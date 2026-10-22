@@ -51,7 +51,7 @@ public static partial class Networking
                 }
             }
 
-            if (!go.NetworkSyncTransform || (!includeAll && !HasControl(go)))
+            if (!go.HasTransformSync || (!includeAll && !HasControl(go)))
             {
                 continue;
             }
@@ -223,7 +223,7 @@ public static partial class Networking
                 throw new InvalidDataException("RPC state contains an invalid transform.");
             }
 
-            if (apply && (forceTransforms || !HasControl(go)))
+            if (apply && go.HasTransformSync && (forceTransforms || !HasControl(go)))
             {
                 ApplyRpcTransform(go, root, entry, frame, pose, forceTransforms);
             }
@@ -255,9 +255,7 @@ public static partial class Networking
             entry.Timeline.Clear();
         }
 
-        go.Transform.LocalPosition = pose.Position;
-        go.Transform.LocalRotation = Quaternion.Normalize(pose.Rotation);
-        go.Transform.LocalScale = pose.Scale;
+        ApplyNetworkTransform(go, pose.Position, Quaternion.Normalize(pose.Rotation), pose.Scale);
     }
 
     private static bool InRpcTree(GameObject go, GameObject root)

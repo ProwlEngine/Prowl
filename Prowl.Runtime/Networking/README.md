@@ -46,6 +46,20 @@ compressed session message limit still applies independently.
 
 ## Replicated state
 
+Network flags disable parts of the default replication behavior. Set them in code or the object's network inspector:
+
+```csharp
+go.NetworkFlags |= NetworkFlags.NoScaleSync;
+```
+
+`NetworkFlags.None` synchronizes position, rotation and scale with interpolation. Use
+`NoPositionSync`, `NoRotationSync`, `NoScaleSync`, or `NoTransformSync` to disable channels,
+and `NoInterpolation` to apply incoming transform updates immediately. Only the host can change
+flags after spawning; changes replicate reliably, including for children of a network root.
+The host's configuration controls which channels receivers apply, including RPC state, late-join
+catch-up, and ownership handoff. Disabled channels keep their local values. Initial scene/spawn
+poses still include the complete transform. Old interpolation samples are discarded when flags change.
+
 ```csharp
 public struct Loadout { public int Ammo; public string Weapon; }
 

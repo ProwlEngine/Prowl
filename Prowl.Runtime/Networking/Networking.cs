@@ -260,6 +260,7 @@ public static partial class Networking
         RegisterEngineMessage(session, EngineMessage.OwnershipRequest, OnOwnershipRequest);
         RegisterEngineMessage(session, EngineMessage.OwnershipState, OnOwnershipState);
         RegisterEngineMessage(session, EngineMessage.OwnerTransfer, OnOwnerTransfer);
+        RegisterEngineMessage(session, EngineMessage.NetworkFlags, OnNetworkFlags);
 
         session.Ended += (reason, message) =>
         {
@@ -343,6 +344,7 @@ public static partial class Networking
         Orphaned,
         OwnershipRequest,
         OwnershipState,
-        OwnerTransfer
+        OwnerTransfer,
+        NetworkFlags
     }
 }

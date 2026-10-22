@@ -135,7 +135,7 @@ public partial class NetworkingTests
                 }
                 else
                 {
-                    w.WriteByte(7); w.WriteUInt64(1); w.WriteString("Oversized");
+                    w.WriteByte(8); w.WriteUInt64(1); w.WriteString("Oversized");
                 }
                 w.WriteBytesWithLength(malformed);
             }, peer);

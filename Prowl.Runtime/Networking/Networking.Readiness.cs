@@ -306,7 +306,7 @@ public static partial class Networking
     private static void WriteCatchUpTransforms(NetWriter message)
     {
         NetworkEntry[] entries = s_entries.Values
-            .Where(e => e.GameObject.IsValid() && e.GameObject.NetworkSyncTransform).ToArray();
+            .Where(e => e.GameObject.IsValid() && e.GameObject.HasTransformSync).ToArray();
         message.WriteVarUInt32((uint)entries.Length);
         foreach (NetworkEntry entry in entries)
         {
@@ -347,9 +347,7 @@ public static partial class Networking
             entry.Timeline.Clear();
             entry.HasReceived = true;
             entry.LastReceivedTick = tick;
-            entry.GameObject.Transform.LocalPosition = position;
-            entry.GameObject.Transform.LocalRotation = Quaternion.Normalize(rotation);
-            entry.GameObject.Transform.LocalScale = scale;
+            ApplyNetworkTransform(entry.GameObject, position, Quaternion.Normalize(rotation), scale);
         }
     }
 

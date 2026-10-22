@@ -87,12 +87,12 @@ public sealed class FakePeer : IDisposable
         Owner = SceneSnapshot + 3, Sync = SceneSnapshot + 4, Transform = SceneSnapshot + 5, RpcToHost = SceneSnapshot + 6, RpcFromHost = SceneSnapshot + 7, SceneLoaded = SceneSnapshot + 8, SceneCatchUp = SceneSnapshot + 9,
         SceneReady = SceneSnapshot + 10, SceneActivate = SceneSnapshot + 11, StaticRpcToHost = SceneSnapshot + 12, StaticRpcFromHost = SceneSnapshot + 13,
         Orphaned = SceneSnapshot + 14, OwnershipRequest = SceneSnapshot + 15, OwnershipState = SceneSnapshot + 16,
-        OwnerTransfer = SceneSnapshot + 17;
+        OwnerTransfer = SceneSnapshot + 17, NetworkFlags = SceneSnapshot + 18;
 
     private FakePeer(NetSession session)
     {
         Session = session;
-        for (ushort id = SceneSnapshot; id <= OwnerTransfer; id++)
+        for (ushort id = SceneSnapshot; id <= NetworkFlags; id++)
         {
             ushort captured = id;
             session.OnRaw(id, (NetPeer sender, ref NetReader reader, Delivery delivery) =>
@@ -304,22 +304,22 @@ public partial class NetworkingTests : RuntimeTestBase
         EchoObject plain = Serializer.Serialize(go);
         Assert.False(plain.TryGet("NetworkMode", out _));
         Assert.False(plain.TryGet("NetworkOrphaned", out _));
-        Assert.False(plain.TryGet("NetworkSyncTransform", out _));
+        Assert.False(plain.TryGet("NetworkFlags", out _));
 
         go.NetworkMode = NetworkMode.Object;
         go.NetworkOrphaned = NetworkOrphaned.ClearOwner;
-        go.NetworkSyncTransform = false;
+        go.NetworkFlags = NetworkFlags.NoTransformSync;
         EchoObject stored = Serializer.Serialize(go);
         Assert.Equal((byte)NetworkMode.Object, stored["NetworkMode"].ByteValue);
 
         GameObject copy = Serializer.Deserialize<GameObject>(stored)!;
         Assert.Equal(NetworkMode.Object, copy.NetworkMode);
         Assert.Equal(NetworkOrphaned.ClearOwner, copy.NetworkOrphaned);
-        Assert.False(copy.NetworkSyncTransform);
+        Assert.Equal(NetworkFlags.NoTransformSync, copy.NetworkFlags);
         copy.Dispose();
 
         GameObject fresh = Serializer.Deserialize<GameObject>(plain)!;
-        Assert.True(fresh.NetworkSyncTransform);
+        Assert.Equal(NetworkFlags.None, fresh.NetworkFlags);
         fresh.Dispose();
     }
 

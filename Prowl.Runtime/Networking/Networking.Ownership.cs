@@ -164,9 +164,7 @@ public static partial class Networking
         if (!HasControl(entry.GameObject) && entry.Samples.Count > 0)
         {
             TransformSample sample = entry.Samples[^1];
-            entry.GameObject.Transform.LocalPosition = sample.Position;
-            entry.GameObject.Transform.LocalRotation = sample.Rotation;
-            entry.GameObject.Transform.LocalScale = sample.Scale;
+            ApplyNetworkTransform(entry.GameObject, sample.Position, sample.Rotation, sample.Scale);
         }
 
         using NetWriter state = new(), message = new();

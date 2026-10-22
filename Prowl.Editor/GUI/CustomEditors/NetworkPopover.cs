@@ -173,22 +173,31 @@ internal static class NetworkPopover
                 Spacer(paper, "gi_net_gap2");
 
                 Heading(paper, font, "gi_net_flags", Loc.Get("network.flags"), null);
-                using (paper.Row("gi_net_sync_tf").Height(UnitValue.Auto).Gap(8).Margin(0, 0, 2, 0).Enter())
-                {
-                    Origami.Checkbox(paper, "gi_net_sync_tf_cb", go.NetworkSyncTransform, v =>
-                    {
-                        Undo.RecordGameObjectChange(go, "Toggle Sync Transform", go.NetworkSyncTransform, v, (g, x) => g.NetworkSyncTransform = x);
-                        go.NetworkSyncTransform = v;
-                    }).NoLabel().Show();
-
-                    using (paper.Column("gi_net_sync_tf_text").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
-                    {
-                        Text(paper, font, "gi_net_sync_tf_lbl", Loc.Get("network.sync_transform"), EditorTheme.Ink500, EditorTheme.FontSizeSmall);
-                        Text(paper, font, "gi_net_sync_tf_desc", Loc.Get("network.sync_transform.desc"), EditorTheme.Ink400, EditorTheme.FontSizeSmall - 1);
-                    }
-                }
+                TransformOption(paper, font, go, NetworkFlags.NoPositionSync, Loc.Get("network.flags.no_position_sync"));
+                TransformOption(paper, font, go, NetworkFlags.NoRotationSync, Loc.Get("network.flags.no_rotation_sync"));
+                TransformOption(paper, font, go, NetworkFlags.NoScaleSync, Loc.Get("network.flags.no_scale_sync"));
+                TransformOption(paper, font, go, NetworkFlags.NoInterpolation, Loc.Get("network.flags.no_interpolation"));
+                if (go.IsNetworked && !Networking.IsHost)
+                    Note(paper, font, "gi_net_sync_tf_readonly", Loc.Get("network.flags.host_only"), EditorTheme.Ink400);
             }
         }
+    }
+
+    private static void TransformOption(Paper paper, FontFile font, GameObject go, NetworkFlags flag, string label)
+    {
+        string id = $"gi_net_sync_tf_{flag}";
+        bool enabled = (go.NetworkFlags & flag) != 0;
+        if (go.IsNetworked && !Networking.IsHost)
+        {
+            Text(paper, font, id, $"{(enabled ? EditorIcons.Check : EditorIcons.Xmark)}  {label}", EditorTheme.Ink500, EditorTheme.FontSizeSmall);
+            return;
+        }
+        Origami.Checkbox(paper, id, enabled, on =>
+        {
+            NetworkFlags value = on ? go.NetworkFlags | flag : go.NetworkFlags & ~flag;
+            Undo.RecordGameObjectChange(go, "Change Transform Sync", go.NetworkFlags, value, (g, x) => g.NetworkFlags = x);
+            go.NetworkFlags = value;
+        }).LabelRight(label).Show();
     }
 
     private static void OwnerTransferOption(Paper paper, FontFile font, GameObject go, OwnerTransfer value, IOrigamiIcon icon, string label) =>

@@ -128,7 +128,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         Pedestal(StationCenter(0));
         GameObject lamp = Networked(Model("Lamp", Mesh.CreateSphere(0.6f, 16, 24), Lit(SyncLamp.Colors[0]), StationCenter(0) + new Float3(0f, 1.5f, 0f)));
         lamp.AddComponent<SyncLamp>();
-        lamp.NetworkSyncTransform = false;
+        lamp.NetworkFlags = NetworkFlags.NoTransformSync;
 
         Add(Block("Track", new Float3(6.6f, 0.05f, 6.6f), _stone, StationCenter(1) + new Float3(0f, 0.03f, 0f)));
         GameObject rover = Networked(Model("Rover", Mesh.CreateCube(new Float3(1f, 0.6f, 1.4f)), Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), StationCenter(1) + new Float3(3f, 0.6f, 0f)));

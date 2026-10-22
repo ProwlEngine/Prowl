@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -1357,8 +1357,8 @@ public partial class GameObject : EngineObject, ISerializable
             compoundTag.Add("OwnerTransfer", new EchoObject((byte)OwnerTransfer));
         if (NetworkOrphaned != NetworkOrphaned.Destroy)
             compoundTag.Add("NetworkOrphaned", new EchoObject((byte)NetworkOrphaned));
-        if (!NetworkSyncTransform)
-            compoundTag.Add("NetworkSyncTransform", new EchoObject((byte)0));
+        if (NetworkFlags != NetworkFlags.None)
+            compoundTag.Add("NetworkFlags", new EchoObject((byte)NetworkFlags));
 
         compoundTag.Add("Transform", Serializer.Serialize(typeof(object), _transform, ctx));
 
@@ -1408,7 +1408,10 @@ public partial class GameObject : EngineObject, ISerializable
         NetworkMode = (NetworkMode)(value["NetworkMode"]?.ByteValue ?? (byte)NetworkMode.Snapshot);
         OwnerTransfer = (OwnerTransfer)(value["OwnerTransfer"]?.ByteValue ?? (byte)OwnerTransfer.Fixed);
         NetworkOrphaned = (NetworkOrphaned)(value["NetworkOrphaned"]?.ByteValue ?? (byte)NetworkOrphaned.Destroy);
-        NetworkSyncTransform = value["NetworkSyncTransform"]?.ByteValue != 0;
+        // Legacy scenes stored only an optional false boolean. Missing meant full transform sync.
+        NetworkFlags = value.TryGet("NetworkFlags", out EchoObject? networkFlags)
+            ? (NetworkFlags)networkFlags.ByteValue
+            : value["NetworkSyncTransform"]?.ByteValue == 0 ? NetworkFlags.NoTransformSync : NetworkFlags.None;
 
         // Absent for an ordinary GameObject, which then allocates nothing for it.
         _prefabLink = value.TryGet("Prefab", out EchoObject? linkTag)

@@ -13,6 +13,7 @@ public partial class GameObject
     private NetworkMode _networkMode = NetworkMode.Snapshot;
     private OwnerTransfer _ownerTransfer = OwnerTransfer.Fixed;
     private NetworkOrphaned _networkOrphaned = NetworkOrphaned.Destroy;
+    private NetworkFlags _networkFlags;
 
     /// <summary>
     /// How this object takes part in a networked session. Has no effect when there is no session, so
@@ -69,10 +70,25 @@ public partial class GameObject
     internal void ApplyNetworkOrphaned(NetworkOrphaned value) => _networkOrphaned = value;
 
     /// <summary>
-    /// For a <see cref="NetworkMode.Object"/>: whether whoever controls it sends its position, rotation and
-    /// scale to everyone else. Turn it off for objects whose movement is replicated some other way.
+    /// Options that disable transform channels or interpolation. Only the host may change them after spawning.
     /// </summary>
-    public bool NetworkSyncTransform { get; set; } = true;
+    public NetworkFlags NetworkFlags
+    {
+        get => _networkFlags;
+        set
+        {
+            if (!ValidNetworkFlags(value)) throw new ArgumentOutOfRangeException(nameof(value));
+            if (value == _networkFlags) return;
+            Networking.Networking.SetNetworkFlags(this, value);
+            _networkFlags = value;
+        }
+    }
+
+    internal bool HasTransformSync => (NetworkFlags & NetworkFlags.NoTransformSync) != NetworkFlags.NoTransformSync;
+    internal bool SyncsTransform(NetworkFlags exclusion) => (NetworkFlags & exclusion) == 0;
+    internal static bool ValidNetworkFlags(NetworkFlags value) =>
+        (value & ~(NetworkFlags.NoTransformSync | NetworkFlags.NoInterpolation)) == 0;
+    internal void ApplyNetworkFlags(NetworkFlags value) => _networkFlags = value;
 
     /// <summary>True while a session runs and this object is part of a networked object everyone shares.</summary>
     public bool IsNetworked => Networking.Networking.IsNetworked(this);
