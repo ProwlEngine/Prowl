@@ -13,20 +13,21 @@ internal sealed record DeepResult(
     EquatableArray<RecordedProgram> Programs,
     EquatableArray<SamplerDescription> Samplers,
     EquatableArray<RecordedBlob> Blobs,
-    EquatableArray<DeepInstance> Instances);
+    EquatableArray<DeepGroup> Groups);
 
 public sealed partial class DeepRecording
 {
-    private readonly SortedDictionary<int, InstanceState> _instances = new();
+    private readonly SortedDictionary<int, GroupState> _groups = new();
+    private readonly Dictionary<int, GroupInfo> _groupInfos = new();
     private readonly HashSet<(ResourceId, uint)> _copied = new();
 
-    void ICaptureProfiler.DescribeInstance(in InstanceCaptureInfo instance)
+    void ICaptureProfiler.DescribeGroup(in GroupCaptureInfo group)
     {
-        if (!_instances.TryGetValue(instance.InstanceIndex, out InstanceState? state))
-            return;
+        if (!_groups.TryGetValue(group.GroupIndex, out GroupState? state))
+            _groups[group.GroupIndex] = state = new GroupState(_groupInfos.TryGetValue(group.GroupIndex, out GroupInfo known) ? known : new GroupInfo("", group.GroupIndex, -1));
 
         Dictionary<RenderResourceID, GraphResourceInfo> byName = new();
-        foreach (GraphResourceInfo info in instance.Resources.Span)
+        foreach (GraphResourceInfo info in group.Resources.Span)
         {
             byName[info.Id] = info;
             GraphBacking[] backings = info.Backings.ToArray();
@@ -45,7 +46,7 @@ public sealed partial class DeepRecording
                 info.HistoryValid));
         }
 
-        foreach (PassInfo passInfo in instance.Passes.Span)
+        foreach (PassInfo passInfo in group.Passes.Span)
         {
             PassState pass = new(passInfo.Name, passInfo.Index);
             foreach (PassResourceAccess access in passInfo.Accesses.Span)
@@ -76,17 +77,17 @@ public sealed partial class DeepRecording
 
     void ICaptureProfiler.OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)
     {
-        if (!_instances.TryGetValue(pass.InstanceIndex, out InstanceState? instance))
+        if (!_groups.TryGetValue(pass.GroupIndex, out GroupState? group))
             return;
 
-        PassState state = instance.Pass(pass.Index);
+        PassState state = group.Pass(pass.Index);
         RecordedReference[] recorded = new RecordedReference[references.Length];
         for (int i = 0; i < references.Length; i++)
         {
             PassReference reference = references[i];
             ResourceId id = reference.First.Resource;
             ResourceBuilder builder = Builder(id);
-            Describe(builder, in reference, instance.Origins.TryGetValue(id, out GraphResourceOrigin origin) ? Origin(origin) : ResourceOrigin.External);
+            Describe(builder, in reference, group.Origins.TryGetValue(id, out GraphResourceOrigin origin) ? Origin(origin) : ResourceOrigin.External);
             recorded[i] = new RecordedReference(builder.Id, reference.First.Version, reference.LastVersion, reference.NeedsContents);
 
             if (reference.LastVersion != reference.First.Version && !state.Outputs.Contains(id) && !state.Written.Contains(id))
@@ -98,18 +99,18 @@ public sealed partial class DeepRecording
         {
             PassReference reference = references[i];
             ResourceId id = reference.First.Resource;
-            if (IsInstanceTarget(instance, id) || instance.Known.Contains((id, reference.First.Version)) || !reference.NeedsContents)
+            if (IsTarget(group, id) || group.Known.Contains((id, reference.First.Version)) || !reference.NeedsContents)
                 continue;
 
             Copy(state, capture, in reference, CopyPlacement.BeforePass, reference.First.Version);
-            instance.Known.Add((id, reference.First.Version));
+            group.Known.Add((id, reference.First.Version));
         }
 
         foreach (PassReference reference in references)
         {
             ResourceId id = reference.First.Resource;
             if (state.Outputs.Contains(id) || state.Written.Contains(id))
-                instance.Known.Add((id, reference.LastVersion));
+                group.Known.Add((id, reference.LastVersion));
         }
 
         if (Mode != DeepMode.Full)
@@ -119,16 +120,16 @@ public sealed partial class DeepRecording
         {
             PassReference reference = references[i];
             ResourceId id = reference.First.Resource;
-            if (!state.Outputs.Contains(id) || IsInstanceTarget(instance, id) || _copied.Contains((id, reference.LastVersion)))
+            if (!state.Outputs.Contains(id) || IsTarget(group, id) || _copied.Contains((id, reference.LastVersion)))
                 continue;
 
             Copy(state, capture, in reference, CopyPlacement.AfterPass, reference.LastVersion);
-            instance.Known.Add((id, reference.LastVersion));
+            group.Known.Add((id, reference.LastVersion));
         }
     }
 
-    private static bool IsInstanceTarget(InstanceState instance, ResourceId id)
-        => instance.Origins.TryGetValue(id, out GraphResourceOrigin origin) && origin == GraphResourceOrigin.InstanceTarget;
+    private static bool IsTarget(GroupState group, ResourceId id)
+        => group.Origins.TryGetValue(id, out GraphResourceOrigin origin) && origin == GraphResourceOrigin.Target;
 
     private void Copy(PassState state, ICaptureContext capture, in PassReference reference, CopyPlacement placement, uint version)
     {
@@ -148,7 +149,7 @@ public sealed partial class DeepRecording
 
     private void Release()
     {
-        foreach (PassState pass in _instances.Values.SelectMany(i => i.Passes.Values))
+        foreach (PassState pass in _groups.Values.SelectMany(i => i.Passes.Values))
         {
             foreach (PendingCopy pending in pass.Copies)
                 pending.Copy.Staging.Dispose();
@@ -159,9 +160,9 @@ public sealed partial class DeepRecording
 
     private DeepResult Build(GraphicsDevice device)
     {
-        foreach (InstanceState instance in _instances.Values)
+        foreach (GroupState group in _groups.Values)
         {
-            foreach (PassState pass in instance.Passes.Values)
+            foreach (PassState pass in group.Passes.Values)
                 pass.Recorded = ReadCopies(device, pass);
         }
 
@@ -177,19 +178,16 @@ public sealed partial class DeepRecording
             _programs.Values.ToEquatableArray(),
             _samplers.ToEquatableArray(),
             blobs,
-            _instances.Values.Select(BuildInstance).ToEquatableArray());
+            _groups.Values.Select(BuildGroup).ToEquatableArray());
     }
 
-    private static DeepInstance BuildInstance(InstanceState instance)
+    private static DeepGroup BuildGroup(GroupState group)
         => new(
-            instance.Info.Name,
-            instance.Info.Index,
-            instance.Info.ParentIndex,
-            instance.Info.Key,
-            instance.Info.PixelWidth,
-            instance.Info.PixelHeight,
-            instance.Resources.ToEquatableArray(),
-            instance.Passes.Values.Select(BuildPass).ToEquatableArray());
+            group.Info.Name,
+            group.Info.Index,
+            group.Info.ParentIndex,
+            group.Resources.ToEquatableArray(),
+            group.Passes.Values.Select(BuildPass).ToEquatableArray());
 
     private static DeepPass BuildPass(PassState pass)
         => new(
@@ -245,6 +243,6 @@ public sealed partial class DeepRecording
             GraphResourceOrigin.Transient => ResourceOrigin.Transient,
             GraphResourceOrigin.Imported => ResourceOrigin.Imported,
             GraphResourceOrigin.Persistent => ResourceOrigin.Persistent,
-            _ => ResourceOrigin.InstanceTarget,
+            _ => ResourceOrigin.Target,
         };
 }

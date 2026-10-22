@@ -8,64 +8,46 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Debugger;
 
-internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPass> passes, int step) : IExecutionPass
+internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPass> passes, int step)
 {
-    private readonly Dictionary<string, BufferHandle> _handles = new();
-
-    public string Name => $"Replay restore {step}";
+    private string Name => $"Replay restore {step}";
 
     private IEnumerable<BufferRestore> Restores => scope.BufferRestores.Where(r => r.PassIndex == step);
 
-    public void Setup(RenderContextBuilder builder)
-    {
-        _handles.Clear();
-        HashSet<string> declared = new();
-        if (step == passes[0].Index)
-        {
-            HashSet<string> produced = new();
-            foreach (DeepPass pass in passes)
-            {
-                foreach (RecordedAccess access in pass.Accesses.Where(a => !a.IsOutput && !produced.Contains(a.Resource)))
-                    Import(builder, access.Resource, declared);
+    public void Add(FrameGraph graph) => graph.AddPass(Name, builder => Setup(graph, builder), Render);
 
-                produced.UnionWith(pass.Accesses.Where(a => a.IsOutput).Select(a => a.Resource));
-            }
+    private void Setup(FrameGraph graph, PassBuilder builder)
+    {
+        HashSet<string> declared = new();
+        foreach ((string name, GraphTexture texture) in scope.StepTextures(step))
+        {
+            if (declared.Add(name))
+                builder.Write(graph.Import(texture.Texture), TextureState.TransferDst);
         }
 
-        foreach ((string name, _) in scope.StepTextures(step))
-            Import(builder, name, declared);
-
-        foreach (BufferRestore restore in Restores)
-            Import(builder, restore.Name, declared);
-    }
-
-    public unsafe void Render(RenderContext context, CommandBuffer cmd)
-    {
         foreach (BufferRestore restore in Restores)
         {
-            DeviceBuffer buffer = scope.BindBuffer(scope.GraphBuffers[restore.Name].Id, context.GetRenderBuffer(_handles[restore.Name]));
+            if (declared.Add(restore.Name))
+                builder.Write(graph.Import(scope.GraphBuffers[restore.Name].Buffer), BufferAccess.TransferWrite);
+        }
+    }
+
+    private unsafe void Render(PassContext context)
+    {
+        CommandBuffer cmd = context.Command;
+        foreach (BufferRestore restore in Restores)
+        {
+            DeviceBuffer buffer = scope.GraphBuffers[restore.Name].Buffer;
             fixed (byte* source = restore.Data)
                 cmd.UpdateBuffer(buffer, restore.Offset, (IntPtr)source, Math.Min((uint)restore.Data.Length, buffer.SizeInBytes - restore.Offset));
         }
 
         scope.RestoreStep(cmd, step);
     }
-
-    private void Import(RenderContextBuilder builder, string name, HashSet<string> declared)
-    {
-        if (!declared.Add(name))
-            return;
-
-        if (scope.GraphTextures.TryGetValue(name, out GraphTexture? texture))
-            builder.DeclareImportedTexture(RenderResourceID.Intern(name), texture.Texture, TextureState.TransferDst);
-        else if (scope.GraphBuffers.TryGetValue(name, out GraphBuffer? buffer))
-            _handles[name] = builder.DeclareOutputBuffer(RenderResourceID.Intern(name), buffer.Desc, 0, BufferAccess.TransferWrite);
-    }
 }
 
-internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass pass, int? lastEvent = null, IndirectSlice? slice = null) : IExecutionPass
+internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass pass, int? lastEvent = null, IndirectSlice? slice = null)
 {
-    private readonly Dictionary<string, BufferHandle> _handles = new();
     private readonly Dictionary<string, RecordedProperty> _properties = new();
     private readonly Dictionary<uint, RecordedVertexBinding> _vertex = new();
     private int _vertexCount;
@@ -74,36 +56,34 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
     private bool _sourceDirty;
     private IndirectSlice? _slice;
 
-    public string Name => name;
+    public void Add(FrameGraph graph) => graph.AddPass(name, builder => Setup(graph, builder), Render);
 
-    public void Setup(RenderContextBuilder builder)
+    private void Setup(FrameGraph graph, PassBuilder builder)
     {
-        _handles.Clear();
         foreach (RecordedAccess access in pass.Accesses)
         {
-            RenderResourceID id = RenderResourceID.Intern(access.Resource);
             if (access.Kind == GraphResourceKind.Texture)
             {
-                RenderTexture texture = scope.GraphTextures[access.Resource].Texture;
+                TextureHandle texture = graph.Import(scope.GraphTextures[access.Resource].Texture);
                 if (access.IsOutput)
-                    builder.DeclareImportedTexture(id, texture, access.TextureUsage, access.DepthUsage);
+                    builder.Write(texture, access.TextureUsage, access.DepthUsage);
                 else
-                    builder.DeclareInputTexture(id, access.TextureUsage, access.DepthUsage);
+                    builder.Read(texture, access.TextureUsage, access.DepthUsage);
             }
             else
             {
-                _handles[access.Resource] = access.IsOutput
-                    ? builder.DeclareOutputBuffer(id, scope.GraphBuffers[access.Resource].Desc, 0, access.BufferUsage)
-                    : builder.DeclareInputBuffer(id, access.BufferUsage);
+                BufferHandle buffer = graph.Import(scope.GraphBuffers[access.Resource].Buffer);
+                if (access.IsOutput)
+                    builder.Write(buffer, access.BufferUsage);
+                else
+                    builder.Read(buffer, access.BufferUsage);
             }
         }
     }
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    private void Render(PassContext context)
     {
-        foreach ((string resource, BufferHandle handle) in _handles)
-            scope.BindBuffer(scope.GraphBuffers[resource].Id, context.GetRenderBuffer(handle));
-
+        CommandBuffer cmd = context.Command;
         _properties.Clear();
         _vertex.Clear();
         _vertexCount = 0;

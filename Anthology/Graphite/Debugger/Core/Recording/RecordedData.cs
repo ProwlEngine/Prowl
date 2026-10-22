@@ -4,30 +4,22 @@ using Prowl.Graphite.Debugger.Trace;
 
 namespace Prowl.Graphite.Debugger;
 
-/// <summary>A pass of a recorded instance, with the work its command buffer recorded.</summary>
+/// <summary>A pass of a recorded group, with the work its command buffer recorded.</summary>
 public sealed record RecordedPass(string Name, int Index, PassStats Stats);
 
-/// <summary>A pass of the graph that did not run for an instance.</summary>
-public sealed record RecordedSkippedPass(string Name, PassSkipReason Reason);
-
-/// <summary>An instance of the recorded execution, with its passes in order and the graph passes it skipped.</summary>
-/// <remarks>The root is index 0 with parent -1. Data is the host object of the instance, saved only when it is a [Serializable] record.</remarks>
-public sealed record RecordedInstance(
+/// <summary>A group of the recorded execution, with the passes added directly in it in order.</summary>
+/// <remarks>Index -1 with an empty name holds the passes added outside any group. Root groups have parent -1.</remarks>
+public sealed record RecordedGroup(
     string Name,
     int Index,
     int ParentIndex,
-    GraphInstanceKey Key,
-    uint PixelWidth,
-    uint PixelHeight,
-    EquatableArray<RecordedPass> Passes,
-    EquatableArray<RecordedSkippedPass> Skipped,
-    object? Data = null);
+    EquatableArray<RecordedPass> Passes);
 
-/// <summary>GPU results for one command buffer. Instance and pass indices are -1 for work outside a pass.</summary>
+/// <summary>GPU results for one command buffer. Group and pass indices are -1 for work outside a pass.</summary>
 public sealed record RecordedCommandBuffer(
     ulong Id,
     string Name,
-    int InstanceIndex,
+    int GroupIndex,
     int PassIndex,
     double? Milliseconds,
     GpuVertexStats? VertexStats);

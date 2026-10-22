@@ -10,7 +10,7 @@ namespace Prowl.Graphite.Debugger;
 
 internal sealed record GraphTexture(RenderTexture Texture, TraceResourceId[] Backings);
 
-internal sealed record GraphBuffer(TraceResourceId Id, GraphBufferDesc Desc);
+internal sealed record GraphBuffer(TraceResourceId Id, DeviceBuffer Buffer);
 
 internal sealed record BufferRestore(int PassIndex, string Name, byte[] Data, uint Offset = 0);
 
@@ -43,7 +43,7 @@ internal sealed unsafe class ReplayScope : IDisposable
         foreach (RecordedResource resource in deep.Resources)
             _described[resource.Id] = resource;
 
-        foreach (RecordedCopy copy in deep.Instances.SelectMany(i => i.Passes).SelectMany(p => p.Copies))
+        foreach (RecordedCopy copy in deep.Groups.SelectMany(i => i.Passes).SelectMany(p => p.Copies))
             _copies.TryAdd(copy.Version, copy);
     }
 
@@ -134,10 +134,10 @@ internal sealed unsafe class ReplayScope : IDisposable
         }
     }
 
-    public string? Prepare(DeepInstance instance, IReadOnlyList<DeepPass> passes)
+    public string? Prepare(DeepGroup group, IReadOnlyList<DeepPass> passes)
     {
         Dictionary<string, RecordedGraphResource> byName = new();
-        foreach (RecordedGraphResource resource in instance.Resources)
+        foreach (RecordedGraphResource resource in group.Resources)
             byName.TryAdd(resource.Name, resource);
 
         foreach (DeepPass pass in passes)
@@ -155,12 +155,12 @@ internal sealed unsafe class ReplayScope : IDisposable
         return null;
     }
 
-    public static HashSet<TraceResourceId> Outputs(DeepInstance instance, DeepPass pass)
+    public static HashSet<TraceResourceId> Outputs(DeepGroup group, DeepPass pass)
     {
         HashSet<TraceResourceId> referenced = pass.References.Select(r => r.Resource).ToHashSet();
         HashSet<string> names = pass.Accesses.Where(a => a.IsOutput).Select(a => a.Resource).ToHashSet();
         HashSet<TraceResourceId> outputs = new();
-        foreach (RecordedGraphResource resource in instance.Resources)
+        foreach (RecordedGraphResource resource in group.Resources)
         {
             if (names.Contains(resource.Name))
                 outputs.UnionWith(resource.Backings.Select(b => b.Id));
@@ -177,8 +177,8 @@ internal sealed unsafe class ReplayScope : IDisposable
             if (!byName.TryGetValue(access.Resource, out RecordedGraphResource? graph))
                 return $"Access to {access.Resource} has no recorded resource.";
 
-            if (graph.Origin == GraphResourceOrigin.InstanceTarget)
-                return $"Pass {pass.Name} writes the instance target, which is never copied.";
+            if (graph.Origin == GraphResourceOrigin.Target)
+                return $"Pass {pass.Name} writes the target, which is never copied.";
 
             string? error = graph.Kind == GraphResourceKind.Texture ? BuildTexture(graph) : BuildBuffer(graph);
             if (error != null)
@@ -405,7 +405,7 @@ internal sealed unsafe class ReplayScope : IDisposable
         if (graph.Buffer is not { } desc || graph.Backings.Length == 0)
             return $"Buffer {graph.Name} has no recorded description.";
 
-        GraphBuffers[graph.Name] = new GraphBuffer(graph.Backings[0].Id, desc);
+        GraphBuffers[graph.Name] = new GraphBuffer(graph.Backings[0].Id, BindBuffer(graph.Backings[0].Id, Own(_device.ResourceFactory.CreateBuffer(new BufferDescription(desc.SizeInBytes, desc.Usage)))));
         return null;
     }
 

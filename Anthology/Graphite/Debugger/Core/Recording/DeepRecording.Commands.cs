@@ -15,7 +15,7 @@ public sealed partial class DeepRecording
     private uint _nextTraceId;
 
     IPassCommandSink? ICommandStreamProfiler.BeginPassCommands(in PassInfo pass)
-        => _instances.TryGetValue(pass.InstanceIndex, out InstanceState? instance) ? new PassRecorder(this, instance.Pass(pass.Index)) : null;
+        => _groups.TryGetValue(pass.GroupIndex, out GroupState? group) ? new PassRecorder(this, group.Pass(pass.Index)) : null;
 
     private TraceResourceId Trace(ResourceId id)
         => id.Value == 0 ? default : Builder(id).Id;
@@ -283,9 +283,9 @@ public sealed partial class DeepRecording
 
     private sealed record PendingCopy(TraceVersion Version, CopyPlacement Placement, CaptureCopy Copy);
 
-    private sealed class InstanceState(in InstanceInfo info)
+    private sealed class GroupState(in GroupInfo info)
     {
-        public readonly InstanceInfo Info = info;
+        public readonly GroupInfo Info = info;
         public readonly List<RecordedGraphResource> Resources = new();
         public readonly Dictionary<ResourceId, GraphResourceOrigin> Origins = new();
         public readonly HashSet<(ResourceId, uint)> Known = new();

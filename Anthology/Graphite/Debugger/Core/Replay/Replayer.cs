@@ -35,10 +35,10 @@ public sealed class Replayer
     public ReplayResult Replay(ReplayRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        DeepInstance? instance = _recording.Instances.FirstOrDefault(i => i.Index == request.InstanceIndex);
-        DeepPass? pass = instance?.Passes.FirstOrDefault(p => p.Index == request.PassIndex);
-        if (instance == null || pass == null)
-            return NotReplayable("The request names an instance or pass that is not in the recording.");
+        DeepGroup? group = _recording.Groups.FirstOrDefault(i => i.Index == request.GroupIndex);
+        DeepPass? pass = group?.Passes.FirstOrDefault(p => p.Index == request.PassIndex);
+        if (group == null || pass == null)
+            return NotReplayable("The request names a group or pass that is not in the recording.");
 
         if (pass.NotReplayable != null)
             return NotReplayable(pass.NotReplayable);
@@ -51,21 +51,21 @@ public sealed class Replayer
         }
 
         if (request.EventIndex == null && _recording.Mode == DeepMode.Full && request.Patches is not { Count: > 0 })
-            return Restore(instance, pass);
+            return Restore(group, pass);
 
         try
         {
             using ReplayScope scope = new(_device, _recording, _blobs, _programs);
-            List<DeepPass> ordered = instance.Passes.Where(p => p.Index <= pass.Index).OrderBy(p => p.Index).ToList();
+            List<DeepPass> ordered = group.Passes.Where(p => p.Index <= pass.Index).OrderBy(p => p.Index).ToList();
             List<DeepPass> passes = ordered.Skip(scope.Start(ordered)).ToList();
             DeepPass? blocked = passes.FirstOrDefault(p => p.NotReplayable != null);
             if (blocked != null)
                 return NotReplayable($"Pass {blocked.Name} is needed to reach {pass.Name}: {blocked.NotReplayable}");
 
-            string? error = scope.Prepare(instance, passes);
+            string? error = scope.Prepare(group, passes);
             if (error == null)
                 scope.AddPatches(passes[0].Index, request.Patches);
-            return error != null ? NotReplayable(error) : Run(scope, instance, passes, pass, request.EventIndex, request.Indirect);
+            return error != null ? NotReplayable(error) : Run(scope, group, passes, pass, request.EventIndex, request.Indirect);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -73,26 +73,24 @@ public sealed class Replayer
         }
     }
 
-    private ReplayResult Run(ReplayScope scope, DeepInstance instance, List<DeepPass> passes, DeepPass pass, int? eventIndex, IndirectSlice? slice)
+    private ReplayResult Run(ReplayScope scope, DeepGroup group, List<DeepPass> passes, DeepPass pass, int? eventIndex, IndirectSlice? slice)
     {
         string name = $"Replay {pass.Index} {pass.Name}";
-        ReplayCapture capture = new(name, ReplayScope.Outputs(instance, pass), scope.ReplayIds);
+        ReplayCapture capture = new(name, ReplayScope.Outputs(group, pass), scope.ReplayIds);
         HashSet<int> steps = scope.RestoreSteps().ToHashSet();
-        List<IPass> replay = new();
+        using FrameGraph graph = new(_device, $"Replay {group.Name}");
         foreach (DeepPass p in passes)
         {
             if (p == passes[0] || steps.Contains(p.Index))
-                replay.Add(new ReplayRestorePass(scope, passes, p.Index));
+                new ReplayRestorePass(scope, passes, p.Index).Add(graph);
 
-            replay.Add(new ReplayPass($"Replay {p.Index} {p.Name}", scope, p, p == pass ? eventIndex : null, p == pass ? slice : null));
+            new ReplayPass($"Replay {p.Index} {p.Name}", scope, p, p == pass ? eventIndex : null, p == pass ? slice : null).Add(graph);
         }
-        using RenderGraph graph = RenderGraph.Build(replay, name: $"Replay {instance.Name}");
-        GraphInstances instances = graph.CreateInstances(new GraphExtent(instance.PixelWidth, instance.PixelHeight));
 
         List<ReplayOutput> outputs = new();
         try
         {
-            ExecutionTask task = _device.DispatchGraph(graph, instances, capture);
+            ExecutionTask task = graph.Execute(capture);
             _device.WaitForExecution(task);
 
             foreach ((TraceResourceId resource, CaptureCopy copy) in capture.Copies)
@@ -115,13 +113,13 @@ public sealed class Replayer
         return new ReplayResult(ReplayStatus.Reexecuted, $"Executed {executed} on {device} with unreproducible inputs restored from copies.", outputs.ToEquatableArray());
     }
 
-    private ReplayResult Restore(DeepInstance instance, DeepPass pass)
+    private ReplayResult Restore(DeepGroup group, DeepPass pass)
     {
         Dictionary<TraceVersion, RecordedCopy> copies = new();
-        foreach (RecordedCopy copy in _recording.Instances.SelectMany(i => i.Passes).SelectMany(p => p.Copies))
+        foreach (RecordedCopy copy in _recording.Groups.SelectMany(i => i.Passes).SelectMany(p => p.Copies))
             copies.TryAdd(copy.Version, copy);
 
-        HashSet<TraceResourceId> outputs = ReplayScope.Outputs(instance, pass);
+        HashSet<TraceResourceId> outputs = ReplayScope.Outputs(group, pass);
         List<ReplayOutput> results = new();
         foreach (RecordedReference reference in pass.References.Where(r => outputs.Contains(r.Resource)))
         {
