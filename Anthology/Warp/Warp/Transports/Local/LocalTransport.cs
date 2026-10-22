@@ -5,6 +5,7 @@ using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Prowl.Warp.Transports.Local;
 
@@ -26,6 +27,8 @@ public sealed class LocalTransport : Transport
     private long _inboxBytes;
     private bool _listening;
     private long _maxInboxBytes = 64 * 1024 * 1024;
+    private long _postedPackets;
+    private long _receivedPackets;
 
     /// <param name="network">The network to listen and connect on.</param>
     /// <param name="address">The address <see cref="Listen" /> registers, which others pass to <see cref="Connect" />.</param>
@@ -161,7 +164,7 @@ public sealed class LocalTransport : Transport
                     }
 
                 case PacketKind.Reject:
-                    RaiseDisconnected(packet.Target!, packet.Reason);
+                    FinishClose(packet.Target!, packet.Reason);
                     break;
 
                 case PacketKind.Data:
@@ -178,10 +181,23 @@ public sealed class LocalTransport : Transport
                     break;
 
                 case PacketKind.Disconnect:
-                    RaiseDisconnected(packet.Target!, DisconnectReason.RemoteClosed);
+                    FinishClose(packet.Target!, DisconnectReason.RemoteClosed);
                     break;
             }
         }
+
+        // A full inbox must not lose terminal notifications. Apply their per-connection fallback
+        // only after all packets preceding them have been consumed, preserving reliable data order.
+        _closing.AddRange(Connections);
+        foreach (LocalConnection connection in _closing)
+        {
+            if (connection.PendingClose is { } pending && _receivedPackets >= pending.AfterPacket)
+            {
+                FinishClose(connection, pending.Reason);
+            }
+        }
+
+        _closing.Clear();
     }
 
     public override void Flush() => ThrowIfDisposed();
@@ -212,6 +228,7 @@ public sealed class LocalTransport : Transport
             }
 
             _inboxBytes = 0;
+            _receivedPackets = _postedPackets;
         }
 
         foreach (Packet packet in abandoned)
@@ -245,6 +262,11 @@ public sealed class LocalTransport : Transport
         }
 
         connection.Peer?.Post(new Packet(PacketKind.Disconnect, connection.Peer, null, null, 0, default, default));
+        FinishClose(connection, reason);
+    }
+
+    private void FinishClose(LocalConnection connection, DisconnectReason reason)
+    {
         connection.Peer = null;
         RaiseDisconnected(connection, reason);
     }
@@ -256,9 +278,18 @@ public sealed class LocalTransport : Transport
             int reserve = packet.Kind is PacketKind.Disconnect or PacketKind.Accept or PacketKind.Reject
                 ? MaxConnections * 2
                 : 0;
-            if (!_accepting || _inbox.Count >= MaxInboxPackets + reserve ||
+            if (!_accepting || _inbox.Count >= (long)MaxInboxPackets + reserve ||
                 (packet.Buffer?.Length ?? 0) > MaxInboxBytes - _inboxBytes)
             {
+                if (_accepting && packet.Kind is PacketKind.Reject or PacketKind.Disconnect)
+                {
+                    // One fixed-size notification per connection, even when its owner runs on
+                    // another thread. Only that owner's Receive changes connection state/events.
+                    packet.Target!.DeferClose(_postedPackets,
+                        packet.Kind == PacketKind.Reject ? packet.Reason : DisconnectReason.RemoteClosed);
+                    return true;
+                }
+
                 if (packet.Buffer != null)
                 {
                     ArrayPool<byte>.Shared.Return(packet.Buffer);
@@ -269,6 +300,7 @@ public sealed class LocalTransport : Transport
 
             _inboxBytes += packet.Buffer?.Length ?? 0;
             _inbox.Enqueue(packet);
+            _postedPackets++;
             return true;
         }
     }
@@ -283,6 +315,7 @@ public sealed class LocalTransport : Transport
             }
 
             _inboxBytes -= packet.Buffer?.Length ?? 0;
+            _receivedPackets++;
             return true;
         }
     }
@@ -309,7 +342,12 @@ public sealed class LocalTransport : Transport
     {
         LocalTransport clientTransport = (LocalTransport)client.Transport;
 
-        if (!_listening || client.State != ConnectionState.Connecting || Connections.Count >= MaxConnections)
+        if (client.State != ConnectionState.Connecting)
+        {
+            return;
+        }
+
+        if (!_listening || Connections.Count >= MaxConnections)
         {
             clientTransport.Post(new Packet(PacketKind.Reject, client, null, null, 0, default,
                 !_listening ? DisconnectReason.Unreachable : DisconnectReason.ServerFull));
@@ -318,9 +356,14 @@ public sealed class LocalTransport : Transport
 
         LocalConnection connection = new(this, NextConnectionId(), clientTransport.Address, false) { Peer = client };
         AddConnection(connection);
-        RaiseConnected(connection);
 
-        clientTransport.Post(new Packet(PacketKind.Accept, client, connection, null, 0, default, default));
+        if (!clientTransport.Post(new Packet(PacketKind.Accept, client, connection, null, 0, default, default)))
+        {
+            Close(connection, DisconnectReason.ResourceLimit);
+            return;
+        }
+
+        RaiseConnected(connection);
     }
 
     internal enum PacketKind : byte
@@ -346,6 +389,8 @@ public sealed class LocalTransport : Transport
 /// <summary>A <see cref="Connection" /> on a <see cref="LocalTransport" />.</summary>
 public sealed class LocalConnection : Connection
 {
+    private DeferredClose? _pendingClose;
+
     internal LocalConnection(LocalTransport transport, int id, string address, bool isOutgoing)
         : base(transport, id, address, isOutgoing)
     {
@@ -353,6 +398,13 @@ public sealed class LocalConnection : Connection
 
     /// <summary>The other end of this connection, on the remote transport. Set once connected.</summary>
     internal LocalConnection? Peer { get; set; }
+
+    internal DeferredClose? PendingClose => Volatile.Read(ref _pendingClose);
+
+    internal void DeferClose(long afterPacket, DisconnectReason reason) =>
+        Interlocked.CompareExchange(ref _pendingClose, new DeferredClose(afterPacket, reason), null);
+
+    internal sealed record DeferredClose(long AfterPacket, DisconnectReason Reason);
 
     public override TimeSpan RoundTripTime => TimeSpan.Zero;
 

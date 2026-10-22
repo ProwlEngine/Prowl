@@ -22,7 +22,7 @@ public class KcpTests
         // insert '1' should insert into empty buffer
         Segment one = new() { sn = 1 };
         kcp.InsertSegmentInReceiveBuffer(one);
-        Assert.Equal(1, kcp.rcv_buf.Count);
+        Assert.Single(kcp.rcv_buf);
         Assert.Equal(one, kcp.rcv_buf[0]);
 
         // insert '3' should insert after '1'
@@ -186,7 +186,7 @@ public class KcpTests
 
         // parse_una should remove all segments < una from send buffer
         kcp.ParseUna(2);
-        Assert.Equal(0, kcp.snd_buf.Count);
+        Assert.Empty(kcp.snd_buf);
     }
 
     // test where no elements should be removed
@@ -263,7 +263,7 @@ public class KcpTests
 
         // parse_una should remove all segments < una from send buffer
         kcp.ParseUna(4);
-        Assert.Equal(0, kcp.snd_buf.Count);
+        Assert.Empty(kcp.snd_buf);
     }
 
     // test with no elements in send buffer
@@ -281,7 +281,7 @@ public class KcpTests
         kcp.snd_nxt = 2; // sn + 1 to ensure < is checked
 
         kcp.ParseFastack(1, 0);
-        Assert.Equal(0, kcp.snd_buf.Count);
+        Assert.Empty(kcp.snd_buf);
     }
 
     // test where no elements should be counted
@@ -572,7 +572,7 @@ public class KcpTests
         Assert.Equal(Transports.Kcp.Protocol.Kcp.RTO_NDL, kcp.rx_minrto);
         Assert.Equal((uint)11, kcp.interval);
         Assert.Equal(2, kcp.fastresend);
-        Assert.Equal(true, kcp.nocwnd);
+        Assert.True(kcp.nocwnd);
 
         // disable nodelay with specific settings
         kcp.SetNoDelay(0, 22);
@@ -580,7 +580,7 @@ public class KcpTests
         Assert.Equal(Transports.Kcp.Protocol.Kcp.RTO_MIN, kcp.rx_minrto);
         Assert.Equal((uint)22, kcp.interval);
         Assert.Equal(0, kcp.fastresend);
-        Assert.Equal(false, kcp.nocwnd);
+        Assert.False(kcp.nocwnd);
     }
 
     [Fact]
