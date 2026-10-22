@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 
 namespace Prowl.Editor.Projects.Settings;
 
@@ -15,6 +17,9 @@ public class ProjectsEditorSettings : ProjectSettingsBase
     /// <summary> The list of hex color strings that make up the editor color palette. </summary>
     public List<string> ColorPalette = DefaultColorPalette();
 
+    /// <summary>An image shown behind the editor while this project is open, relative to the project folder. Empty uses the theme's background.</summary>
+    public string BackgroundImage = "";
+
     /// <summary>Last resolution preset selected in the Game View toolbar.</summary>
     public int SelectedResolutionIndex = 0;
 
@@ -23,11 +28,26 @@ public class ProjectsEditorSettings : ProjectSettingsBase
     {
         ColorPalette = DefaultColorPalette();
         SelectedResolutionIndex = 0;
+        BackgroundImage = "";
     }
 
     /// <summary> Draws the colour palette as a grid of editable swatches. </summary>
     public override void OnGUI(Paper paper, float width)
     {
+        Origami.Header(paper, "pe_bg_header", $"{EditorIcons.Image}  Background").Underline().Show();
+        EditorGUI.Row(paper, "pe_bg", "Background Image", () =>
+        {
+            using (paper.Row("pe_bg_btns").Height(UnitValue.Auto).Gap(4).Enter())
+            {
+                string label = string.IsNullOrEmpty(BackgroundImage) ? "None (use the theme's)" : System.IO.Path.GetFileName(BackgroundImage);
+                Origami.Button(paper, "pe_bg_pick", $"{EditorIcons.FolderOpen}  {label}", PickBackgroundImage).Show();
+                if (!string.IsNullOrEmpty(BackgroundImage))
+                    Origami.IconButton(paper, "pe_bg_clear", EditorIcons.Xmark_I, () => { BackgroundImage = ""; EditorRegistries.SaveSettings(); })
+                        .Small().Ghost().Show();
+            }
+        });
+
+        paper.Box("pe_bg_sp").Height(12);
         Origami.Header(paper, "pe_palette_header", $"{EditorIcons.Palette}  Color Palette").Underline().Show();
 
         const float FieldW = 110, DeleteW = 20, Gap = 4, RowH = 24;
@@ -74,6 +94,19 @@ public class ProjectsEditorSettings : ProjectSettingsBase
                 EditorRegistries.SaveSettings();
             }).Show();
         }
+    }
+
+    private void PickBackgroundImage()
+    {
+        if (Project.Current is not { } project) return;
+        EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
+        {
+            if (path == null) return;
+            // Kept relative when it is inside the project, so it works on every machine that opens it.
+            string relative = System.IO.Path.GetRelativePath(project.RootPath, path);
+            BackgroundImage = relative.StartsWith("..") || System.IO.Path.IsPathRooted(relative) ? path : relative;
+            EditorRegistries.SaveSettings();
+        }, project.RootPath, ["*.png;*.jpg;*.jpeg;*.bmp;*.tga;*.webp"], ["Images"]);
     }
 
     // -- Default game/UI color palette --

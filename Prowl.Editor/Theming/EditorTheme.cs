@@ -272,6 +272,8 @@ public static class EditorTheme
     public static BackgroundImageFit BackgroundImageFit = BackgroundImageFit.Fill;
     /// <summary> How much the background image is darkened, from 0 to 1. </summary>
     public static float BackgroundImageDim = 0.3f;
+    /// <summary> Blur radius over the background image in pixels. </summary>
+    public static float BackgroundImageBlur;
 
     /// <summary>True when the (animated or static) nebula should be drawn rather than a gradient/solid.</summary>
     public static bool UsesNebulaBackground => AnimatedBackground || BackgroundStyle == EditorBackgroundStyle.Nebula;

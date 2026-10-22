@@ -184,6 +184,8 @@ public class EditorThemeData
     public BackgroundImageFit BackgroundImageFit { get; set; } = BackgroundImageFit.Fill;
     /// <summary> How much the background image is darkened, from 0 to 1. </summary>
     public float BackgroundImageDim { get; set; } = 0.3f;
+    /// <summary> Blur radius over the background image in pixels, 0 for none. </summary>
+    public float BackgroundImageBlur { get; set; }
 
     // Play mode tint: a colour wash over the editor backdrop while the game runs, so play mode is hard to miss.
     /// <summary> Whether the editor backdrop is tinted while playing. </summary>

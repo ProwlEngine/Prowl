@@ -772,6 +772,7 @@ public class PreferencesPanel : DockPanel
                     Origami.EnumDropdown(paper, "pref_fx_fit_v", theme.BackgroundImageFit,
                         v => { theme.BackgroundImageFit = v; s.ApplyTheme(); s.Save(); }).Show(), compact: true);
                 EditorGUI.SettingsSlider(paper, "pref_fx_dim", Loc.Get("pref.bg_dim"), theme.BackgroundImageDim, 0, 1, v => { theme.BackgroundImageDim = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+                EditorGUI.SettingsSlider(paper, "pref_fx_blur_img", Loc.Get("pref.bg_blur"), theme.BackgroundImageBlur, 0, 40, v => { theme.BackgroundImageBlur = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
                 EditorGUI.SettingsColorField(paper, "pref_fx_ca", Loc.Get("pref.bg_fill"), () => theme.BackgroundColorA, v => { theme.BackgroundColorA = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
             }
         }

@@ -141,6 +141,7 @@ public class EditorSettings
         EditorTheme.BackgroundImagePath = t.BackgroundImagePath;
         EditorTheme.BackgroundImageFit = t.BackgroundImageFit;
         EditorTheme.BackgroundImageDim = t.BackgroundImageDim;
+        EditorTheme.BackgroundImageBlur = t.BackgroundImageBlur;
 
         // Push the freshly-applied editor theme into Origami. Brief lerp so user-visible
         // theme tweaks animate instead of snapping.
