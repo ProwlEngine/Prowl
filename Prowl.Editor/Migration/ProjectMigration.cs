@@ -181,6 +181,23 @@ public sealed class MigrationContext
         }
     }
 
+    /// <summary>
+    /// The settings of every meta whose importer has the short name <paramref name="importer"/>, with the asset's path.
+    /// A meta written without settings gets an empty compound, so it is not skipped.
+    /// </summary>
+    public void RewriteImporterSettings(string importer, Func<string, EchoObject, EchoObject?> convert)
+    {
+        foreach (string metaPath in MetaFiles())
+        {
+            MetaFileData meta = MetaFile.Read(metaPath);
+            if (ShortName(meta.ImporterType) != importer) continue;
+            if (convert(metaPath[..^".meta".Length], meta.Settings ?? EchoObject.NewCompound()) is not { } settings) continue;
+            meta.Settings = settings;
+            MetaFile.Write(metaPath, meta);
+            ChangedFiles.Add(metaPath);
+        }
+    }
+
     public void RewriteProjectSettings(Func<EchoObject, EchoObject?> convert)
     {
         if (!Directory.Exists(Project.ProjectSettingsPath)) return;

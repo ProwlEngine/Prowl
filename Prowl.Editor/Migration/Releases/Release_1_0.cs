@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
@@ -17,7 +18,51 @@ internal sealed class Release_1_0 : MigrationRelease
     [
         new("Mesh, sprite and text renderer settings saved behind properties", ctx => RenameSettings(ctx, s_rendererRenames)),
         new("Light, fog light, decal and reflection probe settings saved behind properties", ctx => RenameSettings(ctx, s_lightRenames)),
+        new("Texture import types: masks become linear Default textures, sprites need the Sprite type, sizes kept", ctx => ctx.RewriteImporterSettings("TextureImporter", TextureImportTypes)),
     ];
+
+    /// <summary>
+    /// Mask textures (type 2) become Default with sRGB off, any texture slicing sprites becomes a Sprite (type 3), baked
+    /// lightmap pages become Lightmaps (type 7), and an existing texture keeps its full size under the new 2048 default.
+    /// </summary>
+    internal static EchoObject? TextureImportTypes(string assetPath, EchoObject settings)
+    {
+        settings.TryGet("textureType", out EchoObject? type);
+        settings.TryGet("sprite", out EchoObject? sprite);
+        bool changed = false;
+
+        if (type == null && IsLightmapPage(assetPath))
+        {
+            settings["textureType"] = new EchoObject(7);
+            changed = true;
+        }
+        if (type != null && type.TagType != EchoType.String && type.IntValue == 2)
+        {
+            settings["textureType"] = new EchoObject(0);
+            if (!settings.TryGet("srgb", out _)) settings["srgb"] = new EchoObject(false);
+            changed = true;
+        }
+
+        bool slices = sprite?.TagType == EchoType.Compound && sprite.TryGet("Mode", out EchoObject? mode) && mode!.TagType != EchoType.String && mode.IntValue != 0;
+        if (slices && (!settings.TryGet("textureType", out EchoObject? now) || now!.IntValue != 3))
+        {
+            settings["textureType"] = new EchoObject(3);
+            changed = true;
+        }
+
+        if (!settings.TryGet("maxSize", out _))
+        {
+            settings["maxSize"] = new EchoObject(16384);
+            changed = true;
+        }
+
+        return changed ? settings : null;
+    }
+
+    /// <summary>A page the lightmapper wrote, Lightmap-N.png inside a scene's _lightmaps folder.</summary>
+    private static bool IsLightmapPage(string assetPath)
+        => Path.GetFileName(Path.GetDirectoryName(assetPath) ?? "").EndsWith("_lightmaps", StringComparison.OrdinalIgnoreCase)
+            && Path.GetFileName(assetPath).StartsWith("Lightmap-", StringComparison.OrdinalIgnoreCase);
 
     private static readonly Dictionary<string, (string From, string To)[]> s_rendererRenames = new()
     {
