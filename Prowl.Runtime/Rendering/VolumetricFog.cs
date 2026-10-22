@@ -6,7 +6,6 @@ using System.Collections.Generic;
 
 using Prowl.Echo;
 using Prowl.Graphite;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.Rendering;
 using Prowl.Vector;
 
@@ -207,9 +206,11 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
         if (declared != _declared)
         {
             _declared = declared;
-            Invalidate();
         }
     }
+
+    private static GraphTextureDesc Layered(in FeatureView view, int width, int height, PixelFormat format)
+        => GraphTextureDesc.Sized(width, height, format) with { ArrayLayers = view.LayerCount > 1 ? (uint)view.LayerCount : 0 };
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
@@ -223,11 +224,11 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
         int slices = _declared.Slices, perRow = (int)MathF.Ceiling(MathF.Sqrt(slices)), rows = (slices + perRow - 1) / perRow;
         state.Grid = new Float4(cellsX, cellsY, slices, perRow);
         state.Atlas = new Float2(cellsX * perRow, cellsY * rows);
-        GraphTextureDesc froxels = view.Texture(cellsX * perRow, cellsY * rows, PixelFormat.R16_G16_B16_A16_Float);
+        GraphTextureDesc froxels = Layered(view, cellsX * perRow, cellsY * rows, PixelFormat.R16_G16_B16_A16_Float);
         state.Froxels = _declared.Temporal
             ? builder.History("Froxels", froxels, usage: TextureState.Attachment | TextureState.Sampled)
             : builder.Temporary("Froxels", froxels);
-        state.March = builder.Temporary("March", view.Texture(width, height, PixelFormat.R16_G16_B16_A16_Float));
+        state.March = builder.Temporary("March", Layered(view, width, height, PixelFormat.R16_G16_B16_A16_Float));
     }
 
     public override void Render(FeatureContext context)
