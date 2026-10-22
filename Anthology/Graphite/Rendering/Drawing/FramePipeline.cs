@@ -18,18 +18,6 @@ internal sealed class CameraView
     public int ViewId { get; set; }
 }
 
-/// <summary>The FrameStart pass: the frame's single scatter into every persistent buffer, with each declared as written.</summary>
-internal sealed class UploadPass(Uploader uploader) : IExecutionPass
-{
-    public FrameBuffers Buffers = null!;
-
-    public string Name => "Graphite.FrameStart";
-
-    public void Setup(RenderContextBuilder builder) => Buffers.Describe(builder, BufferAccess.ShaderWrite);
-
-    public void Render(RenderContext context, CommandBuffer cmd) => uploader.Record(cmd, context.Task);
-}
-
 /// <summary>Everything a camera pipeline draws in one frame, prepared before dispatch.</summary>
 internal sealed class CameraFrame : IDisposable
 {
