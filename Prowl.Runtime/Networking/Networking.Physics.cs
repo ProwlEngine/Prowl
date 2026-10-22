@@ -32,7 +32,7 @@ public static partial class Networking
             return;
         }
 
-        bool proxy = root.IsProxy;
+        bool proxy = root.Network.IsProxy;
         foreach (Rigidbody3D body in root.GetComponentsInChildren<Rigidbody3D>(includeInactive: true))
         {
             if (proxy && body.MotionType == MotionType.Dynamic && !s_proxyBodies.TryGetValue(body, out _))

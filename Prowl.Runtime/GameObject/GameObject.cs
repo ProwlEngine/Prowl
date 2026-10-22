@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -54,10 +54,17 @@ public partial class GameObject : EngineObject, ISerializable
     // Everything tying this object to a prefab, or null for the ordinary case. One reference rather
     // than a copy of each value on every GameObject in the scene.
     private PrefabLink? _prefabLink;
+    [SerializeIgnore] internal NetworkAccessor? _network;
 
     #endregion
 
     #region Public Fields/Properties
+
+    /// <summary>Network configuration, ownership and replication operations. Created on first access.</summary>
+    public NetworkAccessor Network => _network ??= new NetworkAccessor(this);
+
+    /// <summary>True when this peer receives the object's state from its controller.</summary>
+    public bool IsProxy => Networking.Networking.IsProxy(this);
 
     /// <summary> The Tag Index of this GameObject </summary>
     public int TagIndex;
@@ -1177,7 +1184,7 @@ public partial class GameObject : EngineObject, ISerializable
     protected override void OnDispose()
     {
         // On the host, a networked object going away goes away everywhere.
-        if (NetworkMode == NetworkMode.Object)
+        if (NetworkAccessor.ModeOf(this) == NetworkMode.Object)
             Networking.Networking.OnGameObjectDisposed(this);
 
         for (int i = Children.Count - 1; i >= 0; i--)
@@ -1350,15 +1357,7 @@ public partial class GameObject : EngineObject, ISerializable
 
         compoundTag.Add("HideFlags", new EchoObject((int)HideFlags));
 
-        // Only written when set, so scenes that never touch networking are unchanged by it.
-        if (NetworkMode != NetworkMode.Snapshot)
-            compoundTag.Add("NetworkMode", new EchoObject((byte)NetworkMode));
-        if (OwnerTransfer != OwnerTransfer.Fixed)
-            compoundTag.Add("OwnerTransfer", new EchoObject((byte)OwnerTransfer));
-        if (NetworkOrphaned != NetworkOrphaned.Destroy)
-            compoundTag.Add("NetworkOrphaned", new EchoObject((byte)NetworkOrphaned));
-        if (NetworkFlags != NetworkFlags.None)
-            compoundTag.Add("NetworkFlags", new EchoObject((byte)NetworkFlags));
+        NetworkSerialization.Write(this, compoundTag);
 
         compoundTag.Add("Transform", Serializer.Serialize(typeof(object), _transform, ctx));
 
@@ -1370,7 +1369,7 @@ public partial class GameObject : EngineObject, ISerializable
         EchoObject children = EchoObject.NewList();
         foreach (GameObject child in Children)
         {
-            if (WritingNetworkSnapshot && child.NetworkMode == NetworkMode.Never)
+            if (!NetworkSerialization.Include(child))
                 continue;
             children.ListAdd(Serializer.Serialize(typeof(GameObject), child, ctx));
         }
@@ -1405,13 +1404,7 @@ public partial class GameObject : EngineObject, ISerializable
         TagIndex = value["TagIndex"]?.IntValue ?? 0;
         LayerIndex = value["LayerIndex"]?.IntValue ?? 0;
         HideFlags = (HideFlags)(value["HideFlags"]?.IntValue ?? 0);
-        NetworkMode = (NetworkMode)(value["NetworkMode"]?.ByteValue ?? (byte)NetworkMode.Snapshot);
-        OwnerTransfer = (OwnerTransfer)(value["OwnerTransfer"]?.ByteValue ?? (byte)OwnerTransfer.Fixed);
-        NetworkOrphaned = (NetworkOrphaned)(value["NetworkOrphaned"]?.ByteValue ?? (byte)NetworkOrphaned.Destroy);
-        // Legacy scenes stored only an optional false boolean. Missing meant full transform sync.
-        NetworkFlags = value.TryGet("NetworkFlags", out EchoObject? networkFlags)
-            ? (NetworkFlags)networkFlags.ByteValue
-            : value["NetworkSyncTransform"]?.ByteValue == 0 ? NetworkFlags.NoTransformSync : NetworkFlags.None;
+        NetworkSerialization.Read(this, value);
 
         // Absent for an ordinary GameObject, which then allocates nothing for it.
         _prefabLink = value.TryGet("Prefab", out EchoObject? linkTag)

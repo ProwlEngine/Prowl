@@ -42,7 +42,7 @@ public partial class NetworkingTests
         Networking.Networking.Configure(new() { Execution = execution });
         Scene original = CreateScene(); MakeCurrent(original);
         using NetWriter snapshot = new(); Networking.Networking.WriteSnapshot(original, snapshot);
-        GameObject root = CreateGameObject("Spawn root"); root.NetworkMode = NetworkMode.Object;
+        GameObject root = CreateGameObject("Spawn root"); root.Network.Mode = NetworkMode.Object;
         NetworkSpawnCleanupComponent component = root.AddComponent<NetworkSpawnCleanupComponent>();
         component.EndSessionOnDeserialize = kind == "cancel";
         component.Scores.Add(9);

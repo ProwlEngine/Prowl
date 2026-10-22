@@ -39,7 +39,7 @@ public static partial class Networking
             return false;
         }
 
-        if (!IsActive || component.GameObject.IsNetworkExcluded)
+        if (!IsActive || NetworkAccessor.IsExcludedFromNetwork(component.GameObject))
         {
             return false;
         }
@@ -165,7 +165,7 @@ public static partial class Networking
         ReadOnlySpan<byte> states = reader.ReadBytesWithLength();
         RpcRecipients? recipients = RpcRecipients.Read(ref reader);
 
-        if (FindByIdentifier(id) is not Component component || component.GameObject.IsNetworkExcluded
+        if (FindByIdentifier(id) is not Component component || NetworkAccessor.IsExcludedFromNetwork(component.GameObject)
                                                             || NetworkMembers.Of(component).Rpc(method) is not { } rpc)
         {
             NetworkDiagnostics.Record("RPC", "Rejected", sender, id, $"Unknown or excluded component/method #{method}",

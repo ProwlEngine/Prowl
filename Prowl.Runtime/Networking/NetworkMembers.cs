@@ -9,6 +9,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
+using Prowl.Runtime.Diagnostics;
 using Prowl.Warp;
 
 namespace Prowl.Runtime.Networking;
@@ -58,6 +59,22 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
 [EditorBrowsable(EditorBrowsableState.Never)]
 public abstract class SyncMember<T>(uint slot, string name, SyncFlags flags) : SyncMember(slot, name, flags)
 {
+    /// <summary>Generated setter: applies an authorized local change and queues it for replication.</summary>
+    public void Set(Component component, ref T field, T value)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        T old = field;
+        if (Networking.IsActive)
+        {
+            using FrameStatScope stats = FrameStats.Network.Scope();
+            if (!Networking.HasControl(component, Flags)) return;
+            field = value;
+            Networking.MarkSyncDirty(component, Slot);
+        }
+        else field = value;
+        Changed(component, old, value);
+    }
+
     /// <summary>Runs the property's [Change] hook, if it has one.</summary>
     internal abstract void Changed(Component component, T oldValue, T newValue);
 }
@@ -119,6 +136,9 @@ public sealed class SyncCollectionMember<TComponent, TCollection>(
     Func<TComponent, TCollection> get)
     : SyncMember(slot, name, flags) where TComponent : Component where TCollection : NetCollection
 {
+    /// <summary>Generated getter: binds the component's collection to this property.</summary>
+    public TCollection Bind(TComponent component) => Bound(component);
+
     internal override void Write(Component component, NetWriter writer) => Bound(component).WriteAll(writer);
 
     internal override void WriteChanges(Component component, NetWriter writer) => Bound(component).WriteChanges(writer);
@@ -158,6 +178,15 @@ public abstract class RpcMember(uint id, string signature, RpcMode mode, RpcFlag
     public RpcMode Mode { get; } = mode;
 
     public RpcFlags Flags { get; } = flags;
+
+    /// <summary>Generated prologue: true supplies an argument writer; false executes the body locally.</summary>
+    public bool Begin(Component component, out NetWriter writer) => Networking.BeginRpc(component, this, out writer);
+
+    /// <summary>Sends the arguments and returns whether the caller also executes the body.</summary>
+    public bool Send(Component component, NetWriter writer) => Networking.SendRpc(component, this, writer);
+
+    /// <summary>Marks the end of argument decoding; subsequent exceptions belong to the RPC body.</summary>
+    public static void ArgumentsRead() => Networking.RpcArgumentsRead();
 
     /// <summary>Reads the arguments and calls the method.</summary>
     internal abstract void Invoke(Component component, ref NetReader reader);

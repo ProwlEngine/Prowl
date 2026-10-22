@@ -25,7 +25,7 @@ public class Rover : Component
 
     public override void Update()
     {
-        NetPeer? owner = GameObject.NetworkOwner;
+        NetPeer? owner = GameObject.Network.Owner;
         _tint.Apply(GameObject, owner == null ? new Color(0.9f, 0.9f, 0.95f, 1f) : PeerColors.Of(owner), 2f);
 
         // A proxy's transform comes from its controller.
@@ -53,12 +53,12 @@ public class Grabbable : Component
     public void TakeControl()
     {
         NetPeer? caller = Rpc.Caller;
-        GameObject.SetNetworkOwner(caller is { IsHost: false } ? caller : null);
+        GameObject.Network.AssignOwnership(caller is { IsHost: false } ? caller : null);
     }
 
     public override void Update()
     {
-        NetPeer? owner = GameObject.NetworkOwner;
+        NetPeer? owner = GameObject.Network.Owner;
         _tint.Apply(GameObject, owner == null ? new Color(0.9f, 0.9f, 0.95f, 1f) : PeerColors.Of(owner), 2f);
     }
 }

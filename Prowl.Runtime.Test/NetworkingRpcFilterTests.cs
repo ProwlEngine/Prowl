@@ -62,7 +62,7 @@ public partial class NetworkingTests
             Assert.Single(state.Shouts); Assert.Single(StaticRpcProbe.Calls);
 
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => p.Name == "Harry");
-            state.GameObject.SetNetworkOwner(owner);
+            state.GameObject.Network.AssignOwnership(owner);
             using (Rpc.FilterInclude(peer => peer.Name == "Garry")) state.TellOwner("wrong owner");
             using (Rpc.FilterInclude(peer => peer.Name == "Harry")) state.TellOwner("right owner");
             Pump(() => harry.Has(FakePeer.RpcFromHost), harry, garry);

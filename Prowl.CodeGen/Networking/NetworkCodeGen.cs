@@ -22,7 +22,7 @@ namespace Prowl.CodeGen.Networking;
 ///     <para>
 ///         It works from the scripts as written, bound, so it knows what every attribute, type and method really is.
 ///         Each networked member is rewritten where it stands. A <c>[Sync]</c> auto-property gets a backing field and
-///         a setter that goes through <c>Component.__Sync_Set</c>; a network collection, a getter that ties it to its
+///         a setter that goes through its <c>SyncMember</c> descriptor; a network collection, a getter that ties it to its
 ///         component; an RPC, a prologue that sends the call and, unless it should also run here, returns. Each also
 ///         gets a static descriptor (<c>SyncMember</c>, <c>RpcMember</c>) with typed accessors, which the runtime finds
 ///         by reflection, and which carries the property's <c>[Change]</c> hook. The descriptors stay in the file

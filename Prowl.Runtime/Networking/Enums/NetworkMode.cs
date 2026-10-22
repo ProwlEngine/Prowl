@@ -22,7 +22,7 @@ public enum NetworkMode : byte
     /// <summary>
     ///     A networked object, kept in sync for its whole life: its transform and [Sync] properties follow
     ///     whoever controls it (its owner, or the host), and destroying it on the host destroys it everywhere.
-    ///     Objects placed in a scene this way belong to the host; <see cref="GameObject.NetworkSpawn" />
+    ///     Objects placed in a scene this way belong to the host; <see cref="NetworkAccessor.Spawn" />
     ///     creates new ones at runtime. Everything below it is part of it.
     /// </summary>
     Object

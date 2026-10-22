@@ -33,7 +33,7 @@ public static partial class Networking
         Guid id = reader.ReadGuid();
         uint generation = reader.ReadUInt32();
         NetworkFlags flags = (NetworkFlags)reader.ReadByte();
-        if (!GameObject.ValidNetworkFlags(flags) || !reader.IsAtEnd || delivery != Delivery.Reliable)
+        if (!NetworkAccessor.ValidFlags(flags) || !reader.IsAtEnd || delivery != Delivery.Reliable)
             throw new InvalidDataException("Invalid network flags message.");
 
         if (FindByIdentifier(id) is GameObject go && FindEntry(go) is { TearingDown: false } entry &&
@@ -43,7 +43,7 @@ public static partial class Networking
 
     private static void ApplyNetworkFlags(GameObject go, NetworkFlags flags, NetworkEntry entry)
     {
-        go.ApplyNetworkFlags(flags);
+        go.Network.ApplyFlags(flags);
         if (go != entry.GameObject) return;
         // Old samples must not restore values from a previously enabled channel.
         entry.Samples.Clear();

@@ -29,9 +29,9 @@ public class Swarm : Component
         {
             GameObject drone = Model("Drone", mesh, Lit(new Color(0.7f, 0.7f, 0.75f, 1f)), Transform.Position);
             drone.AddComponent<Drone>().Seed = Random.Shared.NextSingle() * 1000f;
-            drone.NetworkMode = NetworkMode.Object;
+            drone.Network.Mode = NetworkMode.Object;
             GameObject.Scene!.Add(drone);
-            drone.NetworkSpawn();
+            drone.Network.Spawn();
         }
     }
 
@@ -47,13 +47,13 @@ public class Swarm : Component
         List<NetPeer?> peers = [null, .. Networking.Session!.Peers.Where(p => !p.IsLocal)];
         int next = 0;
         foreach (Drone? drone in GameObject.Scene!.FindObjectsOfType<Drone>())
-            drone?.GameObject.SetNetworkOwner(peers[next++ % peers.Count]);
+            drone?.GameObject.Network.AssignOwnership(peers[next++ % peers.Count]);
     }
 
     public void Gather()
     {
         foreach (Drone? drone in GameObject.Scene!.FindObjectsOfType<Drone>())
-            drone?.GameObject.SetNetworkOwner(null);
+            drone?.GameObject.Network.AssignOwnership(null);
     }
 }
 
@@ -69,7 +69,7 @@ public class Drone : Component
 
     public override void Update()
     {
-        NetPeer? owner = GameObject.NetworkOwner;
+        NetPeer? owner = GameObject.Network.Owner;
         _tint.Apply(GameObject, owner == null ? Hsv(Hue, 0.6f, 1f) : PeerColors.Of(owner), 1.5f);
 
         if (GameObject.IsProxy)

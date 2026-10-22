@@ -47,7 +47,7 @@ public partial class NetworkingTests
             {
                 GameObject go = CreateGameObject($"Object {i}");
                 scene.Add(go);
-                go.NetworkSpawn();
+                go.Network.Spawn();
                 return go;
             }).ToArray();
             Pump(() => TransformIds(small).Count == 5 && TransformIds(wide).Count == 5, peers);
@@ -70,7 +70,7 @@ public partial class NetworkingTests
                 sender.Deliveries.Last(m => m.Id == FakePeer.StaticRpcFromHost).Delivery);
 
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => p.Name == "sender");
-            foreach (GameObject go in objects) go.SetNetworkOwner(owner);
+            foreach (GameObject go in objects) go.Network.AssignOwnership(owner);
             Pump(() => sender.WireReceived.Count(m => m.Id == FakePeer.Owner) == 5, peers);
             foreach (FakePeer peer in peers) peer.WireReceived.Clear();
 
@@ -107,7 +107,7 @@ public partial class NetworkingTests
         using NetWriter snapshot = new();
         Networking.Networking.WriteSnapshot(scene, snapshot);
         GameObject ship = CreateGameObject("Ship");
-        ship.NetworkMode = NetworkMode.Object;
+        ship.Network.Mode = NetworkMode.Object;
         using NetWriter spawn = new();
         Networking.Networking.WriteSpawn(ship, owner: 1, NetworkOrphaned.Destroy, spawn);
         LocalNetwork network = new();

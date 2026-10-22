@@ -23,8 +23,8 @@ public partial class NetworkingTests
     {
         Scene scene = CreateScene();
         GameObject root = CreateGameObject("Channel proxy");
-        root.NetworkMode = NetworkMode.Object;
-        root.NetworkFlags = mask;
+        root.Network.Mode = NetworkMode.Object;
+        root.Network.Flags = mask;
         root.Transform.LocalPosition = new Float3(2, 3, 4);
         root.Transform.LocalScale = new Float3(2, 2, 2);
         NetTestComponent component = root.AddComponent<NetTestComponent>();
@@ -48,8 +48,8 @@ public partial class NetworkingTests
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             Pump(() => path == "CatchUp" ? host.Has(FakePeer.SceneLoaded) : Networking.Networking.IsReady, host);
             GameObject proxy = Find(Scene.Current, root.Identifier);
-            Assert.Equal(mask, proxy.NetworkFlags);
-            Assert.Throws<InvalidOperationException>(() => proxy.NetworkFlags = mask ^ NetworkFlags.NoScaleSync);
+            Assert.Equal(mask, proxy.Network.Flags);
+            Assert.Throws<InvalidOperationException>(() => proxy.Network.Flags = mask ^ NetworkFlags.NoScaleSync);
             // Disabled channels must retain current local values, not values frozen in the snapshot.
             Float3 localPosition = new(3, 4, 5), localScale = new(3, 3, 3);
             proxy.Transform.LocalPosition = localPosition;
@@ -129,10 +129,10 @@ public partial class NetworkingTests
     public void TransformChannelFlagsRoundTrip(NetworkFlags mask)
     {
         GameObject go = CreateGameObject();
-        go.NetworkFlags = mask;
+        go.Network.Flags = mask;
         using GameObject copy = Serializer.Deserialize<GameObject>(Serializer.Serialize(go))!;
-        Assert.Equal(mask, copy.NetworkFlags);
-        Assert.Throws<ArgumentOutOfRangeException>(() => go.NetworkFlags = (NetworkFlags)16);
+        Assert.Equal(mask, copy.Network.Flags);
+        Assert.Throws<ArgumentOutOfRangeException>(() => go.Network.Flags = (NetworkFlags)16);
     }
 
     [Fact]
@@ -140,8 +140,8 @@ public partial class NetworkingTests
     {
         Scene scene = CreateScene();
         GameObject root = CreateGameObject();
-        root.NetworkMode = NetworkMode.Object;
-        root.NetworkFlags = NetworkFlags.NoScaleSync;
+        root.Network.Mode = NetworkMode.Object;
+        root.Network.Flags = NetworkFlags.NoScaleSync;
         root.Transform.LocalScale = new Float3(2, 2, 2);
         scene.Add(root); MakeCurrent(scene);
         LocalNetwork network = new();
@@ -151,7 +151,7 @@ public partial class NetworkingTests
             using FakePeer owner = FakePeer.Join(network, "owner");
             using FakePeer observer = FakePeer.Join(network, "observer");
             Pump(() => owner.Has(FakePeer.SceneSnapshot) && observer.Has(FakePeer.SceneSnapshot), owner, observer);
-            root.SetNetworkOwner(Networking.Networking.Session!.Peers.Single(p => p.Name == "owner"));
+            root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => p.Name == "owner"));
             observer.Received.Clear();
             owner.Send(FakePeer.Transform, w =>
             {
@@ -166,7 +166,7 @@ public partial class NetworkingTests
             relay.ReadGuid(); relay.ReadUInt32(); relay.ReadUInt32(); relay.ReadDouble();
             NetSerializers.ReadFloat3(ref relay); NetSerializers.ReadQuaternion(ref relay);
             Assert.Equal(new Float3(2, 2, 2), NetSerializers.ReadFloat3(ref relay));
-            root.SetNetworkOwner(null); // Handoff must also preserve the disabled scale.
+            root.Network.AssignOwnership(null); // Handoff must also preserve the disabled scale.
             Assert.Equal(new Float3(2, 2, 2), root.Transform.LocalScale);
         }
         finally { Networking.Networking.Shutdown(); }
@@ -181,8 +181,8 @@ public partial class NetworkingTests
     {
         Scene scene = CreateScene();
         GameObject root = CreateGameObject();
-        root.NetworkMode = NetworkMode.Object;
-        root.NetworkFlags = mask;
+        root.Network.Mode = NetworkMode.Object;
+        root.Network.Flags = mask;
         scene.Add(root); MakeCurrent(scene);
         LocalNetwork network = new();
         try

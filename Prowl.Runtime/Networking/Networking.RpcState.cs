@@ -30,7 +30,7 @@ public static partial class Networking
         uint tick = ++s_tick;
         foreach (GameObject go in root.GetChildrenDeep().Prepend(root))
         {
-            if (go.IsNetworkExcluded || FindEntry(go) != entry)
+            if (NetworkAccessor.IsExcludedFromNetwork(go) || FindEntry(go) != entry)
             {
                 continue;
             }
@@ -51,7 +51,7 @@ public static partial class Networking
                 }
             }
 
-            if (!go.HasTransformSync || (!includeAll && !HasControl(go)))
+            if (!go.Network.HasTransformSync || (!includeAll && !HasControl(go)))
             {
                 continue;
             }
@@ -166,7 +166,7 @@ public static partial class Networking
             uint slot = reader.ReadVarUInt32();
             uint generation = reader.ReadUInt32();
             NetReader value = new(reader.ReadBytesWithLength());
-            if (FindByIdentifier(id) is not Component component || component.GameObject.IsNetworkExcluded ||
+            if (FindByIdentifier(id) is not Component component || NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
                 !InRpcTree(component.GameObject, root) || generation != frame.Generation ||
                 NetworkMembers.Of(component).Sync(slot) is not { } sync)
             {
@@ -210,7 +210,7 @@ public static partial class Networking
         {
             RpcTransform pose = new(reader.ReadGuid(), reader.ReadUInt32(), NetSerializers.ReadFloat3(ref reader),
                 NetSerializers.ReadQuaternion(ref reader), NetSerializers.ReadFloat3(ref reader));
-            if (FindByIdentifier(pose.ObjectId) is not GameObject go || !InRpcTree(go, root) || go.IsNetworkExcluded ||
+            if (FindByIdentifier(pose.ObjectId) is not GameObject go || !InRpcTree(go, root) || NetworkAccessor.IsExcludedFromNetwork(go) ||
                 (!origin.IsHost && OwnerOf(go) != origin.Id))
             {
                 throw new InvalidDataException("RPC state contains an unknown or unauthorized transform.");
@@ -223,7 +223,7 @@ public static partial class Networking
                 throw new InvalidDataException("RPC state contains an invalid transform.");
             }
 
-            if (apply && go.HasTransformSync && (forceTransforms || !HasControl(go)))
+            if (apply && go.Network.HasTransformSync && (forceTransforms || !HasControl(go)))
             {
                 ApplyRpcTransform(go, root, entry, frame, pose, forceTransforms);
             }

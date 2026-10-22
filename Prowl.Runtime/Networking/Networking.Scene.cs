@@ -17,7 +17,7 @@ namespace Prowl.Runtime.Networking;
 public static partial class Networking
 {
     // Bumped whenever the snapshot layout changes, so a mismatched client fails clearly.
-    private const byte SnapshotFormat = 8;
+    private const byte SnapshotFormat = 9;
 
     private static void OnHostSceneLoaded()
     {
@@ -102,14 +102,14 @@ public static partial class Networking
     {
         using FrameStatScope stats = FrameStats.Network.Scope();
         EchoObject echo = null!;
-        GameObject.WritingNetworkSnapshot = true;
+        NetworkSerialization.WritingSnapshot = true;
         try
         {
             AsSetUp(() => echo = Serializer.Serialize(scene));
         }
         finally
         {
-            GameObject.WritingNetworkSnapshot = false;
+            NetworkSerialization.WritingSnapshot = false;
         }
 
         output.WriteByte(SnapshotFormat);
@@ -213,7 +213,7 @@ public static partial class Networking
                 uint generation = reader.ReadUInt32();
                 if (FindByIdentifier(id) is GameObject go)
                 {
-                    go.ApplyNetworkOrphaned(orphaned);
+                    go.Network.ApplyOrphaned(orphaned);
                     s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned, Generation = generation });
                     ControlChanged(go);
                 }
@@ -265,10 +265,10 @@ public static partial class Networking
                 break;
             }
 
-            if (go.NetworkMode == NetworkMode.Object && go.NetworkRoot == go && !go.IsNetworkExcluded &&
+            if (NetworkAccessor.ModeOf(go) == NetworkMode.Object && go.Network.Root == go && !NetworkAccessor.IsExcludedFromNetwork(go) &&
                 !s_entries.Contains(go.Identifier))
             {
-                NetworkEntry entry = new(go) { Orphaned = go.NetworkOrphaned, Generation = NextGeneration() };
+                NetworkEntry entry = new(go) { Orphaned = go.Network.Orphaned, Generation = NextGeneration() };
                 s_entries.Add(entry);
                 NotifySpawn(entry);
             }

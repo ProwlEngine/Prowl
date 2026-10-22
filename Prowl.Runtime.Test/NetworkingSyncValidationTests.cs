@@ -69,7 +69,7 @@ public partial class NetworkingTests
             NetPeer peer = Networking.Networking.Session!.Peers.Single(p => p.Name == "owner");
             GameObject root = CreateGameObject();
             NetCollectionTestComponent component = root.AddComponent<NetCollectionTestComponent>();
-            scene.Add(root); root.NetworkSpawn(peer, NetworkOrphaned.ClearOwner);
+            scene.Add(root); root.Network.Spawn(peer, NetworkOrphaned.ClearOwner);
             Pump(() => owner.Has(FakePeer.Spawn) && observer.Has(FakePeer.Spawn), owner, observer);
             component.ClearSeen(); observer.Received.Clear();
             SessionEndReason? reason = null;
@@ -187,10 +187,10 @@ public partial class NetworkingTests
             NetPeer peer = Networking.Networking.Session!.Peers.Single(p => p.Name == "owner");
             GameObject root = CreateGameObject();
             NetCollectionTestComponent component = root.AddComponent<NetCollectionTestComponent>();
-            scene.Add(root); root.NetworkSpawn(peer);
+            scene.Add(root); root.Network.Spawn(peer);
             GameObject foreign = CreateGameObject();
             NetCollectionTestComponent unauthorized = foreign.AddComponent<NetCollectionTestComponent>();
-            scene.Add(foreign); foreign.NetworkSpawn();
+            scene.Add(foreign); foreign.Network.Spawn();
             Pump(() => owner.Received.Count(m => m.Id == FakePeer.Spawn) == 2, owner, observer);
             component.ClearSeen(); observer.Received.Clear();
             List<int> healthAtScoreCallback = new();

@@ -13,21 +13,21 @@ public class RpcStateTestComponent : NetCollectionTestComponent
     private int _hostValue;
     private static readonly SyncMember<RpcStateTestComponent, int> HostState = new(799, "HostValue", SyncFlags.FromHost,
         static c => c._hostValue, static (c, v) => c._hostValue = v);
-    public int HostValue { get => _hostValue; set => __Sync_Set(ref _hostValue, value, HostState); }
+    public int HostValue { get => _hostValue; set => HostState.Set(this, ref _hostValue, value); }
     [SerializeIgnore] public readonly List<(int Health, int Scores, float Position)> Observed = new();
     private static readonly RpcMember<RpcStateTestComponent> Broadcast = new(701, "Observe()", RpcMode.Broadcast, RpcFlags.None,
-        static (c, ref r, execute) => { if (execute) { __Rpc_ArgumentsRead(); c.Observe(); } });
+        static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.Observe(); } });
     private static readonly RpcMember<RpcStateTestComponent> Unreliable = new(702, "ObserveUnreliable()", RpcMode.Broadcast, RpcFlags.Unreliable,
-        static (c, ref r, execute) => { if (execute) { __Rpc_ArgumentsRead(); c.ObserveUnreliable(); } });
+        static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.ObserveUnreliable(); } });
     private static readonly RpcMember<RpcStateTestComponent> Host = new(703, "ObserveHost()", RpcMode.Host, RpcFlags.None,
-        static (c, ref r, execute) => { if (execute) { __Rpc_ArgumentsRead(); c.ObserveHost(); } });
+        static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.ObserveHost(); } });
     private static readonly RpcMember<RpcStateTestComponent> Owner = new(704, "ObserveOwner()", RpcMode.Owner, RpcFlags.None,
-        static (c, ref r, execute) => { if (execute) { __Rpc_ArgumentsRead(); c.ObserveOwner(); } });
+        static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.ObserveOwner(); } });
     private void Record() => Observed.Add((Health, Scores.Count, Transform.LocalPosition.X));
-    public void Observe() { if (__Rpc_Begin(Broadcast, out var w) && !__Rpc_Send(Broadcast, w)) return; Record(); }
-    public void ObserveUnreliable() { if (__Rpc_Begin(Unreliable, out var w) && !__Rpc_Send(Unreliable, w)) return; Record(); }
-    public void ObserveHost() { if (__Rpc_Begin(Host, out var w) && !__Rpc_Send(Host, w)) return; Record(); }
-    public void ObserveOwner() { if (__Rpc_Begin(Owner, out var w) && !__Rpc_Send(Owner, w)) return; Record(); }
+    public void Observe() { if (Broadcast.Begin(this, out var w) && !Broadcast.Send(this, w)) return; Record(); }
+    public void ObserveUnreliable() { if (Unreliable.Begin(this, out var w) && !Unreliable.Send(this, w)) return; Record(); }
+    public void ObserveHost() { if (Host.Begin(this, out var w) && !Host.Send(this, w)) return; Record(); }
+    public void ObserveOwner() { if (Owner.Begin(this, out var w) && !Owner.Send(this, w)) return; Record(); }
 }
 
 public partial class NetworkingTests
@@ -39,7 +39,7 @@ public partial class NetworkingTests
     {
         Scene scene = CreateScene();
         GameObject root = CreateGameObject("RPC state");
-        root.NetworkMode = NetworkMode.Object;
+        root.Network.Mode = NetworkMode.Object;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
         root.AddComponent<NetworkLifecycleListener>().TryEditOnSpawn = true;
         scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
@@ -107,7 +107,7 @@ public partial class NetworkingTests
     {
         Scene scene = CreateScene();
         GameObject root = CreateGameObject("Client RPC");
-        root.NetworkMode = NetworkMode.Object;
+        root.Network.Mode = NetworkMode.Object;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
         scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
         LocalNetwork network = new();
@@ -117,7 +117,7 @@ public partial class NetworkingTests
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.Has(FakePeer.SceneSnapshot), client);
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
-            root.SetNetworkOwner(owner);
+            root.Network.AssignOwnership(owner);
             using FakePeer observer = FakePeer.Join(network, "observer");
             Pump(() => observer.Has(FakePeer.SceneSnapshot), client, observer);
             component.HostValue = 9;
@@ -162,7 +162,7 @@ public partial class NetworkingTests
     public void StaleOrUnauthorizedRpcStateNeverRunsTheBody(bool stale)
     {
         Scene scene = CreateScene();
-        GameObject root = CreateGameObject(); root.NetworkMode = NetworkMode.Object;
+        GameObject root = CreateGameObject(); root.Network.Mode = NetworkMode.Object;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
         scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
         LocalNetwork network = new();
@@ -171,7 +171,7 @@ public partial class NetworkingTests
             Networking.Networking.Host(new LocalTransport(network, "host"));
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.Has(FakePeer.SceneSnapshot), client);
-            if (stale) root.SetNetworkOwner(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
+            if (stale) root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
             uint generation = NetworkGeneration(root);
             byte[] message = StateRpc(root, component, 703, client.Session.LocalPeer!.Id,
                 stale ? generation - 1 : generation, 1, 0, 20);
@@ -206,7 +206,7 @@ public partial class NetworkingTests
     public void InvalidDependentStateIsRejectedBeforeAnyStateOrBodyChanges(bool hostOnlyValue)
     {
         Scene scene = CreateScene();
-        GameObject root = CreateGameObject(); root.NetworkMode = NetworkMode.Object;
+        GameObject root = CreateGameObject(); root.Network.Mode = NetworkMode.Object;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
         scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
         LocalNetwork network = new();
@@ -215,7 +215,7 @@ public partial class NetworkingTests
             Networking.Networking.Host(new LocalTransport(network, "host"));
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.Has(FakePeer.SceneSnapshot), client);
-            root.SetNetworkOwner(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
+            root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
             byte[] message = StateRpc(root, component, 703, client.Session.LocalPeer!.Id,
                 NetworkGeneration(root), 1, 0, hostOnlyValue ? 20 : float.NaN,
                 hostOnlyValue ? 799u : NetCollectionTestComponent.HealthSlot);
@@ -233,7 +233,7 @@ public partial class NetworkingTests
     public void MultipleRpcsBetweenTicksEachObserveTheirPrecedingState()
     {
         Scene scene = CreateScene();
-        GameObject root = CreateGameObject(); root.NetworkMode = NetworkMode.Object;
+        GameObject root = CreateGameObject(); root.Network.Mode = NetworkMode.Object;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
         scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
         LocalNetwork network = new();
@@ -242,7 +242,7 @@ public partial class NetworkingTests
             Networking.Networking.Host(new LocalTransport(network, "host"));
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.Has(FakePeer.SceneSnapshot), client);
-            root.SetNetworkOwner(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
+            root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
             uint generation = NetworkGeneration(root);
             for (int i = 0; i < 3; i++)
                 client.Session.SendRaw(client.Session.HostPeer!, FakePeer.RpcToHost,
@@ -258,7 +258,7 @@ public partial class NetworkingTests
     public void OldSyncCannotCrossOwnershipGenerationWhenOwnerReturns()
     {
         Scene scene = CreateScene();
-        GameObject root = CreateGameObject(); root.NetworkMode = NetworkMode.Object;
+        GameObject root = CreateGameObject(); root.Network.Mode = NetworkMode.Object;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
         scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
         LocalNetwork network = new();
@@ -268,9 +268,9 @@ public partial class NetworkingTests
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.Has(FakePeer.SceneSnapshot), client);
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
-            root.SetNetworkOwner(owner);
+            root.Network.AssignOwnership(owner);
             uint generation = NetworkGeneration(root);
-            root.SetNetworkOwner(null); root.SetNetworkOwner(owner);
+            root.Network.AssignOwnership(null); root.Network.AssignOwnership(owner);
             using NetWriter sync = new(), value = new();
             sync.WriteInt32(owner.Id); sync.WriteUInt64(1); sync.WriteVarUInt32(1);
             sync.WriteGuid(component.Identifier); sync.WriteVarUInt32(NetCollectionTestComponent.HealthSlot);

@@ -85,7 +85,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         // replaced by the host's.
         foreach (GameObject local in new[] { CameraObject, Hud.GameObject })
         {
-            local.NetworkMode = NetworkMode.Never;
+            local.Network.Mode = NetworkMode.Never;
             Scene.DontDestroyOnLoad(local);
         }
 
@@ -128,7 +128,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         Pedestal(StationCenter(0));
         GameObject lamp = Networked(Model("Lamp", Mesh.CreateSphere(0.6f, 16, 24), Lit(SyncLamp.Colors[0]), StationCenter(0) + new Float3(0f, 1.5f, 0f)));
         lamp.AddComponent<SyncLamp>();
-        lamp.NetworkFlags = NetworkFlags.NoTransformSync;
+        lamp.Network.Flags = NetworkFlags.NoTransformSync;
 
         Add(Block("Track", new Float3(6.6f, 0.05f, 6.6f), _stone, StationCenter(1) + new Float3(0f, 0.03f, 0f)));
         GameObject rover = Networked(Model("Rover", Mesh.CreateCube(new Float3(1f, 0.6f, 1.4f)), Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), StationCenter(1) + new Float3(3f, 0.6f, 0f)));
@@ -196,7 +196,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         {
             if (item?.GetComponent<Rigidbody3D>() is not { } body)
                 continue;
-            item.GameObject.SetNetworkOwner(null);
+            item.GameObject.Network.AssignOwnership(null);
             item.Transform.Position = item.Home;
             item.Transform.Rotation = Quaternion.Identity;
             body.LinearVelocity = Float3.Zero;
@@ -209,7 +209,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
     /// <summary>Placed in the scene as a networked object, which belongs to the host until it hands it out.</summary>
     private GameObject Networked(GameObject go)
     {
-        go.NetworkMode = NetworkMode.Object;
+        go.Network.Mode = NetworkMode.Object;
         return Add(go);
     }
 
@@ -358,7 +358,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
             return CurrentStation switch
             {
                 0 when Find<SyncLamp>() is { } lamp => $"Color {lamp.ColorIndex}, height {lamp.Height:0.0}, {Control(lamp)}",
-                1 when Find<Rover>() is { } rover => $"Rover driven by {Who(rover.GameObject.NetworkOwner)} at speed {rover.Speed:0.0}    "
+                1 when Find<Rover>() is { } rover => $"Rover driven by {Who(rover.GameObject.Network.Owner)} at speed {rover.Speed:0.0}    "
                     + $"Pucks here: {Scene.Current.FindObjectsOfType<Grabbable>().Count(p => p != null && p.GetComponent<Rigidbody3D>() == null && !p.GameObject.IsProxy)} of 4",
                 2 when Find<Bell>() is { } bell => $"The host has counted {bell.Requests} request(s)",
                 3 when Find<Reactor>() is { } reactor => $"Heat {reactor.Heat}",
@@ -417,7 +417,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         Label(paper, font, "Drag one with the left mouse to take it over.", 1);
 
         Header(paper, font, "Rover", 2);
-        Label(paper, font, $"Driven by {Who(rover.GameObject.NetworkOwner)}", 3);
+        Label(paper, font, $"Driven by {Who(rover.GameObject.Network.Owner)}", 3);
         if (rover.GameObject.IsProxy)
             Label(paper, font, "This window follows its transform.", 4);
         else
@@ -427,10 +427,10 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
             return;
 
         Header(paper, font, "Hand the rover to", 6);
-        Button(paper, font, "The host", () => rover.GameObject.SetNetworkOwner(null), 7);
+        Button(paper, font, "The host", () => rover.GameObject.Network.AssignOwnership(null), 7);
         int id = 8;
         foreach (NetPeer peer in Networking.Session!.Peers.Where(p => !p.IsLocal))
-            Button(paper, font, peer.Name, () => rover.GameObject.SetNetworkOwner(peer), id++);
+            Button(paper, font, peer.Name, () => rover.GameObject.Network.AssignOwnership(peer), id++);
     }
 
     private static void BellControls(Paper paper, FontFile font, Bell bell)
@@ -503,7 +503,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
 
     private static string PhysicsStats()
     {
-        List<Rigidbody3D> bodies = [.. Scene.Current.FindObjectsOfType<Rigidbody3D>().OfType<Rigidbody3D>().Where(b => b.GameObject.IsNetworked)];
+        List<Rigidbody3D> bodies = [.. Scene.Current.FindObjectsOfType<Rigidbody3D>().OfType<Rigidbody3D>().Where(b => b.GameObject.Network.Active)];
         return $"{bodies.Count(b => !b.GameObject.IsProxy)} of {bodies.Count} bodies simulated in this window; the rest follow the windows that control them";
     }
 

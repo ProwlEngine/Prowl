@@ -41,9 +41,9 @@ public class Hangar : Component
         Float3 at = Transform.Position + new Float3(Random.Shared.NextSingle() * 6f - 3f, 0.5f, Random.Shared.NextSingle() * 4f - 2f);
         GameObject crate = Model($"Crate {_spawned}", Mesh.CreateCube(new Float3(0.7f, 0.7f, 0.7f)), Lit(new Color(0.5f, 0.5f, 0.5f, 1f)), at);
         crate.AddComponent<Crate>().Home = at;
-        crate.NetworkMode = NetworkMode.Object;
+        crate.Network.Mode = NetworkMode.Object;
         GameObject.Scene!.Add(crate);
-        crate.NetworkSpawn(owner);
+        crate.Network.Spawn(owner);
     }
 }
 
@@ -56,7 +56,7 @@ public class Crate : Component
 
     public override void Update()
     {
-        NetPeer? owner = GameObject.NetworkOwner;
+        NetPeer? owner = GameObject.Network.Owner;
         _tint.Apply(GameObject, owner == null ? new Color(0.6f, 0.6f, 0.62f, 1f) : PeerColors.Of(owner), owner == null ? 0f : 1.5f);
 
         if (!GameObject.IsProxy)

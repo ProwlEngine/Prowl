@@ -31,7 +31,7 @@ public class NetworkLifecycleListener : Component, INetworkEvents
     }
     public void OnNetworkDespawn()
     {
-        WasNetworkedAtDespawn = GameObject.IsNetworked;
+        WasNetworkedAtDespawn = GameObject.Network.Active;
         Events.Add("despawn");
         DespawnAction?.Invoke();
     }
@@ -47,7 +47,7 @@ public partial class NetworkingTests
     {
         Scene scene = CreateScene();
         GameObject root = CreateGameObject("Lifecycle root");
-        root.NetworkMode = NetworkMode.Object;
+        root.Network.Mode = NetworkMode.Object;
         NetworkLifecycleListener listener = root.AddComponent<NetworkLifecycleListener>();
         scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
         LocalNetwork network = new();
@@ -66,9 +66,9 @@ public partial class NetworkingTests
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.Has(FakePeer.SceneSnapshot), client);
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
-            root.SetNetworkOwner(owner);
-            root.SetNetworkOwner(owner); // No-op.
-            root.SetNetworkOwner(null);
+            root.Network.AssignOwnership(owner);
+            root.Network.AssignOwnership(owner); // No-op.
+            root.Network.AssignOwnership(null);
             Networking.Networking.Shutdown();
             Assert.Equal(new[] { "spawn", "authority gained", "authority lost", $"owner -1 -> {owner.Id}",
                 $"owner {owner.Id} -> -1", "authority gained", "authority lost", "despawn" }, listener.Events);
@@ -101,7 +101,7 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Host(new LocalTransport(new(), "host"));
-            root.NetworkSpawn();
+            root.Network.Spawn();
             Assert.Equal(new[] { "spawn", "despawn" }, listener.Events);
             Assert.Null(Networking.Networking.Session);
         }
@@ -138,7 +138,7 @@ public partial class NetworkingTests
             Assert.Throws<InvalidOperationException>(() => outside.SetParent(root));
             Assert.Throws<InvalidOperationException>(() => outside.AddComponent(listener));
             Assert.Throws<InvalidOperationException>(() => root.Scene!.Remove(root));
-            Assert.Throws<InvalidOperationException>(() => root.NetworkMode = NetworkMode.Never);
+            Assert.Throws<InvalidOperationException>(() => root.Network.Mode = NetworkMode.Never);
             Assert.Same(root, listener.GameObject);
             Assert.False(listener.IsDisposed);
             Assert.False(listener.IsDestroyQueued);
@@ -161,7 +161,7 @@ public partial class NetworkingTests
             child.SetParent(root);
             NetworkLifecycleListener listener = child.AddComponent<NetworkLifecycleListener>();
             scene.Add(root);
-            root.NetworkSpawn();
+            root.Network.Spawn();
             Assert.Equal(new[] { "spawn", "authority gained" }, listener.Events);
             Assert.Throws<InvalidOperationException>(() => child.Destroy());
             Assert.Throws<InvalidOperationException>(() => child.AddComponent<NetTestComponent>());
@@ -180,7 +180,7 @@ public partial class NetworkingTests
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.Has(FakePeer.SceneSnapshot), client);
             listener.LostAction = () => Networking.Networking.Shutdown();
-            root.SetNetworkOwner(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
+            root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
             Assert.Equal(new[] { "spawn", "authority gained", "authority lost", "despawn" }, listener.Events);
             Assert.Null(Networking.Networking.Session);
         }
@@ -192,7 +192,7 @@ public partial class NetworkingTests
     {
         Scene scene = CreateScene();
         GameObject first = CreateGameObject(), second = CreateGameObject();
-        first.NetworkMode = second.NetworkMode = NetworkMode.Object;
+        first.Network.Mode = second.Network.Mode = NetworkMode.Object;
         NetworkLifecycleListener a = first.AddComponent<NetworkLifecycleListener>();
         NetworkLifecycleListener b = second.AddComponent<NetworkLifecycleListener>();
         a.SpawnAction = () => Networking.Networking.Shutdown();
@@ -236,7 +236,7 @@ public partial class NetworkingTests
     public void EndingSessionDuringSnapshotSpawnDoesNotActivateIncomingScene()
     {
         Scene original = CreateScene();
-        GameObject root = CreateGameObject(); root.NetworkMode = NetworkMode.Object;
+        GameObject root = CreateGameObject(); root.Network.Mode = NetworkMode.Object;
         NetworkLifecycleListener listener = root.AddComponent<NetworkLifecycleListener>();
         original.Add(root); Scene.Load(original); Scene.ProcessPendingLoad();
         byte[] snapshot;

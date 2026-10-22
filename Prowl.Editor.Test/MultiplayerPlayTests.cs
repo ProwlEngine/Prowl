@@ -94,7 +94,7 @@ public class MultiplayerPlayTests : EditorTestHarness
             Component beacon = beaconObject.AddComponent(beaconType)!;
             scene.Add(beaconObject);
             beaconType.GetProperty("Level")!.SetValue(beacon, 7);
-            beaconObject.NetworkSpawn();
+            beaconObject.Network.Spawn();
 
             using (Rpc.FilterInclude(peer => peer.Name == "Bot"))
                 beaconType.GetMethod("Ping")!.Invoke(beacon, ["hello"]);

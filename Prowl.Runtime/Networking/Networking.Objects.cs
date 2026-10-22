@@ -92,7 +92,7 @@ public static partial class Networking
     /// <summary>The networked object <paramref name="go" /> belongs to, if any.</summary>
     private static NetworkEntry? FindEntry(GameObject go)
     {
-        GameObject? root = go.NetworkRoot;
+        GameObject? root = NetworkAccessor.RootOf(go);
         return root != null && s_entries.TryGetValue(root.Identifier, out NetworkEntry? entry) &&
                entry.GameObject == root
             ? entry
@@ -104,6 +104,8 @@ public static partial class Networking
     internal static uint GenerationOf(GameObject go) => FindEntry(go)?.Generation ?? 0;
 
     internal static bool IsNetworked(GameObject go) => IsActive && FindEntry(go) is { TearingDown: false };
+
+    internal static bool IsProxy(GameObject go) => IsActive && !HasControl(go);
 
     /// <summary>True if this peer drives <paramref name="go" />: it owns it, or it is the host and nobody does.</summary>
     internal static bool HasControl(GameObject go)
@@ -165,22 +167,22 @@ public static partial class Networking
                     $"'{go.Name}' has to be in the current scene before it can be spawned.");
             }
 
-            if (go.IsNetworkExcluded)
+            if (NetworkAccessor.IsExcludedFromNetwork(go))
             {
                 throw new InvalidOperationException(
                     $"'{go.Name}' is under an object that is NetworkMode.Never, so it can't be networked.");
             }
 
             // Asked of the parent, since this object may be marked NetworkMode.Object already.
-            if (go.Parent.IsValid() && go.Parent!.NetworkRoot is { } outer)
+            if (go.Parent.IsValid() && go.Parent!.Network.Root is { } outer)
             {
                 throw new InvalidOperationException(
                     $"'{go.Name}' is inside the networked object '{outer.Name}' already.");
             }
         }
 
-        go.NetworkMode = NetworkMode.Object;
-        go.NetworkOrphaned = orphaned;
+        go.Network.Mode = NetworkMode.Object;
+        go.Network.Orphaned = orphaned;
         if (!IsActive)
         {
             return;
@@ -211,7 +213,7 @@ public static partial class Networking
     {
         using FrameStatScope stats = FrameStats.Network.Scope();
         EchoObject echo;
-        GameObject.WritingNetworkSnapshot = true;
+        NetworkSerialization.WritingSnapshot = true;
         try
         {
             // References out of the tree go by identifier and land on the client's own objects.
@@ -219,7 +221,7 @@ public static partial class Networking
         }
         finally
         {
-            GameObject.WritingNetworkSnapshot = false;
+            NetworkSerialization.WritingSnapshot = false;
         }
 
         output.WriteGuid(go.Identifier);
@@ -295,7 +297,7 @@ public static partial class Networking
             }
 
             NetworkEntry entry = new(go) { Owner = owner, Orphaned = orphaned, Generation = generation };
-            go.ApplyNetworkOrphaned(orphaned);
+            go.Network.ApplyOrphaned(orphaned);
             s_entries.Add(entry);
             ControlChanged(go);
             if (FindByIdentifier(parentId) is GameObject parent)
@@ -452,7 +454,7 @@ public static partial class Networking
         if (s_entries.TryGetValue(id, out NetworkEntry? entry) && entry.Generation == generation)
         {
             entry.Orphaned = orphaned;
-            entry.GameObject.ApplyNetworkOrphaned(orphaned);
+            entry.GameObject.Network.ApplyOrphaned(orphaned);
         }
     }
 

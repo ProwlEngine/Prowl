@@ -62,7 +62,7 @@ public class NetworkDiagnosticsTests : RuntimeTestBase
     {
         Scene scene = CreateScene();
         GameObject go = CreateGameObject("Diagnostic target");
-        go.NetworkMode = NetworkMode.Object;
+        go.Network.Mode = NetworkMode.Object;
         NetTestComponent component = go.AddComponent<NetTestComponent>();
         scene.Add(go);
         Scene.Load(scene);

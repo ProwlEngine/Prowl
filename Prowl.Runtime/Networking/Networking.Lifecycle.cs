@@ -139,7 +139,7 @@ public static partial class Networking
         if (FindEntry(go) is { TearingDown: false })
         {
             throw new InvalidOperationException("A spawned network object's components and hierarchy are fixed. " +
-                                                "Build the tree before NetworkSpawn, or spawn/despawn a whole object.");
+                                                "Build the tree before Network.Spawn, or spawn/despawn a whole object.");
         }
     }
 

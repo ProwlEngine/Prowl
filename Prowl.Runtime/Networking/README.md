@@ -46,10 +46,19 @@ compressed session message limit still applies independently.
 
 ## Replicated state
 
+Objects expose networking through `GameObject.Network`; `Component.Network` forwards to the same
+accessor. It owns configuration and operations such as `Mode`, `Flags`, `Owner`, `OwnerTransfer`,
+`Orphaned`, `Spawn`, `AssignOwnership`, `TakeOwnership`, and `DropOwnership`. `Network.Active`
+reports live membership. Both base types also expose `IsProxy` as a convenience shortcut.
+Accessors are created on first access, with no separate allocation per component. Ordinary object
+and scene serialization does not create accessors, and non-default settings live in one `Network`
+block. Compiler rewriting and serializer generation live in `Prowl.CodeGen`; generated scripts call
+their networking descriptors rather than inherited methods on `Component`.
+
 Network flags disable parts of the default replication behavior. Set them in code or the object's network inspector:
 
 ```csharp
-go.NetworkFlags |= NetworkFlags.NoScaleSync;
+go.Network.Flags |= NetworkFlags.NoScaleSync;
 ```
 
 `NetworkFlags.None` synchronizes position, rotation and scale with interpolation. Use
@@ -147,29 +156,29 @@ changed, then authority gained where applicable. Despawn notifies authority lost
 despawn; listeners receive loss/despawn only if they previously received the corresponding gain/spawn.
 Callbacks may end sessions or destroy whole roots without duplicate notifications. A null owner means
 unowned; a previous owner that already disconnected is also reported as null. Scene replacement,
-remote despawn, local destruction, and session shutdown end membership. `IsNetworked` is already false
+remote despawn, local destruction, and session shutdown end membership. `Network.Active` is already false
 inside `OnNetworkDespawn`. Starting another session from a teardown callback is rejected; schedule
 that startup for the next frame. Preserved scene objects keep
 membership when they survive a host scene change.
 
-When assigning ownership through `NetworkSpawn(owner)` or `SetNetworkOwner(owner)`, use a peer from
+When assigning ownership through `Network.Spawn(owner)` or `Network.AssignOwnership(owner)`, use a peer from
 `Networking.Session`. Peers from another session/context, or peers that already disconnected, are
 rejected before ownership or spawn settings change. `null` clears ownership and leaves simulation to
 the host.
 
-`GameObject.OwnerTransfer` defaults to `OwnerTransfer.Fixed`: only the host assigns an owner.
+`GameObject.Network.OwnerTransfer` defaults to `OwnerTransfer.Fixed`: only the host assigns an owner.
 Set it to `OwnerTransfer.Takeover` in the GameObject's network menu or before spawning to let any
 ready client take ownership. Only the host can change this policy once spawned; changes replicate
 reliably and are included in late join snapshots.
 
 ```csharp
-pickup.OwnerTransfer = OwnerTransfer.Takeover; // Configure before spawning, or on the host.
-pickup.TakeOwnership();                       // Request local ownership.
-pickup.DropOwnership();                       // Return simulation to the host.
+pickup.Network.OwnerTransfer = OwnerTransfer.Takeover; // Configure before spawning, or on the host.
+pickup.Network.TakeOwnership();                       // Request local ownership.
+pickup.Network.DropOwnership();                       // Return simulation to the host.
 ```
 
 Take/drop calls on children act on their network root. The current owner can drop even with `Fixed`.
-The host can always override ownership through `SetNetworkOwner`. Take/drop return false when the
+The host can always override ownership through `Network.AssignOwnership`. Take/drop return false when the
 operation is unavailable or already satisfied. On clients, true means the request was sent: wait for
 `OnNetworkAuthorityGained` or check `IsProxy` before simulating. The host commits transfers and rejects
 requests from loading peers, unauthorized drops, and requests for an obsolete ownership generation.
@@ -180,7 +189,7 @@ and clears interpolation history. A voluntary drop includes the owner's final st
 uses the latest state accepted by the host. Root rigidbodies also hand off linear velocity. Gameplay
 approval callbacks and a `Request` transfer policy are left to a future feature.
 
-`GameObject.NetworkOrphaned` configures disconnect handling before spawning. Once spawned, the host
+`GameObject.Network.Orphaned` configures disconnect handling before spawning. Once spawned, the host
 can change it at runtime: the active policy and connected clients update reliably, and late joiners
 receive the latest policy. Clients cannot override a spawned root's policy locally. `Destroy` removes
 the object when its owner leaves; `ClearOwner` keeps it and returns simulation to the host.
@@ -316,9 +325,9 @@ it. Filters do not limit ordinary Sync/transform replication or provide private-
 
 ## Runtime structure
 
-Build component trees before `NetworkSpawn`. Whole network roots can be spawned and destroyed by the
+Build component trees before `Network.Spawn`. Whole network roots can be spawned and destroyed by the
 host. While a replicated tree is active, adding, removing, moving, destroying individual components,
-reparenting its objects, changing its `NetworkMode`, or moving its tree between scenes is rejected
+reparenting its objects, changing its `Network.Mode`, or moving its tree between scenes is rejected
 before mutation. Clients cannot destroy replicated roots locally. Ordinary edits outside active
 replicated trees remain available. Use the GameObject/Scene mutation APIs; editing `Children` directly
 is unsupported. Structural delta replication and gameplay readiness remain future work.

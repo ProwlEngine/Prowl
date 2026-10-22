@@ -306,7 +306,7 @@ public static partial class Networking
     private static void WriteCatchUpTransforms(NetWriter message)
     {
         NetworkEntry[] entries = s_entries.Values
-            .Where(e => e.GameObject.IsValid() && e.GameObject.HasTransformSync).ToArray();
+            .Where(e => e.GameObject.IsValid() && e.GameObject.Network.HasTransformSync).ToArray();
         message.WriteVarUInt32((uint)entries.Length);
         foreach (NetworkEntry entry in entries)
         {

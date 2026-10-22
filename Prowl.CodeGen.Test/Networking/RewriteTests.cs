@@ -47,7 +47,7 @@ public class RewriteTests
             }
         }
 
-        Assert.Contains(after, line => line.Contains("__Sync_Set(ref this.__sync_Health"));
+        Assert.Contains(after, line => line.Contains("__syncnet_Health.Set(this, ref this.__sync_Health"));
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class RewriteTests
             }
         }
 
-        Assert.Contains(after, line => line.Contains("__Sync_Collection(this.__sync_Crew, __syncnet_Crew)"));
+        Assert.Contains(after, line => line.Contains("__syncnet_Crew.Bind(this)"));
 
         // The game's own types get their serializers in a file of their own.
         Assert.Contains("RegisterClass<global::Bow>", Assert.Single(result.Added).GetText().ToString());

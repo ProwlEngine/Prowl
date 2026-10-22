@@ -49,7 +49,7 @@ public static partial class Networking
 
         if (s_entries.TryGetValue(id, out NetworkEntry? entry) && entry.Generation == generation)
         {
-            entry.GameObject.ApplyOwnerTransfer(policy);
+            entry.GameObject.Network.ApplyOwnerTransfer(policy);
         }
     }
 
@@ -68,7 +68,7 @@ public static partial class Networking
             return false;
         }
 
-        if (!IsHost && (take ? entry.GameObject.OwnerTransfer != OwnerTransfer.Takeover : entry.Owner != local))
+        if (!IsHost && (take ? entry.GameObject.Network.OwnerTransfer != OwnerTransfer.Takeover : entry.Owner != local))
         {
             return false;
         }
@@ -120,7 +120,7 @@ public static partial class Networking
 
         if (take)
         {
-            if (entry.GameObject.OwnerTransfer != OwnerTransfer.Takeover || entry.Owner == sender.Id)
+            if (entry.GameObject.Network.OwnerTransfer != OwnerTransfer.Takeover || entry.Owner == sender.Id)
             {
                 return;
             }

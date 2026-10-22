@@ -62,7 +62,7 @@ internal sealed partial class NetworkCodeGen
             if (sync.Collection)
             {
                 accessors = node.AccessorList.ReplaceNode(getter,
-                    WithArrow(getter, $"__Sync_Collection(this.{sync.Field}, {sync.Descriptor})"));
+                    WithArrow(getter, $"{sync.Descriptor}.Bind(this)"));
             }
             else
             {
@@ -70,7 +70,7 @@ internal sealed partial class NetworkCodeGen
                     node.AccessorList.Accessors.First(a => a.IsKind(SyntaxKind.SetAccessorDeclaration));
                 accessors = node.AccessorList.ReplaceNodes([getter, setter], (original, _) => original == getter
                     ? WithArrow(original, $"this.{sync.Field}")
-                    : WithArrow(original, $"__Sync_Set(ref this.{sync.Field}, value, {sync.Descriptor})"));
+                    : WithArrow(original, $"{sync.Descriptor}.Set(this, ref this.{sync.Field}, value)"));
             }
 
             // The initializer moves to the field. Keep the line breaks it spanned, and what followed it, on the property.
@@ -98,7 +98,7 @@ internal sealed partial class NetworkCodeGen
             StringBuilder prologue = new();
             prologue.Append(rpc.Static
                 ? $"if ({rpc.Descriptor}.Begin(out {WriterType} __rpc_w)) {{ using (__rpc_w) {{ "
-                : $"if (__Rpc_Begin({rpc.Descriptor}, out {WriterType} __rpc_w)) {{ ");
+                : $"if ({rpc.Descriptor}.Begin(this, out {WriterType} __rpc_w)) {{ ");
             prologue.Append("using (global::Prowl.Runtime.Diagnostics.FrameStats.Network.Scope()) { ");
             foreach (ParameterSyntax parameter in node.ParameterList.Parameters)
             {
@@ -108,7 +108,7 @@ internal sealed partial class NetworkCodeGen
 
             prologue.Append(rpc.Static
                 ? $"if (!{rpc.Descriptor}.Send(__rpc_w)) return; }} }} }} "
-                : $"if (!__Rpc_Send({rpc.Descriptor}, __rpc_w)) return; }} }} ");
+                : $"if (!{rpc.Descriptor}.Send(this, __rpc_w)) return; }} }} ");
             StatementSyntax check = SyntaxFactory.ParseStatement(prologue.ToString());
 
             // Inserted right after the opening brace, on its line, taking over whatever followed the brace, so
@@ -179,7 +179,7 @@ internal sealed partial class NetworkCodeGen
 
                     string argumentsRead = rpc.Static
                         ? "global::Prowl.Runtime.Networking.StaticRpcMember.ArgumentsRead()"
-                        : "__Rpc_ArgumentsRead()";
+                        : "global::Prowl.Runtime.Networking.RpcMember.ArgumentsRead()";
                     string target = rpc.Static ? self : "__c";
                     invoke.Append(
                         $"if (!__execute) return; {argumentsRead}; {target}.{rpc.Name}({string.Join(", ", Enumerable.Range(0, rpc.ParameterTypes.Count).Select(i => "__a" + i))}); }}");

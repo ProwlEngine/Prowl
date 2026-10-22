@@ -43,12 +43,12 @@ internal static class NetworkPopover
     /// </summary>
     public static (IOrigamiIcon Icon, Color Color, string Tooltip)? HierarchyMarker(GameObject go)
     {
-        if (!Application.IsPlaying || go.IsNetworkExcluded)
+        if (!Application.IsPlaying || NetworkAccessor.IsExcludedFromNetwork(go))
             return null;
 
-        if (go.IsNetworked)
+        if (Networking.IsNetworked(go))
         {
-            string owner = go.NetworkOwner is { } peer
+            string owner = go.Network.Owner is { } peer
                 ? peer.Name
                 : Loc.Get("network.owner.host");
             string tooltip = Loc.Get("network.controlled_by", new { name = owner });
@@ -60,9 +60,10 @@ internal static class NetworkPopover
 
     public static void DrawButton(Paper paper, FontFile font, GameObject go)
     {
-        (IOrigamiIcon icon, Color color) = go.NetworkMode != NetworkMode.Never && go.IsNetworkExcluded
+        NetworkMode mode = NetworkAccessor.ModeOf(go);
+        (IOrigamiIcon icon, Color color) = mode != NetworkMode.Never && NetworkAccessor.IsExcludedFromNetwork(go)
             ? Style(NetworkMode.Never)
-            : Style(go.NetworkMode);
+            : Style(mode);
 
         ElementBuilder trigger = paper.Box("gi_net_btn")
             .Width(26).Height(26).Rounded(EditorTheme.Roundness)
@@ -72,7 +73,7 @@ internal static class NetworkPopover
             .OnClick(go, (g, _) => Toggle(g));
 
         if (!s_open || s_target != go)
-            trigger.Tooltip(Loc.Get("network.title"), ModeName(go.NetworkMode));
+            trigger.Tooltip(Loc.Get("network.title"), ModeName(mode));
 
         using (trigger.Enter())
         {
@@ -131,29 +132,29 @@ internal static class NetworkPopover
             {
                 (IOrigamiIcon icon, Color color) = Style(mode);
                 NetworkMode chosen = mode;
-                Option(paper, font, $"gi_net_mode_{mode}", icon, color, ModeName(mode), go.NetworkMode == mode, () =>
+                Option(paper, font, $"gi_net_mode_{mode}", icon, color, ModeName(mode), go.Network.Mode == mode, () =>
                 {
-                    Undo.RecordGameObjectChange(go, "Change Network Mode", go.NetworkMode, chosen, (g, x) => g.NetworkMode = x);
-                    go.NetworkMode = chosen;
+                    Undo.RecordGameObjectChange(go, "Change Network Mode", go.Network.Mode, chosen, (g, x) => g.Network.Mode = x);
+                    go.Network.Mode = chosen;
                 });
             }
-            Note(paper, font, "gi_net_mode_note", ModeDescription(go.NetworkMode), EditorTheme.Ink400);
+            Note(paper, font, "gi_net_mode_note", ModeDescription(go.Network.Mode), EditorTheme.Ink400);
 
             // What a parent decides for it.
             GameObject? parent = go.Parent;
-            if (go.NetworkMode != NetworkMode.Never && parent.IsValid() && parent!.IsNetworkExcluded)
+            if (go.Network.Mode != NetworkMode.Never && parent.IsValid() && parent!.Network.IsExcluded)
                 Note(paper, font, "gi_net_inherited", Loc.Get("network.inherited_never"), EditorTheme.Amber400);
-            else if (parent.IsValid() && parent!.NetworkRoot is { } root)
+            else if (parent.IsValid() && parent!.Network.Root is { } root)
                 Note(paper, font, "gi_net_part_of", Loc.Get("network.part_of", new { name = root.Name }), EditorTheme.Blue400);
 
-            if (go.NetworkMode == NetworkMode.Object)
+            if (go.Network.Mode == NetworkMode.Object)
             {
                 Spacer(paper, "gi_net_gap1");
 
                 Heading(paper, font, "gi_net_transfer", Loc.Get("network.owner_transfer"), Loc.Get("network.owner_transfer.desc"));
-                if (go.IsNetworked && !Networking.IsHost)
+                if (go.Network.Active && !Networking.IsHost)
                 {
-                    Note(paper, font, "gi_net_transfer_value", Loc.Get(go.OwnerTransfer == OwnerTransfer.Fixed
+                    Note(paper, font, "gi_net_transfer_value", Loc.Get(go.Network.OwnerTransfer == OwnerTransfer.Fixed
                         ? "network.owner_transfer.fixed" : "network.owner_transfer.takeover"), EditorTheme.Ink500);
                     Note(paper, font, "gi_net_transfer_readonly", Loc.Get("network.owner_transfer.host_only"), EditorTheme.Ink400);
                 }
@@ -162,7 +163,7 @@ internal static class NetworkPopover
                     OwnerTransferOption(paper, font, go, OwnerTransfer.Fixed, EditorIcons.Server_I, Loc.Get("network.owner_transfer.fixed"));
                     OwnerTransferOption(paper, font, go, OwnerTransfer.Takeover, EditorIcons.Wifi_I, Loc.Get("network.owner_transfer.takeover"));
                 }
-                Note(paper, font, "gi_net_transfer_note", Loc.Get(go.OwnerTransfer == OwnerTransfer.Fixed
+                Note(paper, font, "gi_net_transfer_note", Loc.Get(go.Network.OwnerTransfer == OwnerTransfer.Fixed
                     ? "network.owner_transfer.fixed.desc" : "network.owner_transfer.takeover.desc"), EditorTheme.Ink400);
                 Spacer(paper, "gi_net_transfer_gap");
 
@@ -177,7 +178,7 @@ internal static class NetworkPopover
                 TransformOption(paper, font, go, NetworkFlags.NoRotationSync, Loc.Get("network.flags.no_rotation_sync"));
                 TransformOption(paper, font, go, NetworkFlags.NoScaleSync, Loc.Get("network.flags.no_scale_sync"));
                 TransformOption(paper, font, go, NetworkFlags.NoInterpolation, Loc.Get("network.flags.no_interpolation"));
-                if (go.IsNetworked && !Networking.IsHost)
+                if (go.Network.Active && !Networking.IsHost)
                     Note(paper, font, "gi_net_sync_tf_readonly", Loc.Get("network.flags.host_only"), EditorTheme.Ink400);
             }
         }
@@ -186,32 +187,32 @@ internal static class NetworkPopover
     private static void TransformOption(Paper paper, FontFile font, GameObject go, NetworkFlags flag, string label)
     {
         string id = $"gi_net_sync_tf_{flag}";
-        bool enabled = (go.NetworkFlags & flag) != 0;
-        if (go.IsNetworked && !Networking.IsHost)
+        bool enabled = (go.Network.Flags & flag) != 0;
+        if (go.Network.Active && !Networking.IsHost)
         {
             Text(paper, font, id, $"{(enabled ? EditorIcons.Check : EditorIcons.Xmark)}  {label}", EditorTheme.Ink500, EditorTheme.FontSizeSmall);
             return;
         }
         Origami.Checkbox(paper, id, enabled, on =>
         {
-            NetworkFlags value = on ? go.NetworkFlags | flag : go.NetworkFlags & ~flag;
-            Undo.RecordGameObjectChange(go, "Change Transform Sync", go.NetworkFlags, value, (g, x) => g.NetworkFlags = x);
-            go.NetworkFlags = value;
+            NetworkFlags value = on ? go.Network.Flags | flag : go.Network.Flags & ~flag;
+            Undo.RecordGameObjectChange(go, "Change Transform Sync", go.Network.Flags, value, (g, x) => g.Network.Flags = x);
+            go.Network.Flags = value;
         }).LabelRight(label).Show();
     }
 
     private static void OwnerTransferOption(Paper paper, FontFile font, GameObject go, OwnerTransfer value, IOrigamiIcon icon, string label) =>
-        Option(paper, font, $"gi_net_transfer_{value}", icon, EditorTheme.Ink400, label, go.OwnerTransfer == value, () =>
+        Option(paper, font, $"gi_net_transfer_{value}", icon, EditorTheme.Ink400, label, go.Network.OwnerTransfer == value, () =>
         {
-            Undo.RecordGameObjectChange(go, "Change Owner Transfer", go.OwnerTransfer, value, (g, x) => g.OwnerTransfer = x);
-            go.OwnerTransfer = value;
+            Undo.RecordGameObjectChange(go, "Change Owner Transfer", go.Network.OwnerTransfer, value, (g, x) => g.Network.OwnerTransfer = x);
+            go.Network.OwnerTransfer = value;
         });
 
     private static void OrphanedOption(Paper paper, FontFile font, GameObject go, NetworkOrphaned value, IOrigamiIcon icon, string label) =>
-        Option(paper, font, $"gi_net_orph_{value}", icon, EditorTheme.Ink400, label, go.NetworkOrphaned == value, () =>
+        Option(paper, font, $"gi_net_orph_{value}", icon, EditorTheme.Ink400, label, go.Network.Orphaned == value, () =>
         {
-            Undo.RecordGameObjectChange(go, "Change Orphaned Mode", go.NetworkOrphaned, value, (g, x) => g.NetworkOrphaned = x);
-            go.NetworkOrphaned = value;
+            Undo.RecordGameObjectChange(go, "Change Orphaned Mode", go.Network.Orphaned, value, (g, x) => g.Network.Orphaned = x);
+            go.Network.Orphaned = value;
         });
 
     private static string ModeName(NetworkMode mode) => mode switch

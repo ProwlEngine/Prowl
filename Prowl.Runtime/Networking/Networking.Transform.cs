@@ -47,7 +47,7 @@ public static partial class Networking
         foreach (NetworkEntry entry in s_entries.Values)
         {
             GameObject go = entry.GameObject;
-            if (!go.IsValid() || !go.HasTransformSync || !HasControl(go))
+            if (!go.IsValid() || !go.Network.HasTransformSync || !HasControl(go))
             {
                 continue;
             }
@@ -57,9 +57,9 @@ public static partial class Networking
             Quaternion rotation = t.LocalRotation;
             Float3 scale = t.LocalScale;
 
-            bool unchanged = entry.HasSent && (!go.SyncsTransform(NetworkFlags.NoPositionSync) || position.Equals(entry.SentPosition)) &&
-                             (!go.SyncsTransform(NetworkFlags.NoRotationSync) || rotation.Equals(entry.SentRotation)) &&
-                             (!go.SyncsTransform(NetworkFlags.NoScaleSync) || scale.Equals(entry.SentScale));
+            bool unchanged = entry.HasSent && (!go.Network.SyncsTransform(NetworkFlags.NoPositionSync) || position.Equals(entry.SentPosition)) &&
+                             (!go.Network.SyncsTransform(NetworkFlags.NoRotationSync) || rotation.Equals(entry.SentRotation)) &&
+                             (!go.Network.SyncsTransform(NetworkFlags.NoScaleSync) || scale.Equals(entry.SentScale));
             if (unchanged && now - entry.LastSentTime < TransformRefreshSeconds)
             {
                 continue;
@@ -158,7 +158,7 @@ public static partial class Networking
             Float3 scale = NetSerializers.ReadFloat3(ref reader);
 
             if (!s_entries.TryGetValue(id, out NetworkEntry? entry) || !entry.GameObject.IsValid() ||
-                !entry.GameObject.HasTransformSync || HasControl(entry.GameObject) || entry.Generation != generation)
+                !entry.GameObject.Network.HasTransformSync || HasControl(entry.GameObject) || entry.Generation != generation)
             {
                 continue;
             }
@@ -185,9 +185,9 @@ public static partial class Networking
             rotation = Quaternion.Normalize(rotation);
             // Use the host-supplied object policy, never a mask chosen by the sender.
             Transform current = entry.GameObject.Transform;
-            if (!entry.GameObject.SyncsTransform(NetworkFlags.NoPositionSync)) position = current.LocalPosition;
-            if (!entry.GameObject.SyncsTransform(NetworkFlags.NoRotationSync)) rotation = current.LocalRotation;
-            if (!entry.GameObject.SyncsTransform(NetworkFlags.NoScaleSync)) scale = current.LocalScale;
+            if (!entry.GameObject.Network.SyncsTransform(NetworkFlags.NoPositionSync)) position = current.LocalPosition;
+            if (!entry.GameObject.Network.SyncsTransform(NetworkFlags.NoRotationSync)) rotation = current.LocalRotation;
+            if (!entry.GameObject.Network.SyncsTransform(NetworkFlags.NoScaleSync)) scale = current.LocalScale;
             if (!entry.Timeline.Observe(sentAt, now))
             {
                 continue;
@@ -201,7 +201,7 @@ public static partial class Networking
             }
 
             entry.Samples.Add(new TransformSample(sentAt, position, rotation, scale));
-            if ((entry.GameObject.NetworkFlags & NetworkFlags.NoInterpolation) != 0)
+            if ((entry.GameObject.Network.Flags & NetworkFlags.NoInterpolation) != 0)
                 ApplyNetworkTransform(entry.GameObject, position, rotation, scale);
 
             if (relay != null)
@@ -230,7 +230,7 @@ public static partial class Networking
         foreach (NetworkEntry entry in s_entries.Values)
         {
             if (entry.Samples.Count == 0 || !entry.GameObject.IsValid() || HasControl(entry.GameObject) ||
-                (entry.GameObject.NetworkFlags & NetworkFlags.NoInterpolation) != 0)
+                (entry.GameObject.Network.Flags & NetworkFlags.NoInterpolation) != 0)
             {
                 continue;
             }
@@ -264,9 +264,9 @@ public static partial class Networking
 
     private static void ApplyNetworkTransform(GameObject go, Float3 position, Quaternion rotation, Float3 scale)
     {
-        if (go.SyncsTransform(NetworkFlags.NoPositionSync)) go.Transform.LocalPosition = position;
-        if (go.SyncsTransform(NetworkFlags.NoRotationSync)) go.Transform.LocalRotation = rotation;
-        if (go.SyncsTransform(NetworkFlags.NoScaleSync)) go.Transform.LocalScale = scale;
+        if (go.Network.SyncsTransform(NetworkFlags.NoPositionSync)) go.Transform.LocalPosition = position;
+        if (go.Network.SyncsTransform(NetworkFlags.NoRotationSync)) go.Transform.LocalRotation = rotation;
+        if (go.Network.SyncsTransform(NetworkFlags.NoScaleSync)) go.Transform.LocalScale = scale;
     }
 
     private static bool Finite(Float3 value) =>

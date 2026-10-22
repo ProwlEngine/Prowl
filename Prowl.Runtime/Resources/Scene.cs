@@ -544,7 +544,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         for (GameObject? go = obj; go.IsValid(); go = go.Parent)
             if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0
-                || (GameObject.WritingNetworkSnapshot && go.NetworkMode == NetworkMode.Never))
+                || !NetworkSerialization.Include(go))
                 return false;
         return true;
     }

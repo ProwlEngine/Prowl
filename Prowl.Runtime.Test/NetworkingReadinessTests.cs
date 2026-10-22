@@ -38,7 +38,7 @@ public partial class NetworkingTests
     {
         Scene scene = CreateScene();
         GameObject root = CreateGameObject("Ready actor");
-        root.NetworkMode = NetworkMode.Object;
+        root.Network.Mode = NetworkMode.Object;
         NetworkReadinessListener listener = root.AddComponent<NetworkReadinessListener>();
         NetTestComponent state = root.AddComponent<NetTestComponent>();
         scene.Add(root);

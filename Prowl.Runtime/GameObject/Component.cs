@@ -8,6 +8,7 @@ using System.Threading;
 
 using Prowl.Echo;
 using Prowl.PaperUI;
+using Prowl.Runtime.Networking;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
@@ -21,7 +22,7 @@ namespace Prowl.Runtime;
 /// Represents the base class for all scripts that attach to GameObjects in the Prowl Game Engine.
 /// <see cref="Component"/> provides lifecycle methods for game object behaviors.
 /// </summary>
-public abstract partial class Component : EngineObject, ISerializationCallbackReceiver
+public abstract class Component : EngineObject, ISerializationCallbackReceiver
 {
     [SerializeField, HideInInspector]
     private Guid _identifier = Guid.NewGuid();
@@ -64,6 +65,12 @@ public abstract partial class Component : EngineObject, ISerializationCallbackRe
 
     [SerializeIgnore]
     private bool? _executeAlwaysCached;
+
+    /// <summary>The owning GameObject's network configuration, ownership and replication operations.</summary>
+    public NetworkAccessor Network => GameObject.Network;
+
+    /// <summary>True when this peer receives the object's state from its controller.</summary>
+    public bool IsProxy => GameObject.IsProxy;
 
     [SerializeIgnore]
     private CancellationTokenSource? _destroyCancellation;

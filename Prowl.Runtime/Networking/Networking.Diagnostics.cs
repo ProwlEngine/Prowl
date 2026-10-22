@@ -124,7 +124,7 @@ public static partial class Networking
             }
 
             output.Add(new ObjectDiagnostic(go.Identifier, go.Name, entry.Owner, HasControl(go),
-                go.HasTransformSync,
+                go.Network.HasTransformSync,
                 entry.Samples.Count, entry.LastReceivedTick));
         }
     }

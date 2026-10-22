@@ -25,7 +25,7 @@ namespace Prowl.Runtime.Networking;
 ///     </para>
 ///     <para>
 ///         <see cref="NetworkMode.Object" /> objects are networked objects: the host spawns them with
-///         <see cref="GameObject.NetworkSpawn" />, each has an owner (or the host), and their transform and
+///         <see cref="NetworkAccessor.Spawn" />, each has an owner (or the host), and their transform and
 ///         <see cref="SyncAttribute" /> properties follow whoever controls them. <see cref="Rpc" /> methods call across
 ///         peers.
 ///     </para>

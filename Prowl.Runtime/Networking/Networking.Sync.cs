@@ -38,7 +38,7 @@ public static partial class Networking
     /// <summary>Queues a [Sync] value to be sent. False if its object is never networked, so it won't be.</summary>
     internal static bool MarkSyncDirty(Component component, uint slot)
     {
-        if (component.GameObject.IsNetworkExcluded)
+        if (NetworkAccessor.IsExcludedFromNetwork(component.GameObject))
         {
             return false;
         }
@@ -147,7 +147,7 @@ public static partial class Networking
         int count = 0;
         foreach (GameObject go in objects)
         {
-            if (go.IsNetworkExcluded)
+            if (NetworkAccessor.IsExcludedFromNetwork(go))
             {
                 continue;
             }
@@ -249,7 +249,7 @@ public static partial class Networking
                 uint generation = reader.ReadUInt32();
                 ReadOnlySpan<byte> value = reader.ReadBytesWithLength();
 
-                if (FindByIdentifier(id) is not Component component || component.GameObject.IsNetworkExcluded)
+                if (FindByIdentifier(id) is not Component component || NetworkAccessor.IsExcludedFromNetwork(component.GameObject))
                 {
                     NetworkDiagnostics.Record("SyncVar", "Rejected", sender, id,
                         $"Unknown or excluded component, slot #{slot}", value);
@@ -319,7 +319,7 @@ public static partial class Networking
             uint slot = reader.ReadVarUInt32();
             uint generation = reader.ReadUInt32();
             NetReader value = new(reader.ReadBytesWithLength());
-            if (FindByIdentifier(id) is not Component component || component.GameObject.IsNetworkExcluded ||
+            if (FindByIdentifier(id) is not Component component || NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
                 NetworkMembers.Of(component).Sync(slot) is not { } sync || !AcceptSync(sender, component, sync.Flags) ||
                 (!initial && generation != GenerationOf(component.GameObject)))
             {
