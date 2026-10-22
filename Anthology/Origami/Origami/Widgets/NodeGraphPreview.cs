@@ -36,7 +36,7 @@ public static class NodeGraphPreview
         float body = rows > 0
             ? NodeGraphBuilder.BodyPadTop + rows * metrics.RowHeight + NodeGraphBuilder.BodyPadBottom
             : NodeGraphBuilder.BodyPadBottom;
-        if (node.Body != null && node.BodyHeight > 0f) body += node.BodyHeight;
+        if (node.HasBody) body += node.BodyExtent;
         return metrics.HeaderHeight + body;
     }
 

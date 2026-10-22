@@ -449,6 +449,8 @@ public static class ContextMenu
         {
             CloseOnBackdrop = true,
             CloseOnEscape = true,
+            // A click outside or Escape removes the modal without going through Close.
+            OnDismissed = _ => { _isOpen = false; _modalHandle = null; _buildMenu = null; },
         };
         Modal.Push(_modalHandle);
     }
