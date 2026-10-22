@@ -11,164 +11,123 @@ using Xunit;
 
 namespace Prowl.Graphite.Debugger.Tests;
 
-file sealed class EventsPass(RenderTexture target, RenderTexture storage, GraphicsProgram program, ComputeProgram compute, Texture source, Sampler sampler) : IExecutionPass
+file static class Passes
 {
-    private readonly RenderResourceID _target = RenderResourceID.Intern("events_target");
-    private readonly RenderResourceID _storage = RenderResourceID.Intern("events_storage");
+    private static readonly Prowl.Vector.Color Black = new(0, 0, 0, 255);
 
-    public string Name => "Events";
-
-    public void Setup(RenderContextBuilder builder)
+    public static void Events(FrameGraph graph, RenderTexture target, RenderTexture storage, GraphicsProgram program, ComputeProgram compute, Texture source, Sampler sampler)
     {
-        builder.DeclareImportedTexture(_target, target);
-        builder.DeclareImportedTexture(_storage, storage, TextureState.Storage);
+        TextureHandle targetHandle = graph.Import(target);
+        TextureHandle storageHandle = graph.Import(storage);
+        graph.AddPass("Events", pass =>
+        {
+            pass.Write(targetHandle);
+            pass.Write(storageHandle, TextureState.Storage);
+        }, context =>
+        {
+            CommandBuffer cmd = context.Command;
+            PropertySet properties = new();
+            properties.SetTexture("Tex", source);
+            properties.SetSampler("Smp", sampler);
+            cmd.SetFramebuffer(target, TargetLoadStoreOps.Clear(Black));
+            cmd.SetShader(program);
+            cmd.SetVertexSource(VertexSource.None);
+            cmd.SetProperties(properties);
+            cmd.PushDebugGroup("First");
+            cmd.Draw(3);
+            cmd.PopDebugGroup();
+            cmd.ClearColorTarget(0, new Prowl.Vector.Color(0, 0, 255, 255));
+            cmd.SetScissor(0, 0, 4, 8);
+            cmd.Draw(3);
+
+            PropertySet computeProperties = new();
+            computeProperties.SetTexture("ComputeOutput", storage.ColorTextures[0]);
+            cmd.SetComputeShader(compute);
+            cmd.SetProperties(computeProperties);
+            cmd.Dispatch(1, 1, 1);
+        });
     }
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public static void ImportedBuffers(FrameGraph graph, DeviceBuffer data, DeviceBuffer result, ComputeProgram compute)
     {
-        PropertySet properties = new();
-        properties.SetTexture("Tex", source);
-        properties.SetSampler("Smp", sampler);
-        cmd.SetFramebuffer(target, TargetLoadStoreOps.Clear(new Prowl.Vector.Color(0, 0, 0, 255)));
-        cmd.SetShader(program);
-        cmd.SetVertexSource(VertexSource.None);
-        cmd.SetProperties(properties);
-        cmd.PushDebugGroup("First");
-        cmd.Draw(3);
-        cmd.PopDebugGroup();
-        cmd.ClearColorTarget(0, new Prowl.Vector.Color(0, 0, 255, 255));
-        cmd.SetScissor(0, 0, 4, 8);
-        cmd.Draw(3);
-
-        PropertySet computeProperties = new();
-        computeProperties.SetTexture("ComputeOutput", storage.ColorTextures[0]);
-        cmd.SetComputeShader(compute);
-        cmd.SetProperties(computeProperties);
-        cmd.Dispatch(1, 1, 1);
-    }
-}
-
-file sealed class ImportedBufferPass(DeviceBuffer data, DeviceBuffer result, ComputeProgram compute) : IExecutionPass
-{
-    private readonly RenderResourceID _data = RenderResourceID.Intern("imported_data");
-    private readonly RenderResourceID _result = RenderResourceID.Intern("imported_result");
-
-    public string Name => "ImportedBuffers";
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        builder.DeclareImportedBuffer(_data, data, BufferAccess.ShaderRead);
-        builder.DeclareImportedBuffer(_result, result, BufferAccess.ShaderWrite);
+        BufferHandle dataHandle = graph.Import(data);
+        BufferHandle resultHandle = graph.Import(result);
+        graph.AddPass("ImportedBuffers", pass =>
+        {
+            pass.Read(dataHandle, BufferAccess.ShaderRead);
+            pass.Write(resultHandle, BufferAccess.ShaderWrite);
+        }, context =>
+        {
+            CommandBuffer cmd = context.Command;
+            PropertySet properties = new();
+            properties.SetBuffer("Input", data);
+            properties.SetBuffer("Output", result);
+            cmd.SetComputeShader(compute);
+            cmd.SetProperties(properties);
+            cmd.Dispatch(1, 1, 1);
+        });
     }
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public static void Undeclared(FrameGraph graph, ComputeProgram compute, Texture storage)
+        => graph.AddPass("Undeclared", _ => { }, context =>
+        {
+            CommandBuffer cmd = context.Command;
+            PropertySet properties = new();
+            properties.SetTexture("ComputeOutput", storage);
+            cmd.SetComputeShader(compute);
+            cmd.SetProperties(properties);
+            cmd.Dispatch(1, 1, 1);
+        });
+
+    public static void Sample(FrameGraph graph, RenderTexture target, GraphicsProgram program, Texture source, Sampler sampler, string name = "Sample")
     {
-        PropertySet properties = new();
-        properties.SetBuffer("Input", data);
-        properties.SetBuffer("Output", result);
-        cmd.SetComputeShader(compute);
-        cmd.SetProperties(properties);
-        cmd.Dispatch(1, 1, 1);
-    }
-}
-
-file sealed class UndeclaredPass(ComputeProgram compute, Texture storage) : IExecutionPass
-{
-    public string Name => "Undeclared";
-
-    public void Setup(RenderContextBuilder builder) { }
-
-    public void Render(RenderContext context, CommandBuffer cmd)
-    {
-        PropertySet properties = new();
-        properties.SetTexture("ComputeOutput", storage);
-        cmd.SetComputeShader(compute);
-        cmd.SetProperties(properties);
-        cmd.Dispatch(1, 1, 1);
-    }
-}
-
-file sealed class SamplePass(RenderTexture target, GraphicsProgram program, Texture source, Sampler sampler, string name = "Sample") : IExecutionPass
-{
-    private readonly RenderResourceID _target = RenderResourceID.Intern("sample_target_" + name);
-
-    public string Name => name;
-
-    public void Setup(RenderContextBuilder builder) => builder.DeclareImportedTexture(_target, target);
-
-    public void Render(RenderContext context, CommandBuffer cmd)
-    {
-        PropertySet properties = new();
-        properties.SetTexture("Tex", source);
-        properties.SetSampler("Smp", sampler);
-        cmd.SetFramebuffer(target, TargetLoadStoreOps.Clear(new Prowl.Vector.Color(0, 0, 0, 255)));
-        cmd.SetShader(program);
-        cmd.SetVertexSource(VertexSource.None);
-        cmd.SetProperties(properties);
-        cmd.Draw(3);
-    }
-}
-
-file sealed class IndirectPass(RenderTexture target, GraphicsProgram program, Texture source, Sampler sampler, DeviceBuffer arguments) : IExecutionPass
-{
-    private readonly RenderResourceID _target = RenderResourceID.Intern("indirect_target");
-    private readonly RenderResourceID _arguments = RenderResourceID.Intern("indirect_arguments");
-
-    public string Name => "Indirect";
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        builder.DeclareImportedTexture(_target, target);
-        builder.DeclareImportedBuffer(_arguments, arguments, BufferAccess.Indirect);
+        TextureHandle handle = graph.Import(target);
+        graph.AddPass(name, pass => pass.Write(handle), context =>
+        {
+            CommandBuffer cmd = context.Command;
+            PropertySet properties = new();
+            properties.SetTexture("Tex", source);
+            properties.SetSampler("Smp", sampler);
+            cmd.SetFramebuffer(target, TargetLoadStoreOps.Clear(Black));
+            cmd.SetShader(program);
+            cmd.SetVertexSource(VertexSource.None);
+            cmd.SetProperties(properties);
+            cmd.Draw(3);
+        });
     }
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public static void Indirect(FrameGraph graph, RenderTexture target, GraphicsProgram program, Texture source, Sampler sampler, DeviceBuffer arguments)
     {
-        PropertySet properties = new();
-        properties.SetTexture("Tex", source);
-        properties.SetSampler("Smp", sampler);
-        cmd.SetFramebuffer(target, TargetLoadStoreOps.Clear(new Prowl.Vector.Color(0, 0, 0, 255)));
-        cmd.SetShader(program);
-        cmd.SetVertexSource(VertexSource.None);
-        cmd.SetProperties(properties);
-        cmd.DrawIndirect(arguments, 0, 2, 16);
-    }
-}
-
-file sealed class BlitPass(RenderTexture source, RenderTexture destination, string sourceId) : IExecutionPass
-{
-    private readonly RenderResourceID _destination = RenderResourceID.Intern("blit_destination");
-
-    public string Name => "Blit";
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        builder.DeclareInputTexture(RenderResourceID.Intern(sourceId), TextureState.TransferSrc);
-        builder.DeclareImportedTexture(_destination, destination, TextureState.TransferDst);
+        TextureHandle handle = graph.Import(target);
+        BufferHandle argumentsHandle = graph.Import(arguments);
+        graph.AddPass("Indirect", pass =>
+        {
+            pass.Write(handle);
+            pass.Read(argumentsHandle, BufferAccess.Indirect);
+        }, context =>
+        {
+            CommandBuffer cmd = context.Command;
+            PropertySet properties = new();
+            properties.SetTexture("Tex", source);
+            properties.SetSampler("Smp", sampler);
+            cmd.SetFramebuffer(target, TargetLoadStoreOps.Clear(Black));
+            cmd.SetShader(program);
+            cmd.SetVertexSource(VertexSource.None);
+            cmd.SetProperties(properties);
+            cmd.DrawIndirect(arguments, 0, 2, 16);
+        });
     }
 
-    public void Render(RenderContext context, CommandBuffer cmd)
-        => cmd.BlitTexture(source.ColorTextures[0], destination.ColorTextures[0], [new TextureBlit(0, 0, 8, 8, 0, 0, 8, 8)]);
-}
-
-file sealed class ViewBlitPass(RenderTexture source, RenderTexture destination, string sourceId) : IInstancePass
-{
-    public static readonly GraphKind View = GraphKind.Intern("Test.ReplayView");
-
-    private readonly RenderResourceID _destination = RenderResourceID.Intern("view_blit_destination");
-
-    public string Name => "ViewBlit";
-
-    public GraphKind Kind => View;
-
-    public void Setup(InstanceContextBuilder builder)
+    public static void Blit(FrameGraph graph, string name, RenderTexture source, RenderTexture destination)
     {
-        builder.DeclareInputTexture(RenderResourceID.Intern(sourceId), TextureState.TransferSrc);
-        builder.DeclareImportedTexture(_destination, destination, TextureState.TransferDst);
+        TextureHandle sourceHandle = graph.Import(source);
+        TextureHandle destinationHandle = graph.Import(destination);
+        graph.AddPass(name, pass =>
+        {
+            pass.Read(sourceHandle, TextureState.TransferSrc);
+            pass.Write(destinationHandle, TextureState.TransferDst);
+        }, context => context.Command.BlitTexture(source.ColorTextures[0], destination.ColorTextures[0], [new TextureBlit(0, 0, 8, 8, 0, 0, 8, 8)]));
     }
-
-    public void Render(InstanceContext context, CommandBuffer cmd)
-        => cmd.BlitTexture(source.ColorTextures[0], destination.ColorTextures[0], [new TextureBlit(0, 0, 8, 8, 0, 0, 8, 8)]);
 }
 
 [Collection("GPU Tests")]
@@ -185,12 +144,15 @@ public class ReplayTests
         using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
         using RenderTexture drawn = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
         using RenderTexture blitted = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
-        using RenderGraph graph = RenderGraph.Build(new IPass[] { new SamplePass(drawn, program, source, sampler, "Drawn"), new BlitPass(drawn, blitted, "sample_target_Drawn") });
-        DeepRecording deep = Record(device, graph, DeepMode.Full);
+        DeepRecording deep = Record(device, DeepMode.Full, graph =>
+        {
+            Passes.Sample(graph, drawn, program, source, sampler, "Drawn");
+            Passes.Blit(graph, "Blit", drawn, blitted);
+        });
 
-        DeepPass pass = deep.Instances[0].Passes.Single(p => p.Name == "Blit");
+        DeepPass pass = deep.Groups[0].Passes.Single(p => p.Name == "Blit");
         Assert.Contains(pass.Commands, c => c is BlitTextureCommand);
-        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { InstanceIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
+        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { GroupIndex = -1, PassIndex = pass.Index, EventIndex = 0 });
 
         Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
         RecordedCopy copy = pass.Copies.Single(c => c.Placement == CopyPlacement.AfterPass);
@@ -198,7 +160,7 @@ public class ReplayTests
     }
 
     [SkippableFact]
-    public void ReplayOnly_InstancePassRestoresWhatTheRootDrew()
+    public void ReplayOnly_GroupedPassRestoresWhatWasDrawnOutsideTheGroup()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
         ResourceFactory factory = device.ResourceFactory;
@@ -208,19 +170,21 @@ public class ReplayTests
         using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
         using RenderTexture drawn = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
         using RenderTexture blitted = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
-        using RenderGraph graph = RenderGraph.Build(
-            new IPass[] { new SamplePass(drawn, program, source, sampler, "RootDrawn"), new ViewBlitPass(drawn, blitted, "sample_target_RootDrawn") },
-            [new GraphScope(ViewBlitPass.View, GraphKind.Root)]);
-        GraphInstances instances = graph.CreateInstances();
-        instances.Add(ViewBlitPass.View, 3, extent: new GraphExtent(8, 8));
-        DeepRecording full = Record(device, graph, DeepMode.Full, instances);
-        DeepRecording only = Record(device, graph, DeepMode.ReplayOnly, instances);
+        void Add(FrameGraph graph)
+        {
+            Passes.Sample(graph, drawn, program, source, sampler, "Drawn");
+            using (graph.Group("View"))
+                Passes.Blit(graph, "ViewBlit", drawn, blitted);
+        }
 
-        DeepInstance view = only.Instances.Single(i => i.Key == new GraphInstanceKey(ViewBlitPass.View, 3));
-        ReplayResult result = new Replayer(device, only).Replay(new ReplayRequest { InstanceIndex = view.Index, PassIndex = view.Passes[0].Index });
+        DeepRecording full = Record(device, DeepMode.Full, Add);
+        DeepRecording only = Record(device, DeepMode.ReplayOnly, Add);
+
+        DeepGroup view = only.Groups.Single(g => g.Name == "View");
+        ReplayResult result = new Replayer(device, only).Replay(new ReplayRequest { GroupIndex = view.Index, PassIndex = view.Passes[0].Index });
 
         Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
-        RecordedCopy copy = full.Instances.Single(i => i.Index == view.Index).Passes[0].Copies.Single(c => c.Placement == CopyPlacement.AfterPass);
+        RecordedCopy copy = full.Groups.Single(i => i.Index == view.Index).Passes[0].Copies.Single(c => c.Placement == CopyPlacement.AfterPass);
         Assert.Equal(full.Blobs.Single(b => b.Ref == copy.Blob).Data, result.Outputs.Single().Data);
     }
 
@@ -236,19 +200,18 @@ public class ReplayTests
         using RenderTexture target = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
         using DeviceBuffer arguments = factory.CreateBuffer(new BufferDescription(32, BufferUsage.IndirectBuffer));
         device.UpdateBuffer(arguments, 0, new uint[] { 3, 1, 0, 0, 3, 1, 0, 0 });
-        using RenderGraph graph = RenderGraph.Build(new IPass[] { new IndirectPass(target, program, source, sampler, arguments) });
-        DeepRecording deep = Record(device, graph, DeepMode.Full);
-        DeepPass pass = deep.Instances[0].Passes[0];
+        DeepRecording deep = Record(device, DeepMode.Full, graph => Passes.Indirect(graph, target, program, source, sampler, arguments));
+        DeepPass pass = deep.Groups[0].Passes[0];
         Replayer replayer = new(device, deep);
 
         static bool Drawn(ReplayResult result) => result.Outputs.Single().Data.Where((b, i) => i % 4 != 3).Any(b => b != 0);
-        ReplayResult whole = replayer.Replay(new ReplayRequest { InstanceIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
-        ReplayResult none = replayer.Replay(new ReplayRequest { InstanceIndex = 0, PassIndex = pass.Index, EventIndex = 0, Indirect = new IndirectSlice(0, 0) });
-        ReplayResult second = replayer.Replay(new ReplayRequest { InstanceIndex = 0, PassIndex = pass.Index, EventIndex = 0, Indirect = new IndirectSlice(1, 1) });
+        ReplayResult whole = replayer.Replay(new ReplayRequest { GroupIndex = -1, PassIndex = pass.Index, EventIndex = 0 });
+        ReplayResult none = replayer.Replay(new ReplayRequest { GroupIndex = -1, PassIndex = pass.Index, EventIndex = 0, Indirect = new IndirectSlice(0, 0) });
+        ReplayResult second = replayer.Replay(new ReplayRequest { GroupIndex = -1, PassIndex = pass.Index, EventIndex = 0, Indirect = new IndirectSlice(1, 1) });
         TraceResourceId buffer = deep.Resources.Single(r => r.Buffer is { } b && b.SizeInBytes == 32).Id;
         ReplayResult emptied = replayer.Replay(new ReplayRequest
         {
-            InstanceIndex = 0,
+            GroupIndex = -1,
             PassIndex = pass.Index,
             EventIndex = 0,
             Patches = [new BufferPatch(buffer, 0, new byte[32])],
@@ -274,13 +237,16 @@ public class ReplayTests
         using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
         using RenderTexture a = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
         using RenderTexture b = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
-        using RenderGraph graph = RenderGraph.Build(new IPass[] { new SamplePass(a, first, source, sampler, "A"), new SamplePass(b, second, source, sampler, "B") });
-        DeepRecording deep = Record(device, graph, DeepMode.Full);
+        DeepRecording deep = Record(device, DeepMode.Full, graph =>
+        {
+            Passes.Sample(graph, a, first, source, sampler, "A");
+            Passes.Sample(graph, b, second, source, sampler, "B");
+        });
 
         Assert.Equal(2, deep.Programs.Length);
         Assert.Equal(new[] { 1u, 2u }, deep.Programs.Select(p => p.Specializations.Single().Value).Order());
-        DeepPass pass = deep.Instances[0].Passes.Single(p => p.Name == "B");
-        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { InstanceIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
+        DeepPass pass = deep.Groups[0].Passes.Single(p => p.Name == "B");
+        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { GroupIndex = -1, PassIndex = pass.Index, EventIndex = 0 });
         Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
     }
 
@@ -290,8 +256,8 @@ public class ReplayTests
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
         DeepRecording deep = RecordSample(device);
 
-        DeepPass pass = deep.Instances[0].Passes[0];
-        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { InstanceIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
+        DeepPass pass = deep.Groups[0].Passes[0];
+        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { GroupIndex = -1, PassIndex = pass.Index, EventIndex = 0 });
 
         Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
         ReplayOutput output = Assert.Single(result.Outputs);
@@ -306,7 +272,7 @@ public class ReplayTests
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
         DeepRecording deep = RecordSample(device);
 
-        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { InstanceIndex = 0, PassIndex = deep.Instances[0].Passes[0].Index });
+        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { GroupIndex = -1, PassIndex = deep.Groups[0].Passes[0].Index });
 
         Assert.Equal(ReplayStatus.Restored, result.Status);
         Assert.Single(result.Outputs);
@@ -352,8 +318,7 @@ public class ReplayTests
             [new ResourceLayoutDescription { Set = 0, Elements = [new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0)] }],
             4, 1, 1));
         using Texture storage = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(4, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled | TextureUsage.Storage));
-        using RenderGraph graph = RenderGraph.Build(new IPass[] { new UndeclaredPass(compute, storage) });
-        DeepRecording deep = Record(device, graph, DeepMode.Full);
+        DeepRecording deep = Record(device, DeepMode.Full, graph => Passes.Undeclared(graph, compute, storage));
 
         ReplayResult result = ReplayFirstEvent(device, deep);
 
@@ -374,11 +339,10 @@ public class ReplayTests
         using DeviceBuffer data = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly));
         using DeviceBuffer result = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
         device.UpdateBuffer(data, 0, new uint[] { 5, 6, 7, 8 });
-        using RenderGraph graph = RenderGraph.Build(new IPass[] { new ImportedBufferPass(data, result, compute) });
-        DeepRecording deep = Record(device, graph, DeepMode.Full);
+        DeepRecording deep = Record(device, DeepMode.Full, graph => Passes.ImportedBuffers(graph, data, result, compute));
 
-        DeepPass pass = deep.Instances[0].Passes[0];
-        ReplayResult replay = new Replayer(device, deep).Replay(new ReplayRequest { InstanceIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
+        DeepPass pass = deep.Groups[0].Passes[0];
+        ReplayResult replay = new Replayer(device, deep).Replay(new ReplayRequest { GroupIndex = -1, PassIndex = pass.Index, EventIndex = 0 });
 
         Assert.True(replay.Status == ReplayStatus.Reexecuted, replay.Reason);
         ReplayOutput output = Assert.Single(replay.Outputs);
@@ -408,7 +372,7 @@ public class ReplayTests
 
     private static ReplayResult ReplayFirstEvent(GraphicsDevice device, DeepRecording deep)
     {
-        return new Replayer(device, deep).Replay(new ReplayRequest { InstanceIndex = 0, PassIndex = deep.Instances[0].Passes[0].Index, EventIndex = 0 });
+        return new Replayer(device, deep).Replay(new ReplayRequest { GroupIndex = -1, PassIndex = deep.Groups[0].Passes[0].Index, EventIndex = 0 });
     }
 
     private static DeepRecording Edit(DeepRecording deep, Func<DeepResult, DeepResult> edit)
@@ -437,8 +401,7 @@ public class ReplayTests
         device.UpdateTexture(source, Enumerable.Range(0, 64).Select(i => (byte)(i * 4)).ToArray());
         using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
         using RenderTexture target = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
-        using RenderGraph graph = RenderGraph.Build(new IPass[] { new SamplePass(target, program, source, sampler) });
-        return Record(device, graph, DeepMode.Full);
+        return Record(device, DeepMode.Full, graph => Passes.Sample(graph, target, program, source, sampler));
     }
 
     [SkippableFact]
@@ -463,24 +426,24 @@ public class ReplayTests
         using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
         using RenderTexture first = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
         using RenderTexture second = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
-        using RenderGraph graph = RenderGraph.Build(new IPass[]
+        void Add(FrameGraph graph)
         {
-            new SamplePass(first, program, source, sampler, "First"),
-            new SamplePass(second, program, source, sampler, "Second"),
-        });
+            Passes.Sample(graph, first, program, source, sampler, "First");
+            Passes.Sample(graph, second, program, source, sampler, "Second");
+        }
 
-        DeepRecording full = Record(device, graph, DeepMode.Full);
-        DeepRecording only = Record(device, graph, DeepMode.ReplayOnly);
+        DeepRecording full = Record(device, DeepMode.Full, Add);
+        DeepRecording only = Record(device, DeepMode.ReplayOnly, Add);
 
         Replayer fullReplayer = new(device, full);
         Replayer onlyReplayer = new(device, only);
-        DeepInstance fullView = full.Instances[0];
-        DeepInstance onlyView = only.Instances[0];
+        DeepGroup fullView = full.Groups[0];
+        DeepGroup onlyView = only.Groups[0];
         Assert.Equal(2, onlyView.Passes.Length);
         for (int i = 0; i < fullView.Passes.Length; i++)
         {
-            ReplayResult expected = fullReplayer.Replay(new ReplayRequest { InstanceIndex = 0, PassIndex = fullView.Passes[i].Index });
-            ReplayResult actual = onlyReplayer.Replay(new ReplayRequest { InstanceIndex = 0, PassIndex = onlyView.Passes[i].Index });
+            ReplayResult expected = fullReplayer.Replay(new ReplayRequest { GroupIndex = -1, PassIndex = fullView.Passes[i].Index });
+            ReplayResult actual = onlyReplayer.Replay(new ReplayRequest { GroupIndex = -1, PassIndex = onlyView.Passes[i].Index });
             Assert.True(actual.Status == ReplayStatus.Reexecuted, actual.Reason);
             Assert.Equal(expected.Outputs.Single().Data, actual.Outputs.Single().Data);
         }
@@ -512,13 +475,11 @@ public class ReplayTests
         using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
         using RenderTexture target = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
         using RenderTexture storage = factory.CreateRenderTexture(new RenderTextureDescription(4, 1, new[] { PixelFormat.R32_G32_B32_A32_Float }, depth: false, storage: true));
-        using RenderGraph graph = RenderGraph.Build(new IPass[] { new EventsPass(target, storage, program, compute, source, sampler) });
-
-        DeepRecording deep = Record(device, graph, DeepMode.Full);
-        DeepPass pass = deep.Instances[0].Passes[0];
+        DeepRecording deep = Record(device, DeepMode.Full, graph => Passes.Events(graph, target, storage, program, compute, source, sampler));
+        DeepPass pass = deep.Groups[0].Passes[0];
         Assert.Contains(pass.Commands, c => c is PushMarkerCommand { Name: "First" });
         Replayer replayer = new(device, deep);
-        ReplayRequest Request(int? last) => new() { InstanceIndex = 0, PassIndex = pass.Index, EventIndex = last };
+        ReplayRequest Request(int? last) => new() { GroupIndex = -1, PassIndex = pass.Index, EventIndex = last };
 
         ReplayResult whole = replayer.Replay(Request(null));
         ReplayResult last = replayer.Replay(Request(3));
@@ -530,10 +491,12 @@ public class ReplayTests
         Assert.NotEqual(whole.Outputs[0].Data, first.Outputs[0].Data);
     }
 
-    private static DeepRecording Record(GraphicsDevice device, RenderGraph graph, DeepMode mode, GraphInstances? instances = null)
+    private static DeepRecording Record(GraphicsDevice device, DeepMode mode, Action<FrameGraph> add)
     {
+        using FrameGraph graph = new(device, "Test");
+        add(graph);
         DeepRecording deep = new(device, mode);
-        device.DispatchGraph(graph, instances ?? graph.CreateInstances(), deep);
+        graph.Execute(deep);
         deep.Wait();
         return deep;
     }

@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using Prowl.Echo;
@@ -9,43 +10,24 @@ using Xunit;
 
 namespace Prowl.Graphite.Debugger.Tests;
 
-file sealed class WritePass : IExecutionPass
+file static class Passes
 {
-    private readonly string _name;
-    private readonly RenderResourceID _target;
-    private readonly RenderTexture _texture;
-    private readonly DeviceBuffer _external;
-    private readonly byte _value;
-
-    public WritePass(string name, RenderTexture texture, DeviceBuffer external, byte value)
+    public static void Write(FrameGraph graph, string name, RenderTexture texture, DeviceBuffer external, byte value)
     {
-        _name = name;
-        _target = RenderResourceID.Intern("deep_target");
-        _texture = texture;
-        _external = external;
-        _value = value;
+        TextureHandle target = graph.Import(texture);
+        graph.AddPass(name, pass => pass.Write(target), context =>
+        {
+            CommandBuffer cmd = context.Command;
+            cmd.ClearColorTarget(0, new Color((byte)(value * 50), 0, 0, 255));
+            cmd.UpdateBuffer(external, 0, new byte[] { value, value, value, value });
+        });
     }
 
-    public string Name => _name;
-
-    public void Setup(RenderContextBuilder builder) => builder.DeclareImportedTexture(_target, _texture);
-
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public static void History(FrameGraph graph)
     {
-        cmd.ClearColorTarget(0, new Color((byte)(_value * 50), 0, 0, 255));
-        cmd.UpdateBuffer(_external, 0, new byte[] { _value, _value, _value, _value });
+        TextureHandle history = graph.Create("deep_history", GraphTextureDesc.Sized(8, 8, PixelFormat.R8_G8_B8_A8_UNorm), Lifetime.History(1));
+        graph.AddPass("History", pass => pass.Write(history), _ => { });
     }
-}
-
-file sealed class HistoryPass : IExecutionPass
-{
-    private readonly RenderResourceID _id = RenderResourceID.Intern("deep_history");
-
-    public string Name => "History";
-
-    public void Setup(RenderContextBuilder builder) => builder.DeclareOutputTexture(_id, GraphTextureDesc.Sized(8, 8, false, PixelFormat.R8_G8_B8_A8_UNorm), history: 1);
-
-    public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
 [System.Serializable]
@@ -73,11 +55,12 @@ public class DeepRecordingTests
         return EchoObject.ReadFromBinary(reader);
     }
 
-    private static DeepRecording Record(GraphicsDevice device, DeepMode mode, params IPass[] passes)
+    private static DeepRecording Record(GraphicsDevice device, DeepMode mode, Action<FrameGraph> add)
     {
-        using RenderGraph graph = RenderGraph.Build(passes, name: "Deep");
+        using FrameGraph graph = new(device, "Deep");
+        add(graph);
         DeepRecording deep = new(device, mode);
-        device.DispatchGraph(graph, graph.CreateInstances(), deep);
+        graph.Execute(deep);
         deep.Wait();
         return deep;
     }
@@ -89,9 +72,9 @@ public class DeepRecordingTests
         DeviceBuffer external = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
         RenderTexture target = device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
 
-        DeepRecording deep = Record(device, DeepMode.Full, new WritePass("Only", target, external, 5));
+        DeepRecording deep = Record(device, DeepMode.Full, graph => Passes.Write(graph, "Only", target, external, 5));
 
-        DeepPass pass = Assert.Single(Assert.Single(deep.Instances).Passes);
+        DeepPass pass = Assert.Single(Assert.Single(deep.Groups).Passes);
         Assert.Null(pass.NotReplayable);
         Assert.Equal(2, pass.References.Length);
         UpdateBufferCommand update = Assert.Single(pass.Commands.OfType<UpdateBufferCommand>());
@@ -99,7 +82,7 @@ public class DeepRecordingTests
         Assert.Contains(deep.Blobs, b => b.Ref == update.Data && b.Data.SequenceEqual(new byte[] { 5, 5, 5, 5 }));
         Assert.Contains(pass.Commands, c => c is SetFramebufferCommand);
         Assert.Contains(pass.Commands, c => c is ClearColorTargetCommand);
-        Assert.Single(deep.Recording.Instances);
+        Assert.Single(deep.Recording.Groups);
     }
 
     [SkippableTheory]
@@ -111,9 +94,13 @@ public class DeepRecordingTests
         DeviceBuffer external = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
         RenderTexture target = device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
 
-        DeepRecording deep = Record(device, mode, new WritePass("First", target, external, 1), new WritePass("Second", target, external, 2));
+        DeepRecording deep = Record(device, mode, graph =>
+        {
+            Passes.Write(graph, "First", target, external, 1);
+            Passes.Write(graph, "Second", target, external, 2);
+        });
 
-        DeepPass[] passes = deep.Instances[0].Passes.ToArray();
+        DeepPass[] passes = deep.Groups[0].Passes.ToArray();
         RecordedCopy[] copies = passes.SelectMany(p => p.Copies).ToArray();
         Assert.Equal(copies.Length, copies.Select(c => c.Version).Distinct().Count());
         Assert.DoesNotContain(passes[1].Copies, c => c.Placement == CopyPlacement.BeforePass);
@@ -128,7 +115,11 @@ public class DeepRecordingTests
         using GraphicsDevice device = CreateDevice();
         DeviceBuffer external = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
         RenderTexture target = device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
-        DeepRecording deep = Record(device, DeepMode.Full, new WritePass("First", target, external, 1), new WritePass("Second", target, external, 2));
+        DeepRecording deep = Record(device, DeepMode.Full, graph =>
+        {
+            Passes.Write(graph, "First", target, external, 1);
+            Passes.Write(graph, "Second", target, external, 2);
+        });
 
         DebuggerSerialization.Register();
         byte[] bytes = WriteBinary(Serializer.Serialize(deep));
@@ -141,7 +132,7 @@ public class DeepRecordingTests
         Assert.Equal(deep.Recording.DeviceName, loaded.Recording.DeviceName);
         Assert.Equal(deep.ExecutionId, loaded.ExecutionId);
         Assert.Equal("Deep", loaded.Recording.GraphName);
-        Assert.Equal(deep.Recording.Instances, loaded.Recording.Instances);
+        Assert.Equal(deep.Recording.Groups, loaded.Recording.Groups);
         Assert.Equal(deep.Recording.CommandBuffers, loaded.Recording.CommandBuffers);
         Assert.NotNull(loaded.Recording.Counters);
         Assert.Equal(deep.Recording.Counters, loaded.Recording.Counters);
@@ -149,7 +140,7 @@ public class DeepRecordingTests
         Assert.Equal(deep.Programs, loaded.Programs);
         Assert.Equal(deep.Samplers, loaded.Samplers);
         Assert.Equal(deep.Blobs, loaded.Blobs);
-        Assert.Equal(deep.Instances, loaded.Instances);
+        Assert.Equal(deep.Groups, loaded.Groups);
     }
 
     [Fact]
@@ -197,20 +188,19 @@ public class DeepRecordingTests
     }
 
     [Fact]
-    public void EchoRoundTrip_KeepsSerializablePayloadsAndDropsLiveOnes()
+    public void EchoRoundTrip_KeepsSerializablePayloads()
     {
         DebuggerSerialization.Register();
         PushMarkerCommand marker = new("Group", new TestPayload("Cube", new TestHandle(3, 1), [new TestHandle(4, 2)]));
-        RecordedInstance instance = new("Camera", 1, 0, new GraphInstanceKey(GraphKind.Intern("Test.Payload"), 4), 8, 8,
-            EquatableArray<RecordedPass>.Empty, EquatableArray<RecordedSkippedPass>.Empty, new System.Threading.SemaphoreSlim(1));
+        RecordedGroup group = new("Camera", 1, 0, EquatableArray<RecordedPass>.Empty);
 
         PushMarkerCommand loadedMarker = Serializer.Deserialize<PushMarkerCommand>(ReadBinary(WriteBinary(Serializer.Serialize(marker))))!;
-        RecordedInstance loadedInstance = Serializer.Deserialize<RecordedInstance>(ReadBinary(WriteBinary(Serializer.Serialize(instance))))!;
+        RecordedGroup loadedGroup = Serializer.Deserialize<RecordedGroup>(ReadBinary(WriteBinary(Serializer.Serialize(group))))!;
 
         TestPayload payload = Assert.IsType<TestPayload>(loadedMarker.Meta);
         Assert.Equal(("Cube", new TestHandle(3, 1)), (payload.Name, payload.Handle));
         Assert.Equal([new TestHandle(4, 2)], payload.Others);
-        Assert.Equal(instance with { Data = null }, loadedInstance);
+        Assert.Equal(group, loadedGroup);
     }
 
     [SkippableFact]
@@ -219,12 +209,16 @@ public class DeepRecordingTests
         using GraphicsDevice device = CreateDevice();
         using DeviceBuffer external = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
         using RenderTexture target = device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
-        DeepRecording deep = Record(device, DeepMode.Full, new WritePass("First", target, external, 1), new WritePass("Second", target, external, 2));
+        DeepRecording deep = Record(device, DeepMode.Full, graph =>
+        {
+            Passes.Write(graph, "First", target, external, 1);
+            Passes.Write(graph, "Second", target, external, 2);
+        });
         Replayer replayer = new(device, deep);
 
-        foreach (DeepPass pass in deep.Instances[0].Passes)
+        foreach (DeepPass pass in deep.Groups[0].Passes)
         {
-            ReplayResult result = replayer.Replay(new ReplayRequest { InstanceIndex = 0, PassIndex = pass.Index, EventIndex = 1 });
+            ReplayResult result = replayer.Replay(new ReplayRequest { GroupIndex = -1, PassIndex = pass.Index, EventIndex = 1 });
 
             Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
             Assert.NotEmpty(result.Outputs);
@@ -241,14 +235,15 @@ public class DeepRecordingTests
     public void HistoryResources_RecordRingSlotAndValidity()
     {
         using GraphicsDevice device = CreateDevice();
-        using RenderGraph graph = RenderGraph.Build([new HistoryPass()]);
+        using FrameGraph graph = new(device, "Test");
 
         RecordedGraphResource Run()
         {
+            Passes.History(graph);
             DeepRecording deep = new(device, DeepMode.ReplayOnly);
-            device.DispatchGraph(graph, graph.CreateInstances(), deep);
+            graph.Execute(deep);
             deep.Wait();
-            return Assert.Single(deep.Instances[0].Resources);
+            return Assert.Single(deep.Groups[0].Resources);
         }
 
         RecordedGraphResource first = Run();
