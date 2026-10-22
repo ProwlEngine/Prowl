@@ -223,6 +223,9 @@ public sealed class PropertyGridBuilder
 
     private Action<object>? _onChange;
     private HashSet<string>? _overrides;
+    private Action<string>? _onMarkerClicked;
+    private string? _markerTooltip;
+    private Func<FieldInfo, bool>? _filter;
     private int _depth;
 
     internal PropertyGridBuilder(Paper paper, string id, object target, PropertyGridConfig config)
@@ -247,6 +250,17 @@ public sealed class PropertyGridBuilder
     /// <summary>Set of field names to highlight as overridden (prefab system).</summary>
     public PropertyGridBuilder Overrides(HashSet<string>? overrides) { _overrides = overrides; return this; }
 
+    /// <summary>Makes the override marker clickable, called with the field's name.</summary>
+    public PropertyGridBuilder OnOverrideClicked(Action<string> onClicked, string? tooltip = null)
+    {
+        _onMarkerClicked = onClicked;
+        _markerTooltip = tooltip;
+        return this;
+    }
+
+    /// <summary>Draws only the top level fields this returns true for.</summary>
+    public PropertyGridBuilder FieldFilter(Func<FieldInfo, bool>? filter) { _filter = filter; return this; }
+
     /// <summary>Starting nesting depth (default 0).</summary>
     public PropertyGridBuilder Depth(int depth) { _depth = depth; return this; }
 
@@ -256,7 +270,8 @@ public sealed class PropertyGridBuilder
     /// <summary>Render the property grid.</summary>
     public void Show()
     {
-        PropertyGridRenderer.DrawTargets(_paper, _id, _targets, _config, _onChange, _overrides, _depth);
+        PropertyGridRenderer.DrawTargets(_paper, _id, _targets, _config, _onChange, _overrides, _depth,
+            _filter, _onMarkerClicked, _markerTooltip);
     }
 }
 
@@ -276,6 +291,11 @@ public static class PropertyGridRenderer
     /// </summary>
     [ThreadStatic] public static bool IsMixedField;
 
+    // The overridden field about to be drawn, consumed by DrawField so the marker also shows on fields an attribute handler draws.
+    [ThreadStatic] private static string? _pendingOverride;
+    [ThreadStatic] private static Action<string>? _onMarkerClicked;
+    [ThreadStatic] private static string? _markerTooltip;
+
     /// <summary>Single-target entry point.</summary>
     public static void Draw(Paper paper, string id, object target, PropertyGridConfig config,
         Action<object>? onChange, HashSet<string>? overrides, int depth)
@@ -290,7 +310,8 @@ public static class PropertyGridRenderer
     /// exist (by name and type) on every target are omitted.
     /// </summary>
     public static void DrawTargets(Paper paper, string id, IReadOnlyList<object> targets, PropertyGridConfig config,
-        Action<object>? onChange, HashSet<string>? overrides, int depth)
+        Action<object>? onChange, HashSet<string>? overrides, int depth,
+        Func<FieldInfo, bool>? filter = null, Action<string>? onMarkerClicked = null, string? markerTooltip = null)
     {
         if (targets == null || targets.Count == 0) return;
         if (depth > config.MaxDepth) return;
@@ -301,6 +322,11 @@ public static class PropertyGridRenderer
         var m = Origami.Current.Metrics;
         bool isRoot = depth == 0;
         bool multi = targets.Count > 1;
+
+        Action<string>? outerMarkerClicked = _onMarkerClicked;
+        string? outerMarkerTooltip = _markerTooltip;
+        _onMarkerClicked = onMarkerClicked;
+        _markerTooltip = markerTooltip;
 
         if (isRoot)
         {
@@ -320,6 +346,7 @@ public static class PropertyGridRenderer
             for (int i = 0; i < fields.Length; i++)
             {
                 var field = fields[i];
+                if (filter != null && !filter(field)) continue;
                 string fieldId = $"{id}_{field.Name}";
 
                 var meta = GetFieldMeta(field);
@@ -335,6 +362,7 @@ public static class PropertyGridRenderer
                         break;
                 }
 
+                _pendingOverride = overrides != null && overrides.Contains(field.Name) ? field.Name : null;
                 if (begun == attrs.Length) // no handler hid the field
                 {
                     bool isMixed = multi && IsFieldMixed(targets, field);
@@ -359,11 +387,10 @@ public static class PropertyGridRenderer
                         var value = field.GetValue(representative);
                         var fieldType = field.FieldType;
                         string label = meta.Label;
-                        bool isOverridden = overrides?.Contains(field.Name) ?? false;
-
-                        DrawField(paper, fieldId, label, fieldType, value, config, applyAll, depth, isOverridden, isMixed);
+                        DrawField(paper, fieldId, label, fieldType, value, config, applyAll, depth, isMixed: isMixed);
                     }
                 }
+                _pendingOverride = null;
 
                 // Post-draw attribute handlers: exactly the ones that began, so a hidden field still closes their scopes
                 for (int a = 0; a < begun; a++)
@@ -391,6 +418,8 @@ public static class PropertyGridRenderer
             _rootTarget = null;
             _activeConfig = null;
         }
+        _onMarkerClicked = outerMarkerClicked;
+        _markerTooltip = outerMarkerTooltip;
     }
 
     // ── DrawField (public for external callers like MaterialPropertyDrawer) ──
@@ -398,6 +427,10 @@ public static class PropertyGridRenderer
     public static void DrawField(Paper paper, string id, string label, Type fieldType,
         object? value, PropertyGridConfig config, Action<object?> onChange, int depth, bool isOverridden = false, bool isMixed = false)
     {
+        string? overriddenField = _pendingOverride;
+        _pendingOverride = null;
+        isOverridden |= overriddenField != null;
+
         // Notify host before drawing
         config.OnBeforeDrawField?.Invoke(fieldType, value);
 
@@ -443,7 +476,15 @@ public static class PropertyGridRenderer
             if (isOverridden || isMixed)
             {
                 var dot = isOverridden ? theme.Primary.C500 : theme.Amber.C400;
-                using (paper.Box($"{id}_ov").Width(8).Height(m.RowHeight).IsNotInteractable().Enter())
+                Action<string>? onMarkerClicked = isOverridden && overriddenField != null ? _onMarkerClicked : null;
+                var marker = paper.Box($"{id}_ov").Width(8).Height(m.RowHeight);
+                if (onMarkerClicked != null)
+                {
+                    marker.Cursor(PaperCursor.Pointer).OnClick(overriddenField!, (name, _) => onMarkerClicked(name));
+                    if (_markerTooltip != null) marker.Tooltip(_markerTooltip);
+                }
+                else marker.IsNotInteractable();
+                using (marker.Enter())
                     paper.Box($"{id}_ovd").Width(5).Height(5).Rounded(3)
                         .Margin(1, UnitValue.Stretch(), UnitValue.Stretch(), UnitValue.Stretch())
                         .BackgroundColor(dot).IsNotInteractable();
