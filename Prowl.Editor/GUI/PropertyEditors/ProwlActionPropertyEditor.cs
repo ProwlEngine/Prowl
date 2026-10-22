@@ -168,7 +168,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
                 break;
             case ProwlActionArgType.String:
                 EditorGUI.Row(paper, id, "Value", () =>
-                    Origami.TextField(paper, $"{id}_v", call.StringArg, v => { call.StringArg = v; changed(); }).Show());
+                    Origami.TextField(paper, $"{id}_v", call.StringArg, v => { call.StringArg = v; changed(); }).CommitOnEnter().Show());
                 break;
             case ProwlActionArgType.Object:
                 PropertyGridUtils.DrawField(paper, $"{id}_v", "Value", typeof(EngineObject), call.ObjectArg,

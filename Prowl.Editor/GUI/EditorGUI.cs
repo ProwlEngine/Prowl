@@ -142,7 +142,7 @@ public static class EditorGUI
     /// <summary> A label + text field settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsTextField(Paper paper, string id, string label, string value, Action<string> setter)
         => Row(paper, id, label, () =>
-            Origami.TextField(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).Show());
+            Origami.TextField(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).CommitOnEnter().Show());
 
     /// <summary> A label + int slider settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsIntSlider(Paper paper, string id, string label, int value, int min, int max, Action<int> setter)

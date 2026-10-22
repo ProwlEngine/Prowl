@@ -455,6 +455,7 @@ public class EditorApplication : Game
 
         TickPerfStats((float)Time.UnscaledDeltaTime);
         Selection.UpdatePing((float)Time.UnscaledDeltaTime);
+        GUI.Panels.ProjectPanel.RevealPings();
         EditorTheme.TickOrigami((float)Time.UnscaledDeltaTime);
 
         // Push the editor's Origami theme and begin frame
@@ -782,6 +783,8 @@ public class EditorApplication : Game
     {
         // On-boarding guide overlay (above panels/header, below Origami's popovers/toasts).
         GUI.EditorGuide.Draw(paper, (float)Time.UnscaledDeltaTime);
+
+        GUI.Popups.RenameOverlay.EndFrame();
 
         // Render all Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips)
         OrigamiUI.Origami.EndFrame(paper);

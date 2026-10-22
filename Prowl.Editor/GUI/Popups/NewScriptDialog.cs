@@ -137,7 +137,8 @@ public static class NewScriptDialog
                 }
 
                 Origami.TextField(paper, "scr_name", s_name, v => s_name = v)
-                    .Placeholder(Loc.Get("inspector.name")).Width(UnitValue.Stretch()).Show();
+                    .Placeholder(Loc.Get("inspector.name")).Width(UnitValue.Stretch())
+                    .AutoFocus().SelectAllOnFocus().Show();
 
                 // Validation hint green when valid, red when not. Always visible so the
                 // user knows why Create is disabled.
@@ -168,6 +169,12 @@ public static class NewScriptDialog
         // Footer buttons right-aligned Cancel + Create. The Create button is a real
         // EditorGUI.Button when valid; when invalid we render a visually-disabled Box
         // so the user sees the error hint rather than clicking a dead button.
+        if (ok && (paper.IsKeyPressed(PaperKey.Enter) || paper.IsKeyPressed(PaperKey.KeypadEnter)))
+        {
+            DoCreate();
+            return;
+        }
+
         using (paper.Row("scr_btns").Height(EditorTheme.RowHeight).JustifyContent(LayoutJustification.End).Margin(0,0,0,8).Gap(8).Enter())
         {
             Origami.Button(paper, "scr_cancel", Loc.Get("common.cancel"), () => { Modal.Pop(); }).Width(90).Show();

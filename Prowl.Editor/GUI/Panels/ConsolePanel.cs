@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
+using System.Text.RegularExpressions;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
@@ -325,12 +327,19 @@ public class ConsolePanel : DockPanel
 
             paper.Box("con_content").Width(width - 12).Height(count * rowH).Clip()
                 .OnClick(0, (_, e) => SelectRow((int)((float)e.RelativePosition.Y / rowH)))
+                .OnDoubleClick(e =>
+                {
+                    if (SelectRow((int)((float)e.RelativePosition.Y / rowH)) && SourceLocationOf(SelectedEntry()!.Value) is { } location)
+                        OpenSource(location);
+                })
                 .OnRightClick(0, (_, e) =>
                 {
                     if (!SelectRow((int)((float)e.RelativePosition.Y / rowH))) return;
                     LogEntry entry = SelectedEntry()!.Value;
                     Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, menu =>
                     {
+                        if (SourceLocationOf(entry) is { } location)
+                            menu.Item($"{Loc.Get("console.open_source")} {Path.GetFileName(location.Path)}:{location.Line}", () => OpenSource(location), icon: EditorIcons.Code);
                         menu.Item(Loc.Get("console.copy_message"), () => paper.SetClipboard(CopyText(entry, withStack: false)), icon: EditorIcons.Copy);
                         if (entry.StackTrace is { StackFrames.Length: > 0 })
                             menu.Item(Loc.Get("console.copy_with_stack"), () => paper.SetClipboard(CopyText(entry, withStack: true)), icon: EditorIcons.Copy);
@@ -361,6 +370,38 @@ public class ConsolePanel : DockPanel
         if (_selectedFilteredIndex < 0 || _selectedFilteredIndex >= _filteredIndices.Count) return null;
         int index = _filteredIndices[_selectedFilteredIndex];
         return index >= 0 && index < _messages.Count ? _messages[index] : null;
+    }
+
+    private static readonly Regex s_compilerLocation = new(@"^(?<path>[^\r\n]+?\.cs)\((?<line>\d+),(?<column>\d+)\)", RegexOptions.Compiled);
+
+    /// <summary>The script a log points at: a compiler message's "path(line,col)" prefix, else the first stack frame inside the project's Assets.</summary>
+    internal static (string Path, int Line, int Column)? SourceLocationOf(LogEntry entry)
+    {
+        Match match = s_compilerLocation.Match(entry.FullMessage);
+        if (match.Success && File.Exists(match.Groups["path"].Value))
+            return (match.Groups["path"].Value, int.Parse(match.Groups["line"].Value), int.Parse(match.Groups["column"].Value));
+
+        if (entry.StackTrace is not { } trace || Projects.Project.Current is not { } project) return null;
+        string assets = Path.GetFullPath(project.AssetsPath) + Path.DirectorySeparatorChar;
+        foreach (DebugStackFrame frame in trace.StackFrames)
+        {
+            if (string.IsNullOrEmpty(frame.FileName) || !Path.IsPathRooted(frame.FileName)) continue;
+            string full = Path.GetFullPath(frame.FileName);
+            if (full.StartsWith(assets, StringComparison.OrdinalIgnoreCase) && File.Exists(full))
+                return (full, frame.Line ?? 1, frame.Column ?? 1);
+        }
+        return null;
+    }
+
+    private static void OpenSource((string Path, int Line, int Column) location)
+    {
+        if (EditorSettings.Instance.ScriptEditor == ScriptEditor.ScriptEditorMode.BuiltIn)
+        {
+            ScriptEditor.ScriptEditorWindow.OpenFor(location.Path, location.Line, location.Column);
+            return;
+        }
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(location.Path) { UseShellExecute = true }); }
+        catch (Exception e) { Toasts.Error(Loc.Get("console.open_source"), e.Message); }
     }
 
     internal static string CopyText(LogEntry entry, bool withStack)

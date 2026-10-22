@@ -478,7 +478,7 @@ public sealed class AnimationNodeCard
                 else
                 {
                     Origami.TextField(paper, id, value.Text, v => editing.Edit(edit, () => value.Text = v))
-                        .Width(UnitValue.Stretch()).Show();
+                        .Width(UnitValue.Stretch()).CommitOnEnter().Show();
                 }
                 return;
         }
@@ -546,7 +546,7 @@ public sealed class AnimationNodeCard
                 .Searchable("Search bones...").Width(UnitValue.Stretch()).Show();
 
             if (selected == CustomBone)
-                Origami.TextField(paper, $"{id}_name", value, setter).Placeholder("bone name").Width(UnitValue.Stretch()).Show();
+                Origami.TextField(paper, $"{id}_name", value, setter).Placeholder("bone name").Width(UnitValue.Stretch()).CommitOnEnter().Show();
         }
     }
 }

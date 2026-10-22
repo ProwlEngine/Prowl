@@ -72,7 +72,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                                 if (existing >= 0 && existing != idx) return;
                                 Tags[idx] = trimmed;
                                 Changed();
-                            }).Show();
+                            }).CommitOnEnter().Show();
                     }
                     finally { dim?.Dispose(); }
                 }
@@ -138,7 +138,15 @@ public class TagsAndLayersSettings : ProjectSettingsBase
             else
             {
                 EditorGUI.SettingsTextField(paper, $"tl_layer_{i}", $"Layer {i}", Layers[i],
-                    v => { Layers[idx] = v; Apply(); });
+                    v =>
+                    {
+                        // Like tags: trimmed, and a name another layer already has is refused. Empty marks an unused layer.
+                        string trimmed = v.Trim();
+                        int existing = trimmed.Length > 0 ? Array.IndexOf(Layers, trimmed) : -1;
+                        if (existing >= 0 && existing != idx) return;
+                        Layers[idx] = trimmed;
+                        Apply();
+                    });
             }
         }
     }

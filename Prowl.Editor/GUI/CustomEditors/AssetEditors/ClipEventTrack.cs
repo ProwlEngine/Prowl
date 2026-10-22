@@ -315,7 +315,7 @@ internal sealed class ClipEventTrack
 
         if (e.Kind is ClipEventKind.Named or ClipEventKind.TransitionWindow)
             EditorGUI.Row(paper, $"{sid}_name", e.Kind == ClipEventKind.Named ? "Name" : "Filter Id", () =>
-                Origami.TextField(paper, $"{sid}_name_v", e.Name, v => { e.Name = v; write(); }).Show());
+                Origami.TextField(paper, $"{sid}_name_v", e.Name, v => { e.Name = v; write(); }).CommitOnEnter().Show());
 
         if (ClipEvent.OptionNames(e.Kind) is { } options)
         {

@@ -226,7 +226,7 @@ public class InputActionMapEditor : AssetImporterEditor
                 string oldName = action.Name;
                 if (map.RenameAction(oldName, v.Trim()) && _openAction == oldName)
                     _openAction = action.Name;
-            }).Height(34).Show();
+            }).Height(34).CommitOnEnter().Show();
 
             InputBindingDisplay.FieldHeading(paper, $"{id}_kind_h", "Kind", "what your code reads");
             InputBindingDisplay.Segmented(paper, $"{id}_kind",

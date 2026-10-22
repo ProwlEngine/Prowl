@@ -296,7 +296,7 @@ public static class GameObjectInspector
                     }
                 })
                 .Width(UnitValue.Stretch()).Height(26)
-                .Show();
+                .CommitOnEnter().Show();
 
             Origami.Dropdown(paper, "gi_static", go.IsStatic ? 1 : 0,
                 idx =>

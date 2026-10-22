@@ -83,7 +83,7 @@ public class AssemblyDefinitionAssetEditor : AssetImporterEditor
         Origami.Header(paper, $"{id}_hdr", $"{EditorIcons.FileLines}  Assembly Definition").Show();
 
         EditorGUI.Row(paper, $"{id}_name", "Name", () =>
-            Origami.TextField(paper, $"{id}_name_v", def.Name, v => def.Name = v).Show());
+            Origami.TextField(paper, $"{id}_name_v", def.Name, v => def.Name = v).CommitOnEnter().Show());
 
         Origami.Checkbox(paper, $"{id}_unsafe", def.AllowUnsafeCode, v => def.AllowUnsafeCode = v)
             .LabelRight("Allow Unsafe Code").Show();

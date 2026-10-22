@@ -6,65 +6,67 @@ using Prowl.PaperUI.LayoutEngine;
 
 using static Prowl.PaperUI.ElementBuilder;
 
-using Color = System.Drawing.Color;
-
 namespace Prowl.Editor.GUI.Popups;
 
 /// <summary>
-/// Shared rename system. Same architecture as ContextMenuHelper backdrop + floating field
-/// drawn at the call site using SelfDirected + Layer.Topmost.
+/// The editor's one inline rename. A caller starts it with <see cref="Begin"/> and draws it with <see cref="Draw"/> in
+/// place of the item's label. Enter or a click anywhere else commits, Escape cancels. The text starts focused and
+/// selected, and a rename whose item stops being drawn, such as one scrolled away or in a closed panel, cancels.
 /// </summary>
 public static class RenameOverlay
 {
-    /// <summary> Specifies whether the rename field appears at the top or bottom of the item. </summary>
-    public enum Position
-    {
-        /// <summary> The rename field appears at the top of the item. </summary>
-        Top,
-        /// <summary> The rename field appears at the bottom of the item. </summary>
-        Bottom
-    }
+    private const int MissedFramesBeforeCancel = 3;
 
     private static bool _active;
     private static string _text = "";
     private static Action<string>? _onConfirm;
     private static Action? _onCancel;
     private static string? _activeId;
+    private static bool _drawn;
+    private static int _missedFrames;
 
     /// <summary> Whether a rename operation is currently active. </summary>
     public static bool IsActive => _active;
 
-    /// <summary> Begins a rename operation for the given item. onConfirm is called with the final text when confirmed; onCancel is called when cancelled or when blank input is confirmed. </summary>
+    /// <summary>
+    /// Begins renaming an item, cancelling any other rename. onConfirm gets the trimmed text, onCancel runs on Escape,
+    /// on blank text, and when the item stops being drawn.
+    /// </summary>
     public static void Begin(string itemId, string initialText, Action<string> onConfirm, Action? onCancel = null)
     {
+        Cancel();
         _active = true;
         _activeId = itemId;
         _text = initialText;
         _onConfirm = onConfirm;
         _onCancel = onCancel;
+        _drawn = false;
+        _missedFrames = 0;
     }
 
     /// <summary> Cancels the active rename operation and invokes the onCancel callback. </summary>
     public static void Cancel()
     {
         if (!_active) return;
-        _active = false;
-        _onCancel?.Invoke();
-        _onConfirm = null;
-        _onCancel = null;
-        _activeId = null;
+        var onCancel = _onCancel;
+        Reset();
+        onCancel?.Invoke();
     }
 
     private static void Confirm()
     {
         if (!_active) return;
+        var onConfirm = _onConfirm;
+        var onCancel = _onCancel;
+        string text = _text.Trim();
+        Reset();
+        if (text.Length > 0) onConfirm?.Invoke(text);
+        else onCancel?.Invoke();
+    }
+
+    private static void Reset()
+    {
         _active = false;
-        // Blank/whitespace input isn't a valid name - treat it as a cancel (not a silent no-op) so
-        // callers whose onCancel resets their own "is renaming" state actually get that signal.
-        if (!string.IsNullOrWhiteSpace(_text))
-            _onConfirm?.Invoke(_text);
-        else
-            _onCancel?.Invoke();
         _onConfirm = null;
         _onCancel = null;
         _activeId = null;
@@ -73,53 +75,54 @@ public static class RenameOverlay
     /// <summary> Returns true if a rename operation is active and targets the specified itemId. </summary>
     public static bool IsRenaming(string itemId) => _active && _activeId == itemId;
 
-    /// <summary>
-    /// Draw the rename field at this location. Renders a fullscreen backdrop behind it
-    /// and the text field on top, both on Layer.Topmost. Same pattern as ContextMenuHelper.
-    /// </summary>
-    public static void Draw(Paper paper, string id, Position position = Position.Top)
+    /// <summary> Runs once per editor frame after the panels drew, to cancel a rename nobody draws any more. </summary>
+    public static void EndFrame()
+    {
+        if (!_active) return;
+        if (_drawn) _missedFrames = 0;
+        else if (++_missedFrames >= MissedFramesBeforeCancel) Cancel();
+        _drawn = false;
+    }
+
+    /// <summary> Draws the rename field in the current layout flow, where the item's label would be. </summary>
+    public static void Draw(Paper paper, string id, float height = 0)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
-        if (font == null) return;
+        if (font == null || !_active) return;
+        _drawn = true;
 
-        // Handle keys
-        bool confirm = paper.IsKeyDown(PaperKey.Enter) || paper.IsKeyDown(PaperKey.KeypadEnter);
-        bool cancel = paper.IsKeyDown(PaperKey.Escape);
-        if (confirm) { Confirm(); return; }
-        if (cancel) { Cancel(); return; }
+        if (paper.IsKeyPressed(PaperKey.Enter) || paper.IsKeyPressed(PaperKey.KeypadEnter)) { Confirm(); return; }
+        if (paper.IsKeyPressed(PaperKey.Escape)) { Cancel(); return; }
 
-        // Fullscreen backdrop click to cancel
+        // A click anywhere outside the field commits, like renaming in a file explorer.
         paper.Box($"{id}_backdrop")
             .PositionType(PositionType.SelfDirected)
             .Position(-9999, -9999)
             .Size(99999, 99999)
-            .BackgroundColor(Color.FromArgb(85, 0, 0, 0))
             .Layer(Layer.Topmost)
+            .IsNotFocusable()
             .StopEventPropagation()
-            .OnClick(0, (_, _) => Cancel())
-            .OnRightClick(0, (_, _) => Cancel());
+            .OnClick(0, (_, _) => Confirm())
+            .OnRightClick(0, (_, _) => Confirm());
 
-        // Rename field positioned at (0,0) relative to parent, on top of backdrop
         using (paper.Box($"{id}_field")
-            .PositionType(PositionType.SelfDirected)
-            .Position(0, (position == Position.Top ? 0 : UnitValue.Stretch()))
             .Width(UnitValue.Stretch())
-            .Height(EditorTheme.RowHeight)
+            .Height(height > 0 ? height : EditorTheme.RowHeight)
             .Rounded(EditorTheme.Roundness)
             .BorderWidth(1)
             .BackgroundColor(EditorTheme.Neutral100)
             .BorderColor(EditorTheme.Purple400)
             .Layer(Layer.Topmost)
             .StopEventPropagation()
-            .TabIndex(0)
             .Enter())
         {
+            ElementHandle field = paper.CurrentParent;
             TextInputSettings settings = TextInputSettings.Default;
             settings.Font = font;
             settings.TextColor = EditorTheme.Ink500;
             settings.SelectAllOnFocus = true;
 
-            ElementBuilder textField = paper.Box($"{id}_tf")
+            paper.Box($"{id}_tf")
                 .Margin(4, UnitValue.Stretch())
                 .HookToParent()
                 .IsNotInteractable()
@@ -131,8 +134,10 @@ public static class RenameOverlay
                     onChange: v => _text = v,
                     intID: _activeId?.GetHashCode() ?? 0);
 
-            if (!paper.IsElementFocused(textField._handle.Data.ID))
-                paper.SetFocus(textField._handle);
+            // The field row takes the focus, after its text child exists so the focus reaches it and selects the text.
+            // Clicks inside keep the row focused, so they place the caret instead of selecting everything again.
+            if (!paper.IsElementFocused(field.Data.ID))
+                paper.SetFocus(field);
         }
     }
 }

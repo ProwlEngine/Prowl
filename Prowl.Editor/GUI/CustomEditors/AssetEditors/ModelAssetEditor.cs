@@ -263,7 +263,7 @@ public class ModelAssetEditor : ImportSettingsEditor
         if (optimizeHierarchy)
             EditorGUI.Row(paper, $"{id}_preserveNodes", "Never Collapse (comma separated)", () =>
                 Origami.TextField(paper, $"{id}_preserveNodes_v", Str(settings, "preserveNodeNames", ""),
-                    v => settings["preserveNodeNames"] = new EchoObject(v)).Show());
+                    v => settings["preserveNodeNames"] = new EchoObject(v)).CommitOnEnter().Show());
 
         EditorGUI.SettingsToggle(paper, $"{id}_strict", "Fail On Validation Errors", Bool(settings, "strictValidation", false),
             v => settings["strictValidation"] = new EchoObject(v), separator: false);
@@ -408,7 +408,7 @@ public class ModelAssetEditor : ImportSettingsEditor
 
         EditorGUI.Row(paper, $"{id}_clipName", "Name", () =>
             Origami.TextField(paper, $"{id}_clipName_v", Str(block, Importers.ModelImportKeys.ClipName, sourceName),
-                v => Write()[Importers.ModelImportKeys.ClipName] = new EchoObject(v)).Show());
+                v => Write()[Importers.ModelImportKeys.ClipName] = new EchoObject(v)).CommitOnEnter().Show());
 
         EditorGUI.SettingsToggle(paper, $"{id}_clipLoop", "Loop",
             Bool(block, Importers.ModelImportKeys.ClipLoop, Bool(settings, "loopAnimations", true)),

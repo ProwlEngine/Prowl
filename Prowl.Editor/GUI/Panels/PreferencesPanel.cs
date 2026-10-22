@@ -121,13 +121,16 @@ public class PreferencesPanel : DockPanel
 
         EditorGUI.SettingsRow(paper, "pref_proj_path", Loc.Get("pref.projects_path"), () =>
             Origami.TextField(paper, "pref_proj_path_v", s.DefaultProjectsPath,
-                v => { s.DefaultProjectsPath = v; s.Save(); }).Show());
+                v => { s.DefaultProjectsPath = v; s.Save(); }).CommitOnEnter().Show());
 
         EditorGUI.SettingsToggle(paper, "pref_auto_save", Loc.Get("pref.auto_save"), SaveManager.AutoSaveEnabled,
             v => { SaveManager.AutoSaveEnabled = v; s.AutoSaveLayout = v; s.Save(); });
 
         EditorGUI.SettingsToggle(paper, "pref_reimport_focus", Loc.Get("pref.reimport_focus"), s.ReimportOnFocusOnly,
             v => { s.ReimportOnFocusOnly = v; s.Save(); });
+
+        EditorGUI.SettingsEnumDropdown(paper, "pref_script_editor", Loc.Get("pref.script_editor"), s.ScriptEditor,
+            v => { s.ScriptEditor = v; s.Save(); });
 
         string[] thumbOptions = ["32", "64", "128"];
         int thumbIndex = s.ThumbnailSize switch { 64 => 1, 128 => 2, _ => 0 };
@@ -452,9 +455,9 @@ public class PreferencesPanel : DockPanel
     {
         EditorGUI.SectionHeader(paper, "pref_ty_fonts", Loc.Get("pref.fonts"), first: true, compact: true);
         EditorGUI.Row(paper, "pref_ty_ui", Loc.Get("pref.ui_font"), () =>
-            Origami.TextField(paper, "pref_ty_ui_v", theme.DefaultFontName, v => { theme.DefaultFontName = v; s.ApplyTheme(); s.Save(); }).Show(), compact: true);
+            Origami.TextField(paper, "pref_ty_ui_v", theme.DefaultFontName, v => { theme.DefaultFontName = v; s.ApplyTheme(); s.Save(); }).CommitOnEnter().Show(), compact: true);
         EditorGUI.Row(paper, "pref_ty_bold", Loc.Get("pref.bold_font"), () =>
-            Origami.TextField(paper, "pref_ty_bold_v", theme.DefaultBoldFontName, v => { theme.DefaultBoldFontName = v; s.ApplyTheme(); s.Save(); }).Show(), compact: true);
+            Origami.TextField(paper, "pref_ty_bold_v", theme.DefaultBoldFontName, v => { theme.DefaultBoldFontName = v; s.ApplyTheme(); s.Save(); }).CommitOnEnter().Show(), compact: true);
 
         EditorGUI.SectionHeader(paper, "pref_ty_size", Loc.Get("pref.sizing"), compact: true);
         EditorGUI.SettingsSlider(paper, "pref_ty_base", Loc.Get("pref.base_size"), theme.FontSize, 8, 32, v => { theme.FontSize = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);

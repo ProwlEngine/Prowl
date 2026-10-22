@@ -144,7 +144,7 @@ internal sealed class NamedInputsNodeEditor : AnimationNodeEditor
         GraphInputRecord input = record.Inputs[pin];
 
         Origami.TextField(paper, id, input.Name, v => editing.Edit("Name Input", () => input.Name = v, false))
-            .Placeholder(IsRig ? "effector" : "channel").Width(UnitValue.Stretch()).Show();
+            .Placeholder(IsRig ? "effector" : "channel").Width(UnitValue.Stretch()).CommitOnEnter().Show();
     }
 
     // A rig's effectors also name the chain each one moves, which only the inspector has room for.
@@ -159,7 +159,7 @@ internal sealed class NamedInputsNodeEditor : AnimationNodeEditor
             GraphInputRecord input = record.Inputs[pin];
             string id = $"ag_chain_{entry}";
             inspector.Row(id, $"{inspector.Editing.InputLabel(record, pin)} chain", () =>
-                Origami.TextField(inspector.Paper, id + "_v", input.Text, v => inspector.Editing.Edit("Set Chain", () => input.Text = v)).Show());
+                Origami.TextField(inspector.Paper, id + "_v", input.Text, v => inspector.Editing.Edit("Set Chain", () => input.Text = v)).CommitOnEnter().Show());
         }
     }
 }

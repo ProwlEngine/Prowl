@@ -71,7 +71,7 @@ public class StringPropertyEditor : PropertyEditor
     {
         EditorGUI.Row(paper, id, label, () =>
             Origami.TextField(paper, $"{id}_v", (string)(value ?? string.Empty), v => onChange(v))
-                .Show());
+                .CommitOnEnter().Show());
     }
 }
 

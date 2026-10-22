@@ -33,16 +33,25 @@ public class EngineObjectPropertyEditor : PropertyEditor
             PropertyGridUtils.DescribeObjectRef(eo, fieldType),
             eo != null,
             EditorGUI.IsCompatibleDragTarget(fieldType),
-            // Single click pings the asset, double click selects the instance or opens the selector.
-            onClick: () => { if (isAsset) Selection.Ping(asset!.AssetID); },
-            onDoubleClick: () =>
+            // Click pings what is assigned or opens the selector when empty, double click selects what is assigned.
+            onClick: () =>
             {
-                if (eo != null) Selection.Select(eo);
-                else OpenAssetSelector(fieldType, onChange);
+                if (eo == null) OpenAssetSelector(fieldType, onChange);
+                else if (isAsset) Selection.Ping(asset!.AssetID);
+                else if (PingTarget(eo) is { } go) Selection.Ping(go.Identifier);
             },
+            onDoubleClick: () => { if (eo != null) Selection.Select(eo); },
             onPick: () => OpenAssetSelector(fieldType, onChange),
             acceptDrops: () => HandleDrops(paper, fieldType, onChange));
     }
+
+    // A scene object field pings the GameObject in the Hierarchy.
+    private static GameObject? PingTarget(EngineObject eo) => eo switch
+    {
+        GameObject go when go.IsValid() => go,
+        Component c when c.GameObject.IsValid() => c.GameObject,
+        _ => null,
+    };
 
     private static void HandleDrops(Paper paper, Type fieldType, Action<object?> onChange)
     {

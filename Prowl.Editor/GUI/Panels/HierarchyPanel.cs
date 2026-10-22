@@ -976,6 +976,7 @@ public class HierarchyPanel : DockPanel
         RenameOverlay.Begin(goIdStr, go.Name, newName =>
         {
             string oldName = go.Name;
+            if (newName == oldName) return;
             Undo.RegisterAction("Rename",
                 () => { GameObject? r = Undo.FindGO(goGuid); if (r != null) r.Name = oldName; },
                 () => { GameObject? r = Undo.FindGO(goGuid); if (r != null) r.Name = newName; });
@@ -1129,6 +1130,7 @@ public class HierarchyPanel : DockPanel
         string goId = primary.Identifier.ToString();
         RenameOverlay.Begin(goId, primary.Name, newName =>
         {
+            if (oldNames.All(n => n.Name == newName)) return;
             Undo.RegisterAction("Rename",
                 undo: () => { foreach ((Guid id, string? old) in oldNames) { GameObject? r = Undo.FindGO(id); if (r != null) r.Name = old; } },
                 redo: () => { foreach ((Guid id, string _) in oldNames) { GameObject? r = Undo.FindGO(id); if (r != null) r.Name = newName; } });

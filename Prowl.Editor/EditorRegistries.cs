@@ -413,12 +413,7 @@ public static class EditorRegistries
         if (!string.IsNullOrEmpty(attr.Extension))
             _customAssetExtensions.Add(NormalizeExt(attr.Extension));
         _assetMenuEntries.Add(entry);
-        MenuItemAttribute.Register("Assets/Create/" + attr.Name, () =>
-        {
-            var task = new Core.Tasks.CreateAssetTask();
-            task.TaskType = Core.Tasks.CreateAssetTask.AssetType.Asset;
-            task.BeginCreateTask(entry, AssetCreateMenu.GetCurrentFolder());
-        }, attr.Order, attr.Icon);
+        MenuItemAttribute.Register("Assets/Create/" + attr.Name, () => AssetCreateMenu.BeginCreateAsset(entry, AssetCreateMenu.GetCurrentFolder()), attr.Order, attr.Icon);
     }
 
     private static void ScanScriptTemplate(MethodInfo method)

@@ -597,7 +597,7 @@ public class AnimationGraphWindow : DockPanel
 
     private void HandleShortcuts(Paper paper)
     {
-        if (_pickerOpen || ShortcutManager.IsRebinding) return;
+        if (_pickerOpen || _parameterPopup || ShortcutManager.IsRebinding) return;
 
         float x = (float)paper.PointerPos.X, y = (float)paper.PointerPos.Y;
         if (x < _rootX || y < _rootY || x > _rootX + _rootW || y > _rootY + _rootH) return;
@@ -1132,7 +1132,7 @@ public class AnimationGraphWindow : DockPanel
             .DropShadow(0, 8, 24, 0, EditorTheme.Shadow).Enter())
         {
             Origami.SearchField(paper, "ag_pickSearch", _pickerSearch, v => _pickerSearch = v,
-                _pickerKind.HasValue ? $"{AnimationGraphView.KindLabel(_pickerKind.Value)} nodes..." : "Search nodes...").Show();
+                _pickerKind.HasValue ? $"{AnimationGraphView.KindLabel(_pickerKind.Value)} nodes..." : "Search nodes...").AutoFocus().Show();
 
             List<AnimationGraphNode> matches = Matches();
             List<(string Label, string Hint, Action Create)> extras = Extras();
@@ -1414,7 +1414,12 @@ public class AnimationGraphWindow : DockPanel
         }
 
         EditorGUI.Row(paper, "ag_stateName", "Name", () =>
-            Origami.TextField(paper, "ag_stateName_v", state.Name, v => Set("Rename State", () => _stateView.Rename(state, v))).Show());
+            Origami.TextField(paper, "ag_stateName_v", state.Name, v =>
+            {
+                // A state's node is named by the state, so the renamed node is selected again.
+                Set("Rename State", () => _stateView.Rename(state, v.Trim()));
+                _controller.SelectNodes(new[] { AnimationGraphStateView.StateId(state.Name) });
+            }).CommitOnEnter().Show());
 
         EditorGUI.SettingsToggle(paper, "ag_stateDefault", "Default State", state.IsDefault,
             v => { if (v) Set("Set Default State", () => _stateView.SetDefault(state)); }, separator: false);
@@ -1714,7 +1719,7 @@ public class AnimationGraphWindow : DockPanel
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
             Origami.TextField(paper, "ag_ppName", _newParameterName, v => _newParameterName = v)
-                .Placeholder("Name").Width(UnitValue.Stretch()).Show();
+                .Placeholder("Name").Width(UnitValue.Stretch()).AutoFocus().SelectAllOnFocus().Show();
 
             Origami.Dropdown(paper, "ag_ppKind", _newParameterKind, v => _newParameterKind = v, ParameterKindNames)
                 .Width(UnitValue.Stretch()).Show();
@@ -1764,7 +1769,7 @@ public class AnimationGraphWindow : DockPanel
             case NodeValueKind.Id:
                 EditorGUI.Row(paper, $"{id}_def", "Default", () =>
                     Origami.TextField(paper, $"{id}_def_v", parameter.Text,
-                        v => Set("Set Parameter Default", () => parameter.Text = v, false)).Show());
+                        v => Set("Set Parameter Default", () => parameter.Text = v, false)).CommitOnEnter().Show());
                 break;
             case NodeValueKind.Target:
                 break; // A target starts unset, and there is nothing to type for that.
@@ -1877,7 +1882,7 @@ public class AnimationGraphWindow : DockPanel
         if (!bones)
         {
             Origami.TextField(paper, id, entries[index], v => { entries[index] = v; write(); })
-                .Width(UnitValue.Stretch()).Show();
+                .Width(UnitValue.Stretch()).CommitOnEnter().Show();
             return;
         }
 
