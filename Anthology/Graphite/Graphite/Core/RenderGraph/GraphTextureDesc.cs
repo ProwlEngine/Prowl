@@ -2,31 +2,13 @@ using System;
 
 namespace Prowl.Graphite;
 
-/// <summary>How a graph resource's pixel size gets decided at execution time.</summary>
-public enum TextureSizeMode
-{
-    /// <summary>Fraction of the instance's extent.</summary>
-    InstanceRelative,
-
-    /// <summary>Fixed width x height.</summary>
-    Explicit
-}
-
-/// <summary>
-/// A texture a pass reads or writes. Same resource ID shares one physical target; first declaration wins, writer should own it.
-/// </summary>
+/// <summary>Size, formats and layout of a texture the graph creates.</summary>
 public struct GraphTextureDesc
 {
-    /// <summary>How size gets decided at execution.</summary>
-    public TextureSizeMode SizeMode;
-
-    /// <summary>Scale of the instance's extent, used when instance relative.</summary>
-    public float Scale;
-
-    /// <summary>Fixed width, used when explicit.</summary>
+    /// <summary>Width in pixels.</summary>
     public int Width;
 
-    /// <summary>Fixed height, used when explicit.</summary>
+    /// <summary>Height in pixels.</summary>
     public int Height;
 
     /// <summary>Color formats, one per target.</summary>
@@ -58,33 +40,21 @@ public struct GraphTextureDesc
     private static PixelFormat[] DefaultFormats(PixelFormat[] formats)
         => formats is { Length: > 0 } ? formats : new[] { PixelFormat.R8_G8_B8_A8_UNorm };
 
-    /// <summary>Resource sized as a scale of the instance's extent.</summary>
-    public static GraphTextureDesc InstanceSized(PixelFormat format, float scale = 1f, bool depth = false) => new()
+    /// <summary>Resource of one color format.</summary>
+    public static GraphTextureDesc Sized(int width, int height, PixelFormat format, bool depth = false) => new()
     {
-        SizeMode = TextureSizeMode.InstanceRelative,
-        Scale = scale,
+        Width = width,
+        Height = height,
         ColorFormats = new[] { format },
         EnableDepth = depth
     };
 
-    /// <summary>Resource with fixed pixel size, independent of the instance.</summary>
+    /// <summary>Resource with any number of color formats.</summary>
     public static GraphTextureDesc Sized(int width, int height, bool depth = false, params PixelFormat[] formats) => new()
     {
-        SizeMode = TextureSizeMode.Explicit,
-        Scale = 1f,
         Width = width,
         Height = height,
         ColorFormats = DefaultFormats(formats),
         EnableDepth = depth
     };
-
-    /// <summary>Resolves concrete pixel size for an instance's extent.</summary>
-    public readonly (int width, int height) Resolve(uint instanceWidth, uint instanceHeight)
-    {
-        if (SizeMode == TextureSizeMode.Explicit)
-            return (Math.Max(1, Width), Math.Max(1, Height));
-
-        float s = Scale <= 0f ? 1f : Scale;
-        return (Math.Max(1, (int)(instanceWidth * s)), Math.Max(1, (int)(instanceHeight * s)));
-    }
 }
