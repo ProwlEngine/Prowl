@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -14,6 +15,8 @@ namespace Prowl.Graphite.Rendering;
 /// The frame: the passes uploading every change, then those of every world and view, built into one graph every frame
 /// and run as one execution.
 /// </summary>
+internal readonly record struct FrameEntry(FrameFeature Feature, WorldFrame? World);
+
 internal sealed partial class FramePipeline : IDisposable
 {
     [StructLayout(LayoutKind.Sequential)]
@@ -41,6 +44,15 @@ internal sealed partial class FramePipeline : IDisposable
 
     internal RenderStore Store => _store;
 
+    internal DeformPass Deform => _deform;
+    internal ProbePass Probes => _probes;
+
+    /// <summary>The frame features that ran in the last frame, for tests.</summary>
+    internal IEnumerable<FrameFeature> ActiveFrameFeatures => _frameFeatures.Select(entry => entry.Feature);
+
+    /// <summary>The frame features of the renderer's own set, as of this frame. Render thread.</summary>
+    internal FrameFeature[] RendererFeatures = [];
+
     /// <summary>The graph every frame is built into.</summary>
     internal FrameGraph Graph => _graph;
 
@@ -51,7 +63,7 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly ProviderCountsPass _counts;
     private readonly FrameExports _exports = new();
     private readonly Dictionary<FrameFeature, FrameFeaturePass> _frameFeaturePasses = new();
-    private readonly List<FrameFeaturePass> _frameFeatures = new();
+    private readonly List<FrameEntry> _frameFeatures = new();
     private FrameTime _currentTime;
     private readonly ReadbackStaging _readback;
     private readonly List<int> _sortedViews = new();
@@ -221,8 +233,11 @@ internal sealed partial class FramePipeline : IDisposable
     public FrameBuffers Buffers { get; }
 
     /// <summary>Declares what a view's draws bind: the tables and buffers of its world and itself, the shadow pages and cascades, the host's buffers and the cubes it samples.</summary>
-    internal void DeclareDrawReads(FrameGraph graph, PassBuilder builder, CameraFrame camera, bool screenVisibility, bool screenIrradiance)
+    internal void DeclareDrawReads(ViewGraph view, PassBuilder builder, CameraFrame camera, bool screenVisibility, bool screenIrradiance)
     {
+        FrameGraph graph = view.Graph;
+        if (!view.Probing)
+            RequireOutputs(view, camera);
         Buffers.ReadCamera(graph, builder, camera);
         if (camera.World.Shadows != null)
         {
@@ -245,6 +260,30 @@ internal sealed partial class FramePipeline : IDisposable
             builder.Read(graph.Import(camera.ScreenVisibility), TextureState.Sampled, TextureState.Sampled);
         if (screenIrradiance && camera.ScreenIrradiance != null)
             builder.Read(graph.Import(camera.ScreenIrradiance), TextureState.Sampled, TextureState.Sampled);
+    }
+
+    // What the draws read must have been provided by the active features, so a replacement missing one fails with its name
+    private void RequireOutputs(ViewGraph view, CameraFrame camera)
+    {
+        RenderWorld world = camera.World.World;
+        int id = camera.View.ViewId;
+        _exports.Require(RendererOutputs.DeformedVertices, world, id);
+        _exports.Require(RendererOutputs.ObjectProbes, world, id);
+        if (camera.World.Shadows is { } shadows && shadows.AllPages().Any())
+        {
+            _exports.Require(RendererOutputs.ShadowPages, world, id);
+            _exports.Require(RendererOutputs.ShadowFaces, world, id);
+        }
+        if (camera.Cubes.Length > 0)
+            _exports.Require(RendererOutputs.CaptureCubes, world, id);
+        foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
+        {
+            for (int c = 0; c < light.Count; c++)
+            {
+                if (light.Cascades[c].Texture?.Texture != null && !view.Published.ContainsKey(RendererOutputs.Cascades))
+                    throw new InvalidOperationException($"The draws of view {id} read '{RendererOutputs.Cascades}', which no earlier feature of the view published.");
+            }
+        }
     }
 
     public VertexSource VertexSource(int page, PrimitiveTopology topology)
@@ -443,8 +482,8 @@ internal sealed partial class FramePipeline : IDisposable
         camera.EnsureScreenLighting(shape.HasScreenLighting, shape.ScreenIrradiance, w, h, (uint)(shape.Layers > 1 ? shape.Layers : 0));
     }
 
-    // The frame's passes, in the order they run: uploads, deformation, probes, the frame features, then each world's shadows
-    // and captures, the host's views in order and the readbacks
+    // The frame's passes, in the order they run: uploads, the frame features of the slots before the views, then each world's
+    // shadows, captures and fills, the host's views in order and the frame features of the slots after them
     private void BuildFrame()
     {
         _exports.Clear();
@@ -454,28 +493,67 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (CameraFrame camera in Active())
             Buffers.Cameras.Add(camera);
         _upload.Add(_graph, Buffers);
-        _deform.Add(_graph);
-        _probes.Add(_graph);
-        foreach (FrameFeaturePass pass in _frameFeatures)
-            pass.Add();
+        AddFrameFeatures(FrameSlot.Deform, FrameSlot.BeforeViews);
         _counts.Add(_graph);
+        AddFrameFeatures(FrameSlot.Shadows, FrameSlot.Shadows, rendererOnly: true);
         foreach (WorldFrame world in _frameWorlds)
         {
             using (_graph.Group(world.World.Name ?? $"World {world.World.Id}"))
             {
-                ShadowPasses.Add(this, _graph, world);
+                AddFrameFeatures(FrameSlot.Shadows, FrameSlot.Shadows, world);
                 foreach (PlannedInstance planned in _planned)
                 {
-                    if (planned.World == world && planned.Kind != PlannedKind.Host)
+                    if (planned.World == world && planned.Kind == PlannedKind.Capture)
                         AddPlanned(planned);
                 }
+                AddFrameFeatures(FrameSlot.Captures, FrameSlot.Captures, world);
             }
         }
+        AddFrameFeatures(FrameSlot.Captures, FrameSlot.Captures, rendererOnly: true);
         foreach (PlannedInstance planned in _planned)
         {
             if (planned.Kind == PlannedKind.Host)
                 AddPlanned(planned);
         }
+        AddFrameFeatures(FrameSlot.AfterViews, FrameSlot.Readback);
+        _exports.Verify();
+        if (_readback.Requests.Count > 0 && !_exports.Provided(RendererOutputs.ReadbackStaging))
+            throw new InvalidOperationException($"The host asked for readbacks, which read '{RenderResourceID.ToString(RendererOutputs.ReadbackStaging)}', and no active frame feature provided it.");
+    }
+
+    // The active features of the slots, in order: a world's own, the renderer's own, or every one
+    private void AddFrameFeatures(FrameSlot first, FrameSlot last, WorldFrame? world = null, bool rendererOnly = false)
+    {
+        foreach (FrameEntry entry in _frameFeatures)
+        {
+            FrameSlot slot = entry.Feature.SlotSnapshot;
+            if (slot < first || slot > last || (world != null && entry.World != world) || (rendererOnly && entry.World != null))
+                continue;
+            AddFrameFeature(entry);
+        }
+    }
+
+    private void AddFrameFeature(in FrameEntry entry)
+    {
+        if (entry.Feature.IsBuiltIn)
+        {
+            entry.Feature.AddBuiltIn(this, entry.World);
+            return;
+        }
+        _frameFeaturePasses[entry.Feature].Add();
+    }
+
+    internal void AddFills(WorldFrame world)
+    {
+        foreach (PlannedInstance planned in _planned)
+        {
+            if (planned.World == world && planned.Kind == PlannedKind.Fill)
+                AddPlanned(planned);
+        }
+    }
+
+    internal void AddReadbacks()
+    {
         for (int i = 0; i < _readback.Requests.Count; i++)
         {
             using (_graph.Group($"Readback {i}"))
@@ -517,32 +595,66 @@ internal sealed partial class FramePipeline : IDisposable
 
     internal FrameExports Exports => _exports;
 
-    // The frame features that run this frame, in order
+    // The frame features that run this frame, in slot then order: the renderer's and every world's, each group resolved
     private void PrepareFrameFeatures(IEnumerable<WorldFrame> worlds)
     {
         _frameFeatures.Clear();
+        AddCandidates(RendererFeatures, null);
         foreach (WorldFrame world in worlds)
+            AddCandidates(world.World.FrameFeatureSnapshot, world);
+
+        // A built in feature gives way to any other of its group in its own world, or from the renderer's set
+        for (int i = _frameFeatures.Count - 1; i >= 0; i--)
         {
-            foreach (FrameFeature feature in world.World.FrameFeatureSnapshot)
+            FrameEntry entry = _frameFeatures[i];
+            if (entry.Feature.GroupSnapshot is not { } group)
+                continue;
+            for (int j = 0; j < _frameFeatures.Count; j++)
             {
-                if (!feature.EnabledSnapshot || !IsActive(feature))
+                FrameEntry other = _frameFeatures[j];
+                if (j == i || other.Feature.GroupSnapshot != group)
                     continue;
-                if (!_frameFeaturePasses.TryGetValue(feature, out FrameFeaturePass? pass))
-                    _frameFeaturePasses[feature] = pass = new FrameFeaturePass(this, feature, world);
-                _frameFeatures.Add(pass);
+                bool replaces = entry.Feature.IsBuiltIn ? !other.Feature.IsBuiltIn && (entry.World == null || other.World == null || other.World == entry.World)
+                    : !other.Feature.IsBuiltIn && other.World == entry.World && j > i;
+                if (replaces)
+                {
+                    _frameFeatures.RemoveAt(i);
+                    break;
+                }
             }
         }
-        _frameFeatures.Sort((a, b) => a.Feature.OrderSnapshot != b.Feature.OrderSnapshot ? a.Feature.OrderSnapshot.CompareTo(b.Feature.OrderSnapshot) : a.Feature.Id.CompareTo(b.Feature.Id));
-        if (_frameFeaturePasses.Count == _frameFeatures.Count)
+
+        _frameFeatures.Sort(static (a, b) => a.Feature.SlotSnapshot != b.Feature.SlotSnapshot ? a.Feature.SlotSnapshot.CompareTo(b.Feature.SlotSnapshot)
+            : a.Feature.OrderSnapshot != b.Feature.OrderSnapshot ? a.Feature.OrderSnapshot.CompareTo(b.Feature.OrderSnapshot) : a.Feature.Id.CompareTo(b.Feature.Id));
+
+        int user = 0;
+        foreach (FrameEntry entry in _frameFeatures)
+        {
+            if (entry.Feature.IsBuiltIn)
+                continue;
+            user++;
+            if (!_frameFeaturePasses.ContainsKey(entry.Feature))
+                _frameFeaturePasses[entry.Feature] = new FrameFeaturePass(this, entry.Feature, entry.World);
+        }
+        if (_frameFeaturePasses.Count == user)
             return;
         List<FrameFeature>? gone = null;
         foreach (FrameFeature feature in _frameFeaturePasses.Keys)
         {
-            if (!_frameFeatures.Exists(pass => pass.Feature == feature))
+            if (!_frameFeatures.Exists(entry => entry.Feature == feature))
                 (gone ??= new()).Add(feature);
         }
         foreach (FrameFeature feature in gone ?? [])
             _frameFeaturePasses.Remove(feature);
+    }
+
+    private void AddCandidates(FrameFeature[] features, WorldFrame? world)
+    {
+        foreach (FrameFeature feature in features)
+        {
+            if (feature.EnabledSnapshot && IsActive(feature))
+                _frameFeatures.Add(new FrameEntry(feature, world));
+        }
     }
 
     private bool IsActive(FrameFeature feature)

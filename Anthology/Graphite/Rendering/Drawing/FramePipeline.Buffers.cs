@@ -29,7 +29,6 @@ internal sealed partial class FramePipeline
         foreach (MaterialTable table in Materials.Tables.Values)
             shared.Add(table.Records.Persistent);
         shared.Add(Globals.Persistent);
-        _probes.Worlds.Clear();
         _deform.Worlds.Clear();
         foreach (WorldFrame world in worlds)
         {
@@ -38,7 +37,6 @@ internal sealed partial class FramePipeline
             buffers.Clear();
             _deform.Worlds.Add(render);
             WorldProbes probes = world.World.Probes;
-            _probes.Worlds.Add(probes);
             buffers.Add(probes.ProbeRecords.Persistent);
             buffers.Add(probes.TetRecords.Persistent);
             buffers.Add(probes.Requests.Persistent);

@@ -47,6 +47,13 @@ internal sealed class FrameBuffers
         world.Buffers.Read(graph, pass, access);
     }
 
+    public void ReadAll(FrameGraph graph, PassBuilder pass, BufferAccess access = BufferAccess.AllReads)
+    {
+        Shared.Read(graph, pass, access);
+        foreach (WorldFrame world in Worlds)
+            world.Buffers.Read(graph, pass, access);
+    }
+
     public void ReadCamera(FrameGraph graph, PassBuilder pass, CameraFrame camera, BufferAccess access = BufferAccess.AllReads)
     {
         ReadWorld(graph, pass, camera.World, access);

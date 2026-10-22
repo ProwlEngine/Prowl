@@ -309,6 +309,9 @@ public sealed class Renderer : IDisposable
     private volatile bool _stopping;
     private bool _disposed;
 
+    /// <summary>Frame features that are not per world, with the built in Deform and Readback. Host thread.</summary>
+    public FrameFeatureSet FrameFeatures { get; } = new(null);
+
     public Renderer(GraphicsDevice device, IShaderCompiler? compiler, RendererOptions? options = null)
     {
         Device = device;
@@ -330,6 +333,8 @@ public sealed class Renderer : IDisposable
         _globals = new GlobalRegistry(device, _store, Textures) { Reporter = Report };
         _programs.Reporter = Report;
         _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report, _options.Compile) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
+        FrameFeatures.Add(new DeformFeature());
+        FrameFeatures.Add(new ReadbackFeature());
         _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
         _frame.ChangedMaterials = _shadowMaterials;
         Skies = new BuiltInSkies(this);
@@ -645,17 +650,24 @@ public sealed class Renderer : IDisposable
             world.World.FeatureSnapshot = world.World.Features.Snapshot();
             Extract(world.World.FeatureSnapshot);
             world.World.FrameFeatureSnapshot = world.World.FrameFeatures.Snapshot();
-            foreach (FrameFeature feature in world.World.FrameFeatureSnapshot)
+            ExtractFrame(world.World.FrameFeatureSnapshot);
+        }
+        _frame.RendererFeatures = FrameFeatures.Snapshot();
+        ExtractFrame(_frame.RendererFeatures);
+        for (int i = 0; i < views.Length; i++)
+        {
+            _viewFeatures[i] = views[i].Features?.Snapshot() ?? [];
+            Extract(_viewFeatures[i]);
+        }
+
+        static void ExtractFrame(FrameFeature[] features)
+        {
+            foreach (FrameFeature feature in features)
             {
                 feature.TakeSnapshot();
                 if (feature.EnabledSnapshot)
                     feature.Extract();
             }
-        }
-        for (int i = 0; i < views.Length; i++)
-        {
-            _viewFeatures[i] = views[i].Features?.Snapshot() ?? [];
-            Extract(_viewFeatures[i]);
         }
 
         void Extract(RenderFeature[] features)

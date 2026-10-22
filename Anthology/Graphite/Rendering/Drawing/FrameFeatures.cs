@@ -6,11 +6,21 @@ using System.Threading;
 
 namespace Prowl.Graphite.Rendering;
 
-/// <summary>When in the frame a frame feature runs.</summary>
-public enum FrameSlot
+/// <summary>
+/// When in the frame a frame feature runs, in this order: after the renderer's uploads, Deform, LightProbes and BeforeViews,
+/// then each world's Shadows, its capture views and its Captures, then the host's views, then AfterViews and Readback.
+/// </summary>
+public enum FrameSlot : byte
 {
+    Deform,
+    LightProbes,
+
     /// <summary>After the frame's uploads, probes and deformation, before shadows and every view.</summary>
     BeforeViews,
+    Shadows,
+    Captures,
+    AfterViews,
+    Readback,
 }
 
 /// <summary>
@@ -26,7 +36,13 @@ public abstract class FrameFeature
 
     public abstract FrameSlot Slot { get; }
 
-    /// <summary>Order among frame features, lowest first. Resources they declare decide the rest.</summary>
+    /// <summary>
+    /// Of features sharing a group in one set the last added runs, and any feature replaces the built in one of its group:
+    /// Deform, LightProbes, LocalShadows, CaptureFill or Readback.
+    /// </summary>
+    public virtual string? ExclusiveGroup => null;
+
+    /// <summary>Order among frame features of a slot, lowest first. Resources they declare decide the rest.</summary>
     public virtual int Order { get; set; }
 
     public bool Enabled { get; set; } = true;
@@ -46,24 +62,33 @@ public abstract class FrameFeature
     internal RenderWorld? World => Owner?.World;
     internal bool EnabledSnapshot;
     internal int OrderSnapshot;
+    internal FrameSlot SlotSnapshot;
+    internal string? GroupSnapshot;
+
+    internal virtual bool IsBuiltIn => false;
+
+    /// <summary>Adds a built in feature's passes and provides its outputs. The world is null for the renderer's.</summary>
+    internal virtual void AddBuiltIn(FramePipeline frame, WorldFrame? world) => throw new NotSupportedException();
 
     internal void TakeSnapshot()
     {
         EnabledSnapshot = Enabled;
         OrderSnapshot = Order;
+        SlotSnapshot = Slot;
+        GroupSnapshot = ExclusiveGroup;
     }
 }
 
-/// <summary>Frame features added to a world. A feature belongs to one world. Host thread.</summary>
+/// <summary>Frame features added to a world or to the renderer. A feature belongs to one set. Host thread.</summary>
 public sealed class FrameFeatureSet : IEnumerable<FrameFeature>
 {
     private readonly List<FrameFeature> _features = new();
     private FrameFeature[] _snapshot = [];
     private int _version, _snapshotVersion = -1;
 
-    internal FrameFeatureSet(RenderWorld world) => World = world;
+    internal FrameFeatureSet(RenderWorld? world) => World = world;
 
-    internal RenderWorld World { get; }
+    internal RenderWorld? World { get; }
 
     public int Count => _features.Count;
 
@@ -71,7 +96,7 @@ public sealed class FrameFeatureSet : IEnumerable<FrameFeature>
     {
         ArgumentNullException.ThrowIfNull(feature);
         if (feature.Owner is { } owner && owner != this)
-            throw new InvalidOperationException($"{feature.GetType().Name} is already added to another world, and its resources are named once.");
+            throw new InvalidOperationException($"{feature.GetType().Name} is already added to another set, and its resources are named once.");
         if (_features.Contains(feature))
             return;
         feature.Owner = this;
@@ -105,17 +130,40 @@ public sealed class FrameFeatureSet : IEnumerable<FrameFeature>
     }
 }
 
-/// <summary>What the active frame features export this frame, which every view reads.</summary>
+/// <summary>
+/// What the active frame features export this frame, which every view reads, and the names they provide, which the
+/// renderer's passes require. A feature of a world provides for that world, the renderer's for all.
+/// </summary>
 internal sealed class FrameExports
 {
     public readonly Dictionary<RenderResourceID, BufferHandle> Buffers = new();
     public readonly Dictionary<RenderResourceID, TextureHandle> Textures = new();
+    private readonly HashSet<(RenderResourceID Name, RenderWorld? World)> _provided = new();
+    private readonly Dictionary<(RenderResourceID Name, RenderWorld World), int> _required = new();
 
     public void Clear()
     {
         Buffers.Clear();
         Textures.Clear();
+        _provided.Clear();
+        _required.Clear();
     }
+
+    public void Provide(RenderResourceID name, RenderWorld? world) => _provided.Add((name, world));
+
+    /// <summary>Asks for a name a view's draws read, checked by <see cref="Verify"/> once every feature has been added.</summary>
+    public void Require(RenderResourceID name, RenderWorld world, int viewId) => _required.TryAdd((name, world), viewId);
+
+    public void Verify()
+    {
+        foreach (((RenderResourceID name, RenderWorld world), int viewId) in _required)
+        {
+            if (!_provided.Contains((name, world)) && !_provided.Contains((name, null)))
+                throw new InvalidOperationException($"The draws of view {viewId} read '{RenderResourceID.ToString(name)}', which no active frame feature provided.");
+        }
+    }
+
+    public bool Provided(RenderResourceID name) => _provided.Contains((name, null));
 }
 
 /// <summary>Declares a frame feature's resources in the pass the renderer runs it in.</summary>
@@ -159,13 +207,27 @@ public sealed class FrameBuilder
         => Graph.Write(handle, usage);
 
     /// <summary>Reads the world's tables, so the feature runs after the frame's uploads, probes and deformation.</summary>
-    public void ReadWorld() => _pass.Frame.Buffers.ReadWorld(FrameGraph, Graph, _pass.World);
+    public void ReadWorld()
+    {
+        if (_pass.World is { } world)
+            _pass.Frame.Buffers.ReadWorld(FrameGraph, Graph, world);
+        else
+            _pass.Frame.Buffers.ReadAll(FrameGraph, Graph);
+    }
 
     /// <summary>Makes a buffer the feature wrote readable by every view, and by indirect items that name it.</summary>
-    public void Export(BufferHandle handle) => _pass.Frame.Exports.Buffers[handle.Id] = handle;
+    public void Export(BufferHandle handle)
+    {
+        _pass.Frame.Exports.Buffers[handle.Id] = handle;
+        _pass.Frame.Exports.Provide(handle.Id, _pass.Feature.World);
+    }
 
     /// <summary>Makes a texture the feature wrote readable by every view.</summary>
-    public void Export(TextureHandle handle) => _pass.Frame.Exports.Textures[handle.Id] = handle;
+    public void Export(TextureHandle handle)
+    {
+        _pass.Frame.Exports.Textures[handle.Id] = handle;
+        _pass.Frame.Exports.Provide(handle.Id, _pass.Feature.World);
+    }
 }
 
 /// <summary>What a frame feature records with.</summary>
@@ -203,16 +265,18 @@ public sealed class FrameContext
     public void BindWorld(PropertySet properties)
     {
         ArgumentNullException.ThrowIfNull(properties);
-        _pass.Frame.BindWorld(properties, _pass.Feature.World!);
+        if (_pass.Feature.World is not { } world)
+            throw new InvalidOperationException($"{_pass.Feature.GetType().Name} binds a world's tables, but belongs to the renderer and not to a world.");
+        _pass.Frame.BindWorld(properties, world);
     }
 }
 
 /// <summary>A frame feature's pass.</summary>
-internal sealed class FrameFeaturePass(FramePipeline frame, FrameFeature feature, WorldFrame world)
+internal sealed class FrameFeaturePass(FramePipeline frame, FrameFeature feature, WorldFrame? world)
 {
     public FramePipeline Frame => frame;
     public FrameFeature Feature => feature;
-    public WorldFrame World => world;
+    public WorldFrame? World => world;
 
     public string Name => $"Graphite.Frame {feature.GetType().Name}";
 

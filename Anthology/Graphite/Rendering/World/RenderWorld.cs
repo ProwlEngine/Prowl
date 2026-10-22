@@ -293,7 +293,7 @@ public sealed partial class RenderWorld : IDisposable
     /// <summary>Features every view of the world runs. Host thread.</summary>
     public FeatureSet Features { get; } = new();
 
-    /// <summary>GPU work run once a frame outside any view. Host thread.</summary>
+    /// <summary>GPU work run once a frame outside any view, with the world's built in LightProbes, LocalShadows and CaptureFill. Host thread.</summary>
     public FrameFeatureSet FrameFeatures { get; }
 
     /// <summary>Host geometry drawn into each view through its passes without being renderables. Host thread.</summary>
@@ -545,7 +545,7 @@ public sealed partial class RenderWorld : IDisposable
     {
         _owner = owner;
         _device = device;
-        FrameFeatures = new FrameFeatureSet(this);
+        FrameFeatures = new FrameFeatureSet(this) { new LightProbeFeature(), new LocalShadowFeature(), new CaptureFillFeature() };
         int id = System.Threading.Interlocked.Increment(ref s_nextId);
         Id = id;
         Name = $"World {id}";
