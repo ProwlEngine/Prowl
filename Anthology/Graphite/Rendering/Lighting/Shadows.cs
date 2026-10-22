@@ -570,27 +570,6 @@ internal sealed class CascadePass(FeatureShape shape) : IInstancePass
     }
 }
 
-/// <summary>Leaves a camera's cascades in their sampled layout for the passes after it.</summary>
-internal sealed class CascadePublishPass(FeatureShape shape) : IInstancePass
-{
-    public string Name => "Graphite.CascadesPublish";
-
-    public GraphKind Kind => shape.Kind;
-
-    public void Setup(InstanceContextBuilder builder)
-    {
-        foreach (CascadeSlot slot in shape.Cascades)
-        {
-            for (int c = 0; c < slot.Count; c++)
-                builder.DeclareInputTexture(shape.CascadeId(slot.Slot, c), TextureState.Sampled, TextureState.Sampled);
-        }
-    }
-
-    public void Render(InstanceContext context, CommandBuffer cmd)
-    {
-    }
-}
-
 /// <summary>
 /// A local light's cached shadow: a tile per face that persists and redraws only when the light, its tile or a caster
 /// near it changed. A light with both static and moving casters keeps static only copies, so moving changes copy them
