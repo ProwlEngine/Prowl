@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.Threading;
+
 using Xunit;
 
 namespace Prowl.Warp.Tests;
@@ -10,16 +12,20 @@ public class SessionProcessingTests
     public void TimerIterationRecoversAfterMembershipHandlerThrows()
     {
         using ProbeTransport transport = new();
-        using NetSession host = NetSession.CreateHost(transport, options: new()
-        { ReassemblyTimeout = TimeSpan.FromMilliseconds(20), GoodbyeLinger = TimeSpan.FromMilliseconds(20) });
+        using NetSession host = NetSession.CreateHost(transport,
+            options: new NetSessionOptions
+            {
+                ReassemblyTimeout = TimeSpan.FromMilliseconds(20), GoodbyeLinger = TimeSpan.FromMilliseconds(20)
+            });
         ProbeConnection connection = JoinPeer(transport, host);
         BeginPartialMessage(host, connection);
-        Action<NetPeer, SessionEndReason> handler = (_, _) => throw new InvalidOperationException("Application failure");
+        Action<NetPeer, SessionEndReason>
+            handler = (_, _) => throw new InvalidOperationException("Application failure");
         host.PeerLeft += handler;
-        System.Threading.Thread.Sleep(30);
+        Thread.Sleep(30);
         Assert.Throws<InvalidOperationException>(host.Flush);
         host.PeerLeft -= handler;
-        System.Threading.Thread.Sleep(30);
+        Thread.Sleep(30);
         host.Flush();
         Assert.Equal(1, connection.DisconnectCalls);
     }
@@ -28,12 +34,13 @@ public class SessionProcessingTests
     public void MembershipHandlerCanDisposeSessionDuringTimerIteration()
     {
         using ProbeTransport transport = new();
-        using NetSession host = NetSession.CreateHost(transport, options: new() { ReassemblyTimeout = TimeSpan.FromMilliseconds(20) });
+        using NetSession host = NetSession.CreateHost(transport,
+            options: new NetSessionOptions { ReassemblyTimeout = TimeSpan.FromMilliseconds(20) });
         ProbeConnection first = JoinPeer(transport, host), second = JoinPeer(transport, host);
         BeginPartialMessage(host, first);
         BeginPartialMessage(host, second);
         host.PeerLeft += (_, _) => host.Dispose();
-        System.Threading.Thread.Sleep(30);
+        Thread.Sleep(30);
         host.Flush();
         Assert.Equal(SessionState.Ended, host.State);
         Assert.Equal(0, host.PendingReassemblyBytes);
@@ -46,7 +53,7 @@ public class SessionProcessingTests
         fragment.WriteBool(true);
         fragment.WriteVarUInt32(1024);
         fragment.WriteByte(1);
-        host.ProcessEvent(new(TransportEventType.Data, peer, fragment.WrittenMemory));
+        host.ProcessEvent(new TransportEvent(TransportEventType.Data, peer, fragment.WrittenMemory));
     }
 
     private static NetSession CreateHost(Transport transport) => NetSession.CreateHost(transport);
@@ -110,19 +117,20 @@ public class SessionProcessingTests
         using ProbeTransport transport = new(), other = new();
         using NetSession host = CreateHost(transport);
         Connection foreign = other.Connect("other");
-        Assert.Throws<ArgumentException>(() => host.ProcessEvent(new(TransportEventType.Connected, foreign)));
+        Assert.Throws<ArgumentException>(() =>
+            host.ProcessEvent(new TransportEvent(TransportEventType.Connected, foreign)));
     }
 
     private static ProbeConnection JoinPeer(ProbeTransport transport, NetSession host)
     {
         ProbeConnection connection = transport.OpenPeer();
-        host.ProcessEvent(new(TransportEventType.Connected, connection));
+        host.ProcessEvent(new TransportEvent(TransportEventType.Connected, connection));
         using NetWriter request = new();
         request.WriteUInt16(NetSession.ReservedMessageIds);
         request.WriteUInt32(0);
         request.WriteString("client");
         request.WriteBytesWithLength(ReadOnlySpan<byte>.Empty);
-        host.ProcessEvent(new(TransportEventType.Data, connection, request.WrittenMemory));
+        host.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, request.WrittenMemory));
         return connection;
     }
 
@@ -131,20 +139,26 @@ public class SessionProcessingTests
         public int ListenCalls, ConnectCalls, ReceiveCalls, FlushCalls, ShutdownCalls;
         public override bool IsListening => false;
         public override void Listen() => ListenCalls++;
+
         public override Connection Connect(string address)
         {
             ConnectCalls++;
             return new ProbeConnection(this, NextConnectionId());
         }
+
         public override void Receive() => ReceiveCalls++;
         public override void Flush() => FlushCalls++;
         public override void Shutdown() => ShutdownCalls++;
+
         public ProbeConnection OpenPeer()
         {
             ProbeConnection connection = new(this, NextConnectionId());
             AddConnection(connection);
             RaiseConnected(connection);
-            while (Poll(out _)) { }
+            while (Poll(out _))
+            {
+            }
+
             return connection;
         }
     }
@@ -154,7 +168,11 @@ public class SessionProcessingTests
         public int FlushCalls, DisconnectCalls;
         public override TimeSpan RoundTripTime => TimeSpan.Zero;
         public override int GetMaxMessageSize(Delivery delivery) => 128;
-        public override void Send(ReadOnlySpan<byte> data, Delivery delivery) { }
+
+        public override void Send(ReadOnlySpan<byte> data, Delivery delivery)
+        {
+        }
+
         public override void Disconnect() => DisconnectCalls++;
         public override void Flush() => FlushCalls++;
     }

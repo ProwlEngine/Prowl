@@ -2,20 +2,21 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Reflection;
 
-using Prowl.Warp;
 using Prowl.Warp.Transports.Local;
 
 using Xunit;
 
 namespace Prowl.Warp.Tests;
 
-/// <summary>Local-only behaviour. The shared transport behaviour is in <see cref="LocalTransportContractTests"/>.</summary>
+/// <summary>Local-only behaviour. The shared transport behaviour is in <see cref="LocalTransportContractTests" />.</summary>
 public class LocalTransportTests
 {
     private static int InboxCount(LocalTransport transport)
     {
-        object inbox = typeof(LocalTransport).GetField("_inbox", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(transport)!;
+        object inbox = typeof(LocalTransport).GetField("_inbox", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(transport)!;
         return (int)inbox.GetType().GetProperty("Count")!.GetValue(inbox)!;
     }
 
@@ -33,7 +34,11 @@ public class LocalTransportTests
         pump.Until(() => connection.IsConnected, what: "connect");
         connection.Send(new byte[1000], Delivery.Reliable);
         host.Shutdown();
-        if (sendAfterShutdown) connection.Send(new byte[1000], Delivery.Reliable);
+        if (sendAfterShutdown)
+        {
+            connection.Send(new byte[1000], Delivery.Reliable);
+        }
+
         Assert.Equal(0, InboxCount(host));
     }
 
@@ -48,7 +53,11 @@ public class LocalTransportTests
         Connection connection = client.Connect("host");
         Pump pump = new(host, client);
         pump.Until(() => connection.IsConnected, what: "connect");
-        for (int i = 0; i < 20 && connection.IsConnected; i++) connection.Send(new byte[1000], Delivery.Reliable);
+        for (int i = 0; i < 20 && connection.IsConnected; i++)
+        {
+            connection.Send(new byte[1000], Delivery.Reliable);
+        }
+
         Assert.Equal(ConnectionState.Disconnected, connection.State);
         Assert.InRange(InboxCount(host), 0, 5);
     }

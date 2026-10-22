@@ -4,8 +4,6 @@
 using System;
 using System.IO;
 
-using Prowl.Warp;
-
 using Xunit;
 
 namespace Prowl.Warp.Tests;
@@ -19,6 +17,7 @@ public class NetBufferTests
         using NetWriter writer = new();
         char[] text = new char[16];
         long total = 0;
+
         void Round()
         {
             writer.Reset();
@@ -32,9 +31,18 @@ public class NetBufferTests
             reader.ReadDouble();
             total += reader.ReadString(text);
         }
-        for (int i = 0; i < 100; i++) Round();
+
+        for (int i = 0; i < 100; i++)
+        {
+            Round();
+        }
+
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 1000; i++) Round();
+        for (int i = 0; i < 1000; i++)
+        {
+            Round();
+        }
+
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.Equal(1100L * (-12345 + 5), total);
         Assert.True(text.AsSpan(0, 5).SequenceEqual("héllo"));
@@ -53,12 +61,14 @@ public class NetBufferTests
             NetReader warmup = new(writer.WrittenSpan);
             warmup.ReadString(destination);
         }
+
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 1000; i++)
         {
             NetReader reader = new(writer.WrittenSpan);
             reader.ReadString(destination);
         }
+
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.True(destination.SequenceEqual(text));
         Assert.Equal(0, allocated);
@@ -73,8 +83,15 @@ public class NetBufferTests
         NetReader reader = new(writer.WrittenSpan);
         Span<char> small = stackalloc char[1];
         bool rejected = false;
-        try { reader.ReadString(small); }
-        catch (ArgumentException) { rejected = true; }
+        try
+        {
+            reader.ReadString(small);
+        }
+        catch (ArgumentException)
+        {
+            rejected = true;
+        }
+
         Assert.True(rejected);
         Assert.Equal(0, reader.Position);
         Span<char> destination = stackalloc char[4];
@@ -91,7 +108,8 @@ public class NetBufferTests
         writer.WriteString("🌍");
         byte[] data = writer.ToArray();
         Assert.Throws<InvalidDataException>(() => new NetReader(data).ReadString(new char[2], 3));
-        Assert.Throws<EndOfStreamException>(() => new NetReader(data.AsSpan(0, data.Length - 1)).ReadString(new char[2]));
+        Assert.Throws<EndOfStreamException>(() =>
+            new NetReader(data.AsSpan(0, data.Length - 1)).ReadString(new char[2]));
         Assert.Throws<ArgumentOutOfRangeException>(() => new NetReader(data).ReadString(new char[2], -1));
     }
 
@@ -99,7 +117,7 @@ public class NetBufferTests
     public void RoundTripsEveryType()
     {
         Guid guid = Guid.NewGuid();
-        using NetWriter writer = new(initialCapacity: 1); // force growth
+        using NetWriter writer = new(1); // force growth
 
         writer.WriteBool(true);
         writer.WriteByte(200);

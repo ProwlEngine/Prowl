@@ -9,31 +9,39 @@ using System.Text;
 namespace Prowl.Warp;
 
 /// <summary>
-/// Builds a message in a growable buffer rented from <see cref="ArrayPool{T}.Shared"/>. Multi-byte
-/// values are little-endian; read them back with <see cref="NetReader"/>.
+///     Builds a message in a growable buffer rented from <see cref="ArrayPool{T}.Shared" />. Multi-byte
+///     values are little-endian; read them back with <see cref="NetReader" />.
 /// </summary>
-/// <remarks>Reuse a writer with <see cref="Reset"/>, and <see cref="Dispose"/> it to return its buffer.</remarks>
+/// <remarks>Reuse a writer with <see cref="Reset" />, and <see cref="Dispose" /> it to return its buffer.</remarks>
 public sealed class NetWriter : IDisposable
 {
     private byte[] _buffer;
-    private int _length;
 
-    public NetWriter(int initialCapacity = 256)
-    {
-        _buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 16));
-    }
+    public NetWriter(int initialCapacity = 256) => _buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 16));
 
     /// <summary>Bytes written so far.</summary>
-    public int Length => _length;
+    public int Length { get; private set; }
 
     /// <summary>The bytes written so far. Invalidated by any further write.</summary>
-    public ReadOnlySpan<byte> WrittenSpan => new(_buffer, 0, _length);
+    public ReadOnlySpan<byte> WrittenSpan => new(_buffer, 0, Length);
 
     /// <summary>The bytes written so far. Invalidated by any further write.</summary>
-    public ReadOnlyMemory<byte> WrittenMemory => new(_buffer, 0, _length);
+    public ReadOnlyMemory<byte> WrittenMemory => new(_buffer, 0, Length);
+
+    public void Dispose()
+    {
+        if (_buffer.Length == 0)
+        {
+            return;
+        }
+
+        ArrayPool<byte>.Shared.Return(_buffer);
+        _buffer = Array.Empty<byte>();
+        Length = 0;
+    }
 
     /// <summary>Clears the contents, keeping the buffer for reuse.</summary>
-    public void Reset() => _length = 0;
+    public void Reset() => Length = 0;
 
     /// <summary>Allocates an owned copy. Use WrittenSpan or WrittenMemory to avoid the copy.</summary>
     public byte[] ToArray() => WrittenSpan.ToArray();
@@ -43,7 +51,7 @@ public sealed class NetWriter : IDisposable
     public void WriteByte(byte value)
     {
         Reserve(1)[0] = value;
-        _length += 1;
+        Length += 1;
     }
 
     public void WriteSByte(sbyte value) => WriteByte((byte)value);
@@ -51,49 +59,49 @@ public sealed class NetWriter : IDisposable
     public void WriteInt16(short value)
     {
         BinaryPrimitives.WriteInt16LittleEndian(Reserve(2), value);
-        _length += 2;
+        Length += 2;
     }
 
     public void WriteUInt16(ushort value)
     {
         BinaryPrimitives.WriteUInt16LittleEndian(Reserve(2), value);
-        _length += 2;
+        Length += 2;
     }
 
     public void WriteInt32(int value)
     {
         BinaryPrimitives.WriteInt32LittleEndian(Reserve(4), value);
-        _length += 4;
+        Length += 4;
     }
 
     public void WriteUInt32(uint value)
     {
         BinaryPrimitives.WriteUInt32LittleEndian(Reserve(4), value);
-        _length += 4;
+        Length += 4;
     }
 
     public void WriteInt64(long value)
     {
         BinaryPrimitives.WriteInt64LittleEndian(Reserve(8), value);
-        _length += 8;
+        Length += 8;
     }
 
     public void WriteUInt64(ulong value)
     {
         BinaryPrimitives.WriteUInt64LittleEndian(Reserve(8), value);
-        _length += 8;
+        Length += 8;
     }
 
     public void WriteSingle(float value)
     {
         BinaryPrimitives.WriteSingleLittleEndian(Reserve(4), value);
-        _length += 4;
+        Length += 4;
     }
 
     public void WriteDouble(double value)
     {
         BinaryPrimitives.WriteDoubleLittleEndian(Reserve(8), value);
-        _length += 8;
+        Length += 8;
     }
 
     /// <summary>Writes 1 to 5 bytes: 7 bits per byte, small values smallest.</summary>
@@ -109,8 +117,9 @@ public sealed class NetWriter : IDisposable
             span[i++] = (byte)(value | 0x80);
             value >>= 7;
         }
+
         span[i++] = (byte)value;
-        _length += i;
+        Length += i;
     }
 
     /// <summary>Zigzag encoded, so values close to zero (positive or negative) stay small.</summary>
@@ -122,7 +131,7 @@ public sealed class NetWriter : IDisposable
     public void WriteGuid(Guid value)
     {
         value.TryWriteBytes(Reserve(16));
-        _length += 16;
+        Length += 16;
     }
 
     /// <summary>UTF-8, prefixed with its byte length as a var-uint. Null is written as the empty string.</summary>
@@ -132,7 +141,7 @@ public sealed class NetWriter : IDisposable
         int byteCount = Encoding.UTF8.GetByteCount(value);
         WriteVarUInt32((uint)byteCount);
         Encoding.UTF8.GetBytes(value, Reserve(byteCount));
-        _length += byteCount;
+        Length += byteCount;
     }
 
     /// <summary>Raw bytes prefixed with their length as a var-uint.</summary>
@@ -146,34 +155,28 @@ public sealed class NetWriter : IDisposable
     public void WriteBytes(ReadOnlySpan<byte> value)
     {
         value.CopyTo(Reserve(value.Length));
-        _length += value.Length;
-    }
-
-    public void Dispose()
-    {
-        if (_buffer.Length == 0)
-            return;
-
-        ArrayPool<byte>.Shared.Return(_buffer);
-        _buffer = Array.Empty<byte>();
-        _length = 0;
+        Length += value.Length;
     }
 
     private Span<byte> Reserve(int count)
     {
-        if (_length + count > _buffer.Length)
-            Grow(_length + count);
+        if (Length + count > _buffer.Length)
+        {
+            Grow(Length + count);
+        }
 
-        return _buffer.AsSpan(_length, count);
+        return _buffer.AsSpan(Length, count);
     }
 
     private void Grow(int required)
     {
         if (_buffer.Length == 0)
+        {
             throw new ObjectDisposedException(nameof(NetWriter));
+        }
 
         byte[] larger = ArrayPool<byte>.Shared.Rent(Math.Max(required, _buffer.Length * 2));
-        _buffer.AsSpan(0, _length).CopyTo(larger);
+        _buffer.AsSpan(0, Length).CopyTo(larger);
         ArrayPool<byte>.Shared.Return(_buffer);
         _buffer = larger;
     }

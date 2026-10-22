@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Warp;
 using Prowl.Warp.Transports.Kcp;
 using Prowl.Warp.Transports.Local;
 
@@ -14,34 +13,36 @@ using Xunit;
 namespace Prowl.Warp.Tests;
 
 /// <summary>
-/// Behaviour every transport must share, run once per transport by the subclasses at the bottom.
-/// Transport specific behaviour is tested in that transport's own test class.
+///     Behaviour every transport must share, run once per transport by the subclasses at the bottom.
+///     Transport specific behaviour is tested in that transport's own test class.
 /// </summary>
 public abstract class TransportContractTests : IDisposable
 {
     private readonly List<Transport> _created = new();
+
+    /// <summary>An address nothing can be reached at, reported as <see cref="DisconnectReason.Unreachable" />.</summary>
+    protected abstract string UnreachableAddress { get; }
+
+    public void Dispose()
+    {
+        foreach (Transport transport in _created)
+        {
+            transport.Dispose();
+        }
+    }
 
     /// <summary>A new transport that is already listening.</summary>
     protected abstract Transport CreateHost();
 
     protected abstract Transport CreateClient();
 
-    /// <summary>The address clients connect to for <paramref name="host"/>.</summary>
+    /// <summary>The address clients connect to for <paramref name="host" />.</summary>
     protected abstract string AddressOf(Transport host);
-
-    /// <summary>An address nothing can be reached at, reported as <see cref="DisconnectReason.Unreachable"/>.</summary>
-    protected abstract string UnreachableAddress { get; }
 
     protected T Track<T>(T transport) where T : Transport
     {
         _created.Add(transport);
         return transport;
-    }
-
-    public void Dispose()
-    {
-        foreach (Transport transport in _created)
-            transport.Dispose();
     }
 
     private (Transport Host, Transport Client, Pump Pump, Connection ToHost) Connect()
@@ -61,9 +62,16 @@ public abstract class TransportContractTests : IDisposable
     [InlineData(true)]
     public void QueueByteBudgetsReleaseMemoryAfterOverflow(bool global)
     {
-        var (host, client, pump, toHost) = Connect();
-        if (global) host.MaxQueuedDataBytes = 512;
-        else host.MaxQueuedDataBytesPerConnection = 512;
+        (Transport host, Transport client, Pump pump, Connection toHost) = Connect();
+        if (global)
+        {
+            host.MaxQueuedDataBytes = 512;
+        }
+        else
+        {
+            host.MaxQueuedDataBytesPerConnection = 512;
+        }
+
         toHost.Send(new byte[400], Delivery.Unreliable);
         toHost.Send(new byte[400], Delivery.Unreliable);
         pump.Until(() => !host.Connections.Any(), what: "queue budget disconnect");
@@ -74,7 +82,8 @@ public abstract class TransportContractTests : IDisposable
         Connection second = client.Connect(AddressOf(host));
         pump.Until(() => second.IsConnected && host.Connections.Count == 1, what: "reconnect after overflow");
         second.Send(new byte[400], Delivery.Unreliable);
-        pump.Until(() => pump.EventsOf(host).Any(e => e.Type == TransportEventType.Data), what: "reclaimed queue capacity");
+        pump.Until(() => pump.EventsOf(host).Any(e => e.Type == TransportEventType.Data),
+            what: "reclaimed queue capacity");
         Assert.True(second.IsConnected);
     }
 
@@ -116,14 +125,17 @@ public abstract class TransportContractTests : IDisposable
         toClient.Send(new byte[] { 7 }, Delivery.Unreliable);
 
         pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 2
-            && pump.EventsOf(client).Count(e => e.Type == TransportEventType.Data) == 2, what: "messages");
+                         && pump.EventsOf(client).Count(e => e.Type == TransportEventType.Data) == 2, what: "messages");
 
         List<Received> atHost = pump.EventsOf(host).Where(e => e.Type == TransportEventType.Data).ToList();
-        Assert.Contains(atHost, e => e.Delivery == Delivery.Reliable && e.Data.SequenceEqual(new byte[] { 1, 2, 3 }) && e.Connection == toClient);
+        Assert.Contains(atHost,
+            e => e.Delivery == Delivery.Reliable && e.Data.SequenceEqual(new byte[] { 1, 2, 3 }) &&
+                 e.Connection == toClient);
         Assert.Contains(atHost, e => e.Delivery == Delivery.Unreliable && e.Data.SequenceEqual(new byte[] { 4, 5 }));
 
         List<Received> atClient = pump.EventsOf(client).Where(e => e.Type == TransportEventType.Data).ToList();
-        Assert.Contains(atClient, e => e.Delivery == Delivery.Reliable && e.Data.SequenceEqual(new byte[] { 6 }) && e.Connection == toHost);
+        Assert.Contains(atClient,
+            e => e.Delivery == Delivery.Reliable && e.Data.SequenceEqual(new byte[] { 6 }) && e.Connection == toHost);
         Assert.Contains(atClient, e => e.Delivery == Delivery.Unreliable && e.Data.SequenceEqual(new byte[] { 7 }));
     }
 
@@ -134,11 +146,15 @@ public abstract class TransportContractTests : IDisposable
 
         const int count = 500;
         for (int i = 0; i < count; i++)
+        {
             toHost.Send(BitConverter.GetBytes(i), Delivery.Reliable);
+        }
 
-        pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == count, what: "all messages");
+        pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == count,
+            what: "all messages");
 
-        int[] received = pump.EventsOf(host).Where(e => e.Type == TransportEventType.Data).Select(e => BitConverter.ToInt32(e.Data)).ToArray();
+        int[] received = pump.EventsOf(host).Where(e => e.Type == TransportEventType.Data)
+            .Select(e => BitConverter.ToInt32(e.Data)).ToArray();
         Assert.Equal(Enumerable.Range(0, count), received);
     }
 
@@ -147,7 +163,7 @@ public abstract class TransportContractTests : IDisposable
     {
         (Transport host, Transport _, Pump pump, Connection toHost) = Connect();
 
-        byte[] large = TestData.Pattern(Math.Min(toHost.GetMaxMessageSize(Delivery.Reliable), 100_000), seed: 7);
+        byte[] large = TestData.Pattern(Math.Min(toHost.GetMaxMessageSize(Delivery.Reliable), 100_000), 7);
         toHost.Send(large, Delivery.Reliable);
         toHost.Send(Array.Empty<byte>(), Delivery.Reliable);
 
@@ -185,8 +201,10 @@ public abstract class TransportContractTests : IDisposable
         Assert.False(host.IsListening);
         pump.Until(() => toHost.State == ConnectionState.Disconnected, what: "client to notice");
 
-        Assert.Equal(DisconnectReason.RemoteClosed, pump.EventsOf(client).Single(e => e.Type == TransportEventType.Disconnected).Reason);
-        Assert.Equal(DisconnectReason.Requested, pump.EventsOf(host).Single(e => e.Type == TransportEventType.Disconnected).Reason);
+        Assert.Equal(DisconnectReason.RemoteClosed,
+            pump.EventsOf(client).Single(e => e.Type == TransportEventType.Disconnected).Reason);
+        Assert.Equal(DisconnectReason.Requested,
+            pump.EventsOf(host).Single(e => e.Type == TransportEventType.Disconnected).Reason);
     }
 
     [Fact]
@@ -220,7 +238,9 @@ public abstract class TransportContractTests : IDisposable
 
         int max = toHost.GetMaxMessageSize(Delivery.Unreliable);
         if (max < 1_000_000)
+        {
             Assert.Throws<ArgumentException>(() => toHost.Send(new byte[max + 1], Delivery.Unreliable));
+        }
     }
 
     [Fact]
@@ -241,6 +261,8 @@ public sealed class LocalTransportContractTests : TransportContractTests
     private readonly LocalNetwork _network = new();
     private int _clients;
 
+    protected override string UnreachableAddress => "nobody";
+
     protected override Transport CreateHost()
     {
         LocalTransport host = Track(new LocalTransport(_network, "host"));
@@ -251,18 +273,18 @@ public sealed class LocalTransportContractTests : TransportContractTests
     protected override Transport CreateClient() => Track(new LocalTransport(_network, $"client{_clients++}"));
 
     protected override string AddressOf(Transport host) => ((LocalTransport)host).Address;
-
-    protected override string UnreachableAddress => "nobody";
 }
 
 public sealed class KcpTransportContractTests : TransportContractTests
 {
+    protected override string UnreachableAddress => "not a valid host name";
+
     internal static KcpTransportOptions Options() => new()
     {
         Port = 0,
         ConnectTimeout = TimeSpan.FromSeconds(3),
         Timeout = TimeSpan.FromSeconds(3),
-        HandshakeResendInterval = TimeSpan.FromMilliseconds(50),
+        HandshakeResendInterval = TimeSpan.FromMilliseconds(50)
     };
 
     protected override Transport CreateHost()
@@ -275,6 +297,4 @@ public sealed class KcpTransportContractTests : TransportContractTests
     protected override Transport CreateClient() => Track(new KcpTransport(Options()));
 
     protected override string AddressOf(Transport host) => $"127.0.0.1:{((KcpTransport)host).LocalPort}";
-
-    protected override string UnreachableAddress => "not a valid host name";
 }

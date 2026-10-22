@@ -9,10 +9,10 @@ dotnet add package Prowl.Warp
 
 ## Transports
 
-| Transport | Purpose |
-| --- | --- |
-| `KcpTransport` | Reliable ordered messages and unreliable datagrams over UDP |
-| `LocalTransport` | Connections within one process |
+| Transport           | Purpose                                                      |
+|---------------------|--------------------------------------------------------------|
+| `KcpTransport`      | Reliable ordered messages and unreliable datagrams over UDP  |
+| `LocalTransport`    | Connections within one process                               |
 | `BatchingTransport` | Combine small messages until flush; both ends must enable it |
 
 Transports live under `Prowl.Warp.Transports.<Kcp/Local/Batching>`.

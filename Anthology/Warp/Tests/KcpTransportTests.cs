@@ -2,10 +2,11 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
+using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 
-using Prowl.Warp;
 using Prowl.Warp.Transports.Kcp;
 
 using Xunit;
@@ -13,8 +14,8 @@ using Xunit;
 namespace Prowl.Warp.Tests;
 
 /// <summary>
-/// KCP-only behaviour, over real UDP sockets on the loopback interface. The shared transport behaviour
-/// is in <see cref="KcpTransportContractTests"/>.
+///     KCP-only behaviour, over real UDP sockets on the loopback interface. The shared transport behaviour
+///     is in <see cref="KcpTransportContractTests" />.
 /// </summary>
 public class KcpTransportTests
 {
@@ -24,7 +25,7 @@ public class KcpTransportTests
         ConnectTimeout = TimeSpan.FromSeconds(3),
         Timeout = TimeSpan.FromSeconds(3),
         HandshakeResendInterval = TimeSpan.FromMilliseconds(50),
-        Simulation = simulation,
+        Simulation = simulation
     };
 
     private static (KcpTransport Host, KcpTransport Client, Pump Pump, Connection ToHost) Connect(
@@ -45,17 +46,29 @@ public class KcpTransportTests
     {
         KcpTransportOptions options = FastOptions();
         options.MaxDatagramsPerReceive = 4;
-        var (host, client, pump, toHost) = Connect(hostOptions: options);
+        (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) = Connect(options);
         using (host)
         using (client)
         {
-            for (int i = 0; i < 20; i++) toHost.Send(new byte[] { 1 }, Delivery.Unreliable);
-            System.Threading.Thread.Sleep(20);
+            for (int i = 0; i < 20; i++)
+            {
+                toHost.Send(new byte[] { 1 }, Delivery.Unreliable);
+            }
+
+            Thread.Sleep(20);
             host.Receive();
             int count = 0;
-            while (host.Poll(out TransportEvent ev)) if (ev.Type == TransportEventType.Data) count++;
+            while (host.Poll(out TransportEvent ev))
+            {
+                if (ev.Type == TransportEventType.Data)
+                {
+                    count++;
+                }
+            }
+
             Assert.InRange(count, 1, 4);
-            pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 20 - count, what: "remaining budgeted packets");
+            pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 20 - count,
+                what: "remaining budgeted packets");
         }
     }
 
@@ -64,13 +77,16 @@ public class KcpTransportTests
     {
         KcpTransportOptions options = FastOptions();
         options.MaxPendingReliableBytes = 4096;
-        var (host, client, pump, toHost) = Connect(clientOptions: options);
+        (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) = Connect(clientOptions: options);
         using (host)
         using (client)
         {
             // No receiver pumps or acknowledges these sends.
             for (int i = 0; i < 100 && toHost.IsConnected; i++)
+            {
                 toHost.Send(new byte[1000], Delivery.Reliable);
+            }
+
             Assert.Equal(ConnectionState.Disconnected, toHost.State);
         }
     }
@@ -78,17 +94,28 @@ public class KcpTransportTests
     [Fact]
     public void UnpolledDataIsBoundedPerConnection()
     {
-        var (host, client, pump, toHost) = Connect();
+        (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) = Connect();
         using (host)
         using (client)
         {
             host.MaxQueuedDataEventsPerConnection = 4;
-            for (int i = 0; i < 20; i++) toHost.Send(new byte[] { 1 }, Delivery.Unreliable);
-            System.Threading.Thread.Sleep(20);
+            for (int i = 0; i < 20; i++)
+            {
+                toHost.Send(new byte[] { 1 }, Delivery.Unreliable);
+            }
+
+            Thread.Sleep(20);
             host.Receive();
             Assert.Empty(host.Connections);
             int count = 0;
-            while (host.Poll(out TransportEvent ev)) if (ev.Type == TransportEventType.Data) count++;
+            while (host.Poll(out TransportEvent ev))
+            {
+                if (ev.Type == TransportEventType.Data)
+                {
+                    count++;
+                }
+            }
+
             Assert.InRange(count, 0, 4);
         }
     }
@@ -96,14 +123,15 @@ public class KcpTransportTests
     [Fact]
     public void LargeReliableMessagesPreserveOrdering()
     {
-        var (host, client, pump, connection) = Connect();
+        (KcpTransport host, KcpTransport client, Pump pump, Connection connection) = Connect();
         using (host)
         using (client)
         {
             byte[] bulk = TestData.Pattern(100_000, 42);
             connection.Send(bulk, Delivery.Reliable);
             connection.Send(new byte[] { 7 }, Delivery.Reliable);
-            pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 2, what: "bulk completion");
+            pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 2,
+                what: "bulk completion");
             Received received = pump.EventsOf(host).Single(e => e.Type == TransportEventType.Data && e.Data.Length > 1);
             Assert.Equal(Delivery.Reliable, received.Delivery);
             Assert.Equal(bulk, received.Data);
@@ -120,13 +148,14 @@ public class KcpTransportTests
         using (client)
         {
             int max = toHost.GetMaxMessageSize(Delivery.Reliable);
-            byte[] large = TestData.Pattern(max, seed: 1);
+            byte[] large = TestData.Pattern(max, 1);
             byte[] empty = Array.Empty<byte>();
 
             toHost.Send(large, Delivery.Reliable);
             toHost.Send(empty, Delivery.Reliable);
 
-            pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 2, what: "large message");
+            pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 2,
+                what: "large message");
 
             Received[] data = pump.EventsOf(host).Where(e => e.Type == TransportEventType.Data).ToArray();
             Assert.Equal(large, data[0].Data);
@@ -157,7 +186,7 @@ public class KcpTransportTests
             PacketLoss = 0.2,
             Latency = TimeSpan.FromMilliseconds(20),
             Jitter = TimeSpan.FromMilliseconds(20),
-            Seed = 1234,
+            Seed = 1234
         };
         KcpTransportOptions options = FastOptions(bad);
         options.Timeout = TimeSpan.FromSeconds(10);
@@ -169,14 +198,18 @@ public class KcpTransportTests
         {
             const int count = 200;
             for (int i = 0; i < count; i++)
+            {
                 toHost.Send(BitConverter.GetBytes(i), Delivery.Reliable);
-            toHost.Send(TestData.Pattern(20_000, seed: 2), Delivery.Reliable);
+            }
 
-            pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == count + 1, timeoutMs: 20_000, what: "messages over lossy link");
+            toHost.Send(TestData.Pattern(20_000, 2), Delivery.Reliable);
+
+            pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == count + 1, 20_000,
+                "messages over lossy link");
 
             Received[] data = pump.EventsOf(host).Where(e => e.Type == TransportEventType.Data).ToArray();
             Assert.Equal(Enumerable.Range(0, count), data.Take(count).Select(e => BitConverter.ToInt32(e.Data)));
-            Assert.Equal(TestData.Pattern(20_000, seed: 2), data[count].Data);
+            Assert.Equal(TestData.Pattern(20_000, 2), data[count].Data);
         }
     }
 
@@ -272,12 +305,12 @@ public class KcpTransportTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task ResolvesHostNamesAndIpv6Literals()
+    public async Task ResolvesHostNamesAndIpv6Literals()
     {
-        Assert.NotNull(await KcpTransport.TryResolveAsync("localhost:7777", 0, System.Net.Sockets.AddressFamily.InterNetworkV6, default));
-        Assert.NotNull(await KcpTransport.TryResolveAsync("[::1]:7777", 0, System.Net.Sockets.AddressFamily.InterNetworkV6, default));
-        Assert.NotNull(await KcpTransport.TryResolveAsync("127.0.0.1", 7777, System.Net.Sockets.AddressFamily.InterNetwork, default));
-        Assert.Null(await KcpTransport.TryResolveAsync("[::1]:7777", 0, System.Net.Sockets.AddressFamily.InterNetwork, default));
-        Assert.Null(await KcpTransport.TryResolveAsync("localhost:notaport", 0, System.Net.Sockets.AddressFamily.InterNetworkV6, default));
+        Assert.NotNull(await KcpTransport.TryResolveAsync("localhost:7777", 0, AddressFamily.InterNetworkV6, default));
+        Assert.NotNull(await KcpTransport.TryResolveAsync("[::1]:7777", 0, AddressFamily.InterNetworkV6, default));
+        Assert.NotNull(await KcpTransport.TryResolveAsync("127.0.0.1", 7777, AddressFamily.InterNetwork, default));
+        Assert.Null(await KcpTransport.TryResolveAsync("[::1]:7777", 0, AddressFamily.InterNetwork, default));
+        Assert.Null(await KcpTransport.TryResolveAsync("localhost:notaport", 0, AddressFamily.InterNetworkV6, default));
     }
 }

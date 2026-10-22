@@ -25,9 +25,9 @@ public sealed class JoinRequest
 }
 
 /// <summary>
-/// A client waiting for the host to let it in, handed to <see cref="NetSession.JoinRequested"/>.
-/// Call <see cref="Accept"/> or <see cref="Reject"/>, straight away or later (after checking an auth
-/// ticket, say). Undecided joins are refused after <see cref="NetSessionOptions.JoinTimeout"/>.
+///     A client waiting for the host to let it in, handed to <see cref="NetSession.JoinRequested" />.
+///     Call <see cref="Accept" /> or <see cref="Reject" />, straight away or later (after checking an auth
+///     ticket, say). Undecided joins are refused after <see cref="NetSessionOptions.JoinTimeout" />.
 /// </summary>
 public sealed class PendingJoin
 {
@@ -48,9 +48,9 @@ public sealed class PendingJoin
     /// <summary>True once accepted, rejected, timed out or disconnected. Further calls then do nothing.</summary>
     public bool IsResolved { get; internal set; }
 
-    /// <summary>Lets the client in. It becomes a <see cref="NetPeer"/> and <see cref="NetSession.PeerJoined"/> fires.</summary>
-    public void Accept() => _session.ResolveJoin(this, accept: true, null);
+    /// <summary>Lets the client in. It becomes a <see cref="NetPeer" /> and <see cref="NetSession.PeerJoined" /> fires.</summary>
+    public void Accept() => _session.ResolveJoin(this, true, null);
 
-    /// <summary>Turns the client away. It ends with <see cref="SessionEndReason.Rejected"/> and this message.</summary>
-    public void Reject(string message) => _session.ResolveJoin(this, accept: false, message);
+    /// <summary>Turns the client away. It ends with <see cref="SessionEndReason.Rejected" /> and this message.</summary>
+    public void Reject(string message) => _session.ResolveJoin(this, false, message);
 }

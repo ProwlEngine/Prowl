@@ -1,8 +1,11 @@
 using System;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+
 using Prowl.Warp.Transports.Kcp;
+
 using Xunit;
 
 namespace Prowl.Warp.Tests;
@@ -14,7 +17,11 @@ public class KcpResolutionTests
     {
         CancellationToken token = default;
         TaskCompletionSource<IPAddress[]> completion = new();
-        using KcpTransport transport = new(new(), (_, cancellation) => { token = cancellation; return completion.Task; });
+        using KcpTransport transport = new(new KcpTransportOptions(), (_, cancellation) =>
+        {
+            token = cancellation;
+            return completion.Task;
+        });
         Connection peer = transport.Connect("pending.test:7777");
         transport.Update();
         Assert.Equal(ConnectionState.Connecting, peer.State);
@@ -32,8 +39,11 @@ public class KcpResolutionTests
     public void ShutdownCancelsResolutionAndTransportCanBeReused()
     {
         CancellationToken token = default;
-        using KcpTransport transport = new(new() { Port = 0 }, (_, cancellation) =>
-        { token = cancellation; return new TaskCompletionSource<IPAddress[]>().Task; });
+        using KcpTransport transport = new(new KcpTransportOptions { Port = 0 }, (_, cancellation) =>
+        {
+            token = cancellation;
+            return new TaskCompletionSource<IPAddress[]>().Task;
+        });
         Connection peer = transport.Connect("pending.test:7777");
         transport.Shutdown();
         Assert.True(token.IsCancellationRequested);
@@ -46,8 +56,12 @@ public class KcpResolutionTests
     public void ConnectTimeoutIncludesResolution()
     {
         CancellationToken token = default;
-        using KcpTransport transport = new(new() { ConnectTimeout = TimeSpan.FromMilliseconds(20) }, (_, cancellation) =>
-        { token = cancellation; return new TaskCompletionSource<IPAddress[]>().Task; });
+        using KcpTransport transport = new(new KcpTransportOptions { ConnectTimeout = TimeSpan.FromMilliseconds(20) },
+            (_, cancellation) =>
+            {
+                token = cancellation;
+                return new TaskCompletionSource<IPAddress[]>().Task;
+            });
         Connection peer = transport.Connect("pending.test:7777");
         Thread.Sleep(30);
         transport.Update();
@@ -60,7 +74,7 @@ public class KcpResolutionTests
     [Fact]
     public async Task HostNamesAndLiteralsResolveWithoutChangingAddressSemantics()
     {
-        var family = System.Net.Sockets.AddressFamily.InterNetworkV6;
+        AddressFamily family = AddressFamily.InterNetworkV6;
         Assert.NotNull(await KcpTransport.TryResolveAsync("localhost:7777", 0, family, default));
         Assert.NotNull(await KcpTransport.TryResolveAsync("[::1]:7777", 0, family, default));
         Assert.Null(await KcpTransport.TryResolveAsync("localhost:notaport", 0, family, default));

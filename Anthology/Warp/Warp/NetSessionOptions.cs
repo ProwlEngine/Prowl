@@ -5,14 +5,16 @@ using System;
 
 namespace Prowl.Warp;
 
-/// <summary>Value settings for a <see cref="NetSession"/>. Use <c>new()</c> to initialize the defaults.</summary>
+/// <summary>Value settings for a <see cref="NetSession" />. Use <c>new()</c> to initialize the defaults.</summary>
 public struct NetSessionOptions
 {
-    public NetSessionOptions() { }
+    public NetSessionOptions()
+    {
+    }
 
     /// <summary>
-    /// Your game's version. The host turns away clients whose version differs, with
-    /// <see cref="SessionEndReason.VersionMismatch"/>.
+    ///     Your game's version. The host turns away clients whose version differs, with
+    ///     <see cref="SessionEndReason.VersionMismatch" />.
     /// </summary>
     public uint AppVersion { get; set; }
 
@@ -20,22 +22,22 @@ public struct NetSessionOptions
     public int MaxPeers { get; set; } = 64;
 
     /// <summary>
-    /// How long a client may take to complete joining once connected. On the host this also bounds how
-    /// long a <see cref="PendingJoin"/> may wait for a decision before it is refused.
+    ///     How long a client may take to complete joining once connected. On the host this also bounds how
+    ///     long a <see cref="PendingJoin" /> may wait for a decision before it is refused.
     /// </summary>
     public TimeSpan JoinTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    /// After the host kicks or refuses a client, how long it waits for the client to hang up before
-    /// closing the connection itself. Gives the reason time to arrive over a lossy link.
+    ///     After the host kicks or refuses a client, how long it waits for the client to hang up before
+    ///     closing the connection itself. Gives the reason time to arrive over a lossy link.
     /// </summary>
     public TimeSpan GoodbyeLinger { get; set; } = TimeSpan.FromSeconds(1);
 
     /// <summary>
-    /// The largest reliable message this side accepts, in bytes. Reliable messages bigger than the
-    /// transport allows are split into fragments and reassembled; a sender that announces more than this
-    /// is removed with <see cref="SessionEndReason.ProtocolError"/>. Bounds the memory a peer can make
-    /// this side allocate.
+    ///     The largest reliable message this side accepts, in bytes. Reliable messages bigger than the
+    ///     transport allows are split into fragments and reassembled; a sender that announces more than this
+    ///     is removed with <see cref="SessionEndReason.ProtocolError" />. Bounds the memory a peer can make
+    ///     this side allocate.
     /// </summary>
     public int MaxMessageSize { get; set; } = 16 * 1024 * 1024;
 
@@ -47,15 +49,36 @@ public struct NetSessionOptions
 
     /// <summary>Maximum pooled bytes queued for messages sent to the local peer.</summary>
     public long MaxLoopbackBytes { get; set; } = 16 * 1024 * 1024;
+
     public int MaxLoopbackMessages { get; set; } = 4096;
 
     internal NetSessionOptions CopyValidated()
     {
-        if (MaxPeers < 0 || MaxPeers > 65534) throw new ArgumentOutOfRangeException(nameof(MaxPeers));
-        if (MaxMessageSize < 64 || MaxMessageSize > 1024 * 1024 * 1024) throw new ArgumentOutOfRangeException(nameof(MaxMessageSize));
-        if (MaxLoopbackBytes <= 0) throw new ArgumentOutOfRangeException(nameof(MaxLoopbackBytes));
-        if (MaxLoopbackMessages <= 0) throw new ArgumentOutOfRangeException(nameof(MaxLoopbackMessages));
-        if (MaxReassemblyBytes < 64) throw new ArgumentOutOfRangeException(nameof(MaxReassemblyBytes));
+        if (MaxPeers < 0 || MaxPeers > 65534)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MaxPeers));
+        }
+
+        if (MaxMessageSize < 64 || MaxMessageSize > 1024 * 1024 * 1024)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MaxMessageSize));
+        }
+
+        if (MaxLoopbackBytes <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MaxLoopbackBytes));
+        }
+
+        if (MaxLoopbackMessages <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MaxLoopbackMessages));
+        }
+
+        if (MaxReassemblyBytes < 64)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MaxReassemblyBytes));
+        }
+
         ValidateDuration(ReassemblyTimeout, nameof(ReassemblyTimeout));
         ValidateDuration(JoinTimeout, nameof(JoinTimeout));
         ValidateDuration(GoodbyeLinger, nameof(GoodbyeLinger));
@@ -65,23 +88,25 @@ public struct NetSessionOptions
     internal static void ValidateDuration(TimeSpan value, string name)
     {
         if (value <= TimeSpan.Zero || value > TimeSpan.FromDays(1))
+        {
             throw new ArgumentOutOfRangeException(name, "Duration must be positive and at most one day.");
+        }
     }
 }
 
 /// <summary>Why a session ended, or why a peer left it.</summary>
 public enum SessionEndReason : byte
 {
-    /// <summary>The peer left on purpose: <see cref="NetSession.Shutdown"/> locally, or a client closing its connection.</summary>
+    /// <summary>The peer left on purpose: <see cref="NetSession.Shutdown" /> locally, or a client closing its connection.</summary>
     Left,
 
-    /// <summary>The host removed the peer with <see cref="NetSession.Kick"/>.</summary>
+    /// <summary>The host removed the peer with <see cref="NetSession.Kick" />.</summary>
     Kicked,
 
-    /// <summary>The host refused the join, through <see cref="PendingJoin.Reject"/> or a transport level refusal.</summary>
+    /// <summary>The host refused the join, through <see cref="PendingJoin.Reject" /> or a transport level refusal.</summary>
     Rejected,
 
-    /// <summary>The client's <see cref="NetSessionOptions.AppVersion"/> differs from the host's.</summary>
+    /// <summary>The client's <see cref="NetSessionOptions.AppVersion" /> differs from the host's.</summary>
     VersionMismatch,
 
     /// <summary>The host has no room for another peer.</summary>
@@ -90,7 +115,7 @@ public enum SessionEndReason : byte
     /// <summary>The host shut the session down.</summary>
     HostShutdown,
 
-    /// <summary>The connection went silent, or joining took longer than <see cref="NetSessionOptions.JoinTimeout"/>.</summary>
+    /// <summary>The connection went silent, or joining took longer than <see cref="NetSessionOptions.JoinTimeout" />.</summary>
     Timeout,
 
     /// <summary>The host could not be reached at all.</summary>
@@ -103,5 +128,5 @@ public enum SessionEndReason : byte
     ResourceLimit,
 
     /// <summary>The secure transport could not authenticate its peer.</summary>
-    AuthenticationFailed,
+    AuthenticationFailed
 }

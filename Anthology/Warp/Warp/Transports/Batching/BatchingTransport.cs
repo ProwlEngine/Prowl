@@ -11,8 +11,8 @@ namespace Prowl.Warp.Transports.Batching;
 /// <remarks>Owns the inner transport. Flush sends partial batches; full batches are submitted immediately.</remarks>
 public sealed class BatchingTransport : Transport
 {
-    private readonly Transport _inner;
     private readonly int _batchSize;
+    private readonly Transport _inner;
     private readonly Dictionary<Connection, BatchedConnection> _peers = new();
 
     public BatchingTransport(Transport inner, int batchSize = 1200)
@@ -26,7 +26,13 @@ public sealed class BatchingTransport : Transport
     public override TransportCapabilities Capabilities => _inner.Capabilities;
     public override bool IsListening => _inner.IsListening;
     public override int LocalPort => _inner.LocalPort;
-    public override void Listen() { ThrowIfDisposed(); _inner.Listen(); }
+
+    public override void Listen()
+    {
+        ThrowIfDisposed();
+        _inner.Listen();
+    }
+
     public override Connection Connect(string address)
     {
         ThrowIfDisposed();
@@ -35,7 +41,11 @@ public sealed class BatchingTransport : Transport
 
     private BatchedConnection Add(Connection inner)
     {
-        if (_peers.TryGetValue(inner, out BatchedConnection? existing)) return existing;
+        if (_peers.TryGetValue(inner, out BatchedConnection? existing))
+        {
+            return existing;
+        }
+
         BatchedConnection peer = new(this, inner, NextConnectionId());
         _peers.Add(inner, peer);
         AddConnection(peer);
@@ -46,7 +56,7 @@ public sealed class BatchingTransport : Transport
     {
         ThrowIfDisposed();
         _inner.Receive();
-        PollInner(deliverData: true);
+        PollInner(true);
     }
 
     private void PollInner(bool deliverData)
@@ -55,9 +65,14 @@ public sealed class BatchingTransport : Transport
         {
             if (!_peers.TryGetValue(ev.Connection, out BatchedConnection? peer))
             {
-                if (ev.Type != TransportEventType.Connected) continue;
+                if (ev.Type != TransportEventType.Connected)
+                {
+                    continue;
+                }
+
                 peer = Add(ev.Connection);
             }
+
             switch (ev.Type)
             {
                 case TransportEventType.Connected:
@@ -82,12 +97,23 @@ public sealed class BatchingTransport : Transport
         bool valid = batch.Length >= 4;
         while (valid && offset < batch.Length)
         {
-            if (batch.Length - offset < 4) { valid = false; break; }
+            if (batch.Length - offset < 4)
+            {
+                valid = false;
+                break;
+            }
+
             int length = BinaryPrimitives.ReadInt32LittleEndian(batch[offset..]);
             offset += 4;
-            if (length < 0 || length > batch.Length - offset) { valid = false; break; }
+            if (length < 0 || length > batch.Length - offset)
+            {
+                valid = false;
+                break;
+            }
+
             offset += length;
         }
+
         if (!valid)
         {
             peer.Malformed = true;
@@ -95,6 +121,7 @@ public sealed class BatchingTransport : Transport
             RaiseDisconnected(peer, DisconnectReason.ProtocolError);
             return;
         }
+
         offset = 0;
         while (offset < batch.Length && peer.IsConnected)
         {
@@ -119,19 +146,21 @@ public sealed class BatchingTransport : Transport
             peer.Flush(Delivery.Reliable);
             peer.Flush(Delivery.Unreliable);
         }
+
         _inner.Flush();
-        PollInner(deliverData: true);
+        PollInner(true);
     }
 
     public override void Shutdown()
     {
         _inner.Shutdown();
-        PollInner(deliverData: false);
+        PollInner(false);
         foreach (BatchedConnection peer in _peers.Values)
         {
             peer.Release();
             RaiseDisconnected(peer, DisconnectReason.Requested);
         }
+
         _peers.Clear();
     }
 
@@ -139,18 +168,27 @@ public sealed class BatchingTransport : Transport
 
     private sealed class BatchedConnection : Connection
     {
+        public readonly Connection Inner;
         private readonly BatchingTransport _owner;
         private readonly NetWriter _reliable = new(), _unreliable = new();
-        public readonly Connection Inner;
         public bool Malformed;
 
         public BatchedConnection(BatchingTransport owner, Connection inner, int id)
-            : base(owner, id, inner.Address, inner.IsOutgoing) { _owner = owner; Inner = inner; }
+            : base(owner, id, inner.Address, inner.IsOutgoing)
+        {
+            _owner = owner;
+            Inner = inner;
+        }
+
         public override TimeSpan RoundTripTime => Inner.RoundTripTime;
         public override ConnectionStats Stats => Inner.Stats;
         public override int GetMaxMessageSize(Delivery delivery) => Math.Max(0, Inner.GetMaxMessageSize(delivery) - 4);
-        public override int GetBatchThreshold(Delivery delivery) => Math.Max(0, Math.Min(_owner._batchSize, Inner.GetBatchThreshold(delivery)) - 4);
+
+        public override int GetBatchThreshold(Delivery delivery) =>
+            Math.Max(0, Math.Min(_owner._batchSize, Inner.GetBatchThreshold(delivery)) - 4);
+
         public override void Disconnect() => Inner.Disconnect();
+
         public override void Send(ReadOnlySpan<byte> data, Delivery delivery)
         {
             ValidateSend(data, delivery);
@@ -158,20 +196,49 @@ public sealed class BatchingTransport : Transport
             // Stay near a single datagram even when reliable messages may be much larger.
             int threshold = Math.Min(_owner._batchSize, Inner.GetBatchThreshold(delivery));
             threshold = Math.Min(threshold, Inner.GetMaxMessageSize(delivery));
-            if (batch.Length != 0 && data.Length + 4 > threshold - batch.Length) Flush(delivery);
-            if (!Inner.IsConnected) return;
+            if (batch.Length != 0 && data.Length + 4 > threshold - batch.Length)
+            {
+                Flush(delivery);
+            }
+
+            if (!Inner.IsConnected)
+            {
+                return;
+            }
+
             batch.WriteInt32(data.Length);
             batch.WriteBytes(data);
-            if (batch.Length >= threshold) Flush(delivery);
+            if (batch.Length >= threshold)
+            {
+                Flush(delivery);
+            }
         }
 
         public void Flush(Delivery delivery)
         {
             NetWriter batch = delivery == Delivery.Reliable ? _reliable : _unreliable;
-            if (batch.Length == 0) return;
-            try { if (Inner.IsConnected) Inner.Send(batch.WrittenSpan, delivery); }
-            finally { batch.Reset(); }
+            if (batch.Length == 0)
+            {
+                return;
+            }
+
+            try
+            {
+                if (Inner.IsConnected)
+                {
+                    Inner.Send(batch.WrittenSpan, delivery);
+                }
+            }
+            finally
+            {
+                batch.Reset();
+            }
         }
-        public void Release() { _reliable.Dispose(); _unreliable.Dispose(); }
+
+        public void Release()
+        {
+            _reliable.Dispose();
+            _unreliable.Dispose();
+        }
     }
 }

@@ -12,7 +12,10 @@ internal sealed class SessionPump(Transport transport)
     public void Receive(NetSession session)
     {
         transport.Receive();
-        while (session.State != SessionState.Ended && transport.Poll(out TransportEvent ev)) session.ProcessEvent(ev);
+        while (session.State != SessionState.Ended && transport.Poll(out TransportEvent ev))
+        {
+            session.ProcessEvent(ev);
+        }
     }
 
     public void Flush() => transport.Flush();
@@ -20,6 +23,8 @@ internal sealed class SessionPump(Transport transport)
     public void Shutdown()
     {
         transport.Shutdown();
-        while (transport.Poll(out _)) { }
+        while (transport.Poll(out _))
+        {
+        }
     }
 }

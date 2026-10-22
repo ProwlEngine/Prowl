@@ -8,9 +8,9 @@ using System.Collections.Generic;
 namespace Prowl.Warp.Transports.Local;
 
 /// <summary>
-/// An in-process "network" that <see cref="LocalTransport"/>s connect through. Transports only see
-/// listeners registered on the same <see cref="LocalNetwork"/>, so separate instances (one per test,
-/// say) never interfere. Thread safe, so the transports on it can be pumped from different threads.
+///     An in-process "network" that <see cref="LocalTransport" />s connect through. Transports only see
+///     listeners registered on the same <see cref="LocalNetwork" />, so separate instances (one per test,
+///     say) never interfere. Thread safe, so the transports on it can be pumped from different threads.
 /// </summary>
 public sealed class LocalNetwork
 {
@@ -21,5 +21,6 @@ public sealed class LocalNetwork
     internal void Unregister(string address, LocalTransport transport) =>
         _listeners.TryRemove(new KeyValuePair<string, LocalTransport>(address, transport));
 
-    internal LocalTransport? Find(string address) => _listeners.TryGetValue(address, out LocalTransport? transport) ? transport : null;
+    internal LocalTransport? Find(string address) =>
+        _listeners.TryGetValue(address, out LocalTransport? transport) ? transport : null;
 }

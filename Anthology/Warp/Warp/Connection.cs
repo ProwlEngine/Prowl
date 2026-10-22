@@ -6,22 +6,26 @@ using System;
 namespace Prowl.Warp;
 
 /// <summary>
-/// Traffic counters for a <see cref="Connection"/>, counted at the packet level (including protocol
-/// overhead, retransmissions and keepalives).
+///     Traffic counters for a <see cref="Connection" />, counted at the packet level (including protocol
+///     overhead, retransmissions and keepalives).
 /// </summary>
-public readonly record struct ConnectionStats(long PacketsSent, long PacketsReceived, long BytesSent, long BytesReceived);
+public readonly record struct ConnectionStats(
+    long PacketsSent,
+    long PacketsReceived,
+    long BytesSent,
+    long BytesReceived);
 
 /// <summary>
-/// One end of a link between this <see cref="Transport"/> and a remote peer. Connections are created
-/// by the transport, either by <see cref="Transport.Connect"/> or when a remote peer connects to a
-/// listening transport, and are never reused once <see cref="ConnectionState.Disconnected"/>.
+///     One end of a link between this <see cref="Transport" /> and a remote peer. Connections are created
+///     by the transport, either by <see cref="Transport.Connect" /> or when a remote peer connects to a
+///     listening transport, and are never reused once <see cref="ConnectionState.Disconnected" />.
 /// </summary>
 public abstract class Connection
 {
-    private long _packetsSent;
-    private long _packetsReceived;
-    private long _bytesSent;
     private long _bytesReceived;
+    private long _bytesSent;
+    private long _packetsReceived;
+    private long _packetsSent;
 
     protected Connection(Transport transport, int id, string address, bool isOutgoing)
     {
@@ -42,7 +46,7 @@ public abstract class Connection
     /// <summary>The remote address, in the transport's own format (for UDP, <c>host:port</c>).</summary>
     public string Address { get; }
 
-    /// <summary>True if this side initiated the connection with <see cref="Transport.Connect"/>.</summary>
+    /// <summary>True if this side initiated the connection with <see cref="Transport.Connect" />.</summary>
     public bool IsOutgoing { get; }
 
     public ConnectionState State { get; protected internal set; } = ConnectionState.Connecting;
@@ -57,35 +61,42 @@ public abstract class Connection
     /// <summary>Free slot for whoever is using the transport, such as a higher level session or player object.</summary>
     public object? UserData { get; set; }
 
-    /// <summary>The largest message, in bytes, that can be sent with the given <paramref name="delivery"/>.</summary>
+    /// <summary>The largest message, in bytes, that can be sent with the given <paramref name="delivery" />.</summary>
     public abstract int GetMaxMessageSize(Delivery delivery);
 
     /// <summary>Preferred wire batch size, independent of the largest supported message.</summary>
     public virtual int GetBatchThreshold(Delivery delivery) => Math.Min(1200, GetMaxMessageSize(delivery));
 
     /// <summary>
-    /// Sends a message to the remote end. Data is copied, so the span can be reused immediately.
-    /// Reliable messages are queued and go out on the transport's next <see cref="Transport.Flush"/>;
-    /// depending on the transport, unreliable ones may go out straight away.
+    ///     Sends a message to the remote end. Data is copied, so the span can be reused immediately.
+    ///     Reliable messages are queued and go out on the transport's next <see cref="Transport.Flush" />;
+    ///     depending on the transport, unreliable ones may go out straight away.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The connection is not <see cref="ConnectionState.Connected"/>.</exception>
-    /// <exception cref="ArgumentException">The message is larger than <see cref="GetMaxMessageSize"/>.</exception>
+    /// <exception cref="InvalidOperationException">The connection is not <see cref="ConnectionState.Connected" />.</exception>
+    /// <exception cref="ArgumentException">The message is larger than <see cref="GetMaxMessageSize" />.</exception>
     public abstract void Send(ReadOnlySpan<byte> data, Delivery delivery);
 
     /// <summary>Sends with an explicit timing policy. Immediate preserves ordering with earlier queued messages.</summary>
     public virtual void Send(ReadOnlySpan<byte> data, Delivery delivery, SendFlags flags)
     {
-        if ((flags & ~SendFlags.Immediate) != 0) throw new ArgumentOutOfRangeException(nameof(flags));
+        if ((flags & ~SendFlags.Immediate) != 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(flags));
+        }
+
         Send(data, delivery);
-        if ((flags & SendFlags.Immediate) != 0) Flush();
+        if ((flags & SendFlags.Immediate) != 0)
+        {
+            Flush();
+        }
     }
 
     /// <summary>Submits queued sends. An externally driven connection may forward this as a queued request.</summary>
     public virtual void Flush() => Transport.Flush();
 
     /// <summary>
-    /// Closes the connection and tells the remote end. A <see cref="TransportEventType.Disconnected"/>
-    /// event with <see cref="DisconnectReason.Requested"/> follows. Does nothing if already disconnected.
+    ///     Closes the connection and tells the remote end. A <see cref="TransportEventType.Disconnected" />
+    ///     event with <see cref="DisconnectReason.Requested" /> follows. Does nothing if already disconnected.
     /// </summary>
     public abstract void Disconnect();
 
@@ -93,13 +104,26 @@ public abstract class Connection
     protected void ValidateSend(ReadOnlySpan<byte> data, Delivery delivery)
     {
         if (State != ConnectionState.Connected)
+        {
             throw new InvalidOperationException($"Cannot send on {this}: it is {State}.");
+        }
 
-        if (!Enum.IsDefined(delivery)) throw new ArgumentOutOfRangeException(nameof(delivery));
-        if (!Transport.Capabilities.Supports(delivery)) throw new NotSupportedException($"Transport does not support {delivery} delivery.");
+        if (!Enum.IsDefined(delivery))
+        {
+            throw new ArgumentOutOfRangeException(nameof(delivery));
+        }
+
+        if (!Transport.Capabilities.Supports(delivery))
+        {
+            throw new NotSupportedException($"Transport does not support {delivery} delivery.");
+        }
+
         int max = GetMaxMessageSize(delivery);
         if (data.Length > max)
-            throw new ArgumentException($"A {delivery} message can be at most {max} bytes, but this one is {data.Length}.", nameof(data));
+        {
+            throw new ArgumentException(
+                $"A {delivery} message can be at most {max} bytes, but this one is {data.Length}.", nameof(data));
+        }
     }
 
     protected void RecordPacketSent(int bytes)

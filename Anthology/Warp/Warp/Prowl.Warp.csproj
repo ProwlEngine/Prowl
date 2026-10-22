@@ -1,23 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
-    <PropertyGroup>
-        <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
-        <RootNamespace>Prowl.Warp</RootNamespace>
-        <PackageId>Prowl.Warp</PackageId>
-        <Title>Prowl.Warp</Title>
+  <PropertyGroup>
+    <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
+    <RootNamespace>Prowl.Warp</RootNamespace>
+    <PackageId>Prowl.Warp</PackageId>
+    <Title>Prowl.Warp</Title>
 
-        <Description>Dependency-free game networking transports: a pluggable connection/transport API, reliable UDP via an embedded KCP, an in-process local transport, and span-based message buffers.</Description>
+    <Description>Dependency-free game networking transports: a pluggable connection/transport API, reliable UDP via an embedded KCP, an in-process local transport, and span-based message buffers.</Description>
 
-        <PackageTags>networking;netcode;udp;kcp;reliable-udp;multiplayer;gamedev;game-engine;prowl</PackageTags>
+    <PackageTags>networking;netcode;udp;kcp;reliable-udp;multiplayer;gamedev;game-engine;prowl</PackageTags>
 
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <NoWarn>$(NoWarn);CS1591</NoWarn>
-    </PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
 
-    <ItemGroup>
-        <InternalsVisibleTo Include="Prowl.Warp.Tests" />
-    </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Prowl.Warp.Tests"/>
+  </ItemGroup>
 
-    <ItemGroup>
-        <None Include="Transports/Kcp/Protocol/LICENSE.txt" Pack="true" PackagePath="licenses/kcp2k" />
-    </ItemGroup>
+  <ItemGroup>
+    <None Include="Transports/Kcp/Protocol/LICENSE.txt" Pack="true" PackagePath="licenses/kcp2k"/>
+  </ItemGroup>
 </Project>

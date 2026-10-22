@@ -16,12 +16,16 @@ public enum TransportExecution
 {
     WorkerPreferred,
     InlinePreferred,
+
     /// <summary>The transport must be driven on the thread that created it.</summary>
     CreatingThreadRequired
 }
 
 /// <summary>Immutable backend metadata. Wrappers preserve the inner backend's requirements.</summary>
-public readonly record struct TransportCapabilities(bool IsAvailable, DeliverySupport Deliveries, TransportExecution Execution)
+public readonly record struct TransportCapabilities(
+    bool IsAvailable,
+    DeliverySupport Deliveries,
+    TransportExecution Execution)
 {
     public bool Supports(Delivery delivery) => delivery switch
     {

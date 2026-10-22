@@ -6,8 +6,8 @@ using System;
 namespace Prowl.Warp;
 
 /// <summary>
-/// A participant in a <see cref="NetSession"/>: the host, or a client that has joined. Every member
-/// of the session sees the same peers with the same ids.
+///     A participant in a <see cref="NetSession" />: the host, or a client that has joined. Every member
+///     of the session sees the same peers with the same ids.
 /// </summary>
 public sealed class NetPeer
 {
@@ -22,7 +22,10 @@ public sealed class NetPeer
         Connection = connection;
     }
 
-    /// <summary>Assigned by the host when the peer joins, and never reused within the session. The host is <see cref="HostId"/>.</summary>
+    /// <summary>
+    ///     Assigned by the host when the peer joins, and never reused within the session. The host is
+    ///     <see cref="HostId" />.
+    /// </summary>
     public int Id { get; }
 
     /// <summary>The name the peer joined with.</summary>
@@ -34,8 +37,8 @@ public sealed class NetPeer
     public bool IsLocal { get; }
 
     /// <summary>
-    /// The connection to this peer, if this process has one: on the host, every client's; on a client,
-    /// only the host's. Null for the local peer and for other clients seen from a client.
+    ///     The connection to this peer, if this process has one: on the host, every client's; on a client,
+    ///     only the host's. Null for the local peer and for other clients seen from a client.
     /// </summary>
     public Connection? Connection { get; }
 
@@ -45,5 +48,6 @@ public sealed class NetPeer
     /// <summary>Free slot for whoever is using the session, such as a player object.</summary>
     public object? UserData { get; set; }
 
-    public override string ToString() => $"{Name} (#{Id}{(IsHost ? ", host" : string.Empty)}{(IsLocal ? ", local" : string.Empty)})";
+    public override string ToString() =>
+        $"{Name} (#{Id}{(IsHost ? ", host" : string.Empty)}{(IsLocal ? ", local" : string.Empty)})";
 }

@@ -15,14 +15,15 @@ using System.Threading.Tasks;
 namespace Prowl.Warp.Transports.Kcp;
 
 /// <summary>
-/// A transport over UDP: <see cref="Delivery.Reliable"/> messages are carried by an embedded KCP
-/// implementation, <see cref="Delivery.Unreliable"/> ones as plain datagrams. One socket serves both
-/// incoming and outgoing connections. Addresses are <c>host:port</c>, <c>host</c> (using
-/// <see cref="KcpTransportOptions.Port"/>), or <c>[ipv6]:port</c>.
+///     A transport over UDP: <see cref="Delivery.Reliable" /> messages are carried by an embedded KCP
+///     implementation, <see cref="Delivery.Unreliable" /> ones as plain datagrams. One socket serves both
+///     incoming and outgoing connections. Addresses are <c>host:port</c>, <c>host</c> (using
+///     <see cref="KcpTransportOptions.Port" />), or <c>[ipv6]:port</c>.
 /// </summary>
 /// <remarks>
-/// If the OS supports it, the socket is dual-mode IPv6, so it reaches IPv4 and IPv6 peers alike.
-/// Host names resolve asynchronously; completions are applied by the next pump. Disconnect and shutdown cancel pending resolution.
+///     If the OS supports it, the socket is dual-mode IPv6, so it reaches IPv4 and IPv6 peers alike.
+///     Host names resolve asynchronously; completions are applied by the next pump. Disconnect and shutdown cancel pending
+///     resolution.
 /// </remarks>
 public sealed class KcpTransport : Transport
 {
@@ -37,37 +38,38 @@ public sealed class KcpTransport : Transport
     private const int DisconnectRepeats = 3;
 
     private readonly Dictionary<SocketAddress, KcpConnection> _byAddress = new();
-    private readonly List<KcpConnection> _scratch = new();
-    private readonly List<KcpConnection> _unreachable = new();
-    private readonly Dictionary<KcpConnection, Resolution> _resolving = new();
-    private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolver;
-    private readonly record struct Resolution(Task<SocketAddress?> Task, CancellationTokenSource Cancellation, long Started);
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly byte[] _cookieKey = RandomNumberGenerator.GetBytes(32);
 
     private readonly List<DelayedPacket> _delayed = new();
+
     private readonly byte[] _receiveBuffer = new byte[KcpPacket.MaxDatagramSize];
-    private readonly byte[] _cookieKey = RandomNumberGenerator.GetBytes(32);
-    private readonly Stopwatch _clock = Stopwatch.StartNew();
-    private byte[] _sendBuffer = Array.Empty<byte>();
-    private Socket? _socket;
-    private SocketAddress? _receiveAddress;
-    private Random? _simulationRandom;
-    private bool _listening;
+    private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolver;
+    private readonly Dictionary<KcpConnection, Resolution> _resolving = new();
+    private readonly List<KcpConnection> _scratch = new();
+    private readonly List<KcpConnection> _unreachable = new();
     private int _incomingCount;
+    private bool _listening;
+    private SocketAddress? _receiveAddress;
+    private byte[] _sendBuffer = Array.Empty<byte>();
+    private Random? _simulationRandom;
+    private Socket? _socket;
 
     public KcpTransport(KcpTransportOptions? options = null)
-        : this(options, static (host, cancellation) => Dns.GetHostAddressesAsync(host, cancellation)) { }
+        : this(options, static (host, cancellation) => Dns.GetHostAddressesAsync(host, cancellation))
+    {
+    }
 
     internal KcpTransport(KcpTransportOptions? options, Func<string, CancellationToken, Task<IPAddress[]>> resolver)
     {
-        _options = (options ?? new KcpTransportOptions()).CopyValidated();
+        Settings = (options ?? new KcpTransportOptions()).CopyValidated();
         _resolver = resolver;
     }
 
-    private readonly KcpTransportOptions _options;
-    internal KcpTransportOptions Settings => _options;
+    internal KcpTransportOptions Settings { get; }
 
     /// <summary>A detached copy of the settings captured when this transport was created.</summary>
-    public KcpTransportOptions Options => _options.CopyValidated();
+    public KcpTransportOptions Options => Settings.CopyValidated();
 
     public override bool IsListening => _listening;
 
@@ -82,13 +84,18 @@ public sealed class KcpTransport : Transport
     {
         ThrowIfDisposed();
         if (_listening)
+        {
             return;
+        }
 
         if (_socket != null)
-            throw new InvalidOperationException("The socket is already bound for outgoing connections. Call Listen before Connect.");
+        {
+            throw new InvalidOperationException(
+                "The socket is already bound for outgoing connections. Call Listen before Connect.");
+        }
 
-        _options.Validate();
-        OpenSocket(_options.Port);
+        Settings.Validate();
+        OpenSocket(Settings.Port);
         _listening = true;
     }
 
@@ -96,32 +103,45 @@ public sealed class KcpTransport : Transport
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(address);
-        _options.Validate();
+        Settings.Validate();
 
         if (_socket == null)
+        {
             OpenSocket(0);
+        }
 
         CancellationTokenSource cancellation = new();
-        ValueTask<SocketAddress?> resolution = TryResolveAsync(address, _options.Port, _socket!.AddressFamily, cancellation.Token, _resolver);
+        ValueTask<SocketAddress?> resolution = TryResolveAsync(address, Settings.Port, _socket!.AddressFamily,
+            cancellation.Token, _resolver);
         SocketAddress? remote = resolution.IsCompletedSuccessfully ? resolution.Result : null;
         if (remote != null && _byAddress.ContainsKey(remote))
         {
             cancellation.Dispose();
             throw new InvalidOperationException($"Already connected to {address}.");
         }
-        KcpConnection connection = new(this, NextConnectionId(), address, isOutgoing: true, remote, NowMs)
+
+        KcpConnection connection = new(this, NextConnectionId(), address, true, remote, NowMs)
         {
-            ClientNonce = RandomUInt32(),
+            ClientNonce = RandomUInt32()
         };
         AddConnection(connection);
         if (!resolution.IsCompletedSuccessfully)
-            _resolving.Add(connection, new(resolution.AsTask(), cancellation, NowMs));
+        {
+            _resolving.Add(connection, new Resolution(resolution.AsTask(), cancellation, NowMs));
+        }
         else
         {
             cancellation.Dispose();
-            if (remote == null) _unreachable.Add(connection);
-            else _byAddress.Add(remote, connection);
+            if (remote == null)
+            {
+                _unreachable.Add(connection);
+            }
+            else
+            {
+                _byAddress.Add(remote, connection);
+            }
         }
+
         return connection;
     }
 
@@ -130,20 +150,27 @@ public sealed class KcpTransport : Transport
         ThrowIfDisposed();
         ProcessResolutions();
         foreach (KcpConnection connection in _unreachable)
+        {
             RaiseDisconnected(connection, DisconnectReason.Unreachable);
+        }
+
         _unreachable.Clear();
 
         if (_socket == null)
+        {
             return;
+        }
 
         long now = NowMs;
-        for (int processed = 0; processed < _options.MaxDatagramsPerReceive; processed++)
+        for (int processed = 0; processed < Settings.MaxDatagramsPerReceive; processed++)
         {
             int length;
             try
             {
                 if (_socket.Available == 0)
+                {
                     break;
+                }
 
                 length = _socket.ReceiveFrom(_receiveBuffer, SocketFlags.None, _receiveAddress!);
             }
@@ -157,8 +184,10 @@ public sealed class KcpTransport : Transport
                 continue;
             }
 
-            if (length == 0 || length > _options.Mtu)
+            if (length == 0 || length > Settings.Mtu)
+            {
                 continue;
+            }
 
             HandleDatagram(_receiveAddress!, length, now);
         }
@@ -174,11 +203,14 @@ public sealed class KcpTransport : Transport
         foreach (KcpConnection connection in _scratch)
         {
             if (connection.State != ConnectionState.Disconnected)
+            {
                 connection.Tick(now);
+            }
         }
+
         _scratch.Clear();
 
-        SendDelayed(now, all: false);
+        SendDelayed(now, false);
     }
 
     private void ProcessResolutions()
@@ -187,23 +219,31 @@ public sealed class KcpTransport : Transport
         foreach (KcpConnection connection in _scratch)
         {
             Resolution pending = _resolving[connection];
-            if (NowMs - pending.Started >= _options.ConnectTimeout.TotalMilliseconds)
+            if (NowMs - pending.Started >= Settings.ConnectTimeout.TotalMilliseconds)
             {
-                Close(connection, DisconnectReason.Timeout, notifyRemote: false);
+                Close(connection, DisconnectReason.Timeout, false);
                 continue;
             }
-            if (!pending.Task.IsCompleted) continue;
+
+            if (!pending.Task.IsCompleted)
+            {
+                continue;
+            }
+
             _resolving.Remove(connection);
             pending.Cancellation.Dispose();
             SocketAddress? remote = pending.Task.GetAwaiter().GetResult();
             if (remote == null || _byAddress.ContainsKey(remote))
-                Close(connection, DisconnectReason.Unreachable, notifyRemote: false);
+            {
+                Close(connection, DisconnectReason.Unreachable, false);
+            }
             else
             {
                 connection.RemoteAddress = remote;
                 _byAddress.Add(remote, connection);
             }
         }
+
         _scratch.Clear();
     }
 
@@ -211,19 +251,28 @@ public sealed class KcpTransport : Transport
     {
         _scratch.AddRange(_resolving.Keys);
         foreach (KcpConnection connection in _scratch)
-            Close(connection, DisconnectReason.Requested, notifyRemote: false);
+        {
+            Close(connection, DisconnectReason.Requested, false);
+        }
+
         _scratch.Clear();
         foreach (KcpConnection connection in _unreachable)
+        {
             RaiseDisconnected(connection, DisconnectReason.Unreachable);
+        }
+
         _unreachable.Clear();
 
         _scratch.AddRange(_byAddress.Values);
         foreach (KcpConnection connection in _scratch)
-            Close(connection, DisconnectReason.Requested, notifyRemote: true);
+        {
+            Close(connection, DisconnectReason.Requested, true);
+        }
+
         _scratch.Clear();
 
         // Simulated latency would otherwise swallow the disconnect packets just queued.
-        SendDelayed(NowMs, all: true);
+        SendDelayed(NowMs, true);
 
         _socket?.Dispose();
         _socket = null;
@@ -243,7 +292,9 @@ public sealed class KcpTransport : Transport
         }
 
         if (!_listening)
+        {
             return;
+        }
 
         ReadOnlySpan<byte> packet = _receiveBuffer.AsSpan(0, length);
         switch ((KcpPacketType)packet[0])
@@ -260,8 +311,11 @@ public sealed class KcpTransport : Transport
 
     private void HandleConnectRequest(SocketAddress from, ReadOnlySpan<byte> packet)
     {
-        if (packet.Length != KcpPacket.HandshakeRequestSize || BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != _options.ProtocolId)
+        if (packet.Length != KcpPacket.HandshakeRequestSize ||
+            BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != Settings.ProtocolId)
+        {
             return;
+        }
 
         uint nonce = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
 
@@ -275,9 +329,11 @@ public sealed class KcpTransport : Transport
     private void HandleChallengeResponse(SocketAddress from, ReadOnlySpan<byte> packet, long now)
     {
         if (!TryReadChallengeResponse(from, packet, out uint nonce))
+        {
             return;
+        }
 
-        if (_incomingCount >= _options.MaxConnections)
+        if (_incomingCount >= Settings.MaxConnections)
         {
             Span<byte> reject = stackalloc byte[KcpPacket.RejectSize];
             reject[0] = (byte)KcpPacketType.Reject;
@@ -288,10 +344,9 @@ public sealed class KcpTransport : Transport
         }
 
         SocketAddress remote = Clone(from);
-        KcpConnection connection = new(this, NextConnectionId(), Format(remote), isOutgoing: false, remote, now)
+        KcpConnection connection = new(this, NextConnectionId(), Format(remote), false, remote, now)
         {
-            ClientNonce = nonce,
-            SessionId = RandomUInt32(),
+            ClientNonce = nonce, SessionId = RandomUInt32()
         };
         connection.StartSession(now);
 
@@ -304,8 +359,8 @@ public sealed class KcpTransport : Transport
     }
 
     /// <summary>
-    /// A handshake packet from the address of an existing incoming connection: either the client never
-    /// got our Accept, or it restarted and is connecting again from the same address.
+    ///     A handshake packet from the address of an existing incoming connection: either the client never
+    ///     got our Accept, or it restarted and is connecting again from the same address.
     /// </summary>
     internal void HandleRepeatHandshake(KcpConnection connection, ReadOnlySpan<byte> packet, long now)
     {
@@ -319,7 +374,9 @@ public sealed class KcpTransport : Transport
 
             case KcpPacketType.ChallengeResponse:
                 if (!TryReadChallengeResponse(remote, packet, out uint nonce))
+                {
                     return;
+                }
 
                 if (nonce == connection.ClientNonce)
                 {
@@ -328,7 +385,7 @@ public sealed class KcpTransport : Transport
                 }
 
                 // A new attempt from the same address, so the old session is gone on the client's end.
-                Close(connection, DisconnectReason.RemoteClosed, notifyRemote: false);
+                Close(connection, DisconnectReason.RemoteClosed, false);
                 HandleChallengeResponse(remote, packet, now);
                 break;
         }
@@ -337,8 +394,11 @@ public sealed class KcpTransport : Transport
     private bool TryReadChallengeResponse(SocketAddress from, ReadOnlySpan<byte> packet, out uint nonce)
     {
         nonce = 0;
-        if (packet.Length != KcpPacket.HandshakeRequestSize || BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != _options.ProtocolId)
+        if (packet.Length != KcpPacket.HandshakeRequestSize ||
+            BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != Settings.ProtocolId)
+        {
             return false;
+        }
 
         nonce = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
         ReadOnlySpan<byte> cookie = packet.Slice(9, KcpPacket.CookieSize);
@@ -349,7 +409,9 @@ public sealed class KcpTransport : Transport
         Span<byte> expected = stackalloc byte[KcpPacket.CookieSize];
         ComputeCookie(from, nonce, window, expected);
         if (CryptographicOperations.FixedTimeEquals(cookie, expected))
+        {
             return true;
+        }
 
         ComputeCookie(from, nonce, window - 1, expected);
         return CryptographicOperations.FixedTimeEquals(cookie, expected);
@@ -374,7 +436,7 @@ public sealed class KcpTransport : Transport
         Span<byte> packet = stackalloc byte[KcpPacket.HandshakeRequestSize];
         packet.Clear();
         packet[0] = (byte)KcpPacketType.ConnectRequest;
-        BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], _options.ProtocolId);
+        BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], Settings.ProtocolId);
         BinaryPrimitives.WriteUInt32LittleEndian(packet[5..], connection.ClientNonce);
         SendRaw(connection, connection.RemoteAddress!, packet);
     }
@@ -384,7 +446,7 @@ public sealed class KcpTransport : Transport
         Span<byte> packet = stackalloc byte[KcpPacket.HandshakeRequestSize];
         packet.Clear();
         packet[0] = (byte)KcpPacketType.ChallengeResponse;
-        BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], _options.ProtocolId);
+        BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], Settings.ProtocolId);
         BinaryPrimitives.WriteUInt32LittleEndian(packet[5..], connection.ClientNonce);
         cookie.CopyTo(packet[9..]);
         SendRaw(connection, connection.RemoteAddress!, packet);
@@ -404,7 +466,9 @@ public sealed class KcpTransport : Transport
     {
         int length = KcpPacket.SessionHeaderSize + body.Length;
         if (_sendBuffer.Length < length)
-            _sendBuffer = new byte[Math.Max(length, _options.Mtu)];
+        {
+            _sendBuffer = new byte[Math.Max(length, Settings.Mtu)];
+        }
 
         Span<byte> packet = _sendBuffer.AsSpan(0, length);
         packet[0] = (byte)type;
@@ -416,12 +480,16 @@ public sealed class KcpTransport : Transport
     private void SendRaw(KcpConnection? connection, SocketAddress to, ReadOnlySpan<byte> datagram)
     {
         if (_socket == null)
+        {
             return;
+        }
 
         connection?.RecordSent(datagram.Length);
 
-        if (_options.Simulation is { } simulation && Simulate(simulation, to, datagram))
+        if (Settings.Simulation is { } simulation && Simulate(simulation, to, datagram))
+        {
             return;
+        }
 
         SendNow(to, datagram);
     }
@@ -443,15 +511,22 @@ public sealed class KcpTransport : Transport
     internal void Close(KcpConnection connection, DisconnectReason reason, bool notifyRemote)
     {
         if (connection.State == ConnectionState.Disconnected)
+        {
             return;
+        }
 
         if (notifyRemote && connection.State == ConnectionState.Connected)
         {
             // Last chance for queued reliable messages to go out, then say goodbye.
             if (reason != DisconnectReason.ResourceLimit)
+            {
                 connection.FlushReliable(NowMs);
+            }
+
             for (int i = 0; i < DisconnectRepeats; i++)
+            {
                 SendSession(connection, KcpPacketType.Disconnect, ReadOnlySpan<byte>.Empty);
+            }
         }
 
         if (_resolving.Remove(connection, out Resolution resolution))
@@ -459,20 +534,24 @@ public sealed class KcpTransport : Transport
             resolution.Cancellation.Cancel();
             resolution.Cancellation.Dispose();
         }
+
         _unreachable.Remove(connection);
         if (connection.RemoteAddress != null && _byAddress.Remove(connection.RemoteAddress) && !connection.IsOutgoing)
+        {
             _incomingCount--;
+        }
 
         RaiseDisconnected(connection, reason);
         connection.ReleaseBuffers();
     }
 
     protected override void OnReceiveQueueOverflow(Connection connection) =>
-        Close((KcpConnection)connection, DisconnectReason.ResourceLimit, notifyRemote: true);
+        Close((KcpConnection)connection, DisconnectReason.ResourceLimit, true);
 
     internal void OnConnected(KcpConnection connection) => RaiseConnected(connection);
 
-    internal void OnData(KcpConnection connection, ReadOnlySpan<byte> data, Delivery delivery) => RaiseData(connection, data, delivery);
+    internal void OnData(KcpConnection connection, ReadOnlySpan<byte> data, Delivery delivery) =>
+        RaiseData(connection, data, delivery);
 
     internal void OnDataPooled(KcpConnection connection, byte[] rentedBuffer, int length, Delivery delivery) =>
         RaiseDataPooled(connection, rentedBuffer, length, delivery);
@@ -485,11 +564,16 @@ public sealed class KcpTransport : Transport
         Random random = _simulationRandom ??= simulation.Seed is int seed ? new Random(seed) : new Random();
 
         if (simulation.PacketLoss > 0 && random.NextDouble() < simulation.PacketLoss)
+        {
             return true;
+        }
 
-        double delayMs = simulation.Latency.TotalMilliseconds + random.NextDouble() * simulation.Jitter.TotalMilliseconds;
+        double delayMs = simulation.Latency.TotalMilliseconds +
+                         random.NextDouble() * simulation.Jitter.TotalMilliseconds;
         if (delayMs <= 0)
+        {
             return false;
+        }
 
         byte[] buffer = ArrayPool<byte>.Shared.Rent(datagram.Length);
         datagram.CopyTo(buffer);
@@ -500,7 +584,9 @@ public sealed class KcpTransport : Transport
     private void SendDelayed(long now, bool all)
     {
         if (_delayed.Count == 0)
+        {
             return;
+        }
 
         // Keep the waiting packets in order, so pure latency without jitter never reorders anything.
         int kept = 0;
@@ -517,26 +603,28 @@ public sealed class KcpTransport : Transport
                 _delayed[kept++] = packet;
             }
         }
+
         _delayed.RemoveRange(kept, _delayed.Count - kept);
     }
-
-    private readonly record struct DelayedPacket(SocketAddress To, byte[] Buffer, int Length, long DueMs);
 
     // --- Sockets and addresses ------------------------------------------------------------------
 
     private void OpenSocket(int port)
     {
-        Socket socket = CreateDualModeSocket() ?? new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        Socket socket = CreateDualModeSocket() ??
+                        new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         try
         {
             IPAddress any = socket.AddressFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
             socket.Bind(new IPEndPoint(any, port));
             socket.Blocking = false;
-            socket.ReceiveBufferSize = _options.SocketBufferSize;
-            socket.SendBufferSize = _options.SocketBufferSize;
+            socket.ReceiveBufferSize = Settings.SocketBufferSize;
+            socket.SendBufferSize = Settings.SocketBufferSize;
 
             if (OperatingSystem.IsWindows())
+            {
                 socket.IOControl(SioUdpConnReset, new byte[4], null);
+            }
         }
         catch
         {
@@ -545,14 +633,17 @@ public sealed class KcpTransport : Transport
         }
 
         _socket = socket;
-        _receiveAddress = new SocketAddress(socket.AddressFamily, SocketAddress.GetMaximumAddressSize(socket.AddressFamily));
-        _sendBuffer = new byte[_options.Mtu];
+        _receiveAddress =
+            new SocketAddress(socket.AddressFamily, SocketAddress.GetMaximumAddressSize(socket.AddressFamily));
+        _sendBuffer = new byte[Settings.Mtu];
     }
 
     private static Socket? CreateDualModeSocket()
     {
         if (!Socket.OSSupportsIPv6)
+        {
             return null;
+        }
 
         Socket socket = new(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
         try
@@ -568,7 +659,8 @@ public sealed class KcpTransport : Transport
     }
 
     /// <summary>Resolves an address to the form the socket sends to and receives from, or null if it can't.</summary>
-    internal static async ValueTask<SocketAddress?> TryResolveAsync(string address, int defaultPort, AddressFamily socketFamily,
+    internal static async ValueTask<SocketAddress?> TryResolveAsync(string address, int defaultPort,
+        AddressFamily socketFamily,
         CancellationToken cancellation, Func<string, CancellationToken, Task<IPAddress[]>>? resolver = null)
     {
         IPAddress? ip;
@@ -588,22 +680,33 @@ public sealed class KcpTransport : Transport
             if (colon > 0 && address.IndexOf(':') == colon)
             {
                 if (!int.TryParse(address.AsSpan(colon + 1), out port) || port < 0 || port > 65535)
+                {
                     return null;
+                }
+
                 host = address[..colon];
             }
 
             ip = await ResolveHostAsync(host, socketFamily, cancellation, resolver).ConfigureAwait(false);
             if (ip == null)
+            {
                 return null;
+            }
         }
 
         if (port == 0)
+        {
             port = defaultPort;
+        }
 
         if (socketFamily == AddressFamily.InterNetworkV6)
+        {
             ip = ip.MapToIPv6();
+        }
         else if (ip.AddressFamily != AddressFamily.InterNetwork)
+        {
             return null;
+        }
 
         return new IPEndPoint(ip, port).Serialize();
     }
@@ -614,7 +717,9 @@ public sealed class KcpTransport : Transport
         IPAddress[] candidates;
         try
         {
-            candidates = await (resolver == null ? Dns.GetHostAddressesAsync(host, cancellation) : resolver(host, cancellation)).ConfigureAwait(false);
+            candidates =
+                await (resolver == null ? Dns.GetHostAddressesAsync(host, cancellation) : resolver(host, cancellation))
+                    .ConfigureAwait(false);
         }
         catch (Exception e) when (e is SocketException or ArgumentException or OperationCanceledException)
         {
@@ -626,10 +731,16 @@ public sealed class KcpTransport : Transport
         foreach (IPAddress candidate in candidates)
         {
             if (candidate.AddressFamily == AddressFamily.InterNetwork)
+            {
                 return candidate;
+            }
+
             if (candidate.AddressFamily == AddressFamily.InterNetworkV6 && socketFamily == AddressFamily.InterNetworkV6)
+            {
                 fallback ??= candidate;
+            }
         }
+
         return fallback;
     }
 
@@ -637,7 +748,10 @@ public sealed class KcpTransport : Transport
     {
         IPEndPoint endpoint = (IPEndPoint)new IPEndPoint(IPAddress.IPv6Any, 0).Create(address);
         if (endpoint.Address.IsIPv4MappedToIPv6)
+        {
             endpoint = new IPEndPoint(endpoint.Address.MapToIPv4(), endpoint.Port);
+        }
+
         return endpoint.ToString();
     }
 
@@ -656,8 +770,15 @@ public sealed class KcpTransport : Transport
         {
             RandomNumberGenerator.Fill(bytes);
             value = BinaryPrimitives.ReadUInt32LittleEndian(bytes);
-        }
-        while (value == 0);
+        } while (value == 0);
+
         return value;
     }
+
+    private readonly record struct Resolution(
+        Task<SocketAddress?> Task,
+        CancellationTokenSource Cancellation,
+        long Started);
+
+    private readonly record struct DelayedPacket(SocketAddress To, byte[] Buffer, int Length, long DueMs);
 }

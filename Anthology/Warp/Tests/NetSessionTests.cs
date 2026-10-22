@@ -2,12 +2,15 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 
-using Prowl.Warp;
+using Prowl.Warp.Transports.Batching;
 using Prowl.Warp.Transports.Kcp;
 using Prowl.Warp.Transports.Local;
 
@@ -68,7 +71,8 @@ public sealed class SessionProbe
     public (SessionEndReason Reason, string? Message)? EndedWith { get; private set; }
     public List<(NetPeer Sender, string Text)> Chat { get; } = new();
 
-    public static void PumpUntil(Func<bool> condition, params SessionProbe[] probes) => PumpUntil(condition, 5000, probes);
+    public static void PumpUntil(Func<bool> condition, params SessionProbe[] probes) =>
+        PumpUntil(condition, 5000, probes);
 
     public static void PumpUntil(Func<bool> condition, int timeoutMs, params SessionProbe[] probes)
     {
@@ -76,9 +80,15 @@ public sealed class SessionProbe
         while (!condition())
         {
             if (watch.ElapsedMilliseconds > timeoutMs)
+            {
                 throw new TimeoutException("Sessions never reached the expected state.");
+            }
+
             foreach (SessionProbe probe in probes)
+            {
                 probe.Session.Update();
+            }
+
             Thread.Sleep(1);
         }
     }
@@ -89,7 +99,10 @@ public sealed class SessionProbe
         while (watch.ElapsedMilliseconds < milliseconds)
         {
             foreach (SessionProbe probe in probes)
+            {
                 probe.Session.Update();
+            }
+
             Thread.Sleep(1);
         }
     }
@@ -101,22 +114,24 @@ public abstract class NetSessionTests : IDisposable
     private readonly List<NetSession> _sessions = new();
     private string? _hostAddress;
 
-    /// <summary>A transport for a host. <see cref="NetSession.Host"/> starts it listening.</summary>
-    protected abstract Transport CreateHostTransport();
-
-    protected abstract Transport CreateClientTransport(string name);
-
-    /// <summary>The address clients connect to, for a host transport that is listening.</summary>
-    protected abstract string AddressOf(Transport host);
-
     /// <summary>An address nothing can be reached at.</summary>
     protected abstract string UnreachableAddress { get; }
 
     public void Dispose()
     {
         foreach (NetSession session in _sessions)
+        {
             session.Dispose();
+        }
     }
+
+    /// <summary>A transport for a host. <see cref="NetSession.Host" /> starts it listening.</summary>
+    protected abstract Transport CreateHostTransport();
+
+    protected abstract Transport CreateClientTransport(string name);
+
+    /// <summary>The address clients connect to, for a host transport that is listening.</summary>
+    protected abstract string AddressOf(Transport host);
 
     private SessionProbe Host(NetSessionOptions? options = null)
     {
@@ -126,9 +141,11 @@ public abstract class NetSessionTests : IDisposable
         return new SessionProbe(session);
     }
 
-    private SessionProbe Join(string name, NetSessionOptions? options = null, byte[]? token = null, string? address = null)
+    private SessionProbe Join(string name, NetSessionOptions? options = null, byte[]? token = null,
+        string? address = null)
     {
-        NetSession session = NetSession.Join(CreateClientTransport(name), address ?? _hostAddress!, name, token, options);
+        NetSession session =
+            NetSession.Join(CreateClientTransport(name), address ?? _hostAddress!, name, token, options);
         _sessions.Add(session);
         return new SessionProbe(session);
     }
@@ -153,7 +170,8 @@ public abstract class NetSessionTests : IDisposable
         SessionProbe alice = Join("alice");
         SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
         SessionProbe bob = Join("bob");
-        SessionProbe.PumpUntil(() => bob.Session.State == SessionState.Active && alice.PeersJoined.Count == 1, host, alice, bob);
+        SessionProbe.PumpUntil(() => bob.Session.State == SessionState.Active && alice.PeersJoined.Count == 1, host,
+            alice, bob);
 
         foreach (SessionProbe probe in new[] { host, alice, bob })
         {
@@ -179,13 +197,17 @@ public abstract class NetSessionTests : IDisposable
         SessionProbe host = Host();
         SessionProbe alice = Join("alice");
         SessionProbe bob = Join("bob");
-        SessionProbe.PumpUntil(() => host.Session.Peers.Count == 3 && bob.Session.State == SessionState.Active && alice.Session.Peers.Count == 3, host, alice, bob);
+        SessionProbe.PumpUntil(
+            () => host.Session.Peers.Count == 3 && bob.Session.State == SessionState.Active &&
+                  alice.Session.Peers.Count == 3, host, alice, bob);
 
         alice.Session.SendToHost(new ChatMessage("hi host"));
-        host.Session.Broadcast(new ChatMessage("hi all"), except: host.Session.Peers.Single(p => p.Name == "bob"), includeLocal: true);
+        host.Session.Broadcast(new ChatMessage("hi all"), except: host.Session.Peers.Single(p => p.Name == "bob"),
+            includeLocal: true);
         host.Session.Send(host.Session.Peers.Single(p => p.Name == "bob"), new ChatMessage("just bob"));
 
-        SessionProbe.PumpUntil(() => host.Chat.Count == 2 && alice.Chat.Count == 1 && bob.Chat.Count == 1, host, alice, bob);
+        SessionProbe.PumpUntil(() => host.Chat.Count == 2 && alice.Chat.Count == 1 && bob.Chat.Count == 1, host, alice,
+            bob);
 
         Assert.Contains(host.Chat, c => c.Text == "hi host" && c.Sender.Name == "alice");
         Assert.Contains(host.Chat, c => c.Text == "hi all" && c.Sender.IsLocal);
@@ -227,14 +249,19 @@ public abstract class NetSessionTests : IDisposable
         host.Session.JoinRequested += pending =>
         {
             if (pending.Request.Name == "mallory")
+            {
                 pending.Reject("No mallorys.");
+            }
             else
+            {
                 pending.Accept();
+            }
         };
 
         SessionProbe mallory = Join("mallory");
         SessionProbe alice = Join("alice");
-        SessionProbe.PumpUntil(() => mallory.EndedWith != null && alice.Session.State == SessionState.Active, host, mallory, alice);
+        SessionProbe.PumpUntil(() => mallory.EndedWith != null && alice.Session.State == SessionState.Active, host,
+            mallory, alice);
 
         Assert.Equal((SessionEndReason.Rejected, "No mallorys."), mallory.EndedWith);
         Assert.Equal(new[] { "alice" }, host.PeersJoined.Select(p => p.Name));
@@ -320,7 +347,7 @@ public abstract class NetSessionTests : IDisposable
         SessionProbe.PumpUntil(() => alice.Session.Peers.Count == 3 && bob.Session.Peers.Count == 3, host, alice, bob);
 
         bob.Session.Shutdown();
-        Assert.Equal((SessionEndReason.Left, (string?)null), bob.EndedWith);
+        Assert.Equal((SessionEndReason.Left, null), bob.EndedWith);
 
         SessionProbe.PumpUntil(() => alice.PeersLeft.Count == 1, host, alice);
         Assert.Equal(SessionEndReason.Left, alice.PeersLeft[0].Reason);
@@ -346,7 +373,7 @@ public abstract class NetSessionTests : IDisposable
     public void MalformedMessagesGetTheSenderRemoved()
     {
         SessionProbe host = Host();
-        host.Session.OnRaw(10, (NetPeer sender, ref NetReader reader, Delivery delivery) => reader.ReadInt64());
+        host.Session.OnRaw(10, (sender, ref reader, delivery) => reader.ReadInt64());
 
         SessionProbe alice = Join("alice");
         SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
@@ -371,7 +398,9 @@ public abstract class NetSessionTests : IDisposable
         chat.WriteString("nested");
         using NetWriter inner = Fragment(chat.WrittenSpan);
         using NetWriter outer = Fragment(inner.WrittenSpan);
-        Connection connection = toClient ? host.Session.Peers.Single(p => !p.IsLocal).Connection! : alice.Session.HostPeer!.Connection!;
+        Connection connection = toClient
+            ? host.Session.Peers.Single(p => !p.IsLocal).Connection!
+            : alice.Session.HostPeer!.Connection!;
         connection.Send(outer.WrittenSpan, Delivery.Reliable);
         SessionProbe.PumpFor(100, host, alice);
         Assert.Empty(toClient ? alice.Chat : host.Chat);
@@ -396,7 +425,9 @@ public abstract class NetSessionTests : IDisposable
         SessionProbe host = Host();
         SessionProbe alice = Join("alice");
         SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
-        Connection connection = toClient ? host.Session.Peers.Single(p => !p.IsLocal).Connection! : alice.Session.HostPeer!.Connection!;
+        Connection connection = toClient
+            ? host.Session.Peers.Single(p => !p.IsLocal).Connection!
+            : alice.Session.HostPeer!.Connection!;
         using NetWriter fragment = new();
         fragment.WriteUInt16(NetSession.ReservedMessageIds + 5);
         fragment.WriteBool(true);
@@ -408,19 +439,26 @@ public abstract class NetSessionTests : IDisposable
         object? incoming;
         object? remote = null;
         if (toClient)
-            incoming = typeof(NetSession).GetField("_incomingFromHost", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(receiver);
+        {
+            incoming = typeof(NetSession).GetField("_incomingFromHost", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(receiver);
+        }
         else
         {
-            var remotes = (System.Collections.IDictionary)typeof(NetSession).GetField("_remotes", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(receiver)!;
+            IDictionary remotes =
+                (IDictionary)typeof(NetSession).GetField("_remotes", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .GetValue(receiver)!;
             remote = remotes.Values.Cast<object>().Single();
             incoming = remote.GetType().GetField("Incoming")!.GetValue(remote);
         }
+
         Assert.NotNull(incoming);
         Assert.True(receiver.PendingReassemblyBytes >= 100_000);
         receiver.Shutdown();
         Assert.Equal(0, receiver.PendingReassemblyBytes);
         Assert.Null(toClient
-            ? typeof(NetSession).GetField("_incomingFromHost", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(receiver)
+            ? typeof(NetSession).GetField("_incomingFromHost", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(receiver)
             : remote!.GetType().GetField("Incoming")!.GetValue(remote));
     }
 
@@ -445,6 +483,7 @@ public abstract class NetSessionTests : IDisposable
             alice.Session.SendRaw(alice.Session.HostPeer!, 20, new byte[] { 1 });
             alice.Session.SendRaw(alice.Session.HostPeer!, 20, new byte[] { 2 });
         }
+
         SessionProbe.PumpFor(100, host, alice);
         string reason = atClient ? alice.EndedWith!.Value.Reason.ToString() : host.PeersLeft.Single().Reason.ToString();
         Assert.Equal("ResourceLimit", reason);
@@ -470,10 +509,13 @@ public abstract class NetSessionTests : IDisposable
         SessionProbe host = Host(options);
         SessionProbe alice = Join("alice", options);
         SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
-        SendPartial(atClient ? host.Session.Peers.Single(p => !p.IsLocal).Connection! : alice.Session.HostPeer!.Connection!, 100_000);
+        SendPartial(
+            atClient ? host.Session.Peers.Single(p => !p.IsLocal).Connection! : alice.Session.HostPeer!.Connection!,
+            100_000);
         SessionProbe.PumpFor(150, host, alice);
         Assert.Equal(SessionState.Ended, alice.Session.State);
-        Assert.Equal(SessionEndReason.Timeout, atClient ? alice.EndedWith!.Value.Reason : host.PeersLeft.Single().Reason);
+        Assert.Equal(SessionEndReason.Timeout,
+            atClient ? alice.EndedWith!.Value.Reason : host.PeersLeft.Single().Reason);
     }
 
     [Fact]
@@ -484,7 +526,9 @@ public abstract class NetSessionTests : IDisposable
         SessionProbe host = Host(options);
         SessionProbe alice = Join("alice");
         SessionProbe bob = Join("bob");
-        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active && bob.Session.State == SessionState.Active, host, alice, bob);
+        SessionProbe.PumpUntil(
+            () => alice.Session.State == SessionState.Active && bob.Session.State == SessionState.Active, host, alice,
+            bob);
         SendPartial(alice.Session.HostPeer!.Connection!, 100_000);
         SendPartial(bob.Session.HostPeer!.Connection!, 100_000);
         SessionProbe.PumpFor(100, host, alice, bob);
@@ -502,8 +546,11 @@ public abstract class NetSessionTests : IDisposable
         SessionProbe.PumpUntil(() => pending, host, alice);
         SendPartial(alice.Session.Transport.Connections.Single(), 100_000);
         SessionProbe.PumpFor(30, host, alice);
-        var remotes = (System.Collections.IDictionary)typeof(NetSession).GetField("_remotes", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host.Session)!;
-        Assert.All(remotes.Values.Cast<object>(), remote => Assert.Null(remote.GetType().GetField("Incoming")!.GetValue(remote)));
+        IDictionary remotes =
+            (IDictionary)typeof(NetSession).GetField("_remotes", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(host.Session)!;
+        Assert.All(remotes.Values.Cast<object>(),
+            remote => Assert.Null(remote.GetType().GetField("Incoming")!.GetValue(remote)));
     }
 
     [Theory]
@@ -558,7 +605,10 @@ public abstract class NetSessionTests : IDisposable
         host.Session.On<ChatMessage>((sender, message) =>
         {
             calls++;
-            if (message.Text == "throw") throw new System.IO.InvalidDataException("application failure");
+            if (message.Text == "throw")
+            {
+                throw new InvalidDataException("application failure");
+            }
         });
         SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
         alice.Session.SendToHost(new ChatMessage("throw"));
@@ -575,10 +625,12 @@ public abstract class NetSessionTests : IDisposable
         SessionProbe host = Host();
         SessionProbe alice = Join("alice");
         byte[]? received = null;
-        alice.Session.OnRaw(20, (NetPeer sender, ref NetReader reader, Delivery delivery) => received = reader.ReadBytes(reader.Remaining).ToArray());
-        SessionProbe.PumpUntil(() => host.Session.Peers.Count == 2 && alice.Session.State == SessionState.Active, host, alice);
+        alice.Session.OnRaw(20,
+            (sender, ref reader, delivery) => received = reader.ReadBytes(reader.Remaining).ToArray());
+        SessionProbe.PumpUntil(() => host.Session.Peers.Count == 2 && alice.Session.State == SessionState.Active, host,
+            alice);
 
-        byte[] large = TestData.Pattern(1_500_000, seed: 3);
+        byte[] large = TestData.Pattern(1_500_000, 3);
         host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), 20, large, delivery);
         host.Session.SendToHost(new ChatMessage("still in order after"));
         alice.Session.SendToHost(new ChatMessage("and the other way"));
@@ -612,7 +664,8 @@ public abstract class NetSessionTests : IDisposable
     public void ReservedAndDuplicateHandlerIdsAreRefused()
     {
         SessionProbe host = Host();
-        Assert.Throws<ArgumentOutOfRangeException>(() => host.Session.OnRaw(NetSession.ReservedMessageIds, (NetPeer s, ref NetReader r, Delivery d) => { }));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            host.Session.OnRaw(NetSession.ReservedMessageIds, (s, ref r, d) => { }));
         Assert.Throws<InvalidOperationException>(() => host.Session.On<ChatMessage>((s, m) => { }));
         Assert.True(host.Session.Off<ChatMessage>());
         host.Session.On<ChatMessage>((s, m) => { });
@@ -633,31 +686,34 @@ public sealed class LocalNetSessionTests : NetSessionTests
 {
     private readonly LocalNetwork _network = new();
 
+    protected override string UnreachableAddress => "nobody";
+
     protected override Transport CreateHostTransport() => new LocalTransport(_network, "host");
 
     protected override Transport CreateClientTransport(string name) => new LocalTransport(_network, name);
 
     protected override string AddressOf(Transport host) => ((LocalTransport)host).Address;
-
-    protected override string UnreachableAddress => "nobody";
 }
 
 public sealed class BatchedNetSessionTests : NetSessionTests
 {
     private readonly LocalNetwork _network = new();
-    protected override Transport CreateHostTransport() => new Prowl.Warp.Transports.Batching.BatchingTransport(new LocalTransport(_network, "host"));
-    protected override Transport CreateClientTransport(string name) => new Prowl.Warp.Transports.Batching.BatchingTransport(new LocalTransport(_network, name));
-    protected override string AddressOf(Transport host) => "host";
     protected override string UnreachableAddress => "nobody";
+    protected override Transport CreateHostTransport() => new BatchingTransport(new LocalTransport(_network, "host"));
+
+    protected override Transport CreateClientTransport(string name) =>
+        new BatchingTransport(new LocalTransport(_network, name));
+
+    protected override string AddressOf(Transport host) => "host";
 }
 
 public sealed class KcpNetSessionTests : NetSessionTests
 {
+    protected override string UnreachableAddress => "not a valid host name";
     protected override Transport CreateHostTransport() => new KcpTransport(KcpTransportContractTests.Options());
 
-    protected override Transport CreateClientTransport(string name) => new KcpTransport(KcpTransportContractTests.Options());
+    protected override Transport CreateClientTransport(string name) =>
+        new KcpTransport(KcpTransportContractTests.Options());
 
     protected override string AddressOf(Transport host) => $"127.0.0.1:{((KcpTransport)host).LocalPort}";
-
-    protected override string UnreachableAddress => "not a valid host name";
 }

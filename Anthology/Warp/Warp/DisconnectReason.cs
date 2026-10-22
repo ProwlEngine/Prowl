@@ -4,20 +4,23 @@
 namespace Prowl.Warp;
 
 /// <summary>
-/// Why a <see cref="Connection"/> was closed. Reported once, on its
-/// <see cref="TransportEventType.Disconnected"/> event.
+///     Why a <see cref="Connection" /> was closed. Reported once, on its
+///     <see cref="TransportEventType.Disconnected" /> event.
 /// </summary>
 public enum DisconnectReason : byte
 {
-    /// <summary>This side closed the connection, through <see cref="Connection.Disconnect"/> or <see cref="Transport.Shutdown"/>.</summary>
+    /// <summary>
+    ///     This side closed the connection, through <see cref="Connection.Disconnect" /> or
+    ///     <see cref="Transport.Shutdown" />.
+    /// </summary>
     Requested,
 
     /// <summary>The remote end closed the connection.</summary>
     RemoteClosed,
 
     /// <summary>
-    /// Nothing was heard from the remote end for too long, or the handshake never completed. A
-    /// connection that times out while still <see cref="ConnectionState.Connecting"/> never reached the host.
+    ///     Nothing was heard from the remote end for too long, or the handshake never completed. A
+    ///     connection that times out while still <see cref="ConnectionState.Connecting" /> never reached the host.
     /// </summary>
     Timeout,
 
@@ -37,5 +40,5 @@ public enum DisconnectReason : byte
     AuthenticationFailed,
 
     /// <summary>The remote end sent malformed transport framing.</summary>
-    ProtocolError,
+    ProtocolError
 }

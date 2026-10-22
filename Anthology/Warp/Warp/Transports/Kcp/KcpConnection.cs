@@ -8,23 +8,24 @@ using System.Net;
 
 namespace Prowl.Warp.Transports.Kcp;
 
-/// <summary>A <see cref="Connection"/> on a <see cref="KcpTransport"/>.</summary>
+/// <summary>A <see cref="Connection" /> on a <see cref="KcpTransport" />.</summary>
 public sealed class KcpConnection : Connection
 {
-    private readonly KcpTransport _transport;
-    private readonly KcpTransportOptions _options;
+    private readonly long _connectStartMs;
     private readonly byte[] _cookie = new byte[KcpPacket.CookieSize];
-    private Protocol.Kcp? _kcp;
-    private byte[] _sendScratch = Array.Empty<byte>();
+    private readonly KcpTransportOptions _options;
+    private readonly KcpTransport _transport;
     private bool _hasCookie;
-    private long _connectStartMs;
-    private long _nextHandshakeMs;
-    private long _lastReceiveMs;
-    private long _nextPingMs;
-    private double _smoothedRttMs;
     private bool _hasRtt;
+    private Protocol.Kcp? _kcp;
+    private long _lastReceiveMs;
+    private long _nextHandshakeMs;
+    private long _nextPingMs;
+    private byte[] _sendScratch = Array.Empty<byte>();
+    private double _smoothedRttMs;
 
-    internal KcpConnection(KcpTransport transport, int id, string address, bool isOutgoing, SocketAddress? remote, long now)
+    internal KcpConnection(KcpTransport transport, int id, string address, bool isOutgoing, SocketAddress? remote,
+        long now)
         : base(transport, id, address, isOutgoing)
     {
         _transport = transport;
@@ -50,7 +51,9 @@ public sealed class KcpConnection : Connection
     {
         int payload = _options.Mtu - KcpPacket.SessionHeaderSize;
         if (delivery == Delivery.Unreliable)
+        {
             return payload;
+        }
 
         // KCP numbers a message's fragments in one byte, and the receiver must be able to hold them all
         // in its window. kcp2k raises any window below its default up to that default.
@@ -76,31 +79,38 @@ public sealed class KcpConnection : Connection
         int segmentSize = _options.Mtu - KcpPacket.SessionHeaderSize - Protocol.Kcp.OVERHEAD;
         long segments = Math.Max(1L, ((long)data.Length + segmentSize - 1) / segmentSize);
         long segmentBytes = Math.Max(_options.Mtu, Protocol.Kcp.MTU_DEF);
-        if (((long)_kcp!.WaitSnd + segments) * segmentBytes > _options.MaxPendingReliableBytes)
+        if ((_kcp!.WaitSnd + segments) * segmentBytes > _options.MaxPendingReliableBytes)
         {
-            _transport.Close(this, DisconnectReason.ResourceLimit, notifyRemote: true);
+            _transport.Close(this, DisconnectReason.ResourceLimit, true);
             return;
         }
 
         // kcp2k takes arrays, not spans.
         if (_sendScratch.Length < data.Length)
+        {
             _sendScratch = new byte[Math.Max(data.Length, _sendScratch.Length * 2)];
+        }
+
         data.CopyTo(_sendScratch);
 
         int result = _kcp!.Send(_sendScratch, 0, data.Length);
         if (result < 0)
+        {
             throw new InvalidOperationException($"KCP refused a {data.Length} byte message (error {result}).");
+        }
     }
 
-    public override void Disconnect() => _transport.Close(this, DisconnectReason.Requested, notifyRemote: true);
+    public override void Disconnect() => _transport.Close(this, DisconnectReason.Requested, true);
 
     /// <summary>Sets up the reliable channel once the session id is known.</summary>
     internal void StartSession(long now)
     {
         KcpReliabilityOptions reliability = _options.Reliability;
 
-        Protocol.Kcp kcp = new(SessionId, (buffer, length) => _transport.SendSession(this, KcpPacketType.Reliable, buffer.AsSpan(0, length)));
-        kcp.SetNoDelay(reliability.NoDelay ? 1u : 0u, reliability.Interval, reliability.FastResend, !reliability.CongestionControl);
+        Protocol.Kcp kcp = new(SessionId,
+            (buffer, length) => _transport.SendSession(this, KcpPacketType.Reliable, buffer.AsSpan(0, length)));
+        kcp.SetNoDelay(reliability.NoDelay ? 1u : 0u, reliability.Interval, reliability.FastResend,
+            !reliability.CongestionControl);
         kcp.SetWindowSize(reliability.SendWindow, reliability.ReceiveWindow);
         kcp.SetMtu((uint)(_options.Mtu - KcpPacket.SessionHeaderSize));
         kcp.dead_link = reliability.MaxRetransmits;
@@ -120,11 +130,15 @@ public sealed class KcpConnection : Connection
             case KcpPacketType.ConnectRequest:
             case KcpPacketType.ChallengeResponse:
                 if (!IsOutgoing)
+                {
                     _transport.HandleRepeatHandshake(this, packet, now);
+                }
+
                 return;
 
             case KcpPacketType.Challenge:
-                if (IsOutgoing && State == ConnectionState.Connecting && length == KcpPacket.ChallengeSize && ReadNonce(packet) == ClientNonce)
+                if (IsOutgoing && State == ConnectionState.Connecting && length == KcpPacket.ChallengeSize &&
+                    ReadNonce(packet) == ClientNonce)
                 {
                     RecordPacketReceived(length);
                     packet.Slice(5, KcpPacket.CookieSize).CopyTo(_cookie);
@@ -132,32 +146,41 @@ public sealed class KcpConnection : Connection
                     _transport.SendChallengeResponse(this, _cookie);
                     _nextHandshakeMs = now + (long)_options.HandshakeResendInterval.TotalMilliseconds;
                 }
+
                 return;
 
             case KcpPacketType.Accept:
-                if (IsOutgoing && State == ConnectionState.Connecting && length == KcpPacket.AcceptSize && ReadNonce(packet) == ClientNonce)
+                if (IsOutgoing && State == ConnectionState.Connecting && length == KcpPacket.AcceptSize &&
+                    ReadNonce(packet) == ClientNonce)
                 {
                     RecordPacketReceived(length);
                     SessionId = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
                     StartSession(now);
                     _transport.OnConnected(this);
                 }
+
                 return;
 
             case KcpPacketType.Reject:
-                if (IsOutgoing && State == ConnectionState.Connecting && length == KcpPacket.RejectSize && ReadNonce(packet) == ClientNonce)
+                if (IsOutgoing && State == ConnectionState.Connecting && length == KcpPacket.RejectSize &&
+                    ReadNonce(packet) == ClientNonce)
                 {
                     RecordPacketReceived(length);
-                    DisconnectReason reason = (DisconnectReason)packet[5] == DisconnectReason.ServerFull ? DisconnectReason.ServerFull : DisconnectReason.Rejected;
-                    _transport.Close(this, reason, notifyRemote: false);
+                    DisconnectReason reason = (DisconnectReason)packet[5] == DisconnectReason.ServerFull
+                        ? DisconnectReason.ServerFull
+                        : DisconnectReason.Rejected;
+                    _transport.Close(this, reason, false);
                 }
+
                 return;
         }
 
         // Everything else belongs to an established session.
         if (State != ConnectionState.Connected || length < KcpPacket.SessionHeaderSize
-            || BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != SessionId)
+                                               || BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != SessionId)
+        {
             return;
+        }
 
         RecordPacketReceived(length);
         _lastReceiveMs = now;
@@ -167,7 +190,10 @@ public sealed class KcpConnection : Connection
         {
             case KcpPacketType.Reliable:
                 if (_kcp!.Input(buffer, KcpPacket.SessionHeaderSize, body.Length) >= 0)
+                {
                     DrainReliable(_kcp, Delivery.Reliable);
+                }
+
                 break;
 
             case KcpPacketType.Unreliable:
@@ -176,16 +202,22 @@ public sealed class KcpConnection : Connection
 
             case KcpPacketType.Ping:
                 if (body.Length >= 4)
+                {
                     _transport.SendSession(this, KcpPacketType.Pong, body[..4]);
+                }
+
                 break;
 
             case KcpPacketType.Pong:
                 if (body.Length >= 4)
+                {
                     AddRttSample((uint)now - BinaryPrimitives.ReadUInt32LittleEndian(body));
+                }
+
                 break;
 
             case KcpPacketType.Disconnect:
-                _transport.Close(this, DisconnectReason.RemoteClosed, notifyRemote: false);
+                _transport.Close(this, DisconnectReason.RemoteClosed, false);
                 break;
         }
     }
@@ -198,25 +230,30 @@ public sealed class KcpConnection : Connection
             // Incoming connections are connected as soon as they exist; only outgoing ones wait here.
             if (now - _connectStartMs >= (long)_options.ConnectTimeout.TotalMilliseconds)
             {
-                _transport.Close(this, DisconnectReason.Timeout, notifyRemote: false);
+                _transport.Close(this, DisconnectReason.Timeout, false);
                 return;
             }
 
             if (now >= _nextHandshakeMs)
             {
                 if (_hasCookie)
+                {
                     _transport.SendChallengeResponse(this, _cookie);
+                }
                 else
+                {
                     _transport.SendConnectRequest(this);
+                }
 
                 _nextHandshakeMs = now + (long)_options.HandshakeResendInterval.TotalMilliseconds;
             }
+
             return;
         }
 
         if (now - _lastReceiveMs >= (long)_options.Timeout.TotalMilliseconds)
         {
-            _transport.Close(this, DisconnectReason.Timeout, notifyRemote: false);
+            _transport.Close(this, DisconnectReason.Timeout, false);
             return;
         }
 
@@ -232,14 +269,18 @@ public sealed class KcpConnection : Connection
 
         // kcp2k flags the link as dead once a segment has been resent dead_link times without an ack.
         if (_kcp!.state == -1)
-            _transport.Close(this, DisconnectReason.Timeout, notifyRemote: false);
+        {
+            _transport.Close(this, DisconnectReason.Timeout, false);
+        }
     }
 
     /// <summary>Sends whatever the reliable channel has due: new messages, acks and retransmits.</summary>
     internal void FlushReliable(long now)
     {
         if (_kcp == null)
+        {
             return;
+        }
 
         // Update only flushes once per KCP interval. Flushing on every call as well sends new messages
         // and acks on this tick instead of up to an interval later; retransmits are still timer driven.

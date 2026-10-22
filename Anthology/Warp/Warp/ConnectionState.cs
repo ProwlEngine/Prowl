@@ -4,7 +4,7 @@
 namespace Prowl.Warp;
 
 /// <summary>
-/// The lifecycle of a <see cref="Connection"/>. A connection only ever moves forward through these.
+///     The lifecycle of a <see cref="Connection" />. A connection only ever moves forward through these.
 /// </summary>
 public enum ConnectionState : byte
 {
@@ -15,5 +15,5 @@ public enum ConnectionState : byte
     Connected,
 
     /// <summary>The connection is closed and will never be used again.</summary>
-    Disconnected,
+    Disconnected
 }

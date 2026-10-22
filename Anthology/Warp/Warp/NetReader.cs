@@ -9,27 +9,27 @@ using System.Text;
 namespace Prowl.Warp;
 
 /// <summary>
-/// Reads values written by <see cref="NetWriter"/> from a span, without allocating (except for strings).
+///     Reads values written by <see cref="NetWriter" /> from a span, without allocating (except for strings).
 /// </summary>
 /// <remarks>
-/// Network data is untrusted. Every read is bounds checked: reading past the end throws
-/// <see cref="EndOfStreamException"/> and malformed data throws <see cref="InvalidDataException"/>.
+///     Network data is untrusted. Every read is bounds checked: reading past the end throws
+///     <see cref="EndOfStreamException" /> and malformed data throws <see cref="InvalidDataException" />.
 /// </remarks>
 public ref struct NetReader
 {
     private readonly ReadOnlySpan<byte> _data;
-    private int _position;
 
     public NetReader(ReadOnlySpan<byte> data)
     {
         _data = data;
-        _position = 0;
+        Position = 0;
     }
 
-    public readonly int Position => _position;
+    public int Position { get; private set; }
+
     public readonly int Length => _data.Length;
-    public readonly int Remaining => _data.Length - _position;
-    public readonly bool IsAtEnd => _position >= _data.Length;
+    public readonly int Remaining => _data.Length - Position;
+    public readonly bool IsAtEnd => Position >= _data.Length;
 
     public bool ReadBool() => ReadByte() != 0;
 
@@ -57,7 +57,10 @@ public ref struct NetReader
     {
         ulong value = ReadVarUInt64();
         if (value > uint.MaxValue)
+        {
             throw new InvalidDataException("Var-uint is too large for 32 bits.");
+        }
+
         return (uint)value;
     }
 
@@ -68,11 +71,17 @@ public ref struct NetReader
         {
             byte b = ReadByte();
             if (shift == 63 && (b & 0xFE) != 0)
+            {
                 throw new InvalidDataException("Var-uint exceeds 64 bits.");
+            }
+
             result |= (ulong)(b & 0x7F) << shift;
             if ((b & 0x80) == 0)
+            {
                 return result;
+            }
         }
+
         throw new InvalidDataException("Var-uint is longer than 10 bytes.");
     }
 
@@ -92,8 +101,10 @@ public ref struct NetReader
 
     public string ReadString() => ReadString(int.MaxValue);
 
-    /// <summary>Reads a string, rejecting encoded lengths above the limit before allocation.
-    /// Nonempty results allocate; use the Span overload for caller-owned storage.</summary>
+    /// <summary>
+    ///     Reads a string, rejecting encoded lengths above the limit before allocation.
+    ///     Nonempty results allocate; use the Span overload for caller-owned storage.
+    /// </summary>
     public string ReadString(int maximumBytes)
     {
         int length = ReadLength(maximumBytes);
@@ -107,20 +118,23 @@ public ref struct NetReader
         NetReader cursor = this;
         int length = cursor.ReadLength(maximumBytes);
         int written = Encoding.UTF8.GetChars(cursor.Take(length), destination);
-        _position = cursor._position;
+        Position = cursor.Position;
         return written;
     }
 
-    /// <summary>Reads bytes written by <see cref="NetWriter.WriteBytesWithLength"/>. The span points into the source data.</summary>
+    /// <summary>Reads bytes written by <see cref="NetWriter.WriteBytesWithLength" />. The span points into the source data.</summary>
     public ReadOnlySpan<byte> ReadBytesWithLength() => Take(ReadLength());
 
     public ReadOnlySpan<byte> ReadBytesWithLength(int maximumBytes) => Take(ReadLength(maximumBytes));
 
-    /// <summary>Reads <paramref name="count"/> raw bytes. The span points into the source data.</summary>
+    /// <summary>Reads <paramref name="count" /> raw bytes. The span points into the source data.</summary>
     public ReadOnlySpan<byte> ReadBytes(int count)
     {
         if (count < 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(count));
+        }
+
         return Take(count);
     }
 
@@ -128,19 +142,29 @@ public ref struct NetReader
     {
         ArgumentOutOfRangeException.ThrowIfNegative(maximumBytes);
         uint length = ReadVarUInt32();
-        if (length > maximumBytes) throw new InvalidDataException("Length exceeds the field limit.");
+        if (length > maximumBytes)
+        {
+            throw new InvalidDataException("Length exceeds the field limit.");
+        }
+
         if (length > (uint)Remaining)
-            throw new EndOfStreamException($"Length prefix of {length} bytes runs past the end of the data ({Remaining} left).");
+        {
+            throw new EndOfStreamException(
+                $"Length prefix of {length} bytes runs past the end of the data ({Remaining} left).");
+        }
+
         return (int)length;
     }
 
     private ReadOnlySpan<byte> Take(int count)
     {
-        if (count > _data.Length - _position)
+        if (count > _data.Length - Position)
+        {
             throw new EndOfStreamException($"Tried to read {count} bytes with {Remaining} left.");
+        }
 
-        ReadOnlySpan<byte> span = _data.Slice(_position, count);
-        _position += count;
+        ReadOnlySpan<byte> span = _data.Slice(Position, count);
+        Position += count;
         return span;
     }
 }
