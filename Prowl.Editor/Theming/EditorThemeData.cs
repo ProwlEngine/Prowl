@@ -11,6 +11,9 @@ namespace Prowl.Editor.Theming;
 /// <summary>Static editor-background style used when the animated background is off.</summary>
 public enum EditorBackgroundStyle { Nebula, Gradient, Color, Image }
 
+/// <summary>Atlas quality for UI text. Default keeps each element's own quality.</summary>
+public enum TextQualitySetting { Default, Low, Normal, High, Ultra }
+
 /// <summary>How long UI animations take. Off changes things at once.</summary>
 public enum UiAnimationSpeed { Off, Fast, Normal, Slow }
 
@@ -122,6 +125,18 @@ public class EditorThemeData
 
     /// <summary> Name of the monospace font, used for code, paths and the console. </summary>
     public string MonoFontName { get; set; } = "JetBrains Mono";
+
+    /// <summary> Extra space between letters in pixels, added to all UI text. </summary>
+    public float LetterSpacing { get; set; }
+
+    /// <summary> Line height multiplier for all UI text. </summary>
+    public float LineHeightScale { get; set; } = 1f;
+
+    /// <summary> Atlas quality for UI text. </summary>
+    public TextQualitySetting TextQuality { get; set; } = TextQualitySetting.Default;
+
+    /// <summary> Whether UI text uses the font's ligatures. </summary>
+    public bool Ligatures { get; set; } = true;
 
     /// <summary> How many points smaller secondary text is than the base font size. </summary>
     public float SmallFontDelta { get; set; } = 2f;

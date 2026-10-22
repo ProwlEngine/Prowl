@@ -733,8 +733,15 @@ public class PreferencesPanel : DockPanel
 
         EditorGUI.SectionHeader(paper, "pref_ty_size", Loc.Get("pref.sizing"), compact: true);
         EditorGUI.SettingsSlider(paper, "pref_ty_base", Loc.Get("pref.base_size"), theme.FontSize, 8, 32, v => { theme.FontSize = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
-        EditorGUI.SettingsSlider(paper, "pref_ty_icon", Loc.Get("pref.icon_scale"), theme.IconScale, 0.7f, 1.3f, v => { theme.IconScale = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
         EditorGUI.SettingsSlider(paper, "pref_ty_small", Loc.Get("pref.small_delta"), theme.SmallFontDelta, 0, 6, v => { theme.SmallFontDelta = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_ty_icon", Loc.Get("pref.icon_scale"), theme.IconScale, 0.7f, 1.3f, v => { theme.IconScale = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+
+        EditorGUI.SectionHeader(paper, "pref_ty_render", Loc.Get("pref.text_rendering"), compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_ty_letter", Loc.Get("pref.letter_spacing"), theme.LetterSpacing, -1, 3, v => { theme.LetterSpacing = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_ty_line", Loc.Get("pref.line_height"), theme.LineHeightScale, 0.8f, 1.6f, v => { theme.LineHeightScale = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.Row(paper, "pref_ty_quality", Loc.Get("pref.text_quality"), () =>
+            Origami.EnumDropdown(paper, "pref_ty_quality_v", theme.TextQuality, v => { theme.TextQuality = v; s.ApplyTheme(); s.Save(); }).Show(), compact: true);
+        EditorGUI.SettingsToggle(paper, "pref_ty_liga", Loc.Get("pref.ligatures"), theme.Ligatures, v => { theme.Ligatures = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
     }
 
     // ---- Layout ----

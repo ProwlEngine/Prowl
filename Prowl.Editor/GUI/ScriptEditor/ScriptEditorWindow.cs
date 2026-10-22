@@ -41,6 +41,7 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     [Range(1, 8)] public int TabSize = 4;
     [Tooltip("Tab and auto indent insert spaces instead of tab characters.")] public bool InsertSpaces = true;
     [Tooltip("Columns with a vertical guide line.")] public List<int> Rulers = [120];
+    [Tooltip("Joined glyphs such as arrows and comparison operators, in fonts that have them.")] public bool Ligatures = true;
 
     [Header("Display")]
     public bool ShowLineNumbers = true;
@@ -80,6 +81,7 @@ public sealed class ScriptEditorPreferences : EditorPreferences
         options.LineHeight = LineHeight;
         options.TabSize = TabSize;
         options.InsertSpaces = InsertSpaces;
+        options.Ligatures = Ligatures;
         options.Rulers = [.. Rulers];
         options.ShowLineNumbers = ShowLineNumbers;
         options.ShowFolding = ShowFolding;

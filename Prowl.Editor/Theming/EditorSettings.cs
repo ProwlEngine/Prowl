@@ -112,7 +112,21 @@ public class EditorSettings
 
         EditorTheme.UserScale = t.UserScale;
         EditorTheme.AnimationScale = t.AnimationScale;
-        if (EditorApplication.Instance?.PaperInstance is { } paper) paper.TransitionScale = t.AnimationScale;
+        if (EditorApplication.Instance?.PaperInstance is { } paper)
+        {
+            paper.TransitionScale = t.AnimationScale;
+            paper.TextLetterSpacing = t.LetterSpacing;
+            paper.TextLineHeightScale = t.LineHeightScale;
+            paper.TextLigatures = t.Ligatures;
+            paper.TextQuality = t.TextQuality switch
+            {
+                TextQualitySetting.Low => Scribe.FontQuality.Low,
+                TextQualitySetting.Normal => Scribe.FontQuality.Normal,
+                TextQualitySetting.High => Scribe.FontQuality.High,
+                TextQualitySetting.Ultra => Scribe.FontQuality.Ultra,
+                _ => null,
+            };
+        }
         OrigamiUI.Origami.IconScale = t.IconScale;
 
         // Sizing
