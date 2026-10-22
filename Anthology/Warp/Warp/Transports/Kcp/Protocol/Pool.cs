@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Prowl.Warp.Transports.Kcp.Protocol
 {
-    public class Pool<T>
+    public sealed class Pool<T>
     {
         // Mirror is single threaded, no need for concurrent collections
         readonly Stack<T> objects = new Stack<T>();

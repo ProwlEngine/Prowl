@@ -3,7 +3,7 @@ using System.IO;
 namespace Prowl.Warp.Transports.Kcp.Protocol
 {
     // KCP Segment Definition
-    internal class Segment
+    internal sealed class Segment
     {
         internal uint conv;     // conversation
         internal uint cmd;      // command, e.g. Kcp.CMD_ACK etc.

@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace Prowl.Warp.Transports.Kcp.Protocol
 {
-    public class Kcp
+    public sealed class Kcp
     {
         // original Kcp has a define option, which is not defined by default:
         // #define FASTACK_CONSERVE
