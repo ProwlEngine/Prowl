@@ -26,7 +26,6 @@ internal sealed class NetworkingThread : IDisposable
     private readonly int _interval, _maxMessages;
     private readonly long _maxBytes, _maxPeerBytes;
     private readonly int _maxPeerMessages;
-    private readonly bool _encrypted;
     private Thread? _worker;
     private volatile bool _stop, _listening;
     private Exception? _failure;
@@ -46,7 +45,6 @@ internal sealed class NetworkingThread : IDisposable
         if (!transport.Capabilities.IsAvailable || transport.Capabilities.Execution == TransportExecution.CreatingThreadRequired)
             throw new NotSupportedException("This transport cannot run on a networking worker.");
         _transport = transport; _interval = intervalMilliseconds; _maxMessages = maxQueuedMessages; _maxBytes = maxQueuedBytes;
-        _encrypted = transport.IsEncrypted;
         _maxPeerMessages = transport.MaxQueuedDataEventsPerConnection;
         _maxPeerBytes = transport.MaxQueuedDataBytesPerConnection;
     }
@@ -54,7 +52,6 @@ internal sealed class NetworkingThread : IDisposable
     public Transport Transport => _transport;
     public bool IsListening => _listening;
     public int LocalPort => Volatile.Read(ref _localPort);
-    public bool IsEncrypted => _encrypted;
     public IReadOnlyCollection<Connection> Connections => _connections.Values;
     public long PendingSendBytes { get { lock (_gate) return _outgoingBytes; } }
     public long PendingReceiveBytes { get { lock (_gate) return _incomingBytes; } }
