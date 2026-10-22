@@ -579,7 +579,7 @@ public class PreferencesPanel : DockPanel
         s.Save();
     }
 
-    private static void PromptName(string title, string initial, Action<string> onSave)
+    internal static void PromptName(string title, string initial, Action<string> onSave)
     {
         string name = initial;
         DialogModal dialog = Origami.Dialog(title, paper =>

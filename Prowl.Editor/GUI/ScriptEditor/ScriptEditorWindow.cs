@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
@@ -16,6 +18,7 @@ using Prowl.PaperUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Vector;
 
 using TextAlignment = Prowl.PaperUI.TextAlignment;
 
@@ -82,12 +85,122 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     [Range(0, 3), Tooltip("Seconds the mouse rests before hover info shows. Zero turns it off.")] public float HoverDelay = 0.5f;
     [Range(0.05f, 2), Tooltip("Seconds without edits before diagnostics and colours refresh.")] public float AnalysisDelay = 0.35f;
 
+    /// <summary>The colour scheme in use. Picked and edited above the other settings.</summary>
+    [HideInInspector] public string ColorScheme = "Theme";
+
     // Find options, remembered from the last find bar. Not shown in Preferences.
     [HideInInspector] public bool FindMatchCase;
     [HideInInspector] public bool FindWholeWord;
     [HideInInspector] public bool FindRegex;
 
     public override void Apply() => ScriptEditorWindow.ApplyPreferences();
+
+    private static readonly string[] s_schemeFilters = ["*" + CodeColorSchemes.FileExtension];
+
+    public override void OnGUI(Paper paper, float width)
+    {
+        string[] names = [.. CodeColorSchemes.All.Select(s => s.Name)];
+        int index = Math.Max(0, Array.IndexOf(names, ColorScheme));
+        CodeColorScheme scheme = CodeColorSchemes.Find(ColorScheme);
+        bool builtIn = CodeColorSchemes.IsBuiltIn(scheme.Name);
+
+        EditorGUI.SettingsRow(paper, "se_scheme", "Colour Scheme", () =>
+        {
+            using (paper.Row("se_scheme_row").Height(UnitValue.Auto).Gap(4).Enter())
+            {
+                Origami.Dropdown(paper, "se_scheme_v", index, i => SetScheme(names[i]), names).Show();
+                Origami.IconButton(paper, "se_scheme_dup", EditorIcons.Copy_I, () =>
+                        PreferencesPanel.PromptName("Duplicate Colour Scheme", scheme.Name + " Copy", name =>
+                        {
+                            CodeColorSchemes.Save(scheme.Clone(name));
+                            SetScheme(name);
+                        }))
+                    .Tooltip("Duplicate").Show();
+                if (!builtIn)
+                    Origami.IconButton(paper, "se_scheme_del", EditorIcons.Trash_I, () =>
+                            Origami.Confirm("Delete Colour Scheme", $"Delete \"{scheme.Name}\"?", () =>
+                            {
+                                CodeColorSchemes.Delete(scheme.Name);
+                                SetScheme("Theme");
+                            }))
+                        .Tooltip("Delete").Show();
+                Origami.IconButton(paper, "se_scheme_import", EditorIcons.FileImport_I, () =>
+                        EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
+                        {
+                            if (path == null) return;
+                            try { SetScheme(CodeColorSchemes.Import(path).Name); }
+                            catch (Exception ex) { Toasts.Error("Import failed", ex.Message); }
+                        }, filters: s_schemeFilters, filterLabels: ["Colour schemes"]))
+                    .Tooltip("Import").Show();
+                Origami.IconButton(paper, "se_scheme_export", EditorIcons.FileExport_I, () =>
+                        EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
+                        {
+                            if (path == null) return;
+                            if (!path.EndsWith(CodeColorSchemes.FileExtension, StringComparison.OrdinalIgnoreCase)) path += CodeColorSchemes.FileExtension;
+                            try { CodeColorSchemes.Export(scheme, path); }
+                            catch (Exception ex) { Toasts.Error("Export failed", ex.Message); }
+                        }, filters: s_schemeFilters, filterLabels: ["Colour schemes"]))
+                    .Tooltip("Export").Show();
+            }
+        });
+
+        if (builtIn)
+            EditorGUI.Note(paper, "se_scheme_note", "Built-in schemes are read only. Duplicate one to change its colours.");
+        else
+            Origami.Foldout(paper, "se_scheme_edit", "Edit Colours").Body(() => DrawSchemeEditor(paper, scheme));
+    }
+
+    private void SetScheme(string name)
+    {
+        ColorScheme = name;
+        Preferences.Changed(Preferences.SectionOf(this));
+    }
+
+    // Every token kind with its colour and font style, then the editor's own colours.
+    private static void DrawSchemeEditor(Paper paper, CodeColorScheme scheme)
+    {
+        CodeEditorColors current = scheme.Build(EditorTheme.OrigamiTheme);
+
+        foreach (CodeTokenKind kind in Enum.GetValues<CodeTokenKind>())
+        {
+            string key = kind.ToString();
+            CodeTokenStyle style = current.Styles[(int)kind];
+            EditorGUI.Row(paper, $"se_tok_{key}", PropertyGridUtils.NicifyName(key), () =>
+            {
+                using (paper.Row($"se_tok_{key}_row").Height(UnitValue.Auto).Gap(4).Enter())
+                {
+                    SchemeColorField(paper, $"se_tok_{key}_c", scheme, key, current[kind]);
+                    StyleChip(paper, $"se_tok_{key}_b", "B", scheme, key, style, CodeTokenStyle.Bold);
+                    StyleChip(paper, $"se_tok_{key}_i", "I", scheme, key, style, CodeTokenStyle.Italic);
+                    StyleChip(paper, $"se_tok_{key}_u", "U", scheme, key, style, CodeTokenStyle.Underline);
+                }
+            });
+        }
+
+        EditorGUI.SectionHeader(paper, "se_scheme_ui", "Editor");
+        foreach (FieldInfo field in CodeColorSchemes.UiFields)
+            EditorGUI.Row(paper, $"se_ui_{field.Name}", PropertyGridUtils.NicifyName(field.Name), () =>
+                SchemeColorField(paper, $"se_ui_{field.Name}_c", scheme, field.Name, (Color32)field.GetValue(current)!));
+    }
+
+    private static void SchemeColorField(Paper paper, string id, CodeColorScheme scheme, string key, Color32 value)
+    {
+        var color = new Prowl.Vector.Color(value.R / 255f, value.G / 255f, value.B / 255f, value.A / 255f);
+        Origami.ColorField(paper, id, color, v =>
+        {
+            scheme.Colors[key] = CodeColorSchemes.ToHex(new Color32(ToByte(v.R), ToByte(v.G), ToByte(v.B), ToByte(v.A)));
+            CodeColorSchemes.Save(scheme);
+        }).Alpha(true).Width(130f).Show();
+    }
+
+    private static byte ToByte(float v) => (byte)Math.Clamp((int)MathF.Round(v * 255f), 0, 255);
+
+    private static void StyleChip(Paper paper, string id, string label, CodeColorScheme scheme, string key, CodeTokenStyle style, CodeTokenStyle flag)
+        => EditorGUI.Chip(paper, id, label, (style & flag) != 0, () =>
+        {
+            scheme.Styles[key] = style ^ flag;
+            CodeColorSchemes.Save(scheme);
+        }, height: 22f);
 
     /// <summary>Copies these values onto a code editor, its options and its find state.</summary>
     public void ApplyTo(OrigamiUI.CodeEditor editor)
@@ -101,6 +214,10 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     /// <summary>Copies these values onto a code editor's options.</summary>
     public void ApplyTo(CodeEditorOptions options)
     {
+        options.Font = null;
+        options.BoldFont = EditorTheme.FontMonoBold;
+        options.ItalicFont = EditorTheme.FontMonoItalic;
+        options.BoldItalicFont = EditorTheme.FontMonoBoldItalic;
         options.FontSize = FontSize;
         options.LineHeight = LineHeight;
         options.TabSize = TabSize;
@@ -356,6 +473,7 @@ public class ScriptEditorWindow : DockPanel
             }
 
             // Keyed per tab so each script keeps its own scroll, caret and popups while tabs switch and files get renamed.
+            active.Editor.Colors = CodeColorSchemes.Palette(Preferences.Get<ScriptEditorPreferences>().ColorScheme, EditorTheme.OrigamiTheme);
             Origami.CodeEditor(paper, "se_code_" + active.Id, active.Editor)
                 .Size(width, Math.Max(0, height - tabsH - toolbarH)).Show();
             RememberEditorState(active.Editor);

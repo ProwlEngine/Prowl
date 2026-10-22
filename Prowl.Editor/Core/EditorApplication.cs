@@ -348,7 +348,7 @@ public class EditorApplication : Game
     /// <summary>The family name of the bundled monospace font.</summary>
     public const string BundledMonoFontName = "JetBrains Mono";
 
-    private Scribe.FontFile? _geistRegular, _geistMedium, _geistSemiBold, _geistBold, _jetBrainsMono;
+    private Scribe.FontFile? _geistRegular, _geistMedium, _geistSemiBold, _geistBold, _jetBrainsMono, _jetBrainsMonoMedium;
     private Scribe.FontFile[]? _systemFonts;
     private readonly Dictionary<string, Scribe.FontFile?> _fileFonts = new(StringComparer.OrdinalIgnoreCase);
 
@@ -365,6 +365,7 @@ public class EditorApplication : Game
             _geistSemiBold = LoadBundledFont("Geist-SemiBold.ttf");
             _geistBold = LoadBundledFont("Geist-Bold.ttf");
             _jetBrainsMono = LoadBundledFont("JetBrainsMono-Regular.ttf");
+            _jetBrainsMonoMedium = LoadBundledFont("JetBrainsMono-Medium.ttf");
             EditorTheme.FontDisplay = LoadBundledFont("SpaceGrotesk-Bold.ttf");
             EditorTheme.FontLogo = LoadBundledFont("Audiowide-Regular.ttf");
         }
@@ -381,6 +382,17 @@ public class EditorApplication : Game
         EditorTheme.DefaultBoldFont = bold ?? _geistBold;
         EditorTheme.FontSemiBold = bold ?? _geistSemiBold;
         EditorTheme.FontMono = mono ?? _jetBrainsMono;
+        if (mono == null)
+        {
+            EditorTheme.FontMonoBold = _jetBrainsMonoMedium;
+            EditorTheme.FontMonoItalic = EditorTheme.FontMonoBoldItalic = null;
+        }
+        else
+        {
+            EditorTheme.FontMonoBold = FindFace(EditorTheme.MonoFontName, Scribe.FontStyle.Bold);
+            EditorTheme.FontMonoItalic = FindFace(EditorTheme.MonoFontName, Scribe.FontStyle.Italic);
+            EditorTheme.FontMonoBoldItalic = FindFace(EditorTheme.MonoFontName, Scribe.FontStyle.BoldItalic);
+        }
 
         _curDefaultFont = EditorTheme.DefaultFontName;
         _curDefaultBoldFont = EditorTheme.DefaultBoldFontName;
@@ -404,6 +416,15 @@ public class EditorApplication : Game
         }
         if (regular == null) Runtime.Debug.LogWarning($"Font '{family}' is not installed, using {bundled}.");
         return regular;
+    }
+
+    // Only the exact face, so a family without it gets no stand in.
+    private Scribe.FontFile? FindFace(string family, Scribe.FontStyle style)
+    {
+        if (IsFontFile(family)) return null;
+        foreach (Scribe.FontFile font in SystemFonts)
+            if (font.Style == style && font.FamilyName.Equals(family, StringComparison.OrdinalIgnoreCase)) return font;
+        return null;
     }
 
     /// <summary>Whether a font setting holds a path to a font file rather than a family name.</summary>

@@ -215,6 +215,8 @@ public static class EditorTheme
     public static string DefaultBoldFontName = "Geist";
     /// <summary> Font family name or font file path for the monospace face. </summary>
     public static string MonoFontName = "JetBrains Mono";
+    /// <summary> Bold, italic and bold italic faces of the monospace font, null when it has none. </summary>
+    public static FontFile? FontMonoBold, FontMonoItalic, FontMonoBoldItalic;
 
     // DPI Scaling value
     /// <summary> DPI scaling factor applied to all UI measurements. </summary>
