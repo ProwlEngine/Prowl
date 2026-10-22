@@ -490,40 +490,45 @@ internal static class ShadowPasses
     }
 }
 
-/// <summary>Draws a camera's refit cascades into their depth textures.</summary>
-internal sealed class CascadePass
+/// <summary>
+/// Draws a view's refit cascades into their depth textures and publishes them as <see cref="RendererOutputs.Cascades"/>.
+/// Exclusive group "Cascades".
+/// </summary>
+public sealed class CascadeFeature : RenderFeature
 {
-    private readonly ViewGraph _view;
-    private readonly Func<PassBuilder, List<(ViewShadows.Cascade Cascade, TextureHandle Handle)>?> _setup;
-    private readonly Action<PassContext, List<(ViewShadows.Cascade Cascade, TextureHandle Handle)>?> _render;
+    internal CascadeFeature() { }
 
-    public CascadePass(ViewGraph view)
+    private sealed class State
     {
-        _view = view;
-        _setup = Setup;
-        _render = Render;
+        public readonly List<(ViewShadows.Cascade Cascade, TextureHandle Handle)> Targets = new();
     }
 
-    public void Add()
+    public override RenderSlot Slot => RenderSlot.Shadows;
+    public override string? ExclusiveGroup => "Cascades";
+    public override ViewKinds RunsOn => ViewKinds.All;
+
+    private static ViewShadows.Cascade? First(CameraFrame camera)
     {
-        foreach (ViewShadows.CascadeLight light in _view.Camera.Shadows.Lights)
+        foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
         {
             for (int c = 0; c < light.Count; c++)
             {
-                if (light.Cascades[c].Draws.Count > 0)
-                {
-                    _view.Graph.AddPass("Graphite.Cascades", _setup, _render);
-                    return;
-                }
+                if (light.Cascades[c].Texture?.Texture != null)
+                    return light.Cascades[c];
             }
         }
+        return null;
     }
 
-    private List<(ViewShadows.Cascade Cascade, TextureHandle Handle)>? Setup(PassBuilder builder)
+    internal override bool Skips(ViewGraph view) => view.Probing || First(view.Camera) == null;
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        CameraFrame camera = _view.Camera;
-        _view.Frame.Buffers.ReadWorld(_view.Graph, builder, camera.World);
-        List<(ViewShadows.Cascade, TextureHandle)> targets = new();
+        ViewGraph graph = builder.ViewGraph;
+        CameraFrame camera = graph.Camera;
+        State state = builder.GetViewState<State>();
+        state.Targets.Clear();
+        graph.Frame.Buffers.ReadWorld(graph.Graph, builder.Graph, camera.World);
         foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
         {
             for (int c = 0; c < light.Count; c++)
@@ -532,17 +537,17 @@ internal sealed class CascadePass
                 if (cascade.Draws.Count == 0)
                     continue;
                 foreach (ShadowDraw draw in cascade.Draws)
-                    draw.Camera.Buffers.Read(_view.Graph, builder, BufferAccess.AllReads);
-                targets.Add((cascade, builder.Write(_view.Graph.Import(cascade.Texture!.Texture!), TextureState.Attachment)));
+                    draw.Camera.Buffers.Read(graph.Graph, builder.Graph, BufferAccess.AllReads);
+                state.Targets.Add((cascade, builder.Graph.Write(graph.Graph.Import(cascade.Texture!.Texture!), TextureState.Attachment)));
             }
         }
-        return targets;
+        builder.Publish(RendererOutputs.Cascades, state.Targets.Count > 0 ? state.Targets[0].Handle : graph.Graph.Import(First(camera)!.Texture!.Texture!));
     }
 
-    private void Render(PassContext context, List<(ViewShadows.Cascade Cascade, TextureHandle Handle)>? targets)
+    public override void Render(FeatureContext context)
     {
-        foreach ((ViewShadows.Cascade cascade, TextureHandle handle) in targets!)
-            ShadowRecorder.Record(context.Command, context.Get(handle), cascade.Draws, _view.Frame.TileClearProgram, context.Task.RingSlot);
+        foreach ((ViewShadows.Cascade cascade, TextureHandle handle) in context.GetViewState<State>().Targets)
+            ShadowRecorder.Record(context.Command, context.Get(handle), cascade.Draws, context.Frame.TileClearProgram, context.Graph.Task.RingSlot);
     }
 }
 

@@ -12,6 +12,7 @@ namespace Prowl.Graphite.Rendering;
 /// <summary>Where in a view's frame a feature runs, in this order. Spec 6.3 lists what each holds.</summary>
 public enum RenderSlot : byte
 {
+    Clear,
     Setup,
     Culling,
     Shadows,
@@ -30,6 +31,7 @@ public enum RenderSlot : byte
     DisplayPost,
     Ui,
     Overlay,
+    Present,
 }
 
 public enum ViewKind : byte
@@ -174,8 +176,8 @@ public sealed class FeatureSet : IEnumerable<RenderFeature>
 /// Work a host adds to views: a pass in a slot of every view of a world, or of one view. Its slot, order, kinds, group
 /// and Enabled are read at SubmitFrame along with <see cref="Extract"/> on the host thread, everything else runs on the
 /// render thread. Of features sharing an <see cref="ExclusiveGroup"/> the view's wins over the world's, which wins over
-/// the built in one, so a feature replaces a built in one by taking its group: Prepass, Opaque, Sky, SceneColor or
-/// Transparent. A feature that throws fails the frame.
+/// the built in one, so a feature replaces a built in one by taking its group: SceneClear, Cascades, Prepass, Opaque,
+/// Sky, SceneColor, Transparent or Present. A feature that throws fails the frame.
 /// </summary>
 /// <summary>
 /// Scene targets past colour and depth that a feature reads. A view allocates the ones its features read: motion as the
@@ -205,6 +207,9 @@ public abstract class RenderFeature
     public virtual string? ExclusiveGroup => null;
 
     public bool Enabled { get; set; } = true;
+
+    /// <summary>Whether the view adds no pass for the feature this frame.</summary>
+    internal virtual bool Skips(ViewGraph view) => false;
 
     /// <summary>
     /// Halton phases the view's projection jitters through while the feature runs, for temporal effects, 0 for none. The
@@ -411,6 +416,8 @@ public sealed class FeatureBuilder
 
     private ViewGraph View => _pass.View;
 
+    internal ViewGraph ViewGraph => View;
+
     private FrameGraph FrameGraph => View.Graph;
 
     private int Scope => View.Camera.View.ViewId;
@@ -544,7 +551,7 @@ public sealed class FeatureBuilder
         if (_pass.Draws)
             return;
         _pass.Draws = true;
-        View.Frame.DeclareDrawReads(View.Graph, _graph, View.Camera, View.ScreenVisibilityWritten, View.ScreenIrradianceWritten);
+        View.Frame.DeclareDrawReads(View, _graph, View.Camera, View.ScreenVisibilityWritten, View.ScreenIrradianceWritten);
     }
 
     /// <summary>
@@ -621,6 +628,8 @@ public sealed class FeatureContext
     internal FeatureContext(FeaturePass pass) => _pass = pass;
 
     internal CameraFrame Camera => _pass.Camera;
+
+    internal FramePipeline Frame => _pass.Frame;
 
     /// <summary>The underlying pass context, for resources the feature declared through <see cref="FeatureBuilder.Graph"/>.</summary>
     public PassContext Graph { get; internal set; } = null!;
@@ -850,7 +859,7 @@ internal sealed class FeaturePass
 
     public void Add()
     {
-        if (Feature is SceneColorFeature && !Camera.SceneColorUsed)
+        if (Feature.Skips(View))
             return;
         View.Graph.AddPass(Name, _setup, static (context, pass) => pass.Render(context));
     }
@@ -879,6 +888,7 @@ internal sealed class FeaturePass
 
     private void Render(PassContext context)
     {
+        View.BeginRecording(context);
         _context.Graph = context;
         _context.Command = context.Command;
         _context.View = AfterUpscale ? Camera.Info.AtOutput() : Camera.Info;
@@ -888,90 +898,92 @@ internal sealed class FeaturePass
     }
 }
 
-/// <summary>Clears the scene's colour, depth and G-buffer first, so a view whose features draw nothing still presents its clear colour. Fills the view's table for the frame.</summary>
-internal sealed class SceneClearPass
+/// <summary>
+/// Clears the scene's colour, depth and G-buffer first, so a view whose features draw nothing still presents its clear
+/// colour. Publishes the scene as <see cref="RendererOutputs.Scene"/>. Exclusive group "SceneClear".
+/// </summary>
+public sealed class SceneClearFeature : RenderFeature
 {
-    private readonly ViewGraph _view;
-    private readonly Func<PassBuilder, TextureHandle> _setup;
-    private readonly Action<PassContext, TextureHandle> _render;
+    internal SceneClearFeature() { }
 
-    public SceneClearPass(ViewGraph view)
+    private sealed class State
     {
-        _view = view;
-        _setup = Setup;
-        _render = Render;
+        public TextureHandle Scene;
     }
 
-    public void Add() => _view.Graph.AddPass("Graphite.SceneClear", _setup, _render);
+    public override RenderSlot Slot => RenderSlot.Clear;
+    public override string? ExclusiveGroup => "SceneClear";
+    public override ViewKinds RunsOn => ViewKinds.All;
 
-    private TextureHandle Setup(PassBuilder builder)
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        CameraFrame camera = _view.Camera;
-        TextureHandle scene = _view.Graph.Create(RenderResourceID.Intern("Graphite.Scene"), _view.SceneDesc(), Lifetime.Transient, camera.View.ViewId);
+        ViewGraph graph = builder.ViewGraph;
+        CameraFrame camera = graph.Camera;
+        TextureHandle scene = graph.Graph.Create(RenderResourceID.Intern(RendererOutputs.Scene), graph.SceneDesc(), Lifetime.Transient, camera.View.ViewId);
         Float4 clear = camera.Desc.Overlay ? default : camera.Desc.ClearColor with { W = 1 };
         TargetLoadStoreOps ops = new(AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W)), AttachmentOps.Clear(0f));
-        TextureHandle written = builder.Write(scene, TextureState.Attachment, firstWrite: ops);
-        _view.Scene = _view.Current = written;
-        _view.CurrentIsScene = true;
-        _view.SceneWritten = true;
-        _view.CurrentWritten = true;
-        return written;
+        TextureHandle written = builder.Graph.Write(scene, TextureState.Attachment, firstWrite: ops);
+        graph.Scene = graph.Current = written;
+        graph.CurrentIsScene = true;
+        graph.SceneWritten = true;
+        graph.CurrentWritten = true;
+        builder.GetViewState<State>().Scene = written;
+        builder.Publish(RendererOutputs.Scene, written);
     }
 
-    private void Render(PassContext context, TextureHandle scene)
+    public override void Render(FeatureContext context)
     {
-        CameraFrame camera = _view.Camera;
-        camera.DisplayEncoded = false;
-        camera.Drawer.Prepare(context.Task.RingSlot);
-        Framebuffer framebuffer = context.Get(scene).Framebuffer;
+        Framebuffer framebuffer = context.Get(context.GetViewState<State>().Scene).Framebuffer;
         for (uint target = 1; target < framebuffer.ColorTargets.Count; target++)
             context.Command.ClearColorTarget(target, new Color(0, 0, 0, 0));
     }
 }
 
-/// <summary>A view's last pass: the colour the features left, copied into the view's viewport of its target.</summary>
-internal sealed class PresentPass
+/// <summary>A view's last pass: the colour the features left, copied into the view's viewport of its target. Exclusive group "Present".</summary>
+public sealed class PresentFeature : RenderFeature
 {
+    internal PresentFeature() { }
+
     // sRGB targets encode what they are given and float targets hold linear light, so display encoded colour is decoded
     // for both. Other formats store display values, so linear colour is encoded for them.
     private static bool TakesLinear(PixelFormat format) => format is PixelFormat.R8_G8_B8_A8_UNorm_SRgb or PixelFormat.B8_G8_R8_A8_UNorm_SRgb
         or PixelFormat.R16_Float or PixelFormat.R16_G16_Float or PixelFormat.R16_G16_B16_A16_Float or PixelFormat.R11_G11_B10_Float
         or PixelFormat.R32_Float or PixelFormat.R32_G32_Float or PixelFormat.R32_G32_B32_A32_Float;
 
-    private readonly ViewGraph _view;
-    private readonly PropertySet _properties = new();
-    private readonly Func<PassBuilder, (TextureHandle Source, TextureHandle Target)> _setup;
-    private readonly Action<PassContext, (TextureHandle Source, TextureHandle Target)> _render;
-
-    public PresentPass(ViewGraph view)
+    private sealed class State
     {
-        _view = view;
-        _setup = Setup;
-        _render = Render;
+        public readonly PropertySet Properties = new();
+        public TextureHandle Source, Target;
     }
 
-    public void Add() => _view.Graph.AddPass("Graphite.Present", _setup, _render);
+    public override RenderSlot Slot => RenderSlot.Present;
+    public override string? ExclusiveGroup => "Present";
+    public override ViewKinds RunsOn => ViewKinds.All;
 
-    private (TextureHandle Source, TextureHandle Target) Setup(PassBuilder builder)
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        CameraFrame camera = _view.Camera;
-        FrameGraph graph = _view.Graph;
-        TextureHandle source = builder.Read(_view.Current);
+        ViewGraph graph = builder.ViewGraph;
+        if (graph.Probing)
+            return;
+        CameraFrame camera = graph.Camera;
+        State state = builder.GetViewState<State>();
+        state.Source = builder.Graph.Read(graph.Current);
         Float4 clear = camera.Desc.ClearColor with { W = 1 };
         bool whole = camera.Desc.Viewport == new Float4(0, 0, 1, 1);
         AttachmentOps color = camera.Desc.Overlay ? AttachmentOps.Loaded
             : camera.Desc.ClearTarget ? AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W))
             : whole ? new AttachmentOps(LoadAction.DontCare, StoreAction.Store) : AttachmentOps.Loaded;
-        TextureHandle target = _view.Captures ? graph.Import(camera.CaptureCube!) : graph.ImportTarget(camera.Desc.Target!);
-        return (source, builder.Write(target, TextureState.Attachment, firstWrite: new TargetLoadStoreOps(color, AttachmentOps.Loaded)));
+        TextureHandle target = graph.Captures ? graph.Graph.Import(camera.CaptureCube!) : graph.Graph.ImportTarget(camera.Desc.Target!);
+        state.Target = builder.Graph.Write(target, TextureState.Attachment, firstWrite: new TargetLoadStoreOps(color, AttachmentOps.Loaded));
     }
 
-    private void Render(PassContext context, (TextureHandle Source, TextureHandle Target) handles)
+    public override void Render(FeatureContext context)
     {
-        CameraFrame camera = _view.Camera;
-        FramePipeline frame = _view.Frame;
+        CameraFrame camera = context.Camera;
+        FramePipeline frame = context.Frame;
+        State state = context.GetViewState<State>();
         CommandBuffer cmd = context.Command;
-        Framebuffer target = context.Get(handles.Target).Framebuffer;
+        Framebuffer target = context.Get(state.Target).Framebuffer;
         Float4 rect = camera.Desc.Viewport;
         cmd.SetViewport(new Viewport(rect.X * target.Width, rect.Y * target.Height, rect.Z * target.Width, rect.W * target.Height, 0, 1));
         cmd.SetVertexSource(VertexSource.None);
@@ -979,8 +991,8 @@ internal sealed class PresentPass
         bool decode = camera.DisplayEncoded && linearTarget;
         bool encode = !camera.DisplayEncoded && !linearTarget;
         cmd.SetShader(frame.Present(decode, encode, camera.Desc.Overlay).For(camera.LayerCount));
-        _properties.SetTexture("Graphite_Source", context.Get(handles.Source).ColorTextures[0], frame.LinearSampler);
-        cmd.SetProperties(_properties);
+        state.Properties.SetTexture("Graphite_Source", context.Get(state.Source).ColorTextures[0], frame.LinearSampler);
+        cmd.SetProperties(state.Properties);
         cmd.Draw(3);
     }
 }
@@ -1086,6 +1098,8 @@ public sealed class SceneColorFeature : RenderFeature
     public override string? ExclusiveGroup => "SceneColor";
     public override ViewKinds RunsOn => ViewKinds.All;
 
+    internal override bool Skips(ViewGraph view) => !view.Camera.SceneColorUsed;
+
     public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.ReadColor();
 
     public override void Render(FeatureContext context)
@@ -1101,7 +1115,7 @@ public sealed class SceneColorFeature : RenderFeature
 /// <summary>Picks a view's features each frame: built in, world and view features, filtered and ordered.</summary>
 internal static class FeatureSelection
 {
-    public static readonly RenderFeature[] BuiltIn = [new PrepassFeature(), new OpaqueFeature(), new SkyFeature(), new SceneColorFeature(), new TransparentFeature()];
+    public static readonly RenderFeature[] BuiltIn = [new SceneClearFeature(), new CascadeFeature(), new PrepassFeature(), new OpaqueFeature(), new SkyFeature(), new SceneColorFeature(), new TransparentFeature(), new PresentFeature()];
 
     static FeatureSelection()
     {

@@ -2188,7 +2188,7 @@ public sealed class FeatureTests : IDisposable
         Named world = new("world", RenderSlot.Opaque);
         Named early = new("early", RenderSlot.Opaque, -1);
         Named post = new("post", RenderSlot.HdrPost);
-        Assert.Equal(["PrepassFeature", "early", "OpaqueFeature", "world", "view", "SkyFeature", "SceneColorFeature", "TransparentFeature", "post"], Select([post, world, early], [view]));
+        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "early", "OpaqueFeature", "world", "view", "SkyFeature", "SceneColorFeature", "TransparentFeature", "post", "PresentFeature"], Select([post, world, early], [view]));
     }
 
     [Fact]
@@ -2214,7 +2214,119 @@ public sealed class FeatureTests : IDisposable
         Named probes = new("probes", RenderSlot.HdrPost, runsOn: ViewKinds.ReflectionProbe);
         Named off = new("off", RenderSlot.HdrPost, runsOn: ViewKinds.All) { Enabled = false };
 
-        Assert.Equal(["PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "TransparentFeature", "cameras"], Select([cameras, probes, off], []));
-        Assert.Equal(["PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "TransparentFeature", "probes"], Select([cameras, probes, off], [], ViewKind.ReflectionProbe));
+        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "TransparentFeature", "cameras", "PresentFeature"], Select([cameras, probes, off], []));
+        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "TransparentFeature", "probes", "PresentFeature"], Select([cameras, probes, off], [], ViewKind.ReflectionProbe));
+    }
+
+    // Takes a built in frame feature's group and provides what its consumers read
+    private static RenderResourceID? ProvidedBy(string group) => group switch
+    {
+        "Deform" => RendererOutputs.DeformedVertices,
+        "LightProbes" => RendererOutputs.ObjectProbes,
+        "LocalShadows" => RendererOutputs.ShadowPages,
+        "CaptureFill" => RendererOutputs.CaptureCubes,
+        _ => RendererOutputs.ReadbackStaging,
+    };
+
+    private sealed class FrameStand(FrameSlot slot, string group, RenderResourceID? provides) : FrameFeature
+    {
+        public int Runs;
+        public override FrameSlot Slot => slot;
+        public override string? ExclusiveGroup => group;
+        public override void Setup(FrameBuilder builder)
+        {
+            if (provides is { } id)
+                builder.Export(builder.Buffer(id, GraphBufferDesc.Structured(4, 4)));
+        }
+        public override void Render(FrameContext context) => Runs++;
+    }
+
+    [Theory]
+    [InlineData("Deform", FrameSlot.Deform, false)]
+    [InlineData("LightProbes", FrameSlot.LightProbes, true)]
+    [InlineData("LocalShadows", FrameSlot.Shadows, true)]
+    [InlineData("CaptureFill", FrameSlot.Captures, true)]
+    [InlineData("Readback", FrameSlot.Readback, false)]
+    public void AFrameFeatureOfABuiltInsGroup_ReplacesIt(string group, FrameSlot slot, bool inWorld)
+    {
+        FrameStand stand = new(slot, group, ProvidedBy(group));
+        if (inWorld)
+            _world.FrameFeatures.Add(stand);
+        else
+            _renderer.FrameFeatures.Add(stand);
+        AddQuad(new Float3(1, 0, 0));
+        AssertAll(new Float3(1, 0, 0), Frame(View()), Centre);
+
+        FrameFeature[] active = [.. _renderer.Frame.ActiveFrameFeatures];
+        Assert.Contains(stand, active);
+        Assert.DoesNotContain(active, f => f.IsBuiltIn && f.ExclusiveGroup == group);
+        Assert.Equal(1, stand.Runs);
+    }
+
+    [Fact]
+    public void AReplacementThatProvidesNothing_FailsTheFrameNamingWhatTheDrawsRead()
+    {
+        _renderer.FrameFeatures.Add(new FrameStand(FrameSlot.Deform, "Deform", null));
+        AddQuad(new Float3(1, 0, 0));
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
+        _device.WaitForIdle();
+        Assert.Contains(_errors, e => e.Code == "frame.failed" && e.Message.Contains("Graphite.Deform.Vertices"));
+        _errors.Clear();
+    }
+
+    private sealed class ViewStand(RenderSlot slot, string group, bool scene = false) : RenderFeature
+    {
+        public int Setups;
+        public override RenderSlot Slot => slot;
+        public override string? ExclusiveGroup => group;
+        public override ViewKinds RunsOn => ViewKinds.All;
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            Setups++;
+            if (scene)
+            {
+                GraphTextureDesc desc = new() { Width = (int)view.Width, Height = (int)view.Height, ColorFormats = [PixelFormat.R16_G16_B16_A16_Float], EnableDepth = true, DepthFormat = PixelFormat.D32_Float, ArrayLayers = view.LayerCount > 1 ? (uint)view.LayerCount : 0 };
+                builder.Publish(RendererOutputs.Scene, builder.Temporary("Scene", desc, TextureState.Attachment));
+            }
+            else if (group == "Present")
+            {
+                builder.ReadColor();
+            }
+        }
+
+        public override void Render(FeatureContext context) { }
+    }
+
+    [Theory]
+    [InlineData(RenderSlot.Clear, "SceneClear")]
+    [InlineData(RenderSlot.Shadows, "Cascades")]
+    [InlineData(RenderSlot.Present, "Present")]
+    public void AViewFeatureOfABuiltInsGroup_ReplacesIt(RenderSlot slot, string group)
+    {
+        ViewStand stand = new(slot, group, scene: slot == RenderSlot.Clear);
+        _world.Features.Add(stand);
+        AddQuad(new Float3(1, 0, 0));
+        Float4[] pixels = Frame(View());
+
+        Assert.True(stand.Setups > 0);
+        List<RenderFeature> selected = _renderer.Frame.Camera(1)!.Selected;
+        Assert.Contains(stand, selected);
+        Assert.DoesNotContain(selected, f => f.ExclusiveGroup == group && f != stand);
+        if (slot == RenderSlot.Present)
+            AssertAll(new Float3(0, 0, 0), pixels);
+        else if (slot != RenderSlot.Clear)
+            AssertAll(new Float3(1, 0, 0), pixels, Centre);
+    }
+
+    [Fact]
+    public void ASceneClearReplacement_ThatPublishesNoScene_FailsTheFrame()
+    {
+        _world.Features.Add(new ViewStand(RenderSlot.Clear, "SceneClear"));
+        AddQuad(new Float3(1, 0, 0));
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
+        _device.WaitForIdle();
+        Assert.Contains(_errors, e => e.Code == "frame.failed" && e.Message.Contains("Graphite.Scene"));
+        _errors.Clear();
     }
 }

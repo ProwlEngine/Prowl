@@ -21,10 +21,8 @@ internal sealed class ViewGraph
 
     private readonly Dictionary<RenderFeature, FeaturePass> _passes = new();
     private readonly Dictionary<RenderFeature, int> _used = new();
-    private readonly SceneClearPass _clear;
-    private readonly PresentPass _present;
-    private readonly CascadePass _cascades;
     private int _frame;
+    private bool _begun;
 
     public ViewGraph(FramePipeline frame, CameraFrame camera, FrameGraph graph, bool probing)
     {
@@ -32,9 +30,6 @@ internal sealed class ViewGraph
         Camera = camera;
         Graph = graph;
         Probing = probing;
-        _clear = new SceneClearPass(this);
-        _present = new PresentPass(this);
-        _cascades = new CascadePass(this);
     }
 
     public FramePipeline Frame { get; }
@@ -97,24 +92,51 @@ internal sealed class ViewGraph
         return pass;
     }
 
-    /// <summary>Adds the view's passes: its cascades, the scene clear, its features in order and the present.</summary>
+    /// <summary>Fills the view's table for the frame, in the view's first pass to record.</summary>
+    internal void BeginRecording(PassContext context)
+    {
+        if (_begun)
+            return;
+        _begun = true;
+        Camera.DisplayEncoded = false;
+        Camera.Drawer.Prepare(context.Task.RingSlot);
+    }
+
+    // The scene a Clear slot feature published, for the features after it to draw onto
+    private void AdoptScene()
+    {
+        if (SceneWritten)
+            return;
+        if (!Published.TryGetValue(RendererOutputs.Scene, out TextureHandle scene))
+            throw new InvalidOperationException($"No feature of view {Camera.View.ViewId} published '{RendererOutputs.Scene}' in the Clear slot, which the features after it draw onto.");
+        Scene = Current = scene;
+        CurrentIsScene = SceneWritten = CurrentWritten = true;
+    }
+
+    /// <summary>Adds the view's passes: its features in order.</summary>
     public void Build(CameraShape shape)
     {
         Shape = shape;
         _frame++;
+        _begun = false;
         Published.Clear();
         Current = Scene = default;
         CurrentIsScene = true;
         CurrentWritten = SceneWritten = ScreenVisibilityWritten = ScreenIrradianceWritten = Upscaled = false;
         View = Camera.Info;
 
-        if (!Probing)
-            _cascades.Add();
-        _clear.Add();
+        bool adopted = false;
         foreach (RenderFeature feature in Camera.Selected)
+        {
+            if (!adopted && feature.SlotSnapshot > RenderSlot.Clear)
+            {
+                AdoptScene();
+                adopted = true;
+            }
             PassOf(feature).Add();
-        if (!Probing)
-            _present.Add();
+        }
+        if (!adopted)
+            AdoptScene();
 
         if (_passes.Count > Camera.Selected.Count)
         {
