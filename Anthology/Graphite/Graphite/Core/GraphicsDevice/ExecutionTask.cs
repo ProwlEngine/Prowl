@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace Prowl.Graphite;
@@ -16,6 +17,34 @@ public abstract partial class ExecutionTask
 
     /// <summary>Owning device.</summary>
     public abstract GraphicsDevice Device { get; }
+
+    private List<IDisposable>? _retired;
+
+    /// <summary>Disposes the resource once the GPU has finished this execution.</summary>
+    public void Retire(IDisposable resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        lock (this)
+        {
+            (_retired ??= []).Add(resource);
+        }
+    }
+
+    internal void DisposeRetired()
+    {
+        List<IDisposable>? retired;
+        lock (this)
+        {
+            retired = _retired;
+            _retired = null;
+        }
+
+        if (retired == null)
+            return;
+
+        foreach (IDisposable resource in retired)
+            resource.Dispose();
+    }
 
     internal ProfilerSet Profilers { get; set; } = ProfilerSet.Empty;
 
