@@ -98,6 +98,11 @@
   "project.refresh": "Yenile",
   "project.rename": "Yeniden Adlandir",
   "project.show_in_explorer": "Gezginde Goster",
+  "project.open_with": "Birlikte ac",
+  "project.open_with_default": "Sistem varsayilani",
+  "project.open_terminal": "Terminali burada ac",
+  "project.compare": "Karsilastir",
+  "project.regenerate_project_files": "Proje dosyalarini yeniden olustur",
   "project.options": "Secenekler",
 
   "toast.cursor_locked": "Imlec Kilitlendi",

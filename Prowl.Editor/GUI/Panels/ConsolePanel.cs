@@ -415,8 +415,8 @@ public class ConsolePanel : DockPanel
             ScriptEditor.ScriptEditorWindow.OpenFor(location.Path, location.Line, location.Column);
             return;
         }
-        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(location.Path) { UseShellExecute = true }); }
-        catch (Exception e) { Toasts.Error(Loc.Get("console.open_source"), e.Message); }
+        if (!ExternalTools.OpenScript(location.Path, location.Line, location.Column))
+            ExternalTools.OpenWithSystem(location.Path);
     }
 
     internal static string CopyText(LogEntry entry, bool withStack)

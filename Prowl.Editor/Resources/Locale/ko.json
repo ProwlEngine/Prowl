@@ -98,6 +98,11 @@
   "project.refresh": "새로고침",
   "project.rename": "이름 변경",
   "project.show_in_explorer": "탐색기에서 표시",
+  "project.open_with": "연결 프로그램",
+  "project.open_with_default": "시스템 기본값",
+  "project.open_terminal": "여기서 터미널 열기",
+  "project.compare": "비교",
+  "project.regenerate_project_files": "프로젝트 파일 다시 생성",
   "project.options": "옵션",
 
   "toast.cursor_locked": "커서 잠김",

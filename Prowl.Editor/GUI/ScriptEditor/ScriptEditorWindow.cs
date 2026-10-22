@@ -13,6 +13,7 @@ using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.OrigamiUI.CSharp;
 using Prowl.OrigamiUI.Graphite;
@@ -378,8 +379,11 @@ public class ScriptEditorWindow : DockPanel
     [AssetDoubleClickHandler(".cs", ".shader", ".glsl", ".compute")]
     private static bool OnDoubleClick(string relativePath, Guid guid)
     {
-        if (Preferences.Get<ScriptEditorPreferences>().OpenScriptsIn != ScriptEditorMode.BuiltIn || Project.Current is not { } project) return false;
-        OpenFor(Path.Combine(project.AssetsPath, relativePath));
+        if (Project.Current is not { } project) return false;
+        string path = Path.Combine(project.AssetsPath, relativePath);
+        if (Preferences.Get<ScriptEditorPreferences>().OpenScriptsIn != ScriptEditorMode.BuiltIn)
+            return ExternalTools.OpenScript(path);
+        OpenFor(path);
         return true;
     }
 
@@ -566,7 +570,7 @@ public class ScriptEditorWindow : DockPanel
                     .Text(shown, EditorTheme.FontMono ?? Origami.Current.Font!).TextColor(EditorTheme.Ink400)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
-                EditorGUI.PillButton(paper, "se_ext", "Open Externally", false, () => OpenExternally(active.Path));
+                EditorGUI.PillButton(paper, "se_ext", "Open Externally", false, () => OpenExternally(active));
                 EditorGUI.PillButton(paper, "se_save", active.Editor.IsDirty ? "Save" : "Saved", active.Editor.IsDirty, () => Save(active));
             }
 
@@ -833,10 +837,12 @@ public class ScriptEditorWindow : DockPanel
         backend.ImportFile(backend.ToRelativePath(path));
     }
 
-    private static void OpenExternally(string path)
+    // At the caret, in the external script editor when one is set, otherwise with the system's app.
+    private static void OpenExternally(ScriptTab tab)
     {
-        try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
-        catch (Exception e) { Toasts.Error("Could not open", e.Message); }
+        var caret = tab.Editor.Caret;
+        if (!ExternalTools.OpenScript(tab.Path, caret.Line + 1, caret.Column + 1))
+            ExternalTools.OpenWithSystem(tab.Path);
     }
 
     private static void Navigate(CodeLocation location)

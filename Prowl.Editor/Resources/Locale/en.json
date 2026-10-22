@@ -98,6 +98,11 @@
   "project.refresh": "Refresh",
   "project.rename": "Rename",
   "project.show_in_explorer": "Show in Explorer",
+  "project.open_with": "Open With",
+  "project.open_with_default": "System Default",
+  "project.open_terminal": "Open Terminal Here",
+  "project.compare": "Compare",
+  "project.regenerate_project_files": "Regenerate Project Files",
   "project.options": "Options",
 
   "toast.cursor_locked": "Cursor Locked",

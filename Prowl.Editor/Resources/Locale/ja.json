@@ -98,6 +98,11 @@
   "project.refresh": "更新",
   "project.rename": "名前変更",
   "project.show_in_explorer": "エクスプローラーで表示",
+  "project.open_with": "プログラムから開く",
+  "project.open_with_default": "システムの既定",
+  "project.open_terminal": "ここでターミナルを開く",
+  "project.compare": "比較",
+  "project.regenerate_project_files": "プロジェクトファイルを再生成",
   "project.options": "オプション",
 
   "toast.cursor_locked": "カーソルがロックされました",

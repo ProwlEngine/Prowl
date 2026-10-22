@@ -98,6 +98,11 @@
   "project.refresh": "Aggiorna",
   "project.rename": "Rinomina",
   "project.show_in_explorer": "Mostra in Esplora risorse",
+  "project.open_with": "Apri con",
+  "project.open_with_default": "Predefinito di sistema",
+  "project.open_terminal": "Apri terminale qui",
+  "project.compare": "Confronta",
+  "project.regenerate_project_files": "Rigenera file di progetto",
   "project.options": "Opzioni",
 
   "toast.cursor_locked": "Cursore bloccato",

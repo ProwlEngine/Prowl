@@ -98,6 +98,11 @@
   "project.refresh": "Обновить",
   "project.rename": "Переименовать",
   "project.show_in_explorer": "Показать в проводнике",
+  "project.open_with": "Открыть с помощью",
+  "project.open_with_default": "Системное по умолчанию",
+  "project.open_terminal": "Открыть терминал здесь",
+  "project.compare": "Сравнить",
+  "project.regenerate_project_files": "Пересоздать файлы проекта",
   "project.options": "Параметры",
 
   "toast.cursor_locked": "Курсор заблокирован",
