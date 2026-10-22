@@ -967,6 +967,7 @@ public class SceneViewPanel : DockPanel
         _transformGizmo.Snapping = SceneTools.SnapEnabled || _handles.Ctrl;
         _transformGizmo.SnapDistance = SceneTools.MoveSnap;
         _transformGizmo.SnapAngle = SceneTools.RotateSnap;
+        _transformGizmo.SnapScale = SceneTools.ScaleSnap;
         _transformGizmo.IsShiftDown = _handles.Shift;
         // The grab decision comes from arbitration, so a handle nearer the cursor wins instead of the
         // gizmo taking every press it happens to be over.
