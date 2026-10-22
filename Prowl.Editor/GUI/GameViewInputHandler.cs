@@ -150,6 +150,7 @@ public class GameViewInputHandler : IInputHandler
         }
     }
     public float MouseWheelDelta => ShouldFilter ? 0f : _real.MouseWheelDelta;
+    public float MouseWheelDeltaX => ShouldFilter ? 0f : _real.MouseWheelDeltaX;
     public bool GetMouseButton(int button) => (!ShouldFilter && _real.GetMouseButton(button)) || SimulatedInput.GetMouseButton(button);
     public bool GetMouseButtonDown(int button) => (!ShouldFilter && _real.GetMouseButtonDown(button)) || SimulatedInput.GetMouseButtonDown(button);
     public bool GetMouseButtonUp(int button) => (!ShouldFilter && _real.GetMouseButtonUp(button)) || SimulatedInput.GetMouseButtonUp(button);

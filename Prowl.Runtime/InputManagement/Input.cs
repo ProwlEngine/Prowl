@@ -64,6 +64,7 @@ public static class Input
     private static Int2 LockedMousePosition => Current.MapWindowPosition(CursorLockCenter);
     public static Float2 MouseDelta => Current.MouseDelta;
     public static float MouseWheelDelta => Current.MouseWheelDelta;
+    public static float MouseWheelDeltaX => Current.MouseWheelDeltaX;
 
     // Keyboard
     public static char? GetPressedChar() => Current.GetPressedChar();

@@ -47,6 +47,9 @@ public static class PaperInputBridge
         float wheelDelta = Input.MouseWheelDelta;
         if (wheelDelta != 0)
             paper.SetPointerWheel(wheelDelta);
+        float wheelDeltaX = Input.MouseWheelDeltaX;
+        if (wheelDeltaX != 0)
+            paper.SetPointerWheelX(wheelDeltaX);
 
         // InputString is read non-destructively, so every Paper and any user UI sees the same characters.
         foreach (char ch in Input.InputString)
