@@ -562,6 +562,12 @@ public sealed partial class CodeEditor
             if (ctrl && HandleChord(key)) return;
         }
 
+        if (Options.Keymap.TryGet(new CodeKeyBinding(key, ctrl, shift, alt), out var command))
+        {
+            Execute(command, paper);
+            return;
+        }
+
         bool ro = IsReadOnly;
         switch (key)
         {
@@ -579,15 +585,8 @@ public sealed partial class CodeEditor
                 return;
             case PaperKey.Up:
             case PaperKey.Down:
-            {
-                int dir = key == PaperKey.Up ? -1 : 1;
-                if (ctrl && alt) AddCaretVertical(dir);
-                else if (alt && shift && !ro) DuplicateLines(dir > 0);
-                else if (alt && !ro) MoveLines(dir);
-                else if (ctrl) ScrollBy(dir * LineHeightPx);
-                else MoveVertical(dir, shift);
+                MoveVertical(key == PaperKey.Up ? -1 : 1, shift);
                 return;
-            }
             case PaperKey.Home:
                 if (ctrl) MoveDocumentStart(shift); else MoveHome(shift);
                 return;
@@ -611,10 +610,7 @@ public sealed partial class CodeEditor
                 return;
             case PaperKey.Enter:
             case PaperKey.KeypadEnter:
-                if (ro) return;
-                if (ctrl && shift) InsertLineAbove();
-                else if (ctrl) InsertLineBelow();
-                else NewLine();
+                if (!ro) NewLine();
                 return;
             case PaperKey.Tab:
                 if (ro) return;
@@ -624,85 +620,70 @@ public sealed partial class CodeEditor
                 if (ctrl) Copy(paper);
                 else if (shift) Paste(paper);
                 return;
-
-            case PaperKey.F2:
-                StartRename();
-                return;
-            case PaperKey.F3:
-                if (FindQuery.Length == 0) OpenFind(false);
-                else FindNextMatch(!shift);
-                return;
-            case PaperKey.F12:
-                if (shift) FindReferences();
-                else if (ctrl) GoToImplementation();
-                else GoToDefinition();
-                return;
         }
 
-        if (alt && shift && key == PaperKey.F && !ro) { FormatDocument(); return; }
+        if (ctrl && !shift && !alt && key == PaperKey.K) _chordK = true;
+    }
 
-        if (!ctrl) return;
-
-        switch (key)
+    /// <summary>Runs a command as its key would.</summary>
+    public void Execute(CodeEditorCommand command, Paper paper)
+    {
+        bool ro = IsReadOnly;
+        switch (command)
         {
-            case PaperKey.A:
-                if (shift) ToggleBlockComment(); else SelectAll();
-                return;
-            case PaperKey.C: Copy(paper); return;
-            case PaperKey.X: Cut(paper); return;
-            case PaperKey.V: Paste(paper); return;
-            case PaperKey.Z:
-                if (shift) RedoEdit(); else UndoEdit();
-                return;
-            case PaperKey.Y: RedoEdit(); return;
-            case PaperKey.D: AddNextOccurrence(); return;
-            case PaperKey.L:
-                if (shift) { if (FindQuery.Length > 0 && _findBarOpen) SelectAllMatches(); else SelectAllOccurrences(); }
-                else SelectLine();
-                return;
-            case PaperKey.F: OpenFind(false); return;
-            case PaperKey.H: OpenFind(true); return;
-            case PaperKey.G: OpenGoToLine(); return;
-            case PaperKey.S: SaveRequested?.Invoke(); return;
-            case PaperKey.K:
-                if (shift) DeleteLines();
-                else _chordK = true;
-                return;
-            case PaperKey.Slash:
-            case PaperKey.KeypadDivide:
-                ToggleLineComment();
-                return;
-            case PaperKey.Space:
-                if (shift) RequestSignatureHelp(true);
-                else RequestCompletion(CodeCompletionTrigger.Invoke);
-                return;
-            case PaperKey.Period:
-                OpenCodeActions();
-                return;
-            case PaperKey.LeftBracket:
-                if (shift) FoldAtCaret(); else Outdent();
-                return;
-            case PaperKey.RightBracket:
-                if (shift) UnfoldAtCaret(); else Indent();
-                return;
-            case PaperKey.Backslash:
-                if (shift) GoToMatchingBracket();
-                return;
-            case PaperKey.Equals:
-            case PaperKey.KeypadPlus:
-                Zoom(1);
-                return;
-            case PaperKey.Minus:
-            case PaperKey.KeypadMinus:
-                Zoom(-1);
-                return;
-            case PaperKey.Num0:
-            case PaperKey.Keypad0:
-                ResetZoom();
-                return;
-            case PaperKey.U:
-                TransformCase(!shift);
-                return;
+            case CodeEditorCommand.SelectAll: SelectAll(); break;
+            case CodeEditorCommand.Copy: Copy(paper); break;
+            case CodeEditorCommand.Cut: Cut(paper); break;
+            case CodeEditorCommand.Paste: Paste(paper); break;
+            case CodeEditorCommand.Undo: UndoEdit(); break;
+            case CodeEditorCommand.Redo: RedoEdit(); break;
+            case CodeEditorCommand.Save: SaveRequested?.Invoke(); break;
+            case CodeEditorCommand.AddNextOccurrence: AddNextOccurrence(); break;
+            case CodeEditorCommand.SelectLine: SelectLine(); break;
+            case CodeEditorCommand.SelectAllOccurrences:
+                if (FindQuery.Length > 0 && _findBarOpen) SelectAllMatches(); else SelectAllOccurrences();
+                break;
+            case CodeEditorCommand.AddCaretAbove: AddCaretVertical(-1); break;
+            case CodeEditorCommand.AddCaretBelow: AddCaretVertical(1); break;
+            case CodeEditorCommand.Find: OpenFind(false); break;
+            case CodeEditorCommand.Replace: OpenFind(true); break;
+            case CodeEditorCommand.FindNext:
+            case CodeEditorCommand.FindPrevious:
+                if (FindQuery.Length == 0) OpenFind(false);
+                else FindNextMatch(command == CodeEditorCommand.FindNext);
+                break;
+            case CodeEditorCommand.GoToLine: OpenGoToLine(); break;
+            case CodeEditorCommand.DeleteLines: DeleteLines(); break;
+            case CodeEditorCommand.MoveLinesUp: if (!ro) MoveLines(-1); break;
+            case CodeEditorCommand.MoveLinesDown: if (!ro) MoveLines(1); break;
+            case CodeEditorCommand.DuplicateLinesUp: if (!ro) DuplicateLines(false); break;
+            case CodeEditorCommand.DuplicateLinesDown: if (!ro) DuplicateLines(true); break;
+            case CodeEditorCommand.InsertLineBelow: if (!ro) InsertLineBelow(); break;
+            case CodeEditorCommand.InsertLineAbove: if (!ro) InsertLineAbove(); break;
+            case CodeEditorCommand.ToggleLineComment: ToggleLineComment(); break;
+            case CodeEditorCommand.ToggleBlockComment: ToggleBlockComment(); break;
+            case CodeEditorCommand.Indent: Indent(); break;
+            case CodeEditorCommand.Outdent: Outdent(); break;
+            case CodeEditorCommand.UpperCase: TransformCase(true); break;
+            case CodeEditorCommand.LowerCase: TransformCase(false); break;
+            case CodeEditorCommand.TrimTrailingWhitespace: TrimTrailingWhitespace(); break;
+            case CodeEditorCommand.TriggerCompletion: RequestCompletion(CodeCompletionTrigger.Invoke); break;
+            case CodeEditorCommand.ParameterHints: RequestSignatureHelp(true); break;
+            case CodeEditorCommand.CodeActions: OpenCodeActions(); break;
+            case CodeEditorCommand.FormatDocument: if (!ro) FormatDocument(); break;
+            case CodeEditorCommand.OrganizeUsings: OrganizeUsings(); break;
+            case CodeEditorCommand.Rename: StartRename(); break;
+            case CodeEditorCommand.GoToDefinition: GoToDefinition(); break;
+            case CodeEditorCommand.GoToImplementation: GoToImplementation(); break;
+            case CodeEditorCommand.FindReferences: FindReferences(); break;
+            case CodeEditorCommand.GoToMatchingBracket: GoToMatchingBracket(); break;
+            case CodeEditorCommand.Fold: FoldAtCaret(); break;
+            case CodeEditorCommand.Unfold: UnfoldAtCaret(); break;
+            case CodeEditorCommand.ScrollLineUp: ScrollBy(-LineHeightPx); break;
+            case CodeEditorCommand.ScrollLineDown: ScrollBy(LineHeightPx); break;
+            case CodeEditorCommand.ZoomIn: Zoom(1); break;
+            case CodeEditorCommand.ZoomOut: Zoom(-1); break;
+            case CodeEditorCommand.ResetZoom: ResetZoom(); break;
         }
     }
 

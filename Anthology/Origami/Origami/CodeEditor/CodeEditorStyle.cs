@@ -3,6 +3,9 @@
 
 using System;
 
+using System.Collections.Generic;
+
+using Prowl.PaperUI;
 using Prowl.Scribe;
 using Prowl.Vector;
 
@@ -16,6 +19,119 @@ public enum CodeTokenStyle : byte
     Bold = 1,
     Italic = 2,
     Underline = 4,
+}
+
+/// <summary>An action of the code editor that can be bound to a key.</summary>
+public enum CodeEditorCommand
+{
+    SelectAll, Copy, Cut, Paste, Undo, Redo, Save,
+    AddNextOccurrence, SelectLine, SelectAllOccurrences, AddCaretAbove, AddCaretBelow,
+    Find, Replace, FindNext, FindPrevious, GoToLine,
+    DeleteLines, MoveLinesUp, MoveLinesDown, DuplicateLinesUp, DuplicateLinesDown, InsertLineBelow, InsertLineAbove,
+    ToggleLineComment, ToggleBlockComment, Indent, Outdent, UpperCase, LowerCase, TrimTrailingWhitespace,
+    TriggerCompletion, ParameterHints, CodeActions, FormatDocument, OrganizeUsings, Rename,
+    GoToDefinition, GoToImplementation, FindReferences, GoToMatchingBracket,
+    Fold, Unfold, ScrollLineUp, ScrollLineDown, ZoomIn, ZoomOut, ResetZoom,
+}
+
+/// <summary>A key with the modifiers that must be held for it.</summary>
+public readonly record struct CodeKeyBinding(PaperKey Key, bool Ctrl = false, bool Shift = false, bool Alt = false);
+
+/// <summary>Which keys run which <see cref="CodeEditorCommand"/>. A command can have several bindings.</summary>
+public sealed class CodeEditorKeymap
+{
+    private readonly Dictionary<CodeKeyBinding, CodeEditorCommand> _map = new();
+
+    /// <summary>The keymap editors use unless given their own.</summary>
+    public static CodeEditorKeymap Default { get; } = CreateDefault();
+
+    public IEnumerable<KeyValuePair<CodeKeyBinding, CodeEditorCommand>> Bindings => _map;
+
+    public bool TryGet(CodeKeyBinding binding, out CodeEditorCommand command) => _map.TryGetValue(binding, out command);
+
+    /// <summary>Binds a key, taking it away from any command that had it.</summary>
+    public void Bind(CodeEditorCommand command, CodeKeyBinding binding) => _map[binding] = command;
+
+    /// <summary>Removes every key of a command.</summary>
+    public void Unbind(CodeEditorCommand command)
+    {
+        var keys = new List<CodeKeyBinding>();
+        foreach (var (key, cmd) in _map) if (cmd == command) keys.Add(key);
+        foreach (var key in keys) _map.Remove(key);
+    }
+
+    /// <summary>The first key bound to a command, if any.</summary>
+    public CodeKeyBinding? PrimaryBinding(CodeEditorCommand command)
+    {
+        foreach (var (key, cmd) in _map) if (cmd == command) return key;
+        return null;
+    }
+
+    public CodeEditorKeymap Clone()
+    {
+        var copy = new CodeEditorKeymap();
+        foreach (var (key, cmd) in _map) copy._map[key] = cmd;
+        return copy;
+    }
+
+    public static CodeEditorKeymap CreateDefault()
+    {
+        var k = new CodeEditorKeymap();
+        void B(CodeEditorCommand c, PaperKey key, bool ctrl = false, bool shift = false, bool alt = false) => k.Bind(c, new CodeKeyBinding(key, ctrl, shift, alt));
+
+        B(CodeEditorCommand.SelectAll, PaperKey.A, ctrl: true);
+        B(CodeEditorCommand.Copy, PaperKey.C, ctrl: true);
+        B(CodeEditorCommand.Cut, PaperKey.X, ctrl: true);
+        B(CodeEditorCommand.Paste, PaperKey.V, ctrl: true);
+        B(CodeEditorCommand.Undo, PaperKey.Z, ctrl: true);
+        B(CodeEditorCommand.Redo, PaperKey.Y, ctrl: true);
+        B(CodeEditorCommand.Redo, PaperKey.Z, ctrl: true, shift: true);
+        B(CodeEditorCommand.Save, PaperKey.S, ctrl: true);
+        B(CodeEditorCommand.AddNextOccurrence, PaperKey.D, ctrl: true);
+        B(CodeEditorCommand.SelectLine, PaperKey.L, ctrl: true);
+        B(CodeEditorCommand.SelectAllOccurrences, PaperKey.L, ctrl: true, shift: true);
+        B(CodeEditorCommand.AddCaretAbove, PaperKey.Up, ctrl: true, alt: true);
+        B(CodeEditorCommand.AddCaretBelow, PaperKey.Down, ctrl: true, alt: true);
+        B(CodeEditorCommand.Find, PaperKey.F, ctrl: true);
+        B(CodeEditorCommand.Replace, PaperKey.H, ctrl: true);
+        B(CodeEditorCommand.FindNext, PaperKey.F3);
+        B(CodeEditorCommand.FindPrevious, PaperKey.F3, shift: true);
+        B(CodeEditorCommand.GoToLine, PaperKey.G, ctrl: true);
+        B(CodeEditorCommand.DeleteLines, PaperKey.K, ctrl: true, shift: true);
+        B(CodeEditorCommand.MoveLinesUp, PaperKey.Up, alt: true);
+        B(CodeEditorCommand.MoveLinesDown, PaperKey.Down, alt: true);
+        B(CodeEditorCommand.DuplicateLinesUp, PaperKey.Up, shift: true, alt: true);
+        B(CodeEditorCommand.DuplicateLinesDown, PaperKey.Down, shift: true, alt: true);
+        B(CodeEditorCommand.InsertLineBelow, PaperKey.Enter, ctrl: true);
+        B(CodeEditorCommand.InsertLineAbove, PaperKey.Enter, ctrl: true, shift: true);
+        B(CodeEditorCommand.ToggleLineComment, PaperKey.Slash, ctrl: true);
+        B(CodeEditorCommand.ToggleLineComment, PaperKey.KeypadDivide, ctrl: true);
+        B(CodeEditorCommand.ToggleBlockComment, PaperKey.A, ctrl: true, shift: true);
+        B(CodeEditorCommand.Indent, PaperKey.RightBracket, ctrl: true);
+        B(CodeEditorCommand.Outdent, PaperKey.LeftBracket, ctrl: true);
+        B(CodeEditorCommand.UpperCase, PaperKey.U, ctrl: true);
+        B(CodeEditorCommand.LowerCase, PaperKey.U, ctrl: true, shift: true);
+        B(CodeEditorCommand.TriggerCompletion, PaperKey.Space, ctrl: true);
+        B(CodeEditorCommand.ParameterHints, PaperKey.Space, ctrl: true, shift: true);
+        B(CodeEditorCommand.CodeActions, PaperKey.Period, ctrl: true);
+        B(CodeEditorCommand.FormatDocument, PaperKey.F, shift: true, alt: true);
+        B(CodeEditorCommand.Rename, PaperKey.F2);
+        B(CodeEditorCommand.GoToDefinition, PaperKey.F12);
+        B(CodeEditorCommand.GoToImplementation, PaperKey.F12, ctrl: true);
+        B(CodeEditorCommand.FindReferences, PaperKey.F12, shift: true);
+        B(CodeEditorCommand.GoToMatchingBracket, PaperKey.Backslash, ctrl: true, shift: true);
+        B(CodeEditorCommand.Fold, PaperKey.LeftBracket, ctrl: true, shift: true);
+        B(CodeEditorCommand.Unfold, PaperKey.RightBracket, ctrl: true, shift: true);
+        B(CodeEditorCommand.ScrollLineUp, PaperKey.Up, ctrl: true);
+        B(CodeEditorCommand.ScrollLineDown, PaperKey.Down, ctrl: true);
+        B(CodeEditorCommand.ZoomIn, PaperKey.Equals, ctrl: true);
+        B(CodeEditorCommand.ZoomIn, PaperKey.KeypadPlus, ctrl: true);
+        B(CodeEditorCommand.ZoomOut, PaperKey.Minus, ctrl: true);
+        B(CodeEditorCommand.ZoomOut, PaperKey.KeypadMinus, ctrl: true);
+        B(CodeEditorCommand.ResetZoom, PaperKey.Num0, ctrl: true);
+        B(CodeEditorCommand.ResetZoom, PaperKey.Keypad0, ctrl: true);
+        return k;
+    }
 }
 
 /// <summary>Which keys accept the selected completion.</summary>
@@ -119,6 +235,9 @@ public sealed class CodeEditorOptions
     public bool ParameterHints = true;
 
     public CompletionAcceptKeys AcceptCompletionWith = CompletionAcceptKeys.TabAndEnter;
+
+    /// <summary>The keys of the editor's commands. Movement, typing and the Ctrl+K chords are not part of it.</summary>
+    public CodeEditorKeymap Keymap = CodeEditorKeymap.Default;
 
     /// <summary>Characters that accept the selected completion and are then typed. Null uses each suggestion's own, empty turns them off.</summary>
     public string? CompletionCommitCharacters;
