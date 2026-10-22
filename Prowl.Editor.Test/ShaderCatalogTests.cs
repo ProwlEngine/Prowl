@@ -149,6 +149,7 @@ public class ShaderCatalogTests : EditorTestHarness
     {
         string relative = AssetCreateMenu.CreateShader("")!;
         ShaderDefinition definition = ShaderParser.Parse(File.ReadAllText(AssetAbsolutePath(relative)));
+        _ = new Prowl.Graphite.Rendering.Shader(definition, Graphics.Compiler);
 
         Assert.NotEmpty(definition.Passes!);
         foreach (ShaderPass pass in definition.Passes!)
