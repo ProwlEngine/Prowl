@@ -1,6 +1,5 @@
 using Prowl.Warp.Transports.Batching;
 using Prowl.Warp.Transports.Local;
-using Prowl.Warp.Transports.Steam;
 using Xunit;
 
 namespace Prowl.Warp.Tests;
@@ -15,8 +14,8 @@ public class TransportCapabilitiesTests
         Assert.Equal(TransportExecution.InlinePreferred, local.Capabilities.Execution);
         Assert.True(local.Capabilities.Supports(Delivery.Reliable));
         Assert.True(local.Capabilities.Supports(Delivery.Unreliable));
-        using Transport steam = new BatchingTransport(new SteamTransport());
-        Assert.False(steam.Capabilities.IsAvailable);
+        using Transport unavailable = new BatchingTransport(new ReliableBackend(available: false));
+        Assert.False(unavailable.Capabilities.IsAvailable);
     }
 
     [Fact]
@@ -30,7 +29,7 @@ public class TransportCapabilitiesTests
     [Fact]
     public void SessionRejectsUnavailableBackendBeforeStartup()
     {
-        using Transport transport = new SteamTransport();
+        using Transport transport = new ReliableBackend(available: false);
         Assert.Throws<System.NotSupportedException>(() => NetSession.CreateHost(transport));
         Assert.Throws<System.NotSupportedException>(() => NetSession.Host(transport));
     }
@@ -42,9 +41,9 @@ public class TransportCapabilitiesTests
         Assert.Throws<System.NotSupportedException>(() => NetSession.CreateHost(transport));
     }
 
-    private sealed class ReliableBackend(DeliverySupport deliveries = DeliverySupport.Reliable) : Transport
+    private sealed class ReliableBackend(DeliverySupport deliveries = DeliverySupport.Reliable, bool available = true) : Transport
     {
-        public override TransportCapabilities Capabilities => new(true, deliveries, TransportExecution.WorkerPreferred);
+        public override TransportCapabilities Capabilities => new(available, deliveries, TransportExecution.WorkerPreferred);
         public override bool IsListening => false;
         public override void Listen() { }
         public override Connection Connect(string address)

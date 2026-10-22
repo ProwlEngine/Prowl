@@ -14,9 +14,8 @@ dotnet add package Prowl.Warp
 | `KcpTransport` | Reliable ordered messages and unreliable datagrams over UDP |
 | `LocalTransport` | Connections within one process |
 | `BatchingTransport` | Combine small messages until flush; both ends must enable it |
-| `SteamTransport` | Not implemented |
 
-Transports live under `Prowl.Warp.Transports.<Kcp/Local/Batching/Steam>`.
+Transports live under `Prowl.Warp.Transports.<Kcp/Local/Batching>`.
 
 ```csharp
 using Prowl.Warp;
