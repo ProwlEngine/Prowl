@@ -574,6 +574,11 @@ namespace Prowl.PaperUI
 
         #region Keyboard Queries
 
+        /// <summary>Whether the platform's command key is down: Cmd on macOS, Ctrl everywhere else.</summary>
+        public bool IsCommandDown() => OperatingSystem.IsMacOS()
+            ? IsKeyDown(PaperKey.LeftSuper) || IsKeyDown(PaperKey.RightSuper)
+            : IsKeyDown(PaperKey.LeftControl) || IsKeyDown(PaperKey.RightControl);
+
         /// <summary>
         /// Checks if a key is currently down.
         /// </summary>

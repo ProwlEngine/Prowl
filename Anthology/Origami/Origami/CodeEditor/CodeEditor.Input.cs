@@ -171,7 +171,8 @@ public sealed partial class CodeEditor
         return p.X >= v.X + v.GutterW && p.X < v.MinimapX && p.Y >= v.TextY && p.Y < v.TextY + v.TextH && !(MaxScrollX() > 0 && p.Y >= v.HBarY);
     }
 
-    private static bool Ctrl(Paper p) => p.IsKeyDown(PaperKey.LeftControl) || p.IsKeyDown(PaperKey.RightControl);
+    // The command key: Cmd on macOS, Ctrl elsewhere.
+    private static bool Ctrl(Paper p) => p.IsCommandDown();
     private static bool Shift(Paper p) => p.IsKeyDown(PaperKey.LeftShift) || p.IsKeyDown(PaperKey.RightShift);
     private static bool Alt(Paper p) => p.IsKeyDown(PaperKey.LeftAlt) || p.IsKeyDown(PaperKey.RightAlt);
     private bool AddCaretKey(Paper p) => Options.MultiCaretModifier == MultiCaretModifier.Ctrl ? Ctrl(p) : Alt(p);
@@ -548,6 +549,8 @@ public sealed partial class CodeEditor
         var paper = _paper!;
         if (!paper.IsElementFocused(_handle.Data.ID)) return;
         bool ctrl = Ctrl(paper), shift = Shift(paper), alt = Alt(paper);
+        // Moving and deleting by word: Option on macOS, Ctrl elsewhere.
+        bool word = OperatingSystem.IsMacOS() ? alt : ctrl;
         var key = e.Key;
 
         if (key is PaperKey.LeftControl or PaperKey.RightControl or PaperKey.LeftShift or PaperKey.RightShift
@@ -578,10 +581,10 @@ public sealed partial class CodeEditor
                 return;
 
             case PaperKey.Left:
-                MoveLeft(shift, ctrl);
+                MoveLeft(shift, word);
                 return;
             case PaperKey.Right:
-                MoveRight(shift, ctrl);
+                MoveRight(shift, word);
                 return;
             case PaperKey.Up:
             case PaperKey.Down:
@@ -601,12 +604,12 @@ public sealed partial class CodeEditor
                 return;
 
             case PaperKey.Backspace:
-                if (!ro) Backspace(ctrl);
+                if (!ro) Backspace(word);
                 AfterDeleteForPopups();
                 return;
             case PaperKey.Delete:
                 if (shift && !ctrl) { Cut(paper); return; }
-                if (!ro) DeleteForward(ctrl);
+                if (!ro) DeleteForward(word);
                 return;
             case PaperKey.Enter:
             case PaperKey.KeypadEnter:

@@ -1940,7 +1940,7 @@ public sealed class NodeGraphBuilder
     // ── selection helpers ──
     private bool Additive() => Shift() || Ctrl();
     private bool Shift() => _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
-    private bool Ctrl() => _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl);
+    private bool Ctrl() => _paper.IsCommandDown();
     // A double click reaches the click handler too, so an edit is safe from clicks for a moment after
     // it opens: without this the caret appears and the edit closes on the very same gesture.
     private void MaybeCommitEdit(GraphState st)

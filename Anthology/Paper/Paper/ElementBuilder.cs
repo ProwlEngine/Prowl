@@ -1578,7 +1578,12 @@ namespace Prowl.PaperUI
         }
 
         private bool IsShiftPressed() => _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
-        private bool IsControlPressed() => _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl);
+        private bool IsControlPressed() => _paper.IsCommandDown();
+
+        // Moving by word: Option on macOS, Ctrl elsewhere.
+        private bool IsWordModifierPressed() => OperatingSystem.IsMacOS()
+            ? _paper.IsKeyDown(PaperKey.LeftAlt) || _paper.IsKeyDown(PaperKey.RightAlt)
+            : IsControlPressed();
 
         /// <summary>
         /// Finds the start of the previous word from the current position
@@ -1723,7 +1728,7 @@ namespace Prowl.PaperUI
                     break;
 
                 case PaperKey.Left:
-                    if (IsControlPressed())
+                    if (IsWordModifierPressed())
                     {
                         // Ctrl+Left: Move to previous word
                         int newPos = FindPreviousWordStart(state.Value, state.CursorPosition);
@@ -1756,7 +1761,7 @@ namespace Prowl.PaperUI
                     break;
 
                 case PaperKey.Right:
-                    if (IsControlPressed())
+                    if (IsWordModifierPressed())
                     {
                         // Ctrl+Right: Move to next word
                         int newPos = FindNextWordEnd(state.Value, state.CursorPosition);
