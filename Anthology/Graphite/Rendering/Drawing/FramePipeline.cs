@@ -493,7 +493,18 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
 
     public string Name => "Graphite.Deform";
 
-    public void Setup(RenderContextBuilder builder) => Buffers.Write(builder, BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+    public void Setup(RenderContextBuilder builder)
+    {
+        foreach (GeometryPage page in geometry.Pages)
+        {
+            if (!Buffers.Persistent.Contains(page.VertexBuffer) || !Buffers.Persistent.Contains(page.IndexBuffer))
+                continue;
+            builder.DeclareWriteBuffer(page.VertexBuffer.Id, BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+            builder.DeclareWriteBuffer(page.IndexBuffer.Id, BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+        }
+        foreach (RenderWorld.RenderSide world in Worlds)
+            builder.DeclareInputBuffer(world.SkinMatrices.Persistent.Id, BufferAccess.ShaderRead);
+    }
 
     public void Render(RenderContext context, CommandBuffer cmd)
     {
@@ -1293,7 +1304,7 @@ internal sealed partial class FramePipeline : IDisposable
         Programs = new ProgramCache(device, compiler, globals, programs, deterministic, report, policy, _retired.Add);
         programs.Freed += Programs.Drop;
         _upload = new UploadPass(uploader) { Buffers = Buffers };
-        _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl")) { Buffers = Buffers };
+        _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl"));
         _deform = new DeformPass(InternalShaders.Compute(device, compiler, "Internal/Deform.glsl"), geometry) { Buffers = Buffers };
         _readback = new ReadbackStaging(device, report);
 
@@ -1423,6 +1434,24 @@ internal sealed partial class FramePipeline : IDisposable
 
     /// <summary>Every persistent buffer the frame writes and its cameras read, in a stable order.</summary>
     public FrameBuffers Buffers { get; } = new();
+
+    /// <summary>Declares the geometry pages and material tables a view's draws bind from the frame's buffers.</summary>
+    internal void DeclareDrawReads(InstanceContextBuilder builder)
+    {
+        List<PersistentBuffer> known = [.. Buffers.Persistent];
+        foreach (GeometryPage page in Geometry.Pages)
+        {
+            if (known.Contains(page.VertexBuffer))
+                builder.DeclareInputBuffer(page.VertexBuffer.Id, BufferAccess.ShaderRead);
+            if (known.Contains(page.IndexBuffer))
+                builder.DeclareInputBuffer(page.IndexBuffer.Id, BufferAccess.Index);
+        }
+        foreach (MaterialTable table in Materials.Tables.Values)
+        {
+            if (known.Contains(table.Records.Persistent))
+                builder.DeclareInputBuffer(table.Records.Persistent.Id, BufferAccess.ShaderRead);
+        }
+    }
 
     public VertexSource VertexSource(int page, PrimitiveTopology topology)
     {

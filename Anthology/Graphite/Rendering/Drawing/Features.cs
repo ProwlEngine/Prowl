@@ -556,6 +556,12 @@ public sealed class FeatureBuilder
         if (_pass.Draws)
             return;
         _pass.Draws = true;
+        Shape.Frame.DeclareDrawReads(_graph);
+        foreach (CascadeSlot slot in Shape.Cascades)
+        {
+            for (int c = 0; c < slot.Count; c++)
+                _graph.DeclareInputTexture(Shape.CascadeId(slot.Slot, c), TextureState.Sampled, TextureState.Sampled);
+        }
         for (int i = 0; i < Shape.Shape.HostBuffers; i++)
             _graph.DeclareImportSlotBuffer(Shape.HostId(i), BufferAccess.AllReads);
         if (Shape.ScreenVisibilityWritten)
