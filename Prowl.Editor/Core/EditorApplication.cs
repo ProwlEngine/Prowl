@@ -345,6 +345,9 @@ public class EditorApplication : Game
     /// <summary>The family name of the bundled UI font. Any other font name is a system font family or a font file path.</summary>
     public const string BundledFontName = "Geist";
 
+    /// <summary>The regular, bold, italic and bold italic faces of a monospace font.</summary>
+    public readonly record struct MonoFontFaces(Scribe.FontFile? Regular, Scribe.FontFile? Bold, Scribe.FontFile? Italic, Scribe.FontFile? BoldItalic);
+
     /// <summary>The family name of the bundled monospace font.</summary>
     public const string BundledMonoFontName = "JetBrains Mono";
 
@@ -375,24 +378,16 @@ public class EditorApplication : Game
 
         Scribe.FontFile? ui = FindFont(EditorTheme.DefaultFontName, BundledFontName, Scribe.FontStyle.Regular);
         Scribe.FontFile? bold = FindFont(EditorTheme.DefaultBoldFontName, BundledFontName, Scribe.FontStyle.Bold);
-        Scribe.FontFile? mono = FindFont(EditorTheme.MonoFontName, BundledMonoFontName, Scribe.FontStyle.Regular);
 
         EditorTheme.DefaultFont = ui ?? _geistRegular;
         EditorTheme.FontMedium = ui ?? _geistMedium;
         EditorTheme.DefaultBoldFont = bold ?? _geistBold;
         EditorTheme.FontSemiBold = bold ?? _geistSemiBold;
-        EditorTheme.FontMono = mono ?? _jetBrainsMono;
-        if (mono == null)
-        {
-            EditorTheme.FontMonoBold = _jetBrainsMonoMedium;
-            EditorTheme.FontMonoItalic = EditorTheme.FontMonoBoldItalic = null;
-        }
-        else
-        {
-            EditorTheme.FontMonoBold = FindFace(EditorTheme.MonoFontName, Scribe.FontStyle.Bold);
-            EditorTheme.FontMonoItalic = FindFace(EditorTheme.MonoFontName, Scribe.FontStyle.Italic);
-            EditorTheme.FontMonoBoldItalic = FindFace(EditorTheme.MonoFontName, Scribe.FontStyle.BoldItalic);
-        }
+        MonoFontFaces mono = MonoFaces(EditorTheme.MonoFontName);
+        EditorTheme.FontMono = mono.Regular;
+        EditorTheme.FontMonoBold = mono.Bold;
+        EditorTheme.FontMonoItalic = mono.Italic;
+        EditorTheme.FontMonoBoldItalic = mono.BoldItalic;
 
         _curDefaultFont = EditorTheme.DefaultFontName;
         _curDefaultBoldFont = EditorTheme.DefaultBoldFontName;
@@ -416,6 +411,14 @@ public class EditorApplication : Game
         }
         if (regular == null) Runtime.Debug.LogWarning($"Font '{family}' is not installed, using {bundled}.");
         return regular;
+    }
+
+    /// <summary>The faces of a monospace font setting: the bundled font, an installed family or a font file. Faces it does not have are null.</summary>
+    public MonoFontFaces MonoFaces(string name)
+    {
+        Scribe.FontFile? regular = FindFont(name, BundledMonoFontName, Scribe.FontStyle.Regular);
+        if (regular == null) return new(_jetBrainsMono, _jetBrainsMonoMedium, null, null);
+        return new(regular, FindFace(name, Scribe.FontStyle.Bold), FindFace(name, Scribe.FontStyle.Italic), FindFace(name, Scribe.FontStyle.BoldItalic));
     }
 
     // Only the exact face, so a family without it gets no stand in.

@@ -49,6 +49,9 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     [Tooltip("Open double clicked scripts in the built in code editor, or in the system's default app.")]
     public ScriptEditorMode OpenScriptsIn = ScriptEditorMode.BuiltIn;
 
+    /// <summary>Font family or font file for code. Empty follows the editor's mono font. Picked above the other settings.</summary>
+    [HideInInspector] public string Font = "";
+
     [Header("Text")]
     [Range(6, 48)] public float FontSize = 15f;
     [Range(1, 2.5f), Tooltip("Row height as a multiple of the font size.")] public float LineHeight = 1.5f;
@@ -126,6 +129,14 @@ public sealed class ScriptEditorPreferences : EditorPreferences
 
     public override void OnGUI(Paper paper, float width)
     {
+        PreferencesPanel.FontRow(paper, "se_font", "Font",
+            [("", "Editor Mono Font"), (EditorApplication.BundledMonoFontName, EditorApplication.BundledMonoFontName)],
+            Font, v =>
+            {
+                Font = v;
+                Preferences.Changed(Preferences.SectionOf(this));
+            }, compact: false);
+
         string[] names = [.. CodeColorSchemes.All.Select(s => s.Name)];
         int index = Math.Max(0, Array.IndexOf(names, ColorScheme));
         CodeColorScheme scheme = CodeColorSchemes.Find(ColorScheme);
@@ -241,10 +252,21 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     /// <summary>Copies these values onto a code editor's options.</summary>
     public void ApplyTo(CodeEditorOptions options)
     {
-        options.Font = null;
-        options.BoldFont = EditorTheme.FontMonoBold;
-        options.ItalicFont = EditorTheme.FontMonoItalic;
-        options.BoldItalicFont = EditorTheme.FontMonoBoldItalic;
+        if (Font.Length > 0 && EditorApplication.Instance is { } app)
+        {
+            EditorApplication.MonoFontFaces faces = app.MonoFaces(Font);
+            options.Font = faces.Regular;
+            options.BoldFont = faces.Bold;
+            options.ItalicFont = faces.Italic;
+            options.BoldItalicFont = faces.BoldItalic;
+        }
+        else
+        {
+            options.Font = null;
+            options.BoldFont = EditorTheme.FontMonoBold;
+            options.ItalicFont = EditorTheme.FontMonoItalic;
+            options.BoldItalicFont = EditorTheme.FontMonoBoldItalic;
+        }
         options.FontSize = FontSize;
         options.LineHeight = LineHeight;
         options.TabSize = TabSize;

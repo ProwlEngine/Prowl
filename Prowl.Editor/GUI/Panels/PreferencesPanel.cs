@@ -698,32 +698,33 @@ public class PreferencesPanel : DockPanel
             .Order(StringComparer.OrdinalIgnoreCase),
     ];
 
-    // A searchable family dropdown led by the bundled font (and the chosen file, if one is set), plus a button to pick a font file.
     private static void FontRow(Paper paper, EditorSettings s, string id, string label, string bundled, string current, Action<string> set)
-    {
-        string[] options =
-        [
-            bundled,
-            .. EditorApplication.IsFontFile(current) ? [current] : Array.Empty<string>(),
-            .. InstalledFamilies().Where(f => !f.Equals(bundled, StringComparison.OrdinalIgnoreCase)),
-        ];
-        int index = Math.Max(0, Array.FindIndex(options, f => f.Equals(current, StringComparison.OrdinalIgnoreCase)));
-        string[] shown = [.. options.Select(o => EditorApplication.IsFontFile(o) ? System.IO.Path.GetFileName(o) : o)];
+        => FontRow(paper, id, label, [(bundled, bundled)], current, v => { set(v); s.ApplyTheme(); s.Save(); });
 
-        void Apply(string value) { set(value); s.ApplyTheme(); s.Save(); }
+    // A searchable family dropdown led by the given choices (and the chosen file, if one is set), plus a button to pick a font file.
+    internal static void FontRow(Paper paper, string id, string label, (string Value, string Label)[] leading, string current, Action<string> apply, bool compact = true)
+    {
+        (string Value, string Label)[] options =
+        [
+            .. leading,
+            .. EditorApplication.IsFontFile(current) ? [(current, System.IO.Path.GetFileName(current))] : Array.Empty<(string, string)>(),
+            .. InstalledFamilies().Where(f => !leading.Any(l => l.Value.Equals(f, StringComparison.OrdinalIgnoreCase))).Select(f => (f, f)),
+        ];
+        int index = Math.Max(0, Array.FindIndex(options, o => o.Value.Equals(current, StringComparison.OrdinalIgnoreCase)));
+        string[] shown = [.. options.Select(o => o.Label)];
 
         EditorGUI.Row(paper, id, label, () =>
         {
             using (paper.Row($"{id}_row").Height(UnitValue.Auto).Gap(4).Enter())
             {
-                Origami.Dropdown(paper, $"{id}_v", index, i => Apply(options[i]), shown).Searchable().Show();
+                Origami.Dropdown(paper, $"{id}_v", index, i => apply(options[i].Value), shown).Searchable().Show();
                 Origami.IconButton(paper, $"{id}_file", EditorIcons.FolderOpen_I, () =>
-                    EditorApplication.OpenFileDialog(FileDialogMode.Open, path => { if (path != null) Apply(path); },
+                    EditorApplication.OpenFileDialog(FileDialogMode.Open, path => { if (path != null) apply(path); },
                         filters: s_fontFilters, filterLabels: [Loc.Get("pref.font_filter")]))
                     .Small().Width(Origami.Current.Metrics.RowHeight).Height(Origami.Current.Metrics.RowHeight)
                     .Tooltip(Loc.Get("pref.font_file")).Show();
             }
-        }, compact: true);
+        }, compact: compact);
     }
 
     // ---- Typography ----
