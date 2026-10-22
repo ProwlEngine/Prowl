@@ -109,7 +109,7 @@ public static class EditorTheme
             HeaderHeight      = RowHeight,
             CompactHeight     = RowHeight - 4f,
             FontSize          = FontSize,
-            FontSizeSmall     = FontSize - 2f,
+            FontSizeSmall     = FontSizeSmall,
             LabelWidth        = LabelWidth,
             // Spacing / padding scale derived from the two editor knobs (Spacing=4, Padding=6 reproduce
             // Origami's stock 2/4/6/8 and 4/6/12).
@@ -208,6 +208,8 @@ public static class EditorTheme
         : Color.Transparent;
     /// <summary> Font family name for the bold UI face. </summary>
     public static string DefaultBoldFontName = "Geist";
+    /// <summary> Font family name or font file path for the monospace face. </summary>
+    public static string MonoFontName = "JetBrains Mono";
 
     // DPI Scaling value
     /// <summary> DPI scaling factor applied to all UI measurements. </summary>
@@ -228,10 +230,12 @@ public static class EditorTheme
     public static float Padding = 6f;
     /// <summary> Base font size for UI text. </summary>
     public static float FontSize = 17f;
+    /// <summary> How many points smaller secondary text is than <see cref="FontSize"/>. </summary>
+    public static float SmallFontDelta = 2f;
     /// <summary> Smaller font size for secondary labels and captions. </summary>
-    public static float FontSizeSmall = FontSize - 2f;
+    public static float FontSizeSmall => FontSize - SmallFontDelta;
     /// <summary> Larger font size for headings and emphasis. </summary>
-    public static float FontSizeLarge = FontSize + 2f;
+    public static float FontSizeLarge => FontSize + 2f;
     /// <summary> Font size for the PROWL logo wordmark. </summary>
     public static float FontSizeLogo = 72f;
     /// <summary> Default width for property labels in the inspector. </summary>

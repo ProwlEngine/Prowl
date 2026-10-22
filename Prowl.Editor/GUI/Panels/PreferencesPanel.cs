@@ -659,36 +659,56 @@ public class PreferencesPanel : DockPanel
         EditorGUI.SwatchRow(paper, s, "sem_danger", Loc.Get("pref.danger"), theme.Red, _accentPalette);
     }
 
-    private static string[]? _fontFamilies;
+    private static string[]? _installedFamilies;
+    private static readonly string[] s_fontFilters = ["*.ttf;*.otf"];
 
-    // The bundled font first, then every installed family once.
-    private static string[] FontFamilies()
-    {
-        if (_fontFamilies != null) return _fontFamilies;
-        var installed = EditorApplication.Instance?.SystemFonts.Select(f => f.FamilyName) ?? [];
-        return _fontFamilies = [EditorApplication.BundledFontName, .. installed
-            .Where(n => !string.IsNullOrWhiteSpace(n) && !n.Equals(EditorApplication.BundledFontName, StringComparison.OrdinalIgnoreCase))
+    // Every installed family once, read on first use.
+    private static string[] InstalledFamilies() => _installedFamilies ??=
+    [
+        .. (EditorApplication.Instance?.SystemFonts.Select(f => f.FamilyName) ?? [])
+            .Where(n => !string.IsNullOrWhiteSpace(n))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Order(StringComparer.OrdinalIgnoreCase)];
-    }
+            .Order(StringComparer.OrdinalIgnoreCase),
+    ];
 
-    private static int FamilyIndex(string[] families, string name) =>
-        Math.Max(0, Array.FindIndex(families, f => f.Equals(name, StringComparison.OrdinalIgnoreCase)));
+    // A searchable family dropdown led by the bundled font (and the chosen file, if one is set), plus a button to pick a font file.
+    private static void FontRow(Paper paper, EditorSettings s, string id, string label, string bundled, string current, Action<string> set)
+    {
+        string[] options =
+        [
+            bundled,
+            .. EditorApplication.IsFontFile(current) ? [current] : Array.Empty<string>(),
+            .. InstalledFamilies().Where(f => !f.Equals(bundled, StringComparison.OrdinalIgnoreCase)),
+        ];
+        int index = Math.Max(0, Array.FindIndex(options, f => f.Equals(current, StringComparison.OrdinalIgnoreCase)));
+        string[] shown = [.. options.Select(o => EditorApplication.IsFontFile(o) ? System.IO.Path.GetFileName(o) : o)];
+
+        void Apply(string value) { set(value); s.ApplyTheme(); s.Save(); }
+
+        EditorGUI.Row(paper, id, label, () =>
+        {
+            using (paper.Row($"{id}_row").Height(UnitValue.Auto).Gap(4).Enter())
+            {
+                Origami.Dropdown(paper, $"{id}_v", index, i => Apply(options[i]), shown).Searchable().Show();
+                Origami.IconButton(paper, $"{id}_file", EditorIcons.FolderOpen_I, () =>
+                    EditorApplication.OpenFileDialog(FileDialogMode.Open, path => { if (path != null) Apply(path); },
+                        filters: s_fontFilters, filterLabels: [Loc.Get("pref.font_filter")]))
+                    .Tooltip(Loc.Get("pref.font_file")).Show();
+            }
+        }, compact: true);
+    }
 
     // ---- Typography ----
     private void DrawThemeType(Paper paper, EditorSettings s, EditorThemeData theme)
     {
         EditorGUI.SectionHeader(paper, "pref_ty_fonts", Loc.Get("pref.fonts"), first: true, compact: true);
-        string[] families = FontFamilies();
-        EditorGUI.Row(paper, "pref_ty_ui", Loc.Get("pref.ui_font"), () =>
-            Origami.Dropdown(paper, "pref_ty_ui_v", FamilyIndex(families, theme.DefaultFontName),
-                i => { theme.DefaultFontName = families[i]; s.ApplyTheme(); s.Save(); }, families).Searchable().Show(), compact: true);
-        EditorGUI.Row(paper, "pref_ty_bold", Loc.Get("pref.bold_font"), () =>
-            Origami.Dropdown(paper, "pref_ty_bold_v", FamilyIndex(families, theme.DefaultBoldFontName),
-                i => { theme.DefaultBoldFontName = families[i]; s.ApplyTheme(); s.Save(); }, families).Searchable().Show(), compact: true);
+        FontRow(paper, s, "pref_ty_ui", Loc.Get("pref.ui_font"), EditorApplication.BundledFontName, theme.DefaultFontName, v => theme.DefaultFontName = v);
+        FontRow(paper, s, "pref_ty_bold", Loc.Get("pref.bold_font"), EditorApplication.BundledFontName, theme.DefaultBoldFontName, v => theme.DefaultBoldFontName = v);
+        FontRow(paper, s, "pref_ty_mono", Loc.Get("pref.mono_font"), EditorApplication.BundledMonoFontName, theme.MonoFontName, v => theme.MonoFontName = v);
 
         EditorGUI.SectionHeader(paper, "pref_ty_size", Loc.Get("pref.sizing"), compact: true);
         EditorGUI.SettingsSlider(paper, "pref_ty_base", Loc.Get("pref.base_size"), theme.FontSize, 8, 32, v => { theme.FontSize = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_ty_small", Loc.Get("pref.small_delta"), theme.SmallFontDelta, 0, 6, v => { theme.SmallFontDelta = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
     }
 
     // ---- Layout ----

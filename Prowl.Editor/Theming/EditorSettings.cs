@@ -105,6 +105,8 @@ public class EditorSettings
 
         EditorTheme.DefaultFontName = t.DefaultFontName;
         EditorTheme.DefaultBoldFontName = t.DefaultBoldFontName;
+        EditorTheme.MonoFontName = t.MonoFontName;
+        EditorTheme.SmallFontDelta = t.SmallFontDelta;
 
         EditorApplication.Instance?.InitializeFont();
 

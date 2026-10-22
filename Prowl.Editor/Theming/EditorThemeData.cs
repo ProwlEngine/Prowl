@@ -117,6 +117,12 @@ public class EditorThemeData
     /// <summary> Name of the default bold UI font. </summary>
     public string DefaultBoldFontName { get; set; } = "Geist";
 
+    /// <summary> Name of the monospace font, used for code, paths and the console. </summary>
+    public string MonoFontName { get; set; } = "JetBrains Mono";
+
+    /// <summary> How many points smaller secondary text is than the base font size. </summary>
+    public float SmallFontDelta { get; set; } = 2f;
+
     /// <summary> User interface scale factor. </summary>
     public float UserScale { get; set; } = 1f;
 

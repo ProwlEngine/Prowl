@@ -64,8 +64,9 @@ public class EditorApplication : Game
     private bool _quitRequested;
     private IDisposable? _origamiScope;
 
-    private string _curDefaultFont;
-    private string _curDefaultBoldFont;
+    private string? _curDefaultFont;
+    private string? _curDefaultBoldFont;
+    private string? _curMonoFont;
 
     // Play mode state
     private Echo.EchoObject? _savedEditorScene;
@@ -341,16 +342,20 @@ public class EditorApplication : Game
     [DllImport("dwmapi.dll", PreserveSig = true)]
     private static extern int DwmSetWindowAttribute(nint hwnd, int attr, ref int value, int size);
 
-    /// <summary>The family name of the bundled UI font. Any other font name is looked up among the system fonts.</summary>
+    /// <summary>The family name of the bundled UI font. Any other font name is a system font family or a font file path.</summary>
     public const string BundledFontName = "Geist";
 
-    private Scribe.FontFile? _geistRegular, _geistMedium, _geistSemiBold, _geistBold;
+    /// <summary>The family name of the bundled monospace font.</summary>
+    public const string BundledMonoFontName = "JetBrains Mono";
+
+    private Scribe.FontFile? _geistRegular, _geistMedium, _geistSemiBold, _geistBold, _jetBrainsMono;
     private Scribe.FontFile[]? _systemFonts;
+    private readonly Dictionary<string, Scribe.FontFile?> _fileFonts = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Every font installed on this machine, read once on first use.</summary>
     public IReadOnlyList<Scribe.FontFile> SystemFonts => _systemFonts ??= [.. PaperInstance.EnumerateSystemFonts()];
 
-    /// <summary> Loads the editor fonts and resolves the UI and bold fonts from the theme's font names, then syncs the Origami theme. Does nothing when the names have not changed. </summary>
+    /// <summary> Loads the editor fonts and resolves the UI, bold and mono fonts from the theme's font names, then syncs the Origami theme. Does nothing when the names have not changed. </summary>
     public void InitializeFont()
     {
         if (_geistRegular == null)
@@ -359,31 +364,36 @@ public class EditorApplication : Game
             _geistMedium = LoadBundledFont("Geist-Medium.ttf");
             _geistSemiBold = LoadBundledFont("Geist-SemiBold.ttf");
             _geistBold = LoadBundledFont("Geist-Bold.ttf");
-            EditorTheme.FontMono = LoadBundledFont("JetBrainsMono-Regular.ttf");
+            _jetBrainsMono = LoadBundledFont("JetBrainsMono-Regular.ttf");
             EditorTheme.FontDisplay = LoadBundledFont("SpaceGrotesk-Bold.ttf");
             EditorTheme.FontLogo = LoadBundledFont("Audiowide-Regular.ttf");
         }
-        else if (_curDefaultFont == EditorTheme.DefaultFontName && _curDefaultBoldFont == EditorTheme.DefaultBoldFontName)
+        else if (_curDefaultFont == EditorTheme.DefaultFontName && _curDefaultBoldFont == EditorTheme.DefaultBoldFontName
+                 && _curMonoFont == EditorTheme.MonoFontName)
             return;
 
-        Scribe.FontFile? ui = FindSystemFont(EditorTheme.DefaultFontName, Scribe.FontStyle.Regular);
-        Scribe.FontFile? bold = FindSystemFont(EditorTheme.DefaultBoldFontName, Scribe.FontStyle.Bold);
+        Scribe.FontFile? ui = FindFont(EditorTheme.DefaultFontName, BundledFontName, Scribe.FontStyle.Regular);
+        Scribe.FontFile? bold = FindFont(EditorTheme.DefaultBoldFontName, BundledFontName, Scribe.FontStyle.Bold);
+        Scribe.FontFile? mono = FindFont(EditorTheme.MonoFontName, BundledMonoFontName, Scribe.FontStyle.Regular);
 
         EditorTheme.DefaultFont = ui ?? _geistRegular;
         EditorTheme.FontMedium = ui ?? _geistMedium;
         EditorTheme.DefaultBoldFont = bold ?? _geistBold;
         EditorTheme.FontSemiBold = bold ?? _geistSemiBold;
+        EditorTheme.FontMono = mono ?? _jetBrainsMono;
 
         _curDefaultFont = EditorTheme.DefaultFontName;
         _curDefaultBoldFont = EditorTheme.DefaultBoldFontName;
+        _curMonoFont = EditorTheme.MonoFontName;
 
         EditorTheme.SyncOrigami(0f);
     }
 
-    // Prefers the requested style and falls back to the family's regular face.
-    private Scribe.FontFile? FindSystemFont(string family, Scribe.FontStyle style)
+    // A font file path loads that file. A family name prefers the requested style and falls back to the family's regular face.
+    private Scribe.FontFile? FindFont(string family, string bundled, Scribe.FontStyle style)
     {
-        if (string.IsNullOrEmpty(family) || family.Equals(BundledFontName, StringComparison.OrdinalIgnoreCase)) return null;
+        if (string.IsNullOrEmpty(family) || family.Equals(bundled, StringComparison.OrdinalIgnoreCase)) return null;
+        if (IsFontFile(family)) return LoadFontFile(family);
 
         Scribe.FontFile? regular = null;
         foreach (Scribe.FontFile font in SystemFonts)
@@ -392,8 +402,29 @@ public class EditorApplication : Game
             if (font.Style == style) return font;
             if (font.Style == Scribe.FontStyle.Regular) regular = font;
         }
-        if (regular == null) Runtime.Debug.LogWarning($"Font '{family}' is not installed, using {BundledFontName}.");
+        if (regular == null) Runtime.Debug.LogWarning($"Font '{family}' is not installed, using {bundled}.");
         return regular;
+    }
+
+    /// <summary>Whether a font setting holds a path to a font file rather than a family name.</summary>
+    public static bool IsFontFile(string name)
+        => name.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".otf", StringComparison.OrdinalIgnoreCase);
+
+    private Scribe.FontFile? LoadFontFile(string path)
+    {
+        if (_fileFonts.TryGetValue(path, out Scribe.FontFile? cached)) return cached;
+        Scribe.FontFile? font = null;
+        try
+        {
+            using FileStream stream = File.OpenRead(path);
+            font = new Scribe.FontFile(stream);
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogWarning($"Font file '{path}' could not be loaded: {ex.Message}");
+        }
+        _fileFonts[path] = font;
+        return font;
     }
 
     private static Prowl.Scribe.FontFile? LoadBundledFont(string fileName)

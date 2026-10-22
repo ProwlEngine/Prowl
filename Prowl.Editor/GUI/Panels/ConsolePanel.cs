@@ -24,6 +24,17 @@ using TextAlignment = Prowl.PaperUI.TextAlignment;
 
 namespace Prowl.Editor.GUI.Panels;
 
+/// <summary>How the Console panel shows logs.</summary>
+[EditorPreferences("Console", EditorIcons.Terminal, order: 20)]
+public sealed class ConsolePreferences : EditorPreferences
+{
+    [Range(0, 32), Tooltip("Size of log text. 0 follows the small UI text size.")]
+    public float FontSize;
+
+    /// <summary>The log text size in use.</summary>
+    public float TextSize => FontSize > 0f ? FontSize : EditorTheme.FontSizeSmall;
+}
+
 public class ConsolePanel : DockPanel
 {
     [MenuItem("Window/General/Console", priority: 0)]
@@ -36,7 +47,11 @@ public class ConsolePanel : DockPanel
 
     // Past this many undrained logs the oldest go, so nothing grows while no console or status bar is drawn.
     private const int MaxPending = 5000;
-    private static float RowHeight => EditorTheme.RowHeight + 2f;
+    private static float RowHeight => MathF.Max(EditorTheme.RowHeight + 2f, TextSize * 1.5f);
+    private static float TextSize => Preferences.Get<ConsolePreferences>().TextSize;
+
+    // What the cached layouts were built with, so a font or size change rebuilds them.
+    private (float Size, FontFile? Mono, FontFile? Semi, FontFile? Bold) _layoutKey;
 
     private static readonly List<LogEntry> _messages = [];
     private static bool _subscribed;
@@ -418,6 +433,21 @@ public class ConsolePanel : DockPanel
         FontFile mono = EditorTheme.FontMono ?? font;
         FontFile semi = EditorTheme.FontSemiBold ?? font;
         FontFile bold = EditorTheme.FontBold ?? font;
+        float textSize = TextSize;
+
+        var key = (textSize, EditorTheme.FontMono, EditorTheme.FontSemiBold, EditorTheme.FontBold);
+        if (key != _layoutKey)
+        {
+            _layoutKey = key;
+            _ellipsis = null;
+            for (int i = 0; i < _messages.Count; i++)
+            {
+                LogEntry m = _messages[i];
+                m.NameLayout = m.MessageLayout = m.TimeLayout = m.CountLayout = m.SourceLayout = m.StackLayout = null;
+                m.MessageCut = m.StackCut = null;
+                _messages[i] = m;
+            }
+        }
 
         float left = (float)r.Min.X, right = (float)r.Max.X, top = (float)r.Min.Y, w = (float)r.Size.X;
         const float padL = 12f, padR = 12f, gap = 8f, iconSize = 14f;
@@ -443,7 +473,7 @@ public class ConsolePanel : DockPanel
             float room = canvas.LogicalToPixel(maxWidth - LW(_ellipsis!));
             int index = Math.Max(0, full.GetCursorIndex(new Float2(room, 0)));
             while (index > 0 && full.GetCursorPosition(index).X > room) index--;
-            cut = Make(full.Text[..index] + "...", f, EditorTheme.FontSizeSmall);
+            cut = Make(full.Text[..index] + "...", f, textSize);
             cutWidth = maxWidth;
             return cut;
         }
@@ -475,7 +505,7 @@ public class ConsolePanel : DockPanel
             icon.Draw(canvas, new Rect(ix, line1 - iconSize * 0.5f, ix + iconSize, line1 + iconSize * 0.5f), color, 1.6f);
             float cursorX = ix + iconSize + gap;
 
-            msg.NameLayout ??= Make($"{name}:", semi, EditorTheme.FontSizeSmall);
+            msg.NameLayout ??= Make($"{name}:", semi, textSize);
             DrawMid(msg.NameLayout, cursorX, line1, color);
             cursorX += LW(msg.NameLayout) + 5f;
 
@@ -484,7 +514,7 @@ public class ConsolePanel : DockPanel
 
             if (_showTime)
             {
-                msg.TimeLayout ??= Make(msg.TimeString, mono, EditorTheme.FontSizeSmall);
+                msg.TimeLayout ??= Make(msg.TimeString, mono, textSize);
                 float tw = LW(msg.TimeLayout);
                 DrawMid(msg.TimeLayout, rightCursor - tw, line1, EditorTheme.InkFaint);
                 rightCursor -= tw + gap;
@@ -493,7 +523,7 @@ public class ConsolePanel : DockPanel
             string? src = SourceOf(msg);
             if (!string.IsNullOrEmpty(src))
             {
-                msg.SourceLayout ??= Make($"[{src}]", mono, EditorTheme.FontSizeSmall);
+                msg.SourceLayout ??= Make($"[{src}]", mono, textSize);
                 float sw = LW(msg.SourceLayout);
                 DrawMid(msg.SourceLayout, rightCursor - sw, line1, EditorTheme.InkDim);
                 rightCursor -= sw + gap;
@@ -501,7 +531,7 @@ public class ConsolePanel : DockPanel
 
             if (_collapse && msg.Count > 1)
             {
-                msg.CountLayout ??= Make(msg.Count.ToString(), bold, EditorTheme.FontSizeSmall);
+                msg.CountLayout ??= Make(msg.Count.ToString(), bold, textSize);
                 float cw = LW(msg.CountLayout), badgeW = cw + 12f, badgeH = 16f;
                 float badgeX = rightCursor - badgeW, badgeY = line1 - badgeH * 0.5f;
                 canvas.RoundedRectFilled(badgeX, badgeY, badgeW, badgeH, EditorTheme.Roundness > 0f ? badgeH * 0.5f : 0f, EditorTheme.Neutral400);
@@ -512,12 +542,12 @@ public class ConsolePanel : DockPanel
             float msgWidth = rightCursor - cursorX;
             if (msgWidth > 0f)
             {
-                _ellipsis ??= Make("...", mono, EditorTheme.FontSizeSmall);
-                msg.MessageLayout ??= Make(msg.Message, mono, EditorTheme.FontSizeSmall);
+                _ellipsis ??= Make("...", mono, textSize);
+                msg.MessageLayout ??= Make(msg.Message, mono, textSize);
                 DrawMid(Fit(msg.MessageLayout, ref msg.MessageCut, ref msg.MessageCutWidth, msgWidth, mono), cursorX, line1, EditorTheme.Ink400);
                 if (_multiLine && msg.StackTrace is { StackFrames.Length: > 0 })
                 {
-                    msg.StackLayout ??= Make(msg.StackTrace.StackFrames[0].ToString(), mono, EditorTheme.FontSizeSmall);
+                    msg.StackLayout ??= Make(msg.StackTrace.StackFrames[0].ToString(), mono, textSize);
                     DrawMid(Fit(msg.StackLayout, ref msg.StackCut, ref msg.StackCutWidth, msgWidth, mono), cursorX, line2, EditorTheme.InkDim);
                 }
             }
