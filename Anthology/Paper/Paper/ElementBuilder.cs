@@ -1572,6 +1572,7 @@ namespace Prowl.PaperUI
             settings.MaxWidth = (float)maxWidth;
             settings.WrapMode = (isMultiLine && inputSettings.DoWrap) ? Scribe.TextWrapMode.Wrap : TextWrapMode.NoWrap;
             settings.Customizer = TextMask.For(inputSettings.MaskChar);
+            _paper.ApplyTextDefaults(ref settings);
 
             return settings;
         }

@@ -20,13 +20,14 @@ readonly struct LayoutCacheKey : IEquatable<LayoutCacheKey>
     // character; one that closes over state which changes must use FontSystem.UpdateLayout instead,
     // which never touches this cache.
     public readonly GlyphCustomizer Customizer;
+    public readonly bool NoLigatures;
 
     static int Q(float v, float stepTimes) => (int)MathF.Round(v * stepTimes);
 
     public LayoutCacheKey(
         string text, float pixelSize, float letterSpacing, float wordSpacing, float lineHeight,
         int tabSize, TextWrapMode wrap, TextAlignment align, float maxWidth, int fontHash,
-        FontQuality quality, GlyphCustomizer customizer)
+        FontQuality quality, GlyphCustomizer customizer, bool noLigatures)
     {
         Text = text ?? string.Empty;
         PxQ = Q(pixelSize, 8f);  // ~1/8 px
@@ -35,14 +36,14 @@ readonly struct LayoutCacheKey : IEquatable<LayoutCacheKey>
         LhQ = Q(lineHeight, 8f);
         MwQ = Q(maxWidth, 4f);  // ~1/4 px
         TabSize = tabSize; Wrap = wrap; Align = align; FontHash = fontHash;
-        Quality = quality; Customizer = customizer;
+        Quality = quality; Customizer = customizer; NoLigatures = noLigatures;
     }
 
     public bool Equals(LayoutCacheKey o) =>
         (ReferenceEquals(Text, o.Text) || (Text?.Equals(o.Text) ?? o.Text is null))
         && PxQ == o.PxQ && LsQ == o.LsQ && WsQ == o.WsQ && LhQ == o.LhQ && MwQ == o.MwQ
         && TabSize == o.TabSize && Wrap == o.Wrap && Align == o.Align && FontHash == o.FontHash
-        && Quality == o.Quality && ReferenceEquals(Customizer, o.Customizer);
+        && Quality == o.Quality && ReferenceEquals(Customizer, o.Customizer) && NoLigatures == o.NoLigatures;
 
     public override bool Equals(object obj) => obj is LayoutCacheKey o && Equals(o);
 
@@ -54,6 +55,7 @@ readonly struct LayoutCacheKey : IEquatable<LayoutCacheKey>
             h = (h * 397) ^ PxQ; h = (h * 397) ^ LsQ; h = (h * 397) ^ WsQ; h = (h * 397) ^ LhQ; h = (h * 397) ^ MwQ;
             h = (h * 397) ^ TabSize; h = (h * 397) ^ (int)Wrap; h = (h * 397) ^ (int)Align; h = (h * 397) ^ FontHash;
             h = (h * 397) ^ (int)Quality;
+            h = (h * 397) ^ (NoLigatures ? 1 : 0);
             h = (h * 397) ^ (Customizer == null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(Customizer));
             return h;
         }

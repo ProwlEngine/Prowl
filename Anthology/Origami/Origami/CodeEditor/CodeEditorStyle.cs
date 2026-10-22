@@ -22,6 +22,9 @@ public sealed class CodeEditorOptions
 
     public int TabSize = 4;
 
+    /// <summary>Use the font's ligatures and contextual alternates, such as joined arrows in coding fonts.</summary>
+    public bool Ligatures = true;
+
     /// <summary>Tab key and auto indent insert spaces instead of tab characters.</summary>
     public bool InsertSpaces = true;
 

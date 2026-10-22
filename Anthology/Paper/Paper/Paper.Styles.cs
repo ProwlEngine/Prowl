@@ -792,6 +792,27 @@ namespace Prowl.PaperUI
         /// </summary>
         public float TransitionScale { get; set; } = 1f;
 
+        /// <summary>Added to the letter spacing of all text this Paper lays out.</summary>
+        public float TextLetterSpacing { get; set; }
+
+        /// <summary>Multiplies the line height of all text this Paper lays out.</summary>
+        public float TextLineHeightScale { get; set; } = 1f;
+
+        /// <summary>Replaces each element's text quality when set.</summary>
+        public FontQuality? TextQuality { get; set; }
+
+        /// <summary>Whether text uses the font's ligatures and contextual alternates.</summary>
+        public bool TextLigatures { get; set; } = true;
+
+        /// <summary>Applies the Paper wide text settings to settings built from an element's style.</summary>
+        internal void ApplyTextDefaults(ref TextLayoutSettings settings)
+        {
+            settings.LetterSpacing += TextLetterSpacing;
+            settings.LineHeight *= TextLineHeightScale;
+            if (TextQuality is { } quality) settings.Quality = quality;
+            settings.NoLigatures = !TextLigatures;
+        }
+
         /// <summary>
         /// Configure a transition for a property.
         /// </summary>

@@ -63,6 +63,8 @@ public sealed partial class CodeEditor
         public CodeEditorColors? Palette;
         public float FontKey;
         public int TabSize;
+        public FontFile? Font;
+        public bool Ligatures;
         public bool Built;
         public int TokenState = -1;
         public CodeToken[] Tokens = Array.Empty<CodeToken>();
@@ -161,6 +163,7 @@ public sealed partial class CodeEditor
         s.PixelSize = size * canvas.FramebufferScale;
         s.Quality = FontQuality.High;
         s.TabSize = Math.Max(1, Options.TabSize);
+        s.NoLigatures = !Options.Ligatures;
         return s;
     }
 
@@ -628,7 +631,7 @@ public sealed partial class CodeEditor
         _rowsNext[text] = r;
 
         if (r.Built && !r.Pending && r.State == state && ReferenceEquals(r.Semantic, semantic) && ReferenceEquals(r.Palette, pal)
-            && r.FontKey == fontKey && r.TabSize == tab)
+            && r.FontKey == fontKey && r.TabSize == tab && ReferenceEquals(r.Font, font) && r.Ligatures == Options.Ligatures)
             return r;
 
         r.Built = true;
@@ -637,6 +640,8 @@ public sealed partial class CodeEditor
         r.Palette = pal;
         r.FontKey = fontKey;
         r.TabSize = tab;
+        r.Font = font;
+        r.Ligatures = Options.Ligatures;
         if (r.TokenState != state || !r.Built)
         {
             LexLine(line, _tokens);

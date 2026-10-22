@@ -95,6 +95,7 @@ namespace Prowl.PaperUI
             settings.WrapMode = element.WrapMode;
             settings.MaxWidth = availableWidth;
             settings.Customizer = TextMask.For(element.MaskChar);
+            gui.ApplyTextDefaults(ref settings);
 
             // Per-element cache for width-independent text: left-aligned, no-wrap, non-truncated
             // text lays out identically regardless of the element width (MaxWidth only affects
@@ -196,6 +197,7 @@ namespace Prowl.PaperUI
         readonly FontQuality Quality;
         readonly FontFile Font;
         readonly GlyphCustomizer Customizer;
+        readonly bool NoLigatures;
 
         // Width is only used by the width-dependent (truncation) cache; the width-independent cache
         // leaves it at 0.
@@ -210,13 +212,14 @@ namespace Prowl.PaperUI
             Quality = s.Quality;
             Font = s.Font;
             Customizer = s.Customizer;
+            NoLigatures = s.NoLigatures;
             FbScale = fbScale;
             Width = width;
         }
 
         public bool Equals(PlainTextKey o) =>
             ReferenceEquals(Font, o.Font) && ReferenceEquals(Customizer, o.Customizer)
-            && TabSize == o.TabSize && Quality == o.Quality
+            && TabSize == o.TabSize && Quality == o.Quality && NoLigatures == o.NoLigatures
             && PixelSize == o.PixelSize && LetterSpacing == o.LetterSpacing && WordSpacing == o.WordSpacing
             && LineHeight == o.LineHeight && FbScale == o.FbScale && Width == o.Width
             && (ReferenceEquals(Text, o.Text) || string.Equals(Text, o.Text));
