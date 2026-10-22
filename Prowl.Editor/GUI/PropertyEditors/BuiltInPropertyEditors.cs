@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.Editor.GUI.Widgets;
 using Prowl.Editor.Inspector;
@@ -255,12 +256,15 @@ public class Int4PropertyEditor : PropertyEditor
 public class ColorPropertyEditor : PropertyEditor
 {
     private static ColorPalette? s_palette;
+    private static readonly List<string> s_paletteSource = [];
 
     private static ColorPalette GetEditorPalette()
     {
-        if (s_palette != null) return s_palette;
-
         ProjectsEditorSettings settings = EditorRegistries.GetSettings<ProjectsEditorSettings>();
+        // Rebuilt whenever the project palette was edited, reset or undone elsewhere.
+        if (s_palette != null && s_paletteSource.SequenceEqual(settings.ColorPalette)) return s_palette;
+        s_paletteSource.Clear();
+        s_paletteSource.AddRange(settings.ColorPalette);
         // Convert hex strings to Color list, keep in sync
         var colors = new List<Color>();
         foreach (string hex in settings.ColorPalette)
