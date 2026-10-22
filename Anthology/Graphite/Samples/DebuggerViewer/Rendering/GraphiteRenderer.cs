@@ -201,7 +201,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
                     TextureHandle blur = graph.Create(RenderResourceID.Intern($"Blur {i}"), GraphTextureDesc.Sized(w, h, TargetFormat), Lifetime.Persistent);
                     _blurHandles[i] = pass.Write(blur, TextureState.Attachment | TextureState.Sampled);
                 }
-                return written = pass.Write(scene, TextureState.Attachment | TextureState.Sampled);
+                return written = pass.Write(scene, TextureState.Attachment | TextureState.Sampled, null, new TargetLoadStoreOps(AttachmentOps.Clear(ClearColor), AttachmentOps.Loaded));
             }, Render);
             return written;
         }
@@ -218,7 +218,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
                 UploadGeometry(cmd, context.Task);
 
             RenderTexture scene = context.Get(sceneHandle);
-            cmd.SetFramebuffer(scene.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(ClearColor), AttachmentOps.Loaded));
+            cmd.SetFramebuffer(scene.Framebuffer);
 
             if (!hasGeometry)
                 return;
