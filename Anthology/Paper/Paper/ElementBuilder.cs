@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
@@ -1581,7 +1582,7 @@ namespace Prowl.PaperUI
         private bool IsControlPressed() => _paper.IsCommandDown();
 
         // Moving by word: Option on macOS, Ctrl elsewhere.
-        private bool IsWordModifierPressed() => OperatingSystem.IsMacOS()
+        private bool IsWordModifierPressed() => RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
             ? _paper.IsKeyDown(PaperKey.LeftAlt) || _paper.IsKeyDown(PaperKey.RightAlt)
             : IsControlPressed();
 

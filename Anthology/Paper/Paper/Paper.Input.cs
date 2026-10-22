@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Prowl.Vector;
 
 namespace Prowl.PaperUI
@@ -575,7 +576,7 @@ namespace Prowl.PaperUI
         #region Keyboard Queries
 
         /// <summary>Whether the platform's command key is down: Cmd on macOS, Ctrl everywhere else.</summary>
-        public bool IsCommandDown() => OperatingSystem.IsMacOS()
+        public bool IsCommandDown() => RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
             ? IsKeyDown(PaperKey.LeftSuper) || IsKeyDown(PaperKey.RightSuper)
             : IsKeyDown(PaperKey.LeftControl) || IsKeyDown(PaperKey.RightControl);
 
