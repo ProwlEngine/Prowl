@@ -320,6 +320,7 @@ public class EditorApplication : Game
 
         Window.InternalWindow.Closing += () =>
         {
+            SceneToolManager.StoreSettings();
             SaveEditorWindowState();
         };
 

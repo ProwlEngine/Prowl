@@ -156,17 +156,38 @@ public static class SceneToolManager
     //  Per-tool settings
     // ================================================================
 
+    private static readonly Dictionary<string, object> _settings = [];
+
     /// <summary>
-    /// Persistent per-tool settings. Stored in <see cref="EditorSettings"/> rather than project
+    /// Persistent per-tool settings, one shared instance per type. Stored in <see cref="EditorSettings"/> rather than project
     /// settings because a tool's brush size or grid step is a per-user preference that should follow
     /// the user across projects, not something committed alongside the scene.
     /// </summary>
     public static T Settings<T>() where T : class, new()
     {
         string key = typeof(T).FullName ?? typeof(T).Name;
-        Dictionary<string, string> store = EditorSettings.Instance.SceneToolSettings;
+        if (_settings.TryGetValue(key, out object? cached))
+        {
+            if (cached is T live) return live;
+            // A hot reload replaced the type, so carry the old values over by name.
+            Store(key, cached);
+        }
 
-        if (store.TryGetValue(key, out string? json) && !string.IsNullOrEmpty(json))
+        T settings = Load<T>(key);
+        _settings[key] = settings;
+        return settings;
+    }
+
+    /// <summary>Writes every settings object handed out by <see cref="Settings{T}"/> into <see cref="EditorSettings"/>, ready for its next save.</summary>
+    public static void StoreSettings()
+    {
+        foreach ((string key, object settings) in _settings)
+            Store(key, settings);
+    }
+
+    private static T Load<T>(string key) where T : class, new()
+    {
+        if (EditorSettings.Instance.SceneToolSettings.TryGetValue(key, out string? json) && !string.IsNullOrEmpty(json))
         {
             try
             {
@@ -181,14 +202,11 @@ public static class SceneToolManager
         return new T();
     }
 
-    /// <summary>Persist a settings object previously obtained from <see cref="Settings{T}"/>.</summary>
-    public static void SaveSettings<T>(T settings) where T : class
+    private static void Store(string key, object settings)
     {
-        string key = typeof(T).FullName ?? typeof(T).Name;
         try
         {
-            EditorSettings.Instance.SceneToolSettings[key] = System.Text.Json.JsonSerializer.Serialize(settings);
-            EditorSettings.Instance.Save();
+            EditorSettings.Instance.SceneToolSettings[key] = System.Text.Json.JsonSerializer.Serialize(settings, settings.GetType());
         }
         catch (Exception ex)
         {
