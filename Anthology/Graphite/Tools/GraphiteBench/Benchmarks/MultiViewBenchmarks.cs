@@ -35,10 +35,10 @@ public class MultiViewBenchmarks : GraphiteBenchmark
     private int PassesPerView => Case.PassesPerView;
     private bool History => Case.History;
 
-    protected override GraphExtent[] CreateViews()
-        => Enumerable.Range(0, Views).Select(_ => new GraphExtent(DefaultSize, DefaultSize)).ToArray();
+    protected override (uint Width, uint Height)[] CreateViews()
+        => Enumerable.Range(0, Views).Select(_ => (DefaultSize, DefaultSize)).ToArray();
 
-    protected override IEnumerable<IPass> CreatePasses()
+    protected override IEnumerable<BenchPass> CreatePasses()
     {
         GraphicsProgram program = LoadProgram("Fullscreen.glsl");
         RenderResourceID[] ids = Enumerable.Range(0, PassesPerView).Select(i => RenderResourceID.Intern("ViewPass" + i)).ToArray();
@@ -59,8 +59,8 @@ public class MultiViewBenchmarks : GraphiteBenchmark
             }, (context, cmd) =>
             {
                 Texture source = input.IsValid
-                    ? context.GetRenderTexture(input).ColorTextures[0]
-                    : history > 0 ? context.GetRenderTexture(output, 1).ColorTextures[0] : WhiteTexture;
+                    ? context.Get(input).ColorTextures[0]
+                    : history > 0 ? context.History(output, 1)!.ColorTextures[0] : WhiteTexture;
                 props.SetTexture("Input", source, LinearSampler);
                 DrawQuad(cmd, program, props);
             });

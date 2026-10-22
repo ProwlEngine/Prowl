@@ -45,7 +45,7 @@ public class PassBenchmarks : GraphiteBenchmark
     private int DrawsPerPass => Case.DrawsPerPass;
     private PassTopology Topology => Case.Topology;
 
-    protected override IEnumerable<IPass> CreatePasses()
+    protected override IEnumerable<BenchPass> CreatePasses()
     {
         GraphicsProgram program = LoadProgram("Fullscreen.glsl");
         RenderResourceID shared = "Shared";
@@ -82,7 +82,7 @@ public class PassBenchmarks : GraphiteBenchmark
                     cmd.SetFramebuffer(framebuffer, index == 0 ? ClearOps : LoadOps);
 
                 if (input.IsValid)
-                    props.SetTexture("Input", context.GetRenderTexture(input).ColorTextures[0], LinearSampler);
+                    props.SetTexture("Input", context.Get(input).ColorTextures[0], LinearSampler);
 
                 for (int d = 0; d < draws; d++)
                     DrawQuad(cmd, program, props);

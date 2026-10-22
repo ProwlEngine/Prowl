@@ -47,9 +47,9 @@ public class ShaderComplexityBenchmarks : GraphiteBenchmark
     private int Resolution => Case.Resolution;
     private int Overdraw => Case.Overdraw;
 
-    protected override GraphExtent[] CreateViews() => [new GraphExtent((uint)Resolution, (uint)Resolution)];
+    protected override (uint Width, uint Height)[] CreateViews() => [((uint)Resolution, (uint)Resolution)];
 
-    protected override IEnumerable<IPass> CreatePasses()
+    protected override IEnumerable<BenchPass> CreatePasses()
     {
         (string file, int iterations) = Shader switch
         {

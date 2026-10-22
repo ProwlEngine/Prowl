@@ -45,7 +45,7 @@ public class ResourceBindingBenchmarks : GraphiteBenchmark
     private int Draws => Case.Draws;
     private BindingPattern Pattern => Case.Pattern;
 
-    protected override IEnumerable<IPass> CreatePasses()
+    protected override IEnumerable<BenchPass> CreatePasses()
     {
         GraphicsProgram program = Own(BenchShaderLoader.CreateFromSource(Device, GenerateShader(Textures)));
         Texture[] pool = Enumerable.Range(1, TexturePool).Select(seed => CreateTexture(4, seed)).ToArray();

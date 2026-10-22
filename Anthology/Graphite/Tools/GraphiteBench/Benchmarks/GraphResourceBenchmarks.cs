@@ -55,10 +55,10 @@ public class GraphResourceBenchmarks : GraphiteBenchmark
     private int Resources => Case.Resources;
     private GraphResourceScenario Kind => Case.Kind;
 
-    protected override IEnumerable<IPass> CreatePasses()
+    protected override IEnumerable<BenchPass> CreatePasses()
         => Kind == GraphResourceScenario.Buffers ? CreateBufferPasses() : CreateTexturePasses();
 
-    private IEnumerable<IPass> CreateTexturePasses()
+    private IEnumerable<BenchPass> CreateTexturePasses()
     {
         GraphicsProgram flat = LoadProgram("Flat.glsl");
         GraphicsProgram fullscreen = LoadProgram("Fullscreen.glsl");
@@ -69,8 +69,8 @@ public class GraphResourceBenchmarks : GraphiteBenchmark
         for (int i = 0; i < Resources; i++)
         {
             int index = i;
-            GraphTextureDesc desc = kind == GraphResourceScenario.MixedFormats
-                ? GraphTextureDesc.InstanceSized(s_formats[index % s_formats.Length], s_scales[index / s_formats.Length % s_scales.Length], depth: index % 2 == 1)
+            BenchTexture desc = kind == GraphResourceScenario.MixedFormats
+                ? new BenchTexture(s_formats[index % s_formats.Length], s_scales[index / s_formats.Length % s_scales.Length], Depth: index % 2 == 1)
                 : ColorDesc;
             int history = kind == GraphResourceScenario.History ? 1 : 0;
             PropertySet props = CreatePassProperties(new Float4(index / (float)Resources, 1, 0, 1), WhiteTexture);
@@ -84,7 +84,7 @@ public class GraphResourceBenchmarks : GraphiteBenchmark
                     return;
                 }
 
-                props.SetTexture("Input", context.GetRenderTexture(output, 1).ColorTextures[0], LinearSampler);
+                props.SetTexture("Input", context.History(output, 1)!.ColorTextures[0], LinearSampler);
                 DrawQuad(cmd, fullscreen, props);
             });
         }
@@ -103,12 +103,12 @@ public class GraphResourceBenchmarks : GraphiteBenchmark
             b.DeclareOutputTexture(final, ColorDesc, ops: ClearOps);
         }, (context, cmd) =>
         {
-            finalProps.SetTexture("Input", context.GetRenderTexture(first).ColorTextures[0], LinearSampler);
+            finalProps.SetTexture("Input", context.Get(first).ColorTextures[0], LinearSampler);
             DrawQuad(cmd, fullscreen, finalProps);
         });
     }
 
-    private IEnumerable<IPass> CreateBufferPasses()
+    private IEnumerable<BenchPass> CreateBufferPasses()
     {
         ComputeProgram program = Own(BenchShaderLoader.CreateCompute(Device, "BufferChain.glsl"));
         DeviceBuffer source = Own(Device.ResourceFactory.CreateBuffer(new BufferDescription(BufferElements * sizeof(float), BufferUsage.StructuredBufferReadWrite)));
@@ -125,7 +125,7 @@ public class GraphResourceBenchmarks : GraphiteBenchmark
 
             yield return new BenchPass("Write" + index, b => output = b.DeclareOutputBuffer(ids[index], desc), (context, cmd) =>
             {
-                props.SetBuffer("Output", context.GetRenderBuffer(output));
+                props.SetBuffer("Output", context.Get(output));
                 cmd.SetComputeShader(program);
                 cmd.SetProperties(props);
                 cmd.Dispatch(groups, 1, 1);
@@ -147,8 +147,8 @@ public class GraphResourceBenchmarks : GraphiteBenchmark
             finalHandle = b.DeclareOutputBuffer(final, desc);
         }, (context, cmd) =>
         {
-            finalProps.SetBuffer("Input", context.GetRenderBuffer(first));
-            finalProps.SetBuffer("Output", context.GetRenderBuffer(finalHandle));
+            finalProps.SetBuffer("Input", context.Get(first));
+            finalProps.SetBuffer("Output", context.Get(finalHandle));
             cmd.SetComputeShader(program);
             cmd.SetProperties(finalProps);
             cmd.Dispatch(groups, 1, 1);

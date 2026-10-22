@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using BenchmarkDotNet.Attributes;
 
@@ -9,18 +10,61 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Bench;
 
-public static class BenchViews
+public readonly record struct BenchTexture(PixelFormat Format, float Scale = 1f, bool Depth = false);
+
+public sealed class BenchBuilder(FrameGraph graph)
 {
-    public static readonly GraphKind Kind = GraphKind.Intern("Bench.View");
-    public static readonly GraphScope[] Scopes = [new GraphScope(Kind, GraphKind.Root)];
+    private readonly Dictionary<RenderResourceID, TextureHandle> _textures = new();
+    private readonly Dictionary<RenderResourceID, BufferHandle> _buffers = new();
+    private PassBuilder _pass = null!;
+
+    internal int View { get; private set; }
+    internal (uint Width, uint Height) Extent { get; private set; }
+
+    internal void BeginView(int view, (uint Width, uint Height) extent)
+    {
+        View = view;
+        Extent = extent;
+        _textures.Clear();
+        _buffers.Clear();
+    }
+
+    internal void BeginPass(PassBuilder pass) => _pass = pass;
+
+    public TextureHandle DeclareOutputTexture(RenderResourceID id, BenchTexture desc, int history = 0, TargetLoadStoreOps? ops = null)
+    {
+        if (!_textures.TryGetValue(id, out TextureHandle handle))
+        {
+            GraphTextureDesc sized = GraphTextureDesc.Sized(Math.Max(1, (int)(Extent.Width * desc.Scale)), Math.Max(1, (int)(Extent.Height * desc.Scale)), desc.Format, desc.Depth);
+            handle = graph.Create(id, sized, history > 0 ? Lifetime.History(history) : Lifetime.Transient, View);
+        }
+
+        return _textures[id] = _pass.Write(handle, firstWrite: ops);
+    }
+
+    public TextureHandle DeclareInputTexture(RenderResourceID id) => _pass.Read(_textures[id]);
+
+    public BufferHandle DeclareOutputBuffer(RenderResourceID id, GraphBufferDesc desc)
+    {
+        if (!_buffers.TryGetValue(id, out BufferHandle handle))
+            handle = graph.Create(id, desc, scope: View);
+
+        return _buffers[id] = _pass.Write(handle);
+    }
+
+    public BufferHandle DeclareInputBuffer(RenderResourceID id, BufferAccess access) => _pass.Read(_buffers[id], access);
 }
 
-public sealed class BenchPass(string name, Action<InstanceContextBuilder> setup, Action<InstanceContext, CommandBuffer> render) : IInstancePass
+public sealed class BenchPass(string name, Action<BenchBuilder> setup, Action<PassContext, CommandBuffer> render)
 {
     public string Name { get; } = name;
-    public GraphKind Kind => BenchViews.Kind;
-    public void Setup(InstanceContextBuilder builder) => setup(builder);
-    public void Render(InstanceContext context, CommandBuffer cmd) => render(context, cmd);
+
+    internal void Add(FrameGraph graph, BenchBuilder builder)
+        => graph.AddPass(Name, pass =>
+        {
+            builder.BeginPass(pass);
+            setup(builder);
+        }, context => render(context, context.Command));
 }
 
 public abstract class GraphiteBenchmark
@@ -28,14 +72,17 @@ public abstract class GraphiteBenchmark
     public const uint DefaultSize = 64;
     public const PixelFormat ColorFormat = PixelFormat.R8_G8_B8_A8_UNorm;
 
-    protected static readonly GraphTextureDesc ColorDesc = GraphTextureDesc.InstanceSized(ColorFormat);
+    protected static readonly BenchTexture ColorDesc = new(ColorFormat);
     protected static readonly TargetLoadStoreOps ClearOps = new(AttachmentOps.Clear(Color.Black), AttachmentOps.Discard);
     protected static readonly TargetLoadStoreOps LoadOps = new(AttachmentOps.Loaded, AttachmentOps.Discard);
 
     private readonly List<IDisposable> _owned = new();
     private BenchProfiler _profiler = null!;
-    private RenderGraph _graph = null!;
-    private GraphInstances _instances = null!;
+    private FrameGraph _graph = null!;
+    private BenchBuilder _builder = null!;
+    private BenchPass[] _passes = null!;
+    private (uint Width, uint Height)[] _views = null!;
+    private string[] _groupNames = null!;
 
     protected GraphicsDevice Device { get; private set; } = null!;
     internal BenchMesh Cube { get; private set; } = null!;
@@ -65,11 +112,11 @@ public abstract class GraphiteBenchmark
         ViewProperties.SetMatrix("MatrixViewProjection", projection * view);
         ViewProperties.SetFloat4("ViewTint", new Float4(1, 1, 1, 1));
 
-        _graph = RenderGraph.Build([.. CreatePasses()], BenchViews.Scopes, GetType().Name);
-        _instances = _graph.CreateInstances();
-        GraphExtent[] views = CreateViews();
-        for (int i = 0; i < views.Length; i++)
-            _instances.Add(BenchViews.Kind, i, extent: views[i]);
+        _graph = new FrameGraph(Device, GetType().Name);
+        _builder = new BenchBuilder(_graph);
+        _passes = [.. CreatePasses()];
+        _views = CreateViews();
+        _groupNames = Enumerable.Range(0, _views.Length).Select(i => "View " + i).ToArray();
 
         for (int i = 0; i < WarmupFrames; i++)
             Frame();
@@ -81,8 +128,17 @@ public abstract class GraphiteBenchmark
     [Benchmark]
     public void Frame()
     {
-        ExecutionTask task = Device.DispatchGraph(_graph, _instances);
-        Device.WaitForExecution(task);
+        for (int view = 0; view < _views.Length; view++)
+        {
+            _builder.BeginView(view, _views[view]);
+            using (_graph.Group(_groupNames[view]))
+            {
+                foreach (BenchPass pass in _passes)
+                    pass.Add(_graph, _builder);
+            }
+        }
+
+        Device.WaitForExecution(_graph.Execute());
     }
 
     [GlobalCleanup]
@@ -99,9 +155,9 @@ public abstract class GraphiteBenchmark
         Device.Dispose();
     }
 
-    protected abstract IEnumerable<IPass> CreatePasses();
+    protected abstract IEnumerable<BenchPass> CreatePasses();
 
-    protected virtual GraphExtent[] CreateViews() => [new GraphExtent(DefaultSize, DefaultSize)];
+    protected virtual (uint Width, uint Height)[] CreateViews() => [(DefaultSize, DefaultSize)];
 
     protected T Own<T>(T resource) where T : IDisposable
     {
