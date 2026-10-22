@@ -391,7 +391,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
             DrawThumb(canvas, thumbHiCx, thumbHiCy, thumbR, fill, thumbCol, ink, dragging == 2, activeAnim);
         });
 
-        // ── Tooltip overlay (Layer.Topmost so it can never be clipped) ────
+        // ── Tooltip overlay (popup layer so it can never be clipped) ────
         // Always create the element so AnimateBool storage persists across show/hide.
         if (font != null)
         {
@@ -410,7 +410,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                 .PositionType(PositionType.SelfDirected)
                 .Position(0, 0)
                 .Width(1).Height(1)
-                .Layer(Layer.Topmost)
+                .Layer(Origami.PopupLayer)
                 .HookToParent()
                 .IsNotInteractable()
                 .Enter())

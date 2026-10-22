@@ -22,7 +22,7 @@ namespace Prowl.OrigamiUI;
 
 public sealed partial class CodeEditor
 {
-    private const int PopupLayer = Layer.Topmost + 20;
+    private static int PopupLayer => Origami.PopupLayer + 20;
 
     #region Popup text
 

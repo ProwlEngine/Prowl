@@ -83,7 +83,7 @@ public readonly struct SliderThumbContext
 /// the full numeric range.</para>
 /// <para>One layout box for the track (with all canvas drawing), one optional inline
 /// <see cref="NumericFieldBuilder{T}"/> on the right. Tooltip during drag floats above the
-/// thumb on <see cref="Layer.Topmost"/>.</para>
+/// thumb on <see cref="Origami.PopupLayer"/>.</para>
 /// </remarks>
 public sealed class SliderBuilder<T> where T : struct, INumber<T>
 {
@@ -590,7 +590,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         });
 
         // ── Tooltip overlay ──────────────────────────────────────
-        // Lives on its own element on Layer.Topmost so nothing can clip or occlude it.
+        // Lives on its own element on the popup layer so nothing can clip or occlude it.
         // The element is created every frame regardless of visibility — that way AnimateBool
         // storage persists across show/hide cycles and we get a clean fade in/out instead of
         // an instant pop. The Draw callback short-circuits when the animation is fully out.
@@ -606,7 +606,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                 .PositionType(PositionType.SelfDirected)
                 .Position(0, 0)
                 .Width(1).Height(1)
-                .Layer(Layer.Topmost)
+                .Layer(Origami.PopupLayer)
                 .HookToParent()
                 .IsNotInteractable()
                 .Enter())

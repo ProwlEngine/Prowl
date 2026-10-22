@@ -110,7 +110,7 @@ internal static class DropdownInternal
 
     /// <summary>
     /// Full-screen backdrop drawn when a dropdown is open. Sits on
-    /// <see cref="Layer.Overlay"/> so the popover (which uses <see cref="Layer.Topmost"/>)
+    /// the layer just under <see cref="Origami.PopupLayer"/> so the popover
     /// stays interactive above it. Clicking the backdrop closes the dropdown; events are
     /// stopped from propagating so scrolls / clicks behind don't leak.
     /// </summary>
@@ -121,7 +121,7 @@ internal static class DropdownInternal
             .PositionType(PositionType.SelfDirected)
             .Position(-9999, -9999)
             .Size(99999, 99999)
-            .Layer(Layer.Overlay)
+            .Layer(Origami.PopupLayer - 1)
             .OnClick(_ => paper.SetElementStorage(capturedTrig, KeyOpen, false));
 
         if (dim)
@@ -300,7 +300,7 @@ internal static class DropdownInternal
             .Padding(padX, padX, padY, padY)
             .Gap(searchGap)
             .HookToParent()
-            .Layer(Layer.Topmost)
+            .Layer(Origami.PopupLayer)
             .ClampToScreen()
             .StopEventPropagation();
 

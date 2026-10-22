@@ -71,12 +71,9 @@ public sealed class NodeGraphPanel : DockPanel
     private static Color Flow = Palette.C(226, 232, 240);
 
     // ── create-popup state ──
-    private bool _popupOpen;
-    private Float2 _popupScreen, _popupGraph;
-    private string _search = "";
+    private Float2 _popupGraph;
     private string? _wireNode, _wirePort;
     private bool _wireIsOutput;
-    private float _colOx, _colOy, _panelW, _panelH;
 
     public NodeGraphPanel()
     {
@@ -367,8 +364,9 @@ public sealed class NodeGraphPanel : DockPanel
         N("noise").Body = ctx => NoiseBody(ctx, () => ScaleOf(ctx.Node), v => _noiseScale[ctx.Node.Id] = v);
         N("noise").Inputs[1].Tooltip = "Tiling, 0 to 1";
 
-        N("panner").BodyHeight = 26f;
-        N("panner").Body = ctx => SpeedBody(ctx, _panSpeed);
+        // Rows size the card themselves and keep their own drags.
+        N("panner").Rows.Add(new GraphNodeRow(18f, ctx => ValueRow(ctx, "Speed", $"{_panSpeed:0.00}", Palette.TLo)));
+        N("panner").Rows.Add(new GraphNodeRow(18f, ctx => ValueRow(ctx, "Angle", "45", Palette.TLo)));
         N("panner").Collapsible = true;
 
         N("tex").BodyHeight = 30f;
@@ -376,10 +374,11 @@ public sealed class NodeGraphPanel : DockPanel
         N("tex").Badge = new GraphBadge("2 uses", Tex, "RGB feeds both Multiply and Emission");
         N("tex").Collapsible = true;
 
-        N("time").BodyHeight = 24f;
-        N("time").Body = TimeBody;
+        N("time").Rows.Add(new GraphNodeRow(18f, ctx => ValueRow(ctx, "seconds", $"{(float)ctx.Paper.Time:0.0}", ctx.Accent)));
 
-        N("output").Tooltip = "The fragment the shader writes.";
+        // Moves like any node, but a delete leaves it, since the shader always writes a fragment.
+        N("output").Removable = false;
+        N("output").Tooltip = "The fragment the shader writes. It can be moved but not deleted.";
         N("output").Collapsible = true;
     }
 
@@ -418,17 +417,14 @@ public sealed class NodeGraphPanel : DockPanel
         }
     }
 
-    private void SpeedBody(NodeBodyContext ctx, float speed)
+    // One body row: a label on the left and its value on the right.
+    private static void ValueRow(NodeBodyContext ctx, string label, string value, Color valueColor)
     {
         var P = ctx.Paper;
-        float pad = ctx.S(9f);
-        using (P.Row(ctx.Id("row")).Width(P.Percent(100)).Height(P.Percent(100)).Padding(pad, pad, 0, 0).Enter())
-        {
-            P.Box(ctx.Id("lbl")).Width(P.Stretch()).Height(P.Percent(100))
-                .Text("Speed", Fonts.Reg).FontSize(ctx.S(11f)).TextColor(Palette.TMid).Alignment(TextAlignment.MiddleLeft);
-            P.Box(ctx.Id("val")).Width(ctx.S(40f)).Height(P.Percent(100))
-                .Text($"{speed:0.00}", Fonts.Reg).FontSize(ctx.S(11f)).TextColor(Palette.TLo).Alignment(TextAlignment.MiddleRight);
-        }
+        P.Box("lbl").Width(P.Stretch()).Height(P.Percent(100))
+            .Text(label, Fonts.Reg).FontSize(11f).TextColor(Palette.TMid).Alignment(TextAlignment.MiddleLeft);
+        P.Box("val").Width(46f).Height(P.Percent(100))
+            .Text(value, Fonts.Reg).FontSize(11f).TextColor(valueColor).Alignment(TextAlignment.MiddleRight);
     }
 
     private static void SwatchBody(NodeBodyContext ctx)
@@ -442,21 +438,6 @@ public sealed class NodeGraphPanel : DockPanel
     }
 
     private static readonly Color[] Swatches = { Palette.C(236, 122, 84), Palette.C(120, 186, 240), Palette.C(160, 220, 170), Palette.C(232, 206, 128) };
-
-    // A live value drawn on the card, which is what a running graph looks like.
-    private static void TimeBody(NodeBodyContext ctx)
-    {
-        var P = ctx.Paper;
-        float pad = ctx.S(9f);
-        float t = (float)P.Time;
-        using (P.Row(ctx.Id("row")).Width(P.Percent(100)).Height(P.Percent(100)).Padding(pad, pad, 0, 0).Enter())
-        {
-            P.Box(ctx.Id("lbl")).Width(P.Stretch()).Height(P.Percent(100))
-                .Text("seconds", Fonts.Reg).FontSize(ctx.S(11f)).TextColor(Palette.TMid).Alignment(TextAlignment.MiddleLeft);
-            P.Box(ctx.Id("val")).Width(ctx.S(46f)).Height(P.Percent(100))
-                .Text($"{t:0.0}", Fonts.Reg).FontSize(ctx.S(11f)).TextColor(ctx.Accent).Alignment(TextAlignment.MiddleRight);
-        }
-    }
 
     // While "Live" is on, wires carrying signal flow and thicken, and a missing input is flagged.
     private void UpdateLiveState(Paper P)
@@ -483,9 +464,8 @@ public sealed class NodeGraphPanel : DockPanel
 
     public override void OnGUI(Paper P, float w, float h)
     {
-        _panelW = w; _panelH = h;
         using (P.Column("ngroot").Width(P.Percent(100)).Height(P.Percent(100))
-            .BackgroundColor(Palette.RootBg).OnPostLayout((hd, r) => { _colOx = (float)r.Min.X; _colOy = (float)r.Min.Y; }).Enter())
+            .BackgroundColor(Palette.RootBg).Enter())
         {
             Toolbar(P);
             SyncSubGraphs();
@@ -534,12 +514,6 @@ public sealed class NodeGraphPanel : DockPanel
                 .OnWireRemovePoint((wire, index) => { if (index < wire.ControlPoints.Count) wire.ControlPoints.RemoveAt(index); })
                 .OnWirePointMoved((wire, index, pos) => { if (index < wire.ControlPoints.Count) wire.ControlPoints[index] = pos; })
                 .Show();
-
-            if (_popupOpen)
-            {
-                if (P.IsKeyPressed(PaperKey.Escape)) ClosePopup();
-                else DrawCreatePopup(P);
-            }
         }
     }
 
@@ -670,7 +644,7 @@ public sealed class NodeGraphPanel : DockPanel
         .Separator()
         .Item("New Group", () => CreateGroup(new[] { node }), iconDraw: Ico(OrigamiIconSet.Layers))
         .Separator()
-        .Item("Delete", () => DeleteNodes(new[] { node }), iconDraw: Trash, danger: true));
+        .Item("Delete", () => DeleteNodes(new[] { node }), enabled: node.Removable && !node.Pinned, iconDraw: Trash, danger: true));
 
     // Right-click while 2+ nodes are selected.
     private void MultiMenu(Paper P, IReadOnlyList<GraphNode> nodes)
@@ -718,8 +692,9 @@ public sealed class NodeGraphPanel : DockPanel
         {
             Id = n.Id, Title = n.Title, Position = n.Position, Width = n.Width, Accent = n.Accent, Icon = n.Icon,
             Tooltip = n.Tooltip, Body = n.Body, BodyHeight = n.BodyHeight, Collapsible = n.Collapsible, Collapsed = n.Collapsed,
-            Pill = n.Pill, Pinned = n.Pinned, UserData = n.UserData, Badge = n.Badge,
+            Pill = n.Pill, Pinned = n.Pinned, Removable = n.Removable, UserData = n.UserData, Badge = n.Badge,
         };
+        c.Rows.AddRange(n.Rows);
         foreach (var p in n.Inputs) c.Inputs.Add(ClonePort(p));
         foreach (var p in n.Outputs) c.Outputs.Add(ClonePort(p));
         return c;
@@ -766,7 +741,7 @@ public sealed class NodeGraphPanel : DockPanel
     {
         foreach (var n in nodes)
         {
-            if (n.Pinned) continue;
+            if (n.Pinned || !n.Removable) continue;
             Wires.RemoveAll(c => c.FromNode == n.Id || c.ToNode == n.Id);
             Nodes.Remove(n);
             DropSubGraph(n);
@@ -805,64 +780,15 @@ public sealed class NodeGraphPanel : DockPanel
 
     private void OpenPopup(Paper P, Float2 graphPos, string? wireNode, string? wirePort, bool wireIsOutput)
     {
-        _popupOpen = true; _popupGraph = graphPos; _popupScreen = P.PointerPos; _search = "";
+        _popupGraph = graphPos;
         _wireNode = wireNode; _wirePort = wirePort; _wireIsOutput = wireIsOutput;
-    }
-    private void ClosePopup() { _popupOpen = false; _wireNode = null; }
 
-    private IEnumerable<NodeSpec> Filtered()
-    {
-        IEnumerable<NodeSpec> q = Catalog;
-        if (_wireNode != null) q = q.Where(s => _wireIsOutput ? s.Inputs.Length > 0 : s.Outputs.Length > 0);
-        if (!string.IsNullOrWhiteSpace(_search))
-            q = q.Where(s => s.Label.Contains(_search, StringComparison.OrdinalIgnoreCase) || s.Category.Contains(_search, StringComparison.OrdinalIgnoreCase));
-        return q;
-    }
+        IEnumerable<NodeSpec> specs = wireNode == null ? Catalog
+            : Catalog.Where(s => wireIsOutput ? s.Inputs.Length > 0 : s.Outputs.Length > 0);
 
-    private void DrawCreatePopup(Paper P)
-    {
-        const float pw = 236f, ph = 300f;
-        float px = System.Math.Clamp(_popupScreen.X - _colOx, 4f, MathF.Max(4f, _panelW - pw - 4f));
-        float py = System.Math.Clamp(_popupScreen.Y - _colOy, 4f, MathF.Max(4f, _panelH - ph - 4f));
-
-        P.Box("ngbackdrop").PositionType(PositionType.SelfDirected).Left(0).Top(0)
-            .Width(P.Percent(100)).Height(P.Percent(100)).Layer(Layer.Overlay)
-            .OnClick(_ => ClosePopup());
-
-        using (P.Column("ngpopup").PositionType(PositionType.SelfDirected).Left(px).Top(py)
-            .Width(pw).Height(P.Auto).MaxHeight(320).Layer(Layer.Overlay + 10)
-            .BackgroundColor(Palette.C(20, 16, 30, 0.98f)).Rounded(10)
-            .BorderColor(Palette.BdSoft).BorderWidth(1).Padding(7, 7, 7, 7).Gap(6)
-            .DropShadow(0, 8, 24, 0, Palette.C(0, 0, 0, 0.5f)).Enter())
-        {
-            Origami.SearchField(P, "ngsearch", _search, v => _search = v, _wireNode != null ? "Compatible nodes..." : "Search nodes...").Show();
-
-            Origami.ScrollView(P, "ngplist", pw - 14, 240).Body(() =>
-            {
-                string? lastCat = null;
-                foreach (var s in Filtered())
-                {
-                    if (s.Category != lastCat)
-                    {
-                        lastCat = s.Category;
-                        P.Box("hc_" + s.Category).Width(P.Percent(100)).Height(P.Auto).Margin(3, 0, 5, 3)
-                            .Text(s.Category.ToUpperInvariant(), Fonts.Semi).FontSize(9.5f * Palette.TS).LetterSpacing(0.6f)
-                            .TextColor(Palette.Acc300).Alignment(TextAlignment.MiddleLeft);
-                    }
-                    var spec = s;
-                    using (P.Row("it_" + spec.Label).Width(P.Percent(100)).Height(28).Rounded(6).Padding(8, 8, 0, 0)
-                        .Hovered.BackgroundColor(Palette.Hover).End().OnClick(_ => CreateFromSpec(spec)).Enter())
-                    {
-                        P.Box("d_" + spec.Label).Width(8).Height(8).Rounded(4).Margin(0, 9, P.Stretch(), P.Stretch()).BackgroundColor(spec.Accent);
-                        P.Box("l_" + spec.Label).Width(P.Stretch()).Height(P.Auto).Margin(0, 0, P.Stretch(), P.Stretch())
-                            .Text(spec.Label, Fonts.Reg).FontSize(12f * Palette.TS).TextColor(Palette.THi).Alignment(TextAlignment.MiddleLeft);
-                    }
-                }
-                if (!Filtered().Any())
-                    P.Box("noresult").Width(P.Percent(100)).Height(40).Text("No matches", Fonts.Reg)
-                        .FontSize(11.5f * Palette.TS).TextColor(Palette.TLo).Alignment(TextAlignment.MiddleCenter);
-            });
-        }
+        NodePicker.Show((float)P.PointerPos.X, (float)P.PointerPos.Y, b => b
+            .Placeholder(wireNode != null ? "Compatible nodes..." : "Search nodes...")
+            .Items(specs, s => s.Category, s => s.Label, _ => null, CreateFromSpec));
     }
 
     private void CreateFromSpec(NodeSpec spec)
@@ -877,7 +803,7 @@ public sealed class NodeGraphPanel : DockPanel
             if (_wireIsOutput && n.Inputs.Count > 0) Wires.Add(new GraphConnection(_wireNode, _wirePort!, n.Id, n.Inputs[0].Id));
             else if (!_wireIsOutput && n.Outputs.Count > 0) Wires.Add(new GraphConnection(n.Id, n.Outputs[0].Id, _wireNode, _wirePort!));
         }
-        ClosePopup();
+        _wireNode = null;
     }
 
     // ═══ catalog ═══
