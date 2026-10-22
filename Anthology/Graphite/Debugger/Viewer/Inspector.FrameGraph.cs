@@ -135,7 +135,7 @@ internal sealed partial class ProfilerView
         Dictionary<string, KindBlock> kinds = new();
         Dictionary<string, Dictionary<string, RawResource>> raws = new();
         Dictionary<string, HashSet<string>> folded = new();
-        Dictionary<int, DeepGroup> byIndex = deep.Groups.ToDictionary(i => i.Index);
+        Dictionary<int, DeepGroup> byIndex = deep.Groups.Where(i => i.Index >= 0).ToDictionary(i => i.Index);
 
         int DepthOf(DeepGroup instance)
         {
@@ -885,7 +885,7 @@ internal sealed partial class ProfilerView
         if (scope.Count < deep.Groups.Length)
         {
             List<KindBlock> whole = BuildKinds(deep.Groups.ToArray(), deep, model.Index!);
-            Dictionary<int, DeepGroup> byIndex = deep.Groups.ToDictionary(i => i.Index);
+            Dictionary<int, DeepGroup> byIndex = deep.Groups.Where(i => i.Index >= 0).ToDictionary(i => i.Index);
             foreach (KindBlock kind in kinds)
             {
                 OrigamiGroup group = built[kind].Group;
