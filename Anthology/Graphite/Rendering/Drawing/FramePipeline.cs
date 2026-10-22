@@ -217,9 +217,16 @@ internal sealed partial class FramePipeline : IDisposable
     /// <summary>Every persistent buffer the frame writes and its cameras read, in a stable order.</summary>
     public FrameBuffers Buffers { get; } = new();
 
-    /// <summary>Declares the geometry pages and material tables a view's draws bind from the frame's buffers.</summary>
+    /// <summary>Declares the geometry pages, material tables and shadow pages a view's draws bind.</summary>
     internal void DeclareDrawReads(InstanceContextBuilder builder)
     {
+        foreach (WorldFrame world in _frameWorlds)
+        {
+            if (world.Shadows == null)
+                continue;
+            foreach (ShadowPage page in world.Shadows.AllPages())
+                builder.DeclareInputTexture(page.Id, TextureState.Sampled, TextureState.Sampled);
+        }
         List<PersistentBuffer> known = [.. Buffers.Persistent];
         foreach (GeometryPage page in Geometry.Pages)
         {

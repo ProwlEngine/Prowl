@@ -517,26 +517,6 @@ internal sealed class ShadowCopyPass(FramePipeline frame, WorldFrame world) : II
     }
 }
 
-/// <summary>Leaves a world's pages in their sampled layout, so the cameras after it read them through bindless.</summary>
-internal sealed class ShadowPublishPass(WorldFrame world) : IInstancePass
-{
-    public string Name => "Graphite.ShadowPublish";
-
-    public GraphKind Kind => RenderKinds.World;
-
-    public bool IsEnabled(GraphInstance instance) => instance.Data == world;
-
-    public void Setup(InstanceContextBuilder builder)
-    {
-        foreach (ShadowPage page in world.Shadows!.AllPages())
-            builder.DeclareInputTexture(page.Id, TextureState.Sampled, TextureState.Sampled);
-    }
-
-    public void Render(InstanceContext context, CommandBuffer cmd)
-    {
-    }
-}
-
 /// <summary>Draws a camera's refit cascades into their persistent depth textures.</summary>
 internal sealed class CascadePass(FeatureShape shape) : IInstancePass
 {
@@ -986,7 +966,6 @@ internal sealed class WorldShadows(TableHost tables, int worldId)
         yield return new ShadowCopyPass(frame, world);
         foreach (ShadowPage page in Pages)
             yield return new ShadowDrawPass(frame, world, page);
-        yield return new ShadowPublishPass(world);
     }
 }
 
