@@ -123,8 +123,8 @@ public class PreferencesPanel : DockPanel
             Origami.TextField(paper, "pref_proj_path_v", s.DefaultProjectsPath,
                 v => { s.DefaultProjectsPath = v; s.Save(); }).CommitOnEnter().Show());
 
-        EditorGUI.SettingsToggle(paper, "pref_auto_save", Loc.Get("pref.auto_save"), SaveManager.AutoSaveEnabled,
-            v => { SaveManager.AutoSaveEnabled = v; s.AutoSaveLayout = v; s.Save(); });
+        EditorGUI.SettingsToggle(paper, "pref_auto_save", Loc.Get("pref.auto_save"), s.AutoSave,
+            v => { s.AutoSave = v; s.Save(); });
 
         EditorGUI.SettingsToggle(paper, "pref_reimport_focus", Loc.Get("pref.reimport_focus"), s.ReimportOnFocusOnly,
             v => { s.ReimportOnFocusOnly = v; s.Save(); });

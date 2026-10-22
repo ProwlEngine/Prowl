@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;
@@ -35,8 +36,8 @@ public static class SaveManager
     /// <summary>Auto-save interval in seconds. Set to 0 to disable. Default 300 (5 minutes).</summary>
     public static float AutoSaveInterval = 300f;
 
-    /// <summary>Whether auto-save is enabled.</summary>
-    public static bool AutoSaveEnabled = true;
+    /// <summary>Whether auto-save is enabled, from the editor preferences.</summary>
+    public static bool AutoSaveEnabled => EditorSettings.Instance.AutoSave;
 
     /// <summary>
     /// True while <see cref="OnSave"/> handlers are running as part of an auto-save rather than a

@@ -30,7 +30,7 @@ public class EditorSettings
     public string DefaultProjectsPath { get; set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ProwlProjects");
     public string Locale { get; set; } = "en";
-    public bool AutoSaveLayout { get; set; } = true;
+    public bool AutoSave { get; set; } = true;
     public bool ReimportOnFocusOnly { get; set; } = true;
 
     /// <summary> Gets or sets whether double clicked scripts open in the built in code editor or the system's default app. </summary>
