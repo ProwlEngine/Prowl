@@ -133,6 +133,7 @@ public static class EditorTheme
             BlurDockedWindows = UsesImageBackground,
             WindowOpacity = WindowOpacity,
         };
+        Customization?.ApplyTo(t.Metrics);
 
         t.Font         = Font;
         t.FontMedium   = FontMedium;

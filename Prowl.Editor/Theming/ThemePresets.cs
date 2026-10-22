@@ -7,7 +7,7 @@ namespace Prowl.Editor.Theming;
 public readonly record struct ThemePreset(string Name, string Accent, string Accent2, string Bg, string Panel, string Text,
     bool Solid = false, string[]? AccentStops = null, string[]? NeutralStops = null, string[]? InkStops = null)
 {
-    /// <summary>Apply this theme's ramps and effects to <paramref name="t"/>. Status ramps return to their defaults.</summary>
+    /// <summary>Apply this theme's ramps and effects to <paramref name="t"/>. Status ramps and interface colour overrides return to their defaults.</summary>
     public void ApplyTo(EditorThemeData t)
     {
         SetRamp(t.Purple, Accent, AccentStops);
@@ -24,6 +24,7 @@ public readonly record struct ThemePreset(string Name, string Accent, string Acc
         t.BackgroundStyle = Solid ? EditorBackgroundStyle.Color : EditorBackgroundStyle.Nebula;
         if (Solid) t.BackgroundColorA = Bg;
 
+        t.HoverColor = t.SelectionColor = t.FocusColor = t.ScrollbarColor = t.SplitterColor = t.TooltipColor = "";
         t.Name = Name;
     }
 

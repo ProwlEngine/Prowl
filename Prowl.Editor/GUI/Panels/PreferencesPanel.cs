@@ -657,6 +657,31 @@ public class PreferencesPanel : DockPanel
         EditorGUI.SwatchRow(paper, s, "sem_warning", Loc.Get("pref.warning"), theme.Amber, _accentPalette);
         EditorGUI.Divider(paper, "pref_cl_d3");
         EditorGUI.SwatchRow(paper, s, "sem_danger", Loc.Get("pref.danger"), theme.Red, _accentPalette);
+
+        EditorGUI.SectionHeader(paper, "pref_cl_ui", Loc.Get("pref.interface_colors"), compact: true);
+        OverrideColorRow(paper, s, "pref_cl_hover", Loc.Get("pref.hover_color"), theme.HoverColor, v => theme.HoverColor = v, EditorTheme.OrigamiTheme.Hover);
+        OverrideColorRow(paper, s, "pref_cl_sel", Loc.Get("pref.selection_color"), theme.SelectionColor, v => theme.SelectionColor = v, EditorTheme.OrigamiTheme.Selected);
+        OverrideColorRow(paper, s, "pref_cl_focus", Loc.Get("pref.focus_color"), theme.FocusColor, v => theme.FocusColor = v, EditorTheme.OrigamiTheme.FocusBorder);
+        OverrideColorRow(paper, s, "pref_cl_scroll", Loc.Get("pref.scrollbar_color"), theme.ScrollbarColor, v => theme.ScrollbarColor = v, EditorTheme.OrigamiTheme.Scrollbar);
+        OverrideColorRow(paper, s, "pref_cl_split", Loc.Get("pref.splitter_color"), theme.SplitterColor, v => theme.SplitterColor = v, EditorTheme.OrigamiTheme.Splitter);
+        OverrideColorRow(paper, s, "pref_cl_tip", Loc.Get("pref.tooltip_color"), theme.TooltipColor, v => theme.TooltipColor = v, EditorTheme.OrigamiTheme.TooltipBackground);
+    }
+
+    // A switch that turns a colour override on, starting from the colour in use, and the colour itself while it is on.
+    private static void OverrideColorRow(Paper paper, EditorSettings s, string id, string label, string hex, Action<string> set, Color current)
+    {
+        void Apply(string value) { set(value); s.ApplyTheme(); s.Save(); }
+
+        EditorGUI.Row(paper, id, label, () =>
+        {
+            using (paper.Row($"{id}_row").Height(UnitValue.Auto).Gap(SP * 2).Enter())
+            {
+                bool on = hex.Length > 0;
+                Origami.Switch(paper, $"{id}_on", on, v => Apply(v ? ColorRamp.ColorToHex(current) : "")).NoLabel().Show();
+                if (on)
+                    Origami.ColorField(paper, $"{id}_v", EditorGUI.HexToVColor(hex), v => Apply(EditorGUI.VColorToHex(v))).Width(130f).Show();
+            }
+        }, compact: true);
     }
 
     private static string[]? _installedFamilies;
@@ -725,6 +750,14 @@ public class PreferencesPanel : DockPanel
         EditorGUI.SettingsSlider(paper, "pref_sp_label", Loc.Get("pref.label_width"), theme.LabelWidth, 60, 240, v => { theme.LabelWidth = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
         EditorGUI.SettingsSlider(paper, "pref_sp_dock", Loc.Get("pref.dock_spacing"), theme.DockSpacing, 0, 24, v => { theme.DockSpacing = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
         EditorGUI.SettingsSlider(paper, "pref_sp_tabh", Loc.Get("pref.tab_bar_height"), theme.TabBarHeight, 18, 40, v => { theme.TabBarHeight = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SectionHeader(paper, "pref_sp_tabs", Loc.Get("pref.tabs_scrollbars"), compact: true);
+        EditorGUI.Row(paper, "pref_sp_tabstyle", Loc.Get("pref.tab_style"), () =>
+            Origami.EnumDropdown(paper, "pref_sp_tabstyle_v", theme.TabStyle, v => { theme.TabStyle = v; s.ApplyTheme(); s.Save(); }).Show(), compact: true);
+        EditorGUI.Row(paper, "pref_sp_tabclose", Loc.Get("pref.tab_close"), () =>
+            Origami.EnumDropdown(paper, "pref_sp_tabclose_v", theme.TabCloseButtons, v => { theme.TabCloseButtons = v; s.ApplyTheme(); s.Save(); }).Show(), compact: true);
+        EditorGUI.SettingsToggle(paper, "pref_sp_focus", Loc.Get("pref.highlight_focused"), theme.HighlightFocusedPanel, v => { theme.HighlightFocusedPanel = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_sp_scroll", Loc.Get("pref.scrollbar_size"), theme.ScrollbarSize, 2, 16, v => { theme.ScrollbarSize = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsToggle(paper, "pref_sp_autohide", Loc.Get("pref.autohide_scrollbars"), theme.AutoHideScrollbars, v => { theme.AutoHideScrollbars = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
         EditorGUI.SettingsSlider(paper, "pref_sp_tabp", Loc.Get("pref.tab_padding"), theme.TabPadding, 4, 24, v => { theme.TabPadding = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
         EditorGUI.SettingsRow(paper, "pref_sp_scale", Loc.Get("pref.user_scale"), () =>
             Origami.Slider(paper, "pref_sp_scale_v", theme.UserScale, v =>

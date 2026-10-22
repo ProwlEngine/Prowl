@@ -196,6 +196,32 @@ public class EditorThemeData
     /// <summary> Blur radius over the background image in pixels, 0 for none. </summary>
     public float BackgroundImageBlur { get; set; }
 
+    // Interface colours that replace the ones derived from the ramps. Empty keeps the derived colour.
+    /// <summary> Hover highlight color as hex, empty to follow the accent. </summary>
+    public string HoverColor { get; set; } = "";
+    /// <summary> Selection color as hex, empty to follow the accent. </summary>
+    public string SelectionColor { get; set; } = "";
+    /// <summary> Focus ring color as hex, empty to follow the accent. </summary>
+    public string FocusColor { get; set; } = "";
+    /// <summary> Scrollbar color as hex, empty to follow the text color. </summary>
+    public string ScrollbarColor { get; set; } = "";
+    /// <summary> Panel splitter color as hex, empty to follow the borders. </summary>
+    public string SplitterColor { get; set; } = "";
+    /// <summary> Tooltip background color as hex, empty to follow the popovers. </summary>
+    public string TooltipColor { get; set; } = "";
+
+    // Tabs and scrollbars
+    /// <summary> Scrollbar thickness in pixels. </summary>
+    public float ScrollbarSize { get; set; } = 6f;
+    /// <summary> Whether scrollbars only show while the pointer is over their view. </summary>
+    public bool AutoHideScrollbars { get; set; } = true;
+    /// <summary> How docked panel tabs are drawn. </summary>
+    public TabStyle TabStyle { get; set; } = TabStyle.Underline;
+    /// <summary> Which docked panel tabs show a close button. </summary>
+    public TabCloseButtons TabCloseButtons { get; set; } = TabCloseButtons.ActiveTab;
+    /// <summary> Whether only the last clicked panel keeps the accent on its tab. </summary>
+    public bool HighlightFocusedPanel { get; set; } = true;
+
     // Play mode tint: a colour wash over the editor backdrop while the game runs, so play mode is hard to miss.
     /// <summary> Whether the editor backdrop is tinted while playing. </summary>
     public bool PlayModeTint { get; set; } = true;
@@ -245,7 +271,28 @@ public class EditorThemeData
         t.BorderSoft = KeepAlpha(t.BorderSoft, Neutral.GetStop(1));
         t.BorderStrong = KeepAlpha(t.BorderStrong, Neutral.GetStop(1));
         t.Popover = KeepAlpha(t.Popover, Neutral.GetStop(2));
+
+        // Overrides keep the derived colour's alpha, so translucent overlays stay translucent.
+        t.HoverOverride = Override(HoverColor, t.Hover);
+        t.SelectedOverride = Override(SelectionColor, t.Selected);
+        t.FocusOverride = Override(FocusColor, t.FocusBorder);
+        t.ScrollbarOverride = Override(ScrollbarColor, t.Scrollbar);
+        t.SplitterOverride = Override(SplitterColor, t.Splitter);
+        t.TooltipOverride = Override(TooltipColor, t.TooltipBackground);
     }
+
+    /// <summary>Copies the tab and scrollbar settings onto Origami's metrics.</summary>
+    public void ApplyTo(OrigamiMetrics m)
+    {
+        m.ScrollbarSize = ScrollbarSize;
+        m.AutoHideScrollbars = AutoHideScrollbars;
+        m.TabStyle = TabStyle;
+        m.TabCloseButtons = TabCloseButtons;
+        m.HighlightFocusedPanel = HighlightFocusedPanel;
+    }
+
+    private static Color? Override(string hex, Color derived)
+        => string.IsNullOrEmpty(hex) ? null : KeepAlpha(derived, ColorRamp.ParseHex(hex));
 
     private static void ApplyRamp(OrigamiRamp dst, ColorRamp src)
     {
