@@ -31,6 +31,8 @@ public abstract partial class CommandBuffer
     internal override void TrackBuffer(DeviceBuffer buffer)
     {
         CheckNotDisposed(buffer, "The buffer");
+        if (Bindings != null && Device.ValidationEnabled)
+            Bindings.Check(buffer.ResourceId, buffer.Name);
         if (!CaptureActive || !_referencedIds.Add(buffer.ResourceId))
             return;
 
@@ -40,6 +42,8 @@ public abstract partial class CommandBuffer
     internal override void TrackTexture(Texture texture)
     {
         CheckNotDisposed(texture, "The texture");
+        if (Bindings != null && Device.ValidationEnabled)
+            Bindings.Check(texture.ResourceId, texture.Name);
         TrackTexture(texture, false);
     }
 

@@ -168,6 +168,7 @@ public abstract partial class CommandBuffer
     {
         RequireGraphExecution(nameof(SetFramebuffer));
         SetFramebuffer_CheckNotDisposed(fb);
+        ops ??= fb != null ? Bindings?.TakeOps(fb) : null;
         bool changed = _framebuffer != fb;
         if (!changed && !ops.HasValue)
             return;
