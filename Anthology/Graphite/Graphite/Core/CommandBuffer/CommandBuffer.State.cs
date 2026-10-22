@@ -163,12 +163,13 @@ public abstract partial class CommandBuffer
 
     /// <summary>Sets render target framebuffer with load/store ops for the pass it starts. Defaults to load and store.</summary>
     /// <param name="fb">Framebuffer to set.</param>
-    /// <param name="ops">Load/store/clear ops, or null to load and store.</param>
+    /// <param name="ops">Load/store/clear ops, or null for the ops the pass declared for it, else load and store. Explicit ops consume the declared ones.</param>
     public void SetFramebuffer(Framebuffer fb, TargetLoadStoreOps? ops = null)
     {
         RequireGraphExecution(nameof(SetFramebuffer));
         SetFramebuffer_CheckNotDisposed(fb);
-        ops ??= fb != null ? Bindings?.TakeOps(fb) : null;
+        TargetLoadStoreOps? declared = fb != null ? Bindings?.TakeOps(fb) : null;
+        ops ??= declared;
         bool changed = _framebuffer != fb;
         if (!changed && !ops.HasValue)
             return;
