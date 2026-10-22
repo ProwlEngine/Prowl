@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 using Prowl.Editor.GUI;
 using Prowl.Editor.Theming;
+using Prowl.Editor.GraphEditor;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -14,6 +15,8 @@ using Prowl.Runtime.AnimationNodes;
 using Prowl.Scribe;
 using Prowl.Vector;
 
+using AnimationNodeCard = Prowl.Editor.GraphEditor.NodeCard<Prowl.Runtime.GraphNodeRecord, Prowl.Editor.Inspector.AnimationGraphEditing>;
+using AnimationNodeInspector = Prowl.Editor.GraphEditor.NodeInspector<Prowl.Runtime.GraphNodeRecord, Prowl.Editor.Inspector.AnimationGraphEditing>;
 using Canvas = Prowl.Quill.Canvas;
 using Color = System.Drawing.Color;
 using Color32 = Prowl.Vector.Color32;
@@ -21,7 +24,7 @@ using Color32 = Prowl.Vector.Color32;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>A parameter node is its parameter's name and a port, nothing else, so it is just a header.</summary>
-[AnimationNodeEditor(typeof(ParameterNode))]
+[NodeEditor(typeof(ParameterNode))]
 internal sealed class ParameterNodeEditor : AnimationNodeEditor
 {
     public override string AutoName(GraphNodeRecord record) => record.Get(ParameterNode.NameSetting);
@@ -41,44 +44,46 @@ internal sealed class ParameterNodeEditor : AnimationNodeEditor
         card.Widget.Width = 168f;
     }
 
-    public override void Validate(AnimationGraph graph, GraphNodeRecord record, NodeProblems problems)
+    public override void Validate(AnimationGraphEditing editing, GraphNodeRecord record, NodeProblems problems)
     {
+        if (editing.Graph is not { } graph) return;
+
         string name = record.Get(ParameterNode.NameSetting);
         if (name.Length == 0) problems.Blocking("This reads a parameter but has no name.");
-        else if (!graph.Parameters.Exists(p => p.Name == name) && !AnimationGraphView.VirtualParameters(graph).Contains(name))
+        else if (!graph.Parameters.Exists(p => p.Name == name) && !AnimationGraphDomain.VirtualParameters(graph).Contains(name))
             problems.Blocking($"No parameter called '{name}' is declared.");
     }
 
     public override void DrawInspector(AnimationNodeInspector inspector, GraphNodeRecord record)
     {
         inspector.Description();
-        inspector.Window.DrawParameterPicker(inspector.Paper, "ag_p_Name", record.Get(ParameterNode.NameSetting));
+        inspector.Editing.DrawParameterPicker(inspector.Paper, "ag_p_Name", record.Get(ParameterNode.NameSetting));
     }
 }
 
 /// <summary>An external pose is known by the name the game finds it by.</summary>
-[AnimationNodeEditor(typeof(ExternalPoseNode))]
+[NodeEditor(typeof(ExternalPoseNode))]
 internal sealed class ExternalPoseNodeEditor : AnimationNodeEditor
 {
     public override string AutoName(GraphNodeRecord record) => record.Get(ExternalPoseNode.NameSetting);
 }
 
 /// <summary>A slot is known by the name the game fills it by.</summary>
-[AnimationNodeEditor(typeof(ExternalGraphSlotNode))]
+[NodeEditor(typeof(ExternalGraphSlotNode))]
 internal sealed class ExternalGraphSlotNodeEditor : AnimationNodeEditor
 {
     public override string AutoName(GraphNodeRecord record) => record.Get(ExternalGraphSlotNode.Slot);
 }
 
 /// <summary>What an embedded sub graph plays. It feeds its owner rather than another node.</summary>
-[AnimationNodeEditor(typeof(GraphOutputNode))]
+[NodeEditor(typeof(GraphOutputNode))]
 internal sealed class GraphOutputNodeEditor : AnimationNodeEditor
 {
     public override void BuildCard(AnimationNodeCard card, GraphNodeRecord record) => card.Widget.Width = 232f;
 }
 
 /// <summary>What a state plays, with a toggle beside its Enter and Exit for when nothing is wired to them.</summary>
-[AnimationNodeEditor(typeof(StateOutputNode))]
+[NodeEditor(typeof(StateOutputNode))]
 internal sealed class StateOutputNodeEditor : AnimationNodeEditor
 {
     public override void BuildCard(AnimationNodeCard card, GraphNodeRecord record)
@@ -100,10 +105,10 @@ internal sealed class StateOutputNodeEditor : AnimationNodeEditor
 }
 
 /// <summary>Nodes whose every input carries a number of its own: a layer's weight, a blend's share, a pick's value.</summary>
-[AnimationNodeEditor(typeof(LayerBlendNode))]
-[AnimationNodeEditor(typeof(WeightedBlendNode))]
-[AnimationNodeEditor(typeof(RandomSelectorNode))]
-[AnimationNodeEditor(typeof(PickNumberNode))]
+[NodeEditor(typeof(LayerBlendNode))]
+[NodeEditor(typeof(WeightedBlendNode))]
+[NodeEditor(typeof(RandomSelectorNode))]
+[NodeEditor(typeof(PickNumberNode))]
 internal sealed class WeightedInputsNodeEditor : AnimationNodeEditor
 {
     public override bool HasEntries => true;
@@ -130,8 +135,8 @@ internal sealed class WeightedInputsNodeEditor : AnimationNodeEditor
 }
 
 /// <summary>Nodes whose every input is named: the channel a layer writes, the effector a rig moves.</summary>
-[AnimationNodeEditor(typeof(ChannelLayerNode))]
-[AnimationNodeEditor(typeof(IKRigNode))]
+[NodeEditor(typeof(ChannelLayerNode))]
+[NodeEditor(typeof(IKRigNode))]
 internal sealed class NamedInputsNodeEditor : AnimationNodeEditor
 {
     private bool IsRig => Node.Id == AnimationNodeIds.IKRig;
@@ -165,7 +170,7 @@ internal sealed class NamedInputsNodeEditor : AnimationNodeEditor
 }
 
 /// <summary>A state machine's card is a small map of its states; opening it edits them.</summary>
-[AnimationNodeEditor(typeof(StateMachineNode))]
+[NodeEditor(typeof(StateMachineNode))]
 internal sealed class StateMachineNodeEditor : AnimationNodeEditor
 {
     public override string Tooltip => "Double click to open its states";
@@ -182,7 +187,7 @@ internal sealed class StateMachineNodeEditor : AnimationNodeEditor
     public override void AddMenuItems(AnimationGraphEditing editing, GraphNodeRecord record, ContextBuilder menu)
         => menu.Item("Edit States", () => editing.EnterStates(record));
 
-    public override void Validate(AnimationGraph graph, GraphNodeRecord record, NodeProblems problems)
+    public override void Validate(AnimationGraphEditing editing, GraphNodeRecord record, NodeProblems problems)
     {
         if (record.States.Count == 0) problems.Unfinished("This state machine has no states.");
     }
@@ -229,7 +234,7 @@ internal sealed class StateMachineNodeEditor : AnimationNodeEditor
             (float)rect.Min.X + inset + (maxX > minX ? (state.EditorPosition.X - minX) / spanX * w : w * 0.5f),
             (float)rect.Min.Y + inset + (maxY > minY ? (state.EditorPosition.Y - minY) / spanY * h : h * 0.5f));
 
-        int active = editing.View.Probe?.ActiveState(editing.Graph, machine) ?? -1;
+        int active = editing.ActiveState(machine);
 
         canvas.SaveState();
         canvas.SetStrokeWidth(1.2f);
@@ -265,13 +270,13 @@ internal sealed class StateMachineNodeEditor : AnimationNodeEditor
 }
 
 /// <summary>A sub graph is either its own nodes or a graph asset; its card shows a plan of whichever it runs.</summary>
-[AnimationNodeEditor(typeof(SubGraphNode))]
+[NodeEditor(typeof(SubGraphNode))]
 internal sealed class SubGraphNodeEditor : AnimationNodeEditor
 {
     public override string Tooltip => "Double click to open the graph it runs";
 
     // A sub graph starts as its own nodes, ready to fill in, and becomes an asset only when asked.
-    public override void OnCreated(AnimationGraph graph, GraphNodeRecord record) => SetEmbedded(graph, record, true);
+    public override void OnCreated(AnimationGraphDomain domain, GraphNodeRecord record) => SetEmbedded(domain, record, true);
 
     public override bool Open(AnimationGraphEditing editing, GraphNodeRecord record)
     {
@@ -290,8 +295,10 @@ internal sealed class SubGraphNodeEditor : AnimationNodeEditor
             }));
     }
 
-    public override void Validate(AnimationGraph graph, GraphNodeRecord record, NodeProblems problems)
+    public override void Validate(AnimationGraphEditing editing, GraphNodeRecord record, NodeProblems problems)
     {
+        if (editing.Graph is not { } graph) return;
+
         if (record.Get(SubGraphNode.Embedded))
         {
             GraphNodeRecord? output = graph.OwnedNode(record.Id, AnimationNodeIds.GraphOutput);
@@ -302,7 +309,7 @@ internal sealed class SubGraphNodeEditor : AnimationNodeEditor
 
         if (record.Get(SubGraphNode.GraphAssetSetting) is not { } value || value.Graph.AssetID == Guid.Empty)
             problems.Unfinished("No graph is set, so this plays the reference pose.");
-        else if (value.Graph is { } inner && inner.IsValid() && AnimationGraphView.LeadsBack(graph, inner))
+        else if (value.Graph is { } inner && inner.IsValid() && AnimationGraphDomain.LeadsBack(graph, inner))
             problems.Blocking($"'{inner.Name}' leads back to this graph, so it would never end.");
     }
 
@@ -323,8 +330,8 @@ internal sealed class SubGraphNodeEditor : AnimationNodeEditor
         bool embedded = record.Get(SubGraphNode.Embedded);
         Origami.ButtonGroup(paper, id, embedded ? 0 : 1, v =>
         {
-            if ((v == 0) == embedded || editing.Graph.IsNotValid()) return;
-            editing.Edit(v == 0 ? "Embed Sub Graph" : "Use Graph Asset", () => SetEmbedded(editing.Graph!, record, v == 0));
+            if ((v == 0) == embedded || editing.Animation is not { } domain) return;
+            editing.Edit(v == 0 ? "Embed Sub Graph" : "Use Graph Asset", () => SetEmbedded(domain, record, v == 0));
         })
             .Height(22).FullWidth()
             .Item("Embedded", tooltip: "Its own nodes, inside this graph")
@@ -333,10 +340,10 @@ internal sealed class SubGraphNodeEditor : AnimationNodeEditor
     }
 
     // Its embedded nodes are kept either way.
-    private static void SetEmbedded(AnimationGraph graph, GraphNodeRecord record, bool embedded)
+    private static void SetEmbedded(AnimationGraphDomain domain, GraphNodeRecord record, bool embedded)
     {
         record.Properties[SubGraphNode.Embedded.Key] = NodeValue.FromFlag(embedded);
-        if (embedded) AnimationGraphView.EnsureOutput(graph, record.Id, AnimationNodeIds.GraphOutput);
+        if (embedded) domain.EnsureOutput(record.Id, AnimationNodeIds.GraphOutput);
     }
 
     /// <summary>A plan of the graph a sub graph node runs, so the card shows what is inside it.</summary>
@@ -351,7 +358,7 @@ internal sealed class SubGraphNodeEditor : AnimationNodeEditor
         {
             if (inner.IsNotValid()) return;
 
-            AnimationGraphView view = editing.View.InnerView(inner!, embedded ? record.Id : "");
+            AnimationGraphView view = editing.InnerView(inner!, embedded ? record.Id : "");
             paper.Draw((canvas, rect) => NodeGraphPreview.Paint(canvas, rect, view.Nodes, null, Origami.Current, 6f, groups: view.Groups));
         }
     }

@@ -187,32 +187,6 @@ public sealed class GraphTransitionRecord
     public GraphTransitionRecord Clone() => (GraphTransitionRecord)MemberwiseClone();
 }
 
-/// <summary>A titled box drawn behind a set of nodes. Editor only, the compiler never reads it.</summary>
-public sealed class GraphGroupRecord
-{
-    public string Id = string.Empty;
-    /// <summary>The state machine node this sits inside, or empty for the graph itself.</summary>
-    public string Owner = string.Empty;
-    public string Title = "Group";
-    public Float2 Position;
-    public Float2 Size = new(260f, 180f);
-
-    public GraphGroupRecord Clone() => (GraphGroupRecord)MemberwiseClone();
-}
-
-/// <summary>A note left on the canvas. Editor only, the compiler never reads it.</summary>
-public sealed class GraphNoteRecord
-{
-    public string Id = string.Empty;
-    /// <summary>The state machine node this sits inside, or empty for the graph itself.</summary>
-    public string Owner = string.Empty;
-    public string Text = string.Empty;
-    public Float2 Position;
-    public Float2 Size = new(190f, 130f);
-
-    public GraphNoteRecord Clone() => (GraphNoteRecord)MemberwiseClone();
-}
-
 /// <summary>A value the game sets on the animator each frame, which nodes read.</summary>
 public sealed class GraphParameterRecord
 {
