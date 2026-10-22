@@ -677,8 +677,8 @@ public class EditorApplication : Game
 
     private void HandlePlayModeShortcuts()
     {
-        if (ShortcutManager.TryConsume("Game/TogglePlay")) RequestTogglePlayMode();
-        else if (ShortcutManager.TryConsume("Game/TogglePause")) TogglePause();
+        if (ShortcutManager.TryConsume("Global/TogglePlay")) RequestTogglePlayMode();
+        else if (ShortcutManager.TryConsume("Global/TogglePause")) TogglePause();
     }
 
     /// <summary>Centered rounded "pill" holding the play / pause / step transport buttons.</summary>
@@ -695,14 +695,14 @@ public class EditorApplication : Game
             // amber Pause when paused; step stays neutral.
             ButtonBuilder play = Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.Stop_I : EditorIcons.Play_I)
                 .OnClick(() => { paper.ClearFocus(); RequestTogglePlayMode(); })
-                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPlaying ? "game.stop" : "game.play"), "Game/TogglePlay"))
+                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPlaying ? "game.stop" : "game.play"), "Global/TogglePlay"))
                 .Style(ButtonStyle.Ghost);
             if (Application.IsPlaying) play.Danger(); else play.Success();
             play.Show();
 
             ButtonBuilder pause = Origami.IconButton(paper, "btn_pause", EditorIcons.Pause_I,
                 () => { paper.ClearFocus(); TogglePause(); })
-                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPaused ? "game.resume" : "game.pause"), "Game/TogglePause"))
+                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPaused ? "game.resume" : "game.pause"), "Global/TogglePause"))
                 .Style(ButtonStyle.Ghost);
             if (Application.IsPaused) pause.Warning();
             pause.Show();

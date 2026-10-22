@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Editor.Core;
@@ -832,6 +833,19 @@ public class PreferencesPanel : DockPanel
                     string shortcutId = shortcut.Id;
                     Origami.Button(paper, $"pref_sc_rst_{shortcutId}", Loc.Get("inspector.reset"), () => ShortcutManager.ClearOverride(shortcutId))
                         .Small().Height(EditorTheme.RowHeight - 4).Show();
+                }
+
+                List<ShortcutDefinition> conflicts = ShortcutManager.FindConflicts(shortcut, shortcut.Binding);
+                if (conflicts.Count > 0)
+                {
+                    string names = string.Join(", ", conflicts.Select(c => $"{c.Category}: {c.DisplayName}"));
+                    paper.Box($"pref_sc_conflict_{shortcut.Id}")
+                        .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                        .Text($"{EditorIcons.TriangleExclamation}  {Loc.Get("pref.shortcut_conflict", new { names })}", font)
+                        .TextColor(EditorTheme.Amber400)
+                        .FontSize(EditorTheme.FontSizeSmall)
+                        .Alignment(TextAlignment.MiddleLeft).TextTruncate()
+                        .Tooltip(names);
                 }
             }
         }

@@ -51,6 +51,12 @@ public class ShortcutDefinition
     /// <summary>The effective binding (override if set, else default).</summary>
     public ShortcutBinding Binding => Override ?? Default;
 
+    /// <summary>Global shortcuts fire anywhere in the editor. Every other category only fires in its own panel.</summary>
+    public bool IsGlobal => Category == ShortcutManager.GlobalCategory;
+
+    /// <summary>True when both can fire on the same key press: one of them is global, or both belong to the same panel.</summary>
+    public bool SharesScopeWith(ShortcutDefinition other) => IsGlobal || other.IsGlobal || Category == other.Category;
+
     /// <summary> Initializes a new shortcut definition. Category is derived from the id path (the part before the last '/'), or "General" if there is no slash. </summary>
     public ShortcutDefinition(string id, string displayName, ShortcutBinding defaultBinding)
     {
@@ -70,6 +76,9 @@ public class ShortcutDefinition
 /// </summary>
 public static class ShortcutManager
 {
+    /// <summary>The category of shortcuts that fire anywhere in the editor.</summary>
+    public const string GlobalCategory = "Global";
+
     private static readonly Dictionary<string, ShortcutDefinition> _shortcuts = [];
     private static bool _overridesLoaded;
 
@@ -199,16 +208,13 @@ public static class ShortcutManager
         SaveOverrides();
     }
 
-    /// <summary>Find shortcut IDs that conflict with a proposed binding (same key + modifiers).</summary>
-    public static List<string> FindConflicts(string excludeId, ShortcutBinding proposed)
+    /// <summary>The shortcuts that would fire on the same key press as <paramref name="shortcut"/> bound to <paramref name="binding"/>.</summary>
+    public static List<ShortcutDefinition> FindConflicts(ShortcutDefinition shortcut, ShortcutBinding binding)
     {
-        var conflicts = new List<string>();
-        foreach ((string? id, ShortcutDefinition? def) in _shortcuts)
-        {
-            if (id == excludeId) continue;
-            if (def.Binding.Equals(proposed))
-                conflicts.Add(id);
-        }
+        var conflicts = new List<ShortcutDefinition>();
+        foreach (ShortcutDefinition other in _shortcuts.Values)
+            if (other != shortcut && other.Binding.Equals(binding) && shortcut.SharesScopeWith(other))
+                conflicts.Add(other);
         return conflicts;
     }
 
@@ -306,6 +312,8 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Global/NewScene", "New Scene", KeyCode.N, ctrl: true);
         ShortcutManager.Register("Global/Undo", "Undo", KeyCode.Z, ctrl: true);
         ShortcutManager.Register("Global/Redo", "Redo", KeyCode.Y, ctrl: true);
+        ShortcutManager.Register("Global/TogglePlay", "Play / Stop", KeyCode.F5);
+        ShortcutManager.Register("Global/TogglePause", "Pause / Resume", KeyCode.F7);
 
         // Scene View
         ShortcutManager.Register("Scene/Focus", "Focus Selection", KeyCode.F);
@@ -319,8 +327,6 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Scene/ToolUniversal", "Universal Tool", KeyCode.T);
 
         // Game View
-        ShortcutManager.Register("Game/TogglePlay", "Play / Stop", KeyCode.F5);
-        ShortcutManager.Register("Game/TogglePause", "Pause / Resume", KeyCode.F7);
         ShortcutManager.Register("Game/ToggleMaximize", "Toggle Maximize", KeyCode.F3);
 
         // Hierarchy

@@ -513,6 +513,7 @@
   "pref.search_shortcuts": "Search shortcuts...",
   "pref.reset_all": "Reset All to Defaults",
   "pref.press_key": "Press key...  (Esc to cancel)",
+  "pref.shortcut_conflict": "Also fires {{names}}",
   "component.not_found": "Component not found in current scene",
   "component.looking_for": "Looking for: {{name}}",
   "component.on": "on {{name}}",
