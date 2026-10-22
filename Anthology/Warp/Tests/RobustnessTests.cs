@@ -140,7 +140,7 @@ public class RobustnessTests
             Assert.Equal(0, client.PendingReassemblyBytes);
             client.Shutdown();
             SessionProbe.PumpUntil(() => host.Peers.Count == 1 && transport.Connections.Count == 0, hostProbe);
-            Assert.Empty(rawHost.Connections);
+            Assert.Empty(transport.Connections);
         }
     }
 }
