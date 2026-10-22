@@ -7,7 +7,10 @@ using Xunit;
 
 namespace Prowl.CodeGen.Test.Networking;
 
-/// <summary>The rewrite keeps every line where it was, touches only what it must, and hands back the same tree for the same result.</summary>
+/// <summary>
+///     The rewrite keeps every line where it was, touches only what it must, and hands back the same tree for the
+///     same result.
+/// </summary>
 public class RewriteTests
 {
     [Fact]
@@ -24,17 +27,26 @@ public class RewriteTests
         // Lines the rewrite has no business with are untouched, and marked ones are still on their line.
         for (int i = 0; i < before.Length; i++)
         {
-            if (before[i].Contains("Log.Add($\"fire") || before[i].Contains("#region") || before[i].Contains("#endregion")
+            if (before[i].Contains("Log.Add($\"fire") || before[i].Contains("#region") ||
+                before[i].Contains("#endregion")
                 || before[i].Contains("public List<string> Log") || before[i].Contains("MARKER-AFTER"))
+            {
                 Assert.Equal(before[i], after[i]);
+            }
+
             if (before[i].Contains("MARKER"))
+            {
                 Assert.Contains("MARKER", after[i]);
+            }
 
             // Statements in RPC bodies, block or expression bodied, stay on their line for errors and breakpoints.
             int statement = before[i].IndexOf("Log.Add(", StringComparison.Ordinal);
             if (statement >= 0)
+            {
                 Assert.Contains(before[i][statement..before[i].IndexOf(';', statement)], after[i]);
+            }
         }
+
         Assert.Contains(after, line => line.Contains("__Sync_Set(ref this.__sync_Health"));
     }
 
@@ -51,10 +63,16 @@ public class RewriteTests
         for (int i = 0; i < before.Length; i++)
         {
             if (before[i].Contains("public int Ammo;") || before[i].Contains("Log.Add("))
+            {
                 Assert.Equal(before[i].Trim(), after[i].Trim());
+            }
+
             if (before[i].Contains("MARKER"))
+            {
                 Assert.Contains("MARKER", after[i]);
+            }
         }
+
         Assert.Contains(after, line => line.Contains("__Sync_Collection(this.__sync_Crew, __syncnet_Crew)"));
 
         // The game's own types get their serializers in a file of their own.
@@ -96,7 +114,10 @@ public class RewriteTests
         Assert.Same(first, Scripts.Generate(a, b).Trees[0]);
 
         // A new [Sync] in another part leaves this part's rewrite as it was, so its tree is reused.
-        SyntaxTree b2 = Scripts.Parse(TestScripts.ShipPartB.Replace("public int Ammo", "public int Ammo2 { get; set; } [Sync] public int Ammo"), "B.cs");
+        SyntaxTree b2 =
+            Scripts.Parse(
+                TestScripts.ShipPartB.Replace("public int Ammo",
+                    "public int Ammo2 { get; set; } [Sync] public int Ammo"), "B.cs");
         Assert.Same(first, Scripts.Generate(a, b2).Trees[0]);
     }
 }

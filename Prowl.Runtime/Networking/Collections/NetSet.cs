@@ -4,6 +4,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 using Prowl.Warp;
@@ -11,7 +12,10 @@ using Prowl.Warp;
 namespace Prowl.Runtime.Networking;
 
 /// <summary>A change to a <see cref="NetSet{T}" />.</summary>
-/// <param name="Kind">What happened: <see cref="NetChangeKind.Added" />, <see cref="NetChangeKind.Removed" /> or <see cref="NetChangeKind.Cleared" />.</param>
+/// <param name="Kind">
+///     What happened: <see cref="NetChangeKind.Added" />, <see cref="NetChangeKind.Removed" /> or
+///     <see cref="NetChangeKind.Cleared" />.
+/// </param>
 /// <param name="Item">The item added or removed. Default for <see cref="NetChangeKind.Cleared" />.</param>
 public readonly record struct NetSetChange<T>(NetChangeKind Kind, T Item);
 
@@ -28,9 +32,6 @@ public sealed class NetSet<T> : NetCollection, ISet<T>, IReadOnlySet<T>
     }
 
     public NetSet(IEnumerable<T> items) => _items.UnionWith(items);
-
-    /// <summary>Raised for each change, made here or received. See <see cref="NetCollection" />.</summary>
-    public event Action<NetSetChange<T>>? Changed;
 
     public override int Count => _items.Count;
 
@@ -140,13 +141,16 @@ public sealed class NetSet<T> : NetCollection, ISet<T>, IReadOnlySet<T>
 
     public void CopyTo(T[] array, int arrayIndex) => _items.CopyTo(array, arrayIndex);
 
-    public HashSet<T>.Enumerator GetEnumerator() => _items.GetEnumerator();
-
     void ICollection<T>.Add(T item) => Add(item);
 
     IEnumerator<T> IEnumerable<T>.GetEnumerator() => GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    /// <summary>Raised for each change, made here or received. See <see cref="NetCollection" />.</summary>
+    public event Action<NetSetChange<T>>? Changed;
+
+    public HashSet<T>.Enumerator GetEnumerator() => _items.GetEnumerator();
 
     private protected override void WriteItems(NetWriter writer)
     {
@@ -173,25 +177,25 @@ public sealed class NetSet<T> : NetCollection, ISet<T>, IReadOnlySet<T>
         switch (kind)
         {
             case NetChangeKind.Added:
-            {
-                T item = NetSerializer<T>.Read(ref reader);
-                if (apply && _items.Add(item))
                 {
-                    Notify(Changed, new NetSetChange<T>(kind, item), true);
-                }
+                    T item = NetSerializer<T>.Read(ref reader);
+                    if (apply && _items.Add(item))
+                    {
+                        Notify(Changed, new NetSetChange<T>(kind, item), true);
+                    }
 
-                return;
-            }
+                    return;
+                }
             case NetChangeKind.Removed:
-            {
-                T item = NetSerializer<T>.Read(ref reader);
-                if (apply && _items.Remove(item))
                 {
-                    Notify(Changed, new NetSetChange<T>(kind, item), true);
-                }
+                    T item = NetSerializer<T>.Read(ref reader);
+                    if (apply && _items.Remove(item))
+                    {
+                        Notify(Changed, new NetSetChange<T>(kind, item), true);
+                    }
 
-                return;
-            }
+                    return;
+                }
             case NetChangeKind.Cleared:
                 if (apply)
                 {
@@ -201,7 +205,7 @@ public sealed class NetSet<T> : NetCollection, ISet<T>, IReadOnlySet<T>
 
                 return;
             default:
-                throw new System.IO.InvalidDataException($"Unknown set change {kind}.");
+                throw new InvalidDataException($"Unknown set change {kind}.");
         }
     }
 }

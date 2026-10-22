@@ -4,7 +4,6 @@
 using System.Reflection;
 
 using Prowl.CodeGen.Networking;
-using Prowl.Runtime;
 using Prowl.Runtime.Networking;
 using Prowl.Vector;
 using Prowl.Warp;
@@ -13,7 +12,10 @@ using Xunit;
 
 namespace Prowl.CodeGen.Test.Networking;
 
-/// <summary>What [Sync] properties and RPCs compile to: plain members without a session, and descriptors the runtime networks them by.</summary>
+/// <summary>
+///     What [Sync] properties and RPCs compile to: plain members without a session, and descriptors the runtime
+///     networks them by.
+/// </summary>
 public class SyncAndRpcTests
 {
     [Fact]
@@ -42,7 +44,8 @@ public class SyncAndRpcTests
         Scripts.WithComponent(shipType, ship =>
         {
             NetworkMembers members = NetworkMembers.Of(ship);
-            Assert.Equal(new[] { NetworkCodeGen.NetworkId("Health"), NetworkCodeGen.NetworkId("Callsign") }, Scripts.Slots(ship));
+            Assert.Equal(new[] { NetworkCodeGen.NetworkId("Health"), NetworkCodeGen.NetworkId("Callsign") },
+                Scripts.Slots(ship));
             SyncMember health = members.Sync(NetworkCodeGen.NetworkId("Health"))!;
             Assert.Equal("Health", health.Name);
             Assert.Equal(SyncFlags.FromHost, members.Sync(NetworkCodeGen.NetworkId("Callsign"))!.Flags);
@@ -79,11 +82,13 @@ public class SyncAndRpcTests
     [Fact]
     public void PartialClassesNetworkMembersFromEveryPart()
     {
-        Type shipType = Scripts.Compile(TestScripts.ShipPartA, TestScripts.ShipPartB, "namespace Fleet; public partial class Ship { public int Plain; }")
+        Type shipType = Scripts.Compile(TestScripts.ShipPartA, TestScripts.ShipPartB,
+                "namespace Fleet; public partial class Ship { public int Plain; }")
             .GetType("Fleet.Ship")!;
         Scripts.WithComponent(shipType, ship =>
         {
-            Assert.Equal(new[] { NetworkCodeGen.NetworkId("Health"), NetworkCodeGen.NetworkId("Ammo") }, Scripts.Slots(ship));
+            Assert.Equal(new[] { NetworkCodeGen.NetworkId("Health"), NetworkCodeGen.NetworkId("Ammo") },
+                Scripts.Slots(ship));
             Assert.Equal(30, shipType.GetProperty("Ammo")!.GetValue(ship));
 
             NetworkMembers members = NetworkMembers.Of(ship);
@@ -97,26 +102,31 @@ public class SyncAndRpcTests
         });
     }
 
-    /// <summary>A [Sync] type and initializer only the declaring file's usings resolve: the field has to stay where those usings apply.</summary>
+    /// <summary>
+    ///     A [Sync] type and initializer only the declaring file's usings resolve: the field has to stay where those
+    ///     usings apply.
+    /// </summary>
     [Fact]
     public void PartsKeepTheirOwnUsings()
     {
-        Type shipType = Scripts.Compile("namespace Fleet.Stats { public enum Rank { Cadet, Captain } }", TestScripts.ShipPartA, """
-            using Prowl.Runtime;
-            using Prowl.Runtime.Networking;
-            using Fleet.Stats;
+        Type shipType = Scripts.Compile("namespace Fleet.Stats { public enum Rank { Cadet, Captain } }",
+            TestScripts.ShipPartA, """
+                                   using Prowl.Runtime;
+                                   using Prowl.Runtime.Networking;
+                                   using Fleet.Stats;
 
-            namespace Fleet;
+                                   namespace Fleet;
 
-            public partial class Ship
-            {
-                [Sync] public Rank Rank { get; set; } = Rank.Captain;
+                                   public partial class Ship
+                                   {
+                                       [Sync] public Rank Rank { get; set; } = Rank.Captain;
 
-                [Rpc.Broadcast] public void Promote(Rank to) => Rank = to;
-            }
-            """).GetType("Fleet.Ship")!;
+                                       [Rpc.Broadcast] public void Promote(Rank to) => Rank = to;
+                                   }
+                                   """).GetType("Fleet.Ship")!;
 
-        Scripts.WithComponent(shipType, ship => Assert.Equal("Captain", shipType.GetProperty("Rank")!.GetValue(ship)!.ToString()));
+        Scripts.WithComponent(shipType,
+            ship => Assert.Equal("Captain", shipType.GetProperty("Rank")!.GetValue(ship)!.ToString()));
     }
 
     /// <summary>Descriptors on a generic component are found on whichever instantiation is in use.</summary>
@@ -124,18 +134,18 @@ public class SyncAndRpcTests
     public void GenericComponentsNetwork()
     {
         Type holderType = Scripts.Compile("""
-            using Prowl.Runtime;
-            using Prowl.Runtime.Networking;
+                                          using Prowl.Runtime;
+                                          using Prowl.Runtime.Networking;
 
-            public class Holder<T> : Component
-            {
-                [Sync] public int Count { get; set; } = 3;
+                                          public class Holder<T> : Component
+                                          {
+                                              [Sync] public int Count { get; set; } = 3;
 
-                [Rpc.Broadcast] public void Bump(int by) => Count += by;
-            }
+                                              [Rpc.Broadcast] public void Bump(int by) => Count += by;
+                                          }
 
-            public class IntHolder : Holder<int> { }
-            """).GetType("IntHolder")!;
+                                          public class IntHolder : Holder<int> { }
+                                          """).GetType("IntHolder")!;
 
         Scripts.WithComponent(holderType, holder =>
         {
@@ -145,17 +155,15 @@ public class SyncAndRpcTests
     }
 
     [Fact]
-    public void RpcPrologueDoesNotCollideWithTheMethodsOwnNames()
-    {
+    public void RpcPrologueDoesNotCollideWithTheMethodsOwnNames() =>
         Assert.NotNull(Scripts.Compile("""
-            public class StatsNames : Prowl.Runtime.Component
-            {
-                [Prowl.Runtime.Networking.Rpc.Broadcast]
-                public void WithParameter(int __rpc_stats) { }
+                                       public class StatsNames : Prowl.Runtime.Component
+                                       {
+                                           [Prowl.Runtime.Networking.Rpc.Broadcast]
+                                           public void WithParameter(int __rpc_stats) { }
 
-                [Prowl.Runtime.Networking.Rpc.Broadcast]
-                public void WithLocal() { int __rpc_stats = 1; }
-            }
-            """).GetType("StatsNames"));
-    }
+                                           [Prowl.Runtime.Networking.Rpc.Broadcast]
+                                           public void WithLocal() { int __rpc_stats = 1; }
+                                       }
+                                       """).GetType("StatsNames"));
 }

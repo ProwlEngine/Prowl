@@ -1,14 +1,19 @@
 using System;
 
 using Prowl.Warp;
+using Prowl.Warp.Transports.Batching;
 using Prowl.Warp.Transports.Kcp;
 using Prowl.Warp.Transports.Local;
-using Prowl.Warp.Transports.Batching;
 
 namespace Prowl.Runtime.Networking;
 
 /// <summary>Where transport I/O runs. Session callbacks always run on the caller.</summary>
-public enum NetworkExecution { Auto, Inline, DedicatedThread }
+public enum NetworkExecution
+{
+    Auto,
+    Inline,
+    DedicatedThread
+}
 
 public enum NetworkTransport
 {
@@ -21,11 +26,9 @@ public sealed class NetworkConfiguration
 {
     public uint AppVersion;
     public bool BatchMessages = true;
-    // Retained for existing serialized projects. False selects inline execution in Auto mode.
-    public bool UseNetworkThread = true;
-    public NetworkExecution Execution = NetworkExecution.Auto;
     public bool CongestionControl;
     public float ConnectTimeoutSeconds = 5;
+    public NetworkExecution Execution = NetworkExecution.Auto;
     public int FastResend = 2;
     public float InterpolationMilliseconds = 100;
     public float JitterMilliseconds;
@@ -47,7 +50,11 @@ public sealed class NetworkConfiguration
     public float TickRate = 30;
     public float TimeoutSeconds = 10;
     public NetworkTransport Transport = NetworkTransport.Kcp;
+
     public int UpdateIntervalMilliseconds = 10;
+
+    // Retained for existing serialized projects. False selects inline execution in Auto mode.
+    public bool UseNetworkThread = true;
 
     /// <summary>Returns an independent, normalized copy so editing project defaults cannot mutate a running session.</summary>
     public NetworkConfiguration ValidatedCopy()
@@ -58,7 +65,10 @@ public sealed class NetworkConfiguration
             copy.Transport = NetworkTransport.Kcp;
         }
 
-        if (!Enum.IsDefined(copy.Execution)) copy.Execution = NetworkExecution.Auto;
+        if (!Enum.IsDefined(copy.Execution))
+        {
+            copy.Execution = NetworkExecution.Auto;
+        }
 
         copy.Port = Math.Clamp(copy.Port, 0, 65535);
         if (string.IsNullOrWhiteSpace(copy.LocalAddress))
@@ -90,12 +100,25 @@ public sealed class NetworkConfiguration
     internal bool UsesWorker(Transport transport)
     {
         TransportCapabilities capabilities = transport.Capabilities;
-        if (!capabilities.IsAvailable) throw new NotSupportedException("The selected transport is unavailable on this platform.");
-        if (!capabilities.Supports(Delivery.Reliable)) throw new NotSupportedException("Sessions require reliable delivery.");
-        if (Execution == NetworkExecution.DedicatedThread && capabilities.Execution == TransportExecution.CreatingThreadRequired)
+        if (!capabilities.IsAvailable)
+        {
+            throw new NotSupportedException("The selected transport is unavailable on this platform.");
+        }
+
+        if (!capabilities.Supports(Delivery.Reliable))
+        {
+            throw new NotSupportedException("Sessions require reliable delivery.");
+        }
+
+        if (Execution == NetworkExecution.DedicatedThread &&
+            capabilities.Execution == TransportExecution.CreatingThreadRequired)
+        {
             throw new NotSupportedException("The selected transport must run on its creating thread.");
+        }
+
         return Execution == NetworkExecution.DedicatedThread ||
-            (Execution == NetworkExecution.Auto && UseNetworkThread && capabilities.Execution == TransportExecution.WorkerPreferred);
+               (Execution == NetworkExecution.Auto && UseNetworkThread &&
+                capabilities.Execution == TransportExecution.WorkerPreferred);
     }
 
     private static float Limit(float value, float min, float max, float fallback) =>
@@ -169,9 +192,17 @@ public static partial class Networking
     public static Transport CreateTransport(bool hosting)
     {
         if (s_configuration.Transport == NetworkTransport.Local)
-            return new LocalTransport(s_localNetwork, hosting ? s_configuration.LocalAddress : Guid.NewGuid().ToString());
+        {
+            return new LocalTransport(s_localNetwork,
+                hosting ? s_configuration.LocalAddress : Guid.NewGuid().ToString());
+        }
+
         Transport transport = new KcpTransport(s_configuration.CreateKcpOptions());
-        if (s_configuration.BatchMessages) transport = new BatchingTransport(transport, s_configuration.Mtu);
+        if (s_configuration.BatchMessages)
+        {
+            transport = new BatchingTransport(transport, s_configuration.Mtu);
+        }
+
         return transport;
     }
 

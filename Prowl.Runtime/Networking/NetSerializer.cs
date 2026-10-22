@@ -22,11 +22,14 @@ namespace Prowl.Runtime.Networking;
 ///     own structs and classes get serializers from the script compiler when its [Sync] values and RPCs use
 ///     them: member by member (public fields, [SerializeField] fields and public auto-properties), or through
 ///     <see cref="INetSerializable{TSelf}" /> if they implement it. Classes and interfaces are sent as what the
-///     object really is, with references and cycles kept (see <see cref="NetTypeSerializer" />). Any other type can be given one with
+///     object really is, with references and cycles kept (see <see cref="NetTypeSerializer" />). Any other type can be
+///     given one with
 ///     <see cref="Register" />. Anything else throws <see cref="NotSupportedException" /> on first use.
 /// </remarks>
-[BuiltInTypes(typeof(bool), typeof(byte), typeof(sbyte), typeof(short), typeof(ushort), typeof(int), typeof(uint), typeof(long),
-    typeof(ulong), typeof(float), typeof(double), typeof(string), typeof(Guid), typeof(Float2), typeof(Float3), typeof(Float4),
+[BuiltInTypes(typeof(bool), typeof(byte), typeof(sbyte), typeof(short), typeof(ushort), typeof(int), typeof(uint),
+    typeof(long),
+    typeof(ulong), typeof(float), typeof(double), typeof(string), typeof(Guid), typeof(Float2), typeof(Float3),
+    typeof(Float4),
     typeof(Double2), typeof(Double3), typeof(Int2), typeof(Int3), typeof(Quaternion), typeof(Color))]
 public static class NetSerializer<T>
 {
@@ -58,7 +61,8 @@ public static class NetSerializer<T>
         ArgumentNullException.ThrowIfNull(read);
         if (s_builtIn)
         {
-            throw new InvalidOperationException($"{typeof(T)} is sent by the engine's own serializer, which can't be replaced.");
+            throw new InvalidOperationException(
+                $"{typeof(T)} is sent by the engine's own serializer, which can't be replaced.");
         }
 
         (s_write, s_read) = (write, read);

@@ -47,20 +47,20 @@ public enum NetChangeKind : byte
 public abstract class NetCollection
 {
     private const byte Whole = 0, Changes = 1;
+    private uint _changeCount;
+
+    // The changes not sent yet, already written, the first of them being number _changesFrom.
+    private NetWriter? _changes;
+    private uint _changesFrom;
+    private int _changesSession;
+    private SyncMember? _member;
 
     private Component? _owner;
-    private SyncMember? _member;
 
     // How many changes this peer's contents include: each one sent from here or applied from elsewhere.
     // Each peer counts the same changes, so a peer can tell the ones its contents already have. Those
     // turn up when the whole collection is sent to a joiner while changes are still on their way.
     private uint _sequence;
-
-    // The changes not sent yet, already written, the first of them being number _changesFrom.
-    private NetWriter? _changes;
-    private uint _changeCount;
-    private uint _changesFrom;
-    private int _changesSession;
 
     public abstract int Count { get; }
 
@@ -172,7 +172,8 @@ public abstract class NetCollection
         if (sequence > _sequence)
         {
             // Changes this peer never had. The channel is reliable and ordered, so this means a bug, not loss.
-            Debug.LogWarning($"[Network] {Describe()} missed {sequence - _sequence} change(s); it may now differ from the sender's.");
+            Debug.LogWarning(
+                $"[Network] {Describe()} missed {sequence - _sequence} change(s); it may now differ from the sender's.");
             _sequence = sequence;
         }
 

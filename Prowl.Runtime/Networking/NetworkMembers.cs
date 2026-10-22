@@ -5,8 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using System.IO;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 using Prowl.Warp;
@@ -100,7 +100,10 @@ public sealed class SyncMember<TComponent, T>(
         NetworkDiagnostics.FormatValue(NetSerializer<T>.Read(ref reader));
 }
 
-/// <summary>A [Sync] network collection: a <see cref="NetList{T}" />, <see cref="NetDictionary{TKey,TValue}" /> or <see cref="NetSet{T}" />.</summary>
+/// <summary>
+///     A [Sync] network collection: a <see cref="NetList{T}" />, <see cref="NetDictionary{TKey,TValue}" /> or
+///     <see cref="NetSet{T}" />.
+/// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class SyncCollectionMember<TComponent, TCollection>(
     uint slot,
@@ -115,7 +118,8 @@ public sealed class SyncCollectionMember<TComponent, TCollection>(
 
     internal override void ChangesSent(Component component) => Bound(component).ClearChanges();
 
-    internal override void Read(Component component, ref NetReader reader, bool initial) => Bound(component).Read(ref reader, initial);
+    internal override void Read(Component component, ref NetReader reader, bool initial) =>
+        Bound(component).Read(ref reader, initial);
 
     internal override string FormatValue(Component component) => Bound(component).Describe();
 
@@ -170,7 +174,9 @@ public sealed class RpcMember<TComponent>(
     {
         invoke((TComponent)component, ref reader, false);
         if (!reader.IsAtEnd)
+        {
             throw new InvalidDataException("RPC arguments contain trailing bytes.");
+        }
     }
 }
 
@@ -198,7 +204,8 @@ internal sealed class NetworkMembers
     public RpcMember? Rpc(uint id) => _rpcs.GetValueOrDefault(id);
 
     [UnconditionalSuppressMessage("Trimming", "IL2075:DynamicallyAccessedMembers",
-        Justification = "Player builds preserve component assemblies and their network descriptor fields for reflection.")]
+        Justification =
+            "Player builds preserve component assemblies and their network descriptor fields for reflection.")]
     private static NetworkMembers Build(Type type)
     {
         Stack<Type> hierarchy = new();

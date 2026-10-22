@@ -18,8 +18,6 @@ public static partial class Networking
     private const int NoOwner = -1;
     private static uint s_nextGeneration;
 
-    private static uint NextGeneration() => checked(++s_nextGeneration);
-
     private static readonly EntryTable s_entries = new();
 
     // Identifier lookups for messages, over the replicated scene. Filled on demand and rebuilt on a miss,
@@ -29,6 +27,8 @@ public static partial class Networking
 
     // The object a spawn is building, by identifier, until it joins the scene.
     private static Dictionary<Guid, EngineObject>? s_spawning;
+
+    private static uint NextGeneration() => checked(++s_nextGeneration);
 
     /// <summary>The GameObject or Component with this identifier in the replicated scene, or null.</summary>
     internal static EngineObject? FindByIdentifier(Guid id)
@@ -179,7 +179,8 @@ public static partial class Networking
             return;
         }
 
-        NetworkEntry entry = new(go) { Owner = owner?.Id ?? NoOwner, Orphaned = orphaned, Generation = NextGeneration() };
+        NetworkEntry entry =
+            new(go) { Owner = owner?.Id ?? NoOwner, Orphaned = orphaned, Generation = NextGeneration() };
         s_entries.Add(entry);
         IndexTree(go);
 
@@ -190,7 +191,8 @@ public static partial class Networking
     }
 
     /// <summary>A Spawn message: where the object goes, who owns it, the object itself and its [Sync] values.</summary>
-    internal static void WriteSpawn(GameObject go, int owner, NetworkOrphaned orphaned, NetWriter output, uint generation = 0)
+    internal static void WriteSpawn(GameObject go, int owner, NetworkOrphaned orphaned, NetWriter output,
+        uint generation = 0)
     {
         using FrameStatScope stats = FrameStats.Network.Scope();
         EchoObject echo;
@@ -256,7 +258,7 @@ public static partial class Networking
 
         try
         {
-            ApplySyncState(sender, ref reader, null, initial: true);
+            ApplySyncState(sender, ref reader, null, true);
         }
         finally
         {
@@ -411,11 +413,11 @@ public static partial class Networking
     {
         public readonly List<TransformSample> Samples = new();
         public readonly TransformTimeline Timeline = new();
+        public uint Generation;
         public bool HasReceived;
 
         // Transform sync: what this side last sent, and what it has received from whoever controls it.
         public bool HasSent;
-        public uint Generation;
         public uint LastReceivedTick;
         public double LastSentTime;
         public NetworkOrphaned Orphaned;

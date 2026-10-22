@@ -82,7 +82,7 @@ public static partial class Networking
         using NetWriter values = new(1024);
         foreach ((Component component, uint slot) in s_dirty)
         {
-            if (!component.IsDisposed && WriteValue(values, component, slot, changes: true))
+            if (!component.IsDisposed && WriteValue(values, component, slot, true))
             {
                 count++;
             }
@@ -151,7 +151,7 @@ public static partial class Networking
             {
                 foreach (SyncMember sync in NetworkMembers.Of(component).Syncs)
                 {
-                    if (WriteValue(values, component, sync.Slot, changes: false))
+                    if (WriteValue(values, component, sync.Slot, false))
                     {
                         count++;
                     }
@@ -171,7 +171,7 @@ public static partial class Networking
         }
 
         using NetWriter? relay = IsHost ? new NetWriter(1024) : null;
-        int relayed = ApplySyncState(sender, ref reader, relay, initial: false);
+        int relayed = ApplySyncState(sender, ref reader, relay, false);
 
         // The host passes on what it accepted from a client to everyone else.
         if (relay != null && relayed > 0)
@@ -262,7 +262,10 @@ public static partial class Networking
         }
     }
 
-    /// <summary>Runs the queued notifications from <paramref name="from" /> on, in order. The game's code throwing is logged, not passed on.</summary>
+    /// <summary>
+    ///     Runs the queued notifications from <paramref name="from" /> on, in order. The game's code throwing is logged,
+    ///     not passed on.
+    /// </summary>
     private static void RunNotifications(int from)
     {
         try

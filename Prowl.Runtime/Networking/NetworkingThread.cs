@@ -5,6 +5,7 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Threading;
+
 using Prowl.Warp;
 
 namespace Prowl.Runtime.Networking;
@@ -13,55 +14,113 @@ namespace Prowl.Runtime.Networking;
 /// <remarks>The worker exclusively drives Transport while running. Shutdown joins it and permits reuse.</remarks>
 internal sealed class NetworkingThread : IDisposable
 {
-    private readonly Transport _transport;
-    private readonly object _gate = new();
-    private readonly AutoResetEvent _wake = new(false);
-    private readonly ManualResetEventSlim _listenDone = new(false);
-    private readonly Queue<Command> _commands = new();
-    private readonly Queue<Notice> _notices = new();
-    private readonly Dictionary<Connection, QueuedConnection> _peers = new(); // Worker only.
-    private readonly Dictionary<int, QueuedConnection> _connections = new(); // Caller only.
     private readonly Queue<TransportEvent> _closedEvents = new(); // Caller only.
     private readonly List<Connection> _closing = new(); // Caller only.
+    private readonly Queue<Command> _commands = new();
+    private readonly Dictionary<int, QueuedConnection> _connections = new(); // Caller only.
+    private readonly object _gate = new();
     private readonly int _interval, _maxMessages;
+    private readonly ManualResetEventSlim _listenDone = new(false);
     private readonly long _maxBytes, _maxPeerBytes;
     private readonly int _maxPeerMessages;
-    private Thread? _worker;
-    private volatile bool _stop, _listening;
+    private readonly Queue<Notice> _notices = new();
+    private readonly Dictionary<Connection, QueuedConnection> _peers = new(); // Worker only.
+    private readonly AutoResetEvent _wake = new(false);
+    private bool _disposed;
     private Exception? _failure;
-    private int _nextId, _pendingData, _pendingControls;
     private int _localPort;
+    private int _nextId, _pendingData, _pendingControls;
     private long _outgoingBytes, _incomingBytes;
     private byte[]? _polledBuffer;
-    private bool _disposed;
+    private volatile bool _stop, _listening;
+    private Thread? _worker;
 
     public NetworkingThread(Transport transport, int intervalMilliseconds = 2, int maxQueuedMessages = 4096,
         long maxQueuedBytes = 64 * 1024 * 1024)
     {
         ArgumentNullException.ThrowIfNull(transport);
-        if (intervalMilliseconds < 1 || intervalMilliseconds > 1000) throw new ArgumentOutOfRangeException(nameof(intervalMilliseconds));
+        if (intervalMilliseconds < 1 || intervalMilliseconds > 1000)
+        {
+            throw new ArgumentOutOfRangeException(nameof(intervalMilliseconds));
+        }
+
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxQueuedMessages);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxQueuedBytes);
-        if (!transport.Capabilities.IsAvailable || transport.Capabilities.Execution == TransportExecution.CreatingThreadRequired)
+        if (!transport.Capabilities.IsAvailable ||
+            transport.Capabilities.Execution == TransportExecution.CreatingThreadRequired)
+        {
             throw new NotSupportedException("This transport cannot run on a networking worker.");
-        _transport = transport; _interval = intervalMilliseconds; _maxMessages = maxQueuedMessages; _maxBytes = maxQueuedBytes;
+        }
+
+        Transport = transport;
+        _interval = intervalMilliseconds;
+        _maxMessages = maxQueuedMessages;
+        _maxBytes = maxQueuedBytes;
         _maxPeerMessages = transport.MaxQueuedDataEventsPerConnection;
         _maxPeerBytes = transport.MaxQueuedDataBytesPerConnection;
     }
 
-    public Transport Transport => _transport;
+    public Transport Transport { get; }
+
     public bool IsListening => _listening;
     public int LocalPort => Volatile.Read(ref _localPort);
     public IReadOnlyCollection<Connection> Connections => _connections.Values;
-    public long PendingSendBytes { get { lock (_gate) return _outgoingBytes; } }
-    public long PendingReceiveBytes { get { lock (_gate) return _incomingBytes; } }
+
+    public long PendingSendBytes
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _outgoingBytes;
+            }
+        }
+    }
+
+    public long PendingReceiveBytes
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _incomingBytes;
+            }
+        }
+    }
+
     public bool IsWorkerRunning => _worker?.IsAlive == true;
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        Shutdown();
+        _disposed = true;
+        ReleasePolledBuffer();
+        _closedEvents.Clear();
+        try
+        {
+            Transport.Dispose();
+        }
+        finally
+        {
+            _wake.Dispose();
+            _listenDone.Dispose();
+        }
+    }
 
     private void Start()
     {
         ThrowIfDisposed();
         CheckFailure();
-        if (_worker != null) return;
+        if (_worker != null)
+        {
+            return;
+        }
+
         _stop = false;
         _worker = new Thread(Run) { IsBackground = true, Name = "Prowl networking" };
         _worker.Start();
@@ -70,12 +129,20 @@ internal sealed class NetworkingThread : IDisposable
     public void Listen()
     {
         ThrowIfDisposed();
-        if (_listening) { CheckFailure(); return; }
+        if (_listening)
+        {
+            CheckFailure();
+            return;
+        }
+
         _listenDone.Reset();
         Start();
-        Post(new(CommandKind.Listen));
+        Post(new Command(CommandKind.Listen));
         if (!_listenDone.Wait(TimeSpan.FromSeconds(5)))
+        {
             throw new TimeoutException("The networking worker did not finish starting within five seconds.");
+        }
+
         CheckFailure();
     }
 
@@ -84,9 +151,12 @@ internal sealed class NetworkingThread : IDisposable
         ArgumentNullException.ThrowIfNull(address);
         Start();
         if (_connections.Count + _closedEvents.Count >= _maxMessages)
+        {
             throw new InvalidOperationException("Drain networking events before opening more connections.");
+        }
+
         QueuedConnection peer = new(this, Interlocked.Increment(ref _nextId), address, true) { Registered = true };
-        Post(new(CommandKind.Connect, peer));
+        Post(new Command(CommandKind.Connect, peer));
         _connections.Add(peer.Id, peer);
         return peer;
     }
@@ -95,16 +165,25 @@ internal sealed class NetworkingThread : IDisposable
     {
         lock (_gate)
         {
-            if (_commands.Count >= _maxMessages) throw new InvalidOperationException("Networking command queue is full.");
+            if (_commands.Count >= _maxMessages)
+            {
+                throw new InvalidOperationException("Networking command queue is full.");
+            }
+
             _commands.Enqueue(command);
         }
+
         _wake.Set();
     }
 
     private void Send(QueuedConnection peer, ReadOnlySpan<byte> data, Delivery delivery, SendFlags flags)
     {
         CheckFailure();
-        if (Volatile.Read(ref peer.CloseRequested) != 0) return;
+        if (Volatile.Read(ref peer.CloseRequested) != 0)
+        {
+            return;
+        }
+
         byte[] buffer = ArrayPool<byte>.Shared.Rent(data.Length);
         data.CopyTo(buffer);
         bool accepted;
@@ -114,14 +193,16 @@ internal sealed class NetworkingThread : IDisposable
             if (accepted)
             {
                 _outgoingBytes += buffer.Length;
-                _commands.Enqueue(new(CommandKind.Send, peer, buffer, data.Length, delivery, flags));
+                _commands.Enqueue(new Command(CommandKind.Send, peer, buffer, data.Length, delivery, flags));
             }
         }
+
         if (!accepted)
         {
             ArrayPool<byte>.Shared.Return(buffer);
             RequestClose(peer, DisconnectReason.ResourceLimit);
         }
+
         _wake.Set();
     }
 
@@ -136,32 +217,56 @@ internal sealed class NetworkingThread : IDisposable
     {
         ThrowIfDisposed();
         ReleasePolledBuffer();
-        if (_closedEvents.TryDequeue(out ev)) return true;
+        if (_closedEvents.TryDequeue(out ev))
+        {
+            return true;
+        }
+
         while (TakeNotice(out Notice notice))
         {
             QueuedConnection peer = notice.Peer;
             switch (notice.Type)
             {
                 case TransportEventType.Connected:
-                    if (peer.State != ConnectionState.Connecting) continue;
-                    if (!peer.Registered) { peer.Registered = true; _connections.Add(peer.Id, peer); }
+                    if (peer.State != ConnectionState.Connecting)
+                    {
+                        continue;
+                    }
+
+                    if (!peer.Registered)
+                    {
+                        peer.Registered = true;
+                        _connections.Add(peer.Id, peer);
+                    }
+
                     peer.MarkConnected();
                     break;
                 case TransportEventType.Disconnected:
-                    if (peer.State == ConnectionState.Disconnected) continue;
+                    if (peer.State == ConnectionState.Disconnected)
+                    {
+                        continue;
+                    }
+
                     peer.MarkDisconnected();
                     _connections.Remove(peer.Id);
                     break;
                 case TransportEventType.Data:
                     if (!peer.IsConnected || Volatile.Read(ref peer.CloseRequested) != 0)
-                    { ArrayPool<byte>.Shared.Return(notice.Buffer!); continue; }
+                    {
+                        ArrayPool<byte>.Shared.Return(notice.Buffer!);
+                        continue;
+                    }
+
                     _polledBuffer = notice.Buffer;
                     break;
             }
-            ev = new(notice.Type, peer, notice.Buffer == null ? default : notice.Buffer.AsMemory(0, notice.Length),
+
+            ev = new TransportEvent(notice.Type, peer,
+                notice.Buffer == null ? default : notice.Buffer.AsMemory(0, notice.Length),
                 notice.Delivery, notice.Reason);
             return true;
         }
+
         CheckFailure();
         ev = default;
         return false;
@@ -171,7 +276,11 @@ internal sealed class NetworkingThread : IDisposable
     {
         lock (_gate)
         {
-            if (!_notices.TryDequeue(out notice)) return false;
+            if (!_notices.TryDequeue(out notice))
+            {
+                return false;
+            }
+
             if (notice.Buffer != null)
             {
                 _incomingBytes -= notice.Buffer.Length;
@@ -179,12 +288,21 @@ internal sealed class NetworkingThread : IDisposable
                 notice.Peer.IncomingCount--;
                 _pendingData--;
             }
-            else _pendingControls--;
+            else
+            {
+                _pendingControls--;
+            }
+
             return true;
         }
     }
 
-    public void RequestFlush() { ThrowIfDisposed(); CheckFailure(); _wake.Set(); }
+    public void RequestFlush()
+    {
+        ThrowIfDisposed();
+        CheckFailure();
+        _wake.Set();
+    }
 
     private void Run()
     {
@@ -195,23 +313,38 @@ internal sealed class NetworkingThread : IDisposable
                 for (int processed = 0; processed < _maxMessages && !_stop; processed++)
                 {
                     Command command;
-                    lock (_gate) { if (!_commands.TryDequeue(out command)) break; }
+                    lock (_gate)
+                    {
+                        if (!_commands.TryDequeue(out command))
+                        {
+                            break;
+                        }
+                    }
+
                     try
                     {
                         switch (command.Kind)
                         {
                             case CommandKind.Listen:
-                                _transport.Listen(); Volatile.Write(ref _localPort, _transport.LocalPort);
-                                _listening = true; _listenDone.Set(); break;
+                                Transport.Listen();
+                                Volatile.Write(ref _localPort, Transport.LocalPort);
+                                _listening = true;
+                                _listenDone.Set();
+                                break;
                             case CommandKind.Connect:
                                 QueuedConnection peer = command.Peer!;
-                                peer.Inner = _transport.Connect(peer.Address);
-                                Volatile.Write(ref _localPort, _transport.LocalPort);
+                                peer.Inner = Transport.Connect(peer.Address);
+                                Volatile.Write(ref _localPort, Transport.LocalPort);
                                 _peers.Add(peer.Inner, peer);
                                 break;
                             case CommandKind.Send:
-                                if (command.Peer!.Inner is { IsConnected: true } target && Volatile.Read(ref command.Peer.CloseRequested) == 0)
-                                    target.Send(command.Buffer.AsSpan(0, command.Length), command.Delivery, command.Flags);
+                                if (command.Peer!.Inner is { IsConnected: true } target &&
+                                    Volatile.Read(ref command.Peer.CloseRequested) == 0)
+                                {
+                                    target.Send(command.Buffer.AsSpan(0, command.Length), command.Delivery,
+                                        command.Flags);
+                                }
+
                                 break;
                             case CommandKind.Stop:
                                 _stop = true;
@@ -222,37 +355,82 @@ internal sealed class NetworkingThread : IDisposable
                     {
                         if (command.Buffer != null)
                         {
-                            lock (_gate) _outgoingBytes -= command.Buffer.Length;
+                            lock (_gate)
+                            {
+                                _outgoingBytes -= command.Buffer.Length;
+                            }
+
                             ArrayPool<byte>.Shared.Return(command.Buffer);
                         }
                     }
                 }
+
                 foreach (QueuedConnection peer in _peers.Values)
-                    if (Volatile.Read(ref peer.CloseRequested) != 0) peer.Inner!.Disconnect();
-                _transport.Receive();
-                _transport.Flush();
-                while (_transport.Poll(out TransportEvent ev)) Handle(ev);
+                {
+                    if (Volatile.Read(ref peer.CloseRequested) != 0)
+                    {
+                        peer.Inner!.Disconnect();
+                    }
+                }
+
+                Transport.Receive();
+                Transport.Flush();
+                while (Transport.Poll(out TransportEvent ev))
+                {
+                    Handle(ev);
+                }
+
                 lock (_gate)
                 {
-                    foreach (QueuedConnection peer in _peers.Values) peer.Refresh();
+                    foreach (QueuedConnection peer in _peers.Values)
+                    {
+                        peer.Refresh();
+                    }
                 }
+
                 _wake.WaitOne(_interval);
             }
         }
-        catch (Exception error) { lock (_gate) _failure = error; }
+        catch (Exception error)
+        {
+            lock (_gate)
+            {
+                _failure = error;
+            }
+        }
         finally
         {
-            try { _transport.Shutdown(); while (_transport.Poll(out _)) { } }
-            catch (Exception error) { lock (_gate) _failure ??= error; }
+            try
+            {
+                Transport.Shutdown();
+                while (Transport.Poll(out _))
+                {
+                }
+            }
+            catch (Exception error)
+            {
+                lock (_gate)
+                {
+                    _failure ??= error;
+                }
+            }
+
             _peers.Clear();
             _listening = false;
             Volatile.Write(ref _localPort, 0);
             lock (_gate)
             {
                 while (_commands.TryDequeue(out Command pending))
-                    if (pending.Buffer != null) ArrayPool<byte>.Shared.Return(pending.Buffer);
+                {
+                    if (pending.Buffer != null)
+                    {
+                        ArrayPool<byte>.Shared.Return(pending.Buffer);
+                    }
+                }
+
                 _outgoingBytes = 0;
             }
+
             _listenDone.Set();
         }
     }
@@ -261,41 +439,70 @@ internal sealed class NetworkingThread : IDisposable
     {
         if (!_peers.TryGetValue(ev.Connection, out QueuedConnection? peer))
         {
-            peer = new(this, Interlocked.Increment(ref _nextId), ev.Connection.Address, ev.Connection.IsOutgoing) { Inner = ev.Connection };
+            peer = new QueuedConnection(this, Interlocked.Increment(ref _nextId), ev.Connection.Address,
+                ev.Connection.IsOutgoing) { Inner = ev.Connection };
             _peers.Add(ev.Connection, peer);
         }
-        lock (_gate) peer.Refresh();
+
+        lock (_gate)
+        {
+            peer.Refresh();
+        }
+
         if (ev.Type == TransportEventType.Data)
         {
-            if (Volatile.Read(ref peer.CloseRequested) != 0) return;
+            if (Volatile.Read(ref peer.CloseRequested) != 0)
+            {
+                return;
+            }
+
             byte[] buffer = ArrayPool<byte>.Shared.Rent(ev.Data.Length);
             ev.Data.Span.CopyTo(buffer);
             bool accepted;
             lock (_gate)
             {
                 accepted = _pendingData < _maxMessages && buffer.Length <= _maxBytes - _incomingBytes &&
-                    peer.IncomingCount < _maxPeerMessages && buffer.Length <= _maxPeerBytes - peer.IncomingBytes;
+                           peer.IncomingCount < _maxPeerMessages && buffer.Length <= _maxPeerBytes - peer.IncomingBytes;
                 if (accepted)
                 {
-                    _incomingBytes += buffer.Length; peer.IncomingBytes += buffer.Length; peer.IncomingCount++; _pendingData++;
-                    _notices.Enqueue(new(ev.Type, peer, buffer, ev.Data.Length, ev.Delivery));
+                    _incomingBytes += buffer.Length;
+                    peer.IncomingBytes += buffer.Length;
+                    peer.IncomingCount++;
+                    _pendingData++;
+                    _notices.Enqueue(new Notice(ev.Type, peer, buffer, ev.Data.Length, ev.Delivery));
                 }
             }
-            if (!accepted) { ArrayPool<byte>.Shared.Return(buffer); RequestClose(peer, DisconnectReason.ResourceLimit); }
+
+            if (!accepted)
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+                RequestClose(peer, DisconnectReason.ResourceLimit);
+            }
+
             return;
         }
+
         DisconnectReason reason = ev.Reason;
         if (ev.Type == TransportEventType.Disconnected)
         {
             int requested = Volatile.Read(ref peer.CloseRequested);
-            if (requested != 0) reason = (DisconnectReason)(requested - 1);
+            if (requested != 0)
+            {
+                reason = (DisconnectReason)(requested - 1);
+            }
+
             _peers.Remove(ev.Connection);
         }
+
         lock (_gate)
         {
-            if (_pendingControls >= _maxMessages) throw new InvalidOperationException("Networking control event queue is full.");
+            if (_pendingControls >= _maxMessages)
+            {
+                throw new InvalidOperationException("Networking control event queue is full.");
+            }
+
             _pendingControls++;
-            _notices.Enqueue(new(ev.Type, peer, Reason: reason));
+            _notices.Enqueue(new Notice(ev.Type, peer, Reason: reason));
         }
     }
 
@@ -305,8 +512,12 @@ internal sealed class NetworkingThread : IDisposable
         lock (_gate)
         {
             failure = _failure;
-            if (failure == null) return;
+            if (failure == null)
+            {
+                return;
+            }
         }
+
         CloseAll(DisconnectReason.Unreachable);
         throw new InvalidOperationException("The networking worker failed.", failure);
     }
@@ -317,8 +528,9 @@ internal sealed class NetworkingThread : IDisposable
         foreach (QueuedConnection peer in _closing)
         {
             peer.MarkDisconnected();
-            _closedEvents.Enqueue(new(TransportEventType.Disconnected, peer, reason: reason));
+            _closedEvents.Enqueue(new TransportEvent(TransportEventType.Disconnected, peer, reason: reason));
         }
+
         _connections.Clear();
         _closing.Clear();
     }
@@ -329,94 +541,186 @@ internal sealed class NetworkingThread : IDisposable
     // Never dispose a transport or its synchronization handles while its worker is alive.
     public void Shutdown(TimeSpan timeout)
     {
-        if (timeout < TimeSpan.Zero || timeout.TotalMilliseconds > int.MaxValue) throw new ArgumentOutOfRangeException(nameof(timeout));
+        if (timeout < TimeSpan.Zero || timeout.TotalMilliseconds > int.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+        }
+
         if (_worker != null)
         {
             // Drain prior sends, then flush them before the inner shutdown sends its disconnect.
-            lock (_gate) _commands.Enqueue(new(CommandKind.Stop));
+            lock (_gate)
+            {
+                _commands.Enqueue(new Command(CommandKind.Stop));
+            }
+
             _wake.Set();
-            if (!_worker.Join(timeout)) throw new TimeoutException("The networking worker did not stop within the shutdown timeout.");
+            if (!_worker.Join(timeout))
+            {
+                throw new TimeoutException("The networking worker did not stop within the shutdown timeout.");
+            }
+
             _worker = null;
             lock (_gate)
             {
                 while (_commands.TryDequeue(out Command pending))
-                    if (pending.Buffer != null) ArrayPool<byte>.Shared.Return(pending.Buffer);
+                {
+                    if (pending.Buffer != null)
+                    {
+                        ArrayPool<byte>.Shared.Return(pending.Buffer);
+                    }
+                }
+
                 _outgoingBytes = 0;
             }
         }
-        else _transport.Shutdown();
+        else
+        {
+            Transport.Shutdown();
+        }
+
         while (TakeNotice(out Notice notice))
-            if (notice.Buffer != null) ArrayPool<byte>.Shared.Return(notice.Buffer);
+        {
+            if (notice.Buffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(notice.Buffer);
+            }
+        }
+
         CloseAll(DisconnectReason.Requested);
-        lock (_gate) _failure = null;
+        lock (_gate)
+        {
+            _failure = null;
+        }
     }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
     private void ReleasePolledBuffer()
     {
-        if (_polledBuffer == null) return;
+        if (_polledBuffer == null)
+        {
+            return;
+        }
+
         ArrayPool<byte>.Shared.Return(_polledBuffer);
         _polledBuffer = null;
     }
 
-    public void Dispose()
+    private enum CommandKind : byte
     {
-        if (_disposed) return;
-        Shutdown();
-        _disposed = true;
-        ReleasePolledBuffer();
-        _closedEvents.Clear();
-        try { _transport.Dispose(); }
-        finally { _wake.Dispose(); _listenDone.Dispose(); }
+        Listen,
+        Connect,
+        Send,
+        Stop
     }
 
-    private enum CommandKind : byte { Listen, Connect, Send, Stop }
-    private readonly record struct Command(CommandKind Kind, QueuedConnection? Peer = null, byte[]? Buffer = null,
-        int Length = 0, Delivery Delivery = default, SendFlags Flags = default);
-    private readonly record struct Notice(TransportEventType Type, QueuedConnection Peer, byte[]? Buffer = null,
-        int Length = 0, Delivery Delivery = default, DisconnectReason Reason = default);
+    private readonly record struct Command(
+        CommandKind Kind,
+        QueuedConnection? Peer = null,
+        byte[]? Buffer = null,
+        int Length = 0,
+        Delivery Delivery = default,
+        SendFlags Flags = default);
+
+    private readonly record struct Notice(
+        TransportEventType Type,
+        QueuedConnection Peer,
+        byte[]? Buffer = null,
+        int Length = 0,
+        Delivery Delivery = default,
+        DisconnectReason Reason = default);
 
     private sealed class QueuedConnection(NetworkingThread owner, int id, string address, bool outgoing)
-        : Connection(owner._transport, id, address, outgoing)
+        : Connection(owner.Transport, id, address, outgoing)
     {
-        public Connection? Inner; // Worker only.
-        public bool Registered; // Caller only.
         public int CloseRequested;
         public long IncomingBytes;
         public int IncomingCount;
+        public Connection? Inner; // Worker only.
+        public bool Registered; // Caller only.
         private int _reliableMax, _unreliableMax, _reliableThreshold, _unreliableThreshold;
         private long _rttTicks;
         private ConnectionStats _stats;
+
+        public override TimeSpan RoundTripTime
+        {
+            get
+            {
+                lock (owner._gate)
+                {
+                    return TimeSpan.FromTicks(_rttTicks);
+                }
+            }
+        }
+
+        public override ConnectionStats Stats
+        {
+            get
+            {
+                lock (owner._gate)
+                {
+                    return _stats;
+                }
+            }
+        }
+
         public void MarkConnected() => State = ConnectionState.Connected;
         public void MarkDisconnected() => State = ConnectionState.Disconnected;
+
         public void Refresh()
         {
-            TransportCapabilities capabilities = owner._transport.Capabilities;
+            TransportCapabilities capabilities = owner.Transport.Capabilities;
             _reliableMax = capabilities.Supports(Delivery.Reliable) ? Inner!.GetMaxMessageSize(Delivery.Reliable) : 0;
-            _unreliableMax = capabilities.Supports(Delivery.Unreliable) ? Inner!.GetMaxMessageSize(Delivery.Unreliable) : 0;
-            _reliableThreshold = capabilities.Supports(Delivery.Reliable) ? Inner!.GetBatchThreshold(Delivery.Reliable) : 0;
-            _unreliableThreshold = capabilities.Supports(Delivery.Unreliable) ? Inner!.GetBatchThreshold(Delivery.Unreliable) : 0;
+            _unreliableMax = capabilities.Supports(Delivery.Unreliable)
+                ? Inner!.GetMaxMessageSize(Delivery.Unreliable)
+                : 0;
+            _reliableThreshold = capabilities.Supports(Delivery.Reliable)
+                ? Inner!.GetBatchThreshold(Delivery.Reliable)
+                : 0;
+            _unreliableThreshold = capabilities.Supports(Delivery.Unreliable)
+                ? Inner!.GetBatchThreshold(Delivery.Unreliable)
+                : 0;
             _rttTicks = Inner!.RoundTripTime.Ticks;
             _stats = Inner.Stats;
         }
-        public override TimeSpan RoundTripTime { get { lock (owner._gate) return TimeSpan.FromTicks(_rttTicks); } }
-        public override ConnectionStats Stats { get { lock (owner._gate) return _stats; } }
+
         public override int GetMaxMessageSize(Delivery delivery)
-        { lock (owner._gate) return delivery == Delivery.Reliable ? _reliableMax : _unreliableMax; }
+        {
+            lock (owner._gate)
+            {
+                return delivery == Delivery.Reliable ? _reliableMax : _unreliableMax;
+            }
+        }
+
         public override int GetBatchThreshold(Delivery delivery)
-        { lock (owner._gate) return delivery == Delivery.Reliable ? _reliableThreshold : _unreliableThreshold; }
+        {
+            lock (owner._gate)
+            {
+                return delivery == Delivery.Reliable ? _reliableThreshold : _unreliableThreshold;
+            }
+        }
+
         public override void Send(ReadOnlySpan<byte> data, Delivery delivery) => Send(data, delivery, SendFlags.None);
         public override void Flush() => owner.RequestFlush();
+
         public override void Send(ReadOnlySpan<byte> data, Delivery delivery, SendFlags flags)
         {
             ValidateSend(data, delivery);
-            if ((flags & ~SendFlags.Immediate) != 0) throw new ArgumentOutOfRangeException(nameof(flags));
+            if ((flags & ~SendFlags.Immediate) != 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(flags));
+            }
+
             owner.Send(this, data, delivery, flags);
         }
+
         public override void Disconnect()
         {
-            if (State != ConnectionState.Disconnected) owner.RequestClose(this, DisconnectReason.Requested);
+            if (State != ConnectionState.Disconnected)
+            {
+                owner.RequestClose(this, DisconnectReason.Requested);
+            }
         }
     }
 }

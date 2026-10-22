@@ -14,15 +14,15 @@ using Microsoft.CodeAnalysis.Text;
 namespace Prowl.CodeGen;
 
 /// <summary>
-/// Runs script code generation for <c>dotnet build</c> (see build/Prowl.CodeGen.targets): reads a project's
-/// sources and references from a response file, writes what the generators made, and lists the files to
-/// compile in their place. Problems are printed the way MSBuild reports compiler errors.
+///     Runs script code generation for <c>dotnet build</c> (see build/Prowl.CodeGen.targets): reads a project's
+///     sources and references from a response file, writes what the generators made, and lists the files to
+///     compile in their place. Problems are printed the way MSBuild reports compiler errors.
 /// </summary>
 /// <remarks>
-/// The response file has one <c>key:value</c> per line: <c>out</c> (the folder to write to), <c>name</c>,
-/// <c>lang</c>, <c>nullable</c>, <c>unsafe</c>, and any number of <c>define</c>, <c>ref</c> and <c>src</c>.
-/// A rewritten file starts with a <c>#line</c> directive naming the original, and keeps its lines, so the
-/// compiler's errors and the debugger point at the code as written.
+///     The response file has one <c>key:value</c> per line: <c>out</c> (the folder to write to), <c>name</c>,
+///     <c>lang</c>, <c>nullable</c>, <c>unsafe</c>, and any number of <c>define</c>, <c>ref</c> and <c>src</c>.
+///     A rewritten file starts with a <c>#line</c> directive naming the original, and keeps its lines, so the
+///     compiler's errors and the debugger point at the code as written.
 /// </remarks>
 internal static class Program
 {
@@ -42,22 +42,31 @@ internal static class Program
             {
                 string key = line[..colon];
                 if (!options.TryGetValue(key, out List<string>? values))
+                {
                     options[key] = values = new List<string>();
+                }
+
                 values.Add(line[(colon + 1)..].Trim());
             }
         }
 
-        string One(string key, string fallback = "") => options.TryGetValue(key, out List<string>? v) && v.Count > 0 ? v[^1] : fallback;
+        string One(string key, string fallback = "") =>
+            options.TryGetValue(key, out List<string>? v) && v.Count > 0 ? v[^1] : fallback;
+
         List<string> All(string key) => options.TryGetValue(key, out List<string>? v) ? v : [];
 
         string output = Path.GetFullPath(One("out"));
         Directory.CreateDirectory(output);
 
         LanguageVersionFacts.TryParse(One("lang", "latest"), out LanguageVersion language);
-        CSharpParseOptions parse = new CSharpParseOptions(language).WithPreprocessorSymbols(All("define").Where(d => d.Length > 0));
+        CSharpParseOptions parse =
+            new CSharpParseOptions(language).WithPreprocessorSymbols(All("define").Where(d => d.Length > 0));
         List<string> sources = All("src").Select(Path.GetFullPath).ToList();
         List<SyntaxTree> trees = sources
-            .Select(path => CSharpSyntaxTree.ParseText(SourceText.From(File.ReadAllBytes(path), File.ReadAllBytes(path).Length, Encoding.UTF8), parse, path))
+            .Select(path =>
+                CSharpSyntaxTree.ParseText(
+                    SourceText.From(File.ReadAllBytes(path), File.ReadAllBytes(path).Length, Encoding.UTF8), parse,
+                    path))
             .ToList();
 
         NullableContextOptions nullable = One("nullable").ToLowerInvariant() switch
@@ -65,7 +74,7 @@ internal static class Program
             "enable" => NullableContextOptions.Enable,
             "warnings" => NullableContextOptions.Warnings,
             "annotations" => NullableContextOptions.Annotations,
-            _ => NullableContextOptions.Disable,
+            _ => NullableContextOptions.Disable
         };
         CSharpCompilation compilation = CSharpCompilation.Create(One("name", "Game"), trees,
             All("ref").Select(path => MetadataReference.CreateFromFile(path)),
@@ -86,7 +95,8 @@ internal static class Program
             }
 
             string path = Path.Combine(output, $"{i:D4}.{Path.GetFileName(sources[i])}");
-            WriteIfChanged(path, $"#line 1 {SymbolDisplay.FormatLiteral(sources[i], true)}\n{result.Trees[i].GetText()}");
+            WriteIfChanged(path,
+                $"#line 1 {SymbolDisplay.FormatLiteral(sources[i], true)}\n{result.Trees[i].GetText()}");
             compile.Add(path);
             written.Add(path);
         }
@@ -101,10 +111,14 @@ internal static class Program
 
         // Files a previous run generated and this one didn't would otherwise linger in the folder.
         foreach (string stale in Directory.GetFiles(output, "*.cs").Where(f => !written.Contains(f)))
+        {
             File.Delete(stale);
+        }
 
         foreach (Diagnostic diagnostic in result.Diagnostics)
+        {
             Console.WriteLine(Format(diagnostic));
+        }
 
         // The build skips this step while the list is newer than every input, so the list is written on every
         // run that succeeds and is gone after one that doesn't, which then runs again and says why.
@@ -123,7 +137,9 @@ internal static class Program
     private static void WriteIfChanged(string path, string text)
     {
         if (!File.Exists(path) || File.ReadAllText(path) != text)
+        {
             File.WriteAllText(path, text, new UTF8Encoding(false));
+        }
     }
 
     /// <summary>As MSBuild reads a compiler's errors: <c>file(line,column): error ID: message</c>.</summary>
@@ -131,7 +147,9 @@ internal static class Program
     {
         string severity = diagnostic.Severity == DiagnosticSeverity.Error ? "error" : "warning";
         FileLinePositionSpan span = diagnostic.Location.GetMappedLineSpan();
-        string where = span.IsValid ? $"{span.Path}({span.StartLinePosition.Line + 1},{span.StartLinePosition.Character + 1}): " : "";
+        string where = span.IsValid
+            ? $"{span.Path}({span.StartLinePosition.Line + 1},{span.StartLinePosition.Character + 1}): "
+            : "";
         return $"{where}{severity} {diagnostic.Id}: {diagnostic.GetMessage()}";
     }
 }

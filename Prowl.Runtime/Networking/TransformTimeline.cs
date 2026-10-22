@@ -9,11 +9,11 @@ namespace Prowl.Runtime.Networking;
 internal sealed class TransformTimeline
 {
     private bool _initialized;
-    private double _offset;
-    private double _lastSent;
-    private double _lastArrival;
     private double _jitter;
+    private double _lastArrival;
     private double _lastRender = double.NegativeInfinity;
+    private double _lastSent;
+    private double _offset;
 
     public void Clear()
     {
@@ -25,7 +25,10 @@ internal sealed class TransformTimeline
     public bool Observe(double sent, double arrival)
     {
         if (_initialized && sent <= _lastSent)
+        {
             return false;
+        }
+
         double offset = arrival - sent;
         if (!_initialized)
         {
@@ -34,13 +37,14 @@ internal sealed class TransformTimeline
         }
         else
         {
-            double variation = Math.Abs((arrival - _lastArrival) - (sent - _lastSent));
+            double variation = Math.Abs(arrival - _lastArrival - (sent - _lastSent));
             // Grow promptly on a late packet, then shrink gradually as the link settles.
             _jitter = Math.Max(Math.Min(variation, 0.5), _jitter * 0.9);
             // The least delayed sample estimates the clock offset. Permit slow upward drift
             // so a controller clock running slightly slower doesn't exhaust the buffer over time.
             _offset = Math.Min(offset, _offset + (sent - _lastSent) * 0.001);
         }
+
         _lastSent = sent;
         _lastArrival = arrival;
         return true;

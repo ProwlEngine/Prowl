@@ -143,7 +143,7 @@ public static partial class Networking
             }
         }
 
-        ApplySyncState(sender, ref reader, null, initial: true);
+        ApplySyncState(sender, ref reader, null, true);
         Scene.Load(scene);
     }
 

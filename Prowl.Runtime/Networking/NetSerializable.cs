@@ -42,19 +42,14 @@ public interface INetSerializable<TSelf> where TSelf : INetSerializable<TSelf>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class NetTypeSerializer
 {
-    public delegate void MemberWriter<T>(NetWriter writer, ref T value);
-
     public delegate void MemberReader<T>(ref NetReader reader, ref T value);
+
+    public delegate void MemberWriter<T>(NetWriter writer, ref T value);
 
     private const byte Null = 0, Declared = 1, Other = 2, Reference = 3;
 
     // Deeper than this is most likely a peer sending garbage, and would run out of stack before long.
     private const int MaximumDepth = 256;
-
-    /// <summary>A class the generated code can make and fill, keyed by its type and by its id on the wire.</summary>
-    private sealed record Shape(Type Type, uint Id, Func<object>? Create, Action<NetWriter, object> Write, ShapeReader Read);
-
-    private delegate void ShapeReader(ref NetReader reader, object value);
 
     // Weak, so a script assembly that hot reload replaced can still unload; the newer one registers the same ids again.
     private static readonly ConditionalWeakTable<Type, Shape> s_byType = new();
@@ -69,15 +64,22 @@ public static class NetTypeSerializer
 
     public static void RegisterSelf<T>() where T : INetSerializable<T> => NetSerializer<T>.Register(T.Write, T.Read);
 
-    public static void RegisterStruct<T>(Func<T> create, MemberWriter<T> write, MemberReader<T> read) where T : struct =>
+    public static void RegisterStruct<T>(Func<T> create, MemberWriter<T> write, MemberReader<T> read)
+        where T : struct =>
         NetSerializer<T>.Register(
             (w, v) =>
             {
                 EnterWrite();
-                try { write(w, ref v); }
-                finally { ExitWrite(); }
+                try
+                {
+                    write(w, ref v);
+                }
+                finally
+                {
+                    ExitWrite();
+                }
             },
-            (ref NetReader r) =>
+            (ref r) =>
             {
                 EnterRead();
                 try
@@ -86,17 +88,21 @@ public static class NetTypeSerializer
                     read(ref r, ref v);
                     return v;
                 }
-                finally { ExitRead(); }
+                finally
+                {
+                    ExitRead();
+                }
             });
 
     /// <summary>A class that can be sent as itself, or as any of its bases or interfaces that are registered too.</summary>
-    public static void RegisterClass<T>(uint id, Func<T>? create, MemberWriter<T> write, MemberReader<T> read) where T : class
+    public static void RegisterClass<T>(uint id, Func<T>? create, MemberWriter<T> write, MemberReader<T> read)
+        where T : class
     {
         Shape shape = new(typeof(T), id, create, (w, o) =>
         {
             T value = (T)o;
             write(w, ref value);
-        }, (ref NetReader r, object o) =>
+        }, (ref r, o) =>
         {
             T value = (T)o;
             read(ref r, ref value);
@@ -175,7 +181,8 @@ public static class NetTypeSerializer
                 int index = (int)reader.ReadVarUInt32();
                 return index < t_read!.Count && t_read[index] is T known
                     ? known
-                    : throw new InvalidDataException($"A {typeof(T)} referred to an object that wasn't sent, or isn't one.");
+                    : throw new InvalidDataException(
+                        $"A {typeof(T)} referred to an object that wasn't sent, or isn't one.");
             }
 
             Shape? shape = tag switch
@@ -205,7 +212,9 @@ public static class NetTypeSerializer
     {
         lock (s_lock)
         {
-            return s_byId.TryGetValue(id, out WeakReference<Shape>? weak) && weak.TryGetTarget(out Shape? shape) ? shape : null;
+            return s_byId.TryGetValue(id, out WeakReference<Shape>? weak) && weak.TryGetTarget(out Shape? shape)
+                ? shape
+                : null;
         }
     }
 
@@ -214,7 +223,8 @@ public static class NetTypeSerializer
         if (++t_writeDepth > MaximumDepth)
         {
             t_writeDepth--;
-            throw new InvalidOperationException($"A value nests objects more than {MaximumDepth} deep, which is too deep to send.");
+            throw new InvalidOperationException(
+                $"A value nests objects more than {MaximumDepth} deep, which is too deep to send.");
         }
 
         t_written ??= new Dictionary<object, int>(ReferenceEqualityComparer.Instance);
@@ -246,4 +256,14 @@ public static class NetTypeSerializer
             t_read!.Clear();
         }
     }
+
+    /// <summary>A class the generated code can make and fill, keyed by its type and by its id on the wire.</summary>
+    private sealed record Shape(
+        Type Type,
+        uint Id,
+        Func<object>? Create,
+        Action<NetWriter, object> Write,
+        ShapeReader Read);
+
+    private delegate void ShapeReader(ref NetReader reader, object value);
 }

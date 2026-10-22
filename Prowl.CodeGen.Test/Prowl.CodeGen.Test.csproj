@@ -8,8 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.0" />
-    <PackageReference Include="Xunit" Version="2.9.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.0"/>
+    <PackageReference Include="Xunit" Version="2.9.0"/>
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -18,8 +18,8 @@
 
   <!-- Scripts compiled here run against the real engine, so their networking can be exercised. -->
   <ItemGroup>
-    <ProjectReference Include="..\Prowl.CodeGen\Prowl.CodeGen.csproj" />
-    <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
+    <ProjectReference Include="..\Prowl.CodeGen\Prowl.CodeGen.csproj"/>
+    <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj"/>
   </ItemGroup>
 
 </Project>

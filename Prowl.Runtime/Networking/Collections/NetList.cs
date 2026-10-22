@@ -4,6 +4,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 
 using Prowl.Warp;
 
@@ -29,9 +30,6 @@ public sealed class NetList<T> : NetCollection, IList<T>, IReadOnlyList<T>
     }
 
     public NetList(IEnumerable<T> items) => _items.AddRange(items);
-
-    /// <summary>Raised for each change, made here or received. See <see cref="NetCollection" />.</summary>
-    public event Action<NetListChange<T>>? Changed;
 
     public override int Count => _items.Count;
 
@@ -83,7 +81,10 @@ public sealed class NetList<T> : NetCollection, IList<T>, IReadOnlyList<T>
 
     public void RemoveAt(int index) => TryRemoveAt(index);
 
-    /// <summary>Removes the first occurrence of <paramref name="item" />. False if it isn't there, or this peer may not change the list.</summary>
+    /// <summary>
+    ///     Removes the first occurrence of <paramref name="item" />. False if it isn't there, or this peer may not change
+    ///     the list.
+    /// </summary>
     public bool Remove(T item)
     {
         int index = _items.IndexOf(item);
@@ -108,11 +109,14 @@ public sealed class NetList<T> : NetCollection, IList<T>, IReadOnlyList<T>
 
     public void CopyTo(T[] array, int arrayIndex) => _items.CopyTo(array, arrayIndex);
 
-    public List<T>.Enumerator GetEnumerator() => _items.GetEnumerator();
-
     IEnumerator<T> IEnumerable<T>.GetEnumerator() => GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    /// <summary>Raised for each change, made here or received. See <see cref="NetCollection" />.</summary>
+    public event Action<NetListChange<T>>? Changed;
+
+    public List<T>.Enumerator GetEnumerator() => _items.GetEnumerator();
 
     private bool TryRemoveAt(int index)
     {
@@ -159,63 +163,63 @@ public sealed class NetList<T> : NetCollection, IList<T>, IReadOnlyList<T>
         switch (kind)
         {
             case NetChangeKind.Added:
-            {
-                int index = (int)reader.ReadVarUInt32();
-                T item = NetSerializer<T>.Read(ref reader);
-                if (!apply)
                 {
+                    int index = (int)reader.ReadVarUInt32();
+                    T item = NetSerializer<T>.Read(ref reader);
+                    if (!apply)
+                    {
+                        return;
+                    }
+
+                    if (index > _items.Count)
+                    {
+                        Mismatch($"an add at {index}");
+                        return;
+                    }
+
+                    _items.Insert(index, item);
+                    Notify(Changed, new NetListChange<T>(kind, index, default!, item), true);
                     return;
                 }
-
-                if (index > _items.Count)
-                {
-                    Mismatch($"an add at {index}");
-                    return;
-                }
-
-                _items.Insert(index, item);
-                Notify(Changed, new NetListChange<T>(kind, index, default!, item), true);
-                return;
-            }
             case NetChangeKind.Removed:
-            {
-                int index = (int)reader.ReadVarUInt32();
-                if (!apply)
                 {
+                    int index = (int)reader.ReadVarUInt32();
+                    if (!apply)
+                    {
+                        return;
+                    }
+
+                    if (index >= _items.Count)
+                    {
+                        Mismatch($"a removal at {index}");
+                        return;
+                    }
+
+                    T old = _items[index];
+                    _items.RemoveAt(index);
+                    Notify(Changed, new NetListChange<T>(kind, index, old, default!), true);
                     return;
                 }
-
-                if (index >= _items.Count)
-                {
-                    Mismatch($"a removal at {index}");
-                    return;
-                }
-
-                T old = _items[index];
-                _items.RemoveAt(index);
-                Notify(Changed, new NetListChange<T>(kind, index, old, default!), true);
-                return;
-            }
             case NetChangeKind.Replaced:
-            {
-                int index = (int)reader.ReadVarUInt32();
-                T item = NetSerializer<T>.Read(ref reader);
-                if (!apply)
                 {
+                    int index = (int)reader.ReadVarUInt32();
+                    T item = NetSerializer<T>.Read(ref reader);
+                    if (!apply)
+                    {
+                        return;
+                    }
+
+                    if (index >= _items.Count)
+                    {
+                        Mismatch($"a replacement at {index}");
+                        return;
+                    }
+
+                    T old = _items[index];
+                    _items[index] = item;
+                    Notify(Changed, new NetListChange<T>(kind, index, old, item), true);
                     return;
                 }
-
-                if (index >= _items.Count)
-                {
-                    Mismatch($"a replacement at {index}");
-                    return;
-                }
-
-                T old = _items[index];
-                _items[index] = item;
-                Notify(Changed, new NetListChange<T>(kind, index, old, item), true);
-                return;
-            }
             case NetChangeKind.Cleared:
                 if (apply)
                 {
@@ -225,7 +229,7 @@ public sealed class NetList<T> : NetCollection, IList<T>, IReadOnlyList<T>
 
                 return;
             default:
-                throw new System.IO.InvalidDataException($"Unknown list change {kind}.");
+                throw new InvalidDataException($"Unknown list change {kind}.");
         }
     }
 }

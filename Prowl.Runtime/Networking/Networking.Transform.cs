@@ -131,10 +131,15 @@ public static partial class Networking
             float rotationLength = Quaternion.LengthSquared(rotation);
             if (!double.IsFinite(sentAt) || sentAt < 0 || !Finite(position) || !Finite(scale) ||
                 !float.IsFinite(rotationLength) || rotationLength < 1e-12f)
+            {
                 throw new InvalidDataException("A transform contains invalid coordinates, rotation or time.");
+            }
+
             rotation = Quaternion.Normalize(rotation);
             if (!entry.Timeline.Observe(sentAt, now))
+            {
                 continue;
+            }
 
             entry.HasReceived = true;
             entry.LastReceivedTick = tick;

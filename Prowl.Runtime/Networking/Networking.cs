@@ -51,10 +51,10 @@ public static partial class Networking
     private static readonly Stopwatch s_clock = Stopwatch.StartNew();
     private static double s_nextTick;
     private static int s_frame;
+    private static NetworkingContext? s_context;
 
     /// <summary>The running session, or null when there is none.</summary>
     public static NetSession? Session { get; private set; }
-    private static NetworkingContext? s_context;
 
     /// <summary>The session's bound IP port, or zero when it has no IP listener.</summary>
     public static int LocalPort => s_context?.LocalPort ?? Session?.Transport.LocalPort ?? 0;
@@ -84,8 +84,16 @@ public static partial class Networking
         using FrameStatScope stats = FrameStats.Network.Scope();
         NetworkingContext context = new(s_configuration);
         NetSession session;
-        try { session = context.Host(transport, name, options); }
-        catch { context.Dispose(); throw; }
+        try
+        {
+            session = context.Host(transport, name, options);
+        }
+        catch
+        {
+            context.Dispose();
+            throw;
+        }
+
         Attach(session, context);
 
         s_scene = Scene.Current;
@@ -109,8 +117,16 @@ public static partial class Networking
         using FrameStatScope stats = FrameStats.Network.Scope();
         NetworkingContext context = new(s_configuration);
         NetSession session;
-        try { session = context.Join(transport, address, name, token, options); }
-        catch { context.Dispose(); throw; }
+        try
+        {
+            session = context.Join(transport, address, name, token, options);
+        }
+        catch
+        {
+            context.Dispose();
+            throw;
+        }
+
         Attach(session, context);
         return session;
     }

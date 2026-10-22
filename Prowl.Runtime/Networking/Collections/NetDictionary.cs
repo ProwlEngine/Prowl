@@ -5,6 +5,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 
 using Prowl.Warp;
 
@@ -15,40 +16,38 @@ namespace Prowl.Runtime.Networking;
 /// <param name="Key">Whose value. Default for <see cref="NetChangeKind.Cleared" />.</param>
 /// <param name="OldValue">The value removed or replaced.</param>
 /// <param name="NewValue">The value added or put in its place.</param>
-public readonly record struct NetDictionaryChange<TKey, TValue>(NetChangeKind Kind, TKey Key, TValue OldValue, TValue NewValue);
+public readonly record struct NetDictionaryChange<TKey, TValue>(
+    NetChangeKind Kind,
+    TKey Key,
+    TValue OldValue,
+    TValue NewValue);
 
 /// <summary>
 ///     A dictionary that, as a <see cref="SyncAttribute" /> property, sends each change instead of the whole
 ///     dictionary. Keys and values must be sendable, as for any [Sync] value. See <see cref="NetCollection" />.
 /// </summary>
-public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKey, TValue>, IReadOnlyDictionary<TKey, TValue>
+public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKey, TValue>,
+    IReadOnlyDictionary<TKey, TValue>
     where TKey : notnull
 {
     private readonly Dictionary<TKey, TValue> _items = new();
-
-    /// <summary>Raised for each change, made here or received. See <see cref="NetCollection" />.</summary>
-    public event Action<NetDictionaryChange<TKey, TValue>>? Changed;
-
-    public override int Count => _items.Count;
 
     public Dictionary<TKey, TValue>.KeyCollection Keys => _items.Keys;
 
     public Dictionary<TKey, TValue>.ValueCollection Values => _items.Values;
 
+    public override int Count => _items.Count;
+
     ICollection<TKey> IDictionary<TKey, TValue>.Keys => _items.Keys;
 
     ICollection<TValue> IDictionary<TKey, TValue>.Values => _items.Values;
-
-    IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys => _items.Keys;
-
-    IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values => _items.Values;
 
     bool ICollection<KeyValuePair<TKey, TValue>>.IsReadOnly => false;
 
     public TValue this[TKey key]
     {
         get => _items[key];
-        set => Set(key, value, add: false);
+        set => Set(key, value, false);
     }
 
     /// <exception cref="ArgumentException">There's already a value under <paramref name="key" />.</exception>
@@ -60,14 +59,7 @@ public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKe
             throw new ArgumentException($"There's already a value under {key}.", nameof(key));
         }
 
-        Set(key, value, add: true);
-    }
-
-    /// <summary>Adds the value unless there's one under the key already. False if there is, or this peer may not change the dictionary.</summary>
-    public bool TryAdd(TKey key, TValue value)
-    {
-        ArgumentNullException.ThrowIfNull(key);
-        return !_items.ContainsKey(key) && Set(key, value, add: true);
+        Set(key, value, true);
     }
 
     /// <summary>False if there's nothing under the key, or this peer may not change the dictionary.</summary>
@@ -98,14 +90,13 @@ public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKe
 
         record?.WriteByte((byte)NetChangeKind.Cleared);
         _items.Clear();
-        Notify(Changed, new NetDictionaryChange<TKey, TValue>(NetChangeKind.Cleared, default!, default!, default!), false);
+        Notify(Changed, new NetDictionaryChange<TKey, TValue>(NetChangeKind.Cleared, default!, default!, default!),
+            false);
     }
 
     public bool ContainsKey(TKey key) => _items.ContainsKey(key);
 
     public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value) => _items.TryGetValue(key, out value);
-
-    public Dictionary<TKey, TValue>.Enumerator GetEnumerator() => _items.GetEnumerator();
 
     IEnumerator<KeyValuePair<TKey, TValue>> IEnumerable<KeyValuePair<TKey, TValue>>.GetEnumerator() => GetEnumerator();
 
@@ -121,6 +112,25 @@ public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKe
 
     bool ICollection<KeyValuePair<TKey, TValue>>.Remove(KeyValuePair<TKey, TValue> item) =>
         ((ICollection<KeyValuePair<TKey, TValue>>)this).Contains(item) && Remove(item.Key);
+
+    IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys => _items.Keys;
+
+    IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values => _items.Values;
+
+    /// <summary>Raised for each change, made here or received. See <see cref="NetCollection" />.</summary>
+    public event Action<NetDictionaryChange<TKey, TValue>>? Changed;
+
+    /// <summary>
+    ///     Adds the value unless there's one under the key already. False if there is, or this peer may not change the
+    ///     dictionary.
+    /// </summary>
+    public bool TryAdd(TKey key, TValue value)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        return !_items.ContainsKey(key) && Set(key, value, true);
+    }
+
+    public Dictionary<TKey, TValue>.Enumerator GetEnumerator() => _items.GetEnumerator();
 
     private bool Set(TKey key, TValue value, bool add)
     {
@@ -181,37 +191,39 @@ public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKe
         switch (kind)
         {
             case NetChangeKind.Added or NetChangeKind.Replaced:
-            {
-                TKey key = NetSerializer<TKey>.Read(ref reader);
-                TValue value = NetSerializer<TValue>.Read(ref reader);
-                if (!apply || key == null)
                 {
+                    TKey key = NetSerializer<TKey>.Read(ref reader);
+                    TValue value = NetSerializer<TValue>.Read(ref reader);
+                    if (!apply || key == null)
+                    {
+                        return;
+                    }
+
+                    // Added or replaced by what this peer has, which is what its handlers care about.
+                    bool had = _items.TryGetValue(key, out TValue? old);
+                    _items[key] = value;
+                    Notify(Changed,
+                        new NetDictionaryChange<TKey, TValue>(had ? NetChangeKind.Replaced : NetChangeKind.Added, key,
+                            old!, value), true);
                     return;
                 }
-
-                // Added or replaced by what this peer has, which is what its handlers care about.
-                bool had = _items.TryGetValue(key, out TValue? old);
-                _items[key] = value;
-                Notify(Changed, new NetDictionaryChange<TKey, TValue>(had ? NetChangeKind.Replaced : NetChangeKind.Added, key, old!, value), true);
-                return;
-            }
             case NetChangeKind.Removed:
-            {
-                TKey key = NetSerializer<TKey>.Read(ref reader);
-                if (!apply || key == null)
                 {
+                    TKey key = NetSerializer<TKey>.Read(ref reader);
+                    if (!apply || key == null)
+                    {
+                        return;
+                    }
+
+                    if (!_items.Remove(key, out TValue? old))
+                    {
+                        Mismatch($"the removal of {key}");
+                        return;
+                    }
+
+                    Notify(Changed, new NetDictionaryChange<TKey, TValue>(kind, key, old, default!), true);
                     return;
                 }
-
-                if (!_items.Remove(key, out TValue? old))
-                {
-                    Mismatch($"the removal of {key}");
-                    return;
-                }
-
-                Notify(Changed, new NetDictionaryChange<TKey, TValue>(kind, key, old, default!), true);
-                return;
-            }
             case NetChangeKind.Cleared:
                 if (apply)
                 {
@@ -221,7 +233,7 @@ public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKe
 
                 return;
             default:
-                throw new System.IO.InvalidDataException($"Unknown dictionary change {kind}.");
+                throw new InvalidDataException($"Unknown dictionary change {kind}.");
         }
     }
 }
