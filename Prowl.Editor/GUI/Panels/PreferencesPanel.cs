@@ -168,8 +168,6 @@ public class PreferencesPanel : DockPanel
         EditorGUI.SettingsToggle(paper, "pref_reimport_focus", Loc.Get("pref.reimport_focus"), s.ReimportOnFocusOnly,
             v => { s.ReimportOnFocusOnly = v; s.Save(); });
 
-        EditorGUI.SettingsEnumDropdown(paper, "pref_script_editor", Loc.Get("pref.script_editor"), s.ScriptEditor,
-            v => { s.ScriptEditor = v; s.Save(); });
 
         string[] thumbOptions = ["32", "64", "128"];
         int thumbIndex = s.ThumbnailSize switch { 64 => 1, 128 => 2, _ => 0 };

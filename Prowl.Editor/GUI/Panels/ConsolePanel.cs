@@ -395,7 +395,7 @@ public class ConsolePanel : DockPanel
 
     private static void OpenSource((string Path, int Line, int Column) location)
     {
-        if (EditorSettings.Instance.ScriptEditor == ScriptEditor.ScriptEditorMode.BuiltIn)
+        if (Preferences.Get<ScriptEditor.ScriptEditorPreferences>().OpenScriptsIn == ScriptEditor.ScriptEditorMode.BuiltIn)
         {
             ScriptEditor.ScriptEditorWindow.OpenFor(location.Path, location.Line, location.Column);
             return;

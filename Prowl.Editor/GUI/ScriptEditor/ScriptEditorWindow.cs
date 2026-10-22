@@ -14,6 +14,7 @@ using Prowl.OrigamiUI.CSharp;
 using Prowl.OrigamiUI.Graphite;
 using Prowl.PaperUI;
 using Prowl.Rosetta;
+using Prowl.Runtime;
 using Prowl.PaperUI.LayoutEngine;
 
 using TextAlignment = Prowl.PaperUI.TextAlignment;
@@ -25,6 +26,85 @@ public enum ScriptEditorMode
 {
     BuiltIn,
     External,
+}
+
+/// <summary>How the built in code editor looks and behaves. Changes apply to open scripts straight away.</summary>
+[EditorPreferences("Script Editor", EditorIcons.Code, order: 10)]
+public sealed class ScriptEditorPreferences : EditorPreferences
+{
+    [Tooltip("Open double clicked scripts in the built in code editor, or in the system's default app.")]
+    public ScriptEditorMode OpenScriptsIn = ScriptEditorMode.BuiltIn;
+
+    [Header("Text")]
+    [Range(6, 48)] public float FontSize = 15f;
+    [Range(1, 2.5f), Tooltip("Row height as a multiple of the font size.")] public float LineHeight = 1.5f;
+    [Range(1, 8)] public int TabSize = 4;
+    [Tooltip("Tab and auto indent insert spaces instead of tab characters.")] public bool InsertSpaces = true;
+    [Tooltip("Columns with a vertical guide line.")] public List<int> Rulers = [120];
+
+    [Header("Display")]
+    public bool ShowLineNumbers = true;
+    public bool ShowFolding = true;
+    public bool ShowMinimap = true;
+    [Range(40, 200)] public float MinimapWidth = 90f;
+    public bool ShowIndentGuides = true;
+    public bool ShowWhitespace;
+    public bool ShowStatusBar = true;
+    public bool HighlightCurrentLine = true;
+    public bool HighlightMatchingBrackets = true;
+    [Tooltip("Marks other occurrences of the word under the caret.")] public bool HighlightOccurrences = true;
+    [Tooltip("Shows reference counts after declarations.")] public bool ShowCodeLens = true;
+
+    [Header("Scrolling and Caret")]
+    public bool SmoothScrolling = true;
+    public bool ScrollBeyondLastLine = true;
+    [Range(0, 20), Tooltip("Lines kept visible above and below the caret.")] public int ScrollMargin = 3;
+    public bool CaretBlink = true;
+
+    [Header("Editing")]
+    public bool AutoClosePairs = true;
+    public bool AutoIndent = true;
+    [Tooltip("Formats the statement or block a typed ';' or '}' closes.")] public bool FormatOnType = true;
+
+    [Header("Completion and Analysis")]
+    [Tooltip("Opens completion as soon as a word is typed, not only on '.' and Ctrl+Space.")] public bool CompletionOnTyping = true;
+    [Range(0, 3), Tooltip("Seconds the mouse rests before hover info shows. Zero turns it off.")] public float HoverDelay = 0.5f;
+    [Range(0.05f, 2), Tooltip("Seconds without edits before diagnostics and colours refresh.")] public float AnalysisDelay = 0.35f;
+
+    public override void Apply() => ScriptEditorWindow.ApplyPreferences();
+
+    /// <summary>Copies these values onto a code editor's options.</summary>
+    public void ApplyTo(CodeEditorOptions options)
+    {
+        options.FontSize = FontSize;
+        options.LineHeight = LineHeight;
+        options.TabSize = TabSize;
+        options.InsertSpaces = InsertSpaces;
+        options.Rulers = [.. Rulers];
+        options.ShowLineNumbers = ShowLineNumbers;
+        options.ShowFolding = ShowFolding;
+        options.ShowMinimap = ShowMinimap;
+        options.MinimapWidth = MinimapWidth;
+        options.ShowIndentGuides = ShowIndentGuides;
+        options.ShowWhitespace = ShowWhitespace;
+        options.ShowStatusBar = ShowStatusBar;
+        options.HighlightCurrentLine = HighlightCurrentLine;
+        options.HighlightMatchingBrackets = HighlightMatchingBrackets;
+        options.HighlightOccurrences = HighlightOccurrences;
+        options.ShowCodeLens = ShowCodeLens;
+        options.SmoothScrolling = SmoothScrolling;
+        options.ScrollBeyondLastLine = ScrollBeyondLastLine;
+        options.ScrollMargin = ScrollMargin;
+        options.CaretBlink = CaretBlink;
+        options.AutoClosePairs = AutoClosePairs;
+        options.AutoIndent = AutoIndent;
+        options.FormatOnType = FormatOnType;
+        options.CompletionOnTyping = CompletionOnTyping;
+        options.HoverDelay = HoverDelay;
+        options.AnalysisDelay = AnalysisDelay;
+        // No debugger yet, so no breakpoint margin.
+        options.ShowGlyphMargin = false;
+    }
 }
 
 /// <summary>
@@ -88,7 +168,7 @@ public class ScriptEditorWindow : DockPanel
     [AssetDoubleClickHandler(".cs", ".shader", ".glsl", ".compute")]
     private static bool OnDoubleClick(string relativePath, Guid guid)
     {
-        if (EditorSettings.Instance.ScriptEditor != ScriptEditorMode.BuiltIn || Project.Current is not { } project) return false;
+        if (Preferences.Get<ScriptEditorPreferences>().OpenScriptsIn != ScriptEditorMode.BuiltIn || Project.Current is not { } project) return false;
         OpenFor(Path.Combine(project.AssetsPath, relativePath));
         return true;
     }
@@ -123,6 +203,19 @@ public class ScriptEditorWindow : DockPanel
         if (line > 0) editor.GoToLine(line, column);
     }
 
+    internal static void ApplyPreferences()
+    {
+        if (s_window == null) return;
+        ScriptEditorPreferences prefs = Preferences.Get<ScriptEditorPreferences>();
+        foreach (var tab in s_window._tabs)
+        {
+            float oldSize = tab.Editor.Options.FontSize;
+            prefs.ApplyTo(tab.Editor.Options);
+            // A new font size replaces any Ctrl+wheel zoom.
+            if (oldSize != prefs.FontSize) tab.Editor.ResetZoom();
+        }
+    }
+
     private static bool SamePath(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
     private ScriptTab? Load(string path)
@@ -149,9 +242,7 @@ public class ScriptEditorWindow : DockPanel
             ? new ShaderLanguage(ShaderWorkspaces.Shared, kind, path)
             : new RoslynCSharpLanguage(ScriptWorkspaces.Get(path, out onFallback), path);
         var editor = new OrigamiUI.CodeEditor(text, language) { FilePath = path };
-        editor.Options.Rulers = [120];
-        // No debugger yet, so no breakpoint margin.
-        editor.Options.ShowGlyphMargin = false;
+        Preferences.Get<ScriptEditorPreferences>().ApplyTo(editor.Options);
 
         var backend = EditorAssetBackend.Instance;
         var tab = new ScriptTab
