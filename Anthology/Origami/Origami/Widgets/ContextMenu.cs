@@ -409,7 +409,7 @@ public sealed class ContextBuilder
 
 /// <summary>
 /// Static context menu system for Origami. Only one context menu open at a time.
-/// Renders on Layer.Topmost + 500 so it sits above most UI but below modals.
+/// Opens as a modal, so it sits above everything already open, other modals included.
 ///
 /// Use <see cref="RightClickMenu"/> inside any element's scope to attach a right-click menu.
 /// Use <see cref="Show"/> to open programmatically at a position.

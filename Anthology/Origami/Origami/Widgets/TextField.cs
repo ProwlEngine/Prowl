@@ -653,7 +653,7 @@ public sealed class TextFieldBuilder
             .Rounded(_theme.Metrics.ContainerRounding)
             .Padding(4, 4, padY, padY)
             .HookToParent()
-            .Layer(Layer.Topmost)
+            .Layer(Origami.PopupLayer)
             .ClampToScreen()
             .StopEventPropagation()
             .Enter())

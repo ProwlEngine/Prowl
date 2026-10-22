@@ -259,7 +259,7 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
             .Rounded(6f)
             .Padding(6f)
             .Gap(6f)
-            .Layer(Layer.Topmost + 1000)
+            .Layer(Origami.PopupLayer + 1000)
             .OnPostLayout((_, rect) => _paper.SetRootStorage(widthKey, (float)rect.Size.X));
 
         using (popup.Enter())
