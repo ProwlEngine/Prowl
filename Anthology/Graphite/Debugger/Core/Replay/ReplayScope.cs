@@ -379,7 +379,7 @@ internal sealed unsafe class ReplayScope : IDisposable
             ? new RenderTextureDescription(first.Width, first.Height, formats, depthValue.Format, first.SampleCount, storage)
             : new RenderTextureDescription(first.Width, first.Height, formats, false, first.SampleCount, storage);
 
-        RenderTexture texture = Own(_device.ResourceFactory.CreateRenderTexture(renderDescription with { ArrayLayers = first.ArrayLayers }));
+        RenderTexture texture = Own(_device.ResourceFactory.CreateRenderTexture(renderDescription with { ArrayLayers = first.ArrayLayers, MipLevels = first.MipLevels, Cube = first.Type == TextureType.TextureCube && depthDescription == null }));
         List<TraceResourceId> ids = new();
         for (int i = 0; i < colors.Length; i++)
         {
