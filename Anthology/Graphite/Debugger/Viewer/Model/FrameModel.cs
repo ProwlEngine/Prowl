@@ -29,7 +29,7 @@ internal sealed class FrameModel
             {
                 Id = $"i{instance.Index}",
                 Kind = NodeKind.Group,
-                Name = instance.Name,
+                Name = instance.Index < 0 && instance.Name.Length == 0 ? "Execution" : instance.Name,
                 GroupIndex = instance.Index,
                 Group = instance,
             });
@@ -65,7 +65,7 @@ internal sealed class FrameModel
         }
 
         int outside = 0;
-        foreach (RecordedCommandBuffer buffer in recording.CommandBuffers.Where(b => b.GroupIndex < 0 && !b.Name.StartsWith(CaptureCopy.BufferPrefix, System.StringComparison.Ordinal)))
+        foreach (RecordedCommandBuffer buffer in recording.CommandBuffers.Where(b => b.GroupIndex < 0 && b.PassIndex < 0 && !b.Name.StartsWith(CaptureCopy.BufferPrefix, System.StringComparison.Ordinal)))
         {
             ProfileNode node = root.Add(new ProfileNode
             {
@@ -88,12 +88,13 @@ internal sealed class FrameModel
         Stack<ProfileNode> markers = new();
         bool passGroup = false;
         string boundMesh = "";
-        int programCount = 0, markerCount = 0, drawOrdinal = 0;
+        int programCount = 0, markerCount = 0, events = 0, drawEvent = 0;
 
         for (int i = 0; i < pass.Commands.Length; i++)
         {
             RecordedCommand command = pass.Commands[i];
             ProfileNode scope = markers.Count > 0 ? markers.Peek() : passNode;
+            drawEvent = ReplayEvents.IsEvent(command) ? events++ : drawEvent;
             switch (command)
             {
                 case SetPipelineCommand pipeline:
@@ -153,11 +154,11 @@ internal sealed class FrameModel
                         : $"Draw {sub} / {boundMesh}";
                     owner.Add(new ProfileNode
                     {
-                        Id = $"{passNode.Id}d{drawOrdinal}",
+                        Id = $"{passNode.Id}d{drawEvent}",
                         Kind = NodeKind.Draw,
                         Name = name,
                         CommandIndex = i,
-                        DrawOrdinal = drawOrdinal++,
+                        DrawOrdinal = drawEvent,
                         SubIndex = sub,
                         Command = command,
                     });

@@ -49,7 +49,7 @@ internal sealed partial class ProfilerView
                 rows[i].Selected = targets[i].Key == selectedKey;
         }
 
-        TargetStep targetStep = new(step - 1, node.DrawOrdinal);
+        TargetStep targetStep = new(node.DrawOrdinal, node.DrawOrdinal);
         ResourceTable(model, node, context, "Render targets", "Click to preview / magenta = pixels this draw changed",
             new[] { "Slot", "Resource", "Format", "Load", "Store" }, new[] { 0.6f, 1.6f, 1.6f, 0.8f, 0.8f }, rows, targets, targetStep);
 
@@ -80,10 +80,10 @@ internal sealed partial class ProfilerView
         byte[]? previous = Sample(-1);
         for (int i = 0; i < step && i < passDraws.Count; i++)
         {
-            byte[]? now = Sample(i);
+            ProfileNode d = passDraws[i];
+            byte[]? now = Sample(d.DrawOrdinal);
             if (now != null && previous != null && !now.AsSpan().SequenceEqual(previous))
             {
-                ProfileNode d = passDraws[i];
                 rows.Add(new Row
                 {
                     Cells = new[] { d.CommandIndex.ToString(), d.Name, d.Ancestor(NodeKind.Marker)?.Name ?? "no marker", "Passed", "" },
