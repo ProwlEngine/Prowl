@@ -43,9 +43,6 @@ internal static class FullscreenPrograms
 internal sealed class BloomStage(BloomSettings settings, GraphicsProgram program, Sampler sampler, int order, string? input, string? add, string output, float scale, bool prefilter) : RenderFeature
 {
     private readonly PropertySet _properties = new();
-    private TextureHandle _input;
-    private TextureHandle _add;
-    private TextureHandle _output;
     private float _threshold;
     private float _radius;
 
@@ -58,26 +55,35 @@ internal sealed class BloomStage(BloomSettings settings, GraphicsProgram program
         _radius = settings.Radius;
     }
 
+    private sealed class ViewHandles
+    {
+        public TextureHandle Input;
+        public TextureHandle Add;
+        public TextureHandle Output;
+    }
+
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
+        ViewHandles handles = builder.GetSetupState<ViewHandles>();
         if (input == null)
             builder.ReadColor();
         else
-            _input = builder.Read(input);
+            handles.Input = builder.Read(input);
 
         if (add != null)
-            _add = builder.Read(add);
+            handles.Add = builder.Read(add);
 
-        _output = builder.Temporary(output, GraphTextureDesc.InstanceSized(PixelFormat.R16_G16_B16_A16_Float, scale));
-        builder.Publish(output, _output);
+        handles.Output = builder.Temporary(output, GraphTextureDesc.InstanceSized(PixelFormat.R16_G16_B16_A16_Float, scale));
+        builder.Publish(output, handles.Output);
     }
 
     public override void Render(FeatureContext context)
     {
-        Texture source = input == null ? context.Color! : context.Get(_input).ColorTextures[0];
+        ViewHandles handles = context.GetSetupState<ViewHandles>();
+        Texture source = input == null ? context.Color! : context.Get(handles.Input).ColorTextures[0];
         CommandBuffer cmd = context.Command;
 
-        cmd.SetFramebuffer(context.Get(_output).Framebuffer, new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
+        cmd.SetFramebuffer(context.Get(handles.Output).Framebuffer, new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
         cmd.SetFullViewport();
         cmd.SetShader(program);
         cmd.SetVertexSource(VertexSource.None);
@@ -87,7 +93,7 @@ internal sealed class BloomStage(BloomSettings settings, GraphicsProgram program
         _properties.SetFloat("_Threshold", prefilter ? _threshold : -1f);
         _properties.SetFloat("_Radius", _radius);
         if (add != null)
-            _properties.SetTexture("_Add", context.Get(_add).ColorTextures[0], sampler);
+            _properties.SetTexture("_Add", context.Get(handles.Add).ColorTextures[0], sampler);
 
         cmd.SetProperties(_properties);
         cmd.Draw(3);
@@ -98,7 +104,6 @@ internal sealed class BloomStage(BloomSettings settings, GraphicsProgram program
 internal sealed class BloomComposite(BloomSettings settings, FullscreenProgram program, Sampler sampler, string input) : RenderFeature
 {
     private readonly PropertySet _properties = new();
-    private TextureHandle _bloom;
     private float _intensity;
 
     public override RenderSlot Slot => RenderSlot.HdrPost;
@@ -106,15 +111,20 @@ internal sealed class BloomComposite(BloomSettings settings, FullscreenProgram p
 
     public override void Extract() => _intensity = settings.Intensity;
 
+    private sealed class ViewHandles
+    {
+        public TextureHandle Bloom;
+    }
+
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        _bloom = builder.Read(input);
+        builder.GetSetupState<ViewHandles>().Bloom = builder.Read(input);
         builder.WriteColor();
     }
 
     public override void Render(FeatureContext context)
     {
-        _properties.SetTexture("_Bloom", context.Get(_bloom).ColorTextures[0], sampler);
+        _properties.SetTexture("_Bloom", context.Get(context.GetSetupState<ViewHandles>().Bloom).ColorTextures[0], sampler);
         _properties.SetFloat("_Intensity", _intensity);
         context.Fullscreen(program, _properties);
     }
