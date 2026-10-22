@@ -140,6 +140,9 @@ public sealed class NetSession : IDisposable
     /// <summary>This process's peer. Null on a client until it has joined.</summary>
     public NetPeer? LocalPeer { get; private set; }
 
+    /// <summary>The client's transport connection to the host, available before admission. Null when hosting.</summary>
+    public Connection? HostConnection => _hostConnection;
+
     /// <summary>The host's peer. Null on a client until it has joined.</summary>
     public NetPeer? HostPeer { get; private set; }
 
