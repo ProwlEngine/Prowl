@@ -348,11 +348,10 @@ public abstract class StationGame : Game
 
         public void BeginExecution(ulong executionId, string graphName) { }
         public void EndExecution() { }
-        public void BeginView(in ViewInfo view) { }
-        public void EndView(in ViewInfo view) { }
+        public void BeginGroup(in GroupInfo group) { }
+        public void EndGroup(in GroupInfo group) { }
         public void BeginPass(in PassInfo pass) { }
         public void EndPass(in PassInfo pass, in PassStats stats) => Add(pass.Name, stats.CpuMilliseconds, 0);
-        public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
         public void RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds) => Add(commandBuffer.Pass?.Name ?? commandBuffer.Name, 0, milliseconds);
         public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
     }
