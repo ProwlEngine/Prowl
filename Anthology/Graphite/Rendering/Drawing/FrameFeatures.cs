@@ -206,6 +206,10 @@ public sealed class FrameBuilder
     public TextureHandle Write(TextureHandle handle, TextureState usage = TextureState.Storage)
         => Graph.Write(handle, usage);
 
+    /// <summary>Writes a buffer the host owns, such as one set in the globals, so the draws reading it wait for the write.</summary>
+    public BufferHandle Write(DeviceBuffer buffer, BufferAccess usage = BufferAccess.ShaderRead | BufferAccess.ShaderWrite)
+        => Graph.Write(FrameGraph.Import(buffer), usage);
+
     /// <summary>Reads the world's tables, so the feature runs after the frame's uploads, probes and deformation.</summary>
     public void ReadWorld()
     {
