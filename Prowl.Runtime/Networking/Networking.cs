@@ -52,6 +52,7 @@ public static partial class Networking
     private static double s_nextTick;
     private static int s_frame;
     private static NetworkingContext? s_context;
+    private static bool s_endingSession;
 
     /// <summary>The running session, or null when there is none.</summary>
     public static NetSession? Session { get; private set; }
@@ -97,11 +98,10 @@ public static partial class Networking
         Attach(session, context);
 
         s_scene = Scene.Current;
-        RegisterSceneObjects(s_scene);
-
         session.PeerJoined += SendSnapshot;
         session.PeerLeft += OnPeerLeft;
         Scene.OnSceneLoaded += OnHostSceneLoaded;
+        RegisterSceneObjects(s_scene);
         return session;
     }
 
@@ -192,6 +192,10 @@ public static partial class Networking
     private static void BeginSession()
     {
         MainThreadContext.AssertMainThread();
+        if (s_endingSession)
+        {
+            throw new InvalidOperationException("A session cannot start during network teardown. Schedule startup for the next frame.");
+        }
         if (Session != null)
         {
             throw new InvalidOperationException(
@@ -227,34 +231,44 @@ public static partial class Networking
                 return;
             }
 
-            NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty, $"Ended: {reason}: {message}");
-            Session = null;
-            s_context = null;
-            context.Dispose();
-            Scene.OnSceneLoaded -= OnHostSceneLoaded;
-            ResetState();
-            Debug.Log(message == null
-                ? $"[Network] Session ended: {reason}."
-                : $"[Network] Session ended: {reason}: {message}");
+            s_endingSession = true;
+            try
+            {
+                NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty, $"Ended: {reason}: {message}");
+                Session = null;
+                s_context = null;
+                Scene.OnSceneLoaded -= OnHostSceneLoaded;
+                try { context.Dispose(); }
+                finally { ResetState(); }
+                Debug.Log(message == null
+                    ? $"[Network] Session ended: {reason}."
+                    : $"[Network] Session ended: {reason}: {message}");
+            }
+            finally
+            {
+                s_endingSession = false;
+            }
         };
     }
 
     private static void ResetState()
     {
-        List<GameObject> networked = s_entries.Values.Select(e => e.GameObject).ToList();
+        NetworkEntry[] entries = s_entries.Values.ToArray();
+        foreach (NetworkEntry entry in entries)
+            NotifyDespawn(entry);
         s_scene = null;
         s_entries.Clear();
         s_index.Clear();
         s_dirty.Clear();
+        s_stateRevisions.Clear();
+        s_outgoingStateRevision = 0;
         SessionNumber++;
         s_incoming = null;
         s_incomingRead = false;
         CurrentCaller = null;
 
-        foreach (GameObject go in networked)
-        {
-            ControlChanged(go);
-        }
+        foreach (NetworkEntry entry in entries)
+            ControlChanged(entry.GameObject);
     }
 
     private enum EngineMessage : ushort

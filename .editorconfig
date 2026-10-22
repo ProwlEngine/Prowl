@@ -40,7 +40,7 @@ csharp_indent_switch_labels = true
 csharp_indent_labels = one_less_than_current
 
 # Modifier preferences
-csharp_preferred_modifier_order = public,private,protected,internal,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,volatile,async:suggestion
+csharp_preferred_modifier_order = public, private, protected, internal, static, extern, new, virtual, abstract, sealed, override, readonly, unsafe, volatile, async:suggestion
 
 # avoid this. unless absolutely necessary
 dotnet_style_qualification_for_field = false:suggestion
@@ -57,31 +57,31 @@ dotnet_style_predefined_type_for_member_access = true:suggestion
 
 # name all constant fields using PascalCase
 dotnet_naming_rule.constant_fields_should_be_pascal_case.severity = suggestion
-dotnet_naming_rule.constant_fields_should_be_pascal_case.symbols  = constant_fields
-dotnet_naming_rule.constant_fields_should_be_pascal_case.style    = pascal_case_style
-dotnet_naming_symbols.constant_fields.applicable_kinds   = field
+dotnet_naming_rule.constant_fields_should_be_pascal_case.symbols = constant_fields
+dotnet_naming_rule.constant_fields_should_be_pascal_case.style = pascal_case_style
+dotnet_naming_symbols.constant_fields.applicable_kinds = field
 dotnet_naming_symbols.constant_fields.required_modifiers = const
 dotnet_naming_style.pascal_case_style.capitalization = pascal_case
 
 # public fields should be PascalCase
 dotnet_naming_rule.public_fields_should_be_pascal_case.severity = suggestion
-dotnet_naming_rule.public_fields_should_be_pascal_case.symbols  = public_fields
-dotnet_naming_rule.public_fields_should_be_pascal_case.style    = pascal_case_style
+dotnet_naming_rule.public_fields_should_be_pascal_case.symbols = public_fields
+dotnet_naming_rule.public_fields_should_be_pascal_case.style = pascal_case_style
 dotnet_naming_symbols.public_fields.applicable_kinds = field
 dotnet_naming_symbols.public_fields.applicable_accessibilities = public
 
 # public properties should be PascalCase
 dotnet_naming_rule.public_properties_should_be_pascal_case.severity = suggestion
-dotnet_naming_rule.public_properties_should_be_pascal_case.symbols  = public_properties
-dotnet_naming_rule.public_properties_should_be_pascal_case.style    = pascal_case_style
+dotnet_naming_rule.public_properties_should_be_pascal_case.symbols = public_properties
+dotnet_naming_rule.public_properties_should_be_pascal_case.style = pascal_case_style
 dotnet_naming_symbols.public_properties.applicable_kinds = property
 dotnet_naming_symbols.public_properties.applicable_accessibilities = public
 
 # static fields should have s_ prefix
 dotnet_naming_rule.static_fields_should_have_prefix.severity = suggestion
-dotnet_naming_rule.static_fields_should_have_prefix.symbols  = static_fields
-dotnet_naming_rule.static_fields_should_have_prefix.style    = static_prefix_style
-dotnet_naming_symbols.static_fields.applicable_kinds   = field
+dotnet_naming_rule.static_fields_should_have_prefix.symbols = static_fields
+dotnet_naming_rule.static_fields_should_have_prefix.style = static_prefix_style
+dotnet_naming_symbols.static_fields.applicable_kinds = field
 dotnet_naming_symbols.static_fields.required_modifiers = static
 dotnet_naming_symbols.static_fields.applicable_accessibilities = private, internal, private_protected
 dotnet_naming_style.static_prefix_style.required_prefix = s_
@@ -89,8 +89,8 @@ dotnet_naming_style.static_prefix_style.capitalization = camel_case
 
 # internal and private fields should be _camelCase
 dotnet_naming_rule.camel_case_for_private_internal_fields.severity = suggestion
-dotnet_naming_rule.camel_case_for_private_internal_fields.symbols  = private_internal_fields
-dotnet_naming_rule.camel_case_for_private_internal_fields.style    = camel_case_underscore_style
+dotnet_naming_rule.camel_case_for_private_internal_fields.symbols = private_internal_fields
+dotnet_naming_rule.camel_case_for_private_internal_fields.style = camel_case_underscore_style
 dotnet_naming_symbols.private_internal_fields.applicable_kinds = field
 dotnet_naming_symbols.private_internal_fields.applicable_accessibilities = private, internal
 dotnet_naming_style.camel_case_underscore_style.required_prefix = _
@@ -188,7 +188,7 @@ dotnet_diagnostic.IDE0044.severity = none
 dotnet_diagnostic.IDE0290.severity = none
 
 # License header
-file_header_template = This file is part of the Prowl Game Engine\nLicensed under the MIT License. See the LICENSE file in the project root for details.
+file_header_template = This file is part of the Prowl Game Engine\nLicensed under the MIT License.See the LICENSE file in the project root for details.
 
 # C++ Files
 [*.{cpp,h,in}]

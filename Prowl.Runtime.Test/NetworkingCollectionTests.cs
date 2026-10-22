@@ -99,6 +99,30 @@ public class NetCollectionTestComponent : Component
 
 public partial class NetworkingTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void InitialCollectionsRejectOperationsAndRpcPayloadsWithoutChangingContents(bool rpcPayload)
+    {
+        NetList<int> source = new();
+        source.Add(1);
+        using NetWriter writer = new();
+        if (rpcPayload) source.WriteRpc(writer);
+        else source.WriteChanges(writer);
+        byte[] data = writer.ToArray();
+        NetList<int> target = new();
+        target.Add(9);
+        int notifications = 0;
+        target.Changed += _ => notifications++;
+        Assert.Throws<System.IO.InvalidDataException>(() =>
+        {
+            NetReader reader = new(data);
+            target.Read(ref reader, initial: true);
+        });
+        Assert.Equal(new[] { 9 }, target);
+        Assert.Equal(0, notifications);
+    }
+
     /// <summary>Writes every [Sync] value of the component, as a snapshot or spawn carries it.</summary>
     private static Dictionary<uint, byte[]> WholeState(Component component)
     {

@@ -639,7 +639,16 @@ public abstract partial class Component : EngineObject, ISerializationCallbackRe
     /// Override to react to freshly loaded values.</summary>
     public virtual void OnAfterDeserialize() { }
 
-    private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(_go, nameof(Dispose));
+    private protected override void AssertCanDispose()
+    {
+        MainThreadContext.AssertOwner(_go, nameof(Dispose));
+        AssertCanDestroy();
+    }
+
+    private protected override void AssertCanDestroy()
+    {
+        if (_go.IsValid() && !_go.IsDestroyQueued) Networking.Networking.AssertStructureEditable(_go);
+    }
 
     /// <summary>Throws when this component's live object is touched from a thread other than the main one.</summary>
     private protected void AssertOwner([System.Runtime.CompilerServices.CallerMemberName] string member = "")

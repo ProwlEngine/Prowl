@@ -10,11 +10,22 @@ namespace Prowl.Runtime;
 
 public partial class GameObject
 {
+    private NetworkMode _networkMode = NetworkMode.Snapshot;
+
     /// <summary>
     /// How this object takes part in a networked session. Has no effect when there is no session, so
     /// single player games can ignore it.
     /// </summary>
-    public NetworkMode NetworkMode { get; set; } = NetworkMode.Snapshot;
+    public NetworkMode NetworkMode
+    {
+        get => _networkMode;
+        set
+        {
+            if (value == _networkMode) return;
+            Networking.Networking.AssertHierarchyEditable(this);
+            _networkMode = value;
+        }
+    }
 
     /// <summary>For a <see cref="NetworkMode.Object"/>: what happens to it when the peer that owns it leaves.</summary>
     public NetworkOrphaned NetworkOrphaned { get; set; } = NetworkOrphaned.Destroy;

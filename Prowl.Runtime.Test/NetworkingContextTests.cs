@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using Prowl.Runtime.Networking;
 using Prowl.Warp;
-using Prowl.Warp.Transports.Batching;
 using Prowl.Warp.Transports.Kcp;
 using Prowl.Warp.Transports.Local;
 using Xunit;
@@ -16,12 +15,12 @@ public class NetworkingContextTests
     public void ReconnectsAndLargeTransfersSurviveSimulatedWan(NetworkExecution execution)
     {
         int rounds = int.TryParse(Environment.GetEnvironmentVariable("PROWL_NETWORK_STRESS_ROUNDS"), out int configured) ? configured : 3;
-        Transport Stack(int seed) => new BatchingTransport(new KcpTransport(new()
+        Transport Stack(int seed) => new KcpTransport(new()
         {
             Port = 0,
             Simulation = new() { PacketLoss = 0.03, Latency = TimeSpan.FromMilliseconds(15),
                 Jitter = TimeSpan.FromMilliseconds(10), Seed = seed }
-        }));
+        });
         NetworkConfiguration configuration = new() { Execution = execution };
         using NetworkingContext host = new(configuration);
         NetSession server = host.Host(Stack(42));
@@ -61,8 +60,8 @@ public class NetworkingContextTests
         LocalNetwork network = new();
         NetSession lobby = lobbyHost.Host(new LocalTransport(network, "lobby"));
         NetSession lobbyPeer = lobbyClient.Join(new LocalTransport(network, "lobby-client"), "lobby", "client");
-        NetSession game = gameHost.Host(new BatchingTransport(new KcpTransport(new() { Port = 0 })));
-        NetSession gamePeer = gameClient.Join(new BatchingTransport(new KcpTransport()), $"127.0.0.1:{gameHost.LocalPort}", "client");
+        NetSession game = gameHost.Host(new KcpTransport(new() { Port = 0 }));
+        NetSession gamePeer = gameClient.Join(new KcpTransport(), $"127.0.0.1:{gameHost.LocalPort}", "client");
         void Pump() { lobbyHost.Update(); lobbyClient.Update(); gameHost.Update(); gameClient.Update(); }
         Until(() => lobbyPeer.State == SessionState.Active && gamePeer.State == SessionState.Active, Pump);
         bool received = false;

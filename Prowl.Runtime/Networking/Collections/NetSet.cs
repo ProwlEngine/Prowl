@@ -33,6 +33,8 @@ public sealed class NetSet<T> : NetCollection, ISet<T>, IReadOnlySet<T>
 
     public NetSet(IEnumerable<T> items) => _items.UnionWith(items);
 
+    internal override NetCollection CreateEmptyCopy() => new NetSet<T>();
+
     public override int Count => _items.Count;
 
     bool ICollection<T>.IsReadOnly => false;

@@ -34,6 +34,8 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
     /// <summary>Writes what changed since the last send. For most values, that's the value.</summary>
     internal virtual void WriteChanges(Component component, NetWriter writer) => Write(component, writer);
 
+    internal virtual void WriteRpc(Component component, NetWriter writer) => Write(component, writer);
+
     /// <summary>What <see cref="WriteChanges" /> wrote has been sent.</summary>
     internal virtual void ChangesSent(Component component)
     {
@@ -44,6 +46,8 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
     ///     or spawn, which runs no [Change] hook.
     /// </summary>
     internal abstract void Read(Component component, ref NetReader reader, bool initial);
+
+    internal abstract void Validate(Component component, ref NetReader reader);
 
     internal abstract string FormatValue(Component component);
 
@@ -71,6 +75,8 @@ public sealed class SyncMember<TComponent, T>(
 {
     internal override void Write(Component component, NetWriter writer) =>
         NetSerializer<T>.Write(writer, get((TComponent)component));
+
+    internal override void Validate(Component component, ref NetReader reader) => NetSerializer<T>.Read(ref reader);
 
     internal override void Read(Component component, ref NetReader reader, bool initial)
     {
@@ -116,7 +122,11 @@ public sealed class SyncCollectionMember<TComponent, TCollection>(
 
     internal override void WriteChanges(Component component, NetWriter writer) => Bound(component).WriteChanges(writer);
 
+    internal override void WriteRpc(Component component, NetWriter writer) => Bound(component).WriteRpc(writer);
+
     internal override void ChangesSent(Component component) => Bound(component).ClearChanges();
+
+    internal override void Validate(Component component, ref NetReader reader) => Bound(component).Validate(ref reader);
 
     internal override void Read(Component component, ref NetReader reader, bool initial) =>
         Bound(component).Read(ref reader, initial);

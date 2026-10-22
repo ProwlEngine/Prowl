@@ -13,7 +13,6 @@ using Prowl.Runtime;
 using Prowl.Runtime.Networking;
 using Prowl.Warp;
 using Prowl.Warp.Transports.Kcp;
-using Prowl.Warp.Transports.Batching;
 
 using Debug = Prowl.Runtime.Debug;
 
@@ -220,7 +219,6 @@ public static class MultiplayerPlay
 
             NetworkConfiguration configuration = Networking.Configuration;
             Transport transport = new KcpTransport(configuration.CreateKcpOptions());
-            if (configuration.BatchMessages) transport = new BatchingTransport(transport, configuration.Mtu);
             NetSession session = Networking.Join(transport, address, name);
             session.Ended += (reason, message) =>
             {

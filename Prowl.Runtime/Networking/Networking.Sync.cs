@@ -3,6 +3,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 using Prowl.Warp;
 
@@ -12,7 +14,8 @@ namespace Prowl.Runtime.Networking;
 // host to every client, or from a client to the host, which applies them and passes them on.
 //
 // A block of values, as in a Sync message, a snapshot or a spawn, is
-// [varuint count] then per value [guid component][varuint slot][bytes value, length prefixed].
+// [varuint count] then per value [guid component][varuint slot][u32 ownership generation][bytes value, length prefixed].
+// Ongoing Sync messages prefix this block with [i32 original writer][u64 state revision].
 // The length lets a receiver skip values for components it doesn't have or won't accept.
 //
 // A network collection's value is its changes since the last tick, or all of it in a snapshot or spawn;
@@ -24,6 +27,8 @@ public static partial class Networking
     private static readonly HashSet<string> s_syncWarnings = new();
     private static readonly List<Action> s_notifications = new();
     private static int s_applying;
+    private static ulong s_outgoingStateRevision;
+    private static readonly Dictionary<(Guid Component, uint Slot, int Origin, uint Generation), ulong> s_stateRevisions = new();
 
     // The peer whose values are being applied.
     private static NetPeer? s_syncSender;
@@ -95,6 +100,8 @@ public static partial class Networking
             return;
         }
 
+        message.WriteInt32(Session!.LocalPeer!.Id);
+        message.WriteUInt64(checked(++s_outgoingStateRevision));
         message.WriteVarUInt32((uint)count);
         message.WriteBytes(values.WrittenSpan);
 
@@ -109,7 +116,7 @@ public static partial class Networking
     }
 
     /// <summary>Writes one value: what changed since it was last sent if <paramref name="changes" />, else all of it.</summary>
-    private static bool WriteValue(NetWriter output, Component component, uint slot, bool changes)
+    private static bool WriteValue(NetWriter output, Component component, uint slot, bool changes, bool rpc = false)
     {
         if (NetworkMembers.Of(component).Sync(slot) is not { } sync)
         {
@@ -122,6 +129,10 @@ public static partial class Networking
             sync.WriteChanges(component, s_valueWriter);
             sync.ChangesSent(component);
         }
+        else if (rpc)
+        {
+            sync.WriteRpc(component, s_valueWriter);
+        }
         else
         {
             sync.Write(component, s_valueWriter);
@@ -129,6 +140,7 @@ public static partial class Networking
 
         output.WriteGuid(component.Identifier);
         output.WriteVarUInt32(slot);
+        output.WriteUInt32(GenerationOf(component.GameObject));
         output.WriteBytesWithLength(s_valueWriter.WrittenSpan);
         TraceMember("SyncVar", "Serialize", Session?.LocalPeer, component, slot, false, "Serialized",
             s_valueWriter.WrittenSpan);
@@ -163,6 +175,20 @@ public static partial class Networking
         output.WriteBytes(values.WrittenSpan);
     }
 
+    private static void ClearStateRevisions(GameObject root)
+    {
+        HashSet<Guid> identifiers = new();
+        foreach (GameObject go in root.GetChildrenDeep().Prepend(root))
+        {
+            identifiers.Add(go.Identifier);
+            foreach (Component part in go.GetComponents())
+                identifiers.Add(part.Identifier);
+        }
+        foreach (var key in s_stateRevisions.Keys.ToArray())
+            if (identifiers.Contains(key.Component))
+                s_stateRevisions.Remove(key);
+    }
+
     private static void OnSync(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
         if (!IsHost && !sender.IsHost)
@@ -170,13 +196,22 @@ public static partial class Networking
             return;
         }
 
+        NetSession? session = Session;
+        int originId = reader.ReadInt32();
+        ulong revision = reader.ReadUInt64();
+        if ((!sender.IsHost && originId != sender.Id) || revision == 0)
+            throw new InvalidDataException("Invalid Sync origin.");
+        if (!Session!.TryGetPeer(originId, out NetPeer? origin))
+            return;
         using NetWriter? relay = IsHost ? new NetWriter(1024) : null;
-        int relayed = ApplySyncState(sender, ref reader, relay, false);
+        int relayed = ApplySyncState(origin, ref reader, relay, false, revision);
 
         // The host passes on what it accepted from a client to everyone else.
-        if (relay != null && relayed > 0)
+        if (Session == session && relay != null && relayed > 0)
         {
             using NetWriter message = new(relay.Length + 8);
+            message.WriteInt32(originId);
+            message.WriteUInt64(revision);
             message.WriteVarUInt32((uint)relayed);
             message.WriteBytes(relay.WrittenSpan);
             BroadcastEngine(EngineMessage.Sync, message.WrittenSpan, except: sender);
@@ -189,7 +224,7 @@ public static partial class Networking
     ///     <paramref name="initial" /> for a snapshot or spawn, whose values change nothing that was running,
     ///     so nothing is notified. Otherwise notifications run once every value in the block is in place.
     /// </summary>
-    private static int ApplySyncState(NetPeer sender, ref NetReader reader, NetWriter? relay, bool initial)
+    private static int ApplySyncState(NetPeer sender, ref NetReader reader, NetWriter? relay, bool initial, ulong revision = 0)
     {
         int relayed = 0;
         uint count = reader.ReadVarUInt32();
@@ -203,6 +238,7 @@ public static partial class Networking
             {
                 Guid id = reader.ReadGuid();
                 uint slot = reader.ReadVarUInt32();
+                uint generation = reader.ReadUInt32();
                 ReadOnlySpan<byte> value = reader.ReadBytesWithLength();
 
                 if (FindByIdentifier(id) is not Component component || component.GameObject.IsNetworkExcluded)
@@ -213,11 +249,17 @@ public static partial class Networking
                 }
 
                 SyncMember? sync = NetworkMembers.Of(component).Sync(slot);
-                bool accepted = sync != null && AcceptSync(component, sync.Flags);
+                bool accepted = sync != null && AcceptSync(component, sync.Flags) &&
+                    (initial || generation == GenerationOf(component.GameObject));
+                var revisionKey = (component.Identifier, slot, sender.Id, generation);
+                if (accepted && revision != 0 && s_stateRevisions.GetValueOrDefault(revisionKey) >= revision)
+                    accepted = false;
                 if (accepted)
                 {
                     NetReader valueReader = new(value);
                     sync!.Read(component, ref valueReader, initial);
+                    if (revision != 0)
+                        s_stateRevisions[revisionKey] = revision;
                 }
 
                 TraceMember("SyncVar", accepted ? "Apply" : "Rejected", sender, component, slot, false,
@@ -226,6 +268,7 @@ public static partial class Networking
                 {
                     relay.WriteGuid(id);
                     relay.WriteVarUInt32(slot);
+                    relay.WriteUInt32(generation);
                     relay.WriteBytesWithLength(value);
                     relayed++;
                 }

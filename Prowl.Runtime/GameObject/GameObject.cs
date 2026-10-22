@@ -304,6 +304,11 @@ public partial class GameObject : EngineObject, ISerializable
         if (NewParent == _parent)
             return true;
 
+        if (!IsDisposed)
+        {
+            Networking.Networking.AssertHierarchyEditable(this);
+            Networking.Networking.AssertHierarchyEditable(NewParent);
+        }
         SceneEvents.Invalidate();
 
         // Make sure that the new father is not a child of this transform.
@@ -591,6 +596,7 @@ public partial class GameObject : EngineObject, ISerializable
         HashSet<Type>? pending)
     {
         MainThreadContext.AssertOwner(this, nameof(AddComponent));
+        Networking.Networking.AssertStructureEditable(this);
         if (!CanConstruct(type)) return null;
 
         if (RefusesAnother(type)) return null;
@@ -691,6 +697,8 @@ public partial class GameObject : EngineObject, ISerializable
         MainThreadContext.AssertOwner(comp.GameObject);
 
         if (ReferenceEquals(comp.GameObject, this)) return true;
+        Networking.Networking.AssertStructureEditable(this);
+        Networking.Networking.AssertStructureEditable(comp.GameObject);
         if (RefusesAnother(comp.GetType())) return false;
 
         // A component belongs to exactly one GameObject. Leaving it registered on its previous one
@@ -762,6 +770,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <typeparam name="T">The type of components to remove.</typeparam>
     public void RemoveAll<T>() where T : Component
     {
+        Networking.Networking.AssertStructureEditable(this);
         if (_componentCache.TryGetValue(typeof(T), out IReadOnlyCollection<Component>? components))
         {
             // Create a copy to avoid potential collection modification issues
@@ -831,6 +840,7 @@ public partial class GameObject : EngineObject, ISerializable
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
         MainThreadContext.AssertOwner(this, nameof(RemoveComponent));
+        if (!IsDisposed && !IsDestroyQueued) Networking.Networking.AssertStructureEditable(this);
         if (component.CanDestroy() == false) return;
 
         if (_components.Remove(component))
@@ -1152,7 +1162,14 @@ public partial class GameObject : EngineObject, ISerializable
         return false;
     }
 
-    private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(this, nameof(Dispose));
+    private protected override void AssertCanDestroy() => Networking.Networking.AssertObjectDestroyable(this);
+
+    private protected override void AssertCanDispose()
+    {
+        MainThreadContext.AssertOwner(this, nameof(Dispose));
+        AssertCanDestroy();
+        Networking.Networking.BeforeObjectDisposed(this);
+    }
 
     /// <summary>
     /// Disposes of the GameObject and its components.

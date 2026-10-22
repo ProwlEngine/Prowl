@@ -219,6 +219,8 @@ public static partial class Networking
                     $"{component.GetType().Name}.{rpc?.Signature ?? $"#{method}"}");
             }
 
+            reader.ReadInt32(); // Original state writer, preserved by host relaying.
+            reader.ReadUInt64();
             uint count = reader.ReadVarUInt32();
             StringBuilder context = new($"{count} SyncVar value(s)");
             List<string> names = new();
@@ -227,6 +229,7 @@ public static partial class Networking
             {
                 Guid id = reader.ReadGuid();
                 uint slot = reader.ReadVarUInt32();
+                reader.ReadUInt32(); // Ownership generation.
                 ReadOnlySpan<byte> value = reader.ReadBytesWithLength();
                 if (FindByIdentifier(id) is not Component component)
                 {

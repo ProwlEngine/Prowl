@@ -1,7 +1,6 @@
 using System;
 
 using Prowl.Warp;
-using Prowl.Warp.Transports.Batching;
 using Prowl.Warp.Transports.Kcp;
 using Prowl.Warp.Transports.Local;
 
@@ -130,6 +129,7 @@ public sealed class NetworkConfiguration
         return new NetSessionOptions
         {
             AppVersion = c.AppVersion,
+            BatchMessages = c.BatchMessages,
             MaxPeers = c.MaxPeers,
             MaxMessageSize = c.MaxMessageSize,
             JoinTimeout = TimeSpan.FromSeconds(c.JoinTimeoutSeconds)
@@ -197,13 +197,7 @@ public static partial class Networking
                 hosting ? s_configuration.LocalAddress : Guid.NewGuid().ToString());
         }
 
-        Transport transport = new KcpTransport(s_configuration.CreateKcpOptions());
-        if (s_configuration.BatchMessages)
-        {
-            transport = new BatchingTransport(transport, s_configuration.Mtu);
-        }
-
-        return transport;
+        return new KcpTransport(s_configuration.CreateKcpOptions());
     }
 
     /// <summary>Hosts using the project's transport and session defaults.</summary>

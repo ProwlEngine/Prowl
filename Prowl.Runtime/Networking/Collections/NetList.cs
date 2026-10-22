@@ -31,6 +31,8 @@ public sealed class NetList<T> : NetCollection, IList<T>, IReadOnlyList<T>
 
     public NetList(IEnumerable<T> items) => _items.AddRange(items);
 
+    internal override NetCollection CreateEmptyCopy() => new NetList<T>();
+
     public override int Count => _items.Count;
 
     bool ICollection<T>.IsReadOnly => false;

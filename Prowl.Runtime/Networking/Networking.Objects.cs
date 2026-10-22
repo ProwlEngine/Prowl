@@ -100,7 +100,9 @@ public static partial class Networking
 
     private static int OwnerOf(GameObject go) => FindEntry(go)?.Owner ?? NoOwner;
 
-    internal static bool IsNetworked(GameObject go) => IsActive && FindEntry(go) != null;
+    internal static uint GenerationOf(GameObject go) => FindEntry(go)?.Generation ?? 0;
+
+    internal static bool IsNetworked(GameObject go) => IsActive && FindEntry(go) is { TearingDown: false };
 
     /// <summary>True if this peer drives <paramref name="go" />: it owns it, or it is the host and nobody does.</summary>
     internal static bool HasControl(GameObject go)
@@ -119,7 +121,7 @@ public static partial class Networking
 
     internal static NetPeer? GetOwner(GameObject go)
     {
-        if (!IsActive)
+        if (!IsActive || FindEntry(go) is { TearingDown: true })
         {
             return null;
         }
@@ -142,6 +144,11 @@ public static partial class Networking
             if (!IsHost)
             {
                 throw new InvalidOperationException("Only the host can spawn networked objects.");
+            }
+
+            if (FindEntry(go) is { TearingDown: true })
+            {
+                throw new InvalidOperationException("An object being despawned cannot be spawned again.");
             }
 
             if (go.Scene != s_scene)
@@ -188,6 +195,7 @@ public static partial class Networking
         WriteSpawn(go, entry.Owner, entry.Orphaned, message, entry.Generation);
         BroadcastEngine(EngineMessage.Spawn, message.WrittenSpan);
         ControlChanged(go);
+        NotifySpawn(entry);
     }
 
     /// <summary>A Spawn message: where the object goes, who owns it, the object itself and its [Sync] values.</summary>
@@ -265,6 +273,9 @@ public static partial class Networking
             s_spawning = null;
         }
 
+        NetworkEntry entry = new(go) { Owner = owner, Orphaned = orphaned, Generation = generation };
+        s_entries.Add(entry);
+        ControlChanged(go);
         if (FindByIdentifier(parentId) is GameObject parent)
         {
             go.SetParent(parent, false);
@@ -274,9 +285,8 @@ public static partial class Networking
             s_scene.Add(go);
         }
 
-        s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned, Generation = generation });
         IndexTree(go);
-        ControlChanged(go);
+        NotifySpawn(entry);
     }
 
     /// <summary>A GameObject was disposed. On the host, a networked object going away goes away everywhere.</summary>
@@ -291,7 +301,7 @@ public static partial class Networking
         s_entries.Remove(go.Identifier);
 
         // A scene being swapped out is disabled first. Its objects aren't destroyed, they're replaced by the next snapshot.
-        if (go.Scene is not { IsActive: true } || !IsActive)
+        if (go.Scene is not { IsDisposed: false, IsActive: true } || !IsActive)
         {
             return;
         }
@@ -311,6 +321,7 @@ public static partial class Networking
         Guid id = reader.ReadGuid();
         if (s_entries.Remove(id, out NetworkEntry? entry) && entry.GameObject.IsValid())
         {
+            NotifyDespawn(entry);
             entry.GameObject.Destroy();
         }
     }
@@ -329,7 +340,7 @@ public static partial class Networking
             throw new InvalidOperationException("Only the host can change who owns a networked object.");
         }
 
-        if (!s_entries.TryGetValue(go.Identifier, out NetworkEntry? entry) || entry.GameObject != go)
+        if (!s_entries.TryGetValue(go.Identifier, out NetworkEntry? entry) || entry.GameObject != go || entry.TearingDown)
         {
             throw new InvalidOperationException($"'{go.Name}' is not a spawned networked object.");
         }
@@ -346,6 +357,7 @@ public static partial class Networking
         }
 
         Float3 velocity = SampledVelocity(entry);
+        ClearStateRevisions(entry.GameObject);
         entry.Owner = owner;
         entry.Generation = NextGeneration();
         entry.HasSent = false;
@@ -359,6 +371,7 @@ public static partial class Networking
         message.WriteVarUInt32((uint)(owner + 1));
         message.WriteUInt32(entry.Generation);
         BroadcastEngine(EngineMessage.Owner, message.WrittenSpan);
+        NotifyOwnership(entry);
     }
 
     private static void OnOwner(NetPeer sender, ref NetReader reader, Delivery delivery)
@@ -374,6 +387,7 @@ public static partial class Networking
         if (s_entries.TryGetValue(id, out NetworkEntry? entry))
         {
             Float3 velocity = SampledVelocity(entry);
+            ClearStateRevisions(entry.GameObject);
             entry.Owner = owner;
             entry.Generation = generation;
             entry.HasSent = false;
@@ -381,11 +395,13 @@ public static partial class Networking
             entry.Samples.Clear();
             entry.Timeline.Clear();
             ControlChanged(entry.GameObject, velocity);
+            NotifyOwnership(entry);
         }
     }
 
     private static void OnPeerLeft(NetPeer peer, SessionEndReason reason)
     {
+        NetSession? session = Session;
         List<NetworkEntry> orphans = new();
         foreach (NetworkEntry entry in s_entries.Values)
         {
@@ -397,6 +413,10 @@ public static partial class Networking
 
         foreach (NetworkEntry entry in orphans)
         {
+            if (Session != session || !IsActive)
+                break;
+            if (FindEntry(entry.GameObject) != entry)
+                continue;
             if (entry.Orphaned == NetworkOrphaned.Destroy && entry.GameObject.IsValid())
             {
                 entry.GameObject.Destroy();
@@ -411,6 +431,12 @@ public static partial class Networking
     /// <summary>What the session knows about one networked object (a <see cref="NetworkMode.Object" /> root).</summary>
     private sealed class NetworkEntry(GameObject gameObject)
     {
+        public readonly HashSet<Component> SpawnListeners = new();
+        public readonly HashSet<Component> AuthorityListeners = new();
+        public bool SpawnNotified;
+        public bool HasLocalAuthority;
+        public bool TearingDown;
+        public int NotifiedOwnerId = NoOwner;
         public readonly List<TransformSample> Samples = new();
         public readonly TransformTimeline Timeline = new();
         public uint Generation;

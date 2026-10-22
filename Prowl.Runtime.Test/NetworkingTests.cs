@@ -92,18 +92,52 @@ public sealed class FakePeer : IDisposable
         for (ushort id = SceneSnapshot; id <= RpcFromHost; id++)
         {
             ushort captured = id;
-            session.OnRaw(id, (NetPeer sender, ref NetReader reader, Delivery delivery) => Received.Add((captured, reader.ReadBytes(reader.Remaining).ToArray())));
+            session.OnRaw(id, (NetPeer sender, ref NetReader reader, Delivery delivery) =>
+            {
+                NetReader wire = reader;
+                WireReceived.Add((captured, wire.ReadBytes(wire.Remaining).ToArray()));
+                Received.Add((captured, ReadEnginePayload(captured, ref reader)));
+            });
         }
     }
+
+    private ulong _stateRevision;
 
     public NetSession Session { get; }
 
     public List<(ushort Id, byte[] Data)> Received { get; } = new();
+    public List<(ushort Id, byte[] Data)> WireReceived { get; } = new();
 
     public static FakePeer Join(LocalNetwork network, string name) =>
         new(NetSession.Join(new LocalTransport(network, name), "host", name));
 
     public static FakePeer Host(LocalNetwork network) => new(NetSession.Host(new LocalTransport(network, "host"), "FakeHost"));
+
+    private static byte[] ReadEnginePayload(ushort id, ref NetReader reader)
+    {
+        if (id == Sync)
+        {
+            reader.ReadInt32(); reader.ReadUInt64();
+            using NetWriter logical = new();
+            uint count = reader.ReadVarUInt32(); logical.WriteVarUInt32(count);
+            for (uint i = 0; i < count; i++)
+            {
+                logical.WriteGuid(reader.ReadGuid()); logical.WriteVarUInt32(reader.ReadVarUInt32());
+                reader.ReadUInt32(); logical.WriteBytesWithLength(reader.ReadBytesWithLength());
+            }
+            return logical.ToArray();
+        }
+        if (id == RpcFromHost)
+        {
+            using NetWriter logical = new();
+            logical.WriteVarUInt32(reader.ReadVarUInt32());
+            logical.WriteGuid(reader.ReadGuid());
+            logical.WriteUInt32(reader.ReadUInt32());
+            logical.WriteBytes(reader.ReadBytesWithLength());
+            return logical.ToArray();
+        }
+        return reader.ReadBytes(reader.Remaining).ToArray();
+    }
 
     public bool Has(ushort id) => Received.Any(m => m.Id == id);
 
@@ -113,7 +147,38 @@ public sealed class FakePeer : IDisposable
     {
         using NetWriter writer = new();
         write(writer);
-        Session.SendRaw(to ?? Session.HostPeer!, id, writer.WrittenSpan);
+        using NetWriter wire = new();
+        if (id == Sync)
+        {
+            wire.WriteInt32(Session.LocalPeer!.Id);
+            wire.WriteUInt64(++_stateRevision);
+        }
+        if (id == RpcToHost || id == RpcFromHost)
+        {
+            NetReader arguments = new(writer.WrittenSpan);
+            if (id == RpcFromHost) wire.WriteVarUInt32(arguments.ReadVarUInt32());
+            wire.WriteGuid(arguments.ReadGuid());
+            wire.WriteUInt32(arguments.ReadUInt32());
+            wire.WriteBytesWithLength(arguments.ReadBytes(arguments.Remaining));
+            wire.WriteBytesWithLength(new byte[] { 0 }); // This test call supplies no dependent state.
+        }
+        else if (id == Sync)
+        {
+            NetReader block = new(writer.WrittenSpan);
+            uint count = block.ReadVarUInt32(); wire.WriteVarUInt32(count);
+            for (uint i = 0; i < count; i++)
+            {
+                Guid componentId = block.ReadGuid(); wire.WriteGuid(componentId);
+                wire.WriteVarUInt32(block.ReadVarUInt32());
+                uint generation = Networking.Networking.FindByIdentifier(componentId) is Component part
+                    ? Networking.Networking.GenerationOf(part.GameObject) : 0;
+                wire.WriteUInt32(generation);
+                wire.WriteBytesWithLength(block.ReadBytesWithLength());
+            }
+        }
+        else wire.WriteBytes(writer.WrittenSpan);
+        Session.SendRaw(to ?? Session.HostPeer!, id, wire.WrittenSpan);
+        Session.Flush();
     }
 
     public void SendSync(Guid component, uint slot, int value) => Send(Sync, w =>

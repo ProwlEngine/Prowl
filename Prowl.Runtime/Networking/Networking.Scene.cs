@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Runtime.Diagnostics;
@@ -16,7 +17,7 @@ namespace Prowl.Runtime.Networking;
 public static partial class Networking
 {
     // Bumped whenever the snapshot layout changes, so a mismatched client fails clearly.
-    private const byte SnapshotFormat = 5;
+    private const byte SnapshotFormat = 6;
 
     private static void OnHostSceneLoaded()
     {
@@ -30,6 +31,8 @@ public static partial class Networking
         s_scene = Scene.Current;
         s_index.Clear();
         s_dirty.Clear();
+        foreach (NetworkEntry entry in s_entries.Values.ToArray())
+            if (!entry.GameObject.IsValid() || entry.GameObject.Scene != s_scene) NotifyDespawn(entry);
         s_entries.RemoveWhere(e => !e.GameObject.IsValid() || e.GameObject.Scene != s_scene);
         RegisterSceneObjects(s_scene);
 
@@ -119,43 +122,77 @@ public static partial class Networking
             return;
         }
 
+        NetSession? session = Session;
         Scene scene = ReadSnapshot(ref reader);
-
-        // Everything after the scene refers to the objects in it, so it becomes the replicated scene now,
-        // although it only turns current at the end of the frame.
-        s_scene = scene;
-        s_index.Clear();
-        s_indexFrame = -1;
-        s_entries.Clear();
-        s_dirty.Clear();
-
-        uint count = reader.ReadVarUInt32();
-        for (uint i = 0; i < count; i++)
+        bool queuedForActivation = false;
+        try
         {
-            Guid id = reader.ReadGuid();
-            int owner = (int)reader.ReadVarUInt32() - 1;
-            NetworkOrphaned orphaned = (NetworkOrphaned)reader.ReadByte();
-            uint generation = reader.ReadUInt32();
-            if (FindByIdentifier(id) is GameObject go)
-            {
-                s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned, Generation = generation });
-                ControlChanged(go);
-            }
-        }
+            if (Session != session)
+                return;
 
-        ApplySyncState(sender, ref reader, null, true);
-        Scene.Load(scene);
+            foreach (NetworkEntry entry in s_entries.Values.ToArray())
+            {
+                NotifyDespawn(entry);
+                if (Session != session)
+                    return;
+            }
+
+            // Incoming messages can resolve this scene before it becomes current at the frame boundary.
+            s_scene = scene;
+            s_index.Clear();
+            s_indexFrame = -1;
+            s_entries.Clear();
+            s_stateRevisions.Clear();
+            s_dirty.Clear();
+
+            uint count = reader.ReadVarUInt32();
+            for (uint i = 0; i < count; i++)
+            {
+                Guid id = reader.ReadGuid();
+                int owner = (int)reader.ReadVarUInt32() - 1;
+                NetworkOrphaned orphaned = (NetworkOrphaned)reader.ReadByte();
+                uint generation = reader.ReadUInt32();
+                if (FindByIdentifier(id) is GameObject go)
+                {
+                    s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned, Generation = generation });
+                    ControlChanged(go);
+                }
+            }
+
+            ApplySyncState(sender, ref reader, null, initial: true);
+            foreach (NetworkEntry entry in s_entries.Values.ToArray())
+            {
+                NotifySpawn(entry);
+                if (Session != session)
+                    return;
+            }
+
+            Scene.Load(scene);
+            queuedForActivation = true;
+        }
+        finally
+        {
+            // Scene.Load takes ownership only on success. Cancellation and malformed metadata must
+            // release the deserialized scene, including its physics and rendering resources.
+            if (!queuedForActivation)
+                scene.Dispose();
+        }
     }
 
     /// <summary>Registers the scene's own networked objects, which belong to the host until it spawns or hands them out.</summary>
     private static void RegisterSceneObjects(Scene scene)
     {
-        foreach (GameObject go in scene.AllObjects)
+        NetSession? session = Session;
+        foreach (GameObject go in scene.AllObjects.ToArray())
         {
+            if (Session != session || !IsActive || s_scene != scene)
+                break;
             if (go.NetworkMode == NetworkMode.Object && go.NetworkRoot == go && !go.IsNetworkExcluded &&
                 !s_entries.Contains(go.Identifier))
             {
-                s_entries.Add(new NetworkEntry(go) { Orphaned = go.NetworkOrphaned, Generation = NextGeneration() });
+                NetworkEntry entry = new(go) { Orphaned = go.NetworkOrphaned, Generation = NextGeneration() };
+                s_entries.Add(entry);
+                NotifySpawn(entry);
             }
         }
     }

@@ -46,7 +46,7 @@ public enum NetChangeKind : byte
 /// </remarks>
 public abstract class NetCollection
 {
-    private const byte Whole = 0, Changes = 1;
+    private const byte Whole = 0, Changes = 1, RpcState = 2;
     private uint _changeCount;
 
     // The changes not sent yet, already written, the first of them being number _changesFrom.
@@ -150,10 +150,42 @@ public abstract class NetCollection
         _changeCount = 0;
     }
 
+    // Include pending operations for callbacks, plus a complete recovery state. Neither is consumed:
+    // peers outside the RPC's recipients still need their ordinary tick update.
+    internal void WriteRpc(NetWriter writer)
+    {
+        using NetWriter changes = new(), whole = new();
+        WriteChanges(changes);
+        WriteAll(whole);
+        writer.WriteByte(RpcState);
+        writer.WriteBytesWithLength(changes.WrittenSpan);
+        writer.WriteBytesWithLength(whole.WrittenSpan);
+    }
+
+    internal abstract NetCollection CreateEmptyCopy();
+
+    internal void Validate(ref NetReader reader)
+    {
+        NetCollection copy = CreateEmptyCopy();
+        using NetWriter state = new();
+        WriteAll(state);
+        NetReader initial = new(state.WrittenSpan);
+        copy.Read(ref initial, initial: true);
+        copy.Read(ref reader, initial: false);
+    }
+
     /// <summary>Applies what <see cref="WriteAll" /> or <see cref="WriteChanges" /> wrote on another peer.</summary>
     internal void Read(ref NetReader reader, bool initial)
     {
         byte kind = reader.ReadByte();
+        if (initial && kind != Whole)
+            throw new InvalidDataException("Initial collection state must contain complete contents.");
+        if (kind == RpcState)
+        {
+            ReadRpcState(ref reader);
+            return;
+        }
+
         uint sequence = reader.ReadVarUInt32();
         if (kind == Whole)
         {
@@ -187,6 +219,31 @@ public abstract class NetCollection
                 _sequence++;
             }
         }
+    }
+
+    private void ReadRpcState(ref NetReader reader)
+    {
+        ReadOnlySpan<byte> delta = reader.ReadBytesWithLength();
+        ReadOnlySpan<byte> whole = reader.ReadBytesWithLength();
+        NetReader header = new(delta);
+        if (header.ReadByte() != Changes || whole.IsEmpty || whole[0] != Whole)
+            throw new InvalidDataException("Invalid RPC collection state.");
+
+        uint from = header.ReadVarUInt32();
+        if (from <= _sequence)
+        {
+            NetReader operations = new(delta);
+            Read(ref operations, initial: false);
+            if (!operations.IsAtEnd)
+                throw new InvalidDataException("Trailing collection operation bytes.");
+        }
+
+        // Missing an earlier unreliable prerequisite makes its operations unsafe to replay. The
+        // complete contents still recover the right state without inventing historical callbacks.
+        NetReader contents = new(whole);
+        Read(ref contents, initial: true);
+        if (!contents.IsAtEnd)
+            throw new InvalidDataException("Trailing collection state bytes.");
     }
 
     /// <summary>Writes the count, then every item.</summary>

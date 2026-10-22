@@ -65,7 +65,7 @@ public class NetworkingThreadTests
     [Fact]
     public void BatchedUdpSessionsReassembleLargeMessagesAndPreserveShutdownReasons()
     {
-        Transport Stack() => new Prowl.Warp.Transports.Batching.BatchingTransport(new KcpTransport(new() { Port = 0 }));
+        Transport Stack() => new KcpTransport(new() { Port = 0 });
         using NetworkingThread hostThread = new(Stack()), clientThread = new(Stack());
         using NetSession host = CreateHostSession(hostThread);
         using NetSession client = CreateClientSession(clientThread, $"127.0.0.1:{hostThread.LocalPort}", "client");

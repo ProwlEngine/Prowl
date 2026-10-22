@@ -273,13 +273,14 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         if (_current is not null && !_current.IsDisposed)
         {
+            Scene outgoing = _current;
             try
             {
-                if (_current.IsActive)
-                    _current.Disable();
-                _current.Dispose();
+                if (outgoing.IsActive)
+                    outgoing.Disable();
+                outgoing.Dispose();
             }
-            catch (Exception e) { Debug.LogError($"[Scene] Tearing down '{_current.Name}' threw: {e.Message}\n{e.StackTrace}"); }
+            catch (Exception e) { Debug.LogError($"[Scene] Tearing down '{outgoing.Name}' threw: {e.Message}\n{e.StackTrace}"); }
         }
 
         // Between the two scenes, so the outgoing one's teardown belongs to its own session and the incoming
@@ -641,6 +642,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         EnsureNotDisposed();
         MainThreadContext.AssertOwner(this);
         MainThreadContext.AssertOwner(obj);
+        if (obj.Scene != this) Networking.Networking.AssertHierarchyEditable(obj);
         if (obj.Scene.IsValid() && obj.Scene != this) obj.Scene.Remove(obj);
         AddObject(obj);
     }
@@ -694,6 +696,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </remarks>
     public void Remove(GameObject obj)
     {
+        Networking.Networking.AssertHierarchyEditable(obj);
         EnsureNotDisposed();
         MainThreadContext.AssertOwner(this);
 

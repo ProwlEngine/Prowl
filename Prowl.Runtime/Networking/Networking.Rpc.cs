@@ -10,7 +10,8 @@ using Prowl.Warp;
 
 namespace Prowl.Runtime.Networking;
 
-// RPCs. A call is [guid component][u32 method id][arguments]. Clients send theirs to the host, which
+// RPCs. A call is [guid component][u32 method id][length-prefixed arguments][length-prefixed dependent states].
+// Clients send theirs to the host, which
 // checks it against the method's own RpcMode and RpcFlags (never trusting the caller about them), runs
 // it if it should and passes it on; calls from the host carry the original caller's id in front.
 public static partial class Networking
@@ -80,9 +81,18 @@ public static partial class Networking
             return false;
         }
 
+        using NetWriter states = new();
+        WriteRpcStates(component, states);
+        using NetWriter envelope = new(writer.Length + 128);
+        NetReader raw = new(writer.WrittenSpan);
+        envelope.WriteGuid(raw.ReadGuid());
+        envelope.WriteUInt32(raw.ReadUInt32());
+        envelope.WriteBytesWithLength(raw.ReadBytes(raw.Remaining));
+        envelope.WriteBytesWithLength(states.WrittenSpan);
+
         if (!IsHost)
         {
-            SendEngine(session.HostPeer!, EngineMessage.RpcToHost, writer.WrittenSpan, delivery);
+            SendEngine(session.HostPeer!, EngineMessage.RpcToHost, envelope.WrittenSpan, delivery);
             TraceMember("RPC", "Send", session.HostPeer, component, id, true, $"{mode}, {delivery}",
                 writer.WrittenSpan);
             return mode == RpcMode.Broadcast;
@@ -90,7 +100,7 @@ public static partial class Networking
 
         using NetWriter message = new(writer.Length + 8);
         message.WriteVarUInt32((uint)session.LocalPeer!.Id);
-        message.WriteBytes(writer.WrittenSpan);
+        message.WriteBytes(envelope.WrittenSpan);
         TraceMember("RPC", "Send", null, component, id, true, $"{mode}, {delivery}", writer.WrittenSpan);
 
         switch (mode)
@@ -122,7 +132,9 @@ public static partial class Networking
 
         Guid id = reader.ReadGuid();
         uint method = reader.ReadUInt32();
-        ReadOnlySpan<byte> arguments = reader.ReadBytes(reader.Remaining);
+        ReadOnlySpan<byte> arguments = reader.ReadBytesWithLength();
+        ReadOnlySpan<byte> states = reader.ReadBytesWithLength();
+        if (!reader.IsAtEnd) throw new InvalidDataException("RPC contains trailing bytes.");
 
         if (FindByIdentifier(id) is not Component component || component.GameObject.IsNetworkExcluded
                                                             || NetworkMembers.Of(component).Rpc(method) is not { } rpc)
@@ -145,12 +157,16 @@ public static partial class Networking
         // Validate on the host even when only another owner will execute the call.
         NetReader validation = new(arguments);
         rpc.ValidateArguments(component, ref validation);
+        if (!ProcessRpcStates(component, states, sender, apply: false))
+            return;
+        if (!ProcessRpcStates(component, states, sender, apply: true) || !IsActive || !component.IsValid())
+            return;
 
         Delivery relayDelivery = (flags & RpcFlags.Unreliable) != 0 ? Delivery.Unreliable : Delivery.Reliable;
         switch (mode)
         {
             case RpcMode.Broadcast:
-                Relay(sender, id, method, arguments, relayDelivery, null);
+                Relay(component, sender, id, method, arguments, states, relayDelivery, null);
                 Invoke(component, rpc, arguments, sender);
                 break;
 
@@ -166,21 +182,24 @@ public static partial class Networking
                 }
                 else if (owner != sender.Id && Session!.TryGetPeer(owner, out NetPeer? ownerPeer))
                 {
-                    Relay(sender, id, method, arguments, relayDelivery, ownerPeer);
+                    Relay(component, sender, id, method, arguments, states, relayDelivery, ownerPeer);
                 }
 
                 break;
         }
     }
 
-    private static void Relay(NetPeer caller, Guid id, uint method, ReadOnlySpan<byte> arguments, Delivery delivery,
-        NetPeer? to)
+    private static void Relay(Component component, NetPeer caller, Guid id, uint method, ReadOnlySpan<byte> arguments,
+        ReadOnlySpan<byte> capturedStates, Delivery delivery, NetPeer? to)
     {
+        using NetWriter states = new();
+        WriteRelayedRpcStates(component, capturedStates, states);
         using NetWriter message = new(arguments.Length + 32);
         message.WriteVarUInt32((uint)caller.Id);
         message.WriteGuid(id);
         message.WriteUInt32(method);
-        message.WriteBytes(arguments);
+        message.WriteBytesWithLength(arguments);
+        message.WriteBytesWithLength(states.WrittenSpan);
 
         if (to != null)
         {
@@ -202,7 +221,9 @@ public static partial class Networking
         int callerId = (int)reader.ReadVarUInt32();
         Guid id = reader.ReadGuid();
         uint method = reader.ReadUInt32();
-        ReadOnlySpan<byte> arguments = reader.ReadBytes(reader.Remaining);
+        ReadOnlySpan<byte> arguments = reader.ReadBytesWithLength();
+        ReadOnlySpan<byte> states = reader.ReadBytesWithLength();
+        if (!reader.IsAtEnd) throw new InvalidDataException("RPC contains trailing bytes.");
 
         if (FindByIdentifier(id) is not Component component || NetworkMembers.Of(component).Rpc(method) is not { } rpc)
         {
@@ -210,7 +231,14 @@ public static partial class Networking
             return;
         }
 
-        NetPeer caller = Session!.TryGetPeer(callerId, out NetPeer? peer) ? peer : sender;
+        if (!Session!.TryGetPeer(callerId, out NetPeer? caller))
+            return;
+        NetReader validation = new(arguments);
+        rpc.ValidateArguments(component, ref validation);
+        if (!ProcessRpcStates(component, states, caller, apply: false))
+            return;
+        if (!ProcessRpcStates(component, states, caller, apply: true) || !IsActive || !component.IsValid())
+            return;
         Invoke(component, rpc, arguments, caller);
     }
 

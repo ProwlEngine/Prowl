@@ -55,13 +55,13 @@ public class NetworkConfigurationTests : RuntimeTestBase
     }
 
     [Fact]
-    public void WrappedLocalTransportKeepsInlineExecution()
+    public void BatchedLocalSessionKeepsInlineExecution()
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
         try
         {
             Networking.Networking.Configure(new());
-            using Transport transport = new Prowl.Warp.Transports.Batching.BatchingTransport(new LocalTransport(new(), "host"));
+            using Transport transport = new LocalTransport(new(), "host");
             using NetSession session = Networking.Networking.Host(transport);
             Assert.False(session.IsExternallyPumped);
         }
@@ -76,7 +76,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
         {
             Networking.Networking.Configure(new() { Port = 0 });
             using Transport transport = Networking.Networking.CreateTransport(true);
-            Assert.IsType<Prowl.Warp.Transports.Batching.BatchingTransport>(transport);
+            Assert.IsType<Prowl.Warp.Transports.Kcp.KcpTransport>(transport);
             using NetSession session = Networking.Networking.Host(transport);
             Assert.Same(transport, session.Transport);
             Assert.True(session.IsExternallyPumped);
