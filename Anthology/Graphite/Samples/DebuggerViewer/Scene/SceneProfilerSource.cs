@@ -87,10 +87,10 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
 
     private FrameTiming Measure(Recording recording, double dispatchMilliseconds, double frameMilliseconds)
     {
-        List<CpuStage> stages = [new CpuStage("DispatchGraph", dispatchMilliseconds, "Main")];
-        foreach (RecordedInstance instance in recording.Instances)
-            foreach (RecordedPass pass in instance.Passes)
-                stages.Add(new CpuStage($"{instance.Name}/{pass.Name}", pass.Stats.CpuMilliseconds, "Main"));
+        List<CpuStage> stages = [new CpuStage("Execute", dispatchMilliseconds, "Main")];
+        foreach (RecordedGroup group in recording.Groups)
+            foreach (RecordedPass pass in group.Passes)
+                stages.Add(new CpuStage($"{group.Name}/{pass.Name}", pass.Stats.CpuMilliseconds, "Main"));
 
 
         return new FrameTiming(
@@ -143,6 +143,6 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
         using (BinaryReader reader = new(File.OpenRead(path)))
             recording = Serializer.Deserialize<DeepRecording>(EchoObject.ReadFromBinary(reader))
                 ?? throw new InvalidDataException($"{path} is not a Graphite debugger recording.");
-        Open(recording, Measure(recording.Recording, recording.Recording.Instances.Sum(i => i.Passes.Sum(p => p.Stats.CpuMilliseconds)), 0));
+        Open(recording, Measure(recording.Recording, recording.Recording.Groups.Sum(g => g.Passes.Sum(p => p.Stats.CpuMilliseconds)), 0));
     }
 }

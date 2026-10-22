@@ -17,13 +17,12 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     private static readonly Color ClearColor = new(0f, 0f, 0f, 1f);
     private static readonly Keyword UpsampleOn = new("Upsample", "true");
     private static readonly Keyword UpsampleOff = new("Upsample", "false");
-    private static readonly GraphKind Canvas = GraphKind.Intern("Sample.Canvas");
-    private static readonly RenderResourceID PreviewSlot = "Preview";
+    private static readonly RenderResourceID SceneSlot = "Scene";
 
     private readonly GraphicsDevice _device;
     private readonly ScenePass _scenePass;
-    private readonly RenderGraph _graph;
-    private readonly GraphInstances _instances;
+    private readonly PresentPass _presentPass;
+    private readonly FrameGraph _graph;
     private GraphicsProgram _canvasProgram = null!;
     private ShaderPass _blurPass = null!;
     private Float4x4 _projection;
@@ -39,8 +38,8 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     {
         _device = device;
         _scenePass = new ScenePass(this);
-        _graph = RenderGraph.Build([_scenePass, new PresentPass(this)], [new GraphScope(Canvas, GraphKind.Root)], "Viewer UI");
-        _instances = _graph.CreateInstances();
+        _presentPass = new PresentPass(this);
+        _graph = new FrameGraph(device, "Viewer UI");
     }
 
     public bool SupportsBackdropBlur => true;
@@ -118,17 +117,23 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
     {
         _scenePass.SetFrame(canvas, drawCalls);
-        _instances.Reset();
-        _instances.Add(Canvas, 0, extent: new GraphExtent((uint)_fbWidth, (uint)_fbHeight), target: _device.MainSwapchain.Framebuffer, name: "Canvas",
-            imports: [GraphImport.Of(PreviewSlot, (_preview ?? _defaultTexture).Texture)]);
+        using (_graph.Group("Canvas"))
+        {
+            TextureHandle preview = _graph.Import((_preview ?? _defaultTexture).Texture);
+            TextureHandle target = _graph.ImportTarget(_device.MainSwapchain.Framebuffer, PixelFormat.D24_UNorm_S8_UInt);
+            TextureHandle scene = _graph.Create(SceneSlot, GraphTextureDesc.Sized(_fbWidth, _fbHeight, TargetFormat));
+            _scenePass.Add(_graph, preview, scene);
+            _presentPass.Add(_graph, scene, target);
+        }
+
         if (_screenshot == null)
         {
-            _device.DispatchGraph(_graph, _instances);
+            _graph.Execute();
             return;
         }
 
         using DeepRecording recording = new(_device, DeepMode.Full);
-        _device.DispatchGraph(_graph, _instances, recording);
+        _graph.Execute(recording);
         recording.Wait();
         WritePng(recording, _screenshot);
         _screenshot = null;
@@ -136,7 +141,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
 
     private static void WritePng(DeepRecording recording, string path)
     {
-        RecordedCopy copy = recording.Instances.First(i => i.Key.Kind == Canvas).Passes[0].Copies.First(c => c.Placement == CopyPlacement.AfterPass);
+        RecordedCopy copy = recording.Groups.First(g => g.Name == "Canvas").Passes[0].Copies.First(c => c.Placement == CopyPlacement.AfterPass);
         CopyRegion region = copy.Regions[0];
         byte[] data = recording.Blobs.First(b => b.Ref == copy.Blob).Data.Items.ToArray();
         byte[] pixels = data.AsSpan((int)region.Offset, (int)(region.Width * region.Height * 4)).ToArray();
@@ -161,14 +166,13 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
         _created.Clear();
     }
 
-    private sealed class ScenePass : IInstancePass
+    private sealed class ScenePass
     {
         private readonly GraphiteRenderer _owner;
         private readonly PropertySet _properties = new();
         private readonly Texture?[] _blurTex = new Texture?[MaxBlurLevels];
         private readonly Framebuffer?[] _blurFB = new Framebuffer?[MaxBlurLevels];
         private readonly Int2[] _blurSize = new Int2[MaxBlurLevels];
-        private TextureHandle _sceneHandle;
         private Canvas _canvas = null!;
         private IReadOnlyList<DrawCall> _drawCalls = [];
         private DeviceBuffer _activeVbo = null!;
@@ -180,24 +184,22 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
 
         public ScenePass(GraphiteRenderer owner) => _owner = owner;
 
-        public string Name => "Scene";
-
-        public GraphKind Kind => Canvas;
-
         public void SetFrame(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
         {
             _canvas = canvas;
             _drawCalls = drawCalls;
         }
 
-        public void Setup(InstanceContextBuilder builder)
-        {
-            builder.DeclareImportSlotTexture(PreviewSlot, TextureState.Sampled);
-            _sceneHandle = builder.DeclareOutputTexture("Scene", GraphTextureDesc.InstanceSized(TargetFormat), usage: TextureState.Attachment | TextureState.Sampled);
-        }
+        public void Add(FrameGraph graph, TextureHandle preview, TextureHandle scene)
+            => graph.AddPass("Scene", pass =>
+            {
+                pass.Read(preview);
+                return pass.Write(scene);
+            }, Render);
 
-        public void Render(InstanceContext context, CommandBuffer cmd)
+        private void Render(PassContext context, TextureHandle sceneHandle)
         {
+            CommandBuffer cmd = context.Command;
             EnsureBlurTargets(_owner._fbWidth, _owner._fbHeight);
             _backdropDirty = true;
 
@@ -205,7 +207,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
             if (hasGeometry)
                 UploadGeometry(cmd, context.Task);
 
-            RenderTexture scene = context.GetRenderTexture(_sceneHandle);
+            RenderTexture scene = context.Get(sceneHandle);
             cmd.SetFramebuffer(scene.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(ClearColor), AttachmentOps.Loaded));
 
             if (!hasGeometry)
@@ -357,27 +359,24 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
         }
     }
 
-    private sealed class PresentPass : InstanceRasterPass
+    private sealed class PresentPass
     {
         private readonly GraphiteRenderer _owner;
         private readonly PropertySet _properties = new();
-        private TextureHandle _sceneHandle;
 
         public PresentPass(GraphiteRenderer owner) => _owner = owner;
 
-        public override string Name => "Present";
+        public void Add(FrameGraph graph, TextureHandle scene, TextureHandle target)
+            => graph.AddPass("Present", pass =>
+            {
+                pass.Write(target);
+                return pass.Read(scene);
+            }, Render);
 
-        public override GraphKind Kind => Canvas;
-
-        public override void Setup(InstanceContextBuilder builder)
+        private void Render(PassContext context, TextureHandle sceneHandle)
         {
-            _sceneHandle = builder.DeclareInputTexture("Scene");
-            SetInstanceTarget(builder, depthFormat: PixelFormat.D24_UNorm_S8_UInt);
-        }
-
-        public override void Render(InstanceContext context, CommandBuffer cmd)
-        {
-            RenderTexture scene = context.GetRenderTexture(_sceneHandle);
+            CommandBuffer cmd = context.Command;
+            RenderTexture scene = context.Get(sceneHandle);
             _properties.SetTexture("src", scene.ColorTextures[0], _owner._sampler);
             _properties.SetFloat2("halfpixel", new Float2(0f, 0f));
             _properties.SetFloat("offset", 0f);

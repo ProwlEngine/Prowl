@@ -12,31 +12,6 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Samples.DebuggerReplay;
 
-internal sealed class TexturedPass(RenderTexture target, GraphicsProgram program, Texture source, Sampler sampler) : IInstancePass
-{
-    public static readonly GraphKind Offscreen = GraphKind.Intern("Sample.Offscreen");
-
-    private readonly RenderResourceID _target = RenderResourceID.Intern("textured_target");
-
-    public string Name => "Textured";
-
-    public GraphKind Kind => Offscreen;
-
-    public void Setup(InstanceContextBuilder builder) => builder.DeclareImportedTexture(_target, target);
-
-    public void Render(InstanceContext context, CommandBuffer cmd)
-    {
-        PropertySet properties = new();
-        properties.SetTexture("Tex", source);
-        properties.SetSampler("Smp", sampler);
-        cmd.SetFramebuffer(target, TargetLoadStoreOps.Clear(new Color(0.1f, 0.12f, 0.16f, 1f)));
-        cmd.SetShader(program);
-        cmd.SetVertexSource(VertexSource.None);
-        cmd.SetProperties(properties);
-        cmd.Draw(3);
-    }
-}
-
 public static class Program
 {
     private static int Main()
@@ -48,10 +23,10 @@ public static class Program
         DeepRecording loaded = RoundTrip(recording, out int size);
         Console.WriteLine($"Round trip through Echo: {size} bytes.");
 
-        DeepInstance instance = loaded.Instances.Single(i => i.Key == new GraphInstanceKey(TexturedPass.Offscreen, 0));
-        DeepPass pass = instance.Passes[0];
+        DeepGroup group = loaded.Groups.Single(g => g.Name == "Offscreen");
+        DeepPass pass = group.Passes[0];
         Replayer replayer = new(device, loaded);
-        ReplayResult result = replayer.Replay(new ReplayRequest { InstanceIndex = instance.Index, PassIndex = pass.Index, EventIndex = 0 });
+        ReplayResult result = replayer.Replay(new ReplayRequest { GroupIndex = group.Index, PassIndex = pass.Index, EventIndex = 0 });
         Console.WriteLine($"Replay of the draw in pass {pass.Name}: {result.Status}. {result.Reason}");
         if (result.Status == ReplayStatus.NotReplayable)
             return 1;
@@ -82,12 +57,26 @@ public static class Program
         device.UpdateTexture(source, Enumerable.Range(0, 64).Select(i => (byte)(i * 4)).ToArray());
         using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
         using RenderTexture target = factory.CreateRenderTexture(new RenderTextureDescription(64, 64, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
-        using RenderGraph graph = RenderGraph.Build([new TexturedPass(target, program, source, sampler)], [new GraphScope(TexturedPass.Offscreen, GraphKind.Root)], "Replay sample");
-        GraphInstances instances = graph.CreateInstances();
-        instances.Add(TexturedPass.Offscreen, 0, extent: new GraphExtent(64, 64), name: "Offscreen");
+        using FrameGraph graph = new(device, "Replay sample");
+        using (graph.Group("Offscreen"))
+        {
+            TextureHandle color = graph.Import(target);
+            graph.AddPass("Textured", pass => pass.Write(color), context =>
+            {
+                CommandBuffer cmd = context.Command;
+                PropertySet properties = new();
+                properties.SetTexture("Tex", source);
+                properties.SetSampler("Smp", sampler);
+                cmd.SetFramebuffer(target, TargetLoadStoreOps.Clear(new Color(0.1f, 0.12f, 0.16f, 1f)));
+                cmd.SetShader(program);
+                cmd.SetVertexSource(VertexSource.None);
+                cmd.SetProperties(properties);
+                cmd.Draw(3);
+            });
+        }
 
         DeepRecording recording = new(device, DeepMode.Full);
-        device.DispatchGraph(graph, instances, recording);
+        graph.Execute(recording);
         recording.Wait();
         return recording;
     }
