@@ -34,6 +34,7 @@ public class NetworkDiagnosticsPanel : DockPanel
     private readonly List<NetworkDiagnostics.Entry> _filtered = new();
     private readonly List<Networking.ObjectDiagnostic> _objects = new();
     private readonly List<NetPeer> _peers = new();
+    private readonly Dictionary<NetPeer, ConnectionStats> _peerStatBaselines = new();
     private string _search = "";
     private int _view, _kind, _direction;
     private bool _paused, _showInternalEvents;
@@ -43,6 +44,7 @@ public class NetworkDiagnosticsPanel : DockPanel
     private double _sampleAt;
     private long _sent, _received;
     private double _sendRate, _receiveRate;
+    private bool _usingPeerBaseline;
 
     private static readonly string[] Views = ["Traffic", "Peers", "Objects"];
     private static readonly string[] Kinds = ["All events", "RPC", "SyncVar", "Transform", "Session", "SceneSnapshot", "Spawn", "Despawn", "Owner"];
@@ -88,6 +90,11 @@ public class NetworkDiagnosticsPanel : DockPanel
                     .TextColor(Networking.IsActive ? EditorTheme.Green400 : EditorTheme.Ink400)
                     .Alignment(TextAlignment.MiddleLeft).Clip().Tooltip(details);
                 if (_view == 0) DrawCaptureControls(paper);
+                else if (_view == 1)
+                    EditorGUI.ToolbarIconBtn(paper, "net_peer_baseline", EditorIcons.Stopwatch,
+                        _usingPeerBaseline ? "Showing traffic since baseline. Click to show session totals."
+                            : "Showing session totals. Click to measure traffic from now.",
+                        _usingPeerBaseline, TogglePeerBaseline);
             }
 
             bool inlineFilters = width >= 520;
@@ -115,14 +122,21 @@ public class NetworkDiagnosticsPanel : DockPanel
     {
         _sampledSession = null;
         _peers.Clear();
+        _peerStatBaselines.Clear();
+        _usingPeerBaseline = false;
     }
 
     private void SampleRates(NetSession? session)
     {
+        if (_sampledSession != session)
+        {
+            _peerStatBaselines.Clear();
+            _usingPeerBaseline = false;
+        }
         long sent = 0, received = 0;
         foreach (NetPeer peer in _peers)
         {
-            ConnectionStats stats = peer.Connection?.Stats ?? default;
+            ConnectionStats stats = PeerStats(peer);
             sent += stats.BytesSent;
             received += stats.BytesReceived;
         }
@@ -143,6 +157,35 @@ public class NetworkDiagnosticsPanel : DockPanel
             _received = received;
             _sampleAt = now;
         }
+    }
+
+    private void TogglePeerBaseline()
+    {
+        if (Networking.Session is not { } session) return;
+        _usingPeerBaseline = !_usingPeerBaseline;
+        _peerStatBaselines.Clear();
+        _sent = _received = 0;
+        foreach (NetPeer peer in session.Peers)
+        {
+            if (_usingPeerBaseline)
+                _peerStatBaselines[peer] = peer.Connection?.Stats ?? default;
+            ConnectionStats stats = PeerStats(peer);
+            _sent += stats.BytesSent;
+            _received += stats.BytesReceived;
+        }
+        _sampleAt = Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
+        _sendRate = _receiveRate = 0;
+    }
+
+    private ConnectionStats PeerStats(NetPeer peer)
+    {
+        ConnectionStats stats = peer.Connection?.Stats ?? default;
+        if (!_peerStatBaselines.TryGetValue(peer, out ConnectionStats baseline)) return stats;
+        return new ConnectionStats(
+            Math.Max(0, stats.PacketsSent - baseline.PacketsSent),
+            Math.Max(0, stats.PacketsReceived - baseline.PacketsReceived),
+            Math.Max(0, stats.BytesSent - baseline.BytesSent),
+            Math.Max(0, stats.BytesReceived - baseline.BytesReceived));
     }
 
     private bool Matches(string text) => string.IsNullOrWhiteSpace(_search) || text.Contains(_search, StringComparison.OrdinalIgnoreCase);
@@ -346,7 +389,7 @@ public class NetworkDiagnosticsPanel : DockPanel
             .RowCount(_peers.Count).CellContent((i, col) =>
             {
                 NetPeer peer = _peers[i];
-                ConnectionStats stats = peer.Connection?.Stats ?? default;
+                ConnectionStats stats = PeerStats(peer);
                 string text = col switch
                 {
                     0 => peer.Name,
