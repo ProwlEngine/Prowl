@@ -24,12 +24,11 @@ jobs:
             9.0.x
             10.0.x
 
-      # Releases leave out every sample project and all of Graphite. Origami.Graphite and its tests go too,
-      # since they build on Graphite.
+      # Releases leave out every sample project and the Graphite test projects, which need a GPU.
       - name: Trim solution
         run: |
           cp Anthology.slnx Publish.slnx
-          excluded=$(dotnet sln Publish.slnx list | tr '\\' '/' | grep -Ei '^Graphite/|^Origami/Graphite|(^|/)Samples?/|Sample[^/]*\.csproj$')
+          excluded=$(dotnet sln Publish.slnx list | tr '\\' '/' | grep -Ei '^Graphite/Tests/|(^|/)Samples?/|Sample[^/]*\.csproj$')
           echo "Leaving out:"
           echo "$excluded"
           dotnet sln Publish.slnx remove $excluded
