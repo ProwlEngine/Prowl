@@ -68,9 +68,6 @@ public abstract class Transport : IDisposable
     /// <summary>The bound IP port, or zero for unbound transports and transports without ports.</summary>
     public virtual int LocalPort => 0;
 
-    /// <summary>Whether application messages use authenticated encryption on this transport.</summary>
-    public virtual bool IsEncrypted => false;
-
     /// <summary>Starts accepting incoming connections, at the address the transport was configured with.</summary>
     public abstract void Listen();
 
