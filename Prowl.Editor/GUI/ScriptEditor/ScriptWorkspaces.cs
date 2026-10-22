@@ -26,6 +26,14 @@ internal static class ScriptWorkspaces
     private const string FallbackKey = "";
 
     private static readonly Dictionary<string, Entry> s_entries = new(StringComparer.OrdinalIgnoreCase);
+    private static Func<Microsoft.CodeAnalysis.Options.OptionSet, Microsoft.CodeAnalysis.Options.OptionSet>? s_style;
+
+    /// <summary>Sets the formatting style every workspace formats with, now and when created later.</summary>
+    public static void SetStyle(Func<Microsoft.CodeAnalysis.Options.OptionSet, Microsoft.CodeAnalysis.Options.OptionSet> style)
+    {
+        s_style = style;
+        foreach (Entry entry in s_entries.Values) entry.Workspace.SetOptions(style);
+    }
     private static bool s_hooked;
 
     /// <summary>Raised after a compile refreshed the workspaces, so editors on the fallback can move to their real unit.</summary>
@@ -46,6 +54,7 @@ internal static class ScriptWorkspaces
         if (!s_entries.TryGetValue(FallbackKey, out var fallback))
         {
             fallback = new Entry { Workspace = new CSharpWorkspace(assemblyName: "Scripts") { Analyzers = RoslynScriptBackend.ScriptAnalyzers } };
+            if (s_style != null) fallback.Workspace.SetOptions(s_style);
             fallback.Workspace.SetPreprocessorSymbols(ScriptCompiler.EditorDefines);
             s_entries[FallbackKey] = fallback;
         }
@@ -78,6 +87,7 @@ internal static class ScriptWorkspaces
         if (!s_entries.TryGetValue(context.UnitName, out var entry))
         {
             entry = new Entry { Workspace = new CSharpWorkspace(context.References, context.UnitName) { Analyzers = RoslynScriptBackend.ScriptAnalyzers } };
+            if (s_style != null) entry.Workspace.SetOptions(s_style);
             s_entries[context.UnitName] = entry;
         }
         else entry.Workspace.SetReferences(context.References);

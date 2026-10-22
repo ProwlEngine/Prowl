@@ -249,6 +249,9 @@ internal static class RoslynScriptBackend
         }
     }
 
+    /// <summary>Severity overrides from the project's code style, applied on top of the built in ones.</summary>
+    public static KeyValuePair<string, ReportDiagnostic>[] DiagnosticOverrides { get; set; } = [];
+
     private static CSharpCompilationOptions BuildOptions(CompilationUnit unit) => BuildOptions(unit.AllowUnsafe);
 
     private static CSharpCompilationOptions BuildOptions(bool allowUnsafe) =>
@@ -260,12 +263,13 @@ internal static class RoslynScriptBackend
             .WithConcurrentBuild(true)
             // Referencing runtime implementation assemblies (from the TPA list) instead of ref
             // assemblies produces harmless version mismatch noise. Silence it.
-            .WithSpecificDiagnosticOptions(new[]
-            {
+            .WithSpecificDiagnosticOptions(
+            [
                 new KeyValuePair<string, ReportDiagnostic>("CS1701", ReportDiagnostic.Suppress),
                 new KeyValuePair<string, ReportDiagnostic>("CS1702", ReportDiagnostic.Suppress),
                 new KeyValuePair<string, ReportDiagnostic>("CS1705", ReportDiagnostic.Suppress),
-            });
+                .. DiagnosticOverrides,
+            ]);
 
     private static List<MetadataReference> BuildReferences(
         CompilationUnit unit,
