@@ -166,7 +166,7 @@ internal sealed partial class ProfilerView
     {
         _selId = "f";
         _pixel = null;
-        _graphSelection = null;
+        _frameGraphSelection = null;
         _replays.Clear();
     }
 
