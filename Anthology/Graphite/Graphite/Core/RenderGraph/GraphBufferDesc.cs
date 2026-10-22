@@ -1,4 +1,4 @@
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 /// <summary>
 /// Buffer a pass reads/writes as a graph resource. Usage flags count as part of the resource identity

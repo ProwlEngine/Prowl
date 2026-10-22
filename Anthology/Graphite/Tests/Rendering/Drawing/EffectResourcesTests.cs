@@ -7,6 +7,7 @@ using Xunit;
 namespace Prowl.Graphite.Rendering.Tests;
 
 // Stock effects of one renderer share their programs, so a new instance compiles nothing already built
+[Collection("GPU Tests")]
 public sealed class EffectResourcesTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));

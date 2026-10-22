@@ -69,8 +69,8 @@ public sealed partial class DeepRecording : IGraphProfiler, IGpuStatsProfiler, I
     /// <summary>Content keyed by hash.</summary>
     public EquatableArray<RecordedBlob> Blobs => Result.Blobs;
 
-    /// <summary>The views of the execution in order.</summary>
-    public EquatableArray<DeepView> Views => Result.Views;
+    /// <summary>The instances of the execution in order, the root first.</summary>
+    public EquatableArray<DeepInstance> Instances => Result.Instances;
 
     /// <summary>True once the execution has resolved on the GPU and its copies are read.</summary>
     public bool IsDone
@@ -146,19 +146,19 @@ public sealed partial class DeepRecording : IGraphProfiler, IGpuStatsProfiler, I
 
     void IProfiler.EndExecution() => ((IProfiler)_recording).EndExecution();
 
-    void IGraphProfiler.BeginView(in ViewInfo view)
+    void IGraphProfiler.BeginInstance(in InstanceInfo instance)
     {
-        _views[view.Index] = new ViewState(view.Name, view.Index, view.PixelWidth, view.PixelHeight);
-        ((IGraphProfiler)_recording).BeginView(in view);
+        _instances[instance.Index] = new InstanceState(instance);
+        ((IGraphProfiler)_recording).BeginInstance(in instance);
     }
 
-    void IGraphProfiler.EndView(in ViewInfo view) => ((IGraphProfiler)_recording).EndView(in view);
+    void IGraphProfiler.EndInstance(in InstanceInfo instance) => ((IGraphProfiler)_recording).EndInstance(in instance);
 
     void IGraphProfiler.BeginPass(in PassInfo pass) => ((IGraphProfiler)_recording).BeginPass(in pass);
 
     void IGraphProfiler.EndPass(in PassInfo pass, in PassStats stats) => ((IGraphProfiler)_recording).EndPass(in pass, in stats);
 
-    void IGraphProfiler.SkipPass(string name, int viewIndex, PassSkipReason reason) => ((IGraphProfiler)_recording).SkipPass(name, viewIndex, reason);
+    void IGraphProfiler.SkipPass(string name, int instanceIndex, PassSkipReason reason) => ((IGraphProfiler)_recording).SkipPass(name, instanceIndex, reason);
 
     void IGpuStatsProfiler.RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds)
         => ((IGpuStatsProfiler)_recording).RecordExecutionTime(in commandBuffer, milliseconds);

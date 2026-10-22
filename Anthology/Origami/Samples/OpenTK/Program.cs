@@ -22,6 +22,8 @@ internal static class Program
             if (args[i] == "--shot" && i + 1 < args.Length) shotPath = args[++i];
             else if (args[i] == "--frames" && i + 1 < args.Length) int.TryParse(args[++i], out shotFrames);
             else if (args[i] == "--cat" && i + 1 < args.Length) int.TryParse(args[++i], out initialCat);
+            else if (args[i] == "--code") NebulaEditor.ShowCode = true;
+            else if (args[i] == "--huge" && i + 1 < args.Length) { int.TryParse(args[++i], out CodeEditorPanel.HugeLines); NebulaEditor.ShowCode = true; }
             else if (args[i] == "--textcompare" && i + 1 < args.Length) { shotPath = args[++i]; textCompare = true; }
         }
 

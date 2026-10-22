@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
@@ -32,10 +31,10 @@ file sealed class GraphRecorder : ExecutionRecorder, IGraphProfiler
     public readonly List<PassInfo> PassesEnded = new();
     public readonly List<PassStats> PassStatsEnded = new();
 
-    public void BeginView(in ViewInfo view) { }
-    public void EndView(in ViewInfo view) { }
+    public void BeginInstance(in InstanceInfo instance) { }
+    public void EndInstance(in InstanceInfo instance) { }
     public void BeginPass(in PassInfo pass) { }
-    public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
+    public void SkipPass(string name, int instanceIndex, PassSkipReason reason) { }
 
     public void EndPass(in PassInfo pass, in PassStats stats)
     {
@@ -46,13 +45,14 @@ file sealed class GraphRecorder : ExecutionRecorder, IGraphProfiler
 
 file sealed class LifecycleRecorder : ExecutionRecorder, IGraphProfiler
 {
+    public readonly List<InstanceInfo> InstancesBegun = new();
     public readonly List<PassInfo> PassesBegun = new();
     public readonly List<PassInfo> PassesEnded = new();
 
-    public void BeginView(in ViewInfo view) { }
-    public void EndView(in ViewInfo view) { }
+    public void BeginInstance(in InstanceInfo instance) => InstancesBegun.Add(instance);
+    public void EndInstance(in InstanceInfo instance) { }
     public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
-    public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
+    public void SkipPass(string name, int instanceIndex, PassSkipReason reason) { }
     public void EndPass(in PassInfo pass, in PassStats stats) => PassesEnded.Add(pass);
 }
 
@@ -86,15 +86,15 @@ file sealed class StatsOnlyProfiler : ExecutionRecorder, IGpuStatsProfiler
 
 file sealed class CorrelationProfiler : ExecutionRecorder, IGraphProfiler, IGpuStatsProfiler
 {
-    public readonly List<ViewInfo> ViewsBegun = new();
+    public readonly List<InstanceInfo> InstancesBegun = new();
     public readonly List<PassInfo> PassesBegun = new();
     public readonly List<CommandBufferInfo> Timings = new();
     public int TimingsAtEnd = -1;
 
-    public void BeginView(in ViewInfo view) => ViewsBegun.Add(view);
-    public void EndView(in ViewInfo view) { }
+    public void BeginInstance(in InstanceInfo instance) => InstancesBegun.Add(instance);
+    public void EndInstance(in InstanceInfo instance) { }
     public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
-    public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
+    public void SkipPass(string name, int instanceIndex, PassSkipReason reason) { }
     public void EndPass(in PassInfo pass, in PassStats stats) { }
     public void RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds) => Timings.Add(commandBuffer);
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
@@ -110,51 +110,42 @@ file sealed class CorrelationProfiler : ExecutionRecorder, IGraphProfiler, IGpuS
         Assert.Equal(executionId, ExecutionId);
         Assert.Equal(graphName, GraphName);
         Assert.Equal(1, Ended);
-        Assert.Equal(new[] { 0, 1 }, ViewsBegun.ConvertAll(v => v.Index));
+        Assert.Equal(new[] { 0, 1, 2 }, InstancesBegun.ConvertAll(v => v.Index));
         Assert.Equal(4, PassesBegun.Count);
         Assert.Equal(4, TimingsAtEnd);
-        foreach (int viewIndex in new[] { 0, 1 })
+        foreach (int viewIndex in new[] { 1, 2 })
         {
             foreach (string name in new[] { "ProfilerClear", "ProfilerCopy" })
             {
-                CommandBufferInfo info = Assert.Single(Timings, t => t.Pass!.Value.ViewIndex == viewIndex && t.Pass!.Value.Name == name);
+                CommandBufferInfo info = Assert.Single(Timings, t => t.Pass!.Value.InstanceIndex == viewIndex && t.Pass!.Value.Name == name);
                 Assert.Equal(name, info.Name);
             }
         }
     }
 }
 
-file readonly struct ProfilerView : IRenderView
+file sealed class ClearingRasterPass : InstanceRasterPass
 {
-    public ProfilerView(uint width, uint height)
-    {
-        PixelWidth = width;
-        PixelHeight = height;
-    }
+    public override GraphKind Kind => TestViews.Kind;
 
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-    public int ViewId => 0;
-}
-
-file sealed class ClearingRasterPass : RasterPass
-{
     private readonly RenderResourceID _id;
 
     public ClearingRasterPass(RenderResourceID id) => _id = id;
 
     public override string Name => "ProfilerClear";
 
-    public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, _id, GraphTextureDesc.ViewSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
+    public override void Setup(InstanceContextBuilder builder)
+        => SetTarget(builder, _id, GraphTextureDesc.InstanceSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
 
-    public override void Render(RenderContext context, CommandBuffer cmd)
+    public override void Render(InstanceContext context, CommandBuffer cmd)
     {
     }
 }
 
-file sealed class DrawingRasterPass : RasterPass
+file sealed class DrawingRasterPass : InstanceRasterPass
 {
+    public override GraphKind Kind => TestViews.Kind;
+
     private readonly RenderResourceID _id;
     private readonly GraphicsProgram _program;
     private readonly DeviceBuffer _vertices;
@@ -170,10 +161,10 @@ file sealed class DrawingRasterPass : RasterPass
 
     public override string Name => "ProfilerDraw";
 
-    public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, _id, GraphTextureDesc.ViewSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
+    public override void Setup(InstanceContextBuilder builder)
+        => SetTarget(builder, _id, GraphTextureDesc.InstanceSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
 
-    public override void Render(RenderContext context, CommandBuffer cmd)
+    public override void Render(InstanceContext context, CommandBuffer cmd)
     {
         cmd.SetFullViewport();
         cmd.SetShader(_program);
@@ -186,8 +177,10 @@ file sealed class DrawingRasterPass : RasterPass
     }
 }
 
-file sealed class DispatchingPass : IPass
+file sealed class DispatchingPass : IInstancePass
 {
+    public GraphKind Kind => TestViews.Kind;
+
     private readonly ComputeProgram _program;
     private readonly PropertySet _properties;
 
@@ -199,9 +192,9 @@ file sealed class DispatchingPass : IPass
 
     public string Name => "ProfilerDispatch";
 
-    public void Setup(RenderContextBuilder builder) { }
+    public void Setup(InstanceContextBuilder builder) { }
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
         cmd.SetComputeShader(_program);
         cmd.SetProperties(_properties);
@@ -210,8 +203,10 @@ file sealed class DispatchingPass : IPass
     }
 }
 
-file sealed class ReadingCopyPass : IPass
+file sealed class ReadingCopyPass : IInstancePass
 {
+    public GraphKind Kind => TestViews.Kind;
+
     private readonly RenderResourceID _id;
     private readonly DeviceBuffer _readback;
     private TextureHandle _handle;
@@ -224,9 +219,9 @@ file sealed class ReadingCopyPass : IPass
 
     public string Name => "ProfilerCopy";
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id, TextureState.TransferSrc);
+    public void Setup(InstanceContextBuilder builder) => _handle = builder.DeclareInputTexture(_id, TextureState.TransferSrc);
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
         RenderTexture target = context.GetRenderTexture(_handle);
         cmd.CopyTextureToBuffer(target.ColorTextures[0], _readback, 0, TextureRegion.Whole(target.ColorTextures[0]));
@@ -317,9 +312,9 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         props.SetBuffer("Destination", destination);
 
         RenderResourceID id = RenderResourceID.Intern("profiler_pass_stats_target");
-        using RenderPipeline pipeline = new([new DrawingRasterPass(id, graphics, vertices, indirect), new DispatchingPass(compute, props)]);
+        using RenderGraph graph = TestViews.Build([new DrawingRasterPass(id, graphics, vertices, indirect), new DispatchingPass(compute, props)]);
 
-        device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) }, profiler);
+        device.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(size, size)), profiler);
         device.WaitForIdle();
 
         Assert.Equal(new[] { "ProfilerDraw", "ProfilerDispatch" }, profiler.PassesEnded.ConvertAll(p => p.Name));
@@ -354,9 +349,9 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         RenderResourceID id = RenderResourceID.Intern("profiler_pass_target");
         ClearingRasterPass clearPass = new(id);
         ReadingCopyPass copyPass = new(id, readback);
-        using RenderPipeline pipeline = new([clearPass, copyPass]);
+        using RenderGraph graph = TestViews.Build([clearPass, copyPass]);
 
-        device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) }, profiler);
+        device.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(size, size)), profiler);
         device.WaitForIdle();
 
         Assert.Equal(2, profiler.PassesBegun.Count);
@@ -364,6 +359,22 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.Equal(new[] { "ProfilerClear", "ProfilerCopy" }, profiler.PassesBegun.ConvertAll(p => p.Name));
 
         Assert.True(device.Counters.Snapshot().Barriers(BarrierBin.TextureTransition) > 0);
+    }
+
+    [Fact]
+    public void InstanceInfo_CarriesTheInstanceData()
+    {
+        LifecycleRecorder profiler = new();
+        using GraphicsDevice device = CreateDevice();
+        using RenderGraph graph = TestViews.Build([]);
+        object data = new();
+        GraphInstances instances = graph.CreateInstances();
+        instances.Add(TestViews.Kind, 0, data: data);
+
+        device.DispatchGraph(graph, instances, profiler);
+        device.WaitForIdle();
+
+        Assert.Same(data, profiler.InstancesBegun[1].Data);
     }
 
     [Fact]
@@ -377,9 +388,9 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer readback = device.Tracked().CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
 
         RenderResourceID id = RenderResourceID.Intern("profiler_stats_only_target");
-        using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]);
+        using RenderGraph graph = TestViews.Build([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]);
 
-        device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) }, profiler);
+        device.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(size, size)), profiler);
         device.WaitForIdle();
 
         PassInfo clear = Assert.Single(profiler.Timed, t => t.Name == "ProfilerClear").Pass!.Value;
@@ -401,11 +412,11 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer readback = device.Tracked().CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
 
         RenderResourceID id = RenderResourceID.Intern("profiler_correlation_target");
-        using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]) { Name = "Correlation" };
-        ProfilerView[] views = [new(size, size), new(size, size)];
+        using RenderGraph graph = TestViews.Build([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)], "Correlation");
+        GraphInstances views = TestViews.Of(graph, (size, size), (size, size));
 
-        ExecutionTask first = device.DispatchGraph(pipeline, views, firstProfiler);
-        ExecutionTask second = device.DispatchGraph(pipeline, views, secondProfiler);
+        ExecutionTask first = device.DispatchGraph(graph, views, firstProfiler);
+        ExecutionTask second = device.DispatchGraph(graph, views, secondProfiler);
         device.WaitForIdle();
 
         Assert.True(first.Id < second.Id);
@@ -446,13 +457,13 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
                 {
                     DeviceBuffer readback = device.Tracked().CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
                     RenderResourceID id = RenderResourceID.Intern($"profiler_concurrent_target_{threadIndex}");
-                    using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]);
-                    ProfilerView[] views = [new(size, size), new(size, size)];
+                    using RenderGraph graph = TestViews.Build([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)], "Concurrent");
+                    GraphInstances views = TestViews.Of(graph, (size, size), (size, size));
 
                     start.SignalAndWait();
                     for (int i = 0; i < iterations; i++)
                     {
-                        ExecutionTask task = device.DispatchGraph(pipeline, views);
+                        ExecutionTask task = device.DispatchGraph(graph, views);
                         lock (tasks)
                             tasks.Add(task);
                     }
@@ -477,7 +488,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
         Dictionary<ulong, CorrelationProfiler> byExecution = profilers.ToDictionary(p => p.ExecutionId);
         foreach (ExecutionTask task in tasks)
-            byExecution[task.Id].AssertCompleteTwoViewCopyExecution(task.Id, nameof(RenderPipeline));
+            byExecution[task.Id].AssertCompleteTwoViewCopyExecution(task.Id, "Concurrent");
     }
 
     [Fact]

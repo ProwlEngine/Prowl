@@ -4,20 +4,12 @@ using Prowl.Echo;
 using Prowl.Graphite.Debugger.Serialization;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 using Xunit;
 
 namespace Prowl.Graphite.Debugger.Tests;
 
-file readonly struct DeepView : IRenderView
-{
-    public uint PixelWidth => 8;
-    public uint PixelHeight => 8;
-    public int ViewId => 0;
-}
-
-file sealed class WritePass : IPass
+file sealed class WritePass : IExecutionPass
 {
     private readonly string _name;
     private readonly RenderResourceID _target;
@@ -45,17 +37,24 @@ file sealed class WritePass : IPass
     }
 }
 
-file sealed class HistoryPass : IPass
+file sealed class HistoryPass : IExecutionPass
 {
     private readonly RenderResourceID _id = RenderResourceID.Intern("deep_history");
 
     public string Name => "History";
 
-    public void Setup(RenderContextBuilder builder) => builder.DeclareOutputTexture(_id, GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm), history: 1);
+    public void Setup(RenderContextBuilder builder) => builder.DeclareOutputTexture(_id, GraphTextureDesc.Sized(8, 8, false, PixelFormat.R8_G8_B8_A8_UNorm), history: 1);
 
     public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
+[System.Serializable]
+public readonly record struct TestHandle(int Index, int Generation);
+
+[System.Serializable]
+public sealed record TestPayload(string Name, TestHandle Handle, TestHandle[] Others);
+
+[Collection("GPU Tests")]
 public class DeepRecordingTests
 {
     private static GraphicsDevice CreateDevice() => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -76,9 +75,9 @@ public class DeepRecordingTests
 
     private static DeepRecording Record(GraphicsDevice device, DeepMode mode, params IPass[] passes)
     {
-        using RenderPipeline pipeline = new(passes);
+        using RenderGraph graph = RenderGraph.Build(passes, name: "Deep");
         DeepRecording deep = new(device, mode);
-        device.DispatchGraph(pipeline, new DeepView[] { new() }, deep);
+        device.DispatchGraph(graph, graph.CreateInstances(), deep);
         deep.Wait();
         return deep;
     }
@@ -92,7 +91,7 @@ public class DeepRecordingTests
 
         DeepRecording deep = Record(device, DeepMode.Full, new WritePass("Only", target, external, 5));
 
-        DeepPass pass = Assert.Single(Assert.Single(deep.Views).Passes);
+        DeepPass pass = Assert.Single(Assert.Single(deep.Instances).Passes);
         Assert.Null(pass.NotReplayable);
         Assert.Equal(2, pass.References.Length);
         UpdateBufferCommand update = Assert.Single(pass.Commands.OfType<UpdateBufferCommand>());
@@ -100,7 +99,7 @@ public class DeepRecordingTests
         Assert.Contains(deep.Blobs, b => b.Ref == update.Data && b.Data.SequenceEqual(new byte[] { 5, 5, 5, 5 }));
         Assert.Contains(pass.Commands, c => c is SetFramebufferCommand);
         Assert.Contains(pass.Commands, c => c is ClearColorTargetCommand);
-        Assert.Single(deep.Recording.Views);
+        Assert.Single(deep.Recording.Instances);
     }
 
     [SkippableTheory]
@@ -114,7 +113,7 @@ public class DeepRecordingTests
 
         DeepRecording deep = Record(device, mode, new WritePass("First", target, external, 1), new WritePass("Second", target, external, 2));
 
-        DeepPass[] passes = deep.Views[0].Passes.ToArray();
+        DeepPass[] passes = deep.Instances[0].Passes.ToArray();
         RecordedCopy[] copies = passes.SelectMany(p => p.Copies).ToArray();
         Assert.Equal(copies.Length, copies.Select(c => c.Version).Distinct().Count());
         Assert.DoesNotContain(passes[1].Copies, c => c.Placement == CopyPlacement.BeforePass);
@@ -141,8 +140,8 @@ public class DeepRecordingTests
         Assert.Equal(deep.Features, loaded.Features);
         Assert.Equal(deep.Recording.DeviceName, loaded.Recording.DeviceName);
         Assert.Equal(deep.ExecutionId, loaded.ExecutionId);
-        Assert.Equal(nameof(RenderPipeline), loaded.Recording.GraphName);
-        Assert.Equal(deep.Recording.Views, loaded.Recording.Views);
+        Assert.Equal("Deep", loaded.Recording.GraphName);
+        Assert.Equal(deep.Recording.Instances, loaded.Recording.Instances);
         Assert.Equal(deep.Recording.CommandBuffers, loaded.Recording.CommandBuffers);
         Assert.NotNull(loaded.Recording.Counters);
         Assert.Equal(deep.Recording.Counters, loaded.Recording.Counters);
@@ -150,7 +149,7 @@ public class DeepRecordingTests
         Assert.Equal(deep.Programs, loaded.Programs);
         Assert.Equal(deep.Samplers, loaded.Samplers);
         Assert.Equal(deep.Blobs, loaded.Blobs);
-        Assert.Equal(deep.Views, loaded.Views);
+        Assert.Equal(deep.Instances, loaded.Instances);
     }
 
     [Fact]
@@ -170,16 +169,18 @@ public class DeepRecordingTests
             1,
             1,
             1,
-            new PushConstantRange(ShaderStages.Vertex | ShaderStages.Fragment, 16));
+            new PushConstantRange(ShaderStages.Vertex | ShaderStages.Fragment, 16),
+            EquatableArray.Create(new SpecializationConstant(2, 7)));
         EquatableArray<RecordedCommand> commands = EquatableArray.Create<RecordedCommand>(
             new SetPipelineCommand(program.Key, 42, false, null, PrimitiveTopology.TriangleList),
             new SetPushConstantsCommand(4, new BlobRef(EquatableArray.Create<byte>(3, 4), 8)),
             new SetDescriptorTableCommand(0,
                 EquatableArray.Create(new ResourceLayoutElementDescription("Textures", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0) { ArrayCount = 64 }),
-                EquatableArray.Create(new RecordedTableEntry(3, new RecordedProperty("Textures", PropertyKind.Texture, default, EquatableArray<byte>.Empty, default, default, null, -1)))),
+                EquatableArray.Create(new RecordedTableEntry(3, new RecordedProperty("Textures", PropertyKind.Texture, default, EquatableArray<byte>.Empty, default, default, null, -1, true)))),
             new SetPropertiesCommand(
                 EquatableArray.Create(new RecordedProperty("Tint", PropertyKind.Uniform, UniformScalarType.Float1, EquatableArray.Create<byte>(0, 0, 128, 63), default, default, null, -1)),
                 EquatableArray.Create("Old")),
+            new BlitTextureCommand(default, default, EquatableArray.Create(new TextureBlit(0, 0, 8, 8, 0, 0, 4, 4))),
             new PushMarkerCommand("Group"),
             new DrawCommand(3, 1, 0, 0),
             new PopMarkerCommand());
@@ -195,6 +196,23 @@ public class DeepRecordingTests
         Assert.Equal(commands, loadedCommands);
     }
 
+    [Fact]
+    public void EchoRoundTrip_KeepsSerializablePayloadsAndDropsLiveOnes()
+    {
+        DebuggerSerialization.Register();
+        PushMarkerCommand marker = new("Group", new TestPayload("Cube", new TestHandle(3, 1), [new TestHandle(4, 2)]));
+        RecordedInstance instance = new("Camera", 1, 0, new GraphInstanceKey(GraphKind.Intern("Test.Payload"), 4), 8, 8,
+            EquatableArray<RecordedPass>.Empty, EquatableArray<RecordedSkippedPass>.Empty, new System.Threading.SemaphoreSlim(1));
+
+        PushMarkerCommand loadedMarker = Serializer.Deserialize<PushMarkerCommand>(ReadBinary(WriteBinary(Serializer.Serialize(marker))))!;
+        RecordedInstance loadedInstance = Serializer.Deserialize<RecordedInstance>(ReadBinary(WriteBinary(Serializer.Serialize(instance))))!;
+
+        TestPayload payload = Assert.IsType<TestPayload>(loadedMarker.Meta);
+        Assert.Equal(("Cube", new TestHandle(3, 1)), (payload.Name, payload.Handle));
+        Assert.Equal([new TestHandle(4, 2)], payload.Others);
+        Assert.Equal(instance with { Data = null }, loadedInstance);
+    }
+
     [SkippableFact]
     public void Replay_ReproducesAfterPassCopies()
     {
@@ -204,9 +222,9 @@ public class DeepRecordingTests
         DeepRecording deep = Record(device, DeepMode.Full, new WritePass("First", target, external, 1), new WritePass("Second", target, external, 2));
         Replayer replayer = new(device, deep);
 
-        foreach (DeepPass pass in deep.Views[0].Passes)
+        foreach (DeepPass pass in deep.Instances[0].Passes)
         {
-            ReplayResult result = replayer.Replay(new ReplayRequest { ViewIndex = 0, PassIndex = pass.Index, EventIndex = 1 });
+            ReplayResult result = replayer.Replay(new ReplayRequest { InstanceIndex = 0, PassIndex = pass.Index, EventIndex = 1 });
 
             Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
             Assert.NotEmpty(result.Outputs);
@@ -223,14 +241,14 @@ public class DeepRecordingTests
     public void HistoryResources_RecordRingSlotAndValidity()
     {
         using GraphicsDevice device = CreateDevice();
-        using RenderPipeline pipeline = new([new HistoryPass()]);
+        using RenderGraph graph = RenderGraph.Build([new HistoryPass()]);
 
         RecordedGraphResource Run()
         {
             DeepRecording deep = new(device, DeepMode.ReplayOnly);
-            device.DispatchGraph(pipeline, new DeepView[] { new() }, deep);
+            device.DispatchGraph(graph, graph.CreateInstances(), deep);
             deep.Wait();
-            return Assert.Single(deep.Views[0].Resources);
+            return Assert.Single(deep.Instances[0].Resources);
         }
 
         RecordedGraphResource first = Run();

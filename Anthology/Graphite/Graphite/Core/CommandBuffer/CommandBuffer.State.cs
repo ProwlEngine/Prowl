@@ -2,7 +2,6 @@ using System;
 using System.Runtime.InteropServices;
 
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 namespace Prowl.Graphite;
@@ -17,6 +16,7 @@ public abstract partial class CommandBuffer
     {
         RequireGraphExecution(nameof(SetShader));
         ValidationHelpers.RequireNotNullRender(Device, program, nameof(GraphicsProgram), nameof(SetShader));
+        CheckNotDisposed(program, "The graphics program");
         bool changed = !ReferenceEquals(_shaderProgram, program);
         if (!changed) return;
 
@@ -34,6 +34,7 @@ public abstract partial class CommandBuffer
     {
         RequireGraphExecution(nameof(SetComputeShader));
         ValidationHelpers.RequireNotNullRender(Device, program, nameof(ComputeProgram), nameof(SetComputeShader));
+        CheckNotDisposed(program, "The compute program");
         if (ReferenceEquals(_computeProgram, program)) return;
 
         _statShaderSwitches++;
@@ -77,6 +78,8 @@ public abstract partial class CommandBuffer
     public void SetDescriptorTable(uint set, DescriptorTable? table)
     {
         RequireGraphExecution(nameof(SetDescriptorTable));
+        if (table != null)
+            SetDescriptorTable_CheckNotDisposed(set, table);
         if (set >= _descriptorTables.Length)
         {
             if (table == null)
@@ -164,6 +167,7 @@ public abstract partial class CommandBuffer
     public void SetFramebuffer(Framebuffer fb, TargetLoadStoreOps? ops = null)
     {
         RequireGraphExecution(nameof(SetFramebuffer));
+        SetFramebuffer_CheckNotDisposed(fb);
         bool changed = _framebuffer != fb;
         if (!changed && !ops.HasValue)
             return;

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 namespace Prowl.Graphite.Rendering;
@@ -102,6 +101,11 @@ internal static class EffectResolutionScale
 }
 
 /// <summary>The Halton sequence term of an index in a radix, 0 to 1.</summary>
+internal sealed class FrameCounter
+{
+    public int Index;
+}
+
 internal static class Halton
 {
     public static float Of(int index, int radix)
@@ -180,6 +184,8 @@ public sealed class AutoExposure : PostEffect
     private readonly PropertySet _properties = new();
     private (float Compensation, float Up, float Down, float Min, float Max) _settings;
 
+    private const int LuminanceLevels = 13;
+
     private sealed class ViewState
     {
         public readonly List<TextureHandle> Levels = new();
@@ -216,22 +222,16 @@ public sealed class AutoExposure : PostEffect
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
         builder.WriteColor();
-        ViewState state = builder.GetViewState<ViewState>();
+        ViewState state = builder.GetSetupState<ViewState>();
         state.Levels.Clear();
-        int width = (int)view.Width / 2, height = (int)view.Height / 2;
-        state.Levels.Add(builder.Temporary("Luminance0", FeatureView.Shared(Math.Max(1, width), Math.Max(1, height), PixelFormat.R16_Float)));
-        while (width > 2 || height > 2)
-        {
-            width = Math.Max(1, width / 2);
-            height = Math.Max(1, height / 2);
-            state.Levels.Add(builder.Temporary("Luminance" + state.Levels.Count, FeatureView.Shared(width, height, PixelFormat.R16_Float)));
-        }
+        for (int level = 0; level < LuminanceLevels; level++)
+            state.Levels.Add(builder.Temporary("Luminance" + level, view.SharedTexture(PixelFormat.R16_Float, 0.5f / (1 << level))));
         state.Adapted = builder.History("Adapted", FeatureView.Shared(1, 1, PixelFormat.R16_Float), usage: TextureState.Attachment | TextureState.Sampled);
     }
 
     public override void Render(FeatureContext context)
     {
-        ViewState state = context.GetViewState<ViewState>();
+        ViewState state = context.GetSetupState<ViewState>();
         _properties.SetTexture("_MainTex", context.Color!, LinearClamp);
         context.Fullscreen(context.View.LayerCount > 1 ? _extractLayered : _extract, context.Get(state.Levels[0]), _properties, shared: true);
         for (int i = 1; i < state.Levels.Count; i++)
@@ -320,27 +320,20 @@ public sealed class Bloom : PostEffect
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
         builder.WriteColor();
-        ViewState state = builder.GetViewState<ViewState>();
+        ViewState state = builder.GetSetupState<ViewState>();
         state.Down.Clear();
         state.Up.Clear();
-        List<(int Width, int Height)> sizes = new();
-        int width = Math.Max(1, (int)view.Width / 2), height = Math.Max(1, (int)view.Height / 2);
-        sizes.Add((width, height));
-        for (int i = 0; i < _iterations; i++)
-        {
-            width = Math.Max(1, width / 2);
-            height = Math.Max(1, height / 2);
-            sizes.Add((width, height));
-        }
-        for (int i = 0; i < sizes.Count; i++)
-            state.Down.Add(builder.Temporary("Down" + i, view.Texture(sizes[i].Width, sizes[i].Height, Hdr)));
-        for (int i = sizes.Count - 2; i >= 0; i--)
-            state.Up.Add(builder.Temporary("Up" + i, view.Texture(sizes[i].Width, sizes[i].Height, Hdr)));
+        int count = _iterations + 1;
+        for (int i = 0; i < count; i++)
+            state.Down.Add(builder.Temporary("Down" + i, view.Texture(Hdr, 0.5f / (1 << i))));
+        for (int i = count - 2; i >= 0; i--)
+            state.Up.Add(builder.Temporary("Up" + i, view.Texture(Hdr, 0.5f / (1 << i))));
     }
 
     public override void Render(FeatureContext context)
     {
-        ViewState state = context.GetViewState<ViewState>();
+        ViewState state = context.GetSetupState<ViewState>();
+        _properties.Clear();
         _properties.SetFloat("_Threshold", _settings.Threshold);
         _properties.SetFloat("_SoftKnee", _settings.Knee);
         _properties.SetFloat("_Clamp", _settings.Clamp);
@@ -388,7 +381,6 @@ public sealed class Gtao : ScreenLightingFeature
     private sealed class ViewState
     {
         public TextureHandle Depth, Ao, History, Blur, Visibility;
-        public int FrameIndex;
     }
 
     public Gtao(Renderer renderer)
@@ -439,21 +431,21 @@ public sealed class Gtao : ScreenLightingFeature
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
         builder.ReadScene();
-        ViewState state = builder.GetViewState<ViewState>();
+        ViewState state = builder.GetSetupState<ViewState>();
         state.Visibility = builder.WriteScreenLighting(false).Visibility;
-        int width = Math.Max(1, (int)(view.Width * ScaleSnapshot)), height = Math.Max(1, (int)(view.Height * ScaleSnapshot));
-        state.Depth = builder.Temporary("Depth", view.Texture(width, height, PixelFormat.R32_Float));
-        state.Ao = builder.Temporary("Ao", view.Texture(width, height, PixelFormat.R8_UNorm));
+        state.Depth = builder.Temporary("Depth", view.Texture(PixelFormat.R32_Float, ScaleSnapshot));
+        state.Ao = builder.Temporary("Ao", view.Texture(PixelFormat.R8_UNorm, ScaleSnapshot));
         if (_declared.Temporal)
-            state.History = builder.History("History", view.Texture(width, height, PixelFormat.R8_UNorm), usage: TextureState.Attachment | TextureState.Sampled);
+            state.History = builder.History("History", view.Texture(PixelFormat.R8_UNorm, ScaleSnapshot), usage: TextureState.Attachment | TextureState.Sampled);
         if (_declared.Blur)
-            state.Blur = builder.Temporary("Blur", view.Texture(width, height, PixelFormat.R8_UNorm));
+            state.Blur = builder.Temporary("Blur", view.Texture(PixelFormat.R8_UNorm, ScaleSnapshot));
     }
 
     public override void Render(FeatureContext context)
     {
-        ViewState state = context.GetViewState<ViewState>();
-        state.FrameIndex = (state.FrameIndex + 1) % 64;
+        ViewState state = context.GetSetupState<ViewState>();
+        FrameCounter counter = context.GetViewState<FrameCounter>();
+        counter.Index = (counter.Index + 1) % 64;
         RenderTexture depth = context.Get(state.Depth), ao = context.Get(state.Ao);
 
         _properties.SetTexture("_CameraDepthTexture", context.Depth!, _resources.PointClamp);
@@ -467,7 +459,7 @@ public sealed class Gtao : ScreenLightingFeature
         _properties.SetFloat("_Radius", _settings.Radius);
         _properties.SetFloat("_Intensity", _settings.Intensity);
         _properties.SetFloat2("_NoiseScale", size / 256f);
-        _properties.SetFloat2("_JitterOffset", new Float2(Halton.Of(state.FrameIndex, 2), Halton.Of(state.FrameIndex, 3)));
+        _properties.SetFloat2("_JitterOffset", new Float2(Halton.Of(counter.Index, 2), Halton.Of(counter.Index, 3)));
         context.Fullscreen(_ao, ao, _properties);
 
         RenderTexture result = ao;
@@ -530,7 +522,6 @@ public sealed class ScreenSpaceReflections : PostEffect
         public TextureHandle Source, Combined, ReflectionHistory, RayData, Reflection;
         public readonly TextureHandle[] Pyramid = new TextureHandle[4];
         public readonly TextureHandle[] Scratch = new TextureHandle[4];
-        public int FrameIndex;
     }
 
     public ScreenSpaceReflections(Renderer renderer) : base(renderer)
@@ -600,31 +591,31 @@ public sealed class ScreenSpaceReflections : PostEffect
     {
         builder.ReadScene();
         builder.WriteColor();
-        ViewState state = builder.GetViewState<ViewState>();
-        int width = (int)view.Width, height = (int)view.Height;
+        ViewState state = builder.GetSetupState<ViewState>();
         if (_declared.Temporal)
         {
-            state.Source = builder.Temporary("Source", view.Texture(width, height, Hdr));
-            state.Combined = builder.History("Combined", view.Texture(width, height, Hdr), usage: TextureState.Attachment | TextureState.Sampled);
-            state.ReflectionHistory = builder.History("Reflection", view.Texture(width, height, Hdr), usage: TextureState.Attachment | TextureState.Sampled);
+            state.Source = builder.Temporary("Source", view.Texture(Hdr));
+            state.Combined = builder.History("Combined", view.Texture(Hdr), usage: TextureState.Attachment | TextureState.Sampled);
+            state.ReflectionHistory = builder.History("Reflection", view.Texture(Hdr), usage: TextureState.Attachment | TextureState.Sampled);
         }
         if (_declared.MipMap)
         {
             for (int level = 0; level < 4; level++)
             {
-                state.Scratch[level] = builder.Temporary("Scratch" + level, view.Texture(Math.Max(1, width >> level), Math.Max(1, height >> level), Hdr));
-                state.Pyramid[level] = builder.Temporary("Pyramid" + level, view.Texture(Math.Max(1, width >> (level + 1)), Math.Max(1, height >> (level + 1)), Hdr));
+                state.Scratch[level] = builder.Temporary("Scratch" + level, view.Texture(Hdr, 1f / (1 << level)));
+                state.Pyramid[level] = builder.Temporary("Pyramid" + level, view.Texture(Hdr, 1f / (1 << (level + 1))));
             }
         }
-        state.RayData = builder.Temporary("Rays", view.Texture(Math.Max(1, (int)(width * _declared.Scale)), Math.Max(1, (int)(height * _declared.Scale)), Hdr));
-        state.Reflection = builder.Temporary("Reflection", view.Texture(width, height, Hdr));
+        state.RayData = builder.Temporary("Rays", view.Texture(Hdr, _declared.Scale));
+        state.Reflection = builder.Temporary("Reflection", view.Texture(Hdr));
     }
 
     public override void Render(FeatureContext context)
     {
-        ViewState state = context.GetViewState<ViewState>();
-        state.FrameIndex = (state.FrameIndex + 1) % 64;
-        Float2 jitter = new(Halton.Of(state.FrameIndex, 2), Halton.Of(state.FrameIndex, 3));
+        ViewState state = context.GetSetupState<ViewState>();
+        FrameCounter counter = context.GetViewState<FrameCounter>();
+        counter.Index = (counter.Index + 1) % 64;
+        Float2 jitter = new(Halton.Of(counter.Index, 2), Halton.Of(counter.Index, 3));
         Float2 screen = new(context.View.Width, context.View.Height);
         RenderTexture rays = context.Get(state.RayData);
         Float2 raySize = new(rays.ColorTextures[0].Width, rays.ColorTextures[0].Height);
@@ -837,20 +828,18 @@ public sealed class DepthOfField : PostEffect
     {
         builder.ReadScene();
         builder.WriteColor();
-        ViewState state = builder.GetViewState<ViewState>();
-        int width = (int)view.Width, height = (int)view.Height;
-        int blurWidth = Math.Max(1, width / _divisor), blurHeight = Math.Max(1, height / _divisor);
-        uint layers = view.LayerCount > 1 ? (uint)view.LayerCount : 0;
-        state.CoC = builder.Temporary("CoC", view.Texture(width, height, PixelFormat.R16_Float));
-        state.Prefiltered = builder.Temporary("Prefiltered", view.Texture(blurWidth, blurHeight, Hdr));
-        state.Bokeh = builder.Temporary("Bokeh", GraphTextureDesc.Sized(blurWidth, blurHeight, false, Hdr, Hdr) with { ArrayLayers = layers });
-        state.Smoothed = builder.Temporary("Smoothed", GraphTextureDesc.Sized(blurWidth, blurHeight, false, Hdr, Hdr) with { ArrayLayers = layers });
+        ViewState state = builder.GetSetupState<ViewState>();
+        float blur = 1f / _divisor;
+        state.CoC = builder.Temporary("CoC", view.Texture(PixelFormat.R16_Float));
+        state.Prefiltered = builder.Temporary("Prefiltered", view.Texture(Hdr, blur));
+        state.Bokeh = builder.Temporary("Bokeh", view.Texture(Hdr, blur) with { ColorFormats = [Hdr, Hdr] });
+        state.Smoothed = builder.Temporary("Smoothed", view.Texture(Hdr, blur) with { ColorFormats = [Hdr, Hdr] });
         state.Focus = builder.History("Focus", FeatureView.Shared(1, 1, PixelFormat.R32_Float), usage: TextureState.Attachment | TextureState.Sampled);
     }
 
     public override void Render(FeatureContext context)
     {
-        ViewState state = context.GetViewState<ViewState>();
+        ViewState state = context.GetSetupState<ViewState>();
         float width = context.View.Width, height = context.View.Height;
         RenderTexture prefiltered = context.Get(state.Prefiltered), bokeh = context.Get(state.Bokeh), smoothed = context.Get(state.Smoothed);
         float downscale = height / prefiltered.ColorTextures[0].Height;
@@ -1229,14 +1218,14 @@ public sealed class Smaa : PostEffect
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
         builder.WriteColor();
-        ViewState state = builder.GetViewState<ViewState>();
+        ViewState state = builder.GetSetupState<ViewState>();
         state.Edges = builder.Temporary("Edges", view.Texture(PixelFormat.R8_G8_B8_A8_UNorm));
         state.Weights = builder.Temporary("Weights", view.Texture(PixelFormat.R8_G8_B8_A8_UNorm));
     }
 
     public override void Render(FeatureContext context)
     {
-        ViewState state = context.GetViewState<ViewState>();
+        ViewState state = context.GetSetupState<ViewState>();
         RenderTexture edges = context.Get(state.Edges), weights = context.Get(state.Weights);
         (Texture area, Texture search) = context.SmaaTables;
         _properties.SetFloat2("_Resolution", new Float2(context.View.Width, context.View.Height));

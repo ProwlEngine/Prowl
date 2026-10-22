@@ -5,7 +5,6 @@ using System.Linq;
 using BenchmarkDotNet.Attributes;
 
 using Prowl.Graphite;
-using Prowl.Graphite.RenderGraph;
 
 using Prowl.Vector;
 
@@ -71,7 +70,7 @@ public class GraphResourceBenchmarks : GraphiteBenchmark
         {
             int index = i;
             GraphTextureDesc desc = kind == GraphResourceScenario.MixedFormats
-                ? GraphTextureDesc.ViewSized(s_formats[index % s_formats.Length], s_scales[index / s_formats.Length % s_scales.Length], depth: index % 2 == 1)
+                ? GraphTextureDesc.InstanceSized(s_formats[index % s_formats.Length], s_scales[index / s_formats.Length % s_scales.Length], depth: index % 2 == 1)
                 : ColorDesc;
             int history = kind == GraphResourceScenario.History ? 1 : 0;
             PropertySet props = CreatePassProperties(new Float4(index / (float)Resources, 1, 0, 1), WhiteTexture);

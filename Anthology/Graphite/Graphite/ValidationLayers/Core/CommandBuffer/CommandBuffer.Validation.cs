@@ -4,6 +4,71 @@ namespace Prowl.Graphite;
 
 public abstract partial class CommandBuffer
 {
+    private (DescriptorTable? Table, uint Version)[] _checkedTables = [];
+
+    internal void CheckNotDisposed(GraphicsResource? resource, string use)
+    {
+        if (resource is { IsDisposed: true } && Device.ValidationEnabled)
+            ThrowDisposed(resource, use);
+    }
+
+    internal void CheckNotDisposed(PropertyEntry entry, PropertyID name)
+    {
+        if (!Device.ValidationEnabled)
+            return;
+
+        GraphicsResource? disposed = Disposed(entry.Buffer?.Buffer) ?? Disposed(entry.Texture) ?? Disposed(entry.TextureView)
+            ?? Disposed(entry.TextureView?.Target) ?? Disposed(entry.Sampler);
+        if (disposed != null)
+            ThrowDisposed(disposed, $"The resource of property '{PropertyID.ToString(name)}'");
+    }
+
+    private static GraphicsResource? Disposed(GraphicsResource? resource) => resource is { IsDisposed: true } ? resource : null;
+
+    private void ThrowDisposed(GraphicsResource resource, string use)
+    {
+        string reason = resource.DisposeReason is { } why ? $" ({why})" : "";
+        throw new RenderException($"{use} is '{resource.Name}', which was disposed{reason} before command buffer '{Name}' recorded a command using it.");
+    }
+
+    private void SetDescriptorTable_CheckNotDisposed(uint set, DescriptorTable table)
+    {
+        if (!Device.ValidationEnabled)
+            return;
+
+        CheckNotDisposed(table, "The descriptor table");
+        if (_checkedTables.Length <= set)
+            Array.Resize(ref _checkedTables, (int)set + 1);
+        if (ReferenceEquals(_checkedTables[set].Table, table) && _checkedTables[set].Version == table.Version)
+            return;
+
+        _checkedTables[set] = (table, table.Version);
+        for (int element = 0; element < table.ElementCount; element++)
+        {
+            ref readonly ResourceLayoutElementDescription description = ref table.Layout.Elements[element];
+            if (description.Count != 1)
+                continue;
+
+            DescriptorTableEntry entry = table.EntriesOf(element)[0];
+            GraphicsResource? disposed = Disposed(entry.Buffer?.Buffer) ?? Disposed(entry.Texture) ?? Disposed(entry.View)
+                ?? Disposed(entry.View?.Target) ?? Disposed(entry.Sampler);
+            if (disposed != null)
+                ThrowDisposed(disposed, $"The resource bound to '{PropertyID.ToString(description.Name)}' in descriptor table '{table.Name}'");
+        }
+    }
+
+    private void SetFramebuffer_CheckNotDisposed(Framebuffer fb)
+    {
+        if (fb == null || !Device.ValidationEnabled)
+            return;
+
+        CheckNotDisposed(fb, "The framebuffer");
+        foreach (FramebufferAttachment attachment in fb.ColorTargets)
+            CheckNotDisposed(attachment.Target, "A color target");
+        if (fb.DepthTarget is { } depth)
+            CheckNotDisposed(depth.Target, "The depth target");
+    }
+
     private void SetVertexSource_CheckNonNull(IVertexSource source)
     {
         if (!Device.ValidationEnabled)
@@ -26,6 +91,7 @@ public abstract partial class CommandBuffer
             throw new RenderException(
                 $"IVertexSource.ResolveSlot returned a null Buffer for layout slot {layoutSlot}.");
         }
+        CheckNotDisposed(binding.Buffer, $"The vertex buffer of layout slot {layoutSlot}");
         if ((binding.Buffer.Usage & BufferUsage.VertexBuffer) == 0)
         {
             throw new RenderException(
@@ -43,6 +109,7 @@ public abstract partial class CommandBuffer
             throw new RenderException(
                 "IVertexSource.TryGetIndexBuffer returned true but the index buffer is null.");
         }
+        CheckNotDisposed(buffer, "The index buffer");
         if ((buffer.Usage & BufferUsage.IndexBuffer) == 0)
         {
             throw new RenderException(

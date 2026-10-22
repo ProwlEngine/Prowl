@@ -116,7 +116,6 @@ internal unsafe partial class VkCommandBuffer
     private void PreDrawCommand()
     {
         MarkStorageWrites(_currentShaderProgram);
-        ResolveAndBindGraphicsPipeline();
 
         // Resolve + transition property textures (must precede the render pass) and prepare descriptor
         // sets. Returns false when nothing changed since the last draw and the sets are still bound.
@@ -126,6 +125,7 @@ internal unsafe partial class VkCommandBuffer
             isGraphics: true);
 
         EnsureRenderPassActive();
+        ResolveAndBindGraphicsPipeline();
 
         if (needBind)
             _descriptorBinder.EmitBind(_currentShaderProgram.PipelineLayout, PipelineBindPoint.Graphics);

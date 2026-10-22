@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 namespace Prowl.Graphite.Debugger;
@@ -16,7 +15,7 @@ public sealed partial class DeepRecording
     private uint _nextTraceId;
 
     IPassCommandSink? ICommandStreamProfiler.BeginPassCommands(in PassInfo pass)
-        => _views.TryGetValue(pass.ViewIndex, out ViewState? view) ? new PassRecorder(this, view.Pass(pass.Index)) : null;
+        => _instances.TryGetValue(pass.InstanceIndex, out InstanceState? instance) ? new PassRecorder(this, instance.Pass(pass.Index)) : null;
 
     private TraceResourceId Trace(ResourceId id)
         => id.Value == 0 ? default : Builder(id).Id;
@@ -53,12 +52,13 @@ public sealed partial class DeepRecording
             Trace(state.Resource),
             state.Range,
             state.ViewFormat,
-            sampler);
+            sampler,
+            state.Arrayed);
     }
 
     private ProgramKey EnsureProgram(ShaderProgram program)
     {
-        ProgramKey key = program.Key;
+        ProgramKey key = program is GraphicsProgram variant ? variant.VariantKey : program.Key;
         if (_programs.ContainsKey(key))
             return key;
 
@@ -77,7 +77,8 @@ public sealed partial class DeepRecording
                 0,
                 0,
                 0,
-                program.PushConstants),
+                program.PushConstants,
+                graphics.Specializations.ToEquatableArray()),
             ComputeProgram compute => new RecordedProgram(
                 key,
                 program.Name,
@@ -91,7 +92,8 @@ public sealed partial class DeepRecording
                 compute.ThreadGroupSizeX,
                 compute.ThreadGroupSizeY,
                 compute.ThreadGroupSizeZ,
-                program.PushConstants),
+                program.PushConstants,
+                EquatableArray<SpecializationConstant>.Empty),
             _ => throw new NotSupportedException($"Unknown program type {program.GetType().Name}."),
         };
 
@@ -250,6 +252,12 @@ public sealed partial class DeepRecording
             pass.Commands.Add(new CopyTextureCommand(owner.Trace(source), sourceRegion, owner.Trace(destinationAfter), destinationRegion, layerCount));
         }
 
+        public void BlitTexture(in ResourceVersion source, in ResourceVersion destinationAfter, ReadOnlySpan<TextureBlit> regions)
+        {
+            pass.Written.Add(destinationAfter.Resource);
+            pass.Commands.Add(new BlitTextureCommand(owner.Trace(source), owner.Trace(destinationAfter), regions.ToArray().ToEquatableArray()));
+        }
+
         public void CopyTextureToBuffer(in ResourceVersion source, in TextureRegion region, in ResourceVersion destinationAfter, uint destinationOffset)
         {
             pass.Written.Add(destinationAfter.Resource);
@@ -268,19 +276,16 @@ public sealed partial class DeepRecording
             pass.Commands.Add(new GenerateMipsCommand(owner.Trace(textureAfter)));
         }
 
-        public void PushMarker(string name) => pass.Commands.Add(new PushMarkerCommand(name));
+        public void PushMarker(string name, object? meta) => pass.Commands.Add(new PushMarkerCommand(name, meta));
 
         public void PopMarker() => pass.Commands.Add(new PopMarkerCommand());
     }
 
     private sealed record PendingCopy(TraceVersion Version, CopyPlacement Placement, CaptureCopy Copy);
 
-    private sealed class ViewState(string name, int index, uint pixelWidth, uint pixelHeight)
+    private sealed class InstanceState(in InstanceInfo info)
     {
-        public readonly string Name = name;
-        public readonly int Index = index;
-        public readonly uint PixelWidth = pixelWidth;
-        public readonly uint PixelHeight = pixelHeight;
+        public readonly InstanceInfo Info = info;
         public readonly List<RecordedGraphResource> Resources = new();
         public readonly Dictionary<ResourceId, GraphResourceOrigin> Origins = new();
         public readonly HashSet<(ResourceId, uint)> Known = new();

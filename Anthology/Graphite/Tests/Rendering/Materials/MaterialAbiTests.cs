@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
@@ -20,15 +19,7 @@ internal sealed class SlotResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => 1u;
 }
 
-file readonly struct NoView : IRenderView
-{
-    public Framebuffer? Target => null;
-    public uint PixelWidth => 4;
-    public uint PixelHeight => 4;
-    public int ViewId => 0;
-}
-
-file sealed class DrawPass(Action<CommandBuffer> draw) : IPass
+file sealed class DrawPass(Action<CommandBuffer> draw) : IExecutionPass
 {
     public string Name => "Draw";
 
@@ -37,6 +28,7 @@ file sealed class DrawPass(Action<CommandBuffer> draw) : IPass
     public void Render(RenderContext context, CommandBuffer cmd) => draw(cmd);
 }
 
+[Collection("GPU Tests")]
 public sealed class MaterialAbiTests : IDisposable
 {
     private const string Source = """
@@ -56,7 +48,7 @@ public sealed class MaterialAbiTests : IDisposable
                 Vertex
                 {
                     layout(push_constant) uniform Push { uint slot; } push;
-                    layout(location = 31) flat out uint graphite_MaterialSlot;
+                    layout(location = 27) flat out uint graphite_MaterialSlot;
 
                     void main()
                     {
@@ -91,23 +83,24 @@ public sealed class MaterialAbiTests : IDisposable
         """;
 
     private static readonly ResourceLayoutDescription s_frameTable = new(GraphiteBindings.FrameSet,
-        new ResourceLayoutElementDescription("Graphite_Textures2D", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Texture2DTable) { ArrayCount = 16 },
-        new ResourceLayoutElementDescription("Graphite_Textures2DArray", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Texture2DArrayTable) { ArrayCount = 4 },
-        new ResourceLayoutElementDescription("Graphite_Textures3D", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Texture3DTable) { ArrayCount = 4 },
-        new ResourceLayoutElementDescription("Graphite_TexturesCube", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.TextureCubeTable) { ArrayCount = 4 },
-        new ResourceLayoutElementDescription("Graphite_TexturesCubeArray", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.TextureCubeArrayTable) { ArrayCount = 4 })
+        new ResourceLayoutElementDescription("Graphite_Textures2D", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Texture2DTable) { ArrayCount = RendererTextures.Textures2D },
+        new ResourceLayoutElementDescription("Graphite_Textures2DArray", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Texture2DArrayTable) { ArrayCount = RendererTextures.OtherTextures },
+        new ResourceLayoutElementDescription("Graphite_Textures3D", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Texture3DTable) { ArrayCount = RendererTextures.OtherTextures },
+        new ResourceLayoutElementDescription("Graphite_TexturesCube", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.TextureCubeTable) { ArrayCount = RendererTextures.OtherTextures },
+        new ResourceLayoutElementDescription("Graphite_TexturesCubeArray", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.TextureCubeArrayTable) { ArrayCount = RendererTextures.OtherTextures })
     {
         Table = true,
     };
 
     private static readonly ResourceLayoutDescription s_viewTable = new(GraphiteBindings.ViewSet,
-        new ResourceLayoutElementDescription("Graphite_Samplers", ResourceKind.Sampler, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.SamplerTable) { ArrayCount = 4 },
+        new ResourceLayoutElementDescription("Graphite_Samplers", ResourceKind.Sampler, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.SamplerTable) { ArrayCount = RendererTextures.Samplers },
         new ResourceLayoutElementDescription("Graphite_Globals", ResourceKind.StructuredBufferReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Globals))
     {
         Table = true,
     };
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly GraphStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly SlotResources _resources = new();
     private readonly GlobalRegistry _registry;
@@ -116,8 +109,8 @@ public sealed class MaterialAbiTests : IDisposable
 
     public MaterialAbiTests()
     {
-        _registry = new GlobalRegistry(_device, _resources);
-        _materials = new MaterialSystem(_device, _resources);
+        _registry = new GlobalRegistry(_device, _store, _resources);
+        _materials = new MaterialSystem(_device, _store, _resources);
     }
 
     public void Dispose()
@@ -125,9 +118,8 @@ public sealed class MaterialAbiTests : IDisposable
         _device.WaitForIdle();
         for (int i = _owned.Count - 1; i >= 0; i--)
             _owned[i].Dispose();
-        _materials.Dispose();
-        _registry.Dispose();
         _compiler.Dispose();
+        _store.Dispose();
         _device.Dispose();
     }
 
@@ -212,7 +204,7 @@ public sealed class MaterialAbiTests : IDisposable
         Framebuffer framebuffer = Own(_device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, target)));
         DeviceBuffer readback = Own(_device.ResourceFactory.CreateBuffer(new BufferDescription(4 * 4 * 16, BufferUsage.Staging)));
 
-        using RenderPipeline pipeline = new([new DrawPass(cmd =>
+        using RenderGraph graph = RenderGraph.Build([new DrawPass(cmd =>
         {
             cmd.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cmd.SetFullViewport();
@@ -224,7 +216,7 @@ public sealed class MaterialAbiTests : IDisposable
             cmd.SetPushConstants(slot);
             cmd.Draw(3);
         })]);
-        _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+        _device.DispatchGraph(graph, graph.CreateInstances());
         _device.WaitForIdle();
         _device.Record(cmd => cmd.CopyTextureToBuffer(target, readback, 0, TextureRegion.Whole(target, 0, 0))).Wait();
 
@@ -272,7 +264,7 @@ public sealed class MaterialAbiTests : IDisposable
     public void VertexStages_ReadingMaterialsWithoutWritingTheSlot_FailToCompile()
     {
         string source = Source
-            .Replace("layout(location = 31) flat out uint graphite_MaterialSlot;", "uniform float _Scale;")
+            .Replace("layout(location = 27) flat out uint graphite_MaterialSlot;", "uniform float _Scale;")
             .Replace("graphite_MaterialSlot = push.slot;", "float s = _Scale + float(push.slot);")
             .Replace("gl_Position = vec4(x, y, 0.0, 1.0);", "gl_Position = vec4(x, y, 0.0, s);");
         ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
@@ -283,7 +275,7 @@ public sealed class MaterialAbiTests : IDisposable
     public void FragmentStages_ReadingMaterials_NeedAVertexStageWritingTheSlot()
     {
         string source = Source
-            .Replace("layout(location = 31) flat out uint graphite_MaterialSlot;", "")
+            .Replace("layout(location = 27) flat out uint graphite_MaterialSlot;", "")
             .Replace("graphite_MaterialSlot = push.slot;", "float unused = float(push.slot);");
         ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
         Assert.Contains("graphite_MaterialSlot", error.Message);

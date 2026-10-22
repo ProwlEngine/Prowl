@@ -16,6 +16,8 @@ public abstract partial class GraphicsDevice
     /// </summary>
     internal ulong NextSubmitSerial() => Interlocked.Increment(ref _submitSerial);
 
+    internal ulong LastSubmitSerial => Volatile.Read(ref _submitSerial);
+
     /// <summary>
     /// Queues native destruction for after the next submission and the latest open execution have finished on the GPU.
     /// </summary>

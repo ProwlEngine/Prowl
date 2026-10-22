@@ -28,6 +28,8 @@ assumes you already know.
   Histogram, Pie, Donut, Radar, FlameGraph), NodeGraph, ImageDiff
 - [Docking & Floating Windows](Docking.md) - DockSpace, DockNode, DockPanel, FloatingWindow,
   serialization
+- [Code Editor](CodeEditor.md) - CodeEditor, CodeDocument, CodeLanguage, C# lexer, Roslyn
+  intelligence through Prowl.Origami.CSharp
 - [3D Gizmos](Gizmos.md) - TransformGizmo, ViewManipulatorGizmo, sub-gizmos, GizmoDraw3D,
   GizmoUtils
 

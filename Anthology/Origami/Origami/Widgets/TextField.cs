@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -62,6 +63,7 @@ public sealed class TextFieldBuilder
 
     // Behaviour
     private bool _submitOnEnter;
+    private bool _commitOnEnter;
     private bool _autoFocus;
 
     // Filtering
@@ -118,6 +120,12 @@ public sealed class TextFieldBuilder
     public TextFieldBuilder SubmitOnEnter(bool submit = true) { _submitOnEnter = submit; return this; }
     /// <summary>Focus the field on the first frame it appears, and again each time it reappears after not being drawn.</summary>
     public TextFieldBuilder AutoFocus(bool autoFocus = true) { _autoFocus = autoFocus; return this; }
+    /// <summary>
+    /// Runs the setter once when an edit is finished instead of on every keystroke: on Enter (single-line), when the
+    /// focus moves elsewhere, or when the field stops being drawn. Escape drops the edit. Suits names and any value
+    /// that is costly or undoable to apply.
+    /// </summary>
+    public TextFieldBuilder CommitOnEnter(bool commit = true) { _commitOnEnter = commit; return this; }
 
     // ── Modes ──────────────────────────────────────────────────────────
 
@@ -298,17 +306,14 @@ public sealed class TextFieldBuilder
                 .Focused.BorderColor(focusBorder).Glow(0, 0, 10, 1, glowColor).End()
                 .Rounded(_theme.Metrics.Rounding)
                 .TabIndex(0);
+            if (_commitOnEnter)
+                rowBuilder.OnFocusChange(e => { if (!e.IsFocused) TextFieldCommits.Commit(e.Source.Data.ID); });
 
             using (rowBuilder.Enter())
             {
                 rowHandle = _paper.CurrentParent;
-
-                // Element storage is dropped when the row is not drawn, so this fires once per appearance.
-                if (_autoFocus && !_readOnly && !_paper.GetElementStorage(rowHandle, "af_done", false))
-                {
-                    _paper.SetFocus(rowHandle);
-                    _paper.SetElementStorage(rowHandle, "af_done", true);
-                }
+                int commitKey = rowHandle.Data.ID;
+                if (_commitOnEnter) TextFieldCommits.Seen(commitKey, _setter);
 
                 // Leading slot ─────────────────────────────────────────
                 if (_isSearch)
@@ -389,14 +394,38 @@ public sealed class TextFieldBuilder
                     .IsNotInteractable()
                     .FontSize(_theme.Metrics.FontSize);
 
+                Action<string?> onChange = v => _setter(v ?? string.Empty);
+                if (_commitOnEnter)
+                {
+                    Action<string> setter = _setter;
+                    string original = _value;
+                    onChange = v => TextFieldCommits.Change(commitKey, setter, original, v ?? string.Empty);
+                }
+
                 if (_multiLine)
-                    editBuilder.TextArea(_value, settings,
-                        onChange: v => _setter(v ?? string.Empty),
-                        intID: _id.GetHashCode());
+                    editBuilder.TextArea(_value, settings, onChange: onChange, intID: _id.GetHashCode());
                 else
-                    editBuilder.TextField(_value, settings,
-                        onChange: v => _setter(v ?? string.Empty),
-                        intID: _id.GetHashCode());
+                    editBuilder.TextField(_value, settings, onChange: onChange, intID: _id.GetHashCode());
+
+                // Enter finishes the edit through the focus loss, Escape drops it first so nothing is applied.
+                if (_commitOnEnter && _paper.IsElementFocused(commitKey))
+                {
+                    if (!_multiLine && (_paper.IsKeyPressed(PaperKey.Enter) || _paper.IsKeyPressed(PaperKey.KeypadEnter)))
+                        _paper.ClearFocus();
+                    else if (_paper.IsKeyPressed(PaperKey.Escape))
+                    {
+                        TextFieldCommits.Discard(commitKey);
+                        _paper.ClearFocus();
+                    }
+                }
+
+                // After the edit element exists, so the focus reaches it and select all on focus applies.
+                // Element storage is dropped when the row is not drawn, so this fires once per appearance.
+                if (_autoFocus && !_readOnly && !_paper.GetElementStorage(rowHandle, "af_done", false))
+                {
+                    _paper.SetFocus(rowHandle);
+                    _paper.SetElementStorage(rowHandle, "af_done", true);
+                }
 
                 // Suffix (.suf) — muted mono unit after the input.
                 if (!string.IsNullOrEmpty(_suffixText) && font != null)
@@ -670,5 +699,52 @@ public sealed class TextFieldBuilder
     {
         _paper.SetElementStorage(rowHandle, KeyForceValue, value);
         _paper.SetElementStorage(rowHandle, KeyForcePending, true);
+    }
+}
+
+/// <summary>Edits of <see cref="TextFieldBuilder.CommitOnEnter"/> fields that are typed but not applied yet, by field row id.</summary>
+internal static class TextFieldCommits
+{
+    private sealed class Edit
+    {
+        public required Action<string> Setter;
+        public required string Original;
+        public string Draft = string.Empty;
+        public int Seen;
+    }
+
+    private static readonly Dictionary<int, Edit> s_edits = new();
+    private static int s_frame;
+
+    public static void Change(int key, Action<string> setter, string original, string draft)
+    {
+        if (!s_edits.TryGetValue(key, out var edit))
+            s_edits[key] = edit = new Edit { Setter = setter, Original = original, Seen = s_frame };
+        edit.Draft = draft;
+    }
+
+    // The latest setter wins, since it closes over this frame's target.
+    public static void Seen(int key, Action<string> setter)
+    {
+        if (!s_edits.TryGetValue(key, out var edit)) return;
+        edit.Seen = s_frame;
+        edit.Setter = setter;
+    }
+
+    public static void Commit(int key)
+    {
+        if (!s_edits.Remove(key, out var edit)) return;
+        if (edit.Draft != edit.Original) edit.Setter(edit.Draft);
+    }
+
+    public static void Discard(int key) => s_edits.Remove(key);
+
+    /// <summary>Applies the edits of fields that were not drawn this frame, such as after the selection changed.</summary>
+    public static void EndFrame()
+    {
+        if (s_edits.Count > 0)
+            foreach (var (key, edit) in s_edits.ToArray())
+                if (edit.Seen < s_frame) Commit(key);
+        s_frame++;
     }
 }

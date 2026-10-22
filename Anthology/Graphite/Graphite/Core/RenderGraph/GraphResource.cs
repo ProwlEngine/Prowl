@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 /// <summary>
 /// Base graph resource tracker. Holds the interned ID passes use to order producers before consumers.
@@ -13,15 +13,16 @@ public abstract class GraphResource
 
     private protected GraphResource(RenderResourceID id) => Id = id;
 
-    /// <summary>Disposes owned physical resources. No-op for imported resources.</summary>
-    internal virtual void DisposeOwned() { }
 }
 
 internal abstract class HistoryRings<TResource, TDesc>
-    where TResource : class, IDisposable
+    where TResource : GraphicsResource
     where TDesc : struct, IEquatable<TDesc>
 {
     public const int RetentionExecutions = 120;
+
+    private static readonly string s_expired = $"its GraphStore freed it after {RetentionExecutions} executions without a resolve; resolve persistent resources again each frame they are used";
+    private const string Resized = "its GraphStore replaced it when its description changed";
 
     private sealed class Ring
     {
@@ -33,25 +34,23 @@ internal abstract class HistoryRings<TResource, TDesc>
         public int CurrentIndex;
     }
 
-    private readonly Dictionary<int, Ring> _rings = new();
-    private readonly List<int> _expired = new();
+    private readonly Dictionary<GraphInstanceKey, Ring> _rings = new();
+    private readonly List<GraphInstanceKey> _expired = new();
     private readonly int _slots;
     private ulong _lastExecutionId;
     private long _executionCount;
 
     protected HistoryRings(int slots) => _slots = slots;
 
-    protected abstract TResource Create(GraphicsDevice device, in TDesc desc, int viewId, int index);
+    protected abstract TResource Create(GraphicsDevice device, in TDesc desc, GraphInstanceKey key, int index);
 
-    public TResource Resolve(GraphicsDevice device, int viewId, ulong executionId, int framesAgo, in TDesc desc)
+    public TResource Resolve(GraphicsDevice device, GraphInstanceKey key, ulong executionId, int framesAgo, in TDesc desc)
     {
         Advance(executionId);
 
-        if (!_rings.TryGetValue(viewId, out Ring? ring) || !ring.Desc.Equals(desc))
+        if (!_rings.TryGetValue(key, out Ring? ring) || !ring.Desc.Equals(desc))
         {
-            if (ring != null)
-                DisposeRing(ring);
-
+            Ring? old = ring;
             ring = new Ring
             {
                 Slots = new TResource[_slots],
@@ -60,8 +59,10 @@ internal abstract class HistoryRings<TResource, TDesc>
                 LastRotationExecutionId = executionId,
             };
             for (int i = 0; i < _slots; i++)
-                ring.Slots[i] = Create(device, desc, viewId, i);
-            _rings[viewId] = ring;
+                ring.Slots[i] = Create(device, desc, key, i);
+            _rings[key] = ring;
+            if (old != null)
+                Replaced(old.Slots, ring.Slots);
         }
         else if (ring.LastRotationExecutionId != executionId)
         {
@@ -75,20 +76,30 @@ internal abstract class HistoryRings<TResource, TDesc>
         return ring.Slots[index];
     }
 
-    public int CurrentSlot(int viewId) => _rings.TryGetValue(viewId, out Ring? ring) ? ring.CurrentIndex : -1;
+    public int Slots => _slots;
 
-    public bool IsValid(int viewId, ulong executionId, in TDesc desc)
+    public void Sweep(ulong executionId) => Advance(executionId);
+
+    public int CurrentSlot(GraphInstanceKey key) => _rings.TryGetValue(key, out Ring? ring) ? ring.CurrentIndex : -1;
+
+    public bool IsValid(GraphInstanceKey key, ulong executionId, in TDesc desc)
     {
         Advance(executionId);
-        return _rings.TryGetValue(viewId, out Ring? ring)
+        return _rings.TryGetValue(key, out Ring? ring)
             && ring.Desc.Equals(desc)
             && ring.AllocationExecutionId != executionId;
+    }
+
+    public void Release(GraphInstanceKey key)
+    {
+        if (_rings.Remove(key, out Ring? ring))
+            DisposeRing(ring, "its GraphStore released it");
     }
 
     public void DisposeAll()
     {
         foreach (Ring ring in _rings.Values)
-            DisposeRing(ring);
+            DisposeRing(ring, "its GraphStore was disposed");
         _rings.Clear();
     }
 
@@ -100,30 +111,36 @@ internal abstract class HistoryRings<TResource, TDesc>
         _lastExecutionId = executionId;
         _executionCount++;
 
-        foreach ((int viewId, Ring ring) in _rings)
+        foreach ((GraphInstanceKey key, Ring ring) in _rings)
         {
             if (_executionCount - ring.LastUsedExecution > RetentionExecutions)
-                _expired.Add(viewId);
+                _expired.Add(key);
         }
 
-        foreach (int viewId in _expired)
+        foreach (GraphInstanceKey key in _expired)
         {
-            DisposeRing(_rings[viewId]);
-            _rings.Remove(viewId);
+            DisposeRing(_rings[key], s_expired);
+            _rings.Remove(key);
         }
         _expired.Clear();
     }
 
-    private static void DisposeRing(Ring ring)
+    protected virtual void Replaced(TResource[] old, TResource[] fresh)
+    {
+        foreach (TResource resource in old)
+            resource.Dispose(Resized);
+    }
+
+    private static void DisposeRing(Ring ring, string reason)
     {
         foreach (TResource resource in ring.Slots)
-            resource.Dispose();
+            resource.Dispose(reason);
     }
 }
 
 /// <summary>
-/// Texture graph resource. History depth 0 = plain transient. Depth N = ring of N+1 copies per view rotated
-/// per execution, so passes can read older frames' results (TAA, reprojection).
+/// Texture graph resource: transient by default, kept across executions when persistent, and a ring of HistoryDepth+1
+/// copies per instance key when it has history, rotated per execution so passes can read older frames' results.
 /// </summary>
 public sealed class GraphTextureResource : GraphResource
 {
@@ -133,58 +150,77 @@ public sealed class GraphTextureResource : GraphResource
     /// <summary>Prior executions readable by age. 0 = no history.</summary>
     public int HistoryDepth { get; }
 
+    /// <summary>Keeps its contents across executions without history.</summary>
+    public bool Persistent { get; }
+
+    /// <summary>True when the graph keeps it across executions, through history or persistence.</summary>
+    public bool Retained => Persistent || HistoryDepth > 0;
+
     /// <summary>Load/store ops applied when bound as a raster target.</summary>
     public TargetLoadStoreOps Ops { get; }
 
     internal bool Storage { get; set; }
 
-    private readonly TextureRings _rings;
+    internal TextureRings? Rings { get; set; }
 
-    internal GraphTextureResource(RenderResourceID id, in GraphTextureDesc desc, int historyDepth = 0, TargetLoadStoreOps? ops = null) : base(id)
+    internal GraphTextureResource(RenderResourceID id, in GraphTextureDesc desc, int historyDepth = 0, TargetLoadStoreOps? ops = null, bool persistent = false) : base(id)
     {
         if (historyDepth < 0)
             throw new ArgumentOutOfRangeException(nameof(historyDepth), "History depth cannot be negative.");
         Description = desc;
         HistoryDepth = historyDepth;
-        Ops = ops ?? TargetLoadStoreOps.ForLifetime(persistent: historyDepth > 0);
-        _rings = new TextureRings(id, historyDepth + 1);
+        Persistent = persistent;
+        Ops = ops ?? TargetLoadStoreOps.ForLifetime(persistent: Retained);
     }
 
-    internal RenderTexture ResolveHistory(GraphicsDevice device, int viewId, ulong executionId, int framesAgo, in RenderTextureDescription desc)
+    internal RenderTextureDescription Allocation(GraphInstance instance)
+    {
+        if (Description.SizeMode == TextureSizeMode.InstanceRelative && !instance.Extent.IsValid)
+            throw new InvalidOperationException(
+                $"Resource '{RenderResourceID.ToString(Id)}' is sized relative to its instance, but instance '{instance.Name}' has no extent.");
+
+        return Allocation(instance.Extent);
+    }
+
+    internal RenderTextureDescription Allocation(GraphExtent extent)
+    {
+        (int width, int height) = Description.Resolve(extent.Width, extent.Height);
+        PixelFormat[] colors = Description.ColorFormats ?? Array.Empty<PixelFormat>();
+        if (Description.EnableDepth && Description.DepthFormat is PixelFormat depthFormat)
+            return new RenderTextureDescription((uint)width, (uint)height, colors, depthFormat, Description.SampleCount, Storage) { ArrayLayers = Description.ArrayLayers, MipLevels = Description.MipLevels, Cube = Description.Cube };
+
+        return new RenderTextureDescription((uint)width, (uint)height, colors, Description.EnableDepth, Description.SampleCount, Storage) { ArrayLayers = Description.ArrayLayers, MipLevels = Description.MipLevels, Cube = Description.Cube };
+    }
+
+    internal RenderTexture ResolveHistory(GraphicsDevice device, GraphInstanceKey key, ulong executionId, int framesAgo, in RenderTextureDescription desc)
     {
         if (framesAgo < 0 || framesAgo > HistoryDepth)
             throw new ArgumentOutOfRangeException(nameof(framesAgo), $"framesAgo must be in [0, {HistoryDepth}] for resource '{RenderResourceID.ToString(Id)}'.");
 
-        return _rings.Resolve(device, viewId, executionId, framesAgo, desc);
+        return Rings!.Resolve(device, key, executionId, framesAgo, desc);
     }
 
-    internal bool IsHistoryValid(int viewId, ulong executionId, in RenderTextureDescription desc)
-        => HistoryDepth > 0 && _rings.IsValid(viewId, executionId, desc);
+    internal bool IsHistoryValid(GraphInstanceKey key, ulong executionId, in RenderTextureDescription desc)
+        => Retained && Rings!.IsValid(key, executionId, desc);
 
-    internal int HistorySlot(int viewId) => HistoryDepth > 0 ? _rings.CurrentSlot(viewId) : -1;
+    internal int HistorySlot(GraphInstanceKey key) => HistoryDepth > 0 ? Rings!.CurrentSlot(key) : -1;
+}
 
-    internal override void DisposeOwned() => _rings.DisposeAll();
-
-    private sealed class TextureRings : HistoryRings<RenderTexture, RenderTextureDescription>
+internal sealed class TextureRings(RenderResourceID id, int slots) : HistoryRings<RenderTexture, RenderTextureDescription>(slots)
+{
+    protected override RenderTexture Create(GraphicsDevice device, in RenderTextureDescription desc, GraphInstanceKey key, int index)
     {
-        private readonly RenderResourceID _id;
-
-        public TextureRings(RenderResourceID id, int slots) : base(slots) => _id = id;
-
-        protected override RenderTexture Create(GraphicsDevice device, in RenderTextureDescription desc, int viewId, int index)
-        {
-            RenderTexture texture = device.ResourceFactory.CreateRenderTexture(desc);
-            string? baseName = RenderResourceID.ToString(_id);
-            if (baseName != null)
-                texture.Name = $"{baseName}[v{viewId}][{index}]";
-            return texture;
-        }
+        RenderTexture texture = device.ResourceFactory.CreateRenderTexture(desc);
+        string? baseName = RenderResourceID.ToString(id);
+        if (baseName != null)
+            texture.Name = $"{baseName}[{key}][{index}]";
+        return texture;
     }
 }
 
 /// <summary>
-/// Buffer graph resource. History depth 0 = plain transient. Depth N = ring of N+1 copies per view rotated
-/// per execution.
+/// Buffer graph resource: transient by default, kept across executions when persistent, and a ring of HistoryDepth+1
+/// copies per instance key when it has history. A persistent buffer that changes size keeps its contents.
 /// </summary>
 public sealed class GraphBufferResource : GraphResource
 {
@@ -194,46 +230,66 @@ public sealed class GraphBufferResource : GraphResource
     /// <summary>Prior executions readable by age. 0 = no history.</summary>
     public int HistoryDepth { get; }
 
-    private readonly BufferRings _rings;
+    /// <summary>Keeps its contents across executions without history.</summary>
+    public bool Persistent { get; }
 
-    internal GraphBufferResource(RenderResourceID id, in GraphBufferDesc desc, int historyDepth = 0) : base(id)
+    /// <summary>True when the graph keeps it across executions, through history or persistence.</summary>
+    public bool Retained => Persistent || HistoryDepth > 0;
+
+    internal BufferRings? Rings { get; set; }
+
+    internal GraphBufferResource(RenderResourceID id, in GraphBufferDesc desc, int historyDepth = 0, bool persistent = false) : base(id)
     {
         if (historyDepth < 0)
             throw new ArgumentOutOfRangeException(nameof(historyDepth), "History depth cannot be negative.");
         Description = desc;
         HistoryDepth = historyDepth;
-        _rings = new BufferRings(historyDepth + 1);
+        Persistent = persistent;
     }
 
-    internal DeviceBuffer ResolveHistory(GraphicsDevice device, int viewId, ulong executionId, int framesAgo, in BufferDescription desc)
+    internal DeviceBuffer ResolveHistory(GraphicsDevice device, GraphInstanceKey key, ulong executionId, int framesAgo, in BufferDescription desc)
     {
         if (framesAgo < 0 || framesAgo > HistoryDepth)
             throw new ArgumentOutOfRangeException(nameof(framesAgo), $"framesAgo must be in [0, {HistoryDepth}] for resource '{RenderResourceID.ToString(Id)}'.");
 
-        return _rings.Resolve(device, viewId, executionId, framesAgo, desc);
+        return Rings!.Resolve(device, key, executionId, framesAgo, desc);
     }
 
-    internal bool IsHistoryValid(int viewId, ulong executionId, in BufferDescription desc)
-        => HistoryDepth > 0 && _rings.IsValid(viewId, executionId, desc);
+    internal bool IsHistoryValid(GraphInstanceKey key, ulong executionId, in BufferDescription desc)
+        => Retained && Rings!.IsValid(key, executionId, desc);
 
-    internal int HistorySlot(int viewId) => HistoryDepth > 0 ? _rings.CurrentSlot(viewId) : -1;
+    internal int HistorySlot(GraphInstanceKey key) => HistoryDepth > 0 ? Rings!.CurrentSlot(key) : -1;
+}
 
-    internal override void DisposeOwned() => _rings.DisposeAll();
+internal sealed class BufferRings(RenderResourceID id, int slots, List<(DeviceBuffer From, DeviceBuffer To)>? resizes) : HistoryRings<DeviceBuffer, BufferDescription>(slots)
+{
+    public bool KeepsContents => resizes != null;
 
-    private sealed class BufferRings : HistoryRings<DeviceBuffer, BufferDescription>
+    protected override DeviceBuffer Create(GraphicsDevice device, in BufferDescription desc, GraphInstanceKey key, int index)
     {
-        public BufferRings(int slots) : base(slots) { }
+        DeviceBuffer buffer = device.ResourceFactory.CreateBuffer(desc);
+        string? baseName = RenderResourceID.ToString(id);
+        if (baseName != null)
+            buffer.Name = $"{baseName}[{key}][{index}]";
+        return buffer;
+    }
 
-        protected override DeviceBuffer Create(GraphicsDevice device, in BufferDescription desc, int viewId, int index)
+    protected override void Replaced(DeviceBuffer[] old, DeviceBuffer[] fresh)
+    {
+        if (resizes == null)
         {
-            return device.ResourceFactory.CreateBuffer(desc);
+            base.Replaced(old, fresh);
+            return;
         }
+
+        for (int i = 0; i < old.Length; i++)
+            resizes.Add((old[i], fresh[i]));
     }
 }
 
 /// <summary>
 /// Externally owned buffer imported into the graph. Caller keeps ownership, graph never disposes it. Its first
-/// access in a view gets a barrier against every earlier write, so a buffer another pipeline or execution wrote is
+/// access in an execution gets a barrier against every earlier write, so a buffer another execution wrote is
 /// safe to read once declared.
 /// </summary>
 public sealed class GraphImportedBufferResource : GraphResource
@@ -249,7 +305,7 @@ public sealed class GraphImportedBufferResource : GraphResource
 
 /// <summary>
 /// Externally-owned texture imported into the graph. Caller keeps ownership, graph never disposes it.
-/// Must be in its resting layout when the execution starts; the graph returns it there when the view ends.
+/// Must be in its resting layout when the execution starts; the graph returns it there when the execution ends.
 /// </summary>
 public sealed class GraphImportedTextureResource : GraphResource
 {
@@ -266,14 +322,32 @@ public sealed class GraphImportedTextureResource : GraphResource
     }
 }
 
-/// <summary>
-/// The view's target for this execution: its <see cref="IRenderView.Target"/>. Write-only.
-/// Passes that write it are skipped for views with no target.
-/// </summary>
-public sealed class GraphViewTargetResource : GraphResource
+/// <summary>A texture the instance binds at dispatch under the resource's id. Caller keeps ownership, graph never disposes it.</summary>
+public sealed class GraphTextureSlotResource : GraphResource
 {
-    /// <summary>Reserved ID every view target declaration uses.</summary>
-    public static readonly RenderResourceID ViewTargetId = RenderResourceID.Intern("Graphite.ViewTarget");
+    /// <summary>Load/store ops applied when bound as a raster target. Loads by default.</summary>
+    public TargetLoadStoreOps Ops { get; }
+
+    internal GraphTextureSlotResource(RenderResourceID id, TargetLoadStoreOps? ops = null) : base(id)
+    {
+        Ops = ops ?? TargetLoadStoreOps.ForLifetime(persistent: true);
+    }
+}
+
+/// <summary>A buffer the instance binds at dispatch under the resource's id. Caller keeps ownership, graph never disposes it.</summary>
+public sealed class GraphBufferSlotResource : GraphResource
+{
+    internal GraphBufferSlotResource(RenderResourceID id) : base(id) { }
+}
+
+/// <summary>
+/// The instance's target for this execution: its <see cref="GraphInstance.Target"/>. Write-only.
+/// Passes that write it are skipped for instances with no target.
+/// </summary>
+public sealed class GraphInstanceTargetResource : GraphResource
+{
+    /// <summary>Reserved ID every instance target declaration uses.</summary>
+    public static readonly RenderResourceID InstanceTargetId = RenderResourceID.Intern("Graphite.InstanceTarget");
 
     /// <summary>Load/store ops applied when bound as a raster target. Clears by default.</summary>
     public TargetLoadStoreOps Ops { get; }
@@ -281,7 +355,7 @@ public sealed class GraphViewTargetResource : GraphResource
     /// <summary>Depth format the target needs, null for color only.</summary>
     public PixelFormat? DepthFormat { get; }
 
-    internal GraphViewTargetResource(TargetLoadStoreOps? ops = null, PixelFormat? depthFormat = null) : base(ViewTargetId)
+    internal GraphInstanceTargetResource(TargetLoadStoreOps? ops = null, PixelFormat? depthFormat = null) : base(InstanceTargetId)
     {
         Ops = ops ?? TargetLoadStoreOps.ForLifetime(persistent: false);
         DepthFormat = depthFormat;

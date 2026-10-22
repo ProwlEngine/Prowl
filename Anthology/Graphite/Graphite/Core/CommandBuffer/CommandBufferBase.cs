@@ -304,6 +304,7 @@ public abstract class CommandBufferBase : GraphicsResource
         TrackTexture(destination);
         BlitTextureCore(source, destination, regions);
         destination.MarkContentChanged();
+        PassSink?.BlitTexture(source.CurrentVersion, destination.CurrentVersion, regions);
     }
 
     private protected abstract void BlitTextureCore(Texture source, Texture destination, ReadOnlySpan<TextureBlit> regions);

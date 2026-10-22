@@ -1,31 +1,12 @@
 using Prowl.Graphite;
 using Prowl.Graphite.Debugger;
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Quill;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
 namespace DebuggerViewer.Rendering;
-
-internal readonly struct CanvasView : IRenderView
-{
-    public CanvasView(uint width, uint height, Swapchain swapchain)
-    {
-        Target = swapchain.Framebuffer;
-        PixelWidth = width;
-        PixelHeight = height;
-    }
-
-    public Framebuffer Target { get; }
-
-    public uint PixelWidth { get; }
-
-    public uint PixelHeight { get; }
-
-    public int ViewId => 0;
-}
 
 /// <summary>Draws a Quill canvas with a Scene pass into an offscreen target and a Present pass to the swapchain.</summary>
 internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
@@ -36,10 +17,13 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     private static readonly Color ClearColor = new(0f, 0f, 0f, 1f);
     private static readonly Keyword UpsampleOn = new("Upsample", "true");
     private static readonly Keyword UpsampleOff = new("Upsample", "false");
+    private static readonly GraphKind Canvas = GraphKind.Intern("Sample.Canvas");
+    private static readonly RenderResourceID PreviewSlot = "Preview";
 
     private readonly GraphicsDevice _device;
     private readonly ScenePass _scenePass;
-    private readonly RenderPipeline _pipeline;
+    private readonly RenderGraph _graph;
+    private readonly GraphInstances _instances;
     private GraphicsProgram _canvasProgram = null!;
     private ShaderPass _blurPass = null!;
     private Float4x4 _projection;
@@ -48,14 +32,15 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     private readonly List<TextureGraphite> _created = new();
     private int _fbWidth;
     private int _fbHeight;
-    private CanvasView[] _views = [];
     private string? _screenshot;
+    private TextureGraphite? _preview;
 
     public GraphiteRenderer(GraphicsDevice device)
     {
         _device = device;
         _scenePass = new ScenePass(this);
-        _pipeline = new([_scenePass, new PresentPass(this)]);
+        _graph = RenderGraph.Build([_scenePass, new PresentPass(this)], [new GraphScope(Canvas, GraphKind.Root)], "Viewer UI");
+        _instances = _graph.CreateInstances();
     }
 
     public bool SupportsBackdropBlur => true;
@@ -94,7 +79,14 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
         _fbWidth = width;
         _fbHeight = height;
         _projection = Float4x4.CreateOrthoOffCenter(0, width, height, 0, -1, 1);
-        _views = [new CanvasView((uint)width, (uint)height, _device.MainSwapchain)];
+    }
+
+    /// <summary>A texture rendered before the UI that the canvas may draw, or null. The UI graph reads it through an import.</summary>
+    public object? Preview(Texture? texture)
+    {
+        if (_preview?.Texture != texture)
+            _preview = texture != null ? TextureGraphite.Wrap(texture, _sampler) : null;
+        return _preview;
     }
 
     /// <summary>Writes the next rendered UI frame to a PNG at the path.</summary>
@@ -126,14 +118,17 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
     {
         _scenePass.SetFrame(canvas, drawCalls);
+        _instances.Reset();
+        _instances.Add(Canvas, 0, extent: new GraphExtent((uint)_fbWidth, (uint)_fbHeight), target: _device.MainSwapchain.Framebuffer, name: "Canvas",
+            imports: [GraphImport.Of(PreviewSlot, (_preview ?? _defaultTexture).Texture)]);
         if (_screenshot == null)
         {
-            _device.DispatchGraph(_pipeline, _views);
+            _device.DispatchGraph(_graph, _instances);
             return;
         }
 
         using DeepRecording recording = new(_device, DeepMode.Full);
-        _device.DispatchGraph(_pipeline, _views, recording);
+        _device.DispatchGraph(_graph, _instances, recording);
         recording.Wait();
         WritePng(recording, _screenshot);
         _screenshot = null;
@@ -141,7 +136,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
 
     private static void WritePng(DeepRecording recording, string path)
     {
-        RecordedCopy copy = recording.Views[0].Passes[0].Copies.First(c => c.Placement == CopyPlacement.AfterPass);
+        RecordedCopy copy = recording.Instances.First(i => i.Key.Kind == Canvas).Passes[0].Copies.First(c => c.Placement == CopyPlacement.AfterPass);
         CopyRegion region = copy.Regions[0];
         byte[] data = recording.Blobs.First(b => b.Ref == copy.Blob).Data.Items.ToArray();
         byte[] pixels = data.AsSpan((int)region.Offset, (int)(region.Width * region.Height * 4)).ToArray();
@@ -156,7 +151,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     public void Dispose()
     {
         _scenePass.DisposeResources();
-        _pipeline.Dispose();
+        _graph.Dispose();
         _sampler?.Dispose();
         _canvasProgram?.Dispose();
         _blurPass?.Dispose();
@@ -166,7 +161,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
         _created.Clear();
     }
 
-    private sealed class ScenePass : IPass
+    private sealed class ScenePass : IInstancePass
     {
         private readonly GraphiteRenderer _owner;
         private readonly PropertySet _properties = new();
@@ -187,16 +182,21 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
 
         public string Name => "Scene";
 
+        public GraphKind Kind => Canvas;
+
         public void SetFrame(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
         {
             _canvas = canvas;
             _drawCalls = drawCalls;
         }
 
-        public void Setup(RenderContextBuilder builder)
-            => _sceneHandle = builder.DeclareOutputTexture("Scene", GraphTextureDesc.ViewSized(TargetFormat), usage: TextureState.Attachment | TextureState.Sampled);
+        public void Setup(InstanceContextBuilder builder)
+        {
+            builder.DeclareImportSlotTexture(PreviewSlot, TextureState.Sampled);
+            _sceneHandle = builder.DeclareOutputTexture("Scene", GraphTextureDesc.InstanceSized(TargetFormat), usage: TextureState.Attachment | TextureState.Sampled);
+        }
 
-        public void Render(RenderContext context, CommandBuffer cmd)
+        public void Render(InstanceContext context, CommandBuffer cmd)
         {
             EnsureBlurTargets(_owner._fbWidth, _owner._fbHeight);
             _backdropDirty = true;
@@ -357,7 +357,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
         }
     }
 
-    private sealed class PresentPass : RasterPass
+    private sealed class PresentPass : InstanceRasterPass
     {
         private readonly GraphiteRenderer _owner;
         private readonly PropertySet _properties = new();
@@ -367,13 +367,15 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
 
         public override string Name => "Present";
 
-        public override void Setup(RenderContextBuilder builder)
+        public override GraphKind Kind => Canvas;
+
+        public override void Setup(InstanceContextBuilder builder)
         {
             _sceneHandle = builder.DeclareInputTexture("Scene");
-            SetViewTarget(builder, depthFormat: PixelFormat.D24_UNorm_S8_UInt);
+            SetInstanceTarget(builder, depthFormat: PixelFormat.D24_UNorm_S8_UInt);
         }
 
-        public override void Render(RenderContext context, CommandBuffer cmd)
+        public override void Render(InstanceContext context, CommandBuffer cmd)
         {
             RenderTexture scene = context.GetRenderTexture(_sceneHandle);
             _properties.SetTexture("src", scene.ColorTextures[0], _owner._sampler);

@@ -13,6 +13,8 @@ namespace Prowl.OrigamiUI.Charts;
 public sealed class LineModule<T> : CartesianModule<LineModule<T>, T>
 {
     private bool _smooth;
+    private double? _markerX;
+    private System.Drawing.Color? _markerColor;
     private readonly List<Float2> _pts = new();
 
     private const int SmoothSteps = 12;
@@ -30,8 +32,25 @@ public sealed class LineModule<T> : CartesianModule<LineModule<T>, T>
     /// <summary>Stroke width of the most recently added series. Defaults to 1.5.</summary>
     public LineModule<T> StrokeWidth(float width) { if (_last != null) _last.StrokeWidth = MathF.Max(0.1f, width); return this; }
 
+    /// <summary>Draws a dotted vertical line at <paramref name="x"/> across the plot.</summary>
+    public LineModule<T> MarkerLine(double x, System.Drawing.Color color) { _markerX = x; _markerColor = color; return this; }
+
     internal override void Paint(Canvas canvas, in PlotContext ctx)
     {
+        if (_markerX is { } mx && _markerColor is { } mc)
+        {
+            float x = ctx.XPos(mx);
+            canvas.BeginPath();
+            for (float y = ctx.T; y < ctx.B; y += 5f)
+            {
+                canvas.MoveTo(x, y);
+                canvas.LineTo(x, MathF.Min(y + 2f, ctx.B));
+            }
+            canvas.SetStrokeColor(C32(mc));
+            canvas.SetStrokeWidth(1f);
+            canvas.Stroke();
+        }
+
         foreach (CartesianSeries<T> s in _series)
         {
             if (!Visible(s)) continue;

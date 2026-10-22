@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 namespace Prowl.Graphite.Rendering;
@@ -255,6 +254,8 @@ internal sealed class WorldReflections : IDisposable
         public Texture Cube { get; } = cube;
         public Framebuffer All { get; } = all;
         public Framebuffer[] Faces { get; } = faces;
+        public RenderTexture AllTexture { get; } = new(all);
+        public RenderTexture[] FaceTextures { get; } = Array.ConvertAll(faces, face => new RenderTexture(face));
 
         public void Dispose()
         {
@@ -265,20 +266,14 @@ internal sealed class WorldReflections : IDisposable
         }
     }
 
-    /// <summary>A prefiltered cube: the sky's or a probe's, its slot and the views filling its mips.</summary>
-    public sealed class Target(Texture cube, uint slot, PrefilterView[] views) : IDisposable
+    /// <summary>A prefiltered cube: the sky's or a probe's, a persistent graph texture with a mip chain, found through its slot.</summary>
+    public sealed class Target(PersistentTexture texture, uint resolution, uint mips)
     {
-        public Texture Cube { get; } = cube;
-        public uint Slot { get; } = slot;
-        public PrefilterView[] Views { get; } = views;
-        public uint Mips => Cube.MipLevels;
-
-        public void Dispose()
-        {
-            foreach (PrefilterView view in Views)
-                view.Target.Dispose();
-            Cube.Dispose();
-        }
+        public PersistentTexture Persistent { get; } = texture;
+        public uint Resolution { get; } = resolution;
+        public uint Mips { get; } = mips;
+        public uint Slot => Persistent.Slot;
+        public Texture Cube => Persistent.Texture!.ColorTextures[0];
     }
 
     // A probe capture in progress: the faces it drew so far into its own scratch cube
@@ -294,6 +289,8 @@ internal sealed class WorldReflections : IDisposable
     private readonly IMaterialResources _resources;
     private readonly Action<RendererError> _report;
     private readonly ReflectionSettings _settings;
+    private readonly GraphStore _store;
+    private int _worldId;
     private bool _skyCaptured;
     private int _capturedFrame;
     private Material? _capturedSky;
@@ -334,13 +331,15 @@ internal sealed class WorldReflections : IDisposable
         public ulong Execution;
     }
 
-    public WorldReflections(GraphicsDevice device, IMaterialResources resources, Action<RendererError> report, ReflectionSettings settings)
+    public WorldReflections(TableHost tables, IMaterialResources resources, Action<RendererError> report, ReflectionSettings settings)
     {
+        GraphicsDevice device = tables.Device;
         _device = device;
+        _store = tables.Store;
         _resources = resources;
         _report = report;
         _settings = settings;
-        Regions = new SpatialIndex<ReflectionProbeRecord>(device, "Reflection probes", SpatialIndex.ProbesSet, Pack, report);
+        Regions = new SpatialIndex<ReflectionProbeRecord>(tables, SpatialIndex.ProbesSet, Pack, report);
         SkyAmbient = device.ResourceFactory.CreateBuffer(new BufferDescription(112, BufferUsage.StructuredBufferReadWrite));
         SkyAmbient.Name = "Sky ambient";
     }
@@ -494,8 +493,9 @@ internal sealed class WorldReflections : IDisposable
     /// Decides this frame's sky capture, baked probes and probe captures, and marks what they make ready. cameras are the
     /// positions this world is seen from this frame. Render thread, before the lighting records flush.
     /// </summary>
-    public void Plan(int frame, WorldLighting lighting, ReadOnlySpan<Double3> cameras)
+    public void Plan(int frame, WorldLighting lighting, ReadOnlySpan<Double3> cameras, int worldId)
     {
+        _worldId = worldId;
         if (_views.Length < cameras.Length)
             _views = new Double3[cameras.Length];
         cameras.CopyTo(_views);
@@ -520,39 +520,37 @@ internal sealed class WorldReflections : IDisposable
 
         EnvironmentDesc environment = lighting.Environment;
         uint skyResolution = Pow2(environment.SkyProbeResolution, "sky probe");
-        if (Sky == null || Sky.Cube.Width != skyResolution)
+        if (Sky == null || Sky.Resolution != skyResolution)
         {
-            Sky?.Dispose();
             SamplerSlot = _resources.SamplerSlot(s_sampler);
-            Sky = CreateTarget(skyResolution, MipsFor(skyResolution), "Sky probe");
+            Sky = CreateTarget(skyResolution, MipsFor(skyResolution), SkyId);
             lighting.SetReflections(Sky.Slot, SamplerSlot, Sky.Mips);
             _skyCaptured = false;
         }
+        else
+        {
+            Sky.Persistent.Resolve(_device, _store, _resources, out bool moved);
+            if (moved)
+                lighting.SetReflections(Sky.Slot, SamplerSlot, Sky.Mips);
+        }
+        ResolveProbeTargets();
         PlanSky(frame, lighting);
         PlanBaked();
         PlanCaptures(frame);
         Regions.Update();
     }
 
-    public bool Flush(Uploader uploader, List<DeviceBuffer> replaced)
-    {
-        int before = replaced.Count;
-        if (Regions.StaticRecords.Flush(uploader) is { } records)
-            replaced.Add(records);
-        if (Regions.StaticNodes.Flush(uploader) is { } nodes)
-            replaced.Add(nodes);
-        return replaced.Count != before;
-    }
+    public bool Flush(Uploader uploader) => Regions.StaticRecords.Flush(uploader) | Regions.StaticNodes.Flush(uploader);
 
     /// <summary>A buffer a bake reads a probe's cube back into, collected once its frame completes. Render thread.</summary>
     private DeviceBuffer BakeBuffer(int index, Target target, Action<BakedReflectionProbe> done)
     {
         uint bytes = 0;
         for (int mip = 0; mip < target.Mips; mip++)
-            bytes += 6 * FaceBytes(target.Cube.Width, mip, target.Cube.Format);
+            bytes += 6 * FaceBytes(target.Resolution, mip, _settings.Format);
         DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(bytes, BufferUsage.Staging));
         buffer.Name = "Reflection probe bake";
-        _pendingBakes.Add(new PendingBake { Index = index, Generation = _generations[index], Buffer = buffer, Done = done, Size = (int)target.Cube.Width, Mips = (int)target.Mips });
+        _pendingBakes.Add(new PendingBake { Index = index, Generation = _generations[index], Buffer = buffer, Done = done, Size = (int)target.Resolution, Mips = (int)target.Mips });
         return buffer;
     }
 
@@ -602,15 +600,11 @@ internal sealed class WorldReflections : IDisposable
 
     public void Dispose()
     {
-        Sky?.Dispose();
-        foreach (Target? target in _targets)
-            target?.Dispose();
         foreach (Scratch scratch in _scratchAll)
             scratch.Dispose();
         foreach (PendingBake bake in _pendingBakes)
             bake.Buffer.Dispose();
         SkyAmbient.Dispose();
-        Regions.Dispose();
     }
 
     private void PlanSky(int frame, WorldLighting lighting)
@@ -630,7 +624,7 @@ internal sealed class WorldReflections : IDisposable
             return;
         }
 
-        SkyScratch = RentScratch(Sky!.Cube.Width);
+        SkyScratch = RentScratch(Sky!.Resolution);
         _scratchUsed.Add(SkyScratch);
         _skyCaptured = true;
         _capturedFrame = frame;
@@ -770,7 +764,7 @@ internal sealed class WorldReflections : IDisposable
     private Job StartJob(int index)
     {
         EnsureRealtimeTarget(index);
-        Job job = new() { Index = index, Scratch = RentScratch(_targets[index]!.Cube.Width) };
+        Job job = new() { Index = index, Scratch = RentScratch(_targets[index]!.Resolution) };
         _jobs.Add(job);
         _working[index] = true;
         return job;
@@ -845,30 +839,35 @@ internal sealed class WorldReflections : IDisposable
     private void EnsureRealtimeTarget(int index)
     {
         uint resolution = Pow2(_probes[index].Resolution, "reflection probe");
-        if (_targets[index] is { } target && target.Cube.Width == resolution)
+        if (_targets[index] is { } target && target.Resolution == resolution)
             return;
         ReleaseTarget(index);
-        _targets[index] = CreateTarget(resolution, MipsFor(resolution), "Reflection probe");
+        _targets[index] = CreateTarget(resolution, MipsFor(resolution), RenderResourceID.Intern($"Graphite.World{_worldId}/Probe{index}"));
     }
 
-    private Target CreateTarget(uint resolution, uint mips, string name)
+    private RenderResourceID SkyId => RenderResourceID.Intern($"Graphite.World{_worldId}/Sky");
+
+    private Target CreateTarget(uint resolution, uint mips, RenderResourceID id)
     {
-        Texture cube = _device.ResourceFactory.CreateTexture(TextureDescription.CreateCube(resolution, mips, 1, _settings.Format, TextureUsage.Sampled | TextureUsage.RenderTarget));
-        cube.Name = name;
-        PrefilterView[] views = new PrefilterView[mips];
-        for (uint mip = 0; mip < mips; mip++)
+        GraphTextureDesc description = GraphTextureDesc.Sized((int)resolution, (int)resolution, false, _settings.Format) with { Cube = true, MipLevels = mips };
+        PersistentTexture texture = new(id, description, new GraphInstanceKey(RenderKinds.World, _worldId), MaterialPropertyType.TextureCube);
+        texture.Resolve(_device, _store, _resources, out _);
+        return new Target(texture, resolution, mips);
+    }
+
+    private void ResolveProbeTargets()
+    {
+        for (int i = 0; i < _targets.Length; i++)
         {
-            FramebufferDescription description = new(null, [new FramebufferAttachment(cube, 0, mip)]) { ViewCount = 6 };
-            views[mip] = new PrefilterView(_device.ResourceFactory.CreateFramebuffer(description), (int)mip, (int)mips, Math.Max(resolution >> (int)mip, 1));
+            if (_targets[i] is not { } target)
+                continue;
+            target.Persistent.Resolve(_device, _store, _resources, out bool moved);
+            if (moved && _captured[i])
+                Regions.Set(i, _probes[i].Position, Radius(_probes[i]), true);
         }
-        return new Target(cube, _resources.TextureSlot(cube, MaterialPropertyType.TextureCube, "black"), views);
     }
 
-    private void ReleaseTarget(int index)
-    {
-        _targets[index]?.Dispose();
-        _targets[index] = null;
-    }
+    private void ReleaseTarget(int index) => _targets[index] = null;
 
     private void MarkCaptured(int index, int frame)
     {
@@ -933,56 +932,26 @@ internal sealed class WorldReflections : IDisposable
         => new(new Float4(x.X, y.X, z.X, 0), new Float4(x.Y, y.Y, z.Y, 0), new Float4(x.Z, y.Z, z.Z, 0), new Float4(0, 0, 0, 1));
 }
 
-/// <summary>Projects a sky capture onto packed order 2 harmonics for the sky ambient mode, after its filter built its mips.</summary>
-internal sealed class SkyAmbientPass(ComputeProgram program, Sampler sampler) : IPass
+/// <summary>What a capture fills this frame: the cube it filters into, how, and where a bake or the sky's light goes.</summary>
+internal sealed class CaptureFill
 {
-    private static readonly RenderResourceID s_output = RenderResourceID.Intern("Graphite.SkyAmbient");
+    public required RenderTexture Source;
+    public required WorldReflections.Target Target;
+    public required int Samples;
+    public DeviceBuffer? Readback;
+    public DeviceBuffer? SkyAmbient;
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Push
-    {
-        public float Lod;
-        public uint Size;
-    }
-
-    private readonly PropertySet _properties = new();
-
-    public Texture Source = null!;
-    public DeviceBuffer Output = null!;
-
-    public string Name => "Graphite.SkyAmbient";
-
-    public void Setup(RenderContextBuilder builder) => builder.DeclareImportedBuffer(s_output, Output, BufferAccess.ShaderWrite);
-
-    public void Render(RenderContext context, CommandBuffer cmd)
-    {
-        const uint size = 16;
-        cmd.SetComputeShader(program);
-        _properties.SetTexture("Graphite_Source", Source, sampler);
-        _properties.SetBuffer("Graphite_SkyAmbient", Output);
-        cmd.SetProperties(_properties);
-        cmd.SetPushConstants(new Push { Lod = MathF.Max(MathF.Log2(Source.Width / (float)size), 0), Size = size });
-        cmd.Dispatch(1, 1, 1);
-    }
+    public static CaptureFill Of(GraphInstance instance) => (CaptureFill)instance.Data!;
 }
 
-/// <summary>One prefiltered mip of a cube as a render view: its six faces drawn at once.</summary>
-internal sealed class PrefilterView(Framebuffer target, int mip, int mips, uint size) : IRenderView
+/// <summary>The passes of a capture fill instance: the prefilter, a bake's read back, the sky's harmonics, and the hand over to sampling.</summary>
+internal static class CaptureFillPasses
 {
-    public Framebuffer Target { get; } = target;
-    Framebuffer? IRenderView.Target => Target;
-    public int Mip { get; } = mip;
-    public int Mips { get; } = mips;
-    public uint PixelWidth { get; } = size;
-    public uint PixelHeight { get; } = size;
-    public int ViewId => -1 - Mip;
+    public static IPass[] Of(FramePipeline frame) => [new PrefilterPass(frame), new BakeCopyPass(), new SkyAmbientPass(frame), new PublishPass()];
 }
 
-/// <summary>
-/// Filters a captured cube with GGX into every roughness mip of a prefiltered cube, run once per mip view. The first view
-/// builds the source's mips, which the filter reads by each sample's solid angle. A bake then reads the cube back.
-/// </summary>
-internal sealed class PrefilterPass(GraphicsProgram program, Sampler sampler, int samples) : IPass
+/// <summary>Filters a captured cube with GGX into every roughness mip of a prefiltered cube, after building the source's mips.</summary>
+internal sealed class PrefilterPass(FramePipeline frame) : IInstancePass
 {
     [StructLayout(LayoutKind.Sequential)]
     private struct Push
@@ -994,52 +963,123 @@ internal sealed class PrefilterPass(GraphicsProgram program, Sampler sampler, in
     }
 
     private readonly PropertySet _properties = new();
-    private TextureHandle _target;
-
-    public Texture Source = null!;
-
-    /// <summary>Where a bake reads the filled cube back to, or null.</summary>
-    public DeviceBuffer? Readback;
-    public Texture? Destination;
+    private TextureHandle _source, _target;
 
     public string Name => "Graphite.Prefilter";
 
-    public void Setup(RenderContextBuilder builder) => _target = builder.DeclareViewTarget();
+    public GraphKind Kind => RenderKinds.CaptureFill;
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Setup(InstanceContextBuilder builder)
     {
-        PrefilterView view = (PrefilterView)context.View;
-        int mips = view.Mips;
-        if (view.Mip == 0)
-            cmd.GenerateMipmaps(Source);
+        _source = builder.DeclareImportSlotTexture(RenderKinds.FillSource, TextureState.Sampled);
+        _target = builder.DeclareImportSlotTexture(RenderKinds.FillTarget, TextureState.Attachment, ops: new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
+    }
 
-        cmd.SetFramebuffer(context.GetRenderTexture(_target).Framebuffer, new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
-        cmd.SetFullViewport();
-        cmd.SetShader(program);
-        cmd.SetVertexSource(VertexSource.None);
-        _properties.SetTexture("Graphite_Source", Source, sampler);
-        cmd.SetProperties(_properties);
-        cmd.SetPushConstants(new Push
+    public void Render(InstanceContext context, CommandBuffer cmd)
+    {
+        CaptureFill fill = CaptureFill.Of(context.Instance);
+        Texture source = context.GetRenderTexture(_source).ColorTextures[0];
+        RenderTexture target = context.GetRenderTexture(_target);
+        uint mips = fill.Target.Mips;
+        cmd.GenerateMipmaps(source);
+        for (uint mip = 0; mip < mips; mip++)
         {
-            Roughness = mips > 1 ? view.Mip / (float)(mips - 1) : 0,
-            SourceSize = Source.Width,
-            SampleCount = view.Mip == 0 ? 1u : (uint)samples,
-        });
-        cmd.Draw(3);
-
-        if (Readback != null && view.Mip == mips - 1)
-        {
-            uint offset = 0;
-            uint resolution = Destination!.Width;
-            for (int face = 0; face < 6; face++)
+            cmd.SetFramebuffer(target.MipFramebuffer(mip), new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
+            cmd.SetFullViewport();
+            cmd.SetShader(frame.PrefilterProgram);
+            cmd.SetVertexSource(VertexSource.None);
+            _properties.SetTexture("Graphite_Source", source, frame.TrilinearClamp);
+            cmd.SetProperties(_properties);
+            cmd.SetPushConstants(new Push
             {
-                for (int mip = 0; mip < mips; mip++)
-                {
-                    uint size = Math.Max(resolution >> mip, 1);
-                    cmd.CopyTextureToBuffer(Destination, Readback, offset, new TextureRegion(0, 0, 0, size, size, 1, (uint)mip, (uint)face));
-                    offset += WorldReflections.FaceBytes(resolution, mip, Destination.Format);
-                }
+                Roughness = mips > 1 ? mip / (float)(mips - 1) : 0,
+                SourceSize = source.Width,
+                SampleCount = mip == 0 ? 1u : (uint)fill.Samples,
+            });
+            cmd.Draw(3);
+        }
+    }
+}
+
+/// <summary>Reads a filled probe's cube back into the buffer of a bake, face by face and mip by mip.</summary>
+internal sealed class BakeCopyPass : IInstancePass
+{
+    private TextureHandle _filtered;
+
+    public string Name => "Graphite.BakeCopy";
+
+    public GraphKind Kind => RenderKinds.CaptureFill;
+
+    public bool IsEnabled(GraphInstance instance) => CaptureFill.Of(instance).Readback != null;
+
+    public void Setup(InstanceContextBuilder builder) => _filtered = builder.DeclareInputTexture(RenderKinds.FillTarget, TextureState.TransferSrc);
+
+    public void Render(InstanceContext context, CommandBuffer cmd)
+    {
+        CaptureFill fill = CaptureFill.Of(context.Instance);
+        Texture cube = context.GetRenderTexture(_filtered).ColorTextures[0];
+        uint offset = 0;
+        for (int face = 0; face < 6; face++)
+        {
+            for (int mip = 0; mip < fill.Target.Mips; mip++)
+            {
+                uint size = Math.Max(cube.Width >> mip, 1);
+                cmd.CopyTextureToBuffer(cube, fill.Readback!, offset, new TextureRegion(0, 0, 0, size, size, 1, (uint)mip, (uint)face));
+                offset += WorldReflections.FaceBytes(cube.Width, mip, cube.Format);
             }
         }
+    }
+}
+
+/// <summary>Projects a sky capture onto packed order 2 harmonics for the sky ambient mode, after its filter built its mips.</summary>
+internal sealed class SkyAmbientPass(FramePipeline frame) : IInstancePass
+{
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Push
+    {
+        public float Lod;
+        public uint Size;
+    }
+
+    private readonly PropertySet _properties = new();
+    private TextureHandle _source;
+    private BufferHandle _output;
+
+    public string Name => "Graphite.SkyAmbient";
+
+    public GraphKind Kind => RenderKinds.CaptureFill;
+
+    public bool IsEnabled(GraphInstance instance) => CaptureFill.Of(instance).SkyAmbient != null;
+
+    public void Setup(InstanceContextBuilder builder)
+    {
+        _source = builder.DeclareInputTexture(RenderKinds.FillSource);
+        _output = builder.DeclareImportSlotBuffer(RenderKinds.FillAmbient, BufferAccess.ShaderWrite);
+    }
+
+    public void Render(InstanceContext context, CommandBuffer cmd)
+    {
+        const uint size = 16;
+        Texture source = context.GetRenderTexture(_source).ColorTextures[0];
+        cmd.SetComputeShader(frame.SkyAmbientProgram);
+        _properties.SetTexture("Graphite_Source", source, frame.TrilinearClamp);
+        _properties.SetBuffer("Graphite_SkyAmbient", context.GetRenderBuffer(_output));
+        cmd.SetProperties(_properties);
+        cmd.SetPushConstants(new Push { Lod = MathF.Max(MathF.Log2(source.Width / (float)size), 0), Size = size });
+        cmd.Dispatch(1, 1, 1);
+    }
+}
+
+/// <summary>Leaves a filled cube in its sampled layout, so the views drawn after the capture read it through bindless.</summary>
+internal sealed class PublishPass : IInstancePass
+{
+    public string Name => "Graphite.PublishCapture";
+
+    public GraphKind Kind => RenderKinds.CaptureFill;
+
+    public void Setup(InstanceContextBuilder builder) => builder.DeclareInputTexture(RenderKinds.FillTarget);
+
+    public void Render(InstanceContext context, CommandBuffer cmd)
+    {
     }
 }

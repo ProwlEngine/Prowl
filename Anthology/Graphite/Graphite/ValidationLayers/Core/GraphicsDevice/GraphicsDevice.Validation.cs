@@ -1,7 +1,15 @@
+using System.Diagnostics;
+
 namespace Prowl.Graphite;
 
 public abstract partial class GraphicsDevice
 {
+    private readonly object _progressLock = new();
+    private float _gpuHangSeconds;
+    private ulong _progressSerial;
+    private long _progressTimestamp;
+    private long _lastProgressCheck;
+
     /// <summary>
     /// True = validation layer runs this device's checks. Set once at device creation.
     /// </summary>
@@ -10,6 +18,36 @@ public abstract partial class GraphicsDevice
     private void InitializeFrameOptions_SetValidationEnabled(in GraphicsDeviceOptions options)
     {
         ValidationEnabled = options.GraphiteValidation;
+        _gpuHangSeconds = options.GpuHangSeconds;
+    }
+
+    /// <summary>True when waits on the GPU should check it still makes progress.</summary>
+    internal bool GpuHangCheckEnabled => ValidationEnabled && _gpuHangSeconds > 0;
+
+    /// <summary>Called by a backend between slices of a wait: throws once the GPU finished nothing for the hang time.</summary>
+    internal void CheckGpuProgress(ulong completed, ulong waitingFor)
+    {
+        if (!GpuHangCheckEnabled || completed >= waitingFor)
+            return;
+
+        long now = Stopwatch.GetTimestamp();
+        lock (_progressLock)
+        {
+            bool fresh = Stopwatch.GetElapsedTime(_lastProgressCheck, now).TotalSeconds > 1;
+            _lastProgressCheck = now;
+            if (fresh || completed != _progressSerial)
+            {
+                _progressSerial = completed;
+                _progressTimestamp = now;
+                return;
+            }
+            if (Stopwatch.GetElapsedTime(_progressTimestamp, now).TotalSeconds < _gpuHangSeconds)
+                return;
+        }
+
+        throw new RenderException(
+            $"The GPU finished no work for {_gpuHangSeconds} seconds while waiting for submission {waitingFor} (last finished: {completed}). " +
+            "It is most likely hung on a draw or dispatch, or the device was lost. Check the driver's logs. GraphicsDeviceOptions.GpuHangSeconds sets this limit.");
     }
 
     private void SyncToVerticalBlank_CheckMainSwapchain()
@@ -42,13 +80,15 @@ public abstract partial class GraphicsDevice
 
         if (FormatHelpers.IsCompressedFormat(texture.Format))
         {
-            if (region.X % 4 != 0 || region.Y % 4 != 0 || region.Height % 4 != 0 || region.Width % 4 != 0)
+            // A region may end short of a whole block only where it meets the edge of the mip.
+            (uint blockWidth, uint blockHeight) = FormatHelpers.GetBlockDimensions(texture.Format);
+            Util.GetMipDimensions(texture, region.MipLevel, out uint mipWidth, out uint mipHeight, out _);
+
+            bool alignedX = region.X % blockWidth == 0 && (region.Width % blockWidth == 0 || region.X + region.Width == mipWidth);
+            bool alignedY = region.Y % blockHeight == 0 && (region.Height % blockHeight == 0 || region.Y + region.Height == mipHeight);
+            if (!alignedX || !alignedY)
             {
-                Util.GetMipDimensions(texture, region.MipLevel, out uint mipWidth, out uint mipHeight, out _);
-                if (region.Width != mipWidth && region.Height != mipHeight)
-                {
-                    throw new RenderException($"Updates to block-compressed textures must use a region that is block-size aligned and sized.");
-                }
+                throw new RenderException($"Updates to block-compressed textures must use a region that is block-size aligned and sized.");
             }
         }
     }

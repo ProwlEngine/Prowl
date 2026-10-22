@@ -1,16 +1,17 @@
 using System.Collections.Generic;
 
-using Prowl.Vector;
-
 namespace Prowl.Graphite.Debugger.Viewer;
 
 /// <summary>Feeds the render profiler with recordings, captures and replays.</summary>
-/// <remarks>Frames is the live window, oldest first. Engine data is optional and only fills extra inspector rows.</remarks>
+/// <remarks>Frames is the live window, oldest first. Timing is engine data that only fills extra inspector rows.</remarks>
 public interface IRenderProfilerSource
 {
     bool IsRecording { get; set; }
 
     IReadOnlyList<Recording> Frames { get; }
+
+    /// <summary>How many frames Frames holds when full, or 0 when unknown.</summary>
+    int FrameCapacity => 0;
 
     Recording? Latest { get; }
 
@@ -27,8 +28,6 @@ public interface IRenderProfilerSource
     void Capture(int frame, DeepMode mode);
 
     ReplayResult Replay(ReplayRequest request);
-
-    RendererInfo? Renderer(string marker);
 
     void SaveSnapshot(string path);
 
@@ -50,32 +49,3 @@ public sealed record CpuStage(string Name, double Milliseconds, string Thread);
 
 /// <summary>Culling results for one view.</summary>
 public sealed record ViewVisibility(string View, int Visible, int CulledFrustum, int CulledOcclusion, int Lights, int ShadowCasters, double CullingMilliseconds);
-
-/// <summary>Engine data for the renderer behind a debug marker.</summary>
-public sealed record RendererInfo(
-    string Name,
-    string RendererType,
-    int InstanceId,
-    string Layer,
-    string StaticFlags,
-    bool CastShadows,
-    bool ReceiveShadows,
-    string LightProbes,
-    int LightmapIndex,
-    int SortingOrder,
-    Float3 Position,
-    Float3 Rotation,
-    Float3 Scale,
-    float ScreenCoverage,
-    float CameraDistance,
-    MaterialInfo Material);
-
-/// <summary>Engine data for a material.</summary>
-public sealed record MaterialInfo(
-    string Name,
-    string RenderQueue,
-    bool Instancing,
-    bool DoubleSided,
-    int ConstantBufferBytes,
-    IReadOnlyList<(string Name, string Type, string Value)> Properties,
-    IReadOnlyList<(string Slot, string Texture, int Size, string Format, int Mips, long Bytes)> Textures);

@@ -9,9 +9,10 @@ Graphite started life as a modified and butchered version of NeoVeldrid, and by 
 - A Vulkan backend, with macOS support via MoltenVK (Vulkan-over-Metal translation).
 - A monolithic `ShaderProgram` model that bundles shader and pipeline state, with per-backend shader compilation handled internally.
 - A string/id-driven `PropertySet` resource binding system that hides per-backend binding rules.
-- A declarative render graph (`RenderPipeline`, `IPass`) that orders passes from their
-  declared texture and buffer reads/writes and resolves shared, transient, and history resources
-  automatically.
+- A declarative render graph (`RenderGraph`, `IExecutionPass`, `IInstancePass`): passes run once per
+  dispatch or once per instance of their kind and are ordered by what they read and write, with
+  transient, persistent and history resources owned by the graph and barriers planned from each
+  pass's declared reads and writes.
 - A frame-less `ExecutionTask` ring for CPU/GPU synchronization, with per-execution transient
   (bump-allocated) GPU memory.
 - Runtime-toggleable validation through `GraphicsDeviceOptions`, and per-execution profilers.
@@ -25,27 +26,15 @@ Graphite started life as a modified and butchered version of NeoVeldrid, and by 
 
 ## Quick Start
 
-Rendering is built around a render graph: a `RenderPipeline` owns a list of `IPass`es, and a
-`GraphicsDevice` dispatches that pipeline against a list of views. The simplest possible pipeline is one
-pass that writes the view target, which presents the frame when the view's `Target` is a swapchain framebuffer:
+Rendering is built around a render graph. A `RenderGraph` is a flat list of passes. An `IExecutionPass`
+runs once per dispatch. An `IInstancePass` has a `GraphKind` and runs once per `GraphInstance` of that
+kind while its `IsEnabled` says so. The graph sorts every pass by the resources it reads and writes, so
+order in the list only breaks ties. Kinds nest through `GraphScope`s, and each instance runs after its
+parent and reads the resources its ancestors own. The simplest graph is one pass that writes the
+instance target, which presents when the target is a swapchain framebuffer:
 
 ```cs
-internal readonly struct SceneView : IRenderView
-{
-    public SceneView(uint width, uint height, Swapchain swapchain)
-    {
-        PixelWidth = width;
-        PixelHeight = height;
-        Target = swapchain.Framebuffer;
-    }
-
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-    public int ViewId => 0;
-    public Framebuffer Target { get; }
-}
-
-internal sealed class TrianglePass : RasterPass
+internal sealed class TrianglePass : InstanceRasterPass
 {
     private readonly Mesh _triangle;
     private readonly GraphicsProgram _shader;
@@ -56,22 +45,24 @@ internal sealed class TrianglePass : RasterPass
         _shader = shader;
     }
 
+    public static readonly GraphKind View = GraphKind.Intern("View");
+
     public override string Name => "Triangle";
 
-    public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
+    public override GraphKind Kind => View;
 
-    public override void Render(RenderContext context, CommandBuffer cmd)
+    public override void Setup(InstanceContextBuilder builder) => SetInstanceTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
+
+    public override void Render(InstanceContext context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_triangle);
         cmd.DrawIndexed();
-
     }
 }
 ```
 
-Creating a device and dispatching the pipeline each frame:
+Creating a device and dispatching the graph each frame:
 
 ```cs
 GraphicsDeviceOptions options = new()
@@ -92,12 +83,28 @@ GraphicsDevice device = GraphicsDevice.CreateVulkan(options, swapchainDescriptio
 
 GraphicsProgram shader = /* load + create a ShaderProgram */;
 Mesh triangle = /* create vertex/index buffers */;
-RenderPipeline pipeline = new([new TrianglePass(triangle, shader)]);
-SceneView[] views = { new SceneView(600, 600, device.MainSwapchain) };
+RenderGraph graph = RenderGraph.Build([new TrianglePass(triangle, shader)], [new GraphScope(TrianglePass.View, GraphKind.Root)], "Triangle");
+GraphInstances instances = graph.CreateInstances();
+instances.Add(TrianglePass.View, id: 0, extent: new GraphExtent(600, 600), target: device.MainSwapchain.Framebuffer);
 
-// Per-frame render loop: builds an ExecutionTask internally, runs the pipeline for every view, and
-// presents the swapchain of every view that wrote the view target.
-device.DispatchGraph(pipeline, views);
+device.DispatchGraph(graph, instances);
+```
+
+Passes that run once per dispatch, such as skinning, are execution passes. Passes that run once per
+camera, light or other unit are instance passes of a kind, with an instance per unit. An instance's key,
+its kind with an id, keys its history and persistent resources. A pass that is disabled for an instance
+is skipped, and a pass can pipe one of its inputs to an output with `Passthrough` so its consumers still
+get a resource when it is off. Buffers and textures the caller owns are bound per instance to the import
+slots a pass declares:
+
+```cs
+GraphKind camera = GraphKind.Intern("Camera");
+RenderGraph graph = RenderGraph.Build([new SkinningPass(), new OpaquePass(camera), new PostPass(camera)], [new GraphScope(camera, GraphKind.Root)], "Scene");
+
+GraphInstances instances = graph.CreateInstances();
+instances.Add(camera, id: 0, extent: new GraphExtent(1280, 720), target: device.MainSwapchain.Framebuffer);
+instances.Add(camera, id: 1, extent: new GraphExtent(256, 256), target: minimap);
+device.DispatchGraph(graph, instances);
 ```
 
 The [`Samples/`](Samples) directory contains complete, runnable versions of this and larger graphs
@@ -143,7 +150,7 @@ barriers, swaps, buffer operations and set binds. Read them with `Counters.Snaps
 
 ```csharp
 Recording recording = new(device);
-device.DispatchGraph(pipeline, views, recording);
+device.DispatchGraph(graph, instances, recording);
 recording.Wait();
 ```
 
@@ -156,14 +163,14 @@ device.GlobalProfilers.Add(() => new MyFrameProfiler(results));
 
 A profiler gets `BeginExecution(executionId, graphName)`, then the events of each capability it
 implements (`IGraphProfiler`, `IGpuStatsProfiler`, `ICaptureProfiler`, `ICommandStreamProfiler`), then
-`EndExecution()` once every GPU result is delivered. The graph name is `RenderPipeline.Name`, which
-defaults to the pipeline type name; `BeginExecution(name, ...)` names executions without a graph.
+`EndExecution()` once every GPU result is delivered. The graph name is the one given to
+`RenderGraph.Build`; `BeginExecution(name, ...)` names executions without a graph.
 A capability with one profiler calls it directly; several profilers sharing a capability are merged
 for that capability only. Execution ids grow with start order, so per-execution results sort by id.
 
 There is no profiling for `device.Record` or other transfers outside an execution.
 
-`Graphite.Debugger` builds on this seam: `Recording` captures views, passes and GPU timings,
+`Graphite.Debugger` builds on this seam: `Recording` captures instances, passes and GPU timings,
 `DeepRecording` also captures commands and resource copies, and `Replayer` replays a recorded pass
 on any device.
 
@@ -172,12 +179,11 @@ on any device.
 Runnable samples live under [`Samples/`](Samples) and share common setup (windowing, shader and
 model loading) through the `Shared` project:
 
-- `HelloTriangle` - the minimal render loop: one pass writing the view target, no offscreen passes.
+- `HelloTriangle` - the minimal render loop: one pass writing the instance target, no offscreen passes.
 - `TexturedQuad` - texture and sampler binding.
 - `Cube` / `CubeGrid` - 3D transforms and instancing-style draws.
 - `PBRRenderer` - a multi-pass render graph: an offscreen "Scene" pass, a two-step bloom
-  (downsample/upsample), and a composite pass that writes Scene + bloom to the view target. The
-  graph orders the four passes from their declared texture reads/writes.
+  (downsample/upsample), and a composite pass that writes Scene + bloom to the instance target.
 
 Run one with, for example:
 

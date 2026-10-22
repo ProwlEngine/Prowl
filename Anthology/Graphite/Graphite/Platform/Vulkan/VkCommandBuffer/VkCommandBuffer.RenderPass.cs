@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Silk.NET.Vulkan;
@@ -100,6 +99,7 @@ internal unsafe partial class VkCommandBuffer
 
         VkFramebufferBase vkFB = Util.AssertSubtype<Framebuffer, VkFramebufferBase>(fb);
         _currentFramebuffer = vkFB;
+        _descriptorBinder.ForgetBound();
         _currentFramebufferEverActive = false;
         _hasResolvedPipeline = false;
         _pendingOps = ops;

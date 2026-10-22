@@ -89,12 +89,95 @@ namespace Prowl.Scribe
 
         private void ApplyGsubLookup(List<GsubGlyph> buf, int lookupIndex)
         {
+            var first = GetFirstGlyphs(lookupIndex);
             int i = 0;
             while (i < buf.Count)
             {
+                if (!HasGlyph(first, buf[i].Glyph)) { i++; continue; }
                 int advance = ApplyLookupAt(buf, lookupIndex, i);
                 i += advance > 0 ? advance : 1;
             }
+        }
+
+        // Per lookup, the glyphs that can start a match, as a bitset. Fonts with heavy contextual
+        // alternates have hundreds of lookups, and nearly every glyph misses nearly every one of them,
+        // so one bit test replaces walking the subtables and their coverage tables.
+        private ulong[][] _gsubFirstGlyphs;
+
+        private static bool HasGlyph(ulong[] bits, int glyph)
+            => (uint)(glyph >> 6) < (uint)bits.Length && (bits[glyph >> 6] & (1UL << (glyph & 63))) != 0;
+
+        private ulong[] GetFirstGlyphs(int lookupIndex)
+        {
+            var table = this.data + this.gsub;
+            if (_gsubFirstGlyphs == null)
+            {
+                var lookupList = table + ttUSHORT(table + 8);
+                _gsubFirstGlyphs = new ulong[ttUSHORT(lookupList)][];
+            }
+            if ((uint)lookupIndex >= (uint)_gsubFirstGlyphs.Length)
+                return System.Array.Empty<ulong>();
+
+            var bits = _gsubFirstGlyphs[lookupIndex];
+            if (bits != null)
+                return bits;
+
+            bits = new ulong[(System.Math.Min(this.numGlyphs, 0xFFFF) >> 6) + 1];
+            var lookup = GetLookup(table, lookupIndex, out int lookupType, out int subtableCount);
+            for (int sIndex = 0; !lookup.IsNull && sIndex < subtableCount; sIndex++)
+            {
+                var st = GetSubtable(lookup, sIndex);
+                int type = lookupType;
+                if (type == 7)
+                {
+                    type = ttUSHORT(st + 2);
+                    st = st + (int)ttULONG(st + 4);
+                }
+
+                switch (type)
+                {
+                    case 1:
+                    case 2:
+                    case 4:
+                        AddCoverage(st + ttUSHORT(st + 2), bits);
+                        break;
+                    case 6:
+                        if (ttUSHORT(st) != 3) break;
+                        int backtrackCount = ttUSHORT(st + 2);
+                        int inputAt = 4 + 2 * backtrackCount;
+                        if (ttUSHORT(st + inputAt) > 0)
+                            AddCoverage(st + ttUSHORT(st + inputAt + 2), bits);
+                        break;
+                }
+            }
+
+            _gsubFirstGlyphs[lookupIndex] = bits;
+            return bits;
+        }
+
+        private static void AddCoverage(FakePtr<byte> coverage, ulong[] bits)
+        {
+            int format = ttUSHORT(coverage);
+            int count = ttUSHORT(coverage + 2);
+            if (format == 1)
+            {
+                for (int k = 0; k < count; k++)
+                    SetGlyph(bits, ttUSHORT(coverage + 4 + 2 * k));
+            }
+            else if (format == 2)
+            {
+                for (int k = 0; k < count; k++)
+                {
+                    var range = coverage + 4 + 6 * k;
+                    int start = ttUSHORT(range), end = ttUSHORT(range + 2);
+                    for (int g = start; g <= end; g++) SetGlyph(bits, g);
+                }
+            }
+        }
+
+        private static void SetGlyph(ulong[] bits, int glyph)
+        {
+            if ((uint)(glyph >> 6) < (uint)bits.Length) bits[glyph >> 6] |= 1UL << (glyph & 63);
         }
 
         // How deep a chained-context rule may recurse into other lookups. Fonts nest a level or two;

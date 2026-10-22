@@ -1,14 +1,13 @@
 using System;
 using System.Threading.Tasks;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// Pipelines built ahead of the first draw, from several threads, and the driver pipeline cache carried into a new device.
+// Pipelines built ahead of the first draw, from several threads, and the driver graph cache carried into a new device.
 public abstract class PipelineBuildTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     private const uint Size = 4;

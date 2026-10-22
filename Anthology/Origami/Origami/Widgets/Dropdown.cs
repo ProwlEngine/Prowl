@@ -190,6 +190,7 @@ public sealed class DropdownBuilder<T>
                 bool cur = _paper.GetElementStorage(trigHandle, DropdownInternal.KeyOpen, false);
                 _paper.SetElementStorage(trigHandle, DropdownInternal.KeyOpen, !cur);
                 _paper.SetElementStorage(trigHandle, DropdownInternal.KeyHighlight, selectedIdx);
+                if (!cur) _paper.SetElementStorage(trigHandle, DropdownInternal.KeySearch, string.Empty);
             })
             .Cursor(_disabled ? PaperCursor.NotAllowed : PaperCursor.Pointer);
 

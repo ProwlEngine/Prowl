@@ -176,6 +176,7 @@ public static partial class Origami
     /// <param name="paper">Paper instance for this frame.</param>
     public static void EndFrame(PaperUI.Paper paper)
     {
+        TextFieldCommits.EndFrame();
         DragDrop.Update(paper);
         DragDrop.DrawVisual(paper);
         OrigamiUI.ContextMenu.Tick();
@@ -208,6 +209,14 @@ public static partial class Origami
     {
         ArgumentNullException.ThrowIfNull(scrollViewId);
         ScrollViewBuilder.s_pendingScrollTo[scrollViewId] = offset;
+    }
+
+    /// <summary>Programmatically scroll a scroll view by a delta in pixels on its next render, such as to bring an item into view.</summary>
+    public static void ScrollBy(string scrollViewId, Prowl.Vector.Float2 delta)
+    {
+        ArgumentNullException.ThrowIfNull(scrollViewId);
+        var pending = ScrollViewBuilder.s_pendingScrollBy;
+        pending[scrollViewId] = pending.TryGetValue(scrollViewId, out var existing) ? existing + delta : delta;
     }
 
     // ── Dropdown factories ───────────────────────────────────────
@@ -581,6 +590,15 @@ public static partial class Origami
     /// </summary>
     public static TreeBuilder Tree(Paper paper, string id, float width, float height)
         => new TreeBuilder(paper, id, Current).Size(width, height);
+
+    // Code editor factory
+
+    /// <summary>
+    /// Draw a code editor. The <paramref name="editor"/> holds the text, carets, undo and language
+    /// state, so keep one per open file and pass it every frame. Terminate with <c>.Show()</c>.
+    /// </summary>
+    public static CodeEditorBuilder CodeEditor(Paper paper, string id, OrigamiUI.CodeEditor editor)
+        => new CodeEditorBuilder(paper, id, editor);
 
     // ── Node graph factory ─────────────────────────────────────
 

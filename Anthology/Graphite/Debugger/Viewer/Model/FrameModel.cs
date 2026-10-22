@@ -21,20 +21,30 @@ internal sealed class FrameModel
         ProfileNode root = new() { Id = "f", Kind = NodeKind.Frame, Name = $"Frame #{recording.ExecutionId}" };
         FrameModel model = new() { Recording = recording, Timing = timing, Deep = deep, Index = deep != null ? new DeepIndex(deep) : null, Root = root };
 
-        foreach (RecordedView view in recording.Views)
+        Dictionary<int, ProfileNode> instances = new();
+        foreach (RecordedInstance instance in recording.Instances)
         {
-            ProfileNode viewNode = root.Add(new ProfileNode { Id = $"v{view.Index}", Kind = NodeKind.View, Name = view.Name, ViewIndex = view.Index });
-            DeepView? deepView = deep?.Views.FirstOrDefault(v => v.Index == view.Index);
-
-            foreach (RecordedPass pass in view.Passes)
+            ProfileNode parentNode = instances.GetValueOrDefault(instance.ParentIndex, root);
+            ProfileNode instanceNode = parentNode.Add(new ProfileNode
             {
-                RecordedCommandBuffer? buffer = recording.CommandBuffers.FirstOrDefault(b => b.ViewIndex == view.Index && b.PassIndex == pass.Index);
-                ProfileNode passNode = viewNode.Add(new ProfileNode
+                Id = $"i{instance.Index}",
+                Kind = NodeKind.Instance,
+                Name = instance.Name,
+                InstanceIndex = instance.Index,
+                Instance = instance,
+            });
+            instances[instance.Index] = instanceNode;
+            DeepInstance? deepInstance = deep?.Instances.FirstOrDefault(i => i.Index == instance.Index);
+
+            foreach (RecordedPass pass in instance.Passes)
+            {
+                RecordedCommandBuffer? buffer = recording.CommandBuffers.FirstOrDefault(b => b.InstanceIndex == instance.Index && b.PassIndex == pass.Index);
+                ProfileNode passNode = instanceNode.Add(new ProfileNode
                 {
-                    Id = $"{viewNode.Id}p{pass.Index}",
+                    Id = $"{instanceNode.Id}p{pass.Index}",
                     Kind = NodeKind.Pass,
                     Name = pass.Name,
-                    ViewIndex = view.Index,
+                    InstanceIndex = instance.Index,
                     PassIndex = pass.Index,
                     Pass = pass,
                     CommandBuffer = buffer,
@@ -42,20 +52,20 @@ internal sealed class FrameModel
                     CpuMilliseconds = pass.Stats.CpuMilliseconds,
                 });
 
-                viewNode.Milliseconds += passNode.Milliseconds;
-                viewNode.CpuMilliseconds += passNode.CpuMilliseconds;
+                for (ProfileNode? n = instanceNode; n != null; n = n.Parent)
+                {
+                    n.Milliseconds += passNode.Milliseconds;
+                    n.CpuMilliseconds += passNode.CpuMilliseconds;
+                }
 
-                DeepPass? deepPass = deepView?.Passes.FirstOrDefault(p => p.Index == pass.Index);
+                DeepPass? deepPass = deepInstance?.Passes.FirstOrDefault(p => p.Index == pass.Index);
                 if (deepPass != null && model.Index != null)
                     ExpandCommands(passNode, deepPass, model.Index);
             }
-
-            root.Milliseconds += viewNode.Milliseconds;
-            root.CpuMilliseconds += viewNode.CpuMilliseconds;
         }
 
         int outside = 0;
-        foreach (RecordedCommandBuffer buffer in recording.CommandBuffers.Where(b => b.ViewIndex < 0 && !b.Name.StartsWith(CaptureCopy.BufferPrefix, System.StringComparison.Ordinal)))
+        foreach (RecordedCommandBuffer buffer in recording.CommandBuffers.Where(b => b.InstanceIndex < 0 && !b.Name.StartsWith(CaptureCopy.BufferPrefix, System.StringComparison.Ordinal)))
         {
             ProfileNode node = root.Add(new ProfileNode
             {
@@ -76,17 +86,24 @@ internal sealed class FrameModel
     {
         ProfileNode? program = null;
         Stack<ProfileNode> markers = new();
+        bool passGroup = false;
         string boundMesh = "";
         int programCount = 0, markerCount = 0, drawOrdinal = 0;
 
         for (int i = 0; i < pass.Commands.Length; i++)
         {
             RecordedCommand command = pass.Commands[i];
+            ProfileNode scope = markers.Count > 0 ? markers.Peek() : passNode;
             switch (command)
             {
                 case SetPipelineCommand pipeline:
+                    if (scope.Kind == NodeKind.Marker && scope.Parent is { Kind: NodeKind.Program, Parent: { } above } && scope.CountDraws() == 0)
+                    {
+                        scope.Parent.Children.Remove(scope);
+                        above.Add(scope);
+                    }
                     RecordedProgram? recorded = index.Program(pipeline.Program);
-                    program = passNode.Add(new ProfileNode
+                    program = scope.Add(new ProfileNode
                     {
                         Id = $"{passNode.Id}s{programCount++}",
                         Kind = NodeKind.Program,
@@ -96,18 +113,14 @@ internal sealed class FrameModel
                         CommandIndex = i,
                         Command = command,
                     });
-                    ProfileNode? open = markers.Count > 0 ? markers.Last() : null;
-                    if (open != null && open.CountDraws() == 0)
-                    {
-                        open.Parent!.Children.Remove(open);
-                        program.Add(open);
-                    }
-                    else
-                        markers.Clear();
+                    break;
+
+                case PushMarkerCommand push when markers.Count == 0 && !passGroup && push.Meta == null && push.Name == pass.Name:
+                    passGroup = true;
                     break;
 
                 case PushMarkerCommand push:
-                    ProfileNode parent = markers.Count > 0 ? markers.Peek() : program ?? passNode;
+                    ProfileNode parent = program != null && program.Parent == scope ? program : scope;
                     markers.Push(parent.Add(new ProfileNode
                     {
                         Id = $"{passNode.Id}o{markerCount++}",
@@ -115,12 +128,15 @@ internal sealed class FrameModel
                         Name = push.Name,
                         CommandIndex = i,
                         Command = command,
+                        Meta = push.Meta,
                     }));
                     break;
 
                 case PopMarkerCommand:
                     if (markers.Count > 0)
                         markers.Pop();
+                    else
+                        passGroup = false;
                     break;
 
                 case BindVertexBuffersCommand bind when bind.Changed.Length > 0:
@@ -129,7 +145,7 @@ internal sealed class FrameModel
 
                 case DrawCommand or DrawIndexedCommand or DrawIndirectCommand or DrawIndexedIndirectCommand
                     or DrawIndirectCountCommand or DrawIndexedIndirectCountCommand or DispatchCommand or DispatchIndirectCommand:
-                    ProfileNode owner = markers.Count > 0 ? markers.Peek() : program ?? passNode;
+                    ProfileNode owner = program != null && program.Parent == scope ? program : scope;
                     bool dispatch = command is DispatchCommand or DispatchIndirectCommand;
                     int sub = owner.Children.Count(c => c.Kind == NodeKind.Draw);
                     string name = dispatch ? $"Dispatch {sub}"
@@ -164,10 +180,12 @@ internal sealed class FrameModel
             Register(into, child);
     }
 
-    public DeepView? ViewOf(ProfileNode node)
+    public IEnumerable<ProfileNode> Instances => ById.Values.Where(n => n.Kind == NodeKind.Instance).OrderBy(n => n.InstanceIndex);
+
+    public DeepInstance? InstanceOf(ProfileNode node)
     {
-        int view = node.Ancestor(NodeKind.View)?.ViewIndex ?? -1;
-        return Deep?.Views.FirstOrDefault(v => v.Index == view);
+        int instance = node.Ancestor(NodeKind.Instance)?.InstanceIndex ?? -1;
+        return Deep?.Instances.FirstOrDefault(i => i.Index == instance);
     }
 
     public DeepPass? PassOf(ProfileNode node)
@@ -175,6 +193,6 @@ internal sealed class FrameModel
         ProfileNode? pass = node.Ancestor(NodeKind.Pass);
         if (pass == null)
             return null;
-        return ViewOf(pass)?.Passes.FirstOrDefault(p => p.Index == pass.PassIndex);
+        return InstanceOf(pass)?.Passes.FirstOrDefault(p => p.Index == pass.PassIndex);
     }
 }

@@ -7,6 +7,7 @@ internal sealed class Options
     public string? ShotPath;
     public int ShotFrames = 30;
     public bool Paused;
+    public int Scene;
     public readonly List<ScriptStep> Script = new();
 
     public static Options Parse(string[] args)
@@ -19,6 +20,7 @@ internal sealed class Options
                 case "--shot" when i + 1 < args.Length: options.ShotPath = args[++i]; break;
                 case "--frames" when i + 1 < args.Length: options.ShotFrames = int.Parse(args[++i]); break;
                 case "--paused": options.Paused = true; break;
+                case "--scene" when i + 1 < args.Length: options.Scene = int.Parse(args[++i]) - 1; break;
                 case "--click" or "--hover" when i + 1 < args.Length:
                 {
                     bool click = args[i] == "--click";

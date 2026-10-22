@@ -30,6 +30,7 @@ internal static class Style
     public static Color ChannelG => Theme.Green.C500;
     public static Color ChannelB => Theme.Primary.C500;
     public static Color Accent => Theme.Red.C700;
+    public static Color Primary => Theme.Primary.C500;
 
     public static FontFile Font => Theme.Font!;
     public static FontFile Mono => Theme.Mono!;
@@ -42,8 +43,9 @@ internal static class Style
 
     public static Color Ink => Theme.Ink.C500;
     public static Color InkSoft => Theme.Ink.C400;
-    public static Color InkDim => Theme.Ink.C300;
-    public static Color InkFaint => Theme.Ink.C200;
+    public static Color InkDim => Theme.Ink.C200;
+    public static Color InkFaint => Theme.Ink.C100;
+    public static Color ChartFill => Color.FromArgb(255, 10, 10, 14);
     public static Color Border => Theme.BorderStrong;
     public static Color CardFill => Theme.Glass;
     public static Color CardBorder => Theme.BorderSoft;
@@ -53,7 +55,7 @@ internal static class Style
     private static OrigamiRamp KindRamp(NodeKind kind) => kind switch
     {
         NodeKind.Frame => Theme.Blue,
-        NodeKind.View => Theme.Red,
+        NodeKind.Instance => Theme.Red,
         NodeKind.Pass => Theme.Amber,
         NodeKind.CommandBuffer => Theme.Primary,
         NodeKind.Program => Theme.Green,
@@ -68,7 +70,7 @@ internal static class Style
     public static string KindLabel(NodeKind kind) => kind switch
     {
         NodeKind.Frame => "Frame",
-        NodeKind.View => "View",
+        NodeKind.Instance => "Instance",
         NodeKind.Pass => "Render Pass",
         NodeKind.CommandBuffer => "Command Buffer (outside passes)",
         NodeKind.Program => "Program",

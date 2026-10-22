@@ -30,6 +30,11 @@ public abstract class TextureView : GraphicsResource
     /// </summary>
     public PixelFormat Format { get; }
 
+    /// <summary>
+    /// Whether a 2D texture is viewed as an array even with one layer.
+    /// </summary>
+    public bool Arrayed { get; }
+
     internal TextureView(in TextureViewDescription description)
     {
         Target = description.Target;
@@ -38,5 +43,6 @@ public abstract class TextureView : GraphicsResource
         BaseArrayLayer = description.BaseArrayLayer;
         ArrayLayers = description.ArrayLayers;
         Format = description.Format ?? description.Target.Format;
+        Arrayed = description.Arrayed;
     }
 }

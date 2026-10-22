@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
 
@@ -11,15 +10,7 @@ using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-file readonly struct NoView : IRenderView
-{
-    public Framebuffer? Target => null;
-    public uint PixelWidth => 1;
-    public uint PixelHeight => 1;
-    public int ViewId => 0;
-}
-
-file sealed class UploadPass(Uploader uploader, DeviceBuffer[] destinations) : IPass
+file sealed class UploadPass(Uploader uploader, DeviceBuffer[] destinations) : IExecutionPass
 {
     public string Name => "Upload";
 
@@ -32,9 +23,11 @@ file sealed class UploadPass(Uploader uploader, DeviceBuffer[] destinations) : I
     public void Render(RenderContext context, CommandBuffer cmd) => uploader.Record(cmd, context.Task);
 }
 
+[Collection("GPU Tests")]
 public sealed class UploadTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly GraphStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly Uploader _uploader;
 
@@ -48,6 +41,7 @@ public sealed class UploadTests : IDisposable
     {
         _uploader.Dispose();
         _compiler.Dispose();
+        _store.Dispose();
         _device.Dispose();
     }
 
@@ -55,16 +49,16 @@ public sealed class UploadTests : IDisposable
 
     private void Flush(params DeviceBuffer[] destinations)
     {
-        using RenderPipeline pipeline = new([new UploadPass(_uploader, destinations)]);
-        _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+        using RenderGraph graph = RenderGraph.Build([new UploadPass(_uploader, destinations)]);
+        _device.DispatchGraph(graph, graph.CreateInstances());
         _device.WaitForIdle();
     }
 
     private uint[] Read(DeviceBuffer buffer)
     {
         using DeviceBuffer readback = _device.ResourceFactory.CreateBuffer(new BufferDescription(buffer.SizeInBytes, BufferUsage.Staging));
-        using RenderPipeline pipeline = new([new CopyPass(buffer, readback)]);
-        _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+        using RenderGraph graph = RenderGraph.Build([new CopyPass(buffer, readback)]);
+        _device.DispatchGraph(graph, graph.CreateInstances());
         _device.WaitForIdle();
         uint[] words = _device.Map<uint>(readback).ToArray();
         _device.Unmap(readback);
@@ -131,11 +125,11 @@ public sealed class UploadTests : IDisposable
     public void FramesInFlight_EachUseTheirOwnUploadBuffers()
     {
         using DeviceBuffer buffer = Buffer(4);
-        using RenderPipeline pipeline = new([new UploadPass(_uploader, [buffer])]);
+        using RenderGraph graph = RenderGraph.Build([new UploadPass(_uploader, [buffer])]);
         for (uint frame = 0; frame < 8; frame++)
         {
             _uploader.Write(buffer, frame % 4, [frame + 100]);
-            _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+            _device.DispatchGraph(graph, graph.CreateInstances());
         }
         _device.WaitForIdle();
 
@@ -145,7 +139,7 @@ public sealed class UploadTests : IDisposable
     [Fact]
     public void Meshes_UploadIntoAPage_AndFreedRangesReturnOnceRetired()
     {
-        using GeometryPool pool = new(_device, 1024, 1024);
+        GeometryPool pool = new(_device, _store, 1024, 1024);
         Float3[] positions = [new(1, 2, 3), new(4, 5, 6), new(7, 8, 9)];
         MeshData data = new()
         {
@@ -182,7 +176,7 @@ public sealed class UploadTests : IDisposable
     [Fact]
     public void MeshesBiggerThanAPage_GetADedicatedPage()
     {
-        using GeometryPool pool = new(_device, 16, 16);
+        GeometryPool pool = new(_device, _store, 16, 16);
         Float3[] positions = Enumerable.Range(0, 30).Select(i => new Float3(i, 0, 0)).ToArray();
         GpuMesh mesh = pool.Create(new MeshData
         {
@@ -217,7 +211,7 @@ public sealed class UploadTests : IDisposable
     [Fact]
     public void ChunkRecords_ReadBackInGlsl_FieldForField()
     {
-        using GeometryPool pool = new(_device, 1 << 16, 1 << 16);
+        GeometryPool pool = new(_device, _store, 1 << 16, 1 << 16);
         pool.Create(Positions(3));
         GpuMesh mesh = pool.Create(Positions(3 * 2048 + 6));
         pool.Apply(_uploader, 0, long.MaxValue, new List<GpuMesh>());
@@ -274,8 +268,8 @@ public sealed class UploadTests : IDisposable
         properties.SetBuffer("Graphite_Chunks", pool.Chunks.Buffer);
         properties.SetBuffer("Graphite_Meshes", pool.Meshes.Buffer);
         properties.SetBuffer("Output", output);
-        using RenderPipeline pipeline = new([new DispatchPass(program, properties, (uint)mesh.Id, [pool.Chunks.Buffer, pool.Meshes.Buffer], output)]);
-        _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+        using RenderGraph graph = RenderGraph.Build([new DispatchPass(program, properties, (uint)mesh.Id, [pool.Chunks.Buffer, pool.Meshes.Buffer], output)]);
+        _device.DispatchGraph(graph, graph.CreateInstances());
         _device.WaitForIdle();
 
         MeshPlacement placement = mesh.Placement!;
@@ -289,19 +283,18 @@ public sealed class UploadTests : IDisposable
     }
 
     [Fact]
-    public void Tables_GrowIntoANewBuffer_KeepingEveryRecord_AndHandTheOldOneBack()
+    public void Tables_GrowIntoANewBuffer_KeepingEveryRecord()
     {
-        using GpuTable table = new(_device, "Test table", 1, 4);
+        GpuTable table = new(_device, _store, "Test.GrowTable", 1, 4);
         for (uint i = 0; i < 4; i++)
             table.Set(i, i + 10);
-        Assert.Null(table.Flush(_uploader));
+        Assert.False(table.Flush(_uploader));
         DeviceBuffer first = table.Buffer;
 
         table.Set(9, 99u);
-        DeviceBuffer? replaced = table.Flush(_uploader);
-        Assert.Same(first, replaced);
+        Assert.True(table.Flush(_uploader));
+        Assert.NotSame(first, table.Buffer);
         Flush(table.Buffer);
-        first.Dispose();
 
         uint[] words = Read(table.Buffer);
         Assert.Equal([10u, 11u, 12u, 13u, 0u, 0u, 0u, 0u, 0u, 99u], words[..10]);
@@ -310,7 +303,7 @@ public sealed class UploadTests : IDisposable
     [Fact]
     public void Tables_OnlyUploadDirtyRecords()
     {
-        using GpuTable table = new(_device, "Test table", 1, 16);
+        GpuTable table = new(_device, _store, "Test.DirtyTable", 1, 16);
         for (uint i = 0; i < 16; i++)
             table.Set(i, i);
         table.Flush(_uploader);
@@ -330,7 +323,7 @@ public sealed class UploadTests : IDisposable
     [Fact]
     public void DisposedMeshes_ClearTheirMeshRecord_AndTheirChunksAreReused()
     {
-        using GeometryPool pool = new(_device, 1 << 16, 1 << 16);
+        GeometryPool pool = new(_device, _store, 1 << 16, 1 << 16);
         GpuMesh first = pool.Create(Positions(3));
         pool.Apply(_uploader, 0, long.MaxValue, new List<GpuMesh>());
         uint chunk = first.Placement!.FirstChunk;
@@ -346,9 +339,28 @@ public sealed class UploadTests : IDisposable
         Assert.Equal(chunk, second.Placement!.FirstChunk);
         Flush(pool.Pages[0].Vertices, pool.Pages[0].Indices, pool.Chunks.Buffer, pool.Meshes.Buffer);
     }
+
+    [Fact]
+    public void AnArrayIdlePastTheStoresRetention_WritesToALiveBuffer()
+    {
+        GpuArray array = new TableHost(_device, _store, "Test").Array("Idle");
+        DeviceBuffer idle = array.Buffer;
+        using RenderGraph graph = RenderGraph.Build([new UploadPass(_uploader, [])], store: _store);
+        GraphInstances instances = graph.CreateInstances();
+        for (int i = 0; i < 130; i++)
+            _device.DispatchGraph(graph, instances);
+        _device.WaitForIdle();
+        Assert.True(idle.IsDisposed);
+
+        array.Write<uint>(_uploader, [7]);
+        Flush(array.Buffer);
+
+        Assert.False(array.Buffer.IsDisposed);
+        Assert.Equal(7u, Read(array.Buffer)[0]);
+    }
 }
 
-file sealed class CopyPass(DeviceBuffer source, DeviceBuffer destination) : IPass
+file sealed class CopyPass(DeviceBuffer source, DeviceBuffer destination) : IExecutionPass
 {
     public string Name => "Copy";
 
@@ -361,7 +373,7 @@ file sealed class CopyPass(DeviceBuffer source, DeviceBuffer destination) : IPas
     public void Render(RenderContext context, CommandBuffer cmd) => cmd.CopyBuffer(source, 0, destination, 0, source.SizeInBytes);
 }
 
-file sealed class DispatchPass(ComputeProgram program, PropertySet properties, uint push, DeviceBuffer[] inputs, DeviceBuffer output) : IPass
+file sealed class DispatchPass(ComputeProgram program, PropertySet properties, uint push, DeviceBuffer[] inputs, DeviceBuffer output) : IExecutionPass
 {
     public string Name => "Dispatch";
 

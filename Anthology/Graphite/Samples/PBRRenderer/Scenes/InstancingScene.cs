@@ -36,6 +36,7 @@ internal sealed class InstancingScene : DemoScene
 
         LightHandle sun = World.AddLight(new LightDesc
         {
+            Name = "Sun",
             Type = LightType.Directional,
             Direction = Float3.Normalize(new Float3(0.45f, -0.6f, 0.5f)),
             Color = new Float3(1f, 0.92f, 0.8f),

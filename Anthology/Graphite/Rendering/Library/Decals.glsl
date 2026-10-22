@@ -85,7 +85,9 @@ void Graphite_ApplyDecal(Graphite_DecalRecord d, vec3 local, float coverage,
 
     if ((flags & 2u) != 0u)
     {
-        vec3 tangent = GRAPHITE_DECAL_TEXTURE(d, d.textures.y, uv).xyz * 2.0 - 1.0;
+        vec3 tangent;
+        tangent.xy = GRAPHITE_DECAL_TEXTURE(d, d.textures.y, uv).xy * 2.0 - 1.0;
+        tangent.z = sqrt(max(0.0, 1.0 - dot(tangent.xy, tangent.xy)));
         vec3 decalNormal = normalize(normalize(d.row0.xyz) * tangent.x + normalize(d.row1.xyz) * tangent.y + d.axis.xyz * tangent.z);
         normal = normalize(mix(normal, decalNormal, clamp(alpha * d.params.x, 0.0, 1.0)));
     }

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 using Prowl.Graphite.Debugging;
 
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 internal interface ICaptureBackend
 {
@@ -32,8 +32,9 @@ internal static class CaptureCopyPlanner
             {
                 if (depthStencil)
                 {
-                    Add(regions, ref offset, mip, layer, width, height, depth, description.Format, (ulong)width * height * depth * 4);
-                    Add(regions, ref offset, mip, layer, width, height, depth, PixelFormat.R8_UInt, (ulong)width * height * depth);
+                    Add(regions, ref offset, mip, layer, width, height, depth, description.Format, (ulong)width * height * depth * (description.Format == PixelFormat.D16_UNorm ? 2u : 4u));
+                    if (FormatHelpers.IsStencilFormat(description.Format))
+                        Add(regions, ref offset, mip, layer, width, height, depth, PixelFormat.R8_UInt, (ulong)width * height * depth);
                 }
                 else
                 {
@@ -60,7 +61,8 @@ internal static class CaptureCopyPlanner
         if (!FormatHelpers.IsCompressedFormat(format))
             return (ulong)width * height * depth * format.GetSizeInBytes();
 
-        ulong blocks = (ulong)((width + 3) / 4) * ((height + 3) / 4) * depth;
+        (uint blockWidth, uint blockHeight) = FormatHelpers.GetBlockDimensions(format);
+        ulong blocks = (ulong)((width + blockWidth - 1) / blockWidth) * ((height + blockHeight - 1) / blockHeight) * depth;
         return blocks * FormatHelpers.GetBlockSizeInBytes(format);
     }
 }

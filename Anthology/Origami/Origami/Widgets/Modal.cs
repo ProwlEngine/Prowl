@@ -272,12 +272,23 @@ public sealed class CustomDrawModal : IModal
 public static class Modal
 {
     private static readonly List<IModal> _stack = [];
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IModal, object> _openedAt = new();
+
+    // A backdrop click this soon after opening is the second click of the double click that opened the modal.
+    private const long BackdropGraceMs = 300;
 
     public static int Count => _stack.Count;
     public static bool IsOpen => _stack.Count > 0;
 
+    /// <summary>Whether <paramref name="modal"/> is still on the stack.</summary>
+    public static bool Contains(IModal modal) => _stack.Contains(modal);
+
     /// <summary>Push any modal onto the stack.</summary>
-    public static void Push(IModal modal) => _stack.Add(modal);
+    public static void Push(IModal modal)
+    {
+        _stack.Add(modal);
+        _openedAt.AddOrUpdate(modal, Environment.TickCount64);
+    }
 
     /// <summary>Pop the topmost modal.</summary>
     public static void Pop()
@@ -376,6 +387,7 @@ public static class Modal
                 .OnClick(capturedIndex, (idx, _) =>
                 {
                     if (idx >= _stack.Count || !_stack[idx].CloseOnBackdrop) return;
+                    if (_openedAt.TryGetValue(_stack[idx], out var opened) && Environment.TickCount64 - (long)opened < BackdropGraceMs) return;
                     IModal dismissed = _stack[idx];
                     _stack.RemoveAt(idx);
                     dismissed.OnDismissed?.Invoke(ModalDismissReason.Backdrop);

@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using BenchmarkDotNet.Attributes;
 
 using Prowl.Graphite;
-using Prowl.Graphite.RenderGraph;
 
 using Prowl.Vector;
 
@@ -48,7 +47,7 @@ public class ShaderComplexityBenchmarks : GraphiteBenchmark
     private int Resolution => Case.Resolution;
     private int Overdraw => Case.Overdraw;
 
-    protected override IRenderView[] CreateViews() => [new BenchView((uint)Resolution, (uint)Resolution, 0)];
+    protected override GraphExtent[] CreateViews() => [new GraphExtent((uint)Resolution, (uint)Resolution)];
 
     protected override IEnumerable<IPass> CreatePasses()
     {

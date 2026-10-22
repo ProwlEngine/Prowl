@@ -1,11 +1,12 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Prowl.Graphite.Debugger.Viewer;
 
 internal enum NodeKind
 {
     Frame,
-    View,
+    Instance,
     Pass,
     CommandBuffer,
     Program,
@@ -24,7 +25,8 @@ internal sealed class ProfileNode
     public double Milliseconds;
     public double CpuMilliseconds;
 
-    public int ViewIndex = -1;
+    public int InstanceIndex = -1;
+    public RecordedInstance? Instance;
     public int PassIndex = -1;
     public RecordedPass? Pass;
     public RecordedCommandBuffer? CommandBuffer;
@@ -36,8 +38,9 @@ internal sealed class ProfileNode
     public int DrawOrdinal = -1;
     public int SubIndex;
     public RecordedCommand? Command;
+    public object? Meta;
 
-    public bool IsTimed => Kind is NodeKind.Frame or NodeKind.View or NodeKind.Pass or NodeKind.CommandBuffer;
+    public bool IsTimed => Kind is NodeKind.Frame or NodeKind.Instance or NodeKind.Pass or NodeKind.CommandBuffer;
 
     public ProfileNode Add(ProfileNode child)
     {
@@ -45,6 +48,8 @@ internal sealed class ProfileNode
         Children.Add(child);
         return child;
     }
+
+    public double OwnMilliseconds => Kind == NodeKind.Instance ? Children.Where(c => c.Kind == NodeKind.Pass).Sum(c => c.Milliseconds) : Milliseconds;
 
     public ProfileNode? Ancestor(NodeKind kind)
     {

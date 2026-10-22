@@ -1,6 +1,6 @@
 using Prowl.Vector;
 
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 /// <summary>What to do with an attachment's contents when a pass starts rendering to it.</summary>
 public enum LoadAction

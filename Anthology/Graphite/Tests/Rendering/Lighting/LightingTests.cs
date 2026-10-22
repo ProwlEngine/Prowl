@@ -16,6 +16,7 @@ namespace Prowl.Graphite.Rendering.Tests;
 
 // Draws a lit quad filling the view and checks every pixel against Prowl's lighting math done on the CPU, so Graphite's
 // port stays exact: point and spot lights from both trees, directional lights, ambient, fog and decals.
+[Collection("GPU Tests")]
 public sealed class LightingTests : IDisposable
 {
     private const string Source = """
@@ -1537,10 +1538,25 @@ public sealed class LightingTests : IDisposable
     }
 
     // An item drawn with an instance count the GPU holds, here none
-    private sealed class IndirectItem(GpuMesh mesh, Material material, DeviceBuffer count) : RenderProvider
+    private sealed class IndirectItem(GpuMesh mesh, Material material) : RenderProvider
     {
         public override void Cull(in ProviderView view, DrawItemSink sink)
-            => sink.AddIndirect(mesh, 0, material, new DrawItem { Transform = Double4x4.CreateTranslation(new Double3(0, 0, 30)) }, count, 4);
+            => sink.AddIndirect(mesh, 0, material, new DrawItem { Transform = Double4x4.CreateTranslation(new Double3(0, 0, 30)) }, "Test.IndirectCount", 4);
+    }
+
+    private sealed class IndirectCount : FrameFeature
+    {
+        private BufferHandle _count;
+
+        public override FrameSlot Slot => FrameSlot.BeforeViews;
+
+        public override void Setup(FrameBuilder builder)
+        {
+            _count = builder.Graph.DeclareOutputBuffer("Test.IndirectCount", GraphBufferDesc.Structured(4, 4), usage: BufferAccess.TransferWrite);
+            builder.Export(_count);
+        }
+
+        public override void Render(FrameContext context) => context.Command.UpdateBuffer<uint>(context.Get(_count), 0, [0, 0, 0, 0]);
     }
 
     [Fact]
@@ -1552,9 +1568,8 @@ public sealed class LightingTests : IDisposable
         LightDesc light = ShadowSpot();
         _world.AddLight(light);
         AddCaster(1, 0.5, 6);
-        using DeviceBuffer count = _device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
-        _device.UpdateBuffer<uint>(count, 0, [0, 0, 0, 0]);
-        _world.Providers.Add(new IndirectItem(_quad, surface, count));
+        _world.FrameFeatures.Add(new IndirectCount());
+        _world.Providers.Add(new IndirectItem(_quad, surface));
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, 2, 1, 2), Frame(), 0.6f);
     }
 

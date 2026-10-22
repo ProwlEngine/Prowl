@@ -18,9 +18,11 @@ file sealed class NoResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => 0;
 }
 
+[Collection("GPU Tests")]
 public sealed class RenderWorldTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly GraphStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly Uploader _uploader;
     private readonly GeometryPool _geometry;
@@ -33,9 +35,9 @@ public sealed class RenderWorldTests : IDisposable
     {
         InternalShaders.Register();
         _uploader = new Uploader(_device, InternalShaders.Compute(_device, _compiler, "Internal/Scatter.glsl"));
-        _geometry = new GeometryPool(_device, 1 << 16, 1 << 16);
-        _materials = new MaterialSystem(_device, new NoResources());
-        _world = new RenderWorld(_device);
+        _geometry = new GeometryPool(_device, _store, 1 << 16, 1 << 16);
+        _materials = new MaterialSystem(_device, _store, new NoResources());
+        _world = new RenderWorld(_device, _store);
         _shader = new Shader(ShaderParser.Parse("""Shader "Test/Plain" { Pass { GLSLPROGRAM ENDGLSL } }"""), _compiler);
         _cube = Mesh(new Float3(-1, -1, -1), new Float3(1, 1, 1));
     }
@@ -43,10 +45,9 @@ public sealed class RenderWorldTests : IDisposable
     public void Dispose()
     {
         _world.Dispose();
-        _materials.Dispose();
-        _geometry.Dispose();
         _uploader.Dispose();
         _compiler.Dispose();
+        _store.Dispose();
         _device.Dispose();
     }
 

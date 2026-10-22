@@ -2,28 +2,14 @@
 
 using System.Collections.Generic;
 
-using Prowl.Graphite.RenderGraph;
-
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-public readonly struct HistoryView : IRenderView
+file sealed class ViewHistoryPass : IInstancePass
 {
-    public HistoryView(int viewId, uint width, uint height)
-    {
-        ViewId = viewId;
-        PixelWidth = width;
-        PixelHeight = height;
-    }
+    public GraphKind Kind => TestViews.Kind;
 
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-    public int ViewId { get; }
-}
-
-file sealed class ViewHistoryPass : IPass
-{
     private readonly RenderResourceID _id;
     private readonly GraphTextureDesc _desc;
     private TextureHandle _handle;
@@ -36,15 +22,19 @@ file sealed class ViewHistoryPass : IPass
 
     public string Name => "ViewHistory";
 
+    public bool Enabled { get; set; } = true;
+
+    public bool IsEnabled(GraphInstance instance) => Enabled;
+
     public Dictionary<int, List<RenderTexture>> Current { get; } = new();
     public Dictionary<int, List<RenderTexture>> Previous { get; } = new();
     public Dictionary<int, List<bool>> Valid { get; } = new();
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputTexture(_id, _desc, history: 1);
+    public void Setup(InstanceContextBuilder builder) => _handle = builder.DeclareOutputTexture(_id, _desc, history: 1);
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
-        int view = context.View.ViewId;
+        int view = context.Instance.Key.Id;
         Record(Valid, view, context.IsHistoryValid(_handle));
         Record(Current, view, context.GetRenderTexture(_handle, 0));
         Record(Previous, view, context.GetRenderTexture(_handle, 1));
@@ -58,8 +48,10 @@ file sealed class ViewHistoryPass : IPass
     }
 }
 
-file sealed class ViewBufferHistoryPass : IPass
+file sealed class ViewBufferHistoryPass : IInstancePass
 {
+    public GraphKind Kind => TestViews.Kind;
+
     private readonly RenderResourceID _id;
     private BufferHandle _handle;
 
@@ -70,12 +62,12 @@ file sealed class ViewBufferHistoryPass : IPass
     public Dictionary<int, List<DeviceBuffer>> Current { get; } = new();
     public Dictionary<int, List<DeviceBuffer>> Previous { get; } = new();
 
-    public void Setup(RenderContextBuilder builder)
+    public void Setup(InstanceContextBuilder builder)
         => _handle = builder.DeclareOutputBuffer(_id, GraphBufferDesc.Structured(16, 16), history: 1);
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
-        int view = context.View.ViewId;
+        int view = context.Instance.Key.Id;
         if (!Current.ContainsKey(view))
         {
             Current[view] = new List<DeviceBuffer>();
@@ -89,11 +81,11 @@ file sealed class ViewBufferHistoryPass : IPass
 public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     private static GraphTextureDesc ColorDesc()
-        => GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm);
+        => GraphTextureDesc.InstanceSized(PixelFormat.R8_G8_B8_A8_UNorm);
 
-    private void Dispatch(RenderPipeline pipeline, params HistoryView[] views)
+    private void Dispatch(RenderGraph graph, params (int Id, uint Width, uint Height)[] views)
     {
-        ExecutionTask task = GD.DispatchGraph(pipeline, views);
+        ExecutionTask task = GD.DispatchGraph(graph, TestViews.Of(graph, views));
         GD.WaitForExecution(task);
     }
 
@@ -101,12 +93,12 @@ public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void TwoViewsInOneDispatch_EachReadsItsOwnPreviousFrame()
     {
         ViewHistoryPass pass = new(RenderResourceID.Intern("viewhistory_alternating"), ColorDesc());
-        using RenderPipeline pipeline = new([pass]);
-        HistoryView a = new(1, 64, 64);
-        HistoryView b = new(2, 64, 64);
+        using RenderGraph graph = TestViews.Build([pass]);
+        var a = (1, 64u, 64u);
+        var b = (2, 64u, 64u);
 
         for (int frame = 0; frame < 3; frame++)
-            Dispatch(pipeline, a, b);
+            Dispatch(graph, a, b);
 
         foreach (int view in new[] { 1, 2 })
         {
@@ -129,12 +121,12 @@ public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void TwoViewsInOneDispatch_BufferHistoryIsPerView()
     {
         ViewBufferHistoryPass pass = new(RenderResourceID.Intern("viewhistory_buffer"));
-        using RenderPipeline pipeline = new([pass]);
-        HistoryView a = new(1, 64, 64);
-        HistoryView b = new(2, 64, 64);
+        using RenderGraph graph = TestViews.Build([pass]);
+        var a = (1, 64u, 64u);
+        var b = (2, 64u, 64u);
 
         for (int frame = 0; frame < 2; frame++)
-            Dispatch(pipeline, a, b);
+            Dispatch(graph, a, b);
 
         Assert.Same(pass.Current[1][0], pass.Previous[1][1]);
         Assert.Same(pass.Current[2][0], pass.Previous[2][1]);
@@ -146,12 +138,12 @@ public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void IsHistoryValid_FalseOnFirstExecution_TrueAfter_FalseAgainAfterResize()
     {
         ViewHistoryPass pass = new(RenderResourceID.Intern("viewhistory_valid"), ColorDesc());
-        using RenderPipeline pipeline = new([pass]);
+        using RenderGraph graph = TestViews.Build([pass]);
 
-        Dispatch(pipeline, new HistoryView(1, 64, 64));
-        Dispatch(pipeline, new HistoryView(1, 64, 64));
-        Dispatch(pipeline, new HistoryView(1, 128, 128));
-        Dispatch(pipeline, new HistoryView(1, 128, 128));
+        Dispatch(graph, (1, 64u, 64u));
+        Dispatch(graph, (1, 64u, 64u));
+        Dispatch(graph, (1, 128u, 128u));
+        Dispatch(graph, (1, 128u, 128u));
 
         Assert.Equal(new[] { false, true, false, true }, pass.Valid[1]);
     }
@@ -160,10 +152,10 @@ public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void IsHistoryValid_IsTrackedPerView()
     {
         ViewHistoryPass pass = new(RenderResourceID.Intern("viewhistory_valid_per_view"), ColorDesc());
-        using RenderPipeline pipeline = new([pass]);
+        using RenderGraph graph = TestViews.Build([pass]);
 
-        Dispatch(pipeline, new HistoryView(1, 64, 64));
-        Dispatch(pipeline, new HistoryView(1, 64, 64), new HistoryView(2, 64, 64));
+        Dispatch(graph, (1, 64u, 64u));
+        Dispatch(graph, (1, 64u, 64u), (2, 64u, 64u));
 
         Assert.Equal(new[] { false, true }, pass.Valid[1]);
         Assert.Equal(new[] { false }, pass.Valid[2]);
@@ -173,28 +165,28 @@ public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void ViewNotRenderedFor120Executions_HasItsRingDisposed()
     {
         ViewHistoryPass pass = new(RenderResourceID.Intern("viewhistory_disposal"), ColorDesc());
-        using RenderPipeline pipeline = new([pass]);
-        HistoryView a = new(1, 64, 64);
-        HistoryView b = new(2, 64, 64);
+        using RenderGraph graph = TestViews.Build([pass]);
+        var a = (1, 64u, 64u);
+        var b = (2, 64u, 64u);
 
-        Dispatch(pipeline, a, b);
+        Dispatch(graph, a, b);
         RenderTexture bCurrent = pass.Current[2][0];
         RenderTexture bPrevious = pass.Previous[2][0];
 
         for (int i = 0; i < 120; i++)
-            Dispatch(pipeline, a);
+            Dispatch(graph, a);
 
         Assert.False(bCurrent.Framebuffer.IsDisposed);
         Assert.False(bPrevious.Framebuffer.IsDisposed);
 
-        Dispatch(pipeline, a);
+        Dispatch(graph, a);
 
         Assert.True(bCurrent.Framebuffer.IsDisposed);
         Assert.True(bPrevious.Framebuffer.IsDisposed);
         Assert.False(pass.Current[1][^1].Framebuffer.IsDisposed);
         Assert.False(pass.Previous[1][^1].Framebuffer.IsDisposed);
 
-        Dispatch(pipeline, a, b);
+        Dispatch(graph, a, b);
 
         Assert.False(pass.Valid[2][^1]);
         Assert.NotSame(bCurrent, pass.Current[2][^1]);
@@ -202,20 +194,39 @@ public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : 
     }
 
     [Fact]
+    public void ADisabledPass_HasItsRingDisposedAfter120Executions()
+    {
+        ViewHistoryPass pass = new(RenderResourceID.Intern("viewhistory_disabled"), ColorDesc());
+        using RenderGraph graph = TestViews.Build([pass]);
+        var a = (1, 64u, 64u);
+
+        Dispatch(graph, a);
+        RenderTexture current = pass.Current[1][0];
+        pass.Enabled = false;
+
+        for (int i = 0; i < 120; i++)
+            Dispatch(graph, a);
+        Assert.False(current.Framebuffer.IsDisposed);
+
+        Dispatch(graph, a);
+        Assert.True(current.Framebuffer.IsDisposed);
+    }
+
+    [Fact]
     public void ViewRenderedWithin120Executions_KeepsItsRing()
     {
         ViewHistoryPass pass = new(RenderResourceID.Intern("viewhistory_retained"), ColorDesc());
-        using RenderPipeline pipeline = new([pass]);
-        HistoryView a = new(1, 64, 64);
-        HistoryView b = new(2, 64, 64);
+        using RenderGraph graph = TestViews.Build([pass]);
+        var a = (1, 64u, 64u);
+        var b = (2, 64u, 64u);
 
-        Dispatch(pipeline, a, b);
+        Dispatch(graph, a, b);
         RenderTexture bCurrent = pass.Current[2][0];
 
         for (int i = 0; i < 119; i++)
-            Dispatch(pipeline, a);
+            Dispatch(graph, a);
 
-        Dispatch(pipeline, a, b);
+        Dispatch(graph, a, b);
 
         Assert.True(pass.Valid[2][^1]);
         Assert.Same(bCurrent, pass.Previous[2][^1]);

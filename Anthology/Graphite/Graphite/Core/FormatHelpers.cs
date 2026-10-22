@@ -93,8 +93,33 @@ internal static class FormatHelpers
             || format == PixelFormat.BC7_UNorm_SRgb
             || format == PixelFormat.ETC2_R8_G8_B8_UNorm
             || format == PixelFormat.ETC2_R8_G8_B8_A1_UNorm
-            || format == PixelFormat.ETC2_R8_G8_B8_A8_UNorm;
+            || format == PixelFormat.ETC2_R8_G8_B8_A8_UNorm
+            || IsAstcFormat(format);
     }
+
+    internal static bool IsAstcFormat(PixelFormat format) =>
+        format >= PixelFormat.ASTC_4x4_UNorm && format <= PixelFormat.ASTC_12x12_UNorm_SRgb;
+
+    /// <summary>Pixels one block covers across and down, one by one for an uncompressed format.</summary>
+    public static (uint Width, uint Height) GetBlockDimensions(PixelFormat format) => format switch
+    {
+            PixelFormat.ASTC_4x4_UNorm or PixelFormat.ASTC_4x4_UNorm_SRgb => (4u, 4u),
+            PixelFormat.ASTC_5x4_UNorm or PixelFormat.ASTC_5x4_UNorm_SRgb => (5u, 4u),
+            PixelFormat.ASTC_5x5_UNorm or PixelFormat.ASTC_5x5_UNorm_SRgb => (5u, 5u),
+            PixelFormat.ASTC_6x5_UNorm or PixelFormat.ASTC_6x5_UNorm_SRgb => (6u, 5u),
+            PixelFormat.ASTC_6x6_UNorm or PixelFormat.ASTC_6x6_UNorm_SRgb => (6u, 6u),
+            PixelFormat.ASTC_8x5_UNorm or PixelFormat.ASTC_8x5_UNorm_SRgb => (8u, 5u),
+            PixelFormat.ASTC_8x6_UNorm or PixelFormat.ASTC_8x6_UNorm_SRgb => (8u, 6u),
+            PixelFormat.ASTC_8x8_UNorm or PixelFormat.ASTC_8x8_UNorm_SRgb => (8u, 8u),
+            PixelFormat.ASTC_10x5_UNorm or PixelFormat.ASTC_10x5_UNorm_SRgb => (10u, 5u),
+            PixelFormat.ASTC_10x6_UNorm or PixelFormat.ASTC_10x6_UNorm_SRgb => (10u, 6u),
+            PixelFormat.ASTC_10x8_UNorm or PixelFormat.ASTC_10x8_UNorm_SRgb => (10u, 8u),
+            PixelFormat.ASTC_10x10_UNorm or PixelFormat.ASTC_10x10_UNorm_SRgb => (10u, 10u),
+            PixelFormat.ASTC_12x10_UNorm or PixelFormat.ASTC_12x10_UNorm_SRgb => (12u, 10u),
+            PixelFormat.ASTC_12x12_UNorm or PixelFormat.ASTC_12x12_UNorm_SRgb => (12u, 12u),
+        _ when IsCompressedFormat(format) => (4u, 4u),
+        _ => (1u, 1u),
+    };
 
     public static uint GetBlockSizeInBytes(PixelFormat format)
     {
@@ -118,6 +143,8 @@ internal static class FormatHelpers
             case PixelFormat.BC7_UNorm:
             case PixelFormat.BC7_UNorm_SRgb:
             case PixelFormat.ETC2_R8_G8_B8_A8_UNorm:
+                return 16;
+            case var astc when IsAstcFormat(astc):
                 return 16;
             default:
                 throw Illegal.Value<PixelFormat>();
@@ -160,26 +187,46 @@ internal static class FormatHelpers
             PixelFormat.BC3_UNorm_SRgb => PixelFormat.BC3_UNorm,
             PixelFormat.BC7_UNorm => PixelFormat.BC7_UNorm_SRgb,
             PixelFormat.BC7_UNorm_SRgb => PixelFormat.BC7_UNorm,
+            PixelFormat.ASTC_4x4_UNorm => PixelFormat.ASTC_4x4_UNorm_SRgb,
+            PixelFormat.ASTC_4x4_UNorm_SRgb => PixelFormat.ASTC_4x4_UNorm,
+            PixelFormat.ASTC_5x4_UNorm => PixelFormat.ASTC_5x4_UNorm_SRgb,
+            PixelFormat.ASTC_5x4_UNorm_SRgb => PixelFormat.ASTC_5x4_UNorm,
+            PixelFormat.ASTC_5x5_UNorm => PixelFormat.ASTC_5x5_UNorm_SRgb,
+            PixelFormat.ASTC_5x5_UNorm_SRgb => PixelFormat.ASTC_5x5_UNorm,
+            PixelFormat.ASTC_6x5_UNorm => PixelFormat.ASTC_6x5_UNorm_SRgb,
+            PixelFormat.ASTC_6x5_UNorm_SRgb => PixelFormat.ASTC_6x5_UNorm,
+            PixelFormat.ASTC_6x6_UNorm => PixelFormat.ASTC_6x6_UNorm_SRgb,
+            PixelFormat.ASTC_6x6_UNorm_SRgb => PixelFormat.ASTC_6x6_UNorm,
+            PixelFormat.ASTC_8x5_UNorm => PixelFormat.ASTC_8x5_UNorm_SRgb,
+            PixelFormat.ASTC_8x5_UNorm_SRgb => PixelFormat.ASTC_8x5_UNorm,
+            PixelFormat.ASTC_8x6_UNorm => PixelFormat.ASTC_8x6_UNorm_SRgb,
+            PixelFormat.ASTC_8x6_UNorm_SRgb => PixelFormat.ASTC_8x6_UNorm,
+            PixelFormat.ASTC_8x8_UNorm => PixelFormat.ASTC_8x8_UNorm_SRgb,
+            PixelFormat.ASTC_8x8_UNorm_SRgb => PixelFormat.ASTC_8x8_UNorm,
+            PixelFormat.ASTC_10x5_UNorm => PixelFormat.ASTC_10x5_UNorm_SRgb,
+            PixelFormat.ASTC_10x5_UNorm_SRgb => PixelFormat.ASTC_10x5_UNorm,
+            PixelFormat.ASTC_10x6_UNorm => PixelFormat.ASTC_10x6_UNorm_SRgb,
+            PixelFormat.ASTC_10x6_UNorm_SRgb => PixelFormat.ASTC_10x6_UNorm,
+            PixelFormat.ASTC_10x8_UNorm => PixelFormat.ASTC_10x8_UNorm_SRgb,
+            PixelFormat.ASTC_10x8_UNorm_SRgb => PixelFormat.ASTC_10x8_UNorm,
+            PixelFormat.ASTC_10x10_UNorm => PixelFormat.ASTC_10x10_UNorm_SRgb,
+            PixelFormat.ASTC_10x10_UNorm_SRgb => PixelFormat.ASTC_10x10_UNorm,
+            PixelFormat.ASTC_12x10_UNorm => PixelFormat.ASTC_12x10_UNorm_SRgb,
+            PixelFormat.ASTC_12x10_UNorm_SRgb => PixelFormat.ASTC_12x10_UNorm,
+            PixelFormat.ASTC_12x12_UNorm => PixelFormat.ASTC_12x12_UNorm_SRgb,
+            PixelFormat.ASTC_12x12_UNorm_SRgb => PixelFormat.ASTC_12x12_UNorm,
             _ => format,
         };
     }
 
     internal static uint GetRegionSize(uint width, uint height, uint depth, PixelFormat format)
     {
-        uint blockSizeInBytes;
-        if (IsCompressedFormat(format))
-        {
-            Debug.Assert((width % 4 == 0 || width < 4) && (height % 4 == 0 || height < 4));
-            blockSizeInBytes = GetBlockSizeInBytes(format);
-            width /= 4;
-            height /= 4;
-        }
-        else
-        {
-            blockSizeInBytes = format.GetSizeInBytes();
-        }
+        if (!IsCompressedFormat(format))
+            return width * height * depth * format.GetSizeInBytes();
 
-        return width * height * depth * blockSizeInBytes;
+        // Edge blocks are whole, so a region narrower than a block still costs one.
+        (uint blockWidth, uint blockHeight) = GetBlockDimensions(format);
+        return ((width + blockWidth - 1) / blockWidth) * ((height + blockHeight - 1) / blockHeight) * depth * GetBlockSizeInBytes(format);
     }
 
     internal static TextureSampleCount GetSampleCount(uint samples)
@@ -272,6 +319,48 @@ internal static class FormatHelpers
             case PixelFormat.BC7_UNorm:
             case PixelFormat.BC7_UNorm_SRgb:
                 return PixelFormat.BC7_UNorm;
+            case PixelFormat.ASTC_4x4_UNorm:
+            case PixelFormat.ASTC_4x4_UNorm_SRgb:
+                return PixelFormat.ASTC_4x4_UNorm;
+            case PixelFormat.ASTC_5x4_UNorm:
+            case PixelFormat.ASTC_5x4_UNorm_SRgb:
+                return PixelFormat.ASTC_5x4_UNorm;
+            case PixelFormat.ASTC_5x5_UNorm:
+            case PixelFormat.ASTC_5x5_UNorm_SRgb:
+                return PixelFormat.ASTC_5x5_UNorm;
+            case PixelFormat.ASTC_6x5_UNorm:
+            case PixelFormat.ASTC_6x5_UNorm_SRgb:
+                return PixelFormat.ASTC_6x5_UNorm;
+            case PixelFormat.ASTC_6x6_UNorm:
+            case PixelFormat.ASTC_6x6_UNorm_SRgb:
+                return PixelFormat.ASTC_6x6_UNorm;
+            case PixelFormat.ASTC_8x5_UNorm:
+            case PixelFormat.ASTC_8x5_UNorm_SRgb:
+                return PixelFormat.ASTC_8x5_UNorm;
+            case PixelFormat.ASTC_8x6_UNorm:
+            case PixelFormat.ASTC_8x6_UNorm_SRgb:
+                return PixelFormat.ASTC_8x6_UNorm;
+            case PixelFormat.ASTC_8x8_UNorm:
+            case PixelFormat.ASTC_8x8_UNorm_SRgb:
+                return PixelFormat.ASTC_8x8_UNorm;
+            case PixelFormat.ASTC_10x5_UNorm:
+            case PixelFormat.ASTC_10x5_UNorm_SRgb:
+                return PixelFormat.ASTC_10x5_UNorm;
+            case PixelFormat.ASTC_10x6_UNorm:
+            case PixelFormat.ASTC_10x6_UNorm_SRgb:
+                return PixelFormat.ASTC_10x6_UNorm;
+            case PixelFormat.ASTC_10x8_UNorm:
+            case PixelFormat.ASTC_10x8_UNorm_SRgb:
+                return PixelFormat.ASTC_10x8_UNorm;
+            case PixelFormat.ASTC_10x10_UNorm:
+            case PixelFormat.ASTC_10x10_UNorm_SRgb:
+                return PixelFormat.ASTC_10x10_UNorm;
+            case PixelFormat.ASTC_12x10_UNorm:
+            case PixelFormat.ASTC_12x10_UNorm_SRgb:
+                return PixelFormat.ASTC_12x10_UNorm;
+            case PixelFormat.ASTC_12x12_UNorm:
+            case PixelFormat.ASTC_12x12_UNorm_SRgb:
+                return PixelFormat.ASTC_12x12_UNorm;
             default:
                 return format;
         }

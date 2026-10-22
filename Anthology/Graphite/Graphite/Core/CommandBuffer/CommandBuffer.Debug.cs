@@ -4,11 +4,15 @@ public abstract partial class CommandBuffer
 {
     /// <summary>Pushes a debug group for grouping commands in debug tools. Nestable. Every push needs a pop.</summary>
     /// <param name="name">Group name shown in debug tools.</param>
-    public void PushDebugGroup(string name)
+    /// <param name="meta">Object that tools capturing the commands receive with the group. Build it only when <see cref="WantsDebugMeta"/>.</param>
+    public void PushDebugGroup(string name, object? meta = null)
     {
-        PassSink?.PushMarker(name);
+        PassSink?.PushMarker(name, meta);
         PushDebugGroupCore(name);
     }
+
+    /// <summary>True when a tool capturing the commands is listening, so group payloads are worth building.</summary>
+    public bool WantsDebugMeta => PassSink != null;
 
     private protected abstract void PushDebugGroupCore(string name);
 

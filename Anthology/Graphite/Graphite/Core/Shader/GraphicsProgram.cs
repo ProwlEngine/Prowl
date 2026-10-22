@@ -32,7 +32,13 @@ public abstract class GraphicsProgram : ShaderProgram
         _rasterizerState = description.RasterizerState;
         _vertexLayouts = Util.ShallowClone(description.VertexLayouts);
         _specializations = description.Specializations is { } specializations ? Util.ShallowClone(specializations) : [];
+        VariantKey = ProgramKey.Compute(_stageDescriptions, _specializations);
     }
+
+    /// <summary>
+    /// <see cref="ShaderProgram.Key"/> with the specialization constants folded in, so programs sharing stages but not constants differ.
+    /// </summary>
+    public ProgramKey VariantKey { get; }
 
     /// <summary>
     /// Stages in this program, in description order.

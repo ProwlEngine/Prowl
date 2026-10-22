@@ -1,6 +1,5 @@
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 namespace Prowl.Graphite.Debugger;
@@ -23,7 +22,8 @@ public sealed record RecordedProperty(
     TraceVersion Resource,
     ResourceRange Range,
     PixelFormat? ViewFormat,
-    int Sampler);
+    int Sampler,
+    bool Arrayed = false);
 
 public sealed record SetFramebufferCommand(
     EquatableArray<RecordedAttachment> Colors,
@@ -89,12 +89,15 @@ public sealed record CopyBufferCommand(TraceVersion Source, uint SourceOffset, T
 
 public sealed record CopyTextureCommand(TraceVersion Source, TextureRegion SourceRegion, TraceVersion DestinationAfter, TextureRegion DestinationRegion, uint LayerCount) : RecordedCommand;
 
+public sealed record BlitTextureCommand(TraceVersion Source, TraceVersion DestinationAfter, EquatableArray<TextureBlit> Regions) : RecordedCommand;
+
 public sealed record CopyTextureToBufferCommand(TraceVersion Source, TextureRegion Region, TraceVersion DestinationAfter, uint DestinationOffset) : RecordedCommand;
 
 public sealed record ResolveTextureCommand(TraceVersion Source, TraceVersion DestinationAfter) : RecordedCommand;
 
 public sealed record GenerateMipsCommand(TraceVersion TextureAfter) : RecordedCommand;
 
-public sealed record PushMarkerCommand(string Name) : RecordedCommand;
+/// <summary>Opens a debug group. Meta is the payload the pass gave it, saved only when it is a [Serializable] record.</summary>
+public sealed record PushMarkerCommand(string Name, object? Meta = null) : RecordedCommand;
 
 public sealed record PopMarkerCommand() : RecordedCommand;

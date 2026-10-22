@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.OrigamiUI;
+
 using Color = System.Drawing.Color;
 
 namespace Prowl.Graphite.Debugger.Viewer;
@@ -24,7 +26,7 @@ internal sealed partial class ProfilerView
         return "Raster";
     }
 
-    private static string? PreviousState(DeepView view, DeepPass pass, string resource)
+    private static string? PreviousState(DeepInstance view, DeepPass pass, string resource)
     {
         string? state = null;
         foreach (DeepPass earlier in view.Passes)
@@ -38,14 +40,14 @@ internal sealed partial class ProfilerView
         return state;
     }
 
-    private static string Transition(DeepView view, DeepPass pass, RecordedAccess access)
+    private static string Transition(DeepInstance view, DeepPass pass, RecordedAccess access)
     {
         string to = AccessState(access);
         string from = PreviousState(view, pass, access.Resource) ?? "Undefined";
         return from == to ? "No barrier" : $"{from} -> {to}";
     }
 
-    private static RecordedGraphResource? GraphResource(DeepView view, string name)
+    private static RecordedGraphResource? GraphResource(DeepInstance view, string name)
         => view.Resources.FirstOrDefault(r => r.Name == name);
 
     private static RecordedResource? Backing(DeepIndex index, RecordedGraphResource graph)
@@ -53,8 +55,8 @@ internal sealed partial class ProfilerView
 
     private static string Format(RecordedResource? resource, RecordedGraphResource? graph)
     {
-        if (resource?.Texture is { } t) return t.Format.ToString();
-        if (graph?.Texture is { } g) return g.ColorFormats is { Length: > 0 } c ? c[0].ToString() : g.DepthFormat?.ToString() ?? "-";
+        if (resource?.Texture is { } t) return Describe.Format(t.Format);
+        if (graph?.Texture is { } g) return g.ColorFormats is { Length: > 0 } c ? Describe.Format(c[0]) : g.DepthFormat is { } d ? Describe.Format(d) : "-";
         if (resource?.Buffer is { } b) return b.Usage.ToString();
         return "-";
     }
@@ -74,19 +76,47 @@ internal sealed partial class ProfilerView
         RecordedPass pass = node.Pass!;
         var stats = pass.Stats;
         var vertex = node.CommandBuffer?.VertexStats;
-        string view = node.Parent!.Name;
+        RecordedInstance instance = node.Parent!.Instance!;
 
         switch (tab)
         {
             case "Overview":
             {
-                KvSection("Pass", 420, new Kv?[]
+                RecordedPass? Find(Recording f) => f.Instances.FirstOrDefault(i => i.Key == instance.Key)?.Passes.FirstOrDefault(p => p.Name == pass.Name);
+                double Gpu(Recording f)
+                {
+                    RecordedInstance? i = f.Instances.FirstOrDefault(x => x.Key == instance.Key);
+                    RecordedPass? p = Find(f);
+                    if (i == null || p == null) return 0;
+                    return f.CommandBuffers.FirstOrDefault(b => b.InstanceIndex == i.Index && b.PassIndex == p.Index)?.Milliseconds ?? 0;
+                }
+
+                double[] gpu = Heavy ? [] : frames.Select(Gpu).ToArray();
+                double[] cpu = Heavy ? [] : frames.Select(f => Find(f)?.Stats.CpuMilliseconds ?? 0).ToArray();
+                double[] draws = Heavy ? [] : frames.Select(f => (double)(Find(f)?.Stats.Draws ?? 0)).ToArray();
+                double Avg(double[] v) => v.Length > 0 ? v.Average() : 0;
+                string Sub(double[] v, Func<double, string> format) => Heavy ? "this snapshot" : $"avg {format(Avg(v))}";
+                double instanceMs = node.Parent!.OwnMilliseconds;
+
+                HeroStrip(new Stat[]
+                {
+                    new("GPU time", Style.Ms2(node.Milliseconds), Sub(gpu, Style.Ms2), Heavy ? null : Versus(node.Milliseconds, Avg(gpu))),
+                    new("CPU record", Style.Ms2(stats.CpuMilliseconds), Sub(cpu, Style.Ms2), Heavy ? null : Versus(stats.CpuMilliseconds, Avg(cpu))),
+                    new("Draw calls", Style.Int(stats.Draws), Sub(draws, Style.Int)),
+                    new("Share of instance", instanceMs > 0 ? Style.F(node.Milliseconds / instanceMs * 100.0, "0.0") + "%" : "-", $"of {instance.Name}"),
+                });
+
+                if (!Heavy)
+                    ChartsSection("Trend", "Frames without this pass plot as 0", CurrentIndex(frames, model), new[]
+                    {
+                        new Sparkline("GPU time", gpu, Style.KindDot(NodeKind.Pass), Style.Ms2),
+                        new Sparkline("CPU record", cpu, Style.KindDot(NodeKind.CommandBuffer), Style.Ms2),
+                    }, 420f, 180f);
+
+                Accordion("Details", () => KvSection("Pass", 420, new Kv?[]
                 {
                     new("Name", pass.Name),
-                    new("View", view),
-                    new("GPU", Style.Ms2(node.Milliseconds)),
-                    new("CPU record", Style.Ms2(stats.CpuMilliseconds)),
-                    new("Draw calls", Style.Int(stats.Draws)),
+                    new("Instance", instance.Name),
                     new("Indirect draws", Style.Int(stats.IndirectDraws)),
                     new("Dispatches", stats.Dispatches.ToString()),
                     new("Shader switches", Style.Int(stats.ShaderSwitches)),
@@ -96,10 +126,10 @@ internal sealed partial class ProfilerView
                     vertex != null ? new("Triangles", Style.F(vertex.Value.InputAssemblyPrimitives / 1e6, "0.000") + " M") : null,
                     vertex != null ? new("Vertices", Style.F(vertex.Value.InputAssemblyVertices / 1e6, "0.000") + " M") : null,
                     vertex != null ? new("Fragment invocations", Style.F(vertex.Value.FragmentShaderInvocations / 1e6, "0.00") + " M") : null,
-                });
+                }));
 
-                if (Heavy && model.PassOf(node) is { } deep && model.ViewOf(node) is { } deepView)
-                    PassDeepOverview(model, deepView, deep);
+                if (Heavy && model.PassOf(node) is { } deep && model.InstanceOf(node) is { } deepInstance)
+                    Collapsible("Replay, attachments and barriers", () => PassDeepOverview(model, deepInstance, deep));
                 break;
             }
 
@@ -111,28 +141,10 @@ internal sealed partial class ProfilerView
                 PassCommands(model, node);
                 break;
 
-            case "History":
-            {
-                RecordedPass? Find(Recording f) => f.Views.FirstOrDefault(v => v.Name == view)?.Passes.FirstOrDefault(p => p.Name == pass.Name);
-                double Gpu(Recording f)
-                {
-                    RecordedView? v = f.Views.FirstOrDefault(x => x.Name == view);
-                    RecordedPass? p = Find(f);
-                    if (v == null || p == null) return 0;
-                    return f.CommandBuffers.FirstOrDefault(b => b.ViewIndex == v.Index && b.PassIndex == p.Index)?.Milliseconds ?? 0;
-                }
-                ChartsSection("Pass history", "Frames without this pass plot as 0", CurrentIndex(frames, model), new[]
-                {
-                    new Sparkline("GPU time", frames.Select(Gpu).ToArray(), Style.KindDot(NodeKind.Pass), Style.Ms2),
-                    new Sparkline("CPU record", frames.Select(f => Find(f)?.Stats.CpuMilliseconds ?? 0).ToArray(), Style.KindDot(NodeKind.CommandBuffer), Style.Ms2),
-                    new Sparkline("Draw calls", frames.Select(f => (double)(Find(f)?.Stats.Draws ?? 0)).ToArray(), Style.KindDot(NodeKind.Draw), Style.Int),
-                });
-                break;
-            }
         }
     }
 
-    private void PassDeepOverview(FrameModel model, DeepView view, DeepPass pass)
+    private void PassDeepOverview(FrameModel model, DeepInstance view, DeepPass pass)
     {
         DeepIndex index = model.Index!;
         SetFramebufferCommand? fb = pass.Commands.OfType<SetFramebufferCommand>().FirstOrDefault();
@@ -187,7 +199,7 @@ internal sealed partial class ProfilerView
                 string[] parts = x.t.Split(" -> ");
                 return R(x.a.Resource, parts[0], parts[1]);
             }).ToList();
-        TableSection("Barriers", 420, "From previous declared use in this view",
+        TableSection("Barriers", 420, "From previous declared use in this instance",
             new[] { "Resource", "From", "To" }, new[] { 1.4f, 1.2f, 1.2f },
             barriers.Count > 0 ? barriers : new List<Row> { R("-", "No barriers", "") });
 
@@ -199,63 +211,74 @@ internal sealed partial class ProfilerView
     private void PassResources(FrameModel model, ProfileNode node)
     {
         DeepIndex index = model.Index!;
-        DeepView view = model.ViewOf(node)!;
+        DeepInstance view = model.InstanceOf(node)!;
         DeepPass pass = model.PassOf(node)!;
         const string context = "pass:Resources";
-        _viewerSelection.TryGetValue(context, out string? current);
 
         Action Pick(string key) => () => { _viewerSelection[context] = key; _pixel = null; };
 
         List<RecordedAccess> inputs = pass.Accesses.Where(a => !a.IsOutput && a.Kind == GraphResourceKind.Texture).ToList();
         List<RecordedAccess> outputs = pass.Accesses.Where(a => a.IsOutput && a.Kind == GraphResourceKind.Texture).ToList();
         SetFramebufferCommand? fb = pass.Commands.OfType<SetFramebufferCommand>().FirstOrDefault();
-
-        TableSection("Inputs", 0, inputs.Count > 0 ? "Click to view" : "None",
-            new[] { "Resource", "Format", "Size", "State", "Barrier" }, new[] { 1.4f, 1.4f, 0.8f, 1.1f, 1.8f },
-            inputs.Select(a =>
-            {
-                RecordedGraphResource? g = GraphResource(view, a.Resource);
-                RecordedResource? r = g != null ? Backing(index, g) : null;
-                string key = "tex:" + a.Resource;
-                return new Row { Cells = new[] { a.Resource, Format(r, g), Style.Bytes(SizeBytes(r)), AccessState(a), Transition(view, pass, a) }, Pick = Pick(key), Selected = current == key };
-            }).ToList());
-
-        TableSection("Outputs", 0, "Click to view",
-            new[] { "Resource", "Format", "Size", "Load", "Store", "Transition" }, new[] { 1.4f, 1.4f, 0.8f, 0.7f, 0.7f, 1.8f },
-            outputs.Select((a, i) =>
-            {
-                RecordedGraphResource? g = GraphResource(view, a.Resource);
-                RecordedResource? r = g != null ? Backing(index, g) : null;
-                (string Load, string Store) ops = fb != null ? (fb.Ops.Color.Load.ToString(), fb.Ops.Color.Store.ToString()) : ("-", "-");
-                string key = "tex:" + a.Resource;
-                return new Row
-                {
-                    Cells = new[] { a.Resource, Format(r, g), Style.Bytes(SizeBytes(r)), ops.Load, ops.Store, Transition(view, pass, a) },
-                    Colors = new Color?[] { null, null, null, ops.Load == "Clear" ? Style.Good : ops.Load == "Load" ? Style.Bad : Style.InkDim },
-                    Pick = Pick(key),
-                    Selected = current == key || (current == null && i == 0),
-                };
-            }).ToList());
-
         List<RecordedResource> buffers = pass.References
             .Select(r => index.Resource(r.Resource))
             .Where(r => r is { Kind: GraphResourceKind.Buffer })
             .Select(r => r!)
             .ToList();
-        TableSection("Buffers referenced", 0, buffers.Count > 0 ? "Click to view / raw only, no shader layout at pass level" : "None",
-            new[] { "Buffer", "Usage", "Size", "Origin" }, new[] { 1.6f, 1.2f, 0.8f, 1.2f },
-            buffers.Select(b =>
-            {
-                string key = "buf:" + b.Id.Value;
-                return new Row { Cells = new[] { b.Name, b.Buffer?.Usage.ToString() ?? "-", Style.Bytes(b.Buffer?.SizeInBytes ?? 0), b.Origin.ToString() }, Pick = Pick(key), Selected = current == key };
-            }).ToList());
 
         List<ViewerItem> items = new();
-        items.AddRange(outputs.Select(a => new ViewerItem("tex:" + a.Resource, a.Resource + " (out)")));
-        items.AddRange(inputs.Select(a => new ViewerItem("tex:" + a.Resource, a.Resource + " (in)")));
-        items.AddRange(buffers.Select(b => new ViewerItem("buf:" + b.Id.Value, b.Name)));
+        List<Row> rows = new();
 
-        Section("Resource viewer", 0, "State shown at end of pass", w => ResourceViewer(model, node, context, items, null, w));
+        void Add(string key, string label, Row row)
+        {
+            items.Add(new ViewerItem(key, label));
+            row.Pick = Pick(key);
+            Mark(row, 0, key);
+            rows.Add(row);
+        }
+
+        Row Texture(RecordedAccess a, string role, Color roleColor, IOrigamiIcon roleIcon, string loadStore, Color? loadColor)
+        {
+            RecordedGraphResource? g = GraphResource(view, a.Resource);
+            RecordedResource? r = g != null ? Backing(index, g) : null;
+            Row row = new()
+            {
+                Cells = new[] { a.Resource, role, Format(r, g), Style.Bytes(SizeBytes(r)), loadStore, Transition(view, pass, a) },
+                Colors = new Color?[] { null, roleColor, null, null, loadColor },
+                Icons = new IOrigamiIcon?[] { null, roleIcon },
+            };
+            return row;
+        }
+
+        foreach (RecordedAccess a in outputs)
+        {
+            (string Load, string Store) ops = fb != null ? (fb.Ops.Color.Load.ToString(), fb.Ops.Color.Store.ToString()) : ("-", "-");
+            Color? loadColor = ops.Load == "Clear" ? Style.Good : ops.Load == "Load" ? Style.Bad : Style.InkDim;
+            Add("tex:" + a.Resource, a.Resource + " (out)", Texture(a, "Output", Style.Write, OrigamiGlyphs.ArrowRightFromBracket_I, $"{ops.Load} / {ops.Store}", loadColor));
+        }
+        foreach (RecordedAccess a in inputs)
+            Add("tex:" + a.Resource, a.Resource + " (in)", Texture(a, "Input", Style.Read, OrigamiGlyphs.ArrowRightToBracket_I, "-", null));
+        foreach (RecordedResource b in buffers)
+            Add("buf:" + b.Id.Value, b.Name, new Row
+            {
+                Cells = new[] { b.Name, "Buffer", b.Buffer?.Usage.ToString() ?? "-", Style.Bytes(b.Buffer?.SizeInBytes ?? 0), "-", b.Origin.ToString() },
+                Colors = new Color?[] { null, Style.Good },
+                Icons = new IOrigamiIcon?[] { null, OrigamiGlyphs.Database_I },
+            });
+
+        if (items.Count == 0)
+        {
+            TableSection("Resources", 0, "None", new[] { "Resource" }, new[] { 1f }, new List<Row> { R("-") });
+            return;
+        }
+
+        string selectedKey = SelectedKey(context, items);
+        for (int i = 0; i < rows.Count; i++)
+            rows[i].Selected = items[i].Key == selectedKey;
+
+        ResourceTable(model, node, context, "Resources", "Click to preview / out = written, in = read",
+            new[] { "Resource", "Role", "Format / usage", "Size", "Load / store", "Transition / origin" }, new[] { 1.5f, 0.9f, 1.4f, 0.8f, 1f, 1.8f },
+            rows, items);
     }
 
     private static string CommandName(RecordedCommand command)
@@ -286,6 +309,7 @@ internal sealed partial class ProfilerView
             PushMarkerCommand c => c.Name,
             UpdateBufferCommand c => $"{Res(c.After)} @ {c.Offset} / {Style.Bytes(c.Data.Length)}",
             CopyBufferCommand c => $"{Res(c.Source)} -> {Res(c.DestinationAfter)} / {Style.Bytes(c.SizeInBytes)}",
+            BlitTextureCommand c => $"{Res(c.Source)} -> {Res(c.DestinationAfter)} / {c.Regions.Length} regions",
             _ => "",
         };
     }

@@ -22,6 +22,7 @@ internal sealed partial class ProfilerView
     private static float PanelHeaderHeight => Metrics.HeaderHeight + Metrics.Padding;
     private const float FramesHeight = 200f;
     private const float HierarchyWidth = 330f;
+    private int _peakFrames;
     private const double BudgetMs = 16.7;
     private const double ScaleMs = 25;
 
@@ -93,6 +94,7 @@ internal sealed partial class ProfilerView
 
                 if (_snapshotMode && OpenSnapshot == null)
                 {
+                Divider("rp_toolbar_div");
                     Dim("empty", "No snapshot open. Press Snapshot in the Render Profiler window, or load a saved one.");
                 }
                 else if (!_snapshotMode && live == null)
@@ -164,7 +166,7 @@ internal sealed partial class ProfilerView
     {
         _selId = "f";
         _pixel = null;
-        _graphSelection = null;
+        _frameGraphSelection = null;
         _replays.Clear();
     }
 
@@ -202,8 +204,8 @@ internal sealed partial class ProfilerView
         });
     }
 
-    private ElementBuilder Card(string id)
-        => _paper.Column(id)
+    private ElementBuilder Card(string id, int index = 0)
+        => _paper.Column(id, index)
             .BackgroundColor(Style.CardFill)
             .BorderColor(Style.CardBorder).BorderWidth(1)
             .Rounded(Metrics.ContainerRounding)
@@ -250,9 +252,12 @@ internal sealed partial class ProfilerView
         canvas.Fill();
     });
 
-    private void Divider(string id) => Origami.Separator(_paper, id).Height(1).Margin(0, 0).Show();
+    private void Divider(string id) => _paper.Box(id).Height(1).BackgroundColor(Style.CardBorder).IsNotInteractable();
 
-    private IDisposable Toolbar() => _paper.Row("rp_toolbar").Height(HeaderHeight).Gap(Metrics.SpacingLarge).AlignItems(LayoutAlignment.Center).Enter();
+    private const float ToolbarHeight = 34f;
+
+    private IDisposable Toolbar()
+        => _paper.Row("rp_toolbar").Height(ToolbarHeight - 1).Padding(10, 8, 0, 0).Gap(6).AlignItems(LayoutAlignment.Center).Enter();
 
     private void DrawLiveToolbar(IReadOnlyList<Recording> frames)
     {
@@ -301,7 +306,7 @@ internal sealed partial class ProfilerView
                 FrameModel model = SnapshotModel(open);
                 HeaderStat("hs_frame", "Frame", $"#{open.ExecutionId}", Style.Ink);
                 HeaderStat("hs_mode", "Mode", $"DeepMode.{open.Mode}", Style.Ink);
-                HeaderStat("hs_views", "Views", model.Recording.Views.Length.ToString(), Style.Ink);
+                HeaderStat("hs_instances", "Instances", model.Recording.Instances.Length.ToString(), Style.Ink);
                 HeaderStat("hs_cpu", "CPU", Style.Ms2(model.Timing.CpuMilliseconds), Style.Ink);
                 HeaderStat("hs_gpu", "GPU", Style.Ms2(model.Timing.GpuMilliseconds), Style.Ink);
             }
@@ -342,7 +347,7 @@ internal sealed partial class ProfilerView
                     Mono("follow", pinned ? $"Selected #{live!.ExecutionId}" : "No frame selected", pinned ? Style.Selection : Style.InkDim);
                 }
 
-                using (Card("card").Height(cardHeight).Enter())
+                using (_paper.Column("card").Height(cardHeight).Enter())
                     DrawFrameBars(frames, live);
             }
 
@@ -366,7 +371,7 @@ internal sealed partial class ProfilerView
 
                     FrameTiming timing = model.Timing;
                     StatRow("r0", "Frame", $"#{live.ExecutionId}", "");
-                    StatRow("r1", "Views", live.Views.Length.ToString(), "");
+                    StatRow("r1", "Instances", live.Instances.Length.ToString(), "");
                     StatRow("r2", "FPS", Style.F(1000.0 / timing.FrameMilliseconds, "0.0"), "");
                     StatRow("r3", "CPU record", Style.F(timing.CpuMilliseconds, "0.00"), $" / {Style.F(avgCpu, "0.00")} avg");
                     StatRow("r4", "GPU draw", Style.F(timing.GpuMilliseconds, "0.00"), $" / {Style.F(avgGpu, "0.00")} avg");
@@ -391,18 +396,20 @@ internal sealed partial class ProfilerView
 
     private void DrawFrameBars(IReadOnlyList<Recording> frames, Recording? live)
     {
-        const float axis = 44f;
         double cumulative = _source.TotalFrames > 0 ? _source.TotalMilliseconds / _source.TotalFrames : 0;
         double[] ms = frames.Select((_, i) => _source.Timing(i).FrameMilliseconds).ToArray();
 
+        _peakFrames = Math.Max(_peakFrames, frames.Count);
+        int capacity = Math.Max(1, _source.FrameCapacity > 0 ? _source.FrameCapacity : _peakFrames);
+
         int Hit(float x, float width)
         {
-            float slot = (width - axis) / frames.Count;
-            int i = (int)MathF.Floor((x - axis) / slot);
-            return i >= 0 && i < frames.Count ? i : -1;
+            float slot = width / capacity;
+            int i = frames.Count - 1 - (int)((width - x) / slot);
+            return x >= 0 && x < width && i >= 0 && i < frames.Count ? i : -1;
         }
 
-        ElementBuilder box = _paper.Box("bars").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Cursor(PaperCursor.Pointer);
+        ElementBuilder box = _paper.Box("bars").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Clip().Cursor(PaperCursor.Pointer);
         box.OnHover(e =>
         {
             _barsHoverX = (float)e.RelativePosition.X;
@@ -433,35 +440,40 @@ internal sealed partial class ProfilerView
             _paper.Draw((canvas, rect) =>
             {
                 float x0 = (float)rect.Min.X, y0 = (float)rect.Min.Y, w = (float)rect.Size.X, h = (float)rect.Size.Y;
-                float px = x0 + axis, pw = w - axis;
                 float Y(double v) => y0 + h - (float)Math.Min(1.0, v / ScaleMs) * h;
+                canvas.RectFilled(x0, y0, w, h, Style.ChartFill);
 
-                canvas.RectFilled(px, Y(BudgetMs), pw, 1, Style.Border);
-                canvas.RectFilled(px, Y(BudgetMs / 2), pw, 1, Style.Alpha(Style.Border, 120));
-                canvas.RectFilled(px, y0 + h - 1, pw, 1, Style.InkFaint);
-                canvas.DrawText("25ms", x0, y0, Style.InkDim, Style.Tiny, Style.Mono);
-                canvas.DrawText("16.7ms", x0, Y(BudgetMs), Style.InkDim, Style.Tiny, Style.Mono, 0f, new Prowl.Vector.Float2(0, 0.5f));
-                canvas.DrawText("8.3ms", x0, Y(BudgetMs / 2), Style.InkDim, Style.Tiny, Style.Mono, 0f, new Prowl.Vector.Float2(0, 0.5f));
+                Color budget = Style.Alpha(Style.Good, 60);
+                canvas.RectFilled(x0, Y(BudgetMs), w, 1, budget);
+                canvas.RectFilled(x0, Y(BudgetMs / 2), w, 1, Style.Alpha(Style.Ink, 30));
+                canvas.DrawText("16.7 ms", x0 + 6, Y(BudgetMs) - 12, budget, Style.Tiny, Style.Mono);
+                canvas.DrawText("8.3 ms", x0 + 6, Y(BudgetMs / 2) - 12, Style.Alpha(Style.Ink, 30), Style.Tiny, Style.Mono);
+                canvas.DrawText("25 ms", x0 + w - 6, y0 + 4, Style.InkDim, Style.Small, Style.Mono, 0f, new Prowl.Vector.Float2(1, 0));
 
-                float slot = pw / frames.Count;
-                float barW = MathF.Max(1f, slot - 1f);
+                float slot = w / capacity;
+                float barW = slot > 3f ? slot - 1f : MathF.Max(1f, slot);
                 int hover = _barsHoverX >= 0 ? Hit(_barsHoverX, w) : -1;
-                for (int i = 0; i < frames.Count; i++)
+                int visible = Math.Min(frames.Count, capacity);
+                for (int ago = 0; ago < visible; ago++)
                 {
+                    int i = frames.Count - 1 - ago;
+                    float bx = x0 + w - (ago + 1) * slot;
                     Color c = i == liveIndex ? Style.Selection : ms[i] > BudgetMs ? Style.OverBudget : Style.FrameBar;
-                    if (i == hover)
-                        c = Color.FromArgb(255, Math.Min(255, c.R + 50), Math.Min(255, c.G + 50), Math.Min(255, c.B + 50));
                     float top = Y(ms[i]);
-                    canvas.RectFilled(px + i * slot, top, barW, y0 + h - 1 - top, c);
+                    canvas.RectFilled(bx, top, barW, y0 + h - top, c);
+                    if (i == liveIndex)
+                        canvas.RectFilled(bx, y0, barW, h, Style.Alpha(Style.Primary, 70));
+                    else if (i == hover)
+                        canvas.RectFilled(bx, y0, barW, h, Color.FromArgb(28, 255, 255, 255));
                 }
 
                 float avgY = Y(cumulative);
-                for (float x = px; x < px + pw; x += 7f)
-                    canvas.RectFilled(x, avgY - 1, MathF.Min(4f, px + pw - x), 2, Style.Ink);
+                for (float x = x0; x < x0 + w; x += 7f)
+                    canvas.RectFilled(x, avgY - 1, MathF.Min(4f, x0 + w - x), 2, Style.Ink);
 
                 string label = $"avg {Style.Ms2(cumulative)} / {_source.TotalFrames} frames";
                 Prowl.Vector.Float2 size = canvas.MeasureText(label, Style.Tiny, Style.Mono);
-                float lx = px + pw - (float)size.X - 16, ly = avgY - (float)size.Y - 8;
+                float lx = x0 + w - (float)size.X - 16, ly = avgY - (float)size.Y - 8;
                 canvas.RoundedRectFilled(lx - 6, ly - 2, (float)size.X + 12, (float)size.Y + 4, 3, 3, 3, 3, Style.Theme.Popover);
                 canvas.DrawText(label, lx, ly, Style.Ink, Style.Tiny, Style.Mono);
             });
@@ -491,10 +503,10 @@ internal sealed partial class ProfilerView
         {
             string title = Heavy ? $"Snapshot / frame #{model.Number}" : $"Frame #{model.Number}";
             Title("t", title);
-            string levels = Heavy ? "Frame > View > Render Pass > Program > Renderer (marker) > Draw" : "Frame > View > Render Pass";
+            string levels = Heavy ? "Frame > Instance > Render Pass > Program > Renderer (marker) > Draw" : "Frame > Instance > Render Pass";
             Dim("p", levels + " / timing ends at pass");
             Spacer("sp");
-            LegendItem("l0", Style.KindFill(NodeKind.View), "View");
+            LegendItem("l0", Style.KindFill(NodeKind.Instance), "Instance");
             LegendItem("l1", Style.KindFill(NodeKind.Pass), "Render Pass");
             LegendItem("l2", Style.KindFill(NodeKind.CommandBuffer), "Command Buffer (outside passes)");
         }
@@ -517,7 +529,7 @@ internal sealed partial class ProfilerView
             .Show();
     }
 
-    private static bool DefaultOpen(NodeKind kind) => kind is NodeKind.Frame or NodeKind.View or NodeKind.Program;
+    private static bool DefaultOpen(NodeKind kind) => kind is NodeKind.Frame or NodeKind.Instance or NodeKind.Program;
 
     private void DrawHierarchy(FrameModel model, float height)
     {

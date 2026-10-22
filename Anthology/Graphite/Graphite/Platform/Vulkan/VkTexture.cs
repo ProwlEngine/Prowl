@@ -58,7 +58,8 @@ internal unsafe partial class VkTexture : Texture
         imageCI.Usage = VkFormats.ToVkTextureUsage(Usage);
         imageCI.Tiling = ImageTiling.Optimal;
         imageCI.Format = VkFormat;
-        imageCI.Flags = ImageCreateFlags.CreateMutableFormatBit;
+        if ((Usage & TextureUsage.DepthStencil) == 0)
+            imageCI.Flags = ImageCreateFlags.CreateMutableFormatBit;
 
         imageCI.Samples = VkSampleCount;
         if (isCubemap)

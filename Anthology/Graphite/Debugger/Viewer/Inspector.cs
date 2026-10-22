@@ -18,16 +18,16 @@ internal sealed partial class ProfilerView
     
     private static readonly Dictionary<NodeKind, string[]> LiveTabs = new()
     {
-        [NodeKind.Frame] = new[] { "Overview", "Timing", "Memory", "History" },
-        [NodeKind.View] = new[] { "Overview", "History" },
-        [NodeKind.Pass] = new[] { "Overview", "History" },
+        [NodeKind.Frame] = new[] { "Overview", "Timing", "Memory" },
+        [NodeKind.Instance] = new[] { "Overview" },
+        [NodeKind.Pass] = new[] { "Overview" },
         [NodeKind.CommandBuffer] = new[] { "Overview" },
     };
 
     private static readonly Dictionary<NodeKind, string[]> SnapshotTabs = new()
     {
-        [NodeKind.Frame] = new[] { "Overview", "Timing", "Memory", "Capture" },
-        [NodeKind.View] = new[] { "Overview", "Render Graph" },
+        [NodeKind.Frame] = new[] { "Overview", "Timing", "Memory", "Render Graph", "Capture" },
+        [NodeKind.Instance] = new[] { "Overview", "Render Graph" },
         [NodeKind.Pass] = new[] { "Overview", "Resources", "Commands" },
         [NodeKind.CommandBuffer] = new[] { "Overview" },
         [NodeKind.Program] = new[] { "Program", "Bindings", "State" },
@@ -96,7 +96,7 @@ internal sealed partial class ProfilerView
         switch (node.Kind)
         {
             case NodeKind.Frame: FrameTab(model, tab, frames); break;
-            case NodeKind.View: ViewTab(model, node, tab, frames); break;
+            case NodeKind.Instance: InstanceTab(model, node, tab, frames); break;
             case NodeKind.Pass: PassTab(model, node, tab, frames); break;
             case NodeKind.CommandBuffer: CommandBufferTab(node); break;
             case NodeKind.Program: ProgramTab(model, node, tab); break;
@@ -125,8 +125,23 @@ internal sealed partial class ProfilerView
 
     private void Section(string title, float basis, string note, Action<float> body, bool uniformPadding = false)
     {
+        if (_inGroup)
+        {
+            NestedAccordion(title, () => Section(title, basis, note, body, uniformPadding));
+            return;
+        }
         OrigamiMetrics m = Style.Theme.Metrics;
         float width = SectionWidth(basis);
+        if (_inAccordion)
+        {
+            using (_paper.Column("sec", _sectionIndex++).Width(width).Height(UnitValue.Auto).Gap(m.SpacingSmall).Enter())
+            {
+                if (note.Length > 0)
+                    Dim("n", note);
+                body(width);
+            }
+            return;
+        }
         float top = uniformPadding ? m.PaddingLarge : m.Padding;
         using (_paper.Column("sec", _sectionIndex++).Width(width).Height(UnitValue.Auto).Gap(m.SpacingSmall).Enter())
         {
@@ -172,6 +187,7 @@ internal sealed partial class ProfilerView
     {
         public required string[] Cells;
         public Color?[]? Colors;
+        public IOrigamiIcon?[]? Icons;
         public Action? Pick;
         public bool Selected;
     }
@@ -180,10 +196,21 @@ internal sealed partial class ProfilerView
 
     private void TableSection(string title, float basis, string note, string[] head, float[] flex, IReadOnlyList<Row> rows, float maxHeight = 360f)
     {
+        if (_inGroup)
+        {
+            NestedAccordion(title, () => TableSection(title, basis, note, head, flex, rows, maxHeight));
+            return;
+        }
         float width = SectionWidth(basis);
         using (_paper.Column("sec", _sectionIndex++).Width(width).Height(UnitValue.Auto).Gap(Style.Theme.Metrics.SpacingSmall).Enter())
         {
-            SectionHeading(title, note);
+            if (_inAccordion)
+            {
+                if (note.Length > 0)
+                    Dim("n", note);
+            }
+            else
+                SectionHeading(title, note);
             Table(width, head, flex, rows, maxHeight);
         }
     }
@@ -211,7 +238,10 @@ internal sealed partial class ProfilerView
             {
                 string text = c < row.Cells.Length ? row.Cells[c] : "";
                 Color color = row.Colors != null && c < row.Colors.Length && row.Colors[c] is { } custom ? custom : c == 0 ? Style.Ink : Style.InkSoft;
-                tr.Cell(text, color);
+                if (row.Icons != null && c < row.Icons.Length && row.Icons[c] is { } icon)
+                    tr.Cell(text, color, icon);
+                else
+                    tr.Cell(text, color);
             }
         }
 
@@ -276,30 +306,26 @@ internal sealed partial class ProfilerView
 
     private readonly record struct Sparkline(string Title, double[] Values, Color Color, Func<double, string> Format, double[]? Second = null, Color? SecondColor = null, string Legend = "");
 
-    private void ChartsSection(string title, string note, int current, IReadOnlyList<Sparkline> charts)
+    private void ChartsSection(string title, string note, int current, IReadOnlyList<Sparkline> charts, float minColumn = 260f, float height = 120f)
         => Section(title, 0, note, width =>
         {
-            int columns = Math.Max(1, (int)((width + 8f) / 268f));
+            int columns = Math.Max(1, (int)((width + 8f) / (minColumn + 8f)));
             float chartWidth = (width - 8f * (columns - 1)) / columns;
             using (_paper.Row("charts").Width(UnitValue.Stretch()).Height(UnitValue.Auto).WrapContent().Gap(8).LineGap(8).Enter())
                 for (int i = 0; i < charts.Count; i++)
                     using (_paper.Column("ch", i).Width(chartWidth).Height(UnitValue.Auto).Gap(2).Enter())
-                        SparklineChart(charts[i], current, chartWidth);
+                        SparklineChart(charts[i], current, chartWidth, height);
         });
 
-    private void SparklineChart(Sparkline chart, int current, float width)
+    private void SparklineChart(Sparkline chart, int current, float width, float height)
     {
         double[] v = chart.Values;
         double avg = v.Length > 0 ? v.Average() : 0;
         double[] average = Enumerable.Repeat(avg, v.Length).ToArray();
-        double[] marker = new double[v.Length];
-        for (int i = 0; i < marker.Length; i++)
-            marker[i] = i == current ? v[i] : double.NaN;
-
         string cur = current >= 0 && current < v.Length ? chart.Format(v[current]) : "-";
         CartesianChart<object> c = Chart.CreateCartesian<object>(_paper, "c")
             .Title($"{chart.Title}   {cur}")
-            .Size(width, 120)
+            .Size(width, height)
             .Legend(false)
             .Bordered(false)
             .Axes(false)
@@ -314,7 +340,8 @@ internal sealed partial class ProfilerView
         if (chart.Second != null)
             lines.Series(chart.Legend.Length > 0 ? chart.Legend.Split('/').Last().Trim() : "second", chart.SecondColor ?? Style.Snapshot, chart.Second).StrokeWidth(1.25f);
         lines.Series(chart.Title, chart.Color, v).StrokeWidth(1.25f);
-        c.AddScatterPlot().MarkerSize(6f).Series("this frame", Style.Selection, marker);
+        if (current >= 0 && current < v.Length)
+            lines.MarkerLine(current, Style.Selection);
         c.Show();
 
         string min = v.Length > 0 ? chart.Format(v.Min()) : "-", max = v.Length > 0 ? chart.Format(v.Max()) : "-";
