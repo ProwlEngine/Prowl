@@ -719,6 +719,7 @@ public class PreferencesPanel : DockPanel
                 Origami.IconButton(paper, $"{id}_file", EditorIcons.FolderOpen_I, () =>
                     EditorApplication.OpenFileDialog(FileDialogMode.Open, path => { if (path != null) Apply(path); },
                         filters: s_fontFilters, filterLabels: [Loc.Get("pref.font_filter")]))
+                    .Small().Width(Origami.Current.Metrics.RowHeight).Height(Origami.Current.Metrics.RowHeight)
                     .Tooltip(Loc.Get("pref.font_file")).Show();
             }
         }, compact: true);
