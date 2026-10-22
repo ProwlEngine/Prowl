@@ -864,8 +864,9 @@ public class DockSpace
         // `tAlpha` fades the preview in/out. The chosen rates feel snappy (~120ms to settle)
         // without the perceptible lag of a slower interpolation.
         float dt = MathF.Max(0f, _lastDeltaTime);
-        float tMove = 1f - MathF.Exp(-dt * 18f);
-        float tAlpha = 1f - MathF.Exp(-dt * 20f);
+        float scale = paper.TransitionScale;
+        float tMove = scale <= 0f ? 1f : 1f - MathF.Exp(-dt * 18f / scale);
+        float tAlpha = scale <= 0f ? 1f : 1f - MathF.Exp(-dt * 20f / scale);
 
         if (target.HasValue)
         {

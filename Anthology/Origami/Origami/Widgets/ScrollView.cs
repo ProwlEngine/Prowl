@@ -437,9 +437,9 @@ public sealed class ScrollViewBuilder
 
     private float EaseScrollAxis(ElementHandle outerHandle, string key, float target)
     {
-        if (!_smoothScroll) return target;
+        float duration = 0.33f * _paper.TransitionScale;
+        if (!_smoothScroll || duration <= 0f) return target;
 
-        const float duration = 0.33f;
         var ease = _paper.GetElementStorage<ScrollEase?>(outerHandle, key, null);
         if (ease == null)
         {

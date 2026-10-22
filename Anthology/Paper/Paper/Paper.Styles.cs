@@ -788,11 +788,18 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
+        /// Scales the length of every style transition. 0 turns transitions off, so values change at once.
+        /// </summary>
+        public float TransitionScale { get; set; } = 1f;
+
+        /// <summary>
         /// Configure a transition for a property.
         /// </summary>
         internal void SetTransitionConfig(int elementID, GuiProp property, float duration, Func<float, float>? easing = null)
         {
-            GetOrCreateStyle(elementID).SetTransitionConfig(property, duration, easing);
+            float scaled = duration * TransitionScale;
+            if (scaled <= 0f) return;
+            GetOrCreateStyle(elementID).SetTransitionConfig(property, scaled, easing);
         }
 
         /// <summary>
