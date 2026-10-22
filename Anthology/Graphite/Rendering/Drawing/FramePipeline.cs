@@ -225,7 +225,9 @@ internal sealed partial class FramePipeline : IDisposable
         description.BlendState = BlendStateDescription.SingleOverrideBlend;
         description.DepthStencilState = DepthStencilStateDescription.Disabled;
         description.RasterizerState = RasterizerStateDescription.CullNone;
-        return device.ResourceFactory.CreateGraphicsProgram(description);
+        GraphicsProgram program = device.ResourceFactory.CreateGraphicsProgram(description);
+        program.Name = ShaderLibrary.Prefix + file;
+        return program;
     }
     public Sampler LinearSampler { get; }
 
