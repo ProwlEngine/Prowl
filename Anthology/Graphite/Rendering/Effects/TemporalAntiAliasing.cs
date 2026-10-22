@@ -64,12 +64,12 @@ public sealed class TemporalAntiAliasing : RenderFeature
     {
         builder.ReadScene();
         builder.WriteColor();
-        builder.GetSetupState<ViewHistory>().Texture = builder.History("History", view.Texture(PixelFormat.R16_G16_B16_A16_Float), usage: TextureState.Attachment | TextureState.Sampled);
+        builder.GetViewState<ViewHistory>().Texture = builder.History("History", view.Texture(PixelFormat.R16_G16_B16_A16_Float), usage: TextureState.Attachment | TextureState.Sampled);
     }
 
     public override void Render(FeatureContext context)
     {
-        TextureHandle handle = context.GetSetupState<ViewHistory>().Texture;
+        TextureHandle handle = context.GetViewState<ViewHistory>().Texture;
         RenderTexture history = context.Get(handle);
         RenderTexture? previous = context.History(handle);
         Float2 resolution = new(context.View.Width, context.View.Height);

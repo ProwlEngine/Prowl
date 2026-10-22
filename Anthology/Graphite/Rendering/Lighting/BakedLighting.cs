@@ -242,7 +242,7 @@ internal sealed class WorldProbes
         ProbeRecords = tables.Array("Records");
         TetRecords = tables.Array("Tetrahedra");
         Requests = tables.Array("Requests");
-        ObjectShBuffer = new PersistentBuffer(RenderResourceID.Intern($"{tables.Prefix}.ObjectSh"), BufferUsage.StructuredBufferReadWrite, new GraphInstanceKey(GraphKind.Root, 0));
+        ObjectShBuffer = new PersistentBuffer(RenderResourceID.Intern($"{tables.Prefix}.ObjectSh"), BufferUsage.StructuredBufferReadWrite);
         ObjectSh = ResolveSh(64);
     }
 
@@ -480,7 +480,7 @@ internal sealed class WorldProbes
 }
 
 /// <summary>Samples the light probes for every world's requests, after the upload and before any camera reads them.</summary>
-internal sealed class ProbePass(ComputeProgram program) : IExecutionPass, IDisposable
+internal sealed class ProbePass(ComputeProgram program) : IDisposable
 {
     [StructLayout(LayoutKind.Sequential)]
     private struct Push
@@ -495,21 +495,30 @@ internal sealed class ProbePass(ComputeProgram program) : IExecutionPass, IDispo
 
     public readonly List<WorldProbes> Worlds = new();
 
-    public string Name => "Graphite.LightProbes";
-
-    public void Setup(RenderContextBuilder builder)
+    public void Add(FrameGraph graph)
     {
+        bool any = false;
         foreach (WorldProbes probes in Worlds)
+            any |= probes.RequestCount > 0;
+        if (!any)
+            return;
+        graph.AddPass("Graphite.LightProbes", builder =>
         {
-            builder.DeclareInputBuffer(probes.ProbeRecords.Persistent.Id, BufferAccess.ShaderRead);
-            builder.DeclareInputBuffer(probes.TetRecords.Persistent.Id, BufferAccess.ShaderRead);
-            builder.DeclareInputBuffer(probes.Requests.Persistent.Id, BufferAccess.ShaderRead);
-            builder.DeclareWriteBuffer(probes.ObjectShBuffer.Id, BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
-        }
+            foreach (WorldProbes probes in Worlds)
+            {
+                if (probes.RequestCount == 0)
+                    continue;
+                builder.Read(graph.Import(probes.ProbeRecords.Buffer), BufferAccess.ShaderRead);
+                builder.Read(graph.Import(probes.TetRecords.Buffer), BufferAccess.ShaderRead);
+                builder.Read(graph.Import(probes.Requests.Buffer), BufferAccess.ShaderRead);
+                builder.Write(graph.Import(probes.ObjectSh), BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+            }
+        }, Render);
     }
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    private void Render(PassContext context)
     {
+        CommandBuffer cmd = context.Command;
         bool bound = false;
         foreach (WorldProbes probes in Worlds)
         {
