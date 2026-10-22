@@ -38,6 +38,7 @@ internal sealed partial class FramePipeline
         ViewDesc capture = new()
         {
             World = world.World,
+            Name = "Sky capture",
             Kind = ViewKind.SkyCapture,
             ViewId = world.SkyCamera.View.ViewId,
             LayerCount = 6,
@@ -75,6 +76,7 @@ internal sealed partial class FramePipeline
             ViewDesc capture = new()
             {
                 World = world.World,
+                Name = $"Reflection probe {work.Index}",
                 Kind = ViewKind.ReflectionProbe,
                 ViewId = camera.View.ViewId,
                 LayerCount = 6,
@@ -95,6 +97,7 @@ internal sealed partial class FramePipeline
             ViewDesc capture = new()
             {
                 World = world.World,
+                Name = $"Reflection probe {work.Index} face {work.FirstFace}",
                 Kind = ViewKind.ReflectionProbe,
                 ViewId = camera.View.ViewId,
                 Target = scratch.Faces[work.FirstFace],

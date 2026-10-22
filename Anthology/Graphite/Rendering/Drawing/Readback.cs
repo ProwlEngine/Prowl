@@ -23,6 +23,7 @@ internal sealed class ReadbackRequest
     public ulong Execution;
     public int Attempts;
     public string? Error;
+    public string? Name;
 }
 
 /// <summary>Makes the staging buffers of a frame's readbacks and drops the requests whose source was disposed.</summary>

@@ -359,7 +359,7 @@ internal sealed partial class FramePipeline : IDisposable
             if (reflections.CaptureDue)
             {
                 CaptureSky(world, time);
-                readbacks.Add(new ReadbackRequest { Buffer = reflections.SkyAmbient, Size = reflections.SkyAmbient.SizeInBytes, BufferDone = world.World.ReceiveSkyAmbient });
+                readbacks.Add(new ReadbackRequest { Name = $"{WorldName(world)} sky ambient readback", Buffer = reflections.SkyAmbient, Size = reflections.SkyAmbient.SizeInBytes, BufferDone = world.World.ReceiveSkyAmbient });
             }
             foreach (ProbeCapture capture in reflections.Captures)
                 CaptureProbe(world, capture, time);
@@ -515,16 +515,14 @@ internal sealed partial class FramePipeline : IDisposable
         AddFrameFeatures(FrameSlot.Shadows, FrameSlot.Shadows, rendererOnly: true);
         foreach (WorldFrame world in _frameWorlds)
         {
-            using (_graph.Group(WorldName(world)))
-            {
+            using (_graph.Group($"{WorldName(world)} shadows"))
                 AddFrameFeatures(FrameSlot.Shadows, FrameSlot.Shadows, world);
-                foreach (PlannedInstance planned in _planned)
-                {
-                    if (planned.World == world && planned.Kind == PlannedKind.Capture)
-                        AddPlanned(planned);
-                }
-                AddFrameFeatures(FrameSlot.Captures, FrameSlot.Captures, world);
+            foreach (PlannedInstance planned in _planned)
+            {
+                if (planned.World == world && planned.Kind == PlannedKind.Capture)
+                    AddPlanned(planned);
             }
+            AddFrameFeatures(FrameSlot.Captures, FrameSlot.Captures, world);
         }
         AddFrameFeatures(FrameSlot.Captures, FrameSlot.Captures, rendererOnly: true);
         foreach (PlannedInstance planned in _planned)
@@ -574,8 +572,8 @@ internal sealed partial class FramePipeline : IDisposable
     {
         foreach (PlannedInstance planned in _planned)
         {
-            if (planned.World == world && planned.Kind == PlannedKind.Fill)
-                AddPlanned(planned);
+            if (planned.World == world && planned.Kind == PlannedKind.Fill && planned.Data is CaptureFill fill)
+                CaptureFillPasses.Add(this, _graph, fill);
         }
     }
 
@@ -583,7 +581,7 @@ internal sealed partial class FramePipeline : IDisposable
     {
         for (int i = 0; i < _readback.Requests.Count; i++)
         {
-            using (_graph.Group($"Readback {i}"))
+            using (_graph.Group(_readback.Requests[i].Name ?? $"Readback {i}"))
                 ReadbackPasses.Add(_graph, _readback.Requests[i], i);
         }
     }
@@ -594,8 +592,6 @@ internal sealed partial class FramePipeline : IDisposable
         {
             if (planned.Data is CameraFrame camera)
                 camera.Build.Build(camera.ShapeKey);
-            else if (planned.Data is CaptureFill fill)
-                CaptureFillPasses.Add(this, _graph, fill);
         }
     }
 
