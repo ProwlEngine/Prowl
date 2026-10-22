@@ -7,6 +7,8 @@ using System.IO;
 using System.Runtime.InteropServices;
 
 using Prowl.Aperture;
+using Prowl.Echo;
+using Prowl.Editor.Importers;
 
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
@@ -270,7 +272,9 @@ public sealed class LightmapBakeService
             LightmapTarget t = atlas.Targets[i];
             byte[] rgba = t.ReadRGBM(8f);
             string rel = $"{lmFolderRel}/Lightmap-{i}.png";
-            WritePng(Path.Combine(lmFolderAbs, $"Lightmap-{i}.png"), rgba, t.Width, t.Height);
+            string pageAbs = Path.Combine(lmFolderAbs, $"Lightmap-{i}.png");
+            WritePng(pageAbs, rgba, t.Width, t.Height);
+            WriteLightmapMeta(pageAbs);
             Guid guid = db.ImportFile(rel);
             if (AssetDatabase.Get<Texture2D>(guid) is not { } lightmap)
             {
@@ -440,6 +444,14 @@ public sealed class LightmapBakeService
         catch { return null; }
     }
 
+    // A page imports as a Lightmap texture, which keeps its RGBM texels exact rather than compressing them.
+    private static void WriteLightmapMeta(string pageAbs)
+    {
+        EchoObject settings = new TextureImporter().DefaultSettings() ?? EchoObject.NewCompound();
+        settings[TextureImportSettings.Keys.Type] = new EchoObject((int)TextureImportType.Lightmap);
+        MetaFile.Write(MetaFile.GetMetaPath(pageAbs), MetaFile.CreateNew(nameof(TextureImporter), defaultSettings: settings));
+    }
+
     // Fallback for embedded/generated textures: read back the GPU pixels (RGBA8 or RGBA16).
     private static BakeTexture? TryReadback(BakeScene bake, Texture2D tex, string name)
     {
@@ -449,9 +461,9 @@ public sealed class LightmapBakeService
         byte[] rgba = new byte[n * 4];
         try
         {
-            if (tex.Format == Runtime.TextureFormat.RGBA8)
+            if (tex.GetMipRgba8() is byte[] expanded)
             {
-                tex.GetData<byte>(rgba);
+                expanded.AsSpan(0, rgba.Length).CopyTo(rgba);
             }
             else if (tex.Format == Runtime.TextureFormat.RGBA16)
             {

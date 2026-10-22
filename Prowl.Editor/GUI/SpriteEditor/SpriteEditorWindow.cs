@@ -41,6 +41,9 @@ public class SpriteEditorWindow : DockPanel
 
     private Guid _textureGuid;
     private Texture2D? _texture;
+
+    // Slices are authored in the source image's pixels, which a Max Size limit can make larger than the texture.
+    private int _sourceW = 1, _sourceH = 1;
     private SpriteEditTarget _target = new();
     private SpriteImportSettings _settings => _target.Settings;
 
@@ -103,6 +106,9 @@ public class SpriteEditorWindow : DockPanel
     {
         _textureGuid = textureGuid;
         _texture = AssetDatabase.Load<Texture2D>(textureGuid);
+        (int sourceW, int sourceH) = TextureSpriteMeta.SourceSize(textureGuid);
+        _sourceW = sourceW > 0 ? sourceW : _texture.IsValid() ? (int)_texture.Width : 1;
+        _sourceH = sourceH > 0 ? sourceH : _texture.IsValid() ? (int)_texture.Height : 1;
         _target = SpriteEditRegistry.Get(textureGuid);
         _selected = -1;
         _needsFrame = true;
@@ -138,7 +144,7 @@ public class SpriteEditorWindow : DockPanel
             _settings.Slices.Add(new SpriteSliceData { Id = Guid.NewGuid(), Name = tex.Name });
 
         SpriteSliceData slice = _settings.Slices[0];
-        var full = new SpriteRect(0, 0, (int)tex.Width, (int)tex.Height);
+        var full = new SpriteRect(0, 0, _sourceW, _sourceH);
         if (slice.Rect.X != full.X || slice.Rect.Y != full.Y ||
             slice.Rect.Width != full.Width || slice.Rect.Height != full.Height)
             slice.Rect = full;
@@ -355,9 +361,9 @@ public class SpriteEditorWindow : DockPanel
     private void RunSliceCore()
     {
         if (_texture is not Texture2D tex) return;
-        int texW = (int)tex.Width, texH = (int)tex.Height;
+        int texW = _sourceW, texH = _sourceH;
         byte[]? alpha = (_settings.SlicingTool == SpriteSlicingTool.Automatic || !_settings.KeepEmptyRects)
-            ? SpriteSlicer.ReadAlpha(tex) : null;
+            ? TextureSpriteMeta.SourceAlpha(_textureGuid) : null;
         _settings.Slices = SpriteSlicer.Slice(_settings, texW, texH, alpha, tex.Name);
         _selected = -1;
     }
@@ -386,7 +392,7 @@ public class SpriteEditorWindow : DockPanel
 
                 if (_needsFrame && _texture is Texture2D t && _cvW > 1 && _cvH > 1)
                 {
-                    _view.Frame(t.Width, t.Height, new Float2(_cvW, _cvH));
+                    _view.Frame(_sourceW, _sourceH, new Float2(_cvW, _cvH));
                     ClampPan();
                     _needsFrame = false;
                 }
@@ -472,13 +478,13 @@ public class SpriteEditorWindow : DockPanel
     {
         if (_drag != DragMode.None || IsSingle) return;
         if (_texture is not Texture2D tex) return;
-        _selected = HitBody(ContentAt(paper), (int)tex.Height);
+        _selected = HitBody(ContentAt(paper), _sourceH);
     }
 
     private void DragStart(Paper paper)
     {
         if (_texture is not Texture2D tex) { _drag = DragMode.None; return; }
-        int texW = (int)tex.Width, texH = (int)tex.Height;
+        int texW = _sourceW, texH = _sourceH;
         Float2 content = ContentAt(paper);
         Float2 pointer = paper.PointerPos;
 
@@ -537,7 +543,7 @@ public class SpriteEditorWindow : DockPanel
     private void DragUpdate(Paper paper)
     {
         if (_texture is not Texture2D tex) return;
-        int texW = (int)tex.Width, texH = (int)tex.Height;
+        int texW = _sourceW, texH = _sourceH;
         Float2 content = ContentAt(paper);
 
         switch (_drag)
@@ -611,7 +617,7 @@ public class SpriteEditorWindow : DockPanel
 
         if (_drag == DragMode.Create && _texture is Texture2D tex)
         {
-            int texW = (int)tex.Width, texH = (int)tex.Height;
+            int texW = _sourceW, texH = _sourceH;
             float dx = MathF.Min(_createStart.X, _createEnd.X), dy = MathF.Min(_createStart.Y, _createEnd.Y);
             float dw = MathF.Abs(_createEnd.X - _createStart.X), dh = MathF.Abs(_createEnd.Y - _createStart.Y);
             if (dw >= 2 && dh >= 2)
@@ -710,7 +716,7 @@ public class SpriteEditorWindow : DockPanel
     private void ClampPan()
     {
         if (_texture is not Texture2D tex) return;
-        float cw = tex.Width * _view.Zoom, ch = tex.Height * _view.Zoom;
+        float cw = _sourceW * _view.Zoom, ch = _sourceH * _view.Zoom;
         Float2 p = _view.Pan;
         p.X = Math.Clamp(p.X, MathF.Min(0, _cvW - cw), MathF.Max(0, _cvW - cw));
         p.Y = Math.Clamp(p.Y, MathF.Min(0, _cvH - ch), MathF.Max(0, _cvH - ch));
@@ -721,7 +727,7 @@ public class SpriteEditorWindow : DockPanel
     private PaperCursor HoverCursor(Paper paper)
     {
         if (_texture is not Texture2D tex || !PointerInCanvas(paper)) return PaperCursor.Default;
-        int texH = (int)tex.Height;
+        int texH = _sourceH;
         Float2 pointer = paper.PointerPos;
 
         if (_drag != DragMode.None)
@@ -780,7 +786,7 @@ public class SpriteEditorWindow : DockPanel
             return;
         }
 
-        int texW = (int)tex.Width, texH = (int)tex.Height;
+        int texW = _sourceW, texH = _sourceH;
 
         // Draw the texture in screen space with a flipped V (textures are stored Y-up), the same brush idiom
         // the scene view uses for its render target. Matches how the slice rects are placed via ScreenOf.
@@ -953,7 +959,7 @@ public class SpriteEditorWindow : DockPanel
         Origami.Header(paper, "se_h_rect", IsSingle ? "Sprite" : "Rect Settings").Line().Show();
 
         EditorGUI.Row(paper, "se_name", "Name", () =>
-            Origami.TextField(paper, "se_name_v", s.Name, v => Mutate("Edit Name", () => s.Name = v, true)).Show());
+            Origami.TextField(paper, "se_name_v", s.Name, v => Mutate("Edit Name", () => s.Name = v, true)).CommitOnEnter().Show());
 
         if (!IsSingle)
         {

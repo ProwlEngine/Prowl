@@ -329,7 +329,7 @@ public static class Graphics
     {
         if (Device == null) return [];
         TextureRegion r = region ?? new TextureRegion(0, 0, 0, Math.Max(texture.Width >> (int)mip, 1), Math.Max(texture.Height >> (int)mip, 1), Math.Max(texture.Depth >> (int)mip, 1), mip, layer);
-        uint bytes = r.Width * r.Height * r.Depth * texture.Format.GetSizeInBytes();
+        uint bytes = texture.Format.GetRegionSizeInBytes(r.Width, r.Height, r.Depth);
         using DeviceBuffer staging = Device.ResourceFactory.CreateBuffer(new BufferDescription(bytes, BufferUsage.Staging));
         Device.Record(cmd => cmd.CopyTextureToBuffer(texture, staging, 0, r), "Readback").Wait();
         byte[] data = Device.Map<byte>(staging).ToArray();

@@ -406,9 +406,9 @@ public static class ThumbnailGenerator
     {
         int count = tw * th;
         byte[] outp = new byte[count * 4];
-        if (tex.Format == Runtime.TextureFormat.RGBA8)
+        if (tex.GetMipRgba8() is byte[] expanded)
         {
-            tex.GetData<byte>(outp.AsMemory());
+            expanded.AsSpan(0, outp.Length).CopyTo(outp);
         }
         else if (tex.Format == Runtime.TextureFormat.RGBA16)
         {

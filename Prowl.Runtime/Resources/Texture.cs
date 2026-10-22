@@ -2,6 +2,8 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Concurrent;
+using System.Threading;
 
 using GTexture = Prowl.Graphite.Texture;
 using GTextureDescription = Prowl.Graphite.TextureDescription;
@@ -46,7 +48,7 @@ public abstract class Texture : Asset
     /// <summary>The texel format.</summary>
     public TextureFormat Format { get { EnsureLoaded(); return _format; } }
 
-    /// <summary>Whether the texels are sRGB encoded colour, which the GPU decodes to linear when sampling. Only RGBA8 has an sRGB form.</summary>
+    /// <summary>Whether the texels are sRGB encoded colour, which the GPU decodes to linear when sampling. RGBA8, BC1, BC3 and ASTC have an sRGB form.</summary>
     public bool Srgb { get { EnsureLoaded(); return _srgb; } }
 
     /// <summary>Mip levels the texture holds, 1 when it has none.</summary>
@@ -86,11 +88,16 @@ public abstract class Texture : Asset
         _wrapU = _wrapV = _wrapW = wrap;
     }
 
+    /// <summary>Whether this kind of texture can hold block compressed formats.</summary>
+    private protected virtual bool SupportsCompressed => false;
+
     /// <summary>Changes the format, dropping the Graphite texture until the next allocation.</summary>
     private protected void SetFormat(TextureFormat format, bool srgb)
     {
         if (!Enum.IsDefined(format))
             throw new FormatException($"Invalid texture format {(int)format}");
+        if (GraphicsFormats.IsCompressed(format) && !SupportsCompressed)
+            throw new NotSupportedException($"{GetType().Name} cannot hold the compressed format {format}.");
         srgb &= GraphicsFormats.SupportsSrgb(format);
         if (_format != format || _srgb != srgb) ReplaceGpu(null);
         _format = format;
@@ -108,8 +115,30 @@ public abstract class Texture : Asset
         _borderColor = border;
     }
 
-    /// <summary>The Graphite format of this texture.</summary>
-    private protected Graphite.PixelFormat GpuFormat => GraphicsFormats.ToPixelFormat(_format, _srgb);
+    /// <summary>
+    /// Whether the texels are compressed in a format the GPU cannot sample, so they are expanded to RGBA8 on upload.
+    /// Headless nothing is uploaded, so nothing needs expanding.
+    /// </summary>
+    private protected bool DecodesOnUpload => GraphicsFormats.IsCompressed(_format) && Graphics.Device != null && !CanSample(GraphicsFormats.ToPixelFormat(_format, _srgb));
+
+    /// <summary>The Graphite format of this texture, RGBA8 when the GPU cannot sample its compressed format.</summary>
+    private protected Graphite.PixelFormat GpuFormat => GraphicsFormats.ToPixelFormat(DecodesOnUpload ? TextureFormat.RGBA8 : _format, _srgb);
+
+    private sealed record SampleSupport(Graphite.GraphicsDevice Device, ConcurrentDictionary<Graphite.PixelFormat, bool> Formats);
+    private static SampleSupport? _sampleSupport;
+
+    private static bool CanSample(Graphite.PixelFormat format)
+    {
+        Graphite.GraphicsDevice device = Graphics.Device!;
+        SampleSupport? support = Volatile.Read(ref _sampleSupport);
+        if (support == null || !ReferenceEquals(support.Device, device))
+        {
+            SampleSupport fresh = new(device, new());
+            support = Interlocked.CompareExchange(ref _sampleSupport, fresh, support) == support ? fresh : Volatile.Read(ref _sampleSupport)!;
+        }
+
+        return support.Formats.GetOrAdd(format, f => device.GetPixelFormatSupport(f, Graphite.TextureType.Texture2D, Graphite.TextureUsage.Sampled));
+    }
 
     /// <summary>The usage a Graphite texture of this texture's format needs.</summary>
     private protected Graphite.TextureUsage Usage
@@ -117,6 +146,7 @@ public abstract class Texture : Asset
         get
         {
             Graphite.TextureUsage usage = Graphite.TextureUsage.Sampled;
+            if (GraphicsFormats.IsCompressed(_format)) return usage;
             if (GraphicsFormats.IsDepth(_format)) usage |= Graphite.TextureUsage.DepthStencil;
             else usage |= Graphite.TextureUsage.RenderTarget;
             if (RandomWrite) usage |= Graphite.TextureUsage.Storage;
@@ -154,15 +184,16 @@ public abstract class Texture : Asset
         Graphics.DeferDispose(_gpu);
         _gpu = texture;
         _displayView = null;
-        if (texture != null && texture.Format == Graphite.PixelFormat.R8_G8_B8_A8_UNorm_SRgb)
-            _displayView = Graphics.Device!.ResourceFactory.CreateTextureView(
-                new Graphite.TextureViewDescription(texture, format: Graphite.PixelFormat.R8_G8_B8_A8_UNorm));
+        if (texture != null && GraphicsFormats.WithoutSrgb(texture.Format) is Graphite.PixelFormat linear)
+            _displayView = Graphics.Device!.ResourceFactory.CreateTextureView(new Graphite.TextureViewDescription(texture, format: linear));
     }
 
-    /// <summary>Uploads texels into a region of a mip and layer.</summary>
+    /// <summary>Uploads texels into a region of a mip and layer, expanding compressed blocks the GPU cannot sample.</summary>
     private protected void Upload(ReadOnlySpan<byte> data, uint x, uint y, uint z, uint width, uint height, uint depth, uint mip = 0, uint layer = 0)
     {
         if (_gpu == null) return;
+        if (GraphicsFormats.IsCompressed(_format) && !Graphite.FormatSizeHelpers.IsCompressed(_gpu.Format))
+            data = Aperture.TextureDecoder.Decode(data, (int)width, (int)height, GraphicsFormats.ToAperture(_format, _srgb));
         Graphics.Device!.UpdateTexture<byte>(_gpu, data, new Graphite.TextureRegion(x, y, z, width, height, depth, mip, layer));
     }
 
@@ -173,10 +204,12 @@ public abstract class Texture : Asset
         return Graphics.ReadTexture(_gpu, mip, layer);
     }
 
-    /// <summary>Gives the texture a full mip chain if it lacks one, and fills every level from level 0.</summary>
+    /// <summary>Gives the texture a full mip chain if it lacks one, and fills every level from level 0. Compressed textures bring their own levels instead.</summary>
     public void GenerateMipmaps()
     {
         EnsureLoaded();
+        if (GraphicsFormats.IsCompressed(_format))
+            throw new InvalidOperationException($"A {_format} texture cannot filter its own mips, give it every level through its mip chain.");
         if (_mipCount < FullMipCount)
         {
             GTexture? old = _gpu;
@@ -207,6 +240,6 @@ public abstract class Texture : Asset
         if (!Registered) Dispose();
     }
 
-    /// <summary>Bytes per texel of a format.</summary>
+    /// <summary>Bytes per texel of a format, zero for a compressed format.</summary>
     public static int GetBytesPerPixel(TextureFormat format) => GraphicsFormats.BytesPerTexel(format);
 }
