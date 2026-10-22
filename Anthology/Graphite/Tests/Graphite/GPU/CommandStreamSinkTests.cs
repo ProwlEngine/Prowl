@@ -16,6 +16,7 @@ namespace Prowl.Graphite.Tests;
 internal sealed class SinkRecorder : ICommandStreamProfiler, IPassCommandSink
 {
     public readonly List<string> Log = new();
+    public readonly List<TargetLoadStoreOps> Ops = new();
     public readonly List<PropertyState[]> Tables = new();
     public readonly List<(ResourceVersion After, uint Offset, byte[] Data)> BufferUpdates = new();
     public readonly List<(ResourceVersion After, TextureRegion Region, byte[] Data)> TextureUpdates = new();
@@ -36,7 +37,10 @@ internal sealed class SinkRecorder : ICommandStreamProfiler, IPassCommandSink
     public void End() => Log.Add("EndPass");
 
     public void SetFramebuffer(in FramebufferInfo framebuffer, in TargetLoadStoreOps ops)
-        => Log.Add($"SetFramebuffer:{framebuffer.Colors.Length}:{framebuffer.Depth.HasValue}:{ops.Color.Load}");
+    {
+        Ops.Add(ops);
+        Log.Add($"SetFramebuffer:{framebuffer.Colors.Length}:{framebuffer.Depth.HasValue}:{ops.Color.Load}");
+    }
 
     public void ClearColorTarget(uint index, Color color) => Log.Add("ClearColorTarget");
     public void ClearDepthStencil(float depth, byte stencil) => Log.Add("ClearDepthStencil");
