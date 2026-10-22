@@ -4,7 +4,6 @@
 using System;
 using System.IO;
 
-using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Tasks;
 using Prowl.Warp;
 
@@ -17,36 +16,64 @@ public static partial class Networking
     internal static bool BeginStaticRpc(StaticRpcMember rpc, out NetWriter writer)
     {
         writer = null!;
-        if (s_incomingStatic == rpc || !IsActive) return false;
+        if (s_incomingStatic == rpc || !IsActive)
+        {
+            return false;
+        }
+
         MainThreadContext.AssertMainThread();
-        if (rpc.Mode == RpcMode.Host && IsHost && !Rpc.HasFilters) return false;
+        if (rpc.Mode == RpcMode.Host && IsHost && !Rpc.HasFilters)
+        {
+            return false;
+        }
+
         writer = new NetWriter();
         return true;
     }
 
     internal static bool SendStaticRpc(StaticRpcMember rpc, NetWriter arguments)
     {
-        if (!IsHost && (!IsReady || (rpc.Flags & RpcFlags.HostOnly) != 0)) return false;
+        if (!IsHost && (!IsReady || (rpc.Flags & RpcFlags.HostOnly) != 0))
+        {
+            return false;
+        }
 
         NetSession session = Session!;
         RpcRecipients? recipients = Rpc.CaptureRecipients(session);
         bool localIncluded = RpcRecipients.Includes(recipients, session.LocalPeer!);
         if (recipients != null && recipients.Ids.Count == (localIncluded ? 1 : 0) && rpc.Mode == RpcMode.Broadcast)
+        {
             return localIncluded;
-        if (rpc.Mode == RpcMode.Host && IsHost) return localIncluded;
-        if (rpc.Mode == RpcMode.Host && !RpcRecipients.Includes(recipients, session.HostPeer!)) return false;
+        }
+
+        if (rpc.Mode == RpcMode.Host && IsHost)
+        {
+            return localIncluded;
+        }
+
+        if (rpc.Mode == RpcMode.Host && !RpcRecipients.Includes(recipients, session.HostPeer!))
+        {
+            return false;
+        }
 
         using NetWriter message = new();
-        if (IsHost) message.WriteVarUInt32((uint)Session!.LocalPeer!.Id);
+        if (IsHost)
+        {
+            message.WriteVarUInt32((uint)Session!.LocalPeer!.Id);
+        }
+
         WriteStaticCall(message, rpc, arguments.WrittenSpan);
         Delivery delivery = StaticRpcDelivery(rpc);
         if (IsHost)
+        {
             SendRpcRecipients(EngineMessage.StaticRpcFromHost, message.WrittenSpan, delivery, recipients);
+        }
         else
         {
             RpcRecipients.Write(message, recipients);
             SendEngine(session.HostPeer!, EngineMessage.StaticRpcToHost, message.WrittenSpan, delivery);
         }
+
         return rpc.Mode == RpcMode.Broadcast && localIncluded;
     }
 
@@ -72,10 +99,18 @@ public static partial class Networking
 
     private static void OnStaticRpcToHost(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
-        if (!IsHost) return;
+        if (!IsHost)
+        {
+            return;
+        }
+
         StaticRpcMember? rpc = ReadStaticCall(ref reader, out ReadOnlySpan<byte> arguments);
         RpcRecipients? recipients = RpcRecipients.Read(ref reader);
-        if (rpc == null || (rpc.Flags & RpcFlags.HostOnly) != 0) return;
+        if (rpc == null || (rpc.Flags & RpcFlags.HostOnly) != 0)
+        {
+            return;
+        }
+
         rpc.ValidateArguments(arguments);
 
         if (rpc.Mode == RpcMode.Broadcast)
@@ -83,20 +118,36 @@ public static partial class Networking
             using NetWriter relay = new();
             relay.WriteVarUInt32((uint)sender.Id);
             WriteStaticCall(relay, rpc, arguments);
-            SendRpcRecipients(EngineMessage.StaticRpcFromHost, relay.WrittenSpan, StaticRpcDelivery(rpc), recipients, sender);
+            SendRpcRecipients(EngineMessage.StaticRpcFromHost, relay.WrittenSpan, StaticRpcDelivery(rpc), recipients,
+                sender);
         }
-        if (RpcRecipients.Includes(recipients, Session!.LocalPeer!)) InvokeStatic(rpc, arguments, sender);
+
+        if (RpcRecipients.Includes(recipients, Session!.LocalPeer!))
+        {
+            InvokeStatic(rpc, arguments, sender);
+        }
     }
 
     private static void OnStaticRpcFromHost(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
-        if (IsHost || !sender.IsHost) return;
+        if (IsHost || !sender.IsHost)
+        {
+            return;
+        }
+
         int callerId = checked((int)reader.ReadVarUInt32());
         StaticRpcMember? rpc = ReadStaticCall(ref reader, out ReadOnlySpan<byte> arguments);
-        if (!reader.IsAtEnd) throw new InvalidDataException("Static RPC contains trailing bytes.");
+        if (!reader.IsAtEnd)
+        {
+            throw new InvalidDataException("Static RPC contains trailing bytes.");
+        }
+
         if (rpc == null || rpc.Mode != RpcMode.Broadcast || !Session!.TryGetPeer(callerId, out NetPeer? caller) ||
             ((rpc.Flags & RpcFlags.HostOnly) != 0 && !caller!.IsHost))
+        {
             return;
+        }
+
         rpc.ValidateArguments(arguments);
         InvokeStatic(rpc, arguments, caller!);
     }

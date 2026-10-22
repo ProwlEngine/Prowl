@@ -154,7 +154,7 @@ public abstract class NetCollection
         using NetWriter state = new();
         WriteAll(state);
         NetReader baseline = new(state.WrittenSpan);
-        copy.Read(ref baseline, initial: true);
+        copy.Read(ref baseline, true);
         copy.Read(ref reader, initial);
     }
 
@@ -163,7 +163,10 @@ public abstract class NetCollection
     {
         byte kind = reader.ReadByte();
         if (initial && kind != Whole)
+        {
             throw new InvalidDataException("Initial collection state must contain complete contents.");
+        }
+
         if (kind == RpcState)
         {
             ReadRpcState(ref reader);
@@ -211,23 +214,29 @@ public abstract class NetCollection
         ReadOnlySpan<byte> whole = reader.ReadBytesWithLength();
         NetReader header = new(delta);
         if (header.ReadByte() != Changes || whole.IsEmpty || whole[0] != Whole)
+        {
             throw new InvalidDataException("Invalid RPC collection state.");
+        }
 
         uint from = header.ReadVarUInt32();
         if (from <= _sequence)
         {
             NetReader operations = new(delta);
-            Read(ref operations, initial: false);
+            Read(ref operations, false);
             if (!operations.IsAtEnd)
+            {
                 throw new InvalidDataException("Trailing collection operation bytes.");
+            }
         }
 
         // Missing an earlier unreliable prerequisite makes its operations unsafe to replay. The
         // complete contents still recover the right state without inventing historical callbacks.
         NetReader contents = new(whole);
-        Read(ref contents, initial: true);
+        Read(ref contents, true);
         if (!contents.IsAtEnd)
+        {
             throw new InvalidDataException("Trailing collection state bytes.");
+        }
     }
 
     /// <summary>Writes the count, then every item.</summary>

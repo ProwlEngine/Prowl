@@ -10,5 +10,5 @@ public enum NetworkOrphaned : byte
     Destroy,
 
     /// <summary>Keep it, with the host in control.</summary>
-    ClearOwner,
+    ClearOwner
 }

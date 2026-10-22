@@ -35,17 +35,36 @@ public static partial class Networking
         s_dirty.Clear();
         foreach (NetworkEntry entry in s_entries.Values.ToArray())
         {
-            if (!entry.GameObject.IsValid() || entry.GameObject.Scene != s_scene) NotifyDespawn(entry);
-            if (Session != session) return;
+            if (!entry.GameObject.IsValid() || entry.GameObject.Scene != s_scene)
+            {
+                NotifyDespawn(entry);
+            }
+
+            if (Session != session)
+            {
+                return;
+            }
         }
+
         s_entries.RemoveWhere(e => !e.GameObject.IsValid() || e.GameObject.Scene != s_scene);
         RegisterSceneObjects(s_scene);
 
-        if (Session != session) return;
+        if (Session != session)
+        {
+            return;
+        }
+
         DispatchNetworkListener(e => e.OnNetworkLoading());
-        if (Session != session) return;
+        if (Session != session)
+        {
+            return;
+        }
+
         SetLocalReady();
-        if (Session != session) return;
+        if (Session != session)
+        {
+            return;
+        }
 
         foreach (NetPeer peer in session.Peers.ToArray())
         {
@@ -64,7 +83,10 @@ public static partial class Networking
         }
 
         BeginPeerLoad(peer);
-        if (Session != session || s_scene == null) return;
+        if (Session != session || s_scene == null)
+        {
+            return;
+        }
 
         using NetWriter message = new(64 * 1024);
         using FrameStatScope stats = FrameStats.Network.Scope();
@@ -122,7 +144,11 @@ public static partial class Networking
         }
 
         generation = reader.ReadUInt64();
-        if (generation == 0) throw new InvalidDataException("Scene generation cannot be zero.");
+        if (generation == 0)
+        {
+            throw new InvalidDataException("Scene generation cannot be zero.");
+        }
+
         string name = reader.ReadString();
         Scene? scene = Serializer.Deserialize<Scene>(Decompress(reader.ReadBytesWithLength()));
         if (scene.IsNotValid())
@@ -141,14 +167,20 @@ public static partial class Networking
             return;
         }
 
-        if (delivery != Delivery.Reliable) throw new InvalidDataException("Scene snapshots must be reliable.");
+        if (delivery != Delivery.Reliable)
+        {
+            throw new InvalidDataException("Scene snapshots must be reliable.");
+        }
+
         NetSession? session = Session;
         Scene scene = ReadSnapshot(ref reader, out ulong sceneGeneration);
         bool queuedForActivation = false;
         try
         {
             if (Session != session || sceneGeneration <= s_sceneGeneration)
+            {
                 return;
+            }
 
             s_sceneGeneration = sceneGeneration;
             s_joinState = NetworkJoinState.Loading;
@@ -159,7 +191,9 @@ public static partial class Networking
             {
                 NotifyDespawn(entry);
                 if (Session != session)
+                {
                     return;
+                }
             }
 
             // Incoming messages can resolve this scene before it becomes current at the frame boundary.
@@ -185,17 +219,27 @@ public static partial class Networking
                 }
             }
 
-            ApplySyncState(sender, ref reader, null, initial: true);
+            ApplySyncState(sender, ref reader, null, true);
             foreach (NetworkEntry entry in s_entries.Values.ToArray())
             {
                 NotifySpawn(entry);
                 if (Session != session)
+                {
                     return;
+                }
             }
 
-            if (!reader.IsAtEnd) throw new InvalidDataException("Scene snapshot contains trailing bytes.");
+            if (!reader.IsAtEnd)
+            {
+                throw new InvalidDataException("Scene snapshot contains trailing bytes.");
+            }
+
             DispatchNetworkListener(e => e.OnNetworkLoading());
-            if (Session != session) return;
+            if (Session != session)
+            {
+                return;
+            }
+
             Scene.Load(scene);
             queuedForActivation = true;
         }
@@ -204,7 +248,9 @@ public static partial class Networking
             // Scene.Load takes ownership only on success. Cancellation and malformed metadata must
             // release the deserialized scene, including its physics and rendering resources.
             if (!queuedForActivation)
+            {
                 scene.Dispose();
+            }
         }
     }
 
@@ -215,7 +261,10 @@ public static partial class Networking
         foreach (GameObject go in scene.AllObjects.ToArray())
         {
             if (Session != session || !IsActive || s_scene != scene)
+            {
                 break;
+            }
+
             if (go.NetworkMode == NetworkMode.Object && go.NetworkRoot == go && !go.IsNetworkExcluded &&
                 !s_entries.Contains(go.Identifier))
             {
@@ -233,7 +282,8 @@ public static partial class Networking
         using (BinaryWriter writer = new(zlib))
         {
             // SnapshotDecoder validates this fixed-width wire layout before Echo reads it.
-            echo.WriteToBinary(writer, new BinarySerializationOptions { EncodingMode = BinaryEncodingMode.Performance });
+            echo.WriteToBinary(writer,
+                new BinarySerializationOptions { EncodingMode = BinaryEncodingMode.Performance });
         }
 
         return compressed.ToArray();

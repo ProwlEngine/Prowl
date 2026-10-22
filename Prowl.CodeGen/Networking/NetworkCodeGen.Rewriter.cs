@@ -178,7 +178,8 @@ internal sealed partial class NetworkCodeGen
                     }
 
                     string argumentsRead = rpc.Static
-                        ? "global::Prowl.Runtime.Networking.StaticRpcMember.ArgumentsRead()" : "__Rpc_ArgumentsRead()";
+                        ? "global::Prowl.Runtime.Networking.StaticRpcMember.ArgumentsRead()"
+                        : "__Rpc_ArgumentsRead()";
                     string target = rpc.Static ? self : "__c";
                     invoke.Append(
                         $"if (!__execute) return; {argumentsRead}; {target}.{rpc.Name}({string.Join(", ", Enumerable.Range(0, rpc.ParameterTypes.Count).Select(i => "__a" + i))}); }}");
@@ -374,7 +375,7 @@ internal sealed partial class NetworkCodeGen
 
             uint flags = rpc.ConstructorArguments.Select(a => Convert.ToUInt32(a.Value)).FirstOrDefault();
             if (method.IsStatic && (kind.Name == "OwnerAttribute" || (flags & 4u) != 0 ||
-                GenericContainer(method.ContainingType)))
+                                    GenericContainer(method.ContainingType)))
             {
                 context.Report(s_staticRpc, location, method.Name);
                 return null;
@@ -390,13 +391,20 @@ internal sealed partial class NetworkCodeGen
             List<string> types = node.ParameterList.Parameters.Select(p => OneLine(p.Type!)).ToList();
             string key = $"{method.Name}({string.Join(",", types)})";
             context.ClaimId(method.ContainingType, true, key, location);
-            return new RpcInfo(method.Name, NetworkId(key), kind.Name[..^"Attribute".Length], flags, types, method.IsStatic);
+            return new RpcInfo(method.Name, NetworkId(key), kind.Name[..^"Attribute".Length], flags, types,
+                method.IsStatic);
         }
 
         private static bool GenericContainer(INamedTypeSymbol? type)
         {
             for (; type != null; type = type.ContainingType)
-                if (type.IsGenericType) return true;
+            {
+                if (type.IsGenericType)
+                {
+                    return true;
+                }
+            }
+
             return false;
         }
 

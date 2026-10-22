@@ -36,8 +36,6 @@ public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKe
 
     public Dictionary<TKey, TValue>.ValueCollection Values => _items.Values;
 
-    internal override NetCollection CreateEmptyCopy() => new NetDictionary<TKey, TValue>();
-
     public override int Count => _items.Count;
 
     ICollection<TKey> IDictionary<TKey, TValue>.Keys => _items.Keys;
@@ -118,6 +116,8 @@ public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKe
     IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys => _items.Keys;
 
     IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values => _items.Values;
+
+    internal override NetCollection CreateEmptyCopy() => new NetDictionary<TKey, TValue>();
 
     /// <summary>Raised for each change, made here or received. See <see cref="NetCollection" />.</summary>
     public event Action<NetDictionaryChange<TKey, TValue>>? Changed;

@@ -2,7 +2,6 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
@@ -104,8 +103,16 @@ public static partial class Networking
         session.PeerLeft += OnPeerLeft;
         Scene.OnSceneLoaded += OnHostSceneLoaded;
         RegisterSceneObjects(s_scene);
-        if (Session == session) DispatchNetworkListener(e => e.OnNetworkLoading());
-        if (Session == session) SetLocalReady();
+        if (Session == session)
+        {
+            DispatchNetworkListener(e => e.OnNetworkLoading());
+        }
+
+        if (Session == session)
+        {
+            SetLocalReady();
+        }
+
         return session;
     }
 
@@ -162,7 +169,10 @@ public static partial class Networking
         using FrameStatScope stats = FrameStats.Network.Scope();
         s_frame++;
         s_context!.Receive();
-        if (Session == session) UpdateReadiness();
+        if (Session == session)
+        {
+            UpdateReadiness();
+        }
 
         if (IsActive)
         {
@@ -190,7 +200,10 @@ public static partial class Networking
             SendTransforms();
         }
 
-        if (Session == session) s_context!.Flush();
+        if (Session == session)
+        {
+            s_context!.Flush();
+        }
     }
 
     // --- Session bookkeeping -------------------------------------------------------------------
@@ -200,8 +213,10 @@ public static partial class Networking
         MainThreadContext.AssertMainThread();
         if (s_endingSession)
         {
-            throw new InvalidOperationException("A session cannot start during network teardown. Schedule startup for the next frame.");
+            throw new InvalidOperationException(
+                "A session cannot start during network teardown. Schedule startup for the next frame.");
         }
+
         if (Session != null)
         {
             throw new InvalidOperationException(
@@ -256,13 +271,21 @@ public static partial class Networking
             s_endingSession = true;
             try
             {
-                NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty, $"Ended: {reason}: {message}");
+                NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty,
+                    $"Ended: {reason}: {message}");
                 Session = null;
                 s_context = null;
                 Scene.OnSceneLoaded -= OnHostSceneLoaded;
                 Scene.OnSceneLoaded -= OnNetworkSceneActivated;
-                try { context.Dispose(); }
-                finally { ResetState(); }
+                try
+                {
+                    context.Dispose();
+                }
+                finally
+                {
+                    ResetState();
+                }
+
                 Debug.Log(message == null
                     ? $"[Network] Session ended: {reason}."
                     : $"[Network] Session ended: {reason}: {message}");
@@ -278,7 +301,10 @@ public static partial class Networking
     {
         NetworkEntry[] entries = s_entries.Values.ToArray();
         foreach (NetworkEntry entry in entries)
+        {
             NotifyDespawn(entry);
+        }
+
         ResetReadiness();
         s_scene = null;
         s_entries.Clear();
@@ -293,7 +319,9 @@ public static partial class Networking
         CurrentCaller = null;
 
         foreach (NetworkEntry entry in entries)
+        {
             ControlChanged(entry.GameObject);
+        }
     }
 
     private enum EngineMessage : ushort

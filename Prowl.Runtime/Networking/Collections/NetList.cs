@@ -31,8 +31,6 @@ public sealed class NetList<T> : NetCollection, IList<T>, IReadOnlyList<T>
 
     public NetList(IEnumerable<T> items) => _items.AddRange(items);
 
-    internal override NetCollection CreateEmptyCopy() => new NetList<T>();
-
     public override int Count => _items.Count;
 
     bool ICollection<T>.IsReadOnly => false;
@@ -114,6 +112,8 @@ public sealed class NetList<T> : NetCollection, IList<T>, IReadOnlyList<T>
     IEnumerator<T> IEnumerable<T>.GetEnumerator() => GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    internal override NetCollection CreateEmptyCopy() => new NetList<T>();
 
     /// <summary>Raised for each change, made here or received. See <see cref="NetCollection" />.</summary>
     public event Action<NetListChange<T>>? Changed;

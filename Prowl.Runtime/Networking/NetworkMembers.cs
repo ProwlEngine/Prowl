@@ -76,7 +76,8 @@ public sealed class SyncMember<TComponent, T>(
     internal override void Write(Component component, NetWriter writer) =>
         NetSerializer<T>.Write(writer, get((TComponent)component));
 
-    internal override void Validate(Component component, ref NetReader reader, bool initial = false) => NetSerializer<T>.Read(ref reader);
+    internal override void Validate(Component component, ref NetReader reader, bool initial = false) =>
+        NetSerializer<T>.Read(ref reader);
 
     internal override void Read(Component component, ref NetReader reader, bool initial)
     {
@@ -126,7 +127,8 @@ public sealed class SyncCollectionMember<TComponent, TCollection>(
 
     internal override void ChangesSent(Component component) => Bound(component).ClearChanges();
 
-    internal override void Validate(Component component, ref NetReader reader, bool initial = false) => Bound(component).Validate(ref reader, initial);
+    internal override void Validate(Component component, ref NetReader reader, bool initial = false) =>
+        Bound(component).Validate(ref reader, initial);
 
     internal override void Read(Component component, ref NetReader reader, bool initial) =>
         Bound(component).Read(ref reader, initial);

@@ -28,7 +28,9 @@ public static partial class Networking
     private static readonly List<Action> s_notifications = new();
     private static int s_applying;
     private static ulong s_outgoingStateRevision;
-    private static readonly Dictionary<(Guid Component, uint Slot, int Origin, uint Generation), ulong> s_stateRevisions = new();
+
+    private static readonly Dictionary<(Guid Component, uint Slot, int Origin, uint Generation), ulong>
+        s_stateRevisions = new();
 
     /// <summary>Goes up when a session ends, so what was queued for one is never sent in the next.</summary>
     internal static int SessionNumber { get; private set; }
@@ -173,11 +175,18 @@ public static partial class Networking
         {
             identifiers.Add(go.Identifier);
             foreach (Component part in go.GetComponents())
+            {
                 identifiers.Add(part.Identifier);
+            }
         }
-        foreach (var key in s_stateRevisions.Keys.ToArray())
+
+        foreach ((Guid Component, uint Slot, int Origin, uint Generation) key in s_stateRevisions.Keys.ToArray())
+        {
             if (identifiers.Contains(key.Component))
+            {
                 s_stateRevisions.Remove(key);
+            }
+        }
     }
 
     private static void OnSync(NetPeer sender, ref NetReader reader, Delivery delivery)
@@ -191,11 +200,17 @@ public static partial class Networking
         int originId = reader.ReadInt32();
         ulong revision = reader.ReadUInt64();
         if ((!sender.IsHost && originId != sender.Id) || revision == 0)
+        {
             throw new InvalidDataException("Invalid Sync origin.");
+        }
+
         if (!Session!.TryGetPeer(originId, out NetPeer? origin))
+        {
             return;
+        }
+
         using NetWriter? relay = IsHost ? new NetWriter(1024) : null;
-        int relayed = ApplySyncState(origin, ref reader, relay, false, revision, requireEnd: true);
+        int relayed = ApplySyncState(origin, ref reader, relay, false, revision, true);
 
         // The host passes on what it accepted from a client to everyone else.
         if (Session == session && relay != null && relayed > 0)
@@ -215,7 +230,8 @@ public static partial class Networking
     ///     <paramref name="initial" /> for a snapshot or spawn, whose values change nothing that was running,
     ///     so nothing is notified. Otherwise notifications run once every value in the block is in place.
     /// </summary>
-    private static int ApplySyncState(NetPeer sender, ref NetReader reader, NetWriter? relay, bool initial, ulong revision = 0, bool requireEnd = false)
+    private static int ApplySyncState(NetPeer sender, ref NetReader reader, NetWriter? relay, bool initial,
+        ulong revision = 0, bool requireEnd = false)
     {
         // Validate all framing and accepted values before changing live state, revisions, or relays.
         // Collection validation reads into a detached copy, so partial operations cannot leak out.
@@ -242,16 +258,22 @@ public static partial class Networking
 
                 SyncMember? sync = NetworkMembers.Of(component).Sync(slot);
                 bool accepted = sync != null && AcceptSync(sender, component, sync.Flags) &&
-                    (initial || generation == GenerationOf(component.GameObject));
-                var revisionKey = (component.Identifier, slot, sender.Id, generation);
+                                (initial || generation == GenerationOf(component.GameObject));
+                (Guid Identifier, uint slot, int Id, uint generation) revisionKey = (component.Identifier, slot,
+                    sender.Id, generation);
                 if (accepted && revision != 0 && s_stateRevisions.GetValueOrDefault(revisionKey) >= revision)
+                {
                     accepted = false;
+                }
+
                 if (accepted)
                 {
                     NetReader valueReader = new(value);
                     sync!.Read(component, ref valueReader, initial);
                     if (revision != 0)
+                    {
                         s_stateRevisions[revisionKey] = revision;
+                    }
                 }
 
                 TraceMember("SyncVar", accepted ? "Apply" : "Rejected", sender, component, slot, false,
@@ -280,13 +302,17 @@ public static partial class Networking
         return relayed;
     }
 
-    private static void ValidateSyncState(NetPeer sender, NetReader reader, bool initial, ulong revision, bool requireEnd)
+    private static void ValidateSyncState(NetPeer sender, NetReader reader, bool initial, ulong revision,
+        bool requireEnd)
     {
         uint count = reader.ReadVarUInt32();
         // Each record needs a guid, slot, generation, and value length, even when it is skipped.
         if (count > reader.Remaining / 22)
+        {
             throw new InvalidDataException("Sync count exceeds the remaining data.");
-        HashSet<(Guid, uint, uint)>? seen = revision == 0 ? null : new();
+        }
+
+        HashSet<(Guid, uint, uint)>? seen = revision == 0 ? null : new HashSet<(Guid, uint, uint)>();
         for (uint i = 0; i < count; i++)
         {
             Guid id = reader.ReadGuid();
@@ -296,24 +322,37 @@ public static partial class Networking
             if (FindByIdentifier(id) is not Component component || component.GameObject.IsNetworkExcluded ||
                 NetworkMembers.Of(component).Sync(slot) is not { } sync || !AcceptSync(sender, component, sync.Flags) ||
                 (!initial && generation != GenerationOf(component.GameObject)))
+            {
                 continue;
+            }
+
             // Match application: only the first accepted value for a slot advances this revision.
             if (revision != 0 && (s_stateRevisions.GetValueOrDefault((id, slot, sender.Id, generation)) >= revision ||
-                !seen!.Add((id, slot, generation))))
+                                  !seen!.Add((id, slot, generation))))
+            {
                 continue;
+            }
+
             try
             {
                 sync.Validate(component, ref value, initial);
             }
-            catch (Exception e) when (e is ArgumentException or OverflowException or FormatException or IndexOutOfRangeException)
+            catch (Exception e) when (e is ArgumentException or OverflowException or FormatException
+                                          or IndexOutOfRangeException)
             {
                 throw new InvalidDataException("Sync contains a malformed value.", e);
             }
+
             if (!value.IsAtEnd)
+            {
                 throw new InvalidDataException("Sync value contains trailing bytes.");
+            }
         }
+
         if (requireEnd && !reader.IsAtEnd)
+        {
             throw new InvalidDataException("Sync message contains trailing bytes.");
+        }
     }
 
     /// <summary>

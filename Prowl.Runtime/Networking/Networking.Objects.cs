@@ -140,7 +140,11 @@ public static partial class Networking
     /// </summary>
     internal static void Spawn(GameObject go, NetPeer? owner, NetworkOrphaned orphaned)
     {
-        if (!Enum.IsDefined(orphaned)) throw new ArgumentOutOfRangeException(nameof(orphaned));
+        if (!Enum.IsDefined(orphaned))
+        {
+            throw new ArgumentOutOfRangeException(nameof(orphaned));
+        }
+
         if (IsActive)
         {
             if (!IsHost)
@@ -255,9 +259,15 @@ public static partial class Networking
         bool attached = false;
         try
         {
-            if (Session != session || s_scene != scene) return;
+            if (Session != session || s_scene != scene)
+            {
+                return;
+            }
+
             if (go!.Identifier != id)
+            {
                 throw new InvalidDataException("A spawned object's identifier doesn't match its message.");
+            }
 
             // Resolve initial Sync references within the new tree before enabling its components.
             s_spawning = new Dictionary<Guid, EngineObject>();
@@ -267,24 +277,42 @@ public static partial class Networking
                 {
                     s_spawning[part.Identifier] = part;
                     foreach (Component component in part.GetComponents<Component>())
+                    {
                         s_spawning[component.Identifier] = component;
+                    }
                 }
+
                 ApplySyncState(sender, ref reader, null, true, requireEnd: true);
             }
-            finally { s_spawning = null; }
+            finally
+            {
+                s_spawning = null;
+            }
 
-            if (Session != session || s_scene != scene) return;
+            if (Session != session || s_scene != scene)
+            {
+                return;
+            }
+
             NetworkEntry entry = new(go) { Owner = owner, Orphaned = orphaned, Generation = generation };
             go.ApplyNetworkOrphaned(orphaned);
             s_entries.Add(entry);
             ControlChanged(go);
             if (FindByIdentifier(parentId) is GameObject parent)
+            {
                 go.SetParent(parent, false);
+            }
             else
+            {
                 scene.Add(go);
+            }
 
             attached = true;
-            if (Session != session || s_scene != scene) return;
+            if (Session != session || s_scene != scene)
+            {
+                return;
+            }
+
             IndexTree(go);
             NotifySpawn(entry);
         }
@@ -295,7 +323,10 @@ public static partial class Networking
             if (!attached)
             {
                 if (s_entries.TryGetValue(go!.Identifier, out NetworkEntry? pending) && pending.GameObject == go)
+                {
                     s_entries.Remove(go.Identifier);
+                }
+
                 go.Dispose();
             }
         }
@@ -354,7 +385,8 @@ public static partial class Networking
 
         ValidateOwner(owner);
 
-        if (!s_entries.TryGetValue(go.Identifier, out NetworkEntry? entry) || entry.GameObject != go || entry.TearingDown)
+        if (!s_entries.TryGetValue(go.Identifier, out NetworkEntry? entry) || entry.GameObject != go ||
+            entry.TearingDown)
         {
             throw new InvalidOperationException($"'{go.Name}' is not a spawned networked object.");
         }
@@ -366,13 +398,22 @@ public static partial class Networking
     private static void ValidateOwner(NetPeer? owner)
     {
         if (owner != null && (!Session!.TryGetPeer(owner.Id, out NetPeer? current) || !ReferenceEquals(current, owner)))
+        {
             throw new ArgumentException("The owner must be a peer from the current session.", nameof(owner));
+        }
     }
 
     internal static void SetOrphaned(GameObject go, NetworkOrphaned orphaned)
     {
-        if (!IsActive || FindEntry(go) is not { TearingDown: false } entry || entry.GameObject != go) return;
-        if (!IsHost) throw new InvalidOperationException("Only the host can change a spawned object's orphaned policy.");
+        if (!IsActive || FindEntry(go) is not { TearingDown: false } entry || entry.GameObject != go)
+        {
+            return;
+        }
+
+        if (!IsHost)
+        {
+            throw new InvalidOperationException("Only the host can change a spawned object's orphaned policy.");
+        }
 
         entry.Orphaned = orphaned;
         using NetWriter message = new();
@@ -385,18 +426,29 @@ public static partial class Networking
     private static NetworkOrphaned ReadOrphaned(ref NetReader reader)
     {
         NetworkOrphaned orphaned = (NetworkOrphaned)reader.ReadByte();
-        if (!Enum.IsDefined(orphaned)) throw new InvalidDataException("Invalid network orphaned policy.");
+        if (!Enum.IsDefined(orphaned))
+        {
+            throw new InvalidDataException("Invalid network orphaned policy.");
+        }
+
         return orphaned;
     }
 
     private static void OnOrphaned(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
-        if (IsHost || !sender.IsHost) return;
+        if (IsHost || !sender.IsHost)
+        {
+            return;
+        }
+
         Guid id = reader.ReadGuid();
         uint generation = reader.ReadUInt32();
         NetworkOrphaned orphaned = ReadOrphaned(ref reader);
         if (!reader.IsAtEnd || delivery != Delivery.Reliable)
+        {
             throw new InvalidDataException("Invalid orphaned policy message.");
+        }
+
         if (s_entries.TryGetValue(id, out NetworkEntry? entry) && entry.Generation == generation)
         {
             entry.Orphaned = orphaned;
@@ -462,7 +514,11 @@ public static partial class Networking
         NetSession? session = Session;
         s_peerReadiness.Remove(peer.Id);
         DispatchNetworkListener(e => e.OnPeerDisconnected(peer, reason));
-        if (Session != session) return;
+        if (Session != session)
+        {
+            return;
+        }
+
         List<NetworkEntry> orphans = new();
         foreach (NetworkEntry entry in s_entries.Values)
         {
@@ -475,9 +531,15 @@ public static partial class Networking
         foreach (NetworkEntry entry in orphans)
         {
             if (Session != session || !IsActive)
+            {
                 break;
+            }
+
             if (FindEntry(entry.GameObject) != entry)
+            {
                 continue;
+            }
+
             if (entry.Orphaned == NetworkOrphaned.Destroy && entry.GameObject.IsValid())
             {
                 entry.GameObject.Destroy();
@@ -492,27 +554,27 @@ public static partial class Networking
     /// <summary>What the session knows about one networked object (a <see cref="NetworkMode.Object" /> root).</summary>
     private sealed class NetworkEntry(GameObject gameObject)
     {
-        public readonly HashSet<Component> SpawnListeners = new();
         public readonly HashSet<Component> AuthorityListeners = new();
-        public bool SpawnNotified;
-        public bool HasLocalAuthority;
-        public bool TearingDown;
-        public int NotifiedOwnerId = NoOwner;
         public readonly List<TransformSample> Samples = new();
+        public readonly HashSet<Component> SpawnListeners = new();
         public readonly TransformTimeline Timeline = new();
-        public Float3? TransferVelocity;
         public uint Generation;
+        public bool HasLocalAuthority;
         public bool HasReceived;
 
         // Transform sync: what this side last sent, and what it has received from whoever controls it.
         public bool HasSent;
         public uint LastReceivedTick;
         public double LastSentTime;
+        public int NotifiedOwnerId = NoOwner;
         public NetworkOrphaned Orphaned;
         public int Owner = NoOwner;
         public Float3 SentPosition;
         public Quaternion SentRotation;
         public Float3 SentScale;
+        public bool SpawnNotified;
+        public bool TearingDown;
+        public Float3? TransferVelocity;
         public GameObject GameObject { get; } = gameObject;
     }
 

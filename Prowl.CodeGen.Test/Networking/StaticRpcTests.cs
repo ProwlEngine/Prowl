@@ -1,5 +1,7 @@
 using System.Reflection;
 
+using Microsoft.CodeAnalysis;
+
 using Prowl.CodeGen.Networking;
 using Prowl.Runtime.Networking;
 using Prowl.Vector;
@@ -15,18 +17,18 @@ public class StaticRpcTests
     public void StaticClassesCompileAndRunOfflineWithoutAComponent()
     {
         Type type = Scripts.Compile("""
-            using Prowl.Runtime.Networking;
-            using Prowl.Vector;
-            public static class Sounds
-            {
-                public static string Last;
-                [Rpc.Broadcast] public static void Play(string name, Float3 position)
-                {
-                    Last = name + " at " + position.X;
-                }
-                [Rpc.Host(RpcFlags.HostOnly)] public static void Play(int id) => Last = "host " + id;
-            }
-            """).GetType("Sounds")!;
+                                    using Prowl.Runtime.Networking;
+                                    using Prowl.Vector;
+                                    public static class Sounds
+                                    {
+                                        public static string Last;
+                                        [Rpc.Broadcast] public static void Play(string name, Float3 position)
+                                        {
+                                            Last = name + " at " + position.X;
+                                        }
+                                        [Rpc.Host(RpcFlags.HostOnly)] public static void Play(int id) => Last = "host " + id;
+                                    }
+                                    """).GetType("Sounds")!;
         type.GetMethod("Play", [typeof(string), typeof(Float3)])!.Invoke(null, ["bell", new Float3(3, 0, 0)]);
         Assert.Equal("bell at 3", type.GetField("Last")!.GetValue(null));
         type.GetMethod("Play", [typeof(int)])!.Invoke(null, [9]);
@@ -37,17 +39,17 @@ public class StaticRpcTests
     public void ReceiversFindUncalledPrivateNestedStaticRpcsAndGeneratedSerializers()
     {
         Assembly assembly = Scripts.Compile("""
-            using Prowl.Runtime.Networking;
-            public struct SoundInfo { public int Volume; }
-            public class Container
-            {
-                private static partial class Sounds
-                {
-                    public static int Last;
-                    [Rpc.Broadcast(RpcFlags.Unreliable)] private static void Play(SoundInfo sound) => Last = sound.Volume;
-                }
-            }
-            """);
+                                            using Prowl.Runtime.Networking;
+                                            public struct SoundInfo { public int Volume; }
+                                            public class Container
+                                            {
+                                                private static partial class Sounds
+                                                {
+                                                    public static int Last;
+                                                    [Rpc.Broadcast(RpcFlags.Unreliable)] private static void Play(SoundInfo sound) => Last = sound.Volume;
+                                                }
+                                            }
+                                            """);
         Type type = assembly.GetType("Container+Sounds")!;
         string typeName = $"{type.FullName}, {assembly.GetName().Name}";
         StaticRpcMember rpc = StaticRpcMember.Find(typeName, NetworkCodeGen.NetworkId("Play(SoundInfo)"))!;
@@ -68,24 +70,24 @@ public class StaticRpcTests
     public void StaticRpcsWorkInPartialClassesAndAlongsideComponentRpcs()
     {
         Assembly assembly = Scripts.Compile("""
-            using Prowl.Runtime.Networking;
-            public static partial class Events
-            {
-                public static int Last;
-                [Rpc.Host] public static void Set(int value) => Last = value;
-            }
-            public class Actor : Prowl.Runtime.Component
-            {
-                [Rpc.Broadcast] public static void Global() { }
-                [Rpc.Broadcast] public void Local() { }
-            }
-            """, """
-            using Prowl.Runtime.Networking;
-            public static partial class Events
-            {
-                [Rpc.Broadcast] public static void Clear() => Last = 0;
-            }
-            """);
+                                            using Prowl.Runtime.Networking;
+                                            public static partial class Events
+                                            {
+                                                public static int Last;
+                                                [Rpc.Host] public static void Set(int value) => Last = value;
+                                            }
+                                            public class Actor : Prowl.Runtime.Component
+                                            {
+                                                [Rpc.Broadcast] public static void Global() { }
+                                                [Rpc.Broadcast] public void Local() { }
+                                            }
+                                            """, """
+                                                 using Prowl.Runtime.Networking;
+                                                 public static partial class Events
+                                                 {
+                                                     [Rpc.Broadcast] public static void Clear() => Last = 0;
+                                                 }
+                                                 """);
         Type type = assembly.GetType("Events")!;
         type.GetMethod("Set")!.Invoke(null, [12]);
         Assert.Equal(12, type.GetField("Last")!.GetValue(null));
@@ -109,17 +111,17 @@ public class StaticRpcTests
     [Fact]
     public void StaticRewritePreservesSourceLines()
     {
-        var original = Scripts.Parse("""
-            using Prowl.Runtime.Networking;
-            public static class Events
-            {
-                [Rpc.Host]
-                public static void Run(int value)
-                {
-                    System.Console.WriteLine(value);
-                }
-            }
-            """);
+        SyntaxTree original = Scripts.Parse("""
+                                            using Prowl.Runtime.Networking;
+                                            public static class Events
+                                            {
+                                                [Rpc.Host]
+                                                public static void Run(int value)
+                                                {
+                                                    System.Console.WriteLine(value);
+                                                }
+                                            }
+                                            """);
         string[] before = original.GetText().ToString().Split('\n');
         string[] after = Scripts.Generate(original).Trees[0].GetText().ToString().Split('\n');
         Assert.Equal(before.Length, after.Length);

@@ -17,18 +17,21 @@ public sealed class NetworkConfiguration
     public float InterpolationMilliseconds = 100;
     public float JitterMilliseconds;
     public float JoinTimeoutSeconds = 10;
-    public float SceneLoadTimeoutSeconds = 60;
     public float LatencyMilliseconds;
     public string LocalAddress = "host";
     public int MaxMessageSize = 16 * 1024 * 1024;
-    /// <summary>Maximum decompressed Echo bytes in one scene snapshot or spawned object.</summary>
-    public int MaxSnapshotDecompressedBytes = 64 * 1024 * 1024;
-    /// <summary>Maximum Echo value nesting, including the root, before engine objects are created.</summary>
-    public int MaxSnapshotDepth = 128;
-    /// <summary>Maximum Echo values, including container and scalar values, in one snapshot or spawn.</summary>
-    public int MaxSnapshotNodes = 250_000;
     public int MaxPeers = 64;
     public int MaxRetransmits = 40;
+
+    /// <summary>Maximum decompressed Echo bytes in one scene snapshot or spawned object.</summary>
+    public int MaxSnapshotDecompressedBytes = 64 * 1024 * 1024;
+
+    /// <summary>Maximum Echo value nesting, including the root, before engine objects are created.</summary>
+    public int MaxSnapshotDepth = 128;
+
+    /// <summary>Maximum Echo values, including container and scalar values, in one snapshot or spawn.</summary>
+    public int MaxSnapshotNodes = 250_000;
+
     public int Mtu = 1200;
     public bool NoDelay = true;
     public float PacketLossPercent;
@@ -36,6 +39,7 @@ public sealed class NetworkConfiguration
     public int Port = 7777;
     public uint ProtocolId = 0x50524157;
     public int ReceiveWindow = 4096;
+    public float SceneLoadTimeoutSeconds = 60;
     public int SendWindow = 4096;
     public bool SimulateNetwork;
     public float TickRate = 30;

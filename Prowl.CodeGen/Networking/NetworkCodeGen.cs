@@ -298,7 +298,13 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         public string Descriptor => "__syncnet_" + Name;
     }
 
-    private sealed record RpcInfo(string Name, uint Id, string Mode, uint Flags, IReadOnlyList<string> ParameterTypes, bool Static = false)
+    private sealed record RpcInfo(
+        string Name,
+        uint Id,
+        string Mode,
+        uint Flags,
+        IReadOnlyList<string> ParameterTypes,
+        bool Static = false)
     {
         public string Signature => $"{Name}({string.Join(",", ParameterTypes)})";
 

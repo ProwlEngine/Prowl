@@ -26,11 +26,15 @@ public sealed class StaticRpcMember
     private readonly StaticRpcInvoker _invoke;
 
     public StaticRpcMember([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields |
-        DynamicallyAccessedMemberTypes.NonPublicFields)] Type declaringType, uint id, string signature, RpcMode mode, RpcFlags flags, StaticRpcInvoker invoke)
+                                                       DynamicallyAccessedMemberTypes.NonPublicFields)]
+        Type declaringType, uint id, string signature, RpcMode mode, RpcFlags flags, StaticRpcInvoker invoke)
     {
-        if (!declaringType.IsClass || declaringType.ContainsGenericParameters || mode is not (RpcMode.Broadcast or RpcMode.Host) ||
+        if (!declaringType.IsClass || declaringType.ContainsGenericParameters ||
+            mode is not (RpcMode.Broadcast or RpcMode.Host) ||
             (flags & RpcFlags.OwnerOnly) != 0)
+        {
             throw new ArgumentException("Static RPCs require a non-generic class and cannot use object ownership.");
+        }
 
         DeclaringType = declaringType;
         TypeName = $"{declaringType.FullName}, {declaringType.Assembly.GetName().Name}";
@@ -63,16 +67,21 @@ public sealed class StaticRpcMember
     {
         NetReader reader = new(arguments);
         _invoke(ref reader, false);
-        if (!reader.IsAtEnd) throw new InvalidDataException("Static RPC arguments contain trailing bytes.");
+        if (!reader.IsAtEnd)
+        {
+            throw new InvalidDataException("Static RPC arguments contain trailing bytes.");
+        }
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2026",
-        Justification = "Player builds preserve script assemblies; generated descriptors root their declaring type fields.")]
+        Justification =
+            "Player builds preserve script assemblies; generated descriptors root their declaring type fields.")]
     internal static StaticRpcMember? Find(string typeName, uint id)
     {
         Type? type = RuntimeUtils.ResolveType(typeName);
         return type is { IsClass: true, ContainsGenericParameters: false }
-            ? s_members.GetValue(type, Build).GetValueOrDefault(id) : null;
+            ? s_members.GetValue(type, Build).GetValueOrDefault(id)
+            : null;
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2070",
@@ -81,14 +90,20 @@ public sealed class StaticRpcMember
     {
         Dictionary<uint, StaticRpcMember> members = new();
         foreach (FieldInfo field in type.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic |
-                                                  BindingFlags.DeclaredOnly))
+                                                   BindingFlags.DeclaredOnly))
         {
             if (field.FieldType != typeof(StaticRpcMember) || field.GetValue(null) is not StaticRpcMember rpc ||
                 rpc.DeclaringType != type)
+            {
                 continue;
+            }
+
             if (!members.TryAdd(rpc.Id, rpc))
+            {
                 throw new InvalidOperationException($"Static RPC id collision on {type.FullName}: {rpc.Id}.");
+            }
         }
+
         return members;
     }
 }

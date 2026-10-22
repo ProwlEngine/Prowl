@@ -33,8 +33,6 @@ public sealed class NetSet<T> : NetCollection, ISet<T>, IReadOnlySet<T>
 
     public NetSet(IEnumerable<T> items) => _items.UnionWith(items);
 
-    internal override NetCollection CreateEmptyCopy() => new NetSet<T>();
-
     public override int Count => _items.Count;
 
     bool ICollection<T>.IsReadOnly => false;
@@ -148,6 +146,8 @@ public sealed class NetSet<T> : NetCollection, ISet<T>, IReadOnlySet<T>
     IEnumerator<T> IEnumerable<T>.GetEnumerator() => GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    internal override NetCollection CreateEmptyCopy() => new NetSet<T>();
 
     /// <summary>Raised for each change, made here or received. See <see cref="NetCollection" />.</summary>
     public event Action<NetSetChange<T>>? Changed;
