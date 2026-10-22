@@ -35,6 +35,30 @@ public readonly record struct ThemePreset(string Name, string Accent, string Acc
     }
 }
 
+/// <summary>A layout density: shape and sizing only, never colors or effects.</summary>
+public readonly record struct LayoutPreset(string Name, float Roundness, float Spacing, float Padding, float RowHeight,
+    float FontSize, float LabelWidth, float TabBarHeight, float TabPadding, float MenuBarHeight, float StatusBarHeight,
+    float DockSpacing)
+{
+    public bool Matches(EditorThemeData t) =>
+        t.Roundness == Roundness && t.Spacing == Spacing && t.Padding == Padding && t.RowHeight == RowHeight &&
+        t.FontSize == FontSize && t.LabelWidth == LabelWidth && t.TabBarHeight == TabBarHeight &&
+        t.TabPadding == TabPadding && t.MenuBarHeight == MenuBarHeight && t.StatusBarHeight == StatusBarHeight &&
+        t.DockSpacing == DockSpacing;
+
+    public void ApplyTo(EditorThemeData t)
+    {
+        t.Roundness = Roundness; t.Spacing = Spacing; t.Padding = Padding; t.RowHeight = RowHeight;
+        t.FontSize = FontSize; t.LabelWidth = LabelWidth; t.TabBarHeight = TabBarHeight;
+        t.TabPadding = TabPadding; t.MenuBarHeight = MenuBarHeight; t.StatusBarHeight = StatusBarHeight;
+        t.DockSpacing = DockSpacing;
+    }
+
+    /// <summary>The layout values of a theme, under a new name.</summary>
+    public static LayoutPreset From(string name, EditorThemeData t) => new(name, t.Roundness, t.Spacing, t.Padding, t.RowHeight,
+        t.FontSize, t.LabelWidth, t.TabBarHeight, t.TabPadding, t.MenuBarHeight, t.StatusBarHeight, t.DockSpacing);
+}
+
 /// <summary>The editor's built-in color themes.</summary>
 public static class ThemePresets
 {
@@ -58,6 +82,18 @@ public static class ThemePresets
         new("Solar",    "#FBBF24", "#60A5FA", "#161009", "#221A0C", "#F7F1E4"),
         new("Cyan",     "#06B6D4", "#14B8A6", "#0A1416", "#122528", "#E4F5F7"),
         new("Crimson",  "#F43F5E", "#FB923C", "#160A0D", "#2A161B", "#F7E8EB"),
+        new("High Contrast", "#FFD400", "#00E5FF", "#000000", "#000000", "#FFFFFF", Solid: true,
+            AccentStops: ["#332B00", "#4D4000", "#806A00", "#B39500", "#FFD400", "#FFE14D", "#FFEB80"],
+            NeutralStops: ["#000000", "#FFFFFF", "#000000", "#000000", "#000000", "#1F1F1F", "#3A3A3A"],
+            InkStops: ["#C8C8C8", "#DDDDDD", "#EEEEEE", "#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF"]),
+    ];
+
+    /// <summary>The built-in layout densities. "Default" matches the EditorThemeData defaults.</summary>
+    public static readonly LayoutPreset[] Layouts =
+    [
+        new("Default",  Roundness: 6f,  Spacing: 2f, Padding: 6f, RowHeight: 24f, FontSize: 17f, LabelWidth: 150f, TabBarHeight: 32f, TabPadding: 12f, MenuBarHeight: 40f, StatusBarHeight: 26f, DockSpacing: 6f),
+        new("Compact",  Roundness: 0f,  Spacing: 1f, Padding: 4f, RowHeight: 20f, FontSize: 15f, LabelWidth: 130f, TabBarHeight: 26f, TabPadding: 8f,  MenuBarHeight: 32f, StatusBarHeight: 22f, DockSpacing: 3f),
+        new("Spacious", Roundness: 10f, Spacing: 4f, Padding: 9f, RowHeight: 28f, FontSize: 18f, LabelWidth: 170f, TabBarHeight: 36f, TabPadding: 14f, MenuBarHeight: 44f, StatusBarHeight: 28f, DockSpacing: 8f),
     ];
 
     /// <summary>The theme a fresh install and Reset use.</summary>

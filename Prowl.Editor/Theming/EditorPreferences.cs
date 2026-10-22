@@ -292,7 +292,7 @@ public static class Preferences
         using ZipArchive zip = ZipFile.OpenRead(path);
         string json = ReadEntry(zip, ProfileSettingsEntry) ?? throw new InvalidDataException($"{Path.GetFileName(path)} is not a settings profile.");
         EditorSettings settings = JsonSerializer.Deserialize<EditorSettings>(json) ?? throw new InvalidDataException("The profile's settings are empty.");
-        settings.Theme.InitRamps();
+        settings.InitThemes();
         EditorSettings.Replace(settings);
 
         foreach (PreferencesSection section in _sections)

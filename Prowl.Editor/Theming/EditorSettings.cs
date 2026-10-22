@@ -80,6 +80,19 @@ public class EditorSettings
     /// <summary> Gets or sets the current editor theme data. Defaults to the built-in theme. </summary>
     public EditorThemeData Theme { get; set; } = EditorThemeData.CreateDefault();
 
+    /// <summary> Themes the user saved under their own names. </summary>
+    public List<EditorThemeData> SavedThemes { get; set; } = [];
+
+    /// <summary> Layout densities the user saved under their own names. </summary>
+    public List<LayoutPreset> SavedLayouts { get; set; } = [];
+
+    /// <summary> Prepares the color ramps of the current and saved themes after loading. </summary>
+    public void InitThemes()
+    {
+        Theme.InitRamps();
+        foreach (EditorThemeData saved in SavedThemes) saved.InitRamps();
+    }
+
     /// <summary>Apply the current theme to EditorTheme's static fields.</summary>
     public void ApplyTheme()
     {
@@ -162,7 +175,7 @@ public class EditorSettings
                 s_knownJson = json;
                 if (settings != null)
                 {
-                    settings.Theme.InitRamps();
+                    settings.InitThemes();
                     settings.ApplyTheme();
                     return settings;
                 }
@@ -195,7 +208,7 @@ public class EditorSettings
         try
         {
             if (JsonSerializer.Deserialize<EditorSettings>(json) is not { } settings) return;
-            settings.Theme.InitRamps();
+            settings.InitThemes();
             Replace(settings);
             Debug.Log("Editor settings reloaded from disk.");
         }

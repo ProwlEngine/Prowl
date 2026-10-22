@@ -465,34 +465,6 @@ public class PreferencesPanel : DockPanel
     //  (th-sec / th-row / th-swrow / th-preset controls)
     // ================================================================
 
-    // Layouts set shape and sizing only, never colors or effects.
-    private readonly record struct LayoutPreset(string Name, float Roundness, float Spacing, float Padding, float RowHeight,
-        float FontSize, float LabelWidth, float TabBarHeight, float TabPadding, float MenuBarHeight, float StatusBarHeight,
-        float DockSpacing)
-    {
-        public bool Matches(EditorThemeData t) =>
-            t.Roundness == Roundness && t.Spacing == Spacing && t.Padding == Padding && t.RowHeight == RowHeight &&
-            t.FontSize == FontSize && t.LabelWidth == LabelWidth && t.TabBarHeight == TabBarHeight &&
-            t.TabPadding == TabPadding && t.MenuBarHeight == MenuBarHeight && t.StatusBarHeight == StatusBarHeight &&
-            t.DockSpacing == DockSpacing;
-
-        public void ApplyTo(EditorThemeData t)
-        {
-            t.Roundness = Roundness; t.Spacing = Spacing; t.Padding = Padding; t.RowHeight = RowHeight;
-            t.FontSize = FontSize; t.LabelWidth = LabelWidth; t.TabBarHeight = TabBarHeight;
-            t.TabPadding = TabPadding; t.MenuBarHeight = MenuBarHeight; t.StatusBarHeight = StatusBarHeight;
-            t.DockSpacing = DockSpacing;
-        }
-    }
-
-    // "Default" matches the EditorThemeData defaults.
-    private static readonly LayoutPreset[] _layouts =
-    [
-        new("Default",  Roundness: 6f,  Spacing: 2f, Padding: 6f, RowHeight: 24f, FontSize: 17f, LabelWidth: 150f, TabBarHeight: 32f, TabPadding: 12f, MenuBarHeight: 40f, StatusBarHeight: 26f, DockSpacing: 6f),
-        new("Compact",  Roundness: 0f,  Spacing: 1f, Padding: 4f, RowHeight: 20f, FontSize: 15f, LabelWidth: 130f, TabBarHeight: 26f, TabPadding: 8f,  MenuBarHeight: 32f, StatusBarHeight: 22f, DockSpacing: 3f),
-        new("Spacious", Roundness: 10f, Spacing: 4f, Padding: 9f, RowHeight: 28f, FontSize: 18f, LabelWidth: 170f, TabBarHeight: 36f, TabPadding: 14f, MenuBarHeight: 44f, StatusBarHeight: 28f, DockSpacing: 8f),
-    ];
-
     private const int PresetColumns = 4;
 
     // Palettes always include the ramp's real default so the current colour reads as selected.
@@ -523,24 +495,30 @@ public class PreferencesPanel : DockPanel
         {
             ThemePreset p = ThemePresets.All[i];
             bool on = string.Equals(theme.Name, p.Name, StringComparison.OrdinalIgnoreCase);
-            PresetCard(paper, font, $"pref_pr_c{i}", p.Name, on, () => ApplyPreset(s, p), id =>
-            {
-                using (paper.Row(id).Height(34).Rounded(EditorTheme.Roundness).Padding(6, 6, 6, 6).Gap(4)
-                    .BackgroundColor(Hx(p.Bg)).IsNotInteractable().Enter())
-                {
-                    paper.Box($"{id}_a").Rounded(Origami.Current.Metrics.SmallRounding)
-                        .BackgroundLinearGradient(0, 0, 1, 1, Hx(p.Accent), Hx(p.Accent2)).IsNotInteractable();
-                    paper.Box($"{id}_b").Rounded(Origami.Current.Metrics.SmallRounding).BackgroundColor(Hx(p.Accent2)).IsNotInteractable();
-                    paper.Box($"{id}_p").Rounded(Origami.Current.Metrics.SmallRounding).BackgroundColor(Hx(p.Panel))
-                        .BorderColor(EditorTheme.WithAlpha(Hx(p.Text), 38)).BorderWidth(1).IsNotInteractable();
-                }
-            });
+            PresetCard(paper, font, $"pref_pr_c{i}", p.Name, on, () => ApplyPreset(s, p),
+                id => ThemeSwatch(paper, id, Hx(p.Bg), Hx(p.Accent), Hx(p.Accent2), Hx(p.Panel), Hx(p.Text)));
         });
 
-        EditorGUI.SectionHeader(paper, "pref_ly_hdr", Loc.Get("pref.builtin_layouts"), compact: true);
-        PresetGrid(paper, "pref_ly", _layouts.Length, i =>
+        if (s.SavedThemes.Count > 0)
         {
-            LayoutPreset l = _layouts[i];
+            EditorGUI.SectionHeader(paper, "pref_ut_hdr", Loc.Get("pref.your_themes"), compact: true);
+            PresetGrid(paper, "pref_ut", s.SavedThemes.Count, i =>
+            {
+                EditorThemeData saved = s.SavedThemes[i];
+                bool on = string.Equals(theme.Name, saved.Name, StringComparison.OrdinalIgnoreCase);
+                PresetCard(paper, font, $"pref_ut_c{i}", saved.Name, on, () => ApplySavedTheme(s, saved),
+                    id => ThemeSwatch(paper, id, ColorRamp.ParseHex(saved.BackgroundColorA), saved.Purple.GetStop(4), saved.Blue.GetStop(4),
+                        saved.Neutral.GetStop(4), saved.Ink.GetStop(4)),
+                    onDelete: () => { s.SavedThemes.Remove(saved); s.Save(); });
+            });
+        }
+
+        EditorGUI.SectionHeader(paper, "pref_ly_hdr", Loc.Get("pref.builtin_layouts"), compact: true);
+        LayoutPreset[] layouts = [.. ThemePresets.Layouts, .. s.SavedLayouts];
+        PresetGrid(paper, "pref_ly", layouts.Length, i =>
+        {
+            LayoutPreset l = layouts[i];
+            Action? delete = i < ThemePresets.Layouts.Length ? null : () => { s.SavedLayouts.Remove(l); s.Save(); };
             PresetCard(paper, font, $"pref_ly_c{i}", l.Name, l.Matches(theme), () => ApplyLayout(s, l), id =>
             {
                 float pillRound = l.Roundness * 0.6f;
@@ -552,8 +530,67 @@ public class PreferencesPanel : DockPanel
                     paper.Box($"{id}_b").Rounded(pillRound).BackgroundColor(EditorTheme.Selected).IsNotInteractable();
                     paper.Box($"{id}_c").Rounded(pillRound).BackgroundColor(EditorTheme.Selected).IsNotInteractable();
                 }
-            });
+            }, delete);
         });
+
+        using (paper.Row("pref_save_presets").Height(UnitValue.Auto).Gap(SP * 2).Enter())
+        {
+            EditorGUI.Chip(paper, "pref_save_theme", $"{EditorIcons.FloppyDisk}  {Loc.Get("pref.save_theme")}", () =>
+                PromptName(Loc.Get("pref.save_theme"), theme.Name, name => SaveTheme(s, name)));
+            EditorGUI.Chip(paper, "pref_save_layout", $"{EditorIcons.FloppyDisk}  {Loc.Get("pref.save_layout")}", () =>
+                PromptName(Loc.Get("pref.save_layout"), "", name => SaveLayout(s, name)), leftGap: 8f);
+        }
+    }
+
+    private static void ThemeSwatch(Paper paper, string id, Color bg, Color accent, Color accent2, Color panel, Color text)
+    {
+        using (paper.Row(id).Height(34).Rounded(EditorTheme.Roundness).Padding(6, 6, 6, 6).Gap(4)
+            .BackgroundColor(bg).IsNotInteractable().Enter())
+        {
+            paper.Box($"{id}_a").Rounded(Origami.Current.Metrics.SmallRounding)
+                .BackgroundLinearGradient(0, 0, 1, 1, accent, accent2).IsNotInteractable();
+            paper.Box($"{id}_b").Rounded(Origami.Current.Metrics.SmallRounding).BackgroundColor(accent2).IsNotInteractable();
+            paper.Box($"{id}_p").Rounded(Origami.Current.Metrics.SmallRounding).BackgroundColor(panel)
+                .BorderColor(EditorTheme.WithAlpha(text, 38)).BorderWidth(1).IsNotInteractable();
+        }
+    }
+
+    private static void ApplySavedTheme(EditorSettings s, EditorThemeData saved)
+    {
+        s.Theme = saved.Clone();
+        s.ApplyTheme(); s.Save();
+    }
+
+    // A theme saved under a name already in the list replaces it.
+    private static void SaveTheme(EditorSettings s, string name)
+    {
+        EditorThemeData copy = s.Theme.Clone();
+        copy.Name = name;
+        s.Theme.Name = name;
+        s.SavedThemes.RemoveAll(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+        s.SavedThemes.Add(copy);
+        s.Save();
+    }
+
+    private static void SaveLayout(EditorSettings s, string name)
+    {
+        s.SavedLayouts.RemoveAll(l => string.Equals(l.Name, name, StringComparison.OrdinalIgnoreCase));
+        s.SavedLayouts.Add(LayoutPreset.From(name, s.Theme));
+        s.Save();
+    }
+
+    private static void PromptName(string title, string initial, Action<string> onSave)
+    {
+        string name = initial;
+        DialogModal dialog = Origami.Dialog(title, paper =>
+            Origami.TextField(paper, "pref_name_prompt", name, v => name = v).AutoFocus().Show(), 340);
+        dialog.Button(Loc.Get("dialog.save"), () =>
+            {
+                if (string.IsNullOrWhiteSpace(name)) return;
+                Modal.Remove(dialog);
+                onSave(name.Trim());
+            }, OrigamiVariant.Primary)
+            .Button(Loc.Get("common.cancel"), () => Modal.Remove(dialog));
     }
 
     private static void PresetGrid(Paper paper, string id, int count, Action<int> drawCard)
@@ -572,7 +609,8 @@ public class PreferencesPanel : DockPanel
         }
     }
 
-    private static void PresetCard(Paper paper, Scribe.FontFile font, string id, string name, bool on, Action onClick, Action<string> drawSwatch)
+    private static void PresetCard(Paper paper, Scribe.FontFile font, string id, string name, bool on, Action onClick, Action<string> drawSwatch,
+        Action? onDelete = null)
     {
         ElementBuilder card = paper.Column(id).Height(UnitValue.Auto).Rounded(Origami.Current.Metrics.ContainerRounding)
             .Padding(PAD, PAD, PAD, PAD).Gap(SP * 1.5f)
@@ -584,6 +622,8 @@ public class PreferencesPanel : DockPanel
 
         using (card.Enter())
         {
+            if (onDelete != null)
+                ContextMenu.RightClickMenu(paper, $"{id}_menu", b => b.Item(Loc.Get("pref.delete_preset"), onDelete));
             drawSwatch($"{id}_sw");
             using (paper.Row($"{id}_nm").Height(15).Enter())
             {
