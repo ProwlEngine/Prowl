@@ -189,6 +189,24 @@ public static class Debug
 
     #endregion
 
+    /// <summary>Logs an exception with what was happening when it was thrown, as <see cref="LogSeverity.Exception"/>.</summary>
+    public static void LogException(string context, Exception exception)
+    {
+        DebugStackTrace trace = (DebugStackTrace)new StackTrace(exception, true);
+        string message = $"{context}: {exception.Message}";
+
+        lock (s_consoleLock)
+        {
+            ConsoleColor prevColor = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.DarkRed;
+            Console.WriteLine(message);
+            Console.WriteLine(trace.ToString());
+            Console.ForegroundColor = prevColor;
+        }
+
+        OnLog?.Invoke(message, trace, LogSeverity.Exception);
+    }
+
     public static void LogException(Exception exception)
     {
         ConsoleColor prevColor = Console.ForegroundColor;
