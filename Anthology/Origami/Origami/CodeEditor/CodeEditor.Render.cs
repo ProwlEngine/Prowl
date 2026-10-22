@@ -39,6 +39,7 @@ public sealed partial class CodeEditor
     private float _measuredSize;
     private float _measuredScale;
     private bool _measuredLigatures;
+    private FontQuality _measuredQuality;
     private float _charW = 8f;
     private float _glyphH = 14f;
     private float _fontSize = -1f;
@@ -165,7 +166,7 @@ public sealed partial class CodeEditor
         s.Font = FontFor(font, style);
         s.Underline = (style & CodeTokenStyle.Underline) != 0;
         s.PixelSize = size * canvas.FramebufferScale;
-        s.Quality = FontQuality.High;
+        s.Quality = Options.TextQuality;
         s.TabSize = Math.Max(1, Options.TabSize);
         s.NoLigatures = !Options.Ligatures;
         return s;
@@ -191,11 +192,12 @@ public sealed partial class CodeEditor
     {
         float size = FontSize;
         float scale = canvas.FramebufferScale;
-        if (ReferenceEquals(font, _measuredFont) && size == _measuredSize && scale == _measuredScale && _measuredLigatures == Options.Ligatures) return;
+        if (ReferenceEquals(font, _measuredFont) && size == _measuredSize && scale == _measuredScale && _measuredLigatures == Options.Ligatures && _measuredQuality == Options.TextQuality) return;
         _measuredFont = font;
         _measuredSize = size;
         _measuredScale = scale;
         _measuredLigatures = Options.Ligatures;
+        _measuredQuality = Options.TextQuality;
 
         var probe = CreateLayout(canvas, "MMMMMMMMMMMMMMMMMMMM", font, size);
         _charW = probe.Size.X / 20f / scale;

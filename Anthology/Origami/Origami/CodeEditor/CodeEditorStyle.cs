@@ -162,6 +162,9 @@ public sealed class CodeEditorOptions
 
     public int TabSize = 4;
 
+    /// <summary>Atlas quality the code is rasterised at, independent of the rest of the UI.</summary>
+    public FontQuality TextQuality = FontQuality.High;
+
     /// <summary>Use the font's ligatures and contextual alternates, such as joined arrows in coding fonts.</summary>
     public bool Ligatures = true;
 
