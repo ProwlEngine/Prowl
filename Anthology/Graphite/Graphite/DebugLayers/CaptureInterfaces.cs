@@ -10,7 +10,7 @@ namespace Prowl.Graphite.Debugging;
 /// </summary>
 public interface ICaptureProfiler : IProfiler
 {
-    void DescribeInstance(in InstanceCaptureInfo instance);
+    void DescribeGroup(in GroupCaptureInfo group);
 
     void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture);
 }

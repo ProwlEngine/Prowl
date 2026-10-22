@@ -20,26 +20,24 @@ public readonly record struct PassResourceAccess(
     TextureState? DepthUsage,
     BufferAccess BufferUsage);
 
-/// <summary>One instance of a dispatch. The root is index 0 with parent -1; KindName names what it stands for and Data is what the host gave it.</summary>
-public readonly record struct InstanceInfo(string Name, int Index, int ParentIndex, GraphInstanceKey Key, uint PixelWidth, uint PixelHeight, object? Data = null)
-{
-    public string KindName => Key.Kind.Name;
-}
+/// <summary>A labelled run of passes. Groups nest; a root group has parent -1.</summary>
+public readonly record struct GroupInfo(string Name, int Index, int ParentIndex);
 
 public readonly struct PassInfo
 {
     public string Name { get; }
     public int Index { get; }
-    public int InstanceIndex { get; }
+    /// <summary>The innermost group the pass was added in, -1 for none.</summary>
+    public int GroupIndex { get; }
 
     /// <summary>Every resource access the pass declared, inputs and outputs.</summary>
     public ReadOnlyMemory<PassResourceAccess> Accesses { get; }
 
-    public PassInfo(string name, int index, int instanceIndex, ReadOnlyMemory<PassResourceAccess> accesses)
+    public PassInfo(string name, int index, int groupIndex, ReadOnlyMemory<PassResourceAccess> accesses)
     {
         Name = name;
         Index = index;
-        InstanceIndex = instanceIndex;
+        GroupIndex = groupIndex;
         Accesses = accesses;
     }
 
@@ -58,13 +56,6 @@ public readonly struct PassInfo
                 yield return access;
         }
     }
-}
-
-/// <summary>Why a pass of the graph did not run for an instance.</summary>
-public enum PassSkipReason : byte
-{
-    /// <summary>The pass writes the instance target and the instance has none.</summary>
-    NoTarget,
 }
 
 /// <summary>Work one pass command buffer recorded. Draws counts direct draw calls, IndirectDraws indirect ones.</summary>

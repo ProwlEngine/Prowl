@@ -19,7 +19,7 @@ public enum GraphResourceOrigin : byte
 {
     Transient,
     Imported,
-    InstanceTarget,
+    Target,
     Persistent,
 }
 
@@ -39,9 +39,9 @@ public readonly record struct GraphResourceInfo(
     int HistorySlot,
     bool HistoryValid);
 
-/// <summary>The resources and passes of one instance, matched to its <see cref="InstanceInfo"/> by index.</summary>
-public readonly record struct InstanceCaptureInfo(
-    int InstanceIndex,
+/// <summary>The resources and passes added directly in one group, matched to its <see cref="GroupInfo"/> by index. Index -1 holds passes outside any group.</summary>
+public readonly record struct GroupCaptureInfo(
+    int GroupIndex,
     ReadOnlyMemory<GraphResourceInfo> Resources,
     ReadOnlyMemory<PassInfo> Passes);
 
