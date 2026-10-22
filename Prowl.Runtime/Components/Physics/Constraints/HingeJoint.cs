@@ -149,7 +149,7 @@ public class HingeJoint : PhysicsJoint
         var angleLimit = AngularLimit.FromDegree(minAngleDegrees, maxAngleDegrees);
 
         hingeJoint = new Jitter2.Dynamics.Constraints.HingeJoint(
-            world, body1, body2, worldAnchor, worldAxis, angleLimit, hasMotor);
+            world, body1, body2, worldAnchor, worldAxis, angleLimit, hasMotor ? JointDrive.Motor : JointDrive.None);
 
         joint = hingeJoint;
 
