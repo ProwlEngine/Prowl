@@ -365,6 +365,9 @@ public static class Modal
 
     private const int BaseLayer = Layer.Overlay + 1000;
 
+    // Each modal gets a band: backdrop, content, then room for the popups opened inside it.
+    private const int LayerStep = 10;
+
     public static void Draw(Paper paper)
     {
         if (_stack.Count == 0) return;
@@ -372,7 +375,7 @@ public static class Modal
         for (int i = 0; i < _stack.Count; i++)
         {
             var modal = _stack[i];
-            int layer = BaseLayer + i * 2;
+            int layer = BaseLayer + i * LayerStep;
             int capturedIndex = i;
 
             // Backdrop - progressively darker for each stacked modal
@@ -393,8 +396,11 @@ public static class Modal
                     dismissed.OnDismissed?.Invoke(ModalDismissReason.Backdrop);
                 });
 
-            // Let the modal draw itself on layer + 1
-            modal.Draw(paper, layer + 1, i);
+            // Let the modal draw itself on layer + 1, with its popups above it
+            int outerPopupLayer = Origami.PopupLayer;
+            Origami.PopupLayer = layer + 3;
+            try { modal.Draw(paper, layer + 1, i); }
+            finally { Origami.PopupLayer = outerPopupLayer; }
 
             // Escape handling for the topmost modal only
             if (i == _stack.Count - 1 && modal.CloseOnEscape && paper.IsKeyPressed(PaperKey.Escape))

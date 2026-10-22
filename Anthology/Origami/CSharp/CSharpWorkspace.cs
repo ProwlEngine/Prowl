@@ -77,6 +77,10 @@ public sealed class CSharpWorkspace : IDisposable
         Mutate(s => s.WithProjectParseOptions(ProjectId, ((CSharpParseOptions)s.GetProject(ProjectId)!.ParseOptions!).WithPreprocessorSymbols(list)));
     }
 
+    /// <summary>Changes the workspace options, such as formatting style, that formatting and code fixes read.</summary>
+    public void SetOptions(Func<Microsoft.CodeAnalysis.Options.OptionSet, Microsoft.CodeAnalysis.Options.OptionSet> change)
+        => Mutate(s => s.WithOptions(change(s.Options)));
+
     public void SetCompilationOptions(CSharpCompilationOptions options)
         => Mutate(s => s.WithProjectCompilationOptions(ProjectId, options));
 

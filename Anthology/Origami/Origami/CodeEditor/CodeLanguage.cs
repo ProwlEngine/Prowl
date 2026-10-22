@@ -452,6 +452,10 @@ public abstract class CodeLanguageSession : IDisposable
     public virtual Task<IReadOnlyList<CodeTextEdit>> FormatAsync(int start, int length, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<CodeTextEdit>>(Array.Empty<CodeTextEdit>());
 
+    /// <summary>Edits that remove unused using directives and sort the rest.</summary>
+    public virtual Task<IReadOnlyList<CodeTextEdit>> OrganizeUsingsAsync(CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<CodeTextEdit>>(Array.Empty<CodeTextEdit>());
+
     /// <summary>Edits that format the statement or block closed by <paramref name="typed"/>, which was just typed before <paramref name="offset"/>.</summary>
     public virtual Task<IReadOnlyList<CodeTextEdit>> FormatOnTypeAsync(int offset, char typed, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<CodeTextEdit>>(Array.Empty<CodeTextEdit>());

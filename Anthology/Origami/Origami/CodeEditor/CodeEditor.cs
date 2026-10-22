@@ -78,6 +78,9 @@ public sealed partial class CodeEditor : IDisposable
     private CancellationTokenSource? _foldCts;
 
     public CodeDocument Document { get; }
+
+    /// <summary>Seconds since the text was last edited, as the editor counts time while it is drawn.</summary>
+    public double TimeSinceLastEdit => _lastEditTime < 0 ? double.MaxValue : _time - _lastEditTime;
     public CodeEditorOptions Options { get; set; } = new();
 
     /// <summary>Colours to draw with. Null follows the current Origami theme.</summary>

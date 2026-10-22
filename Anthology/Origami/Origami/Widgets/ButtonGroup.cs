@@ -333,7 +333,7 @@ public sealed class ButtonGroupBuilder
             .PositionType(PositionType.SelfDirected)
             .Position(0, 0)
             .Width(1).Height(1)
-            .Layer(Layer.Topmost)
+            .Layer(Origami.PopupLayer)
             .HookToParent()
             .IsNotInteractable()
             .Enter())

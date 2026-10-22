@@ -166,6 +166,12 @@ public sealed class GraphNode
     /// <summary>Height reserved for <see cref="Body"/>, in graph space.</summary>
     public float BodyHeight;
 
+    /// <summary>
+    /// Rows of controls below the port rows, each at its own height. The card sizes itself from them and
+    /// every row keeps its drags, so working a control never moves the node. Wins over <see cref="Body"/>.
+    /// </summary>
+    public List<GraphNodeRow> Rows = new();
+
     /// <summary>Shows a chevron in the header that raises <c>OnNodeToggleCollapsed</c>.</summary>
     public bool Collapsible;
 
@@ -187,6 +193,40 @@ public sealed class GraphNode
     /// must not move or remove.
     /// </summary>
     public bool Pinned;
+
+    /// <summary>Whether a delete may take the node. A pinned node never can.</summary>
+    public bool Removable = true;
+
+    internal bool HasBody => Rows.Count > 0 || Body != null && BodyHeight > 0f;
+
+    /// <summary>The height the body below the port rows takes, from its rows or from <see cref="BodyHeight"/>.</summary>
+    internal float BodyExtent
+    {
+        get
+        {
+            if (Rows.Count == 0) return Body != null ? BodyHeight : 0f;
+
+            float height = GraphNodeRow.Pad * 0.5f;
+            foreach (GraphNodeRow row in Rows) height += row.Height + GraphNodeRow.Gap;
+            return height;
+        }
+    }
+}
+
+/// <summary>One row of controls in a node's body, drawn at a fixed height.</summary>
+public sealed class GraphNodeRow
+{
+    internal const float Pad = 8f;
+    internal const float Gap = 4f;
+
+    public float Height;
+    public Action<NodeBodyContext> Draw;
+
+    public GraphNodeRow(float height, Action<NodeBodyContext> draw)
+    {
+        Height = height;
+        Draw = draw ?? throw new ArgumentNullException(nameof(draw));
+    }
 }
 
 /// <summary>A directed wire from an output port to an input port, referenced by id.</summary>
@@ -1180,10 +1220,10 @@ public sealed class NodeGraphBuilder
                     // With a custom body below, the rows take exactly their own height rather than
                     // stretching, so the body keeps the space the layout reserved for it.
                     using (_paper.Column("body").Width(UnitValue.Percentage(100))
-                        .Height(node.Body != null && node.BodyHeight > 0f
+                        .Height(node.HasBody
                             ? BodyPadTop + rows * _portRowH
                             : UnitValue.Stretch())
-                        .Padding(0, 0, BodyPadTop, node.Body != null ? 0 : BodyPadBottom).IsNotInteractable().Enter())
+                        .Padding(0, 0, BodyPadTop, node.HasBody ? 0 : BodyPadBottom).IsNotInteractable().Enter())
                         for (int i = 0; i < rows; i++)
                             using (_paper.Row("row", i).Width(UnitValue.Percentage(100)).Height(_portRowH).Enter())
                             {
@@ -1212,10 +1252,14 @@ public sealed class NodeGraphBuilder
                                     .TextColor(portLabelCol).Alignment(TextAlignment.MiddleRight).TextTruncate();
                             }
 
-                if (node.Body != null && node.BodyHeight > 0f)
-                    using (_paper.Box("bodyhost").Width(UnitValue.Percentage(100)).Height(node.BodyHeight)
+                if (node.HasBody)
+                    using (_paper.Box("bodyhost").Width(UnitValue.Percentage(100)).Height(node.BodyExtent)
                         .Margin(0, 0, 0, BodyPadBottom).Enter())
-                        node.Body(new NodeBodyContext(_paper, node, zoom, accent, selected));
+                    {
+                        var ctx = new NodeBodyContext(_paper, node, zoom, accent, selected);
+                        if (node.Rows.Count > 0) DrawRows(node, ctx);
+                        else node.Body!(ctx);
+                    }
             }
 
             // Paper has no per element opacity, so a faded card is the card with the canvas laid over it.
@@ -1223,6 +1267,20 @@ public sealed class NodeGraphBuilder
                 _paper.Box("dim").PositionType(PositionType.SelfDirected).Left(0).Top(0)
                     .Width(UnitValue.Percentage(100)).Height(UnitValue.Percentage(100))
                     .BackgroundColor(WithA(_theme.Neutral.C100, 150)).IsNotInteractable();
+        }
+    }
+
+    // Each row owns its drags, while the gaps between rows still pick the card up.
+    private void DrawRows(GraphNode node, NodeBodyContext ctx)
+    {
+        using (_paper.Column("rows").Width(UnitValue.Stretch()).Height(UnitValue.Stretch())
+            .Padding(GraphNodeRow.Pad, GraphNodeRow.Pad, GraphNodeRow.Pad * 0.5f, 0).Enter())
+        {
+            for (int i = 0; i < node.Rows.Count; i++)
+                using (_paper.Row("row", i).Width(UnitValue.Stretch()).Height(node.Rows[i].Height)
+                    .Margin(0, 0, 0, GraphNodeRow.Gap).AlignItems(LayoutAlignment.Center).StopDragPropagation().Enter())
+                using (Scope("c" + i))
+                    node.Rows[i].Draw(ctx);
         }
     }
 
@@ -1882,7 +1940,7 @@ public sealed class NodeGraphBuilder
     // ── selection helpers ──
     private bool Additive() => Shift() || Ctrl();
     private bool Shift() => _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
-    private bool Ctrl() => _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl);
+    private bool Ctrl() => _paper.IsCommandDown();
     // A double click reaches the click handler too, so an edit is safe from clicks for a moment after
     // it opens: without this the caret appears and the edit closes on the very same gesture.
     private void MaybeCommitEdit(GraphState st)
@@ -1962,7 +2020,7 @@ public sealed class NodeGraphBuilder
     }
 
     private GraphSelection BuildSelection(GraphState st, bool forEdit = false) => new(
-        _nodes.Where(n => st.SelNodes.Contains(n.Id) && !(forEdit && n.Pinned)).ToList(),
+        _nodes.Where(n => st.SelNodes.Contains(n.Id) && !(forEdit && (n.Pinned || !n.Removable))).ToList(),
         _connections.Where(c => st.SelEdges.Contains(EdgeKey(c))).ToList(),
         _groups.Where(g => st.SelGroups.Contains(g.Id)).ToList(),
         _stickies.Where(s => st.SelStickies.Contains(s.Id)).ToList());

@@ -63,14 +63,16 @@ namespace Prowl.Scribe
         /// Applies the default GSUB substitution features (ccmp, liga, rlig, then calt) to a shaping
         /// buffer in place. Glyph indices may be replaced (single), expanded (multiple), or merged
         /// (ligature), with source clusters tracked so hit-testing can map back to characters.
+        /// <paramref name="noLigatures"/> leaves out liga and calt.
         /// </summary>
-        internal void ApplyGsub(List<GsubGlyph> buf)
+        internal void ApplyGsub(List<GsubGlyph> buf, bool noLigatures = false)
         {
             if (this.gsub == 0 || buf.Count == 0)
                 return;
             ApplyGsubFeature(buf, "ccmp");
-            ApplyGsubFeature(buf, "liga");
+            if (!noLigatures) ApplyGsubFeature(buf, "liga");
             ApplyGsubFeature(buf, "rlig");
+            if (noLigatures) return;
 
             // Contextual alternates are on by default everywhere text is laid out, and script faces
             // lean on them heavily: without it their letters keep the shapes and widths they have in

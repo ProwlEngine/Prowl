@@ -282,6 +282,29 @@ public class RoslynSessionTests
     }
 
     [Fact]
+    public async Task FormatFollowsWorkspaceOptions()
+    {
+        string code = "class C\n{\nvoid M()\n{\n}\n}";
+        var workspace = new CSharpWorkspace(s_references.Value);
+        workspace.SetOptions(o => o.WithChangedOption(Microsoft.CodeAnalysis.CSharp.Formatting.CSharpFormattingOptions.NewLinesForBracesInMethods, false));
+        var (session, _) = Open(code, workspace);
+        var edits = await session.FormatAsync(0, -1, default);
+
+        Assert.Contains("void M() {", Apply(code, edits));
+    }
+
+    [Fact]
+    public async Task OrganizeUsingsRemovesUnusedAndSorts()
+    {
+        string code = "using System.Text;\nusing System.Linq;\nusing System;\n\nclass C\n{\n    int[] M() => new[] { 1 }.ToArray();\n    string N() => String.Empty;\n}";
+        var (session, _) = Open(code);
+        var edits = await session.OrganizeUsingsAsync(default);
+
+        string organized = Apply(code, edits);
+        Assert.StartsWith("using System;\nusing System.Linq;\n\nclass C", organized);
+    }
+
+    [Fact]
     public async Task FormatOnSemicolonFormatsOnlyThatStatement()
     {
         string code = "class C\n{\n    void M()\n    {\n        int a=1;\n        int b=2;$$\n    }\n}";

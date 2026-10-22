@@ -45,6 +45,15 @@ public static partial class Origami
     /// Gates <see cref="OrigamiShadow.DropShadow{T}"/>.</summary>
     public static bool DropShadowsEnabled = true;
 
+    /// <summary>
+    /// The layer popups drawn inline by a widget (dropdown lists, autocomplete, tooltips) open on. It rises while a
+    /// modal draws, so a popup opened inside a modal sits above it.
+    /// </summary>
+    public static int PopupLayer { get; internal set; } = Layer.Topmost;
+
+    /// <summary>Scales every icon inside the box it is drawn in. Above 1 an icon can spill past its box.</summary>
+    public static float IconScale = 1f;
+
     /// <summary>Global switch for accent-tinted glows (selected pills, focus rings, active toolbar
     /// buttons, tab underlines, etc.). Default true. Gates <see cref="OrigamiShadow.Glow{T}"/> and the
     /// widgets' canvas-painted glows.</summary>

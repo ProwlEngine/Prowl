@@ -90,6 +90,7 @@ public class TransformGizmo
     public bool IsMouseUp = false;
     public float SnapDistance = 1f;
     public float SnapAngle = 15f;
+    public float SnapScale = 0.1f;
 
     public Float3 Translation;
     public Quaternion Rotation;

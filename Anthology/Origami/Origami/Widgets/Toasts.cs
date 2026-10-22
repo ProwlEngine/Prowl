@@ -145,11 +145,12 @@ public sealed class Toasts
                 continue;
             }
 
+            float fadeIn = FadeInTime * paper.TransitionScale, fadeOut = FadeOutTime * paper.TransitionScale;
             float fade = 1f;
-            if (toast.Elapsed < FadeInTime)
-                fade = toast.Elapsed / FadeInTime;
-            else if (toast.Elapsed > toast.Duration - FadeOutTime)
-                fade = (toast.Duration - toast.Elapsed) / FadeOutTime;
+            if (toast.Elapsed < fadeIn)
+                fade = toast.Elapsed / fadeIn;
+            else if (toast.Elapsed > toast.Duration - fadeOut)
+                fade = (toast.Duration - toast.Elapsed) / fadeOut;
 
             float slideX = (1f - MathF.Min(1f, toast.Elapsed / 0.2f)) * 40f;
 

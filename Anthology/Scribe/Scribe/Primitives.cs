@@ -101,6 +101,9 @@ namespace Prowl.Scribe
         /// <summary>Draw a line through the text, where the font's OS/2 table puts it.</summary>
         public bool Strikethrough;
 
+        /// <summary>Turns off ligatures and contextual alternates, so every character keeps its own glyph.</summary>
+        public bool NoLigatures;
+
         // Atlas rasterization quality. Independent of PixelSize - the distance field is generated
         // once per quality and scaled to any display size at draw time.
         public FontQuality Quality;

@@ -657,7 +657,7 @@ public sealed class TreeBuilder
                 row.OnClick(e =>
                 {
                     e.StopPropagation();
-                    bool ctrl = _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl);
+                    bool ctrl = _paper.IsCommandDown();
                     bool shift = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
                     _onSelectModified(new TreeNodeEvent(capturedNode, capturedIndex), ctrl, shift);
                 });
