@@ -85,18 +85,19 @@ public sealed class FakePeer : IDisposable
 {
     public const ushort SceneSnapshot = Networking.Networking.EngineMessageIds, Spawn = SceneSnapshot + 1, Despawn = SceneSnapshot + 2,
         Owner = SceneSnapshot + 3, Sync = SceneSnapshot + 4, Transform = SceneSnapshot + 5, RpcToHost = SceneSnapshot + 6, RpcFromHost = SceneSnapshot + 7, SceneLoaded = SceneSnapshot + 8, SceneCatchUp = SceneSnapshot + 9,
-        SceneReady = SceneSnapshot + 10, SceneActivate = SceneSnapshot + 11;
+        SceneReady = SceneSnapshot + 10, SceneActivate = SceneSnapshot + 11, StaticRpcToHost = SceneSnapshot + 12, StaticRpcFromHost = SceneSnapshot + 13;
 
     private FakePeer(NetSession session)
     {
         Session = session;
-        for (ushort id = SceneSnapshot; id <= SceneActivate; id++)
+        for (ushort id = SceneSnapshot; id <= StaticRpcFromHost; id++)
         {
             ushort captured = id;
             session.OnRaw(id, (NetPeer sender, ref NetReader reader, Delivery delivery) =>
             {
                 NetReader wire = reader;
                 WireReceived.Add((captured, wire.ReadBytes(wire.Remaining).ToArray()));
+                Deliveries.Add((captured, delivery));
                 Received.Add((captured, ReadEnginePayload(captured, ref reader)));
                 if (AutoReady) HandleReadiness(sender, captured, WireReceived[^1].Data);
             });
@@ -142,6 +143,7 @@ public sealed class FakePeer : IDisposable
 
     public List<(ushort Id, byte[] Data)> Received { get; } = new();
     public List<(ushort Id, byte[] Data)> WireReceived { get; } = new();
+    public List<(ushort Id, Delivery Delivery)> Deliveries { get; } = new();
 
     public static FakePeer Join(LocalNetwork network, string name) =>
         new(NetSession.Join(new LocalTransport(network, name), "host", name));

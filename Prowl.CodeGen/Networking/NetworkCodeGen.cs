@@ -56,7 +56,7 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
 
     private static readonly DiagnosticDescriptor s_rpcShape = new(
         "PROWLNET002", "RPC shape not supported",
-        "RPC '{0}' must be a non-static, non-generic method returning void, with a body and no ref, out or params parameters",
+        "RPC '{0}' must be a non-generic method returning void, with a body and no ref, out or params parameters",
         "Networking", DiagnosticSeverity.Error, true);
 
     private static readonly DiagnosticDescriptor s_notInClass = new(
@@ -82,6 +82,11 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
     private static readonly DiagnosticDescriptor s_collectionShape = new(
         "PROWLNET007", "Network collection shape",
         "[Sync] property '{0}' {1}",
+        "Networking", DiagnosticSeverity.Error, true);
+
+    private static readonly DiagnosticDescriptor s_staticRpc = new(
+        "PROWLNET008", "Static RPC shape not supported",
+        "Static RPC '{0}' must be declared in a non-generic class and cannot use Owner or OwnerOnly",
         "Networking", DiagnosticSeverity.Error, true);
 
     // A file whose rewrite comes out the same gets back the very same tree, so the compiler's incremental reuse holds.
@@ -293,7 +298,7 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         public string Descriptor => "__syncnet_" + Name;
     }
 
-    private sealed record RpcInfo(string Name, uint Id, string Mode, uint Flags, IReadOnlyList<string> ParameterTypes)
+    private sealed record RpcInfo(string Name, uint Id, string Mode, uint Flags, IReadOnlyList<string> ParameterTypes, bool Static = false)
     {
         public string Signature => $"{Name}({string.Join(",", ParameterTypes)})";
 

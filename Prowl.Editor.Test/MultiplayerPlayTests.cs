@@ -44,6 +44,12 @@ public class MultiplayerPlayTests : EditorTestHarness
             [Rpc.Broadcast]
             public void Ping(string text) => Debug.Log($"beacon {text} level {Level} from {Rpc.Caller?.Name}");
         }
+
+        public static class GlobalEvents
+        {
+            [Rpc.Broadcast]
+            public static void Announce(string text) => Debug.Log($"global {text} from {Rpc.Caller?.Name}");
+        }
         """;
 
     [Fact]
@@ -53,7 +59,8 @@ public class MultiplayerPlayTests : EditorTestHarness
         WriteScript("BeaconCalls.cs", BeaconCalls);
         ScriptCompiler.CompileResult compiled = ScriptCompiler.CompileAll(Project);
         Assert.True(compiled.Success, compiled.Errors);
-        Type beaconType = Assembly.Load(File.ReadAllBytes(Project.GameAssemblyPath)).GetType("Beacon")!;
+        Assembly scripts = Assembly.Load(File.ReadAllBytes(Project.GameAssemblyPath));
+        Type beaconType = scripts.GetType("Beacon")!;
 
         Scene scene = new();
         Scene.Load(scene);
@@ -91,6 +98,9 @@ public class MultiplayerPlayTests : EditorTestHarness
 
             beaconType.GetMethod("Ping")!.Invoke(beacon, ["hello"]);
             Pump(() => logs.Contains("beacon hello level 7 from Host"), "the RPC to run on the instance", output, instance);
+
+            scripts.GetType("GlobalEvents")!.GetMethod("Announce")!.Invoke(null, ["hello"]);
+            Pump(() => logs.Contains("global hello from Host"), "the static RPC to run on the instance", output, instance);
 
             // Ending the session ends the instance.
             Networking.Shutdown();

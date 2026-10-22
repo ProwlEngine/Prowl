@@ -96,7 +96,9 @@ internal sealed partial class NetworkCodeGen
 
             Changed = true;
             StringBuilder prologue = new();
-            prologue.Append($"if (__Rpc_Begin({rpc.Descriptor}, out {WriterType} __rpc_w)) {{ ");
+            prologue.Append(rpc.Static
+                ? $"if ({rpc.Descriptor}.Begin(out {WriterType} __rpc_w)) {{ using (__rpc_w) {{ "
+                : $"if (__Rpc_Begin({rpc.Descriptor}, out {WriterType} __rpc_w)) {{ ");
             prologue.Append("using (global::Prowl.Runtime.Diagnostics.FrameStats.Network.Scope()) { ");
             foreach (ParameterSyntax parameter in node.ParameterList.Parameters)
             {
@@ -104,7 +106,9 @@ internal sealed partial class NetworkCodeGen
                     $"{Serializer}<{OneLine(parameter.Type!)}>.Write(__rpc_w, {parameter.Identifier.Text}); ");
             }
 
-            prologue.Append($"if (!__Rpc_Send({rpc.Descriptor}, __rpc_w)) return; }} }} ");
+            prologue.Append(rpc.Static
+                ? $"if (!{rpc.Descriptor}.Send(__rpc_w)) return; }} }} }} "
+                : $"if (!__Rpc_Send({rpc.Descriptor}, __rpc_w)) return; }} }} ");
             StatementSyntax check = SyntaxFactory.ParseStatement(prologue.ToString());
 
             // Inserted right after the opening brace, on its line, taking over whatever followed the brace, so
@@ -164,17 +168,24 @@ internal sealed partial class NetworkCodeGen
                 }
                 else if (member is MethodDeclarationSyntax method && Rpc(method) is { } rpc)
                 {
-                    StringBuilder invoke = new($"static ({self} __c, ref {ReaderType} __r, bool __execute) => {{ ");
+                    StringBuilder invoke = new(rpc.Static
+                        ? $"static (ref {ReaderType} __r, bool __execute) => {{ "
+                        : $"static ({self} __c, ref {ReaderType} __r, bool __execute) => {{ ");
                     for (int i = 0; i < rpc.ParameterTypes.Count; i++)
                     {
                         invoke.Append(
                             $"{rpc.ParameterTypes[i]} __a{i} = {Serializer}<{rpc.ParameterTypes[i]}>.Read(ref __r); ");
                     }
 
+                    string argumentsRead = rpc.Static
+                        ? "global::Prowl.Runtime.Networking.StaticRpcMember.ArgumentsRead()" : "__Rpc_ArgumentsRead()";
+                    string target = rpc.Static ? self : "__c";
                     invoke.Append(
-                        $"if (!__execute) return; __Rpc_ArgumentsRead(); __c.{rpc.Name}({string.Join(", ", Enumerable.Range(0, rpc.ParameterTypes.Count).Select(i => "__a" + i))}); }}");
+                        $"if (!__execute) return; {argumentsRead}; {target}.{rpc.Name}({string.Join(", ", Enumerable.Range(0, rpc.ParameterTypes.Count).Select(i => "__a" + i))}); }}");
+                    string descriptorType = rpc.Static ? "StaticRpcMember" : $"RpcMember<{self}>";
+                    string declaringType = rpc.Static ? $"typeof({self}), " : "";
                     members.Add(
-                        $"{Descriptor} global::Prowl.Runtime.Networking.RpcMember<{self}> {rpc.Descriptor} = new({rpc.Id}u, "
+                        $"{Descriptor} global::Prowl.Runtime.Networking.{descriptorType} {rpc.Descriptor} = new({declaringType}{rpc.Id}u, "
                         + $"{SymbolDisplay.FormatLiteral(rpc.Signature, true)}, {RpcModeType}.{rpc.Mode}, ({RpcFlagsType}){rpc.Flags}u, {invoke});");
                 }
             }
@@ -347,17 +358,25 @@ internal sealed partial class NetworkCodeGen
 
             Location location = node.Identifier.GetLocation();
             if (node.Parent is not ClassDeclarationSyntax ||
-                !DerivesFrom(method.ContainingType, context.Symbols.Component))
+                (!method.IsStatic && !DerivesFrom(method.ContainingType, context.Symbols.Component)))
             {
                 context.Report(s_notInClass, location, method.Name);
                 return null;
             }
 
             bool plainParameters = method.Parameters.All(p => p.RefKind == RefKind.None && !p.IsParams && !p.IsThis);
-            if (!method.ReturnsVoid || !plainParameters || method.IsGenericMethod || method.IsStatic ||
+            if (!method.ReturnsVoid || !plainParameters || method.IsGenericMethod ||
                 (node.Body == null && node.ExpressionBody == null))
             {
                 context.Report(s_rpcShape, location, method.Name);
+                return null;
+            }
+
+            uint flags = rpc.ConstructorArguments.Select(a => Convert.ToUInt32(a.Value)).FirstOrDefault();
+            if (method.IsStatic && (kind.Name == "OwnerAttribute" || (flags & 4u) != 0 ||
+                GenericContainer(method.ContainingType)))
+            {
+                context.Report(s_staticRpc, location, method.Name);
                 return null;
             }
 
@@ -371,8 +390,14 @@ internal sealed partial class NetworkCodeGen
             List<string> types = node.ParameterList.Parameters.Select(p => OneLine(p.Type!)).ToList();
             string key = $"{method.Name}({string.Join(",", types)})";
             context.ClaimId(method.ContainingType, true, key, location);
-            uint flags = rpc.ConstructorArguments.Select(a => Convert.ToUInt32(a.Value)).FirstOrDefault();
-            return new RpcInfo(method.Name, NetworkId(key), kind.Name[..^"Attribute".Length], flags, types);
+            return new RpcInfo(method.Name, NetworkId(key), kind.Name[..^"Attribute".Length], flags, types, method.IsStatic);
+        }
+
+        private static bool GenericContainer(INamedTypeSymbol? type)
+        {
+            for (; type != null; type = type.ContainingType)
+                if (type.IsGenericType) return true;
+            return false;
         }
 
         private static AttributeData? Find(ISymbol symbol, INamedTypeSymbol attribute) =>

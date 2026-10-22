@@ -163,7 +163,7 @@ public static partial class Networking
     private static void SendEngine(NetPeer peer, EngineMessage kind, ReadOnlySpan<byte> payload,
         Delivery delivery = Delivery.Reliable)
     {
-        if (IsHost && kind == EngineMessage.RpcFromHost && !IsPeerReady(peer)) return;
+        if (IsHost && (kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost) && !IsPeerReady(peer)) return;
         Session!.SendRaw(peer, (ushort)kind, payload, delivery);
         if (NetworkDiagnostics.Enabled)
         {
@@ -176,7 +176,7 @@ public static partial class Networking
     private static void BroadcastEngine(EngineMessage kind, ReadOnlySpan<byte> payload,
         Delivery delivery = Delivery.Reliable, NetPeer? except = null)
     {
-        if (kind == EngineMessage.RpcFromHost)
+        if (kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost)
         {
             foreach (NetPeer peer in Session!.Peers)
                 if (!peer.IsLocal && peer != except) SendEngine(peer, kind, payload, delivery);

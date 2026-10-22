@@ -237,6 +237,9 @@ public static partial class Networking
         RegisterEngineMessage(session, EngineMessage.SceneReady, OnClientSceneReady);
         RegisterEngineMessage(session, EngineMessage.SceneActivate, OnSceneActivate);
 
+        RegisterEngineMessage(session, EngineMessage.StaticRpcToHost, OnStaticRpcToHost);
+        RegisterEngineMessage(session, EngineMessage.StaticRpcFromHost, OnStaticRpcFromHost);
+
         session.Ended += (reason, message) =>
         {
             if (Session != session)
@@ -279,6 +282,7 @@ public static partial class Networking
         s_outgoingStateRevision = 0;
         SessionNumber++;
         s_incoming = null;
+        s_incomingStatic = null;
         s_incomingRead = false;
         CurrentCaller = null;
 
@@ -299,6 +303,8 @@ public static partial class Networking
         SceneLoaded,
         SceneCatchUp,
         SceneReady,
-        SceneActivate
+        SceneActivate,
+        StaticRpcToHost,
+        StaticRpcFromHost
     }
 }

@@ -187,9 +187,9 @@ public static partial class Networking
 
     private static bool CanReceiveEngineMessage(NetPeer peer, EngineMessage kind)
     {
-        if (IsHost && !peer.IsLocal && kind is EngineMessage.Sync or EngineMessage.Transform or EngineMessage.RpcToHost)
+        if (IsHost && !peer.IsLocal && kind is EngineMessage.Sync or EngineMessage.Transform or EngineMessage.RpcToHost or EngineMessage.StaticRpcToHost)
             return IsPeerReady(peer);
-        if (IsClient && kind == EngineMessage.RpcFromHost)
+        if (IsClient && (kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost))
             return IsReady;
         return true;
     }

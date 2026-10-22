@@ -163,7 +163,7 @@ a separate content download pipeline and asynchronous snapshot capture are futur
 
 ## State before RPCs
 
-An RPC carries the caller's authorized Sync values, collection contents and pending operations, and
+A component RPC carries the caller's authorized Sync values, collection contents and pending operations, and
 synchronized local transforms within its network root (or its own tree for a snapshot-only object).
 Receivers validate the arguments and complete dependent-state envelope before applying it and invoking
 the method. The host preserves client state when relaying and appends the host-authoritative values.
@@ -181,6 +181,36 @@ already includes. Known operations still raise `Changed`; a complete copy recove
 unreliable prerequisite was lost, without inventing callbacks for unknown historical operations.
 Capturing state adds payload and serialization cost. An unreliable call, including its dependent state,
 must fit the transport's message limit; reliable calls can use Warp fragmentation.
+
+## Static RPCs
+
+Static methods on non-generic classes, including ordinary static classes, can use the same attributes:
+
+```csharp
+public static class GlobalEvents
+{
+    [Rpc.Broadcast]
+    public static void Announce(string message) => Debug.Log(message);
+
+    [Rpc.Host]
+    public static void RequestAnnouncement(string message)
+    {
+        // Validate Rpc.Caller and the request before changing gameplay state.
+        Announce(message);
+    }
+}
+```
+
+No component or spawned object is needed. `Broadcast` executes on the caller and sends to other ready
+peers through the host; `Host` executes only on the host. `Rpc.Caller` preserves the original sender,
+and `Rpc.IsRemote` works inside received static calls. `HostOnly` and `Unreliable` are supported.
+`Owner` and `OwnerOnly` require an object, so the compiler rejects them on static methods, along with
+generic methods and generic declaring/enclosing classes. Without an active session calls run locally.
+
+Static RPCs carry their arguments, with the same serializers and argument validation as component
+RPCs. They do not capture Sync values or transforms; pass the data the method needs as arguments.
+Readiness guards apply to static calls too. Receivers resolve only generated descriptors, including
+methods they have never called locally; descriptor caches do not retain replaced script types.
 
 ## Runtime structure
 
