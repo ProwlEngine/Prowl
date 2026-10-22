@@ -18,6 +18,9 @@ public enum CodeTokenStyle : byte
     Underline = 4,
 }
 
+/// <summary>Which keys accept the selected completion.</summary>
+public enum CompletionAcceptKeys { TabAndEnter, Tab, Enter }
+
 /// <summary>How the caret is drawn.</summary>
 public enum CaretStyle { Line, Block, Underline }
 
@@ -114,6 +117,14 @@ public sealed class CodeEditorOptions
 
     /// <summary>Shows the parameter list while typing a call. Ctrl+Shift+Space still opens it when off.</summary>
     public bool ParameterHints = true;
+
+    public CompletionAcceptKeys AcceptCompletionWith = CompletionAcceptKeys.TabAndEnter;
+
+    /// <summary>Characters that accept the selected completion and are then typed. Null uses each suggestion's own, empty turns them off.</summary>
+    public string? CompletionCommitCharacters;
+
+    /// <summary>Puts suggestions accepted recently first, in every editor.</summary>
+    public bool SortCompletionsByRecentUse;
 }
 
 /// <summary>Colours of a <see cref="CodeEditor"/>. <see cref="Token"/> is indexed by <see cref="CodeTokenKind"/>.</summary>

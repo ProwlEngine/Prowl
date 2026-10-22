@@ -253,9 +253,11 @@ public sealed partial class CodeEditor
                 case PaperKey.Enter:
                 case PaperKey.KeypadEnter:
                     if (ctrl || shift) break;
+                    if (Options.AcceptCompletionWith == CompletionAcceptKeys.Tab) { CloseCompletion(); return false; }
                     CommitCompletion('\n');
                     return true;
                 case PaperKey.Tab:
+                    if (Options.AcceptCompletionWith == CompletionAcceptKeys.Enter) { CloseCompletion(); return false; }
                     CommitCompletion('\t');
                     return true;
                 case PaperKey.Left:
@@ -443,10 +445,22 @@ public sealed partial class CodeEditor
             return;
         }
 
+        bool recent = Options.SortCompletionsByRecentUse;
+        bool recentFirst = recent && filter.Length == 0;
         c.Filtered.Sort((a, b) =>
         {
+            if (recentFirst)
+            {
+                int r = RecentUse(b.Item).CompareTo(RecentUse(a.Item));
+                if (r != 0) return r;
+            }
             int s = b.Score.CompareTo(a.Score);
             if (s != 0) return s;
+            if (recent)
+            {
+                int r = RecentUse(b.Item).CompareTo(RecentUse(a.Item));
+                if (r != 0) return r;
+            }
             return string.Compare(a.Item.Sort, b.Item.Sort, StringComparison.OrdinalIgnoreCase);
         });
 
@@ -510,6 +524,12 @@ public sealed partial class CodeEditor
         return char.IsDigit(c) && !char.IsDigit(prev);
     }
 
+    // When each suggestion was last accepted, shared by every editor, for sorting by recent use.
+    private static readonly Dictionary<string, long> s_recentCompletions = new();
+    private static long s_recentClock;
+
+    private static long RecentUse(CodeCompletionItem item) => s_recentCompletions.TryGetValue(item.Label, out long at) ? at : 0;
+
     private bool CompletionCommitsOn(char c)
     {
         var comp = _completion;
@@ -517,7 +537,7 @@ public sealed partial class CodeEditor
         if (comp.List.SuggestionMode && !comp.UserMoved) return false;
         if (FilterText().Length == 0 && !comp.UserMoved && !comp.Explicit) return false;
         var item = comp.Filtered[comp.Selected].Item;
-        string commit = item.CommitCharacters ?? (Session != null ? ".,;()[]{}<>=" : "");
+        string commit = Options.CompletionCommitCharacters ?? item.CommitCharacters ?? (Session != null ? ".,;()[]{}<>=" : "");
         return commit.IndexOf(c) >= 0;
     }
 
@@ -527,6 +547,7 @@ public sealed partial class CodeEditor
         if (comp == null || comp.Filtered.Count == 0) { CloseCompletion(); return; }
         var item = comp.Filtered[comp.Selected].Item;
         _completion = null;
+        s_recentCompletions[item.Label] = ++s_recentClock;
 
         int caretOffset = Document.PositionToOffset(Caret);
         CodeCompletionCommit? commit = null;
