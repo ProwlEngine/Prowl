@@ -16,7 +16,7 @@ using Prowl.Rosetta;
 namespace Prowl.Editor.GUI;
 
 /// <summary>
-/// The first launch setup: language, theme, layout density, scale and script editor, applied live as they are
+/// The first launch setup: language, scale, script editor, theme and layout density, applied live as they are
 /// picked. Shown once, and again from Window > General > Editor Setup.
 /// </summary>
 public static class EditorSetup
@@ -101,13 +101,6 @@ public static class EditorSetup
                         script.OpenScriptsIn = v;
                         Preferences.Changed(Preferences.SectionOf(script));
                     }).Show());
-
-                EditorGUI.SettingsToggle(paper, "setup_anim_bg", Loc.Get("pref.animated_bg"), s.Theme.AnimatedBackground, v =>
-                {
-                    s.Theme.AnimatedBackground = v;
-                    s.ApplyTheme();
-                    s.Save();
-                });
 
                 PreferencesPanel.DrawThemePresets(paper, font, s, s.Theme);
             }
