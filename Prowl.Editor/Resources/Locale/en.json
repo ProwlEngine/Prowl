@@ -173,6 +173,7 @@
   "console.options": "Options",
   "console.copy": "Copy",
   "console.copy_message": "Copy Message",
+  "console.open_source": "Open Source",
   "console.copy_with_stack": "Copy With Stack Trace",
 
   "inspector.nothing_selected": "Nothing Selected",
@@ -451,6 +452,7 @@
   "pref.projects_path": "Default Projects Path",
   "pref.auto_save": "Auto-Save",
   "pref.reimport_focus": "Reimport Only on Focus",
+  "pref.script_editor": "Script Editor",
   "pref.thumbnail_size": "Thumbnail Size",
   "pref.theme": "Theme",
   "pref.toast_theme": "Theme",

@@ -98,6 +98,10 @@ public class EditorAssetBackend : AssetBackend
         OnAssetsDeleted -= PrefabUtility.OnAssetsDeleted;
         OnAssetsDeleted += PrefabUtility.OnAssetsDeleted;
 
+        // Open scripts follow their file through a rename, and a renamed script can take its class along.
+        OnAssetMoved -= GUI.ScriptEditor.ScriptRenames.OnAssetMoved;
+        OnAssetMoved += GUI.ScriptEditor.ScriptRenames.OnAssetMoved;
+
         // The notification above only reaches the scene that was open when the import happened, so a
         // scene opened afterwards has to catch up on whatever changed while it was closed.
         Runtime.Resources.Scene.OnSceneLoaded -= PrefabUtility.OnSceneLoaded;

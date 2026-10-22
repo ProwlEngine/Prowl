@@ -32,6 +32,9 @@ public class EditorSettings
     public string Locale { get; set; } = "en";
     public bool AutoSaveLayout { get; set; } = true;
     public bool ReimportOnFocusOnly { get; set; } = true;
+
+    /// <summary> Gets or sets whether double clicked scripts open in the built in code editor or the system's default app. </summary>
+    public GUI.ScriptEditor.ScriptEditorMode ScriptEditor { get; set; } = GUI.ScriptEditor.ScriptEditorMode.BuiltIn;
     /// <summary> Gets or sets the thumbnail size in pixels for asset previews. Defaults to 32. </summary>
     public int ThumbnailSize { get; set; } = 32;
 
