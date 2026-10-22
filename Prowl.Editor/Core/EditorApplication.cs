@@ -274,24 +274,27 @@ public class EditorApplication : Game
         {
             if (Application.IsPlaying) return null;
             bool changed = EditorSceneManager.IsDirty;
+            string label = EditorSceneManager.SaveLabel;
 
             if (PrefabEditingMode.IsEditing)
-            {
-                return PrefabEditingMode.Save() && changed
-                    ? Loc.Get("save.prefab", new { name = System.IO.Path.GetFileNameWithoutExtension(PrefabEditingMode.EditingPrefabPath) })
-                    : null;
-            }
+                return PrefabEditingMode.Save() && changed ? label : null;
             if (EditorSceneManager.CurrentScenePath != null)
-            {
-                return EditorSceneManager.Save() && changed
-                    ? Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current.IsValid() ? Runtime.Resources.Scene.Current.Name : "Untitled" })
-                    : null;
-            }
+                return EditorSceneManager.Save() && changed ? label : null;
 
             // An untitled scene only asks for a path when it has something worth keeping, and never during an auto-save.
             if (changed && !SaveManager.IsAutoSave)
-                PromptSaveAs();
+                PromptSaveAs(SaveManager.TakeAfterSaveAs());
             return null;
+        };
+        SaveManager.CollectUnsaved += unsaved =>
+        {
+            if (EditorSceneManager.IsDirty) unsaved.Add(EditorSceneManager.SaveLabel);
+        };
+        Window.CloseRequested = () =>
+        {
+            if (SaveManager.Unsaved().Count == 0) return true;
+            SaveManager.ConfirmUnsaved(() => Window.Stop(force: true));
+            return false;
         };
         SaveManager.OnSave += () =>
         {
@@ -472,7 +475,7 @@ public class EditorApplication : Game
             }
             else if (ShortcutManager.IsPressed("Global/NewScene"))
             {
-                EditorSceneManager.NewScene();
+                EditorSceneManager.ConfirmSceneChange(EditorSceneManager.NewScene);
             }
             else if (ShortcutManager.IsPressed("Global/Undo"))
             {
@@ -1507,7 +1510,7 @@ public class EditorApplication : Game
         string edit = Loc.Get("menu.edit");
 
         // File menu
-        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.new_scene")}", () => EditorSceneManager.NewScene());
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.new_scene")}", () => EditorSceneManager.ConfirmSceneChange(EditorSceneManager.NewScene));
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.open_scene")}", () =>
         {
             EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
@@ -1515,7 +1518,7 @@ public class EditorApplication : Game
                 if (path == null || Project.Current == null) return;
                 string rel = EditorAssetBackend.NormalizePath(
                     System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
-                EditorSceneManager.OpenScene(rel);
+                EditorSceneManager.ConfirmSceneChange(() => EditorSceneManager.OpenScene(rel));
             }, Project.Current?.AssetsPath,
                ["*.scene"], [Loc.Get("editor.filter_scene")]);
         });

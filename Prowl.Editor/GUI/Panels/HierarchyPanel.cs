@@ -441,7 +441,7 @@ public class HierarchyPanel : DockPanel
                     {
                         AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(assetDrop.AssetGuid);
                         if (entry != null)
-                            EditorSceneManager.OpenScene(entry.Path);
+                            EditorSceneManager.ConfirmSceneChange(() => EditorSceneManager.OpenScene(entry.Path));
                     }
                     else
                     {

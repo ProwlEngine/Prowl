@@ -35,6 +35,11 @@ public class MaterialAssetEditor : AssetImporterEditor
     static MaterialAssetEditor()
     {
         SaveManager.OnSave += () => s_saveHook.SavePending(showToast: false);
+        SaveManager.CollectUnsaved += unsaved =>
+        {
+            foreach ((Material _, AssetEntry entry) in _pending.Values)
+                unsaved.Add(Prowl.Rosetta.Loc.Get("save.material", new { name = Path.GetFileNameWithoutExtension(entry.Path) }));
+        };
     }
 
     // ============================================================

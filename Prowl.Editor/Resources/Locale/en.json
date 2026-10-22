@@ -72,6 +72,11 @@
   "game.settings": "Game Settings",
 
   "dialog.delete_assets": "Delete Assets",
+  "dialog.unsaved_changes": "Unsaved Changes",
+  "dialog.unsaved_changes_body": "These have unsaved changes:",
+  "dialog.unsaved_play_mode": "The scene cannot be saved in Play Mode.",
+  "dialog.save": "Save",
+  "dialog.dont_save": "Don't Save",
   "dialog.unsaved_prefab": "Unsaved Prefab Changes",
   "dialog.unsaved_prefab_body": "\"{{name}}\" has unsaved changes. Save before switching?",
   "dialog.flatten_prefab": "Flatten Prefab",

@@ -139,6 +139,13 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
             }
             return saved.Count == 0 ? null : $"{tool}: " + string.Join(", ", saved);
         };
+        SaveManager.CollectUnsaved += unsaved =>
+        {
+            var seen = new HashSet<Guid>();
+            foreach (TWindow window in OpenWindows)
+                if (window._dirty && window._asset.IsValid() && seen.Add(window._assetGuid))
+                    unsaved.Add($"{window.ToolName}: {window._asset!.Name}");
+        };
     }
 
     protected GraphWindow()

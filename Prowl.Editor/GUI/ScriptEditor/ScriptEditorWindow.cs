@@ -71,6 +71,12 @@ public class ScriptEditorWindow : DockPanel
                 if (tab.Editor.IsDirty && Save(tab)) saved.Add(tab.Name);
             return saved.Count == 0 ? null : Loc.Get("save.script", new { name = string.Join(", ", saved) });
         };
+        SaveManager.CollectUnsaved += unsaved =>
+        {
+            if (s_window == null) return;
+            foreach (var tab in s_window._tabs)
+                if (tab.Editor.IsDirty) unsaved.Add(Loc.Get("save.script", new { name = tab.Name }));
+        };
     }
 
     public ScriptEditorWindow()
