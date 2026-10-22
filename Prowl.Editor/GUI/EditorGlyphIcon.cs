@@ -51,7 +51,7 @@ public sealed class EditorGlyphIcon : IOrigamiIcon
         } ?? Theming.EditorTheme.DefaultFont;
         if (font == null || string.IsNullOrEmpty(_glyph)) return;
 
-        float size = MathF.Min((float)rect.Size.X, (float)rect.Size.Y) * _scale;
+        float size = MathF.Min((float)rect.Size.X, (float)rect.Size.Y) * _scale * Origami.IconScale;
         Float2 m = canvas.MeasureText(_glyph, size, font);
         float tx = (float)(rect.Min.X + (rect.Size.X - m.X) / 2.0);
         float ty = (float)(rect.Min.Y + (rect.Size.Y - m.Y) / 2.0);

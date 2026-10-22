@@ -123,6 +123,9 @@ public class EditorThemeData
     /// <summary> How many points smaller secondary text is than the base font size. </summary>
     public float SmallFontDelta { get; set; } = 2f;
 
+    /// <summary> Scale of icons inside their boxes. </summary>
+    public float IconScale { get; set; } = 1f;
+
     /// <summary> User interface scale factor. </summary>
     public float UserScale { get; set; } = 1f;
 

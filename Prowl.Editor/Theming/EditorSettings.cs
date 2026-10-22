@@ -111,6 +111,7 @@ public class EditorSettings
         EditorApplication.Instance?.InitializeFont();
 
         EditorTheme.UserScale = t.UserScale;
+        OrigamiUI.Origami.IconScale = t.IconScale;
 
         // Sizing
         EditorTheme.MenuBarHeight = t.MenuBarHeight;

@@ -708,6 +708,7 @@ public class PreferencesPanel : DockPanel
 
         EditorGUI.SectionHeader(paper, "pref_ty_size", Loc.Get("pref.sizing"), compact: true);
         EditorGUI.SettingsSlider(paper, "pref_ty_base", Loc.Get("pref.base_size"), theme.FontSize, 8, 32, v => { theme.FontSize = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_ty_icon", Loc.Get("pref.icon_scale"), theme.IconScale, 0.7f, 1.3f, v => { theme.IconScale = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
         EditorGUI.SettingsSlider(paper, "pref_ty_small", Loc.Get("pref.small_delta"), theme.SmallFontDelta, 0, 6, v => { theme.SmallFontDelta = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
     }
 
