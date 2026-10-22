@@ -56,7 +56,7 @@ internal sealed partial class FramePipeline
     private void Fill(WorldFrame world, WorldReflections.Target target, WorldReflections.Scratch scratch, DeviceBuffer? readback, DeviceBuffer? ambient)
     {
         CaptureFill fill = new() { Source = scratch.AllTexture, Target = target, Samples = world.World.Reflections.PrefilterSamples, Readback = readback, SkyAmbient = ambient };
-        _planned.Add(new PlannedInstance(RenderKinds.CaptureFill, _planned.Count, world, new GraphExtent(target.Resolution, target.Resolution), null, fill, $"Capture fill {_planned.Count}"));
+        _planned.Add(new PlannedInstance(PlannedKind.Fill, world, fill, $"Capture fill {_planned.Count}"));
     }
 
     private void CaptureProbe(WorldFrame world, ProbeCapture work, in FrameTime time)

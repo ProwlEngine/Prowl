@@ -17,7 +17,7 @@ namespace Prowl.Graphite.Rendering;
 /// words. A copy deformed the frame it is made skips the streams the deform writes. After the upload and before the
 /// fence every view follows.
 /// </summary>
-internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) : IExecutionPass, IDisposable
+internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) : IDisposable
 {
     [StructLayout(LayoutKind.Sequential)]
     private struct Push
@@ -35,26 +35,25 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
     private readonly PropertySet _properties = new();
     private readonly List<(RenderWorld.RenderSide World, int Index)> _jobs = new();
 
-    public FrameBuffers Buffers = null!;
     public readonly List<RenderWorld.RenderSide> Worlds = new();
 
-    public string Name => "Graphite.Deform";
-
-    public void Setup(RenderContextBuilder builder)
+    public void Add(FrameGraph graph)
     {
-        foreach (GeometryPage page in geometry.Pages)
+        graph.AddPass("Graphite.Deform", builder =>
         {
-            if (!Buffers.Persistent.Contains(page.VertexBuffer) || !Buffers.Persistent.Contains(page.IndexBuffer))
-                continue;
-            builder.DeclareWriteBuffer(page.VertexBuffer.Id, BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
-            builder.DeclareWriteBuffer(page.IndexBuffer.Id, BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
-        }
-        foreach (RenderWorld.RenderSide world in Worlds)
-            builder.DeclareInputBuffer(world.SkinMatrices.Persistent.Id, BufferAccess.ShaderRead);
+            foreach (GeometryPage page in geometry.Pages)
+            {
+                builder.Write(graph.Import(page.Vertices), BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+                builder.Write(graph.Import(page.Indices), BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+            }
+            foreach (RenderWorld.RenderSide world in Worlds)
+                builder.Read(graph.Import(world.SkinMatrices.Buffer), BufferAccess.ShaderRead);
+        }, Render);
     }
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    private void Render(PassContext context)
     {
+        CommandBuffer cmd = context.Command;
         _jobs.Clear();
         bool bound = false, morphs = false;
         int slots = 0;

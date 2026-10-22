@@ -541,7 +541,7 @@ public sealed partial class RenderWorld : IDisposable
     /// <summary>Name debug tools show for the world and its instance.</summary>
     public string Name { get; set; }
 
-    internal RenderWorld(GraphicsDevice device, GraphStore store, Renderer? owner = null, IMaterialResources? resources = null, ReflectionSettings? reflections = null)
+    internal RenderWorld(GraphicsDevice device, RenderStore store, Renderer? owner = null, IMaterialResources? resources = null, ReflectionSettings? reflections = null)
     {
         _owner = owner;
         _device = device;

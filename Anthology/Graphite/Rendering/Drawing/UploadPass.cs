@@ -10,14 +10,16 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Rendering;
 
-/// <summary>The FrameStart pass: the frame's single scatter into every persistent buffer, with each declared as written.</summary>
-internal sealed class UploadPass(Uploader uploader) : IExecutionPass
+/// <summary>The FrameStart pass: the frame's single scatter into every buffer, with each declared as written.</summary>
+internal sealed class UploadPass(Uploader uploader, RenderStore store)
 {
-    public FrameBuffers Buffers = null!;
-
-    public string Name => "Graphite.FrameStart";
-
-    public void Setup(RenderContextBuilder builder) => Buffers.Describe(builder, BufferAccess.ShaderWrite);
-
-    public void Render(RenderContext context, CommandBuffer cmd) => uploader.Record(cmd, context.Task);
+    public void Add(FrameGraph graph, FrameBuffers buffers)
+    {
+        graph.AddPass("Graphite.FrameStart", builder => buffers.WriteAll(graph, builder, BufferAccess.ShaderWrite), context =>
+        {
+            if (store.HasResizes)
+                store.RecordResizes(context.Command);
+            uploader.Record(context.Command, context.Task);
+        });
+    }
 }

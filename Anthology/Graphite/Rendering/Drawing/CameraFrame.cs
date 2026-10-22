@@ -46,9 +46,29 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>The cube a capture view presents into.</summary>
     public RenderTexture? CaptureCube;
 
-    /// <summary>The persistent screen lighting a producer in the view's shape writes, resolved before the graph runs.</summary>
+    /// <summary>The screen lighting a producer in the view writes, kept across frames and made again when the view's size changes.</summary>
     public RenderTexture? ScreenVisibility, ScreenIrradiance;
     private (RenderTexture? Texture, TextureView? View) _visibilityView, _irradianceView;
+
+    /// <summary>Makes the screen lighting for this frame's size, or drops it when no producer runs. Render thread.</summary>
+    public void EnsureScreenLighting(bool wanted, bool irradiance, uint width, uint height, uint layers)
+    {
+        ScreenVisibility = EnsureScreen(ScreenVisibility, wanted, width, height, layers, PixelFormat.R8_UNorm, "Graphite.ScreenVisibility");
+        ScreenIrradiance = EnsureScreen(ScreenIrradiance, wanted && irradiance, width, height, layers, PixelFormat.R16_G16_B16_A16_Float, "Graphite.ScreenIrradiance");
+    }
+
+    private RenderTexture? EnsureScreen(RenderTexture? current, bool wanted, uint width, uint height, uint layers, PixelFormat format, string name)
+    {
+        if (current != null && wanted && current.Desc.Width == width && current.Desc.Height == height && Math.Max(current.Desc.ArrayLayers, 1u) == Math.Max(layers, 1u))
+            return current;
+        if (current != null)
+            _frame.Store.Retire(current);
+        if (!wanted)
+            return null;
+        RenderTexture created = new(_device, PersistentTexture.Describe(GraphTextureDesc.Sized((int)width, (int)height, format) with { ArrayLayers = layers > 1 ? layers : 0 }));
+        created.Name = $"{name} {View.ViewId}";
+        return created;
+    }
 
     public TextureView? ScreenVisibilityView() => ArrayView(ref _visibilityView, ScreenVisibility);
 
@@ -77,6 +97,9 @@ internal sealed class CameraFrame : IDisposable
     public readonly ViewShadows Shadows = new();
     public readonly GpuArray Cascades;
 
+    /// <summary>The buffers the view and its draws read, collected each frame.</summary>
+    public readonly BufferSet Buffers = new();
+
     /// <summary>What a shadow view culls its casters against, and which of them it draws, set before it is prepared.</summary>
     public CullFrustum ShadowCull;
     public CasterFilter ShadowFilter;
@@ -103,8 +126,16 @@ internal sealed class CameraFrame : IDisposable
 
     public FeatureView Info;
 
-    /// <summary>The graph shape the view drew with, and the directional cascades it fits, which the shape was made for.</summary>
-    public FeatureShape? Shape;
+    /// <summary>Adds the view's passes to the frame graph.</summary>
+    public readonly ViewGraph Build, Probe;
+
+    /// <summary>The pass types each selected feature asked for, learned by a probe the first time the view selects it.</summary>
+    public readonly Dictionary<RenderFeature, PassType[]> KnownTypes = new();
+
+    /// <summary>What the features selected this frame ask of the view, as a shape.</summary>
+    public CameraShape ShapeKey;
+
+    /// <summary>The directional cascades the view fits.</summary>
     public CascadeSlot[] CascadeSlots = [];
     public string CascadeKey = "";
 
@@ -182,6 +213,8 @@ internal sealed class CameraFrame : IDisposable
     {
         _frame = frame;
         Drawer = new SceneDrawer(frame, this);
+        Build = new ViewGraph(frame, this, frame.Graph, probing: false);
+        Probe = new ViewGraph(frame, this, frame.ProbeGraph, probing: true);
         View.ViewId = viewId;
         Lists = [Prepass, Forward, Transparent];
         ViewTable = new TableRing(device, ProgramCache.ViewLayout, $"View table {viewId}");
@@ -243,6 +276,11 @@ internal sealed class CameraFrame : IDisposable
     public void PruneStates(RenderFeature[] world, RenderFeature[] view)
     {
         bool Known(RenderFeature feature) => Array.IndexOf(world, feature) >= 0 || Array.IndexOf(view, feature) >= 0 || Array.IndexOf(FeatureSelection.BuiltIn, feature) >= 0;
+        foreach (RenderFeature feature in new List<RenderFeature>(KnownTypes.Keys))
+        {
+            if (!Known(feature))
+                KnownTypes.Remove(feature);
+        }
         List<(RenderFeature, Type)>? stale = null;
         foreach ((RenderFeature feature, Type type) in States.Keys)
         {
@@ -263,29 +301,18 @@ internal sealed class CameraFrame : IDisposable
         return (T)state;
     }
 
-    /// <summary>Refreshes every array of the view, so none it binds this frame was freed while it sat unused.</summary>
-    public void RefreshBuffers()
+    /// <summary>Collects the buffers the view's draws read this frame.</summary>
+    public void CollectBuffers()
     {
-        Instances.Refresh();
-        Records.Refresh();
-        Commands.Refresh();
-        ViewBlocks.Refresh();
-        SpatialRoots.Refresh();
-        Cascades.Refresh();
+        Buffers.Clear();
+        Buffers.Add(Instances.Persistent);
+        Buffers.Add(Records.Persistent);
+        Buffers.Add(Commands.Persistent);
+        Buffers.Add(ViewBlocks.Persistent);
+        Buffers.Add(SpatialRoots.Persistent);
+        Buffers.Add(Cascades.Persistent);
         foreach (SpatialView? view in Spatial)
-            view?.Refresh();
-    }
-
-    public void AddBuffers(List<PersistentBuffer> buffers)
-    {
-        buffers.Add(Instances.Persistent);
-        buffers.Add(Records.Persistent);
-        buffers.Add(Commands.Persistent);
-        buffers.Add(ViewBlocks.Persistent);
-        buffers.Add(SpatialRoots.Persistent);
-        buffers.Add(Cascades.Persistent);
-        foreach (SpatialView? view in Spatial)
-            view?.AddBuffers(buffers);
+            view?.AddBuffers(Buffers);
     }
 
     /// <summary>The frame's draw lists: prepass, opaque, transparent, then one per pass type a feature draws.</summary>
@@ -395,5 +422,13 @@ internal sealed class CameraFrame : IDisposable
             (state as IDisposable)?.Dispose();
         ViewTable.Dispose();
         Shadows.Dispose();
+        foreach (GpuArray array in new[] { Instances, Records, Commands, ViewBlocks, SpatialRoots, Cascades })
+            array.Release();
+        foreach (SpatialView? view in Spatial)
+            view?.Release();
+        _visibilityView.View?.Dispose();
+        _irradianceView.View?.Dispose();
+        ScreenVisibility?.Dispose();
+        ScreenIrradiance?.Dispose();
     }
 }

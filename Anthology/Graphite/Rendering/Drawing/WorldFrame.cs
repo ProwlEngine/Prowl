@@ -21,6 +21,7 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     public RenderWorld World { get; } = world;
     public BucketSet Buckets { get; } = buckets;
     public int GlobalRegion { get; } = globalRegion;
+    public BufferSet Buffers { get; } = new();
 
     /// <summary>The draw program of the sky material's Sky pass, held while the world draws it.</summary>
     public ushort? SkyProgram;
@@ -54,4 +55,11 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     }
 }
 
-internal readonly record struct PlannedInstance(GraphKind Kind, int Id, WorldFrame World, GraphExtent Extent, Framebuffer? Target, object Data, string Name);
+internal enum PlannedKind
+{
+    Host,
+    Capture,
+    Fill,
+}
+
+internal readonly record struct PlannedInstance(PlannedKind Kind, WorldFrame World, object Data, string Name);

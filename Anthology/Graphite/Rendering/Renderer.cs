@@ -297,7 +297,7 @@ public sealed class Renderer : IDisposable
     private readonly List<Material> _changedMaterials = new();
     private readonly List<Material> _shadowMaterials = new();
     private readonly List<GpuMesh> _changedMeshes = new();
-    private readonly GraphStore _store;
+    private readonly RenderStore _store;
     private ViewDesc[] _views = [];
     private FrameTime _time;
     private int _viewCount;
@@ -324,7 +324,7 @@ public sealed class Renderer : IDisposable
 
         Textures = new RendererTextures(device) { Reporter = Report };
         _uploader = new Uploader(device, InternalShaders.Compute(device, compiler, "Internal/Scatter.glsl"));
-        _store = new GraphStore();
+        _store = new RenderStore();
         _geometry = new GeometryPool(device, _store, _options.PageVertexWords, _options.PageIndices);
         _materials = new MaterialSystem(device, _store, Textures) { Reporter = Report };
         _globals = new GlobalRegistry(device, _store, Textures) { Reporter = Report };

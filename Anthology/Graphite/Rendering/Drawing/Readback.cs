@@ -49,42 +49,20 @@ internal sealed class ReadbackStaging(GraphicsDevice device, Action<RendererErro
     }
 }
 
-/// <summary>Copies the texture a readback instance binds into its staging buffer.</summary>
-internal sealed class ReadbackTexturePass : IInstancePass
+/// <summary>Copies a readback's texture or buffer into its staging buffer.</summary>
+internal static class ReadbackPasses
 {
-    private TextureHandle _source;
-
-    public string Name => "Graphite.ReadbackTexture";
-
-    public GraphKind Kind => RenderKinds.Readback;
-
-    public bool IsEnabled(GraphInstance instance) => instance.Data is ReadbackRequest { Texture: not null };
-
-    public void Setup(InstanceContextBuilder builder) => _source = builder.DeclareImportSlotTexture(RenderKinds.ReadbackTexture, TextureState.TransferSrc);
-
-    public void Render(InstanceContext context, CommandBuffer cmd)
+    public static void Add(FrameGraph graph, ReadbackRequest request, int index)
     {
-        ReadbackRequest request = (ReadbackRequest)context.Instance.Data!;
-        cmd.CopyTextureToBuffer(context.GetRenderTexture(_source).ColorTextures[0], request.Staging!, 0, request.Region);
-    }
-}
-
-/// <summary>Copies the buffer a readback instance binds into its staging buffer.</summary>
-internal sealed class ReadbackBufferPass : IInstancePass
-{
-    private BufferHandle _source;
-
-    public string Name => "Graphite.ReadbackBuffer";
-
-    public GraphKind Kind => RenderKinds.Readback;
-
-    public bool IsEnabled(GraphInstance instance) => instance.Data is ReadbackRequest { Buffer: not null };
-
-    public void Setup(InstanceContextBuilder builder) => _source = builder.DeclareImportSlotBuffer(RenderKinds.ReadbackBuffer, BufferAccess.TransferRead);
-
-    public void Render(InstanceContext context, CommandBuffer cmd)
-    {
-        ReadbackRequest request = (ReadbackRequest)context.Instance.Data!;
-        cmd.CopyBuffer(context.GetRenderBuffer(_source), request.Offset, request.Staging!, 0, request.Size);
+        if (request.Texture is { } texture)
+        {
+            graph.AddPass("Graphite.ReadbackTexture", builder => builder.Read(graph.Import(texture), TextureState.TransferSrc),
+                (context, source) => context.Command.CopyTextureToBuffer(context.Get(source).ColorTextures[0], request.Staging!, 0, request.Region));
+        }
+        else
+        {
+            graph.AddPass("Graphite.ReadbackBuffer", builder => builder.Read(graph.Import(request.Buffer!), BufferAccess.TransferRead),
+                (context, source) => context.Command.CopyBuffer(context.Get(source), request.Offset, request.Staging!, 0, request.Size));
+        }
     }
 }

@@ -2,49 +2,54 @@ using System.Collections.Generic;
 
 namespace Prowl.Graphite.Rendering;
 
-/// <summary>Every buffer the frame's tables live in, declared by the root passes that write them and read by the cameras.</summary>
+internal sealed class BufferSet
+{
+    public readonly List<DeviceBuffer> Items = new();
+
+    public void Clear() => Items.Clear();
+
+    public void Add(PersistentBuffer buffer) => Items.Add(buffer.Buffer!);
+
+    public void Add(DeviceBuffer buffer) => Items.Add(buffer);
+
+    public void Write(FrameGraph graph, PassBuilder pass, BufferAccess access)
+    {
+        foreach (DeviceBuffer buffer in Items)
+            pass.Write(graph.Import(buffer), access);
+    }
+
+    public void Read(FrameGraph graph, PassBuilder pass, BufferAccess access)
+    {
+        foreach (DeviceBuffer buffer in Items)
+            pass.Read(graph.Import(buffer), access);
+    }
+}
+
+/// <summary>Every buffer the frame's tables live in: the shared ones, each world's and each camera's, imported into the graph every frame.</summary>
 internal sealed class FrameBuffers
 {
-    private static readonly List<RenderResourceID> s_importIds = new();
+    public readonly BufferSet Shared = new();
+    public readonly List<WorldFrame> Worlds = new();
+    public readonly List<CameraFrame> Cameras = new();
 
-    public PersistentBuffer[] Persistent = [];
-    public uint[] Sizes = [];
-    public DeviceBuffer[] Imported = [];
-
-    public void Describe(RenderContextBuilder builder, BufferAccess access)
+    public void WriteAll(FrameGraph graph, PassBuilder pass, BufferAccess access)
     {
-        foreach (PersistentBuffer buffer in Persistent)
-            builder.DeclareOutputBuffer(buffer.Id, buffer.Description, usage: access, persistent: true);
-        DeclareImports(builder, access);
+        Shared.Write(graph, pass, access);
+        foreach (WorldFrame world in Worlds)
+            world.Buffers.Write(graph, pass, access);
+        foreach (CameraFrame camera in Cameras)
+            camera.Buffers.Write(graph, pass, access);
     }
 
-    public void Write(RenderContextBuilder builder, BufferAccess access)
+    public void ReadWorld(FrameGraph graph, PassBuilder pass, WorldFrame world, BufferAccess access = BufferAccess.AllReads)
     {
-        foreach (PersistentBuffer buffer in Persistent)
-            builder.DeclareWriteBuffer(buffer.Id, access);
-        DeclareImports(builder, access);
+        Shared.Read(graph, pass, access);
+        world.Buffers.Read(graph, pass, access);
     }
 
-    public void Read(RenderContextBuilder builder)
+    public void ReadCamera(FrameGraph graph, PassBuilder pass, CameraFrame camera, BufferAccess access = BufferAccess.AllReads)
     {
-        foreach (PersistentBuffer buffer in Persistent)
-            builder.DeclareInputBuffer(buffer.Id);
-        DeclareImports(builder, BufferAccess.AllReads);
-    }
-
-    private void DeclareImports(RenderContextBuilder builder, BufferAccess access)
-    {
-        for (int i = 0; i < Imported.Length; i++)
-            builder.DeclareImportedBuffer(ImportId(i), Imported[i], access);
-    }
-
-    private static RenderResourceID ImportId(int index)
-    {
-        lock (s_importIds)
-        {
-            while (s_importIds.Count <= index)
-                s_importIds.Add(RenderResourceID.Intern("Graphite.Import" + s_importIds.Count));
-            return s_importIds[index];
-        }
+        ReadWorld(graph, pass, camera.World, access);
+        camera.Buffers.Read(graph, pass, access);
     }
 }
