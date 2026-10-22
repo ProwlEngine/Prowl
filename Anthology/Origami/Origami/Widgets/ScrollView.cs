@@ -77,6 +77,8 @@ public sealed class ScrollViewBuilder
         _width = width;
         _height = height;
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
+        _scrollbarSize = theme.Metrics.ScrollbarSize;
+        _autoHideScrollbars = theme.Metrics.AutoHideScrollbars;
     }
 
     // ── Variant ────────────────────────────────────────────────────────
@@ -463,8 +465,8 @@ public sealed class ScrollViewBuilder
     // floating over the dark panel surfaces, lifting brighter/more opaque on hover. The corner spacer's
     // track colour is fully transparent so overlay bars float over the content.
     private SDColor ScrollTrackColor() => SDColor.FromArgb(0, 0, 0, 0);
-    private SDColor ScrollThumbColor() => SDColor.FromArgb(112, _theme.Ink.C200);
-    private SDColor ScrollThumbHoverColor() => SDColor.FromArgb(153, _theme.Ink.C300);
+    private SDColor ScrollThumbColor() => _theme.Scrollbar;
+    private SDColor ScrollThumbHoverColor() => _theme.ScrollbarHover;
 
     private static SDColor WithScaledAlpha(SDColor c, float f) =>
         SDColor.FromArgb((int)Math.Clamp(c.A * f, 0f, 255f), c.R, c.G, c.B);

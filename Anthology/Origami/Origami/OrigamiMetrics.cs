@@ -7,6 +7,24 @@ namespace Prowl.OrigamiUI;
 /// Sizing, padding, and font metrics shared across Origami widgets.
 /// All values are in logical pixels.
 /// </summary>
+/// <summary>How docked panel tabs are drawn.</summary>
+public enum TabStyle
+{
+    /// <summary>Inactive tabs darkened, the active tab underlined.</summary>
+    Underline,
+    /// <summary>The active tab filled with the selection colour.</summary>
+    Filled,
+    /// <summary>No fills or underline, only the label colour changes.</summary>
+    Flat,
+}
+
+/// <summary>Which docked panel tabs show a close button.</summary>
+public enum TabCloseButtons
+{
+    ActiveTab,
+    AllTabs,
+}
+
 public sealed class OrigamiMetrics
 {
     // ── Corner rounding ────────────────────────────────────────
@@ -145,6 +163,23 @@ public sealed class OrigamiMetrics
     public float GraphLodFull = 0.55f;
     public float GraphLodHeader = 0.3f;
 
+    // ── Scrollbars / tabs ──────────────────────────────────────
+
+    /// <summary>Scrollbar thumb thickness. A scroll view's own ScrollbarSize wins.</summary>
+    public float ScrollbarSize = 6f;
+
+    /// <summary>Scrollbars show only while the pointer is over the scroll view.</summary>
+    public bool AutoHideScrollbars = true;
+
+    /// <summary>How docked panel tabs are drawn.</summary>
+    public TabStyle TabStyle = TabStyle.Underline;
+
+    /// <summary>Which docked panel tabs show a close button.</summary>
+    public TabCloseButtons TabCloseButtons = TabCloseButtons.ActiveTab;
+
+    /// <summary>Docked panels other than the last clicked one show their active tab muted.</summary>
+    public bool HighlightFocusedPanel = true;
+
     /// <summary>Linearly interpolate between two metrics blocks. Used during theme transitions.</summary>
     public static OrigamiMetrics Lerp(OrigamiMetrics a, OrigamiMetrics b, float t) => new()
     {
@@ -187,6 +222,11 @@ public sealed class OrigamiMetrics
         GraphMaxZoom = LerpF(a.GraphMaxZoom, b.GraphMaxZoom, t),
         GraphLodFull = LerpF(a.GraphLodFull, b.GraphLodFull, t),
         GraphLodHeader = LerpF(a.GraphLodHeader, b.GraphLodHeader, t),
+        ScrollbarSize = LerpF(a.ScrollbarSize, b.ScrollbarSize, t),
+        AutoHideScrollbars = b.AutoHideScrollbars,
+        TabStyle = b.TabStyle,
+        TabCloseButtons = b.TabCloseButtons,
+        HighlightFocusedPanel = b.HighlightFocusedPanel,
     };
 
     /// <summary>Shallow copy.</summary>
@@ -231,6 +271,11 @@ public sealed class OrigamiMetrics
         GraphMaxZoom = GraphMaxZoom,
         GraphLodFull = GraphLodFull,
         GraphLodHeader = GraphLodHeader,
+        ScrollbarSize = ScrollbarSize,
+        AutoHideScrollbars = AutoHideScrollbars,
+        TabStyle = TabStyle,
+        TabCloseButtons = TabCloseButtons,
+        HighlightFocusedPanel = HighlightFocusedPanel,
     };
 
     private static float LerpF(float a, float b, float t) => a + (b - a) * t;

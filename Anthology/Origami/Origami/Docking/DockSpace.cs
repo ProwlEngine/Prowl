@@ -186,6 +186,12 @@ public class DockSpace
 
     private const float SplitterGripLength = 28f;
 
+    /// <summary>The panel that was clicked last. Its active tab keeps the accent colour.</summary>
+    public DockNode? FocusedNode { get; private set; }
+
+    private static bool ShowsClose(DockNode node, int index, OrigamiMetrics m)
+        => m.TabCloseButtons == TabCloseButtons.AllTabs || index == node.ActiveTabIndex;
+
     private void DrawSplitter(Paper paper, DockNode node, float x, float y, float w, float h, bool horiz,
                                OrigamiTheme theme, OrigamiIcons icons)
     {
@@ -220,7 +226,7 @@ public class DockSpace
                 float lineH = horiz ? h - lineInset * 2f : lineThickness;
                 float lx = rect.Min.X + (w - lineW) / 2f;
                 float ly = rect.Min.Y + (h - lineH) / 2f;
-                canvas.RectFilled(lx, ly, lineW, lineH, theme.BorderSoft);
+                canvas.RectFilled(lx, ly, lineW, lineH, theme.Splitter);
 
                 // The grip only appears while the splitter is hovered or being dragged.
                 if (!hovered) return;
@@ -317,6 +323,12 @@ public class DockSpace
             else
                 tabbar.IsNotInteractable();
 
+            // The last clicked panel keeps the accent, the others go muted.
+            if (paper.IsPointerPressed(PaperMouseBtn.Left) && paper.IsPointerOverRect(x + ox, y + oy, w, h))
+                FocusedNode = node;
+            bool focused = !m.HighlightFocusedPanel || FocusedNode == node || FocusedNode == null;
+            Color accent = focused ? theme.Primary.C500 : OrigamiTheme.WithAlpha(theme.Ink.C300, 170);
+
             // Tab widths from measured label text (+ optional icon + close affordance).
             float iconW = 15f;              // icon slot
             float iconGap = 6f;             // gap between the icon and the label
@@ -328,7 +340,7 @@ public class DockSpace
                 if (font != null)
                     textW = (float)paper.MeasureText(node.Tabs[i].Title, m.FontSize, font, 0).X;
                 bool hasIco = !string.IsNullOrEmpty(node.Tabs[i].Icon);
-                bool showsClose = i == node.ActiveTabIndex;  // active tab expands to fit its close button
+                bool showsClose = ShowsClose(node, i, m);  // a tab with a close button is wider to fit it
                 tabWidths[i] = m.TabPadding * 2 + (hasIco ? iconW + iconGap : 0) + textW + (showsClose ? m.TabCloseSize + 4 : 0);
             }
             Span<float> tabPositions = stackalloc float[node.Tabs.Count];
@@ -352,12 +364,18 @@ public class DockSpace
                 float tw = tabWidths[i];
                 float tx = tabPositions[i];
 
+                Color idleFill = m.TabStyle switch
+                {
+                    TabStyle.Filled => isActive ? OrigamiTheme.WithAlpha(accent, 60) : Color.FromArgb(0, 0, 0, 0),
+                    TabStyle.Flat => Color.FromArgb(0, 0, 0, 0),
+                    _ => isActive ? Color.FromArgb(0, 0, 0, 0) : Color.FromArgb(46, 0, 0, 0),
+                };
                 var tabEl = paper.Box("t", i)
                     .PositionType(PositionType.SelfDirected)
                     .Position(tx, 0).Size(tw, tabH)
                     .Rounded(i == 0 ? cr : 0f, 0f, 0f, 0f) // clip the first tab to the window's rounded top-left
-                    .BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : Color.FromArgb(46, 0, 0, 0))
-                    .Hovered.BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : OrigamiTheme.WithAlpha(theme.Primary.C500, 70)).End()
+                    .BackgroundColor(idleFill)
+                    .Hovered.BackgroundColor(isActive ? idleFill : OrigamiTheme.WithAlpha(theme.Primary.C500, 70)).End()
                     // Per-event stops (not blanket .StopEventPropagation()) isolate the tab's click and
                     // drag from the tab-bar/window underneath, while letting the wheel bubble to a
                     // parent ScrollView. The drag-start frame also fires a dragging event, so stop that
@@ -408,13 +426,13 @@ public class DockSpace
                         .Position(contentX, 0).Size(iconW, tabH)
                         .IsNotInteractable()
                         .Text(tab.Icon, OrigamiFonts.IconSolid ?? font)
-                        .TextColor(isActive ? theme.Primary.C700 : theme.Ink.C300)
+                        .TextColor(isActive ? (m.TabStyle == TabStyle.Flat ? accent : theme.Primary.C700) : theme.Ink.C300)
                         .FontSize(tabIconSize)
                         .Alignment(TextAlignment.MiddleCenter);
                     contentX += iconW + iconGap;
                 }
 
-                bool showClose = isActive;
+                bool showClose = ShowsClose(node, i, m);
                 if (font != null)
                 {
                     float lblW = tw - (contentX - tx) - m.TabPadding - (showClose ? m.TabCloseSize + 4 : 0);
@@ -459,11 +477,11 @@ public class DockSpace
                         }));
                 }
 
-                if (isActive)
+                if (isActive && m.TabStyle == TabStyle.Underline)
                     paper.Box("t_ul")
                         .PositionType(PositionType.SelfDirected).Position(tx, tabH - 2).Size(tw, 2)
                         .IsNotInteractable()
-                        .BackgroundColor(theme.Primary.C500);
+                        .BackgroundColor(accent);
             }
 
             // Trailing separator on the right edge of the last tab, so the final tab (and a lone tab)

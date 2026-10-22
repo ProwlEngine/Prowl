@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Drawing;
 
 namespace Prowl.OrigamiUI;
@@ -69,17 +70,37 @@ public sealed class OrigamiTheme
     /// <summary>Drop-shadow colour for popovers, dropdowns and modals.</summary>
     public Color Shadow;
 
-    /// <summary>Accent-tinted hover overlay. Tracks <see cref="Primary"/> so a retint carries through.</summary>
-    public Color Hover => WithAlpha(Primary.C500, 31);
+    // Optional colours that replace the ones derived from the ramps below. Null keeps the derived colour.
+    public Color? HoverOverride;
+    public Color? SelectedOverride;
+    public Color? FocusOverride;
+    public Color? ScrollbarOverride;
+    public Color? SplitterOverride;
+    public Color? TooltipOverride;
 
-    /// <summary>Accent-tinted selected / active fill. Tracks <see cref="Primary"/>.</summary>
-    public Color Selected => WithAlpha(Primary.C500, 41);
+    /// <summary>Hover overlay. Tracks <see cref="Primary"/> so a retint carries through.</summary>
+    public Color Hover => HoverOverride ?? WithAlpha(Primary.C500, 31);
 
-    /// <summary>Accent-tinted for focused elements<see cref="Primary"/>.</summary>
-    public Color FocusBorder => Primary.C500;
+    /// <summary>Selected / active fill. Tracks <see cref="Primary"/>.</summary>
+    public Color Selected => SelectedOverride ?? WithAlpha(Primary.C500, 41);
 
-    /// <summary>Accent-tinted for focused glow<see cref="Primary"/>.</summary>
-    public Color FocusGlow => WithAlpha(Primary.C500, 130);
+    /// <summary>Border of focused elements.</summary>
+    public Color FocusBorder => FocusOverride ?? Primary.C500;
+
+    /// <summary>Glow around focused elements.</summary>
+    public Color FocusGlow => WithAlpha(FocusBorder, 130);
+
+    /// <summary>Scrollbar thumb.</summary>
+    public Color Scrollbar => ScrollbarOverride ?? WithAlpha(Ink.C200, 112);
+
+    /// <summary>Scrollbar thumb under the pointer.</summary>
+    public Color ScrollbarHover => ScrollbarOverride is { } c ? WithAlpha(c, Math.Min(255, c.A + 60)) : WithAlpha(Ink.C300, 153);
+
+    /// <summary>The hairline between docked panels.</summary>
+    public Color Splitter => SplitterOverride ?? BorderSoft;
+
+    /// <summary>Tooltip background.</summary>
+    public Color TooltipBackground => TooltipOverride ?? Popover;
 
     /// <summary>Return <paramref name="c"/> with a new alpha (0-255). Handy for state overlays.</summary>
     public static Color WithAlpha(Color c, int a) => Color.FromArgb(a, c.R, c.G, c.B);
@@ -146,6 +167,12 @@ public sealed class OrigamiTheme
         BorderSoft = BorderSoft,
         BorderStrong = BorderStrong,
         Shadow = Shadow,
+        HoverOverride = HoverOverride,
+        SelectedOverride = SelectedOverride,
+        FocusOverride = FocusOverride,
+        ScrollbarOverride = ScrollbarOverride,
+        SplitterOverride = SplitterOverride,
+        TooltipOverride = TooltipOverride,
         Metrics = Metrics.Clone(),
         Icons = Icons.Clone(),
         Font = Font,
@@ -174,6 +201,12 @@ public sealed class OrigamiTheme
         BorderSoft = OrigamiRamp.LerpColor(a.BorderSoft, b.BorderSoft, t),
         BorderStrong = OrigamiRamp.LerpColor(a.BorderStrong, b.BorderStrong, t),
         Shadow = OrigamiRamp.LerpColor(a.Shadow, b.Shadow, t),
+        HoverOverride = b.HoverOverride,
+        SelectedOverride = b.SelectedOverride,
+        FocusOverride = b.FocusOverride,
+        ScrollbarOverride = b.ScrollbarOverride,
+        SplitterOverride = b.SplitterOverride,
+        TooltipOverride = b.TooltipOverride,
         Metrics = OrigamiMetrics.Lerp(a.Metrics, b.Metrics, t),
         FontMedium = b.FontMedium,
         FontSemiBold = b.FontSemiBold,

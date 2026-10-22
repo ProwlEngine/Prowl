@@ -216,7 +216,7 @@ public static class TooltipSystem
         // Limit width to the window too, including tooltips whose minimum width is very large.
         tooltipW = MathF.Min(tooltipW, MathF.Max(1f, paper.ScreenRect.Size.X - 8f));
         needsWrap |= naturalW > tooltipW;
-        Color bgColor = theme.Popover;
+        Color bgColor = theme.TooltipBackground;
 
         using (paper.Column("tt_root")
             .PositionType(PositionType.SelfDirected)
