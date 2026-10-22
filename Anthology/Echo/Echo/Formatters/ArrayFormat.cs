@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections;
+using System.IO;
 
 namespace Prowl.Echo.Formatters;
 
@@ -44,7 +45,8 @@ internal sealed class ArrayFormat : ISerializationFormat
 
             // Store elements
             List<EchoObject> elements = new();
-            SerializeMultiDimensionalArray(elementType, array, new int[array.Rank], 0, elements, context);
+            if (array.Length != 0)
+                SerializeMultiDimensionalArray(elementType, array, new int[array.Rank], 0, elements, context);
             arrCompound["elements"] = new EchoObject(elements);
         }
 
@@ -118,12 +120,36 @@ internal sealed class ArrayFormat : ISerializationFormat
             // Multi-dimensional array
             else if (value.TryGet("dimensions", out var dimensionsTag))
             {
-                var dimensions = (int[])Serializer.Deserialize(dimensionsTag, typeof(int[]), context)!;
+                var dimensions = Serializer.Deserialize(dimensionsTag, typeof(int[]), context) as int[];
                 var elementsTag = value.Get("elements")
-                    ?? throw new InvalidOperationException("Missing elements in multi-dimensional array");
+                    ?? throw new InvalidDataException("Missing elements in multi-dimensional array");
+
+                if (dimensions == null || dimensions.Length != targetType.GetArrayRank() || elementsTag.TagType != EchoType.List)
+                    throw new InvalidDataException("Invalid multi-dimensional array rank or elements.");
+                bool empty = false;
+                foreach (int length in dimensions)
+                {
+                    if (length < 0) throw new InvalidDataException("Array dimensions cannot be negative.");
+                    empty |= length == 0;
+                }
+
+                // Bound the product by the actual element count before allocating. Division avoids
+                // overflow even for malicious dimensions; a zero axis makes the entire array empty.
+                int count = empty ? 0 : 1;
+                if (!empty)
+                    foreach (int length in dimensions)
+                    {
+                        if (count > elementsTag.Count / length)
+                            throw new InvalidDataException("Array dimensions exceed the supplied element count.");
+                        count *= length;
+                    }
+                if (count != elementsTag.Count)
+                    throw new InvalidDataException("Array dimensions do not match the supplied element count.");
 
                 var array = Array.CreateInstance(elementType, dimensions);
                 CollectionReferences.Register(value, array, context);
+                // Do not walk huge leading dimensions when a later axis is empty.
+                if (empty) return array;
                 var indices = new int[dimensions.Length];
                 int elementIndex = 0;
 
