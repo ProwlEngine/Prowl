@@ -201,6 +201,11 @@ public static class EditorTheme
 
     /// <summary> Font family name for the primary UI face. </summary>
     public static string DefaultFontName = "Geist";
+
+    /// <summary> Tint drawn over the backdrop while playing, transparent when the tint is off. </summary>
+    public static Color PlayModeTint => Customization is { PlayModeTint: true } t
+        ? Color.FromArgb((int)(Math.Clamp(t.PlayModeTintStrength, 0f, 1f) * 255), ColorRamp.ParseHex(t.PlayModeTintColor))
+        : Color.Transparent;
     /// <summary> Font family name for the bold UI face. </summary>
     public static string DefaultBoldFontName = "Geist";
 

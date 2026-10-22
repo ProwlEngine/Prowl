@@ -185,6 +185,14 @@ public class EditorThemeData
     /// <summary> How much the background image is darkened, from 0 to 1. </summary>
     public float BackgroundImageDim { get; set; } = 0.3f;
 
+    // Play mode tint: a colour wash over the editor backdrop while the game runs, so play mode is hard to miss.
+    /// <summary> Whether the editor backdrop is tinted while playing. </summary>
+    public bool PlayModeTint { get; set; } = true;
+    /// <summary> Play mode tint color as hex. </summary>
+    public string PlayModeTintColor { get; set; } = "#FF5A5A";
+    /// <summary> Strength of the play mode tint, from 0 to 1. </summary>
+    public float PlayModeTintStrength { get; set; } = 0.2f;
+
     // Default ramp stops (RGB) = Origami's ramps. Customization is applied on top of Origami's
     // live theme, preserving each stop's alpha, so translucent glass surfaces stay glass.
     private static readonly Color[] DefaultNeutral = [H("#06060E"), H("#96A0FF"), H("#161628"), H("#0E0E1C"), H("#181830"), H("#22223E"), H("#30304E")];

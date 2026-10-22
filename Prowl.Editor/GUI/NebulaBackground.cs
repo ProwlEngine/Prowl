@@ -113,6 +113,10 @@ public sealed class NebulaBackground
                 box.OnPostLayout((hnd, rect) => paper.Draw(ref hnd, (canvas, r) =>
                     EditorWallpaper.Draw(canvas, r, wallpaper, EditorTheme.BackgroundImageFit, EditorTheme.BackgroundImageDim)));
         }
+
+        if (Runtime.Application.IsPlaying && EditorTheme.PlayModeTint.A > 0)
+            paper.Box($"{id}_play_tint").PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
+                .BackgroundColor(EditorTheme.PlayModeTint).IsNotInteractable();
     }
 
     private void UpdateClouds(float dt)
