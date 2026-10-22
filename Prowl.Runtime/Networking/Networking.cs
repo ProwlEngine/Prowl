@@ -240,6 +240,9 @@ public static partial class Networking
         RegisterEngineMessage(session, EngineMessage.StaticRpcToHost, OnStaticRpcToHost);
         RegisterEngineMessage(session, EngineMessage.StaticRpcFromHost, OnStaticRpcFromHost);
         RegisterEngineMessage(session, EngineMessage.Orphaned, OnOrphaned);
+        RegisterEngineMessage(session, EngineMessage.OwnershipRequest, OnOwnershipRequest);
+        RegisterEngineMessage(session, EngineMessage.OwnershipState, OnOwnershipState);
+        RegisterEngineMessage(session, EngineMessage.OwnerTransfer, OnOwnerTransfer);
 
         session.Ended += (reason, message) =>
         {
@@ -307,6 +310,9 @@ public static partial class Networking
         SceneActivate,
         StaticRpcToHost,
         StaticRpcFromHost,
-        Orphaned
+        Orphaned,
+        OwnershipRequest,
+        OwnershipState,
+        OwnerTransfer
     }
 }

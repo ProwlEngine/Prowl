@@ -121,6 +121,29 @@ When assigning ownership through `NetworkSpawn(owner)` or `SetNetworkOwner(owner
 rejected before ownership or spawn settings change. `null` clears ownership and leaves simulation to
 the host.
 
+`GameObject.OwnerTransfer` defaults to `OwnerTransfer.Fixed`: only the host assigns an owner.
+Set it to `OwnerTransfer.Takeover` in the GameObject's network menu or before spawning to let any
+ready client take ownership. Only the host can change this policy once spawned; changes replicate
+reliably and are included in late join snapshots.
+
+```csharp
+pickup.OwnerTransfer = OwnerTransfer.Takeover; // Configure before spawning, or on the host.
+pickup.TakeOwnership();                       // Request local ownership.
+pickup.DropOwnership();                       // Return simulation to the host.
+```
+
+Take/drop calls on children act on their network root. The current owner can drop even with `Fixed`.
+The host can always override ownership through `SetNetworkOwner`. Take/drop return false when the
+operation is unavailable or already satisfied. On clients, true means the request was sent: wait for
+`OnNetworkAuthorityGained` or check `IsProxy` before simulating. The host commits transfers and rejects
+requests from loading peers, unauthorized drops, and requests for an obsolete ownership generation.
+Competing requests for the same generation cannot both succeed.
+
+Each transfer reliably delivers Sync values and enabled transforms before its ownership notification,
+and clears interpolation history. A voluntary drop includes the owner's final state; a forced takeover
+uses the latest state accepted by the host. Root rigidbodies also hand off linear velocity. Gameplay
+approval callbacks and a `Request` transfer policy are left to a future feature.
+
 `GameObject.NetworkOrphaned` configures disconnect handling before spawning. Once spawned, the host
 can change it at runtime: the active policy and connected clients update reliably, and late joiners
 receive the latest policy. Clients cannot override a spawned root's policy locally. `Destroy` removes
@@ -232,9 +255,9 @@ using (Rpc.FilterExclude(peer => peer.Name == "Harry"))
     GlobalEvents.Announce("Hello everyone else");
 }
 
-using (Rpc.FilterInclude(peer => peer.Name == "Garry"))
+using (Rpc.FilterInclude(peer => peer.Name == "Justin"))
 {
-    GlobalEvents.Announce("Hello Garry");
+    GlobalEvents.Announce("Hello Justin");
 }
 ```
 

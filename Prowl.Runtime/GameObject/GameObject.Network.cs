@@ -11,6 +11,7 @@ namespace Prowl.Runtime;
 public partial class GameObject
 {
     private NetworkMode _networkMode = NetworkMode.Snapshot;
+    private OwnerTransfer _ownerTransfer = OwnerTransfer.Fixed;
     private NetworkOrphaned _networkOrphaned = NetworkOrphaned.Destroy;
 
     /// <summary>
@@ -27,6 +28,29 @@ public partial class GameObject
             _networkMode = value;
         }
     }
+
+    /// <summary>Who may take ownership. Configurable before spawning; runtime changes are controlled by the host.</summary>
+    public OwnerTransfer OwnerTransfer
+    {
+        get => _ownerTransfer;
+        set
+        {
+            if (!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value));
+            if (value == _ownerTransfer) return;
+            Networking.Networking.SetOwnerTransfer(this, value);
+            _ownerTransfer = value;
+        }
+    }
+
+    internal void ApplyOwnerTransfer(OwnerTransfer value) => _ownerTransfer = value;
+
+    /// <summary>Attempts to take ownership of this network root. Clients need Takeover policy.
+    /// True means committed locally by the host or sent for host confirmation; wait for authority gained before simulating.</summary>
+    public bool TakeOwnership() => Networking.Networking.TransferOwnership(this, take: true);
+
+    /// <summary>Relinquishes ownership to the host's simulation. The current owner may drop even under Fixed policy.
+    /// True means committed by the host or sent for confirmation.</summary>
+    public bool DropOwnership() => Networking.Networking.TransferOwnership(this, take: false);
 
     /// <summary>For a <see cref="NetworkMode.Object"/>: what happens to it when the peer that owns it leaves.
     /// Before spawning this configures the object; after spawning only the host can change it, and clients receive the new policy.</summary>

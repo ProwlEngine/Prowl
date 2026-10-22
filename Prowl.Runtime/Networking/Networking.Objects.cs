@@ -402,7 +402,9 @@ public static partial class Networking
             return;
         }
 
-        Float3 velocity = SampledVelocity(entry);
+        Float3 velocity = entry.TransferVelocity ?? OwnershipVelocity(entry);
+        entry.TransferVelocity = null;
+        SendOwnershipState(entry, velocity);
         ClearStateRevisions(entry.GameObject);
         entry.Owner = owner;
         entry.Generation = NextGeneration();
@@ -432,7 +434,8 @@ public static partial class Networking
         uint generation = reader.ReadUInt32();
         if (s_entries.TryGetValue(id, out NetworkEntry? entry))
         {
-            Float3 velocity = SampledVelocity(entry);
+            Float3 velocity = entry.TransferVelocity ?? SampledVelocity(entry);
+            entry.TransferVelocity = null;
             ClearStateRevisions(entry.GameObject);
             entry.Owner = owner;
             entry.Generation = generation;
@@ -488,6 +491,7 @@ public static partial class Networking
         public int NotifiedOwnerId = NoOwner;
         public readonly List<TransformSample> Samples = new();
         public readonly TransformTimeline Timeline = new();
+        public Float3? TransferVelocity;
         public uint Generation;
         public bool HasReceived;
 

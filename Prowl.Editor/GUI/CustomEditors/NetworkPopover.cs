@@ -150,6 +150,22 @@ internal static class NetworkPopover
             {
                 Spacer(paper, "gi_net_gap1");
 
+                Heading(paper, font, "gi_net_transfer", Loc.Get("network.owner_transfer"), Loc.Get("network.owner_transfer.desc"));
+                if (go.IsNetworked && !Networking.IsHost)
+                {
+                    Note(paper, font, "gi_net_transfer_value", Loc.Get(go.OwnerTransfer == OwnerTransfer.Fixed
+                        ? "network.owner_transfer.fixed" : "network.owner_transfer.takeover"), EditorTheme.Ink500);
+                    Note(paper, font, "gi_net_transfer_readonly", Loc.Get("network.owner_transfer.host_only"), EditorTheme.Ink400);
+                }
+                else
+                {
+                    OwnerTransferOption(paper, font, go, OwnerTransfer.Fixed, EditorIcons.Server_I, Loc.Get("network.owner_transfer.fixed"));
+                    OwnerTransferOption(paper, font, go, OwnerTransfer.Takeover, EditorIcons.Wifi_I, Loc.Get("network.owner_transfer.takeover"));
+                }
+                Note(paper, font, "gi_net_transfer_note", Loc.Get(go.OwnerTransfer == OwnerTransfer.Fixed
+                    ? "network.owner_transfer.fixed.desc" : "network.owner_transfer.takeover.desc"), EditorTheme.Ink400);
+                Spacer(paper, "gi_net_transfer_gap");
+
                 Heading(paper, font, "gi_net_orphaned", Loc.Get("network.orphaned"), Loc.Get("network.orphaned.desc"));
                 OrphanedOption(paper, font, go, NetworkOrphaned.Destroy, EditorIcons.Trash_I, Loc.Get("network.orphaned.destroy"));
                 OrphanedOption(paper, font, go, NetworkOrphaned.ClearOwner, EditorIcons.Server_I, Loc.Get("network.orphaned.host"));
@@ -174,6 +190,13 @@ internal static class NetworkPopover
             }
         }
     }
+
+    private static void OwnerTransferOption(Paper paper, FontFile font, GameObject go, OwnerTransfer value, IOrigamiIcon icon, string label) =>
+        Option(paper, font, $"gi_net_transfer_{value}", icon, EditorTheme.Ink400, label, go.OwnerTransfer == value, () =>
+        {
+            Undo.RecordGameObjectChange(go, "Change Owner Transfer", go.OwnerTransfer, value, (g, x) => g.OwnerTransfer = x);
+            go.OwnerTransfer = value;
+        });
 
     private static void OrphanedOption(Paper paper, FontFile font, GameObject go, NetworkOrphaned value, IOrigamiIcon icon, string label) =>
         Option(paper, font, $"gi_net_orph_{value}", icon, EditorTheme.Ink400, label, go.NetworkOrphaned == value, () =>

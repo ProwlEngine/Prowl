@@ -1353,6 +1353,8 @@ public partial class GameObject : EngineObject, ISerializable
         // Only written when set, so scenes that never touch networking are unchanged by it.
         if (NetworkMode != NetworkMode.Snapshot)
             compoundTag.Add("NetworkMode", new EchoObject((byte)NetworkMode));
+        if (OwnerTransfer != OwnerTransfer.Fixed)
+            compoundTag.Add("OwnerTransfer", new EchoObject((byte)OwnerTransfer));
         if (NetworkOrphaned != NetworkOrphaned.Destroy)
             compoundTag.Add("NetworkOrphaned", new EchoObject((byte)NetworkOrphaned));
         if (!NetworkSyncTransform)
@@ -1404,6 +1406,7 @@ public partial class GameObject : EngineObject, ISerializable
         LayerIndex = value["LayerIndex"]?.IntValue ?? 0;
         HideFlags = (HideFlags)(value["HideFlags"]?.IntValue ?? 0);
         NetworkMode = (NetworkMode)(value["NetworkMode"]?.ByteValue ?? (byte)NetworkMode.Snapshot);
+        OwnerTransfer = (OwnerTransfer)(value["OwnerTransfer"]?.ByteValue ?? (byte)OwnerTransfer.Fixed);
         NetworkOrphaned = (NetworkOrphaned)(value["NetworkOrphaned"]?.ByteValue ?? (byte)NetworkOrphaned.Destroy);
         NetworkSyncTransform = value["NetworkSyncTransform"]?.ByteValue != 0;
 

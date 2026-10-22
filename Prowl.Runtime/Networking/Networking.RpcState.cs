@@ -14,10 +14,12 @@ namespace Prowl.Runtime.Networking;
 
 public static partial class Networking
 {
-    private static void WriteRpcState(Component component, NetWriter output)
+    private static void WriteRpcState(Component component, NetWriter output) => WriteRpcState(component.GameObject, output);
+
+    private static void WriteRpcState(GameObject target, NetWriter output, bool includeAll = false)
     {
-        NetworkEntry? entry = FindEntry(component.GameObject);
-        GameObject root = entry != null ? entry.GameObject : component.GameObject;
+        NetworkEntry? entry = FindEntry(target);
+        GameObject root = entry != null ? entry.GameObject : target;
         output.WriteInt32(Session!.LocalPeer!.Id);
         output.WriteUInt64(checked(++s_outgoingStateRevision));
         output.WriteGuid(root.Identifier);
@@ -33,14 +35,14 @@ public static partial class Networking
             {
                 foreach (SyncMember sync in NetworkMembers.Of(part).Syncs)
                 {
-                    if (!HasControl(part, sync.Flags))
+                    if (!includeAll && !HasControl(part, sync.Flags))
                         continue;
                     if (WriteValue(values, part, sync.Slot, changes: false, rpc: true))
                         count++;
                 }
             }
 
-            if (!go.NetworkSyncTransform || !HasControl(go))
+            if (!go.NetworkSyncTransform || (!includeAll && !HasControl(go)))
                 continue;
             transforms.WriteGuid(go.Identifier);
             transforms.WriteUInt32(tick);
@@ -76,12 +78,13 @@ public static partial class Networking
     }
 
     // Validation is a separate pass so a malformed final record cannot leave earlier records applied.
-    private static bool ProcessRpcStates(Component target, ReadOnlySpan<byte> states, NetPeer caller, bool apply)
+    private static bool ProcessRpcStates(EngineObject target, ReadOnlySpan<byte> states, NetPeer caller, bool apply, bool forceTransforms = false)
     {
         NetSession? session = Session;
         if (session == null)
             return false;
 
+        GameObject targetObject = target is Component component ? component.GameObject : (GameObject)target;
         NetReader reader = new(states);
         uint count = reader.ReadVarUInt32();
         int maximum = IsHost ? 1 : 2; // Caller state, followed by host state when relayed.
@@ -97,21 +100,21 @@ public static partial class Networking
             if (!session.TryGetPeer(frame.OriginId, out NetPeer? origin))
                 return false;
 
-            NetworkEntry? entry = FindEntry(target.GameObject);
-            GameObject root = entry != null ? entry.GameObject : target.GameObject;
+            NetworkEntry? entry = FindEntry(targetObject);
+            GameObject root = entry != null ? entry.GameObject : targetObject;
             if (root.Identifier != frame.RootId || (entry?.Generation ?? 0) != frame.Generation)
                 return false;
 
             if (!apply)
                 ValidateRpcSyncs(frame, origin, root);
-            ProcessRpcTransforms(frame, origin, root, entry, apply);
+            ProcessRpcTransforms(frame, origin, root, entry, apply, forceTransforms);
 
             if (apply)
             {
                 NetReader syncs = new(frame.Syncs);
                 ApplySyncState(origin, ref syncs, null, initial: false, revision: frame.Revision);
                 if (Session != session || !target.IsValid() || target.IsDestroyQueued ||
-                    GenerationOf(target.GameObject) != frame.Generation)
+                    GenerationOf(targetObject) != frame.Generation)
                     return false;
             }
         }
@@ -159,7 +162,7 @@ public static partial class Networking
     }
 
     private static void ProcessRpcTransforms(RpcStateFrame frame, NetPeer origin, GameObject root,
-        NetworkEntry? entry, bool apply)
+        NetworkEntry? entry, bool apply, bool forceTransforms)
     {
         NetReader reader = new(frame.Transforms);
         while (!reader.IsAtEnd)
@@ -174,18 +177,18 @@ public static partial class Networking
             if (!Finite(pose.Position) || !Finite(pose.Scale) || !float.IsFinite(rotationLength) || rotationLength < 1e-12f)
                 throw new InvalidDataException("RPC state contains an invalid transform.");
 
-            if (apply && !HasControl(go))
-                ApplyRpcTransform(go, root, entry, frame, pose);
+            if (apply && (forceTransforms || !HasControl(go)))
+                ApplyRpcTransform(go, root, entry, frame, pose, forceTransforms);
         }
     }
 
     private static void ApplyRpcTransform(GameObject go, GameObject root, NetworkEntry? entry,
-        RpcStateFrame frame, RpcTransform pose)
+        RpcStateFrame frame, RpcTransform pose, bool forceTransforms)
     {
         var key = (go.Identifier, uint.MaxValue, frame.OriginId, frame.Generation);
         if (s_stateRevisions.GetValueOrDefault(key) >= frame.Revision)
             return;
-        if (entry != null && go == root && entry.HasReceived && (int)(pose.Tick - entry.LastReceivedTick) < 0)
+        if (!forceTransforms && entry != null && go == root && entry.HasReceived && (int)(pose.Tick - entry.LastReceivedTick) < 0)
             return;
 
         s_stateRevisions[key] = frame.Revision;
