@@ -488,7 +488,7 @@ public class PreferencesPanel : DockPanel
     }
 
     // ---- Presets ----
-    internal static void DrawThemePresets(Paper paper, Scribe.FontFile font, EditorSettings s, EditorThemeData theme)
+    internal static void DrawThemePresets(Paper paper, Scribe.FontFile font, EditorSettings s, EditorThemeData theme, bool saveButtons = true)
     {
         EditorGUI.SectionHeader(paper, "pref_pr_hdr", Loc.Get("pref.builtin_themes"), first: true, compact: true);
         PresetGrid(paper, "pref_pr", ThemePresets.All.Length, i =>
@@ -533,6 +533,7 @@ public class PreferencesPanel : DockPanel
             }, delete);
         });
 
+        if (!saveButtons) return;
         using (paper.Row("pref_save_presets").Height(UnitValue.Auto).Gap(SP * 2).Enter())
         {
             EditorGUI.Chip(paper, "pref_save_theme", $"{EditorIcons.FloppyDisk}  {Loc.Get("pref.save_theme")}", () =>

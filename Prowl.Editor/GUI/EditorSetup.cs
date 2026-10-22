@@ -102,7 +102,7 @@ public static class EditorSetup
                         Preferences.Changed(Preferences.SectionOf(script));
                     }).Show());
 
-                PreferencesPanel.DrawThemePresets(paper, font, s, s.Theme);
+                PreferencesPanel.DrawThemePresets(paper, font, s, s.Theme, saveButtons: false);
             }
         });
     }
