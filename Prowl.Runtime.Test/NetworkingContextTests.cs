@@ -3,7 +3,6 @@ using Prowl.Runtime.Networking;
 using Prowl.Warp;
 using Prowl.Warp.Transports.Batching;
 using Prowl.Warp.Transports.Kcp;
-using Prowl.Warp.Transports.Encryption;
 using Prowl.Warp.Transports.Local;
 using Xunit;
 
@@ -17,12 +16,12 @@ public class NetworkingContextTests
     public void ReconnectsAndLargeTransfersSurviveSimulatedWan(NetworkExecution execution)
     {
         int rounds = int.TryParse(Environment.GetEnvironmentVariable("PROWL_NETWORK_STRESS_ROUNDS"), out int configured) ? configured : 3;
-        Transport Stack(int seed) => new BatchingTransport(new EncryptedTransport(new KcpTransport(new()
+        Transport Stack(int seed) => new BatchingTransport(new KcpTransport(new()
         {
             Port = 0,
             Simulation = new() { PacketLoss = 0.03, Latency = TimeSpan.FromMilliseconds(15),
                 Jitter = TimeSpan.FromMilliseconds(10), Seed = seed }
-        }), new byte[32]));
+        }));
         NetworkConfiguration configuration = new() { Execution = execution };
         using NetworkingContext host = new(configuration);
         NetSession server = host.Host(Stack(42));

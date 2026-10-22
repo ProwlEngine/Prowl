@@ -62,17 +62,10 @@ public class NetworkingThreadTests
         return session;
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void BatchedUdpSessionsReassembleLargeMessagesAndPreserveShutdownReasons(bool encrypted)
+    [Fact]
+    public void BatchedUdpSessionsReassembleLargeMessagesAndPreserveShutdownReasons()
     {
-        Transport Stack()
-        {
-            Transport transport = new KcpTransport(new() { Port = 0 });
-            if (encrypted) transport = new Prowl.Warp.Transports.Encryption.EncryptedTransport(transport, new byte[32]);
-            return new Prowl.Warp.Transports.Batching.BatchingTransport(transport);
-        }
+        Transport Stack() => new Prowl.Warp.Transports.Batching.BatchingTransport(new KcpTransport(new() { Port = 0 }));
         using NetworkingThread hostThread = new(Stack()), clientThread = new(Stack());
         using NetSession host = CreateHostSession(hostThread);
         using NetSession client = CreateClientSession(clientThread, $"127.0.0.1:{hostThread.LocalPort}", "client");

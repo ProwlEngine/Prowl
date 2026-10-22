@@ -29,7 +29,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
     [Fact]
     public void UnavailableTransportFailsBeforeStartingWorker()
     {
-        using Transport transport = new Prowl.Warp.Transports.Steam.SteamTransport();
+        using Transport transport = new ThreadAffineTransport(available: false);
         Assert.Throws<NotSupportedException>(() => Networking.Networking.Host(transport));
         Assert.Null(Networking.Networking.Session);
     }
@@ -43,9 +43,9 @@ public class NetworkConfigurationTests : RuntimeTestBase
         Assert.Throws<NotSupportedException>(() => new NetworkingThread(transport));
     }
 
-    private sealed class ThreadAffineTransport : Transport
+    private sealed class ThreadAffineTransport(bool available = true) : Transport
     {
-        public override TransportCapabilities Capabilities => new(true, DeliverySupport.All, TransportExecution.CreatingThreadRequired);
+        public override TransportCapabilities Capabilities => new(available, DeliverySupport.All, TransportExecution.CreatingThreadRequired);
         public override bool IsListening => false;
         public override void Listen() => throw new InvalidOperationException("Must not start I/O during policy validation.");
         public override Connection Connect(string address) => throw new InvalidOperationException();

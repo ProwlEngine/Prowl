@@ -33,10 +33,7 @@ public sealed class NetworkingSettings : ProjectSettingsBase
         Header(paper, "transport", "Transport");
         EditorGUI.SettingsRow(paper, "netsettings_transport", "Transport", () =>
             Origami.Dropdown(paper, "netsettings_transport_v", (int)Configuration.Transport,
-                v => { Configuration.Transport = (NetworkTransport)v; Changed(); }, ["KCP", "Local", "Steam"]).Show());
-        if (Configuration.Transport == NetworkTransport.Steam)
-            Origami.Label(paper, "netsettings_steam_warning",
-                "Steam transport is a stub and is not implemented yet. Hosting and joining with Steam are unavailable.").Warning().Show();
+                v => { Configuration.Transport = (NetworkTransport)v; Changed(); }, ["KCP", "Local"]).Show());
         if (Configuration.Transport == NetworkTransport.Local)
         {
             EditorGUI.SettingsTextField(paper, "netsettings_local", "Local Host Address", Configuration.LocalAddress,

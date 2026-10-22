@@ -3,7 +3,6 @@ using System;
 using Prowl.Warp;
 using Prowl.Warp.Transports.Kcp;
 using Prowl.Warp.Transports.Local;
-using Prowl.Warp.Transports.Steam;
 using Prowl.Warp.Transports.Batching;
 
 namespace Prowl.Runtime.Networking;
@@ -14,8 +13,7 @@ public enum NetworkExecution { Auto, Inline, DedicatedThread }
 public enum NetworkTransport
 {
     Kcp,
-    Local,
-    Steam
+    Local
 }
 
 /// <summary>Serializable project defaults. Explicit transports and session options can override these per session.</summary>
@@ -172,7 +170,6 @@ public static partial class Networking
     {
         if (s_configuration.Transport == NetworkTransport.Local)
             return new LocalTransport(s_localNetwork, hosting ? s_configuration.LocalAddress : Guid.NewGuid().ToString());
-        if (s_configuration.Transport == NetworkTransport.Steam) return new SteamTransport();
         Transport transport = new KcpTransport(s_configuration.CreateKcpOptions());
         if (s_configuration.BatchMessages) transport = new BatchingTransport(transport, s_configuration.Mtu);
         return transport;
