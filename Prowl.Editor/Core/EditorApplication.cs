@@ -329,24 +329,59 @@ public class EditorApplication : Game
     [DllImport("dwmapi.dll", PreserveSig = true)]
     private static extern int DwmSetWindowAttribute(nint hwnd, int attr, ref int value, int size);
 
-    /// <summary> Loads all editor fonts (Geist variants, JetBrains Mono, Space Grotesk, Audiowide) from embedded resources and syncs the Origami theme. Safe to call multiple times; fonts are only loaded once. </summary>
+    /// <summary>The family name of the bundled UI font. Any other font name is looked up among the system fonts.</summary>
+    public const string BundledFontName = "Geist";
+
+    private Scribe.FontFile? _geistRegular, _geistMedium, _geistSemiBold, _geistBold;
+    private Scribe.FontFile[]? _systemFonts;
+
+    /// <summary>Every font installed on this machine, read once on first use.</summary>
+    public IReadOnlyList<Scribe.FontFile> SystemFonts => _systemFonts ??= [.. PaperInstance.EnumerateSystemFonts()];
+
+    /// <summary> Loads the editor fonts and resolves the UI and bold fonts from the theme's font names, then syncs the Origami theme. Does nothing when the names have not changed. </summary>
     public void InitializeFont()
     {
-        if (EditorTheme.DefaultFont != null) return;
+        if (_geistRegular == null)
+        {
+            _geistRegular = LoadBundledFont("Geist-Regular.ttf");
+            _geistMedium = LoadBundledFont("Geist-Medium.ttf");
+            _geistSemiBold = LoadBundledFont("Geist-SemiBold.ttf");
+            _geistBold = LoadBundledFont("Geist-Bold.ttf");
+            EditorTheme.FontMono = LoadBundledFont("JetBrainsMono-Regular.ttf");
+            EditorTheme.FontDisplay = LoadBundledFont("SpaceGrotesk-Bold.ttf");
+            EditorTheme.FontLogo = LoadBundledFont("Audiowide-Regular.ttf");
+        }
+        else if (_curDefaultFont == EditorTheme.DefaultFontName && _curDefaultBoldFont == EditorTheme.DefaultBoldFontName)
+            return;
 
-        EditorTheme.DefaultFont = LoadBundledFont("Geist-Regular.ttf");
-        EditorTheme.FontMedium = LoadBundledFont("Geist-Medium.ttf");
-        EditorTheme.FontSemiBold = LoadBundledFont("Geist-SemiBold.ttf");
-        EditorTheme.DefaultBoldFont = LoadBundledFont("Geist-Bold.ttf");
-        EditorTheme.FontMono = LoadBundledFont("JetBrainsMono-Regular.ttf");
-        EditorTheme.FontDisplay = LoadBundledFont("SpaceGrotesk-Bold.ttf");
-        EditorTheme.FontLogo = LoadBundledFont("Audiowide-Regular.ttf");
+        Scribe.FontFile? ui = FindSystemFont(EditorTheme.DefaultFontName, Scribe.FontStyle.Regular);
+        Scribe.FontFile? bold = FindSystemFont(EditorTheme.DefaultBoldFontName, Scribe.FontStyle.Bold);
+
+        EditorTheme.DefaultFont = ui ?? _geistRegular;
+        EditorTheme.FontMedium = ui ?? _geistMedium;
+        EditorTheme.DefaultBoldFont = bold ?? _geistBold;
+        EditorTheme.FontSemiBold = bold ?? _geistSemiBold;
 
         _curDefaultFont = EditorTheme.DefaultFontName;
         _curDefaultBoldFont = EditorTheme.DefaultBoldFontName;
 
-        // Rebuild the pushed Origami theme now that fonts exist.
         EditorTheme.SyncOrigami(0f);
+    }
+
+    // Prefers the requested style and falls back to the family's regular face.
+    private Scribe.FontFile? FindSystemFont(string family, Scribe.FontStyle style)
+    {
+        if (string.IsNullOrEmpty(family) || family.Equals(BundledFontName, StringComparison.OrdinalIgnoreCase)) return null;
+
+        Scribe.FontFile? regular = null;
+        foreach (Scribe.FontFile font in SystemFonts)
+        {
+            if (!font.FamilyName.Equals(family, StringComparison.OrdinalIgnoreCase)) continue;
+            if (font.Style == style) return font;
+            if (font.Style == Scribe.FontStyle.Regular) regular = font;
+        }
+        if (regular == null) Runtime.Debug.LogWarning($"Font '{family}' is not installed, using {BundledFontName}.");
+        return regular;
     }
 
     private static Prowl.Scribe.FontFile? LoadBundledFont(string fileName)
@@ -1326,12 +1361,11 @@ public class EditorApplication : Game
             "Noto Sans",           // Linux
         ];
 
-        Scribe.FontFile[] systemFonts = [.. PaperInstance.EnumerateSystemFonts()];
         int loaded = 0;
 
         foreach (string family in fallbackFamilies)
         {
-            Scribe.FontFile? font = systemFonts.FirstOrDefault(f =>
+            Scribe.FontFile? font = SystemFonts.FirstOrDefault(f =>
                 f.FamilyName.Equals(family, StringComparison.OrdinalIgnoreCase)
                 && f.Style == Prowl.Scribe.FontStyle.Regular);
 

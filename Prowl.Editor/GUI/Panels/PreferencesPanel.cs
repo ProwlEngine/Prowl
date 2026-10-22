@@ -450,14 +450,33 @@ public class PreferencesPanel : DockPanel
         EditorGUI.SwatchRow(paper, s, "sem_danger", Loc.Get("pref.danger"), theme.Red, _accentPalette);
     }
 
+    private static string[]? _fontFamilies;
+
+    // The bundled font first, then every installed family once.
+    private static string[] FontFamilies()
+    {
+        if (_fontFamilies != null) return _fontFamilies;
+        var installed = EditorApplication.Instance?.SystemFonts.Select(f => f.FamilyName) ?? [];
+        return _fontFamilies = [EditorApplication.BundledFontName, .. installed
+            .Where(n => !string.IsNullOrWhiteSpace(n) && !n.Equals(EditorApplication.BundledFontName, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)];
+    }
+
+    private static int FamilyIndex(string[] families, string name) =>
+        Math.Max(0, Array.FindIndex(families, f => f.Equals(name, StringComparison.OrdinalIgnoreCase)));
+
     // ---- Typography ----
     private void DrawThemeType(Paper paper, EditorSettings s, EditorThemeData theme)
     {
         EditorGUI.SectionHeader(paper, "pref_ty_fonts", Loc.Get("pref.fonts"), first: true, compact: true);
+        string[] families = FontFamilies();
         EditorGUI.Row(paper, "pref_ty_ui", Loc.Get("pref.ui_font"), () =>
-            Origami.TextField(paper, "pref_ty_ui_v", theme.DefaultFontName, v => { theme.DefaultFontName = v; s.ApplyTheme(); s.Save(); }).CommitOnEnter().Show(), compact: true);
+            Origami.Dropdown(paper, "pref_ty_ui_v", FamilyIndex(families, theme.DefaultFontName),
+                i => { theme.DefaultFontName = families[i]; s.ApplyTheme(); s.Save(); }, families).Searchable().Show(), compact: true);
         EditorGUI.Row(paper, "pref_ty_bold", Loc.Get("pref.bold_font"), () =>
-            Origami.TextField(paper, "pref_ty_bold_v", theme.DefaultBoldFontName, v => { theme.DefaultBoldFontName = v; s.ApplyTheme(); s.Save(); }).CommitOnEnter().Show(), compact: true);
+            Origami.Dropdown(paper, "pref_ty_bold_v", FamilyIndex(families, theme.DefaultBoldFontName),
+                i => { theme.DefaultBoldFontName = families[i]; s.ApplyTheme(); s.Save(); }, families).Searchable().Show(), compact: true);
 
         EditorGUI.SectionHeader(paper, "pref_ty_size", Loc.Get("pref.sizing"), compact: true);
         EditorGUI.SettingsSlider(paper, "pref_ty_base", Loc.Get("pref.base_size"), theme.FontSize, 8, 32, v => { theme.FontSize = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
