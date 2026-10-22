@@ -6,94 +6,49 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-file sealed class ClearSwapchainPass : InstanceRasterPass
-{
-    public override GraphKind Kind => TestViews.Kind;
-
-    public override string Name => "ClearSwapchain";
-
-    public override void Setup(InstanceContextBuilder builder) => SetInstanceTarget(builder, TargetLoadStoreOps.Clear(Color.Blue));
-
-    public override void Render(InstanceContext context, CommandBuffer cmd)
-    {
-    }
-}
-
-file sealed class DepthSwapchainPass : InstanceRasterPass
-{
-    public override GraphKind Kind => TestViews.Kind;
-
-    private readonly PixelFormat _depthFormat;
-
-    public DepthSwapchainPass(PixelFormat depthFormat) => _depthFormat = depthFormat;
-
-    public override string Name => "DepthSwapchain";
-
-    public override void Setup(InstanceContextBuilder builder)
-        => SetInstanceTarget(builder, TargetLoadStoreOps.Clear(Color.Blue), _depthFormat);
-
-    public override void Render(InstanceContext context, CommandBuffer cmd)
-    {
-    }
-}
-
-file sealed class OffscreenPass : IInstancePass
-{
-    public GraphKind Kind => TestViews.Kind;
-
-    public string Name => "Offscreen";
-
-    public void Setup(InstanceContextBuilder builder)
-        => builder.DeclareOutputTexture("Offscreen", GraphTextureDesc.InstanceSized(PixelFormat.R8_G8_B8_A8_UNorm));
-
-    public void Render(InstanceContext context, CommandBuffer cmd) { }
-}
-
 // Coverage for the main swapchain: the framebuffer it exposes, presentation, and resize. These
 // run on the windowed device creators (a headless device has no swapchain).
 public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
-    private GraphInstances SwapchainInstances(RenderGraph graph)
+    private ExecutionTask Present(FrameGraph graph, PixelFormat? depthFormat = null)
     {
-        GraphInstances instances = graph.CreateInstances();
-        instances.Add(TestViews.Kind, 0, extent: new GraphExtent(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height), target: GD.MainSwapchain.Framebuffer);
-        return instances;
+        TextureHandle target = graph.ImportTarget(GD.MainSwapchain.Framebuffer, depthFormat);
+        graph.AddPass("ClearSwapchain", pass => pass.Write(target, firstWrite: TargetLoadStoreOps.Clear(Color.Blue)), _ => { });
+        return graph.Execute();
+    }
+
+    private ExecutionTask Offscreen(FrameGraph graph)
+    {
+        Framebuffer fb = GD.MainSwapchain.Framebuffer;
+        TextureHandle texture = graph.Create("Offscreen", GraphTextureDesc.Sized((int)fb.Width, (int)fb.Height, PixelFormat.R8_G8_B8_A8_UNorm));
+        graph.AddPass("Offscreen", pass => pass.Write(texture), _ => { });
+        return graph.Execute();
     }
 
     [Fact]
-    public void DispatchGraph_PresentsMoreFramesThanSwapchainImages()
+    public void Execute_PresentsMoreFramesThanSwapchainImages()
     {
-        using RenderGraph presenting = TestViews.Build([new ClearSwapchainPass()]);
-        using RenderGraph offscreen = TestViews.Build([new OffscreenPass()]);
-        GraphInstances presentingViews = SwapchainInstances(presenting);
-        GraphInstances offscreenViews = SwapchainInstances(offscreen);
-
+        using FrameGraph graph = new(GD, "Test");
         for (int frame = 0; frame < 12; frame++)
         {
             if (frame % 4 != 3)
-                GD.DispatchGraph(presenting, presentingViews);
+                Present(graph);
             else
-                GD.DispatchGraph(offscreen, offscreenViews);
+                Offscreen(graph);
         }
 
         GD.ResizeMainWindow(128, 96);
-        GraphInstances views = SwapchainInstances(presenting);
-
         for (int frame = 0; frame < 12; frame++)
-        {
-            GD.DispatchGraph(presenting, views);
-        }
+            Present(graph);
 
         GD.WaitForIdle();
     }
 
     [Fact]
-    public void DispatchGraph_TargetDepth_CreatesSwapchainDepth()
+    public void ImportTarget_WithDepthFormat_CreatesSwapchainDepth()
     {
-        using RenderGraph graph = TestViews.Build([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
-        GraphInstances views = SwapchainInstances(graph);
-
-        GD.DispatchGraph(graph, views);
+        using FrameGraph graph = new(GD, "Test");
+        Present(graph, PixelFormat.R16_UNorm);
         GD.WaitForIdle();
 
         Framebuffer fb = GD.MainSwapchain.Framebuffer;
@@ -106,22 +61,18 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     }
 
     [Fact]
-    public void DispatchGraph_TargetDepth_SurvivesResizeAndFormatChange()
+    public void ImportTarget_WithDepthFormat_SurvivesResizeAndFormatChange()
     {
-        using RenderGraph shallow = TestViews.Build([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
-        using RenderGraph deep = TestViews.Build([new DepthSwapchainPass(PixelFormat.R32_Float)]);
-        GraphInstances shallowViews = SwapchainInstances(shallow);
-
+        using FrameGraph graph = new(GD, "Test");
         for (int frame = 0; frame < 6; frame++)
-            GD.DispatchGraph(shallow, shallowViews);
+            Present(graph, PixelFormat.R16_UNorm);
 
-        GD.DispatchGraph(deep, SwapchainInstances(deep));
+        Present(graph, PixelFormat.R32_Float);
         Assert.Equal(PixelFormat.R32_Float, GD.MainSwapchain.Framebuffer.DepthTarget!.Value.Target.Format);
 
         GD.ResizeMainWindow(128, 96);
-        GraphInstances deepViews = SwapchainInstances(deep);
         for (int frame = 0; frame < 6; frame++)
-            GD.DispatchGraph(deep, deepViews);
+            Present(graph, PixelFormat.R32_Float);
 
         Texture depth = GD.MainSwapchain.Framebuffer.DepthTarget!.Value.Target;
         Assert.Equal(GD.MainSwapchain.Framebuffer.Width, depth.Width);
