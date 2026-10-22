@@ -1935,7 +1935,7 @@ public class EditorApplication : Game
 
         // Focus the Game View tab
         FocusPanel(typeof(GameViewPanel));
-        if (FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel { MaximizeOnPlay: true } gameView)
+        if (Preferences.Get<PlayModePreferences>().GameViewOnPlay == GameViewOnPlay.Maximize && FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel gameView)
             _maximizedForPlay = _panelMaximizer.Maximize(gameView);
 
         // The editor's vsync and frame limit are its preference, not the game's, so play starts

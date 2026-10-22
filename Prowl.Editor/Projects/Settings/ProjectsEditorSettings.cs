@@ -10,6 +10,15 @@ using Prowl.PaperUI.LayoutEngine;
 
 namespace Prowl.Editor.Projects.Settings;
 
+/// <summary>A Game view size: pixels, or an aspect ratio when <see cref="Aspect"/> is set.</summary>
+public class GameViewResolution
+{
+    public string Name = "";
+    public int Width = 1920;
+    public int Height = 1080;
+    public bool Aspect;
+}
+
 /// <summary> Stores the color palette per-project. </summary>
 [ProjectSettings("Editor", EditorIcons.Palette, order: 5, exportToBuild: false)]
 public class ProjectsEditorSettings : ProjectSettingsBase
@@ -20,6 +29,9 @@ public class ProjectsEditorSettings : ProjectSettingsBase
     /// <summary>An image shown behind the editor while this project is open, relative to the project folder. Empty uses the theme's background.</summary>
     public string BackgroundImage = "";
 
+    /// <summary>The project's own Game view sizes, listed after the built in ones.</summary>
+    public List<GameViewResolution> CustomResolutions = [];
+
     /// <summary>Last resolution preset selected in the Game View toolbar.</summary>
     public int SelectedResolutionIndex = 0;
 
@@ -29,6 +41,7 @@ public class ProjectsEditorSettings : ProjectSettingsBase
         ColorPalette = DefaultColorPalette();
         SelectedResolutionIndex = 0;
         BackgroundImage = "";
+        CustomResolutions = [];
     }
 
     /// <summary> Draws the colour palette as a grid of editable swatches. </summary>
