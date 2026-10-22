@@ -9,7 +9,6 @@ using System.Text.RegularExpressions;
 
 using Prowl.Echo;
 using Prowl.Graphite;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
 
@@ -244,38 +243,26 @@ public sealed class ComputeShader : Asset
 /// <summary>One compute dispatch as a graph execution of its own, its buffers declared so it waits on writes before it.</summary>
 internal static class ComputeRun
 {
-    private static readonly RenderPipeline s_pipeline = new([new Pass()]) { Name = "Compute" };
-    private static readonly int s_viewId = Graphics.NewViewId();
-
-    private sealed class View : IRenderView
-    {
-        public required ComputeProgram Program;
-        public required PropertySet Properties;
-        public required Action<CommandBuffer> Dispatch;
-        public uint PixelWidth => 1;
-        public uint PixelHeight => 1;
-        public int ViewId => s_viewId;
-    }
-
-    private sealed class Pass : IPass
-    {
-        public string Name => "Compute";
-
-        public void Setup(RenderContextBuilder builder) => builder.DeclareOutputBuffer("ComputeKeepAlive", GraphBufferDesc.Structured(4, 4));
-
-        public void Render(RenderContext context, CommandBuffer cmd)
-        {
-            View view = context.ViewAs<View>();
-            cmd.SetComputeShader(view.Program);
-            cmd.SetProperties(view.Properties);
-            view.Dispatch(cmd);
-        }
-    }
+    private static FrameGraph? s_graph;
 
     public static void Execute(ComputeProgram program, PropertySet properties, List<DeviceBuffer> buffers, Action<CommandBuffer> dispatch)
     {
-        ExecutionTask task = Graphics.Device!.DispatchGraph(s_pipeline, new[] { new View { Program = program, Properties = properties, Dispatch = dispatch } });
-        _ = task;
+        lock (typeof(ComputeRun))
+        {
+            FrameGraph graph = s_graph ??= new FrameGraph(Graphics.Device!, "Compute");
+            graph.AddPass("Compute", pass =>
+            {
+                foreach (DeviceBuffer buffer in buffers)
+                    pass.Write(graph.Import(buffer));
+            }, context =>
+            {
+                CommandBuffer cmd = context.Command;
+                cmd.SetComputeShader(program);
+                cmd.SetProperties(properties);
+                dispatch(cmd);
+            });
+            graph.Execute();
+        }
     }
 }
 
