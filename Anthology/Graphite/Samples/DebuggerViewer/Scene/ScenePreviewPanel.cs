@@ -19,7 +19,7 @@ internal sealed class ScenePreviewPanel : DockPanel
 
     public override string Title => "Scene / " + PbrScenes.Names[_scene.Selected];
 
-    public override string Icon => "\uf030";
+    public override string Icon => OrigamiGlyphs.Image;
 
     public override void OnGUI(Paper paper, float width, float height)
     {
