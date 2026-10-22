@@ -56,6 +56,9 @@ public sealed class PreferencesSection
     /// <summary>True while the open project's own values are in use.</summary>
     public bool IsProjectOverride { get; internal set; }
 
+    /// <summary>The files as this editor last wrote or read them, to tell its own saves from edits made elsewhere.</summary>
+    internal string? KnownText { get; set; }
+
     /// <summary>A fresh instance, for reading the default values.</summary>
     public required EditorPreferences Defaults { get; init; }
 
@@ -66,6 +69,8 @@ public sealed class PreferencesSection
 public static class Preferences
 {
     private static readonly List<PreferencesSection> _sections = [];
+    private static FileSystemWatcher? s_watcher;
+    private static volatile bool s_filesChanged;
 
     /// <summary>Every section, in display order.</summary>
     public static IReadOnlyList<PreferencesSection> Sections => _sections;
@@ -149,6 +154,56 @@ public static class Preferences
         try { File.Delete(path); }
         catch (Exception ex) { Debug.LogWarning($"[Preferences] Could not delete '{path}': {ex.Message}"); }
         Load(section);
+    }
+
+    /// <summary>Starts watching the user's Prowl folder, so settings edited outside the editor apply without a restart.</summary>
+    public static void WatchFiles()
+    {
+        if (s_watcher != null) return;
+        string root = Path.GetDirectoryName(FolderPath)!;
+        try
+        {
+            Directory.CreateDirectory(FolderPath);
+            s_watcher = new FileSystemWatcher(root) { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName };
+            s_watcher.Changed += (_, _) => s_filesChanged = true;
+            s_watcher.Created += (_, _) => s_filesChanged = true;
+            s_watcher.Renamed += (_, _) => s_filesChanged = true;
+            s_watcher.EnableRaisingEvents = true;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[Preferences] Could not watch '{root}' for changes: {ex.Message}");
+        }
+    }
+
+    /// <summary>Reloads whatever changed on disk since the last frame. Called once per frame on the main thread.</summary>
+    public static void ApplyFileChanges()
+    {
+        if (!s_filesChanged) return;
+        s_filesChanged = false;
+
+        EditorSettings.ReloadIfChangedOnDisk();
+        foreach (PreferencesSection section in _sections) ReloadIfChanged(section);
+    }
+
+    internal static void ReloadIfChanged(PreferencesSection section)
+    {
+        if (ReadFiles(section) != section.KnownText) Load(section);
+    }
+
+    // The user's file then the project's, as one text, so a change to either is noticed.
+    private static string ReadFiles(PreferencesSection section)
+    {
+        string text = ReadOrEmpty(Path.Combine(FolderPath, section.FileName));
+        if (section.ProjectOverridable && ProjectFolderPath is { } folder)
+            text += "\n" + ReadOrEmpty(Path.Combine(folder, section.FileName));
+        return text;
+
+        static string ReadOrEmpty(string path)
+        {
+            try { return File.Exists(path) ? File.ReadAllText(path) : ""; }
+            catch (IOException) { return ""; }
+        }
     }
 
     /// <summary>Saves and applies a section after one of its values changed.</summary>
@@ -275,6 +330,7 @@ public static class Preferences
         if (section.ProjectOverridable && ProjectFolderPath is { } folder)
             section.IsProjectOverride = ReadInto(section, Path.Combine(folder, section.FileName));
 
+        section.KnownText = ReadFiles(section);
         ApplySafely(section);
     }
 
@@ -303,6 +359,7 @@ public static class Preferences
         {
             Directory.CreateDirectory(folder);
             File.WriteAllText(path, Serializer.Serialize(section.Instance, TypeMode.Auto).WriteToYaml());
+            section.KnownText = ReadFiles(section);
         }
         catch (Exception ex)
         {

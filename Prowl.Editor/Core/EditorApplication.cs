@@ -110,6 +110,7 @@ public class EditorApplication : Game
 
         // Load editor settings (global, persists across projects)
         _ = EditorSettings.Instance; // triggers load + ApplyTheme
+        Preferences.WatchFiles();
 
         ApplyFramePacing();
 
@@ -517,7 +518,10 @@ public class EditorApplication : Game
 
         // Save system update (Ctrl+S + auto-save) - after theme push so toasts get icons
         using (FrameStats.Editor.Scope())
+        {
             SaveManager.Update((float)Time.UnscaledDeltaTime);
+            Preferences.ApplyFileChanges();
+        }
 
         // Detect project opened (launcher closed since last frame)
         if (!ProjectLauncher.IsOpen && !_introClosing && _launcherWasOpen)

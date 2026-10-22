@@ -25,6 +25,9 @@ public class EditorSettings
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "Prowl", "EditorSettings.json");
 
+    /// <summary>The file as this editor last wrote or read it, to tell its own saves from edits made elsewhere.</summary>
+    private static string? s_knownJson;
+
     // Preferences
     /// <summary> Gets or sets the default directory for new projects. Defaults to Documents/ProwlProjects. </summary>
     public string DefaultProjectsPath { get; set; } = Path.Combine(
@@ -141,6 +144,7 @@ public class EditorSettings
             Directory.CreateDirectory(dir);
             string json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(_filePath, json);
+            s_knownJson = json;
         }
         catch (Exception ex)
         {
@@ -156,6 +160,7 @@ public class EditorSettings
             {
                 string json = File.ReadAllText(_filePath);
                 EditorSettings? settings = JsonSerializer.Deserialize<EditorSettings>(json);
+                s_knownJson = json;
                 if (settings != null)
                 {
                     settings.Theme.InitRamps();
@@ -172,6 +177,33 @@ public class EditorSettings
         var def = new EditorSettings();
         def.ApplyTheme();
         return def;
+    }
+
+    /// <summary>Applies the settings file again when something other than this editor changed it, such as a hand edit.</summary>
+    internal static void ReloadIfChangedOnDisk()
+    {
+        string json;
+        try
+        {
+            if (!File.Exists(_filePath)) return;
+            json = File.ReadAllText(_filePath);
+        }
+        catch (IOException) { return; } // still being written, the next change event retries
+
+        if (json == s_knownJson) return;
+        s_knownJson = json;
+
+        try
+        {
+            if (JsonSerializer.Deserialize<EditorSettings>(json) is not { } settings) return;
+            settings.Theme.InitRamps();
+            Replace(settings);
+            Debug.Log("Editor settings reloaded from disk.");
+        }
+        catch (JsonException ex)
+        {
+            Debug.LogWarning($"EditorSettings.json was changed but could not be read, keeping the current settings: {ex.Message}");
+        }
     }
 
     /// <summary>

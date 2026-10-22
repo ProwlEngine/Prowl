@@ -74,6 +74,24 @@ public class PreferencesTests : IDisposable
         Assert.Equal([80, 120], ((SamplePreferences)section.Defaults).Columns);
         Assert.Contains("Columns", Preferences.ChangedFields(section));
     }
+
+    [Fact]
+    public void AFileEditedOutsideTheEditorIsLoadedButItsOwnSavesAreNot()
+    {
+        PreferencesSection section = Preferences.Create(typeof(SamplePreferences));
+        var prefs = (SamplePreferences)section.Instance;
+        prefs.Size = 5f;
+        Preferences.Changed(section);
+
+        prefs.Size = 6f;
+        Preferences.ReloadIfChanged(section);
+        Assert.Equal(6f, prefs.Size);
+
+        string path = Path.Combine(Preferences.FolderPath, section.FileName);
+        File.WriteAllText(path, File.ReadAllText(path).Replace("5", "9"));
+        Preferences.ReloadIfChanged(section);
+        Assert.Equal(9f, prefs.Size);
+    }
 }
 
 public class ProjectPreferencesTests : EditorTestHarness
