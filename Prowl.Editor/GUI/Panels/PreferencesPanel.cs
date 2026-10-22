@@ -201,6 +201,10 @@ public class PreferencesPanel : DockPanel
         using (paper.Row("pref_sec_actions").Height(EditorTheme.RowHeight).PaddingLeft(Origami.Current.Metrics.PaddingLarge).Enter())
             Origami.Button(paper, "pref_sec_reset", $"{EditorIcons.RotateLeft}  {Loc.Get("pref.reset_section")}", () => Preferences.Reset(section)).Show();
 
+        if (section.ProjectOverridable && Projects.Project.Current != null)
+            EditorGUI.SettingsToggle(paper, "pref_sec_project", Loc.Get("pref.project_override"), section.IsProjectOverride,
+                v => Preferences.SetProjectOverride(section, v));
+
         section.Instance.OnGUI(paper, width);
         DrawSectionFields(paper, "pref_sec_grid", section, null);
     }

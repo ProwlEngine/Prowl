@@ -701,6 +701,7 @@ public static class EditorRegistries
     /// <summary> Resets all settings entries to their defaults and loads saved values from disk. Called when a project is opened. </summary>
     public static void OnProjectOpened()
     {
+        Preferences.OnProjectOpened();
         foreach (SettingsEntry entry in _settingsEntries)
             entry.Instance.ResetToDefaults();
         LoadSettings();

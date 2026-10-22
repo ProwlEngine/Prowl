@@ -29,7 +29,7 @@ public enum ScriptEditorMode
 }
 
 /// <summary>How the built in code editor looks and behaves. Changes apply to open scripts straight away.</summary>
-[EditorPreferences("Script Editor", EditorIcons.Code, order: 10)]
+[EditorPreferences("Script Editor", EditorIcons.Code, order: 10, ProjectOverridable = true)]
 public sealed class ScriptEditorPreferences : EditorPreferences
 {
     [Tooltip("Open double clicked scripts in the built in code editor, or in the system's default app.")]

@@ -75,3 +75,44 @@ public class PreferencesTests : IDisposable
         Assert.Contains("Columns", Preferences.ChangedFields(section));
     }
 }
+
+public class ProjectPreferencesTests : EditorTestHarness
+{
+    [EditorPreferences("Project Preferences Test", ProjectOverridable = true)]
+    public sealed class SharedPreferences : EditorPreferences
+    {
+        public int TabSize = 4;
+    }
+
+    private readonly string _folder = Path.Combine(Path.GetTempPath(), "ProwlPreferencesTests", Guid.NewGuid().ToString("N"));
+    private readonly string _previousFolder = Preferences.FolderPath;
+
+    public ProjectPreferencesTests() => Preferences.FolderPath = _folder;
+
+    public override void Dispose()
+    {
+        Preferences.FolderPath = _previousFolder;
+        if (Directory.Exists(_folder)) Directory.Delete(_folder, true);
+        base.Dispose();
+    }
+
+    [Fact]
+    public void AProjectOverrideIsSavedWithTheProjectAndLeavesTheUsersValuesAlone()
+    {
+        PreferencesSection section = Preferences.Create(typeof(SharedPreferences));
+        ((SharedPreferences)section.Instance).TabSize = 2;
+        Preferences.Changed(section);
+
+        Preferences.SetProjectOverride(section, true);
+        ((SharedPreferences)section.Instance).TabSize = 8;
+        Preferences.Changed(section);
+
+        Assert.True(File.Exists(Path.Combine(Project.ProjectSettingsPath, "Preferences", section.FileName)));
+        Assert.Equal(8, ((SharedPreferences)Preferences.Create(typeof(SharedPreferences)).Instance).TabSize);
+
+        Preferences.SetProjectOverride(section, false);
+
+        Assert.False(section.IsProjectOverride);
+        Assert.Equal(2, ((SharedPreferences)section.Instance).TabSize);
+    }
+}

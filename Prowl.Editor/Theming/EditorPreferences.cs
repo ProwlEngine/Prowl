@@ -24,6 +24,9 @@ public sealed class EditorPreferencesAttribute(string name, string icon = "", in
     public string Name { get; } = name;
     public string Icon { get; } = icon;
     public int Order { get; } = order;
+
+    /// <summary>The section can be overridden for one project, saved in its ProjectSettings folder so it is shared with the team.</summary>
+    public bool ProjectOverridable { get; init; }
 }
 
 /// <summary>
@@ -47,7 +50,11 @@ public sealed class PreferencesSection
     public required string Name { get; init; }
     public required string Icon { get; init; }
     public required int Order { get; init; }
+    public required bool ProjectOverridable { get; init; }
     public required EditorPreferences Instance { get; init; }
+
+    /// <summary>True while the open project's own values are in use.</summary>
+    public bool IsProjectOverride { get; internal set; }
 
     /// <summary>A fresh instance, for reading the default values.</summary>
     public required EditorPreferences Defaults { get; init; }
@@ -109,11 +116,39 @@ public static class Preferences
             Name = attr.Name,
             Icon = attr.Icon,
             Order = attr.Order,
+            ProjectOverridable = attr.ProjectOverridable,
             Instance = (EditorPreferences)Activator.CreateInstance(type)!,
             Defaults = (EditorPreferences)Activator.CreateInstance(type)!,
         };
         Load(section);
         return section;
+    }
+
+    /// <summary>The ProjectSettings folder project overrides are saved in, or null with no project open.</summary>
+    public static string? ProjectFolderPath => Projects.Project.Current is { } project ? Path.Combine(project.ProjectSettingsPath, "Preferences") : null;
+
+    /// <summary>Loads every section again, so project overrides follow the project that was opened.</summary>
+    public static void OnProjectOpened()
+    {
+        foreach (PreferencesSection section in _sections) Load(section);
+    }
+
+    /// <summary>Turns a project override on, starting from the current values, or off, going back to the user's own.</summary>
+    public static void SetProjectOverride(PreferencesSection section, bool on)
+    {
+        if (!section.ProjectOverridable || ProjectFolderPath is not { } folder || on == section.IsProjectOverride) return;
+
+        string path = Path.Combine(folder, section.FileName);
+        if (on)
+        {
+            section.IsProjectOverride = true;
+            Save(section);
+            return;
+        }
+
+        try { File.Delete(path); }
+        catch (Exception ex) { Debug.LogWarning($"[Preferences] Could not delete '{path}': {ex.Message}"); }
+        Load(section);
     }
 
     /// <summary>Saves and applies a section after one of its values changed.</summary>
@@ -145,8 +180,7 @@ public static class Preferences
     /// <summary>Puts every field of a section back to its default value.</summary>
     public static void Reset(PreferencesSection section)
     {
-        foreach (FieldInfo field in PropertyGridUtils.GetSerializableFields(section.Type))
-            field.SetValue(section.Instance, Copy(field.GetValue(section.Defaults), field.FieldType));
+        CopyFields(section.Defaults, section.Instance, section.Type);
         Changed(section);
     }
 
@@ -154,7 +188,13 @@ public static class Preferences
     public static void ResetAll()
     {
         EditorSettings.Replace(new EditorSettings());
-        foreach (PreferencesSection section in _sections) Reset(section);
+        // Only the user's own files go: project overrides belong to their projects.
+        foreach (PreferencesSection section in _sections)
+        {
+            string userFile = Path.Combine(FolderPath, section.FileName);
+            if (File.Exists(userFile)) File.Delete(userFile);
+            Load(section);
+        }
     }
 
     /// <summary>The file extension of a settings profile.</summary>
@@ -178,7 +218,14 @@ public static class Preferences
         using ZipArchive zip = ZipFile.Open(path, ZipArchiveMode.Create);
         WriteEntry(zip, ProfileSettingsEntry, settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         foreach (PreferencesSection section in _sections)
-            WriteEntry(zip, ProfileSectionFolder + section.FileName, Serializer.Serialize(section.Instance, TypeMode.Auto).WriteToYaml());
+        {
+            // A project override belongs to the project, so the profile takes the user's own file.
+            string userFile = Path.Combine(FolderPath, section.FileName);
+            if (!section.IsProjectOverride)
+                WriteEntry(zip, ProfileSectionFolder + section.FileName, Serializer.Serialize(section.Instance, TypeMode.Auto).WriteToYaml());
+            else if (File.Exists(userFile))
+                WriteEntry(zip, ProfileSectionFolder + section.FileName, File.ReadAllText(userFile));
+        }
     }
 
     /// <summary>Replaces every preference with a profile's. Sections the profile does not have go back to their defaults.</summary>
@@ -192,13 +239,14 @@ public static class Preferences
 
         foreach (PreferencesSection section in _sections)
         {
-            if (ReadEntry(zip, ProfileSectionFolder + section.FileName) is not { } yaml)
+            string userFile = Path.Combine(FolderPath, section.FileName);
+            if (ReadEntry(zip, ProfileSectionFolder + section.FileName) is { } yaml)
             {
-                Reset(section);
-                continue;
+                Directory.CreateDirectory(FolderPath);
+                File.WriteAllText(userFile, yaml);
             }
-            Directory.CreateDirectory(FolderPath);
-            File.WriteAllText(Path.Combine(FolderPath, section.FileName), yaml);
+            else if (File.Exists(userFile))
+                File.Delete(userFile);
             Load(section);
         }
     }
@@ -217,37 +265,55 @@ public static class Preferences
         return reader.ReadToEnd();
     }
 
+    // Defaults, then the user's file, then the open project's override when it has one.
     private static void Load(PreferencesSection section)
     {
-        string path = Path.Combine(FolderPath, section.FileName);
-        if (File.Exists(path))
-        {
-            try
-            {
-                EchoObject echo = EchoObject.ReadFromYaml(File.ReadAllText(path));
-                if (Serializer.Deserialize(echo, section.Type) is EditorPreferences loaded)
-                    EditorRegistries.CopySettingsFields(loaded, section.Instance);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[Preferences] Could not read '{path}', using defaults: {ex.Message}");
-            }
-        }
+        CopyFields(section.Defaults, section.Instance, section.Type);
+        ReadInto(section, Path.Combine(FolderPath, section.FileName));
+
+        section.IsProjectOverride = false;
+        if (section.ProjectOverridable && ProjectFolderPath is { } folder)
+            section.IsProjectOverride = ReadInto(section, Path.Combine(folder, section.FileName));
+
         ApplySafely(section);
+    }
+
+    private static bool ReadInto(PreferencesSection section, string path)
+    {
+        if (!File.Exists(path)) return false;
+        try
+        {
+            EchoObject echo = EchoObject.ReadFromYaml(File.ReadAllText(path));
+            if (Serializer.Deserialize(echo, section.Type) is not EditorPreferences loaded) return false;
+            EditorRegistries.CopySettingsFields(loaded, section.Instance);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[Preferences] Could not read '{path}': {ex.Message}");
+            return false;
+        }
     }
 
     private static void Save(PreferencesSection section)
     {
-        string path = Path.Combine(FolderPath, section.FileName);
+        string folder = section.IsProjectOverride && ProjectFolderPath is { } project ? project : FolderPath;
+        string path = Path.Combine(folder, section.FileName);
         try
         {
-            Directory.CreateDirectory(FolderPath);
+            Directory.CreateDirectory(folder);
             File.WriteAllText(path, Serializer.Serialize(section.Instance, TypeMode.Auto).WriteToYaml());
         }
         catch (Exception ex)
         {
             Debug.LogWarning($"[Preferences] Could not save '{path}': {ex.Message}");
         }
+    }
+
+    private static void CopyFields(object source, object target, Type type)
+    {
+        foreach (FieldInfo field in PropertyGridUtils.GetSerializableFields(type))
+            field.SetValue(target, Copy(field.GetValue(source), field.FieldType));
     }
 
     private static void ApplySafely(PreferencesSection section)
