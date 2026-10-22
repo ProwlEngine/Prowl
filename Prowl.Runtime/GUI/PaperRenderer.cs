@@ -6,13 +6,11 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 using Prowl.Graphite;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Quill;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
-using GRenderPipeline = Prowl.Graphite.RenderGraph.RenderPipeline;
 using GTexture = Prowl.Graphite.Texture;
 using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
 using IndexFormat = Prowl.Graphite.IndexFormat;
@@ -21,7 +19,7 @@ namespace Prowl.Runtime.GUI;
 
 /// <summary>
 /// Draws Paper's canvas through Graphite. Each frame's geometry and draw calls are copied when Paper hands them over,
-/// and drawn by a host pipeline after the frame's views, into <see cref="Target"/> or the window, so the UI can show
+/// and drawn by a host pass after the frame's views, into <see cref="Target"/> or the window, so the UI can show
 /// what the views drew. Backdrop blur captures what is under a frosted shape and blurs it with dual Kawase.
 /// </summary>
 public class PaperRenderer : ICanvasRenderer
@@ -51,34 +49,31 @@ public class PaperRenderer : ICanvasRenderer
     private Texture2D _defaultTexture = null!;
     private int _fbWidth;
     private int _fbHeight;
-    private readonly Dictionary<Framebuffer, (GRenderPipeline Pipeline, UiPass Pass)> _pipelines = [];
+    private readonly Dictionary<Framebuffer, UiPass> _passes = [];
 
     public bool SupportsBackdropBlur => true;
 
     /// <summary>Where the UI draws, null for the window.</summary>
     public RenderTexture? Target { get; set; }
 
-    // A pipeline per target, since the graph imports the target it draws into when it is built
-    private GRenderPipeline PipelineFor(Framebuffer target)
+    // A pass per target, since it keeps the blur chain built for that target's size
+    private UiPass PassFor(Framebuffer target)
     {
-        if (_pipelines.TryGetValue(target, out (GRenderPipeline Pipeline, UiPass Pass) entry))
-            return entry.Pipeline;
+        if (_passes.TryGetValue(target, out UiPass? existing))
+            return existing;
 
         List<Framebuffer> stale = [];
-        foreach (Framebuffer framebuffer in _pipelines.Keys)
+        foreach (Framebuffer framebuffer in _passes.Keys)
             if (framebuffer.IsDisposed) stale.Add(framebuffer);
         foreach (Framebuffer framebuffer in stale)
         {
-            (GRenderPipeline pipeline, UiPass pass) = _pipelines[framebuffer];
-            Graphics.DeferDispose(pass);
-            Graphics.DeferDispose(pipeline);
-            _pipelines.Remove(framebuffer);
+            Graphics.DeferDispose(_passes[framebuffer]);
+            _passes.Remove(framebuffer);
         }
 
         UiPass created = new(new Graphite.RenderTexture(target));
-        entry = (new GRenderPipeline([created]) { Name = "Paper" }, created);
-        _pipelines[target] = entry;
-        return entry.Pipeline;
+        _passes[target] = created;
+        return created;
     }
 
     public void Initialize(int width, int height)
@@ -134,11 +129,10 @@ public class PaperRenderer : ICanvasRenderer
     }
 
     /// <summary>A frame of UI as copied from Paper, and the target it draws into.</summary>
-    private sealed class UiView : IRenderView
+    private sealed class UiView
     {
         public required Framebuffer Framebuffer;
         public required uint Width, Height;
-        public required int Id;
         public required byte[] Vertices;
         public required uint[] Indices;
         public required Call[] Calls;
@@ -146,14 +140,7 @@ public class PaperRenderer : ICanvasRenderer
         public required bool Clear;
         public required Sampler LinearClamp;
         public required GTexture White;
-
-        public uint PixelWidth => Width;
-        public uint PixelHeight => Height;
-        public int ViewId => Id;
-        public string Name => "Paper";
     }
-
-    private readonly int _viewId = Graphics.NewViewId();
 
     public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
     {
@@ -198,7 +185,6 @@ public class PaperRenderer : ICanvasRenderer
             Framebuffer = framebuffer,
             Width = (uint)target.Width,
             Height = (uint)target.Height,
-            Id = _viewId,
             Vertices = MemoryMarshal.AsBytes(canvas.Vertices).ToArray(),
             Indices = canvas.Indices.ToArray(),
             Calls = calls,
@@ -207,7 +193,8 @@ public class PaperRenderer : ICanvasRenderer
             LinearClamp = Graphics.GetSampler(SamplerDescription.Linear with { AddressModeU = SamplerAddressMode.Clamp, AddressModeV = SamplerAddressMode.Clamp, AddressModeW = SamplerAddressMode.Clamp }),
             White = white,
         };
-        Graphics.AddPipeline(new GraphDispatch(PipelineFor(framebuffer), [frame]));
+        UiPass pass = PassFor(framebuffer);
+        Graphics.AddHostPass(graph => pass.Add(graph, frame));
     }
 
     /// <summary>
@@ -243,7 +230,7 @@ public class PaperRenderer : ICanvasRenderer
     }
 
     // Draws a frame of UI into its target. Render thread.
-    private sealed class UiPass(Graphite.RenderTexture target) : IPass, IDisposable
+    private sealed class UiPass(Graphite.RenderTexture target) : IDisposable
     {
         private ShaderPass? _canvasPass;
         private GraphicsProgram? _canvas;
@@ -258,10 +245,13 @@ public class PaperRenderer : ICanvasRenderer
         private uint _builtW, _builtH;
         private PixelFormat _builtFormat;
 
-        public string Name => "Paper";
-
-        // Imported so the backdrop blur may sample what is already in the target
-        public void Setup(RenderContextBuilder builder) => builder.DeclareImportedTexture("Paper Target", target, TextureState.Attachment | TextureState.Sampled);
+        // Sampled as well so the backdrop blur may read what is already in the target
+        public void Add(FrameGraph graph, UiView view)
+        {
+            TextureHandle handle = graph.Import(target);
+            TargetLoadStoreOps ops = new(view.Clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 1f)) : AttachmentOps.Loaded, AttachmentOps.Loaded);
+            graph.AddPass("Paper", pass => pass.Write(handle, TextureState.Attachment | TextureState.Sampled, firstWrite: ops), context => Render(context, view));
+        }
 
         private void EnsurePrograms(GraphicsDevice device)
         {
@@ -286,9 +276,9 @@ public class PaperRenderer : ICanvasRenderer
             _canvas = device.ResourceFactory.CreateGraphicsProgram(description);
         }
 
-        public void Render(RenderContext context, CommandBuffer cmd)
+        private void Render(PassContext context, UiView view)
         {
-            UiView view = context.ViewAs<UiView>();
+            CommandBuffer cmd = context.Command;
             GraphicsDevice device = Graphics.Device!;
             EnsurePrograms(device);
             bool hasGeometry = view.Calls.Length > 0 && view.Vertices.Length > 0 && view.Indices.Length > 0;
@@ -303,7 +293,6 @@ public class PaperRenderer : ICanvasRenderer
             }
 
             Framebuffer target = view.Framebuffer;
-            cmd.SetFramebuffer(target, view.Clear ? new TargetLoadStoreOps(AttachmentOps.Clear(new Color(0f, 0f, 0f, 1f)), AttachmentOps.Loaded) : new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
             if (!hasGeometry) return;
 
             // Targets hold their bottom row first, as Graphite presents views
@@ -436,12 +425,9 @@ public class PaperRenderer : ICanvasRenderer
     public void Cleanup()
     {
         Graphics.Renderer?.WaitForRenderThread();
-        foreach ((GRenderPipeline pipeline, UiPass pass) in _pipelines.Values)
-        {
+        foreach (UiPass pass in _passes.Values)
             pass.Dispose();
-            pipeline.Dispose();
-        }
-        _pipelines.Clear();
+        _passes.Clear();
         if (_defaultTexture.IsValid()) _defaultTexture.Dispose();
     }
 

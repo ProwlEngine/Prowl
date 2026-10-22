@@ -23,7 +23,7 @@ namespace Prowl.Runtime;
 
 /// <summary>
 /// Prowl's link to the GPU: one Vulkan device and one Graphite renderer for the application, and the frame every view
-/// and host pipeline joins before <see cref="SubmitFrame"/>. Without a window there is no device, and every GPU object
+/// and host pass joins before <see cref="SubmitFrame"/>. Without a window there is no device, and every GPU object
 /// stays absent while its CPU state works as usual.
 /// </summary>
 // Script hot reload must not migrate these statics. Nothing here references user types, so there is nothing to migrate.
@@ -32,7 +32,8 @@ public static class Graphics
 {
     private static GlslShaderCompiler? s_compiler;
     private static readonly List<ViewDesc> s_views = [];
-    private static readonly List<GraphDispatch> s_pipelines = [];
+    private static readonly List<Action<FrameGraph>> s_hostPasses = [];
+    private static FrameGraph? s_hostGraph;
     private static readonly Dictionary<SamplerDescription, Sampler> s_samplers = [];
     private static readonly List<IDisposable> s_deferred = [];
     private static int s_nextViewId = 1;
@@ -213,11 +214,29 @@ public static class Graphics
         s_views.Add(view);
     }
 
-    /// <summary>Adds a host pipeline to this frame, run after every view. Main thread.</summary>
-    public static void AddPipeline(GraphDispatch pipeline)
+    /// <summary>
+    /// Adds host passes to this frame, recorded into a graph that executes right after the renderer's views, on the render
+    /// thread. Main thread.
+    /// </summary>
+    public static void AddHostPass(Action<FrameGraph> record)
     {
         if (Renderer == null) return;
-        s_pipelines.Add(pipeline);
+        s_hostPasses.Add(record);
+    }
+
+    private static void RunHostPasses(Action<FrameGraph>[] records, bool succeeded)
+    {
+        if (!succeeded || records.Length == 0 || Device == null) return;
+        FrameGraph graph = s_hostGraph ??= new FrameGraph(Device, "Prowl Host");
+        try
+        {
+            foreach (Action<FrameGraph> record in records)
+                record(graph);
+        }
+        finally
+        {
+            graph.Execute();
+        }
     }
 
     private static Action? s_frameStarted;
@@ -265,7 +284,7 @@ public static class Graphics
         if (Renderer == null)
         {
             s_views.Clear();
-            s_pipelines.Clear();
+            s_hostPasses.Clear();
             return;
         }
 
@@ -275,8 +294,17 @@ public static class Graphics
         if (Device!.MainSwapchain is { } swapchain && WindowTarget is { } window && window.MainTexture.GpuTexture is { } source && swapchain.Framebuffer != null)
         {
             s_present ??= new WindowPresent();
-            s_pipelines.Add(s_present.Dispatch(swapchain.Framebuffer, source));
+            Framebuffer framebuffer = swapchain.Framebuffer;
+            s_hostPasses.Add(graph => s_present.Add(graph, framebuffer, source));
         }
+
+        Action<FrameGraph>[] hostPasses = s_hostPasses.ToArray();
+        Action<bool>? external = s_frameSubmitted;
+        Action<bool> submitted = succeeded =>
+        {
+            try { RunHostPasses(hostPasses, succeeded); }
+            finally { external?.Invoke(succeeded); }
+        };
 
         s_time += deltaTime;
         long start = Stopwatch.GetTimestamp();
@@ -285,10 +313,9 @@ public static class Graphics
             Renderer.SubmitFrame(new FrameDesc
             {
                 Views = s_views.ToArray(),
-                Pipelines = s_pipelines.ToArray(),
                 Time = new FrameTime { Time = s_time, DeltaTime = deltaTime, FrameIndex = FrameIndex },
                 Started = s_frameStarted,
-                Submitted = s_frameSubmitted,
+                Submitted = submitted,
             });
         }
         s_frameStarted = null;
@@ -296,7 +323,7 @@ public static class Graphics
         LastFrameWaitMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         FrameIndex++;
         s_views.Clear();
-        s_pipelines.Clear();
+        s_hostPasses.Clear();
         FlushDeferred();
     }
 
@@ -414,8 +441,9 @@ public static class Graphics
         }
         foreach (Sampler sampler in s_samplers.Values) sampler.Dispose();
         s_samplers.Clear();
-        s_present?.Dispose();
         s_present = null;
+        s_hostGraph?.Dispose();
+        s_hostGraph = null;
         if (s_windowTarget.IsValid()) s_windowTarget.Dispose();
         s_windowTarget = null;
         BuiltInShaders.Release();
