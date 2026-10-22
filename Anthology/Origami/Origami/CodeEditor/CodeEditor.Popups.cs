@@ -1121,6 +1121,12 @@ public sealed partial class CodeEditor
         Continue(Session.FormatAsync(start, length, CancellationToken.None), Document.Version, edits => ApplyEdits(edits));
     }
 
+    public void OrganizeUsings()
+    {
+        if (Session == null || IsReadOnly) return;
+        Continue(Session.OrganizeUsingsAsync(CancellationToken.None), Document.Version, edits => ApplyEdits(edits));
+    }
+
     private void FormatOnType(char c)
     {
         if (!Options.FormatOnType || Session == null || IsReadOnly || _selections.Count != 1 || !_language.IsFormatOnTypeTrigger(c)) return;

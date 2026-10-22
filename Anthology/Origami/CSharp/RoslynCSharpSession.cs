@@ -421,6 +421,26 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
             return FormatSpan(document, root, TextSpan.FromBounds(node.FullSpan.Start, token.Span.End), ct);
         }, ct);
 
+    public override Task<IReadOnlyList<CodeTextEdit>> OrganizeUsingsAsync(CancellationToken ct)
+        => Run<IReadOnlyList<CodeTextEdit>>(Array.Empty<CodeTextEdit>(), async (document, ct) =>
+        {
+            var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
+            var model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
+            if (root == null || model == null) return Array.Empty<CodeTextEdit>();
+
+            // CS8019 is the compiler's own "unnecessary using directive".
+            var unused = model.GetDiagnostics(cancellationToken: ct)
+                .Where(d => d.Id == "CS8019")
+                .Select(d => root.FindNode(d.Location.SourceSpan))
+                .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.UsingDirectiveSyntax>()
+                .ToList();
+            var cleaned = unused.Count > 0 ? root.RemoveNodes(unused, SyntaxRemoveOptions.KeepDirectives)! : root;
+
+            var organized = await Formatter.OrganizeImportsAsync(document.WithSyntaxRoot(cleaned), ct).ConfigureAwait(false);
+            var changes = await organized.GetTextChangesAsync(document, ct).ConfigureAwait(false);
+            return changes.Select(c => new CodeTextEdit(c.Span.Start, c.Span.Length, c.NewText ?? "")).ToList();
+        }, ct);
+
     private static IReadOnlyList<CodeTextEdit> FormatSpan(Document document, SyntaxNode root, TextSpan span, CancellationToken ct)
     {
         var workspace = document.Project.Solution.Workspace;
