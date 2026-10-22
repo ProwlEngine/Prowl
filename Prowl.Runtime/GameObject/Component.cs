@@ -305,6 +305,8 @@ public abstract partial class Component : EngineObject, ISerializationCallbackRe
     /// <param name="go">The GameObject to attach to.</param>
     internal void AttachToGameObject(GameObject go)
     {
+        EventAttachmentVersion++;
+        SceneEvents.Invalidate();
         _go = go;
 
         bool isEnabled = _enabled && _go.EnabledInHierarchy;
@@ -316,7 +318,14 @@ public abstract partial class Component : EngineObject, ISerializationCallbackRe
     /// frame, so without this a removed component keeps ticking off the already-built dispatch list
     /// while nothing can find it on the GameObject any more.
     /// </summary>
-    internal void DetachFromGameObject() => _enabledInHierarchy = false;
+    [SerializeIgnore, ReloadIgnore] internal int EventAttachmentVersion;
+
+    internal void DetachFromGameObject()
+    {
+        EventAttachmentVersion++;
+        SceneEvents.Invalidate();
+        _enabledInHierarchy = false;
+    }
 
     /// <summary>
     /// Updates the enabled state based on changes in the hierarchy.
@@ -638,6 +647,7 @@ public abstract partial class Component : EngineObject, ISerializationCallbackRe
 
     private protected override void OnDisposed()
     {
+        SceneEvents.Invalidate();
         CancellationTokenSource? cancellation = Interlocked.Exchange(ref _destroyCancellation, null);
         if (cancellation == null) return;
 

@@ -55,3 +55,28 @@ public class Player : Component
 ```powershell
 dotnet test Prowl.Runtime.Test/Prowl.Runtime.Test.csproj --filter 'FullyQualifiedName~Network|FullyQualifiedName~TransformTimeline'
 ```
+
+## Typed scene events
+
+Components can implement ordinary interfaces and receive local, synchronous events:
+
+```csharp
+public interface IDamageEvents : ISceneEvent<IDamageEvents>
+{
+    void OnDamaged(float amount);
+}
+
+// One object, its tree (the default), or an explicitly selected scene.
+gameObject.RunEvent<IDamageEvents>(e => e.OnDamaged(10), EventScope.Self);
+gameObject.RunEvent<IDamageEvents>(e => e.OnDamaged(10));
+scene.RunEvent<IDamageEvents>(e => e.OnDamaged(10));
+IDamageEvents.Post(e => e.OnDamaged(10)); // Scene.Current
+```
+
+Dispatch runs on the main thread. Disabled components and disabled objects are excluded unless
+`includeInactive: true` is supplied. Listener order is `ExecutionOrder`, then stable scene insertion
+order or tree/component order. Membership is captured at entry: new listeners wait until the next
+dispatch; removed, moved out of scope, disposed, and destroy-queued listeners are skipped. Eligibility
+is checked again before each call. Nested dispatch captures its own membership, and one listener's
+exception is logged without stopping the others. Cached targets are invalidated on structural edits
+and hot reload; warm dispatch with a reused delegate allocates no memory. Events do not send RPCs.

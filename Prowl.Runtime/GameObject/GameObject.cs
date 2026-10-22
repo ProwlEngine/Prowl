@@ -304,6 +304,8 @@ public partial class GameObject : EngineObject, ISerializable
         if (NewParent == _parent)
             return true;
 
+        SceneEvents.Invalidate();
+
         // Make sure that the new father is not a child of this transform.
         if (IsChildOrSameTransform(NewParent, this))
             return false;

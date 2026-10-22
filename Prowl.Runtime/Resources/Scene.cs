@@ -385,6 +385,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     internal void OnHotReload()
     {
+        SceneEvents.Reset();
         foreach (GameObject go in _allObj)
             if (go is not null && !go.IsDisposed)
                 go.OnHotReload();
@@ -731,6 +732,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     internal void Detach(GameObject obj)
     {
+        SceneEvents.Invalidate();
         foreach (GameObject child in obj.Children.ToArray())
             Detach(child);
 
@@ -751,6 +753,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <inheritdoc cref="Detach"/>
     internal void Attach(GameObject obj)
     {
+        SceneEvents.Invalidate();
         if (_allObjSet.Add(obj))
         {
             _allObj.Add(obj);
@@ -771,6 +774,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     private void AddObject(GameObject obj)
     {
+        SceneEvents.Invalidate();
         if (_allObjSet.Add(obj))
         {
             _allObj.Add(obj);
@@ -806,6 +810,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     private void RemoveObject(GameObject obj)
     {
+        SceneEvents.Invalidate();
         // Create a copy to avoid modification during enumeration
         List<GameObject> children = [.. obj.Children];
         foreach (GameObject child in children)
