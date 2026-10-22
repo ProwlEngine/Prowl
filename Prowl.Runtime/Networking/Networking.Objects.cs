@@ -7,6 +7,7 @@ using System.IO;
 
 using Prowl.Echo;
 using Prowl.Runtime.Diagnostics;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Warp;
 
@@ -235,6 +236,8 @@ public static partial class Networking
             return;
         }
 
+        NetSession? session = Session;
+        Scene scene = s_scene;
         Guid id = reader.ReadGuid();
         Guid parentId = reader.ReadGuid();
         int owner = (int)reader.ReadVarUInt32() - 1;
@@ -243,53 +246,59 @@ public static partial class Networking
         EchoObject echo = Decompress(reader.ReadBytesWithLength());
 
         GameObject? go =
-            GameObject.DeserializePreservingIdentifiers(echo, SceneReferenceResolver.ContextForLinking(s_scene));
+            GameObject.DeserializePreservingIdentifiers(echo, SceneReferenceResolver.ContextForLinking(scene));
         if (go.IsNotValid())
         {
             throw new InvalidDataException("The host sent a networked object that could not be read.");
         }
 
-        if (go!.Identifier != id)
-        {
-            throw new InvalidDataException("A spawned object's identifier doesn't match its message.");
-        }
-
-        // Its [Sync] values go in before it joins the scene, so its components are enabled with them. Until
-        // then, what it's made of is found by identifier from here, for values that refer to its own parts.
-        s_spawning = new Dictionary<Guid, EngineObject>();
-        foreach (GameObject part in (List<GameObject>)[go, .. go.GetChildrenDeep()])
-        {
-            s_spawning[part.Identifier] = part;
-            foreach (Component component in part.GetComponents<Component>())
-            {
-                s_spawning[component.Identifier] = component;
-            }
-        }
-
+        bool attached = false;
         try
         {
-            ApplySyncState(sender, ref reader, null, true);
+            if (Session != session || s_scene != scene) return;
+            if (go!.Identifier != id)
+                throw new InvalidDataException("A spawned object's identifier doesn't match its message.");
+
+            // Resolve initial Sync references within the new tree before enabling its components.
+            s_spawning = new Dictionary<Guid, EngineObject>();
+            try
+            {
+                foreach (GameObject part in (List<GameObject>)[go, .. go.GetChildrenDeep()])
+                {
+                    s_spawning[part.Identifier] = part;
+                    foreach (Component component in part.GetComponents<Component>())
+                        s_spawning[component.Identifier] = component;
+                }
+                ApplySyncState(sender, ref reader, null, true, requireEnd: true);
+            }
+            finally { s_spawning = null; }
+
+            if (Session != session || s_scene != scene) return;
+            NetworkEntry entry = new(go) { Owner = owner, Orphaned = orphaned, Generation = generation };
+            go.ApplyNetworkOrphaned(orphaned);
+            s_entries.Add(entry);
+            ControlChanged(go);
+            if (FindByIdentifier(parentId) is GameObject parent)
+                go.SetParent(parent, false);
+            else
+                scene.Add(go);
+
+            attached = true;
+            if (Session != session || s_scene != scene) return;
+            IndexTree(go);
+            NotifySpawn(entry);
         }
         finally
         {
-            s_spawning = null;
+            // Scene/parent ownership starts only after successful attachment. Failed metadata,
+            // Sync state, or attachment must release components and any resources they own.
+            if (!attached)
+            {
+                if (s_entries.TryGetValue(go!.Identifier, out NetworkEntry? pending) && pending.GameObject == go)
+                    s_entries.Remove(go.Identifier);
+                go.Dispose();
+            }
         }
-
-        NetworkEntry entry = new(go) { Owner = owner, Orphaned = orphaned, Generation = generation };
-        go.ApplyNetworkOrphaned(orphaned);
-        s_entries.Add(entry);
-        ControlChanged(go);
-        if (FindByIdentifier(parentId) is GameObject parent)
-        {
-            go.SetParent(parent, false);
-        }
-        else
-        {
-            s_scene.Add(go);
-        }
-
-        IndexTree(go);
-        NotifySpawn(entry);
     }
 
     /// <summary>A GameObject was disposed. On the host, a networked object going away goes away everywhere.</summary>
