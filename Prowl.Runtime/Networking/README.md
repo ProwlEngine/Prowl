@@ -35,6 +35,15 @@ in a datagram. Reliable fallback can add latency under packet loss. Raw Warp mes
 explicit delivery requirements. The session's configured `MaxMessageSize` must allow at least
 74 bytes for scene replication; this is a logical message limit, not a transport packet limit.
 
+Incoming scenes and spawned objects have separate local decoding budgets, available in project
+networking settings or `NetworkConfiguration`: `MaxSnapshotDecompressedBytes` (64 MiB),
+`MaxSnapshotDepth` (128 levels, including the root), and `MaxSnapshotNodes` (250,000 Echo values,
+including containers and scalars). These limits apply to the next incoming snapshot or spawn.
+Decompression stops at the byte budget; lengths, container counts, total values, and nesting are
+validated before Echo builds the tree or the engine creates objects. Exceeding a budget ends the
+client session with `ProtocolError`. Increase the local budgets for larger trusted scenes; the
+compressed session message limit still applies independently.
+
 ## Replicated state
 
 ```csharp

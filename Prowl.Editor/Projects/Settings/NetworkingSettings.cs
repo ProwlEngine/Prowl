@@ -66,6 +66,12 @@ public sealed class NetworkingSettings : ProjectSettingsBase
         Number(paper, "tick", "Tick Rate (Hz)", Configuration.TickRate, v => Configuration.TickRate = v, 1, 240);
         Number(paper, "interpolation", "Interpolation Delay (ms)", Configuration.InterpolationMilliseconds, v => Configuration.InterpolationMilliseconds = v, 0, 5000);
 
+        Header(paper, "snapshots", "Snapshot Limits");
+        Integer(paper, "snapshotbytes", "Maximum Decompressed Bytes", Configuration.MaxSnapshotDecompressedBytes, v => Configuration.MaxSnapshotDecompressedBytes = v, 1, 1073741824);
+        Integer(paper, "snapshotdepth", "Maximum Nesting Depth", Configuration.MaxSnapshotDepth, v => Configuration.MaxSnapshotDepth = v, 1, 256);
+        Integer(paper, "snapshotnodes", "Maximum Values", Configuration.MaxSnapshotNodes, v => Configuration.MaxSnapshotNodes = v, 1, 1000000);
+        Origami.Label(paper, "netsettings_snapshot_note", "Limits apply to incoming scenes and spawned objects before they are created.").Show();
+
         if (Configuration.Transport != NetworkTransport.Kcp) return;
         Header(paper, "reliability", "KCP Reliability");
         Origami.Label(paper, "netsettings_agreement", "Peers must use matching batching settings, protocol IDs, MTUs, and send/receive windows.").Show();

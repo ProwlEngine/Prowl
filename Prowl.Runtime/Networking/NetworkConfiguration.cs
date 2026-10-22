@@ -21,6 +21,12 @@ public sealed class NetworkConfiguration
     public float LatencyMilliseconds;
     public string LocalAddress = "host";
     public int MaxMessageSize = 16 * 1024 * 1024;
+    /// <summary>Maximum decompressed Echo bytes in one scene snapshot or spawned object.</summary>
+    public int MaxSnapshotDecompressedBytes = 64 * 1024 * 1024;
+    /// <summary>Maximum Echo value nesting, including the root, before engine objects are created.</summary>
+    public int MaxSnapshotDepth = 128;
+    /// <summary>Maximum Echo values, including container and scalar values, in one snapshot or spawn.</summary>
+    public int MaxSnapshotNodes = 250_000;
     public int MaxPeers = 64;
     public int MaxRetransmits = 40;
     public int Mtu = 1200;
@@ -65,6 +71,9 @@ public sealed class NetworkConfiguration
         copy.InterpolationMilliseconds = Limit(copy.InterpolationMilliseconds, 0, 5000, 100);
         copy.MaxPeers = Math.Clamp(copy.MaxPeers, 1, 4096);
         copy.MaxMessageSize = Math.Clamp(copy.MaxMessageSize, 1024, 1024 * 1024 * 1024);
+        copy.MaxSnapshotDecompressedBytes = Math.Clamp(copy.MaxSnapshotDecompressedBytes, 1, 1024 * 1024 * 1024);
+        copy.MaxSnapshotDepth = Math.Clamp(copy.MaxSnapshotDepth, 1, 256);
+        copy.MaxSnapshotNodes = Math.Clamp(copy.MaxSnapshotNodes, 1, 1_000_000);
         copy.SceneLoadTimeoutSeconds = Limit(copy.SceneLoadTimeoutSeconds, 0.1f, 600, 60);
         copy.JoinTimeoutSeconds = Limit(copy.JoinTimeoutSeconds, 0.1f, 300, 10);
         copy.ConnectTimeoutSeconds = Limit(copy.ConnectTimeoutSeconds, 0.1f, 300, 5);

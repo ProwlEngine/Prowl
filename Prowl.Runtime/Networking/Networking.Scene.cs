@@ -232,7 +232,8 @@ public static partial class Networking
         using (ZLibStream zlib = new(compressed, CompressionLevel.Fastest, true))
         using (BinaryWriter writer = new(zlib))
         {
-            echo.WriteToBinary(writer);
+            // SnapshotDecoder validates this fixed-width wire layout before Echo reads it.
+            echo.WriteToBinary(writer, new BinarySerializationOptions { EncodingMode = BinaryEncodingMode.Performance });
         }
 
         return compressed.ToArray();
@@ -242,10 +243,7 @@ public static partial class Networking
     {
         try
         {
-            using MemoryStream stream = new(data.ToArray());
-            using ZLibStream zlib = new(stream, CompressionMode.Decompress);
-            using BinaryReader binary = new(zlib);
-            return EchoObject.ReadFromBinary(binary);
+            return SnapshotDecoder.Decode(data, s_configuration);
         }
         catch (Exception e) when (e is not InvalidDataException)
         {

@@ -90,10 +90,14 @@ public class NetworkConfigurationTests : RuntimeTestBase
     {
         var config = new NetworkConfiguration { TickRate = float.NaN, InterpolationMilliseconds = -1,
             Port = 90000, MaxPeers = -5, Mtu = 100, PacketLossPercent = 150, LatencyMilliseconds = float.PositiveInfinity,
-            SimulateNetwork = true, UpdateIntervalMilliseconds = -1, SceneLoadTimeoutSeconds = float.NaN };
+            SimulateNetwork = true, UpdateIntervalMilliseconds = -1, SceneLoadTimeoutSeconds = float.NaN,
+            MaxSnapshotDecompressedBytes = -1, MaxSnapshotDepth = int.MaxValue, MaxSnapshotNodes = -1 };
         NetworkConfiguration normalized = config.ValidatedCopy();
         Assert.Equal(30, normalized.TickRate);
         Assert.Equal(60, normalized.SceneLoadTimeoutSeconds);
+        Assert.Equal(1, normalized.MaxSnapshotDecompressedBytes);
+        Assert.Equal(256, normalized.MaxSnapshotDepth);
+        Assert.Equal(1, normalized.MaxSnapshotNodes);
         Assert.Equal(0, normalized.InterpolationMilliseconds);
         Assert.Equal(65535, normalized.Port);
         Assert.Equal(1, normalized.MaxPeers);
