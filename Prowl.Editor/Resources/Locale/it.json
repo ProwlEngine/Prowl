@@ -575,6 +575,7 @@
   "pref.reset_everything_body": "Tema, scorciatoie, misure del layout e tutte le preferenze torneranno ai valori predefiniti. Continuare?",
   "pref.reset_to_default": "Ripristina predefiniti",
   "pref.press_key": "Premi un tasto...  (Esc per annullare)",
+  "pref.not_bound": "Non assegnato",
   "pref.shortcut_conflict": "Attiva anche {{names}}",
   "component.not_found": "Componente non trovato nella scena corrente",
   "component.looking_for": "In cerca di: {{name}}",

@@ -575,6 +575,7 @@
   "pref.reset_everything_body": "Theme, shortcuts, layout metrics and every preference go back to their defaults. Continue?",
   "pref.reset_to_default": "Reset to default",
   "pref.press_key": "Press key...  (Esc to cancel)",
+  "pref.not_bound": "Not Bound",
   "pref.shortcut_conflict": "Also fires {{names}}",
   "component.not_found": "Component not found in current scene",
   "component.looking_for": "Looking for: {{name}}",

@@ -575,6 +575,7 @@
   "pref.reset_everything_body": "El tema, los atajos, las medidas del diseno y todas las preferencias volveran a sus valores predeterminados. Continuar?",
   "pref.reset_to_default": "Restablecer valores",
   "pref.press_key": "Pulsa una tecla...  (Esc para cancelar)",
+  "pref.not_bound": "Sin asignar",
   "pref.shortcut_conflict": "Tambien activa {{names}}",
   "component.not_found": "Componente no encontrado en la escena actual",
   "component.looking_for": "Buscando: {{name}}",

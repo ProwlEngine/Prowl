@@ -575,6 +575,7 @@
   "pref.reset_everything_body": "テーマ、ショートカット、レイアウトの寸法、すべての設定がデフォルトに戻ります。続行しますか?",
   "pref.reset_to_default": "デフォルトに戻す",
   "pref.press_key": "キーを押してください...  (Escでキャンセル)",
+  "pref.not_bound": "未割り当て",
   "pref.shortcut_conflict": "{{names}} も実行されます",
   "component.not_found": "現在のシーンにコンポーネントが見つかりません",
   "component.looking_for": "検索中: {{name}}",

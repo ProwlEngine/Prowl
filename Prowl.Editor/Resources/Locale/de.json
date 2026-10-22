@@ -575,6 +575,7 @@
   "pref.reset_everything_body": "Thema, Tastenkuerzel, Layout-Masse und alle Einstellungen werden auf ihre Standardwerte zurueckgesetzt. Fortfahren?",
   "pref.reset_to_default": "Auf Standard zuruecksetzen",
   "pref.press_key": "Taste druecken...  (Esc zum Abbrechen)",
+  "pref.not_bound": "Nicht belegt",
   "pref.shortcut_conflict": "Loest auch {{names}} aus",
   "component.not_found": "Komponente in aktueller Szene nicht gefunden",
   "component.looking_for": "Gesucht: {{name}}",

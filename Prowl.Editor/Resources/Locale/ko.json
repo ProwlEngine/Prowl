@@ -575,6 +575,7 @@
   "pref.reset_everything_body": "테마, 단축키, 레이아웃 크기 및 모든 환경설정이 기본값으로 돌아갑니다. 계속하시겠습니까?",
   "pref.reset_to_default": "기본값으로 재설정",
   "pref.press_key": "키를 누르세요...  (Esc로 취소)",
+  "pref.not_bound": "할당 안 됨",
   "pref.shortcut_conflict": "{{names}}도 실행됨",
   "component.not_found": "현재 씬에서 컴포넌트를 찾을 수 없습니다",
   "component.looking_for": "찾는 중: {{name}}",

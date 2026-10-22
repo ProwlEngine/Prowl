@@ -575,6 +575,7 @@
   "pref.reset_everything_body": "主题、快捷键、布局尺寸及所有偏好设置都将恢复为默认值。是否继续?",
   "pref.reset_to_default": "重置为默认",
   "pref.press_key": "按键...  (Esc 取消)",
+  "pref.not_bound": "未绑定",
   "pref.shortcut_conflict": "同时触发 {{names}}",
   "component.not_found": "在当前场景中未找到组件",
   "component.looking_for": "正在查找: {{name}}",

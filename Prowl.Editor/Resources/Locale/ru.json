@@ -575,6 +575,7 @@
   "pref.reset_everything_body": "Тема, горячие клавиши, размеры макета и все настройки вернутся к значениям по умолчанию. Продолжить?",
   "pref.reset_to_default": "Сбросить по умолчанию",
   "pref.press_key": "Нажмите клавишу...  (Esc для отмены)",
+  "pref.not_bound": "Не назначено",
   "pref.shortcut_conflict": "Также срабатывает: {{names}}",
   "component.not_found": "Компонент не найден в текущей сцене",
   "component.looking_for": "Поиск: {{name}}",

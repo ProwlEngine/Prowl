@@ -575,6 +575,7 @@
   "pref.reset_everything_body": "Tema, kisayollar, yerlesim olculeri ve tum tercihler varsayilan degerlerine donecek. Devam edilsin mi?",
   "pref.reset_to_default": "Varsayilana sifirla",
   "pref.press_key": "Bir tusa basin...  (Iptal icin Esc)",
+  "pref.not_bound": "Atanmamis",
   "pref.shortcut_conflict": "Ayrica {{names}} tetiklenir",
   "component.not_found": "Bilesen gecerli sahnede bulunamadi",
   "component.looking_for": "Araniyor: {{name}}",

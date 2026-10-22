@@ -575,6 +575,7 @@
   "pref.reset_everything_body": "Motyw, skroty, wymiary ukladu i wszystkie preferencje wroca do wartosci domyslnych. Kontynuowac?",
   "pref.reset_to_default": "Przywroc domyslne",
   "pref.press_key": "Nacisnij klawisz...  (Esc aby anulowac)",
+  "pref.not_bound": "Nieprzypisany",
   "pref.shortcut_conflict": "Uruchamia tez {{names}}",
   "component.not_found": "Nie znaleziono komponentu w biezacej scenie",
   "component.looking_for": "Szukanie: {{name}}",

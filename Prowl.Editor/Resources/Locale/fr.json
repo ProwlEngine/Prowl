@@ -575,6 +575,7 @@
   "pref.reset_everything_body": "Le theme, les raccourcis, les dimensions de la disposition et toutes les preferences reviennent a leurs valeurs par defaut. Continuer ?",
   "pref.reset_to_default": "Reinitialiser par defaut",
   "pref.press_key": "Appuyez sur une touche...  (Echap pour annuler)",
+  "pref.not_bound": "Non assigne",
   "pref.shortcut_conflict": "Declenche aussi {{names}}",
   "component.not_found": "Composant introuvable dans la scene actuelle",
   "component.looking_for": "Recherche : {{name}}",

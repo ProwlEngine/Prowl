@@ -33,6 +33,9 @@ public class ShortcutBinding
 
     public ShortcutBinding Clone() => new(Key, Ctrl, Shift, Alt);
 
+    /// <summary>False for a shortcut with no key, which never fires.</summary>
+    public bool IsBound => Key != KeyCode.Unknown;
+
     public bool Equals(ShortcutBinding other)
         => Key == other.Key && Ctrl == other.Ctrl && Shift == other.Shift && Alt == other.Alt;
 }
@@ -139,7 +142,7 @@ public static class ShortcutManager
         if (!_shortcuts.TryGetValue(id, out ShortcutDefinition? def)) return false;
 
         ShortcutBinding b = def.Binding;
-        if (!Input.GetKeyDown(b.Key)) return false;
+        if (!b.IsBound || !Input.GetKeyDown(b.Key)) return false;
         if (b.Ctrl != IsPlatformCtrlPressed()) return false;
         if (b.Shift != Input.IsShiftPressed) return false;
         if (b.Alt != Input.IsAltPressed) return false;
@@ -217,7 +220,7 @@ public static class ShortcutManager
     {
         var conflicts = new List<ShortcutDefinition>();
         foreach (ShortcutDefinition other in _shortcuts.Values)
-            if (other != shortcut && other.Binding.Equals(binding) && shortcut.SharesScopeWith(other))
+            if (binding.IsBound && other != shortcut && other.Binding.Equals(binding) && shortcut.SharesScopeWith(other))
                 conflicts.Add(other);
         return conflicts;
     }
@@ -266,7 +269,7 @@ public static class ShortcutManager
     /// </summary>
     public static string GetDisplayString(ShortcutBinding? binding)
     {
-        if (binding == null) return "None";
+        if (binding == null || !binding.IsBound) return Rosetta.Loc.Get("pref.not_bound");
 
         bool isMac = RuntimeUtils.IsMac();
         var sb = new StringBuilder();
