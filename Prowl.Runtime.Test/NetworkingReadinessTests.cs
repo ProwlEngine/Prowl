@@ -300,6 +300,88 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
+    [Theory]
+    [InlineData(NetworkExecution.Inline, false)]
+    [InlineData(NetworkExecution.Inline, true)]
+    [InlineData(NetworkExecution.DedicatedThread, false)]
+    [InlineData(NetworkExecution.DedicatedThread, true)]
+    public void LocalSceneActivationBeforeFirstSnapshotDoesNotEndJoin(NetworkExecution execution, bool admitted)
+    {
+        NetworkConfiguration previous = Networking.Networking.Configuration;
+        Networking.Networking.Configure(new() { Execution = execution });
+        ReadinessHost();
+        using NetWriter snapshot = new();
+        Networking.Networking.WriteSnapshot(Scene.Current, snapshot);
+        Networking.Networking.Shutdown();
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        host.AutoReady = false;
+        Scene local = CreateScene();
+        Scene.Load(local); // The demo queues its initial scene before its first update starts joining.
+        try
+        {
+            NetSession session = Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            if (admitted)
+            {
+                // Admit the client while leaving its local scene activation queued.
+                for (int i = 0; i < 1000 && !Networking.Networking.IsActive; i++)
+                {
+                    Networking.Networking.Receive(); Networking.Networking.Flush(); host.Session.Update();
+                    Thread.Sleep(1);
+                }
+                Assert.True(Networking.Networking.IsActive);
+            }
+            Scene.ProcessPendingLoad();
+            Assert.Same(local, Scene.Current);
+            Assert.Same(session, Networking.Networking.Session);
+            Pump(() => Networking.Networking.JoinState == NetworkJoinState.WaitingForScene, host);
+
+            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
+            host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot.WrittenSpan), client);
+            Pump(() => host.Has(FakePeer.SceneLoaded), host);
+            Assert.NotSame(local, Scene.Current);
+            Assert.Equal(NetworkJoinState.Synchronizing, Networking.Networking.JoinState);
+            Assert.Same(session, Networking.Networking.Session);
+        }
+        finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
+    }
+
+    [Theory]
+    [InlineData(NetworkExecution.Inline, false)]
+    [InlineData(NetworkExecution.Inline, true)]
+    [InlineData(NetworkExecution.DedicatedThread, false)]
+    [InlineData(NetworkExecution.DedicatedThread, true)]
+    public void LocalSceneReplacementAfterSnapshotStillEndsJoin(NetworkExecution execution, bool activateNetworkScene)
+    {
+        NetworkConfiguration previous = Networking.Networking.Configuration;
+        Networking.Networking.Configure(new() { Execution = execution });
+        ReadinessHost();
+        using NetWriter snapshot = new();
+        Networking.Networking.WriteSnapshot(Scene.Current, snapshot);
+        Networking.Networking.Shutdown();
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        host.AutoReady = false;
+        host.Session.PeerJoined += peer => host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot.WrittenSpan), peer);
+        string? failure = null;
+        try
+        {
+            NetSession session = Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            session.Ended += (_, message) => failure = message;
+            for (int i = 0; i < 1000 && !Scene.IsLoadPending; i++)
+            {
+                Networking.Networking.Receive(); Networking.Networking.Flush(); host.Session.Update();
+                Thread.Sleep(1);
+            }
+            Assert.Equal(NetworkJoinState.Loading, Networking.Networking.JoinState);
+            if (activateNetworkScene) Scene.ProcessPendingLoad();
+            MakeCurrent(CreateScene());
+            Assert.Null(Networking.Networking.Session);
+            Assert.Equal("The network scene was replaced locally during the session.", failure);
+        }
+        finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
+    }
+
     [Fact]
     public void ClientTimesOutWhenAdmittedWithoutAScene()
     {

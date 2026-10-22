@@ -219,8 +219,8 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
 
     protected override void Tick()
     {
-        // A host shares its current scene, so it starts once the sample's scene is in place.
-        if (!_started && (IsClientWindow || Scene.Current == SampleScene))
+        // Start after the initial scene activates, so the local camera and HUD are ready on either peer.
+        if (!_started && Scene.Current == SampleScene)
         {
             _started = true;
             StartSession();

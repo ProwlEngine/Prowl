@@ -83,7 +83,9 @@ public static partial class Networking
 
     private static void OnNetworkSceneActivated()
     {
-        if (!IsClient)
+        // A joining client can still activate local scenes before the host supplies its first snapshot.
+        // Only guard scene replacement once there is a network scene to protect (including a queued one).
+        if (!IsClient || s_scene is null)
         {
             return;
         }
