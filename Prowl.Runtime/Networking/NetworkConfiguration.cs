@@ -32,6 +32,7 @@ public sealed class NetworkConfiguration
     public float InterpolationMilliseconds = 100;
     public float JitterMilliseconds;
     public float JoinTimeoutSeconds = 10;
+    public float SceneLoadTimeoutSeconds = 60;
     public float LatencyMilliseconds;
     public string LocalAddress = "host";
     public int MaxMessageSize = 16 * 1024 * 1024;
@@ -79,6 +80,7 @@ public sealed class NetworkConfiguration
         copy.InterpolationMilliseconds = Limit(copy.InterpolationMilliseconds, 0, 5000, 100);
         copy.MaxPeers = Math.Clamp(copy.MaxPeers, 1, 4096);
         copy.MaxMessageSize = Math.Clamp(copy.MaxMessageSize, 1024, 1024 * 1024 * 1024);
+        copy.SceneLoadTimeoutSeconds = Limit(copy.SceneLoadTimeoutSeconds, 0.1f, 600, 60);
         copy.JoinTimeoutSeconds = Limit(copy.JoinTimeoutSeconds, 0.1f, 300, 10);
         copy.ConnectTimeoutSeconds = Limit(copy.ConnectTimeoutSeconds, 0.1f, 300, 5);
         copy.TimeoutSeconds = Limit(copy.TimeoutSeconds, 0.1f, 300, 10);

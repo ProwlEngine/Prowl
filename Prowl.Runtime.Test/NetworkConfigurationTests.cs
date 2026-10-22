@@ -90,9 +90,10 @@ public class NetworkConfigurationTests : RuntimeTestBase
     {
         var config = new NetworkConfiguration { TickRate = float.NaN, InterpolationMilliseconds = -1,
             Port = 90000, MaxPeers = -5, Mtu = 100, PacketLossPercent = 150, LatencyMilliseconds = float.PositiveInfinity,
-            SimulateNetwork = true, UpdateIntervalMilliseconds = -1 };
+            SimulateNetwork = true, UpdateIntervalMilliseconds = -1, SceneLoadTimeoutSeconds = float.NaN };
         NetworkConfiguration normalized = config.ValidatedCopy();
         Assert.Equal(30, normalized.TickRate);
+        Assert.Equal(60, normalized.SceneLoadTimeoutSeconds);
         Assert.Equal(0, normalized.InterpolationMilliseconds);
         Assert.Equal(65535, normalized.Port);
         Assert.Equal(1, normalized.MaxPeers);

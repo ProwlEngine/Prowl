@@ -272,7 +272,7 @@ public partial class NetworkingTests
         using NetWriter snapshot = new();
         Networking.Networking.WriteSnapshot(original, snapshot);
         NetReader header = new(snapshot.WrittenSpan);
-        header.ReadByte(); header.ReadString(); header.ReadBytesWithLength();
+        header.ReadByte(); header.ReadUInt64(); header.ReadString(); header.ReadBytesWithLength();
         using NetWriter malformed = new();
         malformed.WriteBytes(snapshot.WrittenSpan[..header.Position]);
         malformed.WriteVarUInt32(1); // One entry promised, but its metadata is missing.

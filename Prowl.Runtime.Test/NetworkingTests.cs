@@ -84,12 +84,13 @@ public class NetTestComponent : Component
 public sealed class FakePeer : IDisposable
 {
     public const ushort SceneSnapshot = Networking.Networking.EngineMessageIds, Spawn = SceneSnapshot + 1, Despawn = SceneSnapshot + 2,
-        Owner = SceneSnapshot + 3, Sync = SceneSnapshot + 4, Transform = SceneSnapshot + 5, RpcToHost = SceneSnapshot + 6, RpcFromHost = SceneSnapshot + 7;
+        Owner = SceneSnapshot + 3, Sync = SceneSnapshot + 4, Transform = SceneSnapshot + 5, RpcToHost = SceneSnapshot + 6, RpcFromHost = SceneSnapshot + 7, SceneLoaded = SceneSnapshot + 8, SceneCatchUp = SceneSnapshot + 9,
+        SceneReady = SceneSnapshot + 10, SceneActivate = SceneSnapshot + 11;
 
     private FakePeer(NetSession session)
     {
         Session = session;
-        for (ushort id = SceneSnapshot; id <= RpcFromHost; id++)
+        for (ushort id = SceneSnapshot; id <= SceneActivate; id++)
         {
             ushort captured = id;
             session.OnRaw(id, (NetPeer sender, ref NetReader reader, Delivery delivery) =>
@@ -97,7 +98,41 @@ public sealed class FakePeer : IDisposable
                 NetReader wire = reader;
                 WireReceived.Add((captured, wire.ReadBytes(wire.Remaining).ToArray()));
                 Received.Add((captured, ReadEnginePayload(captured, ref reader)));
+                if (AutoReady) HandleReadiness(sender, captured, WireReceived[^1].Data);
             });
+        }
+    }
+
+    public bool AutoReady { get; set; } = true;
+    public ulong SceneGeneration { get; private set; }
+    public bool IsReady { get; private set; }
+
+    private void HandleReadiness(NetPeer sender, ushort kind, byte[] payload)
+    {
+        NetReader reader = new(payload);
+        if (kind == SceneSnapshot && !Session.IsHost)
+        {
+            reader.ReadByte();
+            SceneGeneration = reader.ReadUInt64();
+            IsReady = false;
+            Send(SceneLoaded, w => w.WriteUInt64(SceneGeneration));
+        }
+        else if (kind == SceneCatchUp && !Session.IsHost)
+        {
+            ulong generation = reader.ReadUInt64();
+            Send(SceneReady, w => w.WriteUInt64(generation));
+        }
+        else if (kind == SceneActivate && !Session.IsHost)
+            IsReady = reader.ReadUInt64() == SceneGeneration;
+        else if (kind == SceneLoaded && Session.IsHost)
+        {
+            ulong generation = reader.ReadUInt64();
+            Send(SceneCatchUp, w => { w.WriteUInt64(generation); w.WriteVarUInt32(0); w.WriteVarUInt32(0); }, sender);
+        }
+        else if (kind == SceneReady && Session.IsHost)
+        {
+            ulong generation = reader.ReadUInt64();
+            Send(SceneActivate, w => w.WriteUInt64(generation), sender);
         }
     }
 
@@ -139,7 +174,8 @@ public sealed class FakePeer : IDisposable
         return reader.ReadBytes(reader.Remaining).ToArray();
     }
 
-    public bool Has(ushort id) => Received.Any(m => m.Id == id);
+    public bool Has(ushort id) => Received.Any(m => m.Id == id) &&
+        (id != SceneSnapshot || Session.IsHost || !AutoReady || IsReady);
 
     public byte[] Last(ushort id) => Received.Last(m => m.Id == id).Data;
 
@@ -626,7 +662,7 @@ public partial class NetworkingTests : RuntimeTestBase
             remote.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
         };
         Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-        Pump(() => Scene.Current.AllObjects.Any(o => o.Identifier == original.Identifier), remote);
+        Pump(() => Networking.Networking.IsReady && Scene.Current.AllObjects.Any(o => o.Identifier == original.Identifier), remote);
         client = host.Session.Peers.Single(p => !p.IsLocal);
         return Find(Scene.Current, original.Identifier);
     }
@@ -793,7 +829,7 @@ public partial class NetworkingTests : RuntimeTestBase
         Networking.Networking.Join(new LocalTransport(network, "bob"), "host", "bob");
         try
         {
-            Pump(() => Scene.Current.AllObjects.Any(o => o.Identifier == crateId), host);
+            Pump(() => Networking.Networking.IsReady && Scene.Current.AllObjects.Any(o => o.Identifier == crateId), host);
 
             // [Sync] values come with the snapshot and spawns, not from the scene data.
             NetTestComponent levelHere = Find(Scene.Current, levelId).GetComponent<NetTestComponent>()!;

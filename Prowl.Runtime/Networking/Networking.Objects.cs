@@ -402,6 +402,9 @@ public static partial class Networking
     private static void OnPeerLeft(NetPeer peer, SessionEndReason reason)
     {
         NetSession? session = Session;
+        s_peerReadiness.Remove(peer.Id);
+        DispatchNetworkListener(e => e.OnPeerDisconnected(peer, reason));
+        if (Session != session) return;
         List<NetworkEntry> orphans = new();
         foreach (NetworkEntry entry in s_entries.Values)
         {

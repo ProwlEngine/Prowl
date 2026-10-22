@@ -49,7 +49,7 @@ public static partial class Networking
             return false;
         }
 
-        if (mode == RpcMode.Owner && HasControl(component.GameObject))
+        if (mode == RpcMode.Owner && HasControl(component.GameObject) && (IsHost || IsReady))
         {
             return false;
         }
@@ -66,6 +66,7 @@ public static partial class Networking
     {
         using FrameStatScope stats = FrameStats.Network.Scope();
         NetSession session = Session!;
+        if (!IsHost && !IsReady) return false;
         (uint id, RpcMode mode, RpcFlags flags) = (rpc.Id, rpc.Mode, rpc.Flags);
         Delivery delivery = (flags & RpcFlags.Unreliable) != 0 ? Delivery.Unreliable : Delivery.Reliable;
 

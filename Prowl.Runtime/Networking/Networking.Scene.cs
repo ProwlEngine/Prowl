@@ -17,7 +17,7 @@ namespace Prowl.Runtime.Networking;
 public static partial class Networking
 {
     // Bumped whenever the snapshot layout changes, so a mismatched client fails clearly.
-    private const byte SnapshotFormat = 6;
+    private const byte SnapshotFormat = 7;
 
     private static void OnHostSceneLoaded()
     {
@@ -29,14 +29,25 @@ public static partial class Networking
         // Objects that survived the swap (DontDestroyOnLoad) keep their network state; the rest went with the old scene.
         using FrameStatScope stats = FrameStats.Network.Scope();
         s_scene = Scene.Current;
+        s_sceneGeneration++;
+        s_joinState = NetworkJoinState.Loading;
         s_index.Clear();
         s_dirty.Clear();
         foreach (NetworkEntry entry in s_entries.Values.ToArray())
+        {
             if (!entry.GameObject.IsValid() || entry.GameObject.Scene != s_scene) NotifyDespawn(entry);
+            if (Session != session) return;
+        }
         s_entries.RemoveWhere(e => !e.GameObject.IsValid() || e.GameObject.Scene != s_scene);
         RegisterSceneObjects(s_scene);
 
-        foreach (NetPeer peer in session.Peers)
+        if (Session != session) return;
+        DispatchNetworkListener(e => e.OnNetworkLoading());
+        if (Session != session) return;
+        SetLocalReady();
+        if (Session != session) return;
+
+        foreach (NetPeer peer in session.Peers.ToArray())
         {
             if (!peer.IsLocal)
             {
@@ -51,6 +62,9 @@ public static partial class Networking
         {
             return;
         }
+
+        BeginPeerLoad(peer);
+        if (Session != session || s_scene == null) return;
 
         using NetWriter message = new(64 * 1024);
         using FrameStatScope stats = FrameStats.Network.Scope();
@@ -77,6 +91,7 @@ public static partial class Networking
         }
 
         output.WriteByte(SnapshotFormat);
+        output.WriteUInt64(Math.Max(s_sceneGeneration, 1));
         output.WriteString(scene.Name);
         output.WriteBytesWithLength(Compress(echo));
 
@@ -94,7 +109,9 @@ public static partial class Networking
 
     /// <summary>Builds the scene a snapshot carries, leaving the reader on the network state after it.</summary>
     /// <exception cref="InvalidDataException">The snapshot can't be read.</exception>
-    internal static Scene ReadSnapshot(ref NetReader reader)
+    internal static Scene ReadSnapshot(ref NetReader reader) => ReadSnapshot(ref reader, out _);
+
+    private static Scene ReadSnapshot(ref NetReader reader, out ulong generation)
     {
         using FrameStatScope stats = FrameStats.Network.Scope();
         byte format = reader.ReadByte();
@@ -104,6 +121,8 @@ public static partial class Networking
                 $"The host sent scene snapshot format {format}, this build reads {SnapshotFormat}.");
         }
 
+        generation = reader.ReadUInt64();
+        if (generation == 0) throw new InvalidDataException("Scene generation cannot be zero.");
         string name = reader.ReadString();
         Scene? scene = Serializer.Deserialize<Scene>(Decompress(reader.ReadBytesWithLength()));
         if (scene.IsNotValid())
@@ -117,18 +136,24 @@ public static partial class Networking
 
     private static void OnSceneSnapshot(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
-        if (IsHost)
+        if (IsHost || !sender.IsHost)
         {
             return;
         }
 
+        if (delivery != Delivery.Reliable) throw new InvalidDataException("Scene snapshots must be reliable.");
         NetSession? session = Session;
-        Scene scene = ReadSnapshot(ref reader);
+        Scene scene = ReadSnapshot(ref reader, out ulong sceneGeneration);
         bool queuedForActivation = false;
         try
         {
-            if (Session != session)
+            if (Session != session || sceneGeneration <= s_sceneGeneration)
                 return;
+
+            s_sceneGeneration = sceneGeneration;
+            s_joinState = NetworkJoinState.Loading;
+            s_catchUpApplied = false;
+            s_readyDeadline = Now + s_configuration.SceneLoadTimeoutSeconds;
 
             foreach (NetworkEntry entry in s_entries.Values.ToArray())
             {
@@ -167,6 +192,9 @@ public static partial class Networking
                     return;
             }
 
+            if (!reader.IsAtEnd) throw new InvalidDataException("Scene snapshot contains trailing bytes.");
+            DispatchNetworkListener(e => e.OnNetworkLoading());
+            if (Session != session) return;
             Scene.Load(scene);
             queuedForActivation = true;
         }

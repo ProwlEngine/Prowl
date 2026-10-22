@@ -80,7 +80,8 @@ public class MultiplayerPlayTests : EditorTestHarness
         GameObject? beaconObject = null;
         try
         {
-            Pump(() => Networking.Session!.Peers.Count == 2, "the instance to join", output, instance);
+            Pump(() => Networking.Session!.Peers.Count == 2 && Networking.Session.Peers.All(Networking.IsPeerReady),
+                "the instance to become ready", output, instance);
 
             beaconObject = new GameObject("Beacon");
             Component beacon = beaconObject.AddComponent(beaconType)!;

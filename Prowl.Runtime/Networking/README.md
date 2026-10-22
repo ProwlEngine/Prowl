@@ -116,6 +116,51 @@ inside `OnNetworkDespawn`. Starting another session from a teardown callback is 
 that startup for the next frame. Preserved scene objects keep
 membership when they survive a host scene change.
 
+## Loading and readiness
+
+`Networking.IsActive` means the session admitted this peer. Use `Networking.JoinState` for connection,
+admission, waiting for a snapshot, loading, synchronization, and ready progress. `Networking.IsReady`
+means the network scene is active and the readiness handshake completed. On the host,
+`Networking.IsPeerReady(peer)` reports whether an admitted remote peer is ready for this scene;
+remote readiness is not replicated to other clients.
+
+```csharp
+public class Players : Component, INetworkListener
+{
+    public void OnPeerConnected(NetPeer peer) { } // Host: admitted, still loading.
+    public void OnPeerReady(NetPeer peer) { }     // Host: spawn the player's object here.
+    public void OnPeerDisconnected(NetPeer peer, SessionEndReason reason) { }
+    public void OnNetworkLoading() { }           // Local: initial network state installed.
+    public void OnNetworkReady() { }             // Local: active scene, catch-up complete.
+}
+```
+
+These scene-wide callbacks include disabled components and isolate listener exceptions. Object
+`OnNetworkSpawn` still describes network membership; use `OnNetworkReady` for local gameplay startup.
+The host runs its own loading/ready callbacks when hosting and after scene replacement. It reports
+remote connection, readiness, and disconnection through the peer callbacks. `OnPeerReady` runs once
+per peer per scene generation, so scene-specific player objects can be created there.
+
+Clients acknowledge scene activation, receive a reliable full Sync/collection and root transform
+catch-up, acknowledge that state, and wait for host activation. Initial catch-up uses initial-state
+semantics: it restores values and collection contents without firing change callbacks. Reliable
+spawn/despawn, ownership, and Sync traffic stays ordered around the handshake. Transforms captured
+in catch-up are applied directly, with obsolete interpolation samples cleared. A ready callback sees
+the catch-up state or newer accepted updates, not a permanently frozen snapshot.
+
+RPCs to or from loading peers are dropped; client Sync/transform submissions are ignored until the
+host accepts readiness. Clients also defer their outgoing replication until local activation. Keep
+gameplay logic behind readiness; ordinary component enable/update callbacks still follow the scene
+lifecycle. Raw game messages sent directly through Warp remain the application's responsibility.
+
+Host scene changes invalidate peer readiness. Generations reject stale/duplicate acknowledgements;
+readiness must complete again for the new scene. `NetworkConfiguration.SceneLoadTimeoutSeconds`
+(default 60) bounds waiting for the snapshot and the loading/catch-up handshake. Stalled peers are
+kicked, or a waiting client shuts down, with the failed stage in the reason. Disconnects cancel a
+network scene still queued for activation. Replacing the network scene locally on a client ends its
+session. Authentication/admission remains Warp's version checks and join approval/token mechanism;
+a separate content download pipeline and asynchronous snapshot capture are future work.
+
 ## State before RPCs
 
 An RPC carries the caller's authorized Sync values, collection contents and pending operations, and
@@ -146,5 +191,5 @@ before mutation. Clients cannot destroy replicated roots locally. Ordinary edits
 replicated trees remain available. Use the GameObject/Scene mutation APIs; editing `Children` directly
 is unsupported. Structural delta replication and gameplay readiness remain future work.
 
-The engine Sync/RPC wire layout changed with these guarantees; scene snapshots use format 6. Peers
+The engine Sync/RPC wire layout changed with these guarantees; scene snapshots use format 7. Peers
 must run matching engine builds.

@@ -73,7 +73,7 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(receiving, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsActive && Scene.Current.AllObjects.Any(go => go.Name == "RPC state" && !ReferenceEquals(go, root)), host);
+            Pump(() => Networking.Networking.IsReady && Scene.Current.AllObjects.Any(go => go.Name == "RPC state" && !ReferenceEquals(go, root)), host);
             RpcStateTestComponent proxy = Scene.Current.AllObjects.Single(go => go.Name == "RPC state").GetComponent<RpcStateTestComponent>()!;
             NetworkLifecycleListener lifecycle = proxy.GameObject.GetComponent<NetworkLifecycleListener>()!;
             Assert.Equal(new[] { "spawn" }, lifecycle.Events);
@@ -189,7 +189,7 @@ public partial class NetworkingTests
         using NetWriter writer = new();
         Networking.Networking.WriteSnapshot(Scene.Current, writer);
         NetReader reader = new(writer.WrittenSpan);
-        reader.ReadByte(); reader.ReadString(); reader.ReadBytesWithLength();
+        reader.ReadByte(); reader.ReadUInt64(); reader.ReadString(); reader.ReadBytesWithLength();
         uint count = reader.ReadVarUInt32();
         for (uint i = 0; i < count; i++)
         {

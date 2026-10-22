@@ -102,6 +102,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         _pendingScene = scene;
     }
 
+    // Network cancellation must only remove the scene owned by that join, not a later local load.
+    internal static void CancelPendingLoad(Scene scene)
+    {
+        if (ReferenceEquals(_pendingScene, scene)) _pendingScene = null;
+        if (!ReferenceEquals(_current, scene) && scene.IsValid()) scene.Dispose();
+    }
+
     // A scene queued and then replaced before it became current belongs to nobody, and would stay live.
     private static void DropPendingScene(Scene? except)
     {

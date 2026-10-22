@@ -98,10 +98,13 @@ public static partial class Networking
         Attach(session, context);
 
         s_scene = Scene.Current;
-        session.PeerJoined += SendSnapshot;
+        s_sceneGeneration = 1;
+        session.PeerJoined += OnPeerConnected;
         session.PeerLeft += OnPeerLeft;
         Scene.OnSceneLoaded += OnHostSceneLoaded;
         RegisterSceneObjects(s_scene);
+        if (Session == session) DispatchNetworkListener(e => e.OnNetworkLoading());
+        if (Session == session) SetLocalReady();
         return session;
     }
 
@@ -157,6 +160,7 @@ public static partial class Networking
         using FrameStatScope stats = FrameStats.Network.Scope();
         s_frame++;
         s_context!.Receive();
+        if (Session == session) UpdateReadiness();
 
         if (IsActive)
         {
@@ -174,7 +178,7 @@ public static partial class Networking
         }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
-        if (IsActive && Now >= s_nextTick)
+        if (IsActive && (IsHost || IsReady) && Now >= s_nextTick)
         {
             // Fall behind by more than a tick, after a hitch, and the schedule restarts rather than bursting to catch up.
             double interval = 1.0 / Math.Max(TickRate, 1f);
@@ -184,7 +188,7 @@ public static partial class Networking
             SendTransforms();
         }
 
-        s_context!.Flush();
+        if (Session == session) s_context!.Flush();
     }
 
     // --- Session bookkeeping -------------------------------------------------------------------
@@ -208,6 +212,10 @@ public static partial class Networking
         Session = session;
         s_context = context;
         s_nextTick = Now;
+        s_joinState = session.IsHost ? NetworkJoinState.Loading : NetworkJoinState.Connecting;
+        s_readyDeadline = Now + s_configuration.SceneLoadTimeoutSeconds;
+        Scene.OnSceneLoaded += OnNetworkSceneActivated;
+        session.Joined += OnSessionAdmitted;
         NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty,
             session.IsHost ? "Hosting" : "Joining");
         session.Joined += () => NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty, "Joined");
@@ -224,6 +232,11 @@ public static partial class Networking
         RegisterEngineMessage(session, EngineMessage.RpcToHost, OnRpcToHost);
         RegisterEngineMessage(session, EngineMessage.RpcFromHost, OnRpcFromHost);
 
+        RegisterEngineMessage(session, EngineMessage.SceneLoaded, OnClientSceneLoaded);
+        RegisterEngineMessage(session, EngineMessage.SceneCatchUp, OnSceneCatchUp);
+        RegisterEngineMessage(session, EngineMessage.SceneReady, OnClientSceneReady);
+        RegisterEngineMessage(session, EngineMessage.SceneActivate, OnSceneActivate);
+
         session.Ended += (reason, message) =>
         {
             if (Session != session)
@@ -238,6 +251,7 @@ public static partial class Networking
                 Session = null;
                 s_context = null;
                 Scene.OnSceneLoaded -= OnHostSceneLoaded;
+                Scene.OnSceneLoaded -= OnNetworkSceneActivated;
                 try { context.Dispose(); }
                 finally { ResetState(); }
                 Debug.Log(message == null
@@ -256,6 +270,7 @@ public static partial class Networking
         NetworkEntry[] entries = s_entries.Values.ToArray();
         foreach (NetworkEntry entry in entries)
             NotifyDespawn(entry);
+        ResetReadiness();
         s_scene = null;
         s_entries.Clear();
         s_index.Clear();
@@ -280,6 +295,10 @@ public static partial class Networking
         Sync,
         Transform,
         RpcToHost,
-        RpcFromHost
+        RpcFromHost,
+        SceneLoaded,
+        SceneCatchUp,
+        SceneReady,
+        SceneActivate
     }
 }
