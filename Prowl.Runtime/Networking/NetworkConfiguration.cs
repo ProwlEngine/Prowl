@@ -70,7 +70,7 @@ public sealed class NetworkConfiguration
         copy.ConnectTimeoutSeconds = Limit(copy.ConnectTimeoutSeconds, 0.1f, 300, 5);
         copy.TimeoutSeconds = Limit(copy.TimeoutSeconds, 0.1f, 300, 10);
         copy.PingIntervalSeconds = Limit(copy.PingIntervalSeconds, 0.05f, 60, 1);
-        // Engine transform batches need at least 1000 bytes of unreliable payload.
+        // Keep the conservative default IP packet size; custom transports may use smaller payloads.
         copy.Mtu = Math.Clamp(copy.Mtu, 1200, 65507);
         copy.UpdateIntervalMilliseconds = Math.Clamp(copy.UpdateIntervalMilliseconds, 10, 5000);
         copy.FastResend = Math.Clamp(copy.FastResend, 0, 255);

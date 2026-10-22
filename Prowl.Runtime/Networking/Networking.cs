@@ -82,6 +82,7 @@ public static partial class Networking
     public static NetSession Host(Transport transport, string name = "Host", NetSessionOptions? options = null)
     {
         BeginSession();
+        ValidateSceneMessageLimit(options);
         using FrameStatScope stats = FrameStats.Network.Scope();
         NetworkingContext context = new(s_configuration);
         NetSession session;
@@ -117,6 +118,7 @@ public static partial class Networking
         NetSessionOptions? options = null)
     {
         BeginSession();
+        ValidateSceneMessageLimit(options);
         using FrameStatScope stats = FrameStats.Network.Scope();
         NetworkingContext context = new(s_configuration);
         NetSession session;

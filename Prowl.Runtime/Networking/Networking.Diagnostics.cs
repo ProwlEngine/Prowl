@@ -164,6 +164,12 @@ public static partial class Networking
         Delivery delivery = Delivery.Reliable)
     {
         if (IsHost && (kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost) && !IsPeerReady(peer)) return;
+        // Unreliable is a preference: reliable delivery and Warp fragmentation work on every
+        // session transport, including backends without datagrams or with smaller payload limits.
+        if (delivery == Delivery.Unreliable &&
+            (!Session!.Transport.Capabilities.Supports(delivery) ||
+             peer.Connection is { } connection && (long)payload.Length + sizeof(ushort) > connection.GetMaxMessageSize(delivery)))
+            delivery = Delivery.Reliable;
         Session!.SendRaw(peer, (ushort)kind, payload, delivery);
         if (NetworkDiagnostics.Enabled)
         {
@@ -176,7 +182,7 @@ public static partial class Networking
     private static void BroadcastEngine(EngineMessage kind, ReadOnlySpan<byte> payload,
         Delivery delivery = Delivery.Reliable, NetPeer? except = null)
     {
-        if (kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost)
+        if (delivery == Delivery.Unreliable || kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost)
         {
             foreach (NetPeer peer in Session!.Peers)
                 if (!peer.IsLocal && peer != except) SendEngine(peer, kind, payload, delivery);

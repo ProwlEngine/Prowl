@@ -11,17 +11,26 @@ using Prowl.Warp;
 namespace Prowl.Runtime.Networking;
 
 // Networked objects' transforms. Whoever controls an object sends its local position, rotation and
-// scale every tick it changes (and once a second regardless, since these go unreliably). Everyone
+// scale every tick it changes (and once a second regardless, since these normally go unreliably). Everyone
 // else buffers them and shows the object InterpolationDelay in the past, blending between updates.
 //
 // A Transform message is a run of [guid][u32 generation][u32 tick][f64 sender time][float3 position][quaternion rotation][float3 scale].
 public static partial class Networking
 {
     private const int TransformRecordSize = 16 + 4 + 4 + 8 + 12 + 16 + 12;
+    private const int SessionMessageHeaderSize = sizeof(ushort);
+    // A preferred working buffer size, not a requirement on the transport.
+    private const int TransformBatchBytes = 1000;
     private const int MaxSamples = 32;
     private const double TransformRefreshSeconds = 1;
 
     private static uint s_tick;
+
+    private static void ValidateSceneMessageLimit(NetSessionOptions? options)
+    {
+        if ((options ?? s_configuration.CreateSessionOptions()).MaxMessageSize < TransformRecordSize + SessionMessageHeaderSize)
+            throw new NotSupportedException($"Scene replication requires a message limit of at least {TransformRecordSize + SessionMessageHeaderSize} bytes.");
+    }
 
     private static void SendTransforms()
     {
@@ -63,8 +72,8 @@ public static partial class Networking
             NetSerializers.WriteQuaternion(message, rotation);
             NetSerializers.WriteFloat3(message, scale);
 
-            // Unreliable messages have to fit in one packet.
-            if (message.Length + TransformRecordSize > 1000)
+            // Keep capture bounded; sending splits records to each connection's limit.
+            if (message.Length + TransformRecordSize > TransformBatchBytes)
             {
                 SendTransformMessage(message, null);
                 message.Reset();
@@ -82,12 +91,31 @@ public static partial class Networking
         NetSession session = Session!;
         if (IsHost)
         {
-            BroadcastEngine(EngineMessage.Transform, message.WrittenSpan, Delivery.Unreliable, except);
+            foreach (NetPeer peer in session.Peers)
+                if (!peer.IsLocal && peer != except)
+                    SendTransformMessage(peer, message.WrittenSpan);
         }
         else
         {
-            SendEngine(session.HostPeer!, EngineMessage.Transform, message.WrittenSpan, Delivery.Unreliable);
+            SendTransformMessage(session.HostPeer!, message.WrittenSpan);
         }
+    }
+
+    private static void SendTransformMessage(NetPeer peer, ReadOnlySpan<byte> records)
+    {
+        if (peer.Connection is not { IsConnected: true } connection) return;
+        int limit = Session!.Options.MaxMessageSize;
+        Delivery delivery = Delivery.Reliable;
+        if (Session.Transport.Capabilities.Supports(Delivery.Unreliable) &&
+            connection.GetMaxMessageSize(Delivery.Unreliable) >= TransformRecordSize + SessionMessageHeaderSize)
+        {
+            delivery = Delivery.Unreliable;
+            limit = Math.Min(limit, connection.GetMaxMessageSize(Delivery.Unreliable));
+        }
+        // Warp adds a two-byte message id. Its optional batch framing is handled by Warp itself.
+        int batchBytes = (limit - SessionMessageHeaderSize) / TransformRecordSize * TransformRecordSize;
+        for (int offset = 0; offset < records.Length && connection.IsConnected; offset += batchBytes)
+            SendEngine(peer, EngineMessage.Transform, records.Slice(offset, Math.Min(batchBytes, records.Length - offset)), delivery);
     }
 
     private static void OnTransform(NetPeer sender, ref NetReader reader, Delivery delivery)

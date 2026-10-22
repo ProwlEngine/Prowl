@@ -27,6 +27,14 @@ lobby.Flush();
 `NetworkConfiguration.BatchMessages` configures session batching for any backend.
 Small messages are combined until the context flushes; both peers must enable it.
 
+Scene replication requires reliable delivery. Transforms and RPCs marked `Unreliable` prefer
+datagrams, but automatically use reliable delivery when the backend has no unreliable channel or
+the payload cannot fit. Transform batches are split at record boundaries for each connection's
+message limit; reliable fallback can use Warp fragmentation even when one transform cannot fit
+in a datagram. Reliable fallback can add latency under packet loss. Raw Warp messages keep their
+explicit delivery requirements. The session's configured `MaxMessageSize` must allow at least
+74 bytes for scene replication; this is a logical message limit, not a transport packet limit.
+
 ## Replicated state
 
 ```csharp
@@ -213,7 +221,7 @@ Collection capture retains pending operations for normal tick recipients and ski
 already includes. Known operations still raise `Changed`; a complete copy recovers contents when an
 unreliable prerequisite was lost, without inventing callbacks for unknown historical operations.
 Capturing state adds payload and serialization cost. An unreliable call, including its dependent state,
-must fit the transport's message limit; reliable calls can use Warp fragmentation.
+uses reliable delivery with Warp fragmentation when it exceeds the transport's datagram limit.
 
 ## Static RPCs
 
