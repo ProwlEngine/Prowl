@@ -348,11 +348,11 @@ public sealed class LightingTests : IDisposable
     private RenderableHandle AddQuad(Material material, uint layer = ~0u)
         => _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = layer }, [material]);
 
-    private Float4[] Frame()
+    private Float4[] Frame(params IProfiler[] profilers)
     {
         ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer };
         view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view }, Profilers = profilers });
         _device.WaitForIdle();
         _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
         Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
@@ -1375,6 +1375,19 @@ public sealed class LightingTests : IDisposable
         };
         _world.AddLight(spot);
         AssertMatches(p => Reference.Local(spot, p, s_normal, albedo, 0, 0.5f), Frame());
+    }
+
+    [Fact]
+    public void CommandCaptures_OfCascadesBesideLocalShadowsAndCaptureViews_FindEveryBindingDeclared()
+    {
+        AddQuad(Surface(new Float3(0.8f, 0.8f, 0.8f), 0.5f));
+        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0.3f, -0.2f, 1), Intensity = 0.05f, Shadow = new ShadowDesc { Enabled = true } });
+        _world.AddLight(new LightDesc { Type = LightType.Point, Position = new Double3(0.5, -0.5, 8), Range = 6, Intensity = 0.05f, Shadow = new ShadowDesc { Enabled = true } });
+        RenderableHandle caster = AddCaster(0, 0, 0, half: 1);
+
+        Frame(new PayloadSink());
+        _world.SetTransform(caster, Double4x4.CreateTranslation(new Double3(0.2, 0, 0)));
+        Frame(new PayloadSink());
     }
 
     [Fact]

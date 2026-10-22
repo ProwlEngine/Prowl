@@ -495,6 +495,7 @@ public sealed class FeatureBuilder
     public void WriteColor()
     {
         ReadColor();
+        ReadPostViews();
         Next(ColorFor(View.View));
     }
 
@@ -507,6 +508,7 @@ public sealed class FeatureBuilder
         if (!View.Shape.Upscales)
             throw new InvalidOperationException($"{_pass.Name} writes the output colour outside the Upscale slot.");
         ReadColor();
+        ReadPostViews();
         View.Upscaled = true;
         View.View = View.View.AtOutput();
         Next(ColorFor(View.View));
@@ -587,6 +589,9 @@ public sealed class FeatureBuilder
             throw new InvalidOperationException($"{_pass.Name} reads {name}, which no earlier feature published.");
         return _graph.Read(texture);
     }
+
+    // The views the fullscreen programs of a new colour read
+    private void ReadPostViews() => _graph.Read(FrameGraph.Import(View.Camera.ViewBlocks.Buffer), BufferAccess.AllReads);
 
     private TextureHandle ColorFor(in FeatureView view)
         => FrameGraph.Create(View.IdOf(_pass.Feature, "Color"), View.ColorDesc(view), Lifetime.Transient, Scope);

@@ -239,27 +239,44 @@ internal sealed partial class FramePipeline : IDisposable
         if (!view.Probing)
             RequireOutputs(view, camera);
         Buffers.ReadCamera(graph, builder, camera);
-        if (camera.World.Shadows != null)
-        {
-            foreach (ShadowPage page in camera.World.Shadows.AllPages())
-                builder.Read(graph.Import(page.Texture), TextureState.Sampled, TextureState.Sampled);
-        }
-        foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
-        {
-            for (int c = 0; c < light.Count; c++)
-            {
-                if (light.Cascades[c].Texture?.Texture is { } cascade)
-                    builder.Read(graph.Import(cascade), TextureState.Sampled, TextureState.Sampled);
-            }
-        }
+        DeclareShadowReads(graph, builder);
         foreach (DeviceBuffer buffer in camera.HostBuffers)
             builder.Read(graph.Import(buffer), BufferAccess.AllReads);
-        foreach (RenderTexture cube in camera.Cubes)
-            builder.Read(graph.Import(cube), TextureState.Sampled);
         if (screenVisibility && camera.ScreenVisibility != null)
             builder.Read(graph.Import(camera.ScreenVisibility), TextureState.Sampled, TextureState.Sampled);
         if (screenIrradiance && camera.ScreenIrradiance != null)
             builder.Read(graph.Import(camera.ScreenIrradiance), TextureState.Sampled, TextureState.Sampled);
+    }
+
+    /// <summary>
+    /// Declares every shadow page, cascade and reflection cube of the frame as sampled, bar the ones the pass writes, as they
+    /// all sit in the sampler table a pass that draws binds whole.
+    /// </summary>
+    internal void DeclareShadowReads(FrameGraph graph, PassBuilder builder, RenderTexture? written = null, List<RenderTexture>? alsoWritten = null)
+    {
+        foreach (WorldFrame world in _frameWorlds)
+        {
+            foreach (RenderTexture cube in world.World.Reflections.SampledCubes())
+                builder.Read(graph.Import(cube), TextureState.Sampled);
+            if (world.Shadows == null)
+                continue;
+            foreach (ShadowPage page in world.Shadows.AllPages())
+            {
+                if (page.Texture != written)
+                    builder.Read(graph.Import(page.Texture), TextureState.Sampled, TextureState.Sampled);
+            }
+        }
+        foreach (CameraFrame camera in Active())
+        {
+            foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
+            {
+                for (int c = 0; c < light.Count; c++)
+                {
+                    if (light.Cascades[c].Texture?.Texture is { } cascade && cascade != written && alsoWritten?.Contains(cascade) != true)
+                        builder.Read(graph.Import(cascade), TextureState.Sampled, TextureState.Sampled);
+                }
+            }
+        }
     }
 
     // What the draws read must have been provided by the active features, so a replacement missing one fails with its name

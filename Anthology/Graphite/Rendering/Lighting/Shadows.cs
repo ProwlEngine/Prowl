@@ -457,6 +457,7 @@ internal static class ShadowPasses
         graph.AddPass(page.IsStatic ? "Graphite.ShadowStaticPage" : "Graphite.ShadowPage", builder =>
         {
             frame.Buffers.ReadWorld(graph, builder, world);
+            frame.DeclareShadowReads(graph, builder, page.Texture);
             foreach (ShadowDraw draw in page.Draws)
                 draw.Camera.Buffers.Read(graph, builder, BufferAccess.AllReads);
             return builder.Write(graph.Import(page.Texture), TextureState.Attachment);
@@ -529,6 +530,16 @@ public sealed class CascadeFeature : RenderFeature
         State state = builder.GetViewState<State>();
         state.Targets.Clear();
         graph.Frame.Buffers.ReadWorld(graph.Graph, builder.Graph, camera.World);
+        List<RenderTexture> written = new();
+        foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
+        {
+            for (int c = 0; c < light.Count; c++)
+            {
+                if (light.Cascades[c].Draws.Count > 0)
+                    written.Add(light.Cascades[c].Texture!.Texture!);
+            }
+        }
+        graph.Frame.DeclareShadowReads(graph.Graph, builder.Graph, alsoWritten: written);
         foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
         {
             for (int c = 0; c < light.Count; c++)
