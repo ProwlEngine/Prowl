@@ -10,6 +10,7 @@ using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using BufferAccess = Prowl.Graphite.BufferAccess;
 using BufferDescription = Prowl.Graphite.BufferDescription;
 using BufferUsage = Prowl.Graphite.BufferUsage;
 using CommandBuffer = Prowl.Graphite.CommandBuffer;
@@ -394,8 +395,8 @@ internal struct ParticleBatch
 
 /// <summary>
 /// Draws one particle system into every view. The host writes the frame's records in Sync, Extract hands them to the
-/// render thread, Cull adds the instanced draws per view with their back to front order, and Compute uploads the
-/// records and orders into the world's buffers before any view draws.
+/// render thread, Cull adds the instanced draws per view with their back to front order, and the world's upload feature
+/// writes the records and orders into the world's buffers before any view draws.
 /// </summary>
 internal sealed class ParticleRenderProvider(ParticleSystemComponent system, ParticleBuffers buffers) : RenderProvider
 {
@@ -466,6 +467,7 @@ internal sealed class ParticleRenderProvider(ParticleSystemComponent system, Par
         _orderUsed = 0;
         _orderUploads.Clear();
         buffers.BeginRenderFrame();
+        buffers.Extracted(this);
 
         if (_render.Index != Graphics.FrameIndex)
         {
@@ -474,6 +476,20 @@ internal sealed class ParticleRenderProvider(ParticleSystemComponent system, Par
             return;
         }
         system.CheckVisibility(buffers.World);
+    }
+
+    public bool WritesRecords => _render.Count > 0 && _records != null;
+
+    public bool WritesOrder => _orderUploads.Count > 0 && _order != null;
+
+    /// <summary>Uploads the records and orders into the world's buffers. Render thread, in the upload feature.</summary>
+    public void Upload(CommandBuffer command)
+    {
+        if (WritesRecords)
+            command.UpdateBuffer<Float4>(_records!, (uint)(_render.First * RecordRows * 16), _render.Rows.AsSpan(0, _render.Count));
+        if (_order == null) return;
+        foreach ((int offset, int start, int count) in _orderUploads)
+            command.UpdateBuffer<uint>(_order, (uint)(offset * 4), _orderData.AsSpan(start, count));
     }
 
     public override void Cull(in ProviderView view, DrawItemSink sink)
@@ -548,23 +564,6 @@ internal sealed class ParticleRenderProvider(ParticleSystemComponent system, Par
         _orderUsed += count;
         return offset;
     }
-
-    public override void ComputeBuffers(List<DeviceBuffer> list)
-    {
-        if (_render.Count > 0 && _records != null)
-            list.Add(_records);
-        if (_orderUploads.Count > 0 && _order != null)
-            list.Add(_order);
-    }
-
-    public override void Compute(CommandBuffer command)
-    {
-        if (_render.Count > 0 && _records != null)
-            command.UpdateBuffer<Float4>(_records, (uint)(_render.First * RecordRows * 16), _render.Rows.AsSpan(0, _render.Count));
-        if (_order == null) return;
-        foreach ((int offset, int start, int count) in _orderUploads)
-            command.UpdateBuffer<uint>(_order, (uint)(offset * 4), _orderData.AsSpan(start, count));
-    }
 }
 
 /// <summary>
@@ -592,6 +591,10 @@ internal sealed class ParticleBuffers
     private int _renderOrderCapacity;
     private int _orderUsed;
     private readonly List<ViewInfo> _views = [];
+    private readonly List<ParticleRenderProvider> _extracted = [];
+    private DeviceBuffer? _renderRecords;
+    private DeviceBuffer? _renderOrder;
+    private ParticleUploadFeature? _feature;
 
     private ParticleBuffers(RenderWorld world) => _world = world;
 
@@ -606,7 +609,8 @@ internal sealed class ParticleBuffers
     public static ParticleBuffers Acquire(RenderWorld world)
     {
         ParticleBuffers buffers = s_worlds.GetValue(world, w => new ParticleBuffers(w));
-        buffers._users++;
+        if (buffers._users++ == 0)
+            world.FrameFeatures.Add(buffers._feature = new ParticleUploadFeature(buffers));
         return buffers;
     }
 
@@ -614,6 +618,8 @@ internal sealed class ParticleBuffers
     public void Release()
     {
         if (--_users > 0) return;
+        if (_feature != null) _world.FrameFeatures.Remove(_feature);
+        _feature = null;
         _world.Globals.SetBuffer(RecordsName, null);
         _world.Globals.SetBuffer(OrderName, null);
         Graphics.DeferDispose(Records);
@@ -674,6 +680,9 @@ internal sealed class ParticleBuffers
         _renderFrame = Graphics.FrameIndex;
         _renderOrderCapacity = Order != null ? _orderCapacity : 0;
         _orderUsed = 0;
+        _extracted.Clear();
+        _renderRecords = Records;
+        _renderOrder = Order;
 
         _views.Clear();
         foreach (ViewDesc view in Graphics.FrameViews)
@@ -683,6 +692,27 @@ internal sealed class ParticleBuffers
             Float4x4 v = layer.View;
             _views.Add(new ViewInfo(view.ViewId, new Float3(v.c0.Z, v.c1.Z, v.c2.Z), layer.Projection.c1.Y, layer.Projection.c3.W > 0.5f, true));
         }
+    }
+
+    public void Extracted(ParticleRenderProvider provider) => _extracted.Add(provider);
+
+    /// <summary>Which buffers this frame's providers write. Render thread.</summary>
+    public (DeviceBuffer? Records, DeviceBuffer? Order) Writes()
+    {
+        bool records = false, order = false;
+        foreach (ParticleRenderProvider provider in _extracted)
+        {
+            records |= provider.WritesRecords;
+            order |= provider.WritesOrder;
+        }
+        return (records ? _renderRecords : null, order ? _renderOrder : null);
+    }
+
+    public void Upload(CommandBuffer command)
+    {
+        foreach (ParticleRenderProvider provider in _extracted)
+            provider.Upload(command);
+        _extracted.Clear();
     }
 
     public ViewInfo Find(int viewId)
@@ -754,4 +784,21 @@ internal sealed class ParticleBuffers
         Float3 p = new(plane.X >= 0f ? max.X : min.X, plane.Y >= 0f ? max.Y : min.Y, plane.Z >= 0f ? max.Z : min.Z);
         return plane.X * p.X + plane.Y * p.Y + plane.Z * p.Z + plane.W < 0f;
     }
+}
+
+/// <summary>Writes the records and orders of a world's particle systems into its buffers, ahead of every view.</summary>
+internal sealed class ParticleUploadFeature(ParticleBuffers buffers) : FrameFeature
+{
+    public override FrameSlot Slot => FrameSlot.BeforeViews;
+
+    public override bool IsActive() => buffers.Writes() is (not null, _) or (_, not null);
+
+    public override void Setup(FrameBuilder builder)
+    {
+        (DeviceBuffer? records, DeviceBuffer? order) = buffers.Writes();
+        if (records != null) builder.Write(records, BufferAccess.TransferWrite);
+        if (order != null) builder.Write(order, BufferAccess.TransferWrite);
+    }
+
+    public override void Render(FrameContext context) => buffers.Upload(context.Command);
 }
