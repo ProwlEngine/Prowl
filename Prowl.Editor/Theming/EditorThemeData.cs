@@ -11,6 +11,9 @@ namespace Prowl.Editor.Theming;
 /// <summary>Static editor-background style used when the animated background is off.</summary>
 public enum EditorBackgroundStyle { Nebula, Gradient, Color, Image }
 
+/// <summary>How long UI animations take. Off changes things at once.</summary>
+public enum UiAnimationSpeed { Off, Fast, Normal, Slow }
+
 /// <summary>How a background image is fitted to the window, like desktop wallpaper settings.</summary>
 public enum BackgroundImageFit { Fill, Fit, Stretch, Tile, Center }
 
@@ -165,6 +168,19 @@ public class EditorThemeData
     public bool DropShadows { get; set; } = true;
     /// <summary> Whether accent elements have a glow effect. </summary>
     public bool AccentGlow { get; set; } = true;
+    /// <summary> How long UI animations take. </summary>
+    public UiAnimationSpeed UiAnimations { get; set; } = UiAnimationSpeed.Normal;
+
+    /// <summary> Multiplier for animation lengths matching <see cref="UiAnimations"/>. </summary>
+    [JsonIgnore]
+    public float AnimationScale => UiAnimations switch
+    {
+        UiAnimationSpeed.Off => 0f,
+        UiAnimationSpeed.Fast => 0.5f,
+        UiAnimationSpeed.Slow => 1.6f,
+        _ => 1f,
+    };
+
     /// <summary> Whether anti-aliasing is enabled. </summary>
     public bool AntiAliasing { get; set; } = true;
 

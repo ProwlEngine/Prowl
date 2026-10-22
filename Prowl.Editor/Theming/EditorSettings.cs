@@ -111,6 +111,8 @@ public class EditorSettings
         EditorApplication.Instance?.InitializeFont();
 
         EditorTheme.UserScale = t.UserScale;
+        EditorTheme.AnimationScale = t.AnimationScale;
+        if (EditorApplication.Instance?.PaperInstance is { } paper) paper.TransitionScale = t.AnimationScale;
         OrigamiUI.Origami.IconScale = t.IconScale;
 
         // Sizing

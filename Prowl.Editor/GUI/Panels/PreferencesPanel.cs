@@ -839,6 +839,10 @@ public class PreferencesPanel : DockPanel
             EditorGUI.SettingsSlider(paper, "pref_fx_tint_s", Loc.Get("pref.play_tint_strength"), theme.PlayModeTintStrength, 0, 1, v => { theme.PlayModeTintStrength = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
         }
 
+        EditorGUI.SectionHeader(paper, "pref_fx_motion", Loc.Get("pref.motion"), compact: true);
+        EditorGUI.Row(paper, "pref_fx_anim_speed", Loc.Get("pref.ui_animations"), () =>
+            Origami.EnumDropdown(paper, "pref_fx_anim_speed_v", theme.UiAnimations, v => { theme.UiAnimations = v; s.ApplyTheme(); s.Save(); }).Show(), compact: true);
+
         EditorGUI.SectionHeader(paper, "pref_fx_render", Loc.Get("pref.rendering"), compact: true);
         EditorGUI.SettingsToggle(paper, "pref_fx_aa", Loc.Get("pref.anti_aliasing"), theme.AntiAliasing, v => { theme.AntiAliasing = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
     }

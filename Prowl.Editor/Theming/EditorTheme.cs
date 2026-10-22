@@ -49,6 +49,7 @@ public static class EditorTheme
     public static void SyncOrigami(float transitionSeconds = OrigamiTransitionSeconds)
     {
         OrigamiTheme target = BuildOrigamiTheme();
+        transitionSeconds *= AnimationScale;
         if (transitionSeconds <= 0f)
         {
             OrigamiTheme = target;
@@ -202,6 +203,9 @@ public static class EditorTheme
 
     /// <summary> Font family name for the primary UI face. </summary>
     public static string DefaultFontName = "Geist";
+
+    /// <summary> Multiplier for UI animation lengths, 0 for none. </summary>
+    public static float AnimationScale = 1f;
 
     /// <summary> Tint drawn over the backdrop while playing, transparent when the tint is off. </summary>
     public static Color PlayModeTint => Customization is { PlayModeTint: true } t
