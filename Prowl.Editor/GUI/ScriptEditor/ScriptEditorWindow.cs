@@ -6,6 +6,8 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
@@ -30,6 +32,15 @@ public enum ScriptEditorMode
     BuiltIn,
     External,
 }
+
+/// <summary>The line endings a script is saved with.</summary>
+public enum LineEndingMode { Keep, LF, CRLF }
+
+/// <summary>The encoding a script is saved with.</summary>
+public enum FileEncodingMode { Keep, Utf8, Utf8Bom }
+
+/// <summary>When scripts save themselves.</summary>
+public enum ScriptAutoSave { Off, AfterDelay, OnFocusLoss }
 
 /// <summary>How the built in code editor looks and behaves. Changes apply to open scripts straight away.</summary>
 [EditorPreferences("Script Editor", EditorIcons.Code, order: 10, ProjectOverridable = true)]
@@ -87,6 +98,17 @@ public sealed class ScriptEditorPreferences : EditorPreferences
 
     /// <summary>The colour scheme in use. Picked and edited above the other settings.</summary>
     [HideInInspector] public string ColorScheme = "Theme";
+
+    [Header("Saving")]
+    [Tooltip("Formats the whole file when you save it.")] public bool FormatOnSave;
+    [Tooltip("Removes unused using directives and sorts the rest when you save.")] public bool OrganizeUsingsOnSave;
+    [Tooltip("Removes spaces and tabs at the end of lines when you save.")] public bool TrimTrailingWhitespaceOnSave;
+    [Tooltip("Makes sure the file ends with a line break.")] public bool InsertFinalNewline;
+    public LineEndingMode LineEndings = LineEndingMode.Keep;
+    public FileEncodingMode Encoding = FileEncodingMode.Keep;
+    [Tooltip("Auto save only writes the file. Formatting and the other save steps run when you save yourself.")]
+    public ScriptAutoSave AutoSave = ScriptAutoSave.Off;
+    [Range(0.2f, 10), Tooltip("Seconds after the last edit before an auto save.")] public float AutoSaveDelay = 1f;
 
     // Find options, remembered from the last find bar. Not shown in Preferences.
     [HideInInspector] public bool FindMatchCase;
@@ -439,6 +461,7 @@ public class ScriptEditorWindow : DockPanel
     public override void OnGUI(Paper paper, float width, float height)
     {
         CheckDisk(paper);
+        TickAutoSave();
         var m = Origami.Current.Metrics;
         const float tabsH = 32, toolbarH = 30;
 
@@ -477,6 +500,28 @@ public class ScriptEditorWindow : DockPanel
             Origami.CodeEditor(paper, "se_code_" + active.Id, active.Editor)
                 .Size(width, Math.Max(0, height - tabsH - toolbarH)).Show();
             RememberEditorState(active.Editor);
+        }
+    }
+
+    private bool _wasFocused = true;
+
+    private void TickAutoSave()
+    {
+        ScriptEditorPreferences prefs = Preferences.Get<ScriptEditorPreferences>();
+        bool focused = Runtime.Window.IsFocused;
+        bool focusLost = _wasFocused && !focused;
+        _wasFocused = focused;
+
+        foreach (var tab in _tabs)
+        {
+            if (!tab.Editor.IsDirty) continue;
+            bool due = prefs.AutoSave switch
+            {
+                ScriptAutoSave.AfterDelay => tab.Editor.TimeSinceLastEdit >= prefs.AutoSaveDelay,
+                ScriptAutoSave.OnFocusLoss => focusLost,
+                _ => false,
+            };
+            if (due) Save(tab, automatic: true);
         }
     }
 
@@ -644,11 +689,39 @@ public class ScriptEditorWindow : DockPanel
         }
     }
 
-    private static bool Save(ScriptTab tab)
+    // How long a save waits for formatting or organising usings before writing the file without them.
+    private const int SaveStepTimeoutMs = 3000;
+
+    // The save steps the user picked, applied as edits so they can be undone, then the file in the chosen line endings and encoding.
+    private static bool Save(ScriptTab tab, bool automatic = false)
     {
+        ScriptEditorPreferences prefs = Preferences.Get<ScriptEditorPreferences>();
+        OrigamiUI.CodeEditor editor = tab.Editor;
+
+        if (!automatic)
+        {
+            if (!tab.IsShader && editor.Session is { } session)
+            {
+                if (prefs.OrganizeUsingsOnSave) ApplyStep(editor, session.OrganizeUsingsAsync(CancellationToken.None));
+                if (prefs.FormatOnSave) ApplyStep(editor, session.FormatAsync(0, -1, CancellationToken.None));
+            }
+            if (prefs.TrimTrailingWhitespaceOnSave) editor.TrimTrailingWhitespace();
+            if (prefs.InsertFinalNewline)
+            {
+                CodeDocument doc = editor.Document;
+                if (doc.Length > 0 && doc[doc.LineCount - 1].Length > 0)
+                    editor.ApplyEdits([new CodeTextEdit(doc.Length, 0, "\n")]);
+            }
+        }
+
+        if (prefs.LineEndings != LineEndingMode.Keep)
+            editor.Document.LineEnding = prefs.LineEndings == LineEndingMode.CRLF ? "\r\n" : "\n";
+        if (prefs.Encoding != FileEncodingMode.Keep)
+            tab.HadBom = prefs.Encoding == FileEncodingMode.Utf8Bom;
+
         try
         {
-            File.WriteAllText(tab.Path, tab.Editor.Text, new UTF8Encoding(tab.HadBom));
+            File.WriteAllText(tab.Path, editor.Text, new UTF8Encoding(tab.HadBom));
             tab.DiskTime = File.GetLastWriteTimeUtc(tab.Path);
         }
         catch (Exception e)
@@ -661,6 +734,18 @@ public class ScriptEditorWindow : DockPanel
         if (tab.IsShader) ShaderWorkspaces.Invalidate();
         ImportAndRecompile(tab.Path);
         return true;
+    }
+
+    private static void ApplyStep(OrigamiUI.CodeEditor editor, Task<IReadOnlyList<CodeTextEdit>> step)
+    {
+        try
+        {
+            if (step.Wait(SaveStepTimeoutMs) && step.Result.Count > 0) editor.ApplyEdits(step.Result);
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogWarning($"[ScriptEditor] A save step failed, saving without it: {ex.Message}");
+        }
     }
 
     private static void ImportAndRecompile(string path)
