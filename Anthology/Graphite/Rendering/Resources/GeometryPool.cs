@@ -195,12 +195,14 @@ internal struct MeshRecord
 }
 
 /// <summary>One fixed size page of geometry: a word buffer for vertex streams and a 32 bit index buffer.</summary>
-internal sealed class GeometryPage(RangeAllocator vertexWords, RangeAllocator indices, DeviceBuffer vertices, DeviceBuffer indexBuffer)
+internal sealed class GeometryPage(RangeAllocator vertexWords, RangeAllocator indices, PersistentBuffer vertexBuffer, PersistentBuffer indexBuffer)
 {
     public RangeAllocator VertexWords { get; } = vertexWords;
     public RangeAllocator IndexSpace { get; } = indices;
-    public DeviceBuffer Vertices { get; } = vertices;
-    public DeviceBuffer Indices { get; } = indexBuffer;
+    public PersistentBuffer VertexBuffer { get; } = vertexBuffer;
+    public PersistentBuffer IndexBuffer { get; } = indexBuffer;
+    public DeviceBuffer Vertices => VertexBuffer.Buffer!;
+    public DeviceBuffer Indices => IndexBuffer.Buffer!;
 }
 
 /// <summary>
@@ -209,7 +211,7 @@ internal sealed class GeometryPage(RangeAllocator vertexWords, RangeAllocator in
 /// and freed ranges and ids wait until the GPU retires the frame that freed them. Chunk and mesh records live in two
 /// tables every pass can read.
 /// </summary>
-internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords = GeometryPool.DefaultPageVertexWords, uint pageIndices = GeometryPool.DefaultPageIndices) : IDisposable
+internal sealed class GeometryPool(GraphicsDevice device, GraphStore store, uint pageVertexWords = GeometryPool.DefaultPageVertexWords, uint pageIndices = GeometryPool.DefaultPageIndices)
 {
     /// <summary>Words of vertex data per page, 96 MB.</summary>
     public const uint DefaultPageVertexWords = 24u << 20;
@@ -228,13 +230,12 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
     private readonly RangeAllocator _chunkSpace = new(MaxChunks);
     private readonly List<(ulong Execution, MeshPlacement Placement)> _retiringRanges = new();
     private readonly List<(ulong Execution, int Id)> _retiringIds = new();
-    private readonly List<(ulong Execution, DeviceBuffer Buffer)> _retiringBuffers = new();
 
     public List<GeometryPage> Pages { get; } = new();
 
-    public GpuTable Chunks { get; } = GpuTable.Of<ChunkRecord>(device, "Chunk table", 1024);
+    public GpuTable Chunks { get; } = GpuTable.Of<ChunkRecord>(device, store, "Graphite.ChunkTable", 1024);
 
-    public GpuTable Meshes { get; } = GpuTable.Of<MeshRecord>(device, "Mesh table", 256);
+    public GpuTable Meshes { get; } = GpuTable.Of<MeshRecord>(device, store, "Graphite.MeshTable", 256);
 
     /// <summary>Creates a mesh and queues its upload. Thread safe.</summary>
     public GpuMesh Create(MeshData data)
@@ -301,7 +302,7 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
             _pending.RemoveRange(0, applied);
         }
 
-        bool moved = Retire(Chunks.Flush(uploader), lastDispatched) | Retire(Meshes.Flush(uploader), lastDispatched);
+        bool moved = Chunks.Flush(uploader) | Meshes.Flush(uploader);
         return moved || Pages.Count != pagesBefore;
     }
 
@@ -321,7 +322,7 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
     public void ReleaseCopy(MeshPlacement copy, ulong lastDispatched) => _retiringRanges.Add((lastDispatched, copy));
 
     /// <summary>Queues the chunk records of copies placed since <see cref="Apply"/>, retiring the buffer the table moved off. Render thread.</summary>
-    public void FlushCopies(Uploader uploader, ulong lastDispatched) => Retire(Chunks.Flush(uploader), lastDispatched);
+    public void FlushCopies(Uploader uploader) => Chunks.Flush(uploader);
 
     /// <summary>Returns ranges, ids and buffers freed by frames the GPU has finished. Render thread.</summary>
     public void Reclaim(ulong completedExecution)
@@ -339,15 +340,6 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
             _retiringRanges.RemoveAt(i);
         }
 
-        for (int i = _retiringBuffers.Count - 1; i >= 0; i--)
-        {
-            if (_retiringBuffers[i].Execution > completedExecution)
-                continue;
-
-            _retiringBuffers[i].Buffer.Dispose();
-            _retiringBuffers.RemoveAt(i);
-        }
-
         for (int i = _retiringIds.Count - 1; i >= 0; i--)
         {
             if (_retiringIds[i].Execution > completedExecution)
@@ -359,36 +351,11 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
         }
     }
 
-    public void Dispose()
-    {
-        foreach (GeometryPage page in Pages)
-        {
-            page.Vertices.Dispose();
-            page.Indices.Dispose();
-        }
-        Pages.Clear();
-
-        foreach ((_, DeviceBuffer buffer) in _retiringBuffers)
-            buffer.Dispose();
-        _retiringBuffers.Clear();
-        Chunks.Dispose();
-        Meshes.Dispose();
-    }
-
     private void Release(GpuMesh mesh, ulong execution)
     {
         if (mesh.Placement is { } old)
             _retiringRanges.Add((execution, old));
         mesh.Placement = null;
-    }
-
-    private bool Retire(DeviceBuffer? buffer, ulong execution)
-    {
-        if (buffer == null)
-            return false;
-
-        _retiringBuffers.Add((execution, buffer));
-        return true;
     }
 
     private static uint StreamWords(uint streamsPresent, int stream, uint vertexCount)
@@ -482,10 +449,11 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
 
     private GeometryPage NewPage(uint vertexWords, uint indexCount)
     {
-        DeviceBuffer vertices = device.ResourceFactory.CreateBuffer(new BufferDescription(vertexWords * 4, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer indices = device.ResourceFactory.CreateBuffer(new BufferDescription(indexCount * 4, BufferUsage.IndexBuffer | BufferUsage.StructuredBufferReadWrite));
-        vertices.Name = $"Geometry page {Pages.Count} vertices";
-        indices.Name = $"Geometry page {Pages.Count} indices";
+        GraphInstanceKey root = new(GraphKind.Root, 0);
+        PersistentBuffer vertices = new(RenderResourceID.Intern($"Graphite.Page{Pages.Count}.Vertices"), BufferUsage.StructuredBufferReadWrite, root);
+        PersistentBuffer indices = new(RenderResourceID.Intern($"Graphite.Page{Pages.Count}.Indices"), BufferUsage.IndexBuffer | BufferUsage.StructuredBufferReadWrite, root);
+        vertices.Resolve(device, store, vertexWords * 4);
+        indices.Resolve(device, store, indexCount * 4);
         return new GeometryPage(new RangeAllocator(vertexWords), new RangeAllocator(indexCount), vertices, indices);
     }
 

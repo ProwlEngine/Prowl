@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 
 namespace Prowl.Graphite.Debugger;
 
@@ -36,10 +35,10 @@ public sealed class Replayer
     public ReplayResult Replay(ReplayRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        DeepView? view = _recording.Views.FirstOrDefault(v => v.Index == request.ViewIndex);
-        DeepPass? pass = view?.Passes.FirstOrDefault(p => p.Index == request.PassIndex);
-        if (view == null || pass == null)
-            return NotReplayable("The request names a view or pass that is not in the recording.");
+        DeepInstance? instance = _recording.Instances.FirstOrDefault(i => i.Index == request.InstanceIndex);
+        DeepPass? pass = instance?.Passes.FirstOrDefault(p => p.Index == request.PassIndex);
+        if (instance == null || pass == null)
+            return NotReplayable("The request names an instance or pass that is not in the recording.");
 
         if (pass.NotReplayable != null)
             return NotReplayable(pass.NotReplayable);
@@ -51,20 +50,22 @@ public sealed class Replayer
                 return NotReplayable($"Event {eventIndex} is out of range, pass {pass.Name} has {events} events.");
         }
 
-        if (request.EventIndex == null && _recording.Mode == DeepMode.Full)
-            return Restore(view, pass);
+        if (request.EventIndex == null && _recording.Mode == DeepMode.Full && request.Patches is not { Count: > 0 })
+            return Restore(instance, pass);
 
         try
         {
             using ReplayScope scope = new(_device, _recording, _blobs, _programs);
-            List<DeepPass> ordered = view.Passes.Where(p => p.Index <= pass.Index).OrderBy(p => p.Index).ToList();
+            List<DeepPass> ordered = instance.Passes.Where(p => p.Index <= pass.Index).OrderBy(p => p.Index).ToList();
             List<DeepPass> passes = ordered.Skip(scope.Start(ordered)).ToList();
             DeepPass? blocked = passes.FirstOrDefault(p => p.NotReplayable != null);
             if (blocked != null)
                 return NotReplayable($"Pass {blocked.Name} is needed to reach {pass.Name}: {blocked.NotReplayable}");
 
-            string? error = scope.Prepare(view, passes);
-            return error != null ? NotReplayable(error) : Run(scope, view, passes, pass, request.EventIndex);
+            string? error = scope.Prepare(instance, passes);
+            if (error == null)
+                scope.AddPatches(passes[0].Index, request.Patches);
+            return error != null ? NotReplayable(error) : Run(scope, instance, passes, pass, request.EventIndex, request.Indirect);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -72,10 +73,10 @@ public sealed class Replayer
         }
     }
 
-    private ReplayResult Run(ReplayScope scope, DeepView view, List<DeepPass> passes, DeepPass pass, int? eventIndex)
+    private ReplayResult Run(ReplayScope scope, DeepInstance instance, List<DeepPass> passes, DeepPass pass, int? eventIndex, IndirectSlice? slice)
     {
         string name = $"Replay {pass.Index} {pass.Name}";
-        ReplayCapture capture = new(name, ReplayScope.Outputs(view, pass), scope.ReplayIds);
+        ReplayCapture capture = new(name, ReplayScope.Outputs(instance, pass), scope.ReplayIds);
         HashSet<int> steps = scope.RestoreSteps().ToHashSet();
         List<IPass> replay = new();
         foreach (DeepPass p in passes)
@@ -83,15 +84,15 @@ public sealed class Replayer
             if (p == passes[0] || steps.Contains(p.Index))
                 replay.Add(new ReplayRestorePass(scope, passes, p.Index));
 
-            replay.Add(new ReplayPass($"Replay {p.Index} {p.Name}", scope, p, p == pass ? eventIndex : null));
+            replay.Add(new ReplayPass($"Replay {p.Index} {p.Name}", scope, p, p == pass ? eventIndex : null, p == pass ? slice : null));
         }
-        using RenderPipeline pipeline = new(replay.ToArray());
-        ReplayView[] views = [new ReplayView(view.Name, view.PixelWidth, view.PixelHeight)];
+        using RenderGraph graph = RenderGraph.Build(replay, name: $"Replay {instance.Name}");
+        GraphInstances instances = graph.CreateInstances(new GraphExtent(instance.PixelWidth, instance.PixelHeight));
 
         List<ReplayOutput> outputs = new();
         try
         {
-            ExecutionTask task = _device.DispatchGraph(pipeline, views, [capture]);
+            ExecutionTask task = _device.DispatchGraph(graph, instances, capture);
             _device.WaitForExecution(task);
 
             foreach ((TraceResourceId resource, CaptureCopy copy) in capture.Copies)
@@ -114,13 +115,13 @@ public sealed class Replayer
         return new ReplayResult(ReplayStatus.Reexecuted, $"Executed {executed} on {device} with unreproducible inputs restored from copies.", outputs.ToEquatableArray());
     }
 
-    private ReplayResult Restore(DeepView view, DeepPass pass)
+    private ReplayResult Restore(DeepInstance instance, DeepPass pass)
     {
         Dictionary<TraceVersion, RecordedCopy> copies = new();
-        foreach (RecordedCopy copy in _recording.Views.SelectMany(v => v.Passes).SelectMany(p => p.Copies))
+        foreach (RecordedCopy copy in _recording.Instances.SelectMany(i => i.Passes).SelectMany(p => p.Copies))
             copies.TryAdd(copy.Version, copy);
 
-        HashSet<TraceResourceId> outputs = ReplayScope.Outputs(view, pass);
+        HashSet<TraceResourceId> outputs = ReplayScope.Outputs(instance, pass);
         List<ReplayOutput> results = new();
         foreach (RecordedReference reference in pass.References.Where(r => outputs.Contains(r.Resource)))
         {
@@ -135,15 +136,4 @@ public sealed class Replayer
 
     private static ReplayResult NotReplayable(string reason)
         => new(ReplayStatus.NotReplayable, reason, EquatableArray<ReplayOutput>.Empty);
-
-    private readonly struct ReplayView(string name, uint width, uint height) : IRenderView
-    {
-        public uint PixelWidth => width;
-
-        public uint PixelHeight => height;
-
-        public int ViewId => 0;
-
-        public string Name => name;
-    }
 }

@@ -11,6 +11,7 @@ using Xunit;
 namespace Prowl.Graphite.Rendering.Tests;
 
 // What the renderer frees once nothing needs it: bindless slots, draw program ids, material tables and table logs.
+[Collection("GPU Tests")]
 public sealed class LifetimeTests : IDisposable
 {
     private const string Source = """
@@ -45,6 +46,7 @@ public sealed class LifetimeTests : IDisposable
         """;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly GraphStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly RendererTextures _textures;
     private readonly MaterialSystem _materials;
@@ -54,15 +56,15 @@ public sealed class LifetimeTests : IDisposable
     {
         InternalShaders.Register();
         _textures = new RendererTextures(_device);
-        _materials = new MaterialSystem(_device, _textures);
+        _materials = new MaterialSystem(_device, _store, _textures);
         _shader = new Shader(ShaderParser.Parse(Source), _compiler);
     }
 
     public void Dispose()
     {
-        _materials.Dispose();
         _textures.Dispose();
         _compiler.Dispose();
+        _store.Dispose();
         _device.Dispose();
     }
 

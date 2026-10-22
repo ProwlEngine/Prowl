@@ -4,69 +4,71 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Graphite.RenderGraph;
 
 using Xunit;
 
-namespace Prowl.Graphite.RenderGraph.Tests;
+namespace Prowl.Graphite.Tests;
 
 public class RenderGraphSolverTests
 {
+    private static readonly GraphKind World = GraphKind.Intern("Test.World");
+    private static readonly GraphKind Camera = GraphKind.Intern("Test.Camera");
+    private static readonly GraphScope[] Nested = [new GraphScope(World, GraphKind.Root), new GraphScope(Camera, World)];
+
     private static RenderGraph Build(params IPass[] passes)
-        => RenderGraph.Build(passes);
+        => RenderGraph.Build(passes, TestViews.Scopes);
 
     private static List<string> OrderNames(RenderGraph graph)
-        => graph.OrderedPasses.Select(n => n.Pass.Name).ToList();
+        => graph.Passes.Select(n => n.Pass.Name).ToList();
 
     [Fact]
     public void Build_TwoWritersWithDifferentDescriptions_Throws()
     {
         var a = new TestPass("A", outputs: new[] { ("conflict_shared", Desc.Color()) });
-        var b = new TestPass("B", outputs: new[] { ("conflict_shared", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, depth: true)) });
+        var b = new TestPass("B", outputs: new[] { ("conflict_shared", GraphTextureDesc.InstanceSized(PixelFormat.R8_G8_B8_A8_UNorm, depth: true)) });
 
         Assert.Throws<RenderGraphException>(() => Build(a, b));
     }
 
     [Fact]
-    public void Build_ChainOfDependencies_OrdersTransitively()
+    public void Build_IndependentPasses_RunInInsertionOrder()
     {
-        var a = new TestPass("A", outputs: new[] { ("chain_a", Desc.Color()) });
-        var b = new TestPass("B",
-            inputs: new[] { "chain_a" },
-            outputs: new[] { ("chain_b", Desc.Color()) });
-        var c = new TestPass("C",
-            inputs: new[] { "chain_b" },
-            outputs: new[] { ("chain_c", Desc.Color()) });
+        var a = new TestPass("A", outputs: new[] { ("order_a", Desc.Color()) });
+        var b = new TestPass("B", outputs: new[] { ("order_b", Desc.Color()) });
+        var c = new TestPass("C", outputs: new[] { ("order_c", Desc.Color()) });
 
-        RenderGraph graph = Build(c, b, a);
-        List<string> order = OrderNames(graph);
-
-        Assert.True(order.IndexOf("A") < order.IndexOf("B"));
-        Assert.True(order.IndexOf("B") < order.IndexOf("C"));
+        Assert.Equal(new[] { "A", "B", "C" }, OrderNames(Build(a, b, c)).ToArray());
     }
 
     [Fact]
-    public void Build_IndependentPasses_KeepInsertionOrder()
+    public void Build_ReaderGivenBeforeItsWriter_RunsAfterIt()
     {
-        var a = new TestPass("A", outputs: new[] { ("indep_a", Desc.Color()) });
-        var b = new TestPass("B", outputs: new[] { ("indep_b", Desc.Color()) });
+        var reader = new TestPass("Reader", inputs: new[] { "late_x" });
+        var writer = new TestPass("Writer", outputs: new[] { ("late_x", Desc.Color()) });
 
-        RenderGraph graph = Build(a, b);
+        Assert.Equal(new[] { "Writer", "Reader" }, OrderNames(Build(reader, writer)).ToArray());
+    }
 
-        Assert.Equal(new[] { "A", "B" }, OrderNames(graph).ToArray());
+    [Fact]
+    public void Build_WritersOfOneResource_KeepInsertionOrderAroundTheirReaders()
+    {
+        var first = new TestPass("First", outputs: new[] { ("version_x", Desc.Color()) });
+        var between = new TestPass("Between", inputs: new[] { "version_x" });
+        var second = new TestPass("Second", writes: new[] { "version_x" });
+        var after = new TestPass("After", inputs: new[] { "version_x" });
+
+        Assert.Equal(new[] { "First", "Between", "Second", "After" }, OrderNames(Build(first, between, second, after)).ToArray());
     }
 
     [Fact]
     public void Build_CyclicDependency_Throws()
     {
-        var a = new TestPass("A",
-            inputs: new[] { "cycle_x" },
-            outputs: new[] { ("cycle_y", Desc.Color()) });
-        var b = new TestPass("B",
-            inputs: new[] { "cycle_y" },
-            outputs: new[] { ("cycle_x", Desc.Color()) });
+        var a = new TestPass("A", inputs: new[] { "cycle_b" }, outputs: new[] { ("cycle_a", Desc.Color()) });
+        var b = new TestPass("B", inputs: new[] { "cycle_a" }, outputs: new[] { ("cycle_b", Desc.Color()) });
 
-        Assert.Throws<RenderGraphException>(() => Build(a, b));
+        RenderGraphException ex = Assert.Throws<RenderGraphException>(() => Build(a, b));
+        Assert.Contains("'A'", ex.Message);
+        Assert.Contains("'B'", ex.Message);
     }
 
     [Fact]
@@ -82,75 +84,50 @@ public class RenderGraphSolverTests
     }
 
     [Fact]
-    public void Build_BufferProducerBeforeBufferReader()
+    public void Build_AKindWritingAResourceAnotherKindOwns_Throws()
     {
-        var producer = new TestBufferPass("Compute",
-            outputs: new[] { ("light_grid", Desc.Storage()) });
-        var reader = new TestBufferPass("Shade",
-            inputs: new[] { "light_grid" });
+        var root = new TestRootPass("Root", outputs: new[] { ("owned_x", Desc.Fixed()) });
+        var camera = new TestPass("Camera", outputs: new[] { ("owned_x", Desc.Fixed()) });
 
-        RenderGraph graph = Build(reader, producer);
-        List<string> order = OrderNames(graph);
-
-        Assert.True(order.IndexOf("Compute") < order.IndexOf("Shade"));
-        Assert.IsType<GraphBufferResource>(graph.Resources[RenderResourceID.Intern("light_grid")]);
+        Assert.Throws<RenderGraphException>(() => RenderGraph.Build([root, camera], TestViews.Scopes));
     }
 
     [Fact]
-    public void Build_DiamondDependency_OrdersProducerBeforeBothBranchesAndJoinAfterBoth()
+    public void Build_AnOuterKindReadingAnInnerKindsResource_Throws()
     {
-        var producer = new TestPass("Producer", outputs: new[] { ("diamond_x", Desc.Color()) });
-        var left = new TestPass("Left",
-            inputs: new[] { "diamond_x" },
-            outputs: new[] { ("diamond_y1", Desc.Color()) });
-        var right = new TestPass("Right",
-            inputs: new[] { "diamond_x" },
-            outputs: new[] { ("diamond_y2", Desc.Color()) });
-        var join = new TestPass("Join",
-            inputs: new[] { "diamond_y1", "diamond_y2" },
-            outputs: new[] { ("diamond_out", Desc.Color()) });
+        var camera = new TestPass("Camera", outputs: new[] { ("inner_x", Desc.Color()) }, kind: Camera);
+        var world = new TestPass("World", inputs: new[] { "inner_x" }, kind: World);
 
-        RenderGraph graph = Build(join, right, left, producer);
-        List<string> order = OrderNames(graph);
-
-        Assert.True(order.IndexOf("Producer") < order.IndexOf("Left"));
-        Assert.True(order.IndexOf("Producer") < order.IndexOf("Right"));
-        Assert.True(order.IndexOf("Left") < order.IndexOf("Join"));
-        Assert.True(order.IndexOf("Right") < order.IndexOf("Join"));
+        RenderGraphException ex = Assert.Throws<RenderGraphException>(() => RenderGraph.Build([camera, world], Nested));
+        Assert.Same(world, ex.Pass);
     }
 
     [Fact]
-    public void Build_MultipleWritersOfOneResource_ReaderRunsAfterEveryWriter()
+    public void Build_AnInnerKindReadingAnOuterKindsResource_OrdersTheWriterFirst()
     {
-        var writer1 = new TestPass("Writer1", outputs: new[] { ("fanin_shared", Desc.Color()) });
-        var writer2 = new TestPass("Writer2", outputs: new[] { ("fanin_shared", Desc.Color()) });
-        var reader = new TestPass("Reader",
-            inputs: new[] { "fanin_shared" },
-            outputs: new[] { ("fanin_out", Desc.Color()) });
+        var camera = new TestPass("Camera", inputs: new[] { "outer_x" }, kind: Camera);
+        var world = new TestPass("World", outputs: new[] { ("outer_x", Desc.Color()) }, kind: World);
 
-        RenderGraph graph = Build(reader, writer2, writer1);
-        List<string> order = OrderNames(graph);
+        RenderGraph graph = RenderGraph.Build([camera, world], Nested);
 
-        Assert.True(order.IndexOf("Writer1") < order.IndexOf("Reader"));
-        Assert.True(order.IndexOf("Writer2") < order.IndexOf("Reader"));
+        Assert.Equal(new[] { "World", "Camera" }, OrderNames(graph).ToArray());
+        Assert.Equal(new[] { GraphKind.Root, World, Camera }, graph.Kinds);
     }
 
     [Fact]
-    public void Build_PassReadsAndWritesSameResource_SkipsSelfEdgeAndOrdersNeighborsCorrectly()
+    public void Build_AKindNoScopeDeclares_Throws()
     {
-        var upstream = new TestPass("Upstream", outputs: new[] { ("rmw_res", Desc.Color()) });
-        var rmw = new TestPass("RMW",
-            inputs: new[] { "rmw_res" },
-            outputs: new[] { ("rmw_res", Desc.Color()) });
-        var downstream = new TestPass("Downstream",
-            inputs: new[] { "rmw_res" },
-            outputs: new[] { ("rmw_downstream", Desc.Color()) });
+        var pass = new TestPass("Stray", kind: GraphKind.Intern("Test.Stray"));
 
-        RenderGraph graph = Build(downstream, rmw, upstream);
-        List<string> order = OrderNames(graph);
+        Assert.Throws<RenderGraphException>(() => RenderGraph.Build([pass], TestViews.Scopes));
+    }
 
-        Assert.True(order.IndexOf("Upstream") < order.IndexOf("RMW"));
-        Assert.True(order.IndexOf("RMW") < order.IndexOf("Downstream"));
+    [Fact]
+    public void Build_AKindNamingTwoParents_Throws()
+    {
+        GraphScope[] scopes = [new GraphScope(Camera, World), new GraphScope(World, GraphKind.Root), new GraphScope(Camera, GraphKind.Root)];
+
+        Assert.Throws<ArgumentException>(() => RenderGraph.Build([], scopes));
     }
 
     [Fact]
@@ -161,7 +138,7 @@ public class RenderGraphSolverTests
 
         RenderGraph graph = Build(unreferenced, main);
 
-        Assert.Contains(graph.OrderedPasses, n => n.Pass.Name == "Unreferenced");
+        Assert.Contains(graph.Passes, n => n.Pass.Name == "Unreferenced");
     }
 
     [Fact]
@@ -177,10 +154,10 @@ public class RenderGraphSolverTests
     }
 
     [Fact]
-    public void Build_PassDeclaresBackbuffer_WritesViewTargetIsTrue()
+    public void Build_PassDeclaresBackbuffer_WritesInstanceTargetIsTrue()
     {
         RenderGraph graph = Build(new TestBackbufferPass());
 
-        Assert.True(graph.WritesViewTarget);
+        Assert.True(graph.WritesInstanceTarget);
     }
 }

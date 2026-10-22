@@ -7,7 +7,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
@@ -107,33 +106,30 @@ internal sealed class SinkRecorder : ICommandStreamProfiler, IPassCommandSink
     public void CopyTexture(in ResourceVersion source, in TextureRegion sourceRegion, in ResourceVersion destinationAfter, in TextureRegion destinationRegion, uint layerCount)
         => Log.Add("CopyTexture");
 
+    public void BlitTexture(in ResourceVersion source, in ResourceVersion destinationAfter, ReadOnlySpan<TextureBlit> regions) => Log.Add("BlitTexture");
+
     public void CopyTextureToBuffer(in ResourceVersion source, in TextureRegion region, in ResourceVersion destinationAfter, uint destinationOffset)
         => Log.Add("CopyTextureToBuffer");
 
     public void ResolveTexture(in ResourceVersion source, in ResourceVersion destinationAfter) => Log.Add("ResolveTexture");
     public void GenerateMips(in ResourceVersion textureAfter) => Log.Add("GenerateMips");
-    public void PushMarker(string name) => Log.Add("PushMarker:" + name);
+    public void PushMarker(string name, object? meta) => Log.Add(meta == null ? "PushMarker:" + name : "PushMarker:" + name + ":" + meta);
     public void PopMarker() => Log.Add("PopMarker");
 }
 
-file readonly struct SinkView : IRenderView
+file sealed class SinkPass : IInstancePass
 {
-    public uint PixelWidth => 32;
-    public uint PixelHeight => 32;
-    public int ViewId => 0;
-}
+    public GraphKind Kind => TestViews.Kind;
 
-file sealed class SinkPass : IPass
-{
     private readonly Action<CommandBuffer> _record;
 
     public SinkPass(Action<CommandBuffer> record) => _record = record;
 
     public string Name => "SinkPass";
 
-    public void Setup(RenderContextBuilder builder) { }
+    public void Setup(InstanceContextBuilder builder) { }
 
-    public void Render(RenderContext context, CommandBuffer cmd) => _record(cmd);
+    public void Render(InstanceContext context, CommandBuffer cmd) => _record(cmd);
 }
 
 public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
@@ -208,8 +204,8 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     private SinkRecorder Record(Action<CommandBuffer> record)
     {
         SinkRecorder sink = new();
-        using RenderPipeline pipeline = new([new SinkPass(record)]);
-        GD.DispatchGraph(pipeline, new SinkView[] { new() }, sink);
+        using RenderGraph graph = TestViews.Build([new SinkPass(record)]);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(32, 32)), sink);
         GD.WaitForIdle();
 
         return sink;
@@ -251,16 +247,29 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
 
         string[] expected =
         [
-            "BeginPass:SinkPass",
+            "BeginPass:SinkPass", "PushMarker:SinkPass",
             "SetFramebuffer:1:False:Clear", "SetViewport", "SetScissor",
             "SetStencilReference", "SetBlendConstants",
             "Props:2", "SetPipeline:Graphics", "BindVertexBuffers", "Draw:4:1:0:0",
             "SetPipeline:Compute", "Props:1", "Dispatch:1:1:1",
-            "EndPass",
+            "PopMarker", "EndPass",
         ];
         Assert.Equal(expected, sink.Log);
         Assert.Same(program, sink.Pipelines[0].Program);
         Assert.Same(compute, sink.Pipelines[1].Program);
+    }
+
+    [SkippableFact]
+    public void DebugGroupMeta_ReachesTheSink()
+    {
+        SinkRecorder sink = Record(cl =>
+        {
+            Assert.True(cl.WantsDebugMeta);
+            cl.PushDebugGroup("Group", "payload");
+            cl.PopDebugGroup();
+        });
+
+        Assert.Contains("PushMarker:Group:payload", sink.Log);
     }
 
     [SkippableFact]
@@ -469,11 +478,11 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     public void PassBeginAndEnd_BracketCommands()
     {
         SinkRecorder sink = new();
-        using RenderPipeline pipeline = new([new SinkPass(cmd => { })]);
-        GD.DispatchGraph(pipeline, new SinkView[] { new() }, sink);
+        using RenderGraph graph = TestViews.Build([new SinkPass(cmd => { })]);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(32, 32)), sink);
         GD.WaitForIdle();
 
-        Assert.Equal(["BeginPass:SinkPass", "EndPass"], sink.Log);
+        Assert.Equal(["BeginPass:SinkPass", "PushMarker:SinkPass", "PopMarker", "EndPass"], sink.Log);
     }
 
     [SkippableFact]

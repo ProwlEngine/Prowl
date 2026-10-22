@@ -9,6 +9,7 @@ using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
+[Collection("GPU Tests")]
 public sealed class DebugViewTests : IDisposable
 {
     private readonly GlslShaderCompiler _compiler = new();

@@ -7,12 +7,16 @@ internal sealed class TextureGraphite : IDisposable
 {
     private readonly Texture _texture;
     private readonly Sampler _sampler;
+    private readonly bool _owned;
 
-    private TextureGraphite(Texture texture, Sampler sampler)
+    private TextureGraphite(Texture texture, Sampler sampler, bool owned)
     {
         _texture = texture;
         _sampler = sampler;
+        _owned = owned;
     }
+
+    public Texture Texture => _texture;
 
     public uint Width => _texture.Width;
 
@@ -35,8 +39,10 @@ internal sealed class TextureGraphite : IDisposable
             MipFilter = FilterMode.Linear,
         });
 
-        return new TextureGraphite(texture, sampler);
+        return new TextureGraphite(texture, sampler, true);
     }
+
+    public static TextureGraphite Wrap(Texture texture, Sampler sampler) => new(texture, sampler, false);
 
     public unsafe void SetData(GraphicsDevice device, IntRect rect, byte[] data)
     {
@@ -46,6 +52,8 @@ internal sealed class TextureGraphite : IDisposable
 
     public void Dispose()
     {
+        if (!_owned)
+            return;
         _texture.Dispose();
         _sampler.Dispose();
     }

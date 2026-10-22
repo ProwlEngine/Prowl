@@ -6,7 +6,6 @@ using System.Text;
 using BenchmarkDotNet.Attributes;
 
 using Prowl.Graphite;
-using Prowl.Graphite.RenderGraph;
 
 using Prowl.Vector;
 

@@ -46,7 +46,8 @@ public class GraphicsDeviceFeatures
     /// </summary>
     public bool DrawIndirectCount { get; }
     /// <summary>
-    /// Partially bound, update after bind, non uniformly indexed arrays of sampled images, for bindless texture tables.
+    /// Partially bound, update after bind, non uniformly indexed arrays of sampled images and storage buffers, for bindless
+    /// descriptor tables. Storage images in a table are written after bind only where the device can.
     /// </summary>
     public bool DescriptorIndexing { get; }
     /// <summary>
@@ -65,6 +66,18 @@ public class GraphicsDeviceFeatures
     /// Samplers can reduce with min or max instead of averaging.
     /// </summary>
     public bool SamplerFilterMinmax { get; }
+    /// <summary>
+    /// BC1 to BC7 block compressed textures can be sampled, as on desktop GPUs.
+    /// </summary>
+    public bool TextureCompressionBC { get; }
+    /// <summary>
+    /// ETC2 and EAC block compressed textures can be sampled, as on mobile GPUs.
+    /// </summary>
+    public bool TextureCompressionEtc2 { get; }
+    /// <summary>
+    /// ASTC block compressed textures can be sampled, as on mobile GPUs.
+    /// </summary>
+    public bool TextureCompressionAstc { get; }
 
     internal GraphicsDeviceFeatures(
         bool geometryShader,
@@ -81,7 +94,10 @@ public class GraphicsDeviceFeatures
         bool multiview,
         bool shaderOutputLayer,
         bool shaderOutputViewportIndex,
-        bool samplerFilterMinmax)
+        bool samplerFilterMinmax,
+        bool textureCompressionBC,
+        bool textureCompressionEtc2,
+        bool textureCompressionAstc)
     {
         GeometryShader = geometryShader;
         TessellationShaders = tessellationShaders;
@@ -98,5 +114,8 @@ public class GraphicsDeviceFeatures
         ShaderOutputLayer = shaderOutputLayer;
         ShaderOutputViewportIndex = shaderOutputViewportIndex;
         SamplerFilterMinmax = samplerFilterMinmax;
+        TextureCompressionBC = textureCompressionBC;
+        TextureCompressionEtc2 = textureCompressionEtc2;
+        TextureCompressionAstc = textureCompressionAstc;
     }
 }

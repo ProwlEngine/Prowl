@@ -30,6 +30,12 @@ public struct GraphicsDeviceOptions
     public bool GraphiteValidation = true;
 
     /// <summary>
+    /// With <see cref="GraphiteValidation"/>, seconds the GPU may finish no work while the host waits on it before
+    /// Graphite throws instead of waiting forever. 0 disables. Default 10.
+    /// </summary>
+    public float GpuHangSeconds = 10;
+
+    /// <summary>
     /// Driver pipeline cache contents from an earlier <see cref="GraphicsDevice.GetPipelineCacheData"/>, so pipelines
     /// built in an earlier run build fast. The driver ignores data from another device or driver version.
     /// </summary>

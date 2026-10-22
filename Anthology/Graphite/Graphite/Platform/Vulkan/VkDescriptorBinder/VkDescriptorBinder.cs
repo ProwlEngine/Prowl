@@ -105,6 +105,12 @@ internal unsafe sealed partial class VkDescriptorBinder
         }
     }
 
+    internal void ForgetBound()
+    {
+        for (int i = 0; i < _setBindStates.Length; i++)
+            _setBindStates[i].Bound = false;
+    }
+
     // Resolves sets, transitions textures, and prepares descriptors for binding. Returns true if binding needed, false otherwise
     internal bool Prepare(ShaderProgram program, ShaderProgram reportProgram, bool isGraphics)
     {
@@ -330,6 +336,8 @@ internal unsafe sealed partial class VkDescriptorBinder
                 case ResourceKind.TextureReadWrite:
                     dst[n++] = r.View.DescriptorId;
                     dst[n++] = (ulong)r.Layout;
+                    if (r.Combined)
+                        dst[n++] = r.Sampler.DescriptorId;
                     break;
 
                 case ResourceKind.Sampler:

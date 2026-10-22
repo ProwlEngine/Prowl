@@ -14,10 +14,13 @@ internal sealed class RecordFormat : ISerializationFormat
     private static readonly ConcurrentDictionary<Type, Layout> Layouts = new();
 
     private static readonly HashSet<Type> ValueTypes =
-    [typeof(PassStats), typeof(GpuVertexStats), typeof(MemoryBudgetInfo), typeof(ResourceRange), typeof(CopyRegion), typeof(TraceResourceId), typeof(TraceVersion), typeof(BlobRef)];
+    [typeof(PassStats), typeof(GpuVertexStats), typeof(MemoryBudgetInfo), typeof(ResourceRange), typeof(CopyRegion), typeof(TraceResourceId), typeof(TraceVersion), typeof(BlobRef), typeof(SpecializationConstant), typeof(TextureBlit), typeof(GraphInstanceKey)];
 
     public bool CanHandle(Type type)
-        => ValueTypes.Contains(type) || (type.IsClass && !type.IsAbstract && type.Assembly == typeof(RecordFormat).Assembly && type.GetMethod("<Clone>$") != null);
+        => ValueTypes.Contains(type) || (type.IsClass && !type.IsAbstract && type.Assembly == typeof(RecordFormat).Assembly && type.GetMethod("<Clone>$") != null) || IsPayload(type);
+
+    internal static bool IsPayload(Type type)
+        => type.IsSerializable && type.GetMethod("PrintMembers", BindingFlags.NonPublic | BindingFlags.Instance) != null;
 
     public EchoObject Serialize(Type targetType, object value, SerializationContext context)
     {
@@ -26,6 +29,8 @@ internal sealed class RecordFormat : ISerializationFormat
         for (int i = 0; i < layout.Parameters.Length; i++)
         {
             object? member = layout.Properties[i].GetValue(value);
+            if (layout.Parameters[i].ParameterType == typeof(object) && member != null && !IsPayload(member.GetType()))
+                member = null;
             compound.Add(layout.Properties[i].Name, member == null ? new EchoObject(EchoType.Null, null) : Serializer.Serialize(layout.Parameters[i].ParameterType, member, context));
         }
 

@@ -115,6 +115,32 @@ internal unsafe partial class VkGraphicsDevice
 
     internal bool WaitForSerial(ulong serial, ulong nanosecondTimeout)
     {
+        if (!GpuHangCheckEnabled)
+            return WaitForSerialCore(serial, nanosecondTimeout) == Result.Success;
+
+        const ulong slice = 100_000_000;
+        ulong remaining = nanosecondTimeout;
+        while (true)
+        {
+            ulong wait = System.Math.Min(remaining, slice);
+            Result result = WaitForSerialCore(serial, wait);
+            if (result == Result.Success)
+                return true;
+            if (result == Result.ErrorDeviceLost)
+                throw new RenderException($"The Vulkan device was lost while waiting for submission {serial}.");
+
+            CheckGpuProgress(GetCompletedSerial(), serial);
+            if (nanosecondTimeout != ulong.MaxValue)
+            {
+                remaining -= wait;
+                if (remaining == 0)
+                    return false;
+            }
+        }
+    }
+
+    private Result WaitForSerialCore(ulong serial, ulong nanosecondTimeout)
+    {
         VkSemaphore timeline = _timelineSemaphore;
         SemaphoreWaitInfo waitInfo = new(sType: StructureType.SemaphoreWaitInfo)
         {
@@ -122,7 +148,7 @@ internal unsafe partial class VkGraphicsDevice
             PSemaphores = &timeline,
             PValues = &serial,
         };
-        return Vk.WaitSemaphores(Device, in waitInfo, nanosecondTimeout) == Result.Success;
+        return Vk.WaitSemaphores(Device, in waitInfo, nanosecondTimeout);
     }
 
     private ulong Submit(System.ReadOnlySpan<Silk.NET.Vulkan.CommandBuffer> handles, System.ReadOnlySpan<VkCommandBuffer> tracked, VkGpuSubmission? submission = null)

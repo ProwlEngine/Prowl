@@ -5,7 +5,6 @@ using System.Linq;
 using BenchmarkDotNet.Attributes;
 
 using Prowl.Graphite;
-using Prowl.Graphite.RenderGraph;
 
 using Prowl.Vector;
 
@@ -36,8 +35,8 @@ public class MultiViewBenchmarks : GraphiteBenchmark
     private int PassesPerView => Case.PassesPerView;
     private bool History => Case.History;
 
-    protected override IRenderView[] CreateViews()
-        => Enumerable.Range(0, Views).Select(i => (IRenderView)new BenchView(DefaultSize, DefaultSize, i)).ToArray();
+    protected override GraphExtent[] CreateViews()
+        => Enumerable.Range(0, Views).Select(_ => new GraphExtent(DefaultSize, DefaultSize)).ToArray();
 
     protected override IEnumerable<IPass> CreatePasses()
     {

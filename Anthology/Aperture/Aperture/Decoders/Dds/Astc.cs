@@ -15,7 +15,7 @@ internal static class Astc
     private const int MaxWeight = 64;
 
     /// <summary>The sixteen bytes of a block, with the two readings its fields need.</summary>
-    private readonly struct Block
+    internal readonly struct Block
     {
         private readonly ulong _low;
         private readonly ulong _high;
@@ -26,7 +26,7 @@ internal static class Astc
             _high = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]);
         }
 
-        private Block(ulong low, ulong high)
+        public Block(ulong low, ulong high)
         {
             _low = low;
             _high = high;
@@ -70,7 +70,7 @@ internal static class Astc
     }
 
     /// <summary>What a block turns out to be once its first few bits are read.</summary>
-    private struct Config
+    internal struct Config
     {
         public int GridWidth;
         public int GridHeight;
@@ -296,9 +296,8 @@ internal static class Astc
                     int high = endpoints[(subset * 8) + (c * 2) + 1] * 0x101;
                     int wide = ((low * (MaxWeight - weight)) + (high * weight) + 32) >> 6;
 
-                    // The format normalises by a power of two rather than the largest sample,
-                    // and a result between two steps takes the lower.
-                    channels[c] = ((wide * 255) + 32767) >> 16;
+                    // Normalised by the largest sixteen bit value and rounded, as hardware reads it.
+                    channels[c] = ((wide * 255) + 32767) / 65535;
                 }
 
                 pixels[at] = ((uint)channels[3] << 24) | ((uint)channels[0] << 16)
@@ -311,7 +310,7 @@ internal static class Astc
     /// Reads the first eleven bits, which say how big the weight grid is, how finely the weights
     /// are quantised and whether one channel gets a grid of its own.
     /// </summary>
-    private static bool TryConfig(Block block, out Config config)
+    internal static bool TryConfig(Block block, out Config config)
     {
         config = default;
 
@@ -414,7 +413,7 @@ internal static class Astc
     }
 
     /// <summary>Bits a run of values of one range occupies, which is not a whole number each.</summary>
-    private static int SequenceBits(int count, int range)
+    internal static int SequenceBits(int count, int range)
     {
         ReadOnlySpan<sbyte> table = AstcTables.Ranges;
         int from = range * 3;
@@ -508,7 +507,7 @@ internal static class Astc
     /// unquantisation lands on nought to sixty three, and the step above the halfway point gains
     /// one so that the top of the range reaches all the way.
     /// </summary>
-    private static uint DequantiseWeight(uint value, int range)
+    internal static uint DequantiseWeight(uint value, int range)
     {
         uint weight = UnquantiseWeight(value, range);
         return weight > 32 ? weight + 1 : weight;
@@ -566,7 +565,7 @@ internal static class Astc
         return (a & 0x20) | (result >> 2);
     }
 
-    private static uint DequantiseEndpoint(uint value, int range)
+    internal static uint DequantiseEndpoint(uint value, int range)
     {
         switch (range)
         {
@@ -629,7 +628,7 @@ internal static class Astc
     /// four grid points around it, which is what lets a block store far fewer weights than it has
     /// pixels without the result showing steps.
     /// </summary>
-    private static void Upsample(int width, int height, int gridWidth, int gridHeight,
+    internal static void Upsample(int width, int height, int gridWidth, int gridHeight,
                                  ReadOnlySpan<byte> source, Span<byte> destination)
     {
         if (gridWidth == width && gridHeight == height)
@@ -685,7 +684,7 @@ internal static class Astc
     /// a hash of the pattern number, which is what lets the format offer a thousand of them for
     /// the cost of ten bits.
     /// </summary>
-    private static int Partition(int pattern, int x, int y, int partitions, bool small)
+    internal static int Partition(int pattern, int x, int y, int partitions, bool small)
     {
         if (small)
         {
@@ -787,7 +786,7 @@ internal static class Astc
     /// do this for pictures in the ordinary range, trading how many values are stored against how
     /// much of the colour they describe.
     /// </summary>
-    private static bool DecodeEndpoints(int mode, Span<byte> values, Span<int> to)
+    internal static bool DecodeEndpoints(int mode, Span<byte> values, Span<int> to)
     {
         int v0 = values[0];
         int v1 = values[1];

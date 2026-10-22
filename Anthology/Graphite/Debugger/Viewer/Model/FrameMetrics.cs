@@ -34,8 +34,8 @@ internal readonly record struct FrameMetrics(
     public static FrameMetrics From(Recording recording)
     {
         long draws = 0, indirect = 0, dispatches = 0, switches = 0, binds = 0, setBinds = 0, barriers = 0, passes = 0;
-        foreach (RecordedView view in recording.Views)
-            foreach (RecordedPass pass in view.Passes)
+        foreach (RecordedInstance instance in recording.Instances)
+            foreach (RecordedPass pass in instance.Passes)
             {
                 draws += pass.Stats.Draws;
                 indirect += pass.Stats.IndirectDraws;

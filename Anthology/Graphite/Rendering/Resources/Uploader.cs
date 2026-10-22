@@ -226,41 +226,46 @@ internal sealed class Uploader : IDisposable
 }
 
 /// <summary>
-/// A GPU array of fixed size records with a CPU mirror. Records change on the CPU and only the dirty ones reach the GPU
-/// on <see cref="Flush"/>, merged into runs. Growing moves the table to a new buffer and hands the old one back to retire.
+/// A GPU array of fixed size records with a CPU mirror in a persistent graph buffer. Only dirty records reach the GPU
+/// on <see cref="Flush"/>, and growing resizes the buffer keeping its contents.
 /// </summary>
-internal sealed class GpuTable : IDisposable
+internal sealed class GpuTable
 {
     private readonly GraphicsDevice _device;
-    private readonly string _name;
+    private readonly GraphStore _store;
+    private readonly PersistentBuffer _persistent;
     private uint[] _words;
     private bool[] _dirtyFlags;
     private readonly List<uint> _dirty = new();
     private uint _count;
 
-    public GpuTable(GraphicsDevice device, string name, uint strideWords, uint initialCapacity = 256)
+    public GpuTable(GraphicsDevice device, GraphStore store, string name, uint strideWords, uint initialCapacity = 256)
     {
         if (strideWords == 0)
             throw new ArgumentOutOfRangeException(nameof(strideWords), "A record needs at least one word.");
 
         _device = device;
-        _name = name;
+        _store = store;
         StrideWords = strideWords;
         uint capacity = Math.Max(initialCapacity, 1);
         _words = new uint[capacity * strideWords];
         _dirtyFlags = new bool[capacity];
-        Buffer = CreateBuffer(capacity);
+        _persistent = new PersistentBuffer(RenderResourceID.Intern(name), BufferUsage.StructuredBufferReadWrite, new GraphInstanceKey(GraphKind.Root, 0));
+        Buffer = _persistent.Resolve(device, store, capacity * strideWords * 4);
     }
 
     /// <summary>Makes a table whose records are <typeparamref name="T"/>.</summary>
-    public static GpuTable Of<T>(GraphicsDevice device, string name, uint initialCapacity = 256) where T : unmanaged
+    public static GpuTable Of<T>(GraphicsDevice device, GraphStore store, string name, uint initialCapacity = 256) where T : unmanaged
     {
         if (Unsafe.SizeOf<T>() % 4 != 0)
             throw new ArgumentException($"{typeof(T).Name} is not a whole number of words.");
-        return new GpuTable(device, name, (uint)Unsafe.SizeOf<T>() / 4, initialCapacity);
+        return new GpuTable(device, store, name, (uint)Unsafe.SizeOf<T>() / 4, initialCapacity);
     }
 
     public DeviceBuffer Buffer { get; private set; }
+
+    /// <summary>The graph buffer to declare in a pass.</summary>
+    public PersistentBuffer Persistent => _persistent;
 
     public uint StrideWords { get; }
 
@@ -295,18 +300,15 @@ internal sealed class GpuTable : IDisposable
     public void Set<T>(uint index, in T value) where T : unmanaged
         => MemoryMarshal.Cast<byte, uint>(MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in value))).CopyTo(Edit(index));
 
-    /// <summary>
-    /// Queues the dirty records. Returns the replaced buffer when the table outgrew its buffer, which the caller retires
-    /// once the GPU is done with it, or null.
-    /// </summary>
-    public DeviceBuffer? Flush(Uploader uploader)
+    /// <summary>Queues the dirty records. Returns true when the table outgrew its buffer, so graphs declaring it need a rebuild.</summary>
+    public bool Flush(Uploader uploader)
     {
-        DeviceBuffer? replaced = null;
+        bool resized = false;
         if (_count * StrideWords * 4 > Buffer.SizeInBytes)
         {
-            replaced = Buffer;
-            Buffer = CreateBuffer((uint)_dirtyFlags.Length);
+            Buffer = _persistent.Resolve(_device, _store, (uint)_dirtyFlags.Length * StrideWords * 4);
             uploader.Write(Buffer, 0, _words.AsSpan(0, (int)(_count * StrideWords)));
+            resized = true;
         }
         else if (_dirty.Count > 0)
         {
@@ -327,15 +329,6 @@ internal sealed class GpuTable : IDisposable
         foreach (uint index in _dirty)
             _dirtyFlags[index] = false;
         _dirty.Clear();
-        return replaced;
-    }
-
-    public void Dispose() => Buffer.Dispose();
-
-    private DeviceBuffer CreateBuffer(uint capacity)
-    {
-        DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(capacity * StrideWords * 4, BufferUsage.StructuredBufferReadWrite));
-        buffer.Name = _name;
-        return buffer;
+        return resized;
     }
 }

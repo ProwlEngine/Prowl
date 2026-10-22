@@ -81,6 +81,7 @@ internal unsafe sealed partial class VkDescriptorBinder
             return null;
 
         _trackState?.Track(entry);
+        _cbOwner.CheckNotDisposed(entry, name);
         return entry.Kind == kind ? entry : null;
     }
 

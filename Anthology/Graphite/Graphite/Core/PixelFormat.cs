@@ -257,4 +257,116 @@ public enum PixelFormat : byte
     /// 16-bit normalized depth, no stencil.
     /// </summary>
     D16_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 4x4 block, unorm.
+    /// </summary>
+    ASTC_4x4_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 4x4 block, sRGB.
+    /// </summary>
+    ASTC_4x4_UNorm_SRgb,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 5x4 block, unorm.
+    /// </summary>
+    ASTC_5x4_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 5x4 block, sRGB.
+    /// </summary>
+    ASTC_5x4_UNorm_SRgb,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 5x5 block, unorm.
+    /// </summary>
+    ASTC_5x5_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 5x5 block, sRGB.
+    /// </summary>
+    ASTC_5x5_UNorm_SRgb,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 6x5 block, unorm.
+    /// </summary>
+    ASTC_6x5_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 6x5 block, sRGB.
+    /// </summary>
+    ASTC_6x5_UNorm_SRgb,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 6x6 block, unorm.
+    /// </summary>
+    ASTC_6x6_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 6x6 block, sRGB.
+    /// </summary>
+    ASTC_6x6_UNorm_SRgb,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 8x5 block, unorm.
+    /// </summary>
+    ASTC_8x5_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 8x5 block, sRGB.
+    /// </summary>
+    ASTC_8x5_UNorm_SRgb,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 8x6 block, unorm.
+    /// </summary>
+    ASTC_8x6_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 8x6 block, sRGB.
+    /// </summary>
+    ASTC_8x6_UNorm_SRgb,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 8x8 block, unorm.
+    /// </summary>
+    ASTC_8x8_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 8x8 block, sRGB.
+    /// </summary>
+    ASTC_8x8_UNorm_SRgb,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 10x5 block, unorm.
+    /// </summary>
+    ASTC_10x5_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 10x5 block, sRGB.
+    /// </summary>
+    ASTC_10x5_UNorm_SRgb,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 10x6 block, unorm.
+    /// </summary>
+    ASTC_10x6_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 10x6 block, sRGB.
+    /// </summary>
+    ASTC_10x6_UNorm_SRgb,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 10x8 block, unorm.
+    /// </summary>
+    ASTC_10x8_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 10x8 block, sRGB.
+    /// </summary>
+    ASTC_10x8_UNorm_SRgb,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 10x10 block, unorm.
+    /// </summary>
+    ASTC_10x10_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 10x10 block, sRGB.
+    /// </summary>
+    ASTC_10x10_UNorm_SRgb,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 12x10 block, unorm.
+    /// </summary>
+    ASTC_12x10_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 12x10 block, sRGB.
+    /// </summary>
+    ASTC_12x10_UNorm_SRgb,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 12x12 block, unorm.
+    /// </summary>
+    ASTC_12x12_UNorm,
+    /// <summary>
+    /// ASTC compressed, 128-bit, 12x12 block, sRGB.
+    /// </summary>
+    ASTC_12x12_UNorm_SRgb,
 }

@@ -60,10 +60,10 @@ public sealed class BenchProfiler : IGraphProfiler, IGpuStatsProfiler
 
     public void BeginExecution(ulong executionId, string graphName) => _frames++;
     public void EndExecution() => _gpuFrames++;
-    public void BeginView(in ViewInfo view) { }
-    public void EndView(in ViewInfo view) { }
+    public void BeginInstance(in InstanceInfo instance) { }
+    public void EndInstance(in InstanceInfo instance) { }
     public void BeginPass(in PassInfo pass) { }
-    public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
+    public void SkipPass(string name, int instanceIndex, PassSkipReason reason) { }
 
     public void EndPass(in PassInfo pass, in PassStats stats)
     {

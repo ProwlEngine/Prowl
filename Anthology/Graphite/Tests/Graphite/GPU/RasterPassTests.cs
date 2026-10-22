@@ -1,6 +1,5 @@
 #nullable enable
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
@@ -11,21 +10,10 @@ namespace Prowl.Graphite.Tests;
 // applies its declared load ops, so a transient target is cleared by its lifetime-default Clear op even
 // though the pass records no explicit ClearColorTarget call.
 
-file readonly struct RasterView : IRenderView
+file sealed class ClearingRasterPass : InstanceRasterPass
 {
-    public RasterView(uint width, uint height)
-    {
-        PixelWidth = width;
-        PixelHeight = height;
-    }
+    public override GraphKind Kind => TestViews.Kind;
 
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-    public int ViewId => 0;
-}
-
-file sealed class ClearingRasterPass : RasterPass
-{
     private readonly RenderResourceID _id;
     private readonly Color _clear;
 
@@ -37,16 +25,18 @@ file sealed class ClearingRasterPass : RasterPass
 
     public override string Name => "ClearRaster";
 
-    public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, _id, GraphTextureDesc.ViewSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(_clear));
+    public override void Setup(InstanceContextBuilder builder)
+        => SetTarget(builder, _id, GraphTextureDesc.InstanceSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(_clear));
 
-    public override void Render(RenderContext context, CommandBuffer cmd)
+    public override void Render(InstanceContext context, CommandBuffer cmd)
     {
     }
 }
 
-file sealed class RawClearPass : IPass
+file sealed class RawClearPass : IInstancePass
 {
+    public GraphKind Kind => TestViews.Kind;
+
     private readonly RenderResourceID _id;
     private readonly Color _clear;
 
@@ -58,16 +48,18 @@ file sealed class RawClearPass : IPass
 
     public string Name => "RawClear";
 
-    public void Setup(RenderContextBuilder builder)
-        => builder.DeclareOutputTexture(_id, GraphTextureDesc.ViewSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(_clear));
+    public void Setup(InstanceContextBuilder builder)
+        => builder.DeclareOutputTexture(_id, GraphTextureDesc.InstanceSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(_clear));
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
     }
 }
 
-file sealed class CopyReadbackPass : IPass
+file sealed class CopyReadbackPass : IInstancePass
 {
+    public GraphKind Kind => TestViews.Kind;
+
     private readonly RenderResourceID _id;
     private readonly DeviceBuffer _readback;
     private TextureHandle _handle;
@@ -80,9 +72,9 @@ file sealed class CopyReadbackPass : IPass
 
     public string Name => "CopyReadback";
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id);
+    public void Setup(InstanceContextBuilder builder) => _handle = builder.DeclareInputTexture(_id);
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
         RenderTexture target = context.GetRenderTexture(_handle);
         cmd.CopyTextureToBuffer(target.ColorTextures[0], _readback, 0, TextureRegion.Whole(target.ColorTextures[0]));
@@ -102,9 +94,9 @@ public abstract class RasterPassTests<T> : GraphicsDeviceTestBase<T> where T : G
         RenderResourceID id = RenderResourceID.Intern("raster_clear_target");
         ClearingRasterPass clearPass = new(id, clear);
         CopyReadbackPass copyPass = new(id, readback);
-        using RenderPipeline pipeline = new([clearPass, copyPass]);
+        using RenderGraph graph = TestViews.Build([clearPass, copyPass]);
 
-        GD.DispatchGraph(pipeline, new RasterView[] { new(size, size) });
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(size, size)));
         GD.WaitForIdle();
 
         TexelData<Color> map = ReadTexels<Color>(readback, size, size);
@@ -121,9 +113,9 @@ public abstract class RasterPassTests<T> : GraphicsDeviceTestBase<T> where T : G
         DeviceBuffer readback = CreateTexelReadbackBuffer<Color>(size, size);
 
         RenderResourceID id = RenderResourceID.Intern("raster_raw_clear_target");
-        using RenderPipeline pipeline = new([new RawClearPass(id, clear), new CopyReadbackPass(id, readback)]);
+        using RenderGraph graph = TestViews.Build([new RawClearPass(id, clear), new CopyReadbackPass(id, readback)]);
 
-        GD.DispatchGraph(pipeline, new RasterView[] { new(size, size) });
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(size, size)));
         GD.WaitForIdle();
 
         TexelData<Color> map = ReadTexels<Color>(readback, size, size);

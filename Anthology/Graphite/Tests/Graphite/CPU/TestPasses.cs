@@ -3,30 +3,55 @@
 using System;
 
 using Prowl.Graphite;
-using Prowl.Graphite.RenderGraph;
 
-namespace Prowl.Graphite.RenderGraph.Tests;
+namespace Prowl.Graphite.Tests;
 
-internal readonly struct TestView : IRenderView
+/// <summary>Test pass for the solver. Declares given input names, write names and output textures.</summary>
+internal sealed class TestPass : IInstancePass
 {
-    public TestView(uint width, uint height)
+    private readonly string[] _inputs;
+    private readonly string[] _writes;
+    private readonly (string name, GraphTextureDesc desc)[] _outputs;
+
+    public TestPass(string name,
+        string[]? inputs = null,
+        (string, GraphTextureDesc)[]? outputs = null,
+        GraphKind? kind = null,
+        string[]? writes = null)
     {
-        PixelWidth = width;
-        PixelHeight = height;
+        Name = name;
+        Kind = kind ?? TestViews.Kind;
+        _inputs = inputs ?? Array.Empty<string>();
+        _writes = writes ?? Array.Empty<string>();
+        _outputs = outputs ?? Array.Empty<(string, GraphTextureDesc)>();
     }
 
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-    public int ViewId => 0;
+    public string Name { get; }
+
+    public GraphKind Kind { get; }
+
+    public void Setup(InstanceContextBuilder builder)
+    {
+        foreach (string name in _inputs)
+            builder.DeclareInputTexture(name);
+
+        foreach (string name in _writes)
+            builder.DeclareWriteTexture(name);
+
+        foreach ((string name, GraphTextureDesc desc) in _outputs)
+            builder.DeclareOutputTexture(name, desc);
+    }
+
+    public void Render(InstanceContext context, CommandBuffer cmd) { }
 }
 
-/// <summary>Test pass for the solver. Declares given input names and output textures.</summary>
-internal sealed class TestPass : IPass
+/// <summary>Test pass for the root. Declares given input names and fixed size output textures.</summary>
+internal sealed class TestRootPass : IExecutionPass
 {
     private readonly string[] _inputs;
     private readonly (string name, GraphTextureDesc desc)[] _outputs;
 
-    public TestPass(string name,
+    public TestRootPass(string name,
         string[]? inputs = null,
         (string, GraphTextureDesc)[]? outputs = null)
     {
@@ -49,43 +74,15 @@ internal sealed class TestPass : IPass
     public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
-/// <summary>Test pass reading/writing buffers, for testing buffer ordering.</summary>
-internal sealed class TestBufferPass : IPass
-{
-    private readonly string[] _inputs;
-    private readonly (string name, GraphBufferDesc desc)[] _outputs;
-
-    public TestBufferPass(string name,
-        string[]? inputs = null,
-        (string, GraphBufferDesc)[]? outputs = null)
-    {
-        Name = name;
-        _inputs = inputs ?? Array.Empty<string>();
-        _outputs = outputs ?? Array.Empty<(string, GraphBufferDesc)>();
-    }
-
-    public string Name { get; }
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        foreach (string name in _inputs)
-            builder.DeclareInputBuffer(name);
-
-        foreach ((string name, GraphBufferDesc desc) in _outputs)
-            builder.DeclareOutputBuffer(name, desc);
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd) { }
-}
-
 internal static class Desc
 {
-    public static GraphTextureDesc Color() => GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm);
+    public static GraphTextureDesc Color() => GraphTextureDesc.InstanceSized(PixelFormat.R8_G8_B8_A8_UNorm);
+    public static GraphTextureDesc Fixed() => GraphTextureDesc.Sized(4, 4, false, PixelFormat.R8_G8_B8_A8_UNorm);
     public static GraphBufferDesc Storage() => GraphBufferDesc.Structured(16, 4);
 }
 
 /// <summary>Test pass that writes the backbuffer and reads the named textures.</summary>
-internal sealed class TestBackbufferPass : IPass
+internal sealed class TestBackbufferPass : IInstancePass
 {
     private readonly string[] _inputs;
 
@@ -93,13 +90,15 @@ internal sealed class TestBackbufferPass : IPass
 
     public string Name => "TestBackbuffer";
 
-    public void Setup(RenderContextBuilder builder)
+    public GraphKind Kind => TestViews.Kind;
+
+    public void Setup(InstanceContextBuilder builder)
     {
         foreach (string name in _inputs)
             builder.DeclareInputTexture(name);
 
-        builder.DeclareViewTarget();
+        builder.DeclareInstanceTarget();
     }
 
-    public void Render(RenderContext context, CommandBuffer cmd) { }
+    public void Render(InstanceContext context, CommandBuffer cmd) { }
 }

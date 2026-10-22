@@ -16,11 +16,13 @@ file sealed class SlotResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => 0u;
 }
 
+[Collection("GPU Tests")]
 public sealed class StandardShaderTests : IDisposable
 {
     private static readonly string[] s_litToggles = ["_NORMALMAP", "_SURFACEMAP", "_OCCLUSIONMAP", "_EMISSION", "_PARALLAXMAP", "_TRANSLUCENCY", "_ANISOTROPIC", "_INSTANCE_TINT"];
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly GraphStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly MaterialSystem _system;
     private readonly Shader _lit;
@@ -29,15 +31,15 @@ public sealed class StandardShaderTests : IDisposable
     public StandardShaderTests()
     {
         ShaderLibrary.Register(typeof(Renderer).Assembly);
-        _system = new MaterialSystem(_device, new SlotResources());
+        _system = new MaterialSystem(_device, _store, new SlotResources());
         _lit = Load("Lit");
         _unlit = Load("Unlit");
     }
 
     public void Dispose()
     {
-        _system.Dispose();
         _compiler.Dispose();
+        _store.Dispose();
         _device.Dispose();
     }
 

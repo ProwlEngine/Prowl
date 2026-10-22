@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Graphite.Debugging;
+using Prowl.Graphite.Rendering;
 
 using Prowl.Graphite.Debugger.Trace;
 
@@ -58,12 +59,18 @@ internal sealed partial class ProfilerView
     private static string UniformValue(RecordedProperty prop)
     {
         byte[] bytes = prop.Uniform.Items.ToArray();
-        int count = bytes.Length / 4;
+        bool wide = prop.UniformType is >= UniformScalarType.Double1 and <= UniformScalarType.Double4 or UniformScalarType.Double4x4;
+        int size = wide ? 8 : 4;
+        int count = bytes.Length / size;
         if (count == 0)
             return "-";
-        IEnumerable<string> values = Enumerable.Range(0, Math.Min(4, count)).Select(i => prop.UniformType is >= UniformScalarType.Int1 and <= UniformScalarType.Int4
-            ? BitConverter.ToInt32(bytes, i * 4).ToString()
-            : Style.F(BitConverter.ToSingle(bytes, i * 4), "0.###"));
+        IEnumerable<string> values = Enumerable.Range(0, Math.Min(4, count)).Select(i => prop.UniformType switch
+        {
+            >= UniformScalarType.Int1 and <= UniformScalarType.Int4 => BitConverter.ToInt32(bytes, i * 4).ToString(),
+            >= UniformScalarType.UInt1 and <= UniformScalarType.UInt4 => BitConverter.ToUInt32(bytes, i * 4).ToString(),
+            _ when wide => Style.F((float)BitConverter.ToDouble(bytes, i * 8), "0.###"),
+            _ => Style.F(BitConverter.ToSingle(bytes, i * 4), "0.###"),
+        });
         string joined = string.Join(", ", values);
         return count == 1 ? joined : count > 4 ? $"[{joined}, ...]" : $"({joined})";
     }
@@ -87,31 +94,34 @@ internal sealed partial class ProfilerView
                 {
                     int draws = node.CountDraws();
                     int markers = node.Children.Count(c => c.Kind == NodeKind.Marker);
-                    KvSection("Program", 420, new Kv?[]
+                    HeroStrip(new Stat[]
                     {
-                    new("Name", program.Name),
-                    new("Shader", shader),
-                    new("Shader pass", shaderPass),
-                    new("Graph pass", graphPass),
-                    new("Program key", program.Key.ToString()),
-                    new("Pipeline id", pipeline.PipelineId.ToString()),
-                    new("Kind", program.IsCompute ? "Compute" : "Graphics"),
-                    new("Stages", string.Join(" / ", program.Stages.Select(s => $"{s.Stage} ({s.EntryPoint})"))),
-                    new("SPIR-V", Style.Bytes(program.Stages.Sum(s => (double)s.Code.Length))),
-                    program.IsCompute ? new("Thread group", $"{program.ThreadGroupX} x {program.ThreadGroupY} x {program.ThreadGroupZ}") : new("Topology", pipeline.Topology?.ToString() ?? "-"),
-                    new("Outputs", pipeline.Outputs is { } outputs ? Describe.Outputs(outputs) : "-"),
+                        new("Draws", draws.ToString(), "in this pass"),
+                        new("Renderers", markers.ToString(), $"{node.Children.Count - markers} loose draws"),
+                        new("Kind", program.IsCompute ? "Compute" : "Graphics", shaderPass),
+                        new("SPIR-V", Style.Bytes(program.Stages.Sum(s => (double)s.Code.Length)), $"{program.Stages.Length} stages"),
                     });
-                    KvSection("Use in this pass", 420, new Kv?[]
+                    Accordion("Program details", () =>
                     {
-                    new("Draws", draws.ToString()),
-                    new("Renderers (markers)", markers.ToString()),
-                    new("Loose draws", (node.Children.Count - markers).ToString()),
+                        KvSection("Program", 420, new Kv?[]
+                        {
+                            new("Name", program.Name),
+                            new("Shader", shader),
+                            new("Shader pass", shaderPass),
+                            new("Graph pass", graphPass),
+                            new("Program key", program.Key.ToString()),
+                            new("Pipeline id", pipeline.PipelineId.ToString()),
+                            new("Stages", string.Join(" / ", program.Stages.Select(s => $"{s.Stage} ({s.EntryPoint})"))),
+                            program.IsCompute ? new("Thread group", $"{program.ThreadGroupX} x {program.ThreadGroupY} x {program.ThreadGroupZ}") : new("Topology", pipeline.Topology?.ToString() ?? "-"),
+                            new("Outputs", pipeline.Outputs is { } outputs ? Describe.Outputs(outputs) : "-"),
+                            new("Specialization", program.Specializations.Length > 0 ? string.Join(", ", program.Specializations.Select(c => $"{c.Id}={c.Value}")) : "-"),
+                        });
                     });
-                    TableSection("Vertex inputs", 420, "",
+                    Accordion("Vertex inputs", () => TableSection("Vertex inputs", 420, "",
                         new[] { "Semantic", "Location", "Format", "Offset" }, new[] { 1.2f, 0.7f, 1.4f, 0.6f },
                         program.VertexLayouts.Length > 0
                             ? program.VertexLayouts.SelectMany(l => (l.Elements ?? []).Select(e => R(Describe.Name(e.Name), l.Location.ToString(), e.Format.ToString(), e.Offset.ToString()))).ToList()
-                            : new List<Row> { R("SV_VertexID", "-", "uint (system)", "-") });
+                            : new List<Row> { R("SV_VertexID", "-", "uint (system)", "-") }));
                     break;
                 }
 
@@ -180,7 +190,6 @@ internal sealed partial class ProfilerView
 
     private void MarkerTab(FrameModel model, ProfileNode node, string tab)
     {
-        RendererInfo? info = _source.Renderer(node.Name);
         DeepPass pass = model.PassOf(node)!;
         List<ProfileNode> draws = new();
         node.CollectDraws(draws);
@@ -193,58 +202,79 @@ internal sealed partial class ProfilerView
         switch (tab)
         {
             case "Overview":
-                KvSection("Renderer", 420, new Kv?[]
-                {
-                    new("Name", node.Name),
-                    new("Source", "Debug marker (PushMarker / PopMarker)"),
-                    info != null ? new("Instance ID", info.InstanceId.ToString()) : null,
-                    info != null ? new("Renderer type", info.RendererType) : null,
-                    new("Mesh", mesh),
-                    new("Submeshes", draws.Count.ToString()),
-                    info != null ? new("Layer", info.Layer) : null,
-                    info != null ? new("Static", info.StaticFlags) : null,
-                    info != null ? new("Cast shadows", info.CastShadows ? "On" : "Off") : null,
-                    info != null ? new("Receive shadows", info.ReceiveShadows ? "On" : "Off") : null,
-                    info != null ? new("Light probes", info.LightProbes) : null,
-                    info != null ? new("Lightmap index", info.LightmapIndex >= 0 ? info.LightmapIndex.ToString() : "-") : null,
-                    info != null ? new("Sorting order", info.SortingOrder.ToString()) : null,
-                    new("Draws (this program)", draws.Count.ToString()),
-                    bound.Index != null ? new("Triangles", Style.Int(bound.Index.IndexCount / 3.0)) : null,
-                });
-                if (info != null)
-                    KvSection("Transform & bounds", 420, new Kv?[]
+                HeroStrip(node.Meta is DrawCallGroup counted
+                    ? new Stat[]
                     {
-                        new("Position", $"{Style.F(info.Position.X, "0.00")}, {Style.F(info.Position.Y, "0.00")}, {Style.F(info.Position.Z, "0.00")}"),
-                        new("Rotation", $"{Style.F(info.Rotation.X, "0.0")}, {Style.F(info.Rotation.Y, "0.0")}, {Style.F(info.Rotation.Z, "0.0")}"),
-                        new("Scale", $"{Style.F(info.Scale.X, "0.##")}, {Style.F(info.Scale.Y, "0.##")}, {Style.F(info.Scale.Z, "0.##")}"),
-                        new("Screen coverage", Style.F(info.ScreenCoverage, "0.00") + "%"),
-                        new("Distance to camera", Style.F(info.CameraDistance, "0.0") + " m"),
+                        new("Commands", counted.Commands.Length.ToString(), "indirect commands"),
+                        new("Renderables", counted.Commands.Sum(c => c.Renderables.Length).ToString(), "across its commands"),
+                        new("Materials", counted.Commands.SelectMany(c => c.Renderables).Select(r => r.Material).Distinct().Count().ToString(), counted.Shader),
+                        new("Draws", draws.Count.ToString(), "in this group"),
+                    }
+                    : node.Meta is ShadowFaceGroup tile
+                    ? new Stat[]
+                    {
+                        new("Light", tile.LightName ?? "Unnamed light", tile.Type.ToString()),
+                        new(tile.Cascade ? "Cascade" : "Face", tile.Face.ToString(), tile.World),
+                        new("Tile", $"{tile.Size} x {tile.Size}", $"at {tile.X}, {tile.Y}"),
+                        new("Draws", draws.Count.ToString(), "in this group"),
+                    }
+                    : new Stat[]
+                    {
+                        new("Mesh", mesh, $"{draws.Count} submeshes"),
+                        new("Triangles", bound.Index != null ? Style.Int(bound.Index.IndexCount / 3.0) : "-", "first submesh"),
+                        new("Draws", draws.Count.ToString(), "in this group"),
                     });
+                switch (node.Meta)
+                {
+                    case DrawCallGroup call:
+                        KvSection("Draw call", 420, new Kv?[]
+                        {
+                            new("World", call.World),
+                            new("Shader", call.Shader),
+                            new("Program", call.Program),
+                            new("Commands", call.Commands.Length.ToString()),
+                        });
+                        TableSection("Renderables", 0, "One row per instance of each indirect command",
+                            new[] { "Command", "Renderable", "Handle", "Material", "Position" }, new[] { 0.6f, 1.4f, 0.8f, 1.2f, 1.6f },
+                            call.Commands.SelectMany((c, i) => c.Renderables.Select(r => R(i.ToString(), Describe.Renderable(r), Describe.Handle(r.Handle.Index, r.Handle.Generation), r.Material ?? "-", Describe.Position(r.Transform)))).ToList());
+                        break;
+                    case ShadowFaceGroup face:
+                        KvSection("Shadow tile", 420, new Kv?[]
+                        {
+                            new("World", face.World),
+                            new("Light", face.LightName ?? "Unnamed light"),
+                            new("Handle", Describe.Handle(face.Light.Index, face.Light.Generation)),
+                            new("Type", face.Type.ToString()),
+                            new(face.Cascade ? "Cascade" : "Face", face.Face.ToString()),
+                            new("Tile", $"{face.Size} x {face.Size} at {face.X}, {face.Y}"),
+                        });
+                        break;
+                    default:
+                        KvSection("Group", 420, new Kv?[]
+                        {
+                            new("Name", node.Name),
+                            new("Payload", Describe.Payload(node.Meta)),
+                            new("Payload value", Describe.PayloadValue(node.Meta), node.Meta == null ? Style.InkDim : null),
+                        });
+                        break;
+                }
                 break;
 
             case "Material":
-                if (info == null)
+                if (node.Meta is not DrawCallGroup materials)
                 {
-                    KvSection("Material", 420, new Kv?[] { new("Material", "No engine data for this marker", Style.InkDim) });
+                    KvSection("Material", 420, new Kv?[] { new("Material", "This group's payload names no materials", Style.InkDim) });
                     break;
                 }
-                MaterialInfo mat = info.Material;
                 KvSection("Material", 420, new Kv?[]
                 {
-                    new("Name", mat.Name),
-                    new("Shader", program != null ? ParseProgramName(program.Name).Shader : "-"),
-                    new("Render queue", mat.RenderQueue),
-                    new("GPU instancing", mat.Instancing ? "On" : "Off"),
-                    new("Double sided", mat.DoubleSided ? "On" : "Off"),
-                    new("Material CB", Style.Bytes(mat.ConstantBufferBytes)),
+                    new("Shader", materials.Shader),
+                    new("Program", materials.Program),
                     new("Keywords", program != null ? string.Join(" ", ParseProgramName(program.Name).Keywords) : "-"),
                 });
-                TableSection("Properties", 420, "",
-                    new[] { "Property", "Type", "Value" }, new[] { 1.4f, 0.8f, 1.6f },
-                    mat.Properties.Select(p => R(p.Name, p.Type, p.Value)).ToList());
-                TableSection("Textures", 0, "",
-                    new[] { "Slot", "Texture", "Size", "Format", "Mips", "Memory" }, new[] { 1f, 1.4f, 0.7f, 0.6f, 0.5f, 0.7f },
-                    mat.Textures.Select(t => R(t.Slot, t.Texture, t.Size.ToString(), t.Format, t.Mips.ToString(), Style.Bytes(t.Bytes))).ToList());
+                TableSection("Materials", 420, "Materials the draw call's renderables draw with",
+                    new[] { "Material", "Renderables" }, new[] { 1.6f, 0.8f },
+                    materials.Commands.SelectMany(c => c.Renderables).GroupBy(r => r.Material ?? "-").Select(g => R(g.Key, g.Count().ToString())).ToList());
                 break;
 
             default:
@@ -267,7 +297,6 @@ internal sealed partial class ProfilerView
                     });
 
                     const string context = "marker:Mesh";
-                    _viewerSelection.TryGetValue(context, out string? current);
                     List<ViewerItem> items = new();
                     List<Row> rows = new();
                     foreach ((RecordedResource? res, string kind, string prefix) in new[] { (vb, "Vertex", "vb:"), (ib, "Index", "ib:") })
@@ -280,11 +309,17 @@ internal sealed partial class ProfilerView
                         {
                             Cells = new[] { kind, res.Name, Style.Bytes(res.Buffer?.SizeInBytes ?? 0) },
                             Pick = () => _viewerSelection[context] = key,
-                            Selected = current == key || (current == null && rows.Count == 0),
                         });
+                        Mark(rows[^1], 1, key);
                     }
-                    TableSection("Buffers", 420, "Click to view", new[] { "Kind", "Buffer", "Size" }, new[] { 0.8f, 1.8f, 0.8f }, rows);
-                    Section("Mesh / buffer viewer", 0, "Drag the mesh to orbit", w => ResourceViewer(model, node, context, items, null, w));
+                    if (items.Count > 0)
+                    {
+                        string selectedKey = SelectedKey(context, items);
+                        for (int i = 0; i < rows.Count; i++)
+                            rows[i].Selected = items[i].Key == selectedKey;
+                    }
+                    ResourceTable(model, node, context, "Buffers", "Click to preview / drag the mesh to orbit",
+                        new[] { "Kind", "Buffer", "Size" }, new[] { 0.8f, 1.8f, 0.8f }, rows, items);
                     break;
                 }
         }
@@ -294,7 +329,7 @@ internal sealed partial class ProfilerView
     {
         DeepIndex index = model.Index!;
         DeepPass pass = model.PassOf(node)!;
-        DeepView view = model.ViewOf(node)!;
+        DeepInstance view = model.InstanceOf(node)!;
         ProfileNode passNode = node.Ancestor(NodeKind.Pass)!;
         ProfileNode? program = node.Ancestor(NodeKind.Program);
         ProfileNode? marker = node.Ancestor(NodeKind.Marker);
@@ -313,32 +348,32 @@ internal sealed partial class ProfilerView
                     RecordedCommand cmd = node.Command!;
                     uint instances = cmd switch { DrawIndexedCommand d => d.InstanceCount, DrawCommand d => d.InstanceCount, _ => 1 };
                     uint indexCount = cmd switch { DrawIndexedCommand d => d.IndexCount, DrawCommand d => d.VertexCount, _ => bound.Index?.IndexCount ?? 0 };
-                    KvSection("Draw call", 0, new Kv?[]
+                    HeroStrip(new Stat[]
                     {
-                    new("EID", node.CommandIndex.ToString()),
-                    new("Replay event index", node.DrawOrdinal.ToString()),
-                    new("Command", CommandName(cmd)),
-                    new("Arguments", CommandArgs(index, cmd)),
-                    new("Index count", Style.Int(indexCount) + (bound.Index != null ? " (index buffer bind)" : "")),
-                    new("Instance count", instances.ToString()),
-                    cmd is DrawIndexedCommand di ? new("First index", Style.Int(di.FirstIndex)) : null,
-                    cmd is DrawIndexedCommand dv ? new("Vertex offset", dv.VertexOffset.ToString()) : null,
-                    new("Primitives", Style.Int(indexCount / 3.0 * instances)),
-                    new("Topology", bound.Pipeline?.Topology?.ToString() ?? "-"),
-                    new("Renderer (marker)", marker?.Name ?? "- (no marker)"),
-                    new("Submesh", node.SubIndex.ToString()),
-                    new("Mesh", mesh),
-                    new("Program", program?.Name ?? "-"),
-                    new("Pipeline id", program?.Pipeline?.PipelineId.ToString() ?? "-"),
-                    new("Index in pass", $"{position + 1} of {passDraws.Count}"),
+                        new("Command", CommandName(cmd), $"EID {node.CommandIndex}"),
+                        new("Index count", Style.Int(indexCount), bound.Index != null ? "indexed" : "vertices"),
+                        new("Instances", instances.ToString(), $"{Style.Int(indexCount / 3.0 * instances)} primitives"),
+                        new("Mesh", mesh, marker?.Name ?? "no marker"),
                     });
+                    Accordion("Draw call", () => KvSection("Draw call", 0, new Kv?[]
+                    {
+                        new("Replay event index", node.DrawOrdinal.ToString()),
+                        new("Arguments", CommandArgs(index, cmd)),
+                        cmd is DrawIndexedCommand di ? new("First index", Style.Int(di.FirstIndex)) : null,
+                        cmd is DrawIndexedCommand dv ? new("Vertex offset", dv.VertexOffset.ToString()) : null,
+                        new("Topology", bound.Pipeline?.Topology?.ToString() ?? "-"),
+                        new("Renderer (marker)", marker?.Name ?? "- (no marker)"),
+                        new("Submesh", node.SubIndex.ToString()),
+                        new("Program", program?.Name ?? "-"),
+                        new("Pipeline id", program?.Pipeline?.PipelineId.ToString() ?? "-"),
+                        new("Index in pass", $"{position + 1} of {passDraws.Count}"),
+                    }));
                     break;
                 }
 
             case "Geometry":
                 {
                     const string context = "draw:Geometry";
-                    _viewerSelection.TryGetValue(context, out string? current);
                     List<Row> rows = new();
                     List<ViewerItem> items = new();
                     foreach (RecordedVertexBinding binding in bound.Vertex.Values)
@@ -351,8 +386,8 @@ internal sealed partial class ProfilerView
                         {
                             Cells = new[] { $"VB {binding.Slot}", r?.Name ?? "-", binding.Offset.ToString(), $"{binding.Stride} B ({layout})", Style.Bytes(r?.Buffer?.SizeInBytes ?? 0) },
                             Pick = () => _viewerSelection[context] = key,
-                            Selected = current == key || (current == null && rows.Count == 0),
                         });
+                        Mark(rows[^1], 1, key);
                     }
                     if (bound.Index != null)
                     {
@@ -363,12 +398,17 @@ internal sealed partial class ProfilerView
                         {
                             Cells = new[] { "IB", ib?.Name ?? "-", (first * Describe.IndexSize(bound.Index.Format)).ToString(), bound.Index.Format.ToString(), Style.Bytes(ib?.Buffer?.SizeInBytes ?? 0) },
                             Pick = () => _viewerSelection[context] = key,
-                            Selected = current == key,
                         });
+                        Mark(rows[^1], 1, key);
                     }
-                    TableSection("Bound geometry", 0, "Click to view",
-                        new[] { "Slot", "Buffer", "Offset", "Stride / format", "Size" }, new[] { 0.6f, 1.6f, 0.6f, 1.2f, 0.7f }, rows);
-                    Section("Resource Viewer", 0, "Layout from the program vertex layouts", w => ResourceViewer(model, node, context, items, null, w));
+                    if (items.Count > 0)
+                    {
+                        string selectedKey = SelectedKey(context, items);
+                        for (int i = 0; i < rows.Count; i++)
+                            rows[i].Selected = items[i].Key == selectedKey;
+                    }
+                    ResourceTable(model, node, context, "Bound geometry", "Click to preview / layout from the program vertex layouts",
+                        new[] { "Slot", "Buffer", "Offset", "Stride / format", "Size" }, new[] { 0.6f, 1.6f, 0.6f, 1.2f, 0.7f }, rows, items);
                     break;
                 }
 
@@ -395,9 +435,14 @@ internal sealed partial class ProfilerView
                             };
                         })
                         .ToList();
-                    TableSection("Bound resources", 420, "Folded from SetProperties / click a buffer to view",
+                    List<ViewerItem> buffers = bound.Properties.Values
+                        .Where(p => p.Kind is PropertyKind.Buffer or PropertyKind.UniformBuffer)
+                        .Select(p => new ViewerItem("buf:" + p.Resource.Resource.Value, index.Resource(p.Resource.Resource)?.Name ?? p.Name))
+                        .DistinctBy(i => i.Key)
+                        .ToList();
+                    ResourceTable(model, node, context, "Bound resources", "Folded from SetProperties / click a buffer to preview",
                         new[] { "Name", "Kind", "Resource" }, new[] { 1.4f, 1f, 1.8f },
-                        resources.Count > 0 ? resources : new List<Row> { R("-", "None") });
+                        resources.Count > 0 ? resources : new List<Row> { R("-", "None") }, buffers);
 
                     List<Row> uniforms = bound.Properties.Values
                         .Where(p => p.Kind == PropertyKind.Uniform)
@@ -423,12 +468,6 @@ internal sealed partial class ProfilerView
                         });
                     }
 
-                    List<ViewerItem> buffers = bound.Properties.Values
-                        .Where(p => p.Kind is PropertyKind.Buffer or PropertyKind.UniformBuffer)
-                        .Select(p => new ViewerItem("buf:" + p.Resource.Resource.Value, index.Resource(p.Resource.Resource)?.Name ?? p.Name))
-                        .DistinctBy(i => i.Key)
-                        .ToList();
-                    Section("Bound buffer viewer", 0, "Structured and uniform buffers are raw at this level", w => ResourceViewer(model, node, context, buffers, null, w));
                     break;
                 }
         }

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
@@ -19,14 +18,7 @@ file sealed class FakeResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => sampler == null ? 0u : 3u;
 }
 
-file readonly struct NoView : IRenderView
-{
-    public Framebuffer? Target => null;
-    public uint PixelWidth => 1;
-    public uint PixelHeight => 1;
-    public int ViewId => 0;
-}
-
+[Collection("GPU Tests")]
 public sealed class MaterialTests : IDisposable
 {
     private const string Source = """
@@ -59,6 +51,7 @@ public sealed class MaterialTests : IDisposable
         """;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly GraphStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly Shader _shader;
     private readonly MaterialSystem _system;
@@ -67,13 +60,13 @@ public sealed class MaterialTests : IDisposable
     public MaterialTests()
     {
         _shader = new Shader(ShaderParser.Parse(Source), _compiler);
-        _system = new MaterialSystem(_device, new FakeResources()) { Reporter = _reports.Add };
+        _system = new MaterialSystem(_device, _store, new FakeResources()) { Reporter = _reports.Add };
     }
 
     public void Dispose()
     {
-        _system.Dispose();
         _compiler.Dispose();
+        _store.Dispose();
         _device.Dispose();
     }
 
@@ -364,11 +357,11 @@ public sealed class MaterialTests : IDisposable
         PropertySet properties = new();
         properties.SetBuffer("Materials", table);
         properties.SetBuffer("Output", output);
-        using RenderPipeline pipeline = new([
+        using RenderGraph graph = RenderGraph.Build([
             new UploadTablePass(uploader, table),
             new ReadTablePass(program, properties, material.Slot, table, output),
             new ReadbackPass(output, readback)]);
-        _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+        _device.DispatchGraph(graph, graph.CreateInstances());
         _device.WaitForIdle();
 
         float[] values = _device.Map<float>(readback).ToArray();
@@ -377,7 +370,7 @@ public sealed class MaterialTests : IDisposable
     }
 }
 
-file sealed class UploadTablePass(Uploader uploader, DeviceBuffer table) : IPass
+file sealed class UploadTablePass(Uploader uploader, DeviceBuffer table) : IExecutionPass
 {
     public string Name => "UploadTable";
 
@@ -386,7 +379,7 @@ file sealed class UploadTablePass(Uploader uploader, DeviceBuffer table) : IPass
     public void Render(RenderContext context, CommandBuffer cmd) => uploader.Record(cmd, context.Task);
 }
 
-file sealed class ReadTablePass(ComputeProgram program, PropertySet properties, uint slot, DeviceBuffer table, DeviceBuffer output) : IPass
+file sealed class ReadTablePass(ComputeProgram program, PropertySet properties, uint slot, DeviceBuffer table, DeviceBuffer output) : IExecutionPass
 {
     public string Name => "ReadTable";
 
@@ -405,7 +398,7 @@ file sealed class ReadTablePass(ComputeProgram program, PropertySet properties, 
     }
 }
 
-file sealed class ReadbackPass(DeviceBuffer output, DeviceBuffer readback) : IPass
+file sealed class ReadbackPass(DeviceBuffer output, DeviceBuffer readback) : IExecutionPass
 {
     public string Name => "Readback";
 

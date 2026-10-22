@@ -4,7 +4,7 @@ using System;
 
 using Xunit;
 
-namespace Prowl.Graphite.RenderGraph.Tests;
+namespace Prowl.Graphite.Tests;
 
 public class UsageKindTests
 {

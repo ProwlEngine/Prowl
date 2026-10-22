@@ -92,7 +92,7 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
     {
         uint scImageCount = 0;
         _gd.KhrSwapchain.GetSwapchainImages(_gd.Device, deviceSwapchain, ref scImageCount, null).CheckResult();
-        if (_scImages.Length < scImageCount)
+        if (_scImages.Length != scImageCount)
         {
             _scImages = new Image[(int)scImageCount];
         }
@@ -105,6 +105,16 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
         CreateFramebuffers();
 
         _outputDescription = OutputDescription.CreateFromFramebuffer(this);
+    }
+
+    /// <summary>Lets the framebuffers of the images go, before the swapchain owning the images is destroyed.</summary>
+    internal void ReleaseSwapchain()
+    {
+        DestroySwapchainFramebuffers();
+        _scImages = [];
+        _scFramebuffers = [];
+        _scColorTextures = [];
+        _currentImageIndex = 0;
     }
 
     private void DestroySwapchainFramebuffers()

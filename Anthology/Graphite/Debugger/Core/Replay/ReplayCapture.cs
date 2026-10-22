@@ -14,7 +14,7 @@ internal sealed class ReplayCapture(string passName, HashSet<TraceResourceId> wa
 
     public void EndExecution() { }
 
-    public void DescribeView(in ViewCaptureInfo view) { }
+    public void DescribeInstance(in InstanceCaptureInfo instance) { }
 
     public void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)
     {

@@ -1,7 +1,6 @@
 using System;
 
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 
 using Silk.NET.Vulkan;
 

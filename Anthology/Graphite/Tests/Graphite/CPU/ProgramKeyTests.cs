@@ -38,4 +38,14 @@ public class ProgramKeyTests
         Assert.NotEqual(baseKey, ProgramKey.Compute([Stage(ShaderStages.Vertex, "vs2", 1, 2), fs]));
         Assert.NotEqual(baseKey, ProgramKey.Compute([Stage(ShaderStages.Vertex, "vs", 1, 9), fs]));
     }
+
+    [Fact]
+    public void Compute_SpecializationsChangeTheKeyOnlyWhenPresent()
+    {
+        ShaderStageDescription[] stages = [Stage(ShaderStages.Vertex, "vs", 1, 2)];
+
+        Assert.Equal(ProgramKey.Compute(stages), ProgramKey.Compute(stages, []));
+        Assert.NotEqual(ProgramKey.Compute(stages), ProgramKey.Compute(stages, [new SpecializationConstant(0, 1)]));
+        Assert.NotEqual(ProgramKey.Compute(stages, [new SpecializationConstant(0, 1)]), ProgramKey.Compute(stages, [new SpecializationConstant(0, 2)]));
+    }
 }

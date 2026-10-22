@@ -1,7 +1,6 @@
 using System;
 #nullable enable
 
-using Prowl.Graphite.RenderGraph;
 
 using Xunit;
 
@@ -11,21 +10,10 @@ namespace Prowl.Graphite.Tests;
 // BufferHandle resolution/caching seam through RenderContext.GetRenderBuffer, cross-pass sharing of one
 // transient buffer, and a compute pass writing a graph buffer that is copied back for verification.
 
-file readonly struct BufferView : IRenderView
+file sealed class BufferWriterPass : IInstancePass
 {
-    public BufferView(uint width, uint height)
-    {
-        PixelWidth = width;
-        PixelHeight = height;
-    }
+    public GraphKind Kind => TestViews.Kind;
 
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-    public int ViewId => 0;
-}
-
-file sealed class BufferWriterPass : IPass
-{
     private readonly RenderResourceID _id;
     private readonly GraphBufferDesc _desc;
     private BufferHandle _handle;
@@ -39,13 +27,15 @@ file sealed class BufferWriterPass : IPass
     public string Name => "Writer";
     public DeviceBuffer? Resolved { get; private set; }
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputBuffer(_id, _desc);
+    public void Setup(InstanceContextBuilder builder) => _handle = builder.DeclareOutputBuffer(_id, _desc);
 
-    public void Render(RenderContext context, CommandBuffer cmd) => Resolved = context.GetRenderBuffer(_handle);
+    public void Render(InstanceContext context, CommandBuffer cmd) => Resolved = context.GetRenderBuffer(_handle);
 }
 
-file sealed class BufferReaderPass : IPass
+file sealed class BufferReaderPass : IInstancePass
 {
+    public GraphKind Kind => TestViews.Kind;
+
     private readonly RenderResourceID _id;
     private BufferHandle _handle;
 
@@ -54,13 +44,15 @@ file sealed class BufferReaderPass : IPass
     public string Name => "Reader";
     public DeviceBuffer? Resolved { get; private set; }
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputBuffer(_id);
+    public void Setup(InstanceContextBuilder builder) => _handle = builder.DeclareInputBuffer(_id);
 
-    public void Render(RenderContext context, CommandBuffer cmd) => Resolved = context.GetRenderBuffer(_handle);
+    public void Render(InstanceContext context, CommandBuffer cmd) => Resolved = context.GetRenderBuffer(_handle);
 }
 
-file sealed class ComputeWriteReadbackPass : IPass
+file sealed class ComputeWriteReadbackPass : IInstancePass
 {
+    public GraphKind Kind => TestViews.Kind;
+
     private readonly RenderResourceID _id;
     private readonly GraphBufferDesc _desc;
     private readonly ComputeProgram _compute;
@@ -83,9 +75,9 @@ file sealed class ComputeWriteReadbackPass : IPass
 
     public string Name => "ComputeWriteReadback";
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputBuffer(_id, _desc);
+    public void Setup(InstanceContextBuilder builder) => _handle = builder.DeclareOutputBuffer(_id, _desc);
 
-    public void Render(RenderContext context, CommandBuffer cl)
+    public void Render(InstanceContext context, CommandBuffer cl)
     {
         DeviceBuffer destination = context.GetRenderBuffer(_handle);
 
@@ -102,8 +94,10 @@ file sealed class ComputeWriteReadbackPass : IPass
     }
 }
 
-file sealed class BufferHistoryPass : IPass
+file sealed class BufferHistoryPass : IInstancePass
 {
+    public GraphKind Kind => TestViews.Kind;
+
     private readonly RenderResourceID _id;
     private readonly uint _sizeInBytes;
     private readonly DeviceBuffer _source;
@@ -120,10 +114,10 @@ file sealed class BufferHistoryPass : IPass
 
     public string Name => "History";
 
-    public void Setup(RenderContextBuilder builder)
+    public void Setup(InstanceContextBuilder builder)
         => _handle = builder.DeclareOutputBuffer(_id, GraphBufferDesc.Structured(_sizeInBytes / 4, 4), history: 1);
 
-    public void Render(RenderContext context, CommandBuffer cl)
+    public void Render(InstanceContext context, CommandBuffer cl)
     {
         DeviceBuffer current = context.GetRenderBuffer(_handle, 0);
         DeviceBuffer previous = context.GetRenderBuffer(_handle, 1);
@@ -142,9 +136,9 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         GraphBufferDesc desc = GraphBufferDesc.Structured(16, sizeof(float));
         BufferWriterPass writer = new(id, desc);
         BufferReaderPass reader = new(id);
-        using RenderPipeline pipeline = new([writer, reader]);
+        using RenderGraph graph = TestViews.Build([writer, reader]);
 
-        GD.DispatchGraph(pipeline, new BufferView[] { new(64, 64) });
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(64, 64)));
         GD.WaitForIdle();
 
         Assert.NotNull(writer.Resolved);
@@ -192,9 +186,9 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         GraphBufferDesc desc = GraphBufferDesc.Structured(count, sizeof(float));
         ComputeWriteReadbackPass pass = new(
             RenderResourceID.Intern("bufres_compute_out"), desc, compute, source, readback, side);
-        using RenderPipeline pipeline = new([pass]);
+        using RenderGraph graph = TestViews.Build([pass]);
 
-        GD.DispatchGraph(pipeline, new BufferView[] { new(64, 64) });
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(64, 64)));
         GD.WaitForIdle();
 
         Span<float> map = GD.Map<float>(readback);
@@ -212,7 +206,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer source = RF.CreateBuffer(new BufferDescription(size, BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer readback = RF.CreateBuffer(new BufferDescription(size, BufferUsage.Staging));
         BufferHistoryPass pass = new(RenderResourceID.Intern("bufres_history"), size, source, readback);
-        using RenderPipeline pipeline = new([pass]);
+        using RenderGraph graph = TestViews.Build([pass]);
 
         float[]? previousValues = null;
         for (int frame = 0; frame < 3; frame++)
@@ -222,7 +216,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
                 values[i] = frame * 10 + i + 1;
             GD.UpdateBuffer(source, 0, values);
 
-            GD.DispatchGraph(pipeline, new BufferView[] { new(64, 64) });
+            GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(64, 64)));
             GD.WaitForIdle();
 
             if (previousValues != null)

@@ -145,6 +145,9 @@ public struct ViewDesc
 
     /// <summary>Unique per renderer, keys per view state.</summary>
     public int ViewId;
+
+    /// <summary>Name debug tools show for the view's instance, or null.</summary>
+    public string? Name;
     public ViewLayers Layers;
 
     /// <summary>1 for mono. Stereo and cube layers draw through multiview.</summary>
@@ -210,15 +213,6 @@ public struct ViewDesc
     /// <summary>ViewIds of views that draw before this one, such as ones whose targets it samples.</summary>
     public int[]? DependsOn;
 
-    /// <summary>
-    /// The renderer culls the view and prepares its draws but runs no features and presents nothing. Host pipelines in
-    /// <see cref="FrameDesc.Pipelines"/> record them through <see cref="Renderer.Draws"/>.
-    /// </summary>
-    public bool External;
-
-    /// <summary>Pass types an external view prepares draws for, beyond the prepass, opaque and transparent lists.</summary>
-    public PassType[]? Passes;
-
     public ViewDesc()
     {
         World = null!;
@@ -244,12 +238,6 @@ public struct FrameDesc
 {
     public ReadOnlyMemory<ViewDesc> Views;
     public FrameTime Time;
-
-    /// <summary>
-    /// Host pipelines run in the frame's execution after its views, on the render thread. Their passes draw external
-    /// views through <see cref="Renderer.Draws"/>.
-    /// </summary>
-    public ReadOnlyMemory<GraphDispatch> Pipelines;
 
     /// <summary>Runs on the render thread before the frame is prepared, for host work its submission has to follow.</summary>
     public Action? Started;
@@ -309,8 +297,7 @@ public sealed class Renderer : IDisposable
     private readonly List<Material> _changedMaterials = new();
     private readonly List<Material> _shadowMaterials = new();
     private readonly List<GpuMesh> _changedMeshes = new();
-    private readonly List<DeviceBuffer> _replaced = new();
-    private readonly List<(ulong Execution, DeviceBuffer Buffer)> _retiring = new();
+    private readonly GraphStore _store;
     private ViewDesc[] _views = [];
     private FrameTime _time;
     private int _viewCount;
@@ -327,9 +314,8 @@ public sealed class Renderer : IDisposable
         Device = device;
         _compiler = compiler;
         _options = options ?? new RendererOptions();
-        GraphicsDeviceFeatures features = device.Features;
-        if (!features.MultiDrawIndirect || !features.DrawIndirectBaseInstance || !features.DescriptorIndexing)
-            throw new NotSupportedException("The renderer needs multi draw indirect, a first instance in indirect draws, and descriptor indexing.");
+        if (Unsupported(device) is { } unsupported)
+            throw new NotSupportedException($"The renderer cannot run on '{device.DeviceName}': {unsupported}.");
         if (_options.PrefilterSamples < 1)
             throw new ArgumentException($"PrefilterSamples is {_options.PrefilterSamples}, it must be at least 1.", nameof(options));
         if (_options.SmallestProbeMip is < 1 or > 2048 || !uint.IsPow2(_options.SmallestProbeMip))
@@ -338,11 +324,12 @@ public sealed class Renderer : IDisposable
 
         Textures = new RendererTextures(device) { Reporter = Report };
         _uploader = new Uploader(device, InternalShaders.Compute(device, compiler, "Internal/Scatter.glsl"));
-        _geometry = new GeometryPool(device, _options.PageVertexWords, _options.PageIndices);
-        _materials = new MaterialSystem(device, Textures) { Reporter = Report };
-        _globals = new GlobalRegistry(device, Textures) { Reporter = Report };
+        _store = new GraphStore();
+        _geometry = new GeometryPool(device, _store, _options.PageVertexWords, _options.PageIndices);
+        _materials = new MaterialSystem(device, _store, Textures) { Reporter = Report };
+        _globals = new GlobalRegistry(device, _store, Textures) { Reporter = Report };
         _programs.Reporter = Report;
-        _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report, _options.Compile) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
+        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report, _options.Compile) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
         _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
         _frame.ChangedMaterials = _shadowMaterials;
         Skies = new BuiltInSkies(this);
@@ -355,6 +342,32 @@ public sealed class Renderer : IDisposable
             _thread = new Thread(RenderLoop) { Name = "Graphite Render", IsBackground = true };
             _thread.Start();
         }
+    }
+
+    private static string? Unsupported(GraphicsDevice device)
+        => Unsupported(device.Features.DrawIndirectBaseInstance, device.Features.DescriptorIndexing, device.Limits);
+
+    /// <summary>Why the renderer cannot run on a device with these features and limits, or null when it can.</summary>
+    internal static string? Unsupported(bool drawIndirectBaseInstance, bool descriptorIndexing, GraphicsDeviceLimits limits)
+    {
+        if (!drawIndirectBaseInstance)
+            return "indirect draws need a first instance, which carries each draw's record";
+        if (!descriptorIndexing)
+            return "the bindless tables need descriptor indexing";
+
+        uint varyings = (GraphiteBindings.MaterialSlotLocation + 1) * 4;
+        if (limits.MaxVertexOutputComponents < varyings || limits.MaxFragmentInputComponents < varyings)
+            return $"material varyings reach location {GraphiteBindings.MaterialSlotLocation}, which needs {varyings} vertex output and fragment input components, the device has {limits.MaxVertexOutputComponents} and {limits.MaxFragmentInputComponents}";
+
+        const ShaderStages Graphics = ShaderStages.Vertex | ShaderStages.Fragment;
+        ResourceLayoutDescription pass = new(GraphiteBindings.PassSet,
+            new ResourceLayoutElementDescription(GraphiteBindings.MaterialsName, ResourceKind.StructuredBufferReadOnly, Graphics, GraphiteBindings.Materials),
+            new ResourceLayoutElementDescription(GraphiteBindings.InstancesName, ResourceKind.StructuredBufferReadOnly, Graphics, GraphiteBindings.Instances),
+            new ResourceLayoutElementDescription(GraphiteBindings.DrawRecordsName, ResourceKind.StructuredBufferReadOnly, Graphics, GraphiteBindings.DrawRecords),
+            new ResourceLayoutElementDescription(GraphiteBindings.VerticesName, ResourceKind.StructuredBufferReadOnly, Graphics, GraphiteBindings.Vertices));
+        return limits.Exceeded([ProgramCache.FrameLayout, ProgramCache.ViewLayout, pass]) is { } exceeded
+            ? $"a material program exceeds the descriptor limits, {exceeded}"
+            : null;
     }
 
     public GraphicsDevice Device { get; }
@@ -373,7 +386,7 @@ public sealed class Renderer : IDisposable
         _frameDone.Wait();
         try
         {
-            RenderWorld world = new(Device, this, Textures, new ReflectionSettings(_options.ReflectionFormat, _options.PrefilterSamples, _options.SmallestProbeMip, _options.ProbeTexelsPerFrame));
+            RenderWorld world = new(Device, _store, this, Textures, new ReflectionSettings(_options.ReflectionFormat, _options.PrefilterSamples, _options.SmallestProbeMip, _options.ProbeTexelsPerFrame));
             (GlobalProperties globals, int region) = _globals.AddWorld();
             world.Globals = globals;
             _worlds[world] = new WorldFrame(world, new BucketSet(world.Render, _programs), region, _programs);
@@ -504,7 +517,6 @@ public sealed class Renderer : IDisposable
                     _views[v].Keywords = (Keyword[])keywords.Clone();
             }
             ExtractFeatures(views);
-            _pipelines = frame.Pipelines.ToArray();
             _started = frame.Started;
             _submitted = frame.Submitted;
             _profilers = frame.Profilers ?? [];
@@ -535,7 +547,6 @@ public sealed class Renderer : IDisposable
 
     /// <summary>The slots of host spatial sets by name, the same in every world.</summary>
     internal SpatialSlots SpatialSlots { get; } = new();
-    private GraphDispatch[] _pipelines = [];
     private Action? _started;
     private Action<bool>? _submitted;
     private IProfiler[] _profilers = [];
@@ -578,12 +589,6 @@ public sealed class Renderer : IDisposable
             throw new ArgumentOutOfRangeException(nameof(size), $"The buffer holds {buffer.SizeInBytes} bytes.");
         _readbacks.Enqueue(new ReadbackRequest { Buffer = buffer, Offset = offset, Size = size, BufferDone = done });
     }
-
-    /// <summary>
-    /// The draws prepared this frame for an external view, for host pipelines to record. Render thread, inside a pass of
-    /// <see cref="FrameDesc.Pipelines"/>.
-    /// </summary>
-    public ViewDraws Draws(int viewId) => _frame.Draws(viewId);
 
     /// <summary>
     /// The GPU execution of the last frame dispatched, for hosts tracking their own readbacks or staging against it.
@@ -639,6 +644,13 @@ public sealed class Renderer : IDisposable
         {
             world.World.FeatureSnapshot = world.World.Features.Snapshot();
             Extract(world.World.FeatureSnapshot);
+            world.World.FrameFeatureSnapshot = world.World.FrameFeatures.Snapshot();
+            foreach (FrameFeature feature in world.World.FrameFeatureSnapshot)
+            {
+                feature.TakeSnapshot();
+                if (feature.EnabledSnapshot)
+                    feature.Extract();
+            }
         }
         for (int i = 0; i < views.Length; i++)
         {
@@ -762,14 +774,10 @@ public sealed class Renderer : IDisposable
             world.Dispose();
         }
         _worlds.Clear();
-        foreach ((_, DeviceBuffer buffer) in _retiring)
-            buffer.Dispose();
         _frame.Dispose();
         _effects?.Dispose();
-        _globals.Dispose();
-        _materials.Dispose();
-        _geometry.Dispose();
         _uploader.Dispose();
+        _store.Dispose();
         Textures.Dispose();
         _frameQueued.Dispose();
         _frameDone.Dispose();
@@ -859,13 +867,6 @@ public sealed class Renderer : IDisposable
         _geometry.Reclaim(completed);
         _materials.Reclaim(completed);
         _globals.Reclaim(completed);
-        for (int i = _retiring.Count - 1; i >= 0; i--)
-        {
-            if (_retiring[i].Execution > completed)
-                continue;
-            _retiring[i].Buffer.Dispose();
-            _retiring.RemoveAt(i);
-        }
 
         _changedMeshes.Clear();
         _geometry.Apply(_uploader, _lastDispatched, _options.UploadBudgetPerFrame, _changedMeshes);
@@ -875,32 +876,29 @@ public sealed class Renderer : IDisposable
             world.World.Render.UpdateDeformation(_geometry, _lastDispatched);
             world.Buckets.Update(world.World.Render.DrawChanged, world.World.Render.BoundsChanged, _changedMaterials);
         }
-        _geometry.FlushCopies(_uploader, _lastDispatched);
+        _geometry.FlushCopies(_uploader);
 
         _materials.Flush(_uploader, _lastDispatched);
         _globals.Flush(_uploader, _lastDispatched);
-        _replaced.Clear();
         _frameCount++;
         foreach (WorldFrame world in _worlds.Values)
         {
-            world.World.Render.Flush(_uploader, _replaced);
+            world.World.Render.Flush(_uploader);
             _cameras.Clear();
             for (int v = 0; v < _viewCount; v++)
             {
                 if (_views[v].World == world.World)
                     _cameras.Add(_views[v].Layers[0].Position);
             }
-            world.World.Reflections.Plan(_frameCount, world.World.Lighting, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_cameras));
-            world.World.Reflections.Flush(_uploader, _replaced);
+            world.World.Reflections.Plan(_frameCount, world.World.Lighting, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_cameras), world.World.Id);
+            world.World.Reflections.Flush(_uploader);
             world.World.Lighting.Update();
-            world.World.Lighting.Flush(_uploader, _replaced);
-            world.World.FlushHostSets(_uploader, _replaced);
-            world.World.Probes.Update(world.World.Render, _uploader, _replaced);
+            world.World.Lighting.Flush(_uploader);
+            world.World.FlushHostSets(_uploader);
+            world.World.Probes.Update(world.World.Render, _uploader);
         }
-        foreach (DeviceBuffer buffer in _replaced)
-            _retiring.Add((_lastDispatched, buffer));
 
-        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _viewFeatures.AsSpan(0, _viewCount), _pipelines, _frameReadbacks, _worlds, _worlds.Values, _lastDispatched, _time, _profilers);
+        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _viewFeatures.AsSpan(0, _viewCount), _frameReadbacks, _worlds, _worlds.Values, _lastDispatched, _time, _profilers);
         _lastDispatched = task.Id;
         LastExecution = task;
         foreach (ReadbackRequest request in _frameReadbacks)

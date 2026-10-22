@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 
 namespace Prowl.Graphite;
 
@@ -31,13 +30,18 @@ public abstract partial class CommandBuffer
 
     internal override void TrackBuffer(DeviceBuffer buffer)
     {
+        CheckNotDisposed(buffer, "The buffer");
         if (!CaptureActive || !_referencedIds.Add(buffer.ResourceId))
             return;
 
         _referenced.Add(new ReferencedResource(buffer, null, buffer.CurrentVersion, false));
     }
 
-    internal override void TrackTexture(Texture texture) => TrackTexture(texture, false);
+    internal override void TrackTexture(Texture texture)
+    {
+        CheckNotDisposed(texture, "The texture");
+        TrackTexture(texture, false);
+    }
 
     private void TrackTexture(Texture texture, bool overwritten)
     {
@@ -48,7 +52,20 @@ public abstract partial class CommandBuffer
     }
 
     private void TrackAttachment(Texture texture, LoadAction load)
-        => TrackTexture(texture, load != LoadAction.Load && texture.MipLevels == 1 && ValidationHelpers.GetEffectiveArrayLayers(texture) == 1);
+    {
+        bool overwrites = load != LoadAction.Load && texture.MipLevels == 1 && ValidationHelpers.GetEffectiveArrayLayers(texture) == 1;
+        if (overwrites && Stats is { Draws: 0, IndirectDraws: 0, Dispatches: 0 })
+        {
+            for (int i = 0; i < _referenced.Count; i++)
+            {
+                ReferencedResource entry = _referenced[i];
+                if (entry.Texture == texture && !entry.Overwritten)
+                    _referenced[i] = entry with { Overwritten = true };
+            }
+        }
+
+        TrackTexture(texture, overwrites);
+    }
 
     private void ReportFramebuffer(Framebuffer fb, in TargetLoadStoreOps ops)
     {
@@ -154,7 +171,7 @@ public abstract partial class CommandBuffer
                     textureRange = ResourceRange.Subresources(0, texture.MipLevels, 0, ValidationHelpers.GetEffectiveArrayLayers(texture));
 
                 return new PropertyState(
-                    name, PropertyKind.Texture, default, default, resource, textureRange, view?.Format, entry.Sampler?.Description);
+                    name, PropertyKind.Texture, default, default, resource, textureRange, view?.Format, entry.Sampler?.Description, view?.Arrayed ?? false);
 
             default:
                 return new PropertyState(name, PropertyKind.Sampler, default, default, default, default, null, entry.Sampler?.Description);
@@ -221,7 +238,7 @@ public abstract partial class CommandBuffer
                 ? ResourceRange.Subresources(view.BaseMipLevel, view.MipLevels, view.BaseArrayLayer, view.ArrayLayers)
                 : ResourceRange.Subresources(0, texture.MipLevels, 0, ValidationHelpers.GetEffectiveArrayLayers(texture));
             return new PropertyState(description.Name, PropertyKind.Texture, default, default, texture.CurrentVersion,
-                textureRange, view?.Format, entry.Sampler?.Description);
+                textureRange, view?.Format, entry.Sampler?.Description, view?.Arrayed ?? false);
         }
 
         return new PropertyState(description.Name, PropertyKind.Sampler, default, default, default, default, null, entry.Sampler?.Description);

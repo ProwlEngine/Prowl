@@ -72,6 +72,9 @@ public struct LightDesc
 {
     public LightType Type;
 
+    /// <summary>Name debug tools show, or null.</summary>
+    public string? Name;
+
     /// <summary>World position, double so lights far from the origin keep their place.</summary>
     public Double3 Position;
 
@@ -141,6 +144,7 @@ public struct LightDesc
 }
 
 /// <summary>A light in a world. Generation checked, so a handle of a removed light stays invalid.</summary>
+[Serializable]
 public readonly record struct LightHandle(int Index, int Generation)
 {
     public bool IsValid => Generation > 0;
@@ -505,7 +509,7 @@ internal sealed class HandleStore<T> where T : struct
 /// are culled to each view and built into a fresh tree per view every frame. Directional lights, ambient light and fog
 /// live in one world record.
 /// </summary>
-internal sealed class WorldLighting : IDisposable
+internal sealed class WorldLighting
 {
     private readonly IMaterialResources _resources;
     private readonly Action<RendererError> _report;
@@ -554,14 +558,14 @@ internal sealed class WorldLighting : IDisposable
         public uint Sequence;
     }
 
-    public WorldLighting(GraphicsDevice device, IMaterialResources resources, Action<RendererError> report)
+    public WorldLighting(TableHost tables, IMaterialResources resources, Action<RendererError> report)
     {
         _resources = resources;
         _report = report;
-        Lights = new SpatialIndex<LightRecord>(device, "Lights", SpatialIndex.LightsSet, Pack, report);
-        Decals = new SpatialIndex<DecalRecord>(device, "Decals", SpatialIndex.DecalsSet, (index, origin) => Pack(_decalLooks[index], origin), report);
-        World = GpuTable.Of<WorldLightingRecord>(device, "World lighting", 1);
-        Directionals = GpuTable.Of<DirectionalRecord>(device, "Directional lights", 8);
+        Lights = new SpatialIndex<LightRecord>(tables.Scope("Lights"), SpatialIndex.LightsSet, Pack, report);
+        Decals = new SpatialIndex<DecalRecord>(tables.Scope("Decals"), SpatialIndex.DecalsSet, (index, origin) => Pack(_decalLooks[index], origin), report);
+        World = tables.Of<WorldLightingRecord>("World", 1);
+        Directionals = tables.Of<DirectionalRecord>("Directionals", 8);
         Directionals.Set(0, default(DirectionalRecord));
         Tables = [Lights.StaticRecords, Lights.StaticNodes, Decals.StaticRecords, Decals.StaticNodes, World, Directionals];
     }
@@ -584,6 +588,8 @@ internal sealed class WorldLighting : IDisposable
 
     /// <summary>A light as of the last extraction, normalized. Render thread.</summary>
     public ref readonly LightDesc Light(int index) => ref _lights[index];
+
+    public LightHandle Handle(int index) => new(index, _lightGeneration[index]);
 
     /// <summary>The directional lights' indices in the order shaders read them, the sun first.</summary>
     public IReadOnlyList<int> DirectionalOrder => _shaderOrder;
@@ -761,21 +767,12 @@ internal sealed class WorldLighting : IDisposable
             WriteWorldRecord();
     }
 
-    public bool Flush(Uploader uploader, List<DeviceBuffer> replaced)
+    public bool Flush(Uploader uploader)
     {
-        int before = replaced.Count;
+        bool resized = false;
         foreach (GpuTable table in Tables)
-        {
-            if (table.Flush(uploader) is { } old)
-                replaced.Add(old);
-        }
-        return replaced.Count != before;
-    }
-
-    public void Dispose()
-    {
-        foreach (GpuTable table in Tables)
-            table.Dispose();
+            resized |= table.Flush(uploader);
+        return resized;
     }
 
     private void RebuildLightLists()
@@ -1037,12 +1034,12 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
     private LightBounds[] _boxes = new LightBounds[16];
     private RegionEntry[] _entries = new RegionEntry[16];
 
-    public StaticRegions(GraphicsDevice device, string name, Func<int, Double3, TRecord> pack, Action<RendererError> report)
+    public StaticRegions(TableHost tables, Func<int, Double3, TRecord> pack, Action<RendererError> report)
     {
         _pack = pack;
         _report = report;
-        Records = GpuTable.Of<TRecord>(device, name, 64);
-        Nodes = GpuTable.Of<LightTreeNode>(device, name + " nodes", 16);
+        Records = tables.Of<TRecord>("Records", 64);
+        Nodes = tables.Of<LightTreeNode>("Nodes", 16);
     }
 
     public GpuTable Records { get; }
@@ -1308,7 +1305,7 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
 /// regions with a tree each, rebuilt only when one changes; moving ones in a tree per view around its camera, every
 /// frame. Shaders reach a set's buffers by its slot in the view's bindless arrays.
 /// </summary>
-internal abstract class SpatialIndex(int slot) : IDisposable
+internal abstract class SpatialIndex(int slot)
 {
     public const int MaxSets = 16;
     public const int LightsSet = 0, DecalsSet = 1, ProbesSet = 2, FirstHostSet = 3;
@@ -1322,12 +1319,6 @@ internal abstract class SpatialIndex(int slot) : IDisposable
 
     /// <summary>Builds a view's trees over the regions and moving items it sees, around its camera. Returns their roots. Render thread.</summary>
     public abstract SpatialRoots BuildView(in CullFrustum frustum, SpatialView view, Uploader uploader);
-
-    public void Dispose()
-    {
-        StaticRecords.Dispose();
-        StaticNodes.Dispose();
-    }
 }
 
 /// <summary>A set's roots in a view, matching an entry of Graphite_SpatialRoots: its regions tree and its moving tree.</summary>
@@ -1341,29 +1332,29 @@ internal struct SpatialRoots
 }
 
 /// <summary>The buffers a view builds a set's trees into each frame.</summary>
-internal sealed class SpatialView(GraphicsDevice device, string name) : IDisposable
+internal sealed class SpatialView(TableHost tables)
 {
-    public readonly GpuArray Records = new(device, BufferUsage.StructuredBufferReadOnly, name + " records");
-    public readonly GpuArray Nodes = new(device, BufferUsage.StructuredBufferReadOnly, name + " nodes");
-    public readonly GpuArray RegionEntries = new(device, BufferUsage.StructuredBufferReadOnly, name + " regions");
-    public readonly GpuArray RegionNodes = new(device, BufferUsage.StructuredBufferReadOnly, name + " region nodes");
+    public readonly GpuArray Records = tables.Array("Records");
+    public readonly GpuArray Nodes = tables.Array("Nodes");
+    public readonly GpuArray RegionEntries = tables.Array("RegionEntries");
+    public readonly GpuArray RegionNodes = tables.Array("RegionNodes");
     public readonly LightTreeBuilder Tree = new();
     public readonly LightTreeBuilder RegionTree = new();
 
-    public void AddBuffers(List<DeviceBuffer> buffers)
+    public void Refresh()
     {
-        buffers.Add(Records.Buffer);
-        buffers.Add(Nodes.Buffer);
-        buffers.Add(RegionEntries.Buffer);
-        buffers.Add(RegionNodes.Buffer);
+        Records.Refresh();
+        Nodes.Refresh();
+        RegionEntries.Refresh();
+        RegionNodes.Refresh();
     }
 
-    public void Dispose()
+    public void AddBuffers(List<PersistentBuffer> buffers)
     {
-        Records.Dispose();
-        Nodes.Dispose();
-        RegionEntries.Dispose();
-        RegionNodes.Dispose();
+        buffers.Add(Records.Persistent);
+        buffers.Add(Nodes.Persistent);
+        buffers.Add(RegionEntries.Persistent);
+        buffers.Add(RegionNodes.Persistent);
     }
 }
 
@@ -1381,11 +1372,11 @@ internal sealed class SpatialIndex<TRecord> : SpatialIndex where TRecord : unman
     private TRecord[] _scratch = new TRecord[64];
     private Vector4[] _spheres = new Vector4[64];
 
-    public SpatialIndex(GraphicsDevice device, string name, int slot, Func<int, Double3, TRecord> pack, Action<RendererError> report) : base(slot)
+    public SpatialIndex(TableHost tables, int slot, Func<int, Double3, TRecord> pack, Action<RendererError> report) : base(slot)
     {
         _pack = pack;
         _report = report;
-        _static = new StaticRegions<TRecord>(device, name, pack, report);
+        _static = new StaticRegions<TRecord>(tables, pack, report);
     }
 
     public override GpuTable StaticRecords => _static.Records;
@@ -1572,10 +1563,10 @@ public sealed class SpatialSet<T> where T : unmanaged
     private readonly HandleStore<Item> _items = new();
     private Item[] _render = new Item[16];
 
-    internal SpatialSet(GraphicsDevice device, int slot, string name, Action<RendererError> report)
+    internal SpatialSet(TableHost tables, int slot, Action<RendererError> report)
     {
         Index = slot;
-        Render = new SpatialIndex<SpatialRecord<T>>(device, name, slot, Pack, report);
+        Render = new SpatialIndex<SpatialRecord<T>>(tables, slot, Pack, report);
     }
 
     /// <summary>The set's index, which shaders query it by.</summary>

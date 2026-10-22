@@ -345,10 +345,19 @@ internal static class DropdownInternal
                             placeholderColor: ink.C300,
                             intID: (p.Id + "_search").GetHashCode());
 
+                    // Typing goes to the search as soon as the list opens. Storage resets when the row is not drawn.
+                    ElementHandle searchRow = paper.CurrentParent;
+                    if (!paper.GetElementStorage(searchRow, "af_done", false))
+                    {
+                        paper.SetFocus(searchRow);
+                        paper.SetElementStorage(searchRow, "af_done", true);
+                    }
+
                     if (!string.IsNullOrEmpty(searchText) && icons.Close != null)
                     {
                         paper.Box($"{p.Id}_search_clr")
                             .Rounded(p.Theme.Metrics.SmallRounding).Size(16)
+                            .IsNotFocusable()
                             .Hovered.BackgroundColor(p.Theme.Neutral.C300).End()
                             .Icon(paper, icons.Close, ink.C400, 1.3f)
                             .OnClick(e =>

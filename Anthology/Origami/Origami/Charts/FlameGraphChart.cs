@@ -52,7 +52,6 @@ public sealed class FlameGraphChart<T> : ChartCore<FlameGraphChart<T>, T>
     private const string PlotSizeKey = "flame_size";
     private const int MaxDepth = 32;
     private const float MinRowHeight = 6f;
-    private const float MinLabelWidth = 60f;
     private const float MinLabelHeight = 12f;
     private const float CornerRadius = 2f;
 
@@ -292,6 +291,9 @@ public sealed class FlameGraphChart<T> : ChartCore<FlameGraphChart<T>, T>
             float width = right - left;
             if (width < 1f) continue;
 
+            float gap = width > 3f ? 1f : 0f;
+            width -= gap;
+
             canvas.BeginPath();
             canvas.RoundedRect(left, y, width, barHeight, MathF.Min(CornerRadius, width * 0.5f));
             canvas.SetFillColor(ToC32(node.Color));
@@ -305,7 +307,7 @@ public sealed class FlameGraphChart<T> : ChartCore<FlameGraphChart<T>, T>
                 canvas.Stroke();
             }
 
-            if (labels && width >= MinLabelWidth)
+            if (labels && width > 6f)
             {
                 float luminance = (0.2126f * node.Color.R + 0.7152f * node.Color.G + 0.0722f * node.Color.B) / 255f;
                 DrawText(canvas, FitText(canvas, node.Label, width - 6f), left + 3f, y + barHeight * 0.5f, 0f, 0.5f,

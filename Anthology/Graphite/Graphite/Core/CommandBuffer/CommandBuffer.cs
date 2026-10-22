@@ -73,6 +73,7 @@ public abstract partial class CommandBuffer : CommandBufferBase
         _pushConstantVersion++;
         System.Array.Clear(_descriptorTables);
         System.Array.Clear(_reportedTables);
+        System.Array.Clear(_checkedTables);
         _activeProperties.Clear();
         _uniformShadows.Reset();
         _lastAppliedSource = null;

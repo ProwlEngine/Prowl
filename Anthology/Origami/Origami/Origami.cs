@@ -176,6 +176,7 @@ public static partial class Origami
     /// <param name="paper">Paper instance for this frame.</param>
     public static void EndFrame(PaperUI.Paper paper)
     {
+        TextFieldCommits.EndFrame();
         DragDrop.Update(paper);
         DragDrop.DrawVisual(paper);
         OrigamiUI.ContextMenu.Tick();
@@ -208,6 +209,14 @@ public static partial class Origami
     {
         ArgumentNullException.ThrowIfNull(scrollViewId);
         ScrollViewBuilder.s_pendingScrollTo[scrollViewId] = offset;
+    }
+
+    /// <summary>Programmatically scroll a scroll view by a delta in pixels on its next render, such as to bring an item into view.</summary>
+    public static void ScrollBy(string scrollViewId, Prowl.Vector.Float2 delta)
+    {
+        ArgumentNullException.ThrowIfNull(scrollViewId);
+        var pending = ScrollViewBuilder.s_pendingScrollBy;
+        pending[scrollViewId] = pending.TryGetValue(scrollViewId, out var existing) ? existing + delta : delta;
     }
 
     // ── Dropdown factories ───────────────────────────────────────

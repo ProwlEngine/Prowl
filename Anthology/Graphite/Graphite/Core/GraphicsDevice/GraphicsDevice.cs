@@ -53,7 +53,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// </summary>
     internal abstract CommandBuffer RentGraphCommandBuffer(ExecutionTask task);
 
-    internal abstract Prowl.Graphite.RenderGraph.ICaptureBackend CaptureBackend { get; }
+    internal abstract ICaptureBackend CaptureBackend { get; }
 
     /// <summary>
     /// Main swapchain for this device, or null if none.
@@ -64,6 +64,11 @@ public abstract partial class GraphicsDevice : IDisposable
     /// Optional features this device supports.
     /// </summary>
     public abstract GraphicsDeviceFeatures Features { get; }
+
+    /// <summary>
+    /// Limits of this device, like the largest texture or the descriptors a program can hold.
+    /// </summary>
+    public abstract GraphicsDeviceLimits Limits { get; }
 
     /// <summary>
     /// Vsync on the main swapchain. Setter needs a main swapchain.

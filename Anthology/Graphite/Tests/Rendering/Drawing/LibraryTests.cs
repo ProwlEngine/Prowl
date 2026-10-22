@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
@@ -19,15 +18,7 @@ file sealed class NoResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => 0;
 }
 
-file readonly struct NoView : IRenderView
-{
-    public Framebuffer? Target => null;
-    public uint PixelWidth => 8;
-    public uint PixelHeight => 8;
-    public int ViewId => 0;
-}
-
-file sealed class LambdaPass(string name, Action<RenderContextBuilder> setup, Action<RenderContext, CommandBuffer> render) : IPass
+file sealed class LambdaPass(string name, Action<RenderContextBuilder> setup, Action<RenderContext, CommandBuffer> render) : IExecutionPass
 {
     public string Name => name;
 
@@ -45,6 +36,7 @@ file struct Push
     public uint Flags;
 }
 
+[Collection("GPU Tests")]
 public sealed class LibraryTests : IDisposable
 {
     private const string Source = """
@@ -92,6 +84,7 @@ public sealed class LibraryTests : IDisposable
         """;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly GraphStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly List<IDisposable> _owned = new();
 
@@ -101,6 +94,7 @@ public sealed class LibraryTests : IDisposable
         for (int i = _owned.Count - 1; i >= 0; i--)
             _owned[i].Dispose();
         _compiler.Dispose();
+        _store.Dispose();
         _device.Dispose();
     }
 
@@ -127,10 +121,10 @@ public sealed class LibraryTests : IDisposable
     {
         InternalShaders.Register();
         Uploader uploader = Own(new Uploader(_device, InternalShaders.Compute(_device, _compiler, "Internal/Scatter.glsl")));
-        GeometryPool geometry = Own(new GeometryPool(_device, 1 << 16, 1 << 16));
-        MaterialSystem materials = Own(new MaterialSystem(_device, new NoResources()));
-        GlobalRegistry globals = Own(new GlobalRegistry(_device, new NoResources()));
-        RenderWorld world = Own(new RenderWorld(_device));
+        GeometryPool geometry = new GeometryPool(_device, _store, 1 << 16, 1 << 16);
+        MaterialSystem materials = new MaterialSystem(_device, _store, new NoResources());
+        GlobalRegistry globals = new GlobalRegistry(_device, _store, new NoResources());
+        RenderWorld world = Own(new RenderWorld(_device, _store));
         DrawPrograms programs = new();
         BucketSet buckets = new(world.Render, programs);
 
@@ -193,7 +187,7 @@ public sealed class LibraryTests : IDisposable
         DeviceBuffer[] tables = [geometry.Chunks.Buffer, geometry.Meshes.Buffer, page.Vertices, page.Indices, render.Transforms.Buffer, render.PreviousTransforms.Buffer,
             render.Attributes.Buffer, render.Bounds.Buffer, render.MaterialSlots.Buffer, materialTable.Buffer];
         materials.Flush(uploader, 0);
-        render.Flush(uploader, new List<DeviceBuffer>());
+        render.Flush(uploader);
         geometry.Apply(uploader, 0, long.MaxValue, new List<GpuMesh>());
 
         DescriptorTable frame = Own(_device.ResourceFactory.CreateDescriptorTable(frameLayout));
@@ -216,7 +210,7 @@ public sealed class LibraryTests : IDisposable
         Framebuffer framebuffer = Own(_device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, target)));
         VertexSource vertexSource = new VertexSource(PrimitiveTopology.TriangleList).SetIndexBuffer(page.Indices, IndexFormat.UInt32, page.Indices.SizeInBytes / 4);
 
-        using RenderPipeline pipeline = new([
+        using RenderGraph graph = RenderGraph.Build([
             new LambdaPass("Upload", b =>
             {
                 for (int i = 0; i < tables.Length; i++)
@@ -238,7 +232,7 @@ public sealed class LibraryTests : IDisposable
                 cmd.SetPushConstants(new Push { DrawRecordBase = (uint)call.FirstCommand });
                 cmd.DrawIndexedIndirect(commands, (uint)(call.FirstCommand * Marshal.SizeOf<IndirectDrawIndexedArguments>()), (uint)call.CommandCount, (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>());
             })]);
-        _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+        _device.DispatchGraph(graph, graph.CreateInstances());
         _device.WaitForIdle();
 
         DeviceBuffer readback = Own(_device.ResourceFactory.CreateBuffer(new BufferDescription(8 * 8 * 16, BufferUsage.Staging)));

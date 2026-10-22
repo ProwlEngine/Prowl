@@ -5,7 +5,6 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
 
@@ -420,42 +419,45 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
 }
 
 /// <summary>
-/// A device local buffer the CPU fills every frame through the frame's scatter, like instance lists and indirect
-/// commands. It grows by doubling, and a grown buffer changes the frame's buffer set.
+/// A persistent graph buffer the CPU fills every frame through the frame's scatter, like instance lists and indirect
+/// commands. It grows by doubling. The store frees it when unused, so owners refresh it each frame they use it.
 /// </summary>
-internal sealed class GpuArray(GraphicsDevice device, BufferUsage usage, string name) : IDisposable
+internal sealed class GpuArray
 {
-    public DeviceBuffer Buffer { get; private set; } = Create(device, usage, name, 256);
+    private readonly GraphicsDevice _device;
+    private readonly GraphStore _store;
+    private readonly PersistentBuffer _persistent;
+
+    public GpuArray(GraphicsDevice device, GraphStore store, RenderResourceID id, BufferUsage usage, GraphInstanceKey key)
+    {
+        _device = device;
+        _store = store;
+        _persistent = new PersistentBuffer(id, usage | BufferUsage.StructuredBufferReadWrite, key);
+        Buffer = _persistent.Resolve(device, store, 256);
+    }
+
+    public DeviceBuffer Buffer { get; private set; }
+
+    public PersistentBuffer Persistent => _persistent;
+
+    /// <summary>Resolves the buffer again, so one the store freed while unused is replaced before it is bound.</summary>
+    public void Refresh() => Buffer = _persistent.Resolve(_device, _store, Buffer.SizeInBytes);
 
     public void Write<T>(Uploader uploader, ReadOnlySpan<T> data) where T : unmanaged
     {
         uint bytes = (uint)(data.Length * Unsafe.SizeOf<T>());
-        if (bytes > Buffer.SizeInBytes)
-        {
-            uint size = Buffer.SizeInBytes;
-            Buffer.Dispose();
-            while (size < bytes)
-                size *= 2;
-            Buffer = Create(device, usage, name, size);
-        }
+        uint size = Buffer.SizeInBytes;
+        while (size < bytes)
+            size *= 2;
+        Buffer = _persistent.Resolve(_device, _store, size);
         if (bytes > 0)
             uploader.Write(Buffer, 0, MemoryMarshal.Cast<T, uint>(data));
     }
-
-    public void Dispose() => Buffer.Dispose();
-
-    private static DeviceBuffer Create(GraphicsDevice device, BufferUsage usage, string name, uint size)
-    {
-        DeviceBuffer buffer = device.ResourceFactory.CreateBuffer(new BufferDescription(size, usage | BufferUsage.StructuredBufferReadWrite));
-        buffer.Name = name;
-        return buffer;
-    }
 }
 
-/// <summary>The view a camera pipeline draws for: its target and size. Kept per camera so a frame allocates nothing.</summary>
-internal sealed class CameraView : IRenderView
+/// <summary>The id and render size of a camera's view. Kept per camera so a frame allocates nothing.</summary>
+internal sealed class CameraView
 {
-    public Framebuffer? Target { get; set; }
     public uint PixelWidth { get; set; } = 1;
     public uint PixelHeight { get; set; } = 1;
     public int ViewId { get; set; }
@@ -468,7 +470,7 @@ internal sealed class CameraView : IRenderView
 /// words. A copy deformed the frame it is made skips the streams the deform writes. After the upload and before the
 /// fence every view follows.
 /// </summary>
-internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) : IPass, IDisposable
+internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) : IExecutionPass, IDisposable
 {
     [StructLayout(LayoutKind.Sequential)]
     private struct Push
@@ -486,15 +488,22 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
     private readonly PropertySet _properties = new();
     private readonly List<(RenderWorld.RenderSide World, int Index)> _jobs = new();
 
-    public DeviceBuffer[] Buffers = [];
+    public FrameBuffers Buffers = null!;
     public readonly List<RenderWorld.RenderSide> Worlds = new();
 
     public string Name => "Graphite.Deform";
 
     public void Setup(RenderContextBuilder builder)
     {
-        for (int i = 0; i < Buffers.Length; i++)
-            builder.DeclareImportedBuffer(FramePipeline.BufferId(i), Buffers[i], BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+        foreach (GeometryPage page in geometry.Pages)
+        {
+            if (!Buffers.Persistent.Contains(page.VertexBuffer) || !Buffers.Persistent.Contains(page.IndexBuffer))
+                continue;
+            builder.DeclareWriteBuffer(page.VertexBuffer.Id, BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+            builder.DeclareWriteBuffer(page.IndexBuffer.Id, BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+        }
+        foreach (RenderWorld.RenderSide world in Worlds)
+            builder.DeclareInputBuffer(world.SkinMatrices.Persistent.Id, BufferAccess.ShaderRead);
     }
 
     public void Render(RenderContext context, CommandBuffer cmd)
@@ -641,17 +650,13 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
 }
 
 /// <summary>The FrameStart pass: the frame's single scatter into every persistent buffer, with each declared as written.</summary>
-internal sealed class UploadPass(Uploader uploader) : IPass
+internal sealed class UploadPass(Uploader uploader) : IExecutionPass
 {
-    public DeviceBuffer[] Buffers = [];
+    public FrameBuffers Buffers = null!;
 
     public string Name => "Graphite.FrameStart";
 
-    public void Setup(RenderContextBuilder builder)
-    {
-        for (int i = 0; i < Buffers.Length; i++)
-            builder.DeclareImportedBuffer(FramePipeline.BufferId(i), Buffers[i], BufferAccess.ShaderWrite);
-    }
+    public void Setup(RenderContextBuilder builder) => Buffers.Describe(builder, BufferAccess.ShaderWrite);
 
     public void Render(RenderContext context, CommandBuffer cmd) => uploader.Record(cmd, context.Task);
 }
@@ -662,18 +667,45 @@ internal sealed class CameraFrame : IDisposable
     public readonly DrawList Prepass = new();
     public readonly DrawList Forward = new();
     public readonly DrawList Transparent = new();
-    public readonly RenderPipeline Pipeline = new();
     public readonly SceneDrawer Drawer;
-    public readonly FeatureChain Chain;
-    public readonly SetupPass Setup;
-    public readonly PresentPass Present;
 
-    /// <summary>The features the view's graph runs, and this frame's pick.</summary>
-    public readonly List<RenderFeature> Features = new();
+    /// <summary>The features this frame's pick runs on the view.</summary>
     public readonly List<RenderFeature> Selected = new();
 
-    /// <summary>Whether the view's graph rebuilds before it next draws.</summary>
-    public bool Rebuild = true;
+    /// <summary>The colours and scene a feature drew onto this frame, so the first to draw one clears it.</summary>
+    public readonly HashSet<RenderResourceID> Written = new();
+
+    /// <summary>Whether a feature before the one recording encoded the colour for display, as tonemappers do.</summary>
+    public bool DisplayEncoded;
+
+    /// <summary>
+    /// The opaque colour with its mips that passes tagged "SceneColor" = "Read" sample, made the first time the view's
+    /// transparent list holds one. Used says whether this frame's list holds one.
+    /// </summary>
+    public Texture? SceneColor;
+    public bool SceneColorUsed;
+    private TextureView? _sceneColorView;
+
+    /// <summary>The cube a capture view presents into.</summary>
+    public RenderTexture? CaptureCube;
+
+    /// <summary>The persistent screen lighting a producer in the view's shape writes, resolved before the graph runs.</summary>
+    public RenderTexture? ScreenVisibility, ScreenIrradiance;
+    private (RenderTexture? Texture, TextureView? View) _visibilityView, _irradianceView;
+
+    public TextureView? ScreenVisibilityView() => ArrayView(ref _visibilityView, ScreenVisibility);
+
+    public TextureView? ScreenIrradianceView() => ArrayView(ref _irradianceView, ScreenIrradiance);
+
+    private TextureView? ArrayView(ref (RenderTexture? Texture, TextureView? View) cache, RenderTexture? texture)
+    {
+        if (cache.Texture == texture)
+            return cache.View;
+        if (cache.View != null)
+            _frame.Retired.Add(cache.View);
+        cache = (texture, texture == null ? null : _device.ResourceFactory.CreateTextureView(new TextureViewDescription(texture.ColorTextures[0]) { Arrayed = true }));
+        return cache.View;
+    }
 
     /// <summary>The host's buffers the view's graph declares, from the world's globals.</summary>
     public DeviceBuffer[] HostBuffers = [];
@@ -693,13 +725,13 @@ internal sealed class CameraFrame : IDisposable
     public bool IsShadowView { get; init; }
 
     /// <summary>This frame's instance counts copied from providers' buffers into the view's commands, as byte offsets.</summary>
-    public readonly List<(DeviceBuffer Source, uint Offset, uint Destination)> Counts = new();
+    public readonly List<(RenderResourceID Source, uint Offset, uint Destination)> Counts = new();
 
     public void PlanCounts()
     {
         Counts.Clear();
         uint stride = (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>();
-        foreach ((BucketSet.TransparentItem item, DrawList list, DeviceBuffer source, uint offset) in Sink.Counts)
+        foreach ((BucketSet.TransparentItem item, DrawList list, RenderResourceID source, uint offset) in Sink.Counts)
         {
             int at = Lists.IndexOf(list);
             if (at < 0 || item.FirstCommand < 0)
@@ -709,9 +741,12 @@ internal sealed class CameraFrame : IDisposable
         }
     }
 
-    /// <summary>What host pipelines draw an external view through.</summary>
-    public ViewDraws? Draws;
     public FeatureView Info;
+
+    /// <summary>The graph shape the view drew with, and the directional cascades it fits, which the shape was made for.</summary>
+    public FeatureShape? Shape;
+    public CascadeSlot[] CascadeSlots = [];
+    public string CascadeKey = "";
 
     /// <summary>This frame's time as the host gave it.</summary>
     public FrameTime Time;
@@ -772,45 +807,37 @@ internal sealed class CameraFrame : IDisposable
     public int JitterPhase;
     public Float2 Jitter, PreviousJitter;
     public int LayerCount = 1;
-    public readonly IRenderView[] Views;
 
     private IndirectDrawIndexedArguments[] _commands = new IndirectDrawIndexedArguments[64];
     private DrawRecord[] _records = new DrawRecord[64];
     private uint[] _instances = new uint[256];
     private readonly FramePipeline _frame;
     private readonly GraphicsDevice _device;
+    private readonly TableHost _tables;
 
     /// <summary>The view's buffers for a set's trees.</summary>
-    public SpatialView SpatialFor(int slot) => Spatial[slot] ??= new SpatialView(_device, $"View {View.ViewId} set {slot}");
-    private readonly Dictionary<RenderFeature, FeaturePass> _passes = new();
-    private readonly List<IPass> _passList = new();
-    private RenderFeature[] _worldFeatures = [], _viewFeatures = [];
+    public SpatialView SpatialFor(int slot) => Spatial[slot] ??= new SpatialView(_tables.Scope($"Set{slot}"));
 
     public CameraFrame(GraphicsDevice device, FramePipeline frame, int viewId)
     {
         _frame = frame;
         Drawer = new SceneDrawer(frame, this);
-        Chain = new FeatureChain(device, viewId, frame.Retired);
-        Setup = new SetupPass(frame, this);
-        Present = new PresentPass(frame, this);
-        Views = [View];
         View.ViewId = viewId;
         Lists = [Prepass, Forward, Transparent];
-        Pipeline.Name = $"Graphite.Camera {viewId}";
         ViewTable = new TableRing(device, ProgramCache.ViewLayout, $"View table {viewId}");
-        Instances = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Instances {viewId}");
-        Records = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Draw records {viewId}");
-        Commands = new GpuArray(device, BufferUsage.IndirectBuffer, $"Indirect commands {viewId}");
-        ViewBlocks = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View blocks {viewId}");
-        SpatialRoots = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Spatial roots {viewId}");
-        Cascades = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Cascades {viewId}");
+        _tables = new TableHost(device, frame.Store, $"Graphite.Camera{viewId}");
+        Instances = _tables.Array("Instances");
+        Records = _tables.Array("Records");
+        Commands = _tables.Array("Commands", BufferUsage.IndirectBuffer);
+        ViewBlocks = _tables.Array("ViewBlocks");
+        SpatialRoots = _tables.Array("SpatialRoots");
+        Cascades = _tables.Array("Cascades");
         _device = device;
     }
 
     /// <summary>Picks this frame's features.</summary>
     public void SelectFeatures(RenderFeature[] world, RenderFeature[] view)
     {
-        (_worldFeatures, _viewFeatures) = (world, view);
         FeatureSelection.Select(Selected, world, view, Info);
     }
 
@@ -826,70 +853,36 @@ internal sealed class CameraFrame : IDisposable
         }
     }
 
-    /// <summary>
-    /// Takes this frame's pick of features, rebuilding the graph when it or the graph's resources changed. A feature that
-    /// throws in Setup or breaks the graph fails the frame, and the next frame builds again.
-    /// </summary>
-    public void ApplyFeatures()
+    /// <summary>Makes the scene colour for the view's size. Returns whether it did.</summary>
+    public bool EnsureSceneColor(uint width, uint height, uint layers, PixelFormat format)
     {
-        if (EnsureScreenLighting())
-            Rebuild = true;
-        if (!Rebuild && Same(Features, Selected) && !Invalidated())
-            return;
-
-        Build(Selected);
-        Features.Clear();
-        Features.AddRange(Selected);
-        PruneFeatures();
-        Chain.ReleaseUnwritten();
-        Rebuild = false;
+        layers = Math.Max(layers, 1u);
+        if (SceneColor is { } existing && existing.Width == width && existing.Height == height && existing.ArrayLayers == layers && existing.Format == format)
+            return false;
+        ReleaseSceneColor();
+        uint mips = (uint)Math.Log2(Math.Max(width, height)) + 1;
+        SceneColor = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(width, height, mips, layers, format, TextureUsage.Sampled));
+        SceneColor.Name = $"Graphite.SceneColor {View.ViewId}";
+        return true;
     }
 
-    // The screen lighting textures, sized for the view's producer, or let go without one. Returns whether they changed.
-    private bool EnsureScreenLighting()
+    /// <summary>The scene colour viewed as an array whatever its layer count.</summary>
+    public TextureView SceneColorView()
+        => _sceneColorView ??= _device.ResourceFactory.CreateTextureView(new TextureViewDescription(SceneColor!) { Arrayed = true });
+
+    public void ReleaseSceneColor()
     {
-        foreach (RenderFeature feature in Selected)
-        {
-            if (feature is ScreenLightingFeature producer)
-            {
-                RenderTexture? visibility = Chain.ScreenVisibility.Texture, irradiance = Chain.ScreenIrradiance.Texture;
-                Chain.EnsureScreenLighting(producer.ScaleSnapshot, producer.IrradianceSnapshot);
-                return visibility != Chain.ScreenVisibility.Texture || irradiance != Chain.ScreenIrradiance.Texture;
-            }
-        }
-        bool had = Chain.ScreenVisibility.Texture != null || Chain.ScreenIrradiance.Texture != null;
-        Chain.ScreenVisibility.Release(Chain.Retired);
-        Chain.ScreenIrradiance.Release(Chain.Retired);
-        return had;
+        if (_sceneColorView != null)
+            _frame.Retired.Add(_sceneColorView);
+        if (SceneColor != null)
+            _frame.Retired.Add(SceneColor);
+        (SceneColor, _sceneColorView) = (null, null);
     }
 
-    private void Build(List<RenderFeature> features)
+    // States are kept while their feature is in the world's or view's set, so history survives toggles
+    public void PruneStates(RenderFeature[] world, RenderFeature[] view)
     {
-        _passList.Clear();
-        _passList.Add(Setup);
-        foreach (RenderFeature feature in features)
-        {
-            if (!_passes.TryGetValue(feature, out FeaturePass? pass))
-                _passes[feature] = pass = new FeaturePass(feature, this, _frame);
-            _passList.Add(pass);
-        }
-        _passList.Add(Present);
-        Pipeline.SetPasses(_passList);
-        _ = Pipeline.Graph;
-    }
-
-    // Passes and states are kept while their feature is in the world's or view's set, so ids and history survive toggles
-    private void PruneFeatures()
-    {
-        bool Known(RenderFeature feature) => Array.IndexOf(_worldFeatures, feature) >= 0 || Array.IndexOf(_viewFeatures, feature) >= 0 || Array.IndexOf(FeatureSelection.BuiltIn, feature) >= 0;
-        List<RenderFeature>? gone = null;
-        foreach (RenderFeature feature in _passes.Keys)
-        {
-            if (!Known(feature))
-                (gone ??= new()).Add(feature);
-        }
-        foreach (RenderFeature feature in gone ?? [])
-            _passes.Remove(feature);
+        bool Known(RenderFeature feature) => Array.IndexOf(world, feature) >= 0 || Array.IndexOf(view, feature) >= 0 || Array.IndexOf(FeatureSelection.BuiltIn, feature) >= 0;
         List<(RenderFeature, Type)>? stale = null;
         foreach ((RenderFeature feature, Type type) in States.Keys)
         {
@@ -910,36 +903,27 @@ internal sealed class CameraFrame : IDisposable
         return (T)state;
     }
 
-    private bool Invalidated()
+    /// <summary>Refreshes every array of the view, so none it binds this frame was freed while it sat unused.</summary>
+    public void RefreshBuffers()
     {
-        foreach (RenderFeature feature in Features)
-        {
-            if (_passes.TryGetValue(feature, out FeaturePass? pass) && pass.BuiltVersion != feature.Version)
-                return true;
-        }
-        return false;
+        Instances.Refresh();
+        Records.Refresh();
+        Commands.Refresh();
+        ViewBlocks.Refresh();
+        SpatialRoots.Refresh();
+        Cascades.Refresh();
+        foreach (SpatialView? view in Spatial)
+            view?.Refresh();
     }
 
-    private static bool Same(List<RenderFeature> a, List<RenderFeature> b)
+    public void AddBuffers(List<PersistentBuffer> buffers)
     {
-        if (a.Count != b.Count)
-            return false;
-        for (int i = 0; i < a.Count; i++)
-        {
-            if (a[i] != b[i])
-                return false;
-        }
-        return true;
-    }
-
-    public void AddBuffers(List<DeviceBuffer> buffers)
-    {
-        buffers.Add(Instances.Buffer);
-        buffers.Add(Records.Buffer);
-        buffers.Add(Commands.Buffer);
-        buffers.Add(ViewBlocks.Buffer);
-        buffers.Add(SpatialRoots.Buffer);
-        buffers.Add(Cascades.Buffer);
+        buffers.Add(Instances.Persistent);
+        buffers.Add(Records.Persistent);
+        buffers.Add(Commands.Persistent);
+        buffers.Add(ViewBlocks.Persistent);
+        buffers.Add(SpatialRoots.Persistent);
+        buffers.Add(Cascades.Persistent);
         foreach (SpatialView? view in Spatial)
             view?.AddBuffers(buffers);
     }
@@ -1045,20 +1029,12 @@ internal sealed class CameraFrame : IDisposable
 
     public void Dispose()
     {
-        Pipeline.Dispose();
-        Chain.Dispose();
+        _sceneColorView?.Dispose();
+        SceneColor?.Dispose();
         foreach (object state in States.Values)
             (state as IDisposable)?.Dispose();
         ViewTable.Dispose();
-        Instances.Dispose();
-        Records.Dispose();
-        Commands.Dispose();
-        ViewBlocks.Dispose();
-        SpatialRoots.Dispose();
-        Cascades.Dispose();
         Shadows.Dispose();
-        foreach (SpatialView? view in Spatial)
-            view?.Dispose();
     }
 }
 
@@ -1094,11 +1070,10 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         camera.ViewTable.Set("Graphite_ShadowSampler", 0, frame.ShadowSampler);
         camera.ViewTable.Set("Graphite_ShadowFaces", 0, camera.World.Shadows!.Faces.Buffer);
         camera.ViewTable.Set("Graphite_Cascades", 0, camera.Cascades.Buffer);
-        FeatureChain chain = camera.Chain;
-        camera.ViewTable.Set("Graphite_ScreenVisibility", 0, chain.ScreenVisibility is { Filled: true, Texture: not null } visibility ? visibility.ArrayView(frame.Device) : frame.NoScreenVisibility);
-        camera.ViewTable.Set("Graphite_ScreenIrradiance", 0, chain.ScreenIrradiance is { Filled: true, Texture: not null } irradiance ? irradiance.ArrayView(frame.Device) : frame.NoScreenIrradiance);
+        camera.ViewTable.Set("Graphite_ScreenVisibility", 0, (object?)camera.ScreenVisibilityView() ?? frame.NoScreenVisibility);
+        camera.ViewTable.Set("Graphite_ScreenIrradiance", 0, (object?)camera.ScreenIrradianceView() ?? frame.NoScreenIrradiance);
         camera.ViewTable.Set("Graphite_ScreenSampler", 0, frame.TrilinearClamp);
-        camera.ViewTable.Set("Graphite_SceneColor", 0, chain.SceneColor != null ? chain.SceneColorView() : frame.NoSceneColor);
+        camera.ViewTable.Set("Graphite_SceneColor", 0, camera.SceneColor != null ? camera.SceneColorView() : frame.NoSceneColor);
         camera.ViewTable.Set("Graphite_SceneColorSampler", 0, frame.TrilinearClamp);
         _viewTable = camera.ViewTable.Get(ring);
         _properties.SetBuffer(GraphiteBindings.InstancesName, camera.Instances.Buffer);
@@ -1176,6 +1151,7 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
     private void Draw(CommandBuffer cmd, DrawList list, int commandBase)
     {
         uint stride = (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>();
+        bool multiDraw = frame.Device.Features.MultiDrawIndirect;
         bool shadow = camera.Desc.Kind == ViewKind.Shadow;
         foreach (DrawCall call in list.Calls)
         {
@@ -1189,6 +1165,9 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
                 continue;
 
             GeometryPage page = frame.Geometry.Pages[call.Page];
+            bool group = cmd.WantsDebugMeta;
+            if (group)
+                cmd.PushDebugGroup(shader.Name, DebugGroups.DrawCall(camera.World.World, shader, program, list, call));
             cmd.SetShader(program);
             cmd.SetVertexSource(frame.VertexSource(call.Page, call.Topology));
             cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frame.TextureTable);
@@ -1197,7 +1176,16 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
             _properties.SetBuffer(GraphiteBindings.VerticesName, page.Vertices);
             cmd.SetProperties(_properties);
             cmd.SetPushConstants(new FramePipeline.Push { DrawRecordBase = (uint)(commandBase + call.FirstCommand) });
-            cmd.DrawIndexedIndirect(camera.Commands.Buffer, (uint)(commandBase + call.FirstCommand) * stride, (uint)call.CommandCount, stride);
+            uint offset = (uint)(commandBase + call.FirstCommand) * stride;
+            if (multiDraw)
+                cmd.DrawIndexedIndirect(camera.Commands.Buffer, offset, (uint)call.CommandCount, stride);
+            else
+            {
+                for (int c = 0; c < call.CommandCount; c++)
+                    cmd.DrawIndexedIndirect(camera.Commands.Buffer, offset + (uint)c * stride, 1, stride);
+            }
+            if (group)
+                cmd.PopDebugGroup();
         }
     }
 }
@@ -1226,14 +1214,6 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     public readonly List<CameraFrame> ProbeFaceCameras = new();
     public int ProbeCamerasUsed, ProbeFaceCamerasUsed;
 
-    /// <summary>The pipeline projecting the sky onto harmonics for the sky ambient mode.</summary>
-    public RenderPipeline? SkyAmbient;
-    public SkyAmbientPass? SkyAmbientPass;
-
-    /// <summary>Filter pipelines, one per filling of a probe layer this frame, reused across frames.</summary>
-    public readonly List<(RenderPipeline Pipeline, PrefilterPass Pass)> Filters = new();
-    public int FiltersUsed;
-
     /// <summary>A new capture view id, below any a host may use.</summary>
     public static int NextCaptureViewId() => int.MinValue + Interlocked.Increment(ref s_nextCapture);
 
@@ -1251,15 +1231,13 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     {
         foreach (CameraFrame camera in Captures())
             camera.Dispose();
-        foreach ((RenderPipeline pipeline, _) in Filters)
-            pipeline.Dispose();
-        SkyAmbient?.Dispose();
-        Shadows?.Dispose();
     }
 }
 
+internal readonly record struct PlannedInstance(GraphKind Kind, int Id, WorldFrame World, GraphExtent Extent, Framebuffer? Target, object Data, string Name);
+
 /// <summary>
-/// The frame's pipelines: the FrameStart pipeline uploading every change, then one camera pipeline per view, all in
+/// The frame: the root passes uploading every change, then the instances of every world and view, all in
 /// one execution. Graphs rebuild only when the set of persistent buffers changes.
 /// </summary>
 internal sealed partial class FramePipeline : IDisposable
@@ -1277,31 +1255,40 @@ internal sealed partial class FramePipeline : IDisposable
 
     private readonly GraphicsDevice _device;
     private readonly IShaderCompiler? _compiler;
-    private readonly RenderPipeline _frameStart = new();
     private readonly UploadPass _upload;
     private readonly ProbePass _probes;
     private readonly DeformPass _deform;
     private readonly Dictionary<int, CameraFrame> _cameras = new();
     private readonly Dictionary<(int Page, PrimitiveTopology Topology), VertexSource> _vertexSources = new();
-    private readonly List<GraphDispatch> _dispatches = new();
-    private readonly List<DeviceBuffer> _buffers = new();
+    private readonly List<PlannedInstance> _planned = new();
+    private readonly Dictionary<WorldFrame, GraphInstance> _worldInstances = new();
+    private readonly Dictionary<GraphKind, FeatureShape> _shapes = new();
+    private readonly GraphStore _store;
+    private readonly IPass[] _fillPasses;
+
+    internal GraphStore Store => _store;
+    private readonly ReadbackTexturePass _readbackTexture = new();
+    private readonly ReadbackBufferPass _readbackBuffer = new();
+    private readonly List<GraphImport> _imports = new();
+    private RenderGraph? _graph;
+    private bool _graphDirty = true;
+    private readonly List<PersistentBuffer> _buffers = new();
+    private readonly List<DeviceBuffer> _importedBuffers = new();
     private readonly List<CameraFrame> _captures = new();
     private readonly List<Texture> _disposeAfterDispatch = new();
     private readonly List<IDisposable> _retired = new();
-    private readonly RenderPipeline _readbackPipeline = new() { Name = "Graphite.Readback" };
-    private readonly RenderPipeline _fencePipeline = new() { Name = "Graphite.Fence" };
-    private readonly FencePass _fence = new();
-    private readonly List<int> _fenceAt = new();
-    private readonly List<DeviceBuffer> _replaced = new();
-    private readonly RenderPipeline _providerPipeline = new() { Name = "Graphite.Providers" };
-    private readonly ProviderWork _providerWork = new();
-    private readonly ReadbackPass _readback;
+    private readonly ProviderCountsPass _counts = new();
+    private readonly FrameExports _exports = new();
+    private readonly Dictionary<FrameFeature, FrameFeaturePass> _frameFeaturePasses = new();
+    private readonly List<FrameFeaturePass> _frameFeatures = new();
+    private readonly List<FrameFeaturePass> _activeFrameFeatures = new();
+    private FrameTime _currentTime;
+    private readonly ReadbackStaging _readback;
     private readonly List<int> _sortedViews = new();
     private bool[] _placed = [];
     private readonly HashSet<RenderFeature> _prepared = new();
     private readonly List<int> _viewOrder = new();
     private readonly List<WorldFrame> _frameWorlds = new();
-    private readonly IRenderView[] _frameStartViews = [new CameraView { ViewId = -1 }];
     private int _frame;
 
     private readonly RendererTextures _textures;
@@ -1309,12 +1296,13 @@ internal sealed partial class FramePipeline : IDisposable
 
     private readonly Uploader _uploader;
 
-    public FramePipeline(GraphicsDevice device, IShaderCompiler? compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, bool deterministic, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async)
+    public FramePipeline(GraphicsDevice device, GraphStore store, IShaderCompiler? compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, bool deterministic, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async)
     {
         Report = report;
         _device = device;
         _compiler = compiler;
         _textures = textures;
+        _store = store;
         _uploader = uploader;
         _deterministic = deterministic;
         Geometry = geometry;
@@ -1323,13 +1311,10 @@ internal sealed partial class FramePipeline : IDisposable
         DrawPrograms = programs;
         Programs = new ProgramCache(device, compiler, globals, programs, deterministic, report, policy, _retired.Add);
         programs.Freed += Programs.Drop;
-        _upload = new UploadPass(uploader);
+        _upload = new UploadPass(uploader) { Buffers = Buffers };
         _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl"));
-        _deform = new DeformPass(InternalShaders.Compute(device, compiler, "Internal/Deform.glsl"), geometry);
-        _frameStart.Name = "Graphite.FrameStart";
-        _frameStart.SetPasses([_upload, _probes, _deform]);
-        _readback = new ReadbackPass(device, report);
-        _readbackPipeline.SetPasses([_readback]);
+        _deform = new DeformPass(InternalShaders.Compute(device, compiler, "Internal/Deform.glsl"), geometry) { Buffers = Buffers };
+        _readback = new ReadbackStaging(device, report);
 
         const string present = InternalShaders.Present, decode = InternalShaders.Decode, encode = InternalShaders.Encode;
         BlendStateDescription over = new(default, BlendAttachmentDescription.AlphaBlend with { SourceColorFactor = BlendFactor.One, SourceAlphaFactor = BlendFactor.One });
@@ -1361,6 +1346,7 @@ internal sealed partial class FramePipeline : IDisposable
         BlendAttachmentDescription untouched = BlendAttachmentDescription.OverrideBlend with { ColorWriteMask = ColorWriteMask.None };
         CopyBackProgram = FullscreenProgram.Create(device, compiler, InternalShaders.CopyBack, "Graphite/CopyBack",
             blend: new BlendStateDescription(default, BlendAttachmentDescription.OverrideBlend, untouched, untouched));
+        _fillPasses = CaptureFillPasses.Of(this);
         PrefilterProgram = Fullscreen(device, compiler, "Internal/Prefilter.glsl");
         SkyAmbientProgram = InternalShaders.Compute(device, compiler, "Internal/SkyAmbient.glsl");
         TrilinearClamp = device.ResourceFactory.CreateSampler(SamplerDescription.Linear with
@@ -1455,15 +1441,23 @@ internal sealed partial class FramePipeline : IDisposable
     public Sampler LinearSampler { get; }
 
     /// <summary>Every persistent buffer the frame writes and its cameras read, in a stable order.</summary>
-    public DeviceBuffer[] Buffers { get; private set; } = [];
+    public FrameBuffers Buffers { get; } = new();
 
-    public static RenderResourceID BufferId(int index)
+    /// <summary>Declares the geometry pages and material tables a view's draws bind from the frame's buffers.</summary>
+    internal void DeclareDrawReads(InstanceContextBuilder builder)
     {
-        lock (s_bufferIds)
+        List<PersistentBuffer> known = [.. Buffers.Persistent];
+        foreach (GeometryPage page in Geometry.Pages)
         {
-            while (s_bufferIds.Count <= index)
-                s_bufferIds.Add(RenderResourceID.Intern("Graphite.Buffer" + s_bufferIds.Count));
-            return s_bufferIds[index];
+            if (known.Contains(page.VertexBuffer))
+                builder.DeclareInputBuffer(page.VertexBuffer.Id, BufferAccess.ShaderRead);
+            if (known.Contains(page.IndexBuffer))
+                builder.DeclareInputBuffer(page.IndexBuffer.Id, BufferAccess.Index);
+        }
+        foreach (MaterialTable table in Materials.Tables.Values)
+        {
+            if (known.Contains(table.Records.Persistent))
+                builder.DeclareInputBuffer(table.Records.Persistent.Id, BufferAccess.ShaderRead);
         }
     }
 
@@ -1491,15 +1485,13 @@ internal sealed partial class FramePipeline : IDisposable
         else { _drawCalls++; _drawCommands += commands; }
     }
 
-    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, GraphDispatch[] pipelines, List<ReadbackRequest> readbacks, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time, IProfiler[]? profilers = null)
+    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, List<ReadbackRequest> readbacks, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time, IProfiler[]? profilers = null)
     {
         LastStats = new FrameStats(views.Length, _drawCalls, _drawCommands, _shadowDrawCalls, _shadowDrawCommands, ShadowsAdded, ShadowsGrown, ShadowsShrunk);
         _drawCalls = _drawCommands = _shadowDrawCalls = _shadowDrawCommands = 0;
         _frame++;
-        _dispatches.Clear();
-        _dispatches.Add(new GraphDispatch(_frameStart, _frameStartViews));
-        _fenceAt.Clear();
-        _fenceAt.Add(_dispatches.Count);
+        _currentTime = time;
+        _planned.Clear();
         _frameWorlds.Clear();
         _prepared.Clear();
         foreach (WorldFrame world in allWorlds)
@@ -1507,6 +1499,7 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (RenderFeature[] features in viewFeatures)
             PrepareFeatures(features);
 
+        PrepareFrameFeatures(allWorlds);
         DrawPrograms.Sweep();
         foreach (WorldFrame world in allWorlds)
         {
@@ -1517,7 +1510,6 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (WorldFrame world in allWorlds)
         {
             _frameWorlds.Add(world);
-            world.FiltersUsed = 0;
             world.ProbeCamerasUsed = 0;
             world.ProbeFaceCamerasUsed = 0;
             UpdateSkyProgram(world);
@@ -1552,7 +1544,7 @@ internal sealed partial class FramePipeline : IDisposable
             Draw(camera, view, viewFeatures[index], world, time);
         }
 
-        bool shadows = PrepareShadows();
+        PrepareShadows();
 
         // Providers' objects, written while the views were prepared, the deforming copies' poses, and the shadows' faces,
         // after the frame's earlier writes, as they can rewrite a record those wrote
@@ -1560,11 +1552,8 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (WorldFrame world in _frameWorlds)
         {
             world.World.Render.PrepareDeformation();
-            _replaced.Clear();
-            world.World.Render.Flush(_uploader, _replaced);
-            _retired.AddRange(_replaced);
-            if (world.Shadows!.Faces.Flush(_uploader) is { } faces)
-                _retired.Add(faces);
+            world.World.Render.Flush(_uploader);
+            world.Shadows!.Faces.Flush(_uploader);
         }
 
         ResolvePrograms();
@@ -1575,31 +1564,18 @@ internal sealed partial class FramePipeline : IDisposable
             ResolvePrograms();
         }
 
-        bool providers = _providerWork.Update(_frameWorlds, Active(), _frame, _providerPipeline, Report);
         CollectBuffers(allWorlds);
-        _fence.Update(Buffers, Active(), _frame, _fencePipeline);
-        GraphDispatch fence = new(_fencePipeline, _frameStartViews);
-        for (int i = _fenceAt.Count - 1; i >= 0; i--)
-            _dispatches.Insert(_fenceAt[i], fence);
+        PlanCounts();
 
-        // Providers' compute and the counts it wrote, after the uploads and before the fence every view follows
-        int firstFence = _fenceAt[0];
-        if (providers)
-            _dispatches.Insert(firstFence++, new GraphDispatch(_providerPipeline, _frameStartViews));
-        if (shadows)
-            _dispatches.Insert(firstFence + 1, new GraphDispatch(_shadowPipeline, _frameStartViews));
-        if (pipelines.Length > 0)
+        _readback.Prepare(readbacks);
+        foreach (FeatureShape shape in _shapes.Values)
         {
-            _dispatches.Add(fence);
-            _dispatches.AddRange(pipelines);
+            if (shape.LastFrame == _frame && shape.Prune(_frame))
+                _graphDirty = true;
         }
-        if (readbacks.Count > 0)
-        {
-            _readback.Prepare(readbacks);
-            _readbackPipeline.SetPasses([_readback]);
-            _dispatches.Add(new GraphDispatch(_readbackPipeline, _frameStartViews));
-        }
-        ExecutionTask task = _device.DispatchGraph(CollectionsMarshal.AsSpan(_dispatches), profilers ?? []);
+        if (_graphDirty)
+            BuildGraph();
+        ExecutionTask task = _device.DispatchGraph(_graph!, CreateInstances(_graph!), profilers ?? []);
         foreach (Texture texture in _disposeAfterDispatch)
             texture.Dispose();
         _disposeAfterDispatch.Clear();
@@ -1607,14 +1583,12 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (IDisposable retired in _shadowRetired)
             retired.Dispose();
         _shadowRetired.Clear();
-        foreach (ShadowTarget target in _shadowRetiredTargets)
-            target.Release();
-        _shadowRetiredTargets.Clear();
         foreach (IDisposable retired in _retired)
             retired.Dispose();
         _retired.Clear();
         ReleaseStaleCameras();
         ReleaseIdleCaptures();
+        ReleaseStaleShapes();
         return task;
     }
 
@@ -1628,57 +1602,139 @@ internal sealed partial class FramePipeline : IDisposable
             camera.HasPrevious = false;
         }
         if (view.Cut)
-        {
             camera.HasPrevious = false;
-            camera.Rebuild = true;
-        }
         camera.World = world;
         camera.ResolveKeywords();
-        if (camera.HostBuffers != world.World.Globals.BufferList)
-        {
-            camera.HostBuffers = world.World.Globals.BufferList;
-            camera.Rebuild = true;
-        }
+        camera.HostBuffers = world.World.Globals.BufferList;
         uint width = Math.Max(1u, (uint)MathF.Round(view.Target.Width * view.Viewport.Z * view.RenderScale));
         uint height = Math.Max(1u, (uint)MathF.Round(view.Target.Height * view.Viewport.W * view.RenderScale));
-        camera.Info = new FeatureView(view, width, height, camera.Chain.SceneColor != null);
-        if (!view.External)
+        camera.Info = new FeatureView(view, width, height);
+        camera.SelectFeatures(world.World.FeatureSnapshot, features);
+        camera.PruneStates(world.World.FeatureSnapshot, features);
+        FeatureShape shape = ShapeOf(camera, view);
+        camera.ResetPassLists();
+        foreach (RenderFeature feature in camera.Selected)
         {
-            camera.SelectFeatures(world.World.FeatureSnapshot, features);
-            if (camera.Chain.Ensure(width, height, view.LayerCount, camera.SceneReads, camera.Info.OutputWidth, camera.Info.OutputHeight, view.Ldr))
-                camera.Rebuild = true;
-            camera.ApplyFeatures();
+            foreach (PassType type in shape.PassOf(feature).Types)
+                camera.ListFor(type);
         }
-        if (view.External)
-        {
-            if (camera.Chain.Scene.Texture != null)
-            {
-                camera.Chain.Release();
-                camera.Rebuild = true;
-            }
-            camera.ResetPassLists();
-            foreach (PassType pass in view.Passes ?? [])
-                camera.ListFor(pass);
-        }
+        ResolveScreenLighting(camera, shape, width, height);
         Prepare(camera, view, world, time, width, height);
-        if (!view.External && UpdateSceneColor(camera))
-        {
-            camera.Info = new FeatureView(view, width, height, true);
-            camera.SelectFeatures(world.World.FeatureSnapshot, features);
-            if (camera.Chain.Ensure(width, height, view.LayerCount, camera.SceneReads, camera.Info.OutputWidth, camera.Info.OutputHeight, view.Ldr))
-                camera.Rebuild = true;
-            camera.ApplyFeatures();
-        }
-        camera.View.Target = view.Target;
+        UpdateSceneColor(camera, shape, width, height);
         camera.View.PixelWidth = width;
         camera.View.PixelHeight = height;
-        if (!view.External)
-            _dispatches.Add(new GraphDispatch(camera.Pipeline, camera.Views));
+        _planned.Add(new PlannedInstance(shape.Kind, view.ViewId, world, new GraphExtent(width, height), shape.Captures ? null : view.Target, camera, view.Name ?? (shape.Captures ? $"Capture {view.ViewId}" : $"Camera {view.ViewId}")));
+    }
+
+    private void ReleaseStaleShapes()
+    {
+        List<GraphKind>? stale = null;
+        foreach ((GraphKind kind, FeatureShape shape) in _shapes)
+        {
+            if (_frame - shape.LastFrame > StaleViewFrames)
+                (stale ??= new()).Add(kind);
+        }
+        foreach (GraphKind kind in stale ?? [])
+        {
+            _shapes[kind].Dispose();
+            _shapes.Remove(kind);
+            _graphDirty = true;
+        }
+    }
+
+    private FeatureShape ShapeOf(CameraFrame camera, in ViewDesc view)
+    {
+        (CascadeSlot[] cascades, string cascadeKey) = CascadesOf(camera, view, camera.World);
+        CameraShape key = CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length, cascadeKey);
+        GraphKind kind = RenderKinds.Of(view.Kind, key);
+        bool changed = false;
+        if (!_shapes.TryGetValue(kind, out FeatureShape? shape))
+        {
+            _shapes[kind] = shape = new FeatureShape(kind, view.Kind, key, cascades) { Frame = this };
+            changed = true;
+        }
+        shape.LastFrame = _frame;
+        camera.Shape = shape;
+        foreach (RenderFeature feature in camera.Selected)
+        {
+            if (shape.Add(feature, _frame) || shape.PassOf(feature).BuiltVersion != feature.Version)
+                changed = true;
+        }
+        if (changed)
+        {
+            _graphDirty = true;
+            BuildGraph();
+        }
+        return shape;
+    }
+
+    private void BuildGraph()
+    {
+        _exports.Clear();
+        List<IPass> passes = [_upload, _probes, _deform, .. _frameFeatures, _counts, _readbackTexture, _readbackBuffer, .. _fillPasses, .. ShadowPasses()];
+        List<GraphKind> kinds = [];
+        foreach (FeatureShape shape in _shapes.Values)
+        {
+            passes.AddRange(shape.Passes());
+            kinds.Add(shape.Kind);
+        }
+        _graph = RenderGraph.Build(passes, RenderKinds.Scopes(kinds), "Graphite", _store);
+        _graphDirty = false;
+    }
+
+    private void ResolveScreenLighting(CameraFrame camera, FeatureShape shape, uint width, uint height)
+    {
+        if (!shape.Shape.HasScreenLighting)
+        {
+            camera.ScreenVisibility = camera.ScreenIrradiance = null;
+            return;
+        }
+        GraphInstanceKey key = new(shape.Kind, camera.View.ViewId);
+        GraphExtent extent = new(width, height);
+        camera.ScreenVisibility = _store.ResolvePersistent(_device, shape.ScreenVisibilityId, shape.ScreenDesc(PixelFormat.R8_UNorm), key, extent);
+        camera.ScreenIrradiance = shape.Shape.ScreenIrradiance
+            ? _store.ResolvePersistent(_device, shape.ScreenIrradianceId, shape.ScreenDesc(PixelFormat.R16_G16_B16_A16_Float), key, extent)
+            : null;
+    }
+
+    private GraphInstances CreateInstances(RenderGraph graph)
+    {
+        GraphInstances instances = graph.CreateInstances(data: this);
+        _worldInstances.Clear();
+        foreach (WorldFrame world in _frameWorlds)
+            _worldInstances[world] = instances.Add(RenderKinds.World, world.World.Id, data: world, name: world.World.Name);
+        foreach (PlannedInstance planned in _planned)
+        {
+            _imports.Clear();
+            if (planned.Data is CameraFrame camera)
+            {
+                FeatureShape shape = _shapes[planned.Kind];
+                for (int i = 0; i < camera.HostBuffers.Length; i++)
+                    _imports.Add(GraphImport.Of(shape.HostId(i), camera.HostBuffers[i]));
+                if (camera.CaptureCube != null)
+                    _imports.Add(GraphImport.Of(shape.CaptureId, camera.CaptureCube));
+            }
+            else if (planned.Data is CaptureFill fill)
+            {
+                _imports.Add(GraphImport.Of(RenderKinds.FillSource, fill.Source));
+                _imports.Add(GraphImport.Of(RenderKinds.FillTarget, fill.Target.Persistent.Texture!));
+                if (fill.SkyAmbient != null)
+                    _imports.Add(GraphImport.Of(RenderKinds.FillAmbient, fill.SkyAmbient));
+            }
+            instances.Add(planned.Kind, planned.Id, _worldInstances[planned.World], planned.Extent, planned.Target, planned.Data, planned.Name, _imports);
+        }
+        for (int i = 0; i < _readback.Requests.Count; i++)
+        {
+            ReadbackRequest request = _readback.Requests[i];
+            GraphImport import = request.Texture is { } texture ? GraphImport.Of(RenderKinds.ReadbackTexture, texture) : GraphImport.Of(RenderKinds.ReadbackBuffer, request.Buffer!);
+            instances.Add(RenderKinds.Readback, i, data: request, name: $"Readback {i}", imports: [import]);
+        }
+        return instances;
     }
 
     // Whether the view's transparent list reads the scene colour this frame. Returns whether its copy was just made, which
     // adds the copy to the view's graph; the lists keep their order through that rebuild, so what Prepare uploaded holds.
-    private bool UpdateSceneColor(CameraFrame camera)
+    private void UpdateSceneColor(CameraFrame camera, FeatureShape shape, uint width, uint height)
     {
         bool used = false;
         foreach (DrawCall call in camera.Transparent.Calls)
@@ -1690,17 +1746,91 @@ internal sealed partial class FramePipeline : IDisposable
                 break;
             }
         }
-        FeatureChain chain = camera.Chain;
-        chain.SceneColorUsed = used;
-        return used && chain.SceneColor == null && chain.EnsureSceneColor();
+        camera.SceneColorUsed = used;
+        if (used)
+            camera.EnsureSceneColor(width, height, (uint)shape.Shape.Layers, shape.ColorFormat);
     }
 
-    /// <summary>The draws of an external view this frame. Render thread.</summary>
-    public ViewDraws Draws(int viewId)
+    internal FrameTime CurrentTime => _currentTime;
+
+    internal FrameExports Exports => _exports;
+
+    // The frame features that run this frame, in order. A change in who runs or in what a feature declares rebuilds the graph.
+    private void PrepareFrameFeatures(IEnumerable<WorldFrame> worlds)
     {
-        if (!_cameras.TryGetValue(viewId, out CameraFrame? camera) || camera.LastFrame != _frame || !camera.Desc.External)
-            throw new InvalidOperationException($"No external view {viewId} was submitted this frame.");
-        return camera.Draws ??= new ViewDraws(this, camera);
+        _activeFrameFeatures.Clear();
+        foreach (WorldFrame world in worlds)
+        {
+            foreach (FrameFeature feature in world.World.FrameFeatureSnapshot)
+            {
+                if (!feature.EnabledSnapshot || !IsActive(feature))
+                    continue;
+                if (!_frameFeaturePasses.TryGetValue(feature, out FrameFeaturePass? pass))
+                    _frameFeaturePasses[feature] = pass = new FrameFeaturePass(this, feature) { BuiltVersion = -1 };
+                _activeFrameFeatures.Add(pass);
+            }
+        }
+        _activeFrameFeatures.Sort((a, b) => a.Feature.OrderSnapshot != b.Feature.OrderSnapshot ? a.Feature.OrderSnapshot.CompareTo(b.Feature.OrderSnapshot) : a.Feature.Id.CompareTo(b.Feature.Id));
+        bool changed = _activeFrameFeatures.Count != _frameFeatures.Count;
+        for (int i = 0; !changed && i < _activeFrameFeatures.Count; i++)
+            changed = _activeFrameFeatures[i] != _frameFeatures[i] || _activeFrameFeatures[i].BuiltVersion != _activeFrameFeatures[i].Feature.Version;
+        if (!changed)
+            return;
+        _frameFeatures.Clear();
+        _frameFeatures.AddRange(_activeFrameFeatures);
+        _graphDirty = true;
+        List<FrameFeature>? gone = null;
+        foreach (FrameFeature feature in _frameFeaturePasses.Keys)
+        {
+            if (!_activeFrameFeatures.Exists(pass => pass.Feature == feature))
+                (gone ??= new()).Add(feature);
+        }
+        foreach (FrameFeature feature in gone ?? [])
+            _frameFeaturePasses.Remove(feature);
+    }
+
+    private bool IsActive(FrameFeature feature)
+    {
+        try
+        {
+            return feature.IsActive();
+        }
+        catch (Exception e)
+        {
+            Report(new RendererError("frame.feature", $"{feature.GetType().Name}.IsActive threw: {e}", RendererErrorSeverity.Error, feature) { Key = $"frame.feature.active.{feature.GetType().FullName}" });
+            return false;
+        }
+    }
+
+    // The copies of indirect items' instance counts into the views' commands, the graph built again when what they touch changes
+    private void PlanCounts()
+    {
+        _counts.Copies.Clear();
+        foreach (CameraFrame camera in Active())
+        {
+            if (camera.LastFrame != _frame)
+                continue;
+            foreach ((RenderResourceID source, uint offset, uint destination) in camera.Counts)
+                _counts.Copies.Add((source, offset, camera.Commands.Persistent, destination));
+        }
+        _counts.Plan();
+        if (_counts.Changed())
+            _graphDirty = true;
+    }
+
+    internal void BindWorld(PropertySet properties, RenderWorld world)
+    {
+        RenderWorld.RenderSide render = world.Render;
+        WorldLighting lighting = world.Lighting;
+        properties.SetBuffer("Graphite_Chunks", Geometry.Chunks.Buffer);
+        properties.SetBuffer("Graphite_Transforms", render.Transforms.Buffer);
+        properties.SetBuffer("Graphite_PreviousTransforms", render.PreviousTransforms.Buffer);
+        properties.SetBuffer("Graphite_Objects", render.Attributes.Buffer);
+        properties.SetBuffer("Graphite_MaterialSlots", render.MaterialSlots.Buffer);
+        properties.SetBuffer("Graphite_WorldLighting", lighting.World.Buffer);
+        properties.SetBuffer("Graphite_ObjectProbes", world.Probes.ObjectSh);
+        properties.SetBuffer("Graphite_SkyAmbientSH", world.Reflections.SkyAmbient);
+        properties.SetBuffer("Graphite_Directionals", lighting.Directionals.Buffer);
     }
 
     private void PrepareFeatures(RenderFeature[] features)
@@ -1824,7 +1954,6 @@ internal sealed partial class FramePipeline : IDisposable
         world.SkyProgram = program;
     }
 
-    // Draws only the sky into the six faces of the world's capture cube, then filters it into the sky probe's mips
     private void CaptureSky(WorldFrame world, in FrameTime time)
     {
         WorldReflections reflections = world.World.Reflections;
@@ -1846,40 +1975,17 @@ internal sealed partial class FramePipeline : IDisposable
         };
         for (int face = 0; face < 6; face++)
             capture.Layers[face] = new ViewLayer { View = WorldReflections.FaceView(face), Projection = WorldReflections.FaceProjection };
+        world.SkyCamera.CaptureCube = scratch.AllTexture;
         Draw(world.SkyCamera, capture, [], world, time);
-        Fill(world, reflections.Sky!, scratch.Cube, null);
-
-        if (world.SkyAmbient == null)
-        {
-            world.SkyAmbientPass = new SkyAmbientPass(SkyAmbientProgram, TrilinearClamp);
-            world.SkyAmbient = new RenderPipeline { Name = "Graphite.SkyAmbient" };
-            world.SkyAmbient.SetPasses([world.SkyAmbientPass]);
-        }
-        world.SkyAmbientPass!.Source = scratch.Cube;
-        world.SkyAmbientPass.Output = reflections.SkyAmbient;
-        _dispatches.Add(new GraphDispatch(world.SkyAmbient, _frameStartViews));
-        _fenceAt.Add(_dispatches.Count);
+        Fill(world, reflections.Sky!, scratch, null, reflections.SkyAmbient);
     }
 
-    // Filters a captured cube into every mip of a prefiltered one
-    private void Fill(WorldFrame world, WorldReflections.Target target, Texture source, DeviceBuffer? readback)
+    private void Fill(WorldFrame world, WorldReflections.Target target, WorldReflections.Scratch scratch, DeviceBuffer? readback, DeviceBuffer? ambient)
     {
-        if (world.FiltersUsed == world.Filters.Count)
-        {
-            PrefilterPass created = new(PrefilterProgram, TrilinearClamp, world.World.Reflections.PrefilterSamples);
-            RenderPipeline pipeline = new() { Name = "Graphite.Prefilter" };
-            pipeline.SetPasses([created]);
-            world.Filters.Add((pipeline, created));
-        }
-        (RenderPipeline filter, PrefilterPass pass) = world.Filters[world.FiltersUsed++];
-        WorldReflections reflections = world.World.Reflections;
-        pass.Source = source;
-        pass.Destination = target.Cube;
-        pass.Readback = readback;
-        _dispatches.Add(new GraphDispatch(filter, target.Views));
+        CaptureFill fill = new() { Source = scratch.AllTexture, Target = target, Samples = world.World.Reflections.PrefilterSamples, Readback = readback, SkyAmbient = ambient };
+        _planned.Add(new PlannedInstance(RenderKinds.CaptureFill, _planned.Count, world, new GraphExtent(target.Resolution, target.Resolution), null, fill, $"Capture fill {_planned.Count}"));
     }
 
-    // Draws the world around a probe into its capture cube, all faces or the next one, then fills its layer
     private void CaptureProbe(WorldFrame world, ProbeCapture work, in FrameTime time)
     {
         WorldReflections reflections = world.World.Reflections;
@@ -1892,7 +1998,7 @@ internal sealed partial class FramePipeline : IDisposable
         int faces = work.EndFace - work.FirstFace;
         if (faces == 6)
         {
-            CameraFrame camera = Pooled(world.ProbeCameras, ref world.ProbeCamerasUsed, scratch.Cube.Width);
+            CameraFrame camera = Pooled(world.ProbeCameras, ref world.ProbeCamerasUsed);
             ViewDesc capture = new()
             {
                 World = world.World,
@@ -1907,11 +2013,12 @@ internal sealed partial class FramePipeline : IDisposable
             };
             for (int face = 0; face < 6; face++)
                 capture.Layers[face] = new ViewLayer { View = WorldReflections.FaceView(face), Projection = projection, Position = probe.Position };
+            camera.CaptureCube = scratch.AllTexture;
             Draw(camera, capture, [], world, time);
         }
         else if (faces == 1)
         {
-            CameraFrame camera = Pooled(world.ProbeFaceCameras, ref world.ProbeFaceCamerasUsed, scratch.Cube.Width);
+            CameraFrame camera = Pooled(world.ProbeFaceCameras, ref world.ProbeFaceCamerasUsed);
             ViewDesc capture = new()
             {
                 World = world.World,
@@ -1924,11 +2031,12 @@ internal sealed partial class FramePipeline : IDisposable
                 FarDistance = probe.FarClip,
             };
             capture.Layers[0] = new ViewLayer { View = WorldReflections.FaceView(work.FirstFace), Projection = projection, Position = probe.Position };
+            camera.CaptureCube = scratch.FaceTextures[work.FirstFace];
             Draw(camera, capture, [], world, time);
         }
 
         if (work.Prefilter)
-            Fill(world, target, scratch.Cube, work.Readback);
+            Fill(world, target, scratch, work.Readback, null);
     }
 
     private CameraFrame Capturing()
@@ -1938,26 +2046,10 @@ internal sealed partial class FramePipeline : IDisposable
         return camera;
     }
 
-    // The next capture camera of a pool this frame, one last drawing at this resolution if any so its textures stay
-    private CameraFrame Pooled(List<CameraFrame> pool, ref int used, uint resolution)
+    private CameraFrame Pooled(List<CameraFrame> pool, ref int used)
     {
-        int pick = -1;
-        for (int i = used; i < pool.Count && pick < 0; i++)
-        {
-            if (pool[i].Chain.Scene.Texture?.Desc.Width == resolution)
-                pick = i;
-        }
-        for (int i = used; i < pool.Count && pick < 0; i++)
-        {
-            if (pool[i].Chain.Scene.Texture == null)
-                pick = i;
-        }
-        if (pick < 0)
-        {
+        if (used == pool.Count)
             pool.Add(Capturing());
-            pick = pool.Count - 1;
-        }
-        (pool[used], pool[pick]) = (pool[pick], pool[used]);
         return pool[used++];
     }
 
@@ -1968,11 +2060,8 @@ internal sealed partial class FramePipeline : IDisposable
         {
             foreach (CameraFrame camera in world.Captures())
             {
-                if (_frame - camera.LastFrame > StaleViewFrames && camera.Chain.Scene.Texture != null)
-                {
-                    camera.Chain.Release();
-                    camera.Rebuild = true;
-                }
+                if (_frame - camera.LastFrame > StaleViewFrames)
+                    camera.ReleaseSceneColor();
             }
         }
     }
@@ -1992,9 +2081,9 @@ internal sealed partial class FramePipeline : IDisposable
     private void Untrack(CameraFrame camera)
     {
         _textures.Untrack(camera.ViewTable);
-        foreach ((_, _, ViewShadows.Cascade[] cascades) in camera.Shadows.Lights)
+        foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
         {
-            foreach (ViewShadows.Cascade cascade in cascades)
+            foreach (ViewShadows.Cascade cascade in light.Cascades)
             {
                 if (cascade.Camera != null)
                     _textures.Untrack(cascade.Camera.ViewTable);
@@ -2024,6 +2113,7 @@ internal sealed partial class FramePipeline : IDisposable
 
     private void Prepare(CameraFrame camera, in ViewDesc view, WorldFrame world, in FrameTime time, uint width, uint height)
     {
+        camera.RefreshBuffers();
         camera.Time = time;
         int layers = view.LayerCount;
         bool shadow = camera.IsShadowView;
@@ -2070,7 +2160,7 @@ internal sealed partial class FramePipeline : IDisposable
         // A feature asking for jitter offsets the projection by under a pixel, through Halton(2, 3)
         int phases = 0;
         float mipBias = 0;
-        foreach (RenderFeature feature in camera.Features)
+        foreach (RenderFeature feature in camera.Selected)
         {
             if (feature.JitterPhasesSnapshot > phases)
                 (phases, mipBias) = (feature.JitterPhasesSnapshot, feature.JitterMipBiasSnapshot);
@@ -2152,16 +2242,17 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (WorldFrame world in worlds)
             _captures.AddRange(world.Captures());
         _buffers.Clear();
-        _buffers.Add(Geometry.Chunks.Buffer);
-        _buffers.Add(Geometry.Meshes.Buffer);
+        _importedBuffers.Clear();
+        _buffers.Add(Geometry.Chunks.Persistent);
+        _buffers.Add(Geometry.Meshes.Persistent);
         foreach (GeometryPage page in Geometry.Pages)
         {
-            _buffers.Add(page.Vertices);
-            _buffers.Add(page.Indices);
+            _buffers.Add(page.VertexBuffer);
+            _buffers.Add(page.IndexBuffer);
         }
         foreach (MaterialTable table in Materials.Tables.Values)
-            _buffers.Add(table.Records.Buffer);
-        _buffers.Add(Globals.Buffer);
+            _buffers.Add(table.Records.Persistent);
+        _buffers.Add(Globals.Persistent);
         _probes.Worlds.Clear();
         _deform.Worlds.Clear();
         foreach (WorldFrame world in worlds)
@@ -2170,56 +2261,56 @@ internal sealed partial class FramePipeline : IDisposable
             _deform.Worlds.Add(render);
             WorldProbes probes = world.World.Probes;
             _probes.Worlds.Add(probes);
-            _buffers.Add(probes.ProbeRecords.Buffer);
-            _buffers.Add(probes.TetRecords.Buffer);
-            _buffers.Add(probes.Requests.Buffer);
-            _buffers.Add(probes.ObjectSh);
+            _buffers.Add(probes.ProbeRecords.Persistent);
+            _buffers.Add(probes.TetRecords.Persistent);
+            _buffers.Add(probes.Requests.Persistent);
+            _buffers.Add(probes.ObjectShBuffer);
             foreach (SpatialIndex set in world.World.SpatialSets)
             {
                 if (set.Slot < SpatialIndex.ProbesSet)
                     continue;
-                _buffers.Add(set.StaticRecords.Buffer);
-                _buffers.Add(set.StaticNodes.Buffer);
+                _buffers.Add(set.StaticRecords.Persistent);
+                _buffers.Add(set.StaticNodes.Persistent);
             }
-            _buffers.Add(world.World.Reflections.SkyAmbient);
+            _importedBuffers.Add(world.World.Reflections.SkyAmbient);
 
             foreach (GpuTable table in render.Tables)
-                _buffers.Add(table.Buffer);
+                _buffers.Add(table.Persistent);
             WorldLighting lighting = world.World.Lighting;
             foreach (GpuTable table in lighting.Tables)
-                _buffers.Add(table.Buffer);
-
+                _buffers.Add(table.Persistent);
         }
         foreach (WorldFrame world in worlds)
         {
             if (world.Shadows != null)
-                _buffers.Add(world.Shadows.Faces.Buffer);
-        }
-        foreach (DeviceBuffer buffer in _providerWork.ComputeBuffers)
-        {
-            if (!_buffers.Contains(buffer))
-                _buffers.Add(buffer);
+                _buffers.Add(world.Shadows.Faces.Persistent);
         }
         foreach (CameraFrame camera in Active())
             camera.AddBuffers(_buffers);
 
-        if (Same(Buffers, _buffers))
+        if (Same(Buffers, _buffers, _importedBuffers))
             return;
 
-        Buffers = [.. _buffers];
-        _upload.Buffers = Buffers;
-        _probes.Buffers = Buffers;
-        _deform.Buffers = Buffers;
-        _frameStart.SetPasses([_upload, _probes, _deform]);
+        Buffers.Persistent = [.. _buffers];
+        Buffers.Sizes = new uint[_buffers.Count];
+        for (int i = 0; i < _buffers.Count; i++)
+            Buffers.Sizes[i] = _buffers[i].Description.SizeInBytes;
+        Buffers.Imported = [.. _importedBuffers];
+        _graphDirty = true;
     }
 
-    private static bool Same(DeviceBuffer[] a, List<DeviceBuffer> b)
+    private static bool Same(FrameBuffers current, List<PersistentBuffer> buffers, List<DeviceBuffer> imports)
     {
-        if (a.Length != b.Count)
+        if (current.Persistent.Length != buffers.Count || current.Imported.Length != imports.Count)
             return false;
-        for (int i = 0; i < a.Length; i++)
+        for (int i = 0; i < buffers.Count; i++)
         {
-            if (a[i] != b[i])
+            if (current.Persistent[i] != buffers[i] || buffers[i].Description.SizeInBytes != current.Sizes[i])
+                return false;
+        }
+        for (int i = 0; i < imports.Count; i++)
+        {
+            if (current.Imported[i] != imports[i])
                 return false;
         }
         return true;
@@ -2254,14 +2345,11 @@ internal sealed partial class FramePipeline : IDisposable
             camera.Dispose();
         _shadowCameraPool.Clear();
         _providerProbe?.Dispose();
-        _frameStart.Dispose();
-        _readbackPipeline.Dispose();
-        _providerPipeline.Dispose();
-        _shadowPipeline.Dispose();
+        _graph?.Dispose();
+        foreach (FeatureShape shape in _shapes.Values)
+            shape.Dispose();
         _shadowSampler?.Dispose();
-        _shrinkScratch?.Dispose();
         _tileClear?.Dispose();
-        _fencePipeline.Dispose();
         _probes.Dispose();
         _deform.Dispose();
         Programs.Dispose();
@@ -2286,75 +2374,6 @@ internal sealed partial class FramePipeline : IDisposable
     }
 }
 
-/// <summary>
-/// The draws the renderer prepared this frame for an external view: its culled lists, its tables and the frame's
-/// buffers, which a pass before the host pipelines makes ready for them. Host passes bind a target and record. Render thread.
-/// </summary>
-public sealed class ViewDraws
-{
-    private readonly FramePipeline _frame;
-    private readonly CameraFrame _camera;
-    private readonly PropertySet _properties = new();
-    private ulong _preparedExecution;
-
-    internal ViewDraws(FramePipeline frame, CameraFrame camera)
-    {
-        _frame = frame;
-        _camera = camera;
-    }
-
-    /// <summary>The view as submitted.</summary>
-    public ViewDesc Desc => _camera.Desc;
-
-    /// <summary>Records the visible renderables of a pass type onto the bound target: the prepass, opaque forward, or one in ViewDesc.Passes.</summary>
-    public void Record(RenderContext context, CommandBuffer cmd, PassType pass)
-    {
-        DrawList list = _camera.FindList(pass) ?? throw new InvalidOperationException($"View {_camera.Desc.ViewId} did not prepare the {pass.Name} pass, list it in ViewDesc.Passes.");
-        Prepare(context);
-        _camera.Drawer.DrawList(cmd, list);
-    }
-
-    /// <summary>Records the visible transparent renderables back to front onto the bound target.</summary>
-    public void RecordTransparent(RenderContext context, CommandBuffer cmd)
-    {
-        Prepare(context);
-        _camera.Drawer.DrawList(cmd, _camera.Transparent);
-    }
-
-    /// <summary>Records the world's sky onto the bound target.</summary>
-    public void RecordSky(RenderContext context, CommandBuffer cmd)
-    {
-        Prepare(context);
-        _camera.Drawer.DrawSky(cmd);
-    }
-
-    /// <summary>
-    /// Draws a fullscreen program onto the bound target with the view's layers, and the view's lights, shadows and probes
-    /// when it is lit, such as the lighting pass of a deferred pipeline. Its properties bind last.
-    /// </summary>
-    public void DrawFullscreen(RenderContext context, CommandBuffer cmd, FullscreenProgram program, PropertySet? properties = null)
-    {
-        Prepare(context);
-        cmd.SetShader(program.For(_camera.LayerCount));
-        cmd.SetVertexSource(VertexSource.None);
-        if (program.Lit)
-            _camera.Drawer.BindTables(cmd);
-        _properties.SetBuffer("Graphite_PostViews", _camera.ViewBlocks.Buffer);
-        cmd.SetProperties(_properties);
-        if (properties != null)
-            cmd.SetProperties(properties);
-        cmd.Draw(3);
-    }
-
-    private void Prepare(RenderContext context)
-    {
-        if (_preparedExecution == context.Task.Id)
-            return;
-        _camera.Drawer.Prepare(context.Task.RingSlot);
-        _preparedExecution = context.Task.Id;
-    }
-}
-
 /// <summary>A copy to the host the renderer records after a frame's views.</summary>
 internal sealed class ReadbackRequest
 {
@@ -2370,18 +2389,14 @@ internal sealed class ReadbackRequest
     public string? Error;
 }
 
-/// <summary>Copies the frame's readbacks into staging buffers, last in the execution.</summary>
-internal sealed class ReadbackPass(GraphicsDevice device, Action<RendererError> report) : IPass
+/// <summary>Makes the staging buffers of a frame's readbacks and drops the requests whose source was disposed.</summary>
+internal sealed class ReadbackStaging(GraphicsDevice device, Action<RendererError> report)
 {
-    private static readonly List<RenderResourceID> s_ids = new();
-    private readonly List<ReadbackRequest> _requests = new();
+    public readonly List<ReadbackRequest> Requests = new();
 
-    public string Name => "Graphite.Readback";
-
-    // Staging buffers are made now, and requests whose source was disposed fail
     public void Prepare(List<ReadbackRequest> requests)
     {
-        _requests.Clear();
+        Requests.Clear();
         for (int i = requests.Count - 1; i >= 0; i--)
         {
             ReadbackRequest request = requests[i];
@@ -2393,245 +2408,48 @@ internal sealed class ReadbackPass(GraphicsDevice device, Action<RendererError> 
             }
             uint bytes = request.Texture is { } texture ? request.Region.Width * request.Region.Height * request.Region.Depth * texture.Format.GetSizeInBytes() : request.Size;
             request.Staging ??= device.ResourceFactory.CreateBuffer(new BufferDescription(bytes, BufferUsage.Staging));
-            _requests.Add(request);
-        }
-    }
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        int id = 0;
-        foreach (ReadbackRequest request in _requests)
-        {
-            if (request.Buffer is { } buffer)
-                builder.DeclareImportedBuffer(Id(id++), buffer, BufferAccess.TransferRead);
-        }
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd)
-    {
-        foreach (ReadbackRequest request in _requests)
-        {
-            if (request.Texture is { } texture)
-                cmd.CopyTextureToBuffer(texture, request.Staging!, 0, request.Region);
-            else
-                cmd.CopyBuffer(request.Buffer!, request.Offset, request.Staging!, 0, request.Size);
-        }
-    }
-
-    private static RenderResourceID Id(int index)
-    {
-        lock (s_ids)
-        {
-            while (s_ids.Count <= index)
-                s_ids.Add(RenderResourceID.Intern("Graphite.Readback" + s_ids.Count));
-            return s_ids[index];
+            Requests.Add(request);
         }
     }
 }
 
-/// <summary>
-/// Reads every buffer draws may read, after the passes that write them and before the views and host pipelines, so their
-/// first use in this graph waits for every earlier write. Views then import nothing and never rebuild when a buffer grows.
-/// </summary>
-internal sealed class FencePass : IPass
+/// <summary>Copies the texture a readback instance binds into its staging buffer.</summary>
+internal sealed class ReadbackTexturePass : IInstancePass
 {
-    private DeviceBuffer[] _buffers = [];
-    private readonly List<DeviceBuffer> _wanted = new();
+    private TextureHandle _source;
 
-    public string Name => "Graphite.Fence";
+    public string Name => "Graphite.ReadbackTexture";
 
-    public void Update(DeviceBuffer[] frameBuffers, IEnumerable<CameraFrame> cameras, int frame, RenderPipeline pipeline)
+    public GraphKind Kind => RenderKinds.Readback;
+
+    public bool IsEnabled(GraphInstance instance) => instance.Data is ReadbackRequest { Texture: not null };
+
+    public void Setup(InstanceContextBuilder builder) => _source = builder.DeclareImportSlotTexture(RenderKinds.ReadbackTexture, TextureState.TransferSrc);
+
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
-        _wanted.Clear();
-        _wanted.AddRange(frameBuffers);
-        foreach (CameraFrame camera in cameras)
-        {
-            if (camera.LastFrame != frame)
-                continue;
-            foreach (DeviceBuffer buffer in camera.HostBuffers)
-            {
-                if (!_wanted.Contains(buffer))
-                    _wanted.Add(buffer);
-            }
-        }
-        if (CollectionsMarshal.AsSpan(_wanted).SequenceEqual(_buffers))
-            return;
-        _buffers = [.. _wanted];
-        pipeline.SetPasses([this]);
+        ReadbackRequest request = (ReadbackRequest)context.Instance.Data!;
+        cmd.CopyTextureToBuffer(context.GetRenderTexture(_source).ColorTextures[0], request.Staging!, 0, request.Region);
     }
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        for (int i = 0; i < _buffers.Length; i++)
-            builder.DeclareImportedBuffer(FramePipeline.BufferId(i), _buffers[i], BufferAccess.AllReads);
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
-/// <summary>
-/// Providers' GPU work once a frame, after FrameStart and before the fence every view follows: their compute, then the
-/// instance counts it wrote copied into every view's commands, so indirect items draw what this frame made.
-/// </summary>
-internal sealed class ProviderWork
+/// <summary>Copies the buffer a readback instance binds into its staging buffer.</summary>
+internal sealed class ReadbackBufferPass : IInstancePass
 {
-    private static readonly List<RenderResourceID> s_ids = new();
-    private readonly List<RenderProvider> _computing = new();
-    private readonly List<DeviceBuffer> _computeBuffers = new();
+    private BufferHandle _source;
 
-    /// <summary>This frame's buffers providers' compute writes, which the fence orders before every reader.</summary>
-    public IReadOnlyList<DeviceBuffer> ComputeBuffers => _computeBuffers;
-    private readonly List<(DeviceBuffer Source, uint Offset, DeviceBuffer Target, uint Destination)> _copies = new();
-    private readonly List<DeviceBuffer> _buffers = new();
-    private readonly List<DeviceBuffer> _scratch = new();
-    private DeviceBuffer[] _declared = [];
-    private RenderProvider[] _declaredProviders = [];
-    private readonly ComputeStep _compute;
-    private readonly CopyStep _copy;
-    private Action<RendererError> _report = _ => { };
+    public string Name => "Graphite.ReadbackBuffer";
 
-    public ProviderWork()
+    public GraphKind Kind => RenderKinds.Readback;
+
+    public bool IsEnabled(GraphInstance instance) => instance.Data is ReadbackRequest { Buffer: not null };
+
+    public void Setup(InstanceContextBuilder builder) => _source = builder.DeclareImportSlotBuffer(RenderKinds.ReadbackBuffer, BufferAccess.TransferRead);
+
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
-        _compute = new ComputeStep(this);
-        _copy = new CopyStep(this);
-    }
-
-    /// <summary>Gathers this frame's compute and copies, rebuilding the pipeline when what they touch changes. Returns whether there is any.</summary>
-    public bool Update(IEnumerable<WorldFrame> worlds, IEnumerable<CameraFrame> cameras, int frame, RenderPipeline pipeline, Action<RendererError> report)
-    {
-        _report = report;
-        _computing.Clear();
-        _computeBuffers.Clear();
-        _copies.Clear();
-        _buffers.Clear();
-        foreach (WorldFrame world in worlds)
-        {
-            foreach (RenderProvider provider in world.World.ProviderSnapshot)
-            {
-                if (!provider.EnabledSnapshot)
-                    continue;
-                _scratch.Clear();
-                try
-                {
-                    provider.ComputeBuffers(_scratch);
-                }
-                catch (Exception e)
-                {
-                    Report(provider, "ComputeBuffers", e);
-                    continue;
-                }
-                foreach (DeviceBuffer buffer in _scratch)
-                {
-                    if (buffer != null && !buffer.IsDisposed && !_computeBuffers.Contains(buffer))
-                        _computeBuffers.Add(buffer);
-                }
-                if (_scratch.Count > 0)
-                    _computing.Add(provider);
-            }
-        }
-        foreach (CameraFrame camera in cameras)
-        {
-            if (camera.LastFrame != frame)
-                continue;
-            foreach ((DeviceBuffer source, uint offset, uint destination) in camera.Counts)
-            {
-                if (source.IsDisposed)
-                {
-                    report(new RendererError("provider.count", "An indirect item's instance count buffer was disposed before its frame drew, so it draws its last count.", RendererErrorSeverity.Warning) { Key = "provider.count.disposed" });
-                    continue;
-                }
-                _copies.Add((source, offset, camera.Commands.Buffer, destination));
-            }
-        }
-        if (_computing.Count == 0 && _copies.Count == 0)
-            return false;
-
-        _buffers.AddRange(_computeBuffers);
-        foreach ((DeviceBuffer source, _, DeviceBuffer target, _) in _copies)
-        {
-            if (!_buffers.Contains(source))
-                _buffers.Add(source);
-            if (!_buffers.Contains(target))
-                _buffers.Add(target);
-        }
-        if (!CollectionsMarshal.AsSpan(_buffers).SequenceEqual(_declared) || !CollectionsMarshal.AsSpan(_computing).SequenceEqual(_declaredProviders))
-        {
-            _declared = [.. _buffers];
-            _declaredProviders = [.. _computing];
-            pipeline.SetPasses([_compute, _copy]);
-        }
-        return true;
-    }
-
-    private void Report(RenderProvider provider, string method, Exception e)
-        => _report(new RendererError("provider.compute", $"{provider.GetType().Name}.{method} threw: {e}", RendererErrorSeverity.Error, provider) { Key = $"provider.compute.{provider.GetType().FullName}" });
-
-    private static RenderResourceID Id(int index)
-    {
-        lock (s_ids)
-        {
-            while (s_ids.Count <= index)
-                s_ids.Add(RenderResourceID.Intern("Graphite.Provider" + s_ids.Count));
-            return s_ids[index];
-        }
-    }
-
-    private sealed class ComputeStep(ProviderWork work) : IPass
-    {
-        public string Name => "Graphite.ProviderCompute";
-
-        public void Setup(RenderContextBuilder builder)
-        {
-            for (int i = 0; i < work._declared.Length; i++)
-            {
-                if (work._computeBuffers.Contains(work._declared[i]))
-                    builder.DeclareImportedBuffer(Id(i), work._declared[i], BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
-            }
-        }
-
-        public void Render(RenderContext context, CommandBuffer cmd)
-        {
-            foreach (RenderProvider provider in work._computing)
-            {
-                try
-                {
-                    provider.Compute(cmd);
-                }
-                catch (Exception e)
-                {
-                    work.Report(provider, "Compute", e);
-                }
-            }
-        }
-    }
-
-    private sealed class CopyStep(ProviderWork work) : IPass
-    {
-        public string Name => "Graphite.ProviderCounts";
-
-        public void Setup(RenderContextBuilder builder)
-        {
-            for (int i = 0; i < work._declared.Length; i++)
-            {
-                DeviceBuffer buffer = work._declared[i];
-                BufferAccess access = BufferAccess.None;
-                foreach ((DeviceBuffer source, _, DeviceBuffer target, _) in work._copies)
-                {
-                    if (source == buffer)
-                        access |= BufferAccess.TransferRead;
-                    if (target == buffer)
-                        access |= BufferAccess.TransferWrite;
-                }
-                if (access != BufferAccess.None)
-                    builder.DeclareImportedBuffer(Id(i), buffer, access);
-            }
-        }
-
-        public void Render(RenderContext context, CommandBuffer cmd)
-        {
-            foreach ((DeviceBuffer source, uint offset, DeviceBuffer target, uint destination) in work._copies)
-                cmd.CopyBuffer(source, offset, target, destination, 4);
-        }
+        ReadbackRequest request = (ReadbackRequest)context.Instance.Data!;
+        cmd.CopyBuffer(context.GetRenderBuffer(_source), request.Offset, request.Staging!, 0, request.Size);
     }
 }
 

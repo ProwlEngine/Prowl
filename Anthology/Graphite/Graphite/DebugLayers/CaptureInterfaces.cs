@@ -1,6 +1,5 @@
 using System;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 namespace Prowl.Graphite.Debugging;
@@ -11,7 +10,7 @@ namespace Prowl.Graphite.Debugging;
 /// </summary>
 public interface ICaptureProfiler : IProfiler
 {
-    void DescribeView(in ViewCaptureInfo view);
+    void DescribeInstance(in InstanceCaptureInfo instance);
 
     void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture);
 }
@@ -19,7 +18,7 @@ public interface ICaptureProfiler : IProfiler
 /// <summary>Services a hook can request during a callback. Only valid for the duration of <see cref="ICaptureProfiler.OnPassEnd"/>.</summary>
 public interface ICaptureContext
 {
-    /// <summary>Records a copy of the whole resource into a new staging buffer owned by the caller. Throws for a view target backing.</summary>
+    /// <summary>Records a copy of the whole resource into a new staging buffer owned by the caller. Throws for an instance target backing.</summary>
     CaptureCopy Copy(in PassReference reference, CopyPlacement placement);
 }
 
@@ -89,13 +88,15 @@ public interface IPassCommandSink
 
     void CopyTexture(in ResourceVersion source, in TextureRegion sourceRegion, in ResourceVersion destinationAfter, in TextureRegion destinationRegion, uint layerCount);
 
+    void BlitTexture(in ResourceVersion source, in ResourceVersion destinationAfter, ReadOnlySpan<TextureBlit> regions);
+
     void CopyTextureToBuffer(in ResourceVersion source, in TextureRegion region, in ResourceVersion destinationAfter, uint destinationOffset);
 
     void ResolveTexture(in ResourceVersion source, in ResourceVersion destinationAfter);
 
     void GenerateMips(in ResourceVersion textureAfter);
 
-    void PushMarker(string name);
+    void PushMarker(string name, object? meta);
 
     void PopMarker();
 }

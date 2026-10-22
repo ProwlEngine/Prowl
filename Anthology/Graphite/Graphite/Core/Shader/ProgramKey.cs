@@ -28,6 +28,12 @@ public readonly struct ProgramKey : IEquatable<ProgramKey>
     /// Computes the key of the given stages. Integers are little endian, entry points UTF-8.
     /// </summary>
     public static ProgramKey Compute(ReadOnlySpan<ShaderStageDescription> stages)
+        => Compute(stages, []);
+
+    /// <summary>
+    /// Computes the key of the given stages built with specialization constants. Without constants it equals the key of the stages alone.
+    /// </summary>
+    public static ProgramKey Compute(ReadOnlySpan<ShaderStageDescription> stages, ReadOnlySpan<SpecializationConstant> specializations)
     {
         using IncrementalHash sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         Span<byte> header = stackalloc byte[12];
@@ -40,6 +46,14 @@ public readonly struct ProgramKey : IEquatable<ProgramKey>
             sha.AppendData(header);
             sha.AppendData(entry);
             sha.AppendData(stage.ShaderBytes);
+        }
+
+        Span<byte> constant = stackalloc byte[8];
+        foreach (SpecializationConstant specialization in specializations)
+        {
+            BitConverter.TryWriteBytes(constant, specialization.Id);
+            BitConverter.TryWriteBytes(constant[4..], specialization.Value);
+            sha.AppendData(constant);
         }
 
         Span<byte> digest = stackalloc byte[DigestSize];

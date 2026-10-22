@@ -5,7 +5,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 
 namespace Prowl.Graphite.Debugger;
 
@@ -13,7 +12,7 @@ internal sealed record GraphTexture(RenderTexture Texture, TraceResourceId[] Bac
 
 internal sealed record GraphBuffer(TraceResourceId Id, GraphBufferDesc Desc);
 
-internal sealed record BufferRestore(int PassIndex, string Name, byte[] Data);
+internal sealed record BufferRestore(int PassIndex, string Name, byte[] Data, uint Offset = 0);
 
 internal sealed unsafe class ReplayScope : IDisposable
 {
@@ -27,12 +26,13 @@ internal sealed unsafe class ReplayScope : IDisposable
     private readonly Dictionary<TraceResourceId, DeviceBuffer> _buffers = new();
     private readonly Dictionary<ProgramKey, ShaderProgram> _programs = new();
     private readonly Dictionary<int, Sampler> _samplers = new();
-    private readonly Dictionary<(Texture, ResourceRange, PixelFormat?), TextureView> _views = new();
+    private readonly Dictionary<(Texture, ResourceRange, PixelFormat?, bool), TextureView> _views = new();
     private readonly Dictionary<TraceVersion, RecordedCopy> _copies = new();
     private readonly HashSet<TraceVersion> _planned = new();
     private readonly HashSet<TraceVersion> _produced = new();
     private readonly List<(int PassIndex, TraceResourceId Id, Texture Texture, RecordedCopy Copy)> _textureRestores = new();
     private readonly List<(int PassIndex, DeviceBuffer Buffer, RecordedCopy Copy)> _externalBufferRestores = new();
+    private readonly List<(int PassIndex, DeviceBuffer Buffer, BufferPatch Patch)> _externalPatches = new();
 
     public ReplayScope(GraphicsDevice device, DeepRecording deep, Dictionary<BlobRef, EquatableArray<byte>> blobs, Dictionary<ProgramKey, RecordedProgram> programs)
     {
@@ -43,7 +43,7 @@ internal sealed unsafe class ReplayScope : IDisposable
         foreach (RecordedResource resource in deep.Resources)
             _described[resource.Id] = resource;
 
-        foreach (RecordedCopy copy in deep.Views.SelectMany(v => v.Passes).SelectMany(p => p.Copies))
+        foreach (RecordedCopy copy in deep.Instances.SelectMany(i => i.Passes).SelectMany(p => p.Copies))
             _copies.TryAdd(copy.Version, copy);
     }
 
@@ -74,9 +74,9 @@ internal sealed unsafe class ReplayScope : IDisposable
 
     public Sampler? Sampler(int index) => index < 0 ? null : _samplers[index];
 
-    public TextureView View(Texture texture, ResourceRange range, PixelFormat? format)
+    public TextureView View(Texture texture, ResourceRange range, PixelFormat? format, bool arrayed)
     {
-        if (_views.TryGetValue((texture, range, format), out TextureView? view))
+        if (_views.TryGetValue((texture, range, format, arrayed), out TextureView? view))
             return view;
 
         view = Own(_device.ResourceFactory.CreateTextureView(new TextureViewDescription(
@@ -85,8 +85,11 @@ internal sealed unsafe class ReplayScope : IDisposable
             range.IsTexture ? range.MipLevels : texture.MipLevels,
             range.BaseArrayLayer,
             range.IsTexture ? range.ArrayLayers : texture.ArrayLayers,
-            format)));
-        _views[(texture, range, format)] = view;
+            format)
+        {
+            Arrayed = arrayed,
+        }));
+        _views[(texture, range, format, arrayed)] = view;
         return view;
     }
 
@@ -131,10 +134,10 @@ internal sealed unsafe class ReplayScope : IDisposable
         }
     }
 
-    public string? Prepare(DeepView view, IReadOnlyList<DeepPass> passes)
+    public string? Prepare(DeepInstance instance, IReadOnlyList<DeepPass> passes)
     {
         Dictionary<string, RecordedGraphResource> byName = new();
-        foreach (RecordedGraphResource resource in view.Resources)
+        foreach (RecordedGraphResource resource in instance.Resources)
             byName.TryAdd(resource.Name, resource);
 
         foreach (DeepPass pass in passes)
@@ -152,12 +155,12 @@ internal sealed unsafe class ReplayScope : IDisposable
         return null;
     }
 
-    public static HashSet<TraceResourceId> Outputs(DeepView view, DeepPass pass)
+    public static HashSet<TraceResourceId> Outputs(DeepInstance instance, DeepPass pass)
     {
         HashSet<TraceResourceId> referenced = pass.References.Select(r => r.Resource).ToHashSet();
         HashSet<string> names = pass.Accesses.Where(a => a.IsOutput).Select(a => a.Resource).ToHashSet();
         HashSet<TraceResourceId> outputs = new();
-        foreach (RecordedGraphResource resource in view.Resources)
+        foreach (RecordedGraphResource resource in instance.Resources)
         {
             if (names.Contains(resource.Name))
                 outputs.UnionWith(resource.Backings.Select(b => b.Id));
@@ -174,8 +177,8 @@ internal sealed unsafe class ReplayScope : IDisposable
             if (!byName.TryGetValue(access.Resource, out RecordedGraphResource? graph))
                 return $"Access to {access.Resource} has no recorded resource.";
 
-            if (graph.Origin == GraphResourceOrigin.ViewTarget)
-                return $"Pass {pass.Name} writes the view target, which is never copied.";
+            if (graph.Origin == GraphResourceOrigin.InstanceTarget)
+                return $"Pass {pass.Name} writes the instance target, which is never copied.";
 
             string? error = graph.Kind == GraphResourceKind.Texture ? BuildTexture(graph) : BuildBuffer(graph);
             if (error != null)
@@ -213,8 +216,27 @@ internal sealed unsafe class ReplayScope : IDisposable
         return null;
     }
 
+    public void AddPatches(int firstPass, IReadOnlyList<BufferPatch>? patches)
+    {
+        foreach (BufferPatch patch in patches ?? [])
+        {
+            string? name = GraphBuffers.FirstOrDefault(pair => pair.Value.Id == patch.Resource).Key;
+            if (name != null)
+            {
+                foreach (int step in BufferRestores.Where(r => r.Name == name && r.Offset == 0).Select(r => r.PassIndex).Append(firstPass).Distinct().ToList())
+                    BufferRestores.Add(new BufferRestore(step, name, patch.Data, patch.Offset));
+            }
+            else if (_buffers.TryGetValue(patch.Resource, out DeviceBuffer? buffer))
+            {
+                foreach (int step in _externalBufferRestores.Where(r => r.Buffer == buffer).Select(r => r.PassIndex).Append(firstPass).Distinct().ToList())
+                    _externalPatches.Add((step, buffer, patch));
+            }
+        }
+    }
+
     public IEnumerable<int> RestoreSteps()
         => _textureRestores.Select(r => r.PassIndex)
+            .Concat(_externalPatches.Select(r => r.PassIndex))
             .Concat(_externalBufferRestores.Select(r => r.PassIndex))
             .Concat(BufferRestores.Select(r => r.PassIndex))
             .Distinct()
@@ -232,6 +254,14 @@ internal sealed unsafe class ReplayScope : IDisposable
         {
             if (index == passIndex)
                 UpdateBuffer(cmd, buffer, copy);
+        }
+
+        foreach ((int index, DeviceBuffer buffer, BufferPatch patch) in _externalPatches)
+        {
+            if (index != passIndex)
+                continue;
+            fixed (byte* source = patch.Data)
+                cmd.UpdateBuffer(buffer, patch.Offset, (IntPtr)source, Math.Min((uint)patch.Data.Length, buffer.SizeInBytes - patch.Offset));
         }
     }
 
@@ -424,8 +454,8 @@ internal sealed unsafe class ReplayScope : IDisposable
         if (resource.Texture is not { } texture)
             return null;
 
-        if ((texture.Usage & TextureUsage.DepthStencil) != 0)
-            return $"{resource.Name} is a depth texture, which cannot be restored yet.";
+        if (texture.Format is PixelFormat.D24_UNorm_S8_UInt or PixelFormat.D32_Float_S8_UInt)
+            return $"{resource.Name} has a stencil plane, which cannot be restored yet.";
 
         if (texture.SampleCount != TextureSampleCount.Count1)
             return $"{resource.Name} is multisampled, which cannot be restored yet.";
@@ -494,10 +524,11 @@ internal sealed unsafe class ReplayScope : IDisposable
                 layouts)
             {
                 PushConstants = program.PushConstants,
+                Specializations = program.Specializations.ToArray(),
             });
         }
 
         _programs[key] = Own(built);
-        return built.Key == key ? null : "A rebuilt program does not match its recorded key.";
+        return (built is GraphicsProgram graphics ? graphics.VariantKey : built.Key) == key ? null : "A rebuilt program does not match its recorded key.";
     }
 }

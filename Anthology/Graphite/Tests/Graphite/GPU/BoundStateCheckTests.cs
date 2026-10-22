@@ -2,28 +2,16 @@
 
 using System;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-file readonly struct BoundStateView : IRenderView
+file sealed class LambdaRasterPass : InstanceRasterPass
 {
-    public BoundStateView(uint width, uint height)
-    {
-        PixelWidth = width;
-        PixelHeight = height;
-    }
+    public override GraphKind Kind => TestViews.Kind;
 
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-    public int ViewId => 0;
-}
-
-file sealed class LambdaRasterPass : RasterPass
-{
     private readonly RenderResourceID _id;
     private readonly Action<CommandBuffer> _render;
 
@@ -35,23 +23,25 @@ file sealed class LambdaRasterPass : RasterPass
 
     public override string Name => "BoundStateRaster";
 
-    public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, _id, GraphTextureDesc.ViewSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
+    public override void Setup(InstanceContextBuilder builder)
+        => SetTarget(builder, _id, GraphTextureDesc.InstanceSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
 
-    public override void Render(RenderContext context, CommandBuffer cmd) => _render(cmd);
+    public override void Render(InstanceContext context, CommandBuffer cmd) => _render(cmd);
 }
 
-file sealed class LambdaComputePass : IPass
+file sealed class LambdaComputePass : IInstancePass
 {
+    public GraphKind Kind => TestViews.Kind;
+
     private readonly Action<CommandBuffer> _render;
 
     public LambdaComputePass(Action<CommandBuffer> render) => _render = render;
 
     public string Name => "BoundStateCompute";
 
-    public void Setup(RenderContextBuilder builder) { }
+    public void Setup(InstanceContextBuilder builder) { }
 
-    public void Render(RenderContext context, CommandBuffer cmd) => _render(cmd);
+    public void Render(InstanceContext context, CommandBuffer cmd) => _render(cmd);
 }
 
 public abstract class BoundStateCheckTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
@@ -82,8 +72,8 @@ public abstract class BoundStateCheckTests<T> : GraphicsDeviceTestBase<T> where 
         GD.ValidationEnabled = false;
         try
         {
-            using RenderPipeline pipeline = new([pass]);
-            RenderException ex = Assert.Throws<RenderException>(() => GD.DispatchGraph(pipeline, new BoundStateView[] { new(4, 4) }));
+            using RenderGraph graph = TestViews.Build([pass]);
+            RenderException ex = Assert.Throws<RenderException>(() => GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(4, 4))));
             Assert.Contains(expected, ex.Message);
         }
         finally
@@ -123,6 +113,20 @@ public abstract class BoundStateCheckTests<T> : GraphicsDeviceTestBase<T> where 
     {
         DeviceBuffer indirect = RF.CreateBuffer(new BufferDescription(16, BufferUsage.IndirectBuffer));
         AssertThrowsWithValidationDisabled(new LambdaComputePass(cmd => cmd.DispatchIndirect(indirect, 0)), "ComputeProgram must be set");
+    }
+
+    [Fact]
+    public void Commands_UsingADisposedBuffer_Throw_NamingIt()
+    {
+        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        source.Name = "DisposedSource";
+        using DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        source.Dispose();
+
+        using RenderGraph graph = TestViews.Build([new LambdaComputePass(cmd => cmd.CopyBuffer(source, 0, destination, 0, 16))]);
+        RenderException ex = Assert.Throws<RenderException>(() => GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(4, 4))));
+        Assert.Contains("'DisposedSource', which was disposed", ex.Message);
+        GD.WaitForIdle();
     }
 }
 

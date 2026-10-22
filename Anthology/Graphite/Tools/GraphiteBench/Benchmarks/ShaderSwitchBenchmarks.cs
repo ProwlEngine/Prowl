@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using BenchmarkDotNet.Attributes;
 
 using Prowl.Graphite;
-using Prowl.Graphite.RenderGraph;
 
 using Prowl.Vector;
 

@@ -116,7 +116,7 @@ vec3 Graphite_RelativeFromDepth(vec2 uv, float deviceDepth)
 }
 
 #if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_NO_OBJECT)
-layout(location = 30) flat in uint graphite_ObjectIndex;
+layout(location = 26) flat in uint graphite_ObjectIndex;
 
 uint Graphite_ObjectIndex() { return graphite_ObjectIndex; }
 Graphite_ObjectData Graphite_Object() { return graphite_Objects[graphite_ObjectIndex]; }

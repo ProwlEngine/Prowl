@@ -4,12 +4,11 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 namespace Prowl.Graphite.Debugger;
 
-internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPass> passes, int step) : IPass
+internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPass> passes, int step) : IExecutionPass
 {
     private readonly Dictionary<string, BufferHandle> _handles = new();
 
@@ -46,7 +45,7 @@ internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPas
         {
             DeviceBuffer buffer = scope.BindBuffer(scope.GraphBuffers[restore.Name].Id, context.GetRenderBuffer(_handles[restore.Name]));
             fixed (byte* source = restore.Data)
-                cmd.UpdateBuffer(buffer, 0, (IntPtr)source, Math.Min((uint)restore.Data.Length, buffer.SizeInBytes));
+                cmd.UpdateBuffer(buffer, restore.Offset, (IntPtr)source, Math.Min((uint)restore.Data.Length, buffer.SizeInBytes - restore.Offset));
         }
 
         scope.RestoreStep(cmd, step);
@@ -64,7 +63,7 @@ internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPas
     }
 }
 
-internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass pass, int? lastEvent = null) : IPass
+internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass pass, int? lastEvent = null, IndirectSlice? slice = null) : IExecutionPass
 {
     private readonly Dictionary<string, BufferHandle> _handles = new();
     private readonly Dictionary<string, RecordedProperty> _properties = new();
@@ -73,6 +72,7 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
     private BindIndexBufferCommand? _index;
     private SetPipelineCommand? _pipeline;
     private bool _sourceDirty;
+    private IndirectSlice? _slice;
 
     public string Name => name;
 
@@ -113,8 +113,10 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
         int events = -1;
         foreach (RecordedCommand command in pass.Commands)
         {
+            bool isEvent = ReplayEvents.IsEvent(command);
+            _slice = isEvent && events + 1 == lastEvent ? slice : null;
             Execute(cmd, command);
-            if (ReplayEvents.IsEvent(command) && ++events == lastEvent)
+            if (isEvent && ++events == lastEvent)
                 break;
         }
     }
@@ -185,11 +187,13 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
                 break;
             case DrawIndirectCommand draw:
                 BindSource(cmd);
-                cmd.DrawIndirect(scope.Buffer(draw.Buffer.Resource), draw.Offset, draw.DrawCount, draw.Stride);
+                if (Slice(draw.Offset, draw.DrawCount, draw.Stride) is var (offset, count) && count > 0)
+                    cmd.DrawIndirect(scope.Buffer(draw.Buffer.Resource), offset, count, draw.Stride);
                 break;
             case DrawIndexedIndirectCommand draw:
                 BindSource(cmd);
-                cmd.DrawIndexedIndirect(scope.Buffer(draw.Buffer.Resource), draw.Offset, draw.DrawCount, draw.Stride);
+                if (Slice(draw.Offset, draw.DrawCount, draw.Stride) is var (indexedOffset, indexedCount) && indexedCount > 0)
+                    cmd.DrawIndexedIndirect(scope.Buffer(draw.Buffer.Resource), indexedOffset, indexedCount, draw.Stride);
                 break;
             case DrawIndirectCountCommand draw:
                 BindSource(cmd);
@@ -230,6 +234,9 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
                     copy.SourceRegion.Width, copy.SourceRegion.Height, copy.SourceRegion.Depth,
                     copy.LayerCount);
                 break;
+            case BlitTextureCommand blit:
+                cmd.BlitTexture(scope.Texture(blit.Source.Resource), scope.Texture(blit.DestinationAfter.Resource), blit.Regions.AsSpan());
+                break;
             case CopyTextureToBufferCommand copy:
                 cmd.CopyTextureToBuffer(scope.Texture(copy.Source.Resource), scope.Buffer(copy.DestinationAfter.Resource), copy.DestinationOffset, copy.Region);
                 break;
@@ -244,6 +251,15 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
             default:
                 throw new NotSupportedException($"Unknown command {command.GetType().Name}.");
         }
+    }
+
+    private (uint Offset, uint Count) Slice(uint offset, uint count, uint stride)
+    {
+        if (_slice is not { } slice)
+            return (offset, count);
+
+        uint first = Math.Min(slice.First, count);
+        return (offset + first * stride, Math.Min(slice.Count, count - first));
     }
 
     private void BindSource(CommandBuffer cmd)
@@ -286,20 +302,7 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
         switch (property.Kind)
         {
             case PropertyKind.Uniform:
-                switch (property.UniformType)
-                {
-                    case UniformScalarType.Float1: set.SetFloat(name, MemoryMarshal.Read<float>(bytes)); break;
-                    case UniformScalarType.Float2: set.SetFloat2(name, MemoryMarshal.Read<Float2>(bytes)); break;
-                    case UniformScalarType.Float3: set.SetFloat3(name, MemoryMarshal.Read<Float3>(bytes)); break;
-                    case UniformScalarType.Float4: set.SetFloat4(name, MemoryMarshal.Read<Float4>(bytes)); break;
-                    case UniformScalarType.Int1: set.SetInt(name, MemoryMarshal.Read<int>(bytes)); break;
-                    case UniformScalarType.Int2: set.SetInt2(name, MemoryMarshal.Read<Int2>(bytes)); break;
-                    case UniformScalarType.Int3: set.SetInt3(name, MemoryMarshal.Read<Int3>(bytes)); break;
-                    case UniformScalarType.Int4: set.SetInt4(name, MemoryMarshal.Read<Int4>(bytes)); break;
-                    case UniformScalarType.Float4x4: set.SetMatrix(name, MemoryMarshal.Read<Float4x4>(bytes)); break;
-                    default: throw new NotSupportedException($"Uniform type {property.UniformType} cannot be replayed.");
-                }
-
+                set.SetUniform(name, property.UniformType, bytes);
                 break;
             case PropertyKind.Buffer:
                 set.SetBuffer(name, BufferRange(property));
@@ -311,7 +314,7 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
                 Texture texture = scope.Texture(property.Resource.Resource);
                 Sampler? sampler = scope.Sampler(property.Sampler);
                 if (NeedsView(texture, property))
-                    set.SetTexture(name, scope.View(texture, property.Range, property.ViewFormat), sampler);
+                    set.SetTexture(name, scope.View(texture, property.Range, property.ViewFormat, property.Arrayed), sampler);
                 else
                     set.SetTexture(name, texture, sampler);
 
@@ -343,7 +346,7 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
                     Texture texture = scope.Texture(property.Resource.Resource);
                     Sampler? sampler = scope.Sampler(property.Sampler);
                     if (NeedsView(texture, property))
-                        table.SetTexture(name, entry.Index, scope.View(texture, property.Range, property.ViewFormat), sampler);
+                        table.SetTexture(name, entry.Index, scope.View(texture, property.Range, property.ViewFormat, property.Arrayed), sampler);
                     else
                         table.SetTexture(name, entry.Index, texture, sampler);
                     break;
@@ -366,21 +369,24 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
 
     private static bool NeedsView(Texture texture, RecordedProperty property)
         => property.ViewFormat != null
+            || property.Arrayed
             || (property.Range.IsTexture
                 && (property.Range.BaseMipLevel != 0
                     || property.Range.MipLevels != texture.MipLevels
                     || property.Range.BaseArrayLayer != 0
-                    || property.Range.ArrayLayers != texture.ArrayLayers));
+                    || property.Range.ArrayLayers != texture.ArrayLayers * (texture.Type == TextureType.TextureCube ? 6u : 1u)));
 }
 
-internal static class ReplayEvents
+/// <summary>Which recorded commands count as events, the steps a replay can stop after.</summary>
+public static class ReplayEvents
 {
+    /// <summary>Whether the command is a draw, dispatch, clear or copy.</summary>
     public static bool IsEvent(RecordedCommand command)
         => command is DrawCommand or DrawIndexedCommand or DrawIndirectCommand or DrawIndexedIndirectCommand
             or DrawIndirectCountCommand or DrawIndexedIndirectCountCommand
             or DispatchCommand or DispatchIndirectCommand
             or ClearColorTargetCommand or ClearDepthStencilCommand
             or UpdateBufferCommand or UpdateTextureCommand
-            or CopyBufferCommand or CopyTextureCommand or CopyTextureToBufferCommand
+            or CopyBufferCommand or CopyTextureCommand or BlitTextureCommand or CopyTextureToBufferCommand
             or ResolveTextureCommand or GenerateMipsCommand;
 }

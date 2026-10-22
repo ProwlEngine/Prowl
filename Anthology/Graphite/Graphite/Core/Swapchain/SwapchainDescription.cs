@@ -28,4 +28,9 @@ public struct SwapchainDescription
     /// Color target uses sRGB.
     /// </summary>
     public bool ColorSrgb;
+    /// <summary>
+    /// The host turns its drawing to the display itself, as Android prefers over its compositor doing it. The images
+    /// keep the display's natural orientation and <see cref="Swapchain.Transform"/> says how the display turns them.
+    /// </summary>
+    public bool PreRotate;
 }

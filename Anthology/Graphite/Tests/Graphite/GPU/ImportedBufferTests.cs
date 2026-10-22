@@ -1,20 +1,11 @@
 using System;
 
-using Prowl.Graphite.RenderGraph;
 
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-file readonly struct BufferView : IRenderView
-{
-    public Framebuffer? Target => null;
-    public uint PixelWidth => 4;
-    public uint PixelHeight => 4;
-    public int ViewId => 0;
-}
-
-file sealed class WriteValuesPass(DeviceBuffer data, uint[] values) : IPass
+file sealed class WriteValuesPass(DeviceBuffer data, uint[] values) : IExecutionPass
 {
     private static readonly RenderResourceID s_data = RenderResourceID.Intern("Data");
 
@@ -25,7 +16,7 @@ file sealed class WriteValuesPass(DeviceBuffer data, uint[] values) : IPass
     public void Render(RenderContext context, CommandBuffer cmd) => cmd.UpdateBuffer(data, 0, values);
 }
 
-file sealed class AddOnePass(DeviceBuffer data, DeviceBuffer result, ComputeProgram program) : IPass
+file sealed class AddOnePass(DeviceBuffer data, DeviceBuffer result, ComputeProgram program, GraphKind kind) : IInstancePass
 {
     private static readonly RenderResourceID s_data = RenderResourceID.Intern("Data");
     private static readonly RenderResourceID s_result = RenderResourceID.Intern("Result");
@@ -33,13 +24,15 @@ file sealed class AddOnePass(DeviceBuffer data, DeviceBuffer result, ComputeProg
 
     public string Name => "AddOne";
 
-    public void Setup(RenderContextBuilder builder)
+    public GraphKind Kind => kind;
+
+    public void Setup(InstanceContextBuilder builder)
     {
         builder.DeclareImportedBuffer(s_data, data, BufferAccess.ShaderRead);
         builder.DeclareImportedBuffer(s_result, result, BufferAccess.ShaderWrite);
     }
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
         _properties.SetBuffer("Input", context.GetRenderBuffer(new BufferHandle(s_data)));
         _properties.SetBuffer("Output", context.GetRenderBuffer(new BufferHandle(s_result)));
@@ -49,7 +42,7 @@ file sealed class AddOnePass(DeviceBuffer data, DeviceBuffer result, ComputeProg
     }
 }
 
-file sealed class TwoImportsPass(DeviceBuffer first, DeviceBuffer second) : IPass
+file sealed class TwoImportsPass(DeviceBuffer first, DeviceBuffer second) : IExecutionPass
 {
     private static readonly RenderResourceID s_data = RenderResourceID.Intern("Data");
 
@@ -64,12 +57,44 @@ file sealed class TwoImportsPass(DeviceBuffer first, DeviceBuffer second) : IPas
     public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
-// Buffers that outlive a graph: one pipeline writes an imported buffer and a later pipeline of the same
-// execution reads it, and the declaration rules.
+file sealed class SlotWritePass(uint[] values) : IInstancePass
+{
+    public static readonly RenderResourceID Slot = RenderResourceID.Intern("WriteSlot");
+
+    private BufferHandle _slot;
+
+    public string Name => "SlotWrite";
+
+    public GraphKind Kind => TestViews.Kind;
+
+    public void Setup(InstanceContextBuilder builder) => _slot = builder.DeclareImportSlotBuffer(Slot, BufferAccess.TransferWrite);
+
+    public void Render(InstanceContext context, CommandBuffer cmd) => cmd.UpdateBuffer(context.GetRenderBuffer(_slot), 0, values);
+}
+
+file sealed class SlotCopyPass(DeviceBuffer readback) : IInstancePass
+{
+    public static readonly RenderResourceID Slot = RenderResourceID.Intern("CopySlot");
+
+    private TextureHandle _slot;
+
+    public string Name => "SlotCopy";
+
+    public GraphKind Kind => TestViews.Kind;
+
+    public void Setup(InstanceContextBuilder builder) => _slot = builder.DeclareImportSlotTexture(Slot, TextureState.TransferSrc);
+
+    public void Render(InstanceContext context, CommandBuffer cmd)
+    {
+        Texture texture = context.GetRenderTexture(_slot).ColorTextures[0];
+        cmd.CopyTextureToBuffer(texture, readback, 0, TextureRegion.Whole(texture));
+    }
+}
+
 public abstract class ImportedBufferTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
-    public void ALaterPipeline_ReadsAnImportedBufferAnEarlierOneWrote()
+    public void AChildInstance_ReadsAnImportedBufferTheRootWrote()
     {
         DeviceBuffer data = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly));
         DeviceBuffer result = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
@@ -80,11 +105,12 @@ public abstract class ImportedBufferTests<T> : GraphicsDeviceTestBase<T> where T
                 new ResourceLayoutElementDescription("Output", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 1))],
             4, 1, 1));
 
-        using RenderPipeline world = new([new WriteValuesPass(data, [10, 20, 30, 40])]);
-        using RenderPipeline camera = new([new AddOnePass(data, result, program)]);
-        IRenderView[] view = [new BufferView()];
+        GraphKind camera = GraphKind.Intern("Test.Camera");
+        using RenderGraph graph = RenderGraph.Build([new WriteValuesPass(data, [10, 20, 30, 40]), new AddOnePass(data, result, program, camera)], [new GraphScope(camera, GraphKind.Root)]);
+        GraphInstances instances = graph.CreateInstances();
+        instances.Add(camera, 0);
 
-        GD.DispatchGraph([new GraphDispatch(world, view), new GraphDispatch(camera, view)]);
+        GD.DispatchGraph(graph, instances);
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(result);
@@ -100,9 +126,56 @@ public abstract class ImportedBufferTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer first = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly));
         DeviceBuffer second = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly));
 
-        Assert.ThrowsAny<InvalidOperationException>(() => new RenderPipeline([new TwoImportsPass(first, second)]).Graph);
+        Assert.ThrowsAny<InvalidOperationException>(() => RenderGraph.Build([new TwoImportsPass(first, second)]));
     }
 
+
+    [Fact]
+    public void ImportSlots_BindADifferentBufferPerInstance()
+    {
+        DeviceBuffer first = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer second = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        using RenderGraph graph = TestViews.Build([new SlotWritePass([1, 2, 3, 4])]);
+        GraphInstances instances = graph.CreateInstances();
+        instances.Add(TestViews.Kind, 0, imports: [GraphImport.Of(SlotWritePass.Slot, first)]);
+        instances.Add(TestViews.Kind, 1, imports: [GraphImport.Of(SlotWritePass.Slot, second)]);
+
+        GD.DispatchGraph(graph, instances);
+        GD.WaitForIdle();
+
+        foreach (DeviceBuffer buffer in new[] { first, second })
+        {
+            DeviceBuffer readback = GetReadback(buffer);
+            Span<uint> map = GD.Map<uint>(readback);
+            Assert.Equal([1u, 2u, 3u, 4u], map[..4].ToArray());
+            GD.Unmap(readback);
+        }
+    }
+
+    [Fact]
+    public void ImportSlots_BindAPlainTexture()
+    {
+        Texture texture = RF.CreateTexture(TextureDescription.Texture2D(2, 2, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        DeviceBuffer readback = CreateTexelReadbackBuffer<uint>(2, 2);
+        GD.Record(cmd => cmd.UpdateTexture<uint>(texture, [0xFF00FF00, 0xFF00FF00, 0xFF00FF00, 0xFF00FF00]));
+        using RenderGraph graph = TestViews.Build([new SlotCopyPass(readback)]);
+        GraphInstances instances = graph.CreateInstances();
+        instances.Add(TestViews.Kind, 0, imports: [GraphImport.Of(SlotCopyPass.Slot, texture)]);
+
+        GD.WaitForExecution(GD.DispatchGraph(graph, instances));
+
+        Assert.Equal(0xFF00FF00u, ReadTexels<uint>(readback, 2, 2)[1, 1]);
+    }
+
+    [Fact]
+    public void ImportSlots_AnInstanceThatBindsNothing_ThrowsNamingTheSlot()
+    {
+        using RenderGraph graph = TestViews.Build([new SlotWritePass([1])]);
+
+        RenderGraphException ex = Assert.Throws<RenderGraphException>(() => GD.DispatchGraph(graph, TestViews.Single(graph)));
+
+        Assert.Contains("WriteSlot", ex.Message);
+    }
 
     [Fact]
     public void ImportedBuffers_ReadOnly_AreInputs_AndNeedNoWriter()
@@ -117,8 +190,8 @@ public abstract class ImportedBufferTests<T> : GraphicsDeviceTestBase<T> where T
             4, 1, 1));
         GD.UpdateBuffer(data, 0, new uint[] { 1, 2, 3, 4 });
 
-        using RenderPipeline camera = new([new AddOnePass(data, result, program)]);
-        GD.DispatchGraph(camera, new IRenderView[] { new BufferView() });
+        using RenderGraph camera = TestViews.Build([new AddOnePass(data, result, program, TestViews.Kind)]);
+        GD.DispatchGraph(camera, TestViews.Single(camera, new GraphExtent(4, 4)));
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(result);

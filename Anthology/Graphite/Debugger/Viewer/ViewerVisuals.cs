@@ -21,7 +21,7 @@ internal readonly record struct TargetStep(int EventIndex, int Ordinal);
 
 internal sealed partial class ProfilerView
 {
-    private static readonly string[] MeshModes = { "Flat", "Flat + wire", "Wireframe", "Normals", "UV layout" };
+    private static readonly string[] MeshOverlays = { "None", "Normals", "UV layout" };
 
     private readonly Dictionary<(int, int, int?), ReplayResult> _replays = new();
     private readonly Dictionary<string, (object Texture, int Width, int Height, string Version)> _textures = new();
@@ -30,15 +30,16 @@ internal sealed partial class ProfilerView
     private float _exposure;
     private int _mip;
     private (float U, float V)? _pixel;
-    private int _meshMode = 1;
+    private bool _meshShaded = true, _meshWire = true;
+    private int _meshOverlay;
     private float _yaw = -35f, _pitch = 22f;
 
-    private ReplayResult Replay(FrameModel model, int view, int pass, int? eventIndex)
+    private ReplayResult Replay(FrameModel model, int instance, int pass, int? eventIndex)
     {
-        var key = (view, pass, eventIndex);
+        var key = (instance, pass, eventIndex);
         if (!_replays.TryGetValue(key, out ReplayResult? result))
         {
-            result = _source.Replay(new ReplayRequest { ViewIndex = view, PassIndex = pass, EventIndex = eventIndex });
+            result = _source.Replay(new ReplayRequest { InstanceIndex = instance, PassIndex = pass, EventIndex = eventIndex });
             _replays[key] = result;
         }
         return result;
@@ -47,7 +48,7 @@ internal sealed partial class ProfilerView
     private static ReplayOutput? Output(ReplayResult result, TraceResourceId id)
         => result.Outputs.FirstOrDefault(o => o.Resource == id);
 
-    private void ResolveTexture(FrameModel model, DeepView view, DeepPass pass, RecordedResource? res, TargetStep? step, ViewerData data)
+    private void ResolveTexture(FrameModel model, DeepInstance view, DeepPass pass, RecordedResource? res, TargetStep? step, ViewerData data)
     {
         if (res == null)
         {
@@ -58,7 +59,7 @@ internal sealed partial class ProfilerView
         TraceResourceId id = res.Id;
         DeepIndex index = model.Index!;
 
-        bool Writes(DeepView v, DeepPass p) => p.Accesses.Any(a => a.IsOutput && GraphResource(v, a.Resource) is { } g && Backing(index, g)?.Id == res.Id);
+        bool Writes(DeepInstance v, DeepPass p) => p.Accesses.Any(a => a.IsOutput && GraphResource(v, a.Resource) is { } g && Backing(index, g)?.Id == res.Id);
 
         ReplayOutput? output = null;
         if (Writes(view, pass))
@@ -74,8 +75,8 @@ internal sealed partial class ProfilerView
         }
         else
         {
-            (DeepView, DeepPass)? writer = null;
-            foreach (DeepView v in model.Deep!.Views.OrderBy(v => v.Index))
+            (DeepInstance, DeepPass)? writer = null;
+            foreach (DeepInstance v in model.Deep!.Instances.OrderBy(v => v.Index))
                 foreach (DeepPass p in v.Passes)
                 {
                     bool earlier = v.Index < view.Index || (v.Index == view.Index && p.Index < pass.Index);
@@ -187,30 +188,28 @@ internal sealed partial class ProfilerView
         return result;
     }
 
-    private void TextureView(FrameModel model, ViewerData data, TargetStep? step, float width)
+    private void TextureView(FrameModel model, ViewerData data, TargetStep? step, float width, bool compact = false)
     {
         var t = data.Resource?.Texture;
         int mipMax = t is { } d ? (int)Math.Max(0, d.MipLevels - 1) : 0;
         _mip = Math.Min(_mip, mipMax);
 
+        if (!compact)
         using (_paper.Row("tools").Width(UnitValue.Stretch()).Height(UnitValue.Auto).WrapContent().Gap(Metrics.SpacingLarge).LineGap(Metrics.Spacing).AlignItems(LayoutAlignment.Center).Enter())
         {
             string[] names = { "R", "G", "B", "A" };
-            using (_paper.Row("chans").Width(UnitValue.Auto).Height(26).Rounded(Metrics.Rounding).BorderWidth(1).BorderColor(Style.Theme.Neutral.C200).Clip().Enter())
-                for (int c = 0; c < 4; c++)
-                {
-                    int ci = c;
-                    ButtonBuilder button = Origami.Button(_paper, "ch" + c, names[c], () => _channels[ci] = !_channels[ci]).Small().NotFocusable().Width(30).Rounding(0);
-                    (_channels[c] ? button.Variant(c switch { 0 => OrigamiVariant.Danger, 1 => OrigamiVariant.Success, 2 => OrigamiVariant.Info, _ => OrigamiVariant.Default }).Soft() : button.Subtle().Ghost()).Show();
-                }
+            ButtonGroupBuilder chans = Origami.ButtonGroup(_paper, "chans", -1, c => _channels[c] = !_channels[c]).Small().Selected(c => _channels[c]);
+            foreach (string name in new[] { "R", "G", "B", "A" })
+                chans.Item(name);
+            chans.Show();
 
             Dim("evl", "Exposure");
-            using (_paper.Box("evs").Width(120).Height(Metrics.HeaderHeight).Enter())
+            using (_paper.Row("evs").Width(120).Height(Metrics.HeaderHeight).AlignItems(LayoutAlignment.Center).Enter())
                 Origami.Slider(_paper, "ev", _exposure, v => _exposure = MathF.Round(v * 2f) / 2f, -4f, 4f).Small().ShowValue(false).Show();
             Mono("evv", (_exposure >= 0 ? "+" : "") + Style.F(_exposure, "0.0") + " EV", Style.InkSoft);
 
             Dim("mipl", "Mip");
-            using (_paper.Box("mips").Width(100).Height(Metrics.HeaderHeight).Enter())
+            using (_paper.Row("mips").Width(100).Height(Metrics.HeaderHeight).AlignItems(LayoutAlignment.Center).Enter())
                 Origami.IntSlider(_paper, "mip", _mip, v => _mip = v, 0, Math.Max(1, mipMax)).Small().ShowValue(false).Disabled(mipMax == 0).Show();
             string mipSize = t is { } td ? $"{Math.Max(1, td.Width >> _mip)}x{Math.Max(1, td.Height >> _mip)}" : "-";
             Mono("mipv", $"{_mip} / {mipSize}", Style.InkSoft);
@@ -231,7 +230,7 @@ internal sealed partial class ProfilerView
             : null;
 
         float aspect = (float)pw / ph;
-        float displayWidth = MathF.Min(width, 760f);
+        float displayWidth = MathF.Min(width, (compact ? 240f : 560f) * aspect);
         ElementBuilder box = _paper.Box("img").Width(displayWidth).Height(displayWidth / aspect)
             .Rounded(4).BorderColor(Style.Border).BorderWidth(1).Clip()
             .Cursor(PaperCursor.Crosshair)
@@ -280,7 +279,8 @@ internal sealed partial class ProfilerView
             }
         }
 
-        Mono("readout", PixelReadout(data), Style.InkSoft);
+        if (!compact)
+            Mono("readout", PixelReadout(data), Style.InkSoft);
     }
 
     private string PixelReadout(ViewerData data)
@@ -297,11 +297,11 @@ internal sealed partial class ProfilerView
         int channels = Texels.Channels(region.Format);
         string value = Texels.IsDepth(region.Format)
             ? $"Depth {Style.F(v.X, "0.000000")}"
-            : $"{region.Format} ({string.Join(", ", new[] { v.X, v.Y, v.Z, v.W }.Take(channels).Select(c => Style.F(c, "0.####")))})";
+            : $"{Describe.Format(region.Format)} ({string.Join(", ", new[] { v.X, v.Y, v.Z, v.W }.Take(channels).Select(c => Style.F(c, "0.####")))})";
         return where + value;
     }
 
-    private void MeshView(ViewerData data, float width)
+    private void MeshView(ViewerData data, float width, bool compact = false)
     {
         if (data.Vertices == null || data.Indices == null)
         {
@@ -310,9 +310,9 @@ internal sealed partial class ProfilerView
         }
 
         Mesh mesh = Mesh.Decode(data);
-        string stats = $"{mesh.VertexCount} verts / {mesh.TriangleCount} tris / {MeshModes[_meshMode]}";
+        string stats = $"{mesh.VertexCount} verts / {mesh.TriangleCount} tris";
 
-        ElementBuilder box = _paper.Box("mesh").Width(UnitValue.Stretch()).Height(340)
+        ElementBuilder box = _paper.Box("mesh").Width(UnitValue.Stretch()).Height(compact ? 240 : 460)
             .Rounded(4).BackgroundColor(Style.Theme.Neutral.C100).BorderColor(Style.Border).BorderWidth(1).Clip()
             .Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing)
             .OnDragging(e =>
@@ -325,23 +325,34 @@ internal sealed partial class ProfilerView
 
         using (box.Enter())
         {
-            int mode = _meshMode;
+            bool shaded = _meshShaded, wire = _meshWire;
+            int overlay = _meshOverlay;
             float yaw = _yaw, pitch = _pitch;
-            _paper.Draw((canvas, r) => mesh.Draw(canvas, r, yaw, pitch, mode));
+            _paper.Draw((canvas, r) => mesh.Draw(canvas, r, yaw, pitch, shaded, wire, overlay));
 
-            using (_paper.Row("tools").PositionType(PositionType.SelfDirected).Position(0, 0).Width(UnitValue.Stretch()).Height(UnitValue.Auto)
-                .Padding(Metrics.SpacingLarge).Gap(Metrics.SpacingLarge).IsNotInteractable().Enter())
+            if (!compact)
+            using (_paper.Column("tools").PositionType(PositionType.SelfDirected).Position(0, 0).Width(UnitValue.Auto).Height(UnitValue.Auto)
+                .Padding(Metrics.SpacingLarge).Gap(Metrics.Spacing).Enter())
             {
-                ButtonGroupBuilder group = Origami.ButtonGroup(_paper, "modes", _meshMode, i => _meshMode = i).Small();
-                foreach (string m in MeshModes)
-                    group.Item(m);
-                group.Show();
-                _paper.Box("sp").Width(UnitValue.Stretch()).Height(1).IsNotInteractable();
+                MeshToggle("wire", OrigamiGlyphs.BorderAll_I, _meshWire, _meshWire ? "Wireframe: on" : "Wireframe: off", () => _meshWire = !_meshWire);
+                MeshToggle("shade", OrigamiGlyphs.Cube_I, _meshShaded, _meshShaded ? "Shading: flat" : "Shading: clear", () => _meshShaded = !_meshShaded);
+                MeshToggle("overlay", OrigamiGlyphs.Compass_I, _meshOverlay != 0, $"Overlay: {MeshOverlays[_meshOverlay]} (click to cycle)", () => _meshOverlay = (_meshOverlay + 1) % MeshOverlays.Length);
                 Origami.IconButton(_paper, "reset", Glyph.Rotate, () => { _yaw = -35f; _pitch = 22f; }).Small().NotFocusable().Subtle().Tooltip("Reset view").Show();
             }
         }
 
-        Mono("stats", stats, Style.InkDim);
+        if (!compact)
+            Mono("stats", stats, Style.InkDim);
+    }
+
+    private void MeshToggle(string id, IOrigamiIcon icon, bool active, string tooltip, Action toggle)
+    {
+        ButtonBuilder button = Origami.IconButton(_paper, id, icon, toggle).Small().NotFocusable().Tooltip(tooltip);
+        if (active)
+            button.Primary();
+        else
+            button.Subtle();
+        button.Show();
     }
 
     private sealed class Mesh
@@ -401,7 +412,7 @@ internal sealed partial class ProfilerView
             return mesh;
         }
 
-        public void Draw(Canvas canvas, Rect rect, float yawDeg, float pitchDeg, int mode)
+        public void Draw(Canvas canvas, Rect rect, float yawDeg, float pitchDeg, bool shaded, bool wire, int overlay)
         {
             float x0 = (float)rect.Min.X, y0 = (float)rect.Min.Y, w = (float)rect.Size.X, h = (float)rect.Size.Y;
             float cx = x0 + w / 2, cy = y0 + h / 2, unit = MathF.Min(w, h) / 300f;
@@ -413,7 +424,7 @@ internal sealed partial class ProfilerView
             canvas.MoveTo(cx, y0); canvas.LineTo(cx, y0 + h);
             canvas.Stroke();
 
-            if (mode == 4)
+            if (overlay == 2)
             {
                 DrawUvs(canvas, cx, cy, 260f * unit);
                 return;
@@ -460,8 +471,7 @@ internal sealed partial class ProfilerView
                 canvas.ClosePath();
             }
 
-            bool flat = mode is 0 or 1;
-            if (flat)
+            if (shaded)
             {
                 canvas.SetFillColor(Style.Theme.Primary.C400);
                 canvas.BeginPath();
@@ -471,18 +481,18 @@ internal sealed partial class ProfilerView
                 canvas.Fill();
             }
 
-            if (mode != 0)
+            if (wire)
             {
                 canvas.SetStrokeWidth(0.8f);
-                canvas.SetStrokeColor(Style.Alpha(mode == 2 ? Style.Theme.Ink.C300 : Style.Theme.Ink.C400, 200));
+                canvas.SetStrokeColor(Style.Alpha(!shaded ? Style.Theme.Ink.C300 : Style.Theme.Ink.C400, 200));
                 canvas.BeginPath();
                 foreach (var tri in tris)
-                    if (mode == 2 || tri.Front)
+                    if (!shaded || tri.Front)
                         Tri(tri.Tri);
                 canvas.Stroke();
             }
 
-            if (mode == 3)
+            if (overlay == 1)
             {
                 canvas.SetStrokeColor(Style.Good);
                 canvas.BeginPath();

@@ -407,7 +407,7 @@ public class DockSpace
                         .PositionType(PositionType.SelfDirected)
                         .Position(contentX, 0).Size(iconW, tabH)
                         .IsNotInteractable()
-                        .Text(tab.Icon, font)
+                        .Text(tab.Icon, OrigamiFonts.IconSolid ?? font)
                         .TextColor(isActive ? theme.Primary.C700 : theme.Ink.C300)
                         .FontSize(tabIconSize)
                         .Alignment(TextAlignment.MiddleCenter);

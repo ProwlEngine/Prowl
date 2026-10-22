@@ -96,4 +96,5 @@ public readonly record struct PropertyState(
     ResourceVersion Resource,
     ResourceRange Range,
     PixelFormat? ViewFormat,
-    SamplerDescription? Sampler);
+    SamplerDescription? Sampler,
+    bool Arrayed = false);
