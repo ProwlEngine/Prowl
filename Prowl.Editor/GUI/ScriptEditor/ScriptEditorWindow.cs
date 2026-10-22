@@ -56,11 +56,20 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     [Tooltip("Marks other occurrences of the word under the caret.")] public bool HighlightOccurrences = true;
     [Tooltip("Shows reference counts after declarations.")] public bool ShowCodeLens = true;
 
+    [Tooltip("Marks spaces and tabs at the end of lines.")] public bool ShowTrailingWhitespace;
+    [Tooltip("Colours brackets by how deeply they are nested.")] public bool BracketPairColors;
+    [Tooltip("Colours indent guides by their level.")] public bool RainbowIndentGuides;
+
     [Header("Scrolling and Caret")]
     public bool SmoothScrolling = true;
     public bool ScrollBeyondLastLine = true;
     [Range(0, 20), Tooltip("Lines kept visible above and below the caret.")] public int ScrollMargin = 3;
     public bool CaretBlink = true;
+    public CaretStyle CaretStyle = CaretStyle.Line;
+    [Range(1, 4), Tooltip("Width of the line caret in pixels.")] public float CaretWidth = 2f;
+    [Tooltip("The key held while clicking to add a caret. The other one goes to the definition under the pointer.")]
+    public MultiCaretModifier MultiCaretModifier = MultiCaretModifier.Alt;
+    [Tooltip("Drag selected text to move it, or hold Ctrl to copy it.")] public bool DragAndDropText = true;
 
     [Header("Editing")]
     public bool AutoClosePairs = true;
@@ -69,10 +78,25 @@ public sealed class ScriptEditorPreferences : EditorPreferences
 
     [Header("Completion and Analysis")]
     [Tooltip("Opens completion as soon as a word is typed, not only on '.' and Ctrl+Space.")] public bool CompletionOnTyping = true;
+    [Tooltip("Shows the parameter list while typing a call. Ctrl+Shift+Space opens it either way.")] public bool ParameterHints = true;
     [Range(0, 3), Tooltip("Seconds the mouse rests before hover info shows. Zero turns it off.")] public float HoverDelay = 0.5f;
     [Range(0.05f, 2), Tooltip("Seconds without edits before diagnostics and colours refresh.")] public float AnalysisDelay = 0.35f;
 
+    // Find options, remembered from the last find bar. Not shown in Preferences.
+    [HideInInspector] public bool FindMatchCase;
+    [HideInInspector] public bool FindWholeWord;
+    [HideInInspector] public bool FindRegex;
+
     public override void Apply() => ScriptEditorWindow.ApplyPreferences();
+
+    /// <summary>Copies these values onto a code editor, its options and its find state.</summary>
+    public void ApplyTo(OrigamiUI.CodeEditor editor)
+    {
+        ApplyTo(editor.Options);
+        editor.FindCaseSensitive = FindMatchCase;
+        editor.FindWholeWord = FindWholeWord;
+        editor.FindRegex = FindRegex;
+    }
 
     /// <summary>Copies these values onto a code editor's options.</summary>
     public void ApplyTo(CodeEditorOptions options)
@@ -104,6 +128,14 @@ public sealed class ScriptEditorPreferences : EditorPreferences
         options.CompletionOnTyping = CompletionOnTyping;
         options.HoverDelay = HoverDelay;
         options.AnalysisDelay = AnalysisDelay;
+        options.ShowTrailingWhitespace = ShowTrailingWhitespace;
+        options.BracketPairColors = BracketPairColors;
+        options.RainbowIndentGuides = RainbowIndentGuides;
+        options.CaretStyle = CaretStyle;
+        options.CaretWidth = CaretWidth;
+        options.MultiCaretModifier = MultiCaretModifier;
+        options.DragAndDropText = DragAndDropText;
+        options.ParameterHints = ParameterHints;
         // No debugger yet, so no breakpoint margin.
         options.ShowGlyphMargin = false;
     }
@@ -205,6 +237,22 @@ public class ScriptEditorWindow : DockPanel
         if (line > 0) editor.GoToLine(line, column);
     }
 
+    // Ctrl+wheel zoom and the find bar's toggles carry over to every script and the next session.
+    private static void RememberEditorState(OrigamiUI.CodeEditor editor)
+    {
+        ScriptEditorPreferences prefs = Preferences.Get<ScriptEditorPreferences>();
+        float zoom = MathF.Round(editor.FontSize, 1);
+        if (zoom == prefs.FontSize && editor.FindCaseSensitive == prefs.FindMatchCase
+            && editor.FindWholeWord == prefs.FindWholeWord && editor.FindRegex == prefs.FindRegex)
+            return;
+
+        prefs.FontSize = zoom;
+        prefs.FindMatchCase = editor.FindCaseSensitive;
+        prefs.FindWholeWord = editor.FindWholeWord;
+        prefs.FindRegex = editor.FindRegex;
+        Preferences.Changed(Preferences.SectionOf(prefs));
+    }
+
     internal static void ApplyPreferences()
     {
         if (s_window == null) return;
@@ -212,7 +260,7 @@ public class ScriptEditorWindow : DockPanel
         foreach (var tab in s_window._tabs)
         {
             float oldSize = tab.Editor.Options.FontSize;
-            prefs.ApplyTo(tab.Editor.Options);
+            prefs.ApplyTo(tab.Editor);
             // A new font size replaces any Ctrl+wheel zoom.
             if (oldSize != prefs.FontSize) tab.Editor.ResetZoom();
         }
@@ -244,7 +292,7 @@ public class ScriptEditorWindow : DockPanel
             ? new ShaderLanguage(ShaderWorkspaces.Shared, kind, path)
             : new RoslynCSharpLanguage(ScriptWorkspaces.Get(path, out onFallback), path);
         var editor = new OrigamiUI.CodeEditor(text, language) { FilePath = path };
-        Preferences.Get<ScriptEditorPreferences>().ApplyTo(editor.Options);
+        Preferences.Get<ScriptEditorPreferences>().ApplyTo(editor);
 
         var backend = EditorAssetBackend.Instance;
         var tab = new ScriptTab
@@ -310,6 +358,7 @@ public class ScriptEditorWindow : DockPanel
             // Keyed per tab so each script keeps its own scroll, caret and popups while tabs switch and files get renamed.
             Origami.CodeEditor(paper, "se_code_" + active.Id, active.Editor)
                 .Size(width, Math.Max(0, height - tabsH - toolbarH)).Show();
+            RememberEditorState(active.Editor);
         }
     }
 
