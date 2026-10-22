@@ -93,6 +93,10 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     [Header("Completion and Analysis")]
     [Tooltip("Opens completion as soon as a word is typed, not only on '.' and Ctrl+Space.")] public bool CompletionOnTyping = true;
     [Tooltip("Shows the parameter list while typing a call. Ctrl+Shift+Space opens it either way.")] public bool ParameterHints = true;
+    [Tooltip("Which keys accept the selected suggestion.")] public CompletionAcceptKeys AcceptCompletionWith = CompletionAcceptKeys.TabAndEnter;
+    [Tooltip("Typing one of these accepts the selected suggestion first. Leave empty to only accept with the keys above.")]
+    public string CompletionCommitCharacters = ".,;()[]{}<>=";
+    [Tooltip("Puts suggestions you accepted recently first.")] public bool SortCompletionsByRecentUse;
     [Range(0, 3), Tooltip("Seconds the mouse rests before hover info shows. Zero turns it off.")] public float HoverDelay = 0.5f;
     [Range(0.05f, 2), Tooltip("Seconds without edits before diagnostics and colours refresh.")] public float AnalysisDelay = 0.35f;
 
@@ -275,6 +279,9 @@ public sealed class ScriptEditorPreferences : EditorPreferences
         options.MultiCaretModifier = MultiCaretModifier;
         options.DragAndDropText = DragAndDropText;
         options.ParameterHints = ParameterHints;
+        options.AcceptCompletionWith = AcceptCompletionWith;
+        options.CompletionCommitCharacters = CompletionCommitCharacters;
+        options.SortCompletionsByRecentUse = SortCompletionsByRecentUse;
         // No debugger yet, so no breakpoint margin.
         options.ShowGlyphMargin = false;
     }
