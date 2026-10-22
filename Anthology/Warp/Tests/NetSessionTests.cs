@@ -661,13 +661,3 @@ public sealed class KcpNetSessionTests : NetSessionTests
 
     protected override string UnreachableAddress => "not a valid host name";
 }
-
-public sealed class EncryptedKcpNetSessionTests : NetSessionTests
-{
-    private static Transport Secure() => new Prowl.Warp.Transports.Encryption.EncryptedTransport(
-        new KcpTransport(KcpTransportContractTests.Options()), new byte[32]);
-    protected override Transport CreateHostTransport() => Secure();
-    protected override Transport CreateClientTransport(string name) => Secure();
-    protected override string AddressOf(Transport host) => $"127.0.0.1:{((KcpTransport)((Prowl.Warp.Transports.Encryption.EncryptedTransport)host).Inner).LocalPort}";
-    protected override string UnreachableAddress => "not a valid host name";
-}

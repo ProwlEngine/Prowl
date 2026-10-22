@@ -1,5 +1,4 @@
 using Prowl.Warp.Transports.Batching;
-using Prowl.Warp.Transports.Encryption;
 using Prowl.Warp.Transports.Local;
 using Prowl.Warp.Transports.Steam;
 using Xunit;
@@ -11,7 +10,7 @@ public class TransportCapabilitiesTests
     [Fact]
     public void WrappersPreserveExecutionAndAvailability()
     {
-        using Transport local = new BatchingTransport(new EncryptedTransport(new LocalTransport(new(), "host"), new byte[32]));
+        using Transport local = new BatchingTransport(new LocalTransport(new(), "host"));
         Assert.True(local.Capabilities.IsAvailable);
         Assert.Equal(TransportExecution.InlinePreferred, local.Capabilities.Execution);
         Assert.True(local.Capabilities.Supports(Delivery.Reliable));

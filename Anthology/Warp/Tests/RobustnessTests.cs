@@ -5,7 +5,6 @@ using System.Linq;
 using System.Numerics;
 using Prowl.Warp.Transports.Kcp;
 using Prowl.Warp.Transports.Local;
-using Prowl.Warp.Transports.Encryption;
 using Xunit;
 
 namespace Prowl.Warp.Tests;
@@ -94,21 +93,18 @@ public class RobustnessTests
         finally { foreach (SessionProbe client in clients) client.Session.Dispose(); }
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void LargeAndSmallReliableMessagesSurviveLoss(bool encrypted)
+    [Fact]
+    public void LargeAndSmallReliableMessagesSurviveLoss()
     {
         KcpTransportOptions Options() => new()
         {
             Port = 0,
             Simulation = new() { PacketLoss = 0.1, Latency = TimeSpan.FromMilliseconds(3), Jitter = TimeSpan.FromMilliseconds(3), Seed = 9182 },
         };
-        using KcpTransport rawHost = new(Options());
-        using Transport host = encrypted ? new EncryptedTransport(rawHost, new byte[32]) : rawHost;
-        using Transport client = encrypted ? new EncryptedTransport(new KcpTransport(Options()), new byte[32]) : new KcpTransport(Options());
+        using KcpTransport host = new(Options());
+        using KcpTransport client = new(Options());
         host.Listen();
-        Connection connection = client.Connect($"127.0.0.1:{rawHost.LocalPort}");
+        Connection connection = client.Connect($"127.0.0.1:{host.LocalPort}");
         Pump pump = new(host, client);
         pump.Until(() => connection.IsConnected && pump.EventsOf(host).Any(e => e.Type == TransportEventType.Connected), 10_000, "lossy handshake");
         byte[] bulk = TestData.Pattern(50_000, 20);
@@ -119,21 +115,17 @@ public class RobustnessTests
         Assert.Equal(Enumerable.Range(0, 20), pump.EventsOf(host).Where(e => e.Delivery == Delivery.Reliable && e.Type == TransportEventType.Data && e.Data.Length == 4).Select(e => BitConverter.ToInt32(e.Data)));
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void RepeatedSessionsAndLargeTransfersReleaseAllState(bool encrypted)
+    [Fact]
+    public void RepeatedSessionsAndLargeTransfersReleaseAllState()
     {
         int rounds = int.TryParse(Environment.GetEnvironmentVariable("WARP_STRESS_ROUNDS"), out int configured) ? configured : 20;
-        using KcpTransport rawHost = new(new() { Port = 0 });
-        using Transport transport = encrypted ? new EncryptedTransport(rawHost, new byte[32]) : rawHost;
+        using KcpTransport transport = new(new() { Port = 0 });
         using NetSession host = NetSession.Host(transport);
         SessionProbe hostProbe = new(host);
         for (int round = 0; round < rounds; round++)
         {
-            KcpTransport inner = new(new() { Port = 0 });
-            using Transport clientTransport = encrypted ? new EncryptedTransport(inner, new byte[32]) : inner;
-            using NetSession client = NetSession.Join(clientTransport, $"127.0.0.1:{rawHost.LocalPort}", "stress");
+            using KcpTransport clientTransport = new(new() { Port = 0 });
+            using NetSession client = NetSession.Join(clientTransport, $"127.0.0.1:{transport.LocalPort}", "stress");
             hostProbe.Chat.Clear();
             SessionProbe clientProbe = new(client);
             SessionProbe.PumpUntil(() => client.State == SessionState.Active, hostProbe, clientProbe);

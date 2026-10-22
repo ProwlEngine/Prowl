@@ -14,10 +14,9 @@ dotnet add package Prowl.Warp
 | `KcpTransport` | Reliable ordered messages and unreliable datagrams over UDP |
 | `LocalTransport` | Connections within one process |
 | `BatchingTransport` | Combine small messages until flush; both ends must enable it |
-| `EncryptedTransport` | Optional AES-GCM encryption using a securely provisioned 32-byte shared key |
 | `SteamTransport` | Not implemented |
 
-Transports live under `Prowl.Warp.Transports.<Kcp/Local/Batching/Encryption/Steam>`.
+Transports live under `Prowl.Warp.Transports.<Kcp/Local/Batching/Steam>`.
 
 ```csharp
 using Prowl.Warp;
