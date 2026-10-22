@@ -413,10 +413,8 @@ public class ScaleSubGizmo : ISubGizmo
 
         delta /= _state.StartDelta;
 
-        //if (_gizmo.Snapping)
-        //{
-        //    delta = GizmoUtils.RoundToInterval(delta.Value, _gizmo.SnapDistance);
-        //}
+        if (_gizmo.Snapping)
+            delta = GizmoUtils.RoundToInterval(delta.Value, _gizmo.SnapScale);
 
         delta = MathF.Max(delta.Value, 1e-4f) - 1.0f;
 
