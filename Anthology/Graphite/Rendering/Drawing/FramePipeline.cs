@@ -387,6 +387,7 @@ internal sealed partial class FramePipeline : IDisposable
         camera.World = world;
         camera.ResolveKeywords();
         camera.HostBuffers = world.World.Globals.BufferList;
+        camera.Cubes = world.World.Reflections.SampledCubes();
         uint width = Math.Max(1u, (uint)MathF.Round(view.Target.Width * view.Viewport.Z * view.RenderScale));
         uint height = Math.Max(1u, (uint)MathF.Round(view.Target.Height * view.Viewport.W * view.RenderScale));
         camera.Info = new FeatureView(view, width, height);
@@ -426,7 +427,7 @@ internal sealed partial class FramePipeline : IDisposable
     private FeatureShape ShapeOf(CameraFrame camera, in ViewDesc view)
     {
         (CascadeSlot[] cascades, string cascadeKey) = CascadesOf(camera, view, camera.World);
-        CameraShape key = CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length, cascadeKey);
+        CameraShape key = CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length, camera.Cubes.Length, cascadeKey);
         GraphKind kind = RenderKinds.Of(view.Kind, key);
         bool changed = false;
         if (!_shapes.TryGetValue(kind, out FeatureShape? shape))
@@ -509,6 +510,8 @@ internal sealed partial class FramePipeline : IDisposable
                 FeatureShape shape = _shapes[planned.Kind];
                 for (int i = 0; i < camera.HostBuffers.Length; i++)
                     _imports.Add(GraphImport.Of(shape.HostId(i), camera.HostBuffers[i]));
+                for (int i = 0; i < camera.Cubes.Length; i++)
+                    _imports.Add(GraphImport.Of(shape.CubeId(i), camera.Cubes[i]));
                 if (camera.CaptureCube != null)
                     _imports.Add(GraphImport.Of(shape.CaptureId, camera.CaptureCube));
             }

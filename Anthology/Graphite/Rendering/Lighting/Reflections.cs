@@ -388,6 +388,20 @@ internal sealed class WorldReflections : IDisposable
 
     public Target ProbeTarget(int index) => _targets[index]!;
 
+    /// <summary>The prefiltered cubes views sample through bindless: the sky's, then each probe's, in a stable order.</summary>
+    public RenderTexture[] SampledCubes()
+    {
+        List<RenderTexture> cubes = new();
+        if (Sky?.Persistent.Texture is { } sky)
+            cubes.Add(sky);
+        foreach (Target? target in _targets)
+        {
+            if (target?.Persistent.Texture is { } cube)
+                cubes.Add(cube);
+        }
+        return [.. cubes];
+    }
+
     internal void ReceiveProbe(int index, int generation, uint sequence, bool alive, in ReflectionProbeDesc desc)
     {
         if (index >= _probes.Length)
@@ -947,7 +961,7 @@ internal sealed class CaptureFill
 /// <summary>The passes of a capture fill instance: the prefilter, a bake's read back, the sky's harmonics, and the hand over to sampling.</summary>
 internal static class CaptureFillPasses
 {
-    public static IPass[] Of(FramePipeline frame) => [new PrefilterPass(frame), new BakeCopyPass(), new SkyAmbientPass(frame), new PublishPass()];
+    public static IPass[] Of(FramePipeline frame) => [new PrefilterPass(frame), new BakeCopyPass(), new SkyAmbientPass(frame)];
 }
 
 /// <summary>Filters a captured cube with GGX into every roughness mip of a prefiltered cube, after building the source's mips.</summary>
@@ -1067,19 +1081,5 @@ internal sealed class SkyAmbientPass(FramePipeline frame) : IInstancePass
         cmd.SetProperties(_properties);
         cmd.SetPushConstants(new Push { Lod = MathF.Max(MathF.Log2(source.Width / (float)size), 0), Size = size });
         cmd.Dispatch(1, 1, 1);
-    }
-}
-
-/// <summary>Leaves a filled cube in its sampled layout, so the views drawn after the capture read it through bindless.</summary>
-internal sealed class PublishPass : IInstancePass
-{
-    public string Name => "Graphite.PublishCapture";
-
-    public GraphKind Kind => RenderKinds.CaptureFill;
-
-    public void Setup(InstanceContextBuilder builder) => builder.DeclareInputTexture(RenderKinds.FillTarget);
-
-    public void Render(InstanceContext context, CommandBuffer cmd)
-    {
     }
 }

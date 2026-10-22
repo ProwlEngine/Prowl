@@ -149,6 +149,7 @@ internal sealed class FeatureShape : IDisposable
     public RenderResourceID CascadeId(int slot, int cascade) => RenderResourceID.Intern($"{Kind.Name}/Cascade{slot}.{cascade}");
 
     public RenderResourceID HostId(int index) => RenderResourceID.Intern($"{Kind.Name}/Host{index}");
+    public RenderResourceID CubeId(int index) => RenderResourceID.Intern($"{Kind.Name}/Cube{index}");
 
     public GraphTextureDesc SceneDesc()
     {

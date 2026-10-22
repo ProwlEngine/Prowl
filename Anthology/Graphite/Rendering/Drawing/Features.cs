@@ -564,6 +564,8 @@ public sealed class FeatureBuilder
         }
         for (int i = 0; i < Shape.Shape.HostBuffers; i++)
             _graph.DeclareImportSlotBuffer(Shape.HostId(i), BufferAccess.AllReads);
+        for (int i = 0; i < Shape.Shape.Cubes; i++)
+            _graph.DeclareImportSlotTexture(Shape.CubeId(i), TextureState.Sampled);
         if (Shape.ScreenVisibilityWritten)
             _graph.DeclareInputTexture(Shape.ScreenVisibilityId, TextureState.Sampled, TextureState.Sampled);
         if (Shape.ScreenIrradianceWritten)

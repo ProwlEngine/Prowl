@@ -67,6 +67,9 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>The host's buffers the view's graph declares, from the world's globals.</summary>
     public DeviceBuffer[] HostBuffers = [];
 
+    /// <summary>The world's prefiltered cubes the view's draws sample.</summary>
+    public RenderTexture[] Cubes = [];
+
     /// <summary>Where the world's providers add this view's items.</summary>
     public readonly DrawItemSink Sink = new();
 
