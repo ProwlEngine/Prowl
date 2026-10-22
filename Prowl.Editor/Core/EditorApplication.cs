@@ -529,7 +529,6 @@ public class EditorApplication : Game
             _introTime = 0;
             _introClosing = true;
             _launcherWasOpen = false;
-            GUI.EditorGuide.ArmAutoStart(); // let the tour play once for this freshly-opened project
             if (Project.Current != null)
             {
                 using FrameStatScope projectStats = FrameStats.Editor.Scope();
@@ -661,10 +660,8 @@ public class EditorApplication : Game
 
         DrawStatusBar(paper, w, h);
 
-        // First-run UI tour (once per user; reset from Preferences > General).
-        GUI.EditorGuide.SetDockSpace(_dockSpace);
         if (Project.Current != null && !ProjectLauncher.IsOpen && _introTime >= IntroDuration)
-            GUI.EditorGuide.TryAutoStart(GUI.EditorGuide.WelcomeTour());
+            GUI.EditorSetup.ShowOnFirstLaunch();
     }
 
     // Shared height for the header's interactive elements (menu bar + right-side status chips) so
@@ -831,9 +828,6 @@ public class EditorApplication : Game
     /// <summary> Ends the editor GUI frame: draws the on-boarding guide overlay, renders Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips), plays the intro animation, and pops the Origami theme. </summary>
     public override void EndGui(Paper paper)
     {
-        // On-boarding guide overlay (above panels/header, below Origami's popovers/toasts).
-        GUI.EditorGuide.Draw(paper, (float)Time.UnscaledDeltaTime);
-
         GUI.Popups.RenameOverlay.EndFrame();
 
         // Render all Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips)
@@ -913,8 +907,6 @@ public class EditorApplication : Game
                 .Hovered.TextColor(EditorTheme.Ink500).End()
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
                 .Tooltip(Loc.Get("header.theme_settings"))
-                .OnPostLayout((h2, rect) => GUI.EditorGuide.RegisterThemeButton(
-                    (float)rect.Min.X, (float)rect.Min.Y, (float)rect.Size.X, (float)rect.Size.Y))
                 .OnClick(0, (_, _) =>
                 {
                     OpenPanel(typeof(GUI.Panels.PreferencesPanel));
@@ -1662,8 +1654,6 @@ public class EditorApplication : Game
         catch (Exception ex) { Runtime.Debug.LogWarning($"Failed to clear layout: {ex.Message}"); }
         SetDockLayout(CreateDefaultLayout());
 
-        EditorSettings.Instance.SeenGuides.Clear();
-        EditorSettings.Instance.Save();
     }
 
     /// <summary>Replace the whole docked layout, dropping any maximized panel along with the old one.</summary>

@@ -301,6 +301,9 @@ public class PreferencesPanel : DockPanel
         EditorGUI.SettingsToggle(paper, "pref_cli_eval", Loc.Get("pref.cli_allow_eval"), s.AllowCliEval,
             v => { s.AllowCliEval = v; s.Save(); });
 
+        EditorGUI.SettingsRow(paper, "pref_setup", Loc.Get("pref.run_setup"), () =>
+            Origami.Button(paper, "pref_setup_b", $"{EditorIcons.WandMagicSparkles}  {Loc.Get("pref.run_setup_btn")}", EditorSetup.Show).Show());
+
         EditorGUI.SectionHeader(paper, "pref_gen_profile", Loc.Get("pref.profile"));
         EditorGUI.SettingsRow(paper, "pref_profile", Loc.Get("pref.profile_desc"), () =>
         {
@@ -500,20 +503,20 @@ public class PreferencesPanel : DockPanel
 
     private static Color Hx(string hex) => System.Drawing.ColorTranslator.FromHtml(hex);
 
-    private void ApplyPreset(EditorSettings s, ThemePreset p)
+    private static void ApplyPreset(EditorSettings s, ThemePreset p)
     {
         p.ApplyTo(s.Theme);
         s.ApplyTheme(); s.Save();
     }
 
-    private void ApplyLayout(EditorSettings s, LayoutPreset layout)
+    private static void ApplyLayout(EditorSettings s, LayoutPreset layout)
     {
         layout.ApplyTo(s.Theme);
         s.ApplyTheme(); s.Save();
     }
 
     // ---- Presets ----
-    private void DrawThemePresets(Paper paper, Scribe.FontFile font, EditorSettings s, EditorThemeData theme)
+    internal static void DrawThemePresets(Paper paper, Scribe.FontFile font, EditorSettings s, EditorThemeData theme)
     {
         EditorGUI.SectionHeader(paper, "pref_pr_hdr", Loc.Get("pref.builtin_themes"), first: true, compact: true);
         PresetGrid(paper, "pref_pr", ThemePresets.All.Length, i =>

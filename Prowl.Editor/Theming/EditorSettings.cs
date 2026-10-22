@@ -69,9 +69,8 @@ public class EditorSettings
     /// <summary> Gets or sets the dictionary of user-overridden shortcut bindings, keyed by action name. Only overridden bindings are stored. </summary>
     public Dictionary<string, ShortcutBinding> ShortcutOverrides { get; set; } = [];
 
-    // IDs of interactive guides/tutorials the user has already completed or skipped.
-    /// <summary> Gets or sets the list of interactive guide IDs the user has completed or skipped. </summary>
-    public List<string> SeenGuides { get; set; } = [];
+    /// <summary> Gets or sets whether the first launch editor setup has been shown. </summary>
+    public bool SetupDone { get; set; }
 
     /// <summary>Serialized per-scene-tool settings, keyed by settings type name. Per-user rather
     /// than per-project: a brush size follows the user, it is not committed with the scene.</summary>
@@ -208,7 +207,7 @@ public class EditorSettings
 
     /// <summary>
     /// Swaps in other settings, such as an imported profile or a full reset, and applies them everywhere. This machine's
-    /// window placement and projects folder are kept.
+    /// window placement and projects folder are kept, and a finished setup stays finished.
     /// </summary>
     public static void Replace(EditorSettings next)
     {
@@ -219,6 +218,7 @@ public class EditorSettings
         next.WindowHeight = current.WindowHeight;
         next.WindowMaximized = current.WindowMaximized;
         next.DefaultProjectsPath = current.DefaultProjectsPath;
+        next.SetupDone |= current.SetupDone;
 
         Instance = next;
         next.ApplyTheme();

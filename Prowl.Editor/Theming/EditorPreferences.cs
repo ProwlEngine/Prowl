@@ -92,6 +92,9 @@ public static class Preferences
         throw new InvalidOperationException($"{typeof(T).Name} has no [EditorPreferences] attribute.");
     }
 
+    /// <summary>The section a live instance belongs to.</summary>
+    public static PreferencesSection SectionOf(EditorPreferences instance) => _sections.First(s => s.Instance == instance);
+
     internal static void Clear() => _sections.Clear();
 
     internal static void Scan(Type type)
