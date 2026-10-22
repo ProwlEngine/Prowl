@@ -116,6 +116,8 @@ public abstract class NetSessionTests : IDisposable
     /// <summary>An address nothing can be reached at.</summary>
     protected abstract string UnreachableAddress { get; }
 
+    protected virtual bool BatchMessages => true;
+
     public void Dispose()
     {
         foreach (NetSession session in _sessions)
@@ -132,11 +134,10 @@ public abstract class NetSessionTests : IDisposable
     /// <summary>The address clients connect to, for a host transport that is listening.</summary>
     protected abstract string AddressOf(Transport host);
 
-    protected virtual bool BatchMessages => true;
-
     private SessionProbe Host(NetSessionOptions? options = null)
     {
-        NetSession session = NetSession.Host(CreateHostTransport(), "Hosty", options ?? new NetSessionOptions { BatchMessages = BatchMessages });
+        NetSession session = NetSession.Host(CreateHostTransport(), "Hosty",
+            options ?? new NetSessionOptions { BatchMessages = BatchMessages });
         _sessions.Add(session);
         _hostAddress = AddressOf(session.Transport);
         return new SessionProbe(session);
@@ -146,7 +147,8 @@ public abstract class NetSessionTests : IDisposable
         string? address = null)
     {
         NetSession session =
-            NetSession.Join(CreateClientTransport(name), address ?? _hostAddress!, name, token, options ?? new NetSessionOptions { BatchMessages = BatchMessages });
+            NetSession.Join(CreateClientTransport(name), address ?? _hostAddress!, name, token,
+                options ?? new NetSessionOptions { BatchMessages = BatchMessages });
         _sessions.Add(session);
         return new SessionProbe(session);
     }

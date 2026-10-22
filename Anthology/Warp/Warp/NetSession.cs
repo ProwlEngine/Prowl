@@ -52,13 +52,13 @@ public sealed class NetSession : IDisposable
 
     public const int MaxNameBytes = 256;
     public const int MaxJoinTokenBytes = 4096;
+    private readonly SessionBatcher _batcher;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly NetWriter _fragmentWriter = new();
 
     private readonly Dictionary<ushort, RawMessageHandler> _handlers = new();
 
     // Client only.
-    private readonly Connection? _hostConnection;
     private readonly string _joinName = string.Empty;
     private readonly byte[] _joinToken = Array.Empty<byte>();
     private readonly Queue<Loopback> _loopback = new();
@@ -69,7 +69,6 @@ public sealed class NetSession : IDisposable
     private readonly Dictionary<Connection, Remote> _remotes = new();
     private readonly List<KeyValuePair<Connection, Remote>> _scratch = new();
     private readonly NetWriter _writer = new();
-    private readonly SessionBatcher _batcher;
     private bool _batchWithHost;
     private string? _goodbyeMessage;
     private SessionEndReason? _goodbyeReason;
@@ -119,7 +118,7 @@ public sealed class NetSession : IDisposable
         _joinName = name;
         _joinToken = token;
         State = SessionState.Joining;
-        _hostConnection = connection ?? _pump!.Connect(address);
+        HostConnection = connection ?? _pump!.Connect(address);
     }
 
     /// <summary>Pooled bytes currently retained by incomplete incoming messages.</summary>
@@ -141,7 +140,7 @@ public sealed class NetSession : IDisposable
     public NetPeer? LocalPeer { get; private set; }
 
     /// <summary>The client's transport connection to the host, available before admission. Null when hosting.</summary>
-    public Connection? HostConnection => _hostConnection;
+    public Connection? HostConnection { get; }
 
     /// <summary>The host's peer. Null on a client until it has joined.</summary>
     public NetPeer? HostPeer { get; private set; }
@@ -511,13 +510,13 @@ public sealed class NetSession : IDisposable
             ReleaseReassembly(ref _incomingFromHost);
             _goodbyeReason = SessionEndReason.Timeout;
             _goodbyeMessage = "Fragmented message timed out.";
-            _hostConnection!.Disconnect();
+            HostConnection!.Disconnect();
         }
         else if (State == SessionState.Joining && now >= _joinDeadlineMs)
         {
             _goodbyeReason ??= SessionEndReason.Timeout;
             _goodbyeMessage ??= "The host did not let us in in time.";
-            _hostConnection!.Disconnect();
+            HostConnection!.Disconnect();
         }
 
         _batcher.FlushAll();
@@ -604,6 +603,7 @@ public sealed class NetSession : IDisposable
                 ReceiveBatch(connection, reader.ReadBytes(reader.Remaining), delivery);
                 return;
             }
+
             if (id == (ushort)InternalMessage.Fragment)
             {
                 if (reassembled)
@@ -810,7 +810,7 @@ public sealed class NetSession : IDisposable
 
     private void ClientEvent(in TransportEvent ev)
     {
-        if (ev.Connection != _hostConnection)
+        if (ev.Connection != HostConnection)
         {
             return;
         }
@@ -824,7 +824,7 @@ public sealed class NetSession : IDisposable
                 _writer.WriteString(_joinName);
                 _writer.WriteBytesWithLength(_joinToken);
                 _writer.WriteBool(_options.BatchMessages);
-                SendToConnection(_hostConnection, _writer.WrittenSpan, Delivery.Reliable);
+                SendToConnection(HostConnection, _writer.WrittenSpan, Delivery.Reliable);
                 _joinDeadlineMs = NowMs + (long)_options.JoinTimeout.TotalMilliseconds;
                 break;
 
@@ -869,7 +869,7 @@ public sealed class NetSession : IDisposable
                         throw new InvalidDataException("Unexpected message batch.");
                     }
 
-                    ReceiveBatch(_hostConnection!, reader.ReadBytes(reader.Remaining), delivery);
+                    ReceiveBatch(HostConnection!, reader.ReadBytes(reader.Remaining), delivery);
                     break;
 
                 case (ushort)InternalMessage.Fragment:
@@ -929,7 +929,7 @@ public sealed class NetSession : IDisposable
                 case (ushort)InternalMessage.Goodbye:
                     _goodbyeReason = ReadReason(ref reader);
                     _goodbyeMessage = reader.ReadString();
-                    _hostConnection!.Disconnect();
+                    HostConnection!.Disconnect();
                     break;
 
                 default:
@@ -946,13 +946,13 @@ public sealed class NetSession : IDisposable
             ReleaseReassembly(ref _incomingFromHost);
             _goodbyeReason = e is ResourceLimitException ? SessionEndReason.ResourceLimit : SessionEndReason.Timeout;
             _goodbyeMessage = e.Message;
-            _hostConnection!.Disconnect();
+            HostConnection!.Disconnect();
         }
         catch (Exception e) when (e is EndOfStreamException or InvalidDataException)
         {
             _goodbyeReason ??= SessionEndReason.ProtocolError;
             _goodbyeMessage ??= "The host sent a malformed message.";
-            _hostConnection!.Disconnect();
+            HostConnection!.Disconnect();
         }
     }
 
@@ -969,7 +969,7 @@ public sealed class NetSession : IDisposable
         {
             int id = ReadPeerId(ref reader);
             string name = reader.ReadString(MaxNameBytes);
-            Connection? connection = id == NetPeer.HostId ? _hostConnection : null;
+            Connection? connection = id == NetPeer.HostId ? HostConnection : null;
             if (!_peers.TryAdd(id, new NetPeer(id, name, id == localId, connection)))
             {
                 throw new InvalidDataException($"Peer id {id} listed twice.");
@@ -1177,6 +1177,7 @@ public sealed class NetSession : IDisposable
         {
             throw new InvalidOperationException("Transport message limit is too small for session fragments.");
         }
+
         for (int offset = 0; offset < message.Length && connection.IsConnected; offset += chunkSize)
         {
             int length = Math.Min(chunkSize, message.Length - offset);
@@ -1435,12 +1436,12 @@ public sealed class NetSession : IDisposable
     /// <summary>What the host knows about one connection.</summary>
     private sealed class Remote
     {
+        public bool BatchMessages;
         public long DeadlineMs;
         public Reassembly? Incoming;
         public NetPeer? Peer;
         public PendingJoin? Pending;
         public RemoteStage Stage;
-        public bool BatchMessages;
     }
 
     private readonly record struct Loopback(byte[] Buffer, int Length, Delivery Delivery);

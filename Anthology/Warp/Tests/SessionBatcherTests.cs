@@ -23,7 +23,7 @@ public class SessionBatcherTests
         message[2] = 99;
         Assert.Empty(backend.Sends);
         batcher.FlushAll();
-        var packet = Assert.Single(backend.Sends);
+        (byte[] Data, Delivery Delivery) packet = Assert.Single(backend.Sends);
         Assert.Equal(delivery, packet.Delivery);
         batcher.Validate(packet.Data.AsSpan(2));
         Assert.Equal(new[] { new byte[] { 42, 0, 1 }, new byte[] { 42, 0, 2 } }, Decode(packet.Data));
@@ -196,22 +196,34 @@ public class SessionBatcherTests
 
     private sealed class Backend : Transport
     {
-        public readonly List<(byte[] Data, Delivery Delivery)> Sends = new();
         public readonly Connection Peer;
-        public int Threshold = 128, Maximum = 4096;
-        public bool ReliableOnly, ThrowOnSend;
+        public readonly List<(byte[] Data, Delivery Delivery)> Sends = new();
         public int ConnectionFlushes, TransportFlushes, SendsAtFlush;
+        public bool ReliableOnly, ThrowOnSend;
+        public int Threshold = 128, Maximum = 4096;
         public Backend() => Peer = new RecordingConnection(this);
         public override bool IsListening => false;
-        public override void Listen() { }
+
+        public override void Listen()
+        {
+        }
+
         public override Connection Connect(string address) => Peer;
-        public override void Receive() { }
+
+        public override void Receive()
+        {
+        }
+
         public override void Flush() => TransportFlushes++;
-        public override void Shutdown() { }
+
+        public override void Shutdown()
+        {
+        }
 
         private sealed class RecordingConnection : Connection
         {
             private readonly Backend _owner;
+
             public RecordingConnection(Backend owner) : base(owner, 1, "peer", true)
             {
                 _owner = owner;
@@ -219,9 +231,12 @@ public class SessionBatcherTests
             }
 
             public override TimeSpan RoundTripTime => default;
+
             public override int GetMaxMessageSize(Delivery delivery) =>
                 delivery == Delivery.Unreliable && _owner.ReliableOnly
-                    ? throw new NotSupportedException() : _owner.Maximum;
+                    ? throw new NotSupportedException()
+                    : _owner.Maximum;
+
             public override int GetBatchThreshold(Delivery delivery)
             {
                 GetMaxMessageSize(delivery);
@@ -231,7 +246,11 @@ public class SessionBatcherTests
             public override void Send(ReadOnlySpan<byte> data, Delivery delivery)
             {
                 ValidateSend(data, delivery);
-                if (_owner.ThrowOnSend) throw new IOException("Send failed");
+                if (_owner.ThrowOnSend)
+                {
+                    throw new IOException("Send failed");
+                }
+
                 _owner.Sends.Add((data.ToArray(), delivery));
             }
 

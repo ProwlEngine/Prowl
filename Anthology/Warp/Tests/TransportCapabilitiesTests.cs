@@ -1,7 +1,5 @@
 using System;
 
-using Prowl.Warp.Transports.Local;
-
 using Xunit;
 
 namespace Prowl.Warp.Tests;

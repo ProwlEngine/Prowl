@@ -10,8 +10,18 @@ internal sealed class SessionBatcher(int maxMessageSize) : IDisposable
 {
     internal const ushort MessageId = NetSession.ReservedMessageIds + 6;
     private const int MaxBatchSize = 65536;
-    private readonly int _maxMessageSize = maxMessageSize;
     private readonly Dictionary<Connection, OutgoingBatch> _batches = new();
+    private readonly int _maxMessageSize = maxMessageSize;
+
+    public void Dispose()
+    {
+        foreach (OutgoingBatch batch in _batches.Values)
+        {
+            batch.Dispose();
+        }
+
+        _batches.Clear();
+    }
 
     public bool TrySend(Connection connection, ReadOnlySpan<byte> message, Delivery delivery, SendFlags flags)
     {
@@ -133,28 +143,18 @@ internal sealed class SessionBatcher(int maxMessageSize) : IDisposable
         }
     }
 
-    public void Dispose()
-    {
-        foreach (OutgoingBatch batch in _batches.Values)
-        {
-            batch.Dispose();
-        }
-
-        _batches.Clear();
-    }
-
     private sealed class OutgoingBatch : IDisposable
     {
         public NetWriter? Reliable, Unreliable;
-
-        public NetWriter Get(Delivery delivery) => delivery == Delivery.Reliable
-            ? Reliable ??= new NetWriter()
-            : Unreliable ??= new NetWriter();
 
         public void Dispose()
         {
             Reliable?.Dispose();
             Unreliable?.Dispose();
         }
+
+        public NetWriter Get(Delivery delivery) => delivery == Delivery.Reliable
+            ? Reliable ??= new NetWriter()
+            : Unreliable ??= new NetWriter();
     }
 }

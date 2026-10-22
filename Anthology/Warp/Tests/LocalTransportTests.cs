@@ -114,7 +114,7 @@ public class LocalTransportTests
         pump.Step();
         Assert.Empty(host.Connections);
         Assert.Single(pump.EventsOf(host), ev => ev.Connection == closed.Connection &&
-            ev.Type == TransportEventType.Disconnected);
+                                                 ev.Type == TransportEventType.Disconnected);
     }
 
     [Theory]

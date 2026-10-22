@@ -24,8 +24,16 @@ public class SessionBatchingTests
     {
         using Pair pair = new(hostBatches, clientBatches);
         List<byte> atHost = new(), atClient = new();
-        pair.Host.OnRaw(42, (_, ref reader, channel) => { Assert.Equal(delivery, channel); atHost.Add(reader.ReadByte()); });
-        pair.Client.OnRaw(42, (_, ref reader, channel) => { Assert.Equal(delivery, channel); atClient.Add(reader.ReadByte()); });
+        pair.Host.OnRaw(42, (_, ref reader, channel) =>
+        {
+            Assert.Equal(delivery, channel);
+            atHost.Add(reader.ReadByte());
+        });
+        pair.Client.OnRaw(42, (_, ref reader, channel) =>
+        {
+            Assert.Equal(delivery, channel);
+            atClient.Add(reader.ReadByte());
+        });
         long before = pair.Client.HostPeer!.Connection!.Stats.PacketsSent;
         for (byte i = 0; i < 10; i++)
         {
@@ -219,10 +227,9 @@ public class SessionBatchingTests
 
     private sealed class Pair : IDisposable
     {
-        private readonly LocalTransport _hostTransport, _clientTransport;
-        private readonly bool _externalPump;
         public readonly NetSession Host, Client;
-        public NetPeer Remote => Host.Peers.Single(p => !p.IsLocal);
+        private readonly bool _externalPump;
+        private readonly LocalTransport _hostTransport, _clientTransport;
 
         public Pair(bool hostBatches = true, bool clientBatches = true, int hostMaximum = 16 * 1024 * 1024,
             bool externalPump = false)
@@ -246,6 +253,16 @@ public class SessionBatchingTests
             }
 
             Until(() => Client.State == SessionState.Active);
+        }
+
+        public NetPeer Remote => Host.Peers.Single(p => !p.IsLocal);
+
+        public void Dispose()
+        {
+            Client.Dispose();
+            Host.Dispose();
+            _clientTransport.Dispose();
+            _hostTransport.Dispose();
         }
 
         public void Receive(NetSession session)
@@ -278,14 +295,6 @@ public class SessionBatchingTests
             }
 
             Assert.True(condition(), "Expected session state did not arrive.");
-        }
-
-        public void Dispose()
-        {
-            Client.Dispose();
-            Host.Dispose();
-            _clientTransport.Dispose();
-            _hostTransport.Dispose();
         }
     }
 }

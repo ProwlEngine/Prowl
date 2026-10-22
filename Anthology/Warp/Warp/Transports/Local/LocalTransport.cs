@@ -401,12 +401,10 @@ public sealed class LocalConnection : Connection
 
     internal DeferredClose? PendingClose => Volatile.Read(ref _pendingClose);
 
+    public override TimeSpan RoundTripTime => TimeSpan.Zero;
+
     internal void DeferClose(long afterPacket, DisconnectReason reason) =>
         Interlocked.CompareExchange(ref _pendingClose, new DeferredClose(afterPacket, reason), null);
-
-    internal sealed record DeferredClose(long AfterPacket, DisconnectReason Reason);
-
-    public override TimeSpan RoundTripTime => TimeSpan.Zero;
 
     public override int GetMaxMessageSize(Delivery delivery) => int.MaxValue;
 
@@ -438,4 +436,6 @@ public sealed class LocalConnection : Connection
     internal bool Post(LocalTransport.Packet packet) => ((LocalTransport)Transport).Post(packet);
 
     internal void RecordReceived(int bytes) => RecordPacketReceived(bytes);
+
+    internal sealed record DeferredClose(long AfterPacket, DisconnectReason Reason);
 }
