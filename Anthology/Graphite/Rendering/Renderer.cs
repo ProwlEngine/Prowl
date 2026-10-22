@@ -639,6 +639,13 @@ public sealed class Renderer : IDisposable
         {
             world.World.FeatureSnapshot = world.World.Features.Snapshot();
             Extract(world.World.FeatureSnapshot);
+            world.World.FrameFeatureSnapshot = world.World.FrameFeatures.Snapshot();
+            foreach (FrameFeature feature in world.World.FrameFeatureSnapshot)
+            {
+                feature.TakeSnapshot();
+                if (feature.EnabledSnapshot)
+                    feature.Extract();
+            }
         }
         for (int i = 0; i < views.Length; i++)
         {

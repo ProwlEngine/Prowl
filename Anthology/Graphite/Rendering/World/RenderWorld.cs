@@ -289,6 +289,9 @@ public sealed partial class RenderWorld : IDisposable
     /// <summary>Features every view of the world runs. Host thread.</summary>
     public FeatureSet Features { get; } = new();
 
+    /// <summary>GPU work run once a frame outside any view. Host thread.</summary>
+    public FrameFeatureSet FrameFeatures { get; }
+
     /// <summary>Host geometry drawn into each view through its passes without being renderables. Host thread.</summary>
     public ProviderSet Providers { get; } = new();
 
@@ -479,6 +482,7 @@ public sealed partial class RenderWorld : IDisposable
 
     /// <summary>The features as of the last SubmitFrame. The render thread reads only this.</summary>
     internal RenderFeature[] FeatureSnapshot = [];
+    internal FrameFeature[] FrameFeatureSnapshot = [];
 
     [Flags]
     internal enum Dirt : byte
@@ -533,6 +537,7 @@ public sealed partial class RenderWorld : IDisposable
     {
         _owner = owner;
         _device = device;
+        FrameFeatures = new FrameFeatureSet(this);
         int id = System.Threading.Interlocked.Increment(ref s_nextId);
         Id = id;
         Action<RendererError> report = owner != null ? error => owner.Report(error with { Source = error.Source ?? this, Key = $"{error.Key ?? error.Code}.world{id}" }) : _ => { };
