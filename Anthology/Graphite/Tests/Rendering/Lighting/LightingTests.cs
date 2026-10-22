@@ -3137,6 +3137,27 @@ public sealed class LightingTests : IDisposable
         AssertMatches(_ => new Vector3(0.25f, 0.5f, 0.75f), Frame());
     }
 
+    private sealed class WriteHostBuffer(DeviceBuffer buffer, Float4 second) : FrameFeature
+    {
+        public override FrameSlot Slot => FrameSlot.BeforeViews;
+
+        public override void Setup(FrameBuilder builder) => builder.Write(buffer, BufferAccess.TransferWrite);
+
+        public override void Render(FrameContext context) => context.Command.UpdateBuffer<Float4>(buffer, 0, [new Float4(9, 9, 9, 1), second]);
+    }
+
+    [Fact]
+    public void FrameFeatures_WriteHostBuffers_BeforeTheDrawsThatReadThem()
+    {
+        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(BufferSource)));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)) }, [material]);
+        using DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(32, BufferUsage.StructuredBufferReadOnly));
+        _renderer.Globals.SetBuffer("WindField", buffer);
+        WriteHostBuffer feature = new(buffer, new Float4(0.25f, 0.5f, 0.75f, 1));
+        _world.FrameFeatures.Add(feature);
+        AssertMatches(_ => new Vector3(0.25f, 0.5f, 0.75f), Frame());
+    }
+
     [Fact]
     public void OpaqueForwardPasses_WriteTheGBufferTargetsTheyStore()
     {
