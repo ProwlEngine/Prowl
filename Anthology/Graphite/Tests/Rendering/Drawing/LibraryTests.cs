@@ -18,15 +18,6 @@ file sealed class NoResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => 0;
 }
 
-file sealed class LambdaPass(string name, Action<RenderContextBuilder> setup, Action<RenderContext, CommandBuffer> render) : IExecutionPass
-{
-    public string Name => name;
-
-    public void Setup(RenderContextBuilder builder) => setup(builder);
-
-    public void Render(RenderContext context, CommandBuffer cmd) => render(context, cmd);
-}
-
 [StructLayout(LayoutKind.Sequential)]
 file struct Push
 {
@@ -84,7 +75,7 @@ public sealed class LibraryTests : IDisposable
         """;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GraphStore _store = new();
+    private readonly RenderStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly List<IDisposable> _owned = new();
 
@@ -210,18 +201,16 @@ public sealed class LibraryTests : IDisposable
         Framebuffer framebuffer = Own(_device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, target)));
         VertexSource vertexSource = new VertexSource(PrimitiveTopology.TriangleList).SetIndexBuffer(page.Indices, IndexFormat.UInt32, page.Indices.SizeInBytes / 4);
 
-        using RenderGraph graph = RenderGraph.Build([
-            new LambdaPass("Upload", b =>
+        TestGraph.Run(_device, graph =>
+        {
+            graph.Uploads("Upload", uploader, tables);
+            graph.AddPass("Draw", b =>
             {
-                for (int i = 0; i < tables.Length; i++)
-                    b.DeclareImportedBuffer(RenderResourceID.Intern("Table" + i), tables[i], BufferAccess.ShaderWrite);
-            }, (context, cmd) => uploader.Record(cmd, context.Task)),
-            new LambdaPass("Draw", b =>
+                foreach (DeviceBuffer table in tables)
+                    b.Read(graph.Import(table), BufferAccess.AllReads);
+            }, context =>
             {
-                for (int i = 0; i < tables.Length; i++)
-                    b.DeclareImportedBuffer(RenderResourceID.Intern("Table" + i), tables[i], BufferAccess.ShaderRead);
-            }, (context, cmd) =>
-            {
+                CommandBuffer cmd = context.Command;
                 cmd.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
                 cmd.SetFullViewport();
                 cmd.SetShader(program);
@@ -231,8 +220,8 @@ public sealed class LibraryTests : IDisposable
                 cmd.SetProperties(passProperties);
                 cmd.SetPushConstants(new Push { DrawRecordBase = (uint)call.FirstCommand });
                 cmd.DrawIndexedIndirect(commands, (uint)(call.FirstCommand * Marshal.SizeOf<IndirectDrawIndexedArguments>()), (uint)call.CommandCount, (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>());
-            })]);
-        _device.DispatchGraph(graph, graph.CreateInstances());
+            });
+        });
         _device.WaitForIdle();
 
         DeviceBuffer readback = Own(_device.ResourceFactory.CreateBuffer(new BufferDescription(8 * 8 * 16, BufferUsage.Staging)));

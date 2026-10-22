@@ -51,7 +51,7 @@ public sealed class MaterialTests : IDisposable
         """;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GraphStore _store = new();
+    private readonly RenderStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly Shader _shader;
     private readonly MaterialSystem _system;
@@ -357,56 +357,16 @@ public sealed class MaterialTests : IDisposable
         PropertySet properties = new();
         properties.SetBuffer("Materials", table);
         properties.SetBuffer("Output", output);
-        using RenderGraph graph = RenderGraph.Build([
-            new UploadTablePass(uploader, table),
-            new ReadTablePass(program, properties, material.Slot, table, output),
-            new ReadbackPass(output, readback)]);
-        _device.DispatchGraph(graph, graph.CreateInstances());
+        TestGraph.Run(_device, graph =>
+        {
+            graph.Uploads("UploadTable", uploader, table);
+            graph.Dispatches("ReadTable", program, properties, material.Slot, [table], output);
+            graph.Copies("Readback", output, readback);
+        });
         _device.WaitForIdle();
 
         float[] values = _device.Map<float>(readback).ToArray();
         _device.Unmap(readback);
         Assert.Equal(new[] { 9f, 4f, 6f, 7f, 1f, 7f, 0.5f, 0.5f }, values);
     }
-}
-
-file sealed class UploadTablePass(Uploader uploader, DeviceBuffer table) : IExecutionPass
-{
-    public string Name => "UploadTable";
-
-    public void Setup(RenderContextBuilder builder) => builder.DeclareImportedBuffer(RenderResourceID.Intern("MaterialTable"), table, BufferAccess.ShaderWrite);
-
-    public void Render(RenderContext context, CommandBuffer cmd) => uploader.Record(cmd, context.Task);
-}
-
-file sealed class ReadTablePass(ComputeProgram program, PropertySet properties, uint slot, DeviceBuffer table, DeviceBuffer output) : IExecutionPass
-{
-    public string Name => "ReadTable";
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        builder.DeclareImportedBuffer(RenderResourceID.Intern("MaterialTable"), table, BufferAccess.ShaderRead);
-        builder.DeclareImportedBuffer(RenderResourceID.Intern("MaterialOutput"), output, BufferAccess.ShaderWrite);
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd)
-    {
-        cmd.SetComputeShader(program);
-        cmd.SetProperties(properties);
-        cmd.SetPushConstants(slot);
-        cmd.Dispatch(1, 1, 1);
-    }
-}
-
-file sealed class ReadbackPass(DeviceBuffer output, DeviceBuffer readback) : IExecutionPass
-{
-    public string Name => "Readback";
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        builder.DeclareImportedBuffer(RenderResourceID.Intern("MaterialOutput"), output, BufferAccess.TransferRead);
-        builder.DeclareImportedBuffer(RenderResourceID.Intern("MaterialReadback"), readback, BufferAccess.TransferWrite);
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd) => cmd.CopyBuffer(output, 0, readback, 0, output.SizeInBytes);
 }

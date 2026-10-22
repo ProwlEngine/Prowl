@@ -22,7 +22,7 @@ file sealed class NoResources : IMaterialResources
 public sealed class RenderWorldTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GraphStore _store = new();
+    private readonly RenderStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly Uploader _uploader;
     private readonly GeometryPool _geometry;

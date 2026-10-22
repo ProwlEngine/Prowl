@@ -78,7 +78,7 @@ public sealed class ProgramCacheTests : IDisposable
         """;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GraphStore _store = new();
+    private readonly RenderStore _store = new();
     private readonly GlslShaderCompiler _glsl = new();
     private readonly GatedCompiler _compiler;
     private readonly MaterialSystem _materials;

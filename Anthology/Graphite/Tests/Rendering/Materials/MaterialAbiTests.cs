@@ -19,15 +19,6 @@ internal sealed class SlotResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => 1u;
 }
 
-file sealed class DrawPass(Action<CommandBuffer> draw) : IExecutionPass
-{
-    public string Name => "Draw";
-
-    public void Setup(RenderContextBuilder builder) { }
-
-    public void Render(RenderContext context, CommandBuffer cmd) => draw(cmd);
-}
-
 [Collection("GPU Tests")]
 public sealed class MaterialAbiTests : IDisposable
 {
@@ -100,7 +91,7 @@ public sealed class MaterialAbiTests : IDisposable
     };
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GraphStore _store = new();
+    private readonly RenderStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly SlotResources _resources = new();
     private readonly GlobalRegistry _registry;
@@ -204,8 +195,9 @@ public sealed class MaterialAbiTests : IDisposable
         Framebuffer framebuffer = Own(_device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, target)));
         DeviceBuffer readback = Own(_device.ResourceFactory.CreateBuffer(new BufferDescription(4 * 4 * 16, BufferUsage.Staging)));
 
-        using RenderGraph graph = RenderGraph.Build([new DrawPass(cmd =>
+        TestGraph.Run(_device, graph => graph.AddPass("Draw", builder => { }, context =>
         {
+            CommandBuffer cmd = context.Command;
             cmd.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cmd.SetFullViewport();
             cmd.SetShader(program);
@@ -215,8 +207,7 @@ public sealed class MaterialAbiTests : IDisposable
             cmd.SetProperties(pass);
             cmd.SetPushConstants(slot);
             cmd.Draw(3);
-        })]);
-        _device.DispatchGraph(graph, graph.CreateInstances());
+        }));
         _device.WaitForIdle();
         _device.Record(cmd => cmd.CopyTextureToBuffer(target, readback, 0, TextureRegion.Whole(target, 0, 0))).Wait();
 

@@ -22,7 +22,7 @@ public sealed class StandardShaderTests : IDisposable
     private static readonly string[] s_litToggles = ["_NORMALMAP", "_SURFACEMAP", "_OCCLUSIONMAP", "_EMISSION", "_PARALLAXMAP", "_TRANSLUCENCY", "_ANISOTROPIC", "_INSTANCE_TINT"];
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GraphStore _store = new();
+    private readonly RenderStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly MaterialSystem _system;
     private readonly Shader _lit;

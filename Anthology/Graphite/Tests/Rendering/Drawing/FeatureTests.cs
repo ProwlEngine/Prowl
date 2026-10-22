@@ -1210,7 +1210,7 @@ public sealed class FeatureTests : IDisposable
     public void TheScene_HasOnlyTheTargetsItsFeaturesRead()
     {
         AddQuad(new Float3(1, 1, 1));
-        int Targets() => FeatureShape.SceneTargetCount(_renderer.Frame.Camera(1)!.Shape!.Shape.Targets);
+        int Targets() => ViewGraph.SceneTargetCount(_renderer.Frame.Camera(1)!.ShapeKey.Targets);
         Frame(View());
         Assert.Equal(1, Targets());
 
@@ -1542,14 +1542,13 @@ public sealed class FeatureTests : IDisposable
     }
 
     [Fact]
-    public void InvalidatingAFeature_RebuildsWhatItDeclares()
+    public void TogglingAFeature_ChangesWhatItDeclares()
     {
         AddQuad(new Float3(0.25f, 0.5f, 1));
         Toggle toggle = new(Program("void main() { outColor = vec4(1.0 - Graphite_SampleSource(vUV).rgb, 1.0); }"));
         _world.Features.Add(toggle);
         AssertAll(new Float3(0.25f, 0.5f, 1), Frame(View()));
         toggle.On = true;
-        toggle.Invalidate();
         AssertAll(new Float3(0.75f, 0.5f, 0), Frame(View()));
     }
 
@@ -1637,7 +1636,7 @@ public sealed class FeatureTests : IDisposable
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
             builder.ReadColor();
-            _total = builder.History("Total", GraphTextureDesc.InstanceSized(PixelFormat.R16_G16_B16_A16_Float));
+            _total = builder.History("Total", view.Texture(PixelFormat.R16_G16_B16_A16_Float));
             builder.Publish("Total", _total);
         }
 
@@ -1804,11 +1803,11 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0.25f, 0.5f, 0), Frame(View()));
     }
 
-    // Declares a read of a texture nothing writes, which the graph refuses after its Setup returns
+    // Declares a read of a texture that is not in the frame, which the graph refuses
     private sealed class BreaksTheGraph : RenderFeature
     {
         public override RenderSlot Slot => RenderSlot.HdrPost;
-        public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.Graph.DeclareInputTexture(RenderResourceID.Intern("Nothing writes this"));
+        public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.Graph.Read(default(TextureHandle));
         public override void Render(FeatureContext context) { }
     }
 
@@ -1836,7 +1835,7 @@ public sealed class FeatureTests : IDisposable
         public override bool IsActive(in FeatureView view) => On;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
-            => builder.Publish("Inverted", builder.Temporary("Copy", GraphTextureDesc.InstanceSized(PixelFormat.R16_G16_B16_A16_Float)));
+            => builder.Publish("Inverted", builder.Temporary("Copy", view.Texture(PixelFormat.R16_G16_B16_A16_Float)));
 
         public override void Render(FeatureContext context) { }
     }

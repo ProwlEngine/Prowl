@@ -1552,7 +1552,7 @@ public sealed class LightingTests : IDisposable
 
         public override void Setup(FrameBuilder builder)
         {
-            _count = builder.Graph.DeclareOutputBuffer("Test.IndirectCount", GraphBufferDesc.Structured(4, 4), usage: BufferAccess.TransferWrite);
+            _count = builder.Buffer(RenderResourceID.Intern("Test.IndirectCount"), GraphBufferDesc.Structured(4, 4), usage: BufferAccess.TransferWrite);
             builder.Export(_count);
         }
 

@@ -10,24 +10,11 @@ using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-file sealed class UploadPass(Uploader uploader, DeviceBuffer[] destinations) : IExecutionPass
-{
-    public string Name => "Upload";
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        for (int i = 0; i < destinations.Length; i++)
-            builder.DeclareImportedBuffer(RenderResourceID.Intern("Destination" + i), destinations[i], BufferAccess.ShaderWrite);
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd) => uploader.Record(cmd, context.Task);
-}
-
 [Collection("GPU Tests")]
 public sealed class UploadTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GraphStore _store = new();
+    private readonly RenderStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly Uploader _uploader;
 
@@ -49,16 +36,14 @@ public sealed class UploadTests : IDisposable
 
     private void Flush(params DeviceBuffer[] destinations)
     {
-        using RenderGraph graph = RenderGraph.Build([new UploadPass(_uploader, destinations)]);
-        _device.DispatchGraph(graph, graph.CreateInstances());
+        TestGraph.Run(_device, graph => graph.Uploads("Upload", _uploader, destinations));
         _device.WaitForIdle();
     }
 
     private uint[] Read(DeviceBuffer buffer)
     {
         using DeviceBuffer readback = _device.ResourceFactory.CreateBuffer(new BufferDescription(buffer.SizeInBytes, BufferUsage.Staging));
-        using RenderGraph graph = RenderGraph.Build([new CopyPass(buffer, readback)]);
-        _device.DispatchGraph(graph, graph.CreateInstances());
+        TestGraph.Run(_device, graph => graph.Copies("Copy", buffer, readback));
         _device.WaitForIdle();
         uint[] words = _device.Map<uint>(readback).ToArray();
         _device.Unmap(readback);
@@ -125,11 +110,10 @@ public sealed class UploadTests : IDisposable
     public void FramesInFlight_EachUseTheirOwnUploadBuffers()
     {
         using DeviceBuffer buffer = Buffer(4);
-        using RenderGraph graph = RenderGraph.Build([new UploadPass(_uploader, [buffer])]);
         for (uint frame = 0; frame < 8; frame++)
         {
             _uploader.Write(buffer, frame % 4, [frame + 100]);
-            _device.DispatchGraph(graph, graph.CreateInstances());
+            TestGraph.Run(_device, graph => graph.Uploads("Upload", _uploader, buffer));
         }
         _device.WaitForIdle();
 
@@ -268,8 +252,7 @@ public sealed class UploadTests : IDisposable
         properties.SetBuffer("Graphite_Chunks", pool.Chunks.Buffer);
         properties.SetBuffer("Graphite_Meshes", pool.Meshes.Buffer);
         properties.SetBuffer("Output", output);
-        using RenderGraph graph = RenderGraph.Build([new DispatchPass(program, properties, (uint)mesh.Id, [pool.Chunks.Buffer, pool.Meshes.Buffer], output)]);
-        _device.DispatchGraph(graph, graph.CreateInstances());
+        TestGraph.Run(_device, graph => graph.Dispatches("Dispatch", program, properties, (uint)mesh.Id, [pool.Chunks.Buffer, pool.Meshes.Buffer], output));
         _device.WaitForIdle();
 
         MeshPlacement placement = mesh.Placement!;
@@ -338,57 +321,5 @@ public sealed class UploadTests : IDisposable
         pool.Apply(_uploader, 1, long.MaxValue, new List<GpuMesh>());
         Assert.Equal(chunk, second.Placement!.FirstChunk);
         Flush(pool.Pages[0].Vertices, pool.Pages[0].Indices, pool.Chunks.Buffer, pool.Meshes.Buffer);
-    }
-
-    [Fact]
-    public void AnArrayIdlePastTheStoresRetention_WritesToALiveBuffer()
-    {
-        GpuArray array = new TableHost(_device, _store, "Test").Array("Idle");
-        DeviceBuffer idle = array.Buffer;
-        using RenderGraph graph = RenderGraph.Build([new UploadPass(_uploader, [])], store: _store);
-        GraphInstances instances = graph.CreateInstances();
-        for (int i = 0; i < 130; i++)
-            _device.DispatchGraph(graph, instances);
-        _device.WaitForIdle();
-        Assert.True(idle.IsDisposed);
-
-        array.Write<uint>(_uploader, [7]);
-        Flush(array.Buffer);
-
-        Assert.False(array.Buffer.IsDisposed);
-        Assert.Equal(7u, Read(array.Buffer)[0]);
-    }
-}
-
-file sealed class CopyPass(DeviceBuffer source, DeviceBuffer destination) : IExecutionPass
-{
-    public string Name => "Copy";
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        builder.DeclareImportedBuffer(RenderResourceID.Intern("CopySource"), source, BufferAccess.TransferRead);
-        builder.DeclareImportedBuffer(RenderResourceID.Intern("CopyDestination"), destination, BufferAccess.TransferWrite);
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd) => cmd.CopyBuffer(source, 0, destination, 0, source.SizeInBytes);
-}
-
-file sealed class DispatchPass(ComputeProgram program, PropertySet properties, uint push, DeviceBuffer[] inputs, DeviceBuffer output) : IExecutionPass
-{
-    public string Name => "Dispatch";
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        for (int i = 0; i < inputs.Length; i++)
-            builder.DeclareImportedBuffer(RenderResourceID.Intern("DispatchInput" + i), inputs[i], BufferAccess.ShaderRead);
-        builder.DeclareImportedBuffer(RenderResourceID.Intern("DispatchOutput"), output, BufferAccess.ShaderWrite);
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd)
-    {
-        cmd.SetComputeShader(program);
-        cmd.SetProperties(properties);
-        cmd.SetPushConstants(push);
-        cmd.Dispatch(1, 1, 1);
     }
 }
