@@ -122,7 +122,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
             TextureHandle preview = _graph.Import((_preview ?? _defaultTexture).Texture);
             TextureHandle target = _graph.ImportTarget(_device.MainSwapchain.Framebuffer, PixelFormat.D24_UNorm_S8_UInt);
             TextureHandle scene = _graph.Create(SceneSlot, GraphTextureDesc.Sized(_fbWidth, _fbHeight, TargetFormat));
-            _scenePass.Add(_graph, preview, scene);
+            scene = _scenePass.Add(_graph, preview, scene);
             _presentPass.Add(_graph, scene, target);
         }
 
@@ -190,12 +190,16 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
             _drawCalls = drawCalls;
         }
 
-        public void Add(FrameGraph graph, TextureHandle preview, TextureHandle scene)
-            => graph.AddPass("Scene", pass =>
+        public TextureHandle Add(FrameGraph graph, TextureHandle preview, TextureHandle scene)
+        {
+            TextureHandle written = default;
+            graph.AddPass("Scene", pass =>
             {
                 pass.Read(preview);
-                return pass.Write(scene);
+                return written = pass.Write(scene);
             }, Render);
+            return written;
+        }
 
         private void Render(PassContext context, TextureHandle sceneHandle)
         {
