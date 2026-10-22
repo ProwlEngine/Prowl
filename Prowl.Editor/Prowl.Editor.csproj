@@ -49,7 +49,7 @@
     <!-- <ProjectReference Include="..\..\Anthology\Unwrapper\Unwrapper\Unwrapper.csproj" /> -->
     <PackageReference Include="Prowl.Origami" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Origami.CSharp" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Origami.Graphite" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Origami.Graphite" Version="$(GraphitePackageVersion)" />
     <PackageReference Include="Prowl.Photonic" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Rosetta" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />

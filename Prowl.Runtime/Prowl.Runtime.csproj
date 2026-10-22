@@ -46,10 +46,10 @@
     <!-- <ProjectReference Include="..\..\Anthology\Graphite\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Graphite\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Graphite\Rendering\Prowl.Graphite.Rendering.csproj" /> -->
-    <PackageReference Include="Prowl.Graphite" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Graphite.ShaderDef.Compiler" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Graphite.Rendering" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Graphite" Version="$(GraphitePackageVersion)" />
+    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="$(GraphitePackageVersion)" />
+    <PackageReference Include="Prowl.Graphite.ShaderDef.Compiler" Version="$(GraphitePackageVersion)" />
+    <PackageReference Include="Prowl.Graphite.Rendering" Version="$(GraphitePackageVersion)" />
 
     <PackageReference Include="Jitter2" Version="2.10.0" />
     <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.23.0" />
