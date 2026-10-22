@@ -24,21 +24,28 @@ jobs:
             9.0.x
             10.0.x
 
+      # Releases leave out every sample project and all of Graphite. Origami.Graphite and its tests go too,
+      # since they build on Graphite.
+      - name: Trim solution
+        run: |
+          cp Anthology.slnx Publish.slnx
+          excluded=$(dotnet sln Publish.slnx list | tr '\\' '/' | grep -Ei '^Graphite/|^Origami/Graphite|(^|/)Samples?/|Sample[^/]*\.csproj$')
+          echo "Leaving out:"
+          echo "$excluded"
+          dotnet sln Publish.slnx remove $excluded
+
       - name: Restore
-        run: dotnet restore Anthology.slnx
+        run: dotnet restore Publish.slnx
 
       - name: Build
-        run: dotnet build Anthology.slnx -c Release --no-restore
+        run: dotnet build Publish.slnx -c Release --no-restore
 
-      # Some suites need hardware CI lacks (they pass locally with it), so they're excluded:
-      # Clay (uncommitted model assets), Slang (native binaries fetched after this step), and all
-      # Graphite tests - Prowl.Graphite.Tests, Prowl.Graphite.ShaderDef.Tests and
-      # Prowl.Graphite.ShaderDef.Compiler.Tests (GPU backends / Slang native on a headless runner).
-      # Matching is substring-on-FullyQualifiedName (the test namespace, NOT the .csproj/dll name):
-      # "Prowl.Graphite" covers every Graphite suite, and Slang's namespace is "Prowl.Slang.Test"
-      # (singular) even though its project is Prowl.Slang.Tests. Everything else gates the release.
+      # Some suites need things CI lacks (they pass locally), so they're excluded: Clay (uncommitted model
+      # assets) and Slang (native binaries fetched after this step). Matching is substring on
+      # FullyQualifiedName (the test namespace, not the .csproj name): Slang's namespace is
+      # "Prowl.Slang.Test" (singular) even though its project is Prowl.Slang.Tests. Everything else gates the release.
       - name: Test
-        run: dotnet test Anthology.slnx -c Release --no-build --filter "FullyQualifiedName!~Prowl.Clay.Tests&FullyQualifiedName!~Prowl.Slang.Test&FullyQualifiedName!~Prowl.Graphite"
+        run: dotnet test Publish.slnx -c Release --no-build --filter "FullyQualifiedName!~Prowl.Clay.Tests&FullyQualifiedName!~Prowl.Slang.Test"
 
       # Slang's native binaries are not committed; fetch them so they pack into runtimes/.
       - name: Fetch Slang native binaries
@@ -46,7 +53,7 @@ jobs:
         run: dotnet run UpdateSources.cs
 
       - name: Pack
-        run: dotnet pack Anthology.slnx -c Release --no-build -o artifacts/nuget
+        run: dotnet pack Publish.slnx -c Release --no-build -o artifacts/nuget
 
       - name: NuGet auth (trusted publishing)
         uses: NuGet/login@v1
