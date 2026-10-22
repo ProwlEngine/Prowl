@@ -60,7 +60,10 @@ internal sealed class FrameModel
 
                 DeepPass? deepPass = deepInstance?.Passes.FirstOrDefault(p => p.Index == pass.Index);
                 if (deepPass != null && model.Index != null)
+                {
                     ExpandCommands(passNode, deepPass, model.Index);
+                    passNode.Idle = IsIdle(deepPass);
+                }
             }
         }
 
@@ -81,6 +84,10 @@ internal sealed class FrameModel
         Register(model.ById, root);
         return model;
     }
+
+    // A pass that runs no draw, dispatch or copy and clears nothing, such as a disabled feature
+    private static bool IsIdle(DeepPass pass)
+        => !pass.Commands.Any(c => ReplayEvents.IsEvent(c) || c is SetFramebufferCommand fb && (fb.Colors.Length > 0 && fb.Ops.Color.Load == LoadAction.Clear || fb.Ops.Depth.Load == LoadAction.Clear));
 
     private static void ExpandCommands(ProfileNode passNode, DeepPass pass, DeepIndex index)
     {
@@ -104,11 +111,16 @@ internal sealed class FrameModel
                         above.Add(scope);
                     }
                     RecordedProgram? recorded = index.Program(pipeline.Program);
+                    if (program != null && program.Parent == scope && program.Program?.Key == recorded?.Key)
+                    {
+                        program.Pipeline = pipeline;
+                        break;
+                    }
                     program = scope.Add(new ProfileNode
                     {
                         Id = $"{passNode.Id}s{programCount++}",
                         Kind = NodeKind.Program,
-                        Name = recorded?.Name ?? $"Program {pipeline.Program}",
+                        Name = string.IsNullOrEmpty(recorded?.Name) ? $"Program {pipeline.Program}" : recorded.Name,
                         Program = recorded,
                         Pipeline = pipeline,
                         CommandIndex = i,
@@ -151,7 +163,7 @@ internal sealed class FrameModel
                     int sub = owner.Children.Count(c => c.Kind == NodeKind.Draw);
                     string name = dispatch ? $"Dispatch {sub}"
                         : owner.Kind == NodeKind.Marker ? $"Draw {sub} / SubMesh {sub}"
-                        : $"Draw {sub} / {boundMesh}";
+                        : boundMesh.Length > 0 ? $"Draw {sub} / {boundMesh}" : $"Draw {sub}";
                     owner.Add(new ProfileNode
                     {
                         Id = $"{passNode.Id}d{drawEvent}",

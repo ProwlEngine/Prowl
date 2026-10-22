@@ -565,8 +565,8 @@ internal sealed partial class ProfilerView
             IsLeaf = !kids,
             DefaultExpanded = DefaultOpen(node.Kind),
             IconDraw = KindSquare,
-            IconColor = Style.KindDot(node.Kind),
-            Badge = node.IsTimed ? Style.F(node.Milliseconds, "0.000") : NodeStat(node),
+            IconColor = node.Idle ? Style.InkDim : Style.KindDot(node.Kind),
+            Badge = node.Idle ? "idle" : node.IsTimed ? Style.F(node.Milliseconds, "0.000") : NodeStat(node),
             UserData = node,
         });
         foreach (ProfileNode child in node.Children)

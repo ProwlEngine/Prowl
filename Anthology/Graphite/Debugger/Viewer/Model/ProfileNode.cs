@@ -34,6 +34,8 @@ internal sealed class ProfileNode
     public RecordedProgram? Program;
     public SetPipelineCommand? Pipeline;
 
+    public bool Idle;
+
     public int CommandIndex = -1;
     public int DrawOrdinal = -1;
     public int SubIndex;
