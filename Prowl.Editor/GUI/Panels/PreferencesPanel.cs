@@ -496,7 +496,24 @@ public class PreferencesPanel : DockPanel
         EditorGUI.SettingsSlider(paper, "pref_sp_dock", Loc.Get("pref.dock_spacing"), theme.DockSpacing, 0, 24, v => { theme.DockSpacing = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
         EditorGUI.SettingsSlider(paper, "pref_sp_tabh", Loc.Get("pref.tab_bar_height"), theme.TabBarHeight, 18, 40, v => { theme.TabBarHeight = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
         EditorGUI.SettingsSlider(paper, "pref_sp_tabp", Loc.Get("pref.tab_padding"), theme.TabPadding, 4, 24, v => { theme.TabPadding = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
-        EditorGUI.SettingsSlider(paper, "pref_sp_scale", Loc.Get("pref.user_scale"), theme.UserScale, 0.5f, 2, v => { theme.UserScale = v; s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsRow(paper, "pref_sp_scale", Loc.Get("pref.user_scale"), () =>
+            Origami.Slider(paper, "pref_sp_scale_v", theme.UserScale, v =>
+                {
+                    theme.UserScale = MathF.Round(v, 2);
+                    if (!_scaleDragging) ApplyUserScale(s);
+                }, 0.5f, 2f)
+                .OnDragStart(() => _scaleDragging = true)
+                .OnDragEnd(() => { _scaleDragging = false; ApplyUserScale(s); })
+                .Format("F2").Show(), separator: false, compact: true);
+    }
+
+    // Scaling while dragging would move the slider out from under the cursor, so the scale applies on release.
+    private bool _scaleDragging;
+
+    private static void ApplyUserScale(EditorSettings s)
+    {
+        s.ApplyTheme();
+        s.Save();
     }
 
     // ---- Effects ----
