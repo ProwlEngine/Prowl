@@ -249,8 +249,8 @@ public sealed class ScriptEditorPreferences : EditorPreferences
         editor.FindRegex = FindRegex;
     }
 
-    /// <summary>Copies these values onto a code editor's options.</summary>
-    public void ApplyTo(CodeEditorOptions options)
+    /// <summary>Sets the code font and its bold and italic faces, following the editor's mono font when none is picked.</summary>
+    public void ApplyFonts(CodeEditorOptions options)
     {
         if (Font.Length > 0 && EditorApplication.Instance is { } app)
         {
@@ -267,6 +267,12 @@ public sealed class ScriptEditorPreferences : EditorPreferences
             options.ItalicFont = EditorTheme.FontMonoItalic;
             options.BoldItalicFont = EditorTheme.FontMonoBoldItalic;
         }
+    }
+
+    /// <summary>Copies these values onto a code editor's options.</summary>
+    public void ApplyTo(CodeEditorOptions options)
+    {
+        ApplyFonts(options);
         options.FontSize = FontSize;
         options.LineHeight = LineHeight;
         options.TabSize = TabSize;
@@ -567,6 +573,9 @@ public class ScriptEditorWindow : DockPanel
             // Keyed per tab so each script keeps its own scroll, caret and popups while tabs switch and files get renamed.
             active.Editor.Colors = CodeColorSchemes.Palette(Preferences.Get<ScriptEditorPreferences>().ColorScheme, EditorTheme.OrigamiTheme);
             active.Editor.Options.Keymap = Keymap();
+            // The editor's mono font can change from the Theme tab at any time.
+            ScriptEditorPreferences prefs = Preferences.Get<ScriptEditorPreferences>();
+            if (prefs.Font.Length == 0) prefs.ApplyFonts(active.Editor.Options);
             Origami.CodeEditor(paper, "se_code_" + active.Id, active.Editor)
                 .Size(width, Math.Max(0, height - tabsH - toolbarH)).Show();
             RememberEditorState(active.Editor);
