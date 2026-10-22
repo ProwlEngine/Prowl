@@ -239,6 +239,7 @@ public static partial class Networking
 
         RegisterEngineMessage(session, EngineMessage.StaticRpcToHost, OnStaticRpcToHost);
         RegisterEngineMessage(session, EngineMessage.StaticRpcFromHost, OnStaticRpcFromHost);
+        RegisterEngineMessage(session, EngineMessage.Orphaned, OnOrphaned);
 
         session.Ended += (reason, message) =>
         {
@@ -305,6 +306,7 @@ public static partial class Networking
         SceneReady,
         SceneActivate,
         StaticRpcToHost,
-        StaticRpcFromHost
+        StaticRpcFromHost,
+        Orphaned
     }
 }

@@ -175,10 +175,11 @@ public static partial class Networking
             {
                 Guid id = reader.ReadGuid();
                 int owner = (int)reader.ReadVarUInt32() - 1;
-                NetworkOrphaned orphaned = (NetworkOrphaned)reader.ReadByte();
+                NetworkOrphaned orphaned = ReadOrphaned(ref reader);
                 uint generation = reader.ReadUInt32();
                 if (FindByIdentifier(id) is GameObject go)
                 {
+                    go.ApplyNetworkOrphaned(orphaned);
                     s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned, Generation = generation });
                     ControlChanged(go);
                 }

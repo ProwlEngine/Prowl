@@ -116,6 +116,16 @@ inside `OnNetworkDespawn`. Starting another session from a teardown callback is 
 that startup for the next frame. Preserved scene objects keep
 membership when they survive a host scene change.
 
+When assigning ownership through `NetworkSpawn(owner)` or `SetNetworkOwner(owner)`, use a peer from
+`Networking.Session`. Peers from another session/context, or peers that already disconnected, are
+rejected before ownership or spawn settings change. `null` clears ownership and leaves simulation to
+the host.
+
+`GameObject.NetworkOrphaned` configures disconnect handling before spawning. Once spawned, the host
+can change it at runtime: the active policy and connected clients update reliably, and late joiners
+receive the latest policy. Clients cannot override a spawned root's policy locally. `Destroy` removes
+the object when its owner leaves; `ClearOwner` keeps it and returns simulation to the host.
+
 ## Loading and readiness
 
 `Networking.IsActive` means the session admitted this peer. Use `Networking.JoinState` for connection,

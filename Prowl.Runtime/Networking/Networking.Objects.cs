@@ -139,12 +139,15 @@ public static partial class Networking
     /// </summary>
     internal static void Spawn(GameObject go, NetPeer? owner, NetworkOrphaned orphaned)
     {
+        if (!Enum.IsDefined(orphaned)) throw new ArgumentOutOfRangeException(nameof(orphaned));
         if (IsActive)
         {
             if (!IsHost)
             {
                 throw new InvalidOperationException("Only the host can spawn networked objects.");
             }
+
+            ValidateOwner(owner);
 
             if (FindEntry(go) is { TearingDown: true })
             {
@@ -181,7 +184,6 @@ public static partial class Networking
         using FrameStatScope stats = FrameStats.Network.Scope();
         if (s_entries.TryGetValue(go.Identifier, out NetworkEntry? existing) && existing.GameObject == go)
         {
-            existing.Orphaned = orphaned;
             ChangeOwner(existing, owner?.Id ?? NoOwner);
             return;
         }
@@ -236,7 +238,7 @@ public static partial class Networking
         Guid id = reader.ReadGuid();
         Guid parentId = reader.ReadGuid();
         int owner = (int)reader.ReadVarUInt32() - 1;
-        NetworkOrphaned orphaned = (NetworkOrphaned)reader.ReadByte();
+        NetworkOrphaned orphaned = ReadOrphaned(ref reader);
         uint generation = reader.ReadUInt32();
         EchoObject echo = Decompress(reader.ReadBytesWithLength());
 
@@ -274,6 +276,7 @@ public static partial class Networking
         }
 
         NetworkEntry entry = new(go) { Owner = owner, Orphaned = orphaned, Generation = generation };
+        go.ApplyNetworkOrphaned(orphaned);
         s_entries.Add(entry);
         ControlChanged(go);
         if (FindByIdentifier(parentId) is GameObject parent)
@@ -340,6 +343,8 @@ public static partial class Networking
             throw new InvalidOperationException("Only the host can change who owns a networked object.");
         }
 
+        ValidateOwner(owner);
+
         if (!s_entries.TryGetValue(go.Identifier, out NetworkEntry? entry) || entry.GameObject != go || entry.TearingDown)
         {
             throw new InvalidOperationException($"'{go.Name}' is not a spawned networked object.");
@@ -347,6 +352,47 @@ public static partial class Networking
 
         using FrameStatScope stats = FrameStats.Network.Scope();
         ChangeOwner(entry, owner?.Id ?? NoOwner);
+    }
+
+    private static void ValidateOwner(NetPeer? owner)
+    {
+        if (owner != null && (!Session!.TryGetPeer(owner.Id, out NetPeer? current) || !ReferenceEquals(current, owner)))
+            throw new ArgumentException("The owner must be a peer from the current session.", nameof(owner));
+    }
+
+    internal static void SetOrphaned(GameObject go, NetworkOrphaned orphaned)
+    {
+        if (!IsActive || FindEntry(go) is not { TearingDown: false } entry || entry.GameObject != go) return;
+        if (!IsHost) throw new InvalidOperationException("Only the host can change a spawned object's orphaned policy.");
+
+        entry.Orphaned = orphaned;
+        using NetWriter message = new();
+        message.WriteGuid(go.Identifier);
+        message.WriteUInt32(entry.Generation);
+        message.WriteByte((byte)orphaned);
+        BroadcastEngine(EngineMessage.Orphaned, message.WrittenSpan);
+    }
+
+    private static NetworkOrphaned ReadOrphaned(ref NetReader reader)
+    {
+        NetworkOrphaned orphaned = (NetworkOrphaned)reader.ReadByte();
+        if (!Enum.IsDefined(orphaned)) throw new InvalidDataException("Invalid network orphaned policy.");
+        return orphaned;
+    }
+
+    private static void OnOrphaned(NetPeer sender, ref NetReader reader, Delivery delivery)
+    {
+        if (IsHost || !sender.IsHost) return;
+        Guid id = reader.ReadGuid();
+        uint generation = reader.ReadUInt32();
+        NetworkOrphaned orphaned = ReadOrphaned(ref reader);
+        if (!reader.IsAtEnd || delivery != Delivery.Reliable)
+            throw new InvalidDataException("Invalid orphaned policy message.");
+        if (s_entries.TryGetValue(id, out NetworkEntry? entry) && entry.Generation == generation)
+        {
+            entry.Orphaned = orphaned;
+            entry.GameObject.ApplyNetworkOrphaned(orphaned);
+        }
     }
 
     private static void ChangeOwner(NetworkEntry entry, int owner)

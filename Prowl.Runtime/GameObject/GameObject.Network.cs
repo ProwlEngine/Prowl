@@ -11,6 +11,7 @@ namespace Prowl.Runtime;
 public partial class GameObject
 {
     private NetworkMode _networkMode = NetworkMode.Snapshot;
+    private NetworkOrphaned _networkOrphaned = NetworkOrphaned.Destroy;
 
     /// <summary>
     /// How this object takes part in a networked session. Has no effect when there is no session, so
@@ -27,8 +28,21 @@ public partial class GameObject
         }
     }
 
-    /// <summary>For a <see cref="NetworkMode.Object"/>: what happens to it when the peer that owns it leaves.</summary>
-    public NetworkOrphaned NetworkOrphaned { get; set; } = NetworkOrphaned.Destroy;
+    /// <summary>For a <see cref="NetworkMode.Object"/>: what happens to it when the peer that owns it leaves.
+    /// Before spawning this configures the object; after spawning only the host can change it, and clients receive the new policy.</summary>
+    public NetworkOrphaned NetworkOrphaned
+    {
+        get => _networkOrphaned;
+        set
+        {
+            if (!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value));
+            if (value == _networkOrphaned) return;
+            Networking.Networking.SetOrphaned(this, value);
+            _networkOrphaned = value;
+        }
+    }
+
+    internal void ApplyNetworkOrphaned(NetworkOrphaned value) => _networkOrphaned = value;
 
     /// <summary>
     /// For a <see cref="NetworkMode.Object"/>: whether whoever controls it sends its position, rotation and
@@ -64,11 +78,13 @@ public partial class GameObject
     /// <exception cref="InvalidOperationException">
     /// This is a client (only the host spawns objects), or the object can't be networked here. Nothing is changed then.
     /// </exception>
+    /// <exception cref="ArgumentException">In an active session, the owner is not a peer from that session.</exception>
     public void NetworkSpawn(NetPeer? owner = null, NetworkOrphaned? orphaned = null) =>
         Networking.Networking.Spawn(this, owner, orphaned ?? NetworkOrphaned);
 
     /// <summary>Host: hands control of this networked object to another peer, or back to the host with null.</summary>
     /// <exception cref="InvalidOperationException">This is a client, or the object was not spawned.</exception>
+    /// <exception cref="ArgumentException">The owner is not a peer from the current session.</exception>
     public void SetNetworkOwner(NetPeer? owner) => Networking.Networking.SetOwner(this, owner);
 
     /// <summary>True if this object, or anything above it, is <see cref="NetworkMode.Never"/>.</summary>
