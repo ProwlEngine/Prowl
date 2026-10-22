@@ -212,6 +212,39 @@ RPCs. They do not capture Sync values or transforms; pass the data the method ne
 Readiness guards apply to static calls too. Receivers resolve only generated descriptors, including
 methods they have never called locally; descriptor caches do not retain replaced script types.
 
+## RPC recipient filters
+
+Use synchronous scopes to narrow the normal recipients of component and static RPCs:
+
+```csharp
+using (Rpc.FilterExclude(peer => peer.Name == "Harry"))
+{
+    GlobalEvents.Announce("Hello everyone else");
+}
+
+using (Rpc.FilterInclude(peer => peer.Name == "Garry"))
+{
+    GlobalEvents.Announce("Hello Garry");
+}
+```
+
+Prowl peers expose `Name`, rather than `DisplayName`. Filters also govern local execution: excluding
+the local peer skips its RPC body. Nested scopes combine by intersection, so an inner include cannot
+restore a peer excluded by an outer scope. Disposing restores the previous scope, including when the
+body throws. Dispose in reverse order. Use these scopes on the main thread, without crossing an
+`await`; predicates run synchronously for each peer when a call is made and should have no side effects.
+
+Filters only narrow an RPC's declared destination. `Host` still runs only on the host, `Owner` only
+on the object's controller, and authorization/readiness checks still apply. A matching local-only
+broadcast runs locally without sending anything; an empty selection does nothing. With no active
+session, RPCs remain ordinary local calls and filters have no effect.
+
+A client evaluates its predicates against its current peer list and sends selected peer IDs with the
+call. The host validates the RPC and relays only to those peers, even when excluded from execution
+itself. Predicates are not serialized, and filters active on the receiving host do not alter an incoming
+call's recipients. The host still receives routed arguments and dependent state to validate and relay
+it. Filters do not limit ordinary Sync/transform replication or provide private-state visibility.
+
 ## Runtime structure
 
 Build component trees before `NetworkSpawn`. Whole network roots can be spawned and destroyed by the

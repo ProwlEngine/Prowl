@@ -44,12 +44,12 @@ public static partial class Networking
             return false;
         }
 
-        if (mode == RpcMode.Host && IsHost)
+        if (mode == RpcMode.Host && IsHost && !Rpc.HasFilters)
         {
             return false;
         }
 
-        if (mode == RpcMode.Owner && HasControl(component.GameObject) && (IsHost || IsReady))
+        if (mode == RpcMode.Owner && HasControl(component.GameObject) && (IsHost || IsReady) && !Rpc.HasFilters)
         {
             return false;
         }
@@ -82,6 +82,15 @@ public static partial class Networking
             return false;
         }
 
+        RpcRecipients? recipients = Rpc.CaptureRecipients(session);
+        bool localIncluded = RpcRecipients.Includes(recipients, session.LocalPeer!);
+        if (recipients != null && recipients.Ids.Count == (localIncluded ? 1 : 0) && mode == RpcMode.Broadcast)
+            return localIncluded;
+        if ((mode == RpcMode.Host && IsHost) || (mode == RpcMode.Owner && HasControl(component.GameObject)))
+            return localIncluded;
+        if (mode == RpcMode.Host && !RpcRecipients.Includes(recipients, session.HostPeer!)) return false;
+        if (mode == RpcMode.Owner && !RpcRecipients.Includes(recipients, GetOwner(component.GameObject) ?? session.HostPeer!)) return false;
+
         using NetWriter states = new();
         WriteRpcStates(component, states);
         using NetWriter envelope = new(writer.Length + 128);
@@ -93,10 +102,11 @@ public static partial class Networking
 
         if (!IsHost)
         {
+            RpcRecipients.Write(envelope, recipients);
             SendEngine(session.HostPeer!, EngineMessage.RpcToHost, envelope.WrittenSpan, delivery);
             TraceMember("RPC", "Send", session.HostPeer, component, id, true, $"{mode}, {delivery}",
                 writer.WrittenSpan);
-            return mode == RpcMode.Broadcast;
+            return mode == RpcMode.Broadcast && localIncluded;
         }
 
         using NetWriter message = new(writer.Length + 8);
@@ -107,12 +117,12 @@ public static partial class Networking
         switch (mode)
         {
             case RpcMode.Broadcast:
-                BroadcastEngine(EngineMessage.RpcFromHost, message.WrittenSpan, delivery);
-                return true;
+                SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients);
+                return localIncluded;
 
             case RpcMode.Owner:
                 // The prologue only sends when another peer controls it.
-                if (GetOwner(component.GameObject) is { } owner)
+                if (GetOwner(component.GameObject) is { } owner && RpcRecipients.Includes(recipients, owner))
                 {
                     SendEngine(owner, EngineMessage.RpcFromHost, message.WrittenSpan, delivery);
                 }
@@ -135,7 +145,7 @@ public static partial class Networking
         uint method = reader.ReadUInt32();
         ReadOnlySpan<byte> arguments = reader.ReadBytesWithLength();
         ReadOnlySpan<byte> states = reader.ReadBytesWithLength();
-        if (!reader.IsAtEnd) throw new InvalidDataException("RPC contains trailing bytes.");
+        RpcRecipients? recipients = RpcRecipients.Read(ref reader);
 
         if (FindByIdentifier(id) is not Component component || component.GameObject.IsNetworkExcluded
                                                             || NetworkMembers.Of(component).Rpc(method) is not { } rpc)
@@ -167,23 +177,23 @@ public static partial class Networking
         switch (mode)
         {
             case RpcMode.Broadcast:
-                Relay(component, sender, id, method, arguments, states, relayDelivery, null);
-                Invoke(component, rpc, arguments, sender);
+                Relay(component, sender, id, method, arguments, states, relayDelivery, null, recipients);
+                if (RpcRecipients.Includes(recipients, Session!.LocalPeer!)) Invoke(component, rpc, arguments, sender);
                 break;
 
             case RpcMode.Host:
-                Invoke(component, rpc, arguments, sender);
+                if (RpcRecipients.Includes(recipients, Session!.LocalPeer!)) Invoke(component, rpc, arguments, sender);
                 break;
 
             case RpcMode.Owner:
                 int owner = OwnerOf(component.GameObject);
                 if (owner == NoOwner)
                 {
-                    Invoke(component, rpc, arguments, sender);
+                    if (RpcRecipients.Includes(recipients, Session!.LocalPeer!)) Invoke(component, rpc, arguments, sender);
                 }
                 else if (owner != sender.Id && Session!.TryGetPeer(owner, out NetPeer? ownerPeer))
                 {
-                    Relay(component, sender, id, method, arguments, states, relayDelivery, ownerPeer);
+                    Relay(component, sender, id, method, arguments, states, relayDelivery, ownerPeer, recipients);
                 }
 
                 break;
@@ -191,7 +201,7 @@ public static partial class Networking
     }
 
     private static void Relay(Component component, NetPeer caller, Guid id, uint method, ReadOnlySpan<byte> arguments,
-        ReadOnlySpan<byte> capturedStates, Delivery delivery, NetPeer? to)
+        ReadOnlySpan<byte> capturedStates, Delivery delivery, NetPeer? to, RpcRecipients? recipients)
     {
         using NetWriter states = new();
         WriteRelayedRpcStates(component, capturedStates, states);
@@ -204,11 +214,11 @@ public static partial class Networking
 
         if (to != null)
         {
-            SendEngine(to, EngineMessage.RpcFromHost, message.WrittenSpan, delivery);
+            if (RpcRecipients.Includes(recipients, to)) SendEngine(to, EngineMessage.RpcFromHost, message.WrittenSpan, delivery);
         }
         else
         {
-            BroadcastEngine(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, caller);
+            SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients, caller);
         }
     }
 
@@ -286,5 +296,13 @@ public static partial class Networking
         {
             Debug.LogWarning($"[Network] An RPC on {component.GetType().Name} {problem}, so this call was dropped.");
         }
+    }
+
+    private static void SendRpcRecipients(EngineMessage kind, ReadOnlySpan<byte> payload, Delivery delivery,
+        RpcRecipients? recipients, NetPeer? except = null)
+    {
+        foreach (NetPeer peer in Session!.Peers)
+            if (!peer.IsLocal && peer != except && RpcRecipients.Includes(recipients, peer))
+                SendEngine(peer, kind, payload, delivery);
     }
 }

@@ -96,10 +96,12 @@ public class MultiplayerPlayTests : EditorTestHarness
             beaconType.GetProperty("Level")!.SetValue(beacon, 7);
             beaconObject.NetworkSpawn();
 
-            beaconType.GetMethod("Ping")!.Invoke(beacon, ["hello"]);
+            using (Rpc.FilterInclude(peer => peer.Name == "Bot"))
+                beaconType.GetMethod("Ping")!.Invoke(beacon, ["hello"]);
             Pump(() => logs.Contains("beacon hello level 7 from Host"), "the RPC to run on the instance", output, instance);
 
-            scripts.GetType("GlobalEvents")!.GetMethod("Announce")!.Invoke(null, ["hello"]);
+            using (Rpc.FilterInclude(peer => peer.Name == "Bot"))
+                scripts.GetType("GlobalEvents")!.GetMethod("Announce")!.Invoke(null, ["hello"]);
             Pump(() => logs.Contains("global hello from Host"), "the static RPC to run on the instance", output, instance);
 
             // Ending the session ends the instance.

@@ -19,7 +19,7 @@ public static partial class Networking
         writer = null!;
         if (s_incomingStatic == rpc || !IsActive) return false;
         MainThreadContext.AssertMainThread();
-        if (rpc.Mode == RpcMode.Host && IsHost) return false;
+        if (rpc.Mode == RpcMode.Host && IsHost && !Rpc.HasFilters) return false;
         writer = new NetWriter();
         return true;
     }
@@ -28,15 +28,26 @@ public static partial class Networking
     {
         if (!IsHost && (!IsReady || (rpc.Flags & RpcFlags.HostOnly) != 0)) return false;
 
+        NetSession session = Session!;
+        RpcRecipients? recipients = Rpc.CaptureRecipients(session);
+        bool localIncluded = RpcRecipients.Includes(recipients, session.LocalPeer!);
+        if (recipients != null && recipients.Ids.Count == (localIncluded ? 1 : 0) && rpc.Mode == RpcMode.Broadcast)
+            return localIncluded;
+        if (rpc.Mode == RpcMode.Host && IsHost) return localIncluded;
+        if (rpc.Mode == RpcMode.Host && !RpcRecipients.Includes(recipients, session.HostPeer!)) return false;
+
         using NetWriter message = new();
         if (IsHost) message.WriteVarUInt32((uint)Session!.LocalPeer!.Id);
         WriteStaticCall(message, rpc, arguments.WrittenSpan);
         Delivery delivery = StaticRpcDelivery(rpc);
         if (IsHost)
-            BroadcastEngine(EngineMessage.StaticRpcFromHost, message.WrittenSpan, delivery);
+            SendRpcRecipients(EngineMessage.StaticRpcFromHost, message.WrittenSpan, delivery, recipients);
         else
-            SendEngine(Session!.HostPeer!, EngineMessage.StaticRpcToHost, message.WrittenSpan, delivery);
-        return rpc.Mode == RpcMode.Broadcast;
+        {
+            RpcRecipients.Write(message, recipients);
+            SendEngine(session.HostPeer!, EngineMessage.StaticRpcToHost, message.WrittenSpan, delivery);
+        }
+        return rpc.Mode == RpcMode.Broadcast && localIncluded;
     }
 
     // Calls carry [declaring type + assembly simple name][method id][length-prefixed arguments].
@@ -53,7 +64,6 @@ public static partial class Networking
         string typeName = reader.ReadString(1024);
         uint method = reader.ReadUInt32();
         arguments = reader.ReadBytesWithLength();
-        if (!reader.IsAtEnd) throw new InvalidDataException("Static RPC contains trailing bytes.");
         return StaticRpcMember.Find(typeName, method);
     }
 
@@ -64,6 +74,7 @@ public static partial class Networking
     {
         if (!IsHost) return;
         StaticRpcMember? rpc = ReadStaticCall(ref reader, out ReadOnlySpan<byte> arguments);
+        RpcRecipients? recipients = RpcRecipients.Read(ref reader);
         if (rpc == null || (rpc.Flags & RpcFlags.HostOnly) != 0) return;
         rpc.ValidateArguments(arguments);
 
@@ -72,9 +83,9 @@ public static partial class Networking
             using NetWriter relay = new();
             relay.WriteVarUInt32((uint)sender.Id);
             WriteStaticCall(relay, rpc, arguments);
-            BroadcastEngine(EngineMessage.StaticRpcFromHost, relay.WrittenSpan, StaticRpcDelivery(rpc), sender);
+            SendRpcRecipients(EngineMessage.StaticRpcFromHost, relay.WrittenSpan, StaticRpcDelivery(rpc), recipients, sender);
         }
-        InvokeStatic(rpc, arguments, sender);
+        if (RpcRecipients.Includes(recipients, Session!.LocalPeer!)) InvokeStatic(rpc, arguments, sender);
     }
 
     private static void OnStaticRpcFromHost(NetPeer sender, ref NetReader reader, Delivery delivery)
@@ -82,6 +93,7 @@ public static partial class Networking
         if (IsHost || !sender.IsHost) return;
         int callerId = checked((int)reader.ReadVarUInt32());
         StaticRpcMember? rpc = ReadStaticCall(ref reader, out ReadOnlySpan<byte> arguments);
+        if (!reader.IsAtEnd) throw new InvalidDataException("Static RPC contains trailing bytes.");
         if (rpc == null || rpc.Mode != RpcMode.Broadcast || !Session!.TryGetPeer(callerId, out NetPeer? caller) ||
             ((rpc.Flags & RpcFlags.HostOnly) != 0 && !caller!.IsHost))
             return;

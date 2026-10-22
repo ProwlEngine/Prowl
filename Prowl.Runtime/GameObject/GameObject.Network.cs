@@ -102,13 +102,3 @@ public partial class GameObject
     [ThreadStatic]
     internal static bool WritingNetworkSnapshot;
 }
-
-/// <summary>What happens to a networked object when the peer that owns it leaves.</summary>
-public enum NetworkOrphaned : byte
-{
-    /// <summary>Destroy it everywhere.</summary>
-    Destroy,
-
-    /// <summary>Keep it, with the host in control.</summary>
-    ClearOwner,
-}

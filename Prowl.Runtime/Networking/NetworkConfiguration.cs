@@ -2,23 +2,8 @@ using System;
 
 using Prowl.Warp;
 using Prowl.Warp.Transports.Kcp;
-using Prowl.Warp.Transports.Local;
 
 namespace Prowl.Runtime.Networking;
-
-/// <summary>Where transport I/O runs. Session callbacks always run on the caller.</summary>
-public enum NetworkExecution
-{
-    Auto,
-    Inline,
-    DedicatedThread
-}
-
-public enum NetworkTransport
-{
-    Kcp,
-    Local
-}
 
 /// <summary>Serializable project defaults. Explicit transports and session options can override these per session.</summary>
 public sealed class NetworkConfiguration
@@ -170,67 +155,5 @@ public sealed class NetworkConfiguration
                 }
                 : null
         };
-    }
-}
-
-public static partial class Networking
-{
-    private static NetworkConfiguration s_configuration = new();
-    private static readonly LocalNetwork s_localNetwork = new();
-
-    /// <summary>A copy of the configured project defaults.</summary>
-    public static NetworkConfiguration Configuration => s_configuration.ValidatedCopy();
-
-    /// <summary>Applies replication timing now; transport and session options apply to subsequent sessions.</summary>
-    public static void Configure(NetworkConfiguration configuration)
-    {
-        ArgumentNullException.ThrowIfNull(configuration);
-        s_configuration = configuration.ValidatedCopy();
-        TickRate = s_configuration.TickRate;
-        InterpolationDelay = TimeSpan.FromMilliseconds(s_configuration.InterpolationMilliseconds);
-    }
-
-    /// <summary>Creates a transport using project defaults. Local transports share a network within this process only.</summary>
-    public static Transport CreateTransport(bool hosting)
-    {
-        if (s_configuration.Transport == NetworkTransport.Local)
-        {
-            return new LocalTransport(s_localNetwork,
-                hosting ? s_configuration.LocalAddress : Guid.NewGuid().ToString());
-        }
-
-        return new KcpTransport(s_configuration.CreateKcpOptions());
-    }
-
-    /// <summary>Hosts using the project's transport and session defaults.</summary>
-    public static NetSession Host(string name = "Host")
-    {
-        BeginSession();
-        Transport transport = CreateTransport(true);
-        try
-        {
-            return Host(transport, name);
-        }
-        catch
-        {
-            transport.Dispose();
-            throw;
-        }
-    }
-
-    /// <summary>Joins using the project's transport and session defaults. KCP addresses may include a port.</summary>
-    public static NetSession Join(string address, string name, ReadOnlySpan<byte> token = default)
-    {
-        BeginSession();
-        Transport transport = CreateTransport(false);
-        try
-        {
-            return Join(transport, address, name, token);
-        }
-        catch
-        {
-            transport.Dispose();
-            throw;
-        }
     }
 }

@@ -12,18 +12,6 @@ using Prowl.Warp;
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>The local player's progress towards gameplay, separate from Warp session admission.</summary>
-public enum NetworkJoinState
-{
-    Disconnected,
-    Connecting,
-    Joining,
-    WaitingForScene,
-    Loading,
-    Synchronizing,
-    Ready
-}
-
 public static partial class Networking
 {
     private static NetworkJoinState s_joinState;
