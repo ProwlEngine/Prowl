@@ -812,7 +812,7 @@ public class PhysicsTests : RuntimeTestBase
         Rigidbody3D b = AddDynamicBox(scene, new Float3(1, 0, 0), gravity: false);
 
         int errors = 0;
-        void Count(string message, DebugStackTrace? trace, LogSeverity severity) { if (severity == LogSeverity.Error) errors++; }
+        void Count(string message, DebugStackTrace? trace, LogSeverity severity) { if (severity is LogSeverity.Error or LogSeverity.Exception) errors++; }
         Debug.OnLog += Count;
         try { StepPhysics(scene, 3); }
         finally { Debug.OnLog -= Count; }
@@ -1187,7 +1187,7 @@ public class PhysicsTests : RuntimeTestBase
         CollisionRecorder upperRecorder = upper.GameObject.AddComponent<CollisionRecorder>();
 
         int errors = 0;
-        void Count(string message, DebugStackTrace? trace, LogSeverity severity) { if (severity == LogSeverity.Error) errors++; }
+        void Count(string message, DebugStackTrace? trace, LogSeverity severity) { if (severity is LogSeverity.Error or LogSeverity.Exception) errors++; }
         Debug.OnLog += Count;
         try { Tick(scene, 120); }
         finally { Debug.OnLog -= Count; }

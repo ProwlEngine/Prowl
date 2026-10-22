@@ -3,6 +3,7 @@
 
 using Jitter2;
 using Jitter2.Dynamics;
+using Jitter2.Dynamics.Constraints;
 using Jitter2.LinearMath;
 
 using Prowl.Echo;
@@ -134,7 +135,7 @@ public class UniversalJoint : PhysicsJoint
             : axis2.ToJitter();
 
         universalJoint = new Jitter2.Dynamics.Constraints.UniversalJoint(
-            world, body1, body2, worldAnchor, worldAxis1, worldAxis2, hasMotor);
+            world, body1, body2, worldAnchor, worldAxis1, worldAxis2, hasMotor ? JointDrive.Motor : JointDrive.None);
 
         joint = universalJoint;
 

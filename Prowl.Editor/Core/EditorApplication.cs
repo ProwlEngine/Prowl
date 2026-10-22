@@ -288,6 +288,7 @@ public class EditorApplication : Game
                 PromptSaveAs(SaveManager.TakeAfterSaveAs());
             return null;
         };
+        Runtime.Debug.OnLog += PauseOnLog;
         SaveManager.CollectUnsaved += unsaved =>
         {
             if (EditorSceneManager.IsDirty) unsaved.Add(EditorSceneManager.SaveLabel);
@@ -345,6 +346,9 @@ public class EditorApplication : Game
     /// <summary>The family name of the bundled UI font. Any other font name is a system font family or a font file path.</summary>
     public const string BundledFontName = "Geist";
 
+    /// <summary>The regular, bold, italic and bold italic faces of a monospace font.</summary>
+    public readonly record struct MonoFontFaces(Scribe.FontFile? Regular, Scribe.FontFile? Bold, Scribe.FontFile? Italic, Scribe.FontFile? BoldItalic);
+
     /// <summary>The family name of the bundled monospace font.</summary>
     public const string BundledMonoFontName = "JetBrains Mono";
 
@@ -375,24 +379,16 @@ public class EditorApplication : Game
 
         Scribe.FontFile? ui = FindFont(EditorTheme.DefaultFontName, BundledFontName, Scribe.FontStyle.Regular);
         Scribe.FontFile? bold = FindFont(EditorTheme.DefaultBoldFontName, BundledFontName, Scribe.FontStyle.Bold);
-        Scribe.FontFile? mono = FindFont(EditorTheme.MonoFontName, BundledMonoFontName, Scribe.FontStyle.Regular);
 
         EditorTheme.DefaultFont = ui ?? _geistRegular;
         EditorTheme.FontMedium = ui ?? _geistMedium;
         EditorTheme.DefaultBoldFont = bold ?? _geistBold;
         EditorTheme.FontSemiBold = bold ?? _geistSemiBold;
-        EditorTheme.FontMono = mono ?? _jetBrainsMono;
-        if (mono == null)
-        {
-            EditorTheme.FontMonoBold = _jetBrainsMonoMedium;
-            EditorTheme.FontMonoItalic = EditorTheme.FontMonoBoldItalic = null;
-        }
-        else
-        {
-            EditorTheme.FontMonoBold = FindFace(EditorTheme.MonoFontName, Scribe.FontStyle.Bold);
-            EditorTheme.FontMonoItalic = FindFace(EditorTheme.MonoFontName, Scribe.FontStyle.Italic);
-            EditorTheme.FontMonoBoldItalic = FindFace(EditorTheme.MonoFontName, Scribe.FontStyle.BoldItalic);
-        }
+        MonoFontFaces mono = MonoFaces(EditorTheme.MonoFontName);
+        EditorTheme.FontMono = mono.Regular;
+        EditorTheme.FontMonoBold = mono.Bold;
+        EditorTheme.FontMonoItalic = mono.Italic;
+        EditorTheme.FontMonoBoldItalic = mono.BoldItalic;
 
         _curDefaultFont = EditorTheme.DefaultFontName;
         _curDefaultBoldFont = EditorTheme.DefaultBoldFontName;
@@ -416,6 +412,14 @@ public class EditorApplication : Game
         }
         if (regular == null) Runtime.Debug.LogWarning($"Font '{family}' is not installed, using {bundled}.");
         return regular;
+    }
+
+    /// <summary>The faces of a monospace font setting: the bundled font, an installed family or a font file. Faces it does not have are null.</summary>
+    public MonoFontFaces MonoFaces(string name)
+    {
+        Scribe.FontFile? regular = FindFont(name, BundledMonoFontName, Scribe.FontStyle.Regular);
+        if (regular == null) return new(_jetBrainsMono, _jetBrainsMonoMedium, null, null);
+        return new(regular, FindFace(name, Scribe.FontStyle.Bold), FindFace(name, Scribe.FontStyle.Italic), FindFace(name, Scribe.FontStyle.BoldItalic));
     }
 
     // Only the exact face, so a family without it gets no stand in.
@@ -703,6 +707,15 @@ public class EditorApplication : Game
         GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime, showStarsAndComets: false);
 
         HandlePlayModeShortcuts();
+        if (s_pauseRequested)
+        {
+            s_pauseRequested = false;
+            if (Application.IsPlaying && !Application.IsPaused)
+            {
+                Application.IsPaused = true;
+                Toasts.Warning(Loc.Get("play.paused_on_error"), Loc.Get("play.paused_on_error_msg"));
+            }
+        }
         DrawHeader(paper, w, h);
 
         float pad = EditorTheme.DockPadding;
@@ -1854,6 +1867,18 @@ public class EditorApplication : Game
         Application.TargetFrameRate = limit;
     }
 
+    // Logs can come from any thread, so the pause itself waits for the next frame.
+    private static volatile bool s_pauseRequested;
+
+    private static void PauseOnLog(string message, DebugStackTrace? stackTrace, LogSeverity severity)
+    {
+        if (!Application.IsPlaying || Application.IsPaused) return;
+        PauseOnLog mode = Preferences.Get<PlayModePreferences>().PauseOn;
+        if (mode == GUI.Panels.PauseOnLog.ErrorsAndExceptions && severity is LogSeverity.Error or LogSeverity.Exception
+            || mode == GUI.Panels.PauseOnLog.ExceptionsOnly && severity == LogSeverity.Exception)
+            s_pauseRequested = true;
+    }
+
     private void EnterPlayMode()
     {
         if (Application.IsPlaying) return;
@@ -1868,6 +1893,11 @@ public class EditorApplication : Game
 
         Scene scene = Runtime.Resources.Scene.Current;
         if (scene == null) return;
+
+        PlayModePreferences prefs = Preferences.Get<PlayModePreferences>();
+        if (prefs.SaveSceneOnPlay && EditorSceneManager.IsDirty && EditorSceneManager.CurrentScenePath != null)
+            EditorSceneManager.Save();
+        if (prefs.ClearConsoleOnPlay) ConsolePanel.Clear();
 
         // Save active tab (to restore on stop)
         SaveActiveTab();
@@ -1925,14 +1955,15 @@ public class EditorApplication : Game
 
         // Load with full lifecycle (Enable -> OnEnable/Start will fire)
         Runtime.Resources.Scene.Load(playScene);
-        Undo.Clear();
+        if (prefs.KeepUndoHistory) Undo.ClearPending();
+        else Undo.Clear();
 
         // Apply physics settings to the new scene
         try { EditorRegistries.GetSettings<PhysicsSettings>().Apply(); } catch { }
 
-        // Focus the Game View tab
-        FocusPanel(typeof(GameViewPanel));
-        if (FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel { MaximizeOnPlay: true } gameView)
+        if (prefs.GameViewOnPlay != GameViewOnPlay.Nothing)
+            FocusPanel(typeof(GameViewPanel));
+        if (prefs.GameViewOnPlay == GameViewOnPlay.Maximize && FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel gameView)
             _maximizedForPlay = _panelMaximizer.Maximize(gameView);
 
         // The editor's vsync and frame limit are its preference, not the game's, so play starts
@@ -1976,7 +2007,8 @@ public class EditorApplication : Game
                 Runtime.Resources.Scene.EndSessionOnSwap = true;
                 Runtime.Resources.Scene.Load(restoredScene);
             }
-            Undo.Clear();
+            if (Preferences.Get<PlayModePreferences>().KeepUndoHistory) Undo.ClearPending();
+            else Undo.Clear();
             _savedEditorScene = null;
         }
 

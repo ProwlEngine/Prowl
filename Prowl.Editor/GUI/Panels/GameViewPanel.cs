@@ -24,6 +24,36 @@ using RuntimeEventSystem = Prowl.Runtime.UI.EventSystem;
 
 namespace Prowl.Editor.GUI.Panels;
 
+public enum GameViewOnPlay { Focus, Maximize, Nothing }
+public enum PauseOnLog { Off, ErrorsAndExceptions, ExceptionsOnly }
+public enum ScriptChangesDuringPlay { HotReload, StopPlaying, WaitUntilStopped }
+
+/// <summary>What entering, running and leaving play mode does in the editor.</summary>
+[EditorPreferences("Play Mode", EditorIcons.Play, order: 25)]
+public sealed class PlayModePreferences : EditorPreferences
+{
+    [Tooltip("Saves the open scene before play starts. An untitled scene is not saved.")]
+    public bool SaveSceneOnPlay;
+
+    [Tooltip("What the Game view does when play starts.")]
+    public GameViewOnPlay GameViewOnPlay = GameViewOnPlay.Focus;
+
+    public bool ClearConsoleOnPlay;
+    public bool ClearConsoleOnBuild;
+
+    [Tooltip("Pauses the game when it logs an error or exception.")]
+    public PauseOnLog PauseOn = PauseOnLog.Off;
+
+    [Tooltip("What happens when scripts change while the game is playing.")]
+    public ScriptChangesDuringPlay ScriptChanges = ScriptChangesDuringPlay.HotReload;
+
+    [Tooltip("Keeps edit mode undo history through play, instead of clearing it when play starts and stops.")]
+    public bool KeepUndoHistory;
+}
+
+/// <summary>How the game image is sized inside the Game view.</summary>
+public enum GameViewScale { Fit, PixelPerfect, Zoom }
+
 public class GameViewPanel : DockPanel
 {
     [MenuItem("Window/General/Game", priority: 1)]
@@ -38,9 +68,9 @@ public class GameViewPanel : DockPanel
     internal RenderTexture? RenderTarget => _rt;
     private int _resolutionIndex = -1; // read from the project on first use, see ResolutionIndex
     private bool _showStats;
-
-    /// <summary> Whether play mode fills the dock area with this view. Saved with the layout, and read at the next play. </summary>
-    internal bool MaximizeOnPlay { get; private set; }
+    private GameViewScale _scale = GameViewScale.Fit;
+    private float _zoom = 1f;
+    private static readonly float[] s_zooms = [0.25f, 0.5f, 1f, 1.5f, 2f, 3f, 4f];
 
     private RenderStats.Frame _gameStats; // snapshot from last game render (persists when paused)
     private Rect _displayAbsRect; // game-view rect in paper coords, cached for routing UI input next frame
@@ -52,7 +82,8 @@ public class GameViewPanel : DockPanel
     private readonly PanelLockContext _lockContext = new();
     private bool _lockContextPushed;
 
-    private static readonly (string name, int w, int h)[] Resolutions =
+    // Negative sizes are an aspect ratio, zero is the panel's own size.
+    private static readonly (string name, int w, int h)[] BuiltInResolutions =
     [
         ("Free", 0, 0),
         ("16:9", -16, -9),
@@ -66,6 +97,14 @@ public class GameViewPanel : DockPanel
         ("960x540", 960, 540),
         ("640x480", 640, 480),
         ("800x600", 800, 600),
+    ];
+
+    // The built in sizes, then the project's own.
+    private static (string name, int w, int h)[] Resolutions =>
+    [
+        .. BuiltInResolutions,
+        .. EditorRegistries.GetSettings<ProjectsEditorSettings>().CustomResolutions
+            .Select(r => (r.Name, r.Aspect ? -r.Width : r.Width, r.Aspect ? -r.Height : r.Height)),
     ];
 
     public override void OnGUI(Paper paper, float width, float height)
@@ -85,21 +124,65 @@ public class GameViewPanel : DockPanel
 
     public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
     {
-        if (!MaximizeOnPlay) return false;
-        state["maximizeOnPlay"] = true;
+        state["showStats"] = _showStats;
+        state["scale"] = _scale.ToString();
+        state["zoom"] = _zoom;
         return true;
     }
 
     public override void RestoreState(System.Text.Json.Nodes.JsonObject state)
-        => MaximizeOnPlay = state["maximizeOnPlay"]?.GetValue<bool>() == true;
-
-    // The layout is otherwise only written on save, so the choice is written straight away. Not during play, where
-    // the other panels' state is the play session's and must not be kept.
-    private void ToggleMaximizeOnPlay()
     {
-        MaximizeOnPlay = !MaximizeOnPlay;
+        _showStats = state["showStats"]?.GetValue<bool>() == true;
+        if (Enum.TryParse(state["scale"]?.GetValue<string>(), out GameViewScale scale)) _scale = scale;
+        _zoom = state["zoom"]?.GetValue<float>() ?? 1f;
+    }
+
+    // The layout is otherwise only written on save, so view choices are written straight away. Not during play,
+    // where the other panels' state is the play session's and must not be kept.
+    private static void SaveViewState()
+    {
         if (!Application.IsPlaying)
             EditorApplication.Instance?.SaveDockLayout();
+    }
+
+    private static void ToggleMaximizeOnPlay()
+    {
+        PlayModePreferences prefs = Preferences.Get<PlayModePreferences>();
+        prefs.GameViewOnPlay = prefs.GameViewOnPlay == GameViewOnPlay.Maximize ? GameViewOnPlay.Focus : GameViewOnPlay.Maximize;
+        Preferences.Changed(Preferences.SectionOf(prefs));
+    }
+
+    private void AddCustomResolution()
+    {
+        string name = "", width = "1920", height = "1080";
+        bool aspect = false;
+        DialogModal dialog = Origami.Dialog(Loc.Get("game.add_resolution"), paper =>
+        {
+            EditorGUI.Row(paper, "gv_res_name", Loc.Get("game.resolution_name"), () => Origami.TextField(paper, "gv_res_name_v", name, v => name = v).Show());
+            EditorGUI.Row(paper, "gv_res_w", Loc.Get("game.resolution_width"), () => Origami.TextField(paper, "gv_res_w_v", width, v => width = v).Show());
+            EditorGUI.Row(paper, "gv_res_h", Loc.Get("game.resolution_height"), () => Origami.TextField(paper, "gv_res_h_v", height, v => height = v).Show());
+            EditorGUI.SettingsToggle(paper, "gv_res_aspect", Loc.Get("game.resolution_aspect"), aspect, v => aspect = v, separator: false);
+        }, 380);
+        dialog.Button(Loc.Get("dialog.save"), () =>
+            {
+                if (!int.TryParse(width, out int w) || !int.TryParse(height, out int h) || w <= 0 || h <= 0) return;
+                Modal.Remove(dialog);
+                if (string.IsNullOrWhiteSpace(name)) name = aspect ? $"{w}:{h}" : $"{w}x{h}";
+                ProjectsEditorSettings settings = EditorRegistries.GetSettings<ProjectsEditorSettings>();
+                settings.CustomResolutions.Add(new GameViewResolution { Name = name.Trim(), Width = w, Height = h, Aspect = aspect });
+                EditorRegistries.SaveSettings();
+                SetResolution(Resolutions.Length - 1);
+            }, OrigamiVariant.Primary)
+            .Button(Loc.Get("common.cancel"), () => Modal.Remove(dialog));
+    }
+
+    private void RemoveCustomResolution(int custom)
+    {
+        ProjectsEditorSettings settings = EditorRegistries.GetSettings<ProjectsEditorSettings>();
+        settings.CustomResolutions.RemoveAt(custom);
+        EditorRegistries.SaveSettings();
+        if (ResolutionIndex >= Resolutions.Length) SetResolution(0);
+        else InvalidateRT();
     }
 
     public override float HeaderWidth => 28f;
@@ -109,16 +192,39 @@ public class GameViewPanel : DockPanel
             Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
             {
                 b.Header(Loc.Get("panel.game"));
+                var resolutions = Resolutions;
                 b.Submenu(Loc.Get("game.resolution"), sub =>
                 {
-                    for (int i = 0; i < Resolutions.Length; i++)
+                    for (int i = 0; i < resolutions.Length; i++)
                     {
                         int idx = i;
-                        sub.Item(Resolutions[i].name, () => SetResolution(idx), on: idx == ResolutionIndex);
+                        if (i == BuiltInResolutions.Length) sub.Separator();
+                        sub.Item(resolutions[i].name, () => SetResolution(idx), on: idx == ResolutionIndex);
                     }
+                    sub.Separator();
+                    sub.Item(Loc.Get("game.add_resolution"), AddCustomResolution, icon: EditorIcons.Plus);
+                    if (resolutions.Length > BuiltInResolutions.Length)
+                        sub.Submenu(Loc.Get("game.remove_resolution"), remove =>
+                        {
+                            for (int i = BuiltInResolutions.Length; i < resolutions.Length; i++)
+                            {
+                                int custom = i - BuiltInResolutions.Length;
+                                remove.Item(resolutions[i].name, () => RemoveCustomResolution(custom));
+                            }
+                        });
                 }, EditorIcons.Expand);
-                b.Toggle(Loc.Get("game.show_stats"), () => _showStats = !_showStats, () => _showStats);
-                b.Toggle(Loc.Get("game.maximize_on_play"), ToggleMaximizeOnPlay, () => MaximizeOnPlay);
+                b.Submenu(Loc.Get("game.scale"), sub =>
+                {
+                    sub.Item(Loc.Get("game.scale_fit"), () => { _scale = GameViewScale.Fit; SaveViewState(); }, on: _scale == GameViewScale.Fit);
+                    sub.Item(Loc.Get("game.scale_pixel_perfect"), () => { _scale = GameViewScale.PixelPerfect; SaveViewState(); }, on: _scale == GameViewScale.PixelPerfect);
+                    sub.Separator();
+                    foreach (float zoom in s_zooms)
+                        sub.Item($"{zoom * 100:0}%", () => { _scale = GameViewScale.Zoom; _zoom = zoom; SaveViewState(); },
+                            on: _scale == GameViewScale.Zoom && Math.Abs(_zoom - zoom) < 0.001f);
+                }, EditorIcons.MagnifyingGlass);
+                b.Toggle(Loc.Get("game.show_stats"), () => { _showStats = !_showStats; SaveViewState(); }, () => _showStats);
+                b.Toggle(Loc.Get("game.maximize_on_play"), ToggleMaximizeOnPlay,
+                    () => Preferences.Get<PlayModePreferences>().GameViewOnPlay == GameViewOnPlay.Maximize);
             }));
     }
 
@@ -148,7 +254,7 @@ public class GameViewPanel : DockPanel
 
     private void DrawGameView(Paper paper, Scribe.FontFile font, float width, float height)
     {
-        using (paper.Box("gv_game").Enter())
+        using (paper.Box("gv_game").Clip().Enter())
         {
             Scene scene = Scene.Current;
             if (scene == null)
@@ -298,7 +404,20 @@ public class GameViewPanel : DockPanel
                 float panelAspect = width / height;
                 float displayW, displayH, offsetX, offsetY;
 
-                if (aspect > panelAspect)
+                if (_scale != GameViewScale.Fit)
+                {
+                    // A fixed size shows one render target pixel per screen pixel, the panel sized ones fill the panel at
+                    // 100%. Either way times the zoom, centred and cut off by the panel.
+                    float pixel = targetW > 0 ? 1f / Math.Max(0.01f, paper.DpiScale) : 1f;
+                    float factor = (_scale == GameViewScale.Zoom ? _zoom : 1f) * pixel;
+                    displayW = rtW * factor;
+                    displayH = rtH * factor;
+                    offsetX = (width - displayW) / 2;
+                    offsetY = (height - displayH) / 2;
+                    paper.Box("gv_bg").PositionType(PositionType.SelfDirected).Position(0, 0).Size(width, height)
+                        .BackgroundColor(Color.Black).IsNotInteractable();
+                }
+                else if (aspect > panelAspect)
                 {
                     displayW = width;
                     displayH = width / aspect;
@@ -314,7 +433,7 @@ public class GameViewPanel : DockPanel
                 }
 
                 // Letterbox bars
-                if (offsetY > 0)
+                if (_scale == GameViewScale.Fit && offsetY > 0)
                 {
                     paper.Box("gv_bar_top")
                         .PositionType(PositionType.SelfDirected).Position(0, 0).Size(width, offsetY)
@@ -323,7 +442,7 @@ public class GameViewPanel : DockPanel
                         .PositionType(PositionType.SelfDirected).Position(0, offsetY + displayH).Size(width, offsetY)
                         .BackgroundColor(Color.Black);
                 }
-                if (offsetX > 0)
+                if (_scale == GameViewScale.Fit && offsetX > 0)
                 {
                     paper.Box("gv_bar_left")
                         .PositionType(PositionType.SelfDirected).Position(0, 0).Size(offsetX, height)
@@ -375,7 +494,7 @@ public class GameViewPanel : DockPanel
 
                 // Stats overlay (top-right of viewport, theme sized)
                 if (_showStats)
-                    DrawStats(paper, font, offsetX + displayW, offsetY, displayW);
+                    DrawStats(paper, font, Math.Min(width, offsetX + displayW), Math.Max(0, offsetY), displayW);
             }
             else
             {

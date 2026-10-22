@@ -41,7 +41,7 @@
     <ProjectReference Include="..\..\Anthology\Graphite\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
     <ProjectReference Include="..\..\Anthology\Graphite\Rendering\Prowl.Graphite.Rendering.csproj" />
 
-    <PackageReference Include="Jitter2" Version="2.10.0" />
+    <PackageReference Include="Jitter2" Version="2.13.0" />
     <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Input.Glfw" Version="2.23.0" />
     <PackageReference Include="Silk.NET.OpenXR" Version="2.23.0" />

@@ -59,6 +59,26 @@ public static class ScriptCompiler
     //  Public entry point
     // ================================================================
 
+    /// <summary>Writes the .csproj files and the solution an external IDE opens, without compiling. The solution is rebuilt too.</summary>
+    public static void GenerateProjectFiles(Project project)
+    {
+        (List<CompilationUnit>? units, string? error) = BuildPlan(project);
+        if (error != null)
+        {
+            Runtime.Debug.LogError($"[ScriptCompiler] Could not generate project files: {error}");
+            return;
+        }
+
+        var generated = units.Where(u => u.Source == null || u.Scripts.Count > 0).ToList();
+        foreach (CompilationUnit unit in generated)
+            GenerateCsproj(project, unit, units);
+
+        try { File.Delete(project.ProjectSolutionPath); }
+        catch (IOException) { }
+        GenerateSolutionIfMissing(project, generated);
+        Runtime.Debug.Log("[ScriptCompiler] Project files generated.");
+    }
+
     /// <summary>Generate .csproj files for all user assemblies and compile them in dependency order.</summary>
     public static CompileResult CompileAll(Project project)
     {

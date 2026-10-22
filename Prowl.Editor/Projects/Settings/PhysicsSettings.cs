@@ -162,7 +162,7 @@ public class PhysicsSettings : ProjectSettingsBase
             v => ThreadModel = v ? PhysicsThreadModel.Persistent : PhysicsThreadModel.Regular);
         EditorGUI.SettingsCheckbox(paper, "phys_auxcp", "Auxiliary Contact Points", EnableAuxiliaryContactPoints, v => EnableAuxiliaryContactPoints = v);
         EditorGUI.SettingsCheckbox(paper, "phys_persist", "Persistent Contact Manifold", PersistentContactManifold, v => PersistentContactManifold = v);
-        EditorGUI.SettingsSliderField(paper, "phys_specrelax", "Speculative Relaxation Factor", SpeculativeRelaxationFactor, 0f, 1f, v => SpeculativeRelaxationFactor = v);
+        EditorGUI.SettingsSliderField(paper, "phys_specrelax", "CCD Relaxation Factor", SpeculativeRelaxationFactor, 0f, 1f, v => SpeculativeRelaxationFactor = v);
 
         paper.Box("phys_sp3").Height(8);
 

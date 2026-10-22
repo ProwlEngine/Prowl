@@ -13,6 +13,7 @@ using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.OrigamiUI.CSharp;
 using Prowl.OrigamiUI.Graphite;
@@ -49,6 +50,9 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     [Tooltip("Open double clicked scripts in the built in code editor, or in the system's default app.")]
     public ScriptEditorMode OpenScriptsIn = ScriptEditorMode.BuiltIn;
 
+    /// <summary>Font family or font file for code. Empty follows the editor's mono font. Picked above the other settings.</summary>
+    [HideInInspector] public string Font = "";
+
     [Header("Text")]
     [Range(6, 48)] public float FontSize = 15f;
     [Range(1, 2.5f), Tooltip("Row height as a multiple of the font size.")] public float LineHeight = 1.5f;
@@ -56,6 +60,7 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     [Tooltip("Tab and auto indent insert spaces instead of tab characters.")] public bool InsertSpaces = true;
     [Tooltip("Columns with a vertical guide line.")] public List<int> Rulers = [120];
     [Tooltip("Joined glyphs such as arrows and comparison operators, in fonts that have them.")] public bool Ligatures = true;
+    [Tooltip("Atlas quality for code text, separate from the rest of the editor's text quality.")] public Scribe.FontQuality TextQuality = Scribe.FontQuality.High;
 
     [Header("Display")]
     public bool ShowLineNumbers = true;
@@ -125,6 +130,14 @@ public sealed class ScriptEditorPreferences : EditorPreferences
 
     public override void OnGUI(Paper paper, float width)
     {
+        PreferencesPanel.FontRow(paper, "se_font", "Font",
+            [("", "Editor Mono Font"), (EditorApplication.BundledMonoFontName, EditorApplication.BundledMonoFontName)],
+            Font, v =>
+            {
+                Font = v;
+                Preferences.Changed(Preferences.SectionOf(this));
+            }, compact: false);
+
         string[] names = [.. CodeColorSchemes.All.Select(s => s.Name)];
         int index = Math.Max(0, Array.IndexOf(names, ColorScheme));
         CodeColorScheme scheme = CodeColorSchemes.Find(ColorScheme);
@@ -237,18 +250,36 @@ public sealed class ScriptEditorPreferences : EditorPreferences
         editor.FindRegex = FindRegex;
     }
 
+    /// <summary>Sets the code font and its bold and italic faces, following the editor's mono font when none is picked.</summary>
+    public void ApplyFonts(CodeEditorOptions options)
+    {
+        if (Font.Length > 0 && EditorApplication.Instance is { } app)
+        {
+            EditorApplication.MonoFontFaces faces = app.MonoFaces(Font);
+            options.Font = faces.Regular;
+            options.BoldFont = faces.Bold;
+            options.ItalicFont = faces.Italic;
+            options.BoldItalicFont = faces.BoldItalic;
+        }
+        else
+        {
+            options.Font = null;
+            options.BoldFont = EditorTheme.FontMonoBold;
+            options.ItalicFont = EditorTheme.FontMonoItalic;
+            options.BoldItalicFont = EditorTheme.FontMonoBoldItalic;
+        }
+    }
+
     /// <summary>Copies these values onto a code editor's options.</summary>
     public void ApplyTo(CodeEditorOptions options)
     {
-        options.Font = null;
-        options.BoldFont = EditorTheme.FontMonoBold;
-        options.ItalicFont = EditorTheme.FontMonoItalic;
-        options.BoldItalicFont = EditorTheme.FontMonoBoldItalic;
+        ApplyFonts(options);
         options.FontSize = FontSize;
         options.LineHeight = LineHeight;
         options.TabSize = TabSize;
         options.InsertSpaces = InsertSpaces;
         options.Ligatures = Ligatures;
+        options.TextQuality = TextQuality;
         options.Rulers = [.. Rulers];
         options.ShowLineNumbers = ShowLineNumbers;
         options.ShowFolding = ShowFolding;
@@ -348,8 +379,11 @@ public class ScriptEditorWindow : DockPanel
     [AssetDoubleClickHandler(".cs", ".shader", ".glsl", ".compute")]
     private static bool OnDoubleClick(string relativePath, Guid guid)
     {
-        if (Preferences.Get<ScriptEditorPreferences>().OpenScriptsIn != ScriptEditorMode.BuiltIn || Project.Current is not { } project) return false;
-        OpenFor(Path.Combine(project.AssetsPath, relativePath));
+        if (Project.Current is not { } project) return false;
+        string path = Path.Combine(project.AssetsPath, relativePath);
+        if (Preferences.Get<ScriptEditorPreferences>().OpenScriptsIn != ScriptEditorMode.BuiltIn)
+            return ExternalTools.OpenScript(path);
+        OpenFor(path);
         return true;
     }
 
@@ -536,13 +570,16 @@ public class ScriptEditorWindow : DockPanel
                     .Text(shown, EditorTheme.FontMono ?? Origami.Current.Font!).TextColor(EditorTheme.Ink400)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
-                EditorGUI.PillButton(paper, "se_ext", "Open Externally", false, () => OpenExternally(active.Path));
+                EditorGUI.PillButton(paper, "se_ext", "Open Externally", false, () => OpenExternally(active));
                 EditorGUI.PillButton(paper, "se_save", active.Editor.IsDirty ? "Save" : "Saved", active.Editor.IsDirty, () => Save(active));
             }
 
             // Keyed per tab so each script keeps its own scroll, caret and popups while tabs switch and files get renamed.
             active.Editor.Colors = CodeColorSchemes.Palette(Preferences.Get<ScriptEditorPreferences>().ColorScheme, EditorTheme.OrigamiTheme);
             active.Editor.Options.Keymap = Keymap();
+            // The editor's mono font can change from the Theme tab at any time.
+            ScriptEditorPreferences prefs = Preferences.Get<ScriptEditorPreferences>();
+            if (prefs.Font.Length == 0) prefs.ApplyFonts(active.Editor.Options);
             Origami.CodeEditor(paper, "se_code_" + active.Id, active.Editor)
                 .Size(width, Math.Max(0, height - tabsH - toolbarH)).Show();
             RememberEditorState(active.Editor);
@@ -800,10 +837,12 @@ public class ScriptEditorWindow : DockPanel
         backend.ImportFile(backend.ToRelativePath(path));
     }
 
-    private static void OpenExternally(string path)
+    // At the caret, in the external script editor when one is set, otherwise with the system's app.
+    private static void OpenExternally(ScriptTab tab)
     {
-        try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
-        catch (Exception e) { Toasts.Error("Could not open", e.Message); }
+        var caret = tab.Editor.Caret;
+        if (!ExternalTools.OpenScript(tab.Path, caret.Line + 1, caret.Column + 1))
+            ExternalTools.OpenWithSystem(tab.Path);
     }
 
     private static void Navigate(CodeLocation location)

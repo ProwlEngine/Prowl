@@ -982,6 +982,14 @@ public class ProjectPanel : DockPanel
             // Open / reveal.
             builder.Item(Loc.Get("launcher.open"), () => OpenItem(item), icon: EditorIcons.FolderOpen);
             builder.Item(Loc.Get("project.show_in_explorer"), () => ShowInExplorer(item), icon: EditorIcons.FolderTree);
+            if (!item.IsFolder && !isMulti)
+                builder.Submenu(Loc.Get("project.open_with"), sub => OpenWithMenu(sub, item), icon: EditorIcons.ArrowUpRightFromSquare);
+            if (item.IsFolder && !isMulti)
+                builder.Item(Loc.Get("project.open_terminal"), () => ExternalTools.OpenTerminal(AbsolutePath(item)), icon: EditorIcons.Terminal);
+
+            var selectedFiles = Selection.GetSelected<ContentItem>().Where(c => !c.IsFolder).ToList();
+            if (selectedFiles.Count == 2 && Selection.Count == 2 && ExternalTools.HasDiffTool)
+                builder.Item(Loc.Get("project.compare"), () => ExternalTools.Diff(AbsolutePath(selectedFiles[0]), AbsolutePath(selectedFiles[1])), icon: EditorIcons.CodeCompare);
 
             builder.Separator();
 
@@ -1043,6 +1051,7 @@ public class ProjectPanel : DockPanel
                 string absPath = Path.Combine(Project.Current!.AssetsPath, folder);
                 EditorUtils.OpenFileSystemPath(absPath);
             }, icon: EditorIcons.FolderOpen);
+            builder.Item(Loc.Get("project.open_terminal"), () => ExternalTools.OpenTerminal(Path.Combine(Project.Current!.AssetsPath, folder)), icon: EditorIcons.Terminal);
 
             builder.Separator();
 
@@ -1058,6 +1067,10 @@ public class ProjectPanel : DockPanel
             builder.Item(Loc.Get("menu.assets.reload_scripts"),
                 () => Prowl.Editor.Projects.Scripting.ScriptAssemblyManager.RequestRecompile(),
                 icon: EditorIcons.ArrowsRotate);
+            builder.Item(Loc.Get("project.regenerate_project_files"),
+                () => Prowl.Editor.Projects.Scripting.ScriptCompiler.GenerateProjectFiles(Project.Current!),
+                enabled: !Prowl.Editor.Projects.Scripting.ScriptAssemblyManager.IsCompiling,
+                icon: EditorIcons.FileCode);
         });
     }
 
@@ -1162,21 +1175,22 @@ public class ProjectPanel : DockPanel
             return;
         }
 
-        if (!EditorRegistries.DispatchDoubleClick(item.RelativePath, item.Guid))
-            OpenWithSystem(item);
+        if (EditorRegistries.DispatchDoubleClick(item.RelativePath, item.Guid)) return;
+        string absPath = AbsolutePath(item);
+        if (!ExternalTools.OpenOnDoubleClick(absPath)) ExternalTools.OpenWithSystem(absPath);
     }
 
-    private static void OpenWithSystem(ContentItem item)
+    private static string AbsolutePath(ContentItem item) => Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
+
+    // The system app, then every tool set up for the file's extension.
+    private static void OpenWithMenu(ContextBuilder menu, ContentItem item)
     {
-        string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(absPath) { UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogError($"Failed to open {item.RelativePath}: {ex.Message}");
-        }
+        string absPath = AbsolutePath(item);
+        menu.Item(Loc.Get("project.open_with_default"), () => ExternalTools.OpenWithSystem(absPath));
+        var tools = ExternalTools.ToolsFor(absPath).ToList();
+        if (tools.Count > 0) menu.Separator();
+        foreach (ExternalTool tool in tools)
+            menu.Item(string.IsNullOrEmpty(tool.Name) ? Path.GetFileNameWithoutExtension(tool.Path) : tool.Name, () => ExternalTools.OpenWith(tool, absPath));
     }
 
     private static void ShowInExplorer(ContentItem item)
