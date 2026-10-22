@@ -21,6 +21,14 @@ namespace Prowl.Runtime.GUI;
 public static class PaperInputBridge
 {
     private static readonly (KeyCode Key, PaperKey Mapped)[] s_keyMap = BuildKeyMap();
+    private static readonly Dictionary<KeyCode, PaperKey> s_toPaper = s_keyMap.ToDictionary(p => p.Key, p => p.Mapped);
+    private static readonly Dictionary<PaperKey, KeyCode> s_fromPaper = s_keyMap.GroupBy(p => p.Mapped).ToDictionary(g => g.Key, g => g.First().Key);
+
+    /// <summary>The Paper key for an engine key.</summary>
+    public static bool TryGetPaperKey(KeyCode key, out PaperKey paperKey) => s_toPaper.TryGetValue(key, out paperKey);
+
+    /// <summary>The engine key for a Paper key.</summary>
+    public static bool TryGetKeyCode(PaperKey paperKey, out KeyCode key) => s_fromPaper.TryGetValue(paperKey, out key);
 
     public static void Pump(Paper paper, Float2 pointerPos, bool receivesInput = true)
     {

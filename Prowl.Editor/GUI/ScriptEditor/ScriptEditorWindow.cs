@@ -399,6 +399,44 @@ public class ScriptEditorWindow : DockPanel
         Preferences.Changed(Preferences.SectionOf(prefs));
     }
 
+    // Undo, redo and save stay on the code editor's own keys, which already match the global ones.
+    private static readonly CodeEditorCommand[] s_notRebindable = [CodeEditorCommand.Undo, CodeEditorCommand.Redo, CodeEditorCommand.Save];
+    private const string ShortcutCategory = "CodeEditor/";
+
+    private static CodeEditorKeymap? s_keymap;
+    private static int s_keymapVersion = -1;
+
+    [InitializeOnLoad]
+    private static void RegisterShortcuts()
+    {
+        foreach (CodeEditorCommand command in Enum.GetValues<CodeEditorCommand>())
+        {
+            if (s_notRebindable.Contains(command)) continue;
+            CodeKeyBinding? binding = CodeEditorKeymap.Default.PrimaryBinding(command);
+            KeyCode key = binding is { } b && Runtime.GUI.PaperInputBridge.TryGetKeyCode(b.Key, out KeyCode k) ? k : KeyCode.Unknown;
+            ShortcutManager.Register(ShortcutCategory + command, PropertyGridUtils.NicifyName(command.ToString()), key,
+                binding?.Ctrl ?? false, binding?.Shift ?? false, binding?.Alt ?? false);
+        }
+    }
+
+    /// <summary>The code editor keymap with the Shortcuts tab's rebinds applied.</summary>
+    private static CodeEditorKeymap Keymap()
+    {
+        if (s_keymap != null && s_keymapVersion == ShortcutManager.Version) return s_keymap;
+        s_keymapVersion = ShortcutManager.Version;
+
+        var keymap = CodeEditorKeymap.Default.Clone();
+        foreach (CodeEditorCommand command in Enum.GetValues<CodeEditorCommand>())
+        {
+            string id = ShortcutCategory + command;
+            if (ShortcutManager.GetBinding(id) is not { } binding || ShortcutManager.GetDefault(id) is not { } fallback || binding.Equals(fallback)) continue;
+            keymap.Unbind(command);
+            if (binding.Key != KeyCode.Unknown && Runtime.GUI.PaperInputBridge.TryGetPaperKey(binding.Key, out PaperKey key))
+                keymap.Bind(command, new CodeKeyBinding(key, binding.Ctrl, binding.Shift, binding.Alt));
+        }
+        return s_keymap = keymap;
+    }
+
     internal static void ApplyPreferences()
     {
         if (s_window == null) return;
@@ -504,6 +542,7 @@ public class ScriptEditorWindow : DockPanel
 
             // Keyed per tab so each script keeps its own scroll, caret and popups while tabs switch and files get renamed.
             active.Editor.Colors = CodeColorSchemes.Palette(Preferences.Get<ScriptEditorPreferences>().ColorScheme, EditorTheme.OrigamiTheme);
+            active.Editor.Options.Keymap = Keymap();
             Origami.CodeEditor(paper, "se_code_" + active.Id, active.Editor)
                 .Size(width, Math.Max(0, height - tabsH - toolbarH)).Show();
             RememberEditorState(active.Editor);

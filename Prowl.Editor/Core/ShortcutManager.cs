@@ -80,6 +80,9 @@ public static class ShortcutManager
     public const string GlobalCategory = "Global";
 
     private static readonly Dictionary<string, ShortcutDefinition> _shortcuts = [];
+
+    /// <summary>Goes up whenever a binding changes, so anything built from the bindings knows to rebuild.</summary>
+    public static int Version { get; private set; }
     private static bool _overridesLoaded;
 
     /// <summary>
@@ -113,6 +116,7 @@ public static class ShortcutManager
         }
 
         _shortcuts[id] = def;
+        Version++;
     }
 
     // ================================================================
@@ -236,6 +240,7 @@ public static class ShortcutManager
         Dictionary<string, ShortcutBinding> overrides = EditorSettings.Instance.ShortcutOverrides;
         foreach ((string id, ShortcutDefinition def) in _shortcuts)
             def.Override = overrides.TryGetValue(id, out ShortcutBinding? binding) ? binding : null;
+        Version++;
     }
 
     /// <summary>Save current overrides to EditorSettings.</summary>
@@ -249,6 +254,7 @@ public static class ShortcutManager
         }
         EditorSettings.Instance.ShortcutOverrides = overrides;
         EditorSettings.Instance.Save();
+        Version++;
     }
 
     // ================================================================
