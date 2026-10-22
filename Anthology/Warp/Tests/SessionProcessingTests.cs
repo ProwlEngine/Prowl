@@ -130,6 +130,7 @@ public class SessionProcessingTests
         request.WriteUInt32(0);
         request.WriteString("client");
         request.WriteBytesWithLength(ReadOnlySpan<byte>.Empty);
+        request.WriteBool(true);
         host.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, request.WrittenMemory));
         return connection;
     }

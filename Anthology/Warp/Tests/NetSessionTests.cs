@@ -10,7 +10,6 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 
-using Prowl.Warp.Transports.Batching;
 using Prowl.Warp.Transports.Kcp;
 using Prowl.Warp.Transports.Local;
 
@@ -133,9 +132,11 @@ public abstract class NetSessionTests : IDisposable
     /// <summary>The address clients connect to, for a host transport that is listening.</summary>
     protected abstract string AddressOf(Transport host);
 
+    protected virtual bool BatchMessages => true;
+
     private SessionProbe Host(NetSessionOptions? options = null)
     {
-        NetSession session = NetSession.Host(CreateHostTransport(), "Hosty", options);
+        NetSession session = NetSession.Host(CreateHostTransport(), "Hosty", options ?? new NetSessionOptions { BatchMessages = BatchMessages });
         _sessions.Add(session);
         _hostAddress = AddressOf(session.Transport);
         return new SessionProbe(session);
@@ -145,7 +146,7 @@ public abstract class NetSessionTests : IDisposable
         string? address = null)
     {
         NetSession session =
-            NetSession.Join(CreateClientTransport(name), address ?? _hostAddress!, name, token, options);
+            NetSession.Join(CreateClientTransport(name), address ?? _hostAddress!, name, token, options ?? new NetSessionOptions { BatchMessages = BatchMessages });
         _sessions.Add(session);
         return new SessionProbe(session);
     }
@@ -475,13 +476,13 @@ public abstract class NetSessionTests : IDisposable
         if (atClient)
         {
             NetPeer peer = host.Session.Peers.Single(p => !p.IsLocal);
-            host.Session.SendRaw(peer, 20, new byte[] { 1 });
-            host.Session.SendRaw(peer, 20, new byte[] { 2 });
+            host.Session.SendRaw(peer, 20, new byte[] { 1 }, flags: SendFlags.Immediate);
+            host.Session.SendRaw(peer, 20, new byte[] { 2 }, flags: SendFlags.Immediate);
         }
         else
         {
-            alice.Session.SendRaw(alice.Session.HostPeer!, 20, new byte[] { 1 });
-            alice.Session.SendRaw(alice.Session.HostPeer!, 20, new byte[] { 2 });
+            alice.Session.SendRaw(alice.Session.HostPeer!, 20, new byte[] { 1 }, flags: SendFlags.Immediate);
+            alice.Session.SendRaw(alice.Session.HostPeer!, 20, new byte[] { 2 }, flags: SendFlags.Immediate);
         }
 
         SessionProbe.PumpFor(100, host, alice);
@@ -695,14 +696,15 @@ public sealed class LocalNetSessionTests : NetSessionTests
     protected override string AddressOf(Transport host) => ((LocalTransport)host).Address;
 }
 
-public sealed class BatchedNetSessionTests : NetSessionTests
+public sealed class UnbatchedNetSessionTests : NetSessionTests
 {
     private readonly LocalNetwork _network = new();
     protected override string UnreachableAddress => "nobody";
-    protected override Transport CreateHostTransport() => new BatchingTransport(new LocalTransport(_network, "host"));
+    protected override bool BatchMessages => false;
+    protected override Transport CreateHostTransport() => new LocalTransport(_network, "host");
 
     protected override Transport CreateClientTransport(string name) =>
-        new BatchingTransport(new LocalTransport(_network, name));
+        new LocalTransport(_network, name);
 
     protected override string AddressOf(Transport host) => "host";
 }

@@ -13,9 +13,8 @@ dotnet add package Prowl.Warp
 |---------------------|--------------------------------------------------------------|
 | `KcpTransport`      | Reliable ordered messages and unreliable datagrams over UDP  |
 | `LocalTransport`    | Connections within one process                               |
-| `BatchingTransport` | Combine small messages until flush; both ends must enable it |
 
-Transports live under `Prowl.Warp.Transports.<Kcp/Local/Batching>`.
+Transports live under `Prowl.Warp.Transports.<Kcp/Local>`.
 
 ```csharp
 using Prowl.Warp;
@@ -49,6 +48,11 @@ transport.Flush();
 
 `NetSession` adds admission, peer lists, typed/raw messages and fragmentation. Clients connect to
 one host; there is no host migration. Match `AppVersion` and transport settings between peers.
+
+`NetSessionOptions.BatchMessages` defaults to true. When both peers enable it, sessions combine
+small messages per connection and delivery mode until `Flush`. Full batches and
+`SendFlags.Immediate` submit earlier. Raw transports preserve individual message boundaries.
+Batching is negotiated during joining; changing the toggle does not require a different transport.
 
 ```csharp
 using KcpTransport hostTransport = new(new() { Port = 7777 });

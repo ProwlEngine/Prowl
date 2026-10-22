@@ -64,6 +64,7 @@ public class SessionAllocationTests
         void Round()
         {
             client.SendRaw(client.HostPeer!, 10, payload, delivery);
+            client.Flush();
             host.Update();
             host.BroadcastRaw(10, payload, delivery, includeLocal: true);
             host.Update();

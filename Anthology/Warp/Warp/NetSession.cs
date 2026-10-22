@@ -3,6 +3,7 @@
 
 using System;
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -68,6 +69,8 @@ public sealed class NetSession : IDisposable
     private readonly Dictionary<Connection, Remote> _remotes = new();
     private readonly List<KeyValuePair<Connection, Remote>> _scratch = new();
     private readonly NetWriter _writer = new();
+    private readonly SessionBatcher _batcher;
+    private bool _batchWithHost;
     private string? _goodbyeMessage;
     private SessionEndReason? _goodbyeReason;
     private Reassembly? _incomingFromHost;
@@ -94,6 +97,7 @@ public sealed class NetSession : IDisposable
         Transport = transport;
         Peers = new NetPeerCollection(_peers.Values);
         _options = (options ?? new NetSessionOptions()).CopyValidated();
+        _batcher = new SessionBatcher(_options.MaxMessageSize);
         IsHost = isHost;
         _pump = pumpTransport ? new SessionPump(transport) : null;
     }
@@ -399,7 +403,7 @@ public sealed class NetSession : IDisposable
             {
                 if (connection.IsConnected)
                 {
-                    connection.Send(_writer.WrittenSpan, Delivery.Reliable);
+                    SendToConnection(connection, _writer.WrittenSpan, Delivery.Reliable);
                 }
             }
 
@@ -513,6 +517,7 @@ public sealed class NetSession : IDisposable
             _hostConnection!.Disconnect();
         }
 
+        _batcher.FlushAll();
         _pump?.Flush();
     }
 
@@ -542,6 +547,7 @@ public sealed class NetSession : IDisposable
                 break;
 
             case TransportEventType.Disconnected:
+                _batcher.Remove(ev.Connection);
                 if (_remotes.Remove(ev.Connection, out Remote? remote))
                 {
                     ReleaseReassembly(ref remote.Incoming);
@@ -578,13 +584,23 @@ public sealed class NetSession : IDisposable
         NetReader reader = new(data);
         try
         {
-            if (data.Length > _options.MaxMessageSize)
+            ushort id = reader.ReadUInt16();
+            if (id != (ushort)InternalMessage.Batch && data.Length > _options.MaxMessageSize)
             {
                 throw new InvalidDataException(
                     $"A {data.Length} byte message exceeds the {_options.MaxMessageSize} byte limit.");
             }
 
-            ushort id = reader.ReadUInt16();
+            if (id == (ushort)InternalMessage.Batch)
+            {
+                if (reassembled || remote.Stage != RemoteStage.Joined || !remote.BatchMessages)
+                {
+                    throw new InvalidDataException("Unexpected message batch.");
+                }
+
+                ReceiveBatch(connection, reader.ReadBytes(reader.Remaining), delivery);
+                return;
+            }
             if (id == (ushort)InternalMessage.Fragment)
             {
                 if (reassembled)
@@ -652,6 +668,7 @@ public sealed class NetSession : IDisposable
         uint version = reader.ReadUInt32();
         string name = reader.ReadString(MaxNameBytes);
         byte[] token = reader.ReadBytesWithLength(MaxJoinTokenBytes).ToArray();
+        remote.BatchMessages = reader.ReadBool() && _options.BatchMessages;
 
         if (version != _options.AppVersion)
         {
@@ -728,6 +745,7 @@ public sealed class NetSession : IDisposable
             _writer.WriteString(present.Name);
         }
 
+        _writer.WriteBool(remote.BatchMessages);
         SendToConnection(connection, _writer.WrittenSpan, Delivery.Reliable);
 
         _writer.Reset();
@@ -748,7 +766,7 @@ public sealed class NetSession : IDisposable
         WriteGoodbye(reason, message);
         if (connection.IsConnected)
         {
-            connection.Send(_writer.WrittenSpan, Delivery.Reliable);
+            SendToConnection(connection, _writer.WrittenSpan, Delivery.Reliable);
         }
 
         if (remote.Pending != null)
@@ -802,7 +820,8 @@ public sealed class NetSession : IDisposable
                 _writer.WriteUInt32(_options.AppVersion);
                 _writer.WriteString(_joinName);
                 _writer.WriteBytesWithLength(_joinToken);
-                _hostConnection.Send(_writer.WrittenSpan, Delivery.Reliable);
+                _writer.WriteBool(_options.BatchMessages);
+                SendToConnection(_hostConnection, _writer.WrittenSpan, Delivery.Reliable);
                 _joinDeadlineMs = NowMs + (long)_options.JoinTimeout.TotalMilliseconds;
                 break;
 
@@ -832,15 +851,24 @@ public sealed class NetSession : IDisposable
         NetReader reader = new(data);
         try
         {
-            if (data.Length > _options.MaxMessageSize)
+            ushort id = reader.ReadUInt16();
+            if (id != (ushort)InternalMessage.Batch && data.Length > _options.MaxMessageSize)
             {
                 throw new InvalidDataException(
                     $"A {data.Length} byte message exceeds the {_options.MaxMessageSize} byte limit.");
             }
 
-            ushort id = reader.ReadUInt16();
             switch (id)
             {
+                case (ushort)InternalMessage.Batch:
+                    if (reassembled || State != SessionState.Active || !_batchWithHost)
+                    {
+                        throw new InvalidDataException("Unexpected message batch.");
+                    }
+
+                    ReceiveBatch(_hostConnection!, reader.ReadBytes(reader.Remaining), delivery);
+                    break;
+
                 case (ushort)InternalMessage.Fragment:
                     if (reassembled)
                     {
@@ -952,6 +980,7 @@ public sealed class NetSession : IDisposable
 
         LocalPeer = local;
         HostPeer = host;
+        _batchWithHost = reader.ReadBool() && _options.BatchMessages;
         State = SessionState.Active;
         _joinDeadlineMs = long.MaxValue;
         Joined?.Invoke();
@@ -975,6 +1004,27 @@ public sealed class NetSession : IDisposable
     }
 
     // --- Shared --------------------------------------------------------------------------------
+
+    private void ReceiveBatch(Connection connection, ReadOnlySpan<byte> data, Delivery delivery)
+    {
+        _batcher.Validate(data);
+        NetReader reader = new(data);
+        // The transport may already have closed while queuing a later Disconnected event.
+        // Deliver this earlier Data event according to session state and event order.
+        while (reader.Remaining > 0 && State == SessionState.Active)
+        {
+            int length = reader.ReadInt32();
+            ReadOnlySpan<byte> message = reader.ReadBytes(length);
+            if (IsHost)
+            {
+                HostReceive(connection, message, delivery);
+            }
+            else
+            {
+                ClientReceive(message, delivery);
+            }
+        }
+    }
 
     private void Dispatch(NetPeer sender, ushort id, ref NetReader reader, Delivery delivery)
     {
@@ -1084,6 +1134,33 @@ public sealed class NetSession : IDisposable
             return;
         }
 
+        if (!Transport.Capabilities.Supports(delivery))
+        {
+            throw new NotSupportedException($"Transport does not support {delivery} delivery.");
+        }
+
+        bool batching = IsHost
+            ? _remotes.TryGetValue(connection, out Remote? remote) && remote.BatchMessages
+            : _batchWithHost;
+        if (batching && BinaryPrimitives.ReadUInt16LittleEndian(message) < ReservedMessageIds &&
+            _batcher.TrySend(connection, message, delivery, flags))
+        {
+            return;
+        }
+
+        // Control messages and large messages must not overtake buffered messages on this channel.
+        _batcher.Flush(connection, delivery);
+        if ((flags & SendFlags.Immediate) != 0)
+        {
+            _batcher.Flush(connection, delivery == Delivery.Reliable ? Delivery.Unreliable : Delivery.Reliable);
+        }
+
+        // Submitting a batch can exhaust the backend's queue budget and close this connection.
+        if (!connection.IsConnected)
+        {
+            return;
+        }
+
         int max = connection.GetMaxMessageSize(delivery);
         if (delivery == Delivery.Unreliable || message.Length <= max)
         {
@@ -1093,6 +1170,10 @@ public sealed class NetSession : IDisposable
 
         // Fragment id, first flag and a total length of up to 5 bytes.
         int chunkSize = max - 8;
+        if (chunkSize <= 0)
+        {
+            throw new InvalidOperationException("Transport message limit is too small for session fragments.");
+        }
         for (int offset = 0; offset < message.Length && connection.IsConnected; offset += chunkSize)
         {
             int length = Math.Min(chunkSize, message.Length - offset);
@@ -1261,6 +1342,8 @@ public sealed class NetSession : IDisposable
 
         State = SessionState.Ended;
 
+        _batcher.Dispose();
+
         ReleaseReassembly(ref _incomingFromHost);
         foreach (Remote remote in _remotes.Values)
         {
@@ -1325,7 +1408,8 @@ public sealed class NetSession : IDisposable
         ///     A piece of a reliable message too big for the transport: <c>[bool first][varuint total, if first][bytes]</c>.
         ///     The pieces of one message are sent back to back, and reliable delivery keeps them in order.
         /// </summary>
-        Fragment
+        Fragment,
+        Batch = SessionBatcher.MessageId
     }
 
     /// <summary>A fragmented message being put back together.</summary>
@@ -1353,6 +1437,7 @@ public sealed class NetSession : IDisposable
         public NetPeer? Peer;
         public PendingJoin? Pending;
         public RemoteStage Stage;
+        public bool BatchMessages;
     }
 
     private readonly record struct Loopback(byte[] Buffer, int Length, Delivery Delivery);

@@ -18,6 +18,9 @@ public struct NetSessionOptions
     /// </summary>
     public uint AppVersion { get; set; }
 
+    /// <summary>Combine small outgoing messages until Flush. Negotiated with each peer during joining.</summary>
+    public bool BatchMessages { get; set; } = true;
+
     /// <summary>The most clients that may be joined at once, not counting the host.</summary>
     public int MaxPeers { get; set; } = 64;
 

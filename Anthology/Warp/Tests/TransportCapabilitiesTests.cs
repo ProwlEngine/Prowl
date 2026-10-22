@@ -1,6 +1,5 @@
 using System;
 
-using Prowl.Warp.Transports.Batching;
 using Prowl.Warp.Transports.Local;
 
 using Xunit;
@@ -9,18 +8,6 @@ namespace Prowl.Warp.Tests;
 
 public class TransportCapabilitiesTests
 {
-    [Fact]
-    public void WrappersPreserveExecutionAndAvailability()
-    {
-        using Transport local = new BatchingTransport(new LocalTransport(new LocalNetwork(), "host"));
-        Assert.True(local.Capabilities.IsAvailable);
-        Assert.Equal(TransportExecution.InlinePreferred, local.Capabilities.Execution);
-        Assert.True(local.Capabilities.Supports(Delivery.Reliable));
-        Assert.True(local.Capabilities.Supports(Delivery.Unreliable));
-        using Transport unavailable = new BatchingTransport(new ReliableBackend(available: false));
-        Assert.False(unavailable.Capabilities.IsAvailable);
-    }
-
     [Fact]
     public void UnsupportedDeliveryIsRejectedBeforeBackendSend()
     {
