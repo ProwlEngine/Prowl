@@ -1663,9 +1663,26 @@ internal sealed partial class FramePipeline : IDisposable
         if (changed)
         {
             _graphDirty = true;
-            BuildGraph();
+            DeclareShape(shape);
         }
         return shape;
+    }
+
+    private void DeclareShape(FeatureShape shape)
+    {
+        _exports.Clear();
+        RenderContextBuilder frame = new();
+        foreach (FrameFeaturePass pass in _frameFeatures)
+        {
+            frame.Reset();
+            pass.Setup(frame);
+        }
+        InstanceContextBuilder view = new();
+        foreach (IInstancePass pass in shape.Passes())
+        {
+            view.Reset();
+            pass.Setup(view);
+        }
     }
 
     private void BuildGraph()
