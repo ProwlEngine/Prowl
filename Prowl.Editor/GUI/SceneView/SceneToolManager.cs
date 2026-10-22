@@ -178,6 +178,9 @@ public static class SceneToolManager
         return settings;
     }
 
+    /// <summary>Drops the settings objects handed out so far, so the next <see cref="Settings{T}"/> reads them again from <see cref="EditorSettings"/>.</summary>
+    public static void ForgetSettings() => _settings.Clear();
+
     /// <summary>Writes every settings object handed out by <see cref="Settings{T}"/> into <see cref="EditorSettings"/>, ready for its next save.</summary>
     public static void StoreSettings()
     {

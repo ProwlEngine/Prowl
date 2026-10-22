@@ -174,6 +174,35 @@ public class EditorSettings
         return def;
     }
 
+    /// <summary>
+    /// Swaps in other settings, such as an imported profile or a full reset, and applies them everywhere. This machine's
+    /// window placement and projects folder are kept.
+    /// </summary>
+    public static void Replace(EditorSettings next)
+    {
+        EditorSettings current = Instance;
+        next.WindowX = current.WindowX;
+        next.WindowY = current.WindowY;
+        next.WindowWidth = current.WindowWidth;
+        next.WindowHeight = current.WindowHeight;
+        next.WindowMaximized = current.WindowMaximized;
+        next.DefaultProjectsPath = current.DefaultProjectsPath;
+
+        Instance = next;
+        next.ApplyTheme();
+        next.Save();
+
+        Rosetta.Loc.SetLocale(next.Locale);
+        ShortcutManager.ReloadOverrides();
+        GUI.SceneView.SceneToolManager.ForgetSettings();
+        EditorApplication.ApplyFramePacing();
+        if (next.ThumbnailSize != current.ThumbnailSize)
+        {
+            Thumbnails.ThumbnailGenerator.DeleteAll();
+            EditorAssetBackend.Instance?.ClearThumbnailTextureCache();
+        }
+    }
+
     /// <summary> Resets the theme to the default, applies it, and saves the settings. </summary>
     public void ResetTheme()
     {

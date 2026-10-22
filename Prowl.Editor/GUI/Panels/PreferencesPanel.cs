@@ -297,6 +297,19 @@ public class PreferencesPanel : DockPanel
         EditorGUI.SettingsToggle(paper, "pref_cli_eval", Loc.Get("pref.cli_allow_eval"), s.AllowCliEval,
             v => { s.AllowCliEval = v; s.Save(); });
 
+        EditorGUI.SectionHeader(paper, "pref_gen_profile", Loc.Get("pref.profile"));
+        EditorGUI.SettingsRow(paper, "pref_profile", Loc.Get("pref.profile_desc"), () =>
+        {
+            using (paper.Row("pref_profile_btns").Height(UnitValue.Auto).Gap(EditorTheme.Spacing * 2).Enter())
+            {
+                Origami.Button(paper, "pref_profile_export", $"{EditorIcons.FileExport}  {Loc.Get("pref.profile_export")}", ExportProfile).Show();
+                Origami.Button(paper, "pref_profile_import", $"{EditorIcons.FileImport}  {Loc.Get("pref.profile_import")}", ImportProfile).Show();
+            }
+        });
+        EditorGUI.SettingsRow(paper, "pref_reset_everything", Loc.Get("pref.reset_everything"), () =>
+            Origami.Button(paper, "pref_reset_everything_b", $"{EditorIcons.RotateLeft}  {Loc.Get("pref.reset_everything_btn")}", () =>
+                Origami.Confirm(Loc.Get("pref.reset_everything"), Loc.Get("pref.reset_everything_body"), Preferences.ResetAll)).Show());
+
         EditorGUI.SectionHeader(paper, "pref_gen_maint", Loc.Get("pref.maintenance"));
         EditorGUI.SettingsRow(paper, "pref_clear_cache", Loc.Get("pref.clear_cache"), () =>
             Origami.Button(paper, "pref_clear_cache_b", $"{EditorIcons.ArrowsRotate}  {Loc.Get("pref.clear_cache_btn")}",
@@ -306,6 +319,31 @@ public class PreferencesPanel : DockPanel
                     Toasts.Info(Loc.Get("pref.clear_cache"), Loc.Get("pref.clear_cache_done"));
                 }).Width(200).Show());
     }
+
+    private static readonly string[] s_profileFilters = ["*" + Preferences.ProfileExtension];
+
+    private static void ExportProfile() => EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
+    {
+        if (path == null) return;
+        if (!path.EndsWith(Preferences.ProfileExtension, StringComparison.OrdinalIgnoreCase)) path += Preferences.ProfileExtension;
+        try
+        {
+            Preferences.ExportProfile(path);
+            Toasts.Success(Loc.Get("pref.profile_exported"), System.IO.Path.GetFileName(path));
+        }
+        catch (Exception ex) { Toasts.Error(Loc.Get("pref.profile_failed"), ex.Message); }
+    }, filters: s_profileFilters, filterLabels: [Loc.Get("pref.profile_filter")]);
+
+    private static void ImportProfile() => EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
+    {
+        if (path == null) return;
+        try
+        {
+            Preferences.ImportProfile(path);
+            Toasts.Success(Loc.Get("pref.profile_imported"), System.IO.Path.GetFileName(path));
+        }
+        catch (Exception ex) { Toasts.Error(Loc.Get("pref.profile_failed"), ex.Message); }
+    }, filters: s_profileFilters, filterLabels: [Loc.Get("pref.profile_filter")]);
 
     // ================================================================
     //  Theme (Colors + Sizing)

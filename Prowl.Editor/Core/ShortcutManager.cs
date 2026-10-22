@@ -227,13 +227,15 @@ public static class ShortcutManager
     {
         if (_overridesLoaded) return;
         _overridesLoaded = true;
+        ReloadOverrides();
+    }
 
+    /// <summary>Replaces every override with the ones in EditorSettings, after the settings were swapped out.</summary>
+    public static void ReloadOverrides()
+    {
         Dictionary<string, ShortcutBinding> overrides = EditorSettings.Instance.ShortcutOverrides;
-        foreach ((string? id, ShortcutBinding? binding) in overrides)
-        {
-            if (_shortcuts.TryGetValue(id, out ShortcutDefinition? def))
-                def.Override = binding;
-        }
+        foreach ((string id, ShortcutDefinition def) in _shortcuts)
+            def.Override = overrides.TryGetValue(id, out ShortcutBinding? binding) ? binding : null;
     }
 
     /// <summary>Save current overrides to EditorSettings.</summary>

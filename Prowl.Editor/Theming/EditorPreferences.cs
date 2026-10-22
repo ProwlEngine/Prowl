@@ -4,8 +4,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI;
@@ -145,6 +148,73 @@ public static class Preferences
         foreach (FieldInfo field in PropertyGridUtils.GetSerializableFields(section.Type))
             field.SetValue(section.Instance, Copy(field.GetValue(section.Defaults), field.FieldType));
         Changed(section);
+    }
+
+    /// <summary>Puts every preference back to its default: theme, shortcuts, general settings and every section.</summary>
+    public static void ResetAll()
+    {
+        EditorSettings.Replace(new EditorSettings());
+        foreach (PreferencesSection section in _sections) Reset(section);
+    }
+
+    /// <summary>The file extension of a settings profile.</summary>
+    public const string ProfileExtension = ".prowlprefs";
+
+    private const string ProfileSettingsEntry = "EditorSettings.json";
+    private const string ProfileSectionFolder = "Preferences/";
+
+    // Placement on this machine, left out of a profile.
+    private static readonly string[] s_machineSettings =
+        [nameof(EditorSettings.WindowX), nameof(EditorSettings.WindowY), nameof(EditorSettings.WindowWidth),
+         nameof(EditorSettings.WindowHeight), nameof(EditorSettings.WindowMaximized), nameof(EditorSettings.DefaultProjectsPath)];
+
+    /// <summary>Writes every preference into one profile file, to move to another machine or share.</summary>
+    public static void ExportProfile(string path)
+    {
+        JsonObject settings = JsonSerializer.SerializeToNode(EditorSettings.Instance)!.AsObject();
+        foreach (string name in s_machineSettings) settings.Remove(name);
+
+        if (File.Exists(path)) File.Delete(path);
+        using ZipArchive zip = ZipFile.Open(path, ZipArchiveMode.Create);
+        WriteEntry(zip, ProfileSettingsEntry, settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        foreach (PreferencesSection section in _sections)
+            WriteEntry(zip, ProfileSectionFolder + section.FileName, Serializer.Serialize(section.Instance, TypeMode.Auto).WriteToYaml());
+    }
+
+    /// <summary>Replaces every preference with a profile's. Sections the profile does not have go back to their defaults.</summary>
+    public static void ImportProfile(string path)
+    {
+        using ZipArchive zip = ZipFile.OpenRead(path);
+        string json = ReadEntry(zip, ProfileSettingsEntry) ?? throw new InvalidDataException($"{Path.GetFileName(path)} is not a settings profile.");
+        EditorSettings settings = JsonSerializer.Deserialize<EditorSettings>(json) ?? throw new InvalidDataException("The profile's settings are empty.");
+        settings.Theme.InitRamps();
+        EditorSettings.Replace(settings);
+
+        foreach (PreferencesSection section in _sections)
+        {
+            if (ReadEntry(zip, ProfileSectionFolder + section.FileName) is not { } yaml)
+            {
+                Reset(section);
+                continue;
+            }
+            Directory.CreateDirectory(FolderPath);
+            File.WriteAllText(Path.Combine(FolderPath, section.FileName), yaml);
+            Load(section);
+        }
+    }
+
+    private static void WriteEntry(ZipArchive zip, string name, string text)
+    {
+        using var writer = new StreamWriter(zip.CreateEntry(name).Open());
+        writer.Write(text);
+    }
+
+    private static string? ReadEntry(ZipArchive zip, string name)
+    {
+        ZipArchiveEntry? entry = zip.GetEntry(name);
+        if (entry == null) return null;
+        using var reader = new StreamReader(entry.Open());
+        return reader.ReadToEnd();
     }
 
     private static void Load(PreferencesSection section)
