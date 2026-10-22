@@ -17,7 +17,7 @@ internal sealed partial class ProfilerView
 {
     private readonly Dictionary<string, NodeGraphController> _graphControllers = new();
 
-    private void TargetsTab(FrameModel model, ProfileNode node, DeepInstance view, DeepPass pass, List<ProfileNode> passDraws, int position)
+    private void TargetsTab(FrameModel model, ProfileNode node, DeepGroup view, DeepPass pass, List<ProfileNode> passDraws, int position)
     {
         int step = position + 1;
 
@@ -57,7 +57,7 @@ internal sealed partial class ProfilerView
             PixelHistory(model, node, view, pass, passDraws, targets, step, p);
     }
 
-    private void PixelHistory(FrameModel model, ProfileNode node, DeepInstance view, DeepPass pass, List<ProfileNode> passDraws, List<ViewerItem> targets, int step, (float U, float V) pixel)
+    private void PixelHistory(FrameModel model, ProfileNode node, DeepGroup view, DeepPass pass, List<ProfileNode> passDraws, List<ViewerItem> targets, int step, (float U, float V) pixel)
     {
         string key = _viewerSelection.TryGetValue("draw:Targets", out string? chosen) && targets.Any(t => t.Key == chosen) ? chosen : targets[0].Key;
         RecordedGraphResource? graph = GraphResource(view, key[4..]);
@@ -106,17 +106,12 @@ internal sealed partial class ProfilerView
             rows.Count > 0 ? rows : new List<Row> { R("-", "No draws in this pass touched this pixel yet") });
     }
 
-    private void RenderGraphTab(FrameModel model, ProfileNode node, RecordedInstance recordedInstance)
+    private void RenderGraphTab(FrameModel model, ProfileNode node, RecordedGroup recordedGroup)
     {
-        DeepInstance? view = model.InstanceOf(node);
+        DeepGroup? view = model.GroupOf(node);
         if (view == null)
             return;
 
         GraphTab(model, new[] { view }, $"{model.Number}|{view.Index}", "Render graph / " + view.Name);
-
-        if (recordedInstance.Skipped.Length > 0)
-            TableSection("Skipped passes", 420, "Not in the graph this frame",
-                new[] { "Pass", "Reason" }, new[] { 1.4f, 1.4f },
-                recordedInstance.Skipped.Select(s => R(s.Name, s.Reason.ToString())).ToList());
     }
 }

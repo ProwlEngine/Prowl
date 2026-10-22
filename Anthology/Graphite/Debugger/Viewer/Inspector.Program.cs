@@ -329,7 +329,7 @@ internal sealed partial class ProfilerView
     {
         DeepIndex index = model.Index!;
         DeepPass pass = model.PassOf(node)!;
-        DeepInstance view = model.InstanceOf(node)!;
+        DeepGroup view = model.GroupOf(node)!;
         ProfileNode passNode = node.Ancestor(NodeKind.Pass)!;
         ProfileNode? program = node.Ancestor(NodeKind.Program);
         ProfileNode? marker = node.Ancestor(NodeKind.Marker);
@@ -352,7 +352,7 @@ internal sealed partial class ProfilerView
                     {
                         new("Command", CommandName(cmd), $"EID {node.CommandIndex}"),
                         new("Index count", Style.Int(indexCount), bound.Index != null ? "indexed" : "vertices"),
-                        new("Instances", instances.ToString(), $"{Style.Int(indexCount / 3.0 * instances)} primitives"),
+                        new("Groups", instances.ToString(), $"{Style.Int(indexCount / 3.0 * instances)} primitives"),
                         new("Mesh", mesh, marker?.Name ?? "no marker"),
                     });
                     Accordion("Draw call", () => KvSection("Draw call", 0, new Kv?[]

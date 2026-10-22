@@ -306,7 +306,7 @@ internal sealed partial class ProfilerView
                 FrameModel model = SnapshotModel(open);
                 HeaderStat("hs_frame", "Frame", $"#{open.ExecutionId}", Style.Ink);
                 HeaderStat("hs_mode", "Mode", $"DeepMode.{open.Mode}", Style.Ink);
-                HeaderStat("hs_instances", "Instances", model.Recording.Instances.Length.ToString(), Style.Ink);
+                HeaderStat("hs_instances", "Groups", model.Recording.Groups.Length.ToString(), Style.Ink);
                 HeaderStat("hs_cpu", "CPU", Style.Ms2(model.Timing.CpuMilliseconds), Style.Ink);
                 HeaderStat("hs_gpu", "GPU", Style.Ms2(model.Timing.GpuMilliseconds), Style.Ink);
             }
@@ -371,7 +371,7 @@ internal sealed partial class ProfilerView
 
                     FrameTiming timing = model.Timing;
                     StatRow("r0", "Frame", $"#{live.ExecutionId}", "");
-                    StatRow("r1", "Instances", live.Instances.Length.ToString(), "");
+                    StatRow("r1", "Groups", live.Groups.Length.ToString(), "");
                     StatRow("r2", "FPS", Style.F(1000.0 / timing.FrameMilliseconds, "0.0"), "");
                     StatRow("r3", "CPU record", Style.F(timing.CpuMilliseconds, "0.00"), $" / {Style.F(avgCpu, "0.00")} avg");
                     StatRow("r4", "GPU draw", Style.F(timing.GpuMilliseconds, "0.00"), $" / {Style.F(avgGpu, "0.00")} avg");
@@ -503,10 +503,10 @@ internal sealed partial class ProfilerView
         {
             string title = Heavy ? $"Snapshot / frame #{model.Number}" : $"Frame #{model.Number}";
             Title("t", title);
-            string levels = Heavy ? "Frame > Instance > Render Pass > Program > Renderer (marker) > Draw" : "Frame > Instance > Render Pass";
+            string levels = Heavy ? "Frame > Group > Render Pass > Program > Renderer (marker) > Draw" : "Frame > Group > Render Pass";
             Dim("p", levels + " / timing ends at pass");
             Spacer("sp");
-            LegendItem("l0", Style.KindFill(NodeKind.Instance), "Instance");
+            LegendItem("l0", Style.KindFill(NodeKind.Group), "Group");
             LegendItem("l1", Style.KindFill(NodeKind.Pass), "Render Pass");
             LegendItem("l2", Style.KindFill(NodeKind.CommandBuffer), "Command Buffer (outside passes)");
         }
@@ -529,7 +529,7 @@ internal sealed partial class ProfilerView
             .Show();
     }
 
-    private static bool DefaultOpen(NodeKind kind) => kind is NodeKind.Frame or NodeKind.Instance or NodeKind.Program;
+    private static bool DefaultOpen(NodeKind kind) => kind is NodeKind.Frame or NodeKind.Group or NodeKind.Program;
 
     private void DrawHierarchy(FrameModel model, float height)
     {

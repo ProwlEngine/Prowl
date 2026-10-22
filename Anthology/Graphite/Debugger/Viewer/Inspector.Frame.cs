@@ -29,7 +29,7 @@ internal sealed partial class ProfilerView
         Recording rec = model.Recording;
         FrameTiming timing = model.Timing;
         FrameMetrics m = FrameMetrics.From(rec);
-        List<ProfileNode> instances = model.Instances.ToList();
+        List<ProfileNode> instances = model.Groups.ToList();
         List<ProfileNode> outside = model.Root.Children.Where(c => c.Kind == NodeKind.CommandBuffer).ToList();
         List<ProfileNode> passes = instances.SelectMany(PassesOf).ToList();
         int visible = timing.Visibility.Sum(v => v.Visible);
@@ -38,7 +38,6 @@ internal sealed partial class ProfilerView
         {
             case "Overview":
             {
-                RecordedInstance? first = rec.Instances.FirstOrDefault(i => i.PixelWidth > 0);
                 bool gpuBound = timing.GpuMilliseconds > timing.CpuMilliseconds;
                 FrameTiming[] t = Heavy ? [] : frames.Select((_, i) => _source.Timing(i)).ToArray();
                 FrameMetrics[] fm = Heavy ? [] : frames.Select(FrameMetrics.From).ToArray();
@@ -67,8 +66,7 @@ internal sealed partial class ProfilerView
                         new("Frame", $"#{rec.ExecutionId}"),
                         new("Graph", rec.GraphName),
                         Heavy ? new("Capture", $"Snapshot (deep, DeepMode.{OpenSnapshot!.Mode})") : new("Capture", "Live (light)"),
-                        new("Instances", rec.Instances.Length.ToString()),
-                        first != null ? new("Resolution", $"{first.PixelWidth} x {first.PixelHeight}") : null,
+                        new("Groups", rec.Groups.Length.ToString()),
                     });
                     RecordedFeatures f = rec.Features;
                     (string, bool)[] features =
@@ -123,12 +121,12 @@ internal sealed partial class ProfilerView
             case "Timing":
             {
                 double gpu = Math.Max(1e-6, timing.GpuMilliseconds);
-                Section("GPU time by instance", 0, "Own passes only", _ => StackedBar("instanceshare", "", instances.Select((v, i) => new Segment(v.Name, v.OwnMilliseconds, InstanceColor(i))).ToList(), Style.Ms2));
-                TableSection("Instances", 0, "Own passes only / click to open",
-                    new[] { "Instance", "Key", "GPU ms", "CPU ms", "% of frame", "Passes", "Draws" }, new[] { 2f, 2f, 1f, 1f, 1f, 1f, 1f },
+                Section("GPU time by group", 0, "Own passes only", _ => StackedBar("instanceshare", "", instances.Select((v, i) => new Segment(v.Name, v.OwnMilliseconds, InstanceColor(i))).ToList(), Style.Ms2));
+                TableSection("Groups", 0, "Own passes only / click to open",
+                    new[] { "Group", "Parent", "GPU ms", "CPU ms", "% of frame", "Passes", "Draws" }, new[] { 2f, 2f, 1f, 1f, 1f, 1f, 1f },
                     instances.Select(v => new Row
                     {
-                        Cells = new[] { v.Name, Describe.Key(v.Instance!.Key), Style.F(v.OwnMilliseconds, "0.000"), Style.F(PassesOf(v).Sum(p => p.CpuMilliseconds), "0.000"), Style.F(v.OwnMilliseconds / gpu * 100, "0.0") + "%", PassesOf(v).Count().ToString(), PassesOf(v).Sum(p => (long)(p.Pass?.Stats.Draws ?? 0)).ToString() },
+                        Cells = new[] { v.Name, v.Parent is { Kind: NodeKind.Group } owner ? owner.Name : "-", Style.F(v.OwnMilliseconds, "0.000"), Style.F(PassesOf(v).Sum(p => p.CpuMilliseconds), "0.000"), Style.F(v.OwnMilliseconds / gpu * 100, "0.0") + "%", PassesOf(v).Count().ToString(), PassesOf(v).Sum(p => (long)(p.Pass?.Stats.Draws ?? 0)).ToString() },
                         Pick = Open(v.Id),
                     }).ToList());
 
@@ -138,7 +136,7 @@ internal sealed partial class ProfilerView
 
                 List<ProfileNode> heaviest = passes.OrderByDescending(p => p.Milliseconds).ToList();
                 TableSection("Heaviest passes", 0, $"Top 10 of {heaviest.Count} / click to open",
-                    new[] { "Pass", "Instance", "GPU ms", "CPU ms", "Draws" }, new[] { 2f, 1.5f, 0.8f, 0.8f, 0.7f },
+                    new[] { "Pass", "Group", "GPU ms", "CPU ms", "Draws" }, new[] { 2f, 1.5f, 0.8f, 0.8f, 0.7f },
                     heaviest.Take(10).Select(p => new Row
                     {
                         Cells = new[] { p.Name, p.Parent!.Name, Style.F(p.Milliseconds, "0.000"), Style.F(p.CpuMilliseconds, "0.000"), (p.Pass?.Stats.Draws ?? 0).ToString() },
@@ -146,10 +144,10 @@ internal sealed partial class ProfilerView
                     }).ToList());
 
                 TableSection("Command buffers outside passes", 380, "",
-                    new[] { "Command buffer", "GPU ms", "Instance", "Pass" }, new[] { 2f, 0.8f, 0.6f, 0.6f },
+                    new[] { "Command buffer", "GPU ms", "Group", "Pass" }, new[] { 2f, 0.8f, 0.6f, 0.6f },
                     outside.Select(o => new Row
                     {
-                        Cells = new[] { o.Name, Style.F(o.Milliseconds, "0.000"), o.CommandBuffer!.InstanceIndex.ToString(), o.CommandBuffer.PassIndex.ToString() },
+                        Cells = new[] { o.Name, Style.F(o.Milliseconds, "0.000"), o.CommandBuffer!.GroupIndex.ToString(), o.CommandBuffer.PassIndex.ToString() },
                         Pick = Open(o.Id),
                     }).ToList());
                 break;
@@ -299,7 +297,7 @@ internal sealed partial class ProfilerView
         List<Row> copies = new();
         long copyBytes = 0;
 
-        foreach (DeepInstance instance in deep.Instances)
+        foreach (DeepGroup instance in deep.Groups)
             foreach (DeepPass pass in instance.Passes)
             {
                 int before = pass.Copies.Count(c => c.Placement == CopyPlacement.BeforePass);
@@ -335,32 +333,32 @@ internal sealed partial class ProfilerView
             new("Blob bytes", Style.Bytes(blobBytes)),
         });
         TableSection("Replay status per pass", 0, "Click to open",
-            new[] { "Instance", "Pass", "Status", "Replay / reason", "Copies (before / after)" }, new[] { 1.2f, 1.3f, 1.1f, 2.4f, 1.3f }, status);
+            new[] { "Group", "Pass", "Status", "Replay / reason", "Copies (before / after)" }, new[] { 1.2f, 1.3f, 1.1f, 2.4f, 1.3f }, status);
         TableSection("Copies", 0, "Staging copies read back into blobs",
             new[] { "Pass", "Resource", "Version", "Placement", "Bytes" }, new[] { 1.4f, 1.4f, 0.7f, 0.9f, 0.8f }, copies);
     }
 
     private static IEnumerable<ProfileNode> PassesOf(ProfileNode instance) => instance.Children.Where(c => c.Kind == NodeKind.Pass);
 
-    private static RecordedInstance[] Subtree(Recording frame, GraphInstanceKey key)
+    private static RecordedGroup[] Subtree(Recording frame, string name)
     {
-        RecordedInstance? top = frame.Instances.FirstOrDefault(i => i.Key == key);
+        RecordedGroup? top = frame.Groups.FirstOrDefault(i => i.Name == name);
         if (top == null)
             return [];
 
         HashSet<int> inside = [top.Index];
-        foreach (RecordedInstance instance in frame.Instances)
+        foreach (RecordedGroup instance in frame.Groups)
         {
             if (inside.Contains(instance.ParentIndex))
                 inside.Add(instance.Index);
         }
 
-        return frame.Instances.Where(i => inside.Contains(i.Index)).ToArray();
+        return frame.Groups.Where(i => inside.Contains(i.Index)).ToArray();
     }
 
-    private void InstanceTab(FrameModel model, ProfileNode node, string tab, IReadOnlyList<Recording> frames)
+    private void GroupTab(FrameModel model, ProfileNode node, string tab, IReadOnlyList<Recording> frames)
     {
-        RecordedInstance instance = node.Instance!;
+        RecordedGroup instance = node.Group!;
         ViewVisibility? vis = model.Timing.Visibility.FirstOrDefault(v => v.View == instance.Name);
         List<ProfileNode> passes = PassesOf(node).ToList();
         long draws = passes.Sum(p => (long)(p.Pass?.Stats.Draws ?? 0));
@@ -373,12 +371,12 @@ internal sealed partial class ProfilerView
                 int current = CurrentIndex(frames, model);
                 double Gpu(Recording f)
                 {
-                    HashSet<int> inside = Subtree(f, instance.Key).Select(i => i.Index).ToHashSet();
-                    return f.CommandBuffers.Where(b => inside.Contains(b.InstanceIndex)).Sum(b => b.Milliseconds ?? 0);
+                    HashSet<int> inside = Subtree(f, instance.Name).Select(i => i.Index).ToHashSet();
+                    return f.CommandBuffers.Where(b => inside.Contains(b.GroupIndex)).Sum(b => b.Milliseconds ?? 0);
                 }
                 double[] gpuH = Heavy ? [] : frames.Select(Gpu).ToArray();
-                double[] cpuH = Heavy ? [] : frames.Select(f => Subtree(f, instance.Key).SelectMany(i => i.Passes).Sum(p => p.Stats.CpuMilliseconds)).ToArray();
-                double[] drawH = Heavy ? [] : frames.Select(f => (double)(f.Instances.FirstOrDefault(i => i.Key == instance.Key)?.Passes.Sum(p => (long)p.Stats.Draws) ?? 0)).ToArray();
+                double[] cpuH = Heavy ? [] : frames.Select(f => Subtree(f, instance.Name).SelectMany(i => i.Passes).Sum(p => p.Stats.CpuMilliseconds)).ToArray();
+                double[] drawH = Heavy ? [] : frames.Select(f => (double)(f.Groups.FirstOrDefault(i => i.Name == instance.Name)?.Passes.Sum(p => (long)p.Stats.Draws) ?? 0)).ToArray();
                 double[] visH = Heavy ? [] : frames.Select((_, i) => (double)(_source.Timing(i).Visibility.FirstOrDefault(v => v.View == instance.Name)?.Visible ?? 0)).ToArray();
                 string Sub(double[] v, Func<double, string> format) => Heavy ? "this snapshot" : $"avg {format(v.Length > 0 ? v.Average() : 0)}";
 
@@ -391,7 +389,7 @@ internal sealed partial class ProfilerView
                 });
 
                 if (!Heavy)
-                    ChartsSection("Trend", "Includes child instances / frames without this instance plot as 0", current, new[]
+                    ChartsSection("Trend", "Includes child groups / frames without this group plot as 0", current, new[]
                     {
                         new Sparkline("GPU time", gpuH, Style.Read, Style.Ms2),
                         new Sparkline("CPU record", cpuH, Style.KindDot(NodeKind.Pass), Style.Ms2),
@@ -399,7 +397,7 @@ internal sealed partial class ProfilerView
 
                 if (Heavy)
                 {
-                    DeepInstance? deepInstance = model.InstanceOf(node);
+                    DeepGroup? deepInstance = model.GroupOf(node);
                     TableSection("Passes", 0, "Click to open",
                         new[] { "Pass", "Type", "GPU ms", "CPU ms", "Draws", "Writes" }, new[] { 1.6f, 1.3f, 0.7f, 0.7f, 0.6f, 2f },
                         passes.Select(p =>
@@ -426,18 +424,12 @@ internal sealed partial class ProfilerView
 
                 Collapsible("Details", () =>
                 {
-                    KvSection("Instance", 420, new Kv?[]
+                    KvSection("Group", 420, new Kv?[]
                     {
                         new("Name", instance.Name),
-                        new("Kind", instance.Key.Kind.Name),
-                        new("Id", instance.Key.Id.ToString()),
                         new("Index", instance.Index.ToString()),
-                        new("Parent", node.Parent is { Kind: NodeKind.Instance } parent ? parent.Name : "-"),
-                        new("Data", Describe.Payload(instance.Data)),
-                        new("Data value", Describe.PayloadValue(instance.Data), instance.Data == null ? Style.InkDim : null),
-                        new("Pixel size", $"{instance.PixelWidth} x {instance.PixelHeight}"),
+                        new("Parent", node.Parent is { Kind: NodeKind.Group } parent ? parent.Name : "-"),
                         new("Passes", instance.Passes.Length.ToString()),
-                        new("Skipped passes", instance.Skipped.Length.ToString(), instance.Skipped.Length > 0 ? Style.Bad : null),
                     });
                     if (vis != null)
                         KvSection("Visibility", 420, new Kv?[]
@@ -448,13 +440,10 @@ internal sealed partial class ProfilerView
                             new("Shadow casters", vis.ShadowCasters > 0 ? Style.Int(vis.ShadowCasters) : "-"),
                             new("Culling time", Style.Ms(vis.CullingMilliseconds)),
                         });
-                    TableSection("Skipped passes", 420, "Not executed this frame",
-                        new[] { "Pass", "Reason" }, new[] { 1.4f, 1.4f },
-                        instance.Skipped.Length > 0 ? instance.Skipped.Select(s => R(s.Name, s.Reason.ToString())).ToList() : new List<Row> { R("-", "None") });
                 });
 
                 if (!Heavy)
-                    Accordion("More history", () => ChartsSection("Instance history", "Frames without this instance plot as 0", current, new[]
+                    Accordion("More history", () => ChartsSection("Group history", "Frames without this group plot as 0", current, new[]
                     {
                         new Sparkline("Draw calls", drawH, Style.KindDot(NodeKind.Draw), Style.Int),
                         new Sparkline("Visible renderers", visH, Style.Good, Style.Int),
@@ -481,7 +470,7 @@ internal sealed partial class ProfilerView
         {
             new("Name", buffer.Name),
             new("Id", buffer.Id.ToString()),
-            new("Scope", $"Outside passes (instance {buffer.InstanceIndex}, pass {buffer.PassIndex})"),
+            new("Scope", $"Outside passes (group {buffer.GroupIndex}, pass {buffer.PassIndex})"),
         }));
     }
 }

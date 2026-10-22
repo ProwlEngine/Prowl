@@ -39,7 +39,7 @@ internal sealed partial class ProfilerView
         var key = (instance, pass, eventIndex);
         if (!_replays.TryGetValue(key, out ReplayResult? result))
         {
-            result = _source.Replay(new ReplayRequest { InstanceIndex = instance, PassIndex = pass, EventIndex = eventIndex });
+            result = _source.Replay(new ReplayRequest { GroupIndex = instance, PassIndex = pass, EventIndex = eventIndex });
             _replays[key] = result;
         }
         return result;
@@ -48,7 +48,7 @@ internal sealed partial class ProfilerView
     private static ReplayOutput? Output(ReplayResult result, TraceResourceId id)
         => result.Outputs.FirstOrDefault(o => o.Resource == id);
 
-    private void ResolveTexture(FrameModel model, DeepInstance view, DeepPass pass, RecordedResource? res, TargetStep? step, ViewerData data)
+    private void ResolveTexture(FrameModel model, DeepGroup view, DeepPass pass, RecordedResource? res, TargetStep? step, ViewerData data)
     {
         if (res == null)
         {
@@ -59,7 +59,7 @@ internal sealed partial class ProfilerView
         TraceResourceId id = res.Id;
         DeepIndex index = model.Index!;
 
-        bool Writes(DeepInstance v, DeepPass p) => p.Accesses.Any(a => a.IsOutput && GraphResource(v, a.Resource) is { } g && Backing(index, g)?.Id == res.Id);
+        bool Writes(DeepGroup v, DeepPass p) => p.Accesses.Any(a => a.IsOutput && GraphResource(v, a.Resource) is { } g && Backing(index, g)?.Id == res.Id);
 
         ReplayOutput? output = null;
         if (Writes(view, pass))
@@ -75,8 +75,8 @@ internal sealed partial class ProfilerView
         }
         else
         {
-            (DeepInstance, DeepPass)? writer = null;
-            foreach (DeepInstance v in model.Deep!.Instances.OrderBy(v => v.Index))
+            (DeepGroup, DeepPass)? writer = null;
+            foreach (DeepGroup v in model.Deep!.Groups.OrderBy(v => v.Index))
                 foreach (DeepPass p in v.Passes)
                 {
                     bool earlier = v.Index < view.Index || (v.Index == view.Index && p.Index < pass.Index);

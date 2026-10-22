@@ -22,29 +22,29 @@ internal sealed class FrameModel
         FrameModel model = new() { Recording = recording, Timing = timing, Deep = deep, Index = deep != null ? new DeepIndex(deep) : null, Root = root };
 
         Dictionary<int, ProfileNode> instances = new();
-        foreach (RecordedInstance instance in recording.Instances)
+        foreach (RecordedGroup instance in recording.Groups)
         {
-            ProfileNode parentNode = instances.GetValueOrDefault(instance.ParentIndex, root);
+            ProfileNode parentNode = instance.ParentIndex < 0 ? root : instances.GetValueOrDefault(instance.ParentIndex, root);
             ProfileNode instanceNode = parentNode.Add(new ProfileNode
             {
                 Id = $"i{instance.Index}",
-                Kind = NodeKind.Instance,
+                Kind = NodeKind.Group,
                 Name = instance.Name,
-                InstanceIndex = instance.Index,
-                Instance = instance,
+                GroupIndex = instance.Index,
+                Group = instance,
             });
             instances[instance.Index] = instanceNode;
-            DeepInstance? deepInstance = deep?.Instances.FirstOrDefault(i => i.Index == instance.Index);
+            DeepGroup? deepInstance = deep?.Groups.FirstOrDefault(i => i.Index == instance.Index);
 
             foreach (RecordedPass pass in instance.Passes)
             {
-                RecordedCommandBuffer? buffer = recording.CommandBuffers.FirstOrDefault(b => b.InstanceIndex == instance.Index && b.PassIndex == pass.Index);
+                RecordedCommandBuffer? buffer = recording.CommandBuffers.FirstOrDefault(b => b.GroupIndex == instance.Index && b.PassIndex == pass.Index);
                 ProfileNode passNode = instanceNode.Add(new ProfileNode
                 {
                     Id = $"{instanceNode.Id}p{pass.Index}",
                     Kind = NodeKind.Pass,
                     Name = pass.Name,
-                    InstanceIndex = instance.Index,
+                    GroupIndex = instance.Index,
                     PassIndex = pass.Index,
                     Pass = pass,
                     CommandBuffer = buffer,
@@ -65,7 +65,7 @@ internal sealed class FrameModel
         }
 
         int outside = 0;
-        foreach (RecordedCommandBuffer buffer in recording.CommandBuffers.Where(b => b.InstanceIndex < 0 && !b.Name.StartsWith(CaptureCopy.BufferPrefix, System.StringComparison.Ordinal)))
+        foreach (RecordedCommandBuffer buffer in recording.CommandBuffers.Where(b => b.GroupIndex < 0 && !b.Name.StartsWith(CaptureCopy.BufferPrefix, System.StringComparison.Ordinal)))
         {
             ProfileNode node = root.Add(new ProfileNode
             {
@@ -180,12 +180,12 @@ internal sealed class FrameModel
             Register(into, child);
     }
 
-    public IEnumerable<ProfileNode> Instances => ById.Values.Where(n => n.Kind == NodeKind.Instance).OrderBy(n => n.InstanceIndex);
+    public IEnumerable<ProfileNode> Groups => ById.Values.Where(n => n.Kind == NodeKind.Group).OrderBy(n => n.GroupIndex);
 
-    public DeepInstance? InstanceOf(ProfileNode node)
+    public DeepGroup? GroupOf(ProfileNode node)
     {
-        int instance = node.Ancestor(NodeKind.Instance)?.InstanceIndex ?? -1;
-        return Deep?.Instances.FirstOrDefault(i => i.Index == instance);
+        int instance = node.Ancestor(NodeKind.Group)?.GroupIndex ?? -1;
+        return Deep?.Groups.FirstOrDefault(i => i.Index == instance);
     }
 
     public DeepPass? PassOf(ProfileNode node)
@@ -193,6 +193,6 @@ internal sealed class FrameModel
         ProfileNode? pass = node.Ancestor(NodeKind.Pass);
         if (pass == null)
             return null;
-        return InstanceOf(pass)?.Passes.FirstOrDefault(p => p.Index == pass.PassIndex);
+        return GroupOf(pass)?.Passes.FirstOrDefault(p => p.Index == pass.PassIndex);
     }
 }
