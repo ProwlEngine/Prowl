@@ -279,11 +279,15 @@ public abstract class NetSessionTests : IDisposable
         SessionProbe.PumpUntil(() => waiting != null, host, alice);
         SessionProbe.PumpFor(30, host, alice);
         Assert.Equal(SessionState.Joining, alice.Session.State);
+        Assert.NotNull(alice.Session.HostConnection);
+        Assert.True(alice.Session.HostConnection.IsConnected);
+        Assert.Null(host.Session.HostConnection);
         Assert.Equal(new byte[] { 42 }, waiting!.Request.Token.ToArray());
 
         waiting.Accept();
         SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
         Assert.True(waiting.IsResolved);
+        Assert.Same(alice.Session.HostConnection, alice.Session.HostPeer!.Connection);
     }
 
     [Fact]
