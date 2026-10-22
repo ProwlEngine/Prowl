@@ -62,6 +62,11 @@ public class Player : Component
 - `[Change]` hooks and the collections' `Changed` events run for changes made locally and received, never
   for state that arrives with a snapshot or spawn: that is in place before `OnEnable`. Received `[Change]`
   hooks run once the whole tick's block of values is applied.
+- Incoming Sync blocks validate their complete framing and accepted values before applying state,
+  advancing revisions, relaying values, or running callbacks. Malformed later records reject the block
+  without applying earlier values. Unknown, unauthorized, and stale entries remain skippable;
+  accepted values and standalone Sync messages must not contain trailing bytes. Custom serializers
+  run during validation and application and must read deterministically without side effects.
 - `NetList`, `NetDictionary` and `NetSet` send operations, numbered so a late joiner's full copy never
   applies a pending one twice. Changes on a peer without control are dropped with a one-time warning.
 - Your own structs and classes just work: the script compiler writes serializers for the ones `[Sync]`

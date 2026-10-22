@@ -148,14 +148,14 @@ public abstract class NetCollection
 
     internal abstract NetCollection CreateEmptyCopy();
 
-    internal void Validate(ref NetReader reader)
+    internal void Validate(ref NetReader reader, bool initial = false)
     {
         NetCollection copy = CreateEmptyCopy();
         using NetWriter state = new();
         WriteAll(state);
-        NetReader initial = new(state.WrittenSpan);
-        copy.Read(ref initial, initial: true);
-        copy.Read(ref reader, initial: false);
+        NetReader baseline = new(state.WrittenSpan);
+        copy.Read(ref baseline, initial: true);
+        copy.Read(ref reader, initial);
     }
 
     /// <summary>Applies what <see cref="WriteAll" /> or <see cref="WriteChanges" /> wrote on another peer.</summary>
