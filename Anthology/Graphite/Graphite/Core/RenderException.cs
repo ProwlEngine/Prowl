@@ -2,10 +2,10 @@
 
 namespace Prowl.Graphite;
 
-/// <summary>A render graph that cannot be built, naming the pass whose declarations broke it when one did.</summary>
-public sealed class RenderGraphException(string message, IPass? pass) : InvalidOperationException(message)
+/// <summary>A frame graph that cannot be built or run, naming the pass that broke it when one did.</summary>
+public sealed class RenderGraphException(string message, string? pass) : InvalidOperationException(message)
 {
-    public IPass? Pass { get; } = pass;
+    public string? Pass { get; } = pass;
 }
 
 /// <summary>Prowl.Graphite error.</summary>
