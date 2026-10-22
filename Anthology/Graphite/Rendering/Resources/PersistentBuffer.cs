@@ -1,19 +1,27 @@
 namespace Prowl.Graphite.Rendering;
 
-/// <summary>A graph buffer resolved before the graph runs, so the CPU can queue writes to it. A new size keeps its contents.</summary>
-internal sealed class PersistentBuffer(RenderResourceID id, BufferUsage usage, GraphInstanceKey key)
+internal sealed class PersistentBuffer(RenderResourceID id, BufferUsage usage)
 {
     public RenderResourceID Id { get; } = id;
 
-    public GraphInstanceKey Key { get; } = key;
-
     public DeviceBuffer? Buffer { get; private set; }
 
-    public GraphBufferDesc Description => GraphBufferDesc.Of(Buffer?.SizeInBytes ?? 0, usage);
-
-    public DeviceBuffer Resolve(GraphicsDevice device, GraphStore store, uint sizeInBytes)
+    public DeviceBuffer Resolve(GraphicsDevice device, RenderStore store, uint sizeInBytes)
     {
-        Buffer = store.ResolvePersistent(device, Id, GraphBufferDesc.Of(sizeInBytes, usage), Key);
-        return Buffer;
+        if (Buffer != null && Buffer.SizeInBytes == sizeInBytes)
+            return Buffer;
+        DeviceBuffer created = device.ResourceFactory.CreateBuffer(new BufferDescription(sizeInBytes, usage));
+        created.Name = RenderResourceID.ToString(Id);
+        if (Buffer != null)
+            store.Resized(Buffer, created);
+        Buffer = created;
+        return created;
+    }
+
+    public void Release(RenderStore store)
+    {
+        if (Buffer != null)
+            store.Retire(Buffer);
+        Buffer = null;
     }
 }

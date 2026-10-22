@@ -211,7 +211,7 @@ internal sealed class GeometryPage(RangeAllocator vertexWords, RangeAllocator in
 /// and freed ranges and ids wait until the GPU retires the frame that freed them. Chunk and mesh records live in two
 /// tables every pass can read.
 /// </summary>
-internal sealed class GeometryPool(GraphicsDevice device, GraphStore store, uint pageVertexWords = GeometryPool.DefaultPageVertexWords, uint pageIndices = GeometryPool.DefaultPageIndices)
+internal sealed class GeometryPool(GraphicsDevice device, RenderStore store, uint pageVertexWords = GeometryPool.DefaultPageVertexWords, uint pageIndices = GeometryPool.DefaultPageIndices)
 {
     /// <summary>Words of vertex data per page, 96 MB.</summary>
     public const uint DefaultPageVertexWords = 24u << 20;
@@ -449,9 +449,8 @@ internal sealed class GeometryPool(GraphicsDevice device, GraphStore store, uint
 
     private GeometryPage NewPage(uint vertexWords, uint indexCount)
     {
-        GraphInstanceKey root = new(GraphKind.Root, 0);
-        PersistentBuffer vertices = new(RenderResourceID.Intern($"Graphite.Page{Pages.Count}.Vertices"), BufferUsage.StructuredBufferReadWrite, root);
-        PersistentBuffer indices = new(RenderResourceID.Intern($"Graphite.Page{Pages.Count}.Indices"), BufferUsage.IndexBuffer | BufferUsage.StructuredBufferReadWrite, root);
+        PersistentBuffer vertices = new(RenderResourceID.Intern($"Graphite.Page{Pages.Count}.Vertices"), BufferUsage.StructuredBufferReadWrite);
+        PersistentBuffer indices = new(RenderResourceID.Intern($"Graphite.Page{Pages.Count}.Indices"), BufferUsage.IndexBuffer | BufferUsage.StructuredBufferReadWrite);
         vertices.Resolve(device, store, vertexWords * 4);
         indices.Resolve(device, store, indexCount * 4);
         return new GeometryPage(new RangeAllocator(vertexWords), new RangeAllocator(indexCount), vertices, indices);
