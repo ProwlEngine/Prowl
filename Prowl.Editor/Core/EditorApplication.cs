@@ -288,6 +288,7 @@ public class EditorApplication : Game
                 PromptSaveAs(SaveManager.TakeAfterSaveAs());
             return null;
         };
+        Runtime.Debug.OnLog += PauseOnLog;
         SaveManager.CollectUnsaved += unsaved =>
         {
             if (EditorSceneManager.IsDirty) unsaved.Add(EditorSceneManager.SaveLabel);
@@ -706,6 +707,15 @@ public class EditorApplication : Game
         GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime, showStarsAndComets: false);
 
         HandlePlayModeShortcuts();
+        if (s_pauseRequested)
+        {
+            s_pauseRequested = false;
+            if (Application.IsPlaying && !Application.IsPaused)
+            {
+                Application.IsPaused = true;
+                Toasts.Warning(Loc.Get("play.paused_on_error"), Loc.Get("play.paused_on_error_msg"));
+            }
+        }
         DrawHeader(paper, w, h);
 
         float pad = EditorTheme.DockPadding;
@@ -1857,6 +1867,18 @@ public class EditorApplication : Game
         Application.TargetFrameRate = limit;
     }
 
+    // Logs can come from any thread, so the pause itself waits for the next frame.
+    private static volatile bool s_pauseRequested;
+
+    private static void PauseOnLog(string message, DebugStackTrace? stackTrace, LogSeverity severity)
+    {
+        if (!Application.IsPlaying || Application.IsPaused) return;
+        PauseOnLog mode = Preferences.Get<PlayModePreferences>().PauseOn;
+        if (mode == GUI.Panels.PauseOnLog.ErrorsAndExceptions && severity is LogSeverity.Error or LogSeverity.Exception
+            || mode == GUI.Panels.PauseOnLog.ExceptionsOnly && severity == LogSeverity.Exception)
+            s_pauseRequested = true;
+    }
+
     private void EnterPlayMode()
     {
         if (Application.IsPlaying) return;
@@ -1871,6 +1893,11 @@ public class EditorApplication : Game
 
         Scene scene = Runtime.Resources.Scene.Current;
         if (scene == null) return;
+
+        PlayModePreferences prefs = Preferences.Get<PlayModePreferences>();
+        if (prefs.SaveSceneOnPlay && EditorSceneManager.IsDirty && EditorSceneManager.CurrentScenePath != null)
+            EditorSceneManager.Save();
+        if (prefs.ClearConsoleOnPlay) ConsolePanel.Clear();
 
         // Save active tab (to restore on stop)
         SaveActiveTab();
@@ -1928,14 +1955,15 @@ public class EditorApplication : Game
 
         // Load with full lifecycle (Enable -> OnEnable/Start will fire)
         Runtime.Resources.Scene.Load(playScene);
-        Undo.Clear();
+        if (prefs.KeepUndoHistory) Undo.ClearPending();
+        else Undo.Clear();
 
         // Apply physics settings to the new scene
         try { EditorRegistries.GetSettings<PhysicsSettings>().Apply(); } catch { }
 
-        // Focus the Game View tab
-        FocusPanel(typeof(GameViewPanel));
-        if (Preferences.Get<PlayModePreferences>().GameViewOnPlay == GameViewOnPlay.Maximize && FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel gameView)
+        if (prefs.GameViewOnPlay != GameViewOnPlay.Nothing)
+            FocusPanel(typeof(GameViewPanel));
+        if (prefs.GameViewOnPlay == GameViewOnPlay.Maximize && FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel gameView)
             _maximizedForPlay = _panelMaximizer.Maximize(gameView);
 
         // The editor's vsync and frame limit are its preference, not the game's, so play starts
@@ -1979,7 +2007,8 @@ public class EditorApplication : Game
                 Runtime.Resources.Scene.EndSessionOnSwap = true;
                 Runtime.Resources.Scene.Load(restoredScene);
             }
-            Undo.Clear();
+            if (Preferences.Get<PlayModePreferences>().KeepUndoHistory) Undo.ClearPending();
+            else Undo.Clear();
             _savedEditorScene = null;
         }
 

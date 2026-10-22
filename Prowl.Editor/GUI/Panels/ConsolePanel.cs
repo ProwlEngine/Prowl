@@ -107,6 +107,12 @@ public class ConsolePanel : DockPanel
 
     public ConsolePanel() => EnsureSubscribed();
 
+    /// <summary>Removes every log shown in the Console.</summary>
+    public static void Clear()
+    {
+        lock (s_messagesLock) _messages.Clear();
+    }
+
     /// <summary>Subscribe the shared log store to Debug.OnLog if not already. Safe to call before any
     /// ConsolePanel is opened - the status-bar footer relies on this to show logs regardless.</summary>
     public static void EnsureSubscribed()
@@ -265,7 +271,7 @@ public class ConsolePanel : DockPanel
                 LevelChip(paper, font, "con_copy", EditorIcons.Copy_I, EditorTheme.InkDim, Loc.Get("console.copy"), null, false, !hasSelection,
                     () => { if (SelectedEntry() is { } entry) paper.SetClipboard(CopyText(entry, withStack: true)); });
 
-                ToolbarIconBtn(paper, "con_clear", EditorIcons.Trash, Loc.Get("console.clear"), false, () => { lock (s_messagesLock) _messages.Clear(); _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
+                ToolbarIconBtn(paper, "con_clear", EditorIcons.Trash, Loc.Get("console.clear"), false, () => { Clear(); _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
                 ToolbarIconBtn(paper, "con_opts", EditorIcons.EllipsisVertical, Loc.Get("console.options"), false,
                     () => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, BuildOptionsMenu));
             }

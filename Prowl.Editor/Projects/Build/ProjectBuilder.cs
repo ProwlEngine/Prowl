@@ -9,6 +9,7 @@ using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Settings;
@@ -171,6 +172,9 @@ public static class ProjectBuilder
     /// <summary> Starts a build using the configured pipeline, optionally running it on a background thread. Returns a BuildProgress that tracks the build status. </summary>
     public static BuildProgress StartBuildAsync(bool andRun, string? outputPath)
     {
+        if (EditorApplication.Instance != null && Preferences.Get<PlayModePreferences>().ClearConsoleOnBuild)
+            ConsolePanel.Clear();
+
         BuildSettings? settings;
         try
         {

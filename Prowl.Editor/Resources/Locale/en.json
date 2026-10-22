@@ -63,6 +63,8 @@
 
   "game.resolution": "Resolution",
   "game.show_stats": "Show Stats",
+  "play.paused_on_error": "Paused",
+  "play.paused_on_error_msg": "The game logged an error. Change this in Preferences > Play Mode.",
   "game.add_resolution": "Add Custom...",
   "game.remove_resolution": "Remove Custom",
   "game.resolution_name": "Name",
