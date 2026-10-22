@@ -269,27 +269,34 @@ public class EditorApplication : Game
         PropertyGridConfig.IsSimpleFieldType = fieldType => EditorRegistries.GetPropertyEditor(fieldType) != null;
 
         // Register save handlers
+        // The scene or prefab is written on every save, but only named in the toast when it had changes.
         SaveManager.OnSave += () =>
         {
+            if (Application.IsPlaying) return null;
+            bool changed = EditorSceneManager.IsDirty;
+
             if (PrefabEditingMode.IsEditing)
             {
-                return PrefabEditingMode.Save()
+                return PrefabEditingMode.Save() && changed
                     ? Loc.Get("save.prefab", new { name = System.IO.Path.GetFileNameWithoutExtension(PrefabEditingMode.EditingPrefabPath) })
                     : null;
             }
-            if (EditorSceneManager.Save())
-                return Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current.IsValid() ? Runtime.Resources.Scene.Current.Name : "Untitled" });
+            if (EditorSceneManager.CurrentScenePath != null)
+            {
+                return EditorSceneManager.Save() && changed
+                    ? Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current.IsValid() ? Runtime.Resources.Scene.Current.Name : "Untitled" })
+                    : null;
+            }
 
-            // No path yet - prompt for one, but never interrupt an unattended auto-save.
-            if (!SaveManager.IsAutoSave)
+            // An untitled scene only asks for a path when it has something worth keeping, and never during an auto-save.
+            if (changed && !SaveManager.IsAutoSave)
                 PromptSaveAs();
             return null;
         };
         SaveManager.OnSave += () =>
         {
-            if (Project.Current == null) return null;
-            SaveProjectState();
-            return Loc.Get("save.layout");
+            if (Project.Current != null && !Application.IsPlaying) SaveProjectState();
+            return null;
         };
 
         // Set Windows title bar to match Darkest theme color

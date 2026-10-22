@@ -246,7 +246,7 @@ public class MaterialAssetEditor : AssetImporterEditor
         if (names.Count == 0) return null;
 
         names.Sort(StringComparer.OrdinalIgnoreCase);
-        string label = string.Join(", ", names);
+        string label = Prowl.Rosetta.Loc.Get("save.material", new { name = string.Join(", ", names) });
 
         if (showToast)
             Toasts.Success(Prowl.Rosetta.Loc.Get("save.saved"), label);

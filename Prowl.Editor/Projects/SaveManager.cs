@@ -57,18 +57,9 @@ public static class SaveManager
     {
         _saveRequestedThisFrame = false;
 
-        // Ctrl+S shortcut
+        // Ctrl+S saves everything, in play mode too. Handlers skip what play mode cannot save.
         if (ShortcutManager.IsPressed("Global/Save"))
-        {
-            if (Application.IsPlaying)
-            {
-                Toasts.Warning(Loc.Get("save.cant_play_mode"),
-                    Loc.Get("save.cant_play_mode_msg"));
-                return;
-            }
-
             RequestSave();
-        }
 
         // Auto-save timer
         if (AutoSaveEnabled && AutoSaveInterval > 0 && !Application.IsPlaying)
@@ -116,7 +107,9 @@ public static class SaveManager
 
         if (labels.Count == 0)
         {
-            if (!isAutoSave)
+            if (!isAutoSave && Application.IsPlaying)
+                Toasts.Warning(Loc.Get("save.cant_play_mode"), Loc.Get("save.cant_play_mode_msg"));
+            else if (!isAutoSave)
                 Origami.Toast(Loc.Get("save.nothing")).Message(Loc.Get("save.nothing_msg")).Info().Show();
             IsAutoSave = false;
             return;

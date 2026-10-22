@@ -186,7 +186,7 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
 
     protected abstract GraphDomain<TRecord> CreateDomain(Asset asset);
 
-    public override string Title => _asset.IsValid() ? $"{ToolName}: {_asset!.Name}" : ToolName;
+    public override string Title => _asset.IsValid() ? $"{ToolName}: {_asset!.Name}{(_dirty ? " *" : "")}" : ToolName;
 
     public override void OnClosed()
     {
@@ -647,8 +647,7 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
         float x = (float)paper.PointerPos.X, y = (float)paper.PointerPos.Y;
         if (x < _rootX || y < _rootY || x > _rootX + _rootW || y > _rootY + _rootH) return;
 
-        if (ShortcutManager.IsPressed("GraphEditor/Save")) Save();
-        else if (ShortcutManager.IsPressed("GraphEditor/Delete")) Controller.DeleteSelection();
+        if (ShortcutManager.IsPressed("GraphEditor/Delete")) Controller.DeleteSelection();
         else if (ShortcutManager.IsPressed("GraphEditor/SelectAll")) Controller.SelectAll();
         else if (ShortcutManager.IsPressed("GraphEditor/FrameSelection")) Controller.FrameSelection();
         else if (ShortcutManager.IsPressed("GraphEditor/Recenter")) Controller.FrameAll();

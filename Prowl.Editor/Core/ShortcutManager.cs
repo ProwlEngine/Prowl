@@ -307,7 +307,7 @@ internal static class BuiltInShortcuts
         ShortcutManager.LoadOverrides();
 
         // Global
-        ShortcutManager.Register("Global/Save", "Save Scene", KeyCode.S, ctrl: true);
+        ShortcutManager.Register("Global/Save", "Save All", KeyCode.S, ctrl: true);
         ShortcutManager.Register("Global/SaveAs", "Save Scene As", KeyCode.S, ctrl: true, shift: true);
         ShortcutManager.Register("Global/NewScene", "New Scene", KeyCode.N, ctrl: true);
         ShortcutManager.Register("Global/Undo", "Undo", KeyCode.Z, ctrl: true);
@@ -343,7 +343,6 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Project/Rename", "Rename Selected", KeyCode.F2);
 
         // Graph Editor
-        ShortcutManager.Register("GraphEditor/Save", "Save Graph", KeyCode.S, ctrl: true);
         ShortcutManager.Register("GraphEditor/Delete", "Delete Selected", KeyCode.Delete);
         ShortcutManager.Register("GraphEditor/Duplicate", "Duplicate Selected", KeyCode.D, ctrl: true);
         ShortcutManager.Register("GraphEditor/Copy", "Copy Selected", KeyCode.C, ctrl: true);

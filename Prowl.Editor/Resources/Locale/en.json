@@ -13,8 +13,10 @@
 
   "save.auto_saved": "Auto-saved",
   "save.cant_play_mode": "Can't save during Play Mode",
-  "save.cant_play_mode_msg": "Exit Play Mode to save your scene, prefab, or graph.",
+  "save.cant_play_mode_msg": "Exit Play Mode to save your scene or prefab.",
   "save.graph": "Graph: {{name}}",
+  "save.material": "Material: {{name}}",
+  "save.script": "Script: {{name}}",
   "save.layout": "Editor Layout",
   "save.nothing": "Nothing to save",
   "save.nothing_msg": "All files are up to date.",

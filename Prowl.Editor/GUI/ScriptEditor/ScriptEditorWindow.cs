@@ -13,6 +13,7 @@ using Prowl.OrigamiUI;
 using Prowl.OrigamiUI.CSharp;
 using Prowl.OrigamiUI.Graphite;
 using Prowl.PaperUI;
+using Prowl.Rosetta;
 using Prowl.PaperUI.LayoutEngine;
 
 using TextAlignment = Prowl.PaperUI.TextAlignment;
@@ -58,6 +59,19 @@ public class ScriptEditorWindow : DockPanel
 
     public override string Title => "Scripts";
     public override string Icon => EditorIcons.Code;
+
+    static ScriptEditorWindow()
+    {
+        // Auto save leaves scripts alone, since every write recompiles.
+        SaveManager.OnSave += () =>
+        {
+            if (s_window == null || SaveManager.IsAutoSave) return null;
+            var saved = new List<string>();
+            foreach (var tab in s_window._tabs)
+                if (tab.Editor.IsDirty && Save(tab)) saved.Add(tab.Name);
+            return saved.Count == 0 ? null : Loc.Get("save.script", new { name = string.Join(", ", saved) });
+        };
+    }
 
     public ScriptEditorWindow()
     {
@@ -139,7 +153,7 @@ public class ScriptEditorWindow : DockPanel
             Path = path, Editor = editor, Guid = backend?.PathToGuid(backend.ToRelativePath(path)) ?? Guid.Empty, Id = ++s_nextTabId,
             OnFallback = onFallback, IsShader = shaderKind != null, HadBom = bom, DiskTime = time,
         };
-        editor.SaveRequested += () => Save(tab);
+        editor.SaveRequested += () => SaveManager.RequestSave();
         editor.NavigateRequested += Navigate;
         editor.ExternalEditsRequested += ApplyExternalEdits;
         return tab;
@@ -364,7 +378,7 @@ public class ScriptEditorWindow : DockPanel
         }
     }
 
-    private static void Save(ScriptTab tab)
+    private static bool Save(ScriptTab tab)
     {
         try
         {
@@ -374,12 +388,13 @@ public class ScriptEditorWindow : DockPanel
         catch (Exception e)
         {
             Toasts.Error("Save failed", e.Message);
-            return;
+            return false;
         }
 
         tab.Editor.Undo.MarkSaved();
         if (tab.IsShader) ShaderWorkspaces.Invalidate();
         ImportAndRecompile(tab.Path);
+        return true;
     }
 
     private static void ImportAndRecompile(string path)
