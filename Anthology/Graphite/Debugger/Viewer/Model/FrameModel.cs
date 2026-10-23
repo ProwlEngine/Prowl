@@ -160,20 +160,30 @@ internal sealed class FrameModel
                     or DrawIndirectCountCommand or DrawIndexedIndirectCountCommand or DispatchCommand or DispatchIndirectCommand:
                     ProfileNode owner = program != null && program.Parent == scope ? program : scope;
                     bool dispatch = command is DispatchCommand or DispatchIndirectCommand;
-                    int sub = owner.Children.Count(c => c.Kind == NodeKind.Draw);
-                    string name = dispatch ? $"Dispatch {sub}"
-                        : owner.Kind == NodeKind.Marker ? $"Draw {sub} / SubMesh {sub}"
-                        : boundMesh.Length > 0 ? $"Draw {sub} / {boundMesh}" : $"Draw {sub}";
-                    owner.Add(new ProfileNode
+                    uint steps = command switch
                     {
-                        Id = $"{passNode.Id}d{drawEvent}",
-                        Kind = NodeKind.Draw,
-                        Name = name,
-                        CommandIndex = i,
-                        DrawOrdinal = drawEvent,
-                        SubIndex = sub,
-                        Command = command,
-                    });
+                        DrawIndirectCommand d => d.DrawCount,
+                        DrawIndexedIndirectCommand d => d.DrawCount,
+                        _ => 0,
+                    };
+                    for (int step = 0; step < System.Math.Max(steps, 1u); step++)
+                    {
+                        int sub = owner.Children.Count(c => c.Kind == NodeKind.Draw);
+                        string name = dispatch ? $"Dispatch {sub}"
+                            : owner.Kind == NodeKind.Marker ? $"Draw {sub} / SubMesh {sub}"
+                            : boundMesh.Length > 0 ? $"Draw {sub} / {boundMesh}" : $"Draw {sub}";
+                        owner.Add(new ProfileNode
+                        {
+                            Id = steps > 1 ? $"{passNode.Id}d{drawEvent}i{step}" : $"{passNode.Id}d{drawEvent}",
+                            Kind = NodeKind.Draw,
+                            Name = name,
+                            CommandIndex = i,
+                            DrawOrdinal = drawEvent,
+                            SubIndex = sub,
+                            IndirectIndex = steps > 1 ? step : -1,
+                            Command = command,
+                        });
+                    }
                     break;
             }
         }

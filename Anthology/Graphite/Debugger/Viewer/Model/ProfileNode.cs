@@ -39,8 +39,11 @@ internal sealed class ProfileNode
     public int CommandIndex = -1;
     public int DrawOrdinal = -1;
     public int SubIndex;
+    public int IndirectIndex = -1;
     public RecordedCommand? Command;
     public object? Meta;
+
+    public IndirectSlice? Slice => IndirectIndex >= 0 ? new IndirectSlice(0, (uint)IndirectIndex + 1) : null;
 
     public bool IsTimed => Kind is NodeKind.Frame or NodeKind.Group or NodeKind.Pass or NodeKind.CommandBuffer;
 
