@@ -92,6 +92,23 @@ public class BinaryTagConverterTests
         Assert.Equal(bytes, deserialized.Get("bytes").ByteArrayValue);
     }
 
+    [Fact]
+    public void TestWritingAFileReplacesALongerOne()
+    {
+        var file = new FileInfo(Path.GetTempFileName());
+        try
+        {
+            new EchoObject(EchoType.ByteArray, new byte[4096]).WriteToBinary(file);
+            new EchoObject(EchoType.Int, 42).WriteToBinary(file);
+            file.Refresh();
+            Assert.True(file.Length < 32);
+        }
+        finally
+        {
+            file.Delete();
+        }
+    }
+
     [Theory]
     [InlineData(BinaryEncodingMode.Performance)]
     [InlineData(BinaryEncodingMode.Size)]

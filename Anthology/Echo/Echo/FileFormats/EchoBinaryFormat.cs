@@ -248,7 +248,7 @@ public sealed class EchoBinaryFormat : IFileFormat
 
     public static void WriteToFile(EchoObject tag, FileInfo file, BinarySerializationOptions? options = null)
     {
-        using var stream = file.OpenWrite();
+        using var stream = file.Create();
         using var writer = new BinaryWriter(stream);
         WriteTo(tag, writer, options);
     }
