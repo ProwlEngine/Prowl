@@ -25,6 +25,9 @@ public abstract class CommandBufferBase : GraphicsResource
     /// <summary>Command sink of the pass this buffer records, if a command stream profiler took it.</summary>
     internal IPassCommandSink? PassSink { get; set; }
 
+    /// <summary>Stopwatch ticks spent inside <see cref="PassSink"/> since the buffer began.</summary>
+    internal long SinkTicks { get; set; }
+
     internal virtual void TrackBuffer(DeviceBuffer buffer) { }
 
     internal virtual void TrackTexture(Texture texture) { }

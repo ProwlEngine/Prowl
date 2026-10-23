@@ -334,6 +334,7 @@ internal sealed partial class GraphExecution
         cb.Pass = pass;
         cb.Bindings = null;
         cb.PassSink = null;
+        cb.SinkTicks = 0;
         cb.ResetStats();
         cb.RentalId = (ulong)System.Threading.Interlocked.Increment(ref s_nextCommandBufferRentalId);
         if (!string.IsNullOrEmpty(name))
@@ -347,8 +348,8 @@ internal sealed partial class GraphExecution
     public CommandBuffer BeginPassCommandBuffer(string passName, PassInfo? pass, ReadOnlySpan<ResourceAccess> accesses)
     {
         CommandBuffer cb = BeginCommandBuffer(passName, pass);
-        if (Task.Profilers.CommandStream is { } profiler && cb.Pass is { } info)
-            cb.PassSink = profiler.BeginPassCommands(in info);
+        if (Task.Profilers.CommandStream is { } profiler && cb.Pass is { } info && profiler.BeginPassCommands(in info) is { } sink)
+            cb.PassSink = new TimedPassCommandSink(sink, cb);
 
         if (_barriers.Count > 0 || _pendingBufferSrc != BufferAccess.None)
         {
