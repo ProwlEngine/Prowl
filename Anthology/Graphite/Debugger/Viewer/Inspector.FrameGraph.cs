@@ -594,10 +594,30 @@ internal sealed partial class ProfilerView
         {
             int columns = kind.Passes.Count > 0 ? kind.Passes.Max(p => p.Level) + 1 : 0;
 
-            List<KindAlias> leftAliases = kind.Aliases.Where(a => a.Consumers[0].Level == 0).ToList();
+            int AliasOrder(KindAlias a) => (a.Resource.Kind == GraphResourceKind.Texture ? 100000 : 0) + kind.Aliases.IndexOf(a);
+
+            List<KindAlias> leftAliases = kind.Aliases.Where(a => a.Consumers[0].Level == 0).OrderBy(AliasOrder).ToList();
             List<KindAlias> topAliases = kind.Aliases.Except(leftAliases).ToList();
             List<KindSink> rightSinks = kind.Sinks.Where(sk => sk.Writer.Level == columns - 1 && !sk.Writer.HasOut).ToList();
             List<KindSink> bottomSinks = kind.Sinks.Except(rightSinks).ToList();
+
+            Dictionary<(string, string), int> rank = new();
+            for (int i = 0; i < kind.Aliases.Count; i++)
+                foreach (KindPass c in kind.Aliases[i].Consumers)
+                {
+                    string pid = PassId(kind, c), port = "i:" + kind.Aliases[i].Resource.Key;
+                    rank[(pid, port)] = AliasOrder(kind.Aliases[i]);
+                }
+            foreach (KindSink sink in bottomSinks)
+            {
+                string pid = PassId(kind, sink.Writer), port = "o:" + sink.Resource.Key;
+                rank[(pid, port)] = kind.Sinks.IndexOf(sink);
+            }
+            foreach (GraphNode node in kind.PassNodes.Values)
+            {
+                node.Inputs = node.Inputs.OrderBy(x => rank.GetValueOrDefault((node.Id, x.Id), -1)).ToList();
+                node.Outputs = node.Outputs.OrderBy(x => rank.GetValueOrDefault((node.Id, x.Id), -1)).ToList();
+            }
 
             float WidthOf(GraphNode n) => NodeGraphPreview.MeasureWidth(n, metrics);
             float leftLane = leftAliases.Count > 0 ? leftAliases.Max(a => WidthOf(a.Node)) + ColumnGap : 0f;
@@ -640,7 +660,7 @@ internal sealed partial class ProfilerView
 
             Dictionary<KindPass, List<GraphNode>> leftOf = kind.Passes.ToDictionary(p => p, p => leftAliases.Where(a => a.Consumers[0] == p).Select(a => a.Node).ToList());
             Dictionary<KindPass, List<GraphNode>> rightOf = kind.Passes.ToDictionary(p => p, p => rightSinks.Where(sk => sk.Writer == p).Select(sk => sk.Node).ToList());
-            Dictionary<KindPass, float> rowHeight = kind.Passes.ToDictionary(p => p, p => Math.Max(Height(kind.PassNodes[PassId(kind, p)]), Math.Max(Stack(leftOf[p]), Stack(rightOf[p]))));
+            Dictionary<KindPass, float> rowHeight = kind.Passes.ToDictionary(p => p, p => Math.Max(Height(kind.PassNodes[PassId(kind, p)]), headerH + Math.Max(Stack(leftOf[p]), Stack(rightOf[p]))));
 
             Dictionary<KindPass, int> lanes = new();
             foreach (KindPass p in kind.Passes.OrderBy(p => p.Level))
@@ -682,25 +702,24 @@ internal sealed partial class ProfilerView
                 columnY[p.Level] += rowHeight[p] + RowGap;
             }
             float baseHeight = Math.Max(1f, columnY.Max() - RowGap);
-            float contentHeight = baseHeight + (maxLane - minLane) * laneStep;
+            float contentHeight = baseHeight + (maxLane - minLane) * LaneStep;
             foreach (KindPass p in kind.Passes)
             {
-                float used = columnY[p.Level] - RowGap;
-                float rowTop = KindTitle + topHeight + (baseHeight - used) / 2f + top[p] + (lanes[p] - minLane) * laneStep;
+                float rowTop = KindTitle + topHeight + top[p] + (lanes[p] - minLane) * LaneStep;
                 GraphNode gn = kind.PassNodes[PassId(kind, p)];
-                gn.Position = new Float2(passX[p.Level], rowTop + (rowHeight[p] - Height(gn)) / 2f);
+                gn.Position = new Float2(passX[p.Level], rowTop);
 
-                float y = rowTop + (rowHeight[p] - Stack(leftOf[p])) / 2f;
+                float y = rowTop + headerH;
                 foreach (GraphNode n in leftOf[p])
                 {
-                    n.Position = new Float2(KindPad, y);
-                    y += Height(n) + RowGap;
+                    n.Position = new Float2(passX[p.Level] - ColumnGap - WidthOf(n), y);
+                    y += Height(n) + PillGap;
                 }
-                y = rowTop + (rowHeight[p] - Stack(rightOf[p])) / 2f;
+                y = rowTop + headerH;
                 foreach (GraphNode n in rightOf[p])
                 {
                     n.Position = new Float2(rightLaneX, y);
-                    y += Height(n) + RowGap;
+                    y += Height(n) + PillGap;
                 }
             }
 
