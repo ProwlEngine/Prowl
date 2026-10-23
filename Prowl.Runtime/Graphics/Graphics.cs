@@ -71,6 +71,11 @@ public static class Graphics
     /// <summary>How cameras become views of a frame, Prowl's forward pipeline unless replaced.</summary>
     public static CameraPipeline CameraPipeline { get; set; } = new ForwardCameraPipeline();
 
+    /// <summary>
+    /// Asked on the main thread as each frame is submitted for the profilers its execution reports to, or null for none.
+    /// </summary>
+    public static Func<IProfiler[]?>? FrameProfilers;
+
     /// <summary>Raised on the main thread just before each frame is submitted, for work that pushes state into worlds.</summary>
     public static event Action? BeforeSubmit;
 
@@ -315,6 +320,7 @@ public static class Graphics
                 Views = s_views.ToArray(),
                 Time = new FrameTime { Time = s_time, DeltaTime = deltaTime, FrameIndex = FrameIndex },
                 Started = s_frameStarted,
+                Profilers = FrameProfilers?.Invoke(),
                 Submitted = submitted,
             });
         }
