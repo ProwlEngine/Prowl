@@ -26,22 +26,29 @@ internal static class SnapshotImages
         _ => false,
     };
 
-    /// <summary> Float colors are scaled by <paramref name="exposure"/> then clamped. Depth is stretched over the range it covers. </summary>
-    public static byte[] ToRgba8(ReadOnlySpan<byte> data, in CopyRegion region, float exposure)
+    /// <summary> Texels skipped per pixel so the longer side of the region fits in <paramref name="resolution"/>. 0 or less keeps every texel. </summary>
+    public static int Step(in CopyRegion region, int resolution)
+        => resolution <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(Math.Max(region.Width, region.Height) / (double)resolution));
+
+    public static (int Width, int Height) Size(in CopyRegion region, int step)
+        => ((int)((region.Width + step - 1) / step), (int)((region.Height + step - 1) / step));
+
+    /// <summary> Float colors are scaled by <paramref name="exposure"/> then clamped. Depth is stretched over the range it covers. Every <paramref name="step"/>th texel is kept. </summary>
+    public static byte[] ToRgba8(ReadOnlySpan<byte> data, in CopyRegion region, float exposure, int step = 1)
     {
-        int width = (int)region.Width, height = (int)region.Height;
+        (int width, int height) = Size(region, step);
         byte[] pixels = new byte[width * height * 4];
         bool depth = IsDepth(region.Format);
         float min = 0, max = 1;
         if (depth)
-            DepthRange(data, region, out min, out max);
+            DepthRange(data, region, step, out min, out max);
 
         bool single = region.Format is PixelFormat.R8_UNorm or PixelFormat.R16_UNorm or PixelFormat.R16_Float or PixelFormat.R32_Float;
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
             {
-                (float r, float g, float b, float a) = Read(data, region, x, y);
+                (float r, float g, float b, float a) = Read(data, region, x * step, y * step);
                 int o = (y * width + x) * 4;
                 if (depth)
                 {
@@ -104,13 +111,13 @@ internal static class SnapshotImages
         }
     }
 
-    private static void DepthRange(ReadOnlySpan<byte> data, in CopyRegion region, out float min, out float max)
+    private static void DepthRange(ReadOnlySpan<byte> data, in CopyRegion region, int step, out float min, out float max)
     {
         min = float.MaxValue;
         max = float.MinValue;
-        for (int y = 0; y < region.Height; y++)
+        for (int y = 0; y < region.Height; y += step)
         {
-            for (int x = 0; x < region.Width; x++)
+            for (int x = 0; x < region.Width; x += step)
             {
                 float d = Read(data, region, x, y).R;
                 if (d is <= 0f or >= 1f)

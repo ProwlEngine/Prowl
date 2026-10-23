@@ -25,6 +25,7 @@ public static class CliSnapshotCommands
     public enum DumpKind { Groups, Pass, Resources, Programs }
 
     private const int DefaultCommandCount = 200;
+    private const int DefaultResolution = 2048;
 
     private static RenderProfilerSource Profiler
         => EditorApplication.Instance?.RenderProfiler ?? throw new CliException("The render profiler is not available in this editor.");
@@ -110,8 +111,12 @@ public static class CliSnapshotCommands
         [CliArg("event", "Last event of the pass to run, counted from 0. Omit to run the whole pass")] int? @event = null,
         [CliArg("resource", "Only write outputs of the resource with this name")] string resource = "",
         [CliArg("exposure", "Scale applied to color before clamping, useful for HDR targets")] float exposure = 1f,
+        [CliArg("resolution", "Longest side of each image in pixels. Larger textures are shrunk by skipping texels")] int resolution = DefaultResolution,
+        [CliArg("full", "Write images at the texture's full size, ignoring --resolution")] bool full = false,
         [CliArg("out", "Folder for the images, relative to the project or absolute. Defaults to Library/Cli/Replays")] string @out = "")
     {
+        if (resolution <= 0 && !full)
+            throw new CliException("--resolution must be above 0. Pass --full for the whole texture.");
         DeepRecording recording = Current;
         DeepPass target = FindPass(recording, group, pass);
         Names names = new(recording);
@@ -139,7 +144,7 @@ public static class CliSnapshotCommands
             {
                 resource = name,
                 matchesRecorded = matches,
-                files = WriteOutput(folder, group, pass, name, output, names.Resource(output.Resource), exposure),
+                files = WriteOutput(folder, group, pass, name, output, names.Resource(output.Resource), exposure, full ? 0 : resolution),
             });
         }
 
@@ -149,7 +154,7 @@ public static class CliSnapshotCommands
         return new { status = result.Status.ToString(), result.Reason, pass = target.Name, folder, outputs };
     }
 
-    private static List<object> WriteOutput(string folder, int group, int pass, string name, ReplayOutput output, RecordedResource? resource, float exposure)
+    private static List<object> WriteOutput(string folder, int group, int pass, string name, ReplayOutput output, RecordedResource? resource, float exposure, int resolution)
     {
         List<object> files = [];
         string stem = $"g{group}-p{pass}-{Sanitize(name)}";
@@ -175,11 +180,13 @@ public static class CliSnapshotCommands
                 continue;
             }
 
-            byte[] pixels = SnapshotImages.ToRgba8(data, region, exposure);
+            int step = SnapshotImages.Step(region, resolution);
+            (int width, int height) = SnapshotImages.Size(region, step);
+            byte[] pixels = SnapshotImages.ToRgba8(data, region, exposure, step);
             string png = Path.Combine(folder, stem + suffix + ".png");
-            using (var image = Aperture.Image.FromPixels(pixels, (int)region.Width, (int)region.Height, Aperture.PixelFormat.Rgba8))
+            using (var image = Aperture.Image.FromPixels(pixels, width, height, Aperture.PixelFormat.Rgba8))
                 image.Save(png, new Aperture.EncodeOptions { Format = Aperture.ImageFormat.Png });
-            files.Add(new { path = png, width = region.Width, height = region.Height, format = region.Format.ToString(), mip = region.MipLevel, layer = region.ArrayLayer });
+            files.Add(new { path = png, width, height, textureWidth = region.Width, textureHeight = region.Height, format = region.Format.ToString(), mip = region.MipLevel, layer = region.ArrayLayer });
         }
         return files;
     }
