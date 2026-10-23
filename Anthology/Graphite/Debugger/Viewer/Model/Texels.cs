@@ -85,9 +85,21 @@ internal static class Texels
         }
     }
 
-    public static byte[] ToRgba8(ReadOnlySpan<byte> data, in CopyRegion region)
+    private const long PreviewTexels = 1 << 21;
+
+    /// <summary>Texels skipped per preview pixel, so a preview of the region stays under about two million pixels.</summary>
+    public static int PreviewStep(in CopyRegion region)
     {
-        int width = (int)region.Width, height = (int)region.Height;
+        long texels = (long)region.Width * region.Height;
+        return texels <= PreviewTexels ? 1 : (int)Math.Ceiling(Math.Sqrt((double)texels / PreviewTexels));
+    }
+
+    public static (int Width, int Height) PreviewSize(in CopyRegion region, int step)
+        => ((int)((region.Width + step - 1) / step), (int)((region.Height + step - 1) / step));
+
+    public static byte[] ToRgba8(ReadOnlySpan<byte> data, in CopyRegion region, int step = 1)
+    {
+        (int width, int height) = PreviewSize(region, step);
         byte[] pixels = new byte[width * height * 4];
         if (!CanDecode(region.Format))
             return pixels;
@@ -96,12 +108,12 @@ internal static class Texels
         bool single = Channels(region.Format) == 1;
         float min = 0, max = 1;
         if (depth)
-            Range(data, region, out min, out max);
+            Range(data, region, step, out min, out max);
 
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
             {
-                Float4 v = Read(data, region, x, y);
+                Float4 v = Read(data, region, x * step, y * step);
                 int o = (y * width + x) * 4;
                 if (depth)
                 {
@@ -134,12 +146,12 @@ internal static class Texels
         return Math.Max(1, count);
     }
 
-    private static void Range(ReadOnlySpan<byte> data, in CopyRegion region, out float min, out float max)
+    private static void Range(ReadOnlySpan<byte> data, in CopyRegion region, int step, out float min, out float max)
     {
         min = float.MaxValue;
         max = float.MinValue;
-        for (int y = 0; y < region.Height; y++)
-            for (int x = 0; x < region.Width; x++)
+        for (int y = 0; y < region.Height; y += step)
+            for (int x = 0; x < region.Width; x += step)
             {
                 float d = Read(data, region, x, y).X;
                 if (d is <= 0f or >= 1f)

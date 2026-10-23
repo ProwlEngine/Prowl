@@ -104,8 +104,7 @@ internal sealed partial class ProfilerView
             data.Raw = ImmutableCollectionsMarshal.AsArray(output.Data.Items);
             data.Region = region;
             data.Bytes = Preview(output, region);
-            data.PreviewWidth = (int)region.Width;
-            data.PreviewHeight = (int)region.Height;
+            (data.PreviewWidth, data.PreviewHeight) = Texels.PreviewSize(region, Texels.PreviewStep(region));
         }
     }
 
@@ -122,7 +121,7 @@ internal sealed partial class ProfilerView
         byte[] raw = ImmutableCollectionsMarshal.AsArray(output.Data.Items) ?? [];
         Dictionary<CopyRegion, byte[]> decoded = _previews.GetOrCreateValue(raw);
         if (!decoded.TryGetValue(region, out byte[]? pixels))
-            decoded[region] = pixels = Texels.ToRgba8(raw, region);
+            decoded[region] = pixels = Texels.ToRgba8(raw, region, Texels.PreviewStep(region));
         return pixels;
     }
 
@@ -288,10 +287,12 @@ internal sealed partial class ProfilerView
         if (_pixel is not { } p || data.Bytes == null)
             return "Click the image to read a pixel value.";
 
-        int sx = Math.Min(data.PreviewWidth - 1, (int)(p.U * data.PreviewWidth)), sy = Math.Min(data.PreviewHeight - 1, (int)(p.V * data.PreviewHeight));
-        string where = $"Pixel ({sx}, {sy}) / mip {_mip} / ";
         if (data.Raw is not { } raw || data.Region is not { } region)
-            return where + "-";
+            return $"Mip {_mip} / -";
+
+        int w = (int)region.Width, h = (int)region.Height;
+        int sx = Math.Min(w - 1, (int)(p.U * w)), sy = Math.Min(h - 1, (int)(p.V * h));
+        string where = $"Pixel ({sx}, {sy}) / mip {_mip} / ";
 
         Float4 v = Texels.Read(raw, region, sx, sy);
         int channels = Texels.Channels(region.Format);
