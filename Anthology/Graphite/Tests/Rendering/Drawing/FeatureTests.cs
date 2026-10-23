@@ -2188,7 +2188,7 @@ public sealed class FeatureTests : IDisposable
         Named world = new("world", RenderSlot.Opaque);
         Named early = new("early", RenderSlot.Opaque, -1);
         Named post = new("post", RenderSlot.HdrPost);
-        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "early", "OpaqueFeature", "world", "view", "SkyFeature", "SceneColorFeature", "TransparentFeature", "post", "PresentFeature"], Select([post, world, early], [view]));
+        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "early", "OpaqueFeature", "world", "view", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransparentFeature", "post", "PresentFeature"], Select([post, world, early], [view]));
     }
 
     [Fact]
@@ -2214,8 +2214,8 @@ public sealed class FeatureTests : IDisposable
         Named probes = new("probes", RenderSlot.HdrPost, runsOn: ViewKinds.ReflectionProbe);
         Named off = new("off", RenderSlot.HdrPost, runsOn: ViewKinds.All) { Enabled = false };
 
-        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "TransparentFeature", "cameras", "PresentFeature"], Select([cameras, probes, off], []));
-        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "TransparentFeature", "probes", "PresentFeature"], Select([cameras, probes, off], [], ViewKind.ReflectionProbe));
+        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransparentFeature", "cameras", "PresentFeature"], Select([cameras, probes, off], []));
+        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransparentFeature", "probes", "PresentFeature"], Select([cameras, probes, off], [], ViewKind.ReflectionProbe));
     }
 
     // Takes a built in frame feature's group and provides what its consumers read

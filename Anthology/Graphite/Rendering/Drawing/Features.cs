@@ -1117,10 +1117,36 @@ public sealed class SceneColorFeature : RenderFeature
     }
 }
 
+/// <summary>
+/// Copies the view's depth after the opaque surfaces into its scene depth, for passes tagged "SceneDepth" = "Read" to
+/// fetch through Graphite/SceneDepth.glsl. Active once such a pass was in the view's transparent list, recording nothing
+/// on frames without one.
+/// </summary>
+public sealed class SceneDepthFeature : RenderFeature
+{
+    internal SceneDepthFeature() { }
+
+    public override RenderSlot Slot => RenderSlot.OpaqueColor;
+    public override string? ExclusiveGroup => "SceneDepth";
+    public override ViewKinds RunsOn => ViewKinds.All;
+
+    internal override bool Skips(ViewGraph view) => !view.Camera.SceneDepthUsed;
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.ReadScene();
+
+    public override void Render(FeatureContext context)
+    {
+        CameraFrame camera = context.Camera;
+        if (!camera.SceneDepthUsed || camera.SceneDepth is not { } target || context.Depth is not { } source)
+            return;
+        context.Command.CopyTexture(source, 0, 0, 0, 0, 0, target, 0, 0, 0, 0, 0, target.Width, target.Height, 1, target.ArrayLayers);
+    }
+}
+
 /// <summary>Picks a view's features each frame: built in, world and view features, filtered and ordered.</summary>
 internal static class FeatureSelection
 {
-    public static readonly RenderFeature[] BuiltIn = [new SceneClearFeature(), new CascadeFeature(), new PrepassFeature(), new OpaqueFeature(), new SkyFeature(), new SceneColorFeature(), new TransparentFeature(), new PresentFeature()];
+    public static readonly RenderFeature[] BuiltIn = [new SceneClearFeature(), new CascadeFeature(), new PrepassFeature(), new OpaqueFeature(), new SkyFeature(), new SceneColorFeature(), new SceneDepthFeature(), new TransparentFeature(), new PresentFeature()];
 
     static FeatureSelection()
     {
