@@ -261,12 +261,12 @@ internal sealed partial class ProfilerView
 
     private const float ToolbarHeight = 34f;
 
-    private IDisposable Toolbar()
-        => _paper.Row("rp_toolbar").Height(ToolbarHeight - 1).Padding(10, 8, 0, 0).Gap(6).AlignItems(LayoutAlignment.Center).Enter();
+    private IDisposable Toolbar(float left = 10)
+        => _paper.Row("rp_toolbar").Height(ToolbarHeight - 1).Padding(left, 8, 0, 0).Gap(6).AlignItems(LayoutAlignment.Center).Enter();
 
     private void DrawLiveToolbar(IReadOnlyList<Recording> frames)
     {
-        using (Toolbar())
+        using (Toolbar((ToolbarHeight - 1 - 26f) / 2f))
         {
             bool recording = _source.IsRecording;
             ButtonBuilder record = Origami.Button(_paper, "record", recording ? "Stop recording" : "Record", ToggleRecording)
