@@ -4,6 +4,7 @@ using Prowl.Graphite;
 using Prowl.Graphite.Debugger;
 using Prowl.Graphite.Debugger.Serialization;
 using Prowl.Graphite.Debugger.Viewer;
+using Prowl.Graphite.Debugging;
 using Prowl.Vector;
 
 namespace DebuggerViewer.Scene;
@@ -94,7 +95,7 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
 
         return new FrameTiming(
             dispatchMilliseconds,
-            recording.CommandBuffers.Sum(b => b.Milliseconds ?? 0),
+            recording.CommandBuffers.Where(b => !b.Name.StartsWith(CaptureCopy.BufferPrefix, StringComparison.Ordinal)).Sum(b => b.Milliseconds ?? 0),
             frameMilliseconds,
             0,
             recording.CommandBuffers.Length,
