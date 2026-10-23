@@ -210,6 +210,7 @@ render pipeline; the shader system stores them but does not interpret them. Grap
 | `LightMode`    | `Prepass`, `Forward`, `ShadowCaster`, `ObjectId`, `Sky`, any other name a feature draws | The pass type the renderer draws the pass as                            |
 | `RenderQueue`  | an integer, 2500 and up transparent                           | The default render queue of the shader's materials                      |
 | `SceneColor`   | `Read`                                                        | The pass samples the view's opaque colour through `Graphite/SceneColor.glsl`. A view whose transparent list holds such a pass copies its colour after the opaque surfaces and the sky, with mips, before drawing its transparent surfaces |
+| `SceneDepth`   | `Read`                                                        | The pass fetches the view's opaque depth through `Graphite/SceneDepth.glsl`. A view whose transparent list holds such a pass copies its depth after the opaque surfaces before drawing its transparent surfaces |
 
 ---
 

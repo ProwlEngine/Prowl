@@ -391,10 +391,14 @@ public sealed class Shader
     /// <summary>The pass tag of a pass reading the view's opaque colour, "SceneColor" = "Read". See Graphite/SceneColor.glsl.</summary>
     public const string SceneColorTag = "SceneColor";
 
+    /// <summary>The pass tag of a pass reading the view's opaque depth, "SceneDepth" = "Read". See Graphite/SceneDepth.glsl.</summary>
+    public const string SceneDepthTag = "SceneDepth";
+
     /// <summary>The global axis a view sets to show a debug view, which its draws take from their shaders' Debug passes.</summary>
     public const string DebugAxis = "GRAPHITE_DEBUG";
 
     private readonly bool[] _readsSceneColor;
+    private readonly bool[] _readsSceneDepth;
     private readonly HashSet<string>[] _passAxes;
 
     /// <summary>The shader drawing in this one's place while its variants compile or after they failed, from its Fallback declaration.</summary>
@@ -411,8 +415,12 @@ public sealed class Shader
         foreach (ShaderPass pass in passes)
             pass.Material = abi;
         _readsSceneColor = new bool[passes.Length];
+        _readsSceneDepth = new bool[passes.Length];
         for (int i = 0; i < passes.Length; i++)
+        {
             _readsSceneColor[i] = ShaderDefinition.PassHasTag(passes[i], SceneColorTag, "Read");
+            _readsSceneDepth[i] = ShaderDefinition.PassHasTag(passes[i], SceneDepthTag, "Read");
+        }
 
         Dictionary<string, VariantSpace> axes = new(StringComparer.Ordinal);
         List<VariantSpace> material = new();
@@ -581,6 +589,11 @@ public sealed class Shader
     public bool ReadsSceneColor => Array.IndexOf(_readsSceneColor, true) >= 0;
 
     internal bool PassReadsSceneColor(int passIndex) => passIndex >= 0 && passIndex < _readsSceneColor.Length && _readsSceneColor[passIndex];
+
+    /// <summary>Whether any pass of the shader reads the view's opaque depth through its SceneDepth tag.</summary>
+    public bool ReadsSceneDepth => Array.IndexOf(_readsSceneDepth, true) >= 0;
+
+    internal bool PassReadsSceneDepth(int passIndex) => passIndex >= 0 && passIndex < _readsSceneDepth.Length && _readsSceneDepth[passIndex];
 
     private readonly Dictionary<string, int> _passIndices = new(StringComparer.Ordinal);
 
