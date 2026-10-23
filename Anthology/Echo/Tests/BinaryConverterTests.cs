@@ -92,6 +92,40 @@ public class BinaryTagConverterTests
         Assert.Equal(bytes, deserialized.Get("bytes").ByteArrayValue);
     }
 
+    [Theory]
+    [InlineData(BinaryEncodingMode.Performance)]
+    [InlineData(BinaryEncodingMode.Size)]
+    public void TestCompressedTagIsReadFromItsHeaderAndStopsAtItsEnd(BinaryEncodingMode mode)
+    {
+        var compound = EchoObject.NewCompound();
+        var bytes = new byte[1 << 20];
+        bytes[12345] = 7;
+        compound.Add("bytes", new EchoObject(EchoType.ByteArray, bytes));
+
+        using var stream = new MemoryStream();
+        using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            compound.WriteToBinary(writer, new BinarySerializationOptions { EncodingMode = mode, Compressed = true });
+            writer.Write(42);
+        }
+
+        stream.Position = 0;
+        using var reader = new BinaryReader(stream);
+        var deserialized = EchoObject.ReadFromBinary(reader);
+
+        Assert.True(stream.Length < bytes.Length / 100);
+        Assert.Equal(bytes, deserialized.Get("bytes").ByteArrayValue);
+        Assert.Equal(42, reader.ReadInt32());
+    }
+
+    [Fact]
+    public void TestDataWithoutAHeaderStillReads()
+    {
+        byte[] legacy = [(byte)EchoType.Int, 0x2A, 0, 0, 0];
+        using var reader = new BinaryReader(new MemoryStream(legacy));
+        Assert.Equal(42, EchoObject.ReadFromBinary(reader).IntValue);
+    }
+
     [Fact]
     public void TestWritingAFileReplacesALongerOne()
     {

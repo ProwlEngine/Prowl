@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.IO.Compression;
 using System.Text;
 
 namespace Prowl.Echo;
@@ -29,9 +30,20 @@ public enum BinaryEncodingMode
 public class BinarySerializationOptions
 {
     /// <summary>
-    /// Gets or sets the encoding mode for binary serialization.
+    /// Gets or sets the encoding mode for binary serialization. Readers take it from the header, and use this only for
+    /// data written before the header existed.
     /// </summary>
     public BinaryEncodingMode EncodingMode { get; set; } = BinaryEncodingMode.Performance;
+
+    /// <summary>
+    /// Gzip compresses the whole tag. Only writers use it: readers take it from the header.
+    /// </summary>
+    public bool Compressed { get; set; }
+
+    /// <summary>
+    /// How hard to compress when <see cref="Compressed"/> is set.
+    /// </summary>
+    public CompressionLevel CompressionLevel { get; set; } = CompressionLevel.Fastest;
 
     /// <summary>
     /// Creates a new instance of BinarySerializationOptions with default settings.
@@ -46,6 +58,18 @@ public class BinarySerializationOptions
 public sealed class EchoBinaryFormat : IFileFormat
 {
     public static readonly EchoBinaryFormat Instance = new();
+
+    // Data from before the header starts with a type byte, always below 0xEC, so the first byte tells them apart.
+    private static ReadOnlySpan<byte> Magic => [0xEC, (byte)'E', (byte)'C', (byte)'B'];
+    private const byte FormatVersion = 1;
+
+    [Flags]
+    private enum HeaderFlags : byte
+    {
+        None = 0,
+        Size = 1,
+        Compressed = 2,
+    }
 
     /// <summary>
     /// Options controlling binary encoding mode (Performance vs Size).
@@ -253,9 +277,59 @@ public sealed class EchoBinaryFormat : IFileFormat
         WriteTo(tag, writer, options);
     }
 
+    /// <summary>
+    /// Writes a header naming the encoding and compression, then the tag. A compressed tag is prefixed with its
+    /// length, so a reader stops exactly at its end.
+    /// </summary>
     public static void WriteTo(EchoObject tag, BinaryWriter writer, BinarySerializationOptions? options = null)
     {
         options ??= BinarySerializationOptions.Default;
+        HeaderFlags flags = (options.EncodingMode == BinaryEncodingMode.Size ? HeaderFlags.Size : HeaderFlags.None)
+            | (options.Compressed ? HeaderFlags.Compressed : HeaderFlags.None);
+        writer.Write(Magic);
+        writer.Write(FormatVersion);
+        writer.Write((byte)flags);
+        if (!options.Compressed)
+        {
+            WriteTag(tag, writer, options);
+            return;
+        }
+
+        writer.Flush();
+        Stream stream = writer.BaseStream;
+        if (stream.CanSeek)
+        {
+            long lengthAt = stream.Position;
+            writer.Write(0L);
+            writer.Flush();
+            long start = stream.Position;
+            Compress(tag, stream, options);
+            long end = stream.Position;
+            stream.Position = lengthAt;
+            writer.Write(end - start);
+            writer.Flush();
+            stream.Position = end;
+        }
+        else
+        {
+            using var buffer = new MemoryStream();
+            Compress(tag, buffer, options);
+            writer.Write(buffer.Length);
+            writer.Flush();
+            buffer.Position = 0;
+            buffer.CopyTo(stream);
+        }
+    }
+
+    private static void Compress(EchoObject tag, Stream stream, BinarySerializationOptions options)
+    {
+        using var zip = new GZipStream(stream, options.CompressionLevel, leaveOpen: true);
+        using var zipped = new BinaryWriter(zip, Encoding.UTF8, leaveOpen: true);
+        WriteTag(tag, zipped, options);
+    }
+
+    private static void WriteTag(EchoObject tag, BinaryWriter writer, BinarySerializationOptions options)
+    {
         if (options.EncodingMode == BinaryEncodingMode.Size)
             WriteTag_Size(tag, writer, options);
         else
@@ -388,13 +462,50 @@ public sealed class EchoBinaryFormat : IFileFormat
         return ReadFrom(reader, options);
     }
 
+    /// <summary>
+    /// Reads a tag written by <see cref="WriteTo"/>, taking the encoding and compression from its header. Data written
+    /// before the header existed is read with the encoding in <paramref name="options"/>.
+    /// </summary>
     public static EchoObject ReadFrom(BinaryReader reader, BinarySerializationOptions? options = null)
     {
         options ??= BinarySerializationOptions.Default;
+        byte first = reader.ReadByte();
+        if (first != Magic[0])
+            return ReadValue((EchoType)first, reader, options);
+
+        if (!reader.ReadBytes(Magic.Length - 1).AsSpan().SequenceEqual(Magic[1..]))
+            throw new InvalidDataException("The data is not Echo binary.");
+        byte version = reader.ReadByte();
+        if (version > FormatVersion)
+            throw new InvalidDataException($"Echo binary version {version} is newer than this reader, which supports up to {FormatVersion}.");
+
+        var flags = (HeaderFlags)reader.ReadByte();
+        var stored = new BinarySerializationOptions
+        {
+            EncodingMode = (flags & HeaderFlags.Size) != 0 ? BinaryEncodingMode.Size : BinaryEncodingMode.Performance,
+            Compressed = (flags & HeaderFlags.Compressed) != 0,
+        };
+        if (!stored.Compressed)
+            return ReadTag(reader, stored);
+
+        using var payload = new BoundedReadStream(reader.BaseStream, reader.ReadInt64());
+        EchoObject tag;
+        using (var zip = new GZipStream(payload, CompressionMode.Decompress, leaveOpen: true))
+        using (var zipped = new BinaryReader(zip, Encoding.UTF8, leaveOpen: true))
+            tag = ReadTag(zipped, stored);
+        payload.SkipRest();
+        return tag;
+    }
+
+    private static EchoObject ReadTag(BinaryReader reader, BinarySerializationOptions options)
+        => ReadValue((EchoType)reader.ReadByte(), reader, options);
+
+    private static EchoObject ReadValue(EchoType type, BinaryReader reader, BinarySerializationOptions options)
+    {
         if (options.EncodingMode == BinaryEncodingMode.Size)
-            return ReadTag_Size(reader, options);
+            return ReadValue_Size(type, reader, options);
         else
-            return ReadTag_Performance(reader, options);
+            return ReadValue_Performance(type, reader, options);
     }
 
     private static EchoObject ReadCompound_Performance(BinaryReader reader, BinarySerializationOptions options)
@@ -424,8 +535,10 @@ public sealed class EchoBinaryFormat : IFileFormat
     }
 
     private static EchoObject ReadTag_Performance(BinaryReader reader, BinarySerializationOptions options)
+        => ReadValue_Performance((EchoType)reader.ReadByte(), reader, options);
+
+    private static EchoObject ReadValue_Performance(EchoType type, BinaryReader reader, BinarySerializationOptions options)
     {
-        var type = (EchoType)reader.ReadByte();
 
         if (type == EchoType.Null) return new(EchoType.Null, null);
         else if (type == EchoType.Byte) return new(reader.ReadByte());
@@ -459,8 +572,10 @@ public sealed class EchoBinaryFormat : IFileFormat
     }
 
     private static EchoObject ReadTag_Size(BinaryReader reader, BinarySerializationOptions options)
+        => ReadValue_Size((EchoType)reader.ReadByte(), reader, options);
+
+    private static EchoObject ReadValue_Size(EchoType type, BinaryReader reader, BinarySerializationOptions options)
     {
-        var type = (EchoType)reader.ReadByte();
 
         if (type == EchoType.Null) return new(EchoType.Null, null);
         else if (type == EchoType.Byte) return new(reader.ReadByte());
