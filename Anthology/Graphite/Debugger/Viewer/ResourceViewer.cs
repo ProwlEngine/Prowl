@@ -52,7 +52,7 @@ internal sealed partial class ProfilerView
             string shown = kind == "tex" ? "Texture" : data.Vertices != null && data.Indices != null && kind is "vb" or "ib" ? "Mesh" : "Raw";
             switch (shown)
             {
-                case "Texture": TextureView(model, data, step, width, true); break;
+                case "Texture": TextureView(model, data, step, context + "|compact", width, true); break;
                 case "Mesh": MeshView(data, width, true); break;
                 default: BufferTable(key, "Raw", data, width, true); break;
             }
@@ -81,7 +81,7 @@ internal sealed partial class ProfilerView
             {
                 switch (mode)
                 {
-                    case "Texture": TextureView(model, data, step, mainWidth); break;
+                    case "Texture": TextureView(model, data, step, context, mainWidth); break;
                     case "Mesh": MeshView(data, mainWidth); break;
                     default: BufferTable(key, mode, data, mainWidth); break;
                 }

@@ -26,10 +26,19 @@ internal sealed partial class ProfilerView
     private const int KeptReplays = 4;
     private const long RecentMilliseconds = 1000;
 
+    private sealed class SharedTexture(object texture)
+    {
+        public readonly object Texture = texture;
+        public int Users;
+    }
+
     private readonly Dictionary<(int, int, int?, IndirectSlice?), (ReplayResult Result, long Seen)> _replays = new();
-    private readonly Dictionary<string, (object Texture, int Width, int Height, string Version)> _textures = new();
+    private readonly Dictionary<string, SharedTexture> _shared = new();
+    private readonly Dictionary<string, (string Key, long Seen)> _slots = new();
     private readonly ConditionalWeakTable<byte[], Dictionary<CopyRegion, byte[]>> _previews = new();
     private readonly ConditionalWeakTable<byte[], ConditionalWeakTable<byte[], Dictionary<CopyRegion, byte[]>>> _coverages = new();
+    private readonly ConditionalWeakTable<byte[], object> _identities = new();
+    private long _nextIdentity;
     private readonly bool[] _channels = { true, true, true, true };
     private float _exposure;
     private int _mip;
@@ -60,6 +69,9 @@ internal sealed partial class ProfilerView
     {
         _replays.Clear();
     }
+
+    private long Identity(byte[] data)
+        => (long)_identities.GetValue(data, _ => ++_nextIdentity);
 
     private static ReplayOutput? Output(ReplayResult result, TraceResourceId id)
         => result.Outputs.FirstOrDefault(o => o.Resource == id);
@@ -167,22 +179,44 @@ internal sealed partial class ProfilerView
         return mask;
     }
 
-    private object? UploadTexture(string slot, int width, int height, string version, Func<byte[]> pixels)
+    /// <summary>
+    /// The texture a view slot shows. Slots showing the same content share one texture, which is freed once no slot
+    /// holds it. A slot not drawn for a second, such as a closed pop-out, lets go of its texture.
+    /// </summary>
+    private object UploadTexture(string slot, int width, int height, string version, Func<byte[]> pixels)
     {
-        if (_textures.TryGetValue(slot, out var existing) && existing.Width == width && existing.Height == height)
+        long now = Environment.TickCount64;
+        string key = $"{version}|{width}x{height}";
+        bool held = _slots.TryGetValue(slot, out var current);
+        if (!held || current.Key != key)
         {
-            if (existing.Version != version)
+            if (!_shared.TryGetValue(key, out SharedTexture? shared))
             {
-                _paper.Renderer.SetTextureData(existing.Texture, new IntRect(0, 0, width, height), pixels());
-                _textures[slot] = (existing.Texture, width, height, version);
+                object texture = _paper.Renderer.CreateTexture((uint)width, (uint)height);
+                _paper.Renderer.SetTextureData(texture, new IntRect(0, 0, width, height), pixels());
+                _shared[key] = shared = new SharedTexture(texture);
             }
-            return existing.Texture;
+            shared.Users++;
+            if (held)
+                Release(current.Key);
         }
+        _slots[slot] = (key, now);
 
-        object texture = _paper.Renderer.CreateTexture((uint)width, (uint)height);
-        _paper.Renderer.SetTextureData(texture, new IntRect(0, 0, width, height), pixels());
-        _textures[slot] = (texture, width, height, version);
-        return texture;
+        foreach (var (other, (otherKey, _)) in _slots.Where(s => now - s.Value.Seen > RecentMilliseconds).ToList())
+        {
+            _slots.Remove(other);
+            Release(otherKey);
+        }
+        return _shared[key].Texture;
+    }
+
+    private void Release(string key)
+    {
+        SharedTexture shared = _shared[key];
+        if (--shared.Users > 0)
+            return;
+        _shared.Remove(key);
+        (shared.Texture as IDisposable)?.Dispose();
     }
 
     private byte[] ApplyChannels(byte[] source)
@@ -213,7 +247,7 @@ internal sealed partial class ProfilerView
         return result;
     }
 
-    private void TextureView(FrameModel model, ViewerData data, TargetStep? step, float width, bool compact = false)
+    private void TextureView(FrameModel model, ViewerData data, TargetStep? step, string slot, float width, bool compact = false)
     {
         var t = data.Resource?.Texture;
         int mipMax = t is { } d ? (int)Math.Max(0, d.MipLevels - 1) : 0;
@@ -248,10 +282,10 @@ internal sealed partial class ProfilerView
         }
 
         int pw = data.PreviewWidth, ph = data.PreviewHeight;
-        string identity = RuntimeHelpers.GetHashCode(data.Bytes).ToString();
-        object? image = UploadTexture("image", pw, ph, $"{identity}|{string.Join("", _channels)}|{_exposure}", () => ApplyChannels(data.Bytes));
+        byte[] bytes = data.Bytes, mask = data.Coverage ?? [];
+        object? image = UploadTexture(slot + "|image", pw, ph, $"{Identity(bytes)}|{string.Join("", _channels)}|{_exposure}", () => ApplyChannels(bytes));
         object? coverage = data.Coverage != null
-            ? UploadTexture("coverage", pw, ph, RuntimeHelpers.GetHashCode(data.Coverage).ToString(), () => data.Coverage)
+            ? UploadTexture(slot + "|coverage", pw, ph, $"coverage {Identity(mask)}", () => mask)
             : null;
 
         float aspect = (float)pw / ph;
