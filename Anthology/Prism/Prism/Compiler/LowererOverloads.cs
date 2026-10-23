@@ -393,14 +393,33 @@ public sealed partial class Lowerer
     Value[] LowerBuiltinArgs(Call call, (Expr Arg, int Slot)? sparseTexel = null)
     {
         var targets = BuiltinArgTargets(call);
+        bool imageOp = IsImageOrTextureBuiltin(call.Name);
         var args = new Value[call.Args.Count];
         for (int i = 0; i < args.Length; i++)
         {
-            if (sparseTexel is { Slot: var slot } && slot == i) _sparseTexelAccess = ResolveAccess(sparseTexel.Value.Arg);
-            args[i] = targets?[i] is { } t ? LowerArgAs(call.Args[i], t, $"argument {i + 1} of '{call.Name}'") : LowerExpr(call.Args[i]);
+            bool afterTexel = sparseTexel is { Slot: var slot } && slot == i;
+            if (afterTexel) _sparseTexelAccess = ResolveAccess(sparseTexel.Value.Arg);
+            if (imageOp && !afterTexel && RepeatsPreviousSymbol(call, i, j => targets?[j])) args[i] = args[i - 1];
+            else args[i] = targets?[i] is { } t ? LowerArgAs(call.Args[i], t, $"argument {i + 1} of '{call.Name}'") : LowerExpr(call.Args[i]);
         }
         if (sparseTexel is { Slot: var last } && last == args.Length) _sparseTexelAccess = ResolveAccess(sparseTexel.Value.Arg);
         return args;
+    }
+
+    // The built-ins glslang lowers as image or texture operations (its isImage and isTexture opcode ranges).
+    static bool IsImageOrTextureBuiltin(string name) =>
+        name.StartsWith("texture", StringComparison.Ordinal) || name.StartsWith("texel", StringComparison.Ordinal)
+        || name.StartsWith("image", StringComparison.Ordinal) || name.StartsWith("sparse", StringComparison.Ordinal)
+        || name is "subpassLoad" or "fragmentFetchAMD" or "fragmentMaskFetchAMD" or "colorAttachmentReadEXT";
+
+    // glslang's translateArguments passes the previous argument's id again when this argument and the one
+    // before it are the same variable symbol, so neither may be wrapped in a conversion to its parameter type.
+    bool RepeatsPreviousSymbol(Call call, int i, Func<int, GlslType?> target)
+    {
+        if (i == 0 || call.Args[i] is not Ident cur || call.Args[i - 1] is not Ident prev || cur.Name != prev.Name) return false;
+        if (ResolveLocalVar(cur.Name) is null && ResolveGlobal(cur.Name) is null && !Builtins.ContainsKey(cur.Name)) return false;
+        var type = InferType(cur);
+        return (target(i) is not { } t || t.Equals(type)) && (target(i - 1) is not { } p || p.Equals(type));
     }
 
     // An argument converted to a parameter type: a constant folds into a constant of that type, anything

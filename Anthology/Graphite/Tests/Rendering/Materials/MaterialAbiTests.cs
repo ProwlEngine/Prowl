@@ -63,9 +63,15 @@ public sealed class MaterialAbiTests : IDisposable
                         return texture(sampler2D(tex, smp), uv) * float(textureSize(sampler2D(tex, smp), 0).x);
                     }
 
+                    // A material texture passes to a function as a sampler like any other
+                    float Alpha(sampler2D s, vec2 uv)
+                    {
+                        return texture(s, uv).a;
+                    }
+
                     void main()
                     {
-                        outColor = Fetch(_MainTex_Texture, _MainTex_Sampler, vec2(0.5)) * texture(_MainTex, vec2(0.5)).a * _MainTex_ST.x * _Color * _Scale + vec4(_Wind);
+                        outColor = Fetch(_MainTex_Texture, _MainTex_Sampler, vec2(0.5)) * Alpha(_MainTex, vec2(0.5)) * _MainTex_ST.x * _Color * _Scale + vec4(_Wind);
                     }
                 }
                 ENDGLSL
@@ -181,6 +187,53 @@ public sealed class MaterialAbiTests : IDisposable
         Assert.Equal(new Float4(0.0625f, 0.0625f, 0.125f * 2 * 0.5f + 0.0625f, 2 + 0.0625f), Draw(program, frame, view, pass, second.Slot));
     }
 
+    // One draw covers the left half of the target with one material and the right half with another, so a single draw
+    // samples two different bindless textures through the sampler passed to Alpha.
+    [Fact]
+    public void OneDraw_ReadsADifferentTexturePerTriangle()
+    {
+        string source = Source
+            .Replace("graphite_MaterialSlot = push.slot;", "graphite_MaterialSlot = push.slot + uint(gl_VertexIndex / 3);")
+            .Replace("float x = -1.0 + float((gl_VertexIndex & 1) << 2);", "vec2 corners[6] = vec2[](vec2(0, -3), vec2(0, 3), vec2(-3, 0), vec2(0, -3), vec2(0, 3), vec2(3, 0));")
+            .Replace("float y = -1.0 + float((gl_VertexIndex & 2) << 1);", "")
+            .Replace("gl_Position = vec4(x, y, 0.0, 1.0);", "gl_Position = vec4(corners[gl_VertexIndex], 0.0, 1.0);");
+        ShaderDescription description = Build(source, out Shader shader);
+        description.BlendState = BlendStateDescription.SingleOverrideBlend;
+        description.DepthStencilState = DepthStencilStateDescription.Disabled;
+        description.RasterizerState = RasterizerStateDescription.CullNone;
+        GraphicsProgram program = Own(_device.ResourceFactory.CreateGraphicsProgram(description));
+
+        Texture red = Solid(0.25f, 0, 0);
+        Texture blue = Solid(0, 0, 0.125f);
+        _resources.Slots[red] = 3;
+        _resources.Slots[blue] = 7;
+        Material first = _materials.Create(shader);
+        first.SetTexture("_MainTex", red);
+        Material second = _materials.Create(shader);
+        second.SetTexture("_MainTex", blue);
+        _materials.Extract(new List<Material>());
+        _registry.Extract();
+        Assert.Equal(first.Slot + 1, second.Slot);
+
+        GpuTable records = first.Table!.Records;
+        _device.UpdateBuffer(records.Buffer, 0, MemoryMarshal.Cast<uint, byte>(Words(records)).ToArray());
+        DeviceBuffer globals = Own(_device.ResourceFactory.CreateBuffer(new BufferDescription(_registry.RegionWords * 4, BufferUsage.StructuredBufferReadOnly)));
+        _device.UpdateBuffer(globals, 0, _registry.ReadRegion(0).ToArray());
+        DescriptorTable frame = Own(_device.ResourceFactory.CreateDescriptorTable(s_frameTable));
+        frame.SetTexture("Graphite_Textures2D", 3, red);
+        frame.SetTexture("Graphite_Textures2D", 7, blue);
+        DescriptorTable view = Own(_device.ResourceFactory.CreateDescriptorTable(s_viewTable));
+        view.SetSampler("Graphite_Samplers", 1, Own(_device.ResourceFactory.CreateSampler(SamplerDescription.Point)));
+        view.SetBuffer("Graphite_Globals", 0, globals);
+        PropertySet pass = new();
+        pass.SetBuffer(GraphiteBindings.MaterialsName, records.Buffer);
+
+        Float4[] pixels = DrawAll(program, frame, view, pass, first.Slot, 6);
+        for (int y = 0; y < 4; y++)
+        for (int x = 0; x < 4; x++)
+            Assert.Equal(x < 2 ? new Float4(0.25f * 2, 0, 0, 2) : new Float4(0, 0, 0.125f * 2, 2), pixels[y * 4 + x]);
+    }
+
     private static uint[] Words(GpuTable table)
     {
         uint[] words = new uint[table.Count * table.StrideWords];
@@ -190,6 +243,9 @@ public sealed class MaterialAbiTests : IDisposable
     }
 
     private Float4 Draw(GraphicsProgram program, DescriptorTable frame, DescriptorTable view, PropertySet pass, uint slot)
+        => DrawAll(program, frame, view, pass, slot, 3)[2 * 4 + 2];
+
+    private Float4[] DrawAll(GraphicsProgram program, DescriptorTable frame, DescriptorTable view, PropertySet pass, uint slot, uint vertices)
     {
         Texture target = Own(_device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled)));
         Framebuffer framebuffer = Own(_device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, target)));
@@ -206,14 +262,14 @@ public sealed class MaterialAbiTests : IDisposable
             cmd.SetDescriptorTable(GraphiteBindings.ViewSet, view);
             cmd.SetProperties(pass);
             cmd.SetPushConstants(slot);
-            cmd.Draw(3);
+            cmd.Draw(vertices);
         }));
         _device.WaitForIdle();
         _device.Record(cmd => cmd.CopyTextureToBuffer(target, readback, 0, TextureRegion.Whole(target, 0, 0))).Wait();
 
-        Float4 center = _device.Map<Float4>(readback)[2 * 4 + 2];
+        Float4[] pixels = _device.Map<Float4>(readback).ToArray();
         _device.Unmap(readback);
-        return center;
+        return pixels;
     }
 
     [Fact]
