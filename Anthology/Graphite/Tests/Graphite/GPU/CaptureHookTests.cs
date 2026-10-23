@@ -45,7 +45,7 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
 {
     private static readonly RenderResourceID ColorA = RenderResourceID.Intern("capture_hook_a");
     private static readonly RenderResourceID ColorB = RenderResourceID.Intern("capture_hook_b");
-    private static readonly TargetLoadStoreOps ClearBlack = TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1));
+    private static readonly TargetLoadStoreOps ClearBlack = TargetLoadStoreOps.Clear(new Color(0f, 0f, 0f, 1f));
 
     private sealed record Run(HookRecorder Hook, DeviceBuffer External, ResourceVersion ExternalBefore, RenderTexture ImportedTexture, ResourceVersion ImportedBefore, ulong ExecutionId);
 

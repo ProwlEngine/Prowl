@@ -102,7 +102,7 @@ public abstract class FrameGraphTests<T> : GraphicsDeviceTestBase<T> where T : G
             pass.Write(dst, BufferAccess.TransferWrite);
         }, context => context.Command.CopyBuffer(source, 0, destination, 0, 16));
         graph.AddPass("Paint", pass => pass.Write(texture),
-            context => context.Command.ClearColorTarget(0, new Color(255, 0, 0, 255)));
+            context => context.Command.ClearColorTarget(0, Color.FromBytes(255, 0, 0, 255)));
         Run(graph, GD);
 
         Assert.Equal(Enumerable.Repeat((byte)9, 4), ReadBytes(destination).Take(4));

@@ -773,7 +773,7 @@ public sealed class FeatureContext
     {
         if (!program.Procedural)
             throw new InvalidOperationException($"{_pass.Name} draws a fullscreen program procedurally; create it with CreateProceduralProgram.");
-        AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0, 0, 0, 0)) : AttachmentOps.Loaded;
+        AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : AttachmentOps.Loaded;
         Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
         Command.SetFullViewport();
         Command.SetShader(program.For(View.LayerCount));
@@ -792,7 +792,7 @@ public sealed class FeatureContext
             throw new InvalidOperationException($"{_pass.Name} draws a procedural program as a fullscreen one; draw it with DrawProcedural.");
         if (layers == 1 && View.LayerCount > 1 && program.HasSource)
             throw new InvalidOperationException($"{_pass.Name} draws a program reading the view's colour once for every layer; create it with source: false and bind what it reads.");
-        AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0, 0, 0, 0)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store);
+        AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store);
         Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
         Command.SetFullViewport();
         Command.SetShader(program.For(layers));
@@ -940,7 +940,7 @@ public sealed class SceneClearFeature : RenderFeature
     {
         Framebuffer framebuffer = context.Get(context.GetViewState<State>().Scene).Framebuffer;
         for (uint target = 1; target < framebuffer.ColorTargets.Count; target++)
-            context.Command.ClearColorTarget(target, new Color(0, 0, 0, 0));
+            context.Command.ClearColorTarget(target, new Color(0f, 0f, 0f, 0f));
     }
 }
 

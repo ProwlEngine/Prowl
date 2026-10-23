@@ -78,8 +78,8 @@ public abstract class CaptureCopyTests<T> : GraphicsDeviceTestBase<T> where T : 
         target.ColorTextures[0].Name = "Target";
         using CopyingProfiler profiler = new() { OnlyPass = "Second" };
         using FrameGraph graph = new(GD, "Test");
-        CapturePasses.AddWrite(graph, "First", target, external, new Color(255, 0, 0, 255), 1);
-        CapturePasses.AddWrite(graph, "Second", target, external, new Color(0, 0, 255, 255), 2);
+        CapturePasses.AddWrite(graph, "First", target, external, Color.FromBytes(255, 0, 0, 255), 1);
+        CapturePasses.AddWrite(graph, "Second", target, external, Color.FromBytes(0, 0, 255, 255), 2);
         graph.Execute(profiler);
         GD.WaitForIdle();
 
@@ -129,7 +129,7 @@ public abstract class CaptureCopyTests<T> : GraphicsDeviceTestBase<T> where T : 
         DeviceBuffer external = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
         CopyingProfiler profiler = new();
         using FrameGraph graph = new(GD, "Test");
-        CapturePasses.AddWrite(graph, "Only", target, external, new Color(255, 0, 0, 255), 1, depth);
+        CapturePasses.AddWrite(graph, "Only", target, external, Color.FromBytes(255, 0, 0, 255), 1, depth);
         graph.Execute(profiler);
         GD.WaitForIdle();
 

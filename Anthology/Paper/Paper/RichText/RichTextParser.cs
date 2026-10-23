@@ -370,7 +370,7 @@ public sealed class RichTextParser
 
         if (digits.Length == 3)
         {
-            color = new Color((byte)(v[0] * 17), (byte)(v[1] * 17), (byte)(v[2] * 17), (byte)255);
+            color = Color.FromBytes((byte)(v[0] * 17), (byte)(v[1] * 17), (byte)(v[2] * 17), 255);
             return true;
         }
 
@@ -378,7 +378,7 @@ public sealed class RichTextParser
         int g = v[2] * 16 + v[3];
         int b = v[4] * 16 + v[5];
         int a = digits.Length == 8 ? v[6] * 16 + v[7] : 255;
-        color = new Color((byte)r, (byte)g, (byte)b, (byte)a);
+        color = Color.FromBytes((byte)r, (byte)g, (byte)b, (byte)a);
         return true;
     }
 
@@ -463,26 +463,26 @@ public sealed class RichTextParser
         switch (name.Length)
         {
             case 3:
-                if (Same(name, "red")) { color = new Color((byte)220, (byte)60, (byte)60, (byte)255); return true; }
+                if (Same(name, "red")) { color = Color.FromBytes(220, 60, 60, 255); return true; }
                 return false;
             case 4:
-                if (Same(name, "blue")) { color = new Color((byte)70, (byte)130, (byte)235, (byte)255); return true; }
-                if (Same(name, "cyan")) { color = new Color((byte)70, (byte)200, (byte)220, (byte)255); return true; }
-                if (Same(name, "gray")) { color = new Color((byte)140, (byte)140, (byte)150, (byte)255); return true; }
-                if (Same(name, "grey")) { color = new Color((byte)140, (byte)140, (byte)150, (byte)255); return true; }
+                if (Same(name, "blue")) { color = Color.FromBytes(70, 130, 235, 255); return true; }
+                if (Same(name, "cyan")) { color = Color.FromBytes(70, 200, 220, 255); return true; }
+                if (Same(name, "gray")) { color = Color.FromBytes(140, 140, 150, 255); return true; }
+                if (Same(name, "grey")) { color = Color.FromBytes(140, 140, 150, 255); return true; }
                 return false;
             case 5:
-                if (Same(name, "green")) { color = new Color((byte)80, (byte)200, (byte)120, (byte)255); return true; }
-                if (Same(name, "white")) { color = new Color((byte)245, (byte)245, (byte)250, (byte)255); return true; }
-                if (Same(name, "black")) { color = new Color((byte)20, (byte)20, (byte)24, (byte)255); return true; }
+                if (Same(name, "green")) { color = Color.FromBytes(80, 200, 120, 255); return true; }
+                if (Same(name, "white")) { color = Color.FromBytes(245, 245, 250, 255); return true; }
+                if (Same(name, "black")) { color = Color.FromBytes(20, 20, 24, 255); return true; }
                 return false;
             case 6:
-                if (Same(name, "yellow")) { color = new Color((byte)240, (byte)200, (byte)80, (byte)255); return true; }
-                if (Same(name, "orange")) { color = new Color((byte)240, (byte)150, (byte)70, (byte)255); return true; }
-                if (Same(name, "purple")) { color = new Color((byte)170, (byte)110, (byte)230, (byte)255); return true; }
+                if (Same(name, "yellow")) { color = Color.FromBytes(240, 200, 80, 255); return true; }
+                if (Same(name, "orange")) { color = Color.FromBytes(240, 150, 70, 255); return true; }
+                if (Same(name, "purple")) { color = Color.FromBytes(170, 110, 230, 255); return true; }
                 return false;
             case 7:
-                if (Same(name, "magenta")) { color = new Color((byte)230, (byte)100, (byte)200, (byte)255); return true; }
+                if (Same(name, "magenta")) { color = Color.FromBytes(230, 100, 200, 255); return true; }
                 return false;
             default:
                 return false;

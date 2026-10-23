@@ -55,7 +55,7 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
 
         GD.RunTestGraph((context, cl) =>
         {
-            cl.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(0, 0, 0, 1)), AttachmentOps.Loaded));
+            cl.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(0f, 0f, 0f, 1f)), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(source);

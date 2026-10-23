@@ -13,7 +13,7 @@ namespace Prowl.Graphite.Debugger.Tests;
 
 file static class Passes
 {
-    private static readonly Prowl.Vector.Color Black = new(0, 0, 0, 255);
+    private static readonly Prowl.Vector.Color Black = Prowl.Vector.Color.FromBytes(0, 0, 0, 255);
 
     public static void Events(FrameGraph graph, RenderTexture target, RenderTexture storage, GraphicsProgram program, ComputeProgram compute, Texture source, Sampler sampler)
     {
@@ -36,7 +36,7 @@ file static class Passes
             cmd.PushDebugGroup("First");
             cmd.Draw(3);
             cmd.PopDebugGroup();
-            cmd.ClearColorTarget(0, new Prowl.Vector.Color(0, 0, 255, 255));
+            cmd.ClearColorTarget(0, Prowl.Vector.Color.FromBytes(0, 0, 255, 255));
             cmd.SetScissor(0, 0, 4, 8);
             cmd.Draw(3);
 

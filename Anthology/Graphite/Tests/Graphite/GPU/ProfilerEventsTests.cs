@@ -123,7 +123,7 @@ file sealed class CorrelationProfiler : ExecutionRecorder, IGraphProfiler, IGpuS
 
 file static class ProfilerPasses
 {
-    private static readonly TargetLoadStoreOps ClearBlack = TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1));
+    private static readonly TargetLoadStoreOps ClearBlack = TargetLoadStoreOps.Clear(new Color(0f, 0f, 0f, 1f));
 
     public static TextureHandle AddClear(FrameGraph graph, RenderResourceID id, uint size, int scope = 0)
     {

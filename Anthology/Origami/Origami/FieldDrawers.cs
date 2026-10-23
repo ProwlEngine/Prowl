@@ -149,7 +149,7 @@ public class Int4Drawer : FieldDrawer
 public class ColorDrawer : FieldDrawer
 {
     public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
-        => Origami.ColorField(paper, id, (Prowl.Vector.Color)(value ?? new Prowl.Vector.Color(1, 1, 1, 1)), v => onChange(v)).Show();
+        => Origami.ColorField(paper, id, (Prowl.Vector.Color)(value ?? Prowl.Vector.Color.White), v => onChange(v)).Show();
 }
 
 // ── Registration ────────────────────────────────────────────
