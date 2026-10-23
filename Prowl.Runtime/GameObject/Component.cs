@@ -487,7 +487,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
         if (!RunsGameplay) return;
         HasStarted = true;
         try { Start(); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] Start() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] Start() threw", ex); }
     }
 
     /// <summary>Gated Update only runs in play mode or with [ExecuteAlways].</summary>
@@ -495,7 +495,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     {
         if (!RunsGameplay) return;
         try { Update(); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] Update() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] Update() threw", ex); }
     }
 
     /// <summary>Gated LateUpdate only runs in play mode or with [ExecuteAlways].</summary>
@@ -503,7 +503,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     {
         if (!RunsGameplay) return;
         try { LateUpdate(); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] LateUpdate() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] LateUpdate() threw", ex); }
     }
 
     /// <summary>Gated FixedUpdate only runs in play mode or with [ExecuteAlways].</summary>
@@ -511,7 +511,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     {
         if (!RunsGameplay) return;
         try { FixedUpdate(); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] FixedUpdate() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] FixedUpdate() threw", ex); }
     }
 
     /// <summary>Gated OnEnable only runs in play mode or with [ExecuteAlways].</summary>
@@ -532,7 +532,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
         if (!ShouldExecuteGameplay) return;
         _gameplayEnabled = true;
         try { OnEnable(); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnEnable() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnEnable() threw", ex); }
     }
 
     /// <summary>OnDisable only runs to pair with a gameplay OnEnable.</summary>
@@ -552,7 +552,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
         if (!_gameplayEnabled) return;
         _gameplayEnabled = false;
         try { OnDisable(); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnDisable() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnDisable() threw", ex); }
     }
 
     // ---- Physics callbacks: gameplay-gated + exception-guarded, dispatched by SceneDispatcher ----
@@ -561,63 +561,63 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     {
         if (!RunsGameplay) return;
         try { OnCollisionBegin(collision); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionBegin() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnCollisionBegin() threw", ex); }
     }
 
     internal void InternalOnCollisionStay(in Collision collision)
     {
         if (!RunsGameplay) return;
         try { OnCollisionStay(collision); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionStay() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnCollisionStay() threw", ex); }
     }
 
     internal void InternalOnCollisionEnd(in Collision collision)
     {
         if (!RunsGameplay) return;
         try { OnCollisionEnd(collision); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionEnd() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnCollisionEnd() threw", ex); }
     }
 
     internal void InternalOnTriggerEnter(Rigidbody3D other)
     {
         if (!RunsGameplay) return;
         try { OnTriggerEnter(other); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnTriggerEnter() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnTriggerEnter() threw", ex); }
     }
 
     internal void InternalOnTriggerStay(Rigidbody3D other)
     {
         if (!RunsGameplay) return;
         try { OnTriggerStay(other); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnTriggerStay() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnTriggerStay() threw", ex); }
     }
 
     internal void InternalOnTriggerExit(Rigidbody3D other)
     {
         if (!RunsGameplay) return;
         try { OnTriggerExit(other); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnTriggerExit() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnTriggerExit() threw", ex); }
     }
 
     internal void InternalOnCharacterEnter(CharacterController character)
     {
         if (!RunsGameplay) return;
         try { OnCharacterEnter(character); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCharacterEnter() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnCharacterEnter() threw", ex); }
     }
 
     internal void InternalOnCharacterStay(CharacterController character)
     {
         if (!RunsGameplay) return;
         try { OnCharacterStay(character); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCharacterStay() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnCharacterStay() threw", ex); }
     }
 
     internal void InternalOnCharacterExit(CharacterController character)
     {
         if (!RunsGameplay) return;
         try { OnCharacterExit(character); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCharacterExit() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnCharacterExit() threw", ex); }
     }
 
     // Implemented explicitly so the identity rules below always run. They used to live in the virtual

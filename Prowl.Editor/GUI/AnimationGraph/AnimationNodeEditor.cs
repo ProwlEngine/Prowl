@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.GraphEditor;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.GUI.Widgets;
@@ -14,41 +15,27 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 
 using AnimationCurve = Prowl.Vector.AnimationCurve;
+using AnimationNodeCard = Prowl.Editor.GraphEditor.NodeCard<Prowl.Runtime.GraphNodeRecord, Prowl.Editor.Inspector.AnimationGraphEditing>;
+using AnimationNodeInspector = Prowl.Editor.GraphEditor.NodeInspector<Prowl.Runtime.GraphNodeRecord, Prowl.Editor.Inspector.AnimationGraphEditing>;
 using HumanBodyBone = Prowl.Motion.HumanBodyBone;
-using MotionAvatar = Prowl.Motion.Avatar;
-using MotionSkeleton = Prowl.Motion.Skeleton;
 
 namespace Prowl.Editor.Inspector;
 
-/// <summary>Marks an <see cref="AnimationNodeEditor"/> as the one for a node type, and for the types deriving from it.</summary>
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
-public sealed class AnimationNodeEditorAttribute(Type nodeType) : Attribute
+/// <summary>
+/// How the graph editor shows one kind of animation node. The default draws any node from its pins and
+/// settings. Mark a subclass with <see cref="NodeEditorAttribute"/> to make it the one for a node type.
+/// </summary>
+public class AnimationNodeEditor : NodeEditor<GraphNodeRecord, AnimationGraphEditing>
 {
-    public Type NodeType { get; } = nodeType;
-}
-
-/// <summary>How the graph editor shows one kind of node. The default draws any node from its pins and settings.</summary>
-public class AnimationNodeEditor
-{
-    private static readonly Dictionary<AnimationGraphNode, AnimationNodeEditor> s_editors = new(ReferenceEqualityComparer.Instance);
+    private static readonly NodeEditorCache<AnimationGraphNode, AnimationNodeEditor> s_editors
+        = new(() => new AnimationNodeEditor(), (editor, node) => editor.Node = node);
 
     public AnimationGraphNode Node { get; private set; } = null!;
 
     /// <summary>The editor for a node type: its own, or the default.</summary>
-    public static AnimationNodeEditor For(AnimationGraphNode node)
-    {
-        if (s_editors.TryGetValue(node, out AnimationNodeEditor? editor)) return editor;
+    public static AnimationNodeEditor For(AnimationGraphNode node) => s_editors.For(node);
 
-        editor = EditorRegistries.CreateAnimationNodeEditor(node.GetType()) ?? new AnimationNodeEditor();
-        editor.Node = node;
-        s_editors[node] = editor;
-        return editor;
-    }
-
-    internal static void ClearCache() => s_editors.Clear();
-
-    /// <summary>The icon on the node's header.</summary>
-    public virtual IOrigamiIcon Icon => Node.Id switch
+    public override IOrigamiIcon? Icon => Node.Id switch
     {
         AnimationNodeIds.Clip => EditorIcons.Film_I,
         AnimationNodeIds.AnimationPose => EditorIcons.Image_I,
@@ -125,11 +112,9 @@ public class AnimationNodeEditor
         },
     };
 
-    /// <summary>What hovering the node's header says.</summary>
-    public virtual string Tooltip => Node.Description;
+    public override string Tooltip => Node.Description;
 
-    /// <summary>The name a node takes from how it is set, such as the clip it plays, or empty for none.</summary>
-    public virtual string AutoName(GraphNodeRecord record)
+    public override string AutoName(GraphNodeRecord record)
     {
         foreach (NodeSetting property in Node.Properties)
             if (record.Properties.TryGetValue(property.Key, out NodeValue? value) && AssetName(value) is { Length: > 0 } name)
@@ -137,8 +122,7 @@ public class AnimationNodeEditor
         return string.Empty;
     }
 
-    /// <summary>The line on a card that has no settings of its own to show.</summary>
-    public virtual string Summary(GraphNodeRecord record)
+    public override string Summary(GraphNodeRecord record)
     {
         foreach (NodeSetting property in Node.Properties)
         {
@@ -154,23 +138,11 @@ public class AnimationNodeEditor
         return string.Empty;
     }
 
-    /// <summary>What the node's live badge shows while the game runs, given what the running graph reports.</summary>
-    public virtual string LiveText(AnimationGraphEditing editing, GraphNodeRecord record, string reported) => reported;
-
-    /// <summary>Called once a node has just been added to a graph.</summary>
-    public virtual void OnCreated(AnimationGraph graph, GraphNodeRecord record) { }
-
-    /// <summary>Opens what the node holds, on a double click or from its menu. Returns false when there is nothing to open.</summary>
-    public virtual bool Open(AnimationGraphEditing editing, GraphNodeRecord record) => false;
-
-    /// <summary>Adds the node's own items to its right click menu.</summary>
-    public virtual void AddMenuItems(AnimationGraphEditing editing, GraphNodeRecord record, ContextBuilder menu) { }
-
-    /// <summary>Reports what is wrong with a node beyond unwired pins and mismatched wires, which are checked for every node.</summary>
-    public virtual void Validate(AnimationGraph graph, GraphNodeRecord record, NodeProblems problems) { }
+    /// <summary>Called once a node has just been added to a graph, by the editor or the CLI.</summary>
+    public virtual void OnCreated(AnimationGraphDomain domain, GraphNodeRecord record) { }
 
     /// <summary>Fills in the node's card. By default its settings, the entries of its repeating pins, then its toggles.</summary>
-    public virtual void BuildCard(AnimationNodeCard card, GraphNodeRecord record)
+    public override void BuildCard(AnimationNodeCard card, GraphNodeRecord record)
     {
         card.AddSettings();
         card.AddEntries();
@@ -178,21 +150,12 @@ public class AnimationNodeEditor
     }
 
     /// <summary>Draws the node in the inspector. By default its description, its settings, then the entries of its repeating pins.</summary>
-    public virtual void DrawInspector(AnimationNodeInspector inspector, GraphNodeRecord record)
+    public override void DrawInspector(AnimationNodeInspector inspector, GraphNodeRecord record)
     {
         inspector.Description();
         inspector.Settings();
         inspector.Entries();
     }
-
-    /// <summary>Whether each repetition of the node's repeating pins has settings of its own, drawn by <see cref="DrawEntry"/>.</summary>
-    public virtual bool HasEntries => false;
-
-    /// <summary>The height of one entry on the card.</summary>
-    public virtual float EntryHeight => Origami.Current.Metrics.RowHeight;
-
-    /// <summary>The settings kept on one repetition of the repeating pins, such as a layer's weight, beside its label.</summary>
-    public virtual void DrawEntry(AnimationGraphEditing editing, Paper paper, string id, GraphNodeRecord record, int pin) { }
 
     private static string AssetName(NodeValue value) => value.Kind switch
     {
@@ -203,68 +166,44 @@ public class AnimationNodeEditor
     };
 }
 
-/// <summary>What is wrong with one node, as an editor reports it.</summary>
-public sealed class NodeProblems
+/// <summary>The animation graph a node editor works on, and what it can do to it through the window showing it.</summary>
+public sealed class AnimationGraphEditing : GraphEditing<GraphNodeRecord>
 {
-    private readonly List<GraphProblem> _found;
-    private readonly string _nodeId;
+    internal AnimationGraphEditing(AnimationGraphView view) : base(view) => View = view;
 
-    internal NodeProblems(List<GraphProblem> found, string nodeId)
-    {
-        _found = found;
-        _nodeId = nodeId;
-    }
+    internal new AnimationGraphView View { get; }
 
-    /// <summary>Something that stops the graph running.</summary>
-    public void Blocking(string message) => _found.Add(new GraphProblem(_nodeId, message, true));
-
-    /// <summary>Something the graph runs with, but that is likely not finished.</summary>
-    public void Unfinished(string message) => _found.Add(new GraphProblem(_nodeId, message, false));
-}
-
-/// <summary>The graph a node editor works on, and what it can do to it through the window showing it.</summary>
-public sealed class AnimationGraphEditing
-{
-    private readonly AnimationGraphView _view;
-
-    internal AnimationGraphEditing(AnimationGraphView view) => _view = view;
-
-    internal Action<string, Action, bool>? EditHandler;
     internal Action<GraphNodeRecord>? EnterStatesHandler;
     internal Action<GraphNodeRecord>? OpenSubGraphHandler;
     internal Action<string, string, Action<AnimationGraph>>? ExtractHandler;
+    internal Action<Paper, GraphNodeRecord, NodeSetting>? PropertyHandler;
 
-    internal AnimationGraphView View => _view;
+    public AnimationGraph? Graph => View.Graph;
 
-    public AnimationGraph? Graph => _view.Graph;
+    public AnimationGraphDomain? Animation => View.Animation;
 
-    /// <summary>Makes a change undoable. A rebuild redraws every card after, for a change to what cards show.</summary>
-    public void Edit(string description, Action change, bool rebuild = true)
-    {
-        if (EditHandler != null) EditHandler(description, change, rebuild);
-        else change();
-    }
-
-    public GraphNodeRecord? RecordOf(string nodeId) => _view.RecordOf(nodeId);
+    private AnimationGraphProbe? Probe => View.Probe as AnimationGraphProbe;
 
     /// <summary>What a repeating input is called: the node feeding it, or the pin and its place in the list.</summary>
     public string InputLabel(GraphNodeRecord record, int pin)
-        => AnimationNodeRegistry.Get(record.Type) is { } type ? _view.InputLabel(record, type, pin) : string.Empty;
+        => AnimationNodeRegistry.Get(record.Type) is { } type && Animation is { } domain ? domain.InputLabel(record, type, pin) : string.Empty;
 
     /// <summary>What a node is doing in the running game, or empty when nothing runs.</summary>
-    public string LiveValue(GraphNodeRecord record)
-        => _view.Probe?.Read(_view.Graph, record)?.Value ?? string.Empty;
+    public string LiveValue(GraphNodeRecord record) => View.Probe?.Read(record.Id)?.Value ?? string.Empty;
 
     /// <summary>A declared parameter's value in the running game, or empty when nothing runs or none is declared by that name.</summary>
     public string LiveParameter(string name)
     {
-        if (_view.Probe == null || _view.Graph.IsNotValid()) return string.Empty;
-        GraphParameterRecord? declared = _view.Graph!.Parameters.Find(p => p.Name == name);
-        return declared == null ? string.Empty : _view.Probe.ReadParameter(declared);
+        if (Probe == null || Graph.IsNotValid()) return string.Empty;
+        GraphParameterRecord? declared = Graph!.Parameters.Find(p => p.Name == name);
+        return declared == null ? string.Empty : Probe.ReadParameter(declared);
     }
 
     /// <summary>A number node's value in the running game, or null when nothing runs.</summary>
-    public float? LiveNumber(GraphNodeRecord record) => _view.Probe?.ReadNumber(_view.Graph, record);
+    public float? LiveNumber(GraphNodeRecord record) => Probe?.ReadNumber(record);
+
+    /// <summary>The state a machine is in while the game runs, as an index into its states, or -1.</summary>
+    public int ActiveState(GraphNodeRecord machine) => Probe?.ActiveState(Graph, machine) ?? -1;
 
     /// <summary>Opens a state machine node's states.</summary>
     public void EnterStates(GraphNodeRecord machine) => EnterStatesHandler?.Invoke(machine);
@@ -274,126 +213,132 @@ public sealed class AnimationGraphEditing
 
     /// <summary>Moves the nodes an owner holds into a new graph asset, then hands the asset over to use in their place.</summary>
     public void ExtractToAsset(string owner, string name, Action<AnimationGraph> use) => ExtractHandler?.Invoke(owner, name, use);
+
+    /// <summary>One setting of a node in the inspector, with the widget its kind calls for.</summary>
+    public void DrawProperty(Paper paper, GraphNodeRecord record, NodeSetting setting) => PropertyHandler?.Invoke(paper, record, setting);
+
+    /// <summary>A plan of a graph a sub graph node runs, for drawing as a thumbnail.</summary>
+    internal AnimationGraphView InnerView(AnimationGraph inner, string scope = "") => View.InnerView(inner, scope);
+
+    /// <summary>The parameter a parameter node reads. Fixed when the node is made, so it is shown, not edited.</summary>
+    public void DrawParameterPicker(Paper paper, string id, string name)
+    {
+        if (Graph.IsNotValid()) return;
+
+        Scribe.FontFile font = EditorTheme.DefaultFont!;
+        GraphParameterRecord? declared = Graph!.Parameters.Find(p => p.Name == name);
+        bool isVirtual = declared == null && AnimationGraphDomain.VirtualParameters(Graph).Contains(name);
+
+        string text = declared != null ? $"{name}  ({AnimationGraphWindow.KindName(declared)})"
+            : isVirtual ? $"{name}  (Virtual)"
+            : $"{name} (missing)";
+
+        EditorGUI.Row(paper, id, "Parameter", () =>
+            paper.Box($"{id}_v").Width(UnitValue.Stretch()).Height(Origami.Current.Metrics.RowHeight).IsNotInteractable()
+                .Text(text, font)
+                .TextColor(declared == null && !isVirtual ? EditorTheme.Red400 : EditorTheme.Ink600)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft));
+    }
 }
 
-/// <summary>A node's card as its editor fills it in: fixed height rows of widgets under the header.</summary>
-public sealed class AnimationNodeCard
+/// <summary>The rows an animation node's card and inspector are built from: its settings, its toggles and its repeating entries.</summary>
+public static class AnimationNodeRows
 {
-    private const float LabelWidth = 64f;
-    private const float Gap = 4f;
-    private const float Pad = 8f;
-
-    internal readonly record struct Row(float Height, Action<Paper, string> Draw);
-
-    internal readonly List<Row> Rows = [];
-
-    internal AnimationNodeCard(GraphNode widget, GraphNodeRecord record, AnimationNodeEditor editor, AnimationGraphEditing editing)
-    {
-        Widget = widget;
-        Record = record;
-        Editor = editor;
-        Editing = editing;
-    }
-
-    /// <summary>The card as the graph widget draws it, for its title, width or ports.</summary>
-    public GraphNode Widget { get; }
-
-    public GraphNodeRecord Record { get; }
-    public AnimationNodeEditor Editor { get; }
-    public AnimationGraphNode Node => Editor.Node;
-    public AnimationGraphEditing Editing { get; }
-
-    /// <summary>The card's width while it has rows, or null for the usual width.</summary>
-    public float? Width { get; set; }
-
-    public static float RowHeight => Origami.Current.Metrics.RowHeight;
-
-    /// <summary>Adds a row, drawn with the paper and an id unique to it.</summary>
-    public void Add(float height, Action<Paper, string> draw) => Rows.Add(new Row(height, draw));
+    private static AnimationGraphNode NodeOf(NodeEditor<GraphNodeRecord, AnimationGraphEditing> editor)
+        => ((AnimationNodeEditor)editor).Node;
 
     /// <summary>Adds a row for each setting that is shown and not exposed as a port, other than the toggles.</summary>
-    public void AddSettings()
+    public static void AddSettings(this AnimationNodeCard card)
     {
-        foreach (NodeSetting property in Node.Properties)
-            if (property.Kind != NodeValueKind.Flag && ShowsOnCard(property)) AddSetting(property);
+        foreach (NodeSetting property in NodeOf(card.Editor).Properties)
+            if (property.Kind != NodeValueKind.Flag && ShowsOnCard(card, property)) card.AddSetting(property);
     }
 
     /// <summary>Adds a row editing one setting, with the widget its kind calls for.</summary>
-    public void AddSetting(NodeSetting property)
+    public static void AddSetting(this AnimationNodeCard card, NodeSetting property)
     {
-        float height = property.Kind == NodeValueKind.Curve ? 50f : RowHeight;
-        Add(height, (paper, id) => DrawProperty(Editing, paper, id, Record, property));
+        float height = property.Kind == NodeValueKind.Curve ? 50f : AnimationNodeCard.RowHeight;
+        card.Add(height, (paper, id) => AnimationNodeFields.DrawProperty(card.Editing, paper, id, card.Record, property));
     }
 
     /// <summary>Adds one row of chips for the on and off settings.</summary>
-    public void AddToggles()
+    public static void AddToggles(this AnimationNodeCard card)
     {
         var flags = new List<NodeSetting>();
-        foreach (NodeSetting property in Node.Properties)
-            if (property.Kind == NodeValueKind.Flag && ShowsOnCard(property)) flags.Add(property);
-        if (flags.Count > 0) Add(22f, (paper, id) => DrawToggles(Editing, paper, id, Record, flags));
+        foreach (NodeSetting property in NodeOf(card.Editor).Properties)
+            if (property.Kind == NodeValueKind.Flag && ShowsOnCard(card, property)) flags.Add(property);
+        if (flags.Count > 0) card.Add(22f, (paper, id) => AnimationNodeFields.DrawToggles(card.Editing, paper, id, card.Record, flags));
     }
 
     /// <summary>Adds a row for each repetition of the repeating pins, when the editor has entries to draw.</summary>
-    public void AddEntries()
+    public static void AddEntries(this AnimationNodeCard card)
     {
-        int stride = Node.VariadicStride;
-        if (!Editor.HasEntries || stride <= 0) return;
+        AnimationGraphNode node = NodeOf(card.Editor);
+        int stride = node.VariadicStride;
+        if (!card.Editor.HasEntries || stride <= 0) return;
 
-        for (int pin = Node.VariadicStart; pin < Record.Inputs.Count; pin += stride)
+        for (int pin = node.VariadicStart; pin < card.Record.Inputs.Count; pin += stride)
         {
             int entry = pin;
-            Add(Editor.EntryHeight, (paper, id) =>
+            card.Add(card.Editor.EntryHeight, (paper, id) =>
             {
-                Label(paper, id + "_l", Editing.InputLabel(Record, entry));
-                Editor.DrawEntry(Editing, paper, id, Record, entry);
+                AnimationNodeCard.Label(paper, id + "_l", card.Editing.InputLabel(card.Record, entry));
+                card.Editor.DrawEntry(card.Editing, paper, id, card.Record, entry);
             });
         }
     }
 
-    /// <summary>Adds a button that opens what the node holds.</summary>
-    public void AddOpenButton(string label)
-        => Add(24f, (paper, id) => Origami.Button(paper, id, label, () => Editor.Open(Editing, Record))
-            .Subtle().Width(UnitValue.Stretch()).Height(24).Show());
-
     // An exposed setting is a port now, and the port is where it is set.
-    private bool ShowsOnCard(NodeSetting property)
-        => !Record.PropertyInputs.ContainsKey(property.Key) && Node.ShowsProperty(Record, property.Key);
+    private static bool ShowsOnCard(AnimationNodeCard card, NodeSetting property)
+        => !card.Record.PropertyInputs.ContainsKey(property.Key) && NodeOf(card.Editor).ShowsProperty(card.Record, property.Key);
 
-    /// <summary>Gives the widget the card's rows, height and width. Returns false for a card with nothing on it.</summary>
-    internal bool Apply()
+    /// <summary>The node type's description, as a note.</summary>
+    public static void Description(this AnimationNodeInspector inspector)
     {
-        if (Rows.Count == 0) return false;
-
-        float height = Pad * 0.5f;
-        foreach (Row row in Rows) height += row.Height + Gap;
-
-        Widget.Width = Width ?? 212f;
-        Widget.BodyHeight = height;
-        List<Row> rows = Rows;
-        Widget.Body = ctx => Draw(ctx, rows);
-        return true;
+        AnimationGraphNode node = NodeOf(inspector.Editor);
+        if (node.Description.Length > 0) inspector.Note("ag_desc", node.Description);
     }
 
-    private static void Draw(NodeBodyContext ctx, List<Row> rows)
+    /// <summary>A row for each setting that is shown, other than a list another list draws beside its own.</summary>
+    public static void Settings(this AnimationNodeInspector inspector)
     {
-        Paper paper = ctx.Paper;
-        using (paper.Column(ctx.Id("rows")).Width(UnitValue.Stretch()).Height(UnitValue.Stretch())
-            .Padding(Pad, Pad, Pad * 0.5f, 0).Enter())
-        {
-            for (int i = 0; i < rows.Count; i++)
-            {
-                // Every row keeps its drags to itself, so working a control never drags the node,
-                // while the gaps between rows still pick the card up.
-                ElementBuilder line = ctx.Control(paper.Row(ctx.Id("row" + i)).Width(UnitValue.Stretch()).Height(rows[i].Height)
-                    .Margin(0, 0, 0, Gap).AlignItems(LayoutAlignment.Center));
+        AnimationGraphNode node = NodeOf(inspector.Editor);
+        foreach (NodeSetting property in node.Properties)
+            if (!IsPairedInto(node, property.Key) && node.ShowsProperty(inspector.Record, property.Key)) inspector.Setting(property);
+    }
 
-                using (line.Enter())
-                    rows[i].Draw(paper, ctx.Id("c" + i));
-            }
+    /// <summary>A row editing one setting, with the widget its kind calls for.</summary>
+    public static void Setting(this AnimationNodeInspector inspector, NodeSetting property)
+        => inspector.Editing.DrawProperty(inspector.Paper, inspector.Record, property);
+
+    /// <summary>A row for each repetition of the repeating pins, when the editor has entries to draw.</summary>
+    public static void Entries(this AnimationNodeInspector inspector, string? header = "Inputs")
+    {
+        AnimationGraphNode node = NodeOf(inspector.Editor);
+        int stride = node.VariadicStride;
+        if (!inspector.Editor.HasEntries || stride <= 0 || inspector.Record.Inputs.Count <= node.VariadicStart) return;
+
+        if (header != null) inspector.Header("ag_h_inputs", header);
+        for (int pin = node.VariadicStart, entry = 0; pin < inspector.Record.Inputs.Count; pin += stride, entry++)
+        {
+            int at = pin;
+            string id = $"ag_in_{entry}";
+            inspector.Row(id, inspector.Editing.InputLabel(inspector.Record, at),
+                () => inspector.Editor.DrawEntry(inspector.Editing, inspector.Paper, id + "_v", inspector.Record, at));
         }
     }
 
+    private static bool IsPairedInto(AnimationGraphNode node, string name)
+    {
+        foreach (NodeSetting property in node.Properties)
+            if (property is TextSetting { PairedWith: { } paired } && paired.Key == name) return true;
+        return false;
+    }
+}
+
+/// <summary>The widgets that edit an animation node's settings, on its card and in the inspector.</summary>
+public static class AnimationNodeFields
+{
     /// <summary>Gives a setting its own port, or takes it away and leaves the value that was typed.</summary>
     public static void Expose(GraphNodeRecord record, NodeSetting property, bool exposed)
     {
@@ -402,15 +347,7 @@ public sealed class AnimationNodeCard
     }
 
     /// <summary>A label at the start of a row.</summary>
-    public static void Label(Paper paper, string id, string text)
-    {
-        Scribe.FontFile? font = EditorTheme.DefaultFont;
-        if (font == null) return;
-
-        paper.Box(id).Width(LabelWidth).Height(UnitValue.Stretch()).IsNotInteractable()
-            .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
-            .Alignment(TextAlignment.MiddleLeft).TextTruncate();
-    }
+    public static void Label(Paper paper, string id, string text) => AnimationNodeCard.Label(paper, id, text);
 
     /// <summary>One setting on a card, as the widget its kind calls for.</summary>
     public static void DrawProperty(AnimationGraphEditing editing, Paper paper, string id, GraphNodeRecord record, NodeSetting setting)
@@ -435,7 +372,7 @@ public sealed class AnimationNodeCard
     public static void ValueField(AnimationGraphEditing editing, Paper paper, string id, GraphNodeRecord record, NodeSetting setting,
         string? dragLabel = null, float curveHeight = 40f)
     {
-        NodeValue value = AnimationGraphView.ValueOf(record, setting);
+        NodeValue value = AnimationGraphDomain.ValueOf(record, setting);
         string edit = "Set " + setting.Label;
 
         if (setting is TextSetting { Bone: true, List: false })
@@ -449,13 +386,13 @@ public sealed class AnimationNodeCard
             case NodeValueKind.Number:
                 NumericFieldBuilder<float> number = Origami.NumericField<float>(paper, id, value.Number, v => editing.Edit(edit, () => value.Number = v, false));
                 if (dragLabel != null) number.DraggableLabel(dragLabel, EditorTheme.Ink400);
-                number.Width(UnitValue.Stretch()).Height(RowHeight).Show();
+                number.Width(UnitValue.Stretch()).Height(AnimationNodeCard.RowHeight).Show();
                 return;
 
             case NodeValueKind.Integer:
                 NumericFieldBuilder<int> integer = Origami.NumericField<int>(paper, id, value.Integer, v => editing.Edit(edit, () => value.Integer = v, false));
                 if (dragLabel != null) integer.DraggableLabel(dragLabel, EditorTheme.Ink400);
-                integer.Width(UnitValue.Stretch()).Height(RowHeight).Show();
+                integer.Width(UnitValue.Stretch()).Height(AnimationNodeCard.RowHeight).Show();
                 return;
 
             case NodeValueKind.Vector:
@@ -478,7 +415,7 @@ public sealed class AnimationNodeCard
                 else
                 {
                     Origami.TextField(paper, id, value.Text, v => editing.Edit(edit, () => value.Text = v))
-                        .Width(UnitValue.Stretch()).Show();
+                        .Width(UnitValue.Stretch()).CommitOnEnter().Show();
                 }
                 return;
         }
@@ -487,7 +424,7 @@ public sealed class AnimationNodeCard
     /// <summary>An asset setting's picker, with its own label.</summary>
     public static void AssetField(AnimationGraphEditing editing, Paper paper, string id, string label, GraphNodeRecord record, NodeSetting setting)
     {
-        NodeValue value = AnimationGraphView.ValueOf(record, setting);
+        NodeValue value = AnimationGraphDomain.ValueOf(record, setting);
         switch (setting.Kind)
         {
             case NodeValueKind.Clip: AssetField(paper, id, label, value.Clip, v => editing.Edit("Set Clip", () => value.Clip = v)); break;
@@ -508,7 +445,7 @@ public sealed class AnimationNodeCard
     {
         for (int i = 0; i < flags.Count; i++)
         {
-            NodeValue value = AnimationGraphView.ValueOf(record, flags[i]);
+            NodeValue value = AnimationGraphDomain.ValueOf(record, flags[i]);
             string name = flags[i].Key;
             EditorGUI.Chip(paper, $"{id}_{i}", name, value.Flag, () => editing.Edit("Toggle " + name, () => value.Flag = !value.Flag, false));
         }
@@ -546,77 +483,7 @@ public sealed class AnimationNodeCard
                 .Searchable("Search bones...").Width(UnitValue.Stretch()).Show();
 
             if (selected == CustomBone)
-                Origami.TextField(paper, $"{id}_name", value, setter).Placeholder("bone name").Width(UnitValue.Stretch()).Show();
+                Origami.TextField(paper, $"{id}_name", value, setter).Placeholder("bone name").Width(UnitValue.Stretch()).CommitOnEnter().Show();
         }
-    }
-}
-
-/// <summary>A selected node in the inspector, as its editor draws it.</summary>
-public sealed class AnimationNodeInspector
-{
-    private readonly AnimationGraphWindow _window;
-
-    internal AnimationNodeInspector(AnimationGraphWindow window, Paper paper, GraphNodeRecord record, AnimationNodeEditor editor, AnimationGraphEditing editing)
-    {
-        _window = window;
-        Paper = paper;
-        Record = record;
-        Editor = editor;
-        Editing = editing;
-    }
-
-    internal AnimationGraphWindow Window => _window;
-
-    public Paper Paper { get; }
-    public GraphNodeRecord Record { get; }
-    public AnimationNodeEditor Editor { get; }
-    public AnimationGraphNode Node => Editor.Node;
-    public AnimationGraphEditing Editing { get; }
-
-    /// <summary>The node type's description, as a note.</summary>
-    public void Description()
-    {
-        if (Node.Description.Length > 0) Note("ag_desc", Node.Description);
-    }
-
-    /// <summary>A row for each setting that is shown, other than a list another list draws beside its own.</summary>
-    public void Settings()
-    {
-        foreach (NodeSetting property in Node.Properties)
-            if (!IsPairedInto(property.Key) && Node.ShowsProperty(Record, property.Key)) Setting(property);
-    }
-
-    /// <summary>A row editing one setting, with the widget its kind calls for.</summary>
-    public void Setting(NodeSetting property) => _window.DrawNodeProperty(Paper, Record, property);
-
-    /// <summary>A row for each repetition of the repeating pins, when the editor has entries to draw.</summary>
-    public void Entries(string? header = "Inputs")
-    {
-        int stride = Node.VariadicStride;
-        if (!Editor.HasEntries || stride <= 0 || Record.Inputs.Count <= Node.VariadicStart) return;
-
-        if (header != null) Header("ag_h_inputs", header);
-        for (int pin = Node.VariadicStart, entry = 0; pin < Record.Inputs.Count; pin += stride, entry++)
-        {
-            int at = pin;
-            string id = $"ag_in_{entry}";
-            Row(id, Editing.InputLabel(Record, at), () => Editor.DrawEntry(Editing, Paper, id + "_v", Record, at));
-        }
-    }
-
-    public void Header(string id, string title) => EditorGUI.SectionHeader(Paper, id, title);
-
-    public void Row(string id, string label, Action draw) => EditorGUI.Row(Paper, id, label, draw);
-
-    public void Note(string id, string text) => EditorGUI.Note(Paper, id, text);
-
-    public void Button(string id, string label, Action onClick)
-        => EditorGUI.PillButton(Paper, id, label, active: true, onClick).Margin(0, 0, Origami.Current.Metrics.Spacing, Origami.Current.Metrics.Spacing);
-
-    private bool IsPairedInto(string name)
-    {
-        foreach (NodeSetting property in Node.Properties)
-            if (property is TextSetting { PairedWith: { } paired } && paired.Key == name) return true;
-        return false;
     }
 }

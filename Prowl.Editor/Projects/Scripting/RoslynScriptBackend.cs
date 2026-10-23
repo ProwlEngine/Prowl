@@ -1,4 +1,4 @@
-using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
@@ -69,6 +69,33 @@ internal static class RoslynScriptBackend
 
     internal static CSharpParseOptions ParseOptions(IEnumerable<string> defines)
         => new CSharpParseOptions(LanguageVersion.Latest).WithPreprocessorSymbols(defines);
+
+    /// <summary>What the last editor compile of one unit used, so the code editor sees the same project.</summary>
+    internal sealed record ScriptContext(string UnitName, MetadataReference[] References, string[] Scripts,
+        CSharpCompilationOptions Options, CSharpParseOptions ParseOptions);
+
+    /// <summary>The editor compile context of the unit that owns <paramref name="scriptPath"/>, if it has been compiled.</summary>
+    internal static bool TryGetScriptContext(string projectRoot, string scriptPath, out ScriptContext? context)
+    {
+        context = null;
+        string prefix = projectRoot + "::";
+        lock (s_lock)
+        {
+            foreach (var (key, state) in s_states)
+            {
+                // Player builds share the cache under a "::player:" suffix and are not what the editor runs.
+                if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || key.IndexOf("::player:", StringComparison.Ordinal) >= 0)
+                    continue;
+                string[] scripts = state.Trees.Keys.Select(Path.GetFullPath).ToArray();
+                if (!scripts.Contains(scriptPath, StringComparer.OrdinalIgnoreCase)) continue;
+
+                context = new ScriptContext(key.Substring(prefix.Length), state.References, scripts,
+                    BuildOptions(state.AllowUnsafe), EditorParseOptions);
+                return true;
+            }
+        }
+        return false;
+    }
 
     /// <summary>Drops all cached compilation state (call when a project closes).</summary>
     public static void Reset()
@@ -228,7 +255,8 @@ internal static class RoslynScriptBackend
         return SameReferences(state.References, references) ? compilation : compilation.WithReferences(references);
     }
 
-    private static readonly ImmutableArray<DiagnosticAnalyzer> s_scriptAnalyzers =
+    /// <summary>Prowl's script safety analyzers, also run live by the code editor.</summary>
+    internal static readonly ImmutableArray<DiagnosticAnalyzer> ScriptAnalyzers =
         ImmutableArray.Create<DiagnosticAnalyzer>(
             new ReloadDiagnosticAnalyzer(), new EngineObjectNullAnalyzer(), new ComponentConstructorAnalyzer(),
             new BlockingWaitAnalyzer());
@@ -238,7 +266,7 @@ internal static class RoslynScriptBackend
     {
         try
         {
-            return compilation.WithAnalyzers(s_scriptAnalyzers)
+            return compilation.WithAnalyzers(ScriptAnalyzers)
                 .GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult()
                 .Where(d => d.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning);
         }
@@ -249,21 +277,27 @@ internal static class RoslynScriptBackend
         }
     }
 
-    private static CSharpCompilationOptions BuildOptions(CompilationUnit unit) =>
+    /// <summary>Severity overrides from the project's code style, applied on top of the built in ones.</summary>
+    public static KeyValuePair<string, ReportDiagnostic>[] DiagnosticOverrides { get; set; } = [];
+
+    private static CSharpCompilationOptions BuildOptions(CompilationUnit unit) => BuildOptions(unit.AllowUnsafe);
+
+    private static CSharpCompilationOptions BuildOptions(bool allowUnsafe) =>
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
             .WithPlatform(Platform.AnyCpu)
             .WithOptimizationLevel(OptimizationLevel.Debug)
-            .WithAllowUnsafe(unit.AllowUnsafe)
+            .WithAllowUnsafe(allowUnsafe)
             .WithNullableContextOptions(NullableContextOptions.Annotations)
             .WithConcurrentBuild(true)
             // Referencing runtime implementation assemblies (from the TPA list) instead of ref
             // assemblies produces harmless version mismatch noise. Silence it.
-            .WithSpecificDiagnosticOptions(new[]
-            {
+            .WithSpecificDiagnosticOptions(
+            [
                 new KeyValuePair<string, ReportDiagnostic>("CS1701", ReportDiagnostic.Suppress),
                 new KeyValuePair<string, ReportDiagnostic>("CS1702", ReportDiagnostic.Suppress),
                 new KeyValuePair<string, ReportDiagnostic>("CS1705", ReportDiagnostic.Suppress),
-            });
+                .. DiagnosticOverrides,
+            ]);
 
     private static List<MetadataReference> BuildReferences(
         CompilationUnit unit,

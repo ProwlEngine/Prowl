@@ -12,7 +12,7 @@ internal sealed class ModalHandle
 {
     private IModal? _modal;
 
-    public bool IsOpen => _modal != null;
+    public bool IsOpen => _modal != null && Modal.Contains(_modal);
 
     public void Open(Action<Paper, int> draw, bool closeOnBackdrop = false)
     {

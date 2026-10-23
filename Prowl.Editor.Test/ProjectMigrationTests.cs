@@ -224,4 +224,51 @@ public class ProjectMigrationTests : IDisposable
         WriteProwlFile("banana");
         Assert.Throws<InvalidOperationException>(() => Project.Open(_root));
     }
+
+    [Fact]
+    public void TextureMetas_MoveMasksAndSpritesOntoTheNewTypes_AndKeepTheirSize()
+    {
+        string mask = WriteAsset("Mask.png", "", "TextureImporter");
+        string sheet = WriteAsset("Sheet.png", "", "TextureImporter");
+        string limited = WriteAsset("Limited.png", "", "TextureImporter");
+        WriteSettings(mask, s => s["textureType"] = new EchoObject(2));
+        WriteSettings(sheet, s => { EchoObject sprite = EchoObject.NewCompound(); sprite["Mode"] = new EchoObject(2L); s["sprite"] = sprite; });
+        WriteSettings(limited, s => { s["textureType"] = new EchoObject(0); s["maxSize"] = new EchoObject(512); });
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject maskSettings = MetaFile.Read(mask + ".meta").Settings!;
+        Assert.Equal(0, maskSettings["textureType"].IntValue);
+        Assert.False(maskSettings["srgb"].BoolValue);
+        Assert.Equal(16384, maskSettings["maxSize"].IntValue);
+        Assert.Equal(3, MetaFile.Read(sheet + ".meta").Settings!["textureType"].IntValue);
+        Assert.Equal(512, MetaFile.Read(limited + ".meta").Settings!["maxSize"].IntValue);
+
+        EchoObject again = MetaFile.Read(mask + ".meta").Settings!;
+        Assert.Null(Migration.Releases.Release_1_0.TextureImportTypes(mask, again));
+    }
+
+    [Fact]
+    public void TextureMetas_WithoutSettings_AndLightmapPages_AreMigrated()
+    {
+        string bare = WriteAsset("Bare.png", "", "TextureImporter");
+        Directory.CreateDirectory(Path.Combine(_root, "Assets", "Main_lightmaps"));
+        string page = WriteAsset(Path.Combine("Main_lightmaps", "Lightmap-0.png"), "", "TextureImporter");
+        MetaFileData meta = MetaFile.Read(bare + ".meta");
+        meta.Settings = null;
+        MetaFile.Write(bare + ".meta", meta);
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        Assert.Equal(16384, MetaFile.Read(bare + ".meta").Settings!["maxSize"].IntValue);
+        Assert.Equal(7, MetaFile.Read(page + ".meta").Settings!["textureType"].IntValue);
+    }
+
+    private static void WriteSettings(string asset, Action<EchoObject> edit)
+    {
+        MetaFileData meta = MetaFile.Read(asset + ".meta");
+        meta.Settings ??= EchoObject.NewCompound();
+        edit(meta.Settings);
+        MetaFile.Write(asset + ".meta", meta);
+    }
 }

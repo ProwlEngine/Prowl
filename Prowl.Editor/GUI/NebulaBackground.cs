@@ -102,17 +102,39 @@ public sealed class NebulaBackground
         nebula.Update(EditorTheme.AnimatedBackground ? dt * EditorTheme.BackgroundSpeed : 0f);
 
         ElementBuilder box = paper.Box(id).PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h).IsNotInteractable();
-        if (EditorTheme.UsesNebulaBackground)
+        string? image = ProjectBackgroundImage()
+            ?? (EditorTheme.BackgroundStyle == EditorBackgroundStyle.Image ? EditorTheme.BackgroundImagePath : null);
+
+        if (image != null)
+        {
+            box.BackgroundColor(EditorTheme.BackgroundColorA);
+            if (EditorWallpaper.Get(image) is { } wallpaper)
+            {
+                box.OnPostLayout((hnd, rect) => paper.Draw(ref hnd, (canvas, r) =>
+                    EditorWallpaper.Draw(canvas, r, wallpaper, EditorTheme.BackgroundImageFit, EditorTheme.BackgroundImageDim)));
+                if (EditorTheme.BackgroundImageBlur > 0f)
+                    paper.Box($"{id}_blur").PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
+                        .BackdropBlur(EditorTheme.BackgroundImageBlur).IsNotInteractable();
+            }
+        }
+        else if (EditorTheme.UsesNebulaBackground)
             box.OnPostLayout((hnd, rect) => paper.Draw(ref hnd, (canvas, r) => nebula.Draw(canvas, r)));
         else if (EditorTheme.BackgroundStyle == EditorBackgroundStyle.Gradient)
             box.BackgroundLinearGradient(0, 0, 0, 1, EditorTheme.BackgroundColorA, EditorTheme.BackgroundColorB);
         else
-        {
             box.BackgroundColor(EditorTheme.BackgroundColorA);
-            if (EditorTheme.BackgroundStyle == EditorBackgroundStyle.Image && EditorWallpaper.Get(EditorTheme.BackgroundImagePath) is { } wallpaper)
-                box.OnPostLayout((hnd, rect) => paper.Draw(ref hnd, (canvas, r) =>
-                    EditorWallpaper.Draw(canvas, r, wallpaper, EditorTheme.BackgroundImageFit, EditorTheme.BackgroundImageDim)));
-        }
+
+        if (Runtime.Application.IsPlaying && EditorTheme.PlayModeTint.A > 0)
+            paper.Box($"{id}_play_tint").PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
+                .BackgroundColor(EditorTheme.PlayModeTint).IsNotInteractable();
+    }
+
+    // The open project's own background image, which wins over the theme's background.
+    private static string? ProjectBackgroundImage()
+    {
+        if (Projects.Project.Current is not { } project) return null;
+        string image = EditorRegistries.GetSettings<Projects.Settings.ProjectsEditorSettings>().BackgroundImage;
+        return string.IsNullOrEmpty(image) ? null : System.IO.Path.Combine(project.RootPath, image);
     }
 
     private void UpdateClouds(float dt)

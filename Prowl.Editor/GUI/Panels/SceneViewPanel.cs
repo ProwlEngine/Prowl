@@ -184,7 +184,7 @@ public class SceneViewPanel : DockPanel
                 Origami.NumericField<float>(paper, "sv_cam_size_v", cam.OrthographicSize, v => cam.OrthographicSize = v).Show());
         else
             CameraRow(paper, font, "sv_cam_fov", Loc.Get("scene.camera_fov"), () =>
-                Origami.Slider(paper, "sv_cam_fov_v", cam.FieldOfView, v => cam.FieldOfView = v, 10f, 120f).Format("F0").Show());
+                Origami.Slider(paper, "sv_cam_fov_v", cam.FieldOfView, v => cam.FieldOfView = v, EditorCamera.MinFieldOfView, EditorCamera.MaxFieldOfView).Format("F0").Show());
 
         CameraRow(paper, font, "sv_cam_near", Loc.Get("scene.camera_near"), () =>
             Origami.NumericField<float>(paper, "sv_cam_near_v", cam.NearClip, v => cam.NearClip = v).Show());
@@ -967,6 +967,7 @@ public class SceneViewPanel : DockPanel
         _transformGizmo.Snapping = SceneTools.SnapEnabled || _handles.Ctrl;
         _transformGizmo.SnapDistance = SceneTools.MoveSnap;
         _transformGizmo.SnapAngle = SceneTools.RotateSnap;
+        _transformGizmo.SnapScale = SceneTools.ScaleSnap;
         _transformGizmo.IsShiftDown = _handles.Shift;
         // The grab decision comes from arbitration, so a handle nearer the cursor wins instead of the
         // gizmo taking every press it happens to be over.

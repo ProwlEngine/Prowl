@@ -15,6 +15,9 @@ public interface IInputHandler
     Float2 MouseDelta { get; }
     Int2 MousePosition { get; set; }
     float MouseWheelDelta { get; }
+
+    /// <summary>Horizontal wheel or trackpad scroll this frame. Positive scrolls left.</summary>
+    float MouseWheelDeltaX => 0f;
     Int2 PrevMousePosition { get; }
 
     event Action<KeyCode, bool> OnKeyEvent;

@@ -49,6 +49,7 @@ public static class EditorTheme
     public static void SyncOrigami(float transitionSeconds = OrigamiTransitionSeconds)
     {
         OrigamiTheme target = BuildOrigamiTheme();
+        transitionSeconds *= AnimationScale;
         if (transitionSeconds <= 0f)
         {
             OrigamiTheme = target;
@@ -109,7 +110,7 @@ public static class EditorTheme
             HeaderHeight      = RowHeight,
             CompactHeight     = RowHeight - 4f,
             FontSize          = FontSize,
-            FontSizeSmall     = FontSize - 2f,
+            FontSizeSmall     = FontSizeSmall,
             LabelWidth        = LabelWidth,
             // Spacing / padding scale derived from the two editor knobs (Spacing=4, Padding=6 reproduce
             // Origami's stock 2/4/6/8 and 4/6/12).
@@ -133,6 +134,7 @@ public static class EditorTheme
             BlurDockedWindows = UsesImageBackground,
             WindowOpacity = WindowOpacity,
         };
+        Customization?.ApplyTo(t.Metrics);
 
         t.Font         = Font;
         t.FontMedium   = FontMedium;
@@ -201,8 +203,20 @@ public static class EditorTheme
 
     /// <summary> Font family name for the primary UI face. </summary>
     public static string DefaultFontName = "Geist";
+
+    /// <summary> Multiplier for UI animation lengths, 0 for none. </summary>
+    public static float AnimationScale = 1f;
+
+    /// <summary> Tint drawn over the backdrop while playing, transparent when the tint is off. </summary>
+    public static Color PlayModeTint => Customization is { PlayModeTint: true } t
+        ? Color.FromArgb((int)(Math.Clamp(t.PlayModeTintStrength, 0f, 1f) * 255), ColorRamp.ParseHex(t.PlayModeTintColor))
+        : Color.Transparent;
     /// <summary> Font family name for the bold UI face. </summary>
     public static string DefaultBoldFontName = "Geist";
+    /// <summary> Font family name or font file path for the monospace face. </summary>
+    public static string MonoFontName = "JetBrains Mono";
+    /// <summary> Bold, italic and bold italic faces of the monospace font, null when it has none. </summary>
+    public static FontFile? FontMonoBold, FontMonoItalic, FontMonoBoldItalic;
 
     // DPI Scaling value
     /// <summary> DPI scaling factor applied to all UI measurements. </summary>
@@ -223,10 +237,12 @@ public static class EditorTheme
     public static float Padding = 6f;
     /// <summary> Base font size for UI text. </summary>
     public static float FontSize = 17f;
+    /// <summary> How many points smaller secondary text is than <see cref="FontSize"/>. </summary>
+    public static float SmallFontDelta = 2f;
     /// <summary> Smaller font size for secondary labels and captions. </summary>
-    public static float FontSizeSmall = FontSize - 2f;
+    public static float FontSizeSmall => FontSize - SmallFontDelta;
     /// <summary> Larger font size for headings and emphasis. </summary>
-    public static float FontSizeLarge = FontSize + 2f;
+    public static float FontSizeLarge => FontSize + 2f;
     /// <summary> Font size for the PROWL logo wordmark. </summary>
     public static float FontSizeLogo = 72f;
     /// <summary> Default width for property labels in the inspector. </summary>
@@ -267,6 +283,8 @@ public static class EditorTheme
     public static BackgroundImageFit BackgroundImageFit = BackgroundImageFit.Fill;
     /// <summary> How much the background image is darkened, from 0 to 1. </summary>
     public static float BackgroundImageDim = 0.3f;
+    /// <summary> Blur radius over the background image in pixels. </summary>
+    public static float BackgroundImageBlur;
 
     /// <summary>True when the (animated or static) nebula should be drawn rather than a gradient/solid.</summary>
     public static bool UsesNebulaBackground => AnimatedBackground || BackgroundStyle == EditorBackgroundStyle.Nebula;

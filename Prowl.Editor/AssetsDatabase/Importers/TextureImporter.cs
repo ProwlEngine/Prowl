@@ -35,89 +35,333 @@ public class TextureImporter : AssetImporter
     // 5: sprite sub-asset GUIDs derive from the slice's persistent Id instead of its name.
     // 6: decoded by Aperture rather than ImageMagick
     // 7: Graphite sampling settings, sRGB colour textures, stored mips
+    // 8: block compression, Balanced by default
+    // 9: texture types with their own processing, CPU mip chains, max size
     /// <summary> The import-format version. Incremented when the importer's output changes, triggering reimport of all assets using this importer. </summary>
-    public override int Version => 7;
+    public override int Version => 9;
 
     public override bool Import(ImportContext ctx)
     {
-        EchoObject settings = ctx.Settings ?? EchoObject.NewCompound();
-        bool mipmaps = ReadBool(settings, "generateMipmaps", true);
+        TextureImportSettings s = TextureImportSettings.Read(ctx.Settings, ctx.AbsolutePath);
 
-        var texture = Texture2D.FromFile(ctx.AbsolutePath, mipmaps, IsSrgb(settings, ctx.AbsolutePath));
+        using Aperture.Image image = Aperture.Image.Load(ctx.AbsolutePath, Texture2D.DecodeToUploadLayout);
+        int width = image.Width, height = image.Height;
+        byte[] pixels = new byte[width * height * 4];
+        image.RootFrame.CopyTo(pixels, width * 4);
+
+        Process(pixels, width, height, s);
+        if (s.Type is not (TextureImportType.LookupTable or TextureImportType.Lightmap))
+            pixels = TextureProcessing.FitMaxSize(pixels, ref width, ref height, s.MaxSize, s.Srgb && s.Type != TextureImportType.NormalMap);
+        if (s.Type == TextureImportType.NormalMap) TextureProcessing.Renormalize(pixels);
+
+        List<byte[]> levels = s.Mipmaps
+            ? TextureProcessing.BuildMipChain(pixels, width, height,
+                new MipChainOptions(s.Srgb, s.Type == TextureImportType.NormalMap, s.PreserveCoverage ? s.AlphaCutoff : null))
+            : [pixels];
+
+        TextureFormat format = FormatFor(s.Format, s.Compression, s.Type, TextureProcessing.HasAlpha(pixels));
+        Texture2D texture = Texture2D.FromMipChain(levels, width, height, s.Srgb, format, QualityOf(s.Compression));
         texture.Name = ctx.FileName;
-        texture.Filter = ReadEnum(settings, "filter", FilterMode.Trilinear);
-        texture.WrapU = ReadEnum(settings, "wrapU", WrapMode.Repeat);
-        texture.WrapV = ReadEnum(settings, "wrapV", WrapMode.Repeat);
-        texture.BorderColor = ReadEnum(settings, "borderColor", TextureBorderColor.TransparentBlack);
-        texture.Anisotropy = (uint)Math.Clamp(settings.TryGet("anisotropy", out EchoObject? aniso) ? aniso.IntValue : 0, 0, 16);
+        texture.Filter = s.Filter;
+        texture.WrapU = s.WrapU;
+        texture.WrapV = s.WrapV;
+        texture.BorderColor = s.BorderColor;
+        texture.Anisotropy = (uint)s.Anisotropy;
 
         ctx.SetMainAsset(texture);
 
+        if (s.Type != TextureImportType.Sprite)
+            return true;
+
         // Sprite sub-assets: the texture's sprite config lives in settings["sprite"] (edited in the Sprite Editor).
         SpriteImportSettings spriteSettings = TextureSpriteMeta.ReadFrom(ctx.Settings);
-        if (spriteSettings.Mode != SpriteMode.None)
-        {
-            foreach (KeyValuePair<string, Texture2D> kv in spriteSettings.SecondaryTextures)
-                if (kv.Value is not null) ctx.AddDependency(kv.Value.AssetID);
+        if (spriteSettings.Mode == SpriteMode.None) spriteSettings.Mode = SpriteMode.Single;
 
-            foreach ((SpriteSliceData? slice, Sprite? sprite) in SpriteBuilder.Build(texture, spriteSettings))
-                ctx.AddSubAsset(slice.Name, sprite, SpriteBuilder.IdentityOf(spriteSettings, slice));
-        }
+        foreach (KeyValuePair<string, Texture2D> kv in spriteSettings.SecondaryTextures)
+            if (kv.Value is not null) ctx.AddDependency(kv.Value.AssetID);
+
+        foreach ((SpriteSliceData? slice, Sprite? sprite) in SpriteBuilder.Build(texture, spriteSettings, image.Width, image.Height, pixels))
+            ctx.AddSubAsset(slice.Name, sprite, SpriteBuilder.IdentityOf(spriteSettings, slice));
 
         return true;
     }
 
-    /// <summary>
-    /// Mipmaps, Trilinear filtering, repeat wrapping and default sprite settings. The texture type and sRGB are left out,
-    /// so they follow the file name until set: "Bricks Normal" is a normal map, "Panel Mask" a mask.
-    /// </summary>
+    /// <summary>The per type work on the source pixels: normals from height, a single channel, or an alpha source.</summary>
+    private static void Process(byte[] pixels, int width, int height, TextureImportSettings s)
+    {
+        switch (s.Type)
+        {
+            case TextureImportType.NormalMap:
+                if (s.CreateFromGrayscale) TextureProcessing.NormalsFromHeight(pixels, width, height, s.Bumpiness, s.BumpFiltering == NormalMapFiltering.Smooth);
+                if (s.FlipGreen) TextureProcessing.FlipGreen(pixels);
+                TextureProcessing.ClearAlpha(pixels);
+                return;
+
+            case TextureImportType.SingleChannel:
+                TextureProcessing.ToSingleChannel(pixels, s.Channel == TextureChannel.Alpha);
+                return;
+
+            case TextureImportType.LookupTable:
+            case TextureImportType.Lightmap:
+                return;
+        }
+
+        if (s.AlphaSource == TextureAlphaSource.None) TextureProcessing.ClearAlpha(pixels);
+        else if (s.AlphaSource == TextureAlphaSource.FromGrayscale) TextureProcessing.AlphaFromGrayscale(pixels);
+
+        if (s.AlphaIsTransparency) TextureProcessing.DilateTransparent(pixels, width, height);
+    }
+
+    /// <summary>The settings a new texture starts with. Everything else follows its type until set.</summary>
     public override EchoObject? DefaultSettings()
     {
         var s = EchoObject.NewCompound();
-        s["generateMipmaps"] = new EchoObject(true);
-        s["filter"] = new EchoObject((int)FilterMode.Trilinear);
-        s["wrapU"] = new EchoObject((int)WrapMode.Repeat);
-        s["wrapV"] = new EchoObject((int)WrapMode.Repeat);
-        s["anisotropy"] = new EchoObject(0);
         s["sprite"] = Serializer.Serialize(typeof(SpriteImportSettings), new SpriteImportSettings());
         return s;
     }
 
+    /// <summary>
+    /// The format a texture is stored in. Automatic keeps lookup tables exact and gives normal maps BC5, single channel
+    /// textures BC4, and everything else BC1, or BC3 when any pixel is translucent. No compression stores RGBA8, or R8
+    /// for a single channel.
+    /// </summary>
+    public static TextureFormat FormatFor(TextureImportFormat format, TextureCompression compression, TextureImportType type, bool hasAlpha)
+    {
+        if (compression == TextureCompression.None)
+            return type == TextureImportType.SingleChannel ? TextureFormat.R8 : TextureFormat.RGBA8;
+
+        return format switch
+        {
+            TextureImportFormat.Automatic => type switch
+            {
+                TextureImportType.LookupTable or TextureImportType.Lightmap => TextureFormat.RGBA8,
+                TextureImportType.NormalMap => TextureFormat.BC5,
+                TextureImportType.SingleChannel => TextureFormat.BC4,
+                _ => hasAlpha ? TextureFormat.BC3 : TextureFormat.BC1,
+            },
+            TextureImportFormat.RGBA8 => TextureFormat.RGBA8,
+            TextureImportFormat.R8 => TextureFormat.R8,
+            TextureImportFormat.BC1 => TextureFormat.BC1,
+            TextureImportFormat.BC3 => TextureFormat.BC3,
+            TextureImportFormat.BC4 => TextureFormat.BC4,
+            TextureImportFormat.BC5 => TextureFormat.BC5,
+            TextureImportFormat.ASTC4x4 => TextureFormat.ASTC4x4,
+            TextureImportFormat.ASTC5x5 => TextureFormat.ASTC5x5,
+            TextureImportFormat.ASTC6x6 => TextureFormat.ASTC6x6,
+            TextureImportFormat.ASTC8x8 => TextureFormat.ASTC8x8,
+            TextureImportFormat.ASTC10x10 => TextureFormat.ASTC10x10,
+            _ => TextureFormat.ASTC12x12,
+        };
+    }
+
+    private static Aperture.TextureEncodeQuality QualityOf(TextureCompression compression) => compression switch
+    {
+        TextureCompression.Fast => Aperture.TextureEncodeQuality.Fast,
+        TextureCompression.Thorough => Aperture.TextureEncodeQuality.Thorough,
+        _ => Aperture.TextureEncodeQuality.Balanced,
+    };
+
     /// <summary>The texture type the settings name, or the one the file name suggests when they name none.</summary>
-    public static TextureImportType TypeOf(EchoObject? settings, string path)
-    {
-        if (settings != null && settings.TryGet("textureType", out EchoObject? type)) return (TextureImportType)type.IntValue;
-        if (TextureRuntimeImporter.NamesNormalMap(path)) return TextureImportType.NormalMap;
-        return TextureRuntimeImporter.NamesData(path) ? TextureImportType.Mask : TextureImportType.Default;
-    }
+    public static TextureImportType TypeOf(EchoObject? settings, string path) => TextureImportSettings.Read(settings, path).Type;
 
-    /// <summary>Whether the texture is sRGB colour: the explicit setting, else colour for Default and Sprite textures.</summary>
-    public static bool IsSrgb(EchoObject? settings, string path)
-    {
-        if (settings != null && settings.TryGet("srgb", out EchoObject? srgb)) return srgb.BoolValue;
-        return TypeOf(settings, path) is TextureImportType.Default or TextureImportType.Sprite;
-    }
-
-    private static bool ReadBool(EchoObject settings, string key, bool fallback)
-        => settings.TryGet(key, out EchoObject? tag) ? tag.BoolValue : fallback;
-
-    private static T ReadEnum<T>(EchoObject settings, string key, T fallback) where T : struct, Enum
-        => settings.TryGet(key, out EchoObject? tag) ? (T)Enum.ToObject(typeof(T), tag.IntValue) : fallback;
+    /// <summary>Whether the texture is sRGB colour, the explicit setting or what its type and name suggest.</summary>
+    public static bool IsSrgb(EchoObject? settings, string path) => TextureImportSettings.Read(settings, path).Srgb;
 }
 
-/// <summary>What a texture holds, which picks its sRGB default and the settings the inspector suggests.</summary>
+/// <summary>
+/// A texture's import settings as the importer applies them. A setting missing from the meta takes the default of the
+/// texture's type, so changing the type moves every untouched setting with it.
+/// </summary>
+public sealed class TextureImportSettings
+{
+    public const int DefaultMaxSize = 2048;
+
+    /// <summary>The sizes a texture may be limited to.</summary>
+    public static readonly int[] MaxSizes = [32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384];
+
+    /// <summary>The meta keys, shared by the importer, the inspector and migration.</summary>
+    public static class Keys
+    {
+        public const string Type = "textureType";
+        public const string Srgb = "srgb";
+        public const string AlphaSource = "alphaSource";
+        public const string AlphaIsTransparency = "alphaIsTransparency";
+        public const string CreateFromGrayscale = "createFromGrayscale";
+        public const string Bumpiness = "bumpiness";
+        public const string BumpFiltering = "bumpFiltering";
+        public const string FlipGreen = "flipGreen";
+        public const string Channel = "singleChannel";
+        public const string Mipmaps = "generateMipmaps";
+        public const string PreserveCoverage = "preserveCoverage";
+        public const string AlphaCutoff = "alphaCutoff";
+        public const string Filter = "filter";
+        public const string WrapU = "wrapU";
+        public const string WrapV = "wrapV";
+        public const string BorderColor = "borderColor";
+        public const string Anisotropy = "anisotropy";
+        public const string MaxSize = "maxSize";
+        public const string Compression = "compression";
+        public const string Format = "format";
+    }
+
+    public TextureImportType Type { get; private init; }
+    public bool Srgb { get; private init; }
+    public TextureAlphaSource AlphaSource { get; private init; }
+    public bool AlphaIsTransparency { get; private init; }
+    public bool CreateFromGrayscale { get; private init; }
+    public float Bumpiness { get; private init; }
+    public NormalMapFiltering BumpFiltering { get; private init; }
+    public bool FlipGreen { get; private init; }
+    public TextureChannel Channel { get; private init; }
+    public bool Mipmaps { get; private init; }
+    public bool PreserveCoverage { get; private init; }
+    public float AlphaCutoff { get; private init; }
+    public FilterMode Filter { get; private init; }
+    public WrapMode WrapU { get; private init; }
+    public WrapMode WrapV { get; private init; }
+    public TextureBorderColor BorderColor { get; private init; }
+    public int Anisotropy { get; private init; }
+    public int MaxSize { get; private init; }
+    public TextureCompression Compression { get; private init; }
+    public TextureImportFormat Format { get; private init; }
+
+    public static TextureImportSettings Read(EchoObject? settings, string path)
+    {
+        settings ??= EchoObject.NewCompound();
+        TextureImportType type = TypeFrom(settings, path);
+        bool retiredMask = settings.TryGet(Keys.Type, out EchoObject? raw) && raw.TagType != EchoType.String && raw.IntValue == RetiredMask;
+        bool flat = type is TextureImportType.Sprite or TextureImportType.Cookie or TextureImportType.LookupTable;
+        bool clamped = flat || type == TextureImportType.Lightmap;
+        bool colour = !retiredMask && type is TextureImportType.Default or TextureImportType.Sprite or TextureImportType.Cookie or TextureImportType.Lightmap;
+        bool mipmaps = Bool(settings, Keys.Mipmaps, !flat);
+        bool exact = type is TextureImportType.LookupTable or TextureImportType.Lightmap;
+        bool sheet = type == TextureImportType.Sprite && SpriteModeOf(settings) == SpriteMode.Multiple;
+
+        return new TextureImportSettings
+        {
+            Type = type,
+            Srgb = Bool(settings, Keys.Srgb, colour && !TextureRuntimeImporter.NamesData(path)),
+            AlphaSource = Enum(settings, Keys.AlphaSource, TextureAlphaSource.Input),
+            AlphaIsTransparency = Bool(settings, Keys.AlphaIsTransparency, type == TextureImportType.Sprite),
+            CreateFromGrayscale = Bool(settings, Keys.CreateFromGrayscale, false),
+            Bumpiness = Math.Clamp(Float(settings, Keys.Bumpiness, 0.25f), 0f, 1f),
+            BumpFiltering = Enum(settings, Keys.BumpFiltering, NormalMapFiltering.Smooth),
+            FlipGreen = Bool(settings, Keys.FlipGreen, false),
+            Channel = Enum(settings, Keys.Channel, TextureChannel.Red),
+            Mipmaps = mipmaps,
+            PreserveCoverage = Bool(settings, Keys.PreserveCoverage, false),
+            AlphaCutoff = Math.Clamp(Float(settings, Keys.AlphaCutoff, 0.5f), 0f, 1f),
+            Filter = Enum(settings, Keys.Filter, mipmaps ? FilterMode.Trilinear : FilterMode.Bilinear),
+            WrapU = Enum(settings, Keys.WrapU, clamped ? WrapMode.Clamp : WrapMode.Repeat),
+            WrapV = Enum(settings, Keys.WrapV, clamped ? WrapMode.Clamp : WrapMode.Repeat),
+            BorderColor = Enum(settings, Keys.BorderColor, TextureBorderColor.TransparentBlack),
+            Anisotropy = Math.Clamp(Int(settings, Keys.Anisotropy, 0), 0, 16),
+            MaxSize = Math.Clamp(Int(settings, Keys.MaxSize, exact ? MaxSizes[^1] : DefaultMaxSize), MaxSizes[0], MaxSizes[^1]),
+            Compression = Enum(settings, Keys.Compression, exact || sheet ? TextureCompression.None : TextureCompression.Balanced),
+            Format = Enum(settings, Keys.Format, TextureImportFormat.Automatic),
+        };
+    }
+
+    /// <summary>The number the retired Mask type was stored as, read as a linear Default texture.</summary>
+    private const int RetiredMask = 2;
+
+    private static TextureImportType TypeFrom(EchoObject settings, string path)
+    {
+        if (settings.TryGet(Keys.Type, out EchoObject? tag) && tag.TagType != EchoType.String)
+        {
+            if (System.Enum.IsDefined((TextureImportType)tag.IntValue)) return (TextureImportType)tag.IntValue;
+            if (tag.IntValue == RetiredMask) return TextureImportType.Default;
+        }
+
+        // Metas from before texture types slice sprites through the sprite mode alone.
+        if (SpriteModeOf(settings) != SpriteMode.None) return TextureImportType.Sprite;
+        return TextureRuntimeImporter.NamesNormalMap(path) ? TextureImportType.NormalMap : TextureImportType.Default;
+    }
+
+    private static SpriteMode SpriteModeOf(EchoObject settings)
+        => settings.TryGet("sprite", out EchoObject? sprite) && sprite.TagType == EchoType.Compound
+            && sprite.TryGet("Mode", out EchoObject? mode) && mode.TagType != EchoType.String
+            ? (SpriteMode)mode.IntValue : SpriteMode.None;
+
+    private static bool Bool(EchoObject settings, string key, bool fallback)
+        => settings.TryGet(key, out EchoObject? tag) ? tag.BoolValue : fallback;
+
+    private static int Int(EchoObject settings, string key, int fallback)
+        => settings.TryGet(key, out EchoObject? tag) ? tag.IntValue : fallback;
+
+    private static float Float(EchoObject settings, string key, float fallback)
+        => settings.TryGet(key, out EchoObject? tag) ? tag.FloatValue : fallback;
+
+    private static T Enum<T>(EchoObject settings, string key, T fallback) where T : struct, System.Enum
+        => settings.TryGet(key, out EchoObject? tag) ? (T)System.Enum.ToObject(typeof(T), tag.IntValue) : fallback;
+}
+
+/// <summary>How hard the importer works to compress a texture. None stores it uncompressed.</summary>
+public enum TextureCompression
+{
+    None,
+    Fast,
+    Balanced,
+    Thorough,
+}
+
+/// <summary>The stored format of an imported texture, Automatic choosing one from its type and content.</summary>
+public enum TextureImportFormat
+{
+    Automatic,
+    RGBA8,
+    BC1,
+    BC3,
+    BC4,
+    BC5,
+    ASTC4x4,
+    ASTC5x5,
+    ASTC6x6,
+    ASTC8x8,
+    ASTC10x10,
+    ASTC12x12,
+    R8,
+}
+
+/// <summary>What a texture holds, which decides how it is processed, stored and sampled. The numbers are stored in metas.</summary>
 public enum TextureImportType
 {
-    /// <summary>Colour, sampled through sRGB.</summary>
-    Default,
-    /// <summary>A tangent space normal map, linear.</summary>
-    NormalMap,
-    /// <summary>Data such as masks, roughness, height or occlusion, linear.</summary>
-    Mask,
-    /// <summary>A 2D or UI image: colour, no mips, clamped.</summary>
-    Sprite,
-    /// <summary>A colour lookup table: linear, no mips, clamped.</summary>
-    Lut,
+    /// <summary>Colour or data on a surface, sRGB unless the name says data.</summary>
+    Default = 0,
+    /// <summary>A tangent space normal map: linear, renormalized mips, two channels where compressed.</summary>
+    NormalMap = 1,
+    /// <summary>A 2D or UI image cut into one or many sprites: colour, no mips, clamped, edges bled under alpha.</summary>
+    Sprite = 3,
+    /// <summary>A colour lookup table: linear, no mips, clamped, never compressed.</summary>
+    LookupTable = 4,
+    /// <summary>A light cookie: colour, no mips, clamped.</summary>
+    Cookie = 5,
+    /// <summary>One channel such as a height map, a mask or an IES profile, read from red.</summary>
+    SingleChannel = 6,
+    /// <summary>Baked lighting written by the lightmapper: RGBM encoded, clamped, never resized or compressed.</summary>
+    Lightmap = 7,
+}
+
+/// <summary>Where an imported texture's alpha comes from.</summary>
+public enum TextureAlphaSource
+{
+    None,
+    Input,
+    FromGrayscale,
+}
+
+/// <summary>How a normal map made from a height field takes its slopes.</summary>
+public enum NormalMapFiltering
+{
+    Smooth,
+    Sharp,
+}
+
+/// <summary>The source channel of a single channel texture.</summary>
+public enum TextureChannel
+{
+    Red,
+    Alpha,
 }
 
 // Everything below supports the texture's sprite sub-assets (config, slicing tools, sub-asset building, and
@@ -253,7 +497,13 @@ public static class TextureSpriteMeta
             {
                 SerializationContext ctx = ImportHelper.CreateTrackingContext(out _);
                 SpriteImportSettings? parsed = Serializer.Deserialize<SpriteImportSettings>(echo, ctx);
-                if (parsed != null) return parsed;
+                if (parsed != null)
+                {
+                    // A Sprite texture always makes sprites, so one saved without a mode makes a single one.
+                    if (parsed.Mode == SpriteMode.None && TextureImportSettings.Read(settings, "").Type == TextureImportType.Sprite)
+                        parsed.Mode = SpriteMode.Single;
+                    return parsed;
+                }
 
                 failed = true;
                 Prowl.Runtime.Debug.LogError("[Sprite] Sprite import settings deserialized to null. Keeping the existing block rather than replacing it with defaults.");
@@ -270,11 +520,20 @@ public static class TextureSpriteMeta
     /// <summary>Settings-only overload, for callers that just build from whatever is readable.</summary>
     public static SpriteImportSettings ReadFrom(EchoObject? settings) => ReadFrom(settings, out _);
 
-    /// <summary>Serializes the sprite settings into a texture's <c>.meta</c> settings compound.</summary>
+    /// <summary>
+    /// Serializes the sprite settings into a texture's <c>.meta</c> settings compound. A sprite mode makes it a Sprite
+    /// texture, and no mode turns a Sprite texture back into a Default one.
+    /// </summary>
     public static void WriteInto(EchoObject settings, SpriteImportSettings s)
     {
         AssignMissingSliceIds(s);
         settings[Key] = Serializer.Serialize(typeof(SpriteImportSettings), s);
+
+        bool sprite = settings.TryGet(TextureImportSettings.Keys.Type, out EchoObject? type) && type.IntValue == (int)TextureImportType.Sprite;
+        if (s.Mode != SpriteMode.None && !sprite)
+            settings[TextureImportSettings.Keys.Type] = new EchoObject((int)TextureImportType.Sprite);
+        else if (s.Mode == SpriteMode.None && sprite)
+            settings[TextureImportSettings.Keys.Type] = new EchoObject((int)TextureImportType.Default);
     }
 
     /// <summary>Gives every slice a persistent ID before it reaches disk. The single choke point for
@@ -329,6 +588,38 @@ public static class TextureSpriteMeta
     {
         string rel = EditorAssetBackend.Instance?.GuidToPath(textureGuid) ?? "";
         return Path.Combine(Project.Current.AssetsPath, rel);
+    }
+
+    /// <summary>The source image's size, which slices are authored in, or zero when it cannot be read.</summary>
+    public static (int Width, int Height) SourceSize(Guid textureGuid)
+    {
+        try
+        {
+            Aperture.ImageInfo info = Aperture.Image.Identify(AbsolutePath(textureGuid));
+            return (info.Width, info.Height);
+        }
+        catch (Exception ex)
+        {
+            Prowl.Runtime.Debug.LogWarning($"[Sprite] Could not read the source image of texture {textureGuid}: {ex.Message}");
+            return (0, 0);
+        }
+    }
+
+    /// <summary>The source image's alpha at its own size, bottom row first, for slicing. Null when it cannot be read.</summary>
+    public static byte[]? SourceAlpha(Guid textureGuid)
+    {
+        try
+        {
+            using Aperture.Image image = Aperture.Image.Load(AbsolutePath(textureGuid), Texture2D.DecodeToUploadLayout);
+            byte[] rgba = new byte[image.Width * image.Height * 4];
+            image.RootFrame.CopyTo(rgba, image.Width * 4);
+            return SpriteBuilder.AlphaOf(rgba);
+        }
+        catch (Exception ex)
+        {
+            Prowl.Runtime.Debug.LogWarning($"[Sprite] Could not read the source alpha of texture {textureGuid}: {ex.Message}");
+            return null;
+        }
     }
 }
 
@@ -578,27 +869,17 @@ public static class SpriteSlicer
     {
         try
         {
-            int w = (int)tex.Width, h = (int)tex.Height;
-            int count = w * h;
-            byte[] alpha = new byte[count];
+            if (tex.GetMipRgba8() is byte[] expanded)
+                return SpriteBuilder.AlphaOf(expanded);
 
-            if (tex.Format == TextureFormat.RGBA8)
-            {
-                byte[] rgba = new byte[count * 4];
-                tex.GetData<byte>(rgba.AsMemory());
-                for (int i = 0; i < count; i++) alpha[i] = rgba[i * 4 + 3];
-            }
-            else if (tex.Format == TextureFormat.RGBA16)
-            {
-                ushort[] rgba = new ushort[count * 4];
-                tex.GetData<ushort>(rgba.AsMemory());
-                for (int i = 0; i < count; i++) alpha[i] = (byte)(rgba[i * 4 + 3] >> 8);
-            }
-            else
-            {
+            if (tex.Format != TextureFormat.RGBA16)
                 return null;
-            }
 
+            int count = (int)tex.Width * (int)tex.Height;
+            ushort[] rgba = new ushort[count * 4];
+            tex.GetData<ushort>(rgba.AsMemory());
+            byte[] alpha = new byte[count];
+            for (int i = 0; i < count; i++) alpha[i] = (byte)(rgba[i * 4 + 3] >> 8);
             return alpha;
         }
         catch (Exception ex)
@@ -724,22 +1005,31 @@ public static class SpriteBuilder
     public static SubAssetIdentity IdentityOf(SpriteImportSettings s, SpriteSliceData slice)
         => SubAssetIdentity.Key(s.Mode == SpriteMode.Single ? SingleIdentity : slice.Id.ToString("N"));
 
-    /// <summary> Builds Sprite sub-assets from the texture and its sprite import settings. Single mode produces one full-texture sprite; Multiple mode produces one per slice, with optional tight-mesh tracing. </summary>
+    /// <summary>Builds Sprite sub-assets for a texture that is its own source, reading tight mesh alpha back from it.</summary>
     public static List<(SpriteSliceData slice, Sprite sprite)> Build(Texture2D tex, SpriteImportSettings s)
+        => Build(tex, s, (int)tex.Width, (int)tex.Height, s.GenerateTightMesh ? tex.GetMipRgba8() : null);
+
+    /// <summary>
+    /// Builds Sprite sub-assets from the texture and its sprite settings. Slices, borders and pivots are authored in the
+    /// source image's pixels and scaled to the imported size, so a Max Size limit changes neither where a sprite cuts
+    /// nor how large it is in the world. Single mode always covers the whole texture. <paramref name="pixels"/> are the
+    /// imported RGBA8 texels tight meshes trace.
+    /// </summary>
+    public static List<(SpriteSliceData slice, Sprite sprite)> Build(Texture2D tex, SpriteImportSettings s, int sourceWidth, int sourceHeight, byte[]? pixels)
     {
         var result = new List<(SpriteSliceData, Sprite)>();
         int texW = (int)tex.Width, texH = (int)tex.Height;
-        if (texW <= 0 || texH <= 0) return result;
+        if (texW <= 0 || texH <= 0 || sourceWidth <= 0 || sourceHeight <= 0) return result;
 
-        List<SpriteSliceData> slices = ResolveSlices(s, texW, texH, tex.Name);
-        byte[]? alpha = s.GenerateTightMesh ? SpriteSlicer.ReadAlpha(tex) : null;
-
+        float sx = texW / (float)sourceWidth, sy = texH / (float)sourceHeight;
+        byte[]? alpha = s.GenerateTightMesh && pixels != null ? AlphaOf(pixels) : null;
         int clampedCount = 0;
-        foreach (SpriteSliceData slice in slices)
+
+        foreach (SpriteSliceData slice in ResolveSlices(s, sourceWidth, sourceHeight, tex.Name))
         {
-            SpriteRect rect = ClampToTexture(slice.Rect, texW, texH);
-            if (!SameRect(rect, slice.Rect)) clampedCount++;
-            result.Add((slice, BuildOne(tex, s, slice, rect, texW, texH, alpha)));
+            SpriteRect source = ClampToTexture(slice.Rect, sourceWidth, sourceHeight);
+            if (!SameRect(source, slice.Rect)) clampedCount++;
+            result.Add((slice, BuildOne(tex, s, slice, source, Scale(source, sx, sy, texW, texH), sx, sy, texW, texH, alpha)));
         }
 
         // Replacing the source image with a smaller one leaves the stored rects describing the old
@@ -748,9 +1038,28 @@ public static class SpriteBuilder
         // image (or re-slicing) brings it straight back.
         if (clampedCount > 0)
             Prowl.Runtime.Debug.LogWarning(
-                $"[Sprite] '{tex.Name}': {clampedCount} slice(s) fall outside the {texW}x{texH} texture and were clamped for this import. The stored slicing is unchanged.");
+                $"[Sprite] '{tex.Name}': {clampedCount} slice(s) fall outside the {sourceWidth}x{sourceHeight} texture and were clamped for this import. The stored slicing is unchanged.");
 
         return result;
+    }
+
+    /// <summary>The alpha channel of RGBA8 texels.</summary>
+    public static byte[] AlphaOf(byte[] rgba)
+    {
+        byte[] alpha = new byte[rgba.Length / 4];
+        for (int i = 0; i < alpha.Length; i++)
+            alpha[i] = rgba[(i * 4) + 3];
+        return alpha;
+    }
+
+    /// <summary>A source pixel rect in the imported texture's pixels, never empty.</summary>
+    private static SpriteRect Scale(SpriteRect r, float sx, float sy, int texW, int texH)
+    {
+        int x0 = Math.Clamp((int)MathF.Round(r.X * sx), 0, texW - 1);
+        int y0 = Math.Clamp((int)MathF.Round(r.Y * sy), 0, texH - 1);
+        int x1 = Math.Clamp((int)MathF.Round(r.MaxX * sx), x0 + 1, texW);
+        int y1 = Math.Clamp((int)MathF.Round(r.MaxY * sy), y0 + 1, texH);
+        return new SpriteRect(x0, y0, x1 - x0, y1 - y0);
     }
 
     /// <summary>Trims a rect to the texture, coping with a negative origin and an oversized extent.</summary>
@@ -768,29 +1077,41 @@ public static class SpriteBuilder
 
     private static List<SpriteSliceData> ResolveSlices(SpriteImportSettings s, int texW, int texH, string baseName)
     {
-        if (s.Mode == SpriteMode.Single)
-        {
-            if (s.Slices.Count > 0) return [s.Slices[0]];
-            return
-            [
-                new() { Name = baseName, Rect = new SpriteRect(0, 0, texW, texH), Alignment = SpriteAlignment.Center }
-            ];
-        }
-        return s.Slices;
+        if (s.Mode != SpriteMode.Single)
+            return s.Slices;
+
+        // The one sprite covers the whole texture whatever rect was last stored, keeping the slice's identity and pivot.
+        var full = new SpriteRect(0, 0, texW, texH);
+        if (s.Slices.Count == 0)
+            return [new() { Name = baseName, Rect = full, Alignment = SpriteAlignment.Center }];
+
+        SpriteSliceData first = s.Slices[0];
+        return
+        [
+            new()
+            {
+                Id = first.Id, Name = first.Name, Rect = full, Alignment = first.Alignment,
+                CustomPivot = first.CustomPivot, PivotUnit = first.PivotUnit, Border = first.Border,
+            },
+        ];
     }
 
-    /// <summary><paramref name="rect"/> is the slice's rect after clamping to the texture, which is what
-    /// the sprite is actually built from.</summary>
-    private static Sprite BuildOne(Texture2D tex, SpriteImportSettings s, SpriteSliceData slice, SpriteRect rect, int texW, int texH, byte[]? alpha)
+    /// <summary>
+    /// <paramref name="source"/> is the slice clamped to the source image, <paramref name="rect"/> the same area in the
+    /// imported texture. Pixel sizes scale with it so the sprite keeps its world size.
+    /// </summary>
+    private static Sprite BuildOne(Texture2D tex, SpriteImportSettings s, SpriteSliceData slice, SpriteRect source, SpriteRect rect,
+        float sx, float sy, int texW, int texH, byte[]? alpha)
     {
+        Float4 border = slice.Border;
         var sprite = new Sprite
         {
             Name = slice.Name,
             Texture = tex,
             Rect = rect,
-            Pivot = ResolvePivot(slice, rect),
-            PixelsPerUnit = s.PixelsPerUnit,
-            Border = slice.Border,
+            Pivot = ResolvePivot(slice, source),
+            PixelsPerUnit = s.PixelsPerUnit * sx,
+            Border = new Float4(border.X * sx, border.Y * sy, border.Z * sx, border.W * sy),
             SecondaryTextures = new Dictionary<string, Texture2D>(s.SecondaryTextures),
         };
 

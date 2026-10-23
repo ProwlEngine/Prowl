@@ -45,7 +45,7 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
     }
 
     [SerializeField] private MotionType motionType = MotionType.Dynamic;
-    [SerializeField] private bool isSpeculative;
+    [SerializeField, InspectorName("Continuous Collision Detection")] private bool isSpeculative;
     [SerializeField] private bool useGravity = true;
     [SerializeField] private bool enableGyroscopicForces = false;
     [SerializeField] private float mass = 1;
@@ -129,7 +129,7 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
     }
 
     /// <summary>
-    /// Gets or sets a value indicating whether speculative contacts are enabled.
+    /// Gets or sets whether continuous collision detection is enabled for this body.
     /// </summary>
     public bool EnableSpeculativeContacts
     {
@@ -138,7 +138,7 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
         {
             AssertOwner();
             isSpeculative = value;
-            if (IsSimulated) _body.EnableSpeculativeContacts = value;
+            if (IsSimulated) _body.EnableCcd = value;
         }
     }
 
@@ -672,7 +672,7 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
         ClampSettings();
         rb.MotionType = motionType;
         rb.AllowedMotion = MotionAxes.All & ~(MotionAxes)constraints;
-        rb.EnableSpeculativeContacts = isSpeculative;
+        rb.EnableCcd = isSpeculative;
         ApplyDamping(rb);
         rb.Friction = friction;
         rb.AffectedByGravity = useGravity;

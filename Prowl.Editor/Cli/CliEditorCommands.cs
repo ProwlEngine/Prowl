@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.GraphEditor;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Inspector;
@@ -1420,6 +1421,7 @@ internal static class CliGraph
 
     public static JsonNode? Apply(AnimationGraph graph, JsonObject op, Dictionary<string, string> ids)
     {
+        var domain = new AnimationGraphDomain(graph);
         string kind = Str(op, "op") ?? throw new CliException("Each op needs an \"op\".");
         switch (kind)
         {
@@ -1428,12 +1430,8 @@ internal static class CliGraph
                 string typeId = Str(op, "type") ?? throw new CliException("add needs a \"type\". See 'graph --action types'.");
                     AnimationGraphNode type = AnimationNodeRegistry.Get(typeId) ?? throw new CliException($"No node type '{typeId}'. See 'graph --action types'.");
                 string owner = Id(op, "owner", ids, graph, required: false) ?? "";
-                    GraphNodeRecord record = graph.AddNode(type.Id);
-                record.Owner = owner;
+                GraphNodeRecord record = domain.Create(type.Id, default, owner)!;
                 record.Name = Str(op, "name") ?? "";
-                for (int i = 0; i < type.Inputs.Count; i++) record.Inputs.Add(new GraphInputRecord());
-                AnimationNodeEditor.For(type).OnCreated(graph, record);
-                if (owner.Length == 0 && graph.RootNode.Length == 0 && type.IsPose) graph.RootNode = record.Id;
                 Alias(op, ids, record.Id);
                 return new JsonObject { ["added"] = record.Id };
             }
@@ -1446,15 +1444,13 @@ internal static class CliGraph
                 string? pinText = op["pin"] is JsonValue v && v.TryGetValue(out string? s) ? s : null;
                 if (pinText != null && pinText.StartsWith("setting:", StringComparison.OrdinalIgnoreCase))
                 {
-                    target.PropertyInputs[pinText[8..]] = from;
+                    domain.SetSource(target, AnimationGraphDomain.PropertyPort(pinText[8..]), new WireEnd(from, AnimationGraphDomain.OutputPort));
                     return new JsonObject { ["connected"] = from, ["to"] = target.Id, ["setting"] = pinText[8..] };
                 }
 
                 int pin = PinIndex(target, op["pin"], allowNext: true);
-                while (target.Inputs.Count <= pin) target.Inputs.Add(new GraphInputRecord());
-                target.Inputs[pin].Node = from;
-                if (AnimationNodeRegistry.Get(target.Type) is { } type)
-                    while (target.Inputs.Count < type.WholeGroups(target.Inputs.Count)) target.Inputs.Add(new GraphInputRecord());
+                domain.SetSource(target, AnimationGraphDomain.PinId(pin), new WireEnd(from, AnimationGraphDomain.OutputPort));
+                domain.PadRepeating(target);
                 return new JsonObject { ["connected"] = from, ["to"] = target.Id, ["pin"] = pin };
             }
 
@@ -1463,12 +1459,11 @@ internal static class CliGraph
                     GraphNodeRecord target = Node(graph, Id(op, "to", ids, graph)!);
                 if (op["pin"] is JsonValue v && v.TryGetValue(out string? s) && s.StartsWith("setting:", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (target.PropertyInputs.ContainsKey(s[8..])) target.PropertyInputs[s[8..]] = string.Empty;
+                    domain.SetSource(target, AnimationGraphDomain.PropertyPort(s[8..]), null);
                     return null;
                 }
                 int pin = PinIndex(target, op["pin"], allowNext: false);
-                if (pin < target.Inputs.Count) target.Inputs[pin].Node = string.Empty;
-                AnimationGraphView.TrimVariadic(target);
+                domain.Disconnect(target.Id, AnimationGraphDomain.PinId(pin));
                 return null;
             }
 
@@ -1505,18 +1500,7 @@ internal static class CliGraph
                 if (target.Type is AnimationNodeIds.StateOutput or AnimationNodeIds.GraphOutput)
                     throw new CliException("Output nodes go with their state or graph. Remove the state instead.");
 
-                var inside = new HashSet<string> { target.Id };
-                foreach (GraphStateRecord state in target.States) inside.Add(state.Id);
-                graph.Nodes.Remove(target);
-                foreach (GraphNodeRecord record in graph.Nodes)
-                {
-                    foreach (GraphInputRecord input in record.Inputs) if (input.Node == target.Id) input.Node = string.Empty;
-                    foreach (string driven in record.PropertyInputs.Keys.ToList())
-                        if (record.PropertyInputs[driven] == target.Id) record.PropertyInputs[driven] = string.Empty;
-                    AnimationGraphView.TrimVariadic(record);
-                }
-                if (graph.RootNode == target.Id) graph.RootNode = string.Empty;
-                AnimationGraphView.RemoveInside(graph, inside);
+                domain.Delete([target], []);
                 return null;
             }
 
@@ -1566,7 +1550,7 @@ internal static class CliGraph
 
                 var state = new GraphStateRecord
                 {
-                    Id = AnimationGraphView.NewStateId(),
+                    Id = domain.NewId(IdKind.Scope),
                     Name = name,
                     IsDefault = !machine.States.Exists(s => !s.IsAny),
                 };
@@ -1579,7 +1563,7 @@ internal static class CliGraph
                     state.Graph = CliRefs.ResolveAsset(played) is AnimationGraph playedGraph ? playedGraph : throw new CliException($"'{played}' is not an animation graph.");
 
                 machine.States.Add(state);
-                    GraphNodeRecord output = AnimationGraphView.EnsureOutput(graph, state.Id, AnimationNodeIds.StateOutput);
+                    GraphNodeRecord output = domain.EnsureOutput(state.Id, AnimationNodeIds.StateOutput);
                 Alias(op, ids, state.Id);
                 if (Str(op, "as") is { } alias) ids[alias.TrimStart('$') + ".output"] = output.Id;
                 return new JsonObject { ["state"] = state.Id, ["output"] = output.Id };

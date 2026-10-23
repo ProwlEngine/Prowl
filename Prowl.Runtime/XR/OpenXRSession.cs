@@ -69,10 +69,9 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
     private Graphite.Texture? _eyeTexture;
     private Graphite.Framebuffer? _eyeTarget;
     private Graphite.TextureView? _mirrorSource;
-    private Graphite.RenderGraph.RenderPipeline? _eyesPipeline;
-    private Graphite.RenderGraph.RenderPipeline? _mirrorPipeline;
+    private readonly EyesPass _eyesPass = new();
+    private readonly MirrorPass _mirrorPass = new();
     private readonly List<MirrorView> _mirrors = [];
-    private int _eyesViewId, _mirrorViewId;
     private volatile bool _disposed;
 
     private readonly View[] _appViews = new View[2];
@@ -462,10 +461,6 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         // The mirror reads the left display's layer as plain bytes, which hold the colour encoded as the window holds it
         _mirrorSource = factory.CreateTextureView(new Graphite.TextureViewDescription(_eyeTexture, 0, 1, 0, 1, _plainFormat));
 
-        _eyesPipeline = new Graphite.RenderGraph.RenderPipeline([new EyesPass()]) { Name = "XR Eyes" };
-        _mirrorPipeline = new Graphite.RenderGraph.RenderPipeline([new MirrorPass()]) { Name = "XR Mirror" };
-        _eyesViewId = Graphics.NewViewId();
-        _mirrorViewId = Graphics.NewViewId();
     }
 
     private void CreateSpaces(XRTrackingOrigin origin)
@@ -623,7 +618,7 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         }
 
         if (frame.Submit)
-            Graphics.AddPipeline(new Graphite.GraphDispatch(_eyesPipeline!, [new EyesView(this, frame, 0), new EyesView(this, frame, 1)]));
+            Graphics.AddHostPass(graph => _eyesPass.Add(graph, this, frame));
         Graphics.AddFrameCallbacks(() => FrameStarted(frame), succeeded => FrameSubmitted(frame, succeeded));
     }
 
@@ -934,9 +929,9 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
             ? new Float4(0f, 0.5f - 0.5f * eyeAspect / targetAspect, 1f, eyeAspect / targetAspect)
             : new Float4(0.5f - 0.5f * targetAspect / eyeAspect, 0f, targetAspect / eyeAspect, 1f);
 
-        var view = new MirrorView(target, _mirrorSource!, crop, _mirrorViewId);
+        var view = new MirrorView(target, _mirrorSource!, crop);
         _mirrors.Add(view);
-        Graphics.AddPipeline(new Graphite.GraphDispatch(_mirrorPipeline!, [view]));
+        Graphics.AddHostPass(graph => _mirrorPass.Add(graph, this, view));
     }
 
     /// <summary>A later view drew over the whole of <paramref name="target"/>, so the mirror under it is left out.</summary>
@@ -957,39 +952,35 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
 
     // Renders each layer of the eyes into the image its display shows this frame, flipped into the
     // orientation the compositor reads.
-    private sealed class EyesView(OpenXRSession session, SubmittedFrame frame, int eye) : Graphite.RenderGraph.IRenderView
-    {
-        public OpenXRSession Session => session;
-        public SubmittedFrame Frame => frame;
-        public int Eye => eye;
-        public Graphite.Framebuffer? Target => frame.Waited[eye] ? session._swapchainTargets[eye][frame.Images[eye]] : null;
-        public Graphite.TextureView Source => session._eyeLayerViews[eye];
-        public uint PixelWidth => (uint)session.EyeWidth;
-        public uint PixelHeight => (uint)session.EyeHeight;
-        public int ViewId => session._eyesViewId;
-        public string Name => $"XR {(eye == 0 ? "left" : "right")} eye";
-    }
-
-    private sealed class EyesPass : Graphite.RenderGraph.IPass
+    private sealed class EyesPass
     {
         private ShaderPass? _shader;
         private readonly Graphite.PropertySet _properties = new();
 
-        public string Name => "XR Eyes";
-
-        // The target is the headset's image, written whole and handed back to the runtime.
-        public void Setup(Graphite.RenderGraph.RenderContextBuilder builder)
-            => builder.DeclareViewTarget(new Graphite.RenderGraph.TargetLoadStoreOps(
-                new Graphite.RenderGraph.AttachmentOps(Graphite.RenderGraph.LoadAction.DontCare, Graphite.RenderGraph.StoreAction.Store),
-                Graphite.RenderGraph.AttachmentOps.Discard));
-
-        public void Render(Graphite.RenderGraph.RenderContext context, Graphite.CommandBuffer cmd)
+        public void Add(Graphite.FrameGraph graph, OpenXRSession session, SubmittedFrame frame)
         {
-            EyesView view = context.ViewAs<EyesView>();
-            OpenXRSession session = view.Session;
-            SubmittedFrame frame = view.Frame;
-            if (session._disposed || !frame.Waited[view.Eye]) return;
+            if (session._disposed) return;
+            for (int eye = 0; eye < 2; eye++)
+            {
+                if (!frame.Waited[eye]) continue;
+                int index = eye;
+                Graphite.TextureHandle target = graph.ImportTarget(session._swapchainTargets[index][frame.Images[index]]);
+                Graphite.TextureHandle source = graph.Import(session._eyeTexture!);
+                graph.AddPass($"XR {(index == 0 ? "left" : "right")} eye", pass =>
+                {
+                    // The target is the headset's image, written whole and handed back to the runtime.
+                    pass.Write(target, firstWrite: new Graphite.TargetLoadStoreOps(new Graphite.AttachmentOps(Graphite.LoadAction.DontCare, Graphite.StoreAction.Store), Graphite.AttachmentOps.Discard));
+                    pass.Read(source);
+                }, context =>
+                {
+                    Draw(context.Command, session._eyeLayerViews[index]);
+                    frame.Copied[index] = true;
+                });
+            }
+        }
 
+        private void Draw(Graphite.CommandBuffer cmd, Graphite.TextureView source)
+        {
             if (_shader == null)
             {
                 ShaderDefinition definition = ShaderParser.Parse(EmbeddedResources.ReadAllText("Assets/Defaults/Shaders/XREyes.shader"));
@@ -997,43 +988,41 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
                 _shader = definition.Passes![0];
             }
 
-            _properties.SetTexture("_MainTex", view.Source, Graphics.GetSampler(Graphite.SamplerDescription.Linear));
+            _properties.SetTexture("_MainTex", source, Graphics.GetSampler(Graphite.SamplerDescription.Linear));
             cmd.SetShader(_shader);
             cmd.SetVertexSource(Graphite.VertexSource.None);
             cmd.SetProperties(_properties);
             cmd.Draw(3);
-            frame.Copied[view.Eye] = true;
         }
     }
 
-    private sealed class MirrorView(Graphite.Framebuffer target, Graphite.TextureView source, Float4 crop, int id) : Graphite.RenderGraph.IRenderView
+    private sealed class MirrorView(Graphite.Framebuffer target, Graphite.TextureView source, Float4 crop)
     {
         public Graphite.TextureView Source => source;
         public Float4 Crop => crop;
         public volatile bool Covered;
-        public uint PixelWidth => target.Width;
-        public uint PixelHeight => target.Height;
-        public int ViewId => id;
-        public string Name => "XR Mirror";
-        public Graphite.Framebuffer? Target => target;
+        public Graphite.Framebuffer Target => target;
     }
 
-    private sealed class MirrorPass : Graphite.RenderGraph.IPass
+    private sealed class MirrorPass
     {
         private ShaderPass? _shader;
         private readonly Graphite.PropertySet _properties = new();
 
-        public string Name => "XR Mirror";
-
-        // Loads what is there, so a mirror a later view covered leaves the target as it was
-        public void Setup(Graphite.RenderGraph.RenderContextBuilder builder)
-            => builder.DeclareViewTarget(new Graphite.RenderGraph.TargetLoadStoreOps(new Graphite.RenderGraph.AttachmentOps(Graphite.RenderGraph.LoadAction.Load, Graphite.RenderGraph.StoreAction.Store), Graphite.RenderGraph.AttachmentOps.Discard));
-
-        public void Render(Graphite.RenderGraph.RenderContext context, Graphite.CommandBuffer cmd)
+        public void Add(Graphite.FrameGraph graph, OpenXRSession session, MirrorView view)
         {
-            MirrorView view = context.ViewAs<MirrorView>();
-            if (view.Covered) return;
+            if (view.Covered || session._disposed) return;
+            Graphite.TextureHandle target = graph.ImportTarget(view.Target);
+            Graphite.TextureHandle source = graph.Import(session._eyeTexture!);
+            graph.AddPass("XR Mirror", pass =>
+            {
+                pass.Write(target, firstWrite: new Graphite.TargetLoadStoreOps(new Graphite.AttachmentOps(Graphite.LoadAction.Load, Graphite.StoreAction.Store), Graphite.AttachmentOps.Discard));
+                pass.Read(source);
+            }, context => Draw(context.Command, view));
+        }
 
+        private void Draw(Graphite.CommandBuffer cmd, MirrorView view)
+        {
             if (_shader == null)
             {
                 ShaderDefinition definition = ShaderParser.Parse(EmbeddedResources.ReadAllText("Assets/Defaults/Shaders/XRMirror.shader"));
@@ -1096,13 +1085,9 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         Graphics.DeferDispose(_mirrorSource);
         Graphics.DeferDispose(_eyeTarget);
         Graphics.DeferDispose(_eyeTexture);
-        Graphics.DeferDispose(_eyesPipeline);
-        Graphics.DeferDispose(_mirrorPipeline);
         _mirrorSource = null;
         _eyeTarget = null;
         _eyeTexture = null;
-        _eyesPipeline = null;
-        _mirrorPipeline = null;
 
         // Action sets and spaces are children of the instance and session, so they go with them.
         if (_instance.Handle != 0) _xr.DestroyInstance(_instance);

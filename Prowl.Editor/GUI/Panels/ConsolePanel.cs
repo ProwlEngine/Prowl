@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
+using System.Text.RegularExpressions;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
@@ -22,6 +24,17 @@ using TextAlignment = Prowl.PaperUI.TextAlignment;
 
 namespace Prowl.Editor.GUI.Panels;
 
+/// <summary>How the Console panel shows logs.</summary>
+[EditorPreferences("Console", EditorIcons.Terminal, order: 20)]
+public sealed class ConsolePreferences : EditorPreferences
+{
+    [Range(0, 32), Tooltip("Size of log text. 0 follows the small UI text size.")]
+    public float FontSize;
+
+    /// <summary>The log text size in use.</summary>
+    public float TextSize => FontSize > 0f ? FontSize : EditorTheme.FontSizeSmall;
+}
+
 public class ConsolePanel : DockPanel
 {
     [MenuItem("Window/General/Console", priority: 0)]
@@ -34,7 +47,11 @@ public class ConsolePanel : DockPanel
 
     // Past this many undrained logs the oldest go, so nothing grows while no console or status bar is drawn.
     private const int MaxPending = 5000;
-    private static float RowHeight => EditorTheme.RowHeight + 2f;
+    private static float RowHeight => MathF.Max(EditorTheme.RowHeight + 2f, TextSize * 1.5f);
+    private static float TextSize => Preferences.Get<ConsolePreferences>().TextSize;
+
+    // What the cached layouts were built with, so a font or size change rebuilds them.
+    private (float Size, FontFile? Mono, FontFile? Semi, FontFile? Bold) _layoutKey;
 
     private static readonly List<LogEntry> _messages = [];
     private static bool _subscribed;
@@ -89,6 +106,12 @@ public class ConsolePanel : DockPanel
     }
 
     public ConsolePanel() => EnsureSubscribed();
+
+    /// <summary>Removes every log shown in the Console.</summary>
+    public static void Clear()
+    {
+        lock (s_messagesLock) _messages.Clear();
+    }
 
     /// <summary>Subscribe the shared log store to Debug.OnLog if not already. Safe to call before any
     /// ConsolePanel is opened - the status-bar footer relies on this to show logs regardless.</summary>
@@ -248,7 +271,7 @@ public class ConsolePanel : DockPanel
                 LevelChip(paper, font, "con_copy", EditorIcons.Copy_I, EditorTheme.InkDim, Loc.Get("console.copy"), null, false, !hasSelection,
                     () => { if (SelectedEntry() is { } entry) paper.SetClipboard(CopyText(entry, withStack: true)); });
 
-                ToolbarIconBtn(paper, "con_clear", EditorIcons.Trash, Loc.Get("console.clear"), false, () => { lock (s_messagesLock) _messages.Clear(); _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
+                ToolbarIconBtn(paper, "con_clear", EditorIcons.Trash, Loc.Get("console.clear"), false, () => { Clear(); _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
                 ToolbarIconBtn(paper, "con_opts", EditorIcons.EllipsisVertical, Loc.Get("console.options"), false,
                     () => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, BuildOptionsMenu));
             }
@@ -325,12 +348,19 @@ public class ConsolePanel : DockPanel
 
             paper.Box("con_content").Width(width - 12).Height(count * rowH).Clip()
                 .OnClick(0, (_, e) => SelectRow((int)((float)e.RelativePosition.Y / rowH)))
+                .OnDoubleClick(e =>
+                {
+                    if (SelectRow((int)((float)e.RelativePosition.Y / rowH)) && SourceLocationOf(SelectedEntry()!.Value) is { } location)
+                        OpenSource(location);
+                })
                 .OnRightClick(0, (_, e) =>
                 {
                     if (!SelectRow((int)((float)e.RelativePosition.Y / rowH))) return;
                     LogEntry entry = SelectedEntry()!.Value;
                     Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, menu =>
                     {
+                        if (SourceLocationOf(entry) is { } location)
+                            menu.Item($"{Loc.Get("console.open_source")} {Path.GetFileName(location.Path)}:{location.Line}", () => OpenSource(location), icon: EditorIcons.Code);
                         menu.Item(Loc.Get("console.copy_message"), () => paper.SetClipboard(CopyText(entry, withStack: false)), icon: EditorIcons.Copy);
                         if (entry.StackTrace is { StackFrames.Length: > 0 })
                             menu.Item(Loc.Get("console.copy_with_stack"), () => paper.SetClipboard(CopyText(entry, withStack: true)), icon: EditorIcons.Copy);
@@ -363,6 +393,38 @@ public class ConsolePanel : DockPanel
         return index >= 0 && index < _messages.Count ? _messages[index] : null;
     }
 
+    private static readonly Regex s_compilerLocation = new(@"^(?<path>[^\r\n]+?\.cs)\((?<line>\d+),(?<column>\d+)\)", RegexOptions.Compiled);
+
+    /// <summary>The script a log points at: a compiler message's "path(line,col)" prefix, else the first stack frame inside the project's Assets.</summary>
+    internal static (string Path, int Line, int Column)? SourceLocationOf(LogEntry entry)
+    {
+        Match match = s_compilerLocation.Match(entry.FullMessage);
+        if (match.Success && File.Exists(match.Groups["path"].Value))
+            return (match.Groups["path"].Value, int.Parse(match.Groups["line"].Value), int.Parse(match.Groups["column"].Value));
+
+        if (entry.StackTrace is not { } trace || Projects.Project.Current is not { } project) return null;
+        string assets = Path.GetFullPath(project.AssetsPath) + Path.DirectorySeparatorChar;
+        foreach (DebugStackFrame frame in trace.StackFrames)
+        {
+            if (string.IsNullOrEmpty(frame.FileName) || !Path.IsPathRooted(frame.FileName)) continue;
+            string full = Path.GetFullPath(frame.FileName);
+            if (full.StartsWith(assets, StringComparison.OrdinalIgnoreCase) && File.Exists(full))
+                return (full, frame.Line ?? 1, frame.Column ?? 1);
+        }
+        return null;
+    }
+
+    private static void OpenSource((string Path, int Line, int Column) location)
+    {
+        if (Preferences.Get<ScriptEditor.ScriptEditorPreferences>().OpenScriptsIn == ScriptEditor.ScriptEditorMode.BuiltIn)
+        {
+            ScriptEditor.ScriptEditorWindow.OpenFor(location.Path, location.Line, location.Column);
+            return;
+        }
+        if (!ExternalTools.OpenScript(location.Path, location.Line, location.Column))
+            ExternalTools.OpenWithSystem(location.Path);
+    }
+
     internal static string CopyText(LogEntry entry, bool withStack)
     {
         if (!withStack || entry.StackTrace is not { StackFrames.Length: > 0 } trace) return entry.FullMessage;
@@ -377,6 +439,21 @@ public class ConsolePanel : DockPanel
         FontFile mono = EditorTheme.FontMono ?? font;
         FontFile semi = EditorTheme.FontSemiBold ?? font;
         FontFile bold = EditorTheme.FontBold ?? font;
+        float textSize = TextSize;
+
+        var key = (textSize, EditorTheme.FontMono, EditorTheme.FontSemiBold, EditorTheme.FontBold);
+        if (key != _layoutKey)
+        {
+            _layoutKey = key;
+            _ellipsis = null;
+            for (int i = 0; i < _messages.Count; i++)
+            {
+                LogEntry m = _messages[i];
+                m.NameLayout = m.MessageLayout = m.TimeLayout = m.CountLayout = m.SourceLayout = m.StackLayout = null;
+                m.MessageCut = m.StackCut = null;
+                _messages[i] = m;
+            }
+        }
 
         float left = (float)r.Min.X, right = (float)r.Max.X, top = (float)r.Min.Y, w = (float)r.Size.X;
         const float padL = 12f, padR = 12f, gap = 8f, iconSize = 14f;
@@ -402,7 +479,7 @@ public class ConsolePanel : DockPanel
             float room = canvas.LogicalToPixel(maxWidth - LW(_ellipsis!));
             int index = Math.Max(0, full.GetCursorIndex(new Float2(room, 0)));
             while (index > 0 && full.GetCursorPosition(index).X > room) index--;
-            cut = Make(full.Text[..index] + "...", f, EditorTheme.FontSizeSmall);
+            cut = Make(full.Text[..index] + "...", f, textSize);
             cutWidth = maxWidth;
             return cut;
         }
@@ -434,7 +511,7 @@ public class ConsolePanel : DockPanel
             icon.Draw(canvas, new Rect(ix, line1 - iconSize * 0.5f, ix + iconSize, line1 + iconSize * 0.5f), color, 1.6f);
             float cursorX = ix + iconSize + gap;
 
-            msg.NameLayout ??= Make($"{name}:", semi, EditorTheme.FontSizeSmall);
+            msg.NameLayout ??= Make($"{name}:", semi, textSize);
             DrawMid(msg.NameLayout, cursorX, line1, color);
             cursorX += LW(msg.NameLayout) + 5f;
 
@@ -443,7 +520,7 @@ public class ConsolePanel : DockPanel
 
             if (_showTime)
             {
-                msg.TimeLayout ??= Make(msg.TimeString, mono, EditorTheme.FontSizeSmall);
+                msg.TimeLayout ??= Make(msg.TimeString, mono, textSize);
                 float tw = LW(msg.TimeLayout);
                 DrawMid(msg.TimeLayout, rightCursor - tw, line1, EditorTheme.InkFaint);
                 rightCursor -= tw + gap;
@@ -452,7 +529,7 @@ public class ConsolePanel : DockPanel
             string? src = SourceOf(msg);
             if (!string.IsNullOrEmpty(src))
             {
-                msg.SourceLayout ??= Make($"[{src}]", mono, EditorTheme.FontSizeSmall);
+                msg.SourceLayout ??= Make($"[{src}]", mono, textSize);
                 float sw = LW(msg.SourceLayout);
                 DrawMid(msg.SourceLayout, rightCursor - sw, line1, EditorTheme.InkDim);
                 rightCursor -= sw + gap;
@@ -460,7 +537,7 @@ public class ConsolePanel : DockPanel
 
             if (_collapse && msg.Count > 1)
             {
-                msg.CountLayout ??= Make(msg.Count.ToString(), bold, EditorTheme.FontSizeSmall);
+                msg.CountLayout ??= Make(msg.Count.ToString(), bold, textSize);
                 float cw = LW(msg.CountLayout), badgeW = cw + 12f, badgeH = 16f;
                 float badgeX = rightCursor - badgeW, badgeY = line1 - badgeH * 0.5f;
                 canvas.RoundedRectFilled(badgeX, badgeY, badgeW, badgeH, EditorTheme.Roundness > 0f ? badgeH * 0.5f : 0f, EditorTheme.Neutral400);
@@ -471,12 +548,12 @@ public class ConsolePanel : DockPanel
             float msgWidth = rightCursor - cursorX;
             if (msgWidth > 0f)
             {
-                _ellipsis ??= Make("...", mono, EditorTheme.FontSizeSmall);
-                msg.MessageLayout ??= Make(msg.Message, mono, EditorTheme.FontSizeSmall);
+                _ellipsis ??= Make("...", mono, textSize);
+                msg.MessageLayout ??= Make(msg.Message, mono, textSize);
                 DrawMid(Fit(msg.MessageLayout, ref msg.MessageCut, ref msg.MessageCutWidth, msgWidth, mono), cursorX, line1, EditorTheme.Ink400);
                 if (_multiLine && msg.StackTrace is { StackFrames.Length: > 0 })
                 {
-                    msg.StackLayout ??= Make(msg.StackTrace.StackFrames[0].ToString(), mono, EditorTheme.FontSizeSmall);
+                    msg.StackLayout ??= Make(msg.StackTrace.StackFrames[0].ToString(), mono, textSize);
                     DrawMid(Fit(msg.StackLayout, ref msg.StackCut, ref msg.StackCutWidth, msgWidth, mono), cursorX, line2, EditorTheme.InkDim);
                 }
             }

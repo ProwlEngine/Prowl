@@ -155,7 +155,7 @@ public class NavigationSettings : ProjectSettingsBase
                                         return;
                                 AgentTypes[idx].Name = trimmed;
                                 Changed();
-                            }).Show();
+                            }).CommitOnEnter().Show();
                     }
                 }
 
@@ -273,7 +273,7 @@ public class NavigationSettings : ProjectSettingsBase
                                 if (existing >= 0 && existing != idx) return;
                                 AreaNames[idx] = trimmed;
                                 Changed();
-                            }).Show();
+                            }).CommitOnEnter().Show();
                     }
                 }
 

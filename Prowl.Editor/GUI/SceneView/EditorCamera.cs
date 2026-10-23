@@ -129,11 +129,14 @@ public class EditorCamera
     /// <summary>Far plane to put back when leaving orthographic, which moves it to suit the zoom.</summary>
     private float _perspectiveFarClip;
 
+    public const float MinFieldOfView = 5f;
+    public const float MaxFieldOfView = 170f;
+
     /// <summary>Vertical field of view in degrees, used by perspective views and by focus framing.</summary>
     public float FieldOfView
     {
         get => _camera.FieldOfView;
-        set => _camera.FieldOfView = Math.Clamp(value, 5f, 170f);
+        set => _camera.FieldOfView = Math.Clamp(value, MinFieldOfView, MaxFieldOfView);
     }
 
     /// <summary>Distance to the near clip plane.</summary>

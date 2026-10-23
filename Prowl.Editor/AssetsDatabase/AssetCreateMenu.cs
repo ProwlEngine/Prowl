@@ -22,12 +22,7 @@ namespace Prowl.Editor;
 public static class AssetCreateMenu
 {
     [MenuItem("Assets/Create/Folder", priority: 0, Icon = EditorIcons.Folder)]
-    static void CreateFolderItem()
-    {
-        var task = new CreateAssetTask();
-        task.TaskType = CreateAssetTask.AssetType.Folder;
-        task.BeginCreateTask(new AssetMenuEntry { Name = "New Folder", Extension = "", Icon = EditorRegistries.GetFileIconForExtension("") }, GetCurrentFolder());
-    }
+    static void CreateFolderItem() => CreateAssetTask.Begin(GetCurrentFolder(), "New Folder", "", WriteFolder, isFolder: true);
 
     [MenuItem("Assets/Create/Prefab From Selection", priority: 100, Icon = EditorIcons.Cubes, Separator = true)]
     static void CreatePrefabFromSelectionItem()
@@ -68,39 +63,83 @@ public static class AssetCreateMenu
     }
 
     [MenuItem("Assets/Create/Shader", priority: 1000, Icon = EditorIcons.WandMagicSparkles, Separator = true)]
-    static void CreateShaderItem() => CreateShader(GetCurrentFolder());
+    static void CreateShaderItem() => CreateAssetTask.Begin(GetCurrentFolder(), "New Shader", ".shader", WriteShader);
 
     [MenuItem("Assets/Create/Compute Shader", priority: 1001, Icon = EditorIcons.WandMagicSparkles)]
-    static void CreateComputeShaderItem() => CreateComputeShader(GetCurrentFolder());
+    static void CreateComputeShaderItem() => CreateAssetTask.Begin(GetCurrentFolder(), "New Compute Shader", ".compute", WriteComputeShader);
 
     [MenuItem("Assets/Create/C# Script", priority: 1010, Icon = EditorIcons.FileCode, Separator = true)]
     static void CreateScriptItem() => NewScriptDialog.Open(GetCurrentFolder());
 
     [MenuItem("Assets/Create/Assembly Definition", priority: 1011, Icon = EditorIcons.FileLines)]
-    static void CreateAsmDefItem() => CreateAssemblyDefinition(GetCurrentFolder());
+    static void CreateAsmDefItem() => CreateAssetTask.Begin(GetCurrentFolder(), "NewAssembly", Projects.Scripting.AssemblyDefinitionDatabase.Extension, WriteAssemblyDefinition);
 
-    /// <summary> Creates an asset file from an AssetMenuEntry by instantiating its type, serializing it, and writing to disk. Returns the relative path of the created asset, or null if the folder does not exist or creation fails. </summary>
-    public static string? CreateAsset(AssetMenuEntry entry, string relativeFolder, string? filename = null)
+    /// <summary>Starts naming and creating an asset of a <c>[CreateAssetMenu]</c> type in a folder.</summary>
+    public static void BeginCreateAsset(AssetMenuEntry entry, string relativeFolder)
+        => CreateAssetTask.Begin(relativeFolder, DefaultName(entry), entry.Extension, AssetWriter(entry));
+
+    private static string DefaultName(AssetMenuEntry entry)
+    {
+        int lastSlash = entry.Name.LastIndexOf('/');
+        return "New " + (lastSlash >= 0 ? entry.Name.Substring(lastSlash + 1) : entry.Name);
+    }
+
+    private static CreateAssetTask.Writer AssetWriter(AssetMenuEntry entry) => (path, _) =>
+    {
+        object? instance = entry.Factory != null ? entry.Factory() : Activator.CreateInstance(entry.Type);
+        EchoObject? echo = Prowl.Echo.Serializer.Serialize(typeof(object), instance);
+        if (echo == null) return false;
+        File.WriteAllText(path, echo.WriteToString());
+        return true;
+    };
+
+    private static bool WriteFolder(string path, string _)
+    {
+        Directory.CreateDirectory(path);
+        MetaFile.EnsureMeta(path, "DefaultImporter");
+        return true;
+    }
+
+    private static bool WriteAssemblyDefinition(string path, string name)
+    {
+        new Projects.Scripting.AssemblyDefinition { Name = name }.WriteToFile(path);
+        return true;
+    }
+
+    private static bool WriteShader(string path, string name)
+    {
+        File.WriteAllText(path, ShaderTemplate.Replace("Custom/New Shader", "Custom/" + name));
+        return true;
+    }
+
+    private static bool WriteComputeShader(string path, string _)
+    {
+        File.WriteAllText(path, ComputeShaderTemplate);
+        return true;
+    }
+
+    // Creates a file at once under a unique version of the default name, for callers that skip naming it.
+    private static string? CreateNow(string relativeFolder, string defaultName, string extension, CreateAssetTask.Writer write)
     {
         string absFolder = GetAbsoluteFolder(relativeFolder);
         if (!Directory.Exists(absFolder)) return null;
-
-        int lastSlash = entry.Name.LastIndexOf('/');
-        string baseName = lastSlash >= 0 ? entry.Name.Substring(lastSlash + 1) : entry.Name;
-        string name = filename ?? FindUniqueName(absFolder, $"New {baseName}", entry.Extension);
-        string filePath = Path.Combine(absFolder, name);
-
+        string name = FindUniqueName(absFolder, defaultName, extension);
         try
         {
-            object? instance = entry.Factory != null ? entry.Factory() : Activator.CreateInstance(entry.Type);
-            EchoObject echo = Prowl.Echo.Serializer.Serialize(typeof(object), instance);
-            if (echo != null) File.WriteAllText(filePath, echo.WriteToString());
-            EditorAssetBackend.Instance?.InvalidateFolderIndex();
-            Debug.Log($"Created {entry.Name}: {name}");
-            return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
+            if (!write(Path.Combine(absFolder, name), Path.GetFileNameWithoutExtension(name))) return null;
         }
-        catch (Exception ex) { Debug.LogError($"Failed to create {entry.Name}: {ex.Message}"); return null; }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to create '{name}': {ex.Message}");
+            return null;
+        }
+        EditorAssetBackend.Instance?.InvalidateFolderIndex();
+        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
+
+    /// <summary> Creates an asset file from an AssetMenuEntry by instantiating its type, serializing it, and writing to disk. Returns the relative path of the created asset, or null if the folder does not exist or creation fails. </summary>
+    public static string? CreateAsset(AssetMenuEntry entry, string relativeFolder)
+        => CreateNow(relativeFolder, DefaultName(entry), entry.Extension, AssetWriter(entry));
 
     /// <summary>
     /// The folder new assets go into: the selected folder if there is one, otherwise the folder
@@ -128,48 +167,19 @@ public static class AssetCreateMenu
         => Utils.UniqueNames.ForFile(folder, baseName, ext);
 
     /// <summary> Creates a new folder in the project at the given relative path, with a unique name and a DefaultImporter meta file. Returns the relative path of the created folder, or null if the parent folder does not exist. </summary>
-    public static string? CreateFolder(string relativeFolder)
-    {
-        string absFolder = GetAbsoluteFolder(relativeFolder);
-        if (!Directory.Exists(absFolder)) return null;
-
-        string name = FindUniqueName(absFolder, "New Folder", "");
-        string newPath = Path.Combine(absFolder, name);
-        Directory.CreateDirectory(newPath);
-        MetaFile.EnsureMeta(newPath, "DefaultImporter");
-        EditorAssetBackend.Instance?.InvalidateFolderIndex();
-        Debug.Log($"Created folder: {name}");
-        string relPath = string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
-        return relPath;
-    }
+    public static string? CreateFolder(string relativeFolder) => CreateNow(relativeFolder, "New Folder", "", WriteFolder);
 
     /// <summary> Creates a new assembly definition file in the project at the given relative path, with a unique name. Returns the relative path of the created file, or null if the parent folder does not exist. </summary>
     public static string? CreateAssemblyDefinition(string relativeFolder)
-    {
-        string absFolder = GetAbsoluteFolder(relativeFolder);
-        if (!Directory.Exists(absFolder)) return null;
-
-        string name = FindUniqueName(absFolder, "NewAssembly", Projects.Scripting.AssemblyDefinitionDatabase.Extension);
-        string filePath = Path.Combine(absFolder, name);
-
-        var def = new Projects.Scripting.AssemblyDefinition { Name = Path.GetFileNameWithoutExtension(name) };
-        def.WriteToFile(filePath);
-        EditorAssetBackend.Instance?.InvalidateFolderIndex();
-
-        Debug.Log($"Created assembly definition: {name}");
-        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
-    }
+        => CreateNow(relativeFolder, "NewAssembly", Projects.Scripting.AssemblyDefinitionDatabase.Extension, WriteAssemblyDefinition);
 
     /// <summary> Creates a new .shader file in the project at the given relative path, with a unique name and a lit surface shader to start from. Returns the relative path of the created file, or null if the parent folder does not exist. </summary>
-    public static string? CreateShader(string relativeFolder)
-    {
-        string absFolder = GetAbsoluteFolder(relativeFolder);
-        if (!Directory.Exists(absFolder)) return null;
+    public static string? CreateShader(string relativeFolder) => CreateNow(relativeFolder, "New Shader", ".shader", WriteShader);
 
-        string name = FindUniqueName(absFolder, "New Shader", ".shader");
-        string filePath = Path.Combine(absFolder, name);
+    /// <summary> Creates a new .compute file in the project at the given relative path, with one kernel to start from. Returns the relative path of the created file, or null if the parent folder does not exist. </summary>
+    public static string? CreateComputeShader(string relativeFolder) => CreateNow(relativeFolder, "New Compute Shader", ".compute", WriteComputeShader);
 
-        File.WriteAllText(filePath, @"// A lit surface with every feature of the standard Lit shader: shadows, lightmaps, probes, decals, fog, surface
+    private const string ShaderTemplate = @"// A lit surface with every feature of the standard Lit shader: shadows, lightmaps, probes, decals, fog, surface
 // types and the Lit material inputs. Surface runs before lighting and may change BaseColor, Alpha, Normal, Metallic,
 // Roughness, Occlusion and Emission, reading UV, UV1, VertexColor, WorldPos, ViewDir and GeometryNormal.
 // Surface ""Unlit"" gives the Unlit shader's passes instead.
@@ -195,20 +205,9 @@ Shader ""Custom/New Shader""
         ENDGLSL
     }
 }
-");
-        EditorAssetBackend.Instance?.InvalidateFolderIndex();
-        Debug.Log($"Created shader: {name}");
-        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
-    }
+";
 
-    /// <summary> Creates a new .compute file in the project at the given relative path, with one kernel to start from. Returns the relative path of the created file, or null if the parent folder does not exist. </summary>
-    public static string? CreateComputeShader(string relativeFolder)
-    {
-        string absFolder = GetAbsoluteFolder(relativeFolder);
-        if (!Directory.Exists(absFolder)) return null;
-
-        string name = FindUniqueName(absFolder, "New Compute Shader", ".compute");
-        File.WriteAllText(Path.Combine(absFolder, name), @"// Each kernel is a function, declared with its thread group size: #pragma kernel Name X Y Z
+    private const string ComputeShaderTemplate = @"// Each kernel is a function, declared with its thread group size: #pragma kernel Name X Y Z
 // Find it with shader.FindKernel(""Main""), set buffers and textures per kernel, then Dispatch.
 // Storage blocks and images need no binding, the engine assigns them and binds by name.
 #pragma kernel Main 64
@@ -226,10 +225,5 @@ void Main()
     if (i >= uint(values.length())) return;
     values[i] *= _Scale;
 }
-");
-        EditorAssetBackend.Instance?.InvalidateFolderIndex();
-        Debug.Log($"Created compute shader: {name}");
-        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
-    }
-
+";
 }

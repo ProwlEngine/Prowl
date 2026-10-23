@@ -296,7 +296,7 @@ public static class GameObjectInspector
                     }
                 })
                 .Width(UnitValue.Stretch()).Height(26)
-                .Show();
+                .CommitOnEnter().Show();
 
             // How it networks: the icon shows the mode, the popover changes it.
             NetworkPopover.DrawButton(paper, font, go);

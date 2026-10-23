@@ -8,6 +8,7 @@ using System.Runtime.Loader;
 using System.Threading.Tasks;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -145,6 +146,19 @@ public static class ScriptAssemblyManager
 
         // Wait for debounce (nothing is mid-edit at startup, so that compile skips it)
         if (!_startupCompilePending && DateTime.UtcNow - _lastScriptChange < DebounceDelay) return;
+
+        // While the game plays, changed scripts follow the Play Mode preference. Hot reload just carries on.
+        if (Application.IsPlaying && !_startupCompilePending)
+        {
+            switch (Preferences.Get<GUI.Panels.PlayModePreferences>().ScriptChanges)
+            {
+                case GUI.Panels.ScriptChangesDuringPlay.WaitUntilStopped:
+                    return;
+                case GUI.Panels.ScriptChangesDuringPlay.StopPlaying:
+                    EditorApplication.RequestExitPlayMode();
+                    return;
+            }
+        }
 
         _recompileRequested = false;
 

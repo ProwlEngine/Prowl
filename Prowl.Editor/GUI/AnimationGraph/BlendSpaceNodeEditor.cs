@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Theming;
+using Prowl.Editor.GraphEditor;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.Events;
@@ -14,6 +15,8 @@ using Prowl.Runtime.AnimationNodes;
 using Prowl.Scribe;
 using Prowl.Vector;
 
+using AnimationNodeCard = Prowl.Editor.GraphEditor.NodeCard<Prowl.Runtime.GraphNodeRecord, Prowl.Editor.Inspector.AnimationGraphEditing>;
+using AnimationNodeInspector = Prowl.Editor.GraphEditor.NodeInspector<Prowl.Runtime.GraphNodeRecord, Prowl.Editor.Inspector.AnimationGraphEditing>;
 using Canvas = Prowl.Quill.Canvas;
 using Color = System.Drawing.Color;
 using Color32 = Prowl.Vector.Color32;
@@ -21,8 +24,8 @@ using Color32 = Prowl.Vector.Color32;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>A blend space is a layout, so it is laid out on a chart rather than listed, with each sample's exact value under it.</summary>
-[AnimationNodeEditor(typeof(Blend1DNode))]
-[AnimationNodeEditor(typeof(Blend2DNode))]
+[NodeEditor(typeof(Blend1DNode))]
+[NodeEditor(typeof(Blend2DNode))]
 internal sealed class BlendSpaceNodeEditor : AnimationNodeEditor
 {
     private readonly Dictionary<string, BlendChart> _charts = [];

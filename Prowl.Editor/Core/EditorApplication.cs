@@ -17,6 +17,7 @@ using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Thumbnails;
+using Prowl.Graphite.Debugger.Viewer;
 using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -46,6 +47,9 @@ public class EditorApplication : Game
     private bool _sceneGizmosDrawn;
     private PanelMaximizer _panelMaximizer = null!;
 
+    /// <summary>Feeds the render profiler panels, null headless.</summary>
+    internal RenderProfilerSource? RenderProfiler { get; private set; }
+
     /// <summary>Maximizes docked panels over the rest of the layout, and brings the layout back.</summary>
     internal PanelMaximizer Maximizer => _panelMaximizer;
 
@@ -65,8 +69,9 @@ public class EditorApplication : Game
     private bool _quitRequested;
     private IDisposable? _origamiScope;
 
-    private string _curDefaultFont;
-    private string _curDefaultBoldFont;
+    private string? _curDefaultFont;
+    private string? _curDefaultBoldFont;
+    private string? _curMonoFont;
 
     // Play mode state
     private Echo.EchoObject? _savedEditorScene;
@@ -111,11 +116,17 @@ public class EditorApplication : Game
 
         // Load editor settings (global, persists across projects)
         _ = EditorSettings.Instance; // triggers load + ApplyTheme
+        Preferences.WatchFiles();
 
         ApplyFramePacing();
 
         _dockSpace = new DockSpace(CreateDefaultLayout());
         _panelMaximizer = new PanelMaximizer(_dockSpace);
+        if (!Graphics.IsHeadless)
+        {
+            RenderProfiler = new RenderProfilerSource();
+            RenderProfiler.Attach(_dockSpace);
+        }
 
         // Open windows and the selection keep what they show loaded, through their fields like a scene's objects.
         AssetDatabase.WalkingRoots += WalkEditorRoots;
@@ -270,27 +281,38 @@ public class EditorApplication : Game
         PropertyGridConfig.IsSimpleFieldType = fieldType => EditorRegistries.GetPropertyEditor(fieldType) != null;
 
         // Register save handlers
+        // The scene or prefab is written on every save, but only named in the toast when it had changes.
         SaveManager.OnSave += () =>
         {
-            if (PrefabEditingMode.IsEditing)
-            {
-                return PrefabEditingMode.Save()
-                    ? Loc.Get("save.prefab", new { name = System.IO.Path.GetFileNameWithoutExtension(PrefabEditingMode.EditingPrefabPath) })
-                    : null;
-            }
-            if (EditorSceneManager.Save())
-                return Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current.IsValid() ? Runtime.Resources.Scene.Current.Name : "Untitled" });
+            if (Application.IsPlaying) return null;
+            bool changed = EditorSceneManager.IsDirty;
+            string label = EditorSceneManager.SaveLabel;
 
-            // No path yet - prompt for one, but never interrupt an unattended auto-save.
-            if (!SaveManager.IsAutoSave)
-                PromptSaveAs();
+            if (PrefabEditingMode.IsEditing)
+                return PrefabEditingMode.Save() && changed ? label : null;
+            if (EditorSceneManager.CurrentScenePath != null)
+                return EditorSceneManager.Save() && changed ? label : null;
+
+            // An untitled scene only asks for a path when it has something worth keeping, and never during an auto-save.
+            if (changed && !SaveManager.IsAutoSave)
+                PromptSaveAs(SaveManager.TakeAfterSaveAs());
             return null;
+        };
+        Runtime.Debug.OnLog += PauseOnLog;
+        SaveManager.CollectUnsaved += unsaved =>
+        {
+            if (EditorSceneManager.IsDirty) unsaved.Add(EditorSceneManager.SaveLabel);
+        };
+        Window.CloseRequested = () =>
+        {
+            if (SaveManager.Unsaved().Count == 0) return true;
+            SaveManager.ConfirmUnsaved(() => Window.Stop(force: true));
+            return false;
         };
         SaveManager.OnSave += () =>
         {
-            if (Project.Current == null) return null;
-            SaveProjectState();
-            return Loc.Get("save.layout");
+            if (Project.Current != null && !Application.IsPlaying) SaveProjectState();
+            return null;
         };
 
         // Set Windows title bar to match Darkest theme color
@@ -321,6 +343,7 @@ public class EditorApplication : Game
 
         Window.InternalWindow.Closing += () =>
         {
+            SceneToolManager.StoreSettings();
             SaveEditorWindowState();
         };
 
@@ -330,24 +353,113 @@ public class EditorApplication : Game
     [DllImport("dwmapi.dll", PreserveSig = true)]
     private static extern int DwmSetWindowAttribute(nint hwnd, int attr, ref int value, int size);
 
-    /// <summary> Loads all editor fonts (Geist variants, JetBrains Mono, Space Grotesk, Audiowide) from embedded resources and syncs the Origami theme. Safe to call multiple times; fonts are only loaded once. </summary>
+    /// <summary>The family name of the bundled UI font. Any other font name is a system font family or a font file path.</summary>
+    public const string BundledFontName = "Geist";
+
+    /// <summary>The regular, bold, italic and bold italic faces of a monospace font.</summary>
+    public readonly record struct MonoFontFaces(Scribe.FontFile? Regular, Scribe.FontFile? Bold, Scribe.FontFile? Italic, Scribe.FontFile? BoldItalic);
+
+    /// <summary>The family name of the bundled monospace font.</summary>
+    public const string BundledMonoFontName = "JetBrains Mono";
+
+    private Scribe.FontFile? _geistRegular, _geistMedium, _geistSemiBold, _geistBold, _jetBrainsMono, _jetBrainsMonoMedium;
+    private Scribe.FontFile[]? _systemFonts;
+    private readonly Dictionary<string, Scribe.FontFile?> _fileFonts = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Every font installed on this machine, read once on first use.</summary>
+    public IReadOnlyList<Scribe.FontFile> SystemFonts => _systemFonts ??= [.. PaperInstance.EnumerateSystemFonts()];
+
+    /// <summary> Loads the editor fonts and resolves the UI, bold and mono fonts from the theme's font names, then syncs the Origami theme. Does nothing when the names have not changed. </summary>
     public void InitializeFont()
     {
-        if (EditorTheme.DefaultFont != null) return;
+        if (_geistRegular == null)
+        {
+            _geistRegular = LoadBundledFont("Geist-Regular.ttf");
+            _geistMedium = LoadBundledFont("Geist-Medium.ttf");
+            _geistSemiBold = LoadBundledFont("Geist-SemiBold.ttf");
+            _geistBold = LoadBundledFont("Geist-Bold.ttf");
+            _jetBrainsMono = LoadBundledFont("JetBrainsMono-Regular.ttf");
+            _jetBrainsMonoMedium = LoadBundledFont("JetBrainsMono-Medium.ttf");
+            EditorTheme.FontDisplay = LoadBundledFont("SpaceGrotesk-Bold.ttf");
+            EditorTheme.FontLogo = LoadBundledFont("Audiowide-Regular.ttf");
+        }
+        else if (_curDefaultFont == EditorTheme.DefaultFontName && _curDefaultBoldFont == EditorTheme.DefaultBoldFontName
+                 && _curMonoFont == EditorTheme.MonoFontName)
+            return;
 
-        EditorTheme.DefaultFont = LoadBundledFont("Geist-Regular.ttf");
-        EditorTheme.FontMedium = LoadBundledFont("Geist-Medium.ttf");
-        EditorTheme.FontSemiBold = LoadBundledFont("Geist-SemiBold.ttf");
-        EditorTheme.DefaultBoldFont = LoadBundledFont("Geist-Bold.ttf");
-        EditorTheme.FontMono = LoadBundledFont("JetBrainsMono-Regular.ttf");
-        EditorTheme.FontDisplay = LoadBundledFont("SpaceGrotesk-Bold.ttf");
-        EditorTheme.FontLogo = LoadBundledFont("Audiowide-Regular.ttf");
+        Scribe.FontFile? ui = FindFont(EditorTheme.DefaultFontName, BundledFontName, Scribe.FontStyle.Regular);
+        Scribe.FontFile? bold = FindFont(EditorTheme.DefaultBoldFontName, BundledFontName, Scribe.FontStyle.Bold);
+
+        EditorTheme.DefaultFont = ui ?? _geistRegular;
+        EditorTheme.FontMedium = ui ?? _geistMedium;
+        EditorTheme.DefaultBoldFont = bold ?? _geistBold;
+        EditorTheme.FontSemiBold = bold ?? _geistSemiBold;
+        MonoFontFaces mono = MonoFaces(EditorTheme.MonoFontName);
+        EditorTheme.FontMono = mono.Regular;
+        EditorTheme.FontMonoBold = mono.Bold;
+        EditorTheme.FontMonoItalic = mono.Italic;
+        EditorTheme.FontMonoBoldItalic = mono.BoldItalic;
 
         _curDefaultFont = EditorTheme.DefaultFontName;
         _curDefaultBoldFont = EditorTheme.DefaultBoldFontName;
+        _curMonoFont = EditorTheme.MonoFontName;
 
-        // Rebuild the pushed Origami theme now that fonts exist.
         EditorTheme.SyncOrigami(0f);
+    }
+
+    // A font file path loads that file. A family name prefers the requested style and falls back to the family's regular face.
+    private Scribe.FontFile? FindFont(string family, string bundled, Scribe.FontStyle style)
+    {
+        if (string.IsNullOrEmpty(family) || family.Equals(bundled, StringComparison.OrdinalIgnoreCase)) return null;
+        if (IsFontFile(family)) return LoadFontFile(family);
+
+        Scribe.FontFile? regular = null;
+        foreach (Scribe.FontFile font in SystemFonts)
+        {
+            if (!font.FamilyName.Equals(family, StringComparison.OrdinalIgnoreCase)) continue;
+            if (font.Style == style) return font;
+            if (font.Style == Scribe.FontStyle.Regular) regular = font;
+        }
+        if (regular == null) Runtime.Debug.LogWarning($"Font '{family}' is not installed, using {bundled}.");
+        return regular;
+    }
+
+    /// <summary>The faces of a monospace font setting: the bundled font, an installed family or a font file. Faces it does not have are null.</summary>
+    public MonoFontFaces MonoFaces(string name)
+    {
+        Scribe.FontFile? regular = FindFont(name, BundledMonoFontName, Scribe.FontStyle.Regular);
+        if (regular == null) return new(_jetBrainsMono, _jetBrainsMonoMedium, null, null);
+        return new(regular, FindFace(name, Scribe.FontStyle.Bold), FindFace(name, Scribe.FontStyle.Italic), FindFace(name, Scribe.FontStyle.BoldItalic));
+    }
+
+    // Only the exact face, so a family without it gets no stand in.
+    private Scribe.FontFile? FindFace(string family, Scribe.FontStyle style)
+    {
+        if (IsFontFile(family)) return null;
+        foreach (Scribe.FontFile font in SystemFonts)
+            if (font.Style == style && font.FamilyName.Equals(family, StringComparison.OrdinalIgnoreCase)) return font;
+        return null;
+    }
+
+    /// <summary>Whether a font setting holds a path to a font file rather than a family name.</summary>
+    public static bool IsFontFile(string name)
+        => name.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".otf", StringComparison.OrdinalIgnoreCase);
+
+    private Scribe.FontFile? LoadFontFile(string path)
+    {
+        if (_fileFonts.TryGetValue(path, out Scribe.FontFile? cached)) return cached;
+        Scribe.FontFile? font = null;
+        try
+        {
+            using FileStream stream = File.OpenRead(path);
+            font = new Scribe.FontFile(stream);
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogWarning($"Font file '{path}' could not be loaded: {ex.Message}");
+        }
+        _fileFonts[path] = font;
+        return font;
     }
 
     private static Prowl.Scribe.FontFile? LoadBundledFont(string fileName)
@@ -430,7 +542,7 @@ public class EditorApplication : Game
             }
             else if (ShortcutManager.IsPressed("Global/NewScene"))
             {
-                EditorSceneManager.NewScene();
+                EditorSceneManager.ConfirmSceneChange(EditorSceneManager.NewScene);
             }
             else if (ShortcutManager.IsPressed("Global/Undo"))
             {
@@ -456,6 +568,7 @@ public class EditorApplication : Game
 
         TickPerfStats((float)Time.UnscaledDeltaTime);
         Selection.UpdatePing((float)Time.UnscaledDeltaTime);
+        GUI.Panels.ProjectPanel.RevealPings();
         EditorTheme.TickOrigami((float)Time.UnscaledDeltaTime);
 
         // Push the editor's Origami theme and begin frame
@@ -471,7 +584,10 @@ public class EditorApplication : Game
 
         // Save system update (Ctrl+S + auto-save) - after theme push so toasts get icons
         using (FrameStats.Editor.Scope())
+        {
             SaveManager.Update((float)Time.UnscaledDeltaTime);
+            Preferences.ApplyFileChanges();
+        }
 
         // Detect project opened (launcher closed since last frame)
         if (!ProjectLauncher.IsOpen && !_introClosing && _launcherWasOpen)
@@ -479,7 +595,6 @@ public class EditorApplication : Game
             _introTime = 0;
             _introClosing = true;
             _launcherWasOpen = false;
-            GUI.EditorGuide.ArmAutoStart(); // let the tour play once for this freshly-opened project
             if (Project.Current != null)
             {
                 using FrameStatScope projectStats = FrameStats.Editor.Scope();
@@ -602,6 +717,15 @@ public class EditorApplication : Game
         GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime, showStarsAndComets: false);
 
         HandlePlayModeShortcuts();
+        if (s_pauseRequested)
+        {
+            s_pauseRequested = false;
+            if (Application.IsPlaying && !Application.IsPaused)
+            {
+                Application.IsPaused = true;
+                Toasts.Warning(Loc.Get("play.paused_on_error"), Loc.Get("play.paused_on_error_msg"));
+            }
+        }
         DrawHeader(paper, w, h);
 
         float pad = EditorTheme.DockPadding;
@@ -611,10 +735,8 @@ public class EditorApplication : Game
 
         DrawStatusBar(paper, w, h);
 
-        // First-run UI tour (once per user; reset from Preferences > General).
-        GUI.EditorGuide.SetDockSpace(_dockSpace);
         if (Project.Current != null && !ProjectLauncher.IsOpen && _introTime >= IntroDuration)
-            GUI.EditorGuide.TryAutoStart(GUI.EditorGuide.WelcomeTour());
+            GUI.EditorSetup.ShowOnFirstLaunch();
     }
 
     // Shared height for the header's interactive elements (menu bar + right-side status chips) so
@@ -641,8 +763,8 @@ public class EditorApplication : Game
 
     private void HandlePlayModeShortcuts()
     {
-        if (ShortcutManager.TryConsume("Game/TogglePlay")) RequestTogglePlayMode();
-        else if (ShortcutManager.TryConsume("Game/TogglePause")) TogglePause();
+        if (ShortcutManager.TryConsume("Global/TogglePlay")) RequestTogglePlayMode();
+        else if (ShortcutManager.TryConsume("Global/TogglePause")) TogglePause();
     }
 
     /// <summary>Centered rounded "pill" holding the play / pause / step transport buttons.</summary>
@@ -659,14 +781,14 @@ public class EditorApplication : Game
             // amber Pause when paused; step stays neutral.
             ButtonBuilder play = Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.Stop_I : EditorIcons.Play_I)
                 .OnClick(() => { paper.ClearFocus(); RequestTogglePlayMode(); })
-                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPlaying ? "game.stop" : "game.play"), "Game/TogglePlay"))
+                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPlaying ? "game.stop" : "game.play"), "Global/TogglePlay"))
                 .Style(ButtonStyle.Ghost);
             if (Application.IsPlaying) play.Danger(); else play.Success();
             play.Show();
 
             ButtonBuilder pause = Origami.IconButton(paper, "btn_pause", EditorIcons.Pause_I,
                 () => { paper.ClearFocus(); TogglePause(); })
-                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPaused ? "game.resume" : "game.pause"), "Game/TogglePause"))
+                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPaused ? "game.resume" : "game.pause"), "Global/TogglePause"))
                 .Style(ButtonStyle.Ghost);
             if (Application.IsPaused) pause.Warning();
             pause.Show();
@@ -790,8 +912,7 @@ public class EditorApplication : Game
     /// <summary> Ends the editor GUI frame: draws the on-boarding guide overlay, renders Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips), plays the intro animation, and pops the Origami theme. </summary>
     public override void EndGui(Paper paper)
     {
-        // On-boarding guide overlay (above panels/header, below Origami's popovers/toasts).
-        GUI.EditorGuide.Draw(paper, (float)Time.UnscaledDeltaTime);
+        GUI.Popups.RenameOverlay.EndFrame();
 
         // Render all Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips)
         OrigamiUI.Origami.EndFrame(paper);
@@ -870,8 +991,6 @@ public class EditorApplication : Game
                 .Hovered.TextColor(EditorTheme.Ink500).End()
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
                 .Tooltip(Loc.Get("header.theme_settings"))
-                .OnPostLayout((h2, rect) => GUI.EditorGuide.RegisterThemeButton(
-                    (float)rect.Min.X, (float)rect.Min.Y, (float)rect.Size.X, (float)rect.Size.Y))
                 .OnClick(0, (_, _) =>
                 {
                     OpenPanel(typeof(GUI.Panels.PreferencesPanel));
@@ -1090,7 +1209,7 @@ public class EditorApplication : Game
     /// <summary>Open a file dialog with editor config (icons, quick access, drives).</summary>
     public static void OpenFileDialog(FileDialogMode mode, Action<string?> onComplete,
         string? startPath = null, string[]? filters = null, string[]? filterLabels = null)
-        => OrigamiUI.FileDialog.Open(mode, onComplete, startPath, filters, filterLabels, FileDialogConfig);
+        => OrigamiUI.FileDialog.Open(mode, onComplete, startPath ?? Project.Current?.RootPath, filters, filterLabels, FileDialogConfig);
 
     private const int BarCount = 10;
 
@@ -1333,12 +1452,11 @@ public class EditorApplication : Game
             "Noto Sans",           // Linux
         ];
 
-        Scribe.FontFile[] systemFonts = [.. PaperInstance.EnumerateSystemFonts()];
         int loaded = 0;
 
         foreach (string family in fallbackFamilies)
         {
-            Scribe.FontFile? font = systemFonts.FirstOrDefault(f =>
+            Scribe.FontFile? font = SystemFonts.FirstOrDefault(f =>
                 f.FamilyName.Equals(family, StringComparison.OrdinalIgnoreCase)
                 && f.Style == Prowl.Scribe.FontStyle.Regular);
 
@@ -1472,7 +1590,7 @@ public class EditorApplication : Game
         string edit = Loc.Get("menu.edit");
 
         // File menu
-        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.new_scene")}", () => EditorSceneManager.NewScene());
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.new_scene")}", () => EditorSceneManager.ConfirmSceneChange(EditorSceneManager.NewScene));
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.open_scene")}", () =>
         {
             EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
@@ -1480,7 +1598,7 @@ public class EditorApplication : Game
                 if (path == null || Project.Current == null) return;
                 string rel = EditorAssetBackend.NormalizePath(
                     System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
-                EditorSceneManager.OpenScene(rel);
+                EditorSceneManager.ConfirmSceneChange(() => EditorSceneManager.OpenScene(rel));
             }, Project.Current?.AssetsPath,
                ["*.scene"], [Loc.Get("editor.filter_scene")]);
         });
@@ -1620,8 +1738,6 @@ public class EditorApplication : Game
         catch (Exception ex) { Runtime.Debug.LogWarning($"Failed to clear layout: {ex.Message}"); }
         SetDockLayout(CreateDefaultLayout());
 
-        EditorSettings.Instance.SeenGuides.Clear();
-        EditorSettings.Instance.Save();
     }
 
     /// <summary>Replace the whole docked layout, dropping any maximized panel along with the old one.</summary>
@@ -1655,6 +1771,13 @@ public class EditorApplication : Game
             string json = System.IO.File.ReadAllText(path);
             return DockSerializer.Deserialize(json, _dockSpace.FloatingWindows, (typeName, state) =>
             {
+                // The profiler's panels hold its views, so they come from it rather than a default constructor.
+                if (RenderProfiler?.Windows is { } profiler)
+                {
+                    if (typeName == typeof(LiveProfilerPanel).FullName) return profiler.Live;
+                    if (typeName == typeof(SnapshotViewerPanel).FullName) return profiler.Snapshots;
+                    if (typeName == typeof(ResourcePreviewPanel).FullName) return null;
+                }
                 Type? type = null;
                 foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
                 {
@@ -1770,6 +1893,18 @@ public class EditorApplication : Game
         Application.TargetFrameRate = limit;
     }
 
+    // Logs can come from any thread, so the pause itself waits for the next frame.
+    private static volatile bool s_pauseRequested;
+
+    private static void PauseOnLog(string message, DebugStackTrace? stackTrace, LogSeverity severity)
+    {
+        if (!Application.IsPlaying || Application.IsPaused) return;
+        PauseOnLog mode = Preferences.Get<PlayModePreferences>().PauseOn;
+        if (mode == GUI.Panels.PauseOnLog.ErrorsAndExceptions && severity is LogSeverity.Error or LogSeverity.Exception
+            || mode == GUI.Panels.PauseOnLog.ExceptionsOnly && severity == LogSeverity.Exception)
+            s_pauseRequested = true;
+    }
+
     private void EnterPlayMode()
     {
         if (Application.IsPlaying) return;
@@ -1784,6 +1919,11 @@ public class EditorApplication : Game
 
         Scene scene = Runtime.Resources.Scene.Current;
         if (scene == null) return;
+
+        PlayModePreferences prefs = Preferences.Get<PlayModePreferences>();
+        if (prefs.SaveSceneOnPlay && EditorSceneManager.IsDirty && EditorSceneManager.CurrentScenePath != null)
+            EditorSceneManager.Save();
+        if (prefs.ClearConsoleOnPlay) ConsolePanel.Clear();
 
         // Save active tab (to restore on stop)
         SaveActiveTab();
@@ -1841,14 +1981,15 @@ public class EditorApplication : Game
 
         // Load with full lifecycle (Enable -> OnEnable/Start will fire)
         Runtime.Resources.Scene.Load(playScene);
-        Undo.Clear();
+        if (prefs.KeepUndoHistory) Undo.ClearPending();
+        else Undo.Clear();
 
         // Apply physics settings to the new scene
         try { EditorRegistries.GetSettings<PhysicsSettings>().Apply(); } catch { }
 
-        // Focus the Game View tab
-        FocusPanel(typeof(GameViewPanel));
-        if (FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel { MaximizeOnPlay: true } gameView)
+        if (prefs.GameViewOnPlay != GameViewOnPlay.Nothing)
+            FocusPanel(typeof(GameViewPanel));
+        if (prefs.GameViewOnPlay == GameViewOnPlay.Maximize && FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel gameView)
             _maximizedForPlay = _panelMaximizer.Maximize(gameView);
 
         // The editor's vsync and frame limit are its preference, not the game's, so play starts
@@ -1894,7 +2035,8 @@ public class EditorApplication : Game
                 Runtime.Resources.Scene.EndSessionOnSwap = true;
                 Runtime.Resources.Scene.Load(restoredScene);
             }
-            Undo.Clear();
+            if (Preferences.Get<PlayModePreferences>().KeepUndoHistory) Undo.ClearPending();
+            else Undo.Clear();
             _savedEditorScene = null;
         }
 

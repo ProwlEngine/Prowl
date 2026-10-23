@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -22,21 +23,37 @@ namespace Prowl.Editor.Inspector;
 public enum TerrainTab { Height, Paint, Holes, Details, Trees, Settings }
 public enum HeightTool { Raise, Lower, Flatten, Smooth }
 
+/// <summary>The terrain brush values kept between editor sessions.</summary>
+public sealed class TerrainBrushSettings
+{
+    public TerrainTab ActiveTab { get; set; } = TerrainTab.Height;
+    public HeightTool ActiveHeightTool { get; set; } = HeightTool.Raise;
+    public float BrushSize { get; set; } = 5f;
+    public float BrushStrength { get; set; } = 0.5f;
+    public float BrushFalloff { get; set; } = 0.5f;
+    public float FlattenHeight { get; set; } = 0.5f;
+    public float TreeBrushSize { get; set; } = 10f;
+    public int TreesPerStroke { get; set; } = 3;
+}
+
 [CustomEditor(typeof(TerrainComponent))]
 public class TerrainEditor : CustomEditor
 {
-    // Static brush state persists across selection changes
-    public static TerrainTab ActiveTab = TerrainTab.Height;
-    public static HeightTool ActiveHeightTool = HeightTool.Raise;
-    public static float BrushSize = 5f;
-    public static float BrushStrength = 0.5f;
-    public static float BrushFalloff = 0.5f;
-    public static float FlattenHeight = 0.5f;
+    private static TerrainBrushSettings Brush => SceneToolManager.Settings<TerrainBrushSettings>();
+
+    // Brush state persists across selection changes and editor sessions
+    public static TerrainTab ActiveTab { get => Brush.ActiveTab; set => Brush.ActiveTab = value; }
+    public static HeightTool ActiveHeightTool { get => Brush.ActiveHeightTool; set => Brush.ActiveHeightTool = value; }
+    public static float BrushSize { get => Brush.BrushSize; set => Brush.BrushSize = value; }
+    public static float BrushStrength { get => Brush.BrushStrength; set => Brush.BrushStrength = value; }
+    public static float BrushFalloff { get => Brush.BrushFalloff; set => Brush.BrushFalloff = value; }
+    public static float FlattenHeight { get => Brush.FlattenHeight; set => Brush.FlattenHeight = value; }
+    public static float TreeBrushSize { get => Brush.TreeBrushSize; set => Brush.TreeBrushSize = value; }
+    public static int TreesPerStroke { get => Brush.TreesPerStroke; set => Brush.TreesPerStroke = value; }
+
     public static int PaintLayer = 0;
     public static int ActiveDetailIndex = 0;
     public static int ActiveTreePrototype = 0;
-    public static float TreeBrushSize = 10f;
-    public static int TreesPerStroke = 3;
     public static bool TreeEraseMode = false;
 
     // Instance state

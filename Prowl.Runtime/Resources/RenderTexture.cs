@@ -70,6 +70,11 @@ public sealed class RenderTexture : Asset, ISerializable
 
         if (formats.Length > 8)
             throw new ArgumentException($"A render texture supports 0-8 color attachments, got {formats.Length}.", nameof(formats));
+        foreach (TextureFormat format in formats)
+        {
+            if (GraphicsFormats.IsCompressed(format))
+                throw new ArgumentException($"{format} is compressed and cannot be rendered into.", nameof(formats));
+        }
 
         _width = Math.Max(1, width);
         _height = Math.Max(1, height);

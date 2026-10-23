@@ -1,9 +1,11 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Echo;
+using Prowl.Editor.GraphEditor;
 using Prowl.Editor.Inspector;
 using Prowl.OrigamiUI;
 using Prowl.Runtime;
@@ -20,18 +22,25 @@ namespace Prowl.Editor.Test;
 /// </summary>
 public class AnimationGraphEditorTests
 {
+    // Node editors come from the registry, which names nodes, makes sub graph outputs and checks parameters.
+    public AnimationGraphEditorTests() => EditorRegistries.Initialize();
+
     private static AnimationGraphView ViewOver(AnimationGraph graph)
     {
-        var view = new AnimationGraphView { Graph = graph };
+        var view = new AnimationGraphView { Records = new AnimationGraphDomain(graph) };
         view.Sync();
         return view;
     }
 
     private static ConnectionRequest Wire(string from, string to, int pin)
-        => new(from, AnimationGraphView.OutputPort, to, AnimationGraphView.PinId(pin));
+        => new(from, AnimationGraphDomain.OutputPort, to, AnimationGraphDomain.PinId(pin));
 
     private static ConnectionRequest WireToSocket(string from, string to)
-        => new(from, AnimationGraphView.OutputPort, to, AnimationGraphView.PinId(0), toPlaceholder: true);
+        => new(from, AnimationGraphDomain.OutputPort, to, AnimationGraphDomain.PinId(0), toPlaceholder: true);
+
+    /// <summary>Copies nodes into the graph's own scope, offset from where they were, the way duplicate does.</summary>
+    private static List<GraphNodeRecord> Copy(AnimationGraphView view, GraphNodeRecord[] records, Float2 offset)
+        => view.Animation!.Paste(view.Animation.Capture(records), offset, view.Scope);
 
     // ---- pins -------------------------------------------------------------------------------
 
@@ -106,8 +115,8 @@ public class AnimationGraphEditorTests
         view.Connect(WireToSocket(pose.Id, blend.Id));
         int wired = blend.Inputs.Count;
 
-        view.Disconnect(new GraphConnection(pose.Id, AnimationGraphView.OutputPort, blend.Id, AnimationGraphView.PinId(2)));
-        view.Disconnect(new GraphConnection(pose.Id, AnimationGraphView.OutputPort, blend.Id, AnimationGraphView.PinId(1)));
+        view.Disconnect(new GraphConnection(pose.Id, AnimationGraphDomain.OutputPort, blend.Id, AnimationGraphDomain.PinId(2)));
+        view.Disconnect(new GraphConnection(pose.Id, AnimationGraphDomain.OutputPort, blend.Id, AnimationGraphDomain.PinId(1)));
 
         Assert.True(wired > blend.Inputs.Count);
         Assert.Equal(AnimationNodeRegistry.Get(AnimationNodeIds.Blend1D)!.VariadicStart, blend.Inputs.Count);
@@ -142,8 +151,8 @@ public class AnimationGraphEditorTests
     private static (GraphNodeRecord Machine, GraphStateRecord State, GraphNodeRecord Clip) MachineWithState(AnimationGraph graph, AnimationGraphView view)
     {
         GraphNodeRecord machine = view.Add(AnimationNodeIds.StateMachine, new Float2(0, 0))!;
-        var states = new AnimationGraphStateView { Machine = machine };
-        states.Sync(graph);
+        var states = new AnimationGraphStateView { Animation = view.Animation, Machine = machine };
+        states.Sync();
         GraphStateRecord state = states.Add(new Float2(0, 0))!;
 
         view.Scope = state.Id;
@@ -239,7 +248,7 @@ public class AnimationGraphEditorTests
         view.Sync();
         view.Connect(Wire(pose.Id, speed.Id, 0));
 
-        GraphNodeRecord copy = view.Duplicate(speed)!;
+        GraphNodeRecord copy = Copy(view, [speed], new Float2(28, 28)).Single();
 
         Assert.NotEqual(speed.Id, copy.Id);
         Assert.Equal(2.5f, copy.Properties["Default"].Number);
@@ -283,8 +292,8 @@ public class AnimationGraphEditorTests
         view.Sync();
 
         // Pin 0 of a 1D blend is the number that drives it, not a pose.
-        Assert.False(view.Validate(Wire(pose.Id, blend.Id, 0)));
-        Assert.True(view.Validate(WireToSocket(pose.Id, blend.Id)));
+        Assert.False(view.CanConnect(Wire(pose.Id, blend.Id, 0)));
+        Assert.True(view.CanConnect(WireToSocket(pose.Id, blend.Id)));
     }
 
     [Fact]
@@ -302,8 +311,8 @@ public class AnimationGraphEditorTests
         view.Connect(Wire(a.Id, b.Id, 0));
         view.Connect(Wire(b.Id, c.Id, 0));
 
-        Assert.False(view.Validate(Wire(c.Id, b.Id, 0)));
-        Assert.False(view.Validate(Wire(b.Id, b.Id, 0)));
+        Assert.False(view.CanConnect(Wire(c.Id, b.Id, 0)));
+        Assert.False(view.CanConnect(Wire(b.Id, b.Id, 0)));
     }
 
     // ---- what the validator notices ---------------------------------------------------------
@@ -352,7 +361,7 @@ public class AnimationGraphEditorTests
         idle.Transitions.Add(new GraphTransitionRecord { To = "Walk" });
 
         states.Invalidate();
-        states.Sync(graph);
+        states.Sync();
         states.Rename(walk, "Run");
 
         Assert.Equal("Run", walk.Name);
@@ -373,7 +382,7 @@ public class AnimationGraphEditorTests
         Assert.True(idle.IsDefault);
 
         states.Invalidate();
-        states.Sync(graph);
+        states.Sync();
         states.Delete(new[] { states.Nodes.First(n => n.Id == AnimationGraphStateView.StateId("Idle")) },
             System.Array.Empty<GraphConnection>());
 
@@ -393,7 +402,7 @@ public class AnimationGraphEditorTests
         walk.Name = "Walk";
 
         states.Invalidate();
-        states.Sync(graph);
+        states.Sync();
 
         string from = AnimationGraphStateView.StateId("Idle"), to = AnimationGraphStateView.StateId("Walk");
         Assert.True(states.CanConnect(new ConnectionRequest(from, "", to, "")));
@@ -416,8 +425,8 @@ public class AnimationGraphEditorTests
         AnimationGraphView view = ViewOver(graph);
         GraphNodeRecord machine = view.Add(AnimationNodeIds.StateMachine, new Float2(0, 0))!;
 
-        var states = new AnimationGraphStateView { Machine = machine };
-        states.Sync(graph);
+        var states = new AnimationGraphStateView { Animation = view.Animation, Machine = machine };
+        states.Sync();
         return (graph, machine, states);
     }
 
@@ -499,7 +508,7 @@ public class AnimationGraphEditorTests
         view.Connect(Wire(clip.Id, speed.Id, 0));
         view.Connect(Wire(outside.Id, speed.Id, 1));
 
-        List<GraphNodeRecord> copies = view.Copy(new[] { clip, speed }, new Float2(28, 28));
+        List<GraphNodeRecord> copies = Copy(view, [clip, speed], new Float2(28, 28));
 
         GraphNodeRecord clipCopy = copies.Single(c => c.Type == AnimationNodeIds.Clip);
         GraphNodeRecord speedCopy = copies.Single(c => c.Type == AnimationNodeIds.SpeedScale);
@@ -520,7 +529,7 @@ public class AnimationGraphEditorTests
         AnimationGraphView view = ViewOver(graph);
         (GraphNodeRecord machine, GraphStateRecord state, _) = MachineWithState(graph, view);
 
-        GraphNodeRecord copy = view.Copy(new[] { machine }, new Float2(0, 0)).Single();
+        GraphNodeRecord copy = Copy(view, [machine], new Float2(0, 0)).Single();
         GraphStateRecord copiedState = copy.States.Single();
         Assert.NotEqual(state.Id, copiedState.Id);
 
@@ -537,11 +546,11 @@ public class AnimationGraphEditorTests
         var graph = new AnimationGraph();
         AnimationGraphView view = ViewOver(graph);
         (GraphNodeRecord machine, _, _) = MachineWithState(graph, view);
-        AnimationGraphView.Fragment clipboard = view.Capture(new[] { machine });
+        GraphFragment<GraphNodeRecord> clipboard = view.Animation!.Capture([machine]);
 
         var other = new AnimationGraph();
         AnimationGraphView otherView = ViewOver(other);
-        GraphNodeRecord pasted = otherView.Paste(clipboard, new Float2(0, 0)).Single();
+        GraphNodeRecord pasted = otherView.Animation!.Paste(clipboard, new Float2(0, 0), "").Single();
 
         Assert.Equal(3, other.Nodes.Count);
         Assert.NotNull(other.OwnedNode(pasted.States.Single().Id, AnimationNodeIds.StateOutput));
@@ -553,11 +562,52 @@ public class AnimationGraphEditorTests
         var graph = new AnimationGraph();
         AnimationGraphView view = ViewOver(graph);
         (GraphNodeRecord machine, _, _) = MachineWithState(graph, view);
-        machine.States.Add(new GraphStateRecord { Id = AnimationGraphView.NewStateId(), Name = "Any State", IsAny = true });
+        machine.States.Add(new GraphStateRecord { Id = view.Animation!.NewId(IdKind.Scope), Name = "Any State", IsAny = true });
 
-        GraphNodeRecord copy = view.Copy(new[] { machine }, new Float2(0, 0)).Single();
+        GraphNodeRecord copy = Copy(view, [machine], new Float2(0, 0)).Single();
 
         Assert.Single(copy.States, s => s.IsAny);
+    }
+
+    [Fact]
+    public void ACopiedNodeLetsGoOfAnExposedSettingWiredFromOutside()
+    {
+        var graph = new AnimationGraph();
+        AnimationGraphView view = ViewOver(graph);
+
+        GraphNodeRecord weight = view.Add(AnimationNodeIds.ConstFloat, new Float2(0, 0))!;
+        GraphNodeRecord look = view.Add(AnimationNodeIds.LookAt, new Float2(0, 0))!;
+        look.PropertyInputs["Weight"] = string.Empty;
+        view.Invalidate();
+        view.Sync();
+
+        view.Connect(new ConnectionRequest(weight.Id, AnimationGraphDomain.OutputPort, look.Id, AnimationGraphDomain.PropertyPort("Weight")));
+        Assert.Equal(weight.Id, look.PropertyInputs["Weight"]);
+
+        GraphNodeRecord copy = Copy(view, [look], new Float2(0, 0)).Single();
+
+        // Still exposed, but nothing outside the copy feeds it.
+        Assert.True(copy.PropertyInputs.ContainsKey("Weight"));
+        Assert.Equal(string.Empty, copy.PropertyInputs["Weight"]);
+    }
+
+    // ---- undo --------------------------------------------------------------------------------
+
+    [Fact]
+    public void ASnapshotPutsTheRecordsBackOntoTheSameAsset()
+    {
+        var graph = new AnimationGraph();
+        var domain = new AnimationGraphDomain(graph);
+        GraphNodeRecord pose = domain.Create(AnimationNodeIds.Clip, new Float2(0, 0), "")!;
+        EchoObject before = domain.Snapshot();
+
+        domain.Delete([pose], []);
+        Assert.Empty(graph.Nodes);
+        Assert.Equal(string.Empty, graph.RootNode);
+
+        Assert.True(domain.Restore(before, compiles: true));
+        Assert.Equal(pose.Id, graph.Nodes.Single().Id);
+        Assert.Equal(pose.Id, graph.RootNode);
     }
 
     // ---- parameter nodes --------------------------------------------------------------------
@@ -575,7 +625,7 @@ public class AnimationGraphEditorTests
         GraphNodeRecord parameter = view.Add(AnimationNodeIds.Parameter, new Float2(0, 0))!;
         parameter.Properties["Name"] = NodeValue.FromText("Input");
 
-        Assert.Equal(expected, view.OutputKind(parameter));
+        Assert.Same(AnimationGraphDomain.KindOf(expected), view.Animation!.OutputKind(parameter, AnimationGraphDomain.OutputPort));
     }
 
     [Fact]
@@ -591,6 +641,6 @@ public class AnimationGraphEditorTests
         view.Invalidate();
         view.Sync();
 
-        Assert.False(view.Validate(Wire(parameter.Id, blend.Id, 0)));
+        Assert.False(view.CanConnect(Wire(parameter.Id, blend.Id, 0)));
     }
 }

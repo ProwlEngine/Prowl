@@ -575,7 +575,7 @@ public class InspectorPanel : DockPanel
                                 case Echo.EchoType.String:
                                     EditorGUI.Row(paper, $"insp_set_{key}", PropertyGridUtils.NicifyName(key), () =>
                                         Origami.TextField(paper, $"insp_set_{key}_v", val.StringValue,
-                                            v => { settings[key] = new Echo.EchoObject(v); }).Show());
+                                            v => { settings[key] = new Echo.EchoObject(v); }).CommitOnEnter().Show());
                                     break;
                             }
                         }
@@ -770,7 +770,9 @@ public class InspectorPanel : DockPanel
             _ => ".asset"
         };
 
-        string fileName = $"{item.Name}{ext}";
+        // Never over an existing file, and never a path segment from the sub-asset's name.
+        string absFolder = AssetCreateMenu.GetAbsoluteFolder(parentDir);
+        string fileName = AssetCreateMenu.FindUniqueName(absFolder, Utils.EditorUtils.SafeFileName(item.Name, "Extracted"), ext);
         string relativePath = string.IsNullOrEmpty(parentDir) ? fileName : $"{parentDir}/{fileName}";
 
         // Written as the root, so in full, with whatever it references kept as references.

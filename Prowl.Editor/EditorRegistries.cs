@@ -6,6 +6,7 @@ using System.Reflection;
 
 using Prowl.Echo;
 using Prowl.Editor.Core;
+using Prowl.Editor.GraphEditor;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.Registries;
@@ -71,7 +72,7 @@ public static class EditorRegistries
     private static readonly Dictionary<Type, PropertyEditor> _propertyEditorCache = [];
     private static readonly Dictionary<Type, Type> _assetEditorTypes = [];
     private static readonly Dictionary<Type, AssetImporterEditor> _assetEditorCache = [];
-    private static readonly Dictionary<Type, Type> _animationNodeEditorTypes = [];
+    private static readonly Dictionary<Type, Type> _nodeEditorTypes = [];
 
     // Keyed by importer type name, matching AssetEntry.ImporterType.
     private static readonly Dictionary<string, Type> _assetEditorTypesByImporter = [];
@@ -120,7 +121,7 @@ public static class EditorRegistries
         _customEditorTypes.Clear(); _customEditorCache.Clear();
         _propertyEditorTypes.Clear(); _propertyEditorCache.Clear();
         _assetEditorTypes.Clear(); _assetEditorCache.Clear();
-        _animationNodeEditorTypes.Clear(); AnimationNodeEditor.ClearCache();
+        _nodeEditorTypes.Clear(); NodeEditorCaches.ClearAll();
         _assetEditorTypesByImporter.Clear(); _assetEditorByImporterCache.Clear();
 
         _importersByExt.Clear();
@@ -136,6 +137,7 @@ public static class EditorRegistries
         _dropHandlers.Clear();
 
         _settingsEntries.Clear();
+        Preferences.Clear();
         Build.TargetRegistry.Shared.ResetToBuiltIns();
 
         MenuItemAttribute.Clear();
@@ -175,13 +177,14 @@ public static class EditorRegistries
                 ScanCustomEditor(type);
                 ScanPropertyEditor(type);
                 ScanAssetEditor(type);
-                ScanAnimationNodeEditor(type);
+                ScanNodeEditor(type);
                 ScanImporter(type);
                 ScanComponentIcon(type);
                 ScanThumbnailGenerator(type);
                 ScanSceneTool(type);
                 ScanSceneDropHandler(type);
                 ScanProjectSettings(type);
+                Preferences.Scan(type);
                 ScanAssetMenuEntry(type);
                 ScanBuildTargetProvider(type);
 
@@ -239,11 +242,11 @@ public static class EditorRegistries
         if (target != null) _customEditorTypes[target] = type;
     }
 
-    private static void ScanAnimationNodeEditor(Type type)
+    private static void ScanNodeEditor(Type type)
     {
-        if (!typeof(AnimationNodeEditor).IsAssignableFrom(type) || type.IsAbstract) return;
-        foreach (AnimationNodeEditorAttribute attr in type.GetCustomAttributes<AnimationNodeEditorAttribute>())
-            _animationNodeEditorTypes[attr.NodeType] = type;
+        if (type.IsAbstract) return;
+        foreach (NodeEditorAttribute attr in type.GetCustomAttributes<NodeEditorAttribute>())
+            _nodeEditorTypes[attr.NodeType] = type;
     }
 
     private static void ScanPropertyEditor(Type type)
@@ -413,12 +416,7 @@ public static class EditorRegistries
         if (!string.IsNullOrEmpty(attr.Extension))
             _customAssetExtensions.Add(NormalizeExt(attr.Extension));
         _assetMenuEntries.Add(entry);
-        MenuItemAttribute.Register("Assets/Create/" + attr.Name, () =>
-        {
-            var task = new Core.Tasks.CreateAssetTask();
-            task.TaskType = Core.Tasks.CreateAssetTask.AssetType.Asset;
-            task.BeginCreateTask(entry, AssetCreateMenu.GetCurrentFolder());
-        }, attr.Order, attr.Icon);
+        MenuItemAttribute.Register("Assets/Create/" + attr.Name, () => AssetCreateMenu.BeginCreateAsset(entry, AssetCreateMenu.GetCurrentFolder()), attr.Order, attr.Icon);
     }
 
     private static void ScanScriptTemplate(MethodInfo method)
@@ -506,12 +504,12 @@ public static class EditorRegistries
     public static PropertyEditor? GetPropertyEditor(Type type) => LookupEditor(type, _propertyEditorTypes, _propertyEditorCache, checkInterfaces: true);
     public static AssetImporterEditor? GetAssetEditor(Type type) => LookupEditor(type, _assetEditorTypes, _assetEditorCache);
 
-    /// <summary>A new instance of the editor registered for an animation graph node type or one it derives from, or null for none.</summary>
-    public static AnimationNodeEditor? CreateAnimationNodeEditor(Type nodeType)
+    /// <summary>A new instance of the graph node editor registered for a node type or one it derives from, or null for none.</summary>
+    public static T? CreateNodeEditor<T>(Type nodeType) where T : class
     {
         for (Type? t = nodeType; t != null; t = t.BaseType)
-            if (_animationNodeEditorTypes.TryGetValue(t, out Type? editorType))
-                return TryCreate(editorType, out AnimationNodeEditor? editor) ? editor : null;
+            if (_nodeEditorTypes.TryGetValue(t, out Type? editorType) && typeof(T).IsAssignableFrom(editorType))
+                return TryCreate(editorType, out T? editor) ? editor : null;
         return null;
     }
 
@@ -703,6 +701,7 @@ public static class EditorRegistries
     /// <summary> Resets all settings entries to their defaults and loads saved values from disk. Called when a project is opened. </summary>
     public static void OnProjectOpened()
     {
+        Preferences.OnProjectOpened();
         foreach (SettingsEntry entry in _settingsEntries)
             entry.Instance.ResetToDefaults();
         LoadSettings();

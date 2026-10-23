@@ -11,6 +11,12 @@ namespace Prowl.Editor.Theming;
 /// <summary>Static editor-background style used when the animated background is off.</summary>
 public enum EditorBackgroundStyle { Nebula, Gradient, Color, Image }
 
+/// <summary>Atlas quality for UI text. Default keeps each element's own quality.</summary>
+public enum TextQualitySetting { Default, Low, Normal, High, Ultra }
+
+/// <summary>How long UI animations take. Off changes things at once.</summary>
+public enum UiAnimationSpeed { Off, Fast, Normal, Slow }
+
 /// <summary>How a background image is fitted to the window, like desktop wallpaper settings.</summary>
 public enum BackgroundImageFit { Fill, Fit, Stretch, Tile, Center }
 
@@ -117,6 +123,27 @@ public class EditorThemeData
     /// <summary> Name of the default bold UI font. </summary>
     public string DefaultBoldFontName { get; set; } = "Geist";
 
+    /// <summary> Name of the monospace font, used for code, paths and the console. </summary>
+    public string MonoFontName { get; set; } = "JetBrains Mono";
+
+    /// <summary> Extra space between letters in pixels, added to all UI text. </summary>
+    public float LetterSpacing { get; set; }
+
+    /// <summary> Line height multiplier for all UI text. </summary>
+    public float LineHeightScale { get; set; } = 1f;
+
+    /// <summary> Atlas quality for UI text. </summary>
+    public TextQualitySetting TextQuality { get; set; } = TextQualitySetting.Default;
+
+    /// <summary> Whether UI text uses the font's ligatures. </summary>
+    public bool Ligatures { get; set; } = true;
+
+    /// <summary> How many points smaller secondary text is than the base font size. </summary>
+    public float SmallFontDelta { get; set; } = 2f;
+
+    /// <summary> Scale of icons inside their boxes. </summary>
+    public float IconScale { get; set; } = 1f;
+
     /// <summary> User interface scale factor. </summary>
     public float UserScale { get; set; } = 1f;
 
@@ -156,6 +183,19 @@ public class EditorThemeData
     public bool DropShadows { get; set; } = true;
     /// <summary> Whether accent elements have a glow effect. </summary>
     public bool AccentGlow { get; set; } = true;
+    /// <summary> How long UI animations take. </summary>
+    public UiAnimationSpeed UiAnimations { get; set; } = UiAnimationSpeed.Normal;
+
+    /// <summary> Multiplier for animation lengths matching <see cref="UiAnimations"/>. </summary>
+    [JsonIgnore]
+    public float AnimationScale => UiAnimations switch
+    {
+        UiAnimationSpeed.Off => 0f,
+        UiAnimationSpeed.Fast => 0.5f,
+        UiAnimationSpeed.Slow => 1.6f,
+        _ => 1f,
+    };
+
     /// <summary> Whether anti-aliasing is enabled. </summary>
     public bool AntiAliasing { get; set; } = true;
 
@@ -184,6 +224,42 @@ public class EditorThemeData
     public BackgroundImageFit BackgroundImageFit { get; set; } = BackgroundImageFit.Fill;
     /// <summary> How much the background image is darkened, from 0 to 1. </summary>
     public float BackgroundImageDim { get; set; } = 0.3f;
+    /// <summary> Blur radius over the background image in pixels, 0 for none. </summary>
+    public float BackgroundImageBlur { get; set; }
+
+    // Interface colours that replace the ones derived from the ramps. Empty keeps the derived colour.
+    /// <summary> Hover highlight color as hex, empty to follow the accent. </summary>
+    public string HoverColor { get; set; } = "";
+    /// <summary> Selection color as hex, empty to follow the accent. </summary>
+    public string SelectionColor { get; set; } = "";
+    /// <summary> Focus ring color as hex, empty to follow the accent. </summary>
+    public string FocusColor { get; set; } = "";
+    /// <summary> Scrollbar color as hex, empty to follow the text color. </summary>
+    public string ScrollbarColor { get; set; } = "";
+    /// <summary> Panel splitter color as hex, empty to follow the borders. </summary>
+    public string SplitterColor { get; set; } = "";
+    /// <summary> Tooltip background color as hex, empty to follow the popovers. </summary>
+    public string TooltipColor { get; set; } = "";
+
+    // Tabs and scrollbars
+    /// <summary> Scrollbar thickness in pixels. </summary>
+    public float ScrollbarSize { get; set; } = 6f;
+    /// <summary> Whether scrollbars only show while the pointer is over their view. </summary>
+    public bool AutoHideScrollbars { get; set; } = true;
+    /// <summary> How docked panel tabs are drawn. </summary>
+    public TabStyle TabStyle { get; set; } = TabStyle.Underline;
+    /// <summary> Which docked panel tabs show a close button. </summary>
+    public TabCloseButtons TabCloseButtons { get; set; } = TabCloseButtons.ActiveTab;
+    /// <summary> Whether only the last clicked panel keeps the accent on its tab. </summary>
+    public bool HighlightFocusedPanel { get; set; } = true;
+
+    // Play mode tint: a colour wash over the editor backdrop while the game runs, so play mode is hard to miss.
+    /// <summary> Whether the editor backdrop is tinted while playing. </summary>
+    public bool PlayModeTint { get; set; } = true;
+    /// <summary> Play mode tint color as hex. </summary>
+    public string PlayModeTintColor { get; set; } = "#FF5A5A";
+    /// <summary> Strength of the play mode tint, from 0 to 1. </summary>
+    public float PlayModeTintStrength { get; set; } = 0.2f;
 
     // Default ramp stops (RGB) = Origami's ramps. Customization is applied on top of Origami's
     // live theme, preserving each stop's alpha, so translucent glass surfaces stay glass.
@@ -226,7 +302,28 @@ public class EditorThemeData
         t.BorderSoft = KeepAlpha(t.BorderSoft, Neutral.GetStop(1));
         t.BorderStrong = KeepAlpha(t.BorderStrong, Neutral.GetStop(1));
         t.Popover = KeepAlpha(t.Popover, Neutral.GetStop(2));
+
+        // Overrides keep the derived colour's alpha, so translucent overlays stay translucent.
+        t.HoverOverride = Override(HoverColor, t.Hover);
+        t.SelectedOverride = Override(SelectionColor, t.Selected);
+        t.FocusOverride = Override(FocusColor, t.FocusBorder);
+        t.ScrollbarOverride = Override(ScrollbarColor, t.Scrollbar);
+        t.SplitterOverride = Override(SplitterColor, t.Splitter);
+        t.TooltipOverride = Override(TooltipColor, t.TooltipBackground);
     }
+
+    /// <summary>Copies the tab and scrollbar settings onto Origami's metrics.</summary>
+    public void ApplyTo(OrigamiMetrics m)
+    {
+        m.ScrollbarSize = ScrollbarSize;
+        m.AutoHideScrollbars = AutoHideScrollbars;
+        m.TabStyle = TabStyle;
+        m.TabCloseButtons = TabCloseButtons;
+        m.HighlightFocusedPanel = HighlightFocusedPanel;
+    }
+
+    private static Color? Override(string hex, Color derived)
+        => string.IsNullOrEmpty(hex) ? null : KeepAlpha(derived, ColorRamp.ParseHex(hex));
 
     private static void ApplyRamp(OrigamiRamp dst, ColorRamp src)
     {

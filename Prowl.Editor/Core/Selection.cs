@@ -142,6 +142,9 @@ public static class Selection
     /// <summary>Time remaining on the current ping highlight (seconds).</summary>
     public static float PingTimer { get; private set; }
 
+    /// <summary>Counts pings, so a panel can tell a repeated ping of the same GUID from the one it already showed.</summary>
+    public static int PingVersion { get; private set; }
+
     private const float PingDuration = 2.5f;
 
     /// <summary>
@@ -153,6 +156,7 @@ public static class Selection
         if (guid == Guid.Empty) return;
         PingedGuid = guid;
         PingTimer = PingDuration;
+        PingVersion++;
     }
     /// <summary>
     /// Ping an asset or object by GUID - panels that display this GUID should
@@ -161,6 +165,7 @@ public static class Selection
     public static void FastPing(Guid guid)
     {
         if (guid == Guid.Empty) return;
+        if (guid != PingedGuid) PingVersion++;
         PingedGuid = guid;
         PingTimer = 0.05f;
     }

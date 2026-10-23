@@ -718,6 +718,12 @@ public static class Undo
     {
         _undoStack.Clear();
         _redoStack.Clear();
+        ClearPending();
+    }
+
+    /// <summary>Drops edits that were captured but not yet recorded, keeping the undo and redo history.</summary>
+    public static void ClearPending()
+    {
         _pendingSnapshots.Clear();
         _pendingActions.Clear();
         _pendingActionGroups.Clear();

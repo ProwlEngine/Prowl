@@ -35,12 +35,13 @@ public class AssetRefPropertyEditor : PropertyEditor
             target is null && !assetRef.IsEmpty ? $"Missing ({fieldType.Name})" : PropertyGridUtils.DescribeObjectRef(target, fieldType),
             !assetRef.IsEmpty,
             EditorGUI.IsCompatibleDragTarget(fieldType),
-            onClick: () => { if (!assetRef.IsEmpty) Selection.Ping(assetRef.AssetID); },
-            onDoubleClick: () =>
+            // Click pings what is assigned or opens the selector when empty, double click selects what is assigned.
+            onClick: () =>
             {
-                if (!assetRef.IsEmpty) Selection.Ping(assetRef.AssetID);
-                else Pick();
+                if (assetRef.IsEmpty) Pick();
+                else Selection.Ping(assetRef.AssetID);
             },
+            onDoubleClick: () => { if (target != null) Selection.Select(target); },
             onPick: Pick,
             acceptDrops: () =>
             {

@@ -139,7 +139,7 @@ public static class SelectorModal
     {
         using (paper.Row("sel_searchrow").Height(30).Margin(6, 6, 6, 0).Gap(4).Enter())
         {
-            Origami.SearchField(paper, "sel_search", _searchText, v => _searchText = v).Show();
+            Origami.SearchField(paper, "sel_search", _searchText, v => _searchText = v).AutoFocus().Show();
         }
     }
 

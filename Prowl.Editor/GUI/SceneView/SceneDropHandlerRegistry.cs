@@ -43,7 +43,7 @@ internal class SceneAssetDropHandler : ISceneDropHandler
     public void Handle(AssetDragPayload payload, SceneDropContext context)
     {
         AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(payload.AssetGuid);
-        if (entry != null) EditorSceneManager.OpenScene(entry.Path);
+        if (entry != null) EditorSceneManager.ConfirmSceneChange(() => EditorSceneManager.OpenScene(entry.Path));
     }
 }
 

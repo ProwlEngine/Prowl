@@ -33,6 +33,9 @@ public class ShortcutBinding
 
     public ShortcutBinding Clone() => new(Key, Ctrl, Shift, Alt);
 
+    /// <summary>False for a shortcut with no key, which never fires.</summary>
+    public bool IsBound => Key != KeyCode.Unknown;
+
     public bool Equals(ShortcutBinding other)
         => Key == other.Key && Ctrl == other.Ctrl && Shift == other.Shift && Alt == other.Alt;
 }
@@ -50,6 +53,12 @@ public class ShortcutDefinition
 
     /// <summary>The effective binding (override if set, else default).</summary>
     public ShortcutBinding Binding => Override ?? Default;
+
+    /// <summary>Global shortcuts fire anywhere in the editor. Every other category only fires in its own panel.</summary>
+    public bool IsGlobal => Category == ShortcutManager.GlobalCategory;
+
+    /// <summary>True when both can fire on the same key press: one of them is global, or both belong to the same panel.</summary>
+    public bool SharesScopeWith(ShortcutDefinition other) => IsGlobal || other.IsGlobal || Category == other.Category;
 
     /// <summary> Initializes a new shortcut definition. Category is derived from the id path (the part before the last '/'), or "General" if there is no slash. </summary>
     public ShortcutDefinition(string id, string displayName, ShortcutBinding defaultBinding)
@@ -70,7 +79,13 @@ public class ShortcutDefinition
 /// </summary>
 public static class ShortcutManager
 {
+    /// <summary>The category of shortcuts that fire anywhere in the editor.</summary>
+    public const string GlobalCategory = "Global";
+
     private static readonly Dictionary<string, ShortcutDefinition> _shortcuts = [];
+
+    /// <summary>Goes up whenever a binding changes, so anything built from the bindings knows to rebuild.</summary>
+    public static int Version { get; private set; }
     private static bool _overridesLoaded;
 
     /// <summary>
@@ -104,6 +119,7 @@ public static class ShortcutManager
         }
 
         _shortcuts[id] = def;
+        Version++;
     }
 
     // ================================================================
@@ -126,7 +142,7 @@ public static class ShortcutManager
         if (!_shortcuts.TryGetValue(id, out ShortcutDefinition? def)) return false;
 
         ShortcutBinding b = def.Binding;
-        if (!Input.GetKeyDown(b.Key)) return false;
+        if (!b.IsBound || !Input.GetKeyDown(b.Key)) return false;
         if (b.Ctrl != IsPlatformCtrlPressed()) return false;
         if (b.Shift != Input.IsShiftPressed) return false;
         if (b.Alt != Input.IsAltPressed) return false;
@@ -199,16 +215,13 @@ public static class ShortcutManager
         SaveOverrides();
     }
 
-    /// <summary>Find shortcut IDs that conflict with a proposed binding (same key + modifiers).</summary>
-    public static List<string> FindConflicts(string excludeId, ShortcutBinding proposed)
+    /// <summary>The shortcuts that would fire on the same key press as <paramref name="shortcut"/> bound to <paramref name="binding"/>.</summary>
+    public static List<ShortcutDefinition> FindConflicts(ShortcutDefinition shortcut, ShortcutBinding binding)
     {
-        var conflicts = new List<string>();
-        foreach ((string? id, ShortcutDefinition? def) in _shortcuts)
-        {
-            if (id == excludeId) continue;
-            if (def.Binding.Equals(proposed))
-                conflicts.Add(id);
-        }
+        var conflicts = new List<ShortcutDefinition>();
+        foreach (ShortcutDefinition other in _shortcuts.Values)
+            if (binding.IsBound && other != shortcut && other.Binding.Equals(binding) && shortcut.SharesScopeWith(other))
+                conflicts.Add(other);
         return conflicts;
     }
 
@@ -221,13 +234,16 @@ public static class ShortcutManager
     {
         if (_overridesLoaded) return;
         _overridesLoaded = true;
+        ReloadOverrides();
+    }
 
+    /// <summary>Replaces every override with the ones in EditorSettings, after the settings were swapped out.</summary>
+    public static void ReloadOverrides()
+    {
         Dictionary<string, ShortcutBinding> overrides = EditorSettings.Instance.ShortcutOverrides;
-        foreach ((string? id, ShortcutBinding? binding) in overrides)
-        {
-            if (_shortcuts.TryGetValue(id, out ShortcutDefinition? def))
-                def.Override = binding;
-        }
+        foreach ((string id, ShortcutDefinition def) in _shortcuts)
+            def.Override = overrides.TryGetValue(id, out ShortcutBinding? binding) ? binding : null;
+        Version++;
     }
 
     /// <summary>Save current overrides to EditorSettings.</summary>
@@ -241,6 +257,7 @@ public static class ShortcutManager
         }
         EditorSettings.Instance.ShortcutOverrides = overrides;
         EditorSettings.Instance.Save();
+        Version++;
     }
 
     // ================================================================
@@ -252,7 +269,7 @@ public static class ShortcutManager
     /// </summary>
     public static string GetDisplayString(ShortcutBinding? binding)
     {
-        if (binding == null) return "None";
+        if (binding == null || !binding.IsBound) return Rosetta.Loc.Get("pref.not_bound");
 
         bool isMac = RuntimeUtils.IsMac();
         var sb = new StringBuilder();
@@ -301,11 +318,13 @@ internal static class BuiltInShortcuts
         ShortcutManager.LoadOverrides();
 
         // Global
-        ShortcutManager.Register("Global/Save", "Save Scene", KeyCode.S, ctrl: true);
+        ShortcutManager.Register("Global/Save", "Save All", KeyCode.S, ctrl: true);
         ShortcutManager.Register("Global/SaveAs", "Save Scene As", KeyCode.S, ctrl: true, shift: true);
         ShortcutManager.Register("Global/NewScene", "New Scene", KeyCode.N, ctrl: true);
         ShortcutManager.Register("Global/Undo", "Undo", KeyCode.Z, ctrl: true);
         ShortcutManager.Register("Global/Redo", "Redo", KeyCode.Y, ctrl: true);
+        ShortcutManager.Register("Global/TogglePlay", "Play / Stop", KeyCode.F5);
+        ShortcutManager.Register("Global/TogglePause", "Pause / Resume", KeyCode.F7);
 
         // Scene View
         ShortcutManager.Register("Scene/Focus", "Focus Selection", KeyCode.F);
@@ -319,8 +338,6 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Scene/ToolUniversal", "Universal Tool", KeyCode.T);
 
         // Game View
-        ShortcutManager.Register("Game/TogglePlay", "Play / Stop", KeyCode.F5);
-        ShortcutManager.Register("Game/TogglePause", "Pause / Resume", KeyCode.F7);
         ShortcutManager.Register("Game/ToggleMaximize", "Toggle Maximize", KeyCode.F3);
 
         // Hierarchy
@@ -337,7 +354,6 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Project/Rename", "Rename Selected", KeyCode.F2);
 
         // Graph Editor
-        ShortcutManager.Register("GraphEditor/Save", "Save Graph", KeyCode.S, ctrl: true);
         ShortcutManager.Register("GraphEditor/Delete", "Delete Selected", KeyCode.Delete);
         ShortcutManager.Register("GraphEditor/Duplicate", "Duplicate Selected", KeyCode.D, ctrl: true);
         ShortcutManager.Register("GraphEditor/Copy", "Copy Selected", KeyCode.C, ctrl: true);

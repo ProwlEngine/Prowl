@@ -25,13 +25,17 @@ public class EditorSettings
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "Prowl", "EditorSettings.json");
 
+    /// <summary>The file as this editor last wrote or read it, to tell its own saves from edits made elsewhere.</summary>
+    private static string? s_knownJson;
+
     // Preferences
     /// <summary> Gets or sets the default directory for new projects. Defaults to Documents/ProwlProjects. </summary>
     public string DefaultProjectsPath { get; set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ProwlProjects");
     public string Locale { get; set; } = "en";
-    public bool AutoSaveLayout { get; set; } = true;
+    public bool AutoSave { get; set; } = true;
     public bool ReimportOnFocusOnly { get; set; } = true;
+
     /// <summary> Gets or sets the thumbnail size in pixels for asset previews. Defaults to 32. </summary>
     public int ThumbnailSize { get; set; } = 32;
 
@@ -65,9 +69,8 @@ public class EditorSettings
     /// <summary> Gets or sets the dictionary of user-overridden shortcut bindings, keyed by action name. Only overridden bindings are stored. </summary>
     public Dictionary<string, ShortcutBinding> ShortcutOverrides { get; set; } = [];
 
-    // IDs of interactive guides/tutorials the user has already completed or skipped.
-    /// <summary> Gets or sets the list of interactive guide IDs the user has completed or skipped. </summary>
-    public List<string> SeenGuides { get; set; } = [];
+    /// <summary> Gets or sets whether the first launch editor setup has been shown. </summary>
+    public bool SetupDone { get; set; }
 
     /// <summary>Serialized per-scene-tool settings, keyed by settings type name. Per-user rather
     /// than per-project: a brush size follows the user, it is not committed with the scene.</summary>
@@ -76,6 +79,19 @@ public class EditorSettings
     // Theme
     /// <summary> Gets or sets the current editor theme data. Defaults to the built-in theme. </summary>
     public EditorThemeData Theme { get; set; } = EditorThemeData.CreateDefault();
+
+    /// <summary> Themes the user saved under their own names. </summary>
+    public List<EditorThemeData> SavedThemes { get; set; } = [];
+
+    /// <summary> Layout densities the user saved under their own names. </summary>
+    public List<LayoutPreset> SavedLayouts { get; set; } = [];
+
+    /// <summary> Prepares the color ramps of the current and saved themes after loading. </summary>
+    public void InitThemes()
+    {
+        Theme.InitRamps();
+        foreach (EditorThemeData saved in SavedThemes) saved.InitRamps();
+    }
 
     /// <summary>Apply the current theme to EditorTheme's static fields.</summary>
     public void ApplyTheme()
@@ -89,10 +105,29 @@ public class EditorSettings
 
         EditorTheme.DefaultFontName = t.DefaultFontName;
         EditorTheme.DefaultBoldFontName = t.DefaultBoldFontName;
+        EditorTheme.MonoFontName = t.MonoFontName;
+        EditorTheme.SmallFontDelta = t.SmallFontDelta;
 
         EditorApplication.Instance?.InitializeFont();
 
         EditorTheme.UserScale = t.UserScale;
+        EditorTheme.AnimationScale = t.AnimationScale;
+        if (EditorApplication.Instance?.PaperInstance is { } paper)
+        {
+            paper.TransitionScale = t.AnimationScale;
+            paper.TextLetterSpacing = t.LetterSpacing;
+            paper.TextLineHeightScale = t.LineHeightScale;
+            paper.TextLigatures = t.Ligatures;
+            paper.TextQuality = t.TextQuality switch
+            {
+                TextQualitySetting.Low => Scribe.FontQuality.Low,
+                TextQualitySetting.Normal => Scribe.FontQuality.Normal,
+                TextQualitySetting.High => Scribe.FontQuality.High,
+                TextQualitySetting.Ultra => Scribe.FontQuality.Ultra,
+                _ => null,
+            };
+        }
+        OrigamiUI.Origami.IconScale = t.IconScale;
 
         // Sizing
         EditorTheme.MenuBarHeight = t.MenuBarHeight;
@@ -125,6 +160,7 @@ public class EditorSettings
         EditorTheme.BackgroundImagePath = t.BackgroundImagePath;
         EditorTheme.BackgroundImageFit = t.BackgroundImageFit;
         EditorTheme.BackgroundImageDim = t.BackgroundImageDim;
+        EditorTheme.BackgroundImageBlur = t.BackgroundImageBlur;
 
         // Push the freshly-applied editor theme into Origami. Brief lerp so user-visible
         // theme tweaks animate instead of snapping.
@@ -140,6 +176,7 @@ public class EditorSettings
             Directory.CreateDirectory(dir);
             string json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(_filePath, json);
+            s_knownJson = json;
         }
         catch (Exception ex)
         {
@@ -155,9 +192,10 @@ public class EditorSettings
             {
                 string json = File.ReadAllText(_filePath);
                 EditorSettings? settings = JsonSerializer.Deserialize<EditorSettings>(json);
+                s_knownJson = json;
                 if (settings != null)
                 {
-                    settings.Theme.InitRamps();
+                    settings.InitThemes();
                     settings.ApplyTheme();
                     return settings;
                 }
@@ -171,6 +209,63 @@ public class EditorSettings
         var def = new EditorSettings();
         def.ApplyTheme();
         return def;
+    }
+
+    /// <summary>Applies the settings file again when something other than this editor changed it, such as a hand edit.</summary>
+    internal static void ReloadIfChangedOnDisk()
+    {
+        string json;
+        try
+        {
+            if (!File.Exists(_filePath)) return;
+            json = File.ReadAllText(_filePath);
+        }
+        catch (IOException) { return; } // still being written, the next change event retries
+
+        if (json == s_knownJson) return;
+        s_knownJson = json;
+
+        try
+        {
+            if (JsonSerializer.Deserialize<EditorSettings>(json) is not { } settings) return;
+            settings.InitThemes();
+            Replace(settings);
+            Debug.Log("Editor settings reloaded from disk.");
+        }
+        catch (JsonException ex)
+        {
+            Debug.LogWarning($"EditorSettings.json was changed but could not be read, keeping the current settings: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Swaps in other settings, such as an imported profile or a full reset, and applies them everywhere. This machine's
+    /// window placement and projects folder are kept, and a finished setup stays finished.
+    /// </summary>
+    public static void Replace(EditorSettings next)
+    {
+        EditorSettings current = Instance;
+        next.WindowX = current.WindowX;
+        next.WindowY = current.WindowY;
+        next.WindowWidth = current.WindowWidth;
+        next.WindowHeight = current.WindowHeight;
+        next.WindowMaximized = current.WindowMaximized;
+        next.DefaultProjectsPath = current.DefaultProjectsPath;
+        next.SetupDone |= current.SetupDone;
+
+        Instance = next;
+        next.ApplyTheme();
+        next.Save();
+
+        Rosetta.Loc.SetLocale(next.Locale);
+        ShortcutManager.ReloadOverrides();
+        GUI.SceneView.SceneToolManager.ForgetSettings();
+        EditorApplication.ApplyFramePacing();
+        if (next.ThumbnailSize != current.ThumbnailSize)
+        {
+            Thumbnails.ThumbnailGenerator.DeleteAll();
+            EditorAssetBackend.Instance?.ClearThumbnailTextureCache();
+        }
     }
 
     /// <summary> Resets the theme to the default, applies it, and saves the settings. </summary>

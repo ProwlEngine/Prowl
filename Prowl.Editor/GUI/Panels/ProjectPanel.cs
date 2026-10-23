@@ -96,7 +96,10 @@ public class ProjectPanel : DockPanel
     // Rename state is managed by RenameOverlay
     private static readonly HashSet<Guid> _expandedAssets = []; // files with sub-assets expanded
     private static Guid _pendingPingNavigate; // Navigate to pinged asset's folder on next frame
-    private static Guid _lastPingedGuid; // Track when a new ping starts
+    private static int _lastPingVersion;
+    private static int _revealedPingVersion;
+    private Guid _revealGuid; // Pinged item to scroll into view once it is laid out
+    private Rect _contentViewRect;
     private const float MinThumbSize = 20f;  // Below this = list mode
     private const float MaxThumbSize = 128f;
     private const float ListThreshold = 32f; // Below this = list view
@@ -155,14 +158,12 @@ public class ProjectPanel : DockPanel
         // Last-drawn wins, so a re-created panel replaces its dead predecessor.
         Instance = this;
 
-        // Detect new ping and navigate to the pinged asset's folder
-        if (Selection.PingedGuid != Guid.Empty && Selection.PingedGuid != _lastPingedGuid)
+        // A new ping, even of the same GUID again, navigates to the asset's folder.
+        if (Selection.PingVersion != _lastPingVersion)
         {
-            _lastPingedGuid = Selection.PingedGuid;
-            _pendingPingNavigate = Selection.PingedGuid;
+            _lastPingVersion = Selection.PingVersion;
+            if (Selection.PingedGuid != Guid.Empty) _pendingPingNavigate = Selection.PingedGuid;
         }
-        if (Selection.PingedGuid == Guid.Empty)
-            _lastPingedGuid = Guid.Empty;
 
         if (_pendingPingNavigate != Guid.Empty)
         {
@@ -171,16 +172,21 @@ public class ProjectPanel : DockPanel
             EditorAssetBackend? db = EditorAssetBackend.Instance;
             if (db != null)
             {
+                // A sub-asset lives in its parent file's row, which opens to show it.
                 string? path = db.GuidToPath(pingGuid);
+                if (path == null && db.TryGetParentGuid(pingGuid, out Guid parentGuid) && db.GuidToPath(parentGuid) is { } parentPath)
+                {
+                    path = parentPath;
+                    _expandedAssets.Add(parentGuid);
+                }
+
                 if (path != null)
                 {
-                    // Navigate to the folder containing this asset
                     string folder = System.IO.Path.GetDirectoryName(path)?.Replace('\\', '/') ?? "";
+                    if (folder != _currentFolder) Origami.ScrollTo("proj_content", new Float2(0, 0));
                     _currentFolder = folder;
-
-                    // Reset the content scroll so the pinged item lands in view stored scroll
-                    // from a previous folder can otherwise leave the row off-screen.
-                    Origami.ScrollTo("proj_content", new Float2(0, 0));
+                    _searchText = "";
+                    _revealGuid = pingGuid;
                 }
             }
         }
@@ -623,9 +629,10 @@ public class ProjectPanel : DockPanel
                         .FontSize(12f).Alignment(TextAlignment.MiddleCenter);
 
                     // Name (inline rename or label)
-                    if (RenameOverlay.IsActive && RenameOverlay.IsRenaming($"proj_folder_{relativePath}"))
+                    if (RenameOverlay.IsRenaming($"proj_folder_{relativePath}"))
                     {
-                        RenameOverlay.Draw(p, $"proj_ft_rename_{node.Id.GetHashCode()}");
+                        using (p.Box("proj_ft_rename_slot").Width(UnitValue.Stretch()).Height(22).Margin(4, 4, 0, 0).Enter())
+                            RenameOverlay.Draw(p, $"proj_ft_rename_{node.Id.GetHashCode()}", 20);
                     }
                     else
                     {
@@ -717,6 +724,7 @@ public class ProjectPanel : DockPanel
         using (paper.Box("proj_content_bg")
             .Size(width, height)
             .OnClick(0, (_, _) => Selection.Clear())
+            .OnPostLayout((_, rect) => _contentViewRect = rect)
             .Enter())
         {
             // Remember that the mouse is over the content background the central drop
@@ -812,6 +820,16 @@ public class ProjectPanel : DockPanel
         }
         var flatObjects = visible.Select(v => (object)v.item).ToList();
 
+        if (_revealGuid != Guid.Empty)
+        {
+            int row = visible.FindIndex(v => v.item.Guid == _revealGuid);
+            if (row >= 0)
+            {
+                Origami.ScrollTo("proj_table_sv", new Float2(0, MathF.Max(0, row * TableRowH - height * 0.5f)));
+                _revealGuid = Guid.Empty;
+            }
+        }
+
         int activeCol = _sortBy switch { SortMode.Name => 0, SortMode.Type => 1, SortMode.Size => 2, _ => -1 };
 
         Origami.Table(paper, "proj_table", -1, _ => { })
@@ -903,7 +921,8 @@ public class ProjectPanel : DockPanel
 
             if (RenameOverlay.IsRenaming($"proj_asset_{item.RelativePath}"))
             {
-                RenameOverlay.Draw(paper, $"proj_tcrn_{id}");
+                using (paper.Box($"proj_tcrn_slot_{id}").Width(UnitValue.Stretch()).Height(TableRowH).Margin(6, 4, 0, 0).Enter())
+                    RenameOverlay.Draw(paper, $"proj_tcrn_{id}", TableRowH - 2);
             }
             else
             {
@@ -963,6 +982,14 @@ public class ProjectPanel : DockPanel
             // Open / reveal.
             builder.Item(Loc.Get("launcher.open"), () => OpenItem(item), icon: EditorIcons.FolderOpen);
             builder.Item(Loc.Get("project.show_in_explorer"), () => ShowInExplorer(item), icon: EditorIcons.FolderTree);
+            if (!item.IsFolder && !isMulti)
+                builder.Submenu(Loc.Get("project.open_with"), sub => OpenWithMenu(sub, item), icon: EditorIcons.ArrowUpRightFromSquare);
+            if (item.IsFolder && !isMulti)
+                builder.Item(Loc.Get("project.open_terminal"), () => ExternalTools.OpenTerminal(AbsolutePath(item)), icon: EditorIcons.Terminal);
+
+            var selectedFiles = Selection.GetSelected<ContentItem>().Where(c => !c.IsFolder).ToList();
+            if (selectedFiles.Count == 2 && Selection.Count == 2 && ExternalTools.HasDiffTool)
+                builder.Item(Loc.Get("project.compare"), () => ExternalTools.Diff(AbsolutePath(selectedFiles[0]), AbsolutePath(selectedFiles[1])), icon: EditorIcons.CodeCompare);
 
             builder.Separator();
 
@@ -1024,6 +1051,7 @@ public class ProjectPanel : DockPanel
                 string absPath = Path.Combine(Project.Current!.AssetsPath, folder);
                 EditorUtils.OpenFileSystemPath(absPath);
             }, icon: EditorIcons.FolderOpen);
+            builder.Item(Loc.Get("project.open_terminal"), () => ExternalTools.OpenTerminal(Path.Combine(Project.Current!.AssetsPath, folder)), icon: EditorIcons.Terminal);
 
             builder.Separator();
 
@@ -1039,6 +1067,10 @@ public class ProjectPanel : DockPanel
             builder.Item(Loc.Get("menu.assets.reload_scripts"),
                 () => Prowl.Editor.Projects.Scripting.ScriptAssemblyManager.RequestRecompile(),
                 icon: EditorIcons.ArrowsRotate);
+            builder.Item(Loc.Get("project.regenerate_project_files"),
+                () => Prowl.Editor.Projects.Scripting.ScriptCompiler.GenerateProjectFiles(Project.Current!),
+                enabled: !Prowl.Editor.Projects.Scripting.ScriptAssemblyManager.IsCompiling,
+                icon: EditorIcons.FileCode);
         });
     }
 
@@ -1087,19 +1119,15 @@ public class ProjectPanel : DockPanel
         });
     }
 
-    // Renaming a .cs file only renames the file, not the class it declares, breaking the file-name =
-    // class-name convention and every serialized reference to that component type. Disabled until proper
-    // script renaming (rename the class + serialized type aliasing) is supported.
-    private static bool CanRename(ContentItem item)
-        => item.IsFolder || !string.Equals(Path.GetExtension(item.Name), ".cs", StringComparison.OrdinalIgnoreCase);
+    // A sub-asset is named by its importer, so only files and folders on disk can be renamed.
+    private static bool CanRename(ContentItem item) => !item.IsSubAsset && !string.IsNullOrEmpty(item.RelativePath);
 
     private void StartRename(ContentItem item, bool inTree = false)
     {
-        if (!CanRename(item))
-        {
-            Toasts.Show(Loc.Get("toast.rename_failed"), "Renaming script files isn't supported yet - it would break the class/file-name link.", ToastType.Warning, 4f);
-            return;
-        }
+        if (!CanRename(item)) return;
+
+        // The folder being browsed is not in its own content, so it renames in the folder tree.
+        if (item.IsFolder && item.RelativePath == _currentFolder) inTree = true;
 
         string id = inTree ? $"proj_folder_{item.RelativePath}" : $"proj_asset_{item.RelativePath}";
         string editName = item.IsFolder ? item.Name : Path.GetFileNameWithoutExtension(item.Name);
@@ -1147,21 +1175,22 @@ public class ProjectPanel : DockPanel
             return;
         }
 
-        if (!EditorRegistries.DispatchDoubleClick(item.RelativePath, item.Guid))
-            OpenWithSystem(item);
+        if (EditorRegistries.DispatchDoubleClick(item.RelativePath, item.Guid)) return;
+        string absPath = AbsolutePath(item);
+        if (!ExternalTools.OpenOnDoubleClick(absPath)) ExternalTools.OpenWithSystem(absPath);
     }
 
-    private static void OpenWithSystem(ContentItem item)
+    private static string AbsolutePath(ContentItem item) => Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
+
+    // The system app, then every tool set up for the file's extension.
+    private static void OpenWithMenu(ContextBuilder menu, ContentItem item)
     {
-        string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(absPath) { UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogError($"Failed to open {item.RelativePath}: {ex.Message}");
-        }
+        string absPath = AbsolutePath(item);
+        menu.Item(Loc.Get("project.open_with_default"), () => ExternalTools.OpenWithSystem(absPath));
+        var tools = ExternalTools.ToolsFor(absPath).ToList();
+        if (tools.Count > 0) menu.Separator();
+        foreach (ExternalTool tool in tools)
+            menu.Item(string.IsNullOrEmpty(tool.Name) ? Path.GetFileNameWithoutExtension(tool.Path) : tool.Name, () => ExternalTools.OpenWith(tool, absPath));
     }
 
     private static void ShowInExplorer(ContentItem item)
@@ -1192,6 +1221,47 @@ public class ProjectPanel : DockPanel
                     DrawSubDrawer(paper, font, entries[i], width);
             }
         }
+    }
+
+    private static void DrawPingHighlight(Paper paper, ElementHandle handle, float round)
+    {
+        paper.Draw(ref handle, (canvas, r) =>
+        {
+            float alpha = Selection.GetPingAlpha();
+            if (alpha <= 0f) return;
+            var fillColor = Color.FromArgb((int)(alpha * 60), 255, 220, 50);
+            var borderColor = Color.FromArgb((int)(alpha * 200), 255, 200, 0);
+            float x = (float)r.Min.X, y = (float)r.Min.Y;
+            float w = (float)r.Size.X, h = (float)r.Size.Y;
+            canvas.RoundedRectFilled(x, y, w, h, round, round, round, round, fillColor);
+            canvas.SetStrokeColor(borderColor);
+            canvas.SetStrokeWidth(2f);
+            canvas.BeginPath();
+            float inner = MathF.Max(0f, round - 1f);
+            canvas.RoundedRect(x + 1, y + 1, w - 2, h - 2, inner, inner, inner, inner);
+            canvas.Stroke();
+        });
+    }
+
+    // Scrolls the grid so a pinged item that was laid out outside the visible content comes into view.
+    private void RevealInGrid(Guid guid, Rect rect)
+    {
+        if (guid != _revealGuid) return;
+        _revealGuid = Guid.Empty;
+        double above = rect.Min.Y - _contentViewRect.Min.Y;
+        double below = rect.Max.Y - _contentViewRect.Max.Y;
+        if (above < 0) Origami.ScrollBy("proj_content", new Float2(0, (float)above - 8));
+        else if (below > 0) Origami.ScrollBy("proj_content", new Float2(0, (float)below + 8));
+    }
+
+    /// <summary>Brings the Project panel forward when an asset is pinged, so a ping from the inspector shows even when its tab is hidden.</summary>
+    internal static void RevealPings()
+    {
+        if (Selection.PingVersion == _revealedPingVersion) return;
+        _revealedPingVersion = Selection.PingVersion;
+        if (Instance == null || Selection.PingTimer < 0.5f) return;
+        if (EditorAssetBackend.Instance?.GuidToPathIncludingSubAssets(Selection.PingedGuid) == null) return;
+        EditorApplication.Instance?.FocusPanelInstance(Instance);
     }
 
     private void DrawSubDrawer(Paper paper, Scribe.FontFile font, ContentItem parent, float width)
@@ -1246,6 +1316,12 @@ public class ProjectPanel : DockPanel
                 DragDrop.StartDrag(new AssetDragPayload(s.Guid, s.Name, s.RelativePath, subType));
             })
             .Tooltip(sub.Name)
+            .OnPostLayout((handle, rect) =>
+            {
+                if (sub.Guid == Guid.Empty || sub.Guid != Selection.PingedGuid) return;
+                RevealInGrid(sub.Guid, rect);
+                DrawPingHighlight(paper, handle, Origami.Current.Metrics.ContainerRounding);
+            })
             .Enter())
         {
             Texture2D? thumbTex = EditorAssetBackend.Instance?.GetThumbnailTexture(sub.Guid);
@@ -1336,24 +1412,8 @@ public class ProjectPanel : DockPanel
             .OnPostLayout((handle, rect) =>
             {
                 if (!isPinged) return;
-                paper.Draw(ref handle, (canvas, r) =>
-                {
-                    float alpha = Selection.GetPingAlpha();
-                    if (alpha <= 0f) return;
-                    int fillA = (int)(alpha * 60);
-                    int borderA = (int)(alpha * 200);
-                    var fillColor = Color.FromArgb(fillA, 255, 220, 50);
-                    var borderColor = Color.FromArgb(borderA, 255, 200, 0);
-                    float x = (float)r.Min.X, y = (float)r.Min.Y;
-                    float w = (float)r.Size.X, h = (float)r.Size.Y;
-                    canvas.RoundedRectFilled(x, y, w, h, cellRound, cellRound, cellRound, cellRound, fillColor);
-                    canvas.SetStrokeColor(borderColor);
-                    canvas.SetStrokeWidth(2f);
-                    canvas.BeginPath();
-                    float inner = MathF.Max(0f, cellRound - 1f);
-                    canvas.RoundedRect(x + 1, y + 1, w - 2, h - 2, inner, inner, inner, inner);
-                    canvas.Stroke();
-                });
+                RevealInGrid(item.Guid, rect);
+                DrawPingHighlight(paper, handle, cellRound);
             })
             .Enter())
         {
@@ -1443,9 +1503,10 @@ public class ProjectPanel : DockPanel
             }
 
             // Label - a flow child that WRAPS and grows the card's height (no clipping/truncation).
-            if (RenameOverlay.IsActive && RenameOverlay.IsRenaming($"proj_asset_{item.RelativePath}"))
+            if (RenameOverlay.IsRenaming($"proj_asset_{item.RelativePath}"))
             {
-                RenameOverlay.Draw(paper, "rename", RenameOverlay.Position.Bottom);
+                using (paper.Box("rename_slot").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Margin(3, 3, 4, 6).Enter())
+                    RenameOverlay.Draw(paper, "rename");
             }
             else
             {
@@ -1573,7 +1634,7 @@ public class ProjectPanel : DockPanel
         items.AddRange(VirtualContentItems);
         foreach ((ContentItem item, List<ContentItem> subs) u in sorted) items.Add(u.item);  // subs live on item.Subs, not flattened
 
-        items = [.. items.Where(i => EditorUtils.MatchesSearch(i.Name, _searchText))];
+        items = [.. items.Where(i => VirtualContentItems.Contains(i) || EditorUtils.MatchesSearch(i.Name, _searchText))];
 
         return items;
     }

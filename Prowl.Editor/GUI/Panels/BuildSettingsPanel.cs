@@ -344,7 +344,7 @@ public class BuildSettingsPanel : DockPanel
 
                 EditorGUI.SettingsRow(paper, "bp_cfg_out", Loc.Get("build.output_dir"), () =>
                     Origami.TextField(paper, "bp_cfg_out_v", _buildSettings.OutputDirectory,
-                        v => { _buildSettings.OutputDirectory = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
+                        v => { _buildSettings.OutputDirectory = v; EditorRegistries.SaveSettings(); }).CommitOnEnter().Show(), separator: false);
 
                 EditorGUI.SettingsRow(paper, "bp_cfg_pkg", Loc.Get("build.asset_packaging"), () =>
                     Origami.EnumDropdown(paper, "bp_cfg_pkg_v", _buildSettings.PackagingMode,

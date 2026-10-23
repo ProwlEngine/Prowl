@@ -271,7 +271,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
             {
                 editing.Name = v;
                 _snapshot = editing.Name;
-            }).Width(180).Show();
+            }).Width(180).CommitOnEnter().Show();
 
             Origami.Button(paper, $"{id}_snap_recapture", "Recapture", () => editing.CaptureFrom(mixer))
                 .Small().Style(ButtonStyle.Outline)

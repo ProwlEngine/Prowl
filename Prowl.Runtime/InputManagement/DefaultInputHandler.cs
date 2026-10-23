@@ -77,6 +77,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         }
     }
     public float MouseWheelDelta => Mice[0].ScrollWheels[0].Y;
+    public float MouseWheelDeltaX => Mice[0].ScrollWheels[0].X;
 
     private Dictionary<KeyCode, bool> wasKeyPressed = [];
     private Dictionary<KeyCode, bool> isKeyPressed = [];

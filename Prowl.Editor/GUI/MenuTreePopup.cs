@@ -51,12 +51,17 @@ public sealed class MenuTreeState
     public string Search = "";
     /// <summary> Breadcrumb path of folder names the user has drilled into. Empty at root. </summary>
     public List<string> Nav = [];
+    /// <summary> Index of the search result Enter picks, moved with the arrow keys. </summary>
+    public int Highlight;
+    internal string HighlightSearch = "";
 
     /// <summary> Clears the search text and navigation, returning to the root level. </summary>
     public void Reset()
     {
         Search = "";
         Nav.Clear();
+        Highlight = 0;
+        HighlightSearch = "";
     }
 }
 
@@ -127,6 +132,7 @@ public static class MenuTreePopup
             .Layer(Layer.Topmost)
             .ClampToScreen()
             .StopEventPropagation()
+            .IsNotFocusable()
             .Enter())
         {
             using (paper.Row($"{id}_search_row").Height(searchH).Enter())
@@ -163,8 +169,23 @@ public static class MenuTreePopup
             return;
         }
 
+        // Typing restarts the highlight at the best match, the arrows move it and Enter picks it.
+        if (state.HighlightSearch != state.Search)
+        {
+            state.HighlightSearch = state.Search;
+            state.Highlight = 0;
+        }
+        if (paper.IsKeyPressedOrRepeating(PaperKey.Down)) state.Highlight++;
+        if (paper.IsKeyPressedOrRepeating(PaperKey.Up)) state.Highlight--;
+        state.Highlight = Math.Clamp(state.Highlight, 0, filtered.Count - 1);
+        if (paper.IsKeyPressed(PaperKey.Enter) || paper.IsKeyPressed(PaperKey.KeypadEnter))
+        {
+            onPick(filtered[state.Highlight]);
+            return;
+        }
+
         for (int i = 0; i < filtered.Count; i++)
-            DrawItem(paper, font, $"{id}_item_{i}", filtered[i], onPick, showPath: true);
+            DrawItem(paper, font, $"{id}_item_{i}", filtered[i], onPick, showPath: true, highlighted: i == state.Highlight);
     }
 
     // Click-to-navigate browser: the current folder's subfolders and leaves, with a "Back" row when
@@ -182,6 +203,7 @@ public static class MenuTreePopup
                 .Height(EditorTheme.RowHeight)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
                 .Rounded(EditorTheme.Roundness).PaddingLeft(9).PaddingRight(9).Gap(9)
+                .IsNotFocusable()
                 .OnClick(0, (_, _) => state.Nav.RemoveAt(state.Nav.Count - 1))
                 .Enter())
             {
@@ -203,6 +225,7 @@ public static class MenuTreePopup
                 .Height(EditorTheme.RowHeight)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
                 .Rounded(EditorTheme.Roundness).PaddingLeft(9).PaddingRight(9).Gap(9)
+                .IsNotFocusable()
                 .OnClick(0, (_, _) => state.Nav.Add(captured))
                 .Enter())
             {
@@ -268,12 +291,14 @@ public static class MenuTreePopup
     }
 
     private static void DrawItem(Paper paper, Prowl.Scribe.FontFile font, string id,
-        MenuTreeEntry entry, Action<MenuTreeEntry> onPick, bool showPath)
+        MenuTreeEntry entry, Action<MenuTreeEntry> onPick, bool showPath, bool highlighted = false)
     {
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight)
+            .BackgroundColor(highlighted ? EditorTheme.Hover : System.Drawing.Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Rounded(EditorTheme.Roundness).PaddingLeft(9).PaddingRight(9).Gap(9)
+            .IsNotFocusable()
             .OnClick(entry, (e, _) => onPick(e))
             .Enter())
         {

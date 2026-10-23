@@ -29,6 +29,30 @@ public static class EditorSceneManager
     /// <summary>Marks the current scene as having unsaved changes.</summary>
     public static void MarkDirty() => IsDirty = true;
 
+    /// <summary>The save toast label for the open scene or prefab.</summary>
+    public static string SaveLabel => PrefabEditingMode.IsEditing
+        ? Rosetta.Loc.Get("save.prefab", new { name = Path.GetFileNameWithoutExtension(PrefabEditingMode.EditingPrefabPath) })
+        : Rosetta.Loc.Get("save.scene", new { name = Scene.Current.IsValid() ? Scene.Current.Name : "Untitled" });
+
+    /// <summary>Runs <paramref name="replace"/>, which swaps out the open scene, after asking to save the scene when it has changes.</summary>
+    public static void ConfirmSceneChange(Action replace)
+    {
+        // Play mode and prefab editing refuse the change further on, so there is nothing to ask about.
+        if (!IsDirty || Application.IsPlaying || PrefabEditingMode.IsEditing)
+        {
+            replace();
+            return;
+        }
+
+        SaveManager.AskToSave([SaveLabel], null,
+            save: () =>
+            {
+                if (Save()) replace();
+                else EditorApplication.PromptSaveAs(replace);
+            },
+            discard: replace);
+    }
+
     /// <summary>Fired after the scene is saved. Use for auto-saving dependent assets.</summary>
     public static event Action? OnSceneSaved;
 
@@ -228,7 +252,11 @@ public static class EditorSceneManager
     }
 
     [AssetDoubleClickHandler(".scene")]
-    private static bool OpenSceneHandler(string relativePath, Guid guid) => OpenScene(relativePath);
+    private static bool OpenSceneHandler(string relativePath, Guid guid)
+    {
+        ConfirmSceneChange(() => OpenScene(relativePath));
+        return true;
+    }
 
     [AssetDoubleClickHandler(".prefab")]
     private static bool OpenPrefabHandler(string relativePath, Guid guid)

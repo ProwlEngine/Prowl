@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;
@@ -35,8 +36,8 @@ public static class SaveManager
     /// <summary>Auto-save interval in seconds. Set to 0 to disable. Default 300 (5 minutes).</summary>
     public static float AutoSaveInterval = 300f;
 
-    /// <summary>Whether auto-save is enabled.</summary>
-    public static bool AutoSaveEnabled = true;
+    /// <summary>Whether auto-save is enabled, from the editor preferences.</summary>
+    public static bool AutoSaveEnabled => EditorSettings.Instance.AutoSave;
 
     /// <summary>
     /// True while <see cref="OnSave"/> handlers are running as part of an auto-save rather than a
@@ -44,6 +45,14 @@ public static class SaveManager
     /// dialog for a never-saved scene) - auto-save must never interrupt the user unattended.
     /// </summary>
     public static bool IsAutoSave { get; private set; }
+
+    /// <summary>Fired to list what has unsaved changes. Each subscriber adds one label per unsaved item, worded like its save toast label.</summary>
+    public static event Action<List<string>>? CollectUnsaved;
+
+    // Set only while handlers run for an unsaved changes prompt, see TakeAfterSaveAs.
+    private static Action? _afterSaveAs;
+    private static bool _saveAsStarted;
+    private static DialogModal? _prompt;
 
     private static double _timeSinceLastSave;
     private static bool _saveRequestedThisFrame;
@@ -56,18 +65,9 @@ public static class SaveManager
     {
         _saveRequestedThisFrame = false;
 
-        // Ctrl+S shortcut
+        // Ctrl+S saves everything, in play mode too. Handlers skip what play mode cannot save.
         if (ShortcutManager.IsPressed("Global/Save"))
-        {
-            if (Application.IsPlaying)
-            {
-                Toasts.Warning(Loc.Get("save.cant_play_mode"),
-                    Loc.Get("save.cant_play_mode_msg"));
-                return;
-            }
-
             RequestSave();
-        }
 
         // Auto-save timer
         if (AutoSaveEnabled && AutoSaveInterval > 0 && !Application.IsPlaying)
@@ -84,7 +84,9 @@ public static class SaveManager
     /// Trigger a save. Fires all <see cref="OnSave"/> handlers and shows a combined toast.
     /// Can be called manually from menu items or other systems.
     /// </summary>
-    public static void RequestSave(bool isAutoSave = false)
+    public static void RequestSave(bool isAutoSave = false) => RequestSave(isAutoSave, null);
+
+    private static void RequestSave(bool isAutoSave, Action? afterSaveAs)
     {
         if (_saveRequestedThisFrame) return;
         _saveRequestedThisFrame = true;
@@ -98,6 +100,8 @@ public static class SaveManager
         }
 
         var labels = new List<string>();
+        _afterSaveAs = afterSaveAs;
+        _saveAsStarted = false;
 
         foreach (SaveHandler handler in OnSave.GetInvocationList())
         {
@@ -112,10 +116,13 @@ public static class SaveManager
                 Debug.LogError($"Save handler failed: {ex.Message}");
             }
         }
+        _afterSaveAs = null;
 
         if (labels.Count == 0)
         {
-            if (!isAutoSave)
+            if (!isAutoSave && Application.IsPlaying)
+                Toasts.Warning(Loc.Get("save.cant_play_mode"), Loc.Get("save.cant_play_mode_msg"));
+            else if (!isAutoSave)
                 Origami.Toast(Loc.Get("save.nothing")).Message(Loc.Get("save.nothing_msg")).Info().Show();
             IsAutoSave = false;
             return;
@@ -128,6 +135,63 @@ public static class SaveManager
 
         Origami.Toast(title).Message(message).Success().Show();
         IsAutoSave = false;
+    }
+
+    /// <summary>For a save handler about to open a Save As dialog: what to run once the file is written, so an unsaved changes prompt can carry on.</summary>
+    public static Action? TakeAfterSaveAs()
+    {
+        _saveAsStarted = _afterSaveAs != null;
+        return _afterSaveAs;
+    }
+
+    /// <summary>Everything with unsaved changes, as labels.</summary>
+    public static List<string> Unsaved()
+    {
+        var unsaved = new List<string>();
+        CollectUnsaved?.Invoke(unsaved);
+        return unsaved;
+    }
+
+    /// <summary>Runs <paramref name="proceed"/> when nothing is unsaved, otherwise asks to save everything, discard it, or cancel first.</summary>
+    public static void ConfirmUnsaved(Action proceed)
+    {
+        List<string> unsaved = Unsaved();
+        if (unsaved.Count == 0)
+        {
+            proceed();
+            return;
+        }
+
+        string? note = Application.IsPlaying ? Loc.Get("dialog.unsaved_play_mode") : null;
+        AskToSave(unsaved, note,
+            save: () =>
+            {
+                RequestSave(false, () => ConfirmUnsaved(proceed));
+                // A Save As dialog carries on by itself. Anything else still unsaved is asked about again.
+                if (!_saveAsStarted) ConfirmUnsaved(proceed);
+            },
+            discard: proceed);
+    }
+
+    /// <summary>The Save, Don't Save, Cancel prompt for a list of unsaved items. Cancel and Escape do nothing.</summary>
+    public static void AskToSave(IReadOnlyList<string> items, string? note, Action save, Action discard)
+    {
+        if (_prompt != null && Modal.Contains(_prompt)) return;
+
+        DialogModal dialog = Origami.Dialog(Loc.Get("dialog.unsaved_changes"), paper =>
+        {
+            Origami.Label(paper, "unsaved_msg", Loc.Get("dialog.unsaved_changes_body")).Show();
+            for (int i = 0; i < items.Count; i++)
+                Origami.Label(paper, $"unsaved_item_{i}", "  " + items[i]).Show();
+            if (note != null) Origami.Label(paper, "unsaved_note", note).Show();
+        }, 420);
+        dialog.CloseOnEscape = true;
+        dialog.CloseOnBackdrop = false;
+        _prompt = dialog;
+
+        dialog.Button(Loc.Get("dialog.save"), () => { Modal.Remove(dialog); save(); }, OrigamiVariant.Primary)
+            .Button(Loc.Get("dialog.dont_save"), () => { Modal.Remove(dialog); discard(); })
+            .Button(Loc.Get("common.cancel"), () => Modal.Remove(dialog));
     }
 
     /// <summary>Reset the auto-save timer (e.g. after a manual save).</summary>

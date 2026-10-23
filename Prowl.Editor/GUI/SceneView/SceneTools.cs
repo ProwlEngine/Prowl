@@ -83,7 +83,7 @@ public static class SceneTools
     /// <summary>Increment for rotation, in degrees.</summary>
     public static float RotateSnap { get; set; } = 15f;
 
-    /// <summary>Increment for scaling, as a multiplier step.</summary>
+    /// <summary>Increment for the scale factor while snapping.</summary>
     public static float ScaleSnap { get; set; } = 0.1f;
 
     /// <summary>

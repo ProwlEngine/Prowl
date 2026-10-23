@@ -31,9 +31,21 @@ public static class EditorGUI
     /// bottom gap; when true a 1px divider is drawn beneath the row. An
     /// empty <paramref name="label"/> gives the control the full width.
     /// </summary>
+    /// <summary>While set, rows whose label does not contain it are skipped, and section headers and dividers are hidden. Used by the Preferences search.</summary>
+    public static string? RowFilter;
+
+    /// <summary>How many rows have passed <see cref="RowFilter"/> since it was last reset.</summary>
+    public static int RowFilterMatches;
+
     public static void Row(Paper paper, string id, string label, Action drawControl,
         bool separator = false, float? labelWidth = null, bool compact = false, float minHeight = 0f)
     {
+        if (RowFilter != null)
+        {
+            if (!label.Contains(RowFilter, StringComparison.OrdinalIgnoreCase)) return;
+            RowFilterMatches++;
+        }
+
         OrigamiMetrics m = Origami.Current.Metrics;
 
         if (!separator)
@@ -142,7 +154,7 @@ public static class EditorGUI
     /// <summary> A label + text field settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsTextField(Paper paper, string id, string label, string value, Action<string> setter)
         => Row(paper, id, label, () =>
-            Origami.TextField(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).Show());
+            Origami.TextField(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).CommitOnEnter().Show());
 
     /// <summary> A label + int slider settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsIntSlider(Paper paper, string id, string label, int value, int min, int max, Action<int> setter)
@@ -278,6 +290,7 @@ public static class EditorGUI
     /// variant (theme editor) is shorter and sits flush-left since its host column already pads.</summary>
     public static void SectionHeader(Paper paper, string id, string text, bool first = false, bool compact = false)
     {
+        if (RowFilter != null) return;
         Scribe.FontFile? font = EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont;
         if (font == null) return;
         OrigamiMetrics m = Origami.Current.Metrics;
@@ -293,6 +306,7 @@ public static class EditorGUI
     /// <summary>Full-width 1px separator. <paramref name="verticalMargin"/> adds equal top and bottom gap.</summary>
     public static void Divider(Paper paper, string id, float verticalMargin = 0f)
     {
+        if (RowFilter != null) return;
         ElementBuilder b = paper.Box(id).Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
         if (verticalMargin > 0f) b.Margin(0, 0, verticalMargin, verticalMargin);
     }
