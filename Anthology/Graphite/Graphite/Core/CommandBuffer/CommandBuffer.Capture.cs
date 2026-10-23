@@ -33,6 +33,11 @@ public abstract partial class CommandBuffer
         CheckNotDisposed(buffer, "The buffer");
         if (Bindings != null && Device.ValidationEnabled)
             Bindings.Check(buffer.ResourceId, buffer.Name);
+        RecordBuffer(buffer);
+    }
+
+    private void RecordBuffer(DeviceBuffer buffer)
+    {
         if (!CaptureActive || !_referencedIds.Add(buffer.ResourceId))
             return;
 
@@ -44,10 +49,10 @@ public abstract partial class CommandBuffer
         CheckNotDisposed(texture, "The texture");
         if (Bindings != null && Device.ValidationEnabled)
             Bindings.Check(texture.ResourceId, texture.Name);
-        TrackTexture(texture, false);
+        RecordTexture(texture, false);
     }
 
-    private void TrackTexture(Texture texture, bool overwritten)
+    private void RecordTexture(Texture texture, bool overwritten)
     {
         if (!CaptureActive || !_referencedIds.Add(texture.ResourceId))
             return;
@@ -68,7 +73,7 @@ public abstract partial class CommandBuffer
             }
         }
 
-        TrackTexture(texture, overwrites);
+        RecordTexture(texture, overwrites);
     }
 
     private void ReportFramebuffer(Framebuffer fb, in TargetLoadStoreOps ops)
@@ -229,14 +234,14 @@ public abstract partial class CommandBuffer
     {
         if (entry.Buffer is { } range)
         {
-            TrackBuffer(range.Buffer);
+            RecordBuffer(range.Buffer);
             return new PropertyState(description.Name, PropertyKind.Buffer, default, default, range.Buffer.CurrentVersion,
                 ResourceRange.Bytes(range.Offset, range.SizeInBytes), null, null);
         }
 
         if ((entry.View?.Target ?? entry.Texture) is { } texture)
         {
-            TrackTexture(texture);
+            RecordTexture(texture, false);
             TextureView? view = entry.View;
             ResourceRange textureRange = view != null
                 ? ResourceRange.Subresources(view.BaseMipLevel, view.MipLevels, view.BaseArrayLayer, view.ArrayLayers)
