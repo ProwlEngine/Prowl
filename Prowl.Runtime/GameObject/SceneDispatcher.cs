@@ -368,7 +368,7 @@ internal sealed class SceneDispatcher
         }
     }
 
-    // ---- rendering, gizmo and GUI callbacks (run in edit mode too, so not gameplay gated) ------------
+    // ---- rendering and gizmo callbacks (run in edit mode too, so not gameplay gated) -----------------
 
     public void RunDrawGizmos()
     {
@@ -389,7 +389,9 @@ internal sealed class SceneDispatcher
         for (int i = 0; i < count; i++)
         {
             Component c = items[i];
-            if (c.IsDisposed || !c.EnabledInHierarchy) continue;
+            // Gated like Update, so a component whose OnEnable never ran (the edit scene in the frame play
+            // mode starts) is skipped
+            if (c.IsDisposed || !c.EnabledInHierarchy || !c.RunsGameplay) continue;
 
             try { c.OnGui(paper); }
             catch (Exception ex) { Report(c, nameof(Component.OnGui), ex); }
