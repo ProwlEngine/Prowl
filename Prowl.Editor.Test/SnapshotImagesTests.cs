@@ -20,6 +20,14 @@ public class SnapshotImagesTests
     }
 
     [Fact]
+    public void D16TexelsAreTwoBytesApart()
+    {
+        byte[] data = [0x00, 0x40, 0x00, 0x80];
+        byte[] rgba = SnapshotImages.ToRgba8(data, new CopyRegion(0, 0, 0, 2, 1, 1, PixelFormat.D16_UNorm), 1f);
+        Assert.Equal(new byte[] { 0, 0, 0, 255, 255, 255, 255, 255 }, rgba);
+    }
+
+    [Fact]
     public void FloatColorIsScaledByExposureAndClamped()
     {
         byte[] data = new byte[16];

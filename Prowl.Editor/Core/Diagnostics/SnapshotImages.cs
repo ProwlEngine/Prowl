@@ -64,7 +64,8 @@ internal static class SnapshotImages
 
     private static (float R, float G, float B, float A) Read(ReadOnlySpan<byte> data, in CopyRegion region, int x, int y)
     {
-        int stride = IsDepth(region.Format) ? 4 : (int)region.Format.GetSizeInBytes();
+        // Depth planes are copied at 4 bytes a texel, except D16 at 2.
+        int stride = region.Format == PixelFormat.D16_UNorm ? 2 : IsDepth(region.Format) ? 4 : (int)region.Format.GetSizeInBytes();
         int offset = (int)region.Offset + (y * (int)region.Width + x) * stride;
         if (offset < 0 || offset + stride > data.Length)
             return default;
