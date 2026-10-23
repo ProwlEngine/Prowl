@@ -47,7 +47,6 @@
     <ProjectReference Include="$(AnthologyDir)Origami\CSharp\Prowl.Origami.CSharp.csproj" />
     <ProjectReference Include="$(AnthologyDir)Origami\Graphite\Prowl.Origami.Graphite.csproj" />
     <ProjectReference Include="$(AnthologyDir)Graphite\Debugger\Prowl.Graphite.Debugger.csproj" />
-    <ProjectReference Include="$(AnthologyDir)Graphite\Debugger\Viewer\Prowl.Graphite.Debugger.Viewer.csproj" />
     <ProjectReference Include="$(AnthologyDir)Photonic\Photonic\Photonic.csproj" />
     <ProjectReference Include="$(AnthologyDir)Rosetta\Rosetta\Rosetta.csproj" />
     <ProjectReference Include="$(AnthologyDir)Unwrapper\Unwrapper\Unwrapper.csproj" />
