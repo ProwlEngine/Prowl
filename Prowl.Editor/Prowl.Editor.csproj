@@ -53,15 +53,15 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(ProwlLocalAnthology)' != 'true'">
-    <PackageReference Include="Prowl.Ember" Version="3.9.2" />
-    <PackageReference Include="Prowl.Ember.Analyzers" Version="3.9.2" />
-    <PackageReference Include="Prowl.Origami" Version="3.9.2" />
-    <PackageReference Include="Prowl.Origami.CSharp" Version="3.9.2" />
-    <PackageReference Include="Prowl.Origami.Graphite" Version="3.9.2" />
-    <PackageReference Include="Prowl.Graphite.Debugger" Version="3.9.2" />
-    <PackageReference Include="Prowl.Photonic" Version="3.9.2" />
-    <PackageReference Include="Prowl.Rosetta" Version="3.9.2" />
-    <PackageReference Include="Prowl.Unwrapper" Version="3.9.2" />
+    <PackageReference Include="Prowl.Ember" Version="3.9.3" />
+    <PackageReference Include="Prowl.Ember.Analyzers" Version="3.9.3" />
+    <PackageReference Include="Prowl.Origami" Version="3.9.3" />
+    <PackageReference Include="Prowl.Origami.CSharp" Version="3.9.3" />
+    <PackageReference Include="Prowl.Origami.Graphite" Version="3.9.3" />
+    <PackageReference Include="Prowl.Graphite.Debugger" Version="3.9.3" />
+    <PackageReference Include="Prowl.Photonic" Version="3.9.3" />
+    <PackageReference Include="Prowl.Rosetta" Version="3.9.3" />
+    <PackageReference Include="Prowl.Unwrapper" Version="3.9.3" />
   </ItemGroup>
 
   <ItemGroup>

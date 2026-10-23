@@ -43,19 +43,19 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(ProwlLocalAnthology)' != 'true'">
-    <PackageReference Include="Prowl.Aperture" Version="3.9.2" />
-    <PackageReference Include="Prowl.Clay" Version="3.9.2" />
-    <PackageReference Include="Prowl.Echo" Version="3.9.2" />
-    <PackageReference Include="Prowl.Paper" Version="3.9.2" />
-    <PackageReference Include="Prowl.Recast" Version="3.9.2" />
-    <PackageReference Include="Prowl.Motion" Version="3.9.2" />
-    <PackageReference Include="Prowl.Unwrapper" Version="3.9.2" />
-    <PackageReference Include="Prowl.Ember.Contracts" Version="3.9.2" />
-    <PackageReference Include="Prowl.Ember.Analyzers" Version="3.9.2" PrivateAssets="all" />
-    <PackageReference Include="Prowl.Graphite" Version="3.9.2" />
-    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="3.9.2" />
-    <PackageReference Include="Prowl.Graphite.ShaderDef.Compiler" Version="3.9.2" />
-    <PackageReference Include="Prowl.Graphite.Rendering" Version="3.9.2" />
+    <PackageReference Include="Prowl.Aperture" Version="3.9.3" />
+    <PackageReference Include="Prowl.Clay" Version="3.9.3" />
+    <PackageReference Include="Prowl.Echo" Version="3.9.3" />
+    <PackageReference Include="Prowl.Paper" Version="3.9.3" />
+    <PackageReference Include="Prowl.Recast" Version="3.9.3" />
+    <PackageReference Include="Prowl.Motion" Version="3.9.3" />
+    <PackageReference Include="Prowl.Unwrapper" Version="3.9.3" />
+    <PackageReference Include="Prowl.Ember.Contracts" Version="3.9.3" />
+    <PackageReference Include="Prowl.Ember.Analyzers" Version="3.9.3" PrivateAssets="all" />
+    <PackageReference Include="Prowl.Graphite" Version="3.9.3" />
+    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="3.9.3" />
+    <PackageReference Include="Prowl.Graphite.ShaderDef.Compiler" Version="3.9.3" />
+    <PackageReference Include="Prowl.Graphite.Rendering" Version="3.9.3" />
   </ItemGroup>
 
   <ItemGroup>
