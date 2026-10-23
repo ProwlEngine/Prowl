@@ -72,6 +72,7 @@ Animation graphs are built with the `graph` command. See the prowl-animation ski
 - `input --action key --keys W,ShiftLeft --seconds 1` holds keys, `input --action mouse --button 0`, `input --action mouse --position '[640,360]'` clicks at that point in game view pixels, as measured on a game screenshot, which presses UI buttons there, `input --action look --delta '[5,0]' --seconds 0.5`. Key names are listed in the prowl-scenes skill.
 - `screenshot --view scene` or `--view game` saves a PNG and returns its path. Open the view first if needed with `menu --path Window/General/Game`.
 - `logs --since <nextSeq>` returns only what is new since the last call.
+- `snapshot --action capture`, `snapshot_dump` and `snapshot_replay` inspect how a frame was rendered and write images of pass outputs. See the prowl-profiler skill.
 
 ## Building
 
