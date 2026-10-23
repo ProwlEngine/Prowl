@@ -13,7 +13,7 @@ Shader "Default/Particle"
     Pass
     {
         Name "Forward"
-        Tags { "LightMode" = "Forward" "RenderQueue" = "3000" }
+        Tags { "LightMode" = "Forward" "RenderQueue" = "3000" "SceneDepth" = "Read" }
         Cull Off
         ZWrite Off
         Blend One InverseSourceAlpha
@@ -33,6 +33,7 @@ Shader "Default/Particle"
             out vec3 vNormal;
             out vec4 vCustom;
             flat out vec4 vShading;
+            flat out float vSoftDistance;
 
             vec4 Row(uint record, uint row) { return prowlParticleRecords[record * 6u + row]; }
 
@@ -79,13 +80,14 @@ Shader "Default/Particle"
                 uint instance = Graphite_InstanceIndex();
                 uint record = header + 1u + (orderBase == 0u ? instance : prowlParticleOrder[orderBase - 1u + instance]);
 
-                // Header: mode, render mode, alignment, unused / sheet / blend, lit, fade start, fade end / min size, max size, length scale, velocity scale / pivot
+                // Header: mode, render mode, alignment, soft distance / sheet / blend, lit, fade start, fade end / min size, max size, length scale, velocity scale / pivot
                 vec4 h0 = Row(header, 0u);
                 vec4 sheet = Row(header, 1u);
                 vec4 shading = Row(header, 2u);
                 vec4 sizing = Row(header, 3u);
                 vec3 pivot = Row(header, 4u).xyz;
                 vShading = shading;
+                vSoftDistance = h0.w;
 
                 vec3 vertex = vertexPosition;
                 vec4 r0 = Row(record, 0u), r1 = Row(record, 1u), r2 = Row(record, 2u), r3 = Row(record, 3u), r4 = Row(record, 4u), r5 = Row(record, 5u);
@@ -243,6 +245,7 @@ Shader "Default/Particle"
         Fragment
         {
             #include "Graphite/Lighting.glsl"
+            #include "Graphite/SceneDepth.glsl"
             #include "Prowl/Common.glsl"
 
             layout(location = 0) out vec4 fragColor;
@@ -255,6 +258,7 @@ Shader "Default/Particle"
             in vec3 vNormal;
             in vec4 vCustom;
             flat in vec4 vShading;
+            flat in float vSoftDistance;
 
             uniform sampler2D _MainTex;
             uniform vec4 _MainColor;
@@ -293,6 +297,19 @@ Shader "Default/Particle"
                     Graphite_ViewData view = Graphite_View();
                     vec3 forward = vec3(view.view[0][2], view.view[1][2], view.view[2][2]);
                     fade *= clamp((dot(vWorldPos, forward) - cameraFade.x) / (cameraFade.y - cameraFade.x), 0.0, 1.0);
+                }
+
+                if (vSoftDistance > 0.0)
+                {
+                    vec2 screenUV = Graphite_ScreenUV();
+                    float sceneDepth = Graphite_FetchSceneDepth(screenUV);
+                    if (sceneDepth > 0.0)
+                    {
+                        Graphite_ViewData view = Graphite_View();
+                        vec3 forward = vec3(view.view[0][2], view.view[1][2], view.view[2][2]);
+                        vec3 scene = Graphite_RelativeFromDepth(vec2(screenUV.x, 1.0 - screenUV.y), sceneDepth);
+                        fade *= clamp(dot(scene - vWorldPos, forward) / vSoftDistance, 0.0, 1.0);
+                    }
                 }
 
                 if (vShading.y > 0.5)
