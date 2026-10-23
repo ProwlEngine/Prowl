@@ -298,9 +298,9 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                     trackBuilder.Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing);
 
                     // Click anywhere on track > set value to that position.
-                    trackBuilder.OnClick(e =>
+                    trackBuilder.OnPress(e =>
                     {
-                        double newT = ClickToT(e, _vertical);
+                        double newT = ClickToT(e, trackHandle);
                         T newV = SliderInternal.TToValue<T>(newT, _min, _max, _logarithmic);
                         if (_step.HasValue && _snapWhileDragging) newV = SliderInternal.Snap(newV, _min, _step.Value);
                         newV = SliderInternal.Clamp(newV, _min, _max);
@@ -478,7 +478,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                 tw = rw;
                 th = trackThickness;
 
-                thumbCx = rx + rw * (float)valueT;
+                thumbCx = rx + thumbBaseR + (rw - _thumbDiameter) * (float)valueT;
                 thumbCy = ry + rh * 0.5f;
 
                 if (bipolar)
@@ -501,7 +501,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
 
                 // Vertical: 0 at the bottom, 1 at the top.
                 thumbCx = rx + rw * 0.5f;
-                thumbCy = ry + rh * (1f - (float)valueT);
+                thumbCy = ry + thumbBaseR + (rh - _thumbDiameter) * (1f - (float)valueT);
 
                 if (bipolar)
                 {
@@ -677,31 +677,33 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         _ => _theme.Get(_variant),
     };
 
-    private double ClickToT(PaperUI.Events.ClickEvent e, bool vertical)
-    {
-        // NormalizedPosition is 0..1 across the element rect; Y is top-down so invert for vertical.
-        double t = vertical ? (1.0 - (double)e.NormalizedPosition.Y) : (double)e.NormalizedPosition.X;
-        return Math.Clamp(t, 0.0, 1.0);
-    }
-
-    private void ApplyDrag(PaperUI.Events.DragEvent e, ElementHandle trackHandle)
+    private double MapPointerCoordsToValue(Float2 relativePosition, ElementHandle trackHandle)
     {
         // Map pointer position back to a value along the track, in the track's own layout space so a
         // transformed slider still lines up with the pointer.
-        var r = trackHandle.Data.LayoutRect;
+        Rect r = trackHandle.Data.LayoutRect;
         double t;
-        if (!_vertical)
+        if (_vertical)
         {
-            double w = (double)r.Size.X;
-            t = w > 0 ? ((double)e.LocalPosition.X - (double)r.Min.X) / w : 0;
+            // Y is top-down so invert for vertical.
+            if (r.Size.Y <= 0)
+                return 0;
+            t = 1.0 - ((double)relativePosition.Y - (double)_thumbDiameter * 0.5) / ((double)r.Size.Y - (double)_thumbDiameter);
         }
         else
         {
-            double h = (double)r.Size.Y;
-            t = h > 0 ? 1.0 - ((double)e.LocalPosition.Y - (double)r.Min.Y) / h : 0;
+            if (r.Size.X <= 0)
+                return 0;
+            t = ((double)relativePosition.X - (double)_thumbDiameter * 0.5) / ((double)r.Size.X - (double)_thumbDiameter);
         }
-        t = Math.Clamp(t, 0.0, 1.0);
+        return double.Clamp(t, 0, 1);
+    }
 
+    private double ClickToT(PaperUI.Events.ClickEvent e, ElementHandle trackHandle) => MapPointerCoordsToValue(e.RelativePosition, trackHandle);
+
+    private void ApplyDrag(PaperUI.Events.DragEvent e, ElementHandle trackHandle)
+    {
+        double t = MapPointerCoordsToValue(e.RelativePosition, trackHandle);
         T newV = SliderInternal.TToValue<T>(t, _min, _max, _logarithmic);
         if (_step.HasValue && _snapWhileDragging) newV = SliderInternal.Snap(newV, _min, _step.Value);
         newV = SliderInternal.Clamp(newV, _min, _max);
