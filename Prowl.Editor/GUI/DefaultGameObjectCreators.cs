@@ -33,7 +33,7 @@ internal static class DefaultGameObjectCreators
     [MenuItem("GameObject/Empty Child", isValidate: true)]
     static bool ValidateCreateEmptyChild() => MenuContext.ActiveGameObject != null;
 
-    [MenuItem("GameObject/Empty Parent", priority: 2, Icon = EditorIcons.ObjectGroup)]
+    [MenuItem("GameObject/Empty Parent", priority: 2, Icon = EditorIcons.ObjectGroup, SelectionWide = true)]
     static void CreateEmptyParent() => HierarchyPanel.CreateEmptyParent();
 
     // Wrapping is defined by what's selected, not by where the menu was opened.
