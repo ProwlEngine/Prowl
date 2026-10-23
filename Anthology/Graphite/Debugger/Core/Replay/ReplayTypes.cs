@@ -20,7 +20,7 @@ public sealed class ReplayRequest
     /// <summary>Pass index within the group.</summary>
     public int PassIndex { get; init; }
 
-    /// <summary>Last event of the pass to run, counted from 0. Null runs the whole pass.</summary>
+    /// <summary>Last event of the pass to run, counted from 0. -1 runs none, giving the contents the pass starts from. Null runs the whole pass.</summary>
     public int? EventIndex { get; init; }
 
     /// <summary>Narrows the last event, when it is an indirect draw, to some of its commands.</summary>

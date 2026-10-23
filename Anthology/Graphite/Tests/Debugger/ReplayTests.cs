@@ -536,7 +536,10 @@ public class ReplayTests
         ReplayResult whole = replayer.Replay(Request(null));
         ReplayResult last = replayer.Replay(Request(3));
         ReplayResult first = replayer.Replay(Request(0));
+        ReplayResult none = replayer.Replay(Request(-1));
 
+        Assert.True(none.Status == ReplayStatus.Reexecuted, none.Reason);
+        Assert.NotEqual(first.Outputs[0].Data, none.Outputs[0].Data);
         Assert.True(last.Status == ReplayStatus.Reexecuted, last.Reason);
         Assert.Equal(2, last.Outputs.Length);
         Assert.Equal(whole.Outputs.Select(o => o.Data), last.Outputs.Select(o => o.Data));
