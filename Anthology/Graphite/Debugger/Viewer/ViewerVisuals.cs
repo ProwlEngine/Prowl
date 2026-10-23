@@ -25,6 +25,7 @@ internal sealed partial class ProfilerView
 
     private const int KeptReplays = 4;
     private const long RecentMilliseconds = 1000;
+    private const double TrackBudgetMilliseconds = 30;
 
     private sealed class SharedTexture(object texture)
     {
@@ -32,9 +33,18 @@ internal sealed partial class ProfilerView
         public int Users;
     }
 
+    private sealed class PixelTrack
+    {
+        public readonly List<TexelChanges> Changes = new();
+        public ReplayOutput? Previous;
+        public CopyRegion Region;
+        public string? Failure;
+    }
+
     private readonly Dictionary<(int, int, int?, IndirectSlice?), (ReplayResult Result, long Seen)> _replays = new();
     private readonly Dictionary<string, SharedTexture> _shared = new();
     private readonly Dictionary<string, (string Key, long Seen)> _slots = new();
+    private readonly Dictionary<(int, int, TraceResourceId, int), PixelTrack> _tracks = new();
     private readonly ConditionalWeakTable<byte[], Dictionary<CopyRegion, byte[]>> _previews = new();
     private readonly ConditionalWeakTable<byte[], ConditionalWeakTable<byte[], Dictionary<CopyRegion, byte[]>>> _coverages = new();
     private readonly ConditionalWeakTable<byte[], object> _identities = new();
@@ -68,6 +78,7 @@ internal sealed partial class ProfilerView
     private void ClearReplays()
     {
         _replays.Clear();
+        _tracks.Clear();
     }
 
     private long Identity(byte[] data)
@@ -161,6 +172,48 @@ internal sealed partial class ProfilerView
         if (!masks.TryGetValue(region, out byte[]? mask))
             masks[region] = mask = CoverageMask(Texels.Changed(from, to, region, Texels.PreviewStep(region)));
         return mask;
+    }
+
+    /// <summary>The texels each draw of the pass changed in a resource, filled in over frames up to the first <paramref name="needed"/> draws.</summary>
+    private PixelTrack Track(DeepGroup view, DeepPass pass, TraceResourceId id, List<ProfileNode> draws, int needed)
+    {
+        var key = (view.Index, pass.Index, id, _mip);
+        if (!_tracks.TryGetValue(key, out PixelTrack? track))
+            _tracks[key] = track = new PixelTrack();
+
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        while (track.Failure == null && track.Changes.Count < needed)
+        {
+            int done = track.Changes.Count;
+            track.Previous ??= ReplayDraw(view, pass, id, done == 0 ? null : draws[done - 1], track);
+            ReplayOutput? now = track.Previous != null ? ReplayDraw(view, pass, id, draws[done], track) : null;
+            if (track.Previous == null || now == null)
+                break;
+            if (Region(now, _mip) is not { } region)
+            {
+                track.Failure = "The replayed resource has no texture regions.";
+                break;
+            }
+
+            track.Region = region;
+            track.Changes.Add(Texels.Diff(track.Previous.Data.AsSpan(), now.Data.AsSpan(), region));
+            track.Previous = now;
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds > TrackBudgetMilliseconds)
+                break;
+        }
+
+        if (track.Changes.Count >= needed || track.Failure != null)
+            track.Previous = null;
+        return track;
+    }
+
+    private ReplayOutput? ReplayDraw(DeepGroup view, DeepPass pass, TraceResourceId id, ProfileNode? draw, PixelTrack track)
+    {
+        ReplayResult result = _source.Replay(new ReplayRequest { GroupIndex = view.Index, PassIndex = pass.Index, EventIndex = draw?.DrawOrdinal ?? -1, Indirect = draw?.Slice });
+        ReplayOutput? output = Output(result, id);
+        if (output == null)
+            track.Failure = result.Status == ReplayStatus.NotReplayable ? result.Reason : "The replay did not read back this resource.";
+        return output;
     }
 
     private static byte[] CoverageMask(bool[] changed)

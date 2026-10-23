@@ -168,6 +168,45 @@ internal static class Texels
         return changed;
     }
 
+    /// <summary>Every texel that differs between the two copies of the region, at full resolution.</summary>
+    public static TexelChanges Diff(ReadOnlySpan<byte> before, ReadOnlySpan<byte> after, in CopyRegion region)
+    {
+        int stride = Stride(region.Format), width = (int)region.Width, rowBytes = width * stride;
+        int x0 = int.MaxValue, x1 = -1, y0 = int.MaxValue, y1 = -1;
+        for (int y = 0; y < region.Height; y++)
+        {
+            if (!TryRow(before, after, region, y, rowBytes, out ReadOnlySpan<byte> a, out ReadOnlySpan<byte> b) || a.SequenceEqual(b))
+                continue;
+
+            int last = width - 1;
+            while (a.Slice(last * stride, stride).SequenceEqual(b.Slice(last * stride, stride)))
+                last--;
+            x0 = Math.Min(x0, a.CommonPrefixLength(b) / stride);
+            x1 = Math.Max(x1, last);
+            y0 = Math.Min(y0, y);
+            y1 = y;
+        }
+
+        if (x1 < 0)
+            return TexelChanges.None;
+
+        TexelChanges changes = new(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+        for (int y = y0; y <= y1; y++)
+        {
+            TryRow(before, after, region, y, rowBytes, out ReadOnlySpan<byte> a, out ReadOnlySpan<byte> b);
+            int start = x0 * stride, end = (x1 + 1) * stride;
+            while (start < end)
+            {
+                start += a[start..end].CommonPrefixLength(b[start..end]);
+                if (start >= end)
+                    break;
+                changes.Add(start / stride, y);
+                start = (start / stride + 1) * stride;
+            }
+        }
+        return changes;
+    }
+
     private static bool TryRow(ReadOnlySpan<byte> before, ReadOnlySpan<byte> after, in CopyRegion region, int y, int rowBytes, out ReadOnlySpan<byte> a, out ReadOnlySpan<byte> b)
     {
         int offset = (int)region.Offset + y * rowBytes;
