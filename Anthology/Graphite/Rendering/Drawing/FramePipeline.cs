@@ -122,11 +122,13 @@ internal sealed partial class FramePipeline : IDisposable
         NoScreenVisibility = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R8_UNorm, TextureUsage.Sampled));
         NoScreenIrradiance = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
         NoSceneColor = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
+        NoSceneDepth = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R32_Float, TextureUsage.Sampled));
         for (uint layer = 0; layer < 6; layer++)
         {
             device.UpdateTexture<byte>(NoScreenVisibility, [255], TextureRegion.Whole(NoScreenVisibility, 0, layer));
             device.UpdateTexture<ushort>(NoScreenIrradiance, [0, 0, 0, 0], TextureRegion.Whole(NoScreenIrradiance, 0, layer));
             device.UpdateTexture<ushort>(NoSceneColor, [0, 0, 0, 0], TextureRegion.Whole(NoSceneColor, 0, layer));
+            device.UpdateTexture<float>(NoSceneDepth, [0f], TextureRegion.Whole(NoSceneDepth, 0, layer));
         }
         ClearProgram = FullscreenProgram.Create(device, compiler, InternalShaders.Clear, "Graphite/Clear", source: false);
         BlendAttachmentDescription untouched = BlendAttachmentDescription.OverrideBlend with { ColorWriteMask = ColorWriteMask.None };
@@ -175,6 +177,7 @@ internal sealed partial class FramePipeline : IDisposable
 
     /// <summary>The scene colour a view without a copy reads: black, six layers.</summary>
     public Texture NoSceneColor { get; }
+    public Texture NoSceneDepth { get; }
 
     // An RGBA8 texture from the library's data, in its stored row order, in every layer, mipmapped on the GPU when asked
     private static Texture LoadData(GraphicsDevice device, string file, uint width, uint height, bool mipmapped, uint layers = 1)
@@ -1048,6 +1051,7 @@ internal sealed partial class FramePipeline : IDisposable
         NoScreenVisibility.Dispose();
         NoScreenIrradiance.Dispose();
         NoSceneColor.Dispose();
+        NoSceneDepth.Dispose();
         ClearProgram.Dispose();
         CopyBackProgram.Dispose();
         foreach (IDisposable retired in _retired)
