@@ -207,7 +207,7 @@ public static class CliSnapshotCommands
             notReplayable = passes.Count(p => p.NotReplayable != null),
             draws = light.Groups.SelectMany(g => g.Passes).Sum(p => (long)p.Stats.Draws),
             dispatches = light.Groups.SelectMany(g => g.Passes).Sum(p => (long)p.Stats.Dispatches),
-            gpuMilliseconds = Round(light.CommandBuffers.Sum(b => b.Milliseconds ?? 0)),
+            gpuMilliseconds = Round(light.CommandBuffers.Where(b => !b.Name.StartsWith(CaptureCopy.BufferPrefix, StringComparison.Ordinal)).Sum(b => b.Milliseconds ?? 0)),
             resources = recording.Resources.Length,
             programs = recording.Programs.Length,
             blobBytes = recording.Blobs.Sum(b => (long)b.Data.Length),
