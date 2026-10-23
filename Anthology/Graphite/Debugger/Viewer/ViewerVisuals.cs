@@ -26,6 +26,7 @@ internal sealed partial class ProfilerView
     private readonly Dictionary<(int, int, int?, IndirectSlice?), ReplayResult> _replays = new();
     private readonly Dictionary<string, (object Texture, int Width, int Height, string Version)> _textures = new();
     private readonly ConditionalWeakTable<byte[], Dictionary<CopyRegion, byte[]>> _previews = new();
+    private readonly ConditionalWeakTable<byte[], ConditionalWeakTable<byte[], Dictionary<CopyRegion, byte[]>>> _coverages = new();
     private readonly bool[] _channels = { true, true, true, true };
     private float _exposure;
     private int _mip;
@@ -71,7 +72,7 @@ internal sealed partial class ProfilerView
             if (step is { } s && s.EventIndex >= s.Ordinal && Output(Replay(model, view.Index, pass.Index, s.Ordinal, s.Indirect), id) is { } after
                 && Output(s.Indirect is { Count: > 1 } sl ? Replay(model, view.Index, pass.Index, s.Ordinal, sl with { Count = sl.Count - 1 }) : Replay(model, view.Index, pass.Index, s.Ordinal - 1), id) is { } before
                 && Region(after, _mip) is { } covered)
-                data.Coverage = CoverageMask(Preview(before, covered), Preview(after, covered));
+                data.Coverage = Coverage(before, after, covered);
         }
         else
         {
@@ -125,14 +126,24 @@ internal sealed partial class ProfilerView
         return pixels;
     }
 
-    private static byte[] CoverageMask(ReadOnlySpan<byte> before, ReadOnlySpan<byte> after)
+    private byte[] Coverage(ReplayOutput before, ReplayOutput after, CopyRegion region)
     {
-        byte[] mask = new byte[after.Length];
-        for (int i = 0; i + 3 < after.Length && i + 3 < before.Length; i += 4)
+        byte[] from = ImmutableCollectionsMarshal.AsArray(before.Data.Items) ?? [];
+        byte[] to = ImmutableCollectionsMarshal.AsArray(after.Data.Items) ?? [];
+        Dictionary<CopyRegion, byte[]> masks = _coverages.GetOrCreateValue(to).GetOrCreateValue(from);
+        if (!masks.TryGetValue(region, out byte[]? mask))
+            masks[region] = mask = CoverageMask(Texels.Changed(from, to, region, Texels.PreviewStep(region)));
+        return mask;
+    }
+
+    private static byte[] CoverageMask(bool[] changed)
+    {
+        byte[] mask = new byte[changed.Length * 4];
+        for (int p = 0; p < changed.Length; p++)
         {
-            bool changed = before[i] != after[i] || before[i + 1] != after[i + 1] || before[i + 2] != after[i + 2];
-            if (!changed)
+            if (!changed[p])
                 continue;
+            int i = p * 4;
             mask[i] = Style.Coverage.R;
             mask[i + 1] = Style.Coverage.G;
             mask[i + 2] = Style.Coverage.B;

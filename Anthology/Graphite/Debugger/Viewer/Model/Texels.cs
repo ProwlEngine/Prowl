@@ -146,6 +146,37 @@ internal static class Texels
         return Math.Max(1, count);
     }
 
+    /// <summary>Marks each preview pixel whose block of texels differs between the two copies of the region.</summary>
+    public static bool[] Changed(ReadOnlySpan<byte> before, ReadOnlySpan<byte> after, in CopyRegion region, int step)
+    {
+        (int width, int height) = PreviewSize(region, step);
+        bool[] changed = new bool[width * height];
+        int stride = Stride(region.Format), rowBytes = (int)region.Width * stride;
+        for (int y = 0; y < region.Height; y++)
+        {
+            if (!TryRow(before, after, region, y, rowBytes, out ReadOnlySpan<byte> a, out ReadOnlySpan<byte> b) || a.SequenceEqual(b))
+                continue;
+
+            int row = y / step * width;
+            for (int x = 0; x < width; x++)
+            {
+                int start = x * step * stride, length = Math.Min(step * stride, rowBytes - start);
+                if (!changed[row + x] && !a.Slice(start, length).SequenceEqual(b.Slice(start, length)))
+                    changed[row + x] = true;
+            }
+        }
+        return changed;
+    }
+
+    private static bool TryRow(ReadOnlySpan<byte> before, ReadOnlySpan<byte> after, in CopyRegion region, int y, int rowBytes, out ReadOnlySpan<byte> a, out ReadOnlySpan<byte> b)
+    {
+        int offset = (int)region.Offset + y * rowBytes;
+        bool inside = offset + rowBytes <= before.Length && offset + rowBytes <= after.Length;
+        a = inside ? before.Slice(offset, rowBytes) : default;
+        b = inside ? after.Slice(offset, rowBytes) : default;
+        return inside;
+    }
+
     private static void Range(ReadOnlySpan<byte> data, in CopyRegion region, int step, out float min, out float max)
     {
         min = float.MaxValue;
