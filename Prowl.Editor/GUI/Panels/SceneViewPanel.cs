@@ -539,6 +539,19 @@ public class SceneViewPanel : DockPanel
         }
     }
 
+    private const float IconPickRadius = 12f;
+
+    private static bool TryGetGizmoIconPosition(GameObject go, out Float3 position)
+    {
+        position = default;
+        if (go.HideFlags.HasFlag(HideFlags.NoGizmos)) return false;
+
+        if (go.GetComponent<Light>() is { } light && light.EnabledInHierarchy) { position = go.Transform.Position; return true; }
+        if (go.GetComponent<Camera>() is { } cam && cam.EnabledInHierarchy) { position = go.Transform.Position; return true; }
+        if (go.GetComponent<ReflectionProbe>() is { } probe && probe.EnabledInHierarchy) { position = probe.CapturePosition; return true; }
+        return false;
+    }
+
     internal static GameObject? PickObjectAt(Scene scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
     {
         Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
@@ -557,6 +570,15 @@ public class SceneViewPanel : DockPanel
                 continue;
             }
 
+            if (camera.ShowGizmos && TryGetGizmoIconPosition(go, out Float3 iconPos))
+            {
+                Float3 screen = camera.Camera.WorldToScreenPoint(iconPos, panelSize);
+                if (screen.Z > 0 && screen.Z < bestDist && Float2.Distance(new Float2(screen.X, screen.Y), screenPos) <= IconPickRadius)
+                {
+                    bestDist = screen.Z;
+                    bestHit = go;
+                }
+            }
         }
 
         // UI elements aren't visible to MeshRenderer raycasts but should still be selectable from the
