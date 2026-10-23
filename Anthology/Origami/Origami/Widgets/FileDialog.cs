@@ -67,7 +67,7 @@ public static class FileDialog
         _config = config;
         _overlayMode = mode;
 
-        _overlayState = new EmbeddedState();
+        _overlayState = new EmbeddedState { Filters = filters };
         string path = startPath ?? Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         if (!Directory.Exists(path)) path = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         EnsureInit(_overlayState, path);
@@ -106,6 +106,7 @@ public static class FileDialog
         public int SortColumn;
         public bool SortAscending = true;
         public bool ShowHiddenEntries = false;
+        public string[]? Filters;
         public bool Initialized;
 
         // Navigation history (back / forward)
@@ -144,7 +145,7 @@ public static class FileDialog
         string p = startPath ?? AppContext.BaseDirectory;
         if (!Directory.Exists(p)) p = AppContext.BaseDirectory;
         st.Path = Path.GetFullPath(p);
-        st.Entries = LoadDir(st.Path, st.SortColumn, st.SortAscending, st.ShowHiddenEntries);
+        st.Entries = LoadDir(st.Path, st.SortColumn, st.SortAscending, st.ShowHiddenEntries, st.Filters);
         st.History = new List<string> { st.Path };
         st.HistoryIndex = 0;
         st.Initialized = true;
@@ -169,7 +170,7 @@ public static class FileDialog
         var labelFont = theme.Medium ?? font;
 
         // ── navigation / sort (local, per-id) ────────────────────
-        void Reload() => st.Entries = LoadDir(st.Path, st.SortColumn, st.SortAscending, st.ShowHiddenEntries);
+        void Reload() => st.Entries = LoadDir(st.Path, st.SortColumn, st.SortAscending, st.ShowHiddenEntries, st.Filters);
 
         void NavigateTo(string path, bool addHistory)
         {
@@ -881,7 +882,7 @@ public static class FileDialog
         Origami.Current.Icons.EyeOff?.Draw(c, new Rect(cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2), col);
     }
 
-    private static List<FileEntry> LoadDir(string path, int sortColumn, bool ascending, bool showHidden = false)
+    private static List<FileEntry> LoadDir(string path, int sortColumn, bool ascending, bool showHidden = false, string[]? filters = null)
     {
         var list = new List<FileEntry>();
         try
@@ -895,6 +896,7 @@ public static class FileDialog
             foreach (var file in di.EnumerateFiles())
             {
                 if (!showHidden && (file.Attributes & FileAttributes.Hidden) != 0) continue;
+                if (filters is { Length: > 0 } && !filters.Any(x => file.Name.EndsWith(x, StringComparison.OrdinalIgnoreCase))) continue;
                 list.Add(new FileEntry { Name = file.Name, FullPath = file.FullName, IsDirectory = false, Size = file.Length, LastModified = file.LastWriteTime });
             }
         }
