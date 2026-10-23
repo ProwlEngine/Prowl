@@ -2,7 +2,7 @@
 
   <!-- Shared version for all Prowl.* NuGet packages. Bump once to update Runtime and Editor. -->
   <PropertyGroup>
-    <ProwlPackageVersion>3.9.1</ProwlPackageVersion>
+    <ProwlPackageVersion>3.9.3</ProwlPackageVersion>
     <!-- Graphite is held back until Prowl is ported to the 3.9 render graph API. -->
     <GraphitePackageVersion>3.8.8</GraphitePackageVersion>
   </PropertyGroup>
