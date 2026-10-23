@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using Prowl.Graphite;
@@ -51,6 +52,10 @@ public class PaperRenderer : ICanvasRenderer
     private int _fbHeight;
     private readonly Dictionary<Framebuffer, UiPass> _passes = [];
 
+    // Every UI pass's target by its color textures, so a UI that draws one of them (the editor showing the game's
+    // view) declares a read of the same graph resource, which orders it after the write and makes it sampleable
+    private static readonly ConditionalWeakTable<GTexture, Graphite.RenderTexture> s_uiTargets = new();
+
     public bool SupportsBackdropBlur => true;
 
     /// <summary>Where the UI draws, null for the window.</summary>
@@ -71,7 +76,11 @@ public class PaperRenderer : ICanvasRenderer
             _passes.Remove(framebuffer);
         }
 
-        UiPass created = new(new Graphite.RenderTexture(target));
+        var renderTarget = new Graphite.RenderTexture(target);
+        foreach (GTexture color in renderTarget.ColorTextures)
+            s_uiTargets.AddOrUpdate(color, renderTarget);
+
+        UiPass created = new(renderTarget);
         _passes[target] = created;
         return created;
     }
@@ -136,6 +145,7 @@ public class PaperRenderer : ICanvasRenderer
         public required byte[] Vertices;
         public required uint[] Indices;
         public required Call[] Calls;
+        public required Graphite.RenderTexture[] SampledTargets;
         public required float SdfRange;
         public required bool Clear;
         public required Sampler LinearClamp;
@@ -151,6 +161,7 @@ public class PaperRenderer : ICanvasRenderer
         float fbScale = canvas.FramebufferScale;
         GTexture white = _defaultTexture.GpuTexture!;
         Call[] calls = new Call[drawCalls.Count];
+        List<Graphite.RenderTexture>? sampledTargets = null;
         for (int i = 0; i < calls.Length; i++)
         {
             DrawCall drawCall = drawCalls[i];
@@ -159,6 +170,11 @@ public class PaperRenderer : ICanvasRenderer
             ref Call call = ref calls[i];
             call.ElementCount = drawCall.ElementCount;
             call.Texture = texture.IsValid() ? texture.GpuIfLoaded : drawCall.Texture as GTexture;
+            if (call.Texture != null && s_uiTargets.TryGetValue(call.Texture, out Graphite.RenderTexture? drawnTarget))
+            {
+                sampledTargets ??= [];
+                if (!sampledTargets.Contains(drawnTarget)) sampledTargets.Add(drawnTarget);
+            }
             call.TextureView = texture.IsValid() ? texture.DisplayViewIfLoaded : null;
             call.TextureSampler = texture.IsValid() ? Graphics.GetSampler(texture.SamplerUnchecked) : null;
             call.Font = font.IsValid() ? font.GpuIfLoaded : null;
@@ -188,6 +204,7 @@ public class PaperRenderer : ICanvasRenderer
             Vertices = MemoryMarshal.AsBytes(canvas.Vertices).ToArray(),
             Indices = canvas.Indices.ToArray(),
             Calls = calls,
+            SampledTargets = sampledTargets?.ToArray() ?? [],
             SdfRange = canvas.Text.FontEngine.DistanceRange,
             Clear = !drawnUnder,
             LinearClamp = Graphics.GetSampler(SamplerDescription.Linear with { AddressModeU = SamplerAddressMode.Clamp, AddressModeV = SamplerAddressMode.Clamp, AddressModeW = SamplerAddressMode.Clamp }),
@@ -250,7 +267,12 @@ public class PaperRenderer : ICanvasRenderer
         {
             TextureHandle handle = graph.Import(target);
             TargetLoadStoreOps ops = new(view.Clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 1f)) : AttachmentOps.Loaded, AttachmentOps.Loaded);
-            graph.AddPass("Paper", pass => pass.Write(handle, TextureState.Attachment | TextureState.Sampled, firstWrite: ops), context => Render(context, view));
+            graph.AddPass("Paper", pass =>
+            {
+                pass.Write(handle, TextureState.Attachment | TextureState.Sampled, firstWrite: ops);
+                foreach (Graphite.RenderTexture sampled in view.SampledTargets)
+                    pass.Read(graph.Import(sampled), TextureState.Sampled);
+            }, context => Render(context, view));
         }
 
         private void EnsurePrograms(GraphicsDevice device)
