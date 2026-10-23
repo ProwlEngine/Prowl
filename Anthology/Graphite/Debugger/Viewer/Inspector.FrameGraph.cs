@@ -35,7 +35,6 @@ internal sealed partial class ProfilerView
     private const int AliasSpan = 3;
     private const int AliasFan = 4;
     private const float PillWidth = 44f;
-    private const float MinRun = 40f;
     private const string FbKey = "*fb";
 
     private string? _frameGraphSelection;
@@ -629,32 +628,8 @@ internal sealed partial class ProfilerView
             float width = (rightSinks.Count > 0 ? rightLaneX + rightLane : passX[^1] + FramePassWidth) + KindPad;
 
             float Height(GraphNode n) => NodeGraphPreview.MeasureHeight(n, metrics);
-            float Stack(IEnumerable<GraphNode> items) => items.Sum(n => Height(n) + RowGap) - (items.Any() ? RowGap : 0f);
-
-            List<(GraphNode Node, float Left)> topItems = topAliases.Select(a => (a.Node, passX[Math.Max(a.Consumers.Min(c => c.Level) - 1, 0)])).ToList();
-            List<(GraphNode Node, float Left)> bottomItems = bottomSinks.Select(sk => (sk.Node, passX[Math.Min(sk.Writer.Level + 1, passX.Length - 1)])).ToList();
-
-            float BandRow(List<(GraphNode Node, float Left)> items)
-                => items.Count > 0 ? items.Max(i => Height(i.Node)) + RowGap : 0f;
-
-            (float Height, float Right) PlaceBand(List<(GraphNode Node, float Left)> items, float y0)
-            {
-                float rowH = BandRow(items);
-                List<float> rights = new();
-                float maxRight = 0f;
-                foreach (var (node, left) in items.OrderBy(i => i.Left))
-                {
-                    int row = 0;
-                    while (row < rights.Count && left < rights[row] + RowGap)
-                        row++;
-                    if (row == rights.Count)
-                        rights.Add(0f);
-                    rights[row] = left + WidthOf(node);
-                    maxRight = Math.Max(maxRight, rights[row]);
-                    node.Position = new Float2(left, y0 + row * rowH);
-                }
-                return (rights.Count * rowH, maxRight);
-            }
+            float Stack(IEnumerable<GraphNode> items) => items.Sum(n => Height(n) + PillGap) - (items.Any() ? PillGap : 0f);
+            float headerH = metrics.HeaderHeight;
 
             float topHeight = 0f;
 
@@ -723,130 +698,195 @@ internal sealed partial class ProfilerView
                 }
             }
 
-            List<GraphNode> fixedNodes = kind.Passes.Select(p => kind.PassNodes[PassId(kind, p)]).Concat(leftAliases.Select(a => a.Node)).Concat(rightSinks.Select(sk => sk.Node)).ToList();
-            List<GraphNode> near = new();
-            List<(GraphNode Node, float Left)> bandTop = new(), bandBottom = new();
+            List<GraphNode> placed = kind.Passes.Select(p => kind.PassNodes[PassId(kind, p)]).Concat(leftAliases.Select(a => a.Node)).Concat(rightSinks.Select(sk => sk.Node)).ToList();
+            List<GraphNode> hooked = new();
 
-            (float X, float Y, float W, float H) Rect(GraphNode n) => (n.Position.X, n.Position.Y, WidthOf(n), Height(n));
-
-            bool Overlaps(GraphNode n, (float X, float Y, float W, float H) at)
+            bool Free(float x, float y, float w, float h)
             {
-                const float margin = 8f;
-                foreach (GraphNode other in fixedNodes.Concat(near))
-                {
-                    var o = Rect(other);
-                    if (at.X < o.X + o.W + margin && at.X + at.W > o.X - margin && at.Y < o.Y + o.H + margin && at.Y + at.H > o.Y - margin)
-                        return true;
-                }
-                return false;
+                const float margin = 6f;
+                foreach (GraphNode o in placed)
+                    if (x < o.Position.X + WidthOf(o) + margin && x + w > o.Position.X - margin && y < o.Position.Y + Height(o) + margin && y + h > o.Position.Y - margin)
+                        return false;
+                return true;
             }
 
-            int Crossings((float X, float Y, float W, float H) at, List<GraphNode> targets, bool input)
+            void Hook(GraphNode node, float x, float y, bool down)
+            {
+                float w = WidthOf(node), h = Height(node);
+                for (int guard = 0; guard < 400 && !Free(x, y, w, h); guard++)
+                    y += down ? h + PillGap : -(h + PillGap);
+                node.Position = new Float2(x, y);
+                placed.Add(node);
+                hooked.Add(node);
+            }
+
+            List<GraphNode> passNodes = kind.Passes.Select(p => kind.PassNodes[PassId(kind, p)]).ToList();
+
+            float PortY(GraphNode node, bool input, string id)
+            {
+                List<GraphPort> row = input ? node.Inputs : node.Outputs;
+                return node.Position.Y + headerH + 4f + (row.FindIndex(x => x.Id == id) + 0.5f) * metrics.RowHeight;
+            }
+
+            List<(float X1, float Y1, float X2, float Y2)> wires = new();
+            foreach (GraphConnection c in connections)
+                if (!c.Flow && kind.PassNodes.TryGetValue(c.FromNode, out GraphNode? wf) && kind.PassNodes.TryGetValue(c.ToNode, out GraphNode? wt))
+                    wires.Add((wf.Position.X + WidthOf(wf), PortY(wf, false, c.FromPort), wt.Position.X, PortY(wt, true, c.ToPort)));
+
+            static bool Cuts((float X1, float Y1, float X2, float Y2) a, (float X1, float Y1, float X2, float Y2) b)
+            {
+                float d1 = (b.X2 - b.X1) * (a.Y1 - b.Y1) - (b.Y2 - b.Y1) * (a.X1 - b.X1);
+                float d2 = (b.X2 - b.X1) * (a.Y2 - b.Y1) - (b.Y2 - b.Y1) * (a.X2 - b.X1);
+                float d3 = (a.X2 - a.X1) * (b.Y1 - a.Y1) - (a.Y2 - a.Y1) * (b.X1 - a.X1);
+                float d4 = (a.X2 - a.X1) * (b.Y2 - a.Y1) - (a.Y2 - a.Y1) * (b.X2 - a.X1);
+                return d1 * d2 < 0f && d3 * d4 < 0f;
+            }
+
+            int Hits(float x1, float y1, float x2, float y2, GraphNode skip)
             {
                 int hits = 0;
-                foreach (GraphNode target in targets)
+                foreach (GraphNode o in passNodes)
                 {
-                    var t = Rect(target);
-                    float fx = input ? at.X + at.W : t.X + t.W, fy = input ? at.Y + at.H / 2f : t.Y + t.H / 2f;
-                    float tx = input ? t.X : at.X, ty = input ? t.Y + t.H / 2f : at.Y + at.H / 2f;
-                    foreach (GraphNode other in fixedNodes.Concat(near))
+                    if (o == skip)
+                        continue;
+                    for (int i = 1; i < 24; i++)
                     {
-                        var o = Rect(other);
-                        for (int i = 1; i < 16; i++)
+                        float x = x1 + (x2 - x1) * i / 24f, y = y1 + (y2 - y1) * i / 24f;
+                        if (x > o.Position.X && x < o.Position.X + WidthOf(o) && y > o.Position.Y && y < o.Position.Y + Height(o))
                         {
-                            float x = fx + (tx - fx) * i / 16f, y = fy + (ty - fy) * i / 16f;
-                            if (x > o.X && x < o.X + o.W && y > o.Y && y < o.Y + o.H)
-                            {
-                                hits++;
-                                break;
-                            }
+                            hits++;
+                            break;
                         }
                     }
                 }
                 return hits;
             }
 
-            bool TryNear(GraphNode node, List<GraphNode> targets, bool input)
+            float LinkCost(List<(GraphNode Node, List<(GraphNode Pass, string Port)> Targets)> items, int from, int to, float edge, bool down, bool input, bool alignRight, GraphNode anchor, out float steepness)
             {
-                float w = WidthOf(node), h = Height(node);
-                float bestCost = float.MaxValue;
-                Float2 best = default;
-                foreach (GraphNode target in targets)
+                float cost = 0f;
+                steepness = 0f;
+                for (int step = 0, i = down ? from : to - 1; step < to - from; step++, i += down ? 1 : -1)
                 {
-                    var t = Rect(target);
-                    float near1 = input ? t.X - w - ColumnGap * 0.5f : t.X + t.W + ColumnGap * 0.5f;
-                    float back = input ? t.X - FramePassWidth - ColumnGap : t.X + FramePassWidth + ColumnGap;
-                    float below = t.Y + t.H + RowGap * 0.5f, above = t.Y - h - RowGap * 0.5f, level = t.Y + (t.H - h) / 2f;
-                    (float X, float Y)[] spots =
+                    GraphNode n = items[i].Node;
+                    float w = WidthOf(n), h = Height(n);
+                    float x = alignRight ? anchor.Position.X + WidthOf(anchor) - w : anchor.Position.X;
+                    float y = down ? edge : edge - h;
+                    edge = down ? y + h + PillGap : y - PillGap;
+                    float cy = y + h / 2f;
+                    if (!Free(x, y, w, h))
+                        cost += 2f;
+                    foreach ((GraphNode pass, string port) in items[i].Targets)
                     {
-                        (near1, level),
-                        (near1, below),
-                        (near1, above),
-                        (back, level),
-                        (back, below),
-                        (back, above),
-                        (t.X, below),
-                        (t.X, above),
-                    };
-                    foreach ((float x, float y) in spots)
-                    {
-                        if (x < 4f || y < KindTitle)
-                            continue;
-                        var at = (X: x, Y: y, W: w, H: h);
-                        if (Overlaps(node, at))
-                            continue;
-                        int crossings = Crossings(at, targets, input);
-                        if (crossings > (targets.Count > 1 ? 1 : 0))
-                            continue;
-                        float cost = targets.Sum(tg =>
-                        {
-                            var r = Rect(tg);
-                            float portX = input ? r.X : r.X + r.W;
-                            float pillX = input ? x + w : x;
-                            float run = input ? portX - pillX : pillX - portX;
-                            float cost = run < 0f ? 200f - run : run + (run < MinRun ? (MinRun - run) * 2f : 0f);
-                            return cost + MathF.Abs(y + h / 2f - (r.Y + r.H / 2f)) * 2f;
-                        }) + crossings * 300f;
-                        if (cost < bestCost)
-                        {
-                            bestCost = cost;
-                            best = new Float2(x, y);
-                        }
+                        float px = input ? pass.Position.X : pass.Position.X + WidthOf(pass), py = PortY(pass, input, port);
+                        float ex = input ? x + w : x;
+                        cost += Hits(ex, cy, px, py, pass) / (float)items[i].Targets.Count;
+                        foreach (var wire in wires)
+                            if (Cuts((ex, cy, px, py), wire))
+                                cost += 0.5f / items[i].Targets.Count;
+                        if (pass == items[i].Targets[0].Pass)
+                            steepness = Math.Max(steepness, MathF.Abs(py - cy) / 2f - MathF.Abs(px - ex));
                     }
                 }
-                if (bestCost == float.MaxValue)
-                    return false;
-                node.Position = best;
-                near.Add(node);
-                return true;
+                return cost;
             }
 
-            foreach (KindAlias alias in topAliases)
-                if (!TryNear(alias.Node, alias.Consumers.Select(c => kind.PassNodes[PassId(kind, c)]).ToList(), true))
-                    bandTop.Add(topItems.First(i => i.Node == alias.Node));
-            foreach (KindSink sink in bottomSinks)
-                if (!TryNear(sink.Node, new List<GraphNode> { kind.PassNodes[PassId(kind, sink.Writer)] }, false))
-                    bandBottom.Add(bottomItems.First(i => i.Node == sink.Node));
-
-            topHeight = bandTop.Count > 0 ? PlaceBand(bandTop, KindTitle).Height : 0f;
-            foreach (GraphNode n in fixedNodes.Concat(near))
-                n.Position += new Float2(0f, topHeight);
-
-            float contentBottom = Math.Max(KindTitle + topHeight + contentHeight, near.Count > 0 ? near.Max(n => n.Position.Y + Height(n)) : 0f);
-            float bottomHeight = bandBottom.Count > 0 ? PlaceBand(bandBottom, contentBottom + RowGap).Height : 0f;
-            float bandRight = new[]
+            void Record(GraphNode pill, List<(GraphNode Pass, string Port)> targets, bool input)
             {
-                bandTop.Count > 0 ? bandTop.Max(i => i.Left + WidthOf(i.Node)) : 0f,
-                bandBottom.Count > 0 ? bandBottom.Max(i => i.Left + WidthOf(i.Node)) : 0f,
-                near.Count > 0 ? near.Max(n => n.Position.X + WidthOf(n)) : 0f,
-            }.Max();
-            width = Math.Max(width, bandRight + KindPad);
-            float totalContent = contentBottom - KindTitle + (bottomHeight > 0 ? bottomHeight + RowGap : 0f);
+                foreach ((GraphNode pass, string port) in targets)
+                    wires.Add(input
+                        ? (pill.Position.X + WidthOf(pill), pill.Position.Y + Height(pill) / 2f, pass.Position.X, PortY(pass, true, port))
+                        : (pass.Position.X + WidthOf(pass), PortY(pass, false, port), pill.Position.X, pill.Position.Y + Height(pill) / 2f));
+            }
+
+            void Hug(GraphNode anchor, List<(GraphNode Node, List<(GraphNode Pass, string Port)> Targets)> items, int defaultSplit, bool input)
+            {
+                bool alignRight = input;
+                int best = defaultSplit;
+                float bestCost = float.MaxValue;
+                for (int k = 0; k <= items.Count; k++)
+                {
+                    float cost = Math.Abs(k - defaultSplit)
+                        + LinkCost(items, 0, k, anchor.Position.Y - HugGap, false, input, alignRight, anchor, out _)
+                        + LinkCost(items, k, items.Count, anchor.Position.Y + Height(anchor) + HugGap, true, input, alignRight, anchor, out _);
+                    if (cost < bestCost)
+                    {
+                        bestCost = cost;
+                        best = k;
+                    }
+                }
+
+                LinkCost(items, best, items.Count, anchor.Position.Y + Height(anchor) + HugGap, true, input, alignRight, anchor, out float belowSteep);
+                float belowBack = best > 0 && best < items.Count ? Math.Clamp(belowSteep, 0f, MaxSetback) : 0f;
+
+                float edge = anchor.Position.Y - HugGap;
+                for (int i = best - 1; i >= 0; i--)
+                {
+                    GraphNode n = items[i].Node;
+                    Hook(n, alignRight ? anchor.Position.X + WidthOf(anchor) - WidthOf(n) : anchor.Position.X, edge - Height(n), false);
+                    Record(n, items[i].Targets, input);
+                    edge = n.Position.Y - PillGap;
+                }
+                edge = anchor.Position.Y + Height(anchor) + HugGap;
+                for (int i = best; i < items.Count; i++)
+                {
+                    GraphNode n = items[i].Node;
+                    Hook(n, alignRight ? anchor.Position.X + WidthOf(anchor) - WidthOf(n) - belowBack : anchor.Position.X + belowBack, edge, true);
+                    Record(n, items[i].Targets, input);
+                    edge = n.Position.Y + Height(n) + PillGap;
+                }
+            }
+
+            GraphNode? Neighbor(KindPass pass, bool behind)
+            {
+                KindPass? other = behind
+                    ? kind.Passes.Where(q => q.Level < pass.Level).OrderByDescending(q => q.Level).FirstOrDefault()
+                    : kind.Passes.Where(q => q.Level > pass.Level).OrderBy(q => q.Level).FirstOrDefault();
+                return other == null ? null : kind.PassNodes[PassId(kind, other)];
+            }
+
+            foreach (var group in topAliases.GroupBy(a => a.Consumers[0]))
+            {
+                List<KindAlias> members = group.OrderBy(AliasOrder).ToList();
+                GraphNode? behind = Neighbor(group.Key, true);
+                if (behind == null)
+                    continue;
+                var items = members.Select(m => (m.Node, m.Consumers.Select(c => (kind.PassNodes[PassId(kind, c)], "i:" + m.Resource.Key)).ToList())).ToList();
+                Hug(behind, items, members.Count(m => m.Resource.Kind != GraphResourceKind.Texture), true);
+            }
+            foreach (var group in bottomSinks.GroupBy(sk => sk.Writer))
+            {
+                List<KindSink> members = group.OrderBy(sk => kind.Sinks.IndexOf(sk)).ToList();
+                int split = (members.Count + 1) / 2;
+                GraphNode? ahead = Neighbor(group.Key, false);
+                if (ahead == null)
+                {
+                    GraphNode writer = kind.PassNodes[PassId(kind, group.Key)];
+                    float y = writer.Position.Y + Height(writer) + HugGap;
+                    foreach (KindSink sk in members)
+                    {
+                        Hook(sk.Node, writer.Position.X + WidthOf(writer) + ColumnGap, y, true);
+                        y = sk.Node.Position.Y + Height(sk.Node) + PillGap;
+                    }
+                    continue;
+                }
+                var items = members.Select(m => (m.Node, new List<(GraphNode, string)> { (kind.PassNodes[PassId(kind, m.Writer)], "o:" + m.Resource.Key) })).ToList();
+                Hug(ahead, items, split, false);
+            }
+
+            topHeight = hooked.Count > 0 ? Math.Max(0f, KindTitle - hooked.Min(n => n.Position.Y)) : 0f;
+            float shiftX = placed.Count > 0 ? Math.Max(0f, KindPad - placed.Min(n => n.Position.X)) : 0f;
+            foreach (GraphNode n in placed)
+                n.Position += new Float2(shiftX, topHeight);
+
+            float contentBottom = Math.Max(KindTitle + topHeight + contentHeight, placed.Count > 0 ? placed.Max(n => n.Position.Y + Height(n)) : 0f);
+            width = Math.Max(width + shiftX, (placed.Count > 0 ? placed.Max(n => n.Position.X + WidthOf(n)) : 0f) + KindPad);
+            float totalContent = contentBottom - KindTitle;
 
             List<GraphNode> all = new();
             if (kind.Passes.Count > 0)
             {
-                float pillY = KindTitle + topHeight - minLane * laneStep + baseHeight / 2f - Height(kind.Entry) / 2f;
+                float pillY = KindTitle + topHeight - minLane * LaneStep + (headerH - Height(kind.Entry)) / 2f;
                 kind.Entry.Position = new Float2(-PillWidth / 2f, pillY);
                 kind.Exit.Position = new Float2(width - PillWidth / 2f, pillY);
                 all.Add(kind.Entry);
