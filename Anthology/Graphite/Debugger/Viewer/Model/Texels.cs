@@ -12,7 +12,8 @@ internal static class Texels
 
     public static bool CanDecode(PixelFormat format) => !format.ToString().StartsWith("BC", StringComparison.Ordinal) && !format.ToString().StartsWith("ETC", StringComparison.Ordinal);
 
-    public static int Stride(PixelFormat format) => IsDepth(format) ? 4 : (int)format.GetSizeInBytes();
+    // Matches CaptureCopyPlanner: depth planes are copied at 4 bytes a texel, except D16 at 2.
+    public static int Stride(PixelFormat format) => format == PixelFormat.D16_UNorm ? 2 : IsDepth(format) ? 4 : (int)format.GetSizeInBytes();
 
     public static Float4 Read(ReadOnlySpan<byte> data, in CopyRegion region, int x, int y)
     {
