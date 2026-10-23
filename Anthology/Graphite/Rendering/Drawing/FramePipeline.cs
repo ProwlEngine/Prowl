@@ -471,6 +471,7 @@ internal sealed partial class FramePipeline : IDisposable
         }
         Prepare(camera, view, world, time, width, height);
         UpdateSceneColor(camera, shape, width, height);
+        UpdateSceneDepth(camera, shape, width, height);
         camera.View.PixelWidth = width;
         camera.View.PixelHeight = height;
         bool capture = view.Kind is ViewKind.SkyCapture or ViewKind.ReflectionProbe;
@@ -617,6 +618,24 @@ internal sealed partial class FramePipeline : IDisposable
         camera.SceneColorUsed = used;
         if (used)
             camera.EnsureSceneColor(width, height, (uint)shape.Layers, camera.Build.ColorFormatOf(shape));
+    }
+
+    // Whether the view's transparent list reads the scene depth this frame, which makes the copy
+    private void UpdateSceneDepth(CameraFrame camera, CameraShape shape, uint width, uint height)
+    {
+        bool used = false;
+        foreach (DrawCall call in camera.Transparent.Calls)
+        {
+            DrawProgram program = DrawPrograms[call.Program];
+            if (program.Shader.PassReadsSceneDepth(program.PassIndex))
+            {
+                used = true;
+                break;
+            }
+        }
+        camera.SceneDepthUsed = used;
+        if (used)
+            camera.EnsureSceneDepth(width, height, (uint)shape.Layers, camera.Build.SceneDepthFormat);
     }
 
     internal FrameTime CurrentTime => _currentTime;
