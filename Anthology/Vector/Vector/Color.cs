@@ -483,6 +483,12 @@ public struct Color : IEquatable<Color>
         A = 1f;
     }
 
+    /// <summary>A color from channels of 0 to 255.</summary>
+    public static Color FromBytes(byte r, byte g, byte b, byte a = 255) => new(r / 255f, g / 255f, b / 255f, a / 255f);
+
+    // Whole number arguments would pick these over the float constructors, so (0, 0, 0, 1) meant an alpha of 1/255.
+    // They are kept only to stop such calls compiling: say FromBytes for 0 to 255, or write floats such as 1f.
+    [Obsolete("Whole numbers are ambiguous here. Use Color.FromBytes for 0 to 255 channels, or floats such as 1f for 0 to 1 channels.", true)]
     public Color(byte r, byte g, byte b, byte a)
     {
         this.R = r / 255f;
@@ -491,6 +497,7 @@ public struct Color : IEquatable<Color>
         this.A = a / 255f;
     }
 
+    [Obsolete("Whole numbers are ambiguous here. Use Color.FromBytes for 0 to 255 channels, or floats such as 1f for 0 to 1 channels.", true)]
     public Color(byte r, byte g, byte b)
     {
         this.R = r / 255f;
@@ -734,7 +741,7 @@ public struct Color : IEquatable<Color>
 
     public static implicit operator Color(Float4 v) => new Color(v.X, v.Y, v.Z, v.W);
     public static implicit operator Color(System.Numerics.Vector4 v) => new Color(v.X, v.Y, v.Z, v.W);
-    public static implicit operator Color(System.Drawing.Color c) => new Color(c.R, c.G, c.B, c.A);
+    public static implicit operator Color(System.Drawing.Color c) => FromBytes(c.R, c.G, c.B, c.A);
 
     public static Color operator +(Color a, float b) => new Color(a.R + b, a.G + b, a.B + b, a.A + b);
     public static Color operator -(Color a, float b) => new Color(a.R - b, a.G - b, a.B - b, a.A - b);
