@@ -302,11 +302,11 @@ public class RendererModule : ParticleSystemModule
         return _hasTrailBounds && ParticleBuffers.AnyViewSees(world, _trailBounds, 0f);
     }
 
-    // Header: mode, render mode, alignment / sheet / blend, lit, fade / min size, max size, length scale, velocity scale / pivot
+    // Header: mode, render mode, alignment, soft distance / sheet / blend, lit, fade / min size, max size, length scale, velocity scale / pivot
     private void WriteHeader(ParticleRenderProvider provider, int mode, Float4 sheet)
     {
         Span<Float4> rows = provider.Append(1);
-        rows[0] = new Float4(mode, (float)RenderMode, (float)Alignment, 0f);
+        rows[0] = new Float4(mode, (float)RenderMode, (float)Alignment, MathF.Max(SoftParticleDistance, 0f));
         rows[1] = sheet;
         bool fade = CameraFadeEnd > CameraFadeStart;
         rows[2] = new Float4((float)BlendMode, Lit ? 1f : 0f, fade ? CameraFadeStart : 0f, fade ? CameraFadeEnd : 0f);
