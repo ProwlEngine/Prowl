@@ -49,7 +49,7 @@ internal sealed partial class ProfilerView
                 rows[i].Selected = targets[i].Key == selectedKey;
         }
 
-        TargetStep targetStep = new(node.DrawOrdinal, node.DrawOrdinal);
+        TargetStep targetStep = new(node.DrawOrdinal, node.DrawOrdinal, node.Slice);
         ResourceTable(model, node, context, "Render targets", "Click to preview / magenta = pixels this draw changed",
             new[] { "Slot", "Resource", "Format", "Load", "Store" }, new[] { 0.6f, 1.6f, 1.6f, 0.8f, 0.8f }, rows, targets, targetStep);
 
@@ -64,11 +64,11 @@ internal sealed partial class ProfilerView
         RecordedResource? res = graph != null ? Backing(model.Index!, graph) : null;
         List<Row> rows = new();
 
-        byte[]? Sample(int eventIndex)
+        byte[]? Sample(int eventIndex, IndirectSlice? slice = null)
         {
             if (res == null)
                 return null;
-            ReplayOutput? output = Output(Replay(model, view.Index, pass.Index, eventIndex), res.Id);
+            ReplayOutput? output = Output(Replay(model, view.Index, pass.Index, eventIndex, slice), res.Id);
             if (output == null || output.Regions.Length == 0)
                 return null;
             int w = (int)output.Regions[0].Width, h = (int)output.Regions[0].Height;
@@ -81,7 +81,7 @@ internal sealed partial class ProfilerView
         for (int i = 0; i < step && i < passDraws.Count; i++)
         {
             ProfileNode d = passDraws[i];
-            byte[]? now = Sample(d.DrawOrdinal);
+            byte[]? now = Sample(d.DrawOrdinal, d.Slice);
             if (now != null && previous != null && !now.AsSpan().SequenceEqual(previous))
             {
                 rows.Add(new Row
