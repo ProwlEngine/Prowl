@@ -137,7 +137,10 @@ internal sealed partial class FramePipeline
             foreach (CameraFrame camera in world.Captures())
             {
                 if (_frame - camera.LastFrame > StaleViewFrames)
+                {
                     camera.ReleaseSceneColor();
+                    camera.ReleaseSceneDepth();
+                }
             }
         }
     }

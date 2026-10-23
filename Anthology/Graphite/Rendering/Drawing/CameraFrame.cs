@@ -43,6 +43,14 @@ internal sealed class CameraFrame : IDisposable
     public bool SceneColorUsed;
     private TextureView? _sceneColorView;
 
+    /// <summary>
+    /// The opaque depth that passes tagged "SceneDepth" = "Read" fetch, copied after the opaque surfaces the first time the
+    /// view's transparent list holds one. Used says whether this frame's list holds one.
+    /// </summary>
+    public Texture? SceneDepth;
+    public bool SceneDepthUsed;
+    private TextureView? _sceneDepthView;
+
     /// <summary>The cube a capture view presents into.</summary>
     public RenderTexture? CaptureCube;
 
@@ -263,6 +271,31 @@ internal sealed class CameraFrame : IDisposable
     public TextureView SceneColorView()
         => _sceneColorView ??= _device.ResourceFactory.CreateTextureView(new TextureViewDescription(SceneColor!) { Arrayed = true });
 
+    /// <summary>Makes the scene depth for the view's size. Returns whether it did.</summary>
+    public bool EnsureSceneDepth(uint width, uint height, uint layers, PixelFormat format)
+    {
+        layers = Math.Max(layers, 1u);
+        if (SceneDepth is { } existing && existing.Width == width && existing.Height == height && existing.ArrayLayers == layers && existing.Format == format)
+            return false;
+        ReleaseSceneDepth();
+        SceneDepth = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(width, height, 1, layers, format, TextureUsage.DepthStencil | TextureUsage.Sampled));
+        SceneDepth.Name = $"Graphite.SceneDepth {View.ViewId}";
+        return true;
+    }
+
+    /// <summary>The scene depth viewed as an array whatever its layer count.</summary>
+    public TextureView SceneDepthView()
+        => _sceneDepthView ??= _device.ResourceFactory.CreateTextureView(new TextureViewDescription(SceneDepth!) { Arrayed = true });
+
+    public void ReleaseSceneDepth()
+    {
+        if (_sceneDepthView != null)
+            _frame.Retired.Add(_sceneDepthView);
+        if (SceneDepth != null)
+            _frame.Retired.Add(SceneDepth);
+        (SceneDepth, _sceneDepthView) = (null, null);
+    }
+
     public void ReleaseSceneColor()
     {
         if (_sceneColorView != null)
@@ -418,6 +451,8 @@ internal sealed class CameraFrame : IDisposable
     {
         _sceneColorView?.Dispose();
         SceneColor?.Dispose();
+        _sceneDepthView?.Dispose();
+        SceneDepth?.Dispose();
         foreach (object state in States.Values)
             (state as IDisposable)?.Dispose();
         ViewTable.Dispose();
