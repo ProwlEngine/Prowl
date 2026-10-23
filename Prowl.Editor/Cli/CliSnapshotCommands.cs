@@ -108,7 +108,7 @@ public static class CliSnapshotCommands
     public static object SnapshotReplay(
         [CliArg("group", "Group index, from 'snapshot_dump'")] int group,
         [CliArg("pass", "Pass index within the group")] int pass,
-        [CliArg("event", "Last event of the pass to run, counted from 0. Omit to run the whole pass")] int? @event = null,
+        [CliArg("event", "Last event of the pass to run, counted from 0. -1 runs none, giving what the pass starts from. Omit to run the whole pass")] int? @event = null,
         [CliArg("resource", "Only write outputs of the resource with this name")] string resource = "",
         [CliArg("exposure", "Scale applied to color before clamping, useful for HDR targets")] float exposure = 1f,
         [CliArg("resolution", "Longest side of each image in pixels. Larger textures are shrunk by skipping texels")] int resolution = DefaultResolution,
