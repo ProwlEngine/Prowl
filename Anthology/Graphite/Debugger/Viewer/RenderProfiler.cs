@@ -187,9 +187,11 @@ internal sealed partial class ProfilerView
         {
             if (string.IsNullOrEmpty(path))
                 return;
+            if (!path.EndsWith(SnapshotExtension, StringComparison.OrdinalIgnoreCase))
+                path += SnapshotExtension;
             _source.SaveSnapshot(path);
             _message = $"Saved {System.IO.Path.GetFileName(path)}";
-        });
+        }, filters: SnapshotFilters);
     }
 
     internal void LoadSnapshot()
@@ -201,8 +203,11 @@ internal sealed partial class ProfilerView
             _source.LoadSnapshot(path);
             _message = $"Loaded {System.IO.Path.GetFileName(path)}";
             _snapshotTaken();
-        });
+        }, filters: SnapshotFilters);
     }
+
+    private const string SnapshotExtension = ".gsn";
+    private static readonly string[] SnapshotFilters = [SnapshotExtension];
 
     private ElementBuilder Card(string id, int index = 0)
         => _paper.Column(id, index)
