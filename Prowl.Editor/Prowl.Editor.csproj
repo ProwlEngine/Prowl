@@ -24,8 +24,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
-    <PackageReference Include="Prowl.Ember" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Ember.Analyzers" Version="$(ProwlPackageVersion)" />
     <!-- EngineObject null-safety analyzer: analyzes the editor's own source, and (as a normal reference) is
          copied to output + made available in-process so RoslynScriptBackend applies it to user scripts too. -->
     <ProjectReference Include="..\Prowl.Analyzers\Prowl.Analyzers.csproj" OutputItemType="Analyzer" />
@@ -42,17 +40,31 @@
     <InternalsVisibleTo Include="Prowl.Editor.Test" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(ProwlLocalAnthology)' == 'true'">
+    <ProjectReference Include="$(AnthologyDir)Ember\Ember\Prowl.Ember.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Ember\Analyzers\Prowl.Ember.Analyzers.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Origami\Origami\Origami.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Origami\CSharp\Prowl.Origami.CSharp.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Origami\Graphite\Prowl.Origami.Graphite.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Graphite\Debugger\Prowl.Graphite.Debugger.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Photonic\Photonic\Photonic.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Rosetta\Rosetta\Rosetta.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Unwrapper\Unwrapper\Unwrapper.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ProwlLocalAnthology)' != 'true'">
+    <PackageReference Include="Prowl.Ember" Version="3.9.2" />
+    <PackageReference Include="Prowl.Ember.Analyzers" Version="3.9.2" />
+    <PackageReference Include="Prowl.Origami" Version="3.9.2" />
+    <PackageReference Include="Prowl.Origami.CSharp" Version="3.9.2" />
+    <PackageReference Include="Prowl.Origami.Graphite" Version="3.9.2" />
+    <PackageReference Include="Prowl.Graphite.Debugger" Version="3.9.2" />
+    <PackageReference Include="Prowl.Photonic" Version="3.9.2" />
+    <PackageReference Include="Prowl.Rosetta" Version="3.9.2" />
+    <PackageReference Include="Prowl.Unwrapper" Version="3.9.2" />
+  </ItemGroup>
+
   <ItemGroup>
-     <!-- <ProjectReference Include="..\..\Anthology\Origami\Origami\Origami.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Photonic\Photonic\Photonic.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Rosetta\Rosetta\Rosetta.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Unwrapper\Unwrapper\Unwrapper.csproj" /> -->
-    <PackageReference Include="Prowl.Origami" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Origami.CSharp" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Origami.Graphite" Version="$(GraphitePackageVersion)" />
-    <PackageReference Include="Prowl.Photonic" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Rosetta" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" />
   </ItemGroup>
 

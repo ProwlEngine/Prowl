@@ -166,7 +166,7 @@ public class PrismaticJoint : PhysicsJoint
         var limit = new LinearLimit(minDistance, maxDistance);
 
         prismaticJoint = new Jitter2.Dynamics.Constraints.PrismaticJoint(
-            world, body1, body2, worldAnchor, worldAxis, limit, pinned, hasMotor);
+            world, body1, body2, worldAnchor, worldAxis, limit, hasMotor ? JointDrive.Motor : JointDrive.None, pinned);
 
         joint = prismaticJoint;
 

@@ -26,32 +26,40 @@
     <OutputPath>../Build/Runtime/Release/</OutputPath>
   </PropertyGroup>
 
-  <ItemGroup>
-    <!-- <ProjectReference Include="..\..\Anthology\Aperture\Aperture\Aperture.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Clay\Clay\Clay.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Echo\Echo\Echo.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Paper\Paper\Paper.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Recast\Recast\Prowl.Recast.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Motion\Motion\Motion.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Unwrapper\Unwrapper\Unwrapper.csproj" /> -->
-    <PackageReference Include="Prowl.Aperture" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Clay" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Echo" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Paper" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Recast" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Motion" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Ember.Contracts" Version="$(ProwlPackageVersion)" />
-    <!-- <ProjectReference Include="..\..\Anthology\Graphite\Graphite\Prowl.Graphite.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Graphite\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Graphite\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Graphite\Rendering\Prowl.Graphite.Rendering.csproj" /> -->
-    <PackageReference Include="Prowl.Graphite" Version="$(GraphitePackageVersion)" />
-    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="$(GraphitePackageVersion)" />
-    <PackageReference Include="Prowl.Graphite.ShaderDef.Compiler" Version="$(GraphitePackageVersion)" />
-    <PackageReference Include="Prowl.Graphite.Rendering" Version="$(GraphitePackageVersion)" />
+  <ItemGroup Condition="'$(ProwlLocalAnthology)' == 'true'">
+    <ProjectReference Include="$(AnthologyDir)Aperture\Aperture\Aperture.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Clay\Clay\Clay.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Echo\Echo\Echo.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Paper\Paper\Paper.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Recast\Recast\Prowl.Recast.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Motion\Motion\Motion.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Unwrapper\Unwrapper\Unwrapper.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Ember\Contracts\Prowl.Ember.Contracts.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Ember\Analyzers\Prowl.Ember.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="$(AnthologyDir)Graphite\Graphite\Prowl.Graphite.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Graphite\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Graphite\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Graphite\Rendering\Prowl.Graphite.Rendering.csproj" />
+  </ItemGroup>
 
-    <PackageReference Include="Jitter2" Version="2.10.0" />
+  <ItemGroup Condition="'$(ProwlLocalAnthology)' != 'true'">
+    <PackageReference Include="Prowl.Aperture" Version="3.9.2" />
+    <PackageReference Include="Prowl.Clay" Version="3.9.2" />
+    <PackageReference Include="Prowl.Echo" Version="3.9.2" />
+    <PackageReference Include="Prowl.Paper" Version="3.9.2" />
+    <PackageReference Include="Prowl.Recast" Version="3.9.2" />
+    <PackageReference Include="Prowl.Motion" Version="3.9.2" />
+    <PackageReference Include="Prowl.Unwrapper" Version="3.9.2" />
+    <PackageReference Include="Prowl.Ember.Contracts" Version="3.9.2" />
+    <PackageReference Include="Prowl.Ember.Analyzers" Version="3.9.2" PrivateAssets="all" />
+    <PackageReference Include="Prowl.Graphite" Version="3.9.2" />
+    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="3.9.2" />
+    <PackageReference Include="Prowl.Graphite.ShaderDef.Compiler" Version="3.9.2" />
+    <PackageReference Include="Prowl.Graphite.Rendering" Version="3.9.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Jitter2" Version="2.13.0" />
     <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Input.Glfw" Version="2.23.0" />
     <PackageReference Include="Silk.NET.OpenXR" Version="2.23.0" />

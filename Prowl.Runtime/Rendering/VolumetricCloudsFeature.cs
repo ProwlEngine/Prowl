@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Graphite;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.Rendering;
 using Prowl.Vector;
 
@@ -249,11 +248,13 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         if (declared != _declared)
         {
             _declared = declared;
-            Invalidate();
         }
     }
 
     public override bool IsActive(in FeatureView view) => _settings.Noise2D is { IsDisposed: false } && _settings.Noise3D is { IsDisposed: false };
+
+    private static GraphTextureDesc Layered(in FeatureView view, int width, int height, PixelFormat format)
+        => GraphTextureDesc.Sized(width, height, format) with { ArrayLayers = view.LayerCount > 1 ? (uint)view.LayerCount : 0 };
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
@@ -277,13 +278,13 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         state.Coverage = builder.Temporary("Coverage", FeatureView.Shared(CoverageResolution, CoverageResolution, PixelFormat.R16_Float));
         if (_declared.SunMap)
             state.Sun = builder.Temporary("Sun", FeatureView.Shared(CoverageResolution, CoverageResolution, PixelFormat.R16_G16_B16_A16_Float));
-        state.Depth = builder.Temporary("Depth", view.Texture(width, height, PixelFormat.R32_Float));
+        state.Depth = builder.Temporary("Depth", Layered(view, width, height, PixelFormat.R32_Float));
         state.Target = builder.Temporary("Target", GraphTextureDesc.Sized(width, height, false, PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R32_Float) with { ArrayLayers = layers });
         if (state.Temporal)
         {
             TextureState usage = TextureState.Attachment | TextureState.Sampled;
             state.History = builder.History("History", GraphTextureDesc.Sized(outWidth, outHeight, false, PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R32_Float) with { ArrayLayers = layers }, usage: usage);
-            state.TargetDepth = builder.History("TargetDepth", view.Texture(outWidth, outHeight, PixelFormat.R32_Float), usage: usage);
+            state.TargetDepth = builder.History("TargetDepth", Layered(view, outWidth, outHeight, PixelFormat.R32_Float), usage: usage);
         }
     }
 

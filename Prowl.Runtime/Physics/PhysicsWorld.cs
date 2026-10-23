@@ -699,8 +699,8 @@ public class PhysicsWorld
     public bool PersistentContactManifold = true;
 
     /// <summary>
-    /// Damping factor (0..1) applied to speculative contact correction. Lower = softer prediction.
-    /// Default 0.9.
+    /// Fraction of the predicted gap that CCD allows bodies to close during a step (0..1).
+    /// Lower values stop bodies earlier. Default 0.9.
     /// </summary>
     public float SpeculativeRelaxationFactor
     {
@@ -913,7 +913,7 @@ public class PhysicsWorld
 
         World.EnableAuxiliaryContactPoints = EnableAuxiliaryContactPoints;
         World.PersistentContactManifold = PersistentContactManifold;
-        World.SpeculativeRelaxationFactor = SpeculativeRelaxationFactor;
+        World.CcdRelaxationFactor = SpeculativeRelaxationFactor;
 
         // Push any user Transform edits into the bodies before stepping. Colliders that moved are
         // rebuilt either way, since their shapes are physics state rather than a body pose.

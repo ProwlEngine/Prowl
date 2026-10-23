@@ -17,6 +17,7 @@ using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Thumbnails;
+using Prowl.Graphite.Debugger.Viewer;
 using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -44,6 +45,9 @@ public class EditorApplication : Game
     private DockSpace _dockSpace = null!;
     private bool _sceneGizmosDrawn;
     private PanelMaximizer _panelMaximizer = null!;
+
+    /// <summary>Feeds the render profiler panels, null headless.</summary>
+    internal RenderProfilerSource? RenderProfiler { get; private set; }
 
     /// <summary>Maximizes docked panels over the rest of the layout, and brings the layout back.</summary>
     internal PanelMaximizer Maximizer => _panelMaximizer;
@@ -117,6 +121,11 @@ public class EditorApplication : Game
 
         _dockSpace = new DockSpace(CreateDefaultLayout());
         _panelMaximizer = new PanelMaximizer(_dockSpace);
+        if (!Graphics.IsHeadless)
+        {
+            RenderProfiler = new RenderProfilerSource();
+            RenderProfiler.Attach(_dockSpace);
+        }
 
         // Open windows and the selection keep what they show loaded, through their fields like a scene's objects.
         AssetDatabase.WalkingRoots += WalkEditorRoots;
@@ -1190,7 +1199,7 @@ public class EditorApplication : Game
     /// <summary>Open a file dialog with editor config (icons, quick access, drives).</summary>
     public static void OpenFileDialog(FileDialogMode mode, Action<string?> onComplete,
         string? startPath = null, string[]? filters = null, string[]? filterLabels = null)
-        => OrigamiUI.FileDialog.Open(mode, onComplete, startPath, filters, filterLabels, FileDialogConfig);
+        => OrigamiUI.FileDialog.Open(mode, onComplete, startPath ?? Project.Current?.RootPath, filters, filterLabels, FileDialogConfig);
 
     private const int BarCount = 10;
 
@@ -1752,6 +1761,13 @@ public class EditorApplication : Game
             string json = System.IO.File.ReadAllText(path);
             return DockSerializer.Deserialize(json, _dockSpace.FloatingWindows, (typeName, state) =>
             {
+                // The profiler's panels hold its views, so they come from it rather than a default constructor.
+                if (RenderProfiler?.Windows is { } profiler)
+                {
+                    if (typeName == typeof(LiveProfilerPanel).FullName) return profiler.Live;
+                    if (typeName == typeof(SnapshotViewerPanel).FullName) return profiler.Snapshots;
+                    if (typeName == typeof(ResourcePreviewPanel).FullName) return null;
+                }
                 Type? type = null;
                 foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
                 {
