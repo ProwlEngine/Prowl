@@ -44,7 +44,7 @@ public class UniformBenchmarks : GraphiteBenchmark
     private int Draws => Case.Draws;
     private UniformUpdate Update => Case.Update;
 
-    protected override IEnumerable<IPass> CreatePasses()
+    protected override IEnumerable<BenchPass> CreatePasses()
     {
         GraphicsProgram program = Own(BenchShaderLoader.CreateFromSource(Device, GenerateShader(Fields)));
         PropertyID[] fields = Enumerable.Range(0, Fields).Select(i => (PropertyID)("F" + i)).ToArray();

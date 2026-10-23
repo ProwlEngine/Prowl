@@ -41,7 +41,7 @@ public class ComputeBenchmarks : GraphiteBenchmark
     private int Dispatches => Case.Dispatches;
     private ComputeTopology Topology => Case.Topology;
 
-    protected override IEnumerable<IPass> CreatePasses()
+    protected override IEnumerable<BenchPass> CreatePasses()
     {
         ComputeProgram program = Own(BenchShaderLoader.CreateCompute(Device, "BufferChain.glsl"));
         DeviceBuffer a = CreateBuffer();
@@ -85,8 +85,8 @@ public class ComputeBenchmarks : GraphiteBenchmark
             }, (context, cmd) =>
             {
                 if (input.IsValid)
-                    props.SetBuffer("Input", context.GetRenderBuffer(input));
-                props.SetBuffer("Output", context.GetRenderBuffer(output));
+                    props.SetBuffer("Input", context.Get(input));
+                props.SetBuffer("Output", context.Get(output));
                 cmd.SetComputeShader(program);
                 cmd.SetProperties(props);
                 cmd.Dispatch(groups, 1, 1);

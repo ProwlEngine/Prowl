@@ -279,13 +279,13 @@ internal sealed class GlobalRegistry
     private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
     private readonly List<int> _pendingFree = new();
     private readonly List<(ulong Execution, int Region)> _retiringRegions = new();
-    private readonly GraphStore _store;
+    private readonly RenderStore _store;
     private GpuTable _table;
     private bool _grown;
     private uint _usedWords;
     private bool _allDirty = true;
 
-    public GlobalRegistry(GraphicsDevice device, GraphStore store, IMaterialResources resources)
+    public GlobalRegistry(GraphicsDevice device, RenderStore store, IMaterialResources resources)
     {
         _device = device;
         _store = store;

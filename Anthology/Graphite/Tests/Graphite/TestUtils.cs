@@ -8,92 +8,27 @@ using Silk.NET.Windowing;
 
 namespace Prowl.Graphite.Tests;
 
-// A RenderContext is normally only handed to a pass while the render graph executes it. Low-level
-// GPU tests have no passes, so this harness stands up a throwaway graph with no passes and hands the
-// caller its root context directly, giving tests the same recording/submission surface real passes use.
+// Low-level GPU tests have no real passes, so this harness runs their recording inside throwaway
+// frame graph passes, giving tests the same recording/submission surface real passes use.
 public static class TestGraphExtensions
 {
-    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext, CommandBuffer> record, params IProfiler[] profilers)
+    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<PassContext, CommandBuffer> record, params IProfiler[] profilers)
         => gd.RunTestGraphPasses(1, (context, cmd, _) => record(context, cmd), profilers);
 
-    public static ExecutionTask RunTestGraphPasses(this GraphicsDevice gd, int passCount, Action<RenderContext, CommandBuffer, int> record, params IProfiler[] profilers)
+    public static ExecutionTask RunTestGraphPasses(this GraphicsDevice gd, int passCount, Action<PassContext, CommandBuffer, int> record, params IProfiler[] profilers)
     {
-        ExecutionTask task = gd.BeginExecution(profilers);
-        RenderContext context = RootContext(gd, task);
-
-        try
+        using FrameGraph graph = new(gd, "Test");
+        for (int i = 0; i < passCount; i++)
         {
-            for (int i = 0; i < passCount; i++)
-            {
-                CommandBuffer cmd = context.BeginPassCommandBuffer($"Pass{i}");
-                record(context, cmd, i);
-                context.EndCommandBuffer(cmd);
-            }
-        }
-        finally
-        {
-            gd.CompleteExecution(task);
+            int pass = i;
+            graph.AddPass($"Pass{i}", _ => { }, context => record(context, context.Command, pass));
         }
 
-        return task;
+        return graph.Execute(profilers);
     }
 
-    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext> record)
-    {
-        ExecutionTask task = gd.BeginExecution();
-        RenderContext context = RootContext(gd, task);
-
-        try
-        {
-            record(context);
-        }
-        finally
-        {
-            gd.CompleteExecution(task);
-        }
-
-        return task;
-    }
-
-    private static RenderContext RootContext(GraphicsDevice gd, ExecutionTask task)
-    {
-        RenderGraph graph = RenderGraph.Build([]);
-        GraphInstances instances = graph.CreateInstances(new GraphExtent(256, 256));
-        return new GraphExecution(gd, task, graph, instances).ContextOf(instances.Root);
-    }
-}
-
-public static class TestViews
-{
-    public static readonly GraphKind Kind = GraphKind.Intern("Test.View");
-
-    public static readonly GraphScope[] Scopes = [new GraphScope(Kind, GraphKind.Root)];
-
-    public static RenderGraph Build(IEnumerable<IPass> passes, string name = "", GraphStore? store = null)
-        => RenderGraph.Build([.. passes], Scopes, name, store);
-
-    public static GraphInstances Single(RenderGraph graph, GraphExtent extent = default, Framebuffer? target = null)
-    {
-        GraphInstances instances = graph.CreateInstances();
-        instances.Add(Kind, 0, extent: extent, target: target);
-        return instances;
-    }
-
-    public static GraphInstances Of(RenderGraph graph, params (uint Width, uint Height)[] views)
-    {
-        GraphInstances instances = graph.CreateInstances();
-        for (int i = 0; i < views.Length; i++)
-            instances.Add(Kind, i, extent: new GraphExtent(views[i].Width, views[i].Height));
-        return instances;
-    }
-
-    public static GraphInstances Of(RenderGraph graph, params (int Id, uint Width, uint Height)[] views)
-    {
-        GraphInstances instances = graph.CreateInstances();
-        foreach ((int id, uint width, uint height) in views)
-            instances.Add(Kind, id, extent: new GraphExtent(width, height));
-        return instances;
-    }
+    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<PassContext> record)
+        => gd.RunTestGraphPasses(1, (context, _, _) => record(context));
 }
 
 // Device/window creation for the test suite. The device-creation switch is duplicated from

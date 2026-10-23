@@ -39,7 +39,7 @@ public class ShaderSwitchBenchmarks : GraphiteBenchmark
     private int Draws => Case.Draws;
     private SwitchOrder Order => Case.Order;
 
-    protected override IEnumerable<IPass> CreatePasses()
+    protected override IEnumerable<BenchPass> CreatePasses()
     {
         GraphicsProgram[] programs = BenchShaderLoader.CreateVariants(Device, "Variants.glsl", Programs);
         foreach (GraphicsProgram program in programs)

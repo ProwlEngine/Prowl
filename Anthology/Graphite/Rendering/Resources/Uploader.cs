@@ -232,14 +232,14 @@ internal sealed class Uploader : IDisposable
 internal sealed class GpuTable
 {
     private readonly GraphicsDevice _device;
-    private readonly GraphStore _store;
+    private readonly RenderStore _store;
     private readonly PersistentBuffer _persistent;
     private uint[] _words;
     private bool[] _dirtyFlags;
     private readonly List<uint> _dirty = new();
     private uint _count;
 
-    public GpuTable(GraphicsDevice device, GraphStore store, string name, uint strideWords, uint initialCapacity = 256)
+    public GpuTable(GraphicsDevice device, RenderStore store, string name, uint strideWords, uint initialCapacity = 256)
     {
         if (strideWords == 0)
             throw new ArgumentOutOfRangeException(nameof(strideWords), "A record needs at least one word.");
@@ -250,12 +250,12 @@ internal sealed class GpuTable
         uint capacity = Math.Max(initialCapacity, 1);
         _words = new uint[capacity * strideWords];
         _dirtyFlags = new bool[capacity];
-        _persistent = new PersistentBuffer(RenderResourceID.Intern(name), BufferUsage.StructuredBufferReadWrite, new GraphInstanceKey(GraphKind.Root, 0));
+        _persistent = new PersistentBuffer(RenderResourceID.Intern(name), BufferUsage.StructuredBufferReadWrite);
         Buffer = _persistent.Resolve(device, store, capacity * strideWords * 4);
     }
 
     /// <summary>Makes a table whose records are <typeparamref name="T"/>.</summary>
-    public static GpuTable Of<T>(GraphicsDevice device, GraphStore store, string name, uint initialCapacity = 256) where T : unmanaged
+    public static GpuTable Of<T>(GraphicsDevice device, RenderStore store, string name, uint initialCapacity = 256) where T : unmanaged
     {
         if (Unsafe.SizeOf<T>() % 4 != 0)
             throw new ArgumentException($"{typeof(T).Name} is not a whole number of words.");

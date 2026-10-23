@@ -49,7 +49,7 @@ public sealed class SvgIcon : IOrigamiIcon
     public void Draw(Canvas canvas, Rect rect, Color color, float strokeWidth = 1.5f)
     {
         if (string.IsNullOrEmpty(_path)) return;
-        float size = MathF.Min((float)rect.Size.X, (float)rect.Size.Y) * _scale;
+        float size = MathF.Min((float)rect.Size.X, (float)rect.Size.Y) * _scale * Origami.IconScale;
         float ox = (float)(rect.Min.X + (rect.Size.X - size) / 2.0);
         float oy = (float)(rect.Min.Y + (rect.Size.Y - size) / 2.0);
         SvgPath.Stroke(canvas, _path, ox, oy, size, _color ?? color, strokeWidth, _fill);
@@ -75,7 +75,7 @@ public sealed class FontIcon : IOrigamiIcon
     public void Draw(Canvas canvas, Rect rect, Color color, float strokeWidth = 1.5f)
     {
         if (_font == null || string.IsNullOrEmpty(_glyph)) return;
-        float size = MathF.Min((float)rect.Size.X, (float)rect.Size.Y) * _scale;
+        float size = MathF.Min((float)rect.Size.X, (float)rect.Size.Y) * _scale * Origami.IconScale;
         var c = _color ?? color;
         var m = canvas.MeasureText(_glyph, size, _font);
         float tx = (float)(rect.Min.X + (rect.Size.X - m.X) / 2.0);

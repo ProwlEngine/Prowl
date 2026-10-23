@@ -17,13 +17,13 @@ using Color = System.Drawing.Color;
 
 namespace Prowl.Graphite.Debugger.Viewer;
 
-internal readonly record struct TargetStep(int EventIndex, int Ordinal);
+internal readonly record struct TargetStep(int EventIndex, int Ordinal, IndirectSlice? Indirect = null);
 
 internal sealed partial class ProfilerView
 {
     private static readonly string[] MeshOverlays = { "None", "Normals", "UV layout" };
 
-    private readonly Dictionary<(int, int, int?), ReplayResult> _replays = new();
+    private readonly Dictionary<(int, int, int?, IndirectSlice?), ReplayResult> _replays = new();
     private readonly Dictionary<string, (object Texture, int Width, int Height, string Version)> _textures = new();
     private readonly ConditionalWeakTable<byte[], Dictionary<CopyRegion, byte[]>> _previews = new();
     private readonly bool[] _channels = { true, true, true, true };
@@ -34,12 +34,12 @@ internal sealed partial class ProfilerView
     private int _meshOverlay;
     private float _yaw = -35f, _pitch = 22f;
 
-    private ReplayResult Replay(FrameModel model, int instance, int pass, int? eventIndex)
+    private ReplayResult Replay(FrameModel model, int instance, int pass, int? eventIndex, IndirectSlice? slice = null)
     {
-        var key = (instance, pass, eventIndex);
+        var key = (instance, pass, eventIndex, slice);
         if (!_replays.TryGetValue(key, out ReplayResult? result))
         {
-            result = _source.Replay(new ReplayRequest { InstanceIndex = instance, PassIndex = pass, EventIndex = eventIndex });
+            result = _source.Replay(new ReplayRequest { GroupIndex = instance, PassIndex = pass, EventIndex = eventIndex, Indirect = slice });
             _replays[key] = result;
         }
         return result;
@@ -48,7 +48,7 @@ internal sealed partial class ProfilerView
     private static ReplayOutput? Output(ReplayResult result, TraceResourceId id)
         => result.Outputs.FirstOrDefault(o => o.Resource == id);
 
-    private void ResolveTexture(FrameModel model, DeepInstance view, DeepPass pass, RecordedResource? res, TargetStep? step, ViewerData data)
+    private void ResolveTexture(FrameModel model, DeepGroup view, DeepPass pass, RecordedResource? res, TargetStep? step, ViewerData data)
     {
         if (res == null)
         {
@@ -59,24 +59,24 @@ internal sealed partial class ProfilerView
         TraceResourceId id = res.Id;
         DeepIndex index = model.Index!;
 
-        bool Writes(DeepInstance v, DeepPass p) => p.Accesses.Any(a => a.IsOutput && GraphResource(v, a.Resource) is { } g && Backing(index, g)?.Id == res.Id);
+        bool Writes(DeepGroup v, DeepPass p) => p.Accesses.Any(a => a.IsOutput && GraphResource(v, a.Resource) is { } g && Backing(index, g)?.Id == res.Id);
 
         ReplayOutput? output = null;
         if (Writes(view, pass))
         {
-            ReplayResult result = Replay(model, view.Index, pass.Index, step?.EventIndex);
+            ReplayResult result = Replay(model, view.Index, pass.Index, step?.EventIndex, step?.Indirect);
             output = Output(result, id);
             data.Origin = result.Status == ReplayStatus.NotReplayable ? $"NotReplayable: {result.Reason}" : $"{result.Status} {(step != null ? $"to event {step.Value.EventIndex}" : "whole pass")}";
 
-            if (step is { } s && s.EventIndex >= s.Ordinal && Output(Replay(model, view.Index, pass.Index, s.Ordinal), id) is { } after
-                && Output(Replay(model, view.Index, pass.Index, s.Ordinal - 1), id) is { } before
+            if (step is { } s && s.EventIndex >= s.Ordinal && Output(Replay(model, view.Index, pass.Index, s.Ordinal, s.Indirect), id) is { } after
+                && Output(s.Indirect is { Count: > 1 } sl ? Replay(model, view.Index, pass.Index, s.Ordinal, sl with { Count = sl.Count - 1 }) : Replay(model, view.Index, pass.Index, s.Ordinal - 1), id) is { } before
                 && Region(after, _mip) is { } covered)
                 data.Coverage = CoverageMask(Preview(before, covered), Preview(after, covered));
         }
         else
         {
-            (DeepInstance, DeepPass)? writer = null;
-            foreach (DeepInstance v in model.Deep!.Instances.OrderBy(v => v.Index))
+            (DeepGroup, DeepPass)? writer = null;
+            foreach (DeepGroup v in model.Deep!.Groups.OrderBy(v => v.Index))
                 foreach (DeepPass p in v.Passes)
                 {
                     bool earlier = v.Index < view.Index || (v.Index == view.Index && p.Index < pass.Index);

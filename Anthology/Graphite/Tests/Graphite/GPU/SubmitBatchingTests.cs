@@ -5,29 +5,10 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-file sealed class BufferWritePass : IInstancePass
+file static class BufferWrites
 {
-    public GraphKind Kind => TestViews.Kind;
-
-    private readonly string _name;
-    private readonly DeviceBuffer _source;
-    private readonly DeviceBuffer _destination;
-
-    public BufferWritePass(string name, DeviceBuffer source, DeviceBuffer destination)
-    {
-        _name = name;
-        _source = source;
-        _destination = destination;
-    }
-
-    public string Name => _name;
-
-    public void Setup(InstanceContextBuilder builder) { }
-
-    public void Render(InstanceContext context, CommandBuffer cl)
-    {
-        cl.CopyBuffer(_source, 0, _destination, 0, _destination.SizeInBytes);
-    }
+    public static void Add(FrameGraph graph, string name, DeviceBuffer source, DeviceBuffer destination)
+        => graph.AddPass(name, _ => { }, context => context.Command.CopyBuffer(source, 0, destination, 0, destination.SizeInBytes));
 }
 
 public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
@@ -49,14 +30,14 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer sourceC = CreateValueBuffer(3);
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
-        using RenderGraph graph = TestViews.Build([
-            new BufferWritePass("PassA", sourceA, destination),
-            new BufferWritePass("PassB", sourceB, destination),
-            new BufferWritePass("PassC", sourceC, destination)]);
+        using FrameGraph graph = new(GD, "Test");
+        BufferWrites.Add(graph, "PassA", sourceA, destination);
+        BufferWrites.Add(graph, "PassB", sourceB, destination);
+        BufferWrites.Add(graph, "PassC", sourceC, destination);
 
         int before = vk.GraphicsQueueSubmitCount;
 
-        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(32, 32)));
+        graph.Execute();
         GD.WaitForIdle();
 
         Assert.Equal(1, vk.GraphicsQueueSubmitCount - before);
@@ -70,12 +51,12 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer sourceC = CreateValueBuffer(33);
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
-        using RenderGraph graph = TestViews.Build([
-            new BufferWritePass("PassA", sourceA, destination),
-            new BufferWritePass("PassB", sourceB, destination),
-            new BufferWritePass("PassC", sourceC, destination)]);
+        using FrameGraph graph = new(GD, "Test");
+        BufferWrites.Add(graph, "PassA", sourceA, destination);
+        BufferWrites.Add(graph, "PassB", sourceB, destination);
+        BufferWrites.Add(graph, "PassC", sourceC, destination);
 
-        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(32, 32)));
+        graph.Execute();
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(destination);

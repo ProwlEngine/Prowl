@@ -6,7 +6,7 @@ namespace Prowl.Graphite.Debugger.Serialization;
 internal sealed class TraceFormat : ISerializationFormat
 {
     public bool CanHandle(Type type)
-        => type == typeof(ProgramKey) || type == typeof(PropertyID) || type == typeof(VertexAttributeID) || type == typeof(GraphKind);
+        => type == typeof(ProgramKey) || type == typeof(PropertyID) || type == typeof(VertexAttributeID);
 
     public EchoObject Serialize(Type targetType, object value, SerializationContext context)
     {
@@ -18,8 +18,6 @@ internal sealed class TraceFormat : ISerializationFormat
                 return new EchoObject(PropertyID.ToString(property) ?? "");
             case VertexAttributeID attribute:
                 return new EchoObject(VertexAttributeID.ToString(attribute) ?? "");
-            case GraphKind kind:
-                return new EchoObject(kind.Name);
             default:
                 throw new NotSupportedException(value.GetType().ToString());
         }
@@ -32,9 +30,6 @@ internal sealed class TraceFormat : ISerializationFormat
 
         if (targetType == typeof(PropertyID))
             return PropertyID.Intern(value.StringValue);
-
-        if (targetType == typeof(GraphKind))
-            return string.IsNullOrEmpty(value.StringValue) ? default(GraphKind) : GraphKind.Intern(value.StringValue);
 
         return VertexAttributeID.Intern(value.StringValue);
     }

@@ -18,7 +18,7 @@ internal sealed class DeepIndex
     {
         _recording = recording;
         Dictionary<TraceResourceId, string> graphNames = new();
-        foreach (DeepInstance instance in recording.Instances)
+        foreach (DeepGroup instance in recording.Groups)
             foreach (RecordedGraphResource graph in instance.Resources)
                 foreach (RecordedBacking backing in graph.Backings)
                     graphNames.TryAdd(backing.Id, backing.Role == BackingRole.Depth ? $"{graph.Name} (depth)" : graph.Name);
@@ -50,7 +50,7 @@ internal sealed class DeepIndex
         if (prefer != null && Find(prefer, id) is { } own)
             return own;
 
-        foreach (DeepInstance instance in _recording.Instances)
+        foreach (DeepGroup instance in _recording.Groups)
             foreach (DeepPass pass in instance.Passes)
                 if (Find(pass, id) is { } found)
                     return found;

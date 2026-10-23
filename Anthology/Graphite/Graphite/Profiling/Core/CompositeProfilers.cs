@@ -12,16 +12,16 @@ internal sealed class CompositeGraphProfiler(IGraphProfiler[] sinks) : IGraphPro
 
     public void EndExecution() { }
 
-    public void BeginInstance(in InstanceInfo instance)
+    public void BeginGroup(in GroupInfo group)
     {
         foreach (IGraphProfiler sink in sinks)
-            sink.BeginInstance(in instance);
+            sink.BeginGroup(in group);
     }
 
-    public void EndInstance(in InstanceInfo instance)
+    public void EndGroup(in GroupInfo group)
     {
         foreach (IGraphProfiler sink in sinks)
-            sink.EndInstance(in instance);
+            sink.EndGroup(in group);
     }
 
     public void BeginPass(in PassInfo pass)
@@ -34,12 +34,6 @@ internal sealed class CompositeGraphProfiler(IGraphProfiler[] sinks) : IGraphPro
     {
         foreach (IGraphProfiler sink in sinks)
             sink.EndPass(in pass, in stats);
-    }
-
-    public void SkipPass(string name, int instanceIndex, PassSkipReason reason)
-    {
-        foreach (IGraphProfiler sink in sinks)
-            sink.SkipPass(name, instanceIndex, reason);
     }
 }
 
@@ -68,10 +62,10 @@ internal sealed class CompositeCaptureProfiler(ICaptureProfiler[] sinks) : ICapt
 
     public void EndExecution() { }
 
-    public void DescribeInstance(in InstanceCaptureInfo instance)
+    public void DescribeGroup(in GroupCaptureInfo group)
     {
         foreach (ICaptureProfiler sink in sinks)
-            sink.DescribeInstance(in instance);
+            sink.DescribeGroup(in group);
     }
 
     public void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)

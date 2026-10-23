@@ -38,6 +38,8 @@ public sealed partial class CodeEditor
     private FontFile? _measuredFont;
     private float _measuredSize;
     private float _measuredScale;
+    private bool _measuredLigatures;
+    private FontQuality _measuredQuality;
     private float _charW = 8f;
     private float _glyphH = 14f;
     private float _fontSize = -1f;
@@ -63,6 +65,9 @@ public sealed partial class CodeEditor
         public CodeEditorColors? Palette;
         public float FontKey;
         public int TabSize;
+        public FontFile? Font;
+        public bool Ligatures;
+        public int BracketDepth;
         public bool Built;
         public int TokenState = -1;
         public CodeToken[] Tokens = Array.Empty<CodeToken>();
@@ -78,6 +83,7 @@ public sealed partial class CodeEditor
         public string Text;
         public TextLayout? Layout;
         public FontColor Color;
+        public CodeTokenStyle Style;
     }
 
     private sealed class MinimapLine
@@ -154,31 +160,44 @@ public sealed partial class CodeEditor
 
     #region Layout
 
-    private TextLayoutSettings TextSettings(Canvas canvas, FontFile font, float size)
+    private TextLayoutSettings TextSettings(Canvas canvas, FontFile font, float size, CodeTokenStyle style = CodeTokenStyle.None)
     {
         var s = TextLayoutSettings.Default;
-        s.Font = font;
+        s.Font = FontFor(font, style);
+        s.Underline = (style & CodeTokenStyle.Underline) != 0;
         s.PixelSize = size * canvas.FramebufferScale;
-        s.Quality = FontQuality.High;
+        s.Quality = Options.TextQuality;
         s.TabSize = Math.Max(1, Options.TabSize);
+        s.NoLigatures = !Options.Ligatures;
         return s;
     }
 
-    private TextLayout CreateLayout(Canvas canvas, string text, FontFile font, float size)
+    private TextLayout CreateLayout(Canvas canvas, string text, FontFile font, float size, CodeTokenStyle style = CodeTokenStyle.None)
     {
         var layout = new TextLayout();
-        canvas.Text.FontEngine.UpdateLayout(layout, text, TextSettings(canvas, font, size));
+        canvas.Text.FontEngine.UpdateLayout(layout, text, TextSettings(canvas, font, size, style));
         return layout;
+    }
+
+    private FontFile FontFor(FontFile regular, CodeTokenStyle style)
+    {
+        bool bold = (style & CodeTokenStyle.Bold) != 0, italic = (style & CodeTokenStyle.Italic) != 0;
+        if (bold && italic) return Options.BoldItalicFont ?? Options.BoldFont ?? Options.ItalicFont ?? regular;
+        if (bold) return Options.BoldFont ?? regular;
+        if (italic) return Options.ItalicFont ?? regular;
+        return regular;
     }
 
     private void Measure(Canvas canvas, FontFile font)
     {
         float size = FontSize;
         float scale = canvas.FramebufferScale;
-        if (ReferenceEquals(font, _measuredFont) && size == _measuredSize && scale == _measuredScale) return;
+        if (ReferenceEquals(font, _measuredFont) && size == _measuredSize && scale == _measuredScale && _measuredLigatures == Options.Ligatures && _measuredQuality == Options.TextQuality) return;
         _measuredFont = font;
         _measuredSize = size;
         _measuredScale = scale;
+        _measuredLigatures = Options.Ligatures;
+        _measuredQuality = Options.TextQuality;
 
         var probe = CreateLayout(canvas, "MMMMMMMMMMMMMMMMMMMM", font, size);
         _charW = probe.Size.X / 20f / scale;
@@ -350,6 +369,7 @@ public sealed partial class CodeEditor
         DrawHighlights(canvas, pal, firstRow, lastRow);
         DrawSelections(canvas, pal, firstRow, lastRow);
         if (Options.ShowIndentGuides) DrawIndentGuides(canvas, pal, firstRow, lastRow);
+        if (Options.ShowTrailingWhitespace) DrawTrailingWhitespace(canvas, pal, firstRow, lastRow);
         DrawText(canvas, pal, font, firstRow, lastRow);
         DrawSquiggles(canvas, pal, firstLine, lastLine);
         DrawCarets(canvas, pal, firstRow, lastRow);
@@ -513,8 +533,27 @@ public sealed partial class CodeEditor
             {
                 float x = MathF.Round(ColX(level - tab)) + 0.5f;
                 if (x < v.TextX - 1) continue;
-                canvas.RectFilled(x, y, 1, v.LineH, pal.IndentGuide);
+                Color32 color = Options.RainbowIndentGuides && pal.RainbowGuides.Length > 0
+                    ? pal.RainbowGuides[(level / tab - 1) % pal.RainbowGuides.Length]
+                    : pal.IndentGuide;
+                canvas.RectFilled(x, y, 1, v.LineH, color);
             }
+        }
+    }
+
+    private void DrawTrailingWhitespace(Canvas canvas, CodeEditorColors pal, int firstRow, int lastRow)
+    {
+        var v = _view;
+        for (int row = firstRow; row <= lastRow; row++)
+        {
+            int line = DisplayRowToLine(row, out bool lensRow);
+            if (lensRow) continue;
+            string s = Document[line];
+            int end = s.Length;
+            while (end > 0 && (s[end - 1] == ' ' || s[end - 1] == '\t')) end--;
+            if (end == s.Length || end == 0) continue;
+            float x0 = ColX(VisualColumn(line, end)), x1 = ColX(VisualColumn(line, s.Length));
+            canvas.RectFilled(x0, RowY(row) + 1, x1 - x0, v.LineH - 2, pal.TrailingWhitespace);
         }
     }
 
@@ -562,7 +601,7 @@ public sealed partial class CodeEditor
                 for (int k = 0; k < run.Text.Length; k++)
                 {
                     float gx = MathF.Round((baseX + (run.Column + k) * v.CharW) * scale);
-                    engine.DrawLayout(GlyphLayout(canvas, font, run.Text[k]), new Float2(gx, y), run.Color);
+                    engine.DrawLayout(GlyphLayout(canvas, font, run.Text[k], run.Style), new Float2(gx, y), run.Color);
                 }
             }
 
@@ -627,8 +666,10 @@ public sealed partial class CodeEditor
         r ??= new RowRender();
         _rowsNext[text] = r;
 
+        int depth = Options.BracketPairColors ? BracketDepthAt(line) : -1;
         if (r.Built && !r.Pending && r.State == state && ReferenceEquals(r.Semantic, semantic) && ReferenceEquals(r.Palette, pal)
-            && r.FontKey == fontKey && r.TabSize == tab)
+            && r.FontKey == fontKey && r.TabSize == tab && ReferenceEquals(r.Font, font) && r.Ligatures == Options.Ligatures
+            && r.BracketDepth == depth)
             return r;
 
         r.Built = true;
@@ -637,20 +678,61 @@ public sealed partial class CodeEditor
         r.Palette = pal;
         r.FontKey = fontKey;
         r.TabSize = tab;
+        r.Font = font;
+        r.Ligatures = Options.Ligatures;
+        r.BracketDepth = depth;
         if (r.TokenState != state || !r.Built)
         {
             LexLine(line, _tokens);
             r.Tokens = _tokens.ToArray();
             r.TokenState = state;
         }
-        r.Runs = BuildRuns(canvas, font, r.Tokens, text, semantic, pal, tab, out r.Pending);
+        r.Runs = BuildRuns(canvas, font, r.Tokens, text, semantic, pal, tab, depth, out r.Pending);
         return r;
     }
 
     private CodeTokenKind[] _kinds = Array.Empty<CodeTokenKind>();
+
+    private static bool IsBracket(char c, out bool open)
+    {
+        open = c is '(' or '[' or '{';
+        return open || c is ')' or ']' or '}';
+    }
+
+    // Bracket nesting at the start of each line, counted from the lexed punctuation and rebuilt from the top after an edit.
+    private readonly List<int> _bracketDepths = new();
+    private int _bracketDepthVersion = -1;
+    private readonly List<CodeToken> _bracketTokens = new();
+
+    private int BracketDepthAt(int line)
+    {
+        if (_bracketDepthVersion != Document.Version)
+        {
+            _bracketDepthVersion = Document.Version;
+            _bracketDepths.Clear();
+            _bracketDepths.Add(0);
+        }
+
+        while (_bracketDepths.Count <= line)
+        {
+            int l = _bracketDepths.Count - 1;
+            int depth = _bracketDepths[l];
+            string s = Document[l];
+            LexLine(l, _bracketTokens);
+            foreach (var t in _bracketTokens)
+            {
+                if (t.Kind != CodeTokenKind.Punctuation) continue;
+                for (int i = t.Start; i < t.End && i < s.Length; i++)
+                    if (IsBracket(s[i], out bool open)) depth = open ? depth + 1 : Math.Max(0, depth - 1);
+            }
+            _bracketDepths.Add(depth);
+        }
+        return _bracketDepths[line];
+    }
     private readonly List<Run> _runScratch = new();
 
-    private Run[] BuildRuns(Canvas canvas, FontFile font, CodeToken[] tokens, string text, CodeToken[]? semantic, CodeEditorColors pal, int tab, out bool pending)
+    // depth is the bracket nesting at the start of the line, or -1 to leave brackets uncoloured.
+    private Run[] BuildRuns(Canvas canvas, FontFile font, CodeToken[] tokens, string text, CodeToken[]? semantic, CodeEditorColors pal, int tab, int depth, out bool pending)
     {
         pending = false;
         if (text.Length == 0) return Array.Empty<Run>();
@@ -678,11 +760,24 @@ public sealed partial class CodeEditor
                 continue;
             }
             int i1 = i0 + 1;
-            while (i1 < text.Length && i1 - i0 < MaxRun && text[i1] != ' ' && text[i1] != '\t' && kinds[i1] == kinds[i0]) i1++;
+            Color32 color = pal[kinds[i0]];
+            bool open = false;
+            bool bracket = depth >= 0 && pal.BracketPairs.Length > 0 && kinds[i0] == CodeTokenKind.Punctuation && IsBracket(c, out open);
+            if (bracket)
+            {
+                // Each bracket is its own run, coloured by its nesting depth.
+                if (!open) depth = Math.Max(0, depth - 1);
+                color = pal.BracketPairs[depth % pal.BracketPairs.Length];
+                if (open) depth++;
+            }
+            else
+                while (i1 < text.Length && i1 - i0 < MaxRun && text[i1] != ' ' && text[i1] != '\t' && kinds[i1] == kinds[i0]
+                       && !(depth >= 0 && kinds[i1] == CodeTokenKind.Punctuation && IsBracket(text[i1], out _))) i1++;
             string word = text.Substring(i0, i1 - i0);
-            var layout = WordLayout(canvas, font, word);
+            CodeTokenStyle style = pal.Styles[(int)kinds[i0]];
+            var layout = WordLayout(canvas, font, word, style);
             if (layout == null) pending = true;
-            _runScratch.Add(new Run { Column = vis, Text = word, Layout = layout, Color = ToFont(pal[kinds[i0]]) });
+            _runScratch.Add(new Run { Column = vis, Text = word, Layout = layout, Color = ToFont(color), Style = style });
             vis += i1 - i0;
             i0 = i1;
         }
@@ -690,36 +785,36 @@ public sealed partial class CodeEditor
     }
 
     // One layout per distinct word, shared across every row, so scrolling and typing rarely lay out new text.
-    private readonly Dictionary<string, TextLayout> _layoutCache = new();
+    private readonly Dictionary<(string, CodeTokenStyle), TextLayout> _layoutCache = new();
 
-    private readonly Dictionary<char, TextLayout> _glyphLayouts = new();
+    private readonly Dictionary<(char, CodeTokenStyle), TextLayout> _glyphLayouts = new();
     private double _layoutBudget;
     private double _layoutCostPerChar = 0.01;
     private const double LayoutBudgetMs = 1.5;
 
     // Null when laying the word out now would blow the frame budget while the user is typing. The run is then
     // drawn from single glyph layouts and laid out properly on a later, quieter frame.
-    private TextLayout? WordLayout(Canvas canvas, FontFile font, string word)
+    private TextLayout? WordLayout(Canvas canvas, FontFile font, string word, CodeTokenStyle style)
     {
-        if (_layoutCache.TryGetValue(word, out var layout)) return layout;
+        if (_layoutCache.TryGetValue((word, style), out var layout)) return layout;
         bool typing = _time - _lastEditTime < 0.3;
         if (word.Length > 1 && typing && word.Length * _layoutCostPerChar > _layoutBudget) return null;
 
         if (_layoutCache.Count > 50000) _layoutCache.Clear();
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
-        layout = CreateLayout(canvas, word, font, FontSize);
+        layout = CreateLayout(canvas, word, font, FontSize, style);
         double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         _layoutBudget -= ms;
         _layoutCostPerChar = _layoutCostPerChar * 0.8 + ms / word.Length * 0.2;
-        _layoutCache[word] = layout;
+        _layoutCache[(word, style)] = layout;
         return layout;
     }
 
-    private TextLayout GlyphLayout(Canvas canvas, FontFile font, char c)
+    private TextLayout GlyphLayout(Canvas canvas, FontFile font, char c, CodeTokenStyle style = CodeTokenStyle.None)
     {
-        if (_glyphLayouts.TryGetValue(c, out var layout)) return layout;
-        layout = CreateLayout(canvas, c.ToString(), font, FontSize);
-        _glyphLayouts[c] = layout;
+        if (_glyphLayouts.TryGetValue((c, style), out var layout)) return layout;
+        layout = CreateLayout(canvas, c.ToString(), font, FontSize, style);
+        _glyphLayouts[(c, style)] = layout;
         return layout;
     }
 
@@ -829,12 +924,33 @@ public sealed partial class CodeEditor
         if (!on) return;
 
         foreach (var s in _selections)
+            DrawCaret(canvas, pal, s.Caret, Options.CaretStyle, firstRow, lastRow);
+
+        // Where dragged text will land.
+        if (_drag == DragKind.Move && _moveMoved)
+            DrawCaret(canvas, pal, _moveDrop, CaretStyle.Line, firstRow, lastRow);
+    }
+
+    private void DrawCaret(Canvas canvas, CodeEditorColors pal, TextPosition at, CaretStyle style, int firstRow, int lastRow)
+    {
+        var v = _view;
+        if (IsLineHidden(at.Line)) return;
+        int row = LineToDisplayRow(at.Line);
+        if (row < firstRow || row > lastRow) return;
+        float x = MathF.Round(ColX(VisualColumn(at.Line, at.Column)));
+        float y = RowY(row);
+        switch (style)
         {
-            if (IsLineHidden(s.Caret.Line)) continue;
-            int row = LineToDisplayRow(s.Caret.Line);
-            if (row < firstRow || row > lastRow) continue;
-            float x = MathF.Round(ColX(VisualColumn(s.Caret.Line, s.Caret.Column)));
-            canvas.RectFilled(x - 1, RowY(row) + 1, 2, v.LineH - 2, pal.Caret);
+            case CaretStyle.Block:
+                canvas.RectFilled(x, y + 1, v.CharW, v.LineH - 2, pal.Caret with { A = (byte)(pal.Caret.A / 2) });
+                break;
+            case CaretStyle.Underline:
+                canvas.RectFilled(x, y + v.LineH - 3, v.CharW, 2, pal.Caret);
+                break;
+            default:
+                float w = MathF.Max(1f, Options.CaretWidth);
+                canvas.RectFilled(x - w * 0.5f, y + 1, w, v.LineH - 2, pal.Caret);
+                break;
         }
     }
 

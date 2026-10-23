@@ -67,6 +67,14 @@ public abstract partial class CommandBuffer
             CheckNotDisposed(attachment.Target, "A color target");
         if (fb.DepthTarget is { } depth)
             CheckNotDisposed(depth.Target, "The depth target");
+
+        if (Bindings == null)
+            return;
+
+        foreach (FramebufferAttachment attachment in fb.ColorTargets)
+            Bindings.Check(attachment.Target.ResourceId, attachment.Target.Name);
+        if (fb.DepthTarget is { } target)
+            Bindings.Check(target.Target.ResourceId, target.Target.Name);
     }
 
     private void SetVertexSource_CheckNonNull(IVertexSource source)

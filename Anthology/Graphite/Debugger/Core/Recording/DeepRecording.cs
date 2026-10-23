@@ -69,8 +69,8 @@ public sealed partial class DeepRecording : IGraphProfiler, IGpuStatsProfiler, I
     /// <summary>Content keyed by hash.</summary>
     public EquatableArray<RecordedBlob> Blobs => Result.Blobs;
 
-    /// <summary>The instances of the execution in order, the root first.</summary>
-    public EquatableArray<DeepInstance> Instances => Result.Instances;
+    /// <summary>The groups of the execution in order. Passes added outside any group are in group -1, which comes first.</summary>
+    public EquatableArray<DeepGroup> Groups => Result.Groups;
 
     /// <summary>True once the execution has resolved on the GPU and its copies are read.</summary>
     public bool IsDone
@@ -146,19 +146,17 @@ public sealed partial class DeepRecording : IGraphProfiler, IGpuStatsProfiler, I
 
     void IProfiler.EndExecution() => ((IProfiler)_recording).EndExecution();
 
-    void IGraphProfiler.BeginInstance(in InstanceInfo instance)
+    void IGraphProfiler.BeginGroup(in GroupInfo group)
     {
-        _instances[instance.Index] = new InstanceState(instance);
-        ((IGraphProfiler)_recording).BeginInstance(in instance);
+        _groupInfos[group.Index] = group;
+        ((IGraphProfiler)_recording).BeginGroup(in group);
     }
 
-    void IGraphProfiler.EndInstance(in InstanceInfo instance) => ((IGraphProfiler)_recording).EndInstance(in instance);
+    void IGraphProfiler.EndGroup(in GroupInfo group) => ((IGraphProfiler)_recording).EndGroup(in group);
 
     void IGraphProfiler.BeginPass(in PassInfo pass) => ((IGraphProfiler)_recording).BeginPass(in pass);
 
     void IGraphProfiler.EndPass(in PassInfo pass, in PassStats stats) => ((IGraphProfiler)_recording).EndPass(in pass, in stats);
-
-    void IGraphProfiler.SkipPass(string name, int instanceIndex, PassSkipReason reason) => ((IGraphProfiler)_recording).SkipPass(name, instanceIndex, reason);
 
     void IGpuStatsProfiler.RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds)
         => ((IGpuStatsProfiler)_recording).RecordExecutionTime(in commandBuffer, milliseconds);

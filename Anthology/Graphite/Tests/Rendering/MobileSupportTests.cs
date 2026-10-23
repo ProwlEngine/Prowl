@@ -101,8 +101,8 @@ public sealed class MobileSupportTests
     [Fact]
     public void SceneNormalsFallBackToHalfFloat()
     {
-        PixelFormat[] all = FeatureShape.SceneFormats(_ => true);
-        PixelFormat[] noSnorm = FeatureShape.SceneFormats(format => format != PixelFormat.R16_G16_SNorm);
+        PixelFormat[] all = ViewGraph.SceneFormats(_ => true);
+        PixelFormat[] noSnorm = ViewGraph.SceneFormats(format => format != PixelFormat.R16_G16_SNorm);
 
         Assert.Equal(PixelFormat.R16_G16_SNorm, all[2]);
         Assert.Equal(PixelFormat.R16_G16_Float, noSnorm[2]);
@@ -112,7 +112,7 @@ public sealed class MobileSupportTests
     [Fact]
     public void SceneDepthFallsBackToD16()
     {
-        Assert.Equal(PixelFormat.D32_Float, FeatureShape.SceneDepth(_ => true));
-        Assert.Equal(PixelFormat.D16_UNorm, FeatureShape.SceneDepth(format => format != PixelFormat.D32_Float));
+        Assert.Equal(PixelFormat.D32_Float, ViewGraph.SceneDepth(_ => true));
+        Assert.Equal(PixelFormat.D16_UNorm, ViewGraph.SceneDepth(format => format != PixelFormat.D32_Float));
     }
 }

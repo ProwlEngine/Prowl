@@ -64,7 +64,7 @@ internal sealed class BloomStage(BloomSettings settings, GraphicsProgram program
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        ViewHandles handles = builder.GetSetupState<ViewHandles>();
+        ViewHandles handles = builder.GetViewState<ViewHandles>();
         if (input == null)
             builder.ReadColor();
         else
@@ -73,13 +73,13 @@ internal sealed class BloomStage(BloomSettings settings, GraphicsProgram program
         if (add != null)
             handles.Add = builder.Read(add);
 
-        handles.Output = builder.Temporary(output, GraphTextureDesc.InstanceSized(PixelFormat.R16_G16_B16_A16_Float, scale));
+        handles.Output = builder.Temporary(output, view.Texture(PixelFormat.R16_G16_B16_A16_Float, scale));
         builder.Publish(output, handles.Output);
     }
 
     public override void Render(FeatureContext context)
     {
-        ViewHandles handles = context.GetSetupState<ViewHandles>();
+        ViewHandles handles = context.GetViewState<ViewHandles>();
         Texture source = input == null ? context.Color! : context.Get(handles.Input).ColorTextures[0];
         CommandBuffer cmd = context.Command;
 
@@ -118,13 +118,13 @@ internal sealed class BloomComposite(BloomSettings settings, FullscreenProgram p
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        builder.GetSetupState<ViewHandles>().Bloom = builder.Read(input);
+        builder.GetViewState<ViewHandles>().Bloom = builder.Read(input);
         builder.WriteColor();
     }
 
     public override void Render(FeatureContext context)
     {
-        _properties.SetTexture("_Bloom", context.Get(context.GetSetupState<ViewHandles>().Bloom).ColorTextures[0], sampler);
+        _properties.SetTexture("_Bloom", context.Get(context.GetViewState<ViewHandles>().Bloom).ColorTextures[0], sampler);
         _properties.SetFloat("_Intensity", _intensity);
         context.Fullscreen(program, _properties);
     }

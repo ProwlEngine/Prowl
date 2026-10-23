@@ -232,6 +232,8 @@ public abstract partial class GraphicsDevice
         lock (_executionLock)
         {
             Volatile.Write(ref _lastCompletedExecutionId, _executionIdCounter);
+            foreach (ExecutionTask task in _activeTasks)
+                task.DisposeRetired();
             _activeTasks.Clear();
             _freeSlots.Clear();
             for (uint i = 0; i < _maxExecutingTasks; i++)
@@ -277,6 +279,7 @@ public abstract partial class GraphicsDevice
 
             _activeTasks.RemoveAt(i);
             _freeSlots.Enqueue(task.RingSlot);
+            task.DisposeRetired();
         }
 
         ulong completed = _activeTasks.Count == 0 ? _executionIdCounter : _activeTasks[0].Id - 1;

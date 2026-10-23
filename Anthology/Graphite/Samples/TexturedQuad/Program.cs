@@ -1,61 +1,7 @@
-using Prowl.Vector;
-
 using Silk.NET.Windowing;
 
 
 namespace Prowl.Graphite.Samples.TexturedQuad;
-
-
-// Three draws sharing one shader but switching PropertySets, no dependencies between passes: the pass
-// clears and draws straight into the backbuffer.
-internal sealed class TexturedQuadPass : InstanceRasterPass
-{
-    private readonly GraphicsProgram _shader;
-    private readonly Mesh _leftQuad;
-    private readonly Mesh _rightQuad;
-    private readonly Mesh _midQuad;
-    private readonly PropertySet _leftProperties;
-    private readonly PropertySet _rightProperties;
-    private readonly PropertySet _midProperties;
-
-    public TexturedQuadPass(
-        GraphicsProgram shader,
-        Mesh leftQuad, Mesh rightQuad, Mesh midQuad,
-        PropertySet leftProperties, PropertySet rightProperties, PropertySet midProperties)
-    {
-        _shader = shader;
-        _leftQuad = leftQuad;
-        _rightQuad = rightQuad;
-        _midQuad = midQuad;
-        _leftProperties = leftProperties;
-        _rightProperties = rightProperties;
-        _midProperties = midProperties;
-    }
-
-    public override string Name => "Backbuffer";
-
-    public override GraphKind Kind => SampleView.Kind;
-
-    public override void Setup(InstanceContextBuilder builder) => SetInstanceTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)), PixelFormat.D24_UNorm_S8_UInt);
-
-    public override void Render(InstanceContext context, CommandBuffer cmd)
-    {
-        cmd.SetShader(_shader);
-
-        cmd.SetProperties(_leftProperties);
-        cmd.SetVertexSource(_leftQuad);
-        cmd.DrawIndexed();
-
-        cmd.SetProperties(_rightProperties);
-        cmd.SetVertexSource(_rightQuad);
-        cmd.DrawIndexed();
-
-        cmd.SetProperties(_midProperties);
-        cmd.SetVertexSource(_midQuad);
-        cmd.DrawIndexed();
-
-    }
-}
 
 
 public static class Program
@@ -75,8 +21,7 @@ public static class Program
     static Sampler rightSampler;
     static Sampler midSampler;
     static RenderMSTracker tracker;
-    static RenderGraph graph;
-    static GraphInstances instances;
+    static FrameGraph graph;
 
 
     private static void Main()
@@ -120,9 +65,7 @@ public static class Program
         midProperties = new();
         midProperties.SetTexture("MainTexture", midTexture, midSampler);
 
-        graph = SampleView.Build(new TexturedQuadPass(
-            shader, leftQuad, rightQuad, midQuad, leftProperties, rightProperties, midProperties));
-        instances = SampleView.Instances(graph, 600, 600, device.MainSwapchain);
+        graph = new FrameGraph(device, "Sample");
     }
 
 
@@ -130,7 +73,22 @@ public static class Program
     {
         tracker.Begin();
 
-        device.DispatchGraph(graph, instances);
+        SampleView.Draw(graph, device.MainSwapchain, "Backbuffer", cmd =>
+        {
+            cmd.SetShader(shader);
+
+            cmd.SetProperties(leftProperties);
+            cmd.SetVertexSource(leftQuad);
+            cmd.DrawIndexed();
+
+            cmd.SetProperties(rightProperties);
+            cmd.SetVertexSource(rightQuad);
+            cmd.DrawIndexed();
+
+            cmd.SetProperties(midProperties);
+            cmd.SetVertexSource(midQuad);
+            cmd.DrawIndexed();
+        });
         tracker.End(dt);
     }
 

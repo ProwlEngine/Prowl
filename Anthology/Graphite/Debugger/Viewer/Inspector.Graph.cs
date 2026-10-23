@@ -17,7 +17,7 @@ internal sealed partial class ProfilerView
 {
     private readonly Dictionary<string, NodeGraphController> _graphControllers = new();
 
-    private void TargetsTab(FrameModel model, ProfileNode node, DeepInstance view, DeepPass pass, List<ProfileNode> passDraws, int position)
+    private void TargetsTab(FrameModel model, ProfileNode node, DeepGroup view, DeepPass pass, List<ProfileNode> passDraws, int position)
     {
         int step = position + 1;
 
@@ -49,7 +49,7 @@ internal sealed partial class ProfilerView
                 rows[i].Selected = targets[i].Key == selectedKey;
         }
 
-        TargetStep targetStep = new(step - 1, node.DrawOrdinal);
+        TargetStep targetStep = new(node.DrawOrdinal, node.DrawOrdinal, node.Slice);
         ResourceTable(model, node, context, "Render targets", "Click to preview / magenta = pixels this draw changed",
             new[] { "Slot", "Resource", "Format", "Load", "Store" }, new[] { 0.6f, 1.6f, 1.6f, 0.8f, 0.8f }, rows, targets, targetStep);
 
@@ -57,18 +57,18 @@ internal sealed partial class ProfilerView
             PixelHistory(model, node, view, pass, passDraws, targets, step, p);
     }
 
-    private void PixelHistory(FrameModel model, ProfileNode node, DeepInstance view, DeepPass pass, List<ProfileNode> passDraws, List<ViewerItem> targets, int step, (float U, float V) pixel)
+    private void PixelHistory(FrameModel model, ProfileNode node, DeepGroup view, DeepPass pass, List<ProfileNode> passDraws, List<ViewerItem> targets, int step, (float U, float V) pixel)
     {
         string key = _viewerSelection.TryGetValue("draw:Targets", out string? chosen) && targets.Any(t => t.Key == chosen) ? chosen : targets[0].Key;
         RecordedGraphResource? graph = GraphResource(view, key[4..]);
         RecordedResource? res = graph != null ? Backing(model.Index!, graph) : null;
         List<Row> rows = new();
 
-        byte[]? Sample(int eventIndex)
+        byte[]? Sample(int eventIndex, IndirectSlice? slice = null)
         {
             if (res == null)
                 return null;
-            ReplayOutput? output = Output(Replay(model, view.Index, pass.Index, eventIndex), res.Id);
+            ReplayOutput? output = Output(Replay(model, view.Index, pass.Index, eventIndex, slice), res.Id);
             if (output == null || output.Regions.Length == 0)
                 return null;
             int w = (int)output.Regions[0].Width, h = (int)output.Regions[0].Height;
@@ -80,10 +80,10 @@ internal sealed partial class ProfilerView
         byte[]? previous = Sample(-1);
         for (int i = 0; i < step && i < passDraws.Count; i++)
         {
-            byte[]? now = Sample(i);
+            ProfileNode d = passDraws[i];
+            byte[]? now = Sample(d.DrawOrdinal, d.Slice);
             if (now != null && previous != null && !now.AsSpan().SequenceEqual(previous))
             {
-                ProfileNode d = passDraws[i];
                 rows.Add(new Row
                 {
                     Cells = new[] { d.CommandIndex.ToString(), d.Name, d.Ancestor(NodeKind.Marker)?.Name ?? "no marker", "Passed", "" },
@@ -106,17 +106,12 @@ internal sealed partial class ProfilerView
             rows.Count > 0 ? rows : new List<Row> { R("-", "No draws in this pass touched this pixel yet") });
     }
 
-    private void RenderGraphTab(FrameModel model, ProfileNode node, RecordedInstance recordedInstance)
+    private void RenderGraphTab(FrameModel model, ProfileNode node, RecordedGroup recordedGroup)
     {
-        DeepInstance? view = model.InstanceOf(node);
+        DeepGroup? view = model.GroupOf(node);
         if (view == null)
             return;
 
         GraphTab(model, new[] { view }, $"{model.Number}|{view.Index}", "Render graph / " + view.Name);
-
-        if (recordedInstance.Skipped.Length > 0)
-            TableSection("Skipped passes", 420, "Not in the graph this frame",
-                new[] { "Pass", "Reason" }, new[] { 1.4f, 1.4f },
-                recordedInstance.Skipped.Select(s => R(s.Name, s.Reason.ToString())).ToList());
     }
 }

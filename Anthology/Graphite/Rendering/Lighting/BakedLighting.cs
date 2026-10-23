@@ -242,7 +242,7 @@ internal sealed class WorldProbes
         ProbeRecords = tables.Array("Records");
         TetRecords = tables.Array("Tetrahedra");
         Requests = tables.Array("Requests");
-        ObjectShBuffer = new PersistentBuffer(RenderResourceID.Intern($"{tables.Prefix}.ObjectSh"), BufferUsage.StructuredBufferReadWrite, new GraphInstanceKey(GraphKind.Root, 0));
+        ObjectShBuffer = new PersistentBuffer(RenderResourceID.Intern($"{tables.Prefix}.ObjectSh"), BufferUsage.StructuredBufferReadWrite);
         ObjectSh = ResolveSh(64);
     }
 
@@ -479,8 +479,8 @@ internal sealed class WorldProbes
     private DeviceBuffer ResolveSh(uint capacity) => ObjectShBuffer.Resolve(_tables.Device, _tables.Store, capacity * (uint)Marshal.SizeOf<ProbeShRecord>());
 }
 
-/// <summary>Samples the light probes for every world's requests, after the upload and before any camera reads them.</summary>
-internal sealed class ProbePass(ComputeProgram program) : IExecutionPass, IDisposable
+/// <summary>Samples a world's light probes for its requests, after the upload and before any camera reads them.</summary>
+internal sealed class ProbePass(ComputeProgram program) : IDisposable
 {
     [StructLayout(LayoutKind.Sequential)]
     private struct Push
@@ -493,41 +493,31 @@ internal sealed class ProbePass(ComputeProgram program) : IExecutionPass, IDispo
 
     private readonly PropertySet _properties = new();
 
-    public readonly List<WorldProbes> Worlds = new();
-
-    public string Name => "Graphite.LightProbes";
-
-    public void Setup(RenderContextBuilder builder)
+    public void Add(FrameGraph graph, WorldProbes probes)
     {
-        foreach (WorldProbes probes in Worlds)
+        if (probes.RequestCount == 0)
+            return;
+        graph.AddPass("Graphite.LightProbes", builder =>
         {
-            builder.DeclareInputBuffer(probes.ProbeRecords.Persistent.Id, BufferAccess.ShaderRead);
-            builder.DeclareInputBuffer(probes.TetRecords.Persistent.Id, BufferAccess.ShaderRead);
-            builder.DeclareInputBuffer(probes.Requests.Persistent.Id, BufferAccess.ShaderRead);
-            builder.DeclareWriteBuffer(probes.ObjectShBuffer.Id, BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
-        }
+            builder.Read(graph.Import(probes.ProbeRecords.Buffer), BufferAccess.ShaderRead);
+            builder.Read(graph.Import(probes.TetRecords.Buffer), BufferAccess.ShaderRead);
+            builder.Read(graph.Import(probes.Requests.Buffer), BufferAccess.ShaderRead);
+            builder.Write(graph.Import(probes.ObjectSh), BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+            return probes;
+        }, Render);
     }
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    private void Render(PassContext context, WorldProbes probes)
     {
-        bool bound = false;
-        foreach (WorldProbes probes in Worlds)
-        {
-            if (probes.RequestCount == 0)
-                continue;
-            if (!bound)
-            {
-                cmd.SetComputeShader(program);
-                bound = true;
-            }
-            _properties.SetBuffer("Graphite_Probes", probes.ProbeRecords.Buffer);
-            _properties.SetBuffer("Graphite_ProbeTets", probes.TetRecords.Buffer);
-            _properties.SetBuffer("Graphite_ProbeRequests", probes.Requests.Buffer);
-            _properties.SetBuffer("Graphite_ProbeOutput", probes.ObjectSh);
-            cmd.SetProperties(_properties);
-            cmd.SetPushConstants(new Push { ProbeCount = probes.ProbeCount, TetCount = probes.TetCount, RequestCount = probes.RequestCount });
-            cmd.Dispatch((probes.RequestCount + 63) / 64, 1, 1);
-        }
+        CommandBuffer cmd = context.Command;
+        cmd.SetComputeShader(program);
+        _properties.SetBuffer("Graphite_Probes", probes.ProbeRecords.Buffer);
+        _properties.SetBuffer("Graphite_ProbeTets", probes.TetRecords.Buffer);
+        _properties.SetBuffer("Graphite_ProbeRequests", probes.Requests.Buffer);
+        _properties.SetBuffer("Graphite_ProbeOutput", probes.ObjectSh);
+        cmd.SetProperties(_properties);
+        cmd.SetPushConstants(new Push { ProbeCount = probes.ProbeCount, TetCount = probes.TetCount, RequestCount = probes.RequestCount });
+        cmd.Dispatch((probes.RequestCount + 63) / 64, 1, 1);
     }
 
     public void Dispose() => program.Dispose();

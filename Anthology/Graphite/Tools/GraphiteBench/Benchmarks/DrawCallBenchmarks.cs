@@ -44,7 +44,7 @@ public class DrawCallBenchmarks : GraphiteBenchmark
     private int Draws => Case.Draws;
     private DrawMode Mode => Case.Mode;
 
-    protected override IEnumerable<IPass> CreatePasses()
+    protected override IEnumerable<BenchPass> CreatePasses()
     {
         GraphicsProgram program = LoadProgram("BenchShader.glsl");
         PropertySet[] models = Mode is DrawMode.Identical or DrawMode.MeshRebind or DrawMode.ShaderRebind

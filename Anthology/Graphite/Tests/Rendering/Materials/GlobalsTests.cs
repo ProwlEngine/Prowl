@@ -18,52 +18,11 @@ file sealed class FakeResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => sampler == null ? 0u : 3u;
 }
 
-file sealed class UploadPass(Uploader uploader, DeviceBuffer buffer) : IExecutionPass
-{
-    public string Name => "UploadGlobals";
-
-    public void Setup(RenderContextBuilder builder) => builder.DeclareImportedBuffer(RenderResourceID.Intern("Globals"), buffer, BufferAccess.ShaderWrite);
-
-    public void Render(RenderContext context, CommandBuffer cmd) => uploader.Record(cmd, context.Task);
-}
-
-file sealed class ReadPass(ComputeProgram program, PropertySet properties, uint regionBase, DeviceBuffer globals, DeviceBuffer output) : IExecutionPass
-{
-    public string Name => "ReadGlobals";
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        builder.DeclareImportedBuffer(RenderResourceID.Intern("Globals"), globals, BufferAccess.ShaderRead);
-        builder.DeclareImportedBuffer(RenderResourceID.Intern("GlobalsOutput"), output, BufferAccess.ShaderWrite);
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd)
-    {
-        cmd.SetComputeShader(program);
-        cmd.SetProperties(properties);
-        cmd.SetPushConstants(regionBase);
-        cmd.Dispatch(1, 1, 1);
-    }
-}
-
-file sealed class ReadbackPass(DeviceBuffer output, DeviceBuffer readback) : IExecutionPass
-{
-    public string Name => "ReadbackGlobals";
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        builder.DeclareImportedBuffer(RenderResourceID.Intern("GlobalsOutput"), output, BufferAccess.TransferRead);
-        builder.DeclareImportedBuffer(RenderResourceID.Intern("GlobalsReadback"), readback, BufferAccess.TransferWrite);
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd) => cmd.CopyBuffer(output, 0, readback, 0, output.SizeInBytes);
-}
-
 [Collection("GPU Tests")]
 public sealed class GlobalsTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GraphStore _store = new();
+    private readonly RenderStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly GlobalRegistry _registry;
     private readonly Uploader _uploader;
@@ -282,11 +241,12 @@ public sealed class GlobalsTests : IDisposable
         PropertySet properties = new();
         properties.SetBuffer("Graphite_Globals", _registry.Buffer);
         properties.SetBuffer("Output", output);
-        using RenderGraph graph = RenderGraph.Build([
-            new UploadPass(_uploader, _registry.Buffer),
-            new ReadPass(program, properties, (uint)region * _registry.RegionWords, _registry.Buffer, output),
-            new ReadbackPass(output, readback)]);
-        _device.DispatchGraph(graph, graph.CreateInstances());
+        TestGraph.Run(_device, graph =>
+        {
+            graph.Uploads("UploadGlobals", _uploader, _registry.Buffer);
+            graph.Dispatches("ReadGlobals", program, properties, (uint)region * _registry.RegionWords, [_registry.Buffer], output);
+            graph.Copies("ReadbackGlobals", output, readback);
+        });
         _device.WaitForIdle();
 
         float[] values = _device.Map<float>(readback).ToArray();

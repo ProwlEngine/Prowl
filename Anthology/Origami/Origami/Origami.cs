@@ -51,6 +51,9 @@ public static partial class Origami
     /// </summary>
     public static int PopupLayer { get; internal set; } = Layer.Topmost;
 
+    /// <summary>Scales every icon inside the box it is drawn in. Above 1 an icon can spill past its box.</summary>
+    public static float IconScale = 1f;
+
     /// <summary>Global switch for accent-tinted glows (selected pills, focus rings, active toolbar
     /// buttons, tab underlines, etc.). Default true. Gates <see cref="OrigamiShadow.Glow{T}"/> and the
     /// widgets' canvas-painted glows.</summary>

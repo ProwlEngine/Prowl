@@ -14,10 +14,10 @@ public enum ReplayStatus : byte
 /// <summary>Which pass to replay.</summary>
 public sealed class ReplayRequest
 {
-    /// <summary>Instance index within the recorded execution.</summary>
-    public int InstanceIndex { get; init; }
+    /// <summary>Group index within the recorded execution.</summary>
+    public int GroupIndex { get; init; }
 
-    /// <summary>Pass index within the instance.</summary>
+    /// <summary>Pass index within the group.</summary>
     public int PassIndex { get; init; }
 
     /// <summary>Last event of the pass to run, counted from 0. Null runs the whole pass.</summary>

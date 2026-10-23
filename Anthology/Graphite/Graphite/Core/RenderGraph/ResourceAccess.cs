@@ -5,37 +5,45 @@ namespace Prowl.Graphite;
 internal readonly struct ResourceAccess
 {
     public readonly RenderResourceID Id;
+    public readonly int Resource;
+    public readonly int Version;
+    public readonly TargetLoadStoreOps? FirstWrite;
     public readonly bool IsTexture;
     public readonly bool IsOutput;
     public readonly TextureState TextureUsage;
     public readonly TextureState? DepthUsage;
     public readonly BufferAccess BufferUsage;
-    public readonly GraphResource? Description;
 
     private ResourceAccess(
         RenderResourceID id,
+        int resource,
+        int version,
+        TargetLoadStoreOps? firstWrite,
         bool isTexture,
         bool isOutput,
         TextureState textureUsage,
         TextureState? depthUsage,
-        BufferAccess bufferUsage,
-        GraphResource? description)
+        BufferAccess bufferUsage)
     {
         Id = id;
+        Resource = resource;
+        Version = version;
+        FirstWrite = firstWrite;
         IsTexture = isTexture;
         IsOutput = isOutput;
         TextureUsage = textureUsage;
         DepthUsage = depthUsage;
         BufferUsage = bufferUsage;
-        Description = description;
     }
 
     public static ResourceAccess Texture(
         RenderResourceID id,
+        int resource,
+        int version,
         TextureState usage,
         TextureState? depthUsage,
         bool isOutput,
-        GraphResource? description = null)
+        TargetLoadStoreOps? firstWrite = null)
     {
         string role = isOutput ? "output" : "input";
         if (usage == 0 || (usage & ~ColorStates) != 0)
@@ -43,7 +51,7 @@ internal readonly struct ResourceAccess
         if (isOutput && !IsSingle(usage & WriteStates))
             throw new ArgumentException($"Texture output usage {usage} must include exactly one of Attachment, Storage or TransferDst.", nameof(usage));
         if (!isOutput && (usage & ~ReadStates) != 0)
-            throw new ArgumentException($"Texture usage {usage} writes, declare it with DeclareOutputTexture.", nameof(usage));
+            throw new ArgumentException($"Texture usage {usage} writes, declare it with Write.", nameof(usage));
 
         if (depthUsage is TextureState depth)
         {
@@ -54,21 +62,21 @@ internal readonly struct ResourceAccess
                 throw new ArgumentException($"Depth usage {depth} is not valid for a pass {role}.", nameof(depthUsage));
         }
 
-        return new ResourceAccess(id, true, isOutput, usage, depthUsage, BufferAccess.None, description);
+        return new ResourceAccess(id, resource, version, firstWrite, true, isOutput, usage, depthUsage, BufferAccess.None);
     }
 
-    public static ResourceAccess Buffer(RenderResourceID id, BufferAccess usage, bool isOutput, GraphResource? description = null)
+    public static ResourceAccess Buffer(RenderResourceID id, int resource, int version, BufferAccess usage, bool isOutput)
     {
         if (usage == BufferAccess.None)
             throw new ArgumentException("Buffer usage must name at least one access.", nameof(usage));
         if ((usage & ~(BufferAccess.AllReads | BufferAccess.AllWrites)) != 0)
             throw new ArgumentException($"Buffer usage {usage} contains undefined flags.", nameof(usage));
         if (!isOutput && (usage & BufferAccess.AllWrites) != 0)
-            throw new ArgumentException($"Buffer usage {usage} writes, declare it with DeclareOutputBuffer.", nameof(usage));
+            throw new ArgumentException($"Buffer usage {usage} writes, declare it with Write.", nameof(usage));
         if (isOutput && (usage & BufferAccess.AllWrites) == 0)
             throw new ArgumentException($"Buffer output usage {usage} must include ShaderWrite or TransferWrite.", nameof(usage));
 
-        return new ResourceAccess(id, false, isOutput, default, null, usage, description);
+        return new ResourceAccess(id, resource, version, null, false, isOutput, default, null, usage);
     }
 
     private const TextureState WriteStates = TextureState.Storage | TextureState.Attachment | TextureState.TransferDst;

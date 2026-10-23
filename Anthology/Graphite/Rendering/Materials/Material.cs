@@ -432,7 +432,7 @@ public sealed class Material : IDisposable
 }
 
 /// <summary>The GPU table holding the record of every material of one shader. Slots are reused only after GPU retire.</summary>
-internal sealed class MaterialTable(GraphicsDevice device, GraphStore store, Shader shader, int index)
+internal sealed class MaterialTable(GraphicsDevice device, RenderStore store, Shader shader, int index)
 {
     private readonly Stack<uint> _free = new();
     private uint _next;
@@ -461,7 +461,7 @@ internal sealed class MaterialTable(GraphicsDevice device, GraphStore store, Sha
 /// Owns materials, their ids and the per shader tables. Dirty materials are packed into their table at extraction on
 /// the host thread, and the tables reach the GPU when the render thread flushes them.
 /// </summary>
-internal sealed class MaterialSystem(GraphicsDevice device, GraphStore store, IMaterialResources resources)
+internal sealed class MaterialSystem(GraphicsDevice device, RenderStore store, IMaterialResources resources)
 {
     private readonly object _lock = new();
     private readonly Stack<int> _freeIds = new();

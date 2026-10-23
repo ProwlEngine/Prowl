@@ -594,7 +594,7 @@ namespace Prowl.Scribe
                 if (ag == null)
                 {
                     // Missing in every font: flush so shaping/kerning doesn't cross the gap, then skip.
-                    FlushSubRun(runFont, buf, runStyle, output, primary);
+                    FlushSubRun(runFont, buf, runStyle, output, primary, settings.NoLigatures);
                     buf.Clear();
                     runFont = null;
                     i += charCount;
@@ -605,7 +605,7 @@ namespace Prowl.Scribe
                 // since shaping and kerning either side of one are not comparable.
                 if (runFont != null && (!ReferenceEquals(ag.Font, runFont) || !runStyle.ShapesWith(style)))
                 {
-                    FlushSubRun(runFont, buf, runStyle, output, primary);
+                    FlushSubRun(runFont, buf, runStyle, output, primary, settings.NoLigatures);
                     buf.Clear();
                 }
 
@@ -615,18 +615,18 @@ namespace Prowl.Scribe
                 i += charCount;
             }
 
-            FlushSubRun(runFont, buf, runStyle, output, primary);
+            FlushSubRun(runFont, buf, runStyle, output, primary, settings.NoLigatures);
             buf.Clear();
         }
 
         private void FlushSubRun(FontFile font, List<GsubGlyph> buf, in GlyphStyle style,
-                                 List<ShapedGlyph> output, FontFile primary)
+                                 List<ShapedGlyph> output, FontFile primary, bool noLigatures)
         {
             if (font == null || buf.Count == 0)
                 return;
 
             float pixelSize = style.PixelSize;
-            font.ApplyGsub(buf);
+            font.ApplyGsub(buf, noLigatures);
             float scale = GetScale(font, primary, pixelSize);
 
             for (int k = 0; k < buf.Count; k++)
@@ -699,7 +699,7 @@ namespace Prowl.Scribe
         LayoutCacheKey GenerateLayoutCacheKey(string text, TextLayoutSettings s)
             => new LayoutCacheKey(text, s.PixelSize, s.LetterSpacing, s.WordSpacing, s.LineHeight,
                    s.TabSize, s.WrapMode, s.Alignment, s.MaxWidth, s.Font.GetHashCode(),
-                   s.Quality, s.Customizer);
+                   s.Quality, s.Customizer, s.NoLigatures);
 
         #endregion
 

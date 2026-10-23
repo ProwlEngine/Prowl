@@ -6,7 +6,7 @@ namespace Prowl.Graphite.Debugger.Viewer;
 internal enum NodeKind
 {
     Frame,
-    Instance,
+    Group,
     Pass,
     CommandBuffer,
     Program,
@@ -25,8 +25,8 @@ internal sealed class ProfileNode
     public double Milliseconds;
     public double CpuMilliseconds;
 
-    public int InstanceIndex = -1;
-    public RecordedInstance? Instance;
+    public int GroupIndex = -1;
+    public RecordedGroup? Group;
     public int PassIndex = -1;
     public RecordedPass? Pass;
     public RecordedCommandBuffer? CommandBuffer;
@@ -34,13 +34,18 @@ internal sealed class ProfileNode
     public RecordedProgram? Program;
     public SetPipelineCommand? Pipeline;
 
+    public bool Idle;
+
     public int CommandIndex = -1;
     public int DrawOrdinal = -1;
     public int SubIndex;
+    public int IndirectIndex = -1;
     public RecordedCommand? Command;
     public object? Meta;
 
-    public bool IsTimed => Kind is NodeKind.Frame or NodeKind.Instance or NodeKind.Pass or NodeKind.CommandBuffer;
+    public IndirectSlice? Slice => IndirectIndex >= 0 ? new IndirectSlice(0, (uint)IndirectIndex + 1) : null;
+
+    public bool IsTimed => Kind is NodeKind.Frame or NodeKind.Group or NodeKind.Pass or NodeKind.CommandBuffer;
 
     public ProfileNode Add(ProfileNode child)
     {
@@ -49,7 +54,7 @@ internal sealed class ProfileNode
         return child;
     }
 
-    public double OwnMilliseconds => Kind == NodeKind.Instance ? Children.Where(c => c.Kind == NodeKind.Pass).Sum(c => c.Milliseconds) : Milliseconds;
+    public double OwnMilliseconds => Kind == NodeKind.Group ? Children.Where(c => c.Kind == NodeKind.Pass).Sum(c => c.Milliseconds) : Milliseconds;
 
     public ProfileNode? Ancestor(NodeKind kind)
     {

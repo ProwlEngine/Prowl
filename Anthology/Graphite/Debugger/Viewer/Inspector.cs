@@ -19,7 +19,7 @@ internal sealed partial class ProfilerView
     private static readonly Dictionary<NodeKind, string[]> LiveTabs = new()
     {
         [NodeKind.Frame] = new[] { "Overview", "Timing", "Memory" },
-        [NodeKind.Instance] = new[] { "Overview" },
+        [NodeKind.Group] = new[] { "Overview" },
         [NodeKind.Pass] = new[] { "Overview" },
         [NodeKind.CommandBuffer] = new[] { "Overview" },
     };
@@ -27,7 +27,7 @@ internal sealed partial class ProfilerView
     private static readonly Dictionary<NodeKind, string[]> SnapshotTabs = new()
     {
         [NodeKind.Frame] = new[] { "Overview", "Timing", "Memory", "Render Graph", "Capture" },
-        [NodeKind.Instance] = new[] { "Overview", "Render Graph" },
+        [NodeKind.Group] = new[] { "Overview", "Render Graph" },
         [NodeKind.Pass] = new[] { "Overview", "Resources", "Commands" },
         [NodeKind.CommandBuffer] = new[] { "Overview" },
         [NodeKind.Program] = new[] { "Program", "Bindings", "State" },
@@ -96,7 +96,7 @@ internal sealed partial class ProfilerView
         switch (node.Kind)
         {
             case NodeKind.Frame: FrameTab(model, tab, frames); break;
-            case NodeKind.Instance: InstanceTab(model, node, tab, frames); break;
+            case NodeKind.Group: GroupTab(model, node, tab, frames); break;
             case NodeKind.Pass: PassTab(model, node, tab, frames); break;
             case NodeKind.CommandBuffer: CommandBufferTab(node); break;
             case NodeKind.Program: ProgramTab(model, node, tab); break;

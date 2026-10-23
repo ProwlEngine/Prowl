@@ -304,9 +304,6 @@ internal readonly record struct ShadowDraw(CameraFrame Camera, ShadowTile Tile, 
 /// <summary>A tile read down through the scratch page into its smaller place.</summary>
 internal readonly record struct ShadowShrink(ShadowPage From, ShadowTile FromTile, ShadowTile Scratch, ShadowPage To, ShadowTile ToTile);
 
-/// <summary>What a world's shadow passes were built for, so the graph is built again when a page comes, goes or resizes.</summary>
-internal readonly record struct ShadowPassKey(int Version, int PageSize);
-
 /// <summary>A static only tile copied into its light's live tile.</summary>
 internal readonly record struct ShadowCopy(ShadowPage From, ShadowTile FromTile, ShadowPage To, ShadowTile ToTile);
 
@@ -316,8 +313,6 @@ internal static class ShadowRecorder
 
     public static GraphTextureDesc Desc(int size, PixelFormat format) => new()
     {
-        SizeMode = TextureSizeMode.Explicit,
-        Scale = 1,
         Width = size,
         Height = size,
         ColorFormats = [],
@@ -381,213 +376,189 @@ internal static class ShadowRecorder
     }
 }
 
+/// <summary>The passes that draw a world's shadow pages, in the order they run.</summary>
+internal static class ShadowPasses
+{
+    private static readonly List<TextureBlit> s_blits = new();
+
+    public static void Add(FramePipeline frame, FrameGraph graph, WorldFrame world)
+    {
+        WorldShadows shadows = world.Shadows!;
+        if (shadows.Pages.Count == 0 && shadows.StaticPages.Count == 0)
+            return;
+        if (shadows.Shrinks.Count > 0)
+            Shrink(frame, graph, world);
+        foreach (ShadowPage page in shadows.StaticPages)
+            Draw(frame, graph, world, page);
+        if (shadows.Copies.Count > 0)
+            Copies(graph, world);
+        foreach (ShadowPage page in shadows.Pages)
+            Draw(frame, graph, world, page);
+    }
+
+    // Each page's shrinking tiles blitted at their new size into a scratch page in one command, each texel the nearest old one
+    // so depths never blend, which is what drawing at the smaller size gives. Then the scratch tiles land in their new places,
+    // before any page draws.
+    private static void Shrink(FramePipeline frame, FrameGraph graph, WorldFrame world)
+    {
+        WorldShadows shadows = world.Shadows!;
+        TextureHandle scratch = default;
+        graph.AddPass("Graphite.ShadowShrink", builder =>
+        {
+            List<(ShadowPage Page, TextureHandle Handle)> pages = new();
+            foreach (ShadowPage page in shadows.AllPages())
+                pages.Add((page, builder.Read(graph.Import(page.Texture), TextureState.TransferSrc, TextureState.TransferSrc)));
+            scratch = builder.Write(graph.Create(shadows.ScratchId, ShadowRecorder.Desc(shadows.PageSize / 2, frame.ShadowFormat)), TextureState.TransferDst, TextureState.TransferDst);
+            return (pages, scratch);
+        }, (context, data) =>
+        {
+            Texture target = context.Get(data.scratch).DepthTexture!;
+            foreach ((ShadowPage page, TextureHandle handle) in data.pages)
+            {
+                s_blits.Clear();
+                foreach (ShadowShrink shrink in shadows.Shrinks)
+                {
+                    if (shrink.From == page)
+                        s_blits.Add(new TextureBlit((uint)shrink.FromTile.X, (uint)shrink.FromTile.Y, (uint)shrink.FromTile.Size, (uint)shrink.FromTile.Size, (uint)shrink.Scratch.X, (uint)shrink.Scratch.Y, (uint)shrink.Scratch.Size, (uint)shrink.Scratch.Size));
+                }
+                if (s_blits.Count > 0)
+                    context.Command.BlitTexture(context.Get(handle).DepthTexture!, target, CollectionsMarshal.AsSpan(s_blits));
+            }
+        });
+        graph.AddPass("Graphite.ShadowShrinkCopies", builder =>
+        {
+            TextureHandle source = builder.Read(scratch, TextureState.TransferSrc, TextureState.TransferSrc);
+            List<(ShadowPage Page, TextureHandle Handle)> pages = new();
+            foreach (ShadowPage page in shadows.AllPages())
+                pages.Add((page, builder.Write(graph.Import(page.Texture), TextureState.TransferDst, TextureState.TransferDst)));
+            return (pages, source);
+        }, (context, data) =>
+        {
+            Texture source = context.Get(data.source).DepthTexture!;
+            foreach ((ShadowPage page, TextureHandle handle) in data.pages)
+            {
+                s_blits.Clear();
+                foreach (ShadowShrink shrink in shadows.Shrinks)
+                {
+                    if (shrink.To == page)
+                        s_blits.Add(new TextureBlit((uint)shrink.Scratch.X, (uint)shrink.Scratch.Y, (uint)shrink.Scratch.Size, (uint)shrink.Scratch.Size, (uint)shrink.ToTile.X, (uint)shrink.ToTile.Y, (uint)shrink.ToTile.Size, (uint)shrink.ToTile.Size));
+                }
+                if (s_blits.Count > 0)
+                    context.Command.BlitTexture(source, context.Get(handle).DepthTexture!, CollectionsMarshal.AsSpan(s_blits));
+            }
+        });
+    }
+
+    // Draws the casters of the tiles queued on one page
+    private static void Draw(FramePipeline frame, FrameGraph graph, WorldFrame world, ShadowPage page)
+    {
+        if (page.Draws.Count == 0)
+            return;
+        graph.AddPass(page.IsStatic ? "Graphite.ShadowStaticPage" : "Graphite.ShadowPage", builder =>
+        {
+            frame.Buffers.ReadWorld(graph, builder, world);
+            frame.DeclareShadowReads(graph, builder, page.Texture);
+            foreach (ShadowDraw draw in page.Draws)
+                draw.Camera.Buffers.Read(graph, builder, BufferAccess.AllReads);
+            return builder.Write(graph.Import(page.Texture), TextureState.Attachment);
+        }, (context, handle) => ShadowRecorder.Record(context.Command, context.Get(handle), page.Draws, frame.TileClearProgram, context.Task.RingSlot));
+    }
+
+    // Copies static only tiles into their lights' live tiles, after the static pages draw and before the live ones
+    private static void Copies(FrameGraph graph, WorldFrame world)
+    {
+        WorldShadows shadows = world.Shadows!;
+        graph.AddPass("Graphite.ShadowCopies", builder =>
+        {
+            Dictionary<ShadowPage, TextureHandle> pages = new();
+            foreach (ShadowPage page in shadows.AllPages())
+            {
+                TextureHandle texture = graph.Import(page.Texture);
+                pages[page] = page.IsStatic
+                    ? builder.Read(texture, TextureState.TransferSrc, TextureState.TransferSrc)
+                    : builder.Write(texture, TextureState.TransferDst, TextureState.TransferDst);
+            }
+            return pages;
+        }, (context, pages) =>
+        {
+            foreach (ShadowCopy copy in shadows.Copies)
+            {
+                Texture source = context.Get(pages[copy.From]).DepthTexture!;
+                Texture target = context.Get(pages[copy.To]).DepthTexture!;
+                context.Command.CopyTexture(source, (uint)copy.FromTile.X, (uint)copy.FromTile.Y, 0, 0, 0, target, (uint)copy.ToTile.X, (uint)copy.ToTile.Y, 0, 0, 0, (uint)copy.ToTile.Size, (uint)copy.ToTile.Size, 1, 1);
+            }
+        });
+    }
+}
+
 /// <summary>
-/// Shrinks tiles without drawing them again: each page's shrinking tiles blitted at their new size into a scratch page in
-/// one command, each texel the nearest old one so depths never blend, which is what drawing at the smaller size gives.
+/// Draws a view's refit cascades into their depth textures and publishes them as <see cref="RendererOutputs.Cascades"/>.
+/// Exclusive group "Cascades".
 /// </summary>
-internal sealed class ShadowShrinkPass(FramePipeline frame, WorldFrame world) : IInstancePass
+public sealed class CascadeFeature : RenderFeature
 {
-    private TextureHandle _scratch;
-    private readonly Dictionary<ShadowPage, TextureHandle> _pages = new();
-    private readonly List<TextureBlit> _blits = new();
+    internal CascadeFeature() { }
 
-    public string Name => "Graphite.ShadowShrink";
-
-    public GraphKind Kind => RenderKinds.World;
-
-    public bool IsEnabled(GraphInstance instance) => instance.Data == world && world.Shadows!.Shrinks.Count > 0;
-
-    public void Setup(InstanceContextBuilder builder)
+    private sealed class State
     {
-        WorldShadows shadows = world.Shadows!;
-        _pages.Clear();
-        foreach (ShadowPage page in shadows.AllPages())
-            _pages[page] = builder.DeclareInputTexture(page.Id, TextureState.TransferSrc, TextureState.TransferSrc);
-        _scratch = builder.DeclareOutputTexture(shadows.ScratchId, ShadowRecorder.Desc(shadows.PageSize / 2, frame.ShadowFormat), usage: TextureState.TransferDst, depthUsage: TextureState.TransferDst);
+        public readonly List<(ViewShadows.Cascade Cascade, TextureHandle Handle)> Targets = new();
     }
 
-    public void Render(InstanceContext context, CommandBuffer cmd)
+    public override RenderSlot Slot => RenderSlot.Shadows;
+    public override string? ExclusiveGroup => "Cascades";
+    public override ViewKinds RunsOn => ViewKinds.All;
+
+    private static ViewShadows.Cascade? First(CameraFrame camera)
     {
-        Texture scratch = context.GetRenderTexture(_scratch).DepthTexture!;
-        foreach ((ShadowPage page, TextureHandle handle) in _pages)
+        foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
         {
-            _blits.Clear();
-            foreach (ShadowShrink shrink in world.Shadows!.Shrinks)
+            for (int c = 0; c < light.Count; c++)
             {
-                if (shrink.From == page)
-                    _blits.Add(new TextureBlit((uint)shrink.FromTile.X, (uint)shrink.FromTile.Y, (uint)shrink.FromTile.Size, (uint)shrink.FromTile.Size, (uint)shrink.Scratch.X, (uint)shrink.Scratch.Y, (uint)shrink.Scratch.Size, (uint)shrink.Scratch.Size));
+                if (light.Cascades[c].Texture?.Texture != null)
+                    return light.Cascades[c];
             }
-            if (_blits.Count > 0)
-                cmd.BlitTexture(context.GetRenderTexture(handle).DepthTexture!, scratch, CollectionsMarshal.AsSpan(_blits));
         }
-    }
-}
-
-/// <summary>Blits shrunk tiles from the scratch page into their new places, before any page draws.</summary>
-internal sealed class ShadowShrinkCopyPass(FramePipeline frame, WorldFrame world) : IInstancePass
-{
-    private TextureHandle _scratch;
-    private readonly Dictionary<ShadowPage, TextureHandle> _pages = new();
-    private readonly List<TextureBlit> _blits = new();
-
-    public string Name => "Graphite.ShadowShrinkCopies";
-
-    public GraphKind Kind => RenderKinds.World;
-
-    public bool IsEnabled(GraphInstance instance) => instance.Data == world && world.Shadows!.Shrinks.Count > 0;
-
-    public void Setup(InstanceContextBuilder builder)
-    {
-        WorldShadows shadows = world.Shadows!;
-        _scratch = builder.DeclareInputTexture(shadows.ScratchId, TextureState.TransferSrc, TextureState.TransferSrc);
-        _pages.Clear();
-        foreach (ShadowPage page in shadows.AllPages())
-            _pages[page] = builder.DeclareOutputTexture(page.Id, ShadowRecorder.Desc(shadows.PageSize, frame.ShadowFormat), usage: TextureState.TransferDst, depthUsage: TextureState.TransferDst, persistent: true);
+        return null;
     }
 
-    public void Render(InstanceContext context, CommandBuffer cmd)
+    internal override bool Skips(ViewGraph view) => view.Probing || First(view.Camera) == null;
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        Texture scratch = context.GetRenderTexture(_scratch).DepthTexture!;
-        foreach ((ShadowPage page, TextureHandle handle) in _pages)
-        {
-            _blits.Clear();
-            foreach (ShadowShrink shrink in world.Shadows!.Shrinks)
-            {
-                if (shrink.To == page)
-                    _blits.Add(new TextureBlit((uint)shrink.Scratch.X, (uint)shrink.Scratch.Y, (uint)shrink.Scratch.Size, (uint)shrink.Scratch.Size, (uint)shrink.ToTile.X, (uint)shrink.ToTile.Y, (uint)shrink.ToTile.Size, (uint)shrink.ToTile.Size));
-            }
-            if (_blits.Count > 0)
-                cmd.BlitTexture(scratch, context.GetRenderTexture(handle).DepthTexture!, CollectionsMarshal.AsSpan(_blits));
-        }
-    }
-}
-
-/// <summary>Draws the casters of the tiles queued on one page.</summary>
-internal sealed class ShadowDrawPass(FramePipeline frame, WorldFrame world, ShadowPage page) : IInstancePass
-{
-    private TextureHandle _page;
-
-    public string Name => page.IsStatic ? "Graphite.ShadowStaticPage" : "Graphite.ShadowPage";
-
-    public GraphKind Kind => RenderKinds.World;
-
-    public bool IsEnabled(GraphInstance instance) => instance.Data == world;
-
-    public void Setup(InstanceContextBuilder builder)
-    {
-        frame.Buffers.Read(builder);
-        _page = builder.DeclareOutputTexture(page.Id, ShadowRecorder.Desc(world.Shadows!.PageSize, frame.ShadowFormat), ops: ShadowRecorder.Loaded, persistent: true);
-    }
-
-    public void Render(InstanceContext context, CommandBuffer cmd)
-        => ShadowRecorder.Record(cmd, context.GetRenderTexture(_page), page.Draws, frame.TileClearProgram, context.Task.RingSlot);
-}
-
-/// <summary>Copies static only tiles into their lights' live tiles, after the static pages draw and before the live ones.</summary>
-internal sealed class ShadowCopyPass(FramePipeline frame, WorldFrame world) : IInstancePass
-{
-    private readonly Dictionary<ShadowPage, TextureHandle> _pages = new();
-
-    public string Name => "Graphite.ShadowCopies";
-
-    public GraphKind Kind => RenderKinds.World;
-
-    public bool IsEnabled(GraphInstance instance) => instance.Data == world && world.Shadows!.Copies.Count > 0;
-
-    public void Setup(InstanceContextBuilder builder)
-    {
-        WorldShadows shadows = world.Shadows!;
-        _pages.Clear();
-        foreach (ShadowPage page in shadows.AllPages())
-        {
-            _pages[page] = page.IsStatic
-                ? builder.DeclareInputTexture(page.Id, TextureState.TransferSrc, TextureState.TransferSrc)
-                : builder.DeclareOutputTexture(page.Id, ShadowRecorder.Desc(shadows.PageSize, frame.ShadowFormat), usage: TextureState.TransferDst, depthUsage: TextureState.TransferDst, persistent: true);
-        }
-    }
-
-    public void Render(InstanceContext context, CommandBuffer cmd)
-    {
-        foreach (ShadowCopy copy in world.Shadows!.Copies)
-        {
-            Texture source = context.GetRenderTexture(_pages[copy.From]).DepthTexture!;
-            Texture target = context.GetRenderTexture(_pages[copy.To]).DepthTexture!;
-            cmd.CopyTexture(source, (uint)copy.FromTile.X, (uint)copy.FromTile.Y, 0, 0, 0, target, (uint)copy.ToTile.X, (uint)copy.ToTile.Y, 0, 0, 0, (uint)copy.ToTile.Size, (uint)copy.ToTile.Size, 1, 1);
-        }
-    }
-}
-
-/// <summary>Leaves a world's pages in their sampled layout, so the cameras after it read them through bindless.</summary>
-internal sealed class ShadowPublishPass(WorldFrame world) : IInstancePass
-{
-    public string Name => "Graphite.ShadowPublish";
-
-    public GraphKind Kind => RenderKinds.World;
-
-    public bool IsEnabled(GraphInstance instance) => instance.Data == world;
-
-    public void Setup(InstanceContextBuilder builder)
-    {
-        foreach (ShadowPage page in world.Shadows!.AllPages())
-            builder.DeclareInputTexture(page.Id, TextureState.Sampled, TextureState.Sampled);
-    }
-
-    public void Render(InstanceContext context, CommandBuffer cmd)
-    {
-    }
-}
-
-/// <summary>Draws a camera's refit cascades into their persistent depth textures.</summary>
-internal sealed class CascadePass(FeatureShape shape) : IInstancePass
-{
-    private readonly Dictionary<(int Slot, int Cascade), TextureHandle> _targets = new();
-
-    public string Name => "Graphite.Cascades";
-
-    public GraphKind Kind => shape.Kind;
-
-    public void Setup(InstanceContextBuilder builder)
-    {
-        _targets.Clear();
-        foreach (CascadeSlot slot in shape.Cascades)
-        {
-            for (int c = 0; c < slot.Count; c++)
-                _targets[(slot.Slot, c)] = builder.DeclareOutputTexture(shape.CascadeId(slot.Slot, c), ShadowRecorder.Desc((int)slot.Resolution, shape.Frame.ShadowFormat), ops: ShadowRecorder.Loaded, persistent: true);
-        }
-    }
-
-    public void Render(InstanceContext context, CommandBuffer cmd)
-    {
-        CameraFrame camera = (CameraFrame)context.Instance.Data!;
+        ViewGraph graph = builder.ViewGraph;
+        CameraFrame camera = graph.Camera;
+        State state = builder.GetViewState<State>();
+        state.Targets.Clear();
+        graph.Frame.Buffers.ReadWorld(graph.Graph, builder.Graph, camera.World);
+        List<RenderTexture> written = new();
         foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
         {
             for (int c = 0; c < light.Count; c++)
             {
                 if (light.Cascades[c].Draws.Count > 0)
-                    ShadowRecorder.Record(cmd, context.GetRenderTexture(_targets[(light.Slot, c)]), light.Cascades[c].Draws, shape.Frame.TileClearProgram, context.Task.RingSlot);
+                    written.Add(light.Cascades[c].Texture!.Texture!);
             }
         }
-    }
-}
-
-/// <summary>Leaves a camera's cascades in their sampled layout for the passes after it.</summary>
-internal sealed class CascadePublishPass(FeatureShape shape) : IInstancePass
-{
-    public string Name => "Graphite.CascadesPublish";
-
-    public GraphKind Kind => shape.Kind;
-
-    public void Setup(InstanceContextBuilder builder)
-    {
-        foreach (CascadeSlot slot in shape.Cascades)
+        graph.Frame.DeclareShadowReads(graph.Graph, builder.Graph, alsoWritten: written);
+        foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
         {
-            for (int c = 0; c < slot.Count; c++)
-                builder.DeclareInputTexture(shape.CascadeId(slot.Slot, c), TextureState.Sampled, TextureState.Sampled);
+            for (int c = 0; c < light.Count; c++)
+            {
+                ViewShadows.Cascade cascade = light.Cascades[c];
+                if (cascade.Draws.Count == 0)
+                    continue;
+                foreach (ShadowDraw draw in cascade.Draws)
+                    draw.Camera.Buffers.Read(graph.Graph, builder.Graph, BufferAccess.AllReads);
+                state.Targets.Add((cascade, builder.Graph.Write(graph.Graph.Import(cascade.Texture!.Texture!), TextureState.Attachment)));
+            }
         }
+        builder.Publish(RendererOutputs.Cascades, state.Targets.Count > 0 ? state.Targets[0].Handle : graph.Graph.Import(First(camera)!.Texture!.Texture!));
     }
 
-    public void Render(InstanceContext context, CommandBuffer cmd)
+    public override void Render(FeatureContext context)
     {
+        foreach ((ViewShadows.Cascade cascade, TextureHandle handle) in context.GetViewState<State>().Targets)
+            ShadowRecorder.Record(context.Command, context.Get(handle), cascade.Draws, context.Frame.TileClearProgram, context.Graph.Task.RingSlot);
     }
 }
 
@@ -964,11 +935,6 @@ internal sealed class WorldShadows(TableHost tables, int worldId)
 
     public RenderResourceID ScratchId { get; } = RenderResourceID.Intern($"Graphite.World{worldId}/ShadowScratch");
 
-    /// <summary>Counts the pages made and dropped, so the graph is built again when they change.</summary>
-    public int Version;
-
-    public ShadowPassKey PassKey => new(Version, PageSize);
-
     /// <summary>Lights whose faces hold nothing, written once.</summary>
     public bool[] Zeroed = [];
 
@@ -993,21 +959,6 @@ internal sealed class WorldShadows(TableHost tables, int worldId)
             if (!pages.Exists(page => page.Id == id))
                 return id;
         }
-    }
-
-    /// <summary>The passes that draw this world's pages, in the order they run.</summary>
-    public IEnumerable<IPass> Passes(FramePipeline frame, WorldFrame world)
-    {
-        if (Pages.Count == 0 && StaticPages.Count == 0)
-            yield break;
-        yield return new ShadowShrinkPass(frame, world);
-        yield return new ShadowShrinkCopyPass(frame, world);
-        foreach (ShadowPage page in StaticPages)
-            yield return new ShadowDrawPass(frame, world, page);
-        yield return new ShadowCopyPass(frame, world);
-        foreach (ShadowPage page in Pages)
-            yield return new ShadowDrawPass(frame, world, page);
-        yield return new ShadowPublishPass(world);
     }
 }
 
@@ -1047,9 +998,6 @@ internal sealed class ViewShadows : IDisposable
         public Cascade[] Cascades { get; } = new Cascade[MaxCascades];
     }
 
-    /// <summary>The kind of the graph the cascades' textures belong to.</summary>
-    public GraphKind? Kind;
-
     public readonly List<CascadeLight> Lights = new();
     public readonly List<CascadeRecord> Records = new();
 
@@ -1058,7 +1006,10 @@ internal sealed class ViewShadows : IDisposable
         foreach (CascadeLight light in Lights)
         {
             foreach (Cascade cascade in light.Cascades)
+            {
                 cascade?.Camera?.Dispose();
+                cascade?.Texture?.Texture?.Dispose();
+            }
         }
         Lights.Clear();
     }
@@ -1188,8 +1139,6 @@ internal sealed partial class FramePipeline
     private readonly ShadowTile[] _oldTiles = new ShadowTile[6];
     private bool? _blitShadows;
 
-    private readonly List<(WorldFrame World, ShadowPassKey Key)> _shadowKeys = new(), _builtShadowKeys = new();
-
     // Whether the device blits the shadow format, else shrinking lights draw again
     private bool BlitShadows => _blitShadows ??= _device.SupportsBlit(ShadowFormat, depthFormat: true);
 
@@ -1217,17 +1166,6 @@ internal sealed partial class FramePipeline
         ComparisonKind = ComparisonKind.GreaterEqual,
     });
 
-    private IEnumerable<IPass> ShadowPasses()
-    {
-        _builtShadowKeys.Clear();
-        foreach ((WorldFrame world, ShadowPassKey key) in _shadowKeys)
-        {
-            _builtShadowKeys.Add((world, key));
-            foreach (IPass pass in world.Shadows!.Passes(this, world))
-                yield return pass;
-        }
-    }
-
     // Plans and prepares the frame's local light shadows, after every host view is prepared, and the cascades of every view
     private void PrepareShadows()
     {
@@ -1235,12 +1173,10 @@ internal sealed partial class FramePipeline
         ShadowCallsDrawn = 0;
         ShadowsAdded = ShadowsGrown = ShadowsShrunk = 0;
         ShadowCopiesMade = 0;
-        _shadowKeys.Clear();
         foreach (WorldFrame world in _frameWorlds)
         {
             PrepareLocalShadows(world);
             ShadowCopiesMade += world.Shadows!.Copies.Count;
-            _shadowKeys.Add((world, world.Shadows.PassKey));
         }
         foreach (CameraFrame camera in _cameras.Values)
         {
@@ -1255,8 +1191,6 @@ internal sealed partial class FramePipeline
                     PrepareCascades(camera, FitOf(camera.Desc));
             }
         }
-        if (!CollectionsMarshal.AsSpan(_shadowKeys).SequenceEqual(CollectionsMarshal.AsSpan(_builtShadowKeys)))
-            _graphDirty = true;
     }
 
     private enum CascadeFit
@@ -1289,7 +1223,6 @@ internal sealed partial class FramePipeline
             RetirePages(shadows, shadows.Pages, all: true);
             RetirePages(shadows, shadows.StaticPages, all: true);
             shadows.PageSize = pageSize;
-            shadows.Version++;
         }
         foreach (ShadowPage page in shadows.AllPages())
         {
@@ -1580,7 +1513,7 @@ internal sealed partial class FramePipeline
         world.World.StaticShadowAtlas = shadows.StaticPages.Count > 0 ? shadows.StaticPages[0].Texture.DepthTexture : null;
     }
 
-    private void ResolvePage(ShadowPage page) => page.Persistent.Resolve(_device, _store, texture => _textures.ShadowSlot(texture.DepthTexture!), out _);
+    private void ResolvePage(ShadowPage page) => page.Persistent.Resolve(_device, texture => _textures.ShadowSlot(texture.DepthTexture!), out _);
 
     // Lights whose shadows a caster's change touched: its old and new place, every user of a changed material
     private void InvalidateShadows(WorldFrame world, WorldShadows shadows, WorldLighting lighting)
@@ -1850,11 +1783,10 @@ internal sealed partial class FramePipeline
             }
             if (found == null && pages.Count == 0)
             {
-                PersistentTexture texture = new(shadows.NewPageId(isStatic), ShadowRecorder.Desc(pageSize, ShadowFormat), new GraphInstanceKey(RenderKinds.World, shadows.WorldId), MaterialPropertyType.Texture2D);
+                PersistentTexture texture = new(shadows.NewPageId(isStatic), ShadowRecorder.Desc(pageSize, ShadowFormat), MaterialPropertyType.Texture2D);
                 found = new ShadowPage(texture, isStatic, pageSize) { LastUsed = _frame };
                 ResolvePage(found);
                 pages.Add(found);
-                shadows.Version++;
                 if (!found.Tiles.TryAllocate(size, out tile))
                     found = null;
             }
@@ -1981,7 +1913,6 @@ internal sealed partial class FramePipeline
                 continue;
             pages.RemoveAt(i);
             page.Persistent.Release(_store);
-            shadows.Version++;
             retired = true;
         }
         return retired;
@@ -2187,22 +2118,15 @@ internal sealed partial class FramePipeline
     private void PrepareCascades(CameraFrame camera, CascadeFit fit)
     {
         ViewShadows state = camera.Shadows;
-        FeatureShape shape = camera.Shape!;
         WorldLighting lighting = camera.World.World.Lighting;
         IReadOnlyList<int> order = lighting.DirectionalOrder;
-        if (state.Kind != shape.Kind)
-        {
-            for (int i = state.Lights.Count - 1; i >= 0; i--)
-                ReleaseCascades(state, i);
-            state.Kind = shape.Kind;
-        }
         state.Records.Clear();
         for (int d = 0; d < order.Count; d++)
         {
             ref readonly LightDesc light = ref lighting.Light(order[d]);
             if (fit != CascadeFit.None && light.Shadow.Enabled)
             {
-                PrepareLightCascades(camera, state, shape, light, order[d], d, fit == CascadeFit.Around);
+                PrepareLightCascades(camera, state, light, order[d], d, fit == CascadeFit.Around);
                 continue;
             }
             for (int c = 0; c < ViewShadows.MaxCascades; c++)
@@ -2219,7 +2143,7 @@ internal sealed partial class FramePipeline
         camera.Cascades.Write<CascadeRecord>(_uploader, CollectionsMarshal.AsSpan(state.Records));
     }
 
-    private void PrepareLightCascades(CameraFrame camera, ViewShadows state, FeatureShape shape, in LightDesc light, int index, int slot, bool around)
+    private void PrepareLightCascades(CameraFrame camera, ViewShadows state, in LightDesc light, int index, int slot, bool around)
     {
         int count = CascadeCount(light);
         uint resolution = CascadeResolution(light);
@@ -2275,11 +2199,11 @@ internal sealed partial class FramePipeline
                 cascade.Valid = false;
             if (cascade.Texture == null)
             {
-                cascade.Texture = new PersistentTexture(shape.CascadeId(slot, c), ShadowRecorder.Desc((int)resolution, ShadowFormat), new GraphInstanceKey(shape.Kind, camera.View.ViewId), MaterialPropertyType.Texture2D);
+                cascade.Texture = new PersistentTexture(RenderResourceID.Intern($"Graphite.Camera{camera.View.ViewId}/Cascade{slot}.{c}"), ShadowRecorder.Desc((int)resolution, ShadowFormat), MaterialPropertyType.Texture2D);
                 cascade.Camera = ShadowCamera();
                 cascade.Valid = false;
             }
-            cascade.Texture.Resolve(_device, _store, texture => _textures.ShadowSlot(texture.DepthTexture!), out bool replaced);
+            cascade.Texture.Resolve(_device, texture => _textures.ShadowSlot(texture.DepthTexture!), out bool replaced);
             if (replaced)
                 cascade.Valid = false;
 
@@ -2326,6 +2250,7 @@ internal sealed partial class FramePipeline
     {
         foreach (ViewShadows.Cascade cascade in state.Lights[at].Cascades)
         {
+            cascade.Texture?.Release(_store);
             if (cascade.Camera != null)
             {
                 _textures.Untrack(cascade.Camera.ViewTable);

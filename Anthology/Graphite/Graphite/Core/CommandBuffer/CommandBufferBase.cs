@@ -31,6 +31,8 @@ public abstract class CommandBufferBase : GraphicsResource
 
     internal GraphTextureStates? GraphStates { get; set; }
 
+    internal PassBindings? Bindings { get; set; }
+
     internal TextureState? StateOf(Texture texture)
         => GraphStates?.StateOf(texture);
 

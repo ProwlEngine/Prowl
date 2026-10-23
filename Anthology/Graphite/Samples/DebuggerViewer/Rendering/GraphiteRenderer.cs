@@ -17,13 +17,12 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     private static readonly Color ClearColor = new(0f, 0f, 0f, 1f);
     private static readonly Keyword UpsampleOn = new("Upsample", "true");
     private static readonly Keyword UpsampleOff = new("Upsample", "false");
-    private static readonly GraphKind Canvas = GraphKind.Intern("Sample.Canvas");
-    private static readonly RenderResourceID PreviewSlot = "Preview";
+    private static readonly RenderResourceID SceneSlot = "Scene";
 
     private readonly GraphicsDevice _device;
     private readonly ScenePass _scenePass;
-    private readonly RenderGraph _graph;
-    private readonly GraphInstances _instances;
+    private readonly PresentPass _presentPass;
+    private readonly FrameGraph _graph;
     private GraphicsProgram _canvasProgram = null!;
     private ShaderPass _blurPass = null!;
     private Float4x4 _projection;
@@ -39,8 +38,8 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     {
         _device = device;
         _scenePass = new ScenePass(this);
-        _graph = RenderGraph.Build([_scenePass, new PresentPass(this)], [new GraphScope(Canvas, GraphKind.Root)], "Viewer UI");
-        _instances = _graph.CreateInstances();
+        _presentPass = new PresentPass(this);
+        _graph = new FrameGraph(device, "Viewer UI");
     }
 
     public bool SupportsBackdropBlur => true;
@@ -118,17 +117,23 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
     {
         _scenePass.SetFrame(canvas, drawCalls);
-        _instances.Reset();
-        _instances.Add(Canvas, 0, extent: new GraphExtent((uint)_fbWidth, (uint)_fbHeight), target: _device.MainSwapchain.Framebuffer, name: "Canvas",
-            imports: [GraphImport.Of(PreviewSlot, (_preview ?? _defaultTexture).Texture)]);
+        using (_graph.Group("Canvas"))
+        {
+            TextureHandle preview = _graph.Import((_preview ?? _defaultTexture).Texture);
+            TextureHandle target = _graph.ImportTarget(_device.MainSwapchain.Framebuffer, PixelFormat.D24_UNorm_S8_UInt);
+            TextureHandle scene = _graph.Create(SceneSlot, GraphTextureDesc.Sized(_fbWidth, _fbHeight, TargetFormat));
+            scene = _scenePass.Add(_graph, preview, scene);
+            _presentPass.Add(_graph, scene, target);
+        }
+
         if (_screenshot == null)
         {
-            _device.DispatchGraph(_graph, _instances);
+            _graph.Execute();
             return;
         }
 
         using DeepRecording recording = new(_device, DeepMode.Full);
-        _device.DispatchGraph(_graph, _instances, recording);
+        _graph.Execute(recording);
         recording.Wait();
         WritePng(recording, _screenshot);
         _screenshot = null;
@@ -136,7 +141,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
 
     private static void WritePng(DeepRecording recording, string path)
     {
-        RecordedCopy copy = recording.Instances.First(i => i.Key.Kind == Canvas).Passes[0].Copies.First(c => c.Placement == CopyPlacement.AfterPass);
+        RecordedCopy copy = recording.Groups.First(g => g.Name == "Canvas").Passes[0].Copies.First(c => c.Placement == CopyPlacement.AfterPass);
         CopyRegion region = copy.Regions[0];
         byte[] data = recording.Blobs.First(b => b.Ref == copy.Blob).Data.Items.ToArray();
         byte[] pixels = data.AsSpan((int)region.Offset, (int)(region.Width * region.Height * 4)).ToArray();
@@ -150,7 +155,6 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
 
     public void Dispose()
     {
-        _scenePass.DisposeResources();
         _graph.Dispose();
         _sampler?.Dispose();
         _canvasProgram?.Dispose();
@@ -161,28 +165,21 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
         _created.Clear();
     }
 
-    private sealed class ScenePass : IInstancePass
+    private sealed class ScenePass
     {
         private readonly GraphiteRenderer _owner;
         private readonly PropertySet _properties = new();
-        private readonly Texture?[] _blurTex = new Texture?[MaxBlurLevels];
-        private readonly Framebuffer?[] _blurFB = new Framebuffer?[MaxBlurLevels];
+        private readonly TextureHandle[] _blurHandles = new TextureHandle[MaxBlurLevels];
+        private readonly RenderTexture[] _blur = new RenderTexture[MaxBlurLevels];
         private readonly Int2[] _blurSize = new Int2[MaxBlurLevels];
-        private TextureHandle _sceneHandle;
         private Canvas _canvas = null!;
         private IReadOnlyList<DrawCall> _drawCalls = [];
         private DeviceBuffer _activeVbo = null!;
         private DeviceBuffer _activeEbo = null!;
         private bool _backdropDirty = true;
         private float _lastBlurRadius = -1f;
-        private int _blurBuiltW;
-        private int _blurBuiltH;
 
         public ScenePass(GraphiteRenderer owner) => _owner = owner;
-
-        public string Name => "Scene";
-
-        public GraphKind Kind => Canvas;
 
         public void SetFrame(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
         {
@@ -190,23 +187,38 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
             _drawCalls = drawCalls;
         }
 
-        public void Setup(InstanceContextBuilder builder)
+        public TextureHandle Add(FrameGraph graph, TextureHandle preview, TextureHandle scene)
         {
-            builder.DeclareImportSlotTexture(PreviewSlot, TextureState.Sampled);
-            _sceneHandle = builder.DeclareOutputTexture("Scene", GraphTextureDesc.InstanceSized(TargetFormat), usage: TextureState.Attachment | TextureState.Sampled);
+            TextureHandle written = default;
+            graph.AddPass("Scene", pass =>
+            {
+                pass.Read(preview);
+                for (int i = 0; i < MaxBlurLevels; i++)
+                {
+                    int w = Math.Max(1, _owner._fbWidth >> (i + BlurBaseShift));
+                    int h = Math.Max(1, _owner._fbHeight >> (i + BlurBaseShift));
+                    _blurSize[i] = new Int2(w, h);
+                    TextureHandle blur = graph.Create(RenderResourceID.Intern($"Blur {i}"), GraphTextureDesc.Sized(w, h, TargetFormat), Lifetime.Persistent);
+                    _blurHandles[i] = pass.Write(blur, TextureState.Attachment | TextureState.Sampled);
+                }
+                return written = pass.Write(scene, TextureState.Attachment | TextureState.Sampled, null, new TargetLoadStoreOps(AttachmentOps.Clear(ClearColor), AttachmentOps.Loaded));
+            }, Render);
+            return written;
         }
 
-        public void Render(InstanceContext context, CommandBuffer cmd)
+        private void Render(PassContext context, TextureHandle sceneHandle)
         {
-            EnsureBlurTargets(_owner._fbWidth, _owner._fbHeight);
+            CommandBuffer cmd = context.Command;
+            for (int i = 0; i < MaxBlurLevels; i++)
+                _blur[i] = context.Get(_blurHandles[i]);
             _backdropDirty = true;
 
             bool hasGeometry = _drawCalls.Count > 0 && _canvas.VertexCount > 0 && _canvas.IndexCount > 0;
             if (hasGeometry)
                 UploadGeometry(cmd, context.Task);
 
-            RenderTexture scene = context.GetRenderTexture(_sceneHandle);
-            cmd.SetFramebuffer(scene.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(ClearColor), AttachmentOps.Loaded));
+            RenderTexture scene = context.Get(sceneHandle);
+            cmd.SetFramebuffer(scene.Framebuffer);
 
             if (!hasGeometry)
                 return;
@@ -271,7 +283,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
             _properties.SetInt("backdropFlipY", 0);
 
             if (blur > 0f)
-                _properties.SetTexture("backdropTexture", _blurTex[0]!, _owner._sampler);
+                _properties.SetTexture("backdropTexture", _blur[0].ColorTextures[0], _owner._sampler);
             else
                 texture.SetTexture(_properties, "backdropTexture");
 
@@ -305,16 +317,16 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
 
             BlurPass(cmd, scene.ColorTextures[0], new Int2(_owner._fbWidth, _owner._fbHeight), 0, false, offset);
             for (int i = 0; i < iterations; i++)
-                BlurPass(cmd, _blurTex[i]!, _blurSize[i], i + 1, false, offset);
+                BlurPass(cmd, _blur[i].ColorTextures[0], _blurSize[i], i + 1, false, offset);
 
             for (int i = iterations; i > 0; i--)
-                BlurPass(cmd, _blurTex[i]!, _blurSize[i], i - 1, true, offset);
+                BlurPass(cmd, _blur[i].ColorTextures[0], _blurSize[i], i - 1, true, offset);
         }
 
         private void BlurPass(CommandBuffer cmd, Texture source, Int2 sourceSize, int dstLevel, bool upsample, float offset)
         {
             Int2 basis = upsample ? _blurSize[dstLevel] : sourceSize;
-            cmd.SetFramebuffer(_blurFB[dstLevel]!);
+            cmd.SetFramebuffer(_blur[dstLevel].Framebuffer);
 
             _properties.SetTexture("src", source, _owner._sampler);
             _properties.SetFloat2("halfpixel", new Float2(0.5f / basis.X, 0.5f / basis.Y));
@@ -325,59 +337,26 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
             cmd.SetProperties(_properties);
             cmd.Draw(3);
         }
-
-        private void EnsureBlurTargets(int width, int height)
-        {
-            if (_blurTex[0] != null && _blurBuiltW == width && _blurBuiltH == height)
-                return;
-
-            DisposeResources();
-            for (int i = 0; i < MaxBlurLevels; i++)
-            {
-                int w = Math.Max(1, width >> (i + BlurBaseShift));
-                int h = Math.Max(1, height >> (i + BlurBaseShift));
-                _blurSize[i] = new Int2(w, h);
-                _blurTex[i] = _owner._device.ResourceFactory.CreateTexture(TextureDescription.Texture2D((uint)w, (uint)h, 1, 1, TargetFormat, TextureUsage.Sampled | TextureUsage.RenderTarget));
-                _blurFB[i] = _owner._device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _blurTex[i]!));
-            }
-
-            _blurBuiltW = width;
-            _blurBuiltH = height;
-        }
-
-        public void DisposeResources()
-        {
-            for (int i = 0; i < MaxBlurLevels; i++)
-            {
-                _blurFB[i]?.Dispose();
-                _blurTex[i]?.Dispose();
-                _blurFB[i] = null;
-                _blurTex[i] = null;
-            }
-        }
     }
 
-    private sealed class PresentPass : InstanceRasterPass
+    private sealed class PresentPass
     {
         private readonly GraphiteRenderer _owner;
         private readonly PropertySet _properties = new();
-        private TextureHandle _sceneHandle;
 
         public PresentPass(GraphiteRenderer owner) => _owner = owner;
 
-        public override string Name => "Present";
+        public void Add(FrameGraph graph, TextureHandle scene, TextureHandle target)
+            => graph.AddPass("Present", pass =>
+            {
+                pass.Write(target);
+                return pass.Read(scene);
+            }, Render);
 
-        public override GraphKind Kind => Canvas;
-
-        public override void Setup(InstanceContextBuilder builder)
+        private void Render(PassContext context, TextureHandle sceneHandle)
         {
-            _sceneHandle = builder.DeclareInputTexture("Scene");
-            SetInstanceTarget(builder, depthFormat: PixelFormat.D24_UNorm_S8_UInt);
-        }
-
-        public override void Render(InstanceContext context, CommandBuffer cmd)
-        {
-            RenderTexture scene = context.GetRenderTexture(_sceneHandle);
+            CommandBuffer cmd = context.Command;
+            RenderTexture scene = context.Get(sceneHandle);
             _properties.SetTexture("src", scene.ColorTextures[0], _owner._sampler);
             _properties.SetFloat2("halfpixel", new Float2(0f, 0f));
             _properties.SetFloat("offset", 0f);

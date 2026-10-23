@@ -367,7 +367,7 @@ public sealed class TableBuilder
                     rowBuilder.OnClick(idx, (ci, e) =>
                     {
                         e.StopPropagation();  // don't let the click bubble to a container that clears selection
-                        bool ctrl = _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl);
+                        bool ctrl = _paper.IsCommandDown();
                         bool shift = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
                         _onSelectModified!(ci, ctrl, shift);
                     });

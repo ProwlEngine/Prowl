@@ -4,39 +4,17 @@ using Prowl.Quill;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 using Prowl.Graphite;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
 
 namespace GraphiteSample;
 
 
-internal readonly struct CanvasView : IRenderView
-{
-    public Framebuffer Target { get; }
-
-    public CanvasView(uint width, uint height, Swapchain swapchain)
-    {
-        Target = swapchain.Framebuffer;
-        PixelWidth = width;
-        PixelHeight = height;
-    }
-
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-    public int ViewId => 0;
-}
-
-
 /// <summary>
-/// Renders a Quill <see cref="Canvas"/> using Prowl.Graphite's render-graph Pass API. The graph has
-/// two passes: Scene (draws the canvas into an offscreen color target, including any backdrop-blur
-/// ping-pong needed mid-draw) and Present (blits Scene to the swapchain). Present depends on Scene
-/// through the declared "Scene" texture, so the graph orders them without either pass needing to know
-/// about the other's internals. The backdrop-blur mip chain is not itself part of the graph: its
-/// iteration count is chosen per draw call at render time (from the brush's blur radius), which can't
-/// be expressed as a fixed set of passes declared once in Setup, so it stays free-form scratch state
-/// owned by the Scene pass, same as it always has been.
+/// Renders a Quill <see cref="Canvas"/> through a Prowl.Graphite <see cref="FrameGraph"/> built every frame:
+/// a Scene pass draws the canvas (and any backdrop blur) into an offscreen target, then a Present pass
+/// blits it to the swapchain. The blur mip chain is scratch state owned by the Scene pass, since its
+/// iteration count varies per draw call.
 /// </summary>
 public class GraphiteRenderer : ICanvasRenderer, IDisposable
 {
@@ -67,9 +45,9 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     private int _fbWidth;
     private int _fbHeight;
 
+    private readonly FrameGraph _graph;
     private readonly ScenePass _scenePass;
-    private readonly RenderPipeline _pipeline;
-    private CanvasView[] _views;
+    private readonly PresentPass _presentPass;
 
 
     private static Func<string, Memory<byte>?> s_fileLoader = (x) =>
@@ -91,7 +69,8 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         _gl.SyncToVerticalBlank = false;
 
         _scenePass = new ScenePass(this);
-        _pipeline = new([_scenePass, new PresentPass(this)]);
+        _presentPass = new PresentPass(this);
+        _graph = new FrameGraph(gl, "Quill");
     }
 
 
@@ -167,7 +146,6 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         _fbWidth = width;
         _fbHeight = height;
         _projection = Float4x4.CreateOrthoOffCenter(0, width, height, 0, -1, 1);
-        _views = new[] { new CanvasView((uint)width, (uint)height, _gl.MainSwapchain) };
     }
 
 
@@ -197,8 +175,12 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
     public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
     {
-        _scenePass.SetFrame(canvas, drawCalls);
-        _gl.DispatchGraph(_pipeline, _views);
+        TextureHandle target = _graph.ImportTarget(_gl.MainSwapchain.Framebuffer, PixelFormat.D24_UNorm_S8_UInt);
+        TextureHandle scene = _graph.Create("Scene", GraphTextureDesc.Sized(_fbWidth, _fbHeight, TargetFormat));
+
+        scene = _scenePass.AddTo(_graph, canvas, drawCalls, scene);
+        _presentPass.AddTo(_graph, scene, target);
+        _graph.Execute();
     }
 
 
@@ -210,6 +192,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     {
         _scenePass.DisposeResources();
 
+        _graph?.Dispose();
         _sampler?.Dispose();
         _canvasProgram?.Dispose();
     }
@@ -221,17 +204,11 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     }
 
 
-    // Draws the canvas into the graph's "Scene" texture, including any backdrop-blur ping-pong
-    // needed mid-draw. The blur mip chain is scratch state private to this pass: its iteration count
-    // varies per draw call at render time, so it can't be expressed as fixed graph resources declared
-    // once in Setup.
-    private sealed class ScenePass : IPass
+    private sealed class ScenePass
     {
         private readonly GraphiteRenderer _owner;
 
         private TextureHandle _sceneHandle;
-        public TextureHandle SceneHandle => _sceneHandle;
-
         private Canvas _canvas;
         private IReadOnlyList<DrawCall> _drawCalls;
 
@@ -250,19 +227,20 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
         public ScenePass(GraphiteRenderer owner) => _owner = owner;
 
-        public string Name => "Scene";
-
-        public void SetFrame(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
+        public TextureHandle AddTo(FrameGraph graph, Canvas canvas, IReadOnlyList<DrawCall> drawCalls, TextureHandle scene)
         {
             _canvas = canvas;
             _drawCalls = drawCalls;
+
+            graph.AddPass("Scene",
+                pass => _sceneHandle = pass.Write(scene, firstWrite: TargetLoadStoreOps.Clear(ClearColor)),
+                Render);
+            return _sceneHandle;
         }
 
-        public void Setup(RenderContextBuilder builder)
-            => _sceneHandle = builder.DeclareOutputTexture("Scene", GraphTextureDesc.ViewSized(TargetFormat));
-
-        public void Render(RenderContext context, CommandBuffer cmd)
+        private void Render(PassContext context)
         {
+            CommandBuffer cmd = context.Command;
             EnsureBlurTargets(_owner._fbWidth, _owner._fbHeight);
 
             _backdropDirty = true;
@@ -273,7 +251,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             if (hasGeometry)
                 UploadGeometry(cmd, context.Task);
 
-            RenderTexture scene = context.GetRenderTexture(_sceneHandle);
+            RenderTexture scene = context.Get(_sceneHandle);
 
             cmd.SetFramebuffer(scene.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(ClearColor), AttachmentOps.Loaded));
 
@@ -283,7 +261,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
                 int indexOffset = 0;
                 foreach (DrawCall drawCall in _drawCalls)
                 {
-                    ProcessDrawCall(cmd, context, scene, drawCall, indexOffset, dpiScale);
+                    ProcessDrawCall(cmd, scene, drawCall, indexOffset, dpiScale);
                     indexOffset += drawCall.ElementCount;
                 }
             }
@@ -303,7 +281,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         }
 
 
-        private void ProcessDrawCall(CommandBuffer cmd, RenderContext context, RenderTexture scene, DrawCall drawCall, int indexOffset, float dpiScale)
+        private void ProcessDrawCall(CommandBuffer cmd, RenderTexture scene, DrawCall drawCall, int indexOffset, float dpiScale)
         {
             Brush brush = drawCall.Brush;
             float blur = brush.BackdropBlur;
@@ -471,10 +449,8 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     }
 
 
-    // Blits the graph's "Scene" texture to the swapchain, reusing the blur shader at zero offset as a
-    // plain fullscreen copy. Depends on Scene through the declared texture handle: the graph runs
-    // ScenePass first because this pass reads what that one writes.
-    private sealed class PresentPass : RasterPass
+    // Blits Scene to the swapchain, reusing the blur shader at zero offset as a plain fullscreen copy.
+    private sealed class PresentPass
     {
         private readonly GraphiteRenderer _owner;
         private readonly PropertySet _properties = new();
@@ -485,19 +461,21 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             _owner = owner;
         }
 
-        public override string Name => "Present";
-
-        public override void Setup(RenderContextBuilder builder)
+        public void AddTo(FrameGraph graph, TextureHandle scene, TextureHandle target)
         {
-            _sceneHandle = builder.DeclareInputTexture("Scene");
-            SetViewTarget(builder, depthFormat: PixelFormat.D24_UNorm_S8_UInt);
+            graph.AddPass("Present",
+                pass =>
+                {
+                    _sceneHandle = pass.Read(scene);
+                    pass.Write(target);
+                },
+                Render);
         }
 
-        public override void Render(RenderContext context, CommandBuffer cmd)
+        private void Render(PassContext context)
         {
-            RenderTexture scene = context.GetRenderTexture(_sceneHandle);
-
-
+            CommandBuffer cmd = context.Command;
+            RenderTexture scene = context.Get(_sceneHandle);
 
             _properties.SetTexture("src", scene.ColorTextures[0], _owner._sampler);
             _properties.SetFloat2("halfpixel", new Float2(0f, 0f));

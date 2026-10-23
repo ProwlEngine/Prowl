@@ -6,37 +6,6 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-file sealed class MultisamplePass(GraphicsProgram program, DeviceBuffer triangle, Texture resolved, Action<Texture> drawn) : IInstancePass
-{
-    public GraphKind Kind => TestViews.Kind;
-
-    private static readonly RenderResourceID s_color = RenderResourceID.Intern("Msaa");
-    private TextureHandle _color;
-
-    public string Name => "Msaa";
-
-    public void Setup(InstanceContextBuilder builder)
-        => _color = builder.DeclareOutputTexture(s_color, new GraphTextureDesc
-        {
-            SizeMode = TextureSizeMode.InstanceRelative,
-            Scale = 1f,
-            ColorFormats = [PixelFormat.R32_G32_B32_A32_Float],
-            SampleCount = TextureSampleCount.Count4,
-        }, usage: TextureState.Attachment | TextureState.TransferSrc);
-
-    public void Render(InstanceContext context, CommandBuffer cmd)
-    {
-        RenderTexture color = context.GetRenderTexture(_color);
-        cmd.SetFramebuffer(color.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
-        cmd.SetFullViewport();
-        cmd.SetShader(program);
-        cmd.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleList).SetBuffer("POSITION", triangle));
-        cmd.Draw(3);
-        cmd.ResolveTexture(color.ColorTextures[0], resolved);
-        drawn(color.ColorTextures[0]);
-    }
-}
-
 // MSAA graph textures: attachments with several samples per pixel, resolved into a single sample texture.
 public abstract class MultisampleTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
@@ -56,8 +25,27 @@ public abstract class MultisampleTests<T> : GraphicsDeviceTestBase<T> where T : 
         Texture resolved = RF.CreateTexture(TextureDescription.Texture2D(8, 8, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
         TextureSampleCount drawnSamples = TextureSampleCount.Count1;
 
-        using RenderGraph graph = TestViews.Build([new MultisamplePass(program, triangle, resolved, texture => drawnSamples = texture.SampleCount)]);
-        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(8, 8)));
+        using FrameGraph graph = new(GD, "Test");
+        TextureHandle msaa = graph.Create("Msaa", new GraphTextureDesc
+        {
+            Width = 8,
+            Height = 8,
+            ColorFormats = [PixelFormat.R32_G32_B32_A32_Float],
+            SampleCount = TextureSampleCount.Count4,
+        });
+        graph.AddPass("Msaa", pass => pass.Write(msaa, TextureState.Attachment | TextureState.TransferSrc), context =>
+        {
+            CommandBuffer cmd = context.Command;
+            RenderTexture color = context.Get(msaa);
+            cmd.SetFramebuffer(color.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
+            cmd.SetFullViewport();
+            cmd.SetShader(program);
+            cmd.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleList).SetBuffer("POSITION", triangle));
+            cmd.Draw(3);
+            cmd.ResolveTexture(color.ColorTextures[0], resolved);
+            drawnSamples = color.ColorTextures[0].SampleCount;
+        });
+        graph.Execute();
         GD.WaitForIdle();
 
         Assert.Equal(TextureSampleCount.Count4, drawnSamples);

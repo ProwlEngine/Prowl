@@ -33,7 +33,7 @@ public sealed class BucketTests : IDisposable
     private const int Prepass = 0, Forward = 1, Shadows = 2;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GraphStore _store = new();
+    private readonly RenderStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly Uploader _uploader;
     private readonly GeometryPool _geometry;
