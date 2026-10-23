@@ -407,14 +407,17 @@ public class ReplayTests
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
         DeepRecording deep = RecordSample(device);
 
-        DebuggerSerialization.Register();
-        using MemoryStream stream = new();
-        using (BinaryWriter writer = new(stream, System.Text.Encoding.UTF8, true))
-            Serializer.Serialize(deep).WriteToBinary(writer);
-
-        stream.Position = 0;
-        using BinaryReader reader = new(stream);
-        DeepRecording loaded = Serializer.Deserialize<DeepRecording>(EchoObject.ReadFromBinary(reader))!;
+        string path = Path.GetTempFileName();
+        DeepRecording loaded;
+        try
+        {
+            DebuggerSerialization.Save(deep, path);
+            loaded = DebuggerSerialization.Load(path);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
 
         ReplayResult expected = ReplayFirstEvent(device, deep);
         ReplayResult actual = ReplayFirstEvent(device, loaded);

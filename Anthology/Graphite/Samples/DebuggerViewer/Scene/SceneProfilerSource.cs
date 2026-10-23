@@ -1,6 +1,5 @@
 using System.Diagnostics;
 
-using Prowl.Echo;
 using Prowl.Graphite;
 using Prowl.Graphite.Debugger;
 using Prowl.Graphite.Debugger.Serialization;
@@ -133,16 +132,12 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
     {
         if (Snapshot == null)
             throw new InvalidOperationException("There is no snapshot to save.");
-        using BinaryWriter writer = new(File.Create(path));
-        Serializer.Serialize(Snapshot).WriteToBinary(writer);
+        DebuggerSerialization.Save(Snapshot, path);
     }
 
     public void LoadSnapshot(string path)
     {
-        DeepRecording recording;
-        using (BinaryReader reader = new(File.OpenRead(path)))
-            recording = Serializer.Deserialize<DeepRecording>(EchoObject.ReadFromBinary(reader))
-                ?? throw new InvalidDataException($"{path} is not a Graphite debugger recording.");
+        DeepRecording recording = DebuggerSerialization.Load(path);
         Open(recording, Measure(recording.Recording, recording.Recording.Groups.Sum(g => g.Passes.Sum(p => p.Stats.CpuMilliseconds)), 0));
     }
 }
