@@ -1,2 +1,11 @@
 <Project>
+  <!-- Local Anthology switch. Precedence: -p:ProwlLocalAnthology=true, then prowl.local.props (gitignored),
+       then the PROWL_LOCAL_ANTHOLOGY environment variable. Default is the NuGet packages. -->
+  <Import Project="$(MSBuildThisFileDirectory)prowl.local.props" Condition="Exists('$(MSBuildThisFileDirectory)prowl.local.props')" />
+
+  <PropertyGroup>
+    <ProwlLocalAnthology Condition="'$(ProwlLocalAnthology)' == ''">$(PROWL_LOCAL_ANTHOLOGY)</ProwlLocalAnthology>
+    <ProwlLocalAnthology Condition="'$(ProwlLocalAnthology)' != 'true'">false</ProwlLocalAnthology>
+    <AnthologyDir>$(MSBuildThisFileDirectory)..\Anthology\</AnthologyDir>
+  </PropertyGroup>
 </Project>

@@ -40,7 +40,20 @@
     <InternalsVisibleTo Include="Prowl.Editor.Test" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(ProwlLocalAnthology)' == 'true'">
+    <ProjectReference Include="$(AnthologyDir)Ember\Ember\Prowl.Ember.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Ember\Analyzers\Prowl.Ember.Analyzers.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Origami\Origami\Origami.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Origami\CSharp\Prowl.Origami.CSharp.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Origami\Graphite\Prowl.Origami.Graphite.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Graphite\Debugger\Prowl.Graphite.Debugger.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Graphite\Debugger\Viewer\Prowl.Graphite.Debugger.Viewer.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Photonic\Photonic\Photonic.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Rosetta\Rosetta\Rosetta.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Unwrapper\Unwrapper\Unwrapper.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ProwlLocalAnthology)' != 'true'">
     <PackageReference Include="Prowl.Ember" Version="3.9.2" />
     <PackageReference Include="Prowl.Ember.Analyzers" Version="3.9.2" />
     <PackageReference Include="Prowl.Origami" Version="3.9.2" />

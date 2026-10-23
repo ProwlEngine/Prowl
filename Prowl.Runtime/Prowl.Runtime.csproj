@@ -26,7 +26,23 @@
     <OutputPath>../Build/Runtime/Release/</OutputPath>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(ProwlLocalAnthology)' == 'true'">
+    <ProjectReference Include="$(AnthologyDir)Aperture\Aperture\Aperture.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Clay\Clay\Clay.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Echo\Echo\Echo.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Paper\Paper\Paper.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Recast\Recast\Prowl.Recast.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Motion\Motion\Motion.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Unwrapper\Unwrapper\Unwrapper.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Ember\Contracts\Prowl.Ember.Contracts.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Ember\Analyzers\Prowl.Ember.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="$(AnthologyDir)Graphite\Graphite\Prowl.Graphite.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Graphite\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Graphite\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Graphite\Rendering\Prowl.Graphite.Rendering.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ProwlLocalAnthology)' != 'true'">
     <PackageReference Include="Prowl.Aperture" Version="3.9.2" />
     <PackageReference Include="Prowl.Clay" Version="3.9.2" />
     <PackageReference Include="Prowl.Echo" Version="3.9.2" />
