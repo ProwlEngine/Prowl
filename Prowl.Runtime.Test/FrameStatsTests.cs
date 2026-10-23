@@ -143,12 +143,12 @@ public class FrameStatsTests
     public void AColourIsUsedOnlyWhenTheCategoryIsMade()
     {
         string path = "Test.Coloured." + Guid.NewGuid();
-        var red = new Prowl.Vector.Color(1, 0, 0, 1);
+        var red = new Prowl.Vector.Color(1f, 0f, 0f, 1f);
 
         FrameStat made = FrameStats.GetCategory(path, red);
 
         Assert.Equal(red, made.Color);
-        Assert.Equal(red, FrameStats.GetCategory(path, new Prowl.Vector.Color(0, 0, 1, 1)).Color);
+        Assert.Equal(red, FrameStats.GetCategory(path, new Prowl.Vector.Color(0f, 0f, 1f, 1f)).Color);
     }
 
     [Theory]

@@ -99,6 +99,6 @@ public struct ShapeCastHit
     /// </summary>
     public readonly void DrawGizmos()
     {
-        DrawGizmos(new Color(255, 255, 0, 200), new Color(255, 0, 0, 255), 1.0f);
+        DrawGizmos(Color.FromBytes(255, 255, 0, 200), Color.FromBytes(255, 0, 0, 255), 1.0f);
     }
 }
