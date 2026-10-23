@@ -23,6 +23,10 @@ internal sealed partial class ProfilerView
     private const float KindTitle = 40f;
     private const float ColumnGap = 90f;
     private const float RowGap = 28f;
+    private const float PillGap = 7f;
+    private const float HugGap = 9f;
+    private const float LaneStep = 150f;
+    private const float MaxSetback = 100f;
     private const float KindGap = 240f;
     private const float StackGap = 90f;
     private const float FrameGraphHeight = 720f;
@@ -100,7 +104,7 @@ internal sealed partial class ProfilerView
         public readonly List<KindAlias> Aliases = new();
         public readonly List<KindSink> Sinks = new();
         public readonly Dictionary<string, GraphNode> PassNodes = new();
-        public readonly List<(KindPass From, KindPass To)> Flows = new();
+        public readonly List<(KindPass From, KindPass To, string Key)> Flows = new();
         public GraphNode Entry = null!;
         public GraphNode Exit = null!;
         public Dictionary<string, RawResource> Raw = new();
@@ -421,7 +425,7 @@ internal sealed partial class ProfilerView
                         Port(kind.PassNodes[PassId(kind, w)], false, "o:" + access.Key, r.PortLabel, Style.Read, r.Tooltip);
                         Port(node, true, "i:" + access.Key, r.PortLabel, Style.Read, r.Tooltip);
                         Wire(PassId(kind, w), "o:" + access.Key, node.Id, "i:" + access.Key, Style.Read);
-                        kind.Flows.Add((w, p));
+                        kind.Flows.Add((w, p, access.Key));
                         p.Level = Math.Max(p.Level, w.Level + 1);
                         w.HasOut = true;
                     }
@@ -643,10 +647,10 @@ internal sealed partial class ProfilerView
             {
                 int best = 0;
                 float bestCost = float.MaxValue;
-                foreach (int candidate in new[] { 0, 1, -1, 2, -2, 3, -3 })
+                foreach (int candidate in new[] { 0, 1, -1, 2, -2, 3, -3, 4, -4 })
                 {
                     float cost = Math.Abs(candidate) * 0.05f;
-                    foreach ((KindPass from, KindPass to) in kind.Flows)
+                    foreach ((KindPass from, KindPass to, string key) in kind.Flows)
                     {
                         if (to == p && lanes.TryGetValue(from, out int fromLane))
                             cost += 0.3f * Math.Abs(candidate - fromLane);
@@ -654,7 +658,10 @@ internal sealed partial class ProfilerView
                             continue;
                         int end = lanes.GetValueOrDefault(to);
                         float t = (float)(p.Level - from.Level) / (to.Level - from.Level);
-                        if (Math.Abs(candidate - (start + (end - start) * t)) < 0.9f)
+                        float outRow = headerH + 4f + (kind.PassNodes[PassId(kind, from)].Outputs.FindIndex(x => x.Id == "o:" + key) + 0.5f) * metrics.RowHeight;
+                        float inRow = headerH + 4f + (kind.PassNodes[PassId(kind, to)].Inputs.FindIndex(x => x.Id == "i:" + key) + 0.5f) * metrics.RowHeight;
+                        float wire = start * LaneStep + outRow + (end * LaneStep + inRow - start * LaneStep - outRow) * t, nodeTop = candidate * LaneStep;
+                        if (wire > nodeTop - 12f && wire < nodeTop + Height(kind.PassNodes[PassId(kind, p)]) + 12f)
                             cost += 1f;
                     }
                     if (cost < bestCost)
@@ -666,7 +673,6 @@ internal sealed partial class ProfilerView
                 lanes[p] = best;
             }
             int minLane = lanes.Count > 0 ? lanes.Values.Min() : 0, maxLane = lanes.Count > 0 ? lanes.Values.Max() : 0;
-            float laneStep = kind.Passes.Count > 0 ? kind.Passes.Max(p => Height(kind.PassNodes[PassId(kind, p)])) + RowGap : 0f;
 
             float[] columnY = new float[Math.Max(columns, 1)];
             Dictionary<KindPass, float> top = new();
