@@ -686,15 +686,15 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         if (_vertical)
         {
             // Y is top-down so invert for vertical.
-            if (r.Size.Y <= 0)
+            if (r.Size.Y <= _thumbDiameter)
                 return 0;
-            t = 1.0 - ((double)relativePosition.Y - (double)_thumbDiameter * 0.5) / ((double)r.Size.Y - (double)_thumbDiameter);
+            t = 1.0 - ((double)relativePosition.Y - _thumbDiameter * 0.5) / ((double)r.Size.Y - _thumbDiameter);
         }
         else
         {
-            if (r.Size.X <= 0)
+            if (r.Size.X <= _thumbDiameter)
                 return 0;
-            t = ((double)relativePosition.X - (double)_thumbDiameter * 0.5) / ((double)r.Size.X - (double)_thumbDiameter);
+            t = ((double)relativePosition.X - _thumbDiameter * 0.5) / ((double)r.Size.X - _thumbDiameter);
         }
         return double.Clamp(t, 0, 1);
     }
