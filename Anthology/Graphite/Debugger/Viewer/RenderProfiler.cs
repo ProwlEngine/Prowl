@@ -167,7 +167,7 @@ internal sealed partial class ProfilerView
         _selId = "f";
         _pixel = null;
         _frameGraphSelection = null;
-        _replays.Clear();
+        ClearReplays();
     }
 
     private void TakeSnapshot()

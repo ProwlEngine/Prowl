@@ -23,7 +23,10 @@ internal sealed partial class ProfilerView
 {
     private static readonly string[] MeshOverlays = { "None", "Normals", "UV layout" };
 
-    private readonly Dictionary<(int, int, int?, IndirectSlice?), ReplayResult> _replays = new();
+    private const int KeptReplays = 4;
+    private const long RecentMilliseconds = 1000;
+
+    private readonly Dictionary<(int, int, int?, IndirectSlice?), (ReplayResult Result, long Seen)> _replays = new();
     private readonly Dictionary<string, (object Texture, int Width, int Height, string Version)> _textures = new();
     private readonly ConditionalWeakTable<byte[], Dictionary<CopyRegion, byte[]>> _previews = new();
     private readonly ConditionalWeakTable<byte[], ConditionalWeakTable<byte[], Dictionary<CopyRegion, byte[]>>> _coverages = new();
@@ -38,12 +41,24 @@ internal sealed partial class ProfilerView
     private ReplayResult Replay(FrameModel model, int instance, int pass, int? eventIndex, IndirectSlice? slice = null)
     {
         var key = (instance, pass, eventIndex, slice);
-        if (!_replays.TryGetValue(key, out ReplayResult? result))
+        long now = Environment.TickCount64;
+        if (_replays.TryGetValue(key, out var held))
         {
-            result = _source.Replay(new ReplayRequest { GroupIndex = instance, PassIndex = pass, EventIndex = eventIndex, Indirect = slice });
-            _replays[key] = result;
+            _replays[key] = (held.Result, now);
+            return held.Result;
         }
+
+        ReplayResult result = _source.Replay(new ReplayRequest { GroupIndex = instance, PassIndex = pass, EventIndex = eventIndex, Indirect = slice });
+        _replays[key] = (result, now);
+        // Replays shown in the last second stay, so views drawn together never evict each other every frame.
+        foreach (var stale in _replays.Where(r => now - r.Value.Seen > RecentMilliseconds).OrderBy(r => r.Value.Seen).Take(_replays.Count - KeptReplays).Select(r => r.Key).ToList())
+            _replays.Remove(stale);
         return result;
+    }
+
+    private void ClearReplays()
+    {
+        _replays.Clear();
     }
 
     private static ReplayOutput? Output(ReplayResult result, TraceResourceId id)
