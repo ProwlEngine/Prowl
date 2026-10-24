@@ -145,8 +145,22 @@ public static partial class Networking
 
     internal static void AssertObjectDestroyable(GameObject go)
     {
-        if (FindEntry(go) is not { TearingDown: false } entry || !IsActive || go.Scene is not { IsDisposed: false })
+        if (!IsActive || go.Scene is not { IsDisposed: false })
         {
+            return;
+        }
+
+        if (FindEntry(go) is not { TearingDown: false } entry)
+        {
+            // An ordinary object can still hold spawned roots, which only the host may despawn.
+            if (!IsHost)
+            {
+                foreach (GameObject child in go.GetChildrenDeep())
+                {
+                    AssertStructureEditable(child);
+                }
+            }
+
             return;
         }
 

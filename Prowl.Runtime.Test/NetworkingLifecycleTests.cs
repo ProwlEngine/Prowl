@@ -264,6 +264,44 @@ public partial class NetworkingTests
     }
 
     [Fact]
+    public void ClientCannotDestroyAnOrdinaryParentOfASpawnedRoot()
+    {
+        Scene original = CreateScene();
+        GameObject parent = CreateGameObject("Parent"), root = CreateGameObject("Root");
+        root.Network.Mode = NetworkMode.Object;
+        root.SetParent(parent);
+        original.Add(parent); Scene.Load(original); Scene.ProcessPendingLoad();
+        byte[] snapshot;
+        try
+        {
+            Networking.Networking.Host(new LocalTransport(new(), "host"));
+            using NetWriter writer = new();
+            Networking.Networking.WriteSnapshot(original, writer);
+            snapshot = writer.ToArray();
+        }
+        finally { Networking.Networking.Shutdown(); }
+
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        host.Session.PeerJoined += peer => host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot), peer);
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady, host);
+            GameObject receivedParent = Find(Scene.Current, parent.Identifier);
+            GameObject receivedRoot = Find(Scene.Current, root.Identifier);
+            Assert.Throws<InvalidOperationException>(() => receivedParent.Destroy());
+            Assert.Throws<InvalidOperationException>(() => receivedParent.Dispose());
+            Assert.False(receivedParent.IsDestroyQueued);
+            Assert.False(receivedParent.IsDisposed);
+            Assert.False(receivedRoot.IsDisposed);
+            Assert.Same(receivedParent, receivedRoot.Parent);
+            Assert.True(receivedRoot.Network.Active);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
     public void MalformedSnapshotMetadataDisposesTheIncomingScene()
     {
         Scene original = CreateScene();
