@@ -33,8 +33,6 @@ using System.Diagnostics;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Networking;
-using Prowl.Runtime.Networking.Diagnostics;
-using Prowl.Runtime.Networking.Enums;
 using Prowl.Runtime.Resources;
 using Prowl.Samples;
 using Prowl.Scribe;

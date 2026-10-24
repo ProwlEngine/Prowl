@@ -5,11 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Messages;
 using Prowl.Vector;
 
-namespace Prowl.Runtime.Networking.Utilities;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Structural validation shared by wire readers. Gameplay authorization stays in the systems.</summary>
 internal static class NetworkValidation
@@ -47,9 +45,9 @@ internal static class NetworkValidation
         }
     }
 
-    internal static void TransformChannels(TransformChannels channels)
+    internal static void ValidateTransformChannels(TransformChannels channels)
     {
-        if ((channels & ~Messages.TransformChannels.All) != 0)
+        if ((channels & ~TransformChannels.All) != 0)
         {
             throw new InvalidDataException("A transform has unknown channels.");
         }

@@ -7,15 +7,11 @@ using System.IO;
 
 using Prowl.Echo;
 using Prowl.Runtime.Diagnostics;
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Messages;
-using Prowl.Runtime.Networking.Objects;
-using Prowl.Runtime.Networking.Serialization;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Systems;
+namespace Prowl.Runtime.Networking;
 
 // Networked objects: which exist, who controls them, spawning and despawning.
 internal sealed partial class NetworkSystem

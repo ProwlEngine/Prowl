@@ -15,7 +15,6 @@ using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
 using Prowl.Ember;
-using Prowl.Runtime.Networking.Objects;
 
 namespace Prowl.Runtime;
 

@@ -3,9 +3,8 @@
 
 using System;
 
-using Prowl.Runtime.Networking.Objects;
 
-namespace Prowl.Runtime.Networking.Systems;
+namespace Prowl.Runtime.Networking;
 
 internal sealed partial class NetworkSystem
 {

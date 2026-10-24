@@ -3,10 +3,9 @@
 
 using System;
 
-using Prowl.Runtime.Networking.Utilities;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Messages;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Original writer followed by a SyncBlock; host relays preserve OriginId.</summary>
 internal readonly record struct SyncMessage(int OriginId)

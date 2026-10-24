@@ -6,14 +6,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
-using Prowl.Runtime.Networking.Diagnostics;
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Messages;
-using Prowl.Runtime.Networking.Objects;
 using Prowl.Runtime.Resources;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Systems;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Scene replication for one engine session. All processing runs on the game thread.</summary>
 internal sealed partial class NetworkSystem : IDisposable

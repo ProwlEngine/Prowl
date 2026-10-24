@@ -5,13 +5,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Messages;
-using Prowl.Runtime.Networking.Objects;
 using Prowl.Vector;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Systems;
+namespace Prowl.Runtime.Networking;
 
 // Networked objects' transforms on the wire. Each object's TransformSync decides what it sends and shows; this
 // batches its records into messages, sends them, and hands received ones back to the right object. Whoever

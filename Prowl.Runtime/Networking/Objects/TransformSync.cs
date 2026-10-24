@@ -4,14 +4,11 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Messages;
-using Prowl.Runtime.Networking.Systems;
 using Prowl.Vector;
 
-using static Prowl.Runtime.Networking.Systems.NetworkSystem;
+using static Prowl.Runtime.Networking.NetworkSystem;
 
-namespace Prowl.Runtime.Networking.Objects;
+namespace Prowl.Runtime.Networking;
 
 internal readonly record struct TransformSample(double Time, Float3 Position, Quaternion Rotation, Float3 Scale);
 

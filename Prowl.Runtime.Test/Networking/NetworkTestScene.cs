@@ -1,5 +1,4 @@
 using Prowl.Runtime.Networking;
-using Prowl.Runtime.Networking.Systems;
 
 namespace Prowl.Runtime.Test;
 

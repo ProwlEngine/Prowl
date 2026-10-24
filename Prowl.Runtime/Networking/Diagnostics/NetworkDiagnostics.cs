@@ -6,13 +6,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-using Prowl.Runtime.Networking.Messages;
-using Prowl.Runtime.Networking.Objects;
-using Prowl.Runtime.Networking.Systems;
-using Prowl.Runtime.Networking.Utilities;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Diagnostics;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Main-thread network diagnostics. Capture is opt-in and retains no game object references.</summary>
 public static class NetworkDiagnostics

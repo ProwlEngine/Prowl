@@ -3,11 +3,9 @@
 
 using System;
 
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Utilities;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Messages;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Spawn header followed by a SyncBlock of initial component values.</summary>
 internal readonly ref struct SpawnMessage(

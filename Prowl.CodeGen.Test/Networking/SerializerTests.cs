@@ -3,8 +3,6 @@
 
 using Prowl.CodeGen.Networking;
 using Prowl.Runtime.Networking;
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Utilities;
 using Prowl.Warp;
 
 using Xunit;
@@ -63,9 +61,9 @@ public class SerializerTests
                                                      public class Curse : Spell { public System.Action Effect; }
                                                      public class A : Prowl.Runtime.Component
                                                      {
-                                                         [Prowl.Runtime.Networking.Attributes.Sync] public Outer X { get; set; }
-                                                         [Prowl.Runtime.Networking.Attributes.Sync] public Spell Cast { get; set; }
-                                                         [Prowl.Runtime.Networking.Attributes.Rpc.Broadcast] public void F(Hidden h) { }
+                                                         [Prowl.Runtime.Networking.Sync] public Outer X { get; set; }
+                                                         [Prowl.Runtime.Networking.Sync] public Spell Cast { get; set; }
+                                                         [Prowl.Runtime.Networking.Rpc.Broadcast] public void F(Hidden h) { }
                                                      }
                                                      """).Errors.Select(e => e.GetMessage()).ToList();
 

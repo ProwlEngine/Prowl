@@ -6,17 +6,11 @@ using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Runtime.Diagnostics;
-using Prowl.Runtime.Networking.Attributes;
-using Prowl.Runtime.Networking.Diagnostics;
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Messages;
-using Prowl.Runtime.Networking.Objects;
-using Prowl.Runtime.Networking.Utilities;
 using Prowl.Warp;
 
-using static Prowl.Runtime.Networking.Systems.NetworkSystem;
+using static Prowl.Runtime.Networking.NetworkSystem;
 
-namespace Prowl.Runtime.Networking.Systems;
+namespace Prowl.Runtime.Networking;
 
 // RPCs. A call is [guid component][u32 method id][length-prefixed arguments]. Clients send theirs to the host,
 // followed by the recipients they chose, and the host checks it against the method's own RpcMode and RpcFlags

@@ -12,7 +12,6 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.Networking;
-using Prowl.Runtime.Networking.Diagnostics;
 using Prowl.Scribe;
 using Prowl.Warp;
 

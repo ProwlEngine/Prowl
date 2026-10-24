@@ -2,8 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime;
-using Prowl.Runtime.Networking.Attributes;
-using Prowl.Runtime.Networking.Enums;
+using Prowl.Runtime.Networking;
 
 namespace NetworkingShowcase;
 

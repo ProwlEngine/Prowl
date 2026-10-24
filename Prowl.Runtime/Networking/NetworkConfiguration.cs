@@ -1,6 +1,5 @@
 using System;
 
-using Prowl.Runtime.Networking.Enums;
 using Prowl.Warp;
 using Prowl.Warp.Transports.Kcp;
 

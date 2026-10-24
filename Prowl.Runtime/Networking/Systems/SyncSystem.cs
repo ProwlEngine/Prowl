@@ -5,14 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-using Prowl.Runtime.Networking.Diagnostics;
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Messages;
-using Prowl.Runtime.Networking.Objects;
-using Prowl.Runtime.Networking.Utilities;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Systems;
+namespace Prowl.Runtime.Networking;
 
 // [Sync] properties. Changes are collected as they happen and sent once per tick, reliably: from the
 // host to every client, or from a client to the host, which applies them and passes them on. A reliable RPC

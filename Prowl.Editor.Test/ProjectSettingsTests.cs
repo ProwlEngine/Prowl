@@ -5,7 +5,6 @@ using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Runtime;
 using Prowl.Runtime.Networking;
-using Prowl.Runtime.Networking.Enums;
 
 using Xunit;
 

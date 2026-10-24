@@ -3,10 +3,9 @@
 
 using System;
 
-using Prowl.Runtime.Networking.Enums;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Objects;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Networking configuration and operations for a GameObject. Created only when accessed.</summary>
 public sealed class NetworkAccessor

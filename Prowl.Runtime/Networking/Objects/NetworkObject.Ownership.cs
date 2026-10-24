@@ -6,13 +6,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-using Prowl.Runtime.Networking.Messages;
 using Prowl.Vector;
 using Prowl.Warp;
 
-using static Prowl.Runtime.Networking.Systems.NetworkSystem;
+using static Prowl.Runtime.Networking.NetworkSystem;
 
-namespace Prowl.Runtime.Networking.Objects;
+namespace Prowl.Runtime.Networking;
 
 internal sealed partial class NetworkObject
 {

@@ -10,7 +10,7 @@ using System.Threading;
 
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Serialization;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>
 ///     A type of yours that writes and reads itself on the network, instead of being sent member by member.

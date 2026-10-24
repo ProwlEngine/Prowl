@@ -7,7 +7,7 @@ using Jitter2.Dynamics;
 
 using Prowl.Vector;
 
-namespace Prowl.Runtime.Networking.Objects;
+namespace Prowl.Runtime.Networking;
 
 internal sealed partial class NetworkObject
 {

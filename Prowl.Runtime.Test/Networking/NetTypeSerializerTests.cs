@@ -4,7 +4,6 @@
 using System.Runtime.CompilerServices;
 
 using Prowl.Runtime.Networking;
-using Prowl.Runtime.Networking.Serialization;
 using Prowl.Warp;
 
 using Xunit;

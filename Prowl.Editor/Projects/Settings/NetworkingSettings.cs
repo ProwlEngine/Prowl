@@ -6,7 +6,6 @@ using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Networking;
-using Prowl.Runtime.Networking.Enums;
 
 namespace Prowl.Editor.Projects.Settings;
 

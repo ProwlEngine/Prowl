@@ -4,14 +4,11 @@
 using System;
 using System.IO;
 
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Messages;
-using Prowl.Runtime.Networking.Objects;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Systems;
+namespace Prowl.Runtime.Networking;
 
 internal sealed partial class NetworkSystem
 {

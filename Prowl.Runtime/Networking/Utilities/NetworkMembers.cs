@@ -10,14 +10,9 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 
 using Prowl.Runtime.Diagnostics;
-using Prowl.Runtime.Networking.Collections;
-using Prowl.Runtime.Networking.Diagnostics;
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Serialization;
-using Prowl.Runtime.Networking.Systems;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Utilities;
+namespace Prowl.Runtime.Networking;
 
 // Prowl's script compiler gives each [Sync] property and RPC a static descriptor field, next to the member
 // it describes, with typed accessors. The runtime finds a component type's descriptors by reflection, once.

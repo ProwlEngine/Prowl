@@ -11,17 +11,13 @@ using Jitter2.Dynamics;
 
 using Prowl.Echo;
 using Prowl.Runtime.Diagnostics;
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Messages;
-using Prowl.Runtime.Networking.Objects;
-using Prowl.Runtime.Networking.Serialization;
 using Prowl.Runtime.Resources;
 using Prowl.Warp;
 
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-namespace Prowl.Runtime.Networking.Systems;
+namespace Prowl.Runtime.Networking;
 
 // Sharing the host's scene with clients.
 internal sealed partial class NetworkSystem

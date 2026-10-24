@@ -154,7 +154,7 @@ internal sealed partial class NetworkCodeGen
                     {
                         members.Add($"private readonly {sync.Type} {sync.Field} = {sync.Initializer};");
                         members.Add(
-                            $"{Descriptor} global::Prowl.Runtime.Networking.Utilities.SyncCollectionMember<{self}, {sync.Type}> {sync.Descriptor} = new("
+                            $"{Descriptor} global::Prowl.Runtime.Networking.SyncCollectionMember<{self}, {sync.Type}> {sync.Descriptor} = new("
                             + $"{sync.Slot}u, {SymbolDisplay.FormatLiteral(sync.Name, true)}, {flags}, static __c => __c.{sync.Field});");
                         continue;
                     }
@@ -162,7 +162,7 @@ internal sealed partial class NetworkCodeGen
                     members.Add(
                         $"private {sync.Type} {sync.Field}{(sync.Initializer == null ? "" : " = " + sync.Initializer)};");
                     members.Add(
-                        $"{Descriptor} global::Prowl.Runtime.Networking.Utilities.SyncMember<{self}, {sync.Type}> {sync.Descriptor} = new({sync.Slot}u, "
+                        $"{Descriptor} global::Prowl.Runtime.Networking.SyncMember<{self}, {sync.Type}> {sync.Descriptor} = new({sync.Slot}u, "
                         + $"{SymbolDisplay.FormatLiteral(sync.Name, true)}, {flags}, static __c => __c.{sync.Field}, static (__c, __v) => __c.{sync.Field} = __v"
                         + (sync.Hook == null ? "" : ", " + sync.Hook) + ");");
                 }
@@ -178,15 +178,15 @@ internal sealed partial class NetworkCodeGen
                     }
 
                     string argumentsRead = rpc.Static
-                        ? "global::Prowl.Runtime.Networking.Utilities.StaticRpcMember.ArgumentsRead()"
-                        : "global::Prowl.Runtime.Networking.Utilities.RpcMember.ArgumentsRead()";
+                        ? "global::Prowl.Runtime.Networking.StaticRpcMember.ArgumentsRead()"
+                        : "global::Prowl.Runtime.Networking.RpcMember.ArgumentsRead()";
                     string target = rpc.Static ? self : "__c";
                     invoke.Append(
                         $"if (!__execute) return; {argumentsRead}; {target}.{rpc.Name}({string.Join(", ", Enumerable.Range(0, rpc.ParameterTypes.Count).Select(i => "__a" + i))}); }}");
                     string descriptorType = rpc.Static ? "StaticRpcMember" : $"RpcMember<{self}>";
                     string declaringType = rpc.Static ? $"typeof({self}), " : "";
                     members.Add(
-                        $"{Descriptor} global::Prowl.Runtime.Networking.Utilities.{descriptorType} {rpc.Descriptor} = new({declaringType}{rpc.Id}u, "
+                        $"{Descriptor} global::Prowl.Runtime.Networking.{descriptorType} {rpc.Descriptor} = new({declaringType}{rpc.Id}u, "
                         + $"{SymbolDisplay.FormatLiteral(rpc.Signature, true)}, {RpcModeType}.{rpc.Mode}, ({RpcFlagsType}){rpc.Flags}u, {invoke});");
                 }
             }

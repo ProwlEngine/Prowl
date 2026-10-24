@@ -11,10 +11,6 @@ internal static class TestScripts
                                using System.Collections.Generic;
                                using Prowl.Runtime;
                                using Prowl.Runtime.Networking;
-                               using Prowl.Runtime.Networking.Attributes;
-                               using Prowl.Runtime.Networking.Collections;
-                               using Prowl.Runtime.Networking.Enums;
-                               using Prowl.Runtime.Networking.Serialization;
                                using Prowl.Vector;
 
                                public class Ship : Component
@@ -61,10 +57,6 @@ internal static class TestScripts
     public const string ShipPartA = """
                                     using Prowl.Runtime;
                                     using Prowl.Runtime.Networking;
-                                    using Prowl.Runtime.Networking.Attributes;
-                                    using Prowl.Runtime.Networking.Collections;
-                                    using Prowl.Runtime.Networking.Enums;
-                                    using Prowl.Runtime.Networking.Serialization;
 
                                     namespace Fleet;
 
@@ -81,10 +73,6 @@ internal static class TestScripts
     public const string ShipPartB = """
                                     using Prowl.Runtime;
                                     using Prowl.Runtime.Networking;
-                                    using Prowl.Runtime.Networking.Attributes;
-                                    using Prowl.Runtime.Networking.Collections;
-                                    using Prowl.Runtime.Networking.Enums;
-                                    using Prowl.Runtime.Networking.Serialization;
 
                                     namespace Fleet
                                     {
@@ -104,10 +92,6 @@ internal static class TestScripts
                                 using Prowl.Echo;
                                 using Prowl.Runtime;
                                 using Prowl.Runtime.Networking;
-                                using Prowl.Runtime.Networking.Attributes;
-                                using Prowl.Runtime.Networking.Collections;
-                                using Prowl.Runtime.Networking.Enums;
-                                using Prowl.Runtime.Networking.Serialization;
                                 using Prowl.Warp;
 
                                 public struct Loadout

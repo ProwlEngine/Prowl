@@ -5,11 +5,10 @@ using System;
 using System.Runtime.CompilerServices;
 
 using Prowl.Ember;
-using Prowl.Runtime.Networking.Attributes;
 using Prowl.Vector;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Serialization;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>
 ///     Writes and reads values of type <typeparamref name="T" /> for <see cref="SyncAttribute" /> properties

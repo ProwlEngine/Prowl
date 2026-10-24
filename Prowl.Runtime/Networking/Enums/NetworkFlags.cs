@@ -3,7 +3,7 @@
 
 using System;
 
-namespace Prowl.Runtime.Networking.Enums;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Options that disable parts of a network object's default replication behavior.</summary>
 [Flags]

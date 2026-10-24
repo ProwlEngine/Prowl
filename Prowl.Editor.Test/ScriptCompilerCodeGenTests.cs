@@ -7,7 +7,6 @@ using Prowl.CodeGen.Networking;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Runtime;
 using Prowl.Runtime.Networking;
-using Prowl.Runtime.Networking.Utilities;
 
 using Xunit;
 
@@ -23,10 +22,6 @@ public class ScriptCompilerCodeGenTests : EditorTestHarness
     private const string ShipPartA = """
         using Prowl.Runtime;
         using Prowl.Runtime.Networking;
-        using Prowl.Runtime.Networking.Attributes;
-        using Prowl.Runtime.Networking.Collections;
-        using Prowl.Runtime.Networking.Enums;
-        using Prowl.Runtime.Networking.Serialization;
 
         namespace Fleet;
 
@@ -42,10 +37,6 @@ public class ScriptCompilerCodeGenTests : EditorTestHarness
 
     private const string ShipPartB = """
         using Prowl.Runtime.Networking;
-        using Prowl.Runtime.Networking.Attributes;
-        using Prowl.Runtime.Networking.Collections;
-        using Prowl.Runtime.Networking.Enums;
-        using Prowl.Runtime.Networking.Serialization;
 
         namespace Fleet
         {
@@ -93,7 +84,7 @@ public class ScriptCompilerCodeGenTests : EditorTestHarness
     [Fact]
     public void GenerationErrorsFailTheCompile()
     {
-        WriteScript("Bad.cs", "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Attributes.Sync] public System.Action X { get; set; } }");
+        WriteScript("Bad.cs", "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public System.Action X { get; set; } }");
 
         ScriptCompiler.CompileResult result = ScriptCompiler.CompileAll(Project);
 

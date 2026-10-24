@@ -1,10 +1,9 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Runtime.Networking.Serialization;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Attributes;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>
 ///     Remote procedure calls. Mark an instance method on a <see cref="Component" />, or a static method on

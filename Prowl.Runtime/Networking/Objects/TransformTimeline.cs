@@ -3,7 +3,7 @@
 
 using System;
 
-namespace Prowl.Runtime.Networking.Objects;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Maps local render time to a controller's monotonic clock without changing snapshot spacing.</summary>
 internal sealed class TransformTimeline

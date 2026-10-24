@@ -1,7 +1,5 @@
 using Prowl.Echo;
 using Prowl.Runtime.Networking;
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Objects;
 using Prowl.Runtime.Resources;
 
 using Xunit;

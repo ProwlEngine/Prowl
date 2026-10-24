@@ -3,11 +3,10 @@
 
 using System;
 
-using Prowl.Runtime.Networking.Serialization;
 using Prowl.Vector;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Messages;
+namespace Prowl.Runtime.Networking;
 
 internal readonly ref struct OwnershipRequestMessage(
     Guid identifier,

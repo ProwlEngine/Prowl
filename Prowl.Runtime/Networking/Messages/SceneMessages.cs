@@ -3,13 +3,10 @@
 
 using System;
 
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Serialization;
-using Prowl.Runtime.Networking.Utilities;
 using Prowl.Vector;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Messages;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Snapshot header followed by an ObjectStateBlock and a SyncBlock.</summary>
 internal readonly ref struct SceneSnapshotMessage(

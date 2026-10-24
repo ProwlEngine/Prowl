@@ -3,12 +3,10 @@
 
 using System;
 
-using Prowl.Runtime.Networking.Serialization;
-using Prowl.Runtime.Networking.Utilities;
 using Prowl.Vector;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Messages;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Header followed by TransformRecord values until the end of the message.</summary>
 internal readonly record struct TransformMessage(uint Tick, double SentAt)
@@ -70,7 +68,7 @@ internal readonly record struct TransformRecord(uint NetId, uint Generation, Tra
         uint netId = reader.ReadVarUInt32();
         uint generation = reader.ReadVarUInt32();
         TransformChannels channels = (TransformChannels)reader.ReadByte();
-        NetworkValidation.TransformChannels(channels);
+        NetworkValidation.ValidateTransformChannels(channels);
 
         float stillFor = (channels & TransformChannels.Resumed) != 0 ? reader.ReadSingle() : 0;
         Float3 position = (channels & TransformChannels.Position) != 0

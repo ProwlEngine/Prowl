@@ -3,7 +3,7 @@
 
 using Prowl.Echo;
 using Prowl.Runtime;
-using Prowl.Runtime.Networking.Attributes;
+using Prowl.Runtime.Networking;
 using Prowl.Vector;
 using Prowl.Warp;
 

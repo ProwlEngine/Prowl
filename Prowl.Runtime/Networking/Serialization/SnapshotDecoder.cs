@@ -5,7 +5,7 @@ using System.IO.Compression;
 using Prowl.Echo;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Serialization;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Bounds compressed scene/spawn decoding before Echo allocates or recursively reads the tree.</summary>
 internal static class SnapshotDecoder

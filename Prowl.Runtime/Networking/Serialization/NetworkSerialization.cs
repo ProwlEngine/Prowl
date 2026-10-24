@@ -4,11 +4,9 @@
 using System;
 
 using Prowl.Echo;
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Objects;
 using Prowl.Vector;
 
-namespace Prowl.Runtime.Networking.Serialization;
+namespace Prowl.Runtime.Networking;
 
 internal static class NetworkSerialization
 {

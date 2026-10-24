@@ -3,13 +3,11 @@
 
 using System.Collections.Generic;
 
-using Prowl.Runtime.Networking.Enums;
-using Prowl.Runtime.Networking.Systems;
 using Prowl.Vector;
 
-using static Prowl.Runtime.Networking.Systems.NetworkSystem;
+using static Prowl.Runtime.Networking.NetworkSystem;
 
-namespace Prowl.Runtime.Networking.Objects;
+namespace Prowl.Runtime.Networking;
 
 internal sealed partial class NetworkObject(NetworkSystem scene, GameObject gameObject)
 {

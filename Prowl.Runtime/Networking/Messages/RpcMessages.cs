@@ -4,10 +4,9 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Runtime.Networking.Utilities;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Messages;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>To host: call then optional RpcRecipientMessage. From host: RpcCallerMessage then call.</summary>
 internal readonly ref struct RpcCallMessage(Guid componentId, uint methodId, ReadOnlySpan<byte> arguments)

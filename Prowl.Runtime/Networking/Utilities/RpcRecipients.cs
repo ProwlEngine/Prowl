@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Utilities;
+namespace Prowl.Runtime.Networking;
 
 // Only selected peer ids travel to the host. Predicates stay on the calling peer.
 internal sealed class RpcRecipients(HashSet<int> ids)

@@ -4,11 +4,9 @@
 using System;
 using System.IO;
 
-using Prowl.Runtime.Networking.Diagnostics;
-using Prowl.Runtime.Networking.Messages;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Systems;
+namespace Prowl.Runtime.Networking;
 
 internal sealed partial class NetworkSystem
 {

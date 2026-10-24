@@ -4,8 +4,6 @@
 using System;
 
 using Prowl.Runtime.Diagnostics;
-using Prowl.Runtime.Networking.Diagnostics;
-using Prowl.Runtime.Networking.Systems;
 using Prowl.Runtime.Tasks;
 using Prowl.Warp;
 

@@ -3,7 +3,7 @@
 
 using System;
 
-namespace Prowl.Runtime.Networking.Enums;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Options for an RPC.</summary>
 [Flags]

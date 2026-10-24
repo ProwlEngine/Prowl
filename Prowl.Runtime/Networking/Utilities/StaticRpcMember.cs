@@ -9,10 +9,9 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
-using Prowl.Runtime.Networking.Enums;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking.Utilities;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Generated argument reader for a static RPC. Validation reads arguments without executing the body.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
