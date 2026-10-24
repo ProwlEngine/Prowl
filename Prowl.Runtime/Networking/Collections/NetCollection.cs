@@ -136,14 +136,35 @@ public abstract class NetCollection
 
     internal abstract NetCollection CreateEmptyCopy();
 
+    /// <summary>
+    ///     Reads what <see cref="Read" /> would, throwing where it would, without changing anything. Changes are read
+    ///     past rather than applied: one that doesn't fit the contents is skipped when applied, never thrown.
+    /// </summary>
     internal void Validate(ref NetReader reader, bool initial = false)
     {
-        NetCollection copy = CreateEmptyCopy();
-        using NetWriter state = new();
-        WriteAll(state);
-        NetReader baseline = new(state.WrittenSpan);
-        copy.Read(ref baseline, true);
-        copy.Read(ref reader, initial);
+        byte kind = reader.ReadByte();
+        if (initial && kind != Whole)
+        {
+            throw new InvalidDataException("Initial collection state must contain complete contents.");
+        }
+
+        reader.ReadVarUInt32();
+        if (kind == Whole)
+        {
+            CreateEmptyCopy().ReadItems(ref reader);
+            return;
+        }
+
+        if (kind != Changes)
+        {
+            throw new InvalidDataException($"Unknown network collection payload {kind}.");
+        }
+
+        uint count = reader.ReadVarUInt32();
+        for (uint i = 0; i < count; i++)
+        {
+            ReadChange(ref reader, false);
+        }
     }
 
     /// <summary>Applies what <see cref="WriteAll" /> or <see cref="WriteChanges" /> wrote on another peer.</summary>

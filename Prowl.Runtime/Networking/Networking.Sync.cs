@@ -206,7 +206,7 @@ public static partial class Networking
         bool requireEnd = false)
     {
         // Validate all framing and accepted values before changing live state or relays.
-        // Collection validation reads into a detached copy, so partial operations cannot leak out.
+        // Collection validation only reads, so partial operations cannot leak out.
         ValidateSyncState(sender, reader, initial, requireEnd);
         int relayed = 0;
         uint count = reader.ReadVarUInt32();

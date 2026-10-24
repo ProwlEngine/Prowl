@@ -164,6 +164,51 @@ public partial class NetworkingTests
         return values;
     }
 
+    /// <summary>Counts how often it's written, so a test can see a collection's contents being serialized.</summary>
+    public struct CountedItem
+    {
+        public static int Writes;
+        public int Value;
+
+        [ModuleInitializer]
+        internal static void Register() => NetSerializer<CountedItem>.Register(
+            (w, v) => { Writes++; w.WriteVarInt32(v.Value); },
+            (ref NetReader r) => new CountedItem { Value = r.ReadVarInt32() });
+    }
+
+    [Fact]
+    public void ValidatingAChangeDoesNotSerializeTheExistingContents()
+    {
+        NetList<CountedItem> list = new();
+        for (int i = 0; i < 100; i++) list.Add(new CountedItem { Value = i });
+        byte[] change = ListChange(0, w => { w.WriteByte((byte)NetChangeKind.Removed); w.WriteVarUInt32(0); });
+        CountedItem.Writes = 0;
+        NetReader reader = new(change);
+        list.Validate(ref reader);
+        Assert.True(reader.IsAtEnd);
+        Assert.Equal(0, CountedItem.Writes);
+        Assert.Equal(100, list.Count);
+    }
+
+    [Theory]
+    [InlineData(NetChangeKind.Added)]
+    [InlineData(NetChangeKind.Removed)]
+    [InlineData(NetChangeKind.Replaced)]
+    public void ListChangesAtIndicesPastIntRangeAreSkippedLikeAnyOtherMismatch(NetChangeKind kind)
+    {
+        NetList<int> list = new() { 1, 2 };
+        byte[] change = ListChange(0, w =>
+        {
+            w.WriteByte((byte)kind); w.WriteVarUInt32(uint.MaxValue);
+            if (kind != NetChangeKind.Removed) w.WriteVarInt32(9);
+        });
+        NetReader validation = new(change);
+        list.Validate(ref validation);
+        NetReader reader = new(change);
+        list.Read(ref reader, initial: false);
+        Assert.Equal(new[] { 1, 2 }, list);
+    }
+
     private static byte[] ListChange(uint sequence, params Action<NetWriter>[] changes)
     {
         using NetWriter writer = new();

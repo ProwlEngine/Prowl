@@ -173,9 +173,10 @@ public sealed class NetList<T> : NetCollection, IList<T>, IReadOnlyList<T>
                         return;
                     }
 
-                    if (index > _items.Count)
+                    // Compared unsigned, so an index past int's range is a mismatch rather than negative.
+                    if ((uint)index > (uint)_items.Count)
                     {
-                        Mismatch($"an add at {index}");
+                        Mismatch($"an add at {(uint)index}");
                         return;
                     }
 
@@ -191,9 +192,9 @@ public sealed class NetList<T> : NetCollection, IList<T>, IReadOnlyList<T>
                         return;
                     }
 
-                    if (index >= _items.Count)
+                    if ((uint)index >= (uint)_items.Count)
                     {
-                        Mismatch($"a removal at {index}");
+                        Mismatch($"a removal at {(uint)index}");
                         return;
                     }
 
@@ -211,9 +212,9 @@ public sealed class NetList<T> : NetCollection, IList<T>, IReadOnlyList<T>
                         return;
                     }
 
-                    if (index >= _items.Count)
+                    if ((uint)index >= (uint)_items.Count)
                     {
-                        Mismatch($"a replacement at {index}");
+                        Mismatch($"a replacement at {(uint)index}");
                         return;
                     }
 
