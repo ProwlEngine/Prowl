@@ -297,6 +297,66 @@ internal static class NetSerializers
     internal static Quaternion ReadQuaternion(ref NetReader r) =>
         new(r.ReadSingle(), r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
 
+    // "Smallest three" in 32 bits: the largest component is left out and rebuilt from the unit length, the other
+    // three take 10 bits each over ±1/√2, and 2 bits say which was left out. Within about 0.1° of the original.
+    private const float CompactRange = 0.70710678f;
+    private const uint CompactSteps = 1023;
+
+    internal static void WriteCompactQuaternion(NetWriter w, Quaternion v)
+    {
+        v = Quaternion.Normalize(v);
+        Span<float> c = [v.X, v.Y, v.Z, v.W];
+        int largest = 0;
+        for (int i = 1; i < 4; i++)
+        {
+            if (MathF.Abs(c[i]) > MathF.Abs(c[largest]))
+            {
+                largest = i;
+            }
+        }
+
+        // q and -q are the same rotation, so the left-out component is always made positive.
+        float sign = c[largest] < 0 ? -1 : 1;
+        uint packed = (uint)largest;
+        int shift = 2;
+        for (int i = 0; i < 4; i++)
+        {
+            if (i == largest)
+            {
+                continue;
+            }
+
+            float unit = (Math.Clamp(c[i] * sign, -CompactRange, CompactRange) + CompactRange) / (2 * CompactRange);
+            packed |= (uint)MathF.Round(unit * CompactSteps) << shift;
+            shift += 10;
+        }
+
+        w.WriteUInt32(packed);
+    }
+
+    internal static Quaternion ReadCompactQuaternion(ref NetReader r)
+    {
+        uint packed = r.ReadUInt32();
+        int largest = (int)(packed & 3);
+        Span<float> c = stackalloc float[4];
+        float sum = 0;
+        int shift = 2;
+        for (int i = 0; i < 4; i++)
+        {
+            if (i == largest)
+            {
+                continue;
+            }
+
+            c[i] = (packed >> shift & CompactSteps) / (float)CompactSteps * (2 * CompactRange) - CompactRange;
+            sum += c[i] * c[i];
+            shift += 10;
+        }
+
+        c[largest] = MathF.Sqrt(MathF.Max(0, 1 - sum));
+        return Quaternion.Normalize(new Quaternion(c[0], c[1], c[2], c[3]));
+    }
+
     // The delegates are built for U and handed out as T's; the caller has checked that U is T.
     private static (NetSerializer<T>.Writer, NetSerializer<T>.Reader) Pair<T, U>(NetSerializer<U>.Writer write,
         NetSerializer<U>.Reader read) =>

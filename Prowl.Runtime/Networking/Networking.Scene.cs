@@ -17,7 +17,7 @@ namespace Prowl.Runtime.Networking;
 public static partial class Networking
 {
     // Bumped whenever the snapshot layout changes, so a mismatched client fails clearly.
-    private const byte SnapshotFormat = 10;
+    private const byte SnapshotFormat = 11;
 
     private static void OnHostSceneLoaded()
     {
@@ -127,6 +127,7 @@ public static partial class Networking
             output.WriteVarUInt32((uint)(entry.Owner + 1));
             output.WriteByte((byte)entry.Orphaned);
             output.WriteUInt32(entry.Generation);
+            output.WriteVarUInt32(entry.NetId);
         }
 
         WriteSyncState(output, scene.AllObjects);
@@ -213,10 +214,12 @@ public static partial class Networking
                 int owner = (int)reader.ReadVarUInt32() - 1;
                 NetworkOrphaned orphaned = ReadOrphaned(ref reader);
                 uint generation = reader.ReadUInt32();
+                uint netId = ReadNetId(ref reader);
                 if (FindByIdentifier(id) is GameObject go)
                 {
                     go.Network.ApplyOrphaned(orphaned);
-                    s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned, Generation = generation });
+                    s_entries.Add(new NetworkEntry(go)
+                        { Owner = owner, Orphaned = orphaned, Generation = generation, NetId = netId });
                     ControlChanged(go);
                 }
             }
@@ -270,7 +273,8 @@ public static partial class Networking
             if (NetworkAccessor.ModeOf(go) == NetworkMode.Object && go.Network.Root == go && !NetworkAccessor.IsExcludedFromNetwork(go) &&
                 !s_entries.Contains(go.Identifier))
             {
-                NetworkEntry entry = new(go) { Orphaned = go.Network.Orphaned, Generation = NextGeneration() };
+                NetworkEntry entry = new(go)
+                    { Orphaned = go.Network.Orphaned, Generation = NextGeneration(), NetId = NextNetId() };
                 s_entries.Add(entry);
                 NotifySpawn(entry);
             }

@@ -63,12 +63,10 @@ public partial class NetworkingTests
                 NetSerializers.WriteQuaternion(writer, remoteRotation);
                 NetSerializers.WriteFloat3(writer, remoteScale);
             }
+            uint netId = Networking.Networking.NetIdOf(proxy);
             if (path == "Tick")
-                host.Send(FakePeer.Transform, w =>
-                {
-                    w.WriteGuid(proxy.Identifier); w.WriteUInt32(generation); w.WriteUInt32(1); w.WriteDouble(1);
-                    WritePose(w);
-                }, client);
+                host.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
+                    (netId, generation, remotePosition, remoteRotation, remoteScale)), client);
             else if (path == "CatchUp")
             {
                 NetReader loaded = new(host.Last(FakePeer.SceneLoaded));
@@ -76,7 +74,7 @@ public partial class NetworkingTests
                 host.Send(FakePeer.SceneCatchUp, w =>
                 {
                     w.WriteUInt64(sceneGeneration); w.WriteVarUInt32(0); w.WriteVarUInt32(1);
-                    w.WriteGuid(proxy.Identifier); w.WriteUInt32(generation); w.WriteUInt32(1); WritePose(w);
+                    w.WriteVarUInt32(netId); w.WriteVarUInt32(generation); w.WriteVarUInt32(1); WritePose(w);
                 }, client);
                 Pump(() => host.Has(FakePeer.SceneReady), host);
             }
@@ -137,21 +135,91 @@ public partial class NetworkingTests
             Pump(() => owner.Has(FakePeer.SceneSnapshot) && observer.Has(FakePeer.SceneSnapshot), owner, observer);
             root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => p.Name == "owner"));
             observer.Received.Clear();
-            owner.Send(FakePeer.Transform, w =>
-            {
-                w.WriteGuid(root.Identifier); w.WriteUInt32(NetworkGeneration(root)); w.WriteUInt32(1); w.WriteDouble(1);
-                NetSerializers.WriteFloat3(w, new Float3(5, 6, 7));
-                NetSerializers.WriteQuaternion(w, Quaternion.Identity);
-                NetSerializers.WriteFloat3(w, new Float3(99, 99, 99));
-            });
+            owner.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
+                (Networking.Networking.NetIdOf(root), NetworkGeneration(root), new Float3(5, 6, 7), Quaternion.Identity,
+                    new Float3(99, 99, 99))));
             Pump(() => root.Transform.LocalPosition == new Float3(5, 6, 7) && observer.Has(FakePeer.Transform), owner, observer);
             Assert.Equal(new Float3(2, 2, 2), root.Transform.LocalScale);
-            NetReader relay = new(observer.Last(FakePeer.Transform));
-            relay.ReadGuid(); relay.ReadUInt32(); relay.ReadUInt32(); relay.ReadDouble();
-            NetSerializers.ReadFloat3(ref relay); NetSerializers.ReadQuaternion(ref relay);
-            Assert.Equal(new Float3(2, 2, 2), NetSerializers.ReadFloat3(ref relay));
+            // The relay leaves the disabled scale out, so observers keep their own.
+            TransformRecord relayed = Assert.Single(ReadTransforms(observer.Last(FakePeer.Transform)));
+            Assert.Equal(new Float3(5, 6, 7), relayed.Position);
+            Assert.Null(relayed.Scale);
             root.Network.AssignOwnership(null); // Handoff must also preserve the disabled scale.
             Assert.Equal(new Float3(2, 2, 2), root.Transform.LocalScale);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
+    public void CompactRotationsStayWithinAQuarterDegree()
+    {
+        Random random = new(7);
+        for (int i = 0; i < 1000; i++)
+        {
+            Quaternion q = Quaternion.Normalize(new Quaternion((float)random.NextDouble() * 2 - 1,
+                (float)random.NextDouble() * 2 - 1, (float)random.NextDouble() * 2 - 1, (float)random.NextDouble() * 2 - 1));
+            using NetWriter writer = new();
+            NetSerializers.WriteCompactQuaternion(writer, q);
+            Assert.Equal(4, writer.Length);
+            NetReader reader = new(writer.WrittenSpan);
+            Quaternion back = NetSerializers.ReadCompactQuaternion(ref reader);
+            // q and -q are the same rotation.
+            float dot = MathF.Min(1, MathF.Abs(q.X * back.X + q.Y * back.Y + q.Z * back.Z + q.W * back.W));
+            Assert.True(2 * MathF.Acos(dot) < 0.25f * MathF.PI / 180, $"{q} came back as {back}");
+        }
+    }
+
+    [Fact]
+    public void OnlyChangedChannelsAreSentAndASettledPoseIsExact()
+    {
+        Scene scene = CreateScene();
+        GameObject root = CreateGameObject();
+        root.Network.Mode = NetworkMode.Object;
+        root.Transform.LocalRotation = Quaternion.AxisAngle(Float3.UnitY, 0.3f);
+        scene.Add(root); MakeCurrent(scene);
+        LocalNetwork network = new();
+        try
+        {
+            Networking.Networking.Host(new LocalTransport(network, "host"));
+            using FakePeer client = FakePeer.Join(network, "client");
+            Pump(() => client.IsReady, client);
+            var send = typeof(Networking.Networking).GetMethod("SendTransforms",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            uint netId = Networking.Networking.NetIdOf(root);
+            List<TransformRecord> Sent()
+            {
+                PumpFor(5, client);
+                List<TransformRecord> records = client.WireReceived.Where(m => m.Id == FakePeer.Transform)
+                    .SelectMany(m => ReadTransforms(m.Data)).Where(r => r.NetId == netId).ToList();
+                client.WireReceived.Clear();
+                return records;
+            }
+
+            // Let the first full send and its settle go by.
+            for (int i = 0; i < 5; i++) send.Invoke(null, null);
+            Sent();
+
+            // Only moving: rotation and scale don't go along.
+            for (int i = 1; i <= 8; i++)
+            {
+                root.Transform.LocalPosition = new Float3(i, 0, 0);
+                send.Invoke(null, null);
+            }
+
+            List<TransformRecord> moving = Sent();
+            Assert.Equal(8, moving.Count);
+            Assert.All(moving, r => Assert.NotNull(r.Position));
+            Assert.All(moving, r => Assert.Null(r.Rotation));
+            Assert.All(moving, r => Assert.Null(r.Scale));
+            Assert.Equal(new Float3(8, 0, 0), moving[^1].Position);
+
+            // Still: once settled, the whole pose goes once, exactly, then nothing.
+            for (int i = 0; i < 6; i++) send.Invoke(null, null);
+            TransformRecord settled = Assert.Single(Sent());
+            Assert.NotEqual(0, settled.Channels & ExactRotationChannel);
+            Assert.Equal(root.Transform.LocalRotation, settled.Rotation);
+            Assert.Equal(Float3.One, settled.Scale);
+            Assert.Equal(Delivery.Reliable, client.Deliveries.Last(m => m.Id == FakePeer.Transform).Delivery);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -177,16 +245,13 @@ public partial class NetworkingTests
             Pump(() => owner.IsReady && observer.IsReady, owner, observer);
             root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => p.Name == "owner"));
             // Moving one unit along local X per second.
-            owner.Send(FakePeer.Transform, w =>
+            uint netId = Networking.Networking.NetIdOf(root), generation = NetworkGeneration(root);
+            for (uint i = 0; i < 2; i++)
             {
-                for (uint i = 0; i < 2; i++)
-                {
-                    w.WriteGuid(root.Identifier); w.WriteUInt32(NetworkGeneration(root)); w.WriteUInt32(i + 1); w.WriteDouble(1 + i);
-                    NetSerializers.WriteFloat3(w, new Float3(i, 0, 0));
-                    NetSerializers.WriteQuaternion(w, Quaternion.Identity);
-                    NetSerializers.WriteFloat3(w, Float3.One);
-                }
-            });
+                uint tick = i;
+                owner.Send(FakePeer.Transform, w => WriteTransforms(w, tick + 1, 1 + tick,
+                    (netId, generation, new Float3(tick, 0, 0), Quaternion.Identity, Float3.One)));
+            }
             Pump(() => root.Transform.LocalPosition == new Float3(1, 0, 0), owner, observer);
             observer.Received.Clear();
             root.Network.AssignOwnership(null);

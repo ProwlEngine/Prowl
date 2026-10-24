@@ -55,10 +55,11 @@ public partial class NetworkingTests
         if (kind == "sync")
         {
             NetReader header = new(bytes);
-            header.ReadGuid(); header.ReadGuid(); header.ReadVarUInt32(); header.ReadByte(); header.ReadUInt32(); header.ReadBytesWithLength();
+            header.ReadGuid(); header.ReadGuid(); header.ReadVarUInt32(); header.ReadByte(); header.ReadUInt32();
+            header.ReadVarUInt32(); header.ReadBytesWithLength(); // Network id, then the object.
             using NetWriter malformed = new(); malformed.WriteBytes(bytes.AsSpan(0, header.Position));
             malformed.WriteVarUInt32(1); malformed.WriteGuid(component.Identifier);
-            malformed.WriteVarUInt32(NetCollectionTestComponent.HealthSlot); malformed.WriteUInt32(0);
+            malformed.WriteVarUInt32(NetCollectionTestComponent.HealthSlot); malformed.WriteVarUInt32(0);
             malformed.WriteBytesWithLength(ReadOnlySpan<byte>.Empty);
             bytes = malformed.ToArray();
         }

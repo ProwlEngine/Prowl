@@ -161,7 +161,7 @@ public sealed class FakePeer : IDisposable
             for (uint i = 0; i < count; i++)
             {
                 logical.WriteGuid(reader.ReadGuid()); logical.WriteVarUInt32(reader.ReadVarUInt32());
-                reader.ReadUInt32(); logical.WriteBytesWithLength(reader.ReadBytesWithLength());
+                reader.ReadVarUInt32(); logical.WriteBytesWithLength(reader.ReadBytesWithLength());
             }
             return logical.ToArray();
         }
@@ -209,7 +209,7 @@ public sealed class FakePeer : IDisposable
                 wire.WriteVarUInt32(block.ReadVarUInt32());
                 uint generation = Networking.Networking.FindByIdentifier(componentId) is Component part
                     ? Networking.Networking.GenerationOf(part.GameObject) : 0;
-                wire.WriteUInt32(generation);
+                wire.WriteVarUInt32(generation);
                 wire.WriteBytesWithLength(block.ReadBytesWithLength());
             }
         }
@@ -424,7 +424,7 @@ public partial class NetworkingTests : RuntimeTestBase
         using NetWriter writer = new();
         Networking.Networking.WriteSpawn(root, -1, NetworkOrphaned.Destroy, writer);
         NetReader spawn = new(writer.WrittenSpan);
-        spawn.ReadGuid(); spawn.ReadGuid(); spawn.ReadVarUInt32(); spawn.ReadByte(); spawn.ReadUInt32();
+        spawn.ReadGuid(); spawn.ReadGuid(); spawn.ReadVarUInt32(); spawn.ReadByte(); spawn.ReadUInt32(); spawn.ReadVarUInt32();
         string json = Networking.Networking.Decompress(spawn.ReadBytesWithLength()).WriteToJson();
         Assert.DoesNotContain(HostSecret, json);
         Assert.DoesNotContain(inside.Identifier.ToString(), json);
@@ -542,18 +542,9 @@ public partial class NetworkingTests : RuntimeTestBase
             Assert.Equal(5, component.Score);
 
             // Her transform updates move it on the host, smoothed.
-            alice.Send(FakePeer.Transform, w =>
-            {
-                w.WriteGuid(ship.Identifier);
-                NetReader spawned = new(alice.Last(FakePeer.Spawn));
-                spawned.ReadGuid(); spawned.ReadGuid(); spawned.ReadVarUInt32(); spawned.ReadByte();
-                w.WriteUInt32(spawned.ReadUInt32());
-                w.WriteUInt32(1);
-                w.WriteDouble(1);
-                w.WriteSingle(3); w.WriteSingle(4); w.WriteSingle(5);
-                w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(1);
-                w.WriteSingle(1); w.WriteSingle(1); w.WriteSingle(1);
-            });
+            alice.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
+                (Networking.Networking.NetIdOf(ship), Networking.Networking.GenerationOf(ship), new Float3(3, 4, 5),
+                    Quaternion.Identity, Float3.One)));
             Pump(() => ship.Transform.LocalPosition.Equals(new Float3(3, 4, 5)), alice);
 
             // Her broadcast RPC runs here as hers; the host's runs here and goes to her.
@@ -772,13 +763,51 @@ public partial class NetworkingTests : RuntimeTestBase
 
     private static void SendProxyTransform(FakePeer host, NetPeer client, Guid id, uint tick, float position, uint generation = 0)
     {
-        host.Send(FakePeer.Transform, w =>
+        uint netId = Networking.Networking.NetIdOf(Find(Scene.Current, id));
+        host.Send(FakePeer.Transform, w => WriteTransforms(w, tick, tick / 30.0,
+            (netId, generation, new Float3(position, 0, 0), Quaternion.Identity, Float3.One)), client);
+    }
+
+    // Transform channel bits, as Networking.Transform.cs defines them.
+    private const byte PositionChannel = 1, RotationChannel = 2, ScaleChannel = 4, ExactRotationChannel = 8, ResumedChannel = 16;
+
+    /// <summary>A Transform message: one tick and time, then a full, exact pose for each object.</summary>
+    private static void WriteTransforms(NetWriter w, uint tick, double time,
+        params (uint NetId, uint Generation, Float3 Position, Quaternion Rotation, Float3 Scale)[] records)
+    {
+        w.WriteVarUInt32(tick); w.WriteDouble(time);
+        foreach (var record in records)
         {
-            w.WriteGuid(id); w.WriteUInt32(generation); w.WriteUInt32(tick); w.WriteDouble(tick / 30.0);
-            w.WriteSingle(position); w.WriteSingle(0); w.WriteSingle(0);
-            w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(1);
-            w.WriteSingle(1); w.WriteSingle(1); w.WriteSingle(1);
-        }, client);
+            w.WriteVarUInt32(record.NetId); w.WriteVarUInt32(record.Generation);
+            w.WriteByte(PositionChannel | RotationChannel | ScaleChannel | ExactRotationChannel);
+            NetSerializers.WriteFloat3(w, record.Position);
+            NetSerializers.WriteQuaternion(w, record.Rotation);
+            NetSerializers.WriteFloat3(w, record.Scale);
+        }
+    }
+
+    private readonly record struct TransformRecord(uint NetId, uint Generation, byte Channels, Float3? Position,
+        Quaternion? Rotation, Float3? Scale);
+
+    /// <summary>Decodes a Transform message's records; a channel left out is null.</summary>
+    private static List<TransformRecord> ReadTransforms(byte[] message)
+    {
+        NetReader r = new(message);
+        r.ReadVarUInt32(); r.ReadDouble();
+        List<TransformRecord> records = new();
+        while (!r.IsAtEnd)
+        {
+            uint netId = r.ReadVarUInt32(), generation = r.ReadVarUInt32();
+            byte channels = r.ReadByte();
+            if ((channels & ResumedChannel) != 0) r.ReadSingle();
+            Float3? position = (channels & PositionChannel) != 0 ? NetSerializers.ReadFloat3(ref r) : null;
+            Quaternion? rotation = (channels & RotationChannel) == 0 ? null :
+                (channels & ExactRotationChannel) != 0 ? NetSerializers.ReadQuaternion(ref r) : NetSerializers.ReadCompactQuaternion(ref r);
+            Float3? scale = (channels & ScaleChannel) != 0 ? NetSerializers.ReadFloat3(ref r) : null;
+            records.Add(new TransformRecord(netId, generation, channels, position, rotation, scale));
+        }
+
+        return records;
     }
 
     [Fact]
@@ -859,8 +888,9 @@ public partial class NetworkingTests : RuntimeTestBase
             SendProxyTransform(host, client, proxy.Identifier, 3, 3);
             // Receive all three at once, before interpolation can discard samples.
             Networking.Networking.Receive();
-            var entries = (System.Collections.IDictionary)typeof(Networking.Networking).GetField("s_entries", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
-            object entry = entries[proxy.Identifier]!;
+            object table = typeof(Networking.Networking).GetField("s_entries", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+            object entry = ((System.Collections.IEnumerable)table.GetType().GetProperty("Values")!.GetValue(table)!).Cast<object>()
+                .Single(e => ReferenceEquals(e.GetType().GetProperty("GameObject")!.GetValue(e), proxy));
             var samples = (System.Collections.IEnumerable)entry.GetType().GetField("Samples")!.GetValue(entry)!;
             double[] times = samples.Cast<object>().Select(sample => (double)sample.GetType().GetProperty("Time")!.GetValue(sample)!).ToArray();
             Assert.Equal(3, times.Length);
@@ -879,13 +909,9 @@ public partial class NetworkingTests : RuntimeTestBase
         using (host)
         try
         {
-            host.Send(FakePeer.Transform, w =>
-            {
-                w.WriteGuid(proxy.Identifier); w.WriteUInt32(0); w.WriteUInt32(1); w.WriteDouble(1);
-                w.WriteSingle(position); w.WriteSingle(0); w.WriteSingle(0);
-                w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(zeroRotation ? 0 : 1);
-                w.WriteSingle(1); w.WriteSingle(1); w.WriteSingle(1);
-            }, client);
+            host.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
+                (Networking.Networking.NetIdOf(proxy), 0, new Float3(position, 0, 0),
+                    zeroRotation ? new Quaternion(0, 0, 0, 0) : Quaternion.Identity, Float3.One)), client);
             Frame([host]);
             Assert.False(Networking.Networking.IsActive);
             Assert.True(float.IsFinite(proxy.Transform.LocalPosition.X));
@@ -960,16 +986,9 @@ public partial class NetworkingTests : RuntimeTestBase
 
             // The host moves the crate; it follows, smoothed.
             NetPeer bob = host.Session.Peers.Single(p => !p.IsLocal);
-            host.Send(FakePeer.Transform, w =>
-            {
-                w.WriteGuid(crateId);
-                w.WriteUInt32(0);
-                w.WriteUInt32(1);
-                w.WriteDouble(1);
-                w.WriteSingle(7); w.WriteSingle(8); w.WriteSingle(9);
-                w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(1);
-                w.WriteSingle(1); w.WriteSingle(1); w.WriteSingle(1);
-            }, to: bob);
+            uint crateNetId = Networking.Networking.NetIdOf(Find(Scene.Current, crateId));
+            host.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
+                (crateNetId, 0, new Float3(7, 8, 9), Quaternion.Identity, Float3.One)), to: bob);
             Pump(() => crateHere.Transform.LocalPosition.Equals(new Float3(7, 8, 9)), host);
 
             // And removes it.

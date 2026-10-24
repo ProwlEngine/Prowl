@@ -95,14 +95,14 @@ public partial class NetworkingTests
             int? health = null;
             for (uint i = 0; i < count; i++)
             {
-                catchUp.ReadGuid(); uint slot = catchUp.ReadVarUInt32(); catchUp.ReadUInt32();
+                catchUp.ReadGuid(); uint slot = catchUp.ReadVarUInt32(); catchUp.ReadVarUInt32();
                 NetReader value = new(catchUp.ReadBytesWithLength());
                 if (slot == NetTestComponent.HealthSlot) health = NetSerializer<int>.Read(ref value);
             }
             Assert.Equal(42, health);
             Assert.Equal(1u, catchUp.ReadVarUInt32());
-            Assert.Equal(state.GameObject.Identifier, catchUp.ReadGuid());
-            catchUp.ReadUInt32(); catchUp.ReadUInt32();
+            Assert.Equal(Networking.Networking.NetIdOf(state.GameObject), catchUp.ReadVarUInt32());
+            catchUp.ReadVarUInt32(); catchUp.ReadVarUInt32(); // Ownership generation, tick.
             Assert.Equal(new Float3(7, 8, 9), NetSerializers.ReadFloat3(ref catchUp));
 
             listener.PeerReadyAction = _ => state.Shout("welcome");
@@ -191,7 +191,7 @@ public partial class NetworkingTests
                 w.WriteVarUInt32(1);
                 w.WriteGuid(root.GetComponent<NetTestComponent>()!.Identifier);
                 w.WriteVarUInt32(NetTestComponent.HealthSlot);
-                w.WriteUInt32(Networking.Networking.GenerationOf(root));
+                w.WriteVarUInt32(Networking.Networking.GenerationOf(root));
                 using NetWriter value = new(); NetSerializer<int>.Write(value, 37);
                 w.WriteBytesWithLength(value.WrittenSpan);
                 w.WriteVarUInt32(0);

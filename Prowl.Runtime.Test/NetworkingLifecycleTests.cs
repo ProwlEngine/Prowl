@@ -202,10 +202,7 @@ public partial class NetworkingTests
             Networking.Networking.Host(new LocalTransport(new(), "host"));
             Assert.Null(Networking.Networking.Session);
             Assert.Empty(b.Events);
-            var entries = (System.Collections.IDictionary)typeof(Networking.Networking)
-                .GetField("s_entries", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
-                .GetValue(null)!;
-            Assert.Empty(entries);
+            Assert.Equal(0, Networking.Networking.NetworkObjectCount);
             var sceneLoaded = (Delegate?)typeof(Scene).GetField("OnSceneLoaded",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
             Assert.DoesNotContain(sceneLoaded?.GetInvocationList() ?? [], d => d.Method.Name == "OnHostSceneLoaded");

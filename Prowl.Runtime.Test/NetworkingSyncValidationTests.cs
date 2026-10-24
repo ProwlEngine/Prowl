@@ -13,7 +13,7 @@ public partial class NetworkingTests
     {
         writer.WriteGuid(component.Identifier);
         writer.WriteVarUInt32(slot);
-        writer.WriteUInt32(generation ?? Networking.Networking.GenerationOf(component.GameObject));
+        writer.WriteVarUInt32(generation ?? Networking.Networking.GenerationOf(component.GameObject));
         writer.WriteBytesWithLength(value);
     }
 

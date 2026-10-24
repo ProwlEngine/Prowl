@@ -261,7 +261,7 @@ public static partial class Networking
             {
                 Guid id = reader.ReadGuid();
                 uint slot = reader.ReadVarUInt32();
-                reader.ReadUInt32(); // Ownership generation.
+                reader.ReadVarUInt32(); // Ownership generation.
                 ReadOnlySpan<byte> value = reader.ReadBytesWithLength();
                 if (FindByIdentifier(id) is not Component component)
                 {

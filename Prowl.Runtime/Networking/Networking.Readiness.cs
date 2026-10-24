@@ -310,9 +310,9 @@ public static partial class Networking
         message.WriteVarUInt32((uint)entries.Length);
         foreach (NetworkEntry entry in entries)
         {
-            message.WriteGuid(entry.GameObject.Identifier);
-            message.WriteUInt32(entry.Generation);
-            message.WriteUInt32(entry.HasReceived ? entry.LastReceivedTick : s_tick);
+            message.WriteVarUInt32(entry.NetId);
+            message.WriteVarUInt32(entry.Generation);
+            message.WriteVarUInt32(entry.HasReceived ? entry.LastReceivedTick : s_tick);
             Transform transform = entry.GameObject.Transform;
             NetSerializers.WriteFloat3(message, transform.LocalPosition);
             NetSerializers.WriteQuaternion(message, transform.LocalRotation);
@@ -325,9 +325,9 @@ public static partial class Networking
         uint count = reader.ReadVarUInt32();
         for (uint i = 0; i < count; i++)
         {
-            Guid id = reader.ReadGuid();
-            uint generation = reader.ReadUInt32();
-            uint tick = reader.ReadUInt32();
+            uint netId = reader.ReadVarUInt32();
+            uint generation = reader.ReadVarUInt32();
+            uint tick = reader.ReadVarUInt32();
             Float3 position = NetSerializers.ReadFloat3(ref reader);
             Quaternion rotation = NetSerializers.ReadQuaternion(ref reader);
             Float3 scale = NetSerializers.ReadFloat3(ref reader);
@@ -337,7 +337,7 @@ public static partial class Networking
                 throw new InvalidDataException("Scene catch-up contains an invalid transform.");
             }
 
-            if (!s_entries.TryGetValue(id, out NetworkEntry? entry) || entry.Generation != generation ||
+            if (!s_entries.TryGetNet(netId, out NetworkEntry? entry) || entry.Generation != generation ||
                 (entry.HasReceived && (int)(tick - entry.LastReceivedTick) < 0))
             {
                 continue;

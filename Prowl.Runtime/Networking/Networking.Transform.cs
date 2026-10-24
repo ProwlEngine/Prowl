@@ -10,24 +10,28 @@ using Prowl.Warp;
 
 namespace Prowl.Runtime.Networking;
 
-// Networked objects' transforms. Whoever controls an object sends its local position, rotation and
-// scale every tick it moves, and once more reliably when it has been still for SettleTicks; after that
-// it sends nothing until it moves again. Static GameObjects are never synced. Everyone else buffers
-// the updates and shows the object InterpolationDelay in the past, blending between them.
+// Networked objects' transforms. Whoever controls an object sends, each tick it moves, the channels (position,
+// rotation, scale) that changed, and keeps sending a channel for LingerTicks after it stops, in case its last
+// change was lost. Once the whole object has been still for SettleTicks, its full pose goes once more, reliably
+// and at full precision; after that nothing is sent until it moves again. Static GameObjects are never synced.
+// Everyone else buffers the updates and shows the object InterpolationDelay in the past, blending between them.
 //
-// A Transform message is a run of [guid][u32 generation][u32 tick][f64 sender time][float3 position][quaternion rotation][float3 scale].
+// A Transform message is [varuint tick][f64 sender time], then a run of records:
+// [varuint net id][varuint generation][u8 channels] then, as the channels say, [f32 seconds since it last
+// moved][float3 position][rotation: 4 bytes compact, or 16 exact][float3 scale]. A channel left out is unchanged.
 public static partial class Networking
 {
-    private const int TransformRecordSize = 16 + 4 + 4 + 8 + 12 + 16 + 12;
-
     private const int SessionMessageHeaderSize = sizeof(ushort);
-
-    // A preferred working buffer size, not a requirement on the transport.
-    private const int TransformBatchBytes = 1000;
+    private const int TransformHeaderSize = 5 + 8;
+    private const int MaxTransformRecordSize = 5 + 5 + 1 + 4 + 12 + 16 + 12;
+    private const int MinTransformMessageSize = SessionMessageHeaderSize + TransformHeaderSize + MaxTransformRecordSize;
     private const int MaxSamples = 32;
 
     // Quiet ticks before the final pose goes out reliably.
     private const int SettleTicks = 3;
+
+    // Ticks a channel is still sent after it stops changing, while the rest of the object moves on.
+    private const int LingerTicks = 3;
 
     // Smaller changes don't count as movement, so a body jittering in place still settles. They accumulate
     // against the last pose sent, so slow motion is still sent once it adds up.
@@ -38,23 +42,43 @@ public static partial class Networking
     private static uint s_tick;
     private static double s_lastTransformTime;
 
+    [Flags]
+    private enum TransformChannels : byte
+    {
+        Position = 1,
+        Rotation = 2,
+        Scale = 4,
+
+        // The rotation is the full 16 bytes, as a settled pose sends it, rather than the compact 4.
+        ExactRotation = 8,
+
+        // It was still until the previous tick: receivers hold it at rest until then, then blend from there.
+        Resumed = 16,
+
+        Pose = Position | Rotation | Scale,
+        All = Pose | ExactRotation | Resumed
+    }
+
     private static void ValidateSceneMessageLimit(NetSessionOptions? options)
     {
-        if ((options ?? s_configuration.CreateSessionOptions()).MaxMessageSize <
-            TransformRecordSize + SessionMessageHeaderSize)
+        if ((options ?? s_configuration.CreateSessionOptions()).MaxMessageSize < MinTransformMessageSize)
         {
             throw new NotSupportedException(
-                $"Scene replication requires a message limit of at least {TransformRecordSize + SessionMessageHeaderSize} bytes.");
+                $"Scene replication requires a message limit of at least {MinTransformMessageSize} bytes.");
         }
     }
+
+    private static TransformChannels SyncedChannels(GameObject go) =>
+        (go.Network.SyncsTransform(NetworkFlags.NoPositionSync) ? TransformChannels.Position : 0) |
+        (go.Network.SyncsTransform(NetworkFlags.NoRotationSync) ? TransformChannels.Rotation : 0) |
+        (go.Network.SyncsTransform(NetworkFlags.NoScaleSync) ? TransformChannels.Scale : 0);
 
     private static void SendTransforms()
     {
         s_tick++;
         double now = Now;
 
-        using NetWriter moving = new(1024);
-        using NetWriter settled = new(1024);
+        using TransformBatch moving = new(s_tick, now), settled = new(s_tick, now);
         foreach (NetworkEntry entry in s_entries.Values)
         {
             GameObject go = entry.GameObject;
@@ -67,32 +91,29 @@ public static partial class Networking
             Float3 position = t.LocalPosition;
             Quaternion rotation = t.LocalRotation;
             Float3 scale = t.LocalScale;
+            TransformChannels synced = SyncedChannels(go);
+            TransformChannels changed = entry.HasSent ? Changes(entry, synced, position, rotation, scale) : synced;
 
-            bool changed = !entry.HasSent ||
-                           (go.Network.SyncsTransform(NetworkFlags.NoPositionSync) && Moved(position, entry.SentPosition, PositionEpsilon)) ||
-                           (go.Network.SyncsTransform(NetworkFlags.NoRotationSync) && Moved(rotation, entry.SentRotation)) ||
-                           (go.Network.SyncsTransform(NetworkFlags.NoScaleSync) && Moved(scale, entry.SentScale, ScaleEpsilon));
-
-            NetWriter message;
-            if (changed)
+            TransformChannels channels;
+            float stillFor = 0;
+            if (changed != 0)
             {
-                // Receivers last heard the rest pose when it settled. Repeat it as of the previous tick so they
-                // blend from rest over one tick, not over the whole time it sat still.
+                channels = changed | Lingering(entry, changed);
                 if (entry.HasSent && entry.Settled && s_lastTransformTime > entry.LastSentTime)
                 {
-                    WriteTransformRecord(moving, go, entry.Generation, s_tick - 1, s_lastTransformTime,
-                        entry.SentPosition, entry.SentRotation, entry.SentScale, reliable: false);
+                    channels |= TransformChannels.Resumed;
+                    stillFor = (float)(now - s_lastTransformTime);
                 }
 
                 entry.QuietTicks = 0;
                 entry.Settled = false;
-                message = moving;
             }
             else if (!entry.Settled && ++entry.QuietTicks >= SettleTicks)
             {
-                // Updates while moving can be lost, so the pose it comes to rest at must arrive.
+                // Updates while moving can be lost, so the pose it comes to rest at must arrive, exactly.
+                channels = synced | TransformChannels.ExactRotation;
                 entry.Settled = true;
-                message = settled;
+                entry.LingerPosition = entry.LingerRotation = entry.LingerScale = 0;
             }
             else
             {
@@ -101,43 +122,70 @@ public static partial class Networking
 
             entry.HasSent = true;
             entry.LastSentTime = now;
-            entry.SentPosition = position;
-            entry.SentRotation = rotation;
-            entry.SentScale = scale;
-            WriteTransformRecord(message, go, entry.Generation, s_tick, now, position, rotation, scale,
-                reliable: message == settled);
+            if ((channels & TransformChannels.Position) != 0) entry.SentPosition = position;
+            if ((channels & TransformChannels.Rotation) != 0) entry.SentRotation = rotation;
+            if ((channels & TransformChannels.Scale) != 0) entry.SentScale = scale;
+            TransformBatch batch = entry.Settled ? settled : moving;
+            WriteTransformRecord(batch.Begin(), entry.NetId, entry.Generation, channels, stillFor, position, rotation,
+                scale);
+            batch.End();
         }
 
-        if (moving.Length > 0)
-        {
-            SendTransformMessage(moving, null, reliable: false);
-        }
-
-        if (settled.Length > 0)
-        {
-            SendTransformMessage(settled, null, reliable: true);
-        }
-
+        moving.Send(null, reliable: false);
+        settled.Send(null, reliable: true);
         s_lastTransformTime = now;
     }
 
-    private static void WriteTransformRecord(NetWriter message, GameObject go, uint generation, uint tick, double time,
-        Float3 position, Quaternion rotation, Float3 scale, bool reliable)
-    {
-        message.WriteGuid(go.Identifier);
-        message.WriteUInt32(generation);
-        message.WriteUInt32(tick);
-        message.WriteDouble(time);
-        NetSerializers.WriteFloat3(message, position);
-        NetSerializers.WriteQuaternion(message, rotation);
-        NetSerializers.WriteFloat3(message, scale);
+    private static TransformChannels Changes(NetworkEntry entry, TransformChannels synced, Float3 position,
+        Quaternion rotation, Float3 scale) =>
+        ((synced & TransformChannels.Position) != 0 && Moved(position, entry.SentPosition, PositionEpsilon)
+            ? TransformChannels.Position
+            : 0) |
+        ((synced & TransformChannels.Rotation) != 0 && Moved(rotation, entry.SentRotation)
+            ? TransformChannels.Rotation
+            : 0) |
+        ((synced & TransformChannels.Scale) != 0 && Moved(scale, entry.SentScale, ScaleEpsilon)
+            ? TransformChannels.Scale
+            : 0);
 
-        // Keep capture bounded; sending splits records to each connection's limit.
-        if (message.Length + TransformRecordSize > TransformBatchBytes)
+    /// <summary>The channels that changed recently but not this tick, counting down how long each has left.</summary>
+    private static TransformChannels Lingering(NetworkEntry entry, TransformChannels changed) =>
+        Linger(ref entry.LingerPosition, TransformChannels.Position, changed) |
+        Linger(ref entry.LingerRotation, TransformChannels.Rotation, changed) |
+        Linger(ref entry.LingerScale, TransformChannels.Scale, changed);
+
+    private static TransformChannels Linger(ref int ticks, TransformChannels channel, TransformChannels changed)
+    {
+        if ((changed & channel) != 0)
         {
-            SendTransformMessage(message, null, reliable);
-            message.Reset();
+            ticks = LingerTicks;
+            return 0;
         }
+
+        if (ticks <= 0)
+        {
+            return 0;
+        }
+
+        ticks--;
+        return channel;
+    }
+
+    private static void WriteTransformRecord(NetWriter writer, uint netId, uint generation, TransformChannels channels,
+        float stillFor, Float3 position, Quaternion rotation, Float3 scale)
+    {
+        writer.WriteVarUInt32(netId);
+        writer.WriteVarUInt32(generation);
+        writer.WriteByte((byte)channels);
+        if ((channels & TransformChannels.Resumed) != 0) writer.WriteSingle(stillFor);
+        if ((channels & TransformChannels.Position) != 0) NetSerializers.WriteFloat3(writer, position);
+        if ((channels & TransformChannels.Rotation) != 0)
+        {
+            if ((channels & TransformChannels.ExactRotation) != 0) NetSerializers.WriteQuaternion(writer, rotation);
+            else NetSerializers.WriteCompactQuaternion(writer, rotation);
+        }
+
+        if ((channels & TransformChannels.Scale) != 0) NetSerializers.WriteFloat3(writer, scale);
     }
 
     private static bool Moved(Float3 a, Float3 b, float epsilon) =>
@@ -147,50 +195,6 @@ public static partial class Networking
         MathF.Abs(a.X - b.X) > RotationEpsilon || MathF.Abs(a.Y - b.Y) > RotationEpsilon ||
         MathF.Abs(a.Z - b.Z) > RotationEpsilon || MathF.Abs(a.W - b.W) > RotationEpsilon;
 
-    private static void SendTransformMessage(NetWriter message, NetPeer? except, bool reliable)
-    {
-        NetSession session = Session!;
-        if (IsHost)
-        {
-            foreach (NetPeer peer in session.Peers)
-            {
-                if (!peer.IsLocal && peer != except)
-                {
-                    SendTransformMessage(peer, message.WrittenSpan, reliable);
-                }
-            }
-        }
-        else
-        {
-            SendTransformMessage(session.HostPeer!, message.WrittenSpan, reliable);
-        }
-    }
-
-    private static void SendTransformMessage(NetPeer peer, ReadOnlySpan<byte> records, bool reliable)
-    {
-        if (peer.Connection is not { IsConnected: true } connection)
-        {
-            return;
-        }
-
-        int limit = Session!.Options.MaxMessageSize;
-        Delivery delivery = Delivery.Reliable;
-        if (!reliable && Session.Transport.Capabilities.Supports(Delivery.Unreliable) &&
-            connection.GetMaxMessageSize(Delivery.Unreliable) >= TransformRecordSize + SessionMessageHeaderSize)
-        {
-            delivery = Delivery.Unreliable;
-            limit = Math.Min(limit, connection.GetMaxMessageSize(Delivery.Unreliable));
-        }
-
-        // Warp adds a two-byte message id. Its optional batch framing is handled by Warp itself.
-        int batchBytes = (limit - SessionMessageHeaderSize) / TransformRecordSize * TransformRecordSize;
-        for (int offset = 0; offset < records.Length && connection.IsConnected; offset += batchBytes)
-        {
-            SendEngine(peer, EngineMessage.Transform,
-                records.Slice(offset, Math.Min(batchBytes, records.Length - offset)), delivery);
-        }
-    }
-
     private static void OnTransform(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
         if (!IsHost && !sender.IsHost)
@@ -198,21 +202,42 @@ public static partial class Networking
             return;
         }
 
-        double now = Now;
-        using NetWriter? relay = IsHost ? new NetWriter(1024) : null;
+        uint tick = reader.ReadVarUInt32();
+        double sentAt = reader.ReadDouble();
+        if (!double.IsFinite(sentAt) || sentAt < 0)
+        {
+            throw new InvalidDataException("A transform message has an invalid time.");
+        }
 
+        double now = Now;
+        using TransformBatch? relay = IsHost ? new TransformBatch(tick, sentAt) : null;
         while (!reader.IsAtEnd)
         {
-            Guid id = reader.ReadGuid();
-            uint generation = reader.ReadUInt32();
-            uint tick = reader.ReadUInt32();
-            double sentAt = reader.ReadDouble();
-            Float3 position = NetSerializers.ReadFloat3(ref reader);
-            Quaternion rotation = NetSerializers.ReadQuaternion(ref reader);
-            Float3 scale = NetSerializers.ReadFloat3(ref reader);
+            uint netId = reader.ReadVarUInt32();
+            uint generation = reader.ReadVarUInt32();
+            TransformChannels channels = (TransformChannels)reader.ReadByte();
+            if ((channels & ~TransformChannels.All) != 0)
+            {
+                throw new InvalidDataException("A transform has unknown channels.");
+            }
 
-            if (!s_entries.TryGetValue(id, out NetworkEntry? entry) || !entry.GameObject.IsValid() ||
-                !entry.GameObject.Network.HasTransformSync || HasControl(entry.GameObject) || entry.Generation != generation)
+            float stillFor = (channels & TransformChannels.Resumed) != 0 ? reader.ReadSingle() : 0;
+            Float3 position = (channels & TransformChannels.Position) != 0 ? NetSerializers.ReadFloat3(ref reader) : default;
+            Quaternion rotation = (channels & TransformChannels.Rotation) == 0 ? Quaternion.Identity :
+                (channels & TransformChannels.ExactRotation) != 0 ? NetSerializers.ReadQuaternion(ref reader) :
+                NetSerializers.ReadCompactQuaternion(ref reader);
+            Float3 scale = (channels & TransformChannels.Scale) != 0 ? NetSerializers.ReadFloat3(ref reader) : default;
+
+            float rotationLength = Quaternion.LengthSquared(rotation);
+            if (!float.IsFinite(stillFor) || stillFor < 0 || !Finite(position) || !Finite(scale) ||
+                !float.IsFinite(rotationLength) || rotationLength < 1e-12f)
+            {
+                throw new InvalidDataException("A transform contains invalid coordinates, rotation or time.");
+            }
+
+            if (!s_entries.TryGetNet(netId, out NetworkEntry? entry) || !entry.GameObject.IsValid() ||
+                !entry.GameObject.Network.HasTransformSync || HasControl(entry.GameObject) ||
+                entry.Generation != generation)
             {
                 continue;
             }
@@ -229,52 +254,57 @@ public static partial class Networking
                 continue;
             }
 
-            float rotationLength = Quaternion.LengthSquared(rotation);
-            if (!double.IsFinite(sentAt) || sentAt < 0 || !Finite(position) || !Finite(scale) ||
-                !float.IsFinite(rotationLength) || rotationLength < 1e-12f)
-            {
-                throw new InvalidDataException("A transform contains invalid coordinates, rotation or time.");
-            }
-
-            rotation = Quaternion.Normalize(rotation);
-            // Use the host-supplied object policy, never a mask chosen by the sender.
-            Transform current = entry.GameObject.Transform;
-            if (!entry.GameObject.Network.SyncsTransform(NetworkFlags.NoPositionSync)) position = current.LocalPosition;
-            if (!entry.GameObject.Network.SyncsTransform(NetworkFlags.NoRotationSync)) rotation = current.LocalRotation;
-            if (!entry.GameObject.Network.SyncsTransform(NetworkFlags.NoScaleSync)) scale = current.LocalScale;
             if (!entry.Timeline.Observe(sentAt, now))
             {
                 continue;
             }
 
-            entry.HasReceived = true;
-            entry.LastReceivedTick = tick;
-            if (entry.Samples.Count == MaxSamples)
+            // Use the host-supplied object policy, never channels chosen by the sender.
+            channels &= SyncedChannels(entry.GameObject) | TransformChannels.ExactRotation | TransformChannels.Resumed;
+
+            // Channels left out are as they were in the latest update, or as the object is if there's none.
+            Transform current = entry.GameObject.Transform;
+            TransformSample latest = entry.Samples.Count > 0
+                ? entry.Samples[^1]
+                : new TransformSample(sentAt, current.LocalPosition, current.LocalRotation, current.LocalScale);
+            if ((channels & TransformChannels.Position) == 0) position = latest.Position;
+            if ((channels & TransformChannels.Rotation) == 0) rotation = latest.Rotation;
+            else rotation = Quaternion.Normalize(rotation);
+            if ((channels & TransformChannels.Scale) == 0) scale = latest.Scale;
+
+            // Held where it rested until just before it moved, rather than blended over the whole time it sat still.
+            if ((channels & TransformChannels.Resumed) != 0 && entry.Samples.Count > 0 && sentAt - stillFor > latest.Time)
             {
-                entry.Samples.RemoveAt(0);
+                AddSample(entry, latest with { Time = sentAt - stillFor });
             }
 
-            entry.Samples.Add(new TransformSample(sentAt, position, rotation, scale));
+            entry.HasReceived = true;
+            entry.LastReceivedTick = tick;
+            AddSample(entry, new TransformSample(sentAt, position, rotation, scale));
             if ((entry.GameObject.Network.Flags & NetworkFlags.NoInterpolation) != 0)
+            {
                 ApplyNetworkTransform(entry.GameObject, position, rotation, scale);
+            }
 
             if (relay != null)
             {
-                relay.WriteGuid(id);
-                relay.WriteUInt32(generation);
-                relay.WriteUInt32(tick);
-                relay.WriteDouble(sentAt);
-                NetSerializers.WriteFloat3(relay, position);
-                NetSerializers.WriteQuaternion(relay, rotation);
-                NetSerializers.WriteFloat3(relay, scale);
+                WriteTransformRecord(relay.Begin(), netId, generation, channels, stillFor, position, rotation, scale);
+                relay.End();
             }
         }
 
         // Relay as received, so a settled pose stays reliable.
-        if (relay != null && relay.Length > 0)
+        relay?.Send(sender, delivery == Delivery.Reliable);
+    }
+
+    private static void AddSample(NetworkEntry entry, TransformSample sample)
+    {
+        if (entry.Samples.Count == MaxSamples)
         {
-            SendTransformMessage(relay, sender, delivery == Delivery.Reliable);
+            entry.Samples.RemoveAt(0);
         }
+
+        entry.Samples.Add(sample);
     }
 
     /// <summary>Moves every object this peer doesn't control to where its controller had it, InterpolationDelay ago.</summary>
@@ -328,4 +358,83 @@ public static partial class Networking
         float.IsFinite(value.X) && float.IsFinite(value.Y) && float.IsFinite(value.Z);
 
     private readonly record struct TransformSample(double Time, Float3 Position, Quaternion Rotation, Float3 Scale);
+
+    /// <summary>One tick's transform records, sent to each peer in messages as large as its connection allows.</summary>
+    private sealed class TransformBatch(uint tick, double time) : IDisposable
+    {
+        private readonly List<int> _ends = new();
+        private readonly NetWriter _records = new(1024);
+
+        /// <summary>Where the next record goes; <see cref="End" /> once it's written.</summary>
+        public NetWriter Begin() => _records;
+
+        public void End() => _ends.Add(_records.Length);
+
+        public void Dispose() => _records.Dispose();
+
+        /// <summary>To the host from a client, or from the host to every client but <paramref name="except" />.</summary>
+        public void Send(NetPeer? except, bool reliable)
+        {
+            if (_ends.Count == 0)
+            {
+                return;
+            }
+
+            NetSession session = Session!;
+            if (!IsHost)
+            {
+                SendTo(session.HostPeer!, reliable);
+                return;
+            }
+
+            foreach (NetPeer peer in session.Peers)
+            {
+                if (!peer.IsLocal && peer != except)
+                {
+                    SendTo(peer, reliable);
+                }
+            }
+        }
+
+        private void SendTo(NetPeer peer, bool reliable)
+        {
+            if (peer.Connection is not { IsConnected: true } connection)
+            {
+                return;
+            }
+
+            int limit = Session!.Options.MaxMessageSize;
+            Delivery delivery = Delivery.Reliable;
+            if (!reliable && Session.Transport.Capabilities.Supports(Delivery.Unreliable) &&
+                connection.GetMaxMessageSize(Delivery.Unreliable) >= MinTransformMessageSize)
+            {
+                delivery = Delivery.Unreliable;
+                limit = Math.Min(limit, connection.GetMaxMessageSize(Delivery.Unreliable));
+            }
+
+            // Warp adds a two-byte message id. Its optional batch framing is handled by Warp itself.
+            int budget = limit - SessionMessageHeaderSize;
+            using NetWriter message = new(Math.Min(budget, _records.Length + TransformHeaderSize));
+            int start = 0;
+            for (int i = 0; i < _ends.Count && connection.IsConnected; i++)
+            {
+                if (message.Length == 0)
+                {
+                    message.WriteVarUInt32(tick);
+                    message.WriteDouble(time);
+                }
+
+                ReadOnlySpan<byte> record = _records.WrittenSpan[start.._ends[i]];
+                start = _ends[i];
+                message.WriteBytes(record);
+                bool full = i + 1 == _ends.Count ||
+                            message.Length + (_ends[i + 1] - start) > budget;
+                if (full)
+                {
+                    SendEngine(peer, EngineMessage.Transform, message.WrittenSpan, delivery);
+                    message.Reset();
+                }
+            }
+        }
+    }
 }

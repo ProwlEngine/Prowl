@@ -157,7 +157,7 @@ public partial class NetworkingTests
                     Assert.Equal(FakePeer.Sync, observer.WireReceived[rpcIndex - 1].Id);
                     Assert.Equal(NetPeer.HostId, sync.ReadInt32());
                     Assert.Equal(1u, sync.ReadVarUInt32());
-                    sync.ReadGuid(); Assert.Equal(799u, sync.ReadVarUInt32()); sync.ReadUInt32();
+                    sync.ReadGuid(); Assert.Equal(799u, sync.ReadVarUInt32()); sync.ReadVarUInt32();
                     NetReader hostValue = new(sync.ReadBytesWithLength());
                     Assert.Equal(9, NetSerializer<int>.Read(ref hostValue));
                 }
@@ -237,7 +237,7 @@ public partial class NetworkingTests
         NetSerializer<int>.Write(payload, value);
         sync.WriteInt32(origin); sync.WriteVarUInt32(1);
         sync.WriteGuid(component.Identifier); sync.WriteVarUInt32(slot);
-        sync.WriteUInt32(generation); sync.WriteBytesWithLength(payload.WrittenSpan);
+        sync.WriteVarUInt32(generation); sync.WriteBytesWithLength(payload.WrittenSpan);
         return sync.ToArray();
     }
 
@@ -252,6 +252,7 @@ public partial class NetworkingTests
         {
             Guid id = reader.ReadGuid(); reader.ReadVarUInt32(); reader.ReadByte();
             uint generation = reader.ReadUInt32();
+            reader.ReadVarUInt32(); // Network id.
             if (id == root.Identifier) return generation;
         }
         throw new Exception("Missing network root");
@@ -277,7 +278,7 @@ public partial class NetworkingTests
             using NetWriter sync = new(), value = new();
             sync.WriteInt32(owner.Id); sync.WriteVarUInt32(1);
             sync.WriteGuid(component.Identifier); sync.WriteVarUInt32(NetCollectionTestComponent.HealthSlot);
-            sync.WriteUInt32(generation); NetSerializer<int>.Write(value, 0); sync.WriteBytesWithLength(value.WrittenSpan);
+            sync.WriteVarUInt32(generation); NetSerializer<int>.Write(value, 0); sync.WriteBytesWithLength(value.WrittenSpan);
             client.Session.SendRaw(client.Session.HostPeer!, FakePeer.Sync, sync.WrittenSpan);
             client.Session.Flush(); PumpFor(20, client);
             Assert.Equal(100, component.Health);

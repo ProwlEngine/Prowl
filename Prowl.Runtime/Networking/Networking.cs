@@ -309,6 +309,7 @@ public static partial class Networking
         ResetReadiness();
         s_scene = null;
         s_entries.Clear();
+        s_nextNetId = 0;
         s_index.Clear();
         s_dirty.Clear();
         SessionNumber++;

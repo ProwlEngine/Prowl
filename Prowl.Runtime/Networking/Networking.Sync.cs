@@ -14,7 +14,7 @@ namespace Prowl.Runtime.Networking;
 // or an ownership handoff sends them early, so they arrive ahead of it.
 //
 // A block of values, as in a Sync message, a snapshot or a spawn, is
-// [varuint count] then per value [guid component][varuint slot][u32 ownership generation][bytes value, length prefixed].
+// [varuint count] then per value [guid component][varuint slot][varuint ownership generation][bytes value, length prefixed].
 // Ongoing Sync messages prefix this block with [i32 original writer]. The length lets a receiver skip values for
 // components it doesn't have or won't accept.
 //
@@ -128,7 +128,7 @@ public static partial class Networking
 
         output.WriteGuid(component.Identifier);
         output.WriteVarUInt32(slot);
-        output.WriteUInt32(GenerationOf(component.GameObject));
+        output.WriteVarUInt32(GenerationOf(component.GameObject));
         output.WriteBytesWithLength(s_valueWriter.WrittenSpan);
         TraceMember("SyncVar", "Serialize", Session?.LocalPeer, component, slot, false, "Serialized",
             s_valueWriter.WrittenSpan);
@@ -218,7 +218,7 @@ public static partial class Networking
             {
                 Guid id = reader.ReadGuid();
                 uint slot = reader.ReadVarUInt32();
-                uint generation = reader.ReadUInt32();
+                uint generation = reader.ReadVarUInt32();
                 ReadOnlySpan<byte> value = reader.ReadBytesWithLength();
 
                 if (FindByIdentifier(id) is not Component component || NetworkAccessor.IsExcludedFromNetwork(component.GameObject))
@@ -243,7 +243,7 @@ public static partial class Networking
                 {
                     relay.WriteGuid(id);
                     relay.WriteVarUInt32(slot);
-                    relay.WriteUInt32(generation);
+                    relay.WriteVarUInt32(generation);
                     relay.WriteBytesWithLength(value);
                     relayed++;
                 }
@@ -267,7 +267,7 @@ public static partial class Networking
     {
         uint count = reader.ReadVarUInt32();
         // Each record needs a guid, slot, generation, and value length, even when it is skipped.
-        if (count > reader.Remaining / 22)
+        if (count > reader.Remaining / 19)
         {
             throw new InvalidDataException("Sync count exceeds the remaining data.");
         }
@@ -276,7 +276,7 @@ public static partial class Networking
         {
             Guid id = reader.ReadGuid();
             uint slot = reader.ReadVarUInt32();
-            uint generation = reader.ReadUInt32();
+            uint generation = reader.ReadVarUInt32();
             NetReader value = new(reader.ReadBytesWithLength());
             if (FindByIdentifier(id) is not Component component || NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
                 NetworkMembers.Of(component).Sync(slot) is not { } sync || !AcceptSync(sender, component, sync.Flags) ||

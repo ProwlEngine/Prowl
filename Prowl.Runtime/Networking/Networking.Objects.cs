@@ -3,7 +3,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Runtime.Diagnostics;
@@ -30,6 +32,11 @@ public static partial class Networking
     private static Dictionary<Guid, EngineObject>? s_spawning;
 
     private static uint NextGeneration() => checked(++s_nextGeneration);
+
+    // Host only. Zero is never an object.
+    private static uint s_nextNetId;
+
+    private static uint NextNetId() => checked(++s_nextNetId);
 
     /// <summary>The GameObject or Component with this identifier in the replicated scene, or null.</summary>
     internal static EngineObject? FindByIdentifier(Guid id)
@@ -102,6 +109,8 @@ public static partial class Networking
     private static int OwnerOf(GameObject go) => FindEntry(go)?.Owner ?? NoOwner;
 
     internal static uint GenerationOf(GameObject go) => FindEntry(go)?.Generation ?? 0;
+
+    internal static uint NetIdOf(GameObject go) => FindEntry(go)?.NetId ?? 0;
 
     internal static bool IsNetworked(GameObject go) => IsActive && FindEntry(go) is { TearingDown: false };
 
@@ -196,12 +205,12 @@ public static partial class Networking
         }
 
         NetworkEntry entry =
-            new(go) { Owner = owner?.Id ?? NoOwner, Orphaned = orphaned, Generation = NextGeneration() };
+            new(go) { Owner = owner?.Id ?? NoOwner, Orphaned = orphaned, Generation = NextGeneration(), NetId = NextNetId() };
         s_entries.Add(entry);
         IndexTree(go);
 
         using NetWriter message = new(4096);
-        WriteSpawn(go, entry.Owner, entry.Orphaned, message, entry.Generation);
+        WriteSpawn(go, entry.Owner, entry.Orphaned, message, entry.Generation, entry.NetId);
         BroadcastEngine(EngineMessage.Spawn, message.WrittenSpan);
         ControlChanged(go);
         NotifySpawn(entry);
@@ -209,7 +218,7 @@ public static partial class Networking
 
     /// <summary>A Spawn message: where the object goes, who owns it, the object itself and its [Sync] values.</summary>
     internal static void WriteSpawn(GameObject go, int owner, NetworkOrphaned orphaned, NetWriter output,
-        uint generation = 0)
+        uint generation = 0, uint netId = 0)
     {
         using FrameStatScope stats = FrameStats.Network.Scope();
         EchoObject echo;
@@ -232,6 +241,7 @@ public static partial class Networking
         output.WriteVarUInt32((uint)(owner + 1));
         output.WriteByte((byte)orphaned);
         output.WriteUInt32(generation);
+        output.WriteVarUInt32(netId == 0 ? NextNetId() : netId);
         output.WriteBytesWithLength(Compress(echo));
 
         List<GameObject> tree = [go, .. go.GetChildrenDeep()];
@@ -252,6 +262,7 @@ public static partial class Networking
         int owner = (int)reader.ReadVarUInt32() - 1;
         NetworkOrphaned orphaned = ReadOrphaned(ref reader);
         uint generation = reader.ReadUInt32();
+        uint netId = ReadNetId(ref reader);
         EchoObject echo = Decompress(reader.ReadBytesWithLength());
 
         GameObject? go =
@@ -299,7 +310,7 @@ public static partial class Networking
                 return;
             }
 
-            NetworkEntry entry = new(go) { Owner = owner, Orphaned = orphaned, Generation = generation };
+            NetworkEntry entry = new(go) { Owner = owner, Orphaned = orphaned, Generation = generation, NetId = netId };
             go.Network.ApplyOrphaned(orphaned);
             s_entries.Add(entry);
             ControlChanged(go);
@@ -426,6 +437,12 @@ public static partial class Networking
         message.WriteUInt32(entry.Generation);
         message.WriteByte((byte)orphaned);
         BroadcastEngine(EngineMessage.Orphaned, message.WrittenSpan);
+    }
+
+    private static uint ReadNetId(ref NetReader reader)
+    {
+        uint netId = reader.ReadVarUInt32();
+        return netId != 0 ? netId : throw new InvalidDataException("A networked object came without a network id.");
     }
 
     private static NetworkOrphaned ReadOrphaned(ref NetReader reader)
@@ -569,6 +586,12 @@ public static partial class Networking
         public bool HasSent;
         public uint LastReceivedTick;
         public double LastSentTime;
+
+        // Ticks each channel keeps being sent after it last changed, in case the change was lost.
+        public int LingerPosition, LingerRotation, LingerScale;
+
+        /// <summary>The host-assigned number messages use for this object in place of its identifier.</summary>
+        public uint NetId;
         public int NotifiedOwnerId = NoOwner;
         public NetworkOrphaned Orphaned;
         public int Owner = NoOwner;
@@ -583,30 +606,62 @@ public static partial class Networking
         public GameObject GameObject { get; } = gameObject;
     }
 
-    private sealed class EntryTable : Dictionary<Guid, NetworkEntry>
+    /// <summary>The session's networked objects, by identifier and by <see cref="NetworkEntry.NetId" />.</summary>
+    private sealed class EntryTable
     {
-        public void Add(NetworkEntry entry) => this[entry.GameObject.Identifier] = entry;
+        private readonly Dictionary<Guid, NetworkEntry> _byId = new();
+        private readonly Dictionary<uint, NetworkEntry> _byNetId = new();
 
-        public bool Contains(Guid id) => ContainsKey(id);
+        public int Count => _byId.Count;
+
+        public IEnumerable<NetworkEntry> Values => _byId.Values;
+
+        public void Add(NetworkEntry entry)
+        {
+            Remove(entry.GameObject.Identifier);
+            _byId[entry.GameObject.Identifier] = entry;
+            if (entry.NetId != 0)
+            {
+                _byNetId[entry.NetId] = entry;
+            }
+        }
+
+        public bool Contains(Guid id) => _byId.ContainsKey(id);
+
+        public bool TryGetValue(Guid id, [NotNullWhen(true)] out NetworkEntry? entry) => _byId.TryGetValue(id, out entry);
+
+        public bool TryGetNet(uint netId, [NotNullWhen(true)] out NetworkEntry? entry) =>
+            _byNetId.TryGetValue(netId, out entry);
+
+        public bool Remove(Guid id) => Remove(id, out _);
+
+        public bool Remove(Guid id, [NotNullWhen(true)] out NetworkEntry? entry)
+        {
+            if (!_byId.Remove(id, out entry))
+            {
+                return false;
+            }
+
+            if (_byNetId.TryGetValue(entry.NetId, out NetworkEntry? indexed) && indexed == entry)
+            {
+                _byNetId.Remove(entry.NetId);
+            }
+
+            return true;
+        }
 
         public void RemoveWhere(Func<NetworkEntry, bool> predicate)
         {
-            List<Guid>? doomed = null;
-            foreach ((Guid id, NetworkEntry entry) in this)
+            foreach (NetworkEntry entry in _byId.Values.Where(predicate).ToArray())
             {
-                if (predicate(entry))
-                {
-                    (doomed ??= new List<Guid>()).Add(id);
-                }
+                Remove(entry.GameObject.Identifier);
             }
+        }
 
-            if (doomed != null)
-            {
-                foreach (Guid id in doomed)
-                {
-                    Remove(id);
-                }
-            }
+        public void Clear()
+        {
+            _byId.Clear();
+            _byNetId.Clear();
         }
     }
 }

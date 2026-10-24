@@ -33,7 +33,7 @@ the payload cannot fit. Transform batches are split at record boundaries for eac
 message limit; reliable fallback can use Warp fragmentation even when one transform cannot fit
 in a datagram. Reliable fallback can add latency under packet loss. Raw Warp messages keep their
 explicit delivery requirements. The session's configured `MaxMessageSize` must allow at least
-74 bytes for scene replication; this is a logical message limit, not a transport packet limit.
+70 bytes for scene replication; this is a logical message limit, not a transport packet limit.
 
 Incoming scenes and spawned objects have separate local decoding budgets, available in project
 networking settings or `NetworkConfiguration`: `MaxSnapshotDecompressedBytes` (64 MiB),
@@ -69,9 +69,12 @@ The host's configuration controls which channels receivers apply, including RPC 
 catch-up, and ownership handoff. Disabled channels keep their local values. Initial scene/spawn
 poses still include the complete transform. Old interpolation samples are discarded when flags change.
 
-Transforms are sent every tick an object moves (changes below a small epsilon don't count). Once it
-has been still for a few ticks, its final pose is sent reliably and nothing more is sent until it
-moves again. Objects marked `IsStatic` are not transform-synced at all.
+Transforms are sent every tick an object moves, and only the channels that changed (changes below a
+small epsilon don't count); a channel keeps going for a few ticks after it stops, in case its last
+change was lost. Records name objects by a small host-assigned id, share one tick and timestamp per
+message, and send rotations in 4 bytes while moving. Once an object has been still for a few ticks,
+its full pose is sent reliably at full precision, and nothing more until it moves again. Objects
+marked `IsStatic` are not transform-synced at all.
 
 ```csharp
 public struct Loadout { public int Ammo; public string Weapon; }
@@ -330,5 +333,5 @@ before mutation. Clients cannot destroy replicated roots locally. Ordinary edits
 replicated trees remain available. Use the GameObject/Scene mutation APIs; editing `Children` directly
 is unsupported. Structural delta replication and gameplay readiness remain future work.
 
-The engine Sync/RPC wire layout changed with these guarantees; scene snapshots use format 10. Peers
+The engine Sync/RPC wire layout changed with these guarantees; scene snapshots use format 11. Peers
 must run matching engine builds.

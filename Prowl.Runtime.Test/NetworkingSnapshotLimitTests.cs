@@ -131,11 +131,11 @@ public partial class NetworkingTests
                 if (spawn)
                 {
                     w.WriteGuid(Guid.NewGuid()); w.WriteGuid(Guid.Empty); w.WriteVarUInt32(0);
-                    w.WriteByte((byte)NetworkOrphaned.Destroy); w.WriteUInt32(1);
+                    w.WriteByte((byte)NetworkOrphaned.Destroy); w.WriteUInt32(1); w.WriteVarUInt32(1);
                 }
                 else
                 {
-                    w.WriteByte(9); w.WriteUInt64(1); w.WriteString("Oversized");
+                    w.WriteByte(11); w.WriteUInt64(1); w.WriteString("Oversized"); // The current snapshot format.
                 }
                 w.WriteBytesWithLength(malformed);
             }, peer);

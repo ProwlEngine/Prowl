@@ -12,8 +12,8 @@ public partial class NetworkingTests
     [Fact]
     public void SceneSessionsRejectSessionLimitsSmallerThanOneTransformBeforeIo()
     {
-        using LimitedTransport transport = new(new(), _ => 74);
-        NetSessionOptions options = new() { MaxMessageSize = 73 };
+        using LimitedTransport transport = new(new(), _ => 70);
+        NetSessionOptions options = new() { MaxMessageSize = 69 };
         Assert.Throws<NotSupportedException>(() => Networking.Networking.Host(transport, options: options));
         Assert.Throws<NotSupportedException>(() => Networking.Networking.Join(transport, "host", "client", options: options));
         Assert.Equal(0, transport.Starts);
@@ -21,12 +21,12 @@ public partial class NetworkingTests
     }
 
     [Theory]
-    [InlineData(false, NetworkExecution.Inline, 74, DeliverySupport.All)]
-    [InlineData(true, NetworkExecution.Inline, 74, DeliverySupport.All)]
-    [InlineData(false, NetworkExecution.DedicatedThread, 74, DeliverySupport.All)]
-    [InlineData(true, NetworkExecution.DedicatedThread, 74, DeliverySupport.All)]
-    [InlineData(false, NetworkExecution.Inline, 73, DeliverySupport.All)]
-    [InlineData(true, NetworkExecution.DedicatedThread, 73, DeliverySupport.All)]
+    [InlineData(false, NetworkExecution.Inline, 70, DeliverySupport.All)]
+    [InlineData(true, NetworkExecution.Inline, 70, DeliverySupport.All)]
+    [InlineData(false, NetworkExecution.DedicatedThread, 70, DeliverySupport.All)]
+    [InlineData(true, NetworkExecution.DedicatedThread, 70, DeliverySupport.All)]
+    [InlineData(false, NetworkExecution.Inline, 69, DeliverySupport.All)]
+    [InlineData(true, NetworkExecution.DedicatedThread, 69, DeliverySupport.All)]
     [InlineData(false, NetworkExecution.Inline, 0, DeliverySupport.Reliable)]
     [InlineData(true, NetworkExecution.DedicatedThread, 0, DeliverySupport.Reliable)]
     public void TransformBatchesAndRelaysRespectEachConnectionsLimit(bool batching, NetworkExecution execution, int smallLimit, DeliverySupport deliveries)
@@ -51,12 +51,13 @@ public partial class NetworkingTests
                 return go;
             }).ToArray();
             Pump(() => TransformIds(small).Count == 5 && TransformIds(wide).Count == 5, peers);
-            int smallMax = smallLimit >= 74 ? 72 : 1000;
-            int wideMax = deliveries == DeliverySupport.Reliable ? 1000 : 144;
+            // Under 70 bytes a datagram can't hold one whole record, so transforms fall back to reliable delivery.
+            int smallMax = smallLimit >= 70 ? smallLimit - 2 : 1000;
+            int wideMax = deliveries == DeliverySupport.Reliable ? 1000 : 155 - 2;
             AssertTransformBatches(small, smallMax, objects);
             AssertTransformBatches(wide, wideMax, objects);
             Assert.All(small.Deliveries.Where(m => m.Id == FakePeer.Transform), m =>
-                Assert.Equal(smallLimit < 74 ? Delivery.Reliable : Delivery.Unreliable, m.Delivery));
+                Assert.Equal(smallLimit < 70 ? Delivery.Reliable : Delivery.Unreliable, m.Delivery));
 
             StaticRpcMember rpc = new(typeof(NetworkingTests), 998, "Broadcast", RpcMode.Broadcast, RpcFlags.Unreliable,
                 static (ref NetReader reader, bool execute) => { });
@@ -75,16 +76,8 @@ public partial class NetworkingTests
             foreach (FakePeer peer in peers) peer.WireReceived.Clear();
 
             using NetWriter message = new();
-            foreach (GameObject go in objects)
-            {
-                message.WriteGuid(go.Identifier);
-                message.WriteUInt32(Networking.Networking.GenerationOf(go));
-                message.WriteUInt32(500);
-                message.WriteDouble(10);
-                NetSerializers.WriteFloat3(message, new Float3(42, 0, 0));
-                NetSerializers.WriteQuaternion(message, Quaternion.Identity);
-                NetSerializers.WriteFloat3(message, new Float3(1, 1, 1));
-            }
+            WriteTransforms(message, 500, 10, objects.Select(go => (Networking.Networking.NetIdOf(go),
+                Networking.Networking.GenerationOf(go), new Float3(42, 0, 0), Quaternion.Identity, Float3.One)).ToArray());
             sender.Session.SendRaw(sender.Session.HostPeer!, FakePeer.Transform, message.WrittenSpan,
                 deliveries == DeliverySupport.Reliable ? Delivery.Reliable : Delivery.Unreliable);
             Pump(() => TransformIds(small).Count == 5 && TransformIds(wide).Count == 5, peers);
@@ -127,10 +120,11 @@ public partial class NetworkingTests
             local.Transform.LocalPosition = new Float3(42, 0, 0);
             Pump(() => host.Has(FakePeer.Transform) && host.WireReceived.Any(m => m.Id == FakePeer.Transform), host);
             Assert.All(host.Deliveries.Where(m => m.Id == FakePeer.Transform), m => Assert.Equal(Delivery.Reliable, m.Delivery));
-            Assert.Contains(ship.Identifier, TransformIds(host));
-            NetReader transform = new(host.WireReceived.Last(m => m.Id == FakePeer.Transform).Data);
-            transform.ReadBytes(32); // Identifier, ownership generation, tick, and sender time.
-            Assert.Equal(new Float3(42, 0, 0), NetSerializers.ReadFloat3(ref transform));
+            uint shipNetId = Networking.Networking.NetIdOf(local);
+            Assert.Contains(shipNetId, TransformIds(host));
+            TransformRecord moved = ReadTransforms(host.WireReceived.Last(m => m.Id == FakePeer.Transform).Data)
+                .Single(r => r.NetId == shipNetId);
+            Assert.Equal(new Float3(42, 0, 0), moved.Position);
 
             StaticRpcMember rpc = new(typeof(NetworkingTests), 999, "Test", RpcMode.Host, RpcFlags.Unreliable,
                 static (ref NetReader reader, bool execute) => { });
@@ -143,24 +137,18 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
     }
 
-    private static HashSet<Guid> TransformIds(FakePeer peer)
-    {
-        HashSet<Guid> ids = new();
-        foreach (var message in peer.WireReceived.Where(m => m.Id == FakePeer.Transform))
-        {
-            NetReader reader = new(message.Data);
-            while (!reader.IsAtEnd) { ids.Add(reader.ReadGuid()); reader.ReadBytes(56); }
-        }
-        return ids;
-    }
+    private static HashSet<uint> TransformIds(FakePeer peer) =>
+        peer.WireReceived.Where(m => m.Id == FakePeer.Transform)
+            .SelectMany(m => ReadTransforms(m.Data)).Select(r => r.NetId).ToHashSet();
 
     private static void AssertTransformBatches(FakePeer peer, int maxPayload, GameObject[] objects)
     {
-        Assert.True(TransformIds(peer).SetEquals(objects.Select(go => go.Identifier)));
+        Assert.True(TransformIds(peer).SetEquals(objects.Select(Networking.Networking.NetIdOf)));
+        // Every message fits the connection, and holds whole records.
         Assert.All(peer.WireReceived.Where(m => m.Id == FakePeer.Transform), m =>
         {
-            Assert.InRange(m.Data.Length, 72, maxPayload);
-            Assert.Equal(0, m.Data.Length % 72);
+            Assert.InRange(m.Data.Length, 1, maxPayload);
+            Assert.NotEmpty(ReadTransforms(m.Data));
         });
     }
 
