@@ -16,7 +16,7 @@ file static class RecordPasses
                 using (graph.Group("View " + i))
                 {
                     TextureHandle target = graph.Create("recording_target", GraphTextureDesc.Sized(16, 16, PixelFormat.R8_G8_B8_A8_UNorm), scope: i);
-                    graph.AddPass("Clear", pass => pass.Write(target, firstWrite: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 255))), _ => { });
+                    graph.AddPass("Clear", pass => pass.Write(target, firstWrite: TargetLoadStoreOps.Clear(Color.FromBytes(0, 0, 0, 255))), _ => { });
                 }
             }
         }

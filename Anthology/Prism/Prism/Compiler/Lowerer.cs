@@ -434,7 +434,7 @@ public sealed partial class Lowerer
         // A Lowerer that does not own this thread's pooled resources must not rewind or draw from the
         // shared instruction pool either.
         if (!_ownsPool) InstrPool.PushBypass();
-        try { return LowerCore(unit); }
+        try { return LowerCore(CombinedSamplerArguments.Split(unit)); }
         catch (GlslParseException e) when (!e.Located) { throw e.Resolve(unit.SourceNames); }
         finally { _lowering = false; if (!_ownsPool) InstrPool.PopBypass(); }
     }
@@ -5322,7 +5322,7 @@ public sealed partial class Lowerer
         uint tempReturn = outConversions && fn.ReturnType is not ScalarType { Kind: Scalar.Void } ? TempReturnGlobal(fn.ReturnType) : 0;
         if (tempReturn != 0 && fn.ReturnRelaxed) Relax(tempReturn);
 
-        var opaquePtr = new uint?[n];
+        var opaqueChain = new Chain?[n];
         var savedChain = new Chain?[n];
         var savedRValue = new Value?[n];
         var savedSwizzle = new (Value Base, int[] Select)?[n];
@@ -5334,12 +5334,13 @@ public sealed partial class Lowerer
             // Opaque types (samplers/images/textures) cannot be copied into a Function-storage local;
             // they are passed by their UniformConstant pointer directly. The pointee types must match
             // exactly, so a mismatch throws rather than emitting a call with the wrong argument type.
+            // Only the chain's indices are evaluated here, its access chain waits for step 2.
             if (PassedByPointer(p.Type))
             {
-                var opaque = ResolveAccess(call.Args[i]);
+                var opaque = BuildAccess(call.Args[i]);
                 if (!opaque.Type.Equals(p.Type))
                     throw new GlslParseException($"argument '{p.Name}': an opaque argument must match the parameter type exactly (samplers/images, including image format)");
-                opaquePtr[i] = opaque.Pointer;
+                opaqueChain[i] = opaque;
             }
             // A swizzle is not code: glslang keeps it in the access chain and only resolves it in step 2,
             // after the copy temp exists. This holds whether the swizzled vector is addressable or an
@@ -5412,7 +5413,7 @@ public sealed partial class Lowerer
         for (int i = 0; i < n; i++)
         {
             var p = fn.Params[i];
-            if (opaquePtr[i] is { } ptr) { argPtrs[i] = ptr; continue; }
+            if (opaqueChain[i] is { } opaque) { argPtrs[i] = Collapse(opaque, lValueOnly: true); continue; }
             // Nothing can write a `const in` parameter, so it needs no copy: pass the value itself.
             if (p.ByValue) { argPtrs[i] = savedRValue[i]!.Value.Id; continue; }
             uint ptrType = _m.TypePointer(StorageClass.Function, SpvType(p.Type));
@@ -7039,12 +7040,16 @@ public sealed partial class Lowerer
                  || call.Name.StartsWith("imageAtomicStore", StringComparison.Ordinal) || call.Name.StartsWith("imageAtomicMin", StringComparison.Ordinal)
                  || call.Name.StartsWith("imageAtomicMax", StringComparison.Ordinal)))
             throw new GlslParseException($"'{call.Name}' : only supported on integer images");
-        var coord = LowerExpr(call.Args[1]);
         // glslang evaluates every argument before building the texel pointer, so the data operands'
         // constants come first (the scope/semantics constants then often just reuse them).
         int dataArgs = call.Name switch { "imageAtomicCompSwap" => 2, "imageAtomicLoad" => 0, _ => 1 }, msArg = img.Multisampled ? 1 : 0;
-        var operands = call.Args.Skip(2).Select((a, i) => i >= msArg && i - msArg < dataArgs
-            ? LowerArgAs(a, new ScalarType(img.Sampled), $"argument {i + 3} of '{call.Name}'") : LowerExpr(a)).ToArray();
+        GlslType? Target(int arg) => arg - 2 >= msArg && arg - 2 - msArg < dataArgs ? new ScalarType(img.Sampled) : null;
+        var lowered = new Value[call.Args.Count];
+        for (int i = 1; i < lowered.Length; i++)
+            lowered[i] = i > 1 && RepeatsPreviousSymbol(call, i, Target) ? lowered[i - 1]
+                : Target(i) is { } t ? LowerArgAs(call.Args[i], t, $"argument {i + 1} of '{call.Name}'") : LowerExpr(call.Args[i]);
+        var coord = lowered[1];
+        var operands = lowered[2..];
         int next = 0;
         // A multisampled image takes its sample index as the texel pointer's Sample operand; otherwise it is 0.
         uint sample = img.Multisampled ? operands[next++].Id : _m.ConstantInt(SpvType(Types.UInt), 0);
@@ -8739,7 +8744,8 @@ public sealed partial class Lowerer
     }
 
     // Emits the single collapsed OpAccessChain (or just returns the base when there are no indices).
-    uint Collapse(Chain c)
+    // A bare l-value (glslang accessChainGetLValue) is not decorated NonUniform.
+    uint Collapse(Chain c, bool lValueOnly = false)
     {
         uint[] indices = c.DeferredComp >= 0
             ? [.. c.Indices, _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)c.DeferredComp)]
@@ -8757,7 +8763,7 @@ public sealed partial class Lowerer
             if (c.Type is BufferReferenceType loadedRef) bits |= _bufferRefAlign.GetValueOrDefault(loadedRef.Name, 16);
             _physAligned[result] = (uint)(bits & -bits);
         }
-        if (indices.Any(_nonUniformIds.Contains)) { _m.Decorate(result, Decoration.NonUniform); _nonUniformIds.Add(result); }
+        if (!lValueOnly && indices.Any(_nonUniformIds.Contains)) { _m.Decorate(result, Decoration.NonUniform); _nonUniformIds.Add(result); }
         return result;
     }
 

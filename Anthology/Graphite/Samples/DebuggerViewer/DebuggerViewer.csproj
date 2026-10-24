@@ -9,6 +9,7 @@
     <ItemGroup>
         <ProjectReference Include="../Shared/Shared.csproj" />
         <ProjectReference Include="../../Debugger/Prowl.Graphite.Debugger.csproj" />
+        <ProjectReference Include="../../Debugger/Viewer/Prowl.Graphite.Debugger.Viewer.csproj" />
         <ProjectReference Include="../PBRRenderer/PBRRenderer.csproj" />
     </ItemGroup>
 

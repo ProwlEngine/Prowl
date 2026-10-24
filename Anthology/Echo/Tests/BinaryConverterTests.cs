@@ -95,6 +95,64 @@ public class BinaryTagConverterTests
     [Theory]
     [InlineData(BinaryEncodingMode.Performance)]
     [InlineData(BinaryEncodingMode.Size)]
+    public void TestCompressedTagIsReadFromItsHeaderAndStopsAtItsEnd(BinaryEncodingMode mode)
+    {
+        var compound = EchoObject.NewCompound();
+        var bytes = new byte[1 << 20];
+        bytes[12345] = 7;
+        compound.Add("bytes", new EchoObject(EchoType.ByteArray, bytes));
+
+        using var stream = new MemoryStream();
+        EchoBinaryFormat.WriteToFile(compound, stream, new BinarySerializationOptions { EncodingMode = mode, Compressed = true });
+        stream.Write(BitConverter.GetBytes(42));
+
+        stream.Position = 0;
+        var deserialized = EchoBinaryFormat.ReadFromFile(stream);
+
+        Assert.True(stream.Length < bytes.Length / 100);
+        Assert.Equal(bytes, deserialized.Get("bytes").ByteArrayValue);
+        Assert.Equal(42, new BinaryReader(stream).ReadInt32());
+    }
+
+    [Fact]
+    public void TestWriterOutputHasNoHeader()
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
+            new EchoObject(42).WriteToBinary(writer, new BinarySerializationOptions { Compressed = true });
+
+        Assert.Equal((byte)EchoType.Int, stream.ToArray()[0]);
+        stream.Position = 0;
+        Assert.Equal(42, EchoObject.ReadFromBinary(new BinaryReader(stream)).IntValue);
+    }
+
+    [Fact]
+    public void TestDataWithoutAHeaderStillReads()
+    {
+        byte[] legacy = [(byte)EchoType.Int, 0x2A, 0, 0, 0];
+        Assert.Equal(42, EchoBinaryFormat.ReadFromFile(new MemoryStream(legacy)).IntValue);
+    }
+
+    [Fact]
+    public void TestWritingAFileReplacesALongerOne()
+    {
+        var file = new FileInfo(Path.GetTempFileName());
+        try
+        {
+            new EchoObject(EchoType.ByteArray, new byte[4096]).WriteToBinary(file);
+            new EchoObject(EchoType.Int, 42).WriteToBinary(file);
+            file.Refresh();
+            Assert.True(file.Length < 32);
+        }
+        finally
+        {
+            file.Delete();
+        }
+    }
+
+    [Theory]
+    [InlineData(BinaryEncodingMode.Performance)]
+    [InlineData(BinaryEncodingMode.Size)]
     public void TestNestedCompounds(BinaryEncodingMode mode)
     {
         // Arrange

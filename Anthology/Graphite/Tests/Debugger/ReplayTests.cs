@@ -13,7 +13,7 @@ namespace Prowl.Graphite.Debugger.Tests;
 
 file static class Passes
 {
-    private static readonly Prowl.Vector.Color Black = new(0, 0, 0, 255);
+    private static readonly Prowl.Vector.Color Black = Prowl.Vector.Color.FromBytes(0, 0, 0, 255);
 
     public static void Events(FrameGraph graph, RenderTexture target, RenderTexture storage, GraphicsProgram program, ComputeProgram compute, Texture source, Sampler sampler)
     {
@@ -36,7 +36,7 @@ file static class Passes
             cmd.PushDebugGroup("First");
             cmd.Draw(3);
             cmd.PopDebugGroup();
-            cmd.ClearColorTarget(0, new Prowl.Vector.Color(0, 0, 255, 255));
+            cmd.ClearColorTarget(0, Prowl.Vector.Color.FromBytes(0, 0, 255, 255));
             cmd.SetScissor(0, 0, 4, 8);
             cmd.Draw(3);
 
@@ -407,14 +407,17 @@ public class ReplayTests
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
         DeepRecording deep = RecordSample(device);
 
-        DebuggerSerialization.Register();
-        using MemoryStream stream = new();
-        using (BinaryWriter writer = new(stream, System.Text.Encoding.UTF8, true))
-            Serializer.Serialize(deep).WriteToBinary(writer);
-
-        stream.Position = 0;
-        using BinaryReader reader = new(stream);
-        DeepRecording loaded = Serializer.Deserialize<DeepRecording>(EchoObject.ReadFromBinary(reader))!;
+        string path = Path.GetTempFileName();
+        DeepRecording loaded;
+        try
+        {
+            DebuggerSerialization.Save(deep, path);
+            loaded = DebuggerSerialization.Load(path);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
 
         ReplayResult expected = ReplayFirstEvent(device, deep);
         ReplayResult actual = ReplayFirstEvent(device, loaded);
@@ -536,7 +539,10 @@ public class ReplayTests
         ReplayResult whole = replayer.Replay(Request(null));
         ReplayResult last = replayer.Replay(Request(3));
         ReplayResult first = replayer.Replay(Request(0));
+        ReplayResult none = replayer.Replay(Request(-1));
 
+        Assert.True(none.Status == ReplayStatus.Reexecuted, none.Reason);
+        Assert.NotEqual(first.Outputs[0].Data, none.Outputs[0].Data);
         Assert.True(last.Status == ReplayStatus.Reexecuted, last.Reason);
         Assert.Equal(2, last.Outputs.Length);
         Assert.Equal(whole.Outputs.Select(o => o.Data), last.Outputs.Select(o => o.Data));

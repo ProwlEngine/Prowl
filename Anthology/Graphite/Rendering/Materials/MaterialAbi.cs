@@ -52,6 +52,7 @@ internal static class GraphiteBindings
     public const int ScreenSampler = 33;
     public const int SceneColor = 34;
     public const int SceneColorSampler = 35;
+    public const int SceneDepth = 36;
 
     public const int Materials = 0;
     public const int Instances = 1;
@@ -114,7 +115,8 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_ScreenIrradiance", ResourceKind.TextureReadOnly, Graphics, ScreenIrradiance),
         new ResourceLayoutElementDescription("Graphite_ScreenSampler", ResourceKind.Sampler, Graphics, ScreenSampler),
         new ResourceLayoutElementDescription("Graphite_SceneColor", ResourceKind.TextureReadOnly, Graphics, SceneColor),
-        new ResourceLayoutElementDescription("Graphite_SceneColorSampler", ResourceKind.Sampler, Graphics, SceneColorSampler))
+        new ResourceLayoutElementDescription("Graphite_SceneColorSampler", ResourceKind.Sampler, Graphics, SceneColorSampler),
+        new ResourceLayoutElementDescription("Graphite_SceneDepth", ResourceKind.TextureReadOnly, Graphics, SceneDepth))
     {
         Table = true,
     };

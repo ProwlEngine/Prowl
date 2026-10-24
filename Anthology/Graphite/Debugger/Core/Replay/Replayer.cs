@@ -46,7 +46,7 @@ public sealed class Replayer
         if (request.EventIndex is { } eventIndex)
         {
             int events = pass.Commands.Count(ReplayEvents.IsEvent);
-            if (eventIndex < 0 || eventIndex >= events)
+            if (eventIndex < -1 || eventIndex >= events)
                 return NotReplayable($"Event {eventIndex} is out of range, pass {pass.Name} has {events} events.");
         }
 

@@ -58,6 +58,8 @@ internal sealed class ViewGraph
 
     private bool DepthDrawable(PixelFormat format) => Frame.Device.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.DepthStencil | TextureUsage.Sampled);
 
+    public PixelFormat SceneDepthFormat => SceneDepth(DepthDrawable);
+
     public PixelFormat ColorFormat => ColorFormatOf(Shape);
 
     public PixelFormat ColorFormatOf(in CameraShape shape) => shape.Ldr ? LdrColorFormat : SceneFormats(ColorDrawable)[0];

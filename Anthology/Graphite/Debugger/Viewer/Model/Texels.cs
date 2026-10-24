@@ -12,7 +12,8 @@ internal static class Texels
 
     public static bool CanDecode(PixelFormat format) => !format.ToString().StartsWith("BC", StringComparison.Ordinal) && !format.ToString().StartsWith("ETC", StringComparison.Ordinal);
 
-    public static int Stride(PixelFormat format) => IsDepth(format) ? 4 : (int)format.GetSizeInBytes();
+    // Matches CaptureCopyPlanner: depth planes are copied at 4 bytes a texel, except D16 at 2.
+    public static int Stride(PixelFormat format) => format == PixelFormat.D16_UNorm ? 2 : IsDepth(format) ? 4 : (int)format.GetSizeInBytes();
 
     public static Float4 Read(ReadOnlySpan<byte> data, in CopyRegion region, int x, int y)
     {
@@ -84,9 +85,21 @@ internal static class Texels
         }
     }
 
-    public static byte[] ToRgba8(ReadOnlySpan<byte> data, in CopyRegion region)
+    private const long PreviewTexels = 1 << 21;
+
+    /// <summary>Texels skipped per preview pixel, so a preview of the region stays under about two million pixels.</summary>
+    public static int PreviewStep(in CopyRegion region)
     {
-        int width = (int)region.Width, height = (int)region.Height;
+        long texels = (long)region.Width * region.Height;
+        return texels <= PreviewTexels ? 1 : (int)Math.Ceiling(Math.Sqrt((double)texels / PreviewTexels));
+    }
+
+    public static (int Width, int Height) PreviewSize(in CopyRegion region, int step)
+        => ((int)((region.Width + step - 1) / step), (int)((region.Height + step - 1) / step));
+
+    public static byte[] ToRgba8(ReadOnlySpan<byte> data, in CopyRegion region, int step = 1)
+    {
+        (int width, int height) = PreviewSize(region, step);
         byte[] pixels = new byte[width * height * 4];
         if (!CanDecode(region.Format))
             return pixels;
@@ -95,12 +108,12 @@ internal static class Texels
         bool single = Channels(region.Format) == 1;
         float min = 0, max = 1;
         if (depth)
-            Range(data, region, out min, out max);
+            Range(data, region, step, out min, out max);
 
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
             {
-                Float4 v = Read(data, region, x, y);
+                Float4 v = Read(data, region, x * step, y * step);
                 int o = (y * width + x) * 4;
                 if (depth)
                 {
@@ -133,12 +146,82 @@ internal static class Texels
         return Math.Max(1, count);
     }
 
-    private static void Range(ReadOnlySpan<byte> data, in CopyRegion region, out float min, out float max)
+    /// <summary>Marks each preview pixel whose block of texels differs between the two copies of the region.</summary>
+    public static bool[] Changed(ReadOnlySpan<byte> before, ReadOnlySpan<byte> after, in CopyRegion region, int step)
+    {
+        (int width, int height) = PreviewSize(region, step);
+        bool[] changed = new bool[width * height];
+        int stride = Stride(region.Format), rowBytes = (int)region.Width * stride;
+        for (int y = 0; y < region.Height; y++)
+        {
+            if (!TryRow(before, after, region, y, rowBytes, out ReadOnlySpan<byte> a, out ReadOnlySpan<byte> b) || a.SequenceEqual(b))
+                continue;
+
+            int row = y / step * width;
+            for (int x = 0; x < width; x++)
+            {
+                int start = x * step * stride, length = Math.Min(step * stride, rowBytes - start);
+                if (!changed[row + x] && !a.Slice(start, length).SequenceEqual(b.Slice(start, length)))
+                    changed[row + x] = true;
+            }
+        }
+        return changed;
+    }
+
+    /// <summary>Every texel that differs between the two copies of the region, at full resolution.</summary>
+    public static TexelChanges Diff(ReadOnlySpan<byte> before, ReadOnlySpan<byte> after, in CopyRegion region)
+    {
+        int stride = Stride(region.Format), width = (int)region.Width, rowBytes = width * stride;
+        int x0 = int.MaxValue, x1 = -1, y0 = int.MaxValue, y1 = -1;
+        for (int y = 0; y < region.Height; y++)
+        {
+            if (!TryRow(before, after, region, y, rowBytes, out ReadOnlySpan<byte> a, out ReadOnlySpan<byte> b) || a.SequenceEqual(b))
+                continue;
+
+            int last = width - 1;
+            while (a.Slice(last * stride, stride).SequenceEqual(b.Slice(last * stride, stride)))
+                last--;
+            x0 = Math.Min(x0, a.CommonPrefixLength(b) / stride);
+            x1 = Math.Max(x1, last);
+            y0 = Math.Min(y0, y);
+            y1 = y;
+        }
+
+        if (x1 < 0)
+            return TexelChanges.None;
+
+        TexelChanges changes = new(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+        for (int y = y0; y <= y1; y++)
+        {
+            TryRow(before, after, region, y, rowBytes, out ReadOnlySpan<byte> a, out ReadOnlySpan<byte> b);
+            int start = x0 * stride, end = (x1 + 1) * stride;
+            while (start < end)
+            {
+                start += a[start..end].CommonPrefixLength(b[start..end]);
+                if (start >= end)
+                    break;
+                changes.Add(start / stride, y);
+                start = (start / stride + 1) * stride;
+            }
+        }
+        return changes;
+    }
+
+    private static bool TryRow(ReadOnlySpan<byte> before, ReadOnlySpan<byte> after, in CopyRegion region, int y, int rowBytes, out ReadOnlySpan<byte> a, out ReadOnlySpan<byte> b)
+    {
+        int offset = (int)region.Offset + y * rowBytes;
+        bool inside = offset + rowBytes <= before.Length && offset + rowBytes <= after.Length;
+        a = inside ? before.Slice(offset, rowBytes) : default;
+        b = inside ? after.Slice(offset, rowBytes) : default;
+        return inside;
+    }
+
+    private static void Range(ReadOnlySpan<byte> data, in CopyRegion region, int step, out float min, out float max)
     {
         min = float.MaxValue;
         max = float.MinValue;
-        for (int y = 0; y < region.Height; y++)
-            for (int x = 0; x < region.Width; x++)
+        for (int y = 0; y < region.Height; y += step)
+            for (int x = 0; x < region.Width; x += step)
             {
                 float d = Read(data, region, x, y).X;
                 if (d is <= 0f or >= 1f)

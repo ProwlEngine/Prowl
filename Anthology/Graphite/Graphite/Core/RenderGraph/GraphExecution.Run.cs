@@ -84,7 +84,7 @@ internal sealed partial class GraphExecution
             submitted = true;
             EndCommandBuffer(passCommands);
             AdoptPassStates(passCommands);
-            stats = stats with { CpuMilliseconds = Stopwatch.GetElapsedTime(recordStart).TotalMilliseconds };
+            stats = stats with { CpuMilliseconds = Stopwatch.GetElapsedTime(recordStart).TotalMilliseconds - Stopwatch.GetElapsedTime(0, passCommands.SinkTicks).TotalMilliseconds };
             MarkAttachmentWrites(pass);
             capture?.EndPass(index, passCommands);
             ended = true;

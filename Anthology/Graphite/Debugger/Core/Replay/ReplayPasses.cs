@@ -94,6 +94,8 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
         foreach (RecordedCommand command in pass.Commands)
         {
             bool isEvent = ReplayEvents.IsEvent(command);
+            if (isEvent && lastEvent < 0)
+                break;
             _slice = isEvent && events + 1 == lastEvent ? slice : null;
             Execute(cmd, command);
             if (isEvent && ++events == lastEvent)

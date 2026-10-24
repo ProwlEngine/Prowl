@@ -11,6 +11,7 @@
     </Folder>
     <Folder Name="/Debugger/">
         <Project Path="Debugger/Prowl.Graphite.Debugger.csproj" />
+        <Project Path="Debugger/Viewer/Prowl.Graphite.Debugger.Viewer.csproj" />
     </Folder>
     <Folder Name="/Rendering/">
         <Project Path="Rendering/Prowl.Graphite.Rendering.csproj" />

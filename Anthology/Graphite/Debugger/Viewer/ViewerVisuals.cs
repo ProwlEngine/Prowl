@@ -23,13 +23,38 @@ internal sealed partial class ProfilerView
 {
     private static readonly string[] MeshOverlays = { "None", "Normals", "UV layout" };
 
-    private readonly Dictionary<(int, int, int?, IndirectSlice?), ReplayResult> _replays = new();
-    private readonly Dictionary<string, (object Texture, int Width, int Height, string Version)> _textures = new();
+    private const int KeptReplays = 4;
+    private const long RecentMilliseconds = 1000;
+    private const double TrackBudgetMilliseconds = 30;
+
+    private sealed class SharedTexture(object texture)
+    {
+        public readonly object Texture = texture;
+        public int Users;
+    }
+
+    private sealed class PixelTrack
+    {
+        public readonly List<TexelChanges> Changes = new();
+        public ReplayOutput? Previous;
+        public CopyRegion Region;
+        public string? Failure;
+    }
+
+    private readonly Dictionary<(int, int, int?, IndirectSlice?), (ReplayResult Result, long Seen)> _replays = new();
+    private readonly Dictionary<string, SharedTexture> _shared = new();
+    private readonly Dictionary<string, (string Key, long Seen)> _slots = new();
+    private readonly Dictionary<(int, int, TraceResourceId, int), PixelTrack> _tracks = new();
     private readonly ConditionalWeakTable<byte[], Dictionary<CopyRegion, byte[]>> _previews = new();
+    private readonly ConditionalWeakTable<byte[], ConditionalWeakTable<byte[], Dictionary<CopyRegion, byte[]>>> _coverages = new();
+    private readonly ConditionalWeakTable<byte[], object> _identities = new();
+    private long _nextIdentity;
     private readonly bool[] _channels = { true, true, true, true };
     private float _exposure;
     private int _mip;
     private (float U, float V)? _pixel;
+    private bool _showCoverage;
+    private float _zoom = 1f, _viewU, _viewV;
     private bool _meshShaded = true, _meshWire = true;
     private int _meshOverlay;
     private float _yaw = -35f, _pitch = 22f;
@@ -37,13 +62,29 @@ internal sealed partial class ProfilerView
     private ReplayResult Replay(FrameModel model, int instance, int pass, int? eventIndex, IndirectSlice? slice = null)
     {
         var key = (instance, pass, eventIndex, slice);
-        if (!_replays.TryGetValue(key, out ReplayResult? result))
+        long now = Environment.TickCount64;
+        if (_replays.TryGetValue(key, out var held))
         {
-            result = _source.Replay(new ReplayRequest { GroupIndex = instance, PassIndex = pass, EventIndex = eventIndex, Indirect = slice });
-            _replays[key] = result;
+            _replays[key] = (held.Result, now);
+            return held.Result;
         }
+
+        ReplayResult result = _source.Replay(new ReplayRequest { GroupIndex = instance, PassIndex = pass, EventIndex = eventIndex, Indirect = slice });
+        _replays[key] = (result, now);
+        // Replays shown in the last second stay, so views drawn together never evict each other every frame.
+        foreach (var stale in _replays.Where(r => now - r.Value.Seen > RecentMilliseconds).OrderBy(r => r.Value.Seen).Take(_replays.Count - KeptReplays).Select(r => r.Key).ToList())
+            _replays.Remove(stale);
         return result;
     }
+
+    private void ClearReplays()
+    {
+        _replays.Clear();
+        _tracks.Clear();
+    }
+
+    private long Identity(byte[] data)
+        => (long)_identities.GetValue(data, _ => ++_nextIdentity);
 
     private static ReplayOutput? Output(ReplayResult result, TraceResourceId id)
         => result.Outputs.FirstOrDefault(o => o.Resource == id);
@@ -71,7 +112,7 @@ internal sealed partial class ProfilerView
             if (step is { } s && s.EventIndex >= s.Ordinal && Output(Replay(model, view.Index, pass.Index, s.Ordinal, s.Indirect), id) is { } after
                 && Output(s.Indirect is { Count: > 1 } sl ? Replay(model, view.Index, pass.Index, s.Ordinal, sl with { Count = sl.Count - 1 }) : Replay(model, view.Index, pass.Index, s.Ordinal - 1), id) is { } before
                 && Region(after, _mip) is { } covered)
-                data.Coverage = CoverageMask(Preview(before, covered), Preview(after, covered));
+                data.Coverage = Coverage(before, after, covered);
         }
         else
         {
@@ -104,8 +145,7 @@ internal sealed partial class ProfilerView
             data.Raw = ImmutableCollectionsMarshal.AsArray(output.Data.Items);
             data.Region = region;
             data.Bytes = Preview(output, region);
-            data.PreviewWidth = (int)region.Width;
-            data.PreviewHeight = (int)region.Height;
+            (data.PreviewWidth, data.PreviewHeight) = Texels.PreviewSize(region, Texels.PreviewStep(region));
         }
     }
 
@@ -122,18 +162,70 @@ internal sealed partial class ProfilerView
         byte[] raw = ImmutableCollectionsMarshal.AsArray(output.Data.Items) ?? [];
         Dictionary<CopyRegion, byte[]> decoded = _previews.GetOrCreateValue(raw);
         if (!decoded.TryGetValue(region, out byte[]? pixels))
-            decoded[region] = pixels = Texels.ToRgba8(raw, region);
+            decoded[region] = pixels = Texels.ToRgba8(raw, region, Texels.PreviewStep(region));
         return pixels;
     }
 
-    private static byte[] CoverageMask(ReadOnlySpan<byte> before, ReadOnlySpan<byte> after)
+    private byte[] Coverage(ReplayOutput before, ReplayOutput after, CopyRegion region)
     {
-        byte[] mask = new byte[after.Length];
-        for (int i = 0; i + 3 < after.Length && i + 3 < before.Length; i += 4)
+        byte[] from = ImmutableCollectionsMarshal.AsArray(before.Data.Items) ?? [];
+        byte[] to = ImmutableCollectionsMarshal.AsArray(after.Data.Items) ?? [];
+        Dictionary<CopyRegion, byte[]> masks = _coverages.GetOrCreateValue(to).GetOrCreateValue(from);
+        if (!masks.TryGetValue(region, out byte[]? mask))
+            masks[region] = mask = CoverageMask(Texels.Changed(from, to, region, Texels.PreviewStep(region)));
+        return mask;
+    }
+
+    /// <summary>The texels each draw of the pass changed in a resource, filled in over frames up to the first <paramref name="needed"/> draws.</summary>
+    private PixelTrack Track(DeepGroup view, DeepPass pass, TraceResourceId id, List<ProfileNode> draws, int needed)
+    {
+        var key = (view.Index, pass.Index, id, _mip);
+        if (!_tracks.TryGetValue(key, out PixelTrack? track))
+            _tracks[key] = track = new PixelTrack();
+
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        while (track.Failure == null && track.Changes.Count < needed)
         {
-            bool changed = before[i] != after[i] || before[i + 1] != after[i + 1] || before[i + 2] != after[i + 2];
-            if (!changed)
+            int done = track.Changes.Count;
+            track.Previous ??= ReplayDraw(view, pass, id, done == 0 ? null : draws[done - 1], track);
+            ReplayOutput? now = track.Previous != null ? ReplayDraw(view, pass, id, draws[done], track) : null;
+            if (track.Previous == null || now == null)
+                break;
+            if (Region(now, _mip) is not { } region)
+            {
+                track.Failure = "The replayed resource has no texture regions.";
+                break;
+            }
+
+            track.Region = region;
+            track.Changes.Add(Texels.Diff(track.Previous.Data.AsSpan(), now.Data.AsSpan(), region));
+            track.Previous = now;
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds > TrackBudgetMilliseconds)
+                break;
+        }
+
+        if (track.Changes.Count >= needed || track.Failure != null)
+            track.Previous = null;
+        return track;
+    }
+
+    private ReplayOutput? ReplayDraw(DeepGroup view, DeepPass pass, TraceResourceId id, ProfileNode? draw, PixelTrack track)
+    {
+        ReplayResult result = _source.Replay(new ReplayRequest { GroupIndex = view.Index, PassIndex = pass.Index, EventIndex = draw?.DrawOrdinal ?? -1, Indirect = draw?.Slice });
+        ReplayOutput? output = Output(result, id);
+        if (output == null)
+            track.Failure = result.Status == ReplayStatus.NotReplayable ? result.Reason : "The replay did not read back this resource.";
+        return output;
+    }
+
+    private static byte[] CoverageMask(bool[] changed)
+    {
+        byte[] mask = new byte[changed.Length * 4];
+        for (int p = 0; p < changed.Length; p++)
+        {
+            if (!changed[p])
                 continue;
+            int i = p * 4;
             mask[i] = Style.Coverage.R;
             mask[i + 1] = Style.Coverage.G;
             mask[i + 2] = Style.Coverage.B;
@@ -142,22 +234,44 @@ internal sealed partial class ProfilerView
         return mask;
     }
 
-    private object? UploadTexture(string slot, int width, int height, string version, Func<byte[]> pixels)
+    /// <summary>
+    /// The texture a view slot shows. Slots showing the same content share one texture, which is freed once no slot
+    /// holds it. A slot not drawn for a second, such as a closed pop-out, lets go of its texture.
+    /// </summary>
+    private object UploadTexture(string slot, int width, int height, string version, Func<byte[]> pixels)
     {
-        if (_textures.TryGetValue(slot, out var existing) && existing.Width == width && existing.Height == height)
+        long now = Environment.TickCount64;
+        string key = $"{version}|{width}x{height}";
+        bool held = _slots.TryGetValue(slot, out var current);
+        if (!held || current.Key != key)
         {
-            if (existing.Version != version)
+            if (!_shared.TryGetValue(key, out SharedTexture? shared))
             {
-                _paper.Renderer.SetTextureData(existing.Texture, new IntRect(0, 0, width, height), pixels());
-                _textures[slot] = (existing.Texture, width, height, version);
+                object texture = _paper.Renderer.CreateTexture((uint)width, (uint)height);
+                _paper.Renderer.SetTextureData(texture, new IntRect(0, 0, width, height), pixels());
+                _shared[key] = shared = new SharedTexture(texture);
             }
-            return existing.Texture;
+            shared.Users++;
+            if (held)
+                Release(current.Key);
         }
+        _slots[slot] = (key, now);
 
-        object texture = _paper.Renderer.CreateTexture((uint)width, (uint)height);
-        _paper.Renderer.SetTextureData(texture, new IntRect(0, 0, width, height), pixels());
-        _textures[slot] = (texture, width, height, version);
-        return texture;
+        foreach (var (other, (otherKey, _)) in _slots.Where(s => now - s.Value.Seen > RecentMilliseconds).ToList())
+        {
+            _slots.Remove(other);
+            Release(otherKey);
+        }
+        return _shared[key].Texture;
+    }
+
+    private void Release(string key)
+    {
+        SharedTexture shared = _shared[key];
+        if (--shared.Users > 0)
+            return;
+        _shared.Remove(key);
+        (shared.Texture as IDisposable)?.Dispose();
     }
 
     private byte[] ApplyChannels(byte[] source)
@@ -188,7 +302,7 @@ internal sealed partial class ProfilerView
         return result;
     }
 
-    private void TextureView(FrameModel model, ViewerData data, TargetStep? step, float width, bool compact = false)
+    private void TextureView(FrameModel model, ViewerData data, TargetStep? step, string slot, float width, bool compact = false)
     {
         var t = data.Resource?.Texture;
         int mipMax = t is { } d ? (int)Math.Max(0, d.MipLevels - 1) : 0;
@@ -208,6 +322,11 @@ internal sealed partial class ProfilerView
                 Origami.Slider(_paper, "ev", _exposure, v => _exposure = MathF.Round(v * 2f) / 2f, -4f, 4f).Small().ShowValue(false).Show();
             Mono("evv", (_exposure >= 0 ? "+" : "") + Style.F(_exposure, "0.0") + " EV", Style.InkSoft);
 
+            Origami.IconButton(_paper, "cover", OrigamiGlyphs.Compass_I, () => _showCoverage = !_showCoverage).Small().NotFocusable()
+                .Tooltip(_showCoverage ? "Changed-pixel overlay: on" : "Changed-pixel overlay: off").Show();
+            if (_zoom > 1f)
+                Origami.IconButton(_paper, "zoomreset", Glyph.Rotate, () => (_zoom, _viewU, _viewV) = (1f, 0f, 0f)).Small().NotFocusable().Subtle().Tooltip("Reset zoom").Show();
+
             Dim("mipl", "Mip");
             using (_paper.Row("mips").Width(100).Height(Metrics.HeaderHeight).AlignItems(LayoutAlignment.Center).Enter())
                 Origami.IntSlider(_paper, "mip", _mip, v => _mip = v, 0, Math.Max(1, mipMax)).Small().ShowValue(false).Disabled(mipMax == 0).Show();
@@ -223,18 +342,34 @@ internal sealed partial class ProfilerView
         }
 
         int pw = data.PreviewWidth, ph = data.PreviewHeight;
-        string identity = RuntimeHelpers.GetHashCode(data.Bytes).ToString();
-        object? image = UploadTexture("image", pw, ph, $"{identity}|{string.Join("", _channels)}|{_exposure}", () => ApplyChannels(data.Bytes));
-        object? coverage = data.Coverage != null
-            ? UploadTexture("coverage", pw, ph, RuntimeHelpers.GetHashCode(data.Coverage).ToString(), () => data.Coverage)
+        byte[] bytes = data.Bytes, mask = data.Coverage ?? [];
+        object? image = UploadTexture(slot + "|image", pw, ph, $"{Identity(bytes)}|{string.Join("", _channels)}|{_exposure}", () => ApplyChannels(bytes));
+        object? coverage = data.Coverage != null && _showCoverage
+            ? UploadTexture(slot + "|coverage", pw, ph, $"coverage {Identity(mask)}", () => mask)
             : null;
 
         float aspect = (float)pw / ph;
+        float zoom = _zoom;
+        (float U, float V) view = (_viewU, _viewV);
         float displayWidth = MathF.Min(width, (compact ? 240f : 560f) * aspect);
         ElementBuilder box = _paper.Box("img").Width(displayWidth).Height(displayWidth / aspect)
             .Rounded(4).BorderColor(Style.Border).BorderWidth(1).Clip()
             .Cursor(PaperCursor.Crosshair)
-            .OnClick(e => _pixel = (Math.Clamp((float)e.NormalizedPosition.X, 0f, 1f), Math.Clamp((float)e.NormalizedPosition.Y, 0f, 1f)));
+            .OnClick(e => _pixel = (Math.Clamp(_viewU + (float)e.NormalizedPosition.X / _zoom, 0f, 1f), Math.Clamp(_viewV + (float)e.NormalizedPosition.Y / _zoom, 0f, 1f)))
+            .OnDragging(e =>
+            {
+                _viewU -= (float)e.Delta.X / (displayWidth * _zoom);
+                _viewV -= (float)e.Delta.Y / (displayWidth / aspect * _zoom);
+                ClampView();
+            })
+            .OnScroll(e =>
+            {
+                float u = _viewU + (float)e.NormalizedPosition.X / _zoom, v = _viewV + (float)e.NormalizedPosition.Y / _zoom;
+                _zoom = Math.Clamp(_zoom * MathF.Pow(1.2f, e.Delta), 1f, 64f);
+                _viewU = u - (float)e.NormalizedPosition.X / _zoom;
+                _viewV = v - (float)e.NormalizedPosition.Y / _zoom;
+                ClampView();
+            });
 
         using (box.Enter())
         {
@@ -247,7 +382,7 @@ internal sealed partial class ProfilerView
                     for (float cx = ((int)(cy / cell) % 2) * cell; cx < w; cx += cell * 2)
                         canvas.RectFilled(x + cx, y + cy, MathF.Min(cell, w - cx), MathF.Min(cell, h - cy), Style.Theme.Neutral.C300);
                 if (image != null)
-                    canvas.DrawImage(image, x, y, w, h);
+                    canvas.DrawImage(image, x - view.U * zoom * w, y - view.V * zoom * h, w * zoom, h * zoom);
             });
 
             using (_paper.Box("over").PositionType(PositionType.SelfDirected).Position(0, 0).Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).IsNotInteractable().Enter())
@@ -257,10 +392,10 @@ internal sealed partial class ProfilerView
                 {
                     float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, h = (float)r.Size.Y;
                     if (coverage != null)
-                        canvas.DrawImage(coverage, x, y, w, h);
+                        canvas.DrawImage(coverage, x - view.U * zoom * w, y - view.V * zoom * h, w * zoom, h * zoom);
                     if (pick is { } p)
                     {
-                        float px = x + p.U * w, py = y + p.V * h;
+                        float px = x + (p.U - view.U) * zoom * w, py = y + (p.V - view.V) * zoom * h;
                         void Cross()
                         {
                             canvas.BeginPath();
@@ -283,15 +418,24 @@ internal sealed partial class ProfilerView
             Mono("readout", PixelReadout(data), Style.InkSoft);
     }
 
+    private void ClampView()
+    {
+        float span = 1f - 1f / _zoom;
+        _viewU = Math.Clamp(_viewU, 0f, span);
+        _viewV = Math.Clamp(_viewV, 0f, span);
+    }
+
     private string PixelReadout(ViewerData data)
     {
         if (_pixel is not { } p || data.Bytes == null)
             return "Click the image to read a pixel value.";
 
-        int sx = Math.Min(data.PreviewWidth - 1, (int)(p.U * data.PreviewWidth)), sy = Math.Min(data.PreviewHeight - 1, (int)(p.V * data.PreviewHeight));
-        string where = $"Pixel ({sx}, {sy}) / mip {_mip} / ";
         if (data.Raw is not { } raw || data.Region is not { } region)
-            return where + "-";
+            return $"Mip {_mip} / -";
+
+        int w = (int)region.Width, h = (int)region.Height;
+        int sx = Math.Min(w - 1, (int)(p.U * w)), sy = Math.Min(h - 1, (int)(p.V * h));
+        string where = $"Pixel ({sx}, {sy}) / mip {_mip} / ";
 
         Float4 v = Texels.Read(raw, region, sx, sy);
         int channels = Texels.Channels(region.Format);

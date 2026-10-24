@@ -18,7 +18,7 @@ file static class Passes
         graph.AddPass(name, pass => pass.Write(target), context =>
         {
             CommandBuffer cmd = context.Command;
-            cmd.ClearColorTarget(0, new Color((byte)(value * 50), 0, 0, 255));
+            cmd.ClearColorTarget(0, Color.FromBytes((byte)(value * 50), 0, 0, 255));
             cmd.UpdateBuffer(external, 0, new byte[] { value, value, value, value });
         });
     }

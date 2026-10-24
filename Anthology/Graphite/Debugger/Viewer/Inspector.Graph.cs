@@ -63,27 +63,21 @@ internal sealed partial class ProfilerView
         RecordedGraphResource? graph = GraphResource(view, key[4..]);
         RecordedResource? res = graph != null ? Backing(model.Index!, graph) : null;
         List<Row> rows = new();
+        int needed = Math.Min(step, passDraws.Count);
+        PixelTrack? track = res != null ? Track(view, pass, res.Id, passDraws, needed) : null;
+        string note = track?.Failure ?? (track != null && track.Changes.Count < needed
+            ? $"Replaying draw {track.Changes.Count + 1} of {needed}"
+            : "Up to this draw / replayed once per draw for every pixel");
 
-        byte[]? Sample(int eventIndex, IndirectSlice? slice = null)
+        if (track is { Changes.Count: > 0 })
         {
-            if (res == null)
-                return null;
-            ReplayOutput? output = Output(Replay(model, view.Index, pass.Index, eventIndex, slice), res.Id);
-            if (output == null || output.Regions.Length == 0)
-                return null;
-            int w = (int)output.Regions[0].Width, h = (int)output.Regions[0].Height;
+            int w = (int)track.Region.Width, h = (int)track.Region.Height;
             int x = Math.Min(w - 1, (int)(pixel.U * w)), y = Math.Min(h - 1, (int)(pixel.V * h));
-            int o = (y * w + x) * 4;
-            return output.Data.Items.Slice(o, 4).ToArray();
-        }
-
-        byte[]? previous = Sample(-1);
-        for (int i = 0; i < step && i < passDraws.Count; i++)
-        {
-            ProfileNode d = passDraws[i];
-            byte[]? now = Sample(d.DrawOrdinal, d.Slice);
-            if (now != null && previous != null && !now.AsSpan().SequenceEqual(previous))
+            for (int i = 0; i < track.Changes.Count && i < needed; i++)
             {
+                ProfileNode d = passDraws[i];
+                if (!track.Changes[i].Contains(x, y))
+                    continue;
                 rows.Add(new Row
                 {
                     Cells = new[] { d.CommandIndex.ToString(), d.Name, d.Ancestor(NodeKind.Marker)?.Name ?? "no marker", "Passed", "" },
@@ -91,7 +85,6 @@ internal sealed partial class ProfilerView
                     Selected = d == node,
                 });
             }
-            previous = now;
         }
 
         for (int i = 0; i < rows.Count; i++)
@@ -101,7 +94,7 @@ internal sealed partial class ProfilerView
             rows[i].Colors = new Color?[] { null, null, null, null, last ? Style.Good : Style.InkDim };
         }
 
-        TableSection("Pixel history", 0, "Up to this draw / one replay per event",
+        TableSection("Pixel history", 0, note,
             new[] { "EID", "Draw", "Renderer", "Depth test", "Result" }, new[] { 0.5f, 1.6f, 1.2f, 0.8f, 1.2f },
             rows.Count > 0 ? rows : new List<Row> { R("-", "No draws in this pass touched this pixel yet") });
     }

@@ -455,6 +455,7 @@ public sealed class FeatureBuilder
         if (_pass.Output is { } output && output == View.Scene)
             throw new InvalidOperationException($"{_pass.Name} reads the scene it draws onto.");
         _pass.SceneRead = _graph.Read(View.Scene, TextureState.Sampled, TextureState.Sampled);
+        ReadPostViews();
     }
 
     /// <summary>Reads the current colour.</summary>
@@ -773,7 +774,7 @@ public sealed class FeatureContext
     {
         if (!program.Procedural)
             throw new InvalidOperationException($"{_pass.Name} draws a fullscreen program procedurally; create it with CreateProceduralProgram.");
-        AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0, 0, 0, 0)) : AttachmentOps.Loaded;
+        AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : AttachmentOps.Loaded;
         Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
         Command.SetFullViewport();
         Command.SetShader(program.For(View.LayerCount));
@@ -792,7 +793,7 @@ public sealed class FeatureContext
             throw new InvalidOperationException($"{_pass.Name} draws a procedural program as a fullscreen one; draw it with DrawProcedural.");
         if (layers == 1 && View.LayerCount > 1 && program.HasSource)
             throw new InvalidOperationException($"{_pass.Name} draws a program reading the view's colour once for every layer; create it with source: false and bind what it reads.");
-        AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0, 0, 0, 0)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store);
+        AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store);
         Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
         Command.SetFullViewport();
         Command.SetShader(program.For(layers));
@@ -940,7 +941,7 @@ public sealed class SceneClearFeature : RenderFeature
     {
         Framebuffer framebuffer = context.Get(context.GetViewState<State>().Scene).Framebuffer;
         for (uint target = 1; target < framebuffer.ColorTargets.Count; target++)
-            context.Command.ClearColorTarget(target, new Color(0, 0, 0, 0));
+            context.Command.ClearColorTarget(target, new Color(0f, 0f, 0f, 0f));
     }
 }
 
@@ -1117,10 +1118,36 @@ public sealed class SceneColorFeature : RenderFeature
     }
 }
 
+/// <summary>
+/// Copies the view's depth after the opaque surfaces into its scene depth, for passes tagged "SceneDepth" = "Read" to
+/// fetch through Graphite/SceneDepth.glsl. Active once such a pass was in the view's transparent list, recording nothing
+/// on frames without one.
+/// </summary>
+public sealed class SceneDepthFeature : RenderFeature
+{
+    internal SceneDepthFeature() { }
+
+    public override RenderSlot Slot => RenderSlot.OpaqueColor;
+    public override string? ExclusiveGroup => "SceneDepth";
+    public override ViewKinds RunsOn => ViewKinds.All;
+
+    internal override bool Skips(ViewGraph view) => !view.Camera.SceneDepthUsed;
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.ReadScene();
+
+    public override void Render(FeatureContext context)
+    {
+        CameraFrame camera = context.Camera;
+        if (!camera.SceneDepthUsed || camera.SceneDepth is not { } target || context.Depth is not { } source)
+            return;
+        context.Command.CopyTexture(source, 0, 0, 0, 0, 0, target, 0, 0, 0, 0, 0, target.Width, target.Height, 1, target.ArrayLayers);
+    }
+}
+
 /// <summary>Picks a view's features each frame: built in, world and view features, filtered and ordered.</summary>
 internal static class FeatureSelection
 {
-    public static readonly RenderFeature[] BuiltIn = [new SceneClearFeature(), new CascadeFeature(), new PrepassFeature(), new OpaqueFeature(), new SkyFeature(), new SceneColorFeature(), new TransparentFeature(), new PresentFeature()];
+    public static readonly RenderFeature[] BuiltIn = [new SceneClearFeature(), new CascadeFeature(), new PrepassFeature(), new OpaqueFeature(), new SkyFeature(), new SceneColorFeature(), new SceneDepthFeature(), new TransparentFeature(), new PresentFeature()];
 
     static FeatureSelection()
     {
