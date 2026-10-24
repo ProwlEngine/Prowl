@@ -328,8 +328,7 @@ public class EditorAssetBackend : AssetBackend
         }
 
         using var stream = new MemoryStream(bytes);
-        using var reader = new BinaryReader(stream);
-        return ReadInto(EchoObject.ReadFromBinary(reader), staging, context);
+        return ReadInto(EchoBinaryFormat.ReadFromFile(stream), staging, context);
     }
 
     // The entry a GUID imports through: its own, or its parent's for a sub-asset.
