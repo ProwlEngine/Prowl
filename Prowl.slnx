@@ -30,6 +30,8 @@
     <Project Path="../Anthology/Origami/Graphite/Prowl.Origami.Graphite.csproj" />
     <Project Path="../Anthology/Photonic/Photonic/Photonic.csproj" />
     <Project Path="../Anthology/Rosetta/Rosetta/Rosetta.csproj" />
+    <Project Path="../Anthology/Warp/Warp/Prowl.Warp.csproj" />
+    <Project Path="../Anthology/Warp/Tests/Prowl.Warp.Tests.csproj" />
   </Folder>
   <Folder Name="/Samples/" />
   <Folder Name="/Samples/Runtime/">
@@ -37,6 +39,7 @@
     <Project Path="Samples/Runtime/ManyLights/ManyLights.csproj" />
     <Project Path="Samples/Runtime/ControllerShowcase/ControllerShowcase.csproj" />
     <Project Path="Samples/Runtime/ParticleShowcase/ParticleShowcase.csproj" />
+    <Project Path="Samples/Runtime/NetworkingShowcase/NetworkingShowcase.csproj" />
     <Project Path="Samples/Runtime/PhysicsShowcase/PhysicsShowcase.csproj" />
     <Project Path="Samples/Runtime/RenderingShowcase/RenderingShowcase.csproj" />
     <Project Path="Samples/Runtime/ScriptingShowcase/ScriptingShowcase.csproj" />
@@ -46,6 +49,8 @@
   </Folder>
   <Project Path="Prowl.Analyzers/Prowl.Analyzers.csproj" />
   <Project Path="Prowl.Cli/Prowl.Cli.csproj" />
+  <Project Path="Prowl.CodeGen.Test/Prowl.CodeGen.Test.csproj" />
+  <Project Path="Prowl.CodeGen/Prowl.CodeGen.csproj" />
   <Project Path="Prowl.Editor.Test/Prowl.Editor.Test.csproj" />
   <Project Path="Prowl.Editor/Prowl.Editor.csproj" />
   <Project Path="Prowl.Runtime.Test/Prowl.Runtime.Test.csproj" />

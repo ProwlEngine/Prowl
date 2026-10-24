@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Prowl.Echo;
 using Prowl.PaperUI;
 using Prowl.Runtime.Diagnostics;
+using Prowl.Runtime.Networking;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
@@ -99,6 +100,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         _pendingLoad = null;
         DropPendingScene(except: scene);
         _pendingScene = scene;
+    }
+
+    // Network cancellation must only remove the scene owned by that join, not a later local load.
+    internal static void CancelPendingLoad(Scene scene)
+    {
+        if (ReferenceEquals(_pendingScene, scene)) _pendingScene = null;
+        if (!ReferenceEquals(_current, scene) && scene.IsValid()) scene.Dispose();
     }
 
     // A scene queued and then replaced before it became current belongs to nobody, and would stay live.
@@ -272,13 +280,14 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         if (_current is not null && !_current.IsDisposed)
         {
+            Scene outgoing = _current;
             try
             {
-                if (_current.IsActive)
-                    _current.Disable();
-                _current.Dispose();
+                if (outgoing.IsActive)
+                    outgoing.Disable();
+                outgoing.Dispose();
             }
-            catch (Exception e) { Debug.LogError($"[Scene] Tearing down '{_current.Name}' threw: {e.Message}\n{e.StackTrace}"); }
+            catch (Exception e) { Debug.LogError($"[Scene] Tearing down '{outgoing.Name}' threw: {e.Message}\n{e.StackTrace}"); }
         }
 
         // Between the two scenes, so the outgoing one's teardown belongs to its own session and the incoming
@@ -384,6 +393,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     internal void OnHotReload()
     {
+        SceneEvents.Reset();
         foreach (GameObject go in _allObj)
             if (go is not null && !go.IsDisposed)
                 go.OnHotReload();
@@ -528,11 +538,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>
     /// False for an object marked <see cref="HideFlags.DontSave"/> or <see cref="HideFlags.HideAndDontSave"/>,
     /// and for anything under one: a child written out without its parent would load back as a stray root.
+    /// While writing a network snapshot, also false for anything <see cref="NetworkMode.Never"/>.
     /// </summary>
     private static bool IsSaveable(GameObject obj)
     {
         for (GameObject? go = obj; go.IsValid(); go = go.Parent)
-            if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0)
+            if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0
+                || !NetworkSerialization.Include(go))
                 return false;
         return true;
     }
@@ -728,6 +740,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     internal void Detach(GameObject obj)
     {
+        SceneEvents.Invalidate();
         foreach (GameObject child in obj.Children.ToArray())
             Detach(child);
 
@@ -748,6 +761,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <inheritdoc cref="Detach"/>
     internal void Attach(GameObject obj)
     {
+        SceneEvents.Invalidate();
         if (_allObjSet.Add(obj))
         {
             _allObj.Add(obj);
@@ -768,6 +782,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     private void AddObject(GameObject obj)
     {
+        SceneEvents.Invalidate();
         if (_allObjSet.Add(obj))
         {
             _allObj.Add(obj);
@@ -803,6 +818,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     private void RemoveObject(GameObject obj)
     {
+        SceneEvents.Invalidate();
         // Create a copy to avoid modification during enumeration
         List<GameObject> children = [.. obj.Children];
         foreach (GameObject child in children)

@@ -1,0 +1,9 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)../'))"
+          Condition="Exists($([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)../')))" />
+
+  <!-- A sample that sets ProwlCodeGen compiles its [Sync] properties and RPCs the way game scripts are. -->
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Prowl.CodeGen\build\Prowl.CodeGen.targets" />
+
+</Project>

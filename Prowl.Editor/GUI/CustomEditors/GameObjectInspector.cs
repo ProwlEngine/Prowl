@@ -32,7 +32,7 @@ public static class GameObjectInspector
         if (go.IsPrefabInstance)
             DrawPrefabHeader(paper, font, go);
 
-        DrawHeader(paper, go);
+        DrawHeader(paper, font, go);
         EditorGUI.Divider(paper, "gi_sep_header", 6f);
         if (go.RectTransform != null)
         {
@@ -271,7 +271,7 @@ public static class GameObjectInspector
     //  Header: Name, Enabled, Tag, Layer
     // ================================================================
 
-    private static void DrawHeader(Paper paper, GameObject go)
+    private static void DrawHeader(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
     {
         Guid goId = go.Identifier;
 
@@ -297,6 +297,9 @@ public static class GameObjectInspector
                 })
                 .Width(UnitValue.Stretch()).Height(26)
                 .CommitOnEnter().Show();
+
+            // How it networks: the icon shows the mode, the popover changes it.
+            NetworkPopover.DrawButton(paper, font, go);
 
             Origami.Dropdown(paper, "gi_static", go.IsStatic ? 1 : 0,
                 idx =>
@@ -352,8 +355,7 @@ public static class GameObjectInspector
                         Undo.RecordGameObjectChange(go, "Change Layer", go.LayerIndex, newIdx, (g, x) => g.LayerIndex = x);
                         go.LayerIndex = newIdx;
                     }
-                }, layerNames).Inline(Loc.Get("inspector.layer")).Width(UnitValue.Stretch()).Height(26).Show();
-        }
+                }, layerNames).Inline(Loc.Get("inspector.layer")).Width(UnitValue.Stretch()).Height(26).Show();        }
     }
 
     /// <summary>Set <see cref="GameObject.IsStatic"/> on every descendant of <paramref name="go"/> (recorded for undo).</summary>

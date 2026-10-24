@@ -10,6 +10,7 @@ using System.Runtime.CompilerServices;
 
 using Prowl.Ember;
 using Prowl.Echo;
+using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
@@ -53,10 +54,17 @@ public partial class GameObject : EngineObject, ISerializable
     // Everything tying this object to a prefab, or null for the ordinary case. One reference rather
     // than a copy of each value on every GameObject in the scene.
     private PrefabLink? _prefabLink;
+    [SerializeIgnore] internal NetworkAccessor? _network;
 
     #endregion
 
     #region Public Fields/Properties
+
+    /// <summary>Network configuration, ownership and replication operations. Created on first access.</summary>
+    public NetworkAccessor Network => _network ??= new NetworkAccessor(this);
+
+    /// <summary>True when this peer receives the object's state from its controller.</summary>
+    public bool IsProxy => Networking.Networking.System?.IsProxy(this) == true;
 
     /// <summary> The Tag Index of this GameObject </summary>
     public int TagIndex;
@@ -302,6 +310,8 @@ public partial class GameObject : EngineObject, ISerializable
         MainThreadContext.AssertOwner(NewParent);
         if (NewParent == _parent)
             return true;
+
+        SceneEvents.Invalidate();
 
         // Make sure that the new father is not a child of this transform.
         if (IsChildOrSameTransform(NewParent, this))
@@ -556,6 +566,7 @@ public partial class GameObject : EngineObject, ISerializable
 
         // Insert at new position
         Parent.Children.Insert(index, this);
+        SceneEvents.Invalidate();
 
         // Sibling order feeds the canvas draw-order (depth-first index); force a rebuild so the
         // reorder is reflected instead of drawing in the stale order.
@@ -1149,13 +1160,19 @@ public partial class GameObject : EngineObject, ISerializable
         return false;
     }
 
-    private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(this, nameof(Dispose));
+    private protected override void AssertCanDispose()
+    {
+        MainThreadContext.AssertOwner(this, nameof(Dispose));
+        Networking.Networking.System?.BeforeObjectDisposed(this);
+    }
 
     /// <summary>
     /// Disposes of the GameObject and its components.
     /// </summary>
     protected override void OnDispose()
     {
+        Networking.Networking.System?.OnGameObjectDisposed(this);
+
         for (int i = Children.Count - 1; i >= 0; i--)
             Children[i].Dispose();
 
@@ -1326,6 +1343,8 @@ public partial class GameObject : EngineObject, ISerializable
 
         compoundTag.Add("HideFlags", new EchoObject((int)HideFlags));
 
+        NetworkSerialization.Write(this, compoundTag);
+
         compoundTag.Add("Transform", Serializer.Serialize(typeof(object), _transform, ctx));
 
         EchoObject components = EchoObject.NewList();
@@ -1335,7 +1354,11 @@ public partial class GameObject : EngineObject, ISerializable
 
         EchoObject children = EchoObject.NewList();
         foreach (GameObject child in Children)
+        {
+            if (!NetworkSerialization.Include(child))
+                continue;
             children.ListAdd(Serializer.Serialize(typeof(GameObject), child, ctx));
+        }
         compoundTag.Add("Children", children);
 
         // One block, absent entirely for an ordinary GameObject, and a build can drop the editor-only
@@ -1367,6 +1390,7 @@ public partial class GameObject : EngineObject, ISerializable
         TagIndex = value["TagIndex"]?.IntValue ?? 0;
         LayerIndex = value["LayerIndex"]?.IntValue ?? 0;
         HideFlags = (HideFlags)(value["HideFlags"]?.IntValue ?? 0);
+        NetworkSerialization.Read(this, value);
 
         // Absent for an ordinary GameObject, which then allocates nothing for it.
         _prefabLink = value.TryGet("Prefab", out EchoObject? linkTag)
