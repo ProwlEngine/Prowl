@@ -45,6 +45,7 @@ public partial class NetworkingTests
         scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
         LocalNetwork network = new();
         byte[] snapshot, rpc, oldSync, nextSync;
+        byte[]? stateSync = null;
         try
         {
             Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -60,7 +61,14 @@ public partial class NetworkingTests
             root.Transform.LocalPosition = new Float3(10, 0, 0);
             if (unreliable) component.ObserveUnreliable(); else component.Observe();
             Pump(() => client.Has(FakePeer.RpcFromHost), client);
-            rpc = client.WireReceived.Last(m => m.Id == FakePeer.RpcFromHost).Data;
+            int rpcIndex = client.WireReceived.FindLastIndex(m => m.Id == FakePeer.RpcFromHost);
+            rpc = client.WireReceived[rpcIndex].Data;
+            // A reliable call sends its pending Sync changes ahead of itself instead of inside it.
+            if (!unreliable)
+            {
+                Assert.Equal(FakePeer.Sync, client.WireReceived[rpcIndex - 1].Id);
+                stateSync = client.WireReceived[rpcIndex - 1].Data;
+            }
             typeof(Networking.Networking).GetMethod("SendSyncChanges", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, null);
             PumpFor(10, client);
             nextSync = client.WireReceived.Last(m => m.Id == FakePeer.Sync).Data;
@@ -80,17 +88,46 @@ public partial class NetworkingTests
             Assert.Equal(100, lifecycle.HealthAtSpawn);
             Assert.True(lifecycle.StructuralEditRejected);
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
+            // Give the proxy interpolation history. Ticks just below the wrap, so the call's tick is newer.
+            uint generation = NetworkGeneration(proxy.GameObject);
+            host.Send(FakePeer.Transform, w =>
+            {
+                for (uint i = 0; i < 2; i++)
+                {
+                    w.WriteGuid(proxy.GameObject.Identifier); w.WriteUInt32(generation);
+                    w.WriteUInt32(uint.MaxValue - 1 + i); w.WriteDouble(1 + i * 0.05);
+                    NetSerializers.WriteFloat3(w, new Float3(i, 0, 0));
+                    NetSerializers.WriteQuaternion(w, Quaternion.Identity);
+                    NetSerializers.WriteFloat3(w, Float3.One);
+                }
+            }, client);
+            Pump(() => Samples(proxy.GameObject) > 0, host);
+            if (stateSync != null)
+            {
+                NetReader call = new(rpc);
+                call.ReadVarUInt32(); call.ReadGuid(); call.ReadUInt32(); call.ReadBytesWithLength();
+                NetReader states = new(call.ReadBytesWithLength());
+                Assert.Equal(1u, states.ReadVarUInt32());
+                NetReader frame = new(states.ReadBytesWithLength());
+                frame.ReadInt32(); frame.ReadUInt64(); frame.ReadGuid(); frame.ReadUInt32();
+                NetReader syncs = new(frame.ReadBytesWithLength());
+                Assert.Equal(0u, syncs.ReadVarUInt32());
+                host.Session.SendRaw(client, FakePeer.Sync, stateSync);
+            }
+
             host.Session.SendRaw(client, FakePeer.RpcFromHost, rpc, unreliable ? Delivery.Unreliable : Delivery.Reliable);
             host.Session.Flush();
             Pump(() => proxy.Observed.Count == 1, host);
             Assert.Equal((0, 1, 10f), proxy.Observed[0]);
+            // The call's pose is for its body; the proxy keeps interpolating rather than snapping.
+            Assert.True(Samples(proxy.GameObject) > 0);
             host.Session.SendRaw(client, FakePeer.Sync, oldSync);
             host.Session.SendRaw(client, FakePeer.Sync, nextSync);
             host.Session.Flush(); PumpFor(10, host);
             Assert.Equal(0, proxy.Health);
             Assert.Equal(new[] { 7 }, proxy.Scores);
             Assert.Single(proxy.ScoreChanges);
-            Assert.Equal(10f, proxy.Transform.LocalPosition.X);
+            Assert.True(proxy.Transform.LocalPosition.X <= 1f); // Back on its interpolated path.
             host.Send(FakePeer.Despawn, w => w.WriteGuid(proxy.GameObject.Identifier), client);
             Pump(() => proxy.IsDisposed, host);
             Assert.Equal(new[] { "spawn", "despawn" }, lifecycle.Events);
@@ -136,7 +173,8 @@ public partial class NetworkingTests
             if (method is 701 or 702)
             {
                 Pump(() => observer.Has(FakePeer.RpcFromHost), client, observer);
-                NetReader relay = new(observer.WireReceived.Last(m => m.Id == FakePeer.RpcFromHost).Data);
+                int rpcIndex = observer.WireReceived.FindLastIndex(m => m.Id == FakePeer.RpcFromHost);
+                NetReader relay = new(observer.WireReceived[rpcIndex].Data);
                 Assert.Equal((uint)owner.Id, relay.ReadVarUInt32());
                 relay.ReadGuid(); relay.ReadUInt32(); relay.ReadBytesWithLength();
                 NetReader states = new(relay.ReadBytesWithLength());
@@ -147,6 +185,15 @@ public partial class NetworkingTests
                 Assert.Equal(NetPeer.HostId, hostState.ReadInt32());
                 hostState.ReadUInt64(); hostState.ReadGuid(); hostState.ReadUInt32();
                 NetReader sync = new(hostState.ReadBytesWithLength());
+                if (method == 701)
+                {
+                    // Reliable: the host's value went out as a Sync message just ahead of the relay.
+                    Assert.Equal(0u, sync.ReadVarUInt32());
+                    Assert.Equal(FakePeer.Sync, observer.WireReceived[rpcIndex - 1].Id);
+                    sync = new(observer.WireReceived[rpcIndex - 1].Data);
+                    sync.ReadInt32(); sync.ReadUInt64();
+                }
+
                 Assert.Equal(1u, sync.ReadVarUInt32());
                 sync.ReadGuid(); Assert.Equal(799u, sync.ReadVarUInt32()); sync.ReadUInt32();
                 NetReader hostValue = new(sync.ReadBytesWithLength());
@@ -182,6 +229,13 @@ public partial class NetworkingTests
             Assert.Equal(0f, root.Transform.LocalPosition.X);
         }
         finally { Networking.Networking.Shutdown(); }
+    }
+
+    private static int Samples(GameObject root)
+    {
+        List<Networking.Networking.ObjectDiagnostic> objects = new();
+        Networking.Networking.GetObjectDiagnostics(objects);
+        return objects.Single(o => o.Identifier == root.Identifier).BufferedSamples;
     }
 
     private static uint NetworkGeneration(GameObject root)

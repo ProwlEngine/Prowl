@@ -109,8 +109,15 @@ public static partial class Networking
             return false;
         }
 
+        // Reliable delivery is ordered, so Sync changes sent now arrive before the call.
+        bool reliable = delivery == Delivery.Reliable;
+        if (reliable)
+        {
+            SendSyncChanges();
+        }
+
         using NetWriter states = new();
-        WriteRpcStates(component, states);
+        WriteRpcStates(component, states, includeSyncs: !reliable);
         using NetWriter envelope = new(writer.Length + 128);
         NetReader raw = new(writer.WrittenSpan);
         envelope.WriteGuid(raw.ReadGuid());
@@ -237,8 +244,15 @@ public static partial class Networking
     private static void Relay(Component component, NetPeer caller, Guid id, uint method, ReadOnlySpan<byte> arguments,
         ReadOnlySpan<byte> capturedStates, Delivery delivery, NetPeer? to, RpcRecipients? recipients)
     {
+        // The client's Sync changes were relayed as they arrived, ahead of this; send the host's own the same way.
+        bool reliable = delivery == Delivery.Reliable;
+        if (reliable)
+        {
+            SendSyncChanges();
+        }
+
         using NetWriter states = new();
-        WriteRelayedRpcStates(component, capturedStates, states);
+        WriteRelayedRpcStates(component, capturedStates, states, includeSyncs: !reliable);
         using NetWriter message = new(arguments.Length + 32);
         message.WriteVarUInt32((uint)caller.Id);
         message.WriteGuid(id);

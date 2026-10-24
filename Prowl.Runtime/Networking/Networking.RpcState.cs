@@ -14,10 +14,13 @@ namespace Prowl.Runtime.Networking;
 
 public static partial class Networking
 {
-    private static void WriteRpcState(Component component, NetWriter output) =>
-        WriteRpcState(component.GameObject, output);
+    // Without syncs, the state is only transforms: the call is reliable, so the Sync changes sent just before it
+    // arrive first, and capturing every value again would only cost bandwidth.
+    private static void WriteRpcState(Component component, NetWriter output, bool includeSyncs) =>
+        WriteRpcState(component.GameObject, output, includeSyncs: includeSyncs);
 
-    private static void WriteRpcState(GameObject target, NetWriter output, bool includeAll = false)
+    private static void WriteRpcState(GameObject target, NetWriter output, bool includeAll = false,
+        bool includeSyncs = true)
     {
         NetworkEntry? entry = FindEntry(target);
         GameObject root = entry != null ? entry.GameObject : target;
@@ -39,7 +42,7 @@ public static partial class Networking
             {
                 foreach (SyncMember sync in NetworkMembers.Of(part).Syncs)
                 {
-                    if (!includeAll && !HasControl(part, sync.Flags))
+                    if (!includeSyncs || (!includeAll && !HasControl(part, sync.Flags)))
                     {
                         continue;
                     }
@@ -70,22 +73,23 @@ public static partial class Networking
         output.WriteBytesWithLength(transforms.WrittenSpan);
     }
 
-    private static void WriteRpcStates(Component component, NetWriter states)
+    private static void WriteRpcStates(Component component, NetWriter states, bool includeSyncs)
     {
         using NetWriter state = new();
-        WriteRpcState(component, state);
+        WriteRpcState(component, state, includeSyncs);
         states.WriteVarUInt32(1);
         states.WriteBytesWithLength(state.WrittenSpan);
     }
 
-    private static void WriteRelayedRpcStates(Component component, ReadOnlySpan<byte> captured, NetWriter states)
+    private static void WriteRelayedRpcStates(Component component, ReadOnlySpan<byte> captured, NetWriter states,
+        bool includeSyncs)
     {
         using NetWriter hostState = new();
         NetReader reader = new(captured);
         uint count = reader.ReadVarUInt32();
         states.WriteVarUInt32(count + 1);
         states.WriteBytes(reader.ReadBytes(reader.Remaining));
-        WriteRpcState(component, hostState);
+        WriteRpcState(component, hostState, includeSyncs);
         states.WriteBytesWithLength(hostState.WrittenSpan);
     }
 
@@ -251,8 +255,13 @@ public static partial class Networking
         {
             entry.HasReceived = true;
             entry.LastReceivedTick = pose.Tick;
-            entry.Samples.Clear();
-            entry.Timeline.Clear();
+            // A handoff starts over from this pose. A call only needs it while its body runs: interpolation
+            // takes over again this frame, so a proxy calling RPCs as it moves doesn't snap.
+            if (forceTransforms)
+            {
+                entry.Samples.Clear();
+                entry.Timeline.Clear();
+            }
         }
 
         ApplyNetworkTransform(go, pose.Position, Quaternion.Normalize(pose.Rotation), pose.Scale);
