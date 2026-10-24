@@ -5,6 +5,7 @@
 
   <PropertyGroup>
     <ProwlLocalAnthology Condition="'$(ProwlLocalAnthology)' == ''">$(PROWL_LOCAL_ANTHOLOGY)</ProwlLocalAnthology>
+    <ProwlLocalAnthology Condition="'$(ProwlLocalAnthology)' == '1'">true</ProwlLocalAnthology>
     <ProwlLocalAnthology Condition="'$(ProwlLocalAnthology)' != 'true'">false</ProwlLocalAnthology>
     <AnthologyDir>$(MSBuildThisFileDirectory)..\Anthology\</AnthologyDir>
     <ProwlPackageVersion>3.9.3</ProwlPackageVersion>
