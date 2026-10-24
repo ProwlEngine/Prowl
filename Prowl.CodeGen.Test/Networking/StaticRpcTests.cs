@@ -4,6 +4,9 @@ using Microsoft.CodeAnalysis;
 
 using Prowl.CodeGen.Networking;
 using Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Enums;
+using Prowl.Runtime.Networking.Serialization;
+using Prowl.Runtime.Networking.Utilities;
 using Prowl.Vector;
 using Prowl.Warp;
 
@@ -18,6 +21,10 @@ public class StaticRpcTests
     {
         Type type = Scripts.Compile("""
                                     using Prowl.Runtime.Networking;
+                                    using Prowl.Runtime.Networking.Attributes;
+                                    using Prowl.Runtime.Networking.Collections;
+                                    using Prowl.Runtime.Networking.Enums;
+                                    using Prowl.Runtime.Networking.Serialization;
                                     using Prowl.Vector;
                                     public static class Sounds
                                     {
@@ -40,6 +47,10 @@ public class StaticRpcTests
     {
         Assembly assembly = Scripts.Compile("""
                                             using Prowl.Runtime.Networking;
+                                            using Prowl.Runtime.Networking.Attributes;
+                                            using Prowl.Runtime.Networking.Collections;
+                                            using Prowl.Runtime.Networking.Enums;
+                                            using Prowl.Runtime.Networking.Serialization;
                                             public struct SoundInfo { public int Volume; }
                                             public class Container
                                             {
@@ -71,6 +82,10 @@ public class StaticRpcTests
     {
         Assembly assembly = Scripts.Compile("""
                                             using Prowl.Runtime.Networking;
+                                            using Prowl.Runtime.Networking.Attributes;
+                                            using Prowl.Runtime.Networking.Collections;
+                                            using Prowl.Runtime.Networking.Enums;
+                                            using Prowl.Runtime.Networking.Serialization;
                                             public static partial class Events
                                             {
                                                 public static int Last;
@@ -83,6 +98,10 @@ public class StaticRpcTests
                                             }
                                             """, """
                                                  using Prowl.Runtime.Networking;
+                                                 using Prowl.Runtime.Networking.Attributes;
+                                                 using Prowl.Runtime.Networking.Collections;
+                                                 using Prowl.Runtime.Networking.Enums;
+                                                 using Prowl.Runtime.Networking.Serialization;
                                                  public static partial class Events
                                                  {
                                                      [Rpc.Broadcast] public static void Clear() => Last = 0;
@@ -106,13 +125,17 @@ public class StaticRpcTests
     [InlineData("public static class Events<T> { [Rpc.Host] public static void F() { } }")]
     [InlineData("public class Outer<T> { public static class Events { [Rpc.Host] public static void F() { } } }")]
     public void StaticRpcsRejectOwnershipAndGenericContainers(string source) =>
-        Assert.Contains(Scripts.Build("using Prowl.Runtime.Networking; " + source).Errors, e => e.Id == "PROWLNET008");
+        Assert.Contains(Scripts.Build("using Prowl.Runtime.Networking.Attributes; using Prowl.Runtime.Networking.Enums; " + source).Errors, e => e.Id == "PROWLNET008");
 
     [Fact]
     public void StaticRewritePreservesSourceLines()
     {
         SyntaxTree original = Scripts.Parse("""
                                             using Prowl.Runtime.Networking;
+                                            using Prowl.Runtime.Networking.Attributes;
+                                            using Prowl.Runtime.Networking.Collections;
+                                            using Prowl.Runtime.Networking.Enums;
+                                            using Prowl.Runtime.Networking.Serialization;
                                             public static class Events
                                             {
                                                 [Rpc.Host]

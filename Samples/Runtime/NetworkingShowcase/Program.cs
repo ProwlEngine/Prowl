@@ -33,6 +33,8 @@ using System.Diagnostics;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Diagnostics;
+using Prowl.Runtime.Networking.Enums;
 using Prowl.Runtime.Resources;
 using Prowl.Samples;
 using Prowl.Scribe;
@@ -46,11 +48,12 @@ namespace NetworkingShowcase;
 
 internal class Program
 {
-    static void Main(string[] args)
+    private static void Main(string[] args)
     {
         int join = Array.IndexOf(args, "--join");
         string? address = join >= 0 && join + 1 < args.Length ? args[join + 1] : null;
-        new NetworkingShowcaseGame(address).Run(address == null ? "Networking Showcase (host)" : "Networking Showcase (client)", 1280, 760);
+        new NetworkingShowcaseGame(address).Run(
+            address == null ? "Networking Showcase (host)" : "Networking Showcase (client)", 1280, 760);
     }
 }
 
@@ -61,21 +64,55 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
     private const int OwnershipStation = 1;
     private const float PuckHeight = 0.3f;
 
-    private bool _started;
-    private string _status = "Starting";
-    private Material _stone = null!;
-
     private Grabbable? _dragging;
-    private int _stressCount = 200;
 
     // Bytes this window sent and received a second, measured over the last second.
     private long _lastSent, _lastReceived;
     private double _sentPerSecond, _receivedPerSecond, _nextRate;
 
+    private bool _started;
+    private string _status = "Starting";
+    private Material _stone = null!;
+    private int _stressCount = 200;
+
     private bool IsClientWindow => joinAddress != null;
 
     // The host takes clients from station to station, so they have none to pick.
     public override bool ChoosesStations => !IsClientWindow;
+
+    public override string Stats
+    {
+        get
+        {
+            if (!Networking.IsActive)
+            {
+                return _status;
+            }
+
+            return CurrentStation switch
+            {
+                0 when Find<SyncLamp>() is { } lamp =>
+                    $"Color {lamp.ColorIndex}, height {lamp.Height:0.0}, {Control(lamp)}",
+                1 when Find<Rover>() is { } rover =>
+                    $"Rover driven by {Who(rover.GameObject.Network.Owner)} at speed {rover.Speed:0.0}    "
+                    + $"Pucks here: {Scene.Current.FindObjectsOfType<Grabbable>().Count(p => p != null && p.GetComponent<Rigidbody3D>() == null && !p.GameObject.IsProxy)} of 4",
+                2 when Find<Bell>() is { } bell => $"The host has counted {bell.Requests} request(s)",
+                3 when Find<Reactor>() is { } reactor => $"Heat {reactor.Heat}",
+                4 when Find<Board>() is { } board =>
+                    $"{board.Bars.Count} bar(s), {board.Votes.Values.Sum()} vote(s) from {board.Voters.Count} voter(s)",
+                5 when Find<Armory>() is { } armory =>
+                    $"{armory.Current.Weapon}, {armory.Current.Ammo} of {armory.Current.Magazine}{(armory.Current.Silenced ? ", silenced" : "")}",
+                6 when Find<Hangar>() is { } hangar => $"{hangar.Crates} crate(s) in the hangar",
+                7 => PhysicsStats(),
+                8 when Find<Swarm>() is { } swarm =>
+                    $"{swarm.Drones} drone(s), {NetworkDiagnostics.NetworkObjectCount} networked object(s)    "
+                    + $"Sent {Kilobytes(_sentPerSecond)}, received {Kilobytes(_receivedPerSecond)}",
+                9 when Find<Guestbook>() is { } book =>
+                    $"{book.Entries.Count} entr(ies) in the guestbook, {Networking.Session!.Peers.Count} peer(s) here now",
+                _ => "Waiting for the host's scene"
+            };
+        }
+    }
 
     private static Float3 StationCenter(int index) => new(index * StationSpacing, 0f, 0f);
 
@@ -89,24 +126,47 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
             Scene.DontDestroyOnLoad(local);
         }
 
-        AddStation("Sync values", "The lamp's color and height are [Sync] properties. The host controls the lamp, so it sets them and every window shows them at the next network tick. On a client, setting them does nothing.", StationCenter(0), new Float3(0f, 4f, -9f));
-        AddStation("Ownership", "Grab a puck with the left mouse: it asks the host for control, and once it has it, this window moves the puck and the others follow, smoothed. The rover is driven by whoever the host hands it to. Colors are owners.", StationCenter(1), new Float3(0f, 9f, -9f), 0f);
-        AddStation("RPCs", "Ring the bell and it rings in every window, yours too: a broadcast RPC. Ask the host and only the host runs the call, counting the request in a value only it may set. Each call knows who made it.", StationCenter(2), new Float3(0f, 3f, -7f));
-        AddStation("Change hooks", "The reactor's heat is [Sync] with a [Change] hook, which runs with the old and new heat in every window the heat changes in. Anyone can stoke it through a host RPC; the host is the one that changes it.", StationCenter(3), new Float3(0f, 3f, -7f));
-        AddStation("Collections", "The bars are a NetList: adding one sends one bar, not all of them. Votes go to a NetDictionary and voters to a NetSet, through a host RPC. Every window rebuilds its bars from the lists' Changed events.", StationCenter(4), new Float3(0f, 4f, -9f));
-        AddStation("Custom structs", "The loadout is a struct of the game's own. Nothing marks it for the network: the script compiler sees it used and writes its serializer. It's a [Sync] value, and the argument of a broadcast RPC.", StationCenter(5), new Float3(0f, 3f, -7f));
-        AddStation("Spawning", "Only the host creates networked objects. Ask for a crate and the host spawns one owned by you, which you then drive: it bobs in your color in every window. Close a client and its crates go with it.", StationCenter(6), new Float3(0f, 6f, -10f));
-        AddStation("Physics", "Each rigidbody simulates only in the window that controls it; everywhere else it's driven by the transform that window sends. Grab one with the left mouse to take it over, then throw it: it keeps its speed as control changes hands. Bodies other windows control push yours without being pushed back.", StationCenter(7), new Float3(0f, 6f, -11f));
-        AddStation("Stress test", "The host spawns drones, each a networked object moving every frame. Churn changes a [Sync] value on every drone every frame too, and spreading hands them out so every window drives its share. Watch the traffic and the frame rate.", StationCenter(8), new Float3(0f, 7f, -13f));
-        AddStation("Late join", "Launch another client after changing things above. It gets the scene, every [Sync] value, every collection and every spawned object at once, without change hooks firing for any of it. The guestbook is a NetList the host signs for each arrival.", StationCenter(9), new Float3(0f, 3f, -8f));
+        AddStation("Sync values",
+            "The lamp's color and height are [Sync] properties. The host controls the lamp, so it sets them and every window shows them at the next network tick. On a client, setting them does nothing.",
+            StationCenter(0), new Float3(0f, 4f, -9f));
+        AddStation("Ownership",
+            "Grab a puck with the left mouse: it asks the host for control, and once it has it, this window moves the puck and the others follow, smoothed. The rover is driven by whoever the host hands it to. Colors are owners.",
+            StationCenter(1), new Float3(0f, 9f, -9f), 0f);
+        AddStation("RPCs",
+            "Ring the bell and it rings in every window, yours too: a broadcast RPC. Ask the host and only the host runs the call, counting the request in a value only it may set. Each call knows who made it.",
+            StationCenter(2), new Float3(0f, 3f, -7f));
+        AddStation("Change hooks",
+            "The reactor's heat is [Sync] with a [Change] hook, which runs with the old and new heat in every window the heat changes in. Anyone can stoke it through a host RPC; the host is the one that changes it.",
+            StationCenter(3), new Float3(0f, 3f, -7f));
+        AddStation("Collections",
+            "The bars are a NetList: adding one sends one bar, not all of them. Votes go to a NetDictionary and voters to a NetSet, through a host RPC. Every window rebuilds its bars from the lists' Changed events.",
+            StationCenter(4), new Float3(0f, 4f, -9f));
+        AddStation("Custom structs",
+            "The loadout is a struct of the game's own. Nothing marks it for the network: the script compiler sees it used and writes its serializer. It's a [Sync] value, and the argument of a broadcast RPC.",
+            StationCenter(5), new Float3(0f, 3f, -7f));
+        AddStation("Spawning",
+            "Only the host creates networked objects. Ask for a crate and the host spawns one owned by you, which you then drive: it bobs in your color in every window. Close a client and its crates go with it.",
+            StationCenter(6), new Float3(0f, 6f, -10f));
+        AddStation("Physics",
+            "Each rigidbody simulates only in the window that controls it; everywhere else it's driven by the transform that window sends. Grab one with the left mouse to take it over, then throw it: it keeps its speed as control changes hands. Bodies other windows control push yours without being pushed back.",
+            StationCenter(7), new Float3(0f, 6f, -11f));
+        AddStation("Stress test",
+            "The host spawns drones, each a networked object moving every frame. Churn changes a [Sync] value on every drone every frame too, and spreading hands them out so every window drives its share. Watch the traffic and the frame rate.",
+            StationCenter(8), new Float3(0f, 7f, -13f));
+        AddStation("Late join",
+            "Launch another client after changing things above. It gets the scene, every [Sync] value, every collection and every spawned object at once, without change hooks firing for any of it. The guestbook is a NetList the host signs for each arrival.",
+            StationCenter(9), new Float3(0f, 3f, -8f));
 
         // A body another window controls is kinematic here; clicking it asks the host for it, and the grab takes
         // hold when control arrives and the body simulates here again.
-        CameraObject.GetComponent<PhysicsGrabber>()!.UnheldClicked += body => body.GetComponent<Grabbable>()?.TakeControl();
+        CameraObject.GetComponent<PhysicsGrabber>()!.UnheldClicked +=
+            body => body.GetComponent<Grabbable>()?.TakeControl();
 
         // A client's world is the host's, and arrives when it joins.
         if (!IsClientWindow)
+        {
             BuildWorld();
+        }
     }
 
     private void BuildWorld()
@@ -122,35 +182,42 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         Add(sun);
 
         float length = StationSpacing * Stations.Count + 20f;
-        Add(Block("Floor", new Float3(length, 1f, 30f), Floor(length, 30f), new Float3(StationSpacing * (Stations.Count - 1) * 0.5f, -0.5f, 0f)));
+        Add(Block("Floor", new Float3(length, 1f, 30f), Floor(length, 30f),
+            new Float3(StationSpacing * (Stations.Count - 1) * 0.5f, -0.5f, 0f)));
         Networked(new GameObject("Tour")).AddComponent<Tour>();
 
         Pedestal(StationCenter(0));
-        GameObject lamp = Networked(Model("Lamp", Mesh.CreateSphere(0.6f, 16, 24), Lit(SyncLamp.Colors[0]), StationCenter(0) + new Float3(0f, 1.5f, 0f)));
+        GameObject lamp = Networked(Model("Lamp", Mesh.CreateSphere(0.6f, 16, 24), Lit(SyncLamp.Colors[0]),
+            StationCenter(0) + new Float3(0f, 1.5f, 0f)));
         lamp.AddComponent<SyncLamp>();
         lamp.Network.Flags = NetworkFlags.NoTransformSync;
 
         Add(Block("Track", new Float3(6.6f, 0.05f, 6.6f), _stone, StationCenter(1) + new Float3(0f, 0.03f, 0f)));
-        GameObject rover = Networked(Model("Rover", Mesh.CreateCube(new Float3(1f, 0.6f, 1.4f)), Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), StationCenter(1) + new Float3(3f, 0.6f, 0f)));
+        GameObject rover = Networked(Model("Rover", Mesh.CreateCube(new Float3(1f, 0.6f, 1.4f)),
+            Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), StationCenter(1) + new Float3(3f, 0.6f, 0f)));
         rover.AddComponent<Rover>().Center = StationCenter(1);
         for (int i = 0; i < 4; i++)
         {
-            Float3 at = StationCenter(1) + new Float3(-1.5f + i, PuckHeight, -1.2f + (i % 2) * 2.4f);
-            Networked(Model($"Puck {i + 1}", Mesh.CreateCylinder(0.4f, 0.2f, 24), Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), at)).AddComponent<Grabbable>().Home = at;
+            Float3 at = StationCenter(1) + new Float3(-1.5f + i, PuckHeight, -1.2f + i % 2 * 2.4f);
+            Networked(Model($"Puck {i + 1}", Mesh.CreateCylinder(0.4f, 0.2f, 24), Lit(new Color(0.9f, 0.9f, 0.95f, 1f)),
+                at)).AddComponent<Grabbable>().Home = at;
         }
 
         Pedestal(StationCenter(2));
-        Networked(Model("Bell", Mesh.CreateCone(0.7f, 1.2f), Lit(new Color(0.6f, 0.6f, 0.65f, 1f), 0.8f, 0.3f), StationCenter(2) + new Float3(0f, 1.8f, 0f), new Float3(180f, 0f, 0f)))
+        Networked(Model("Bell", Mesh.CreateCone(0.7f, 1.2f), Lit(new Color(0.6f, 0.6f, 0.65f, 1f), 0.8f, 0.3f),
+                StationCenter(2) + new Float3(0f, 1.8f, 0f), new Float3(180f, 0f, 0f)))
             .AddComponent<Bell>();
 
         Pedestal(StationCenter(3));
-        Networked(Model("Reactor", Mesh.CreateCylinder(0.6f, 1.4f, 24), Lit(new Color(0.1f, 0.35f, 1f, 1f)), StationCenter(3) + new Float3(0f, 1.7f, 0f)))
+        Networked(Model("Reactor", Mesh.CreateCylinder(0.6f, 1.4f, 24), Lit(new Color(0.1f, 0.35f, 1f, 1f)),
+                StationCenter(3) + new Float3(0f, 1.7f, 0f)))
             .AddComponent<Reactor>();
 
         Networked(new GameObject("Board") { Transform = { Position = StationCenter(4) } }).AddComponent<Board>();
 
         Pedestal(StationCenter(5));
-        Networked(Model("Loadout", Mesh.CreateCube(new Float3(0.8f, 1f, 0.8f)), Lit(Armory.Weapons[0].Tint), StationCenter(5) + new Float3(0f, 1.5f, 0f)))
+        Networked(Model("Loadout", Mesh.CreateCube(new Float3(0.8f, 1f, 0.8f)), Lit(Armory.Weapons[0].Tint),
+                StationCenter(5) + new Float3(0f, 1.5f, 0f)))
             .AddComponent<Armory>();
 
         Add(Block("Hangar Floor", new Float3(7f, 0.05f, 5f), _stone, StationCenter(6) + new Float3(0f, 0.03f, 0f)));
@@ -162,7 +229,8 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         Networked(new GameObject("Swarm") { Transform = { Position = StationCenter(8) } }).AddComponent<Swarm>();
 
         Pedestal(StationCenter(9));
-        Networked(new GameObject("Guestbook") { Transform = { Position = StationCenter(9) } }).AddComponent<Guestbook>();
+        Networked(new GameObject("Guestbook") { Transform = { Position = StationCenter(9) } })
+            .AddComponent<Guestbook>();
     }
 
     /// <summary>A walled pen of boxes and balls, each a networked rigidbody anyone can grab.</summary>
@@ -179,12 +247,18 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
             Float3 at = c + new Float3(-3f + i % 4 * 2f, 0.5f + i / 4 * 0.9f, -1.5f + i / 4 % 2 * 1.5f);
             GameObject body = Networked(ball
                 ? Model($"Ball {i + 1}", Mesh.CreateSphere(0.4f, 12, 18), Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), at)
-                : Model($"Box {i + 1}", Mesh.CreateCube(new Float3(0.8f, 0.8f, 0.8f)), Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), at));
+                : Model($"Box {i + 1}", Mesh.CreateCube(new Float3(0.8f, 0.8f, 0.8f)),
+                    Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), at));
             body.AddComponent<Rigidbody3D>().Mass = ball ? 1f : 2f;
             if (ball)
+            {
                 body.AddComponent<SphereCollider>().Radius = 0.4f;
+            }
             else
+            {
                 body.AddComponent<BoxCollider>().Size = new Float3(0.8f, 0.8f, 0.8f);
+            }
+
             body.AddComponent<Grabbable>().Home = at;
         }
     }
@@ -195,7 +269,10 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         foreach (Grabbable? item in Scene.Current.FindObjectsOfType<Grabbable>())
         {
             if (item?.GetComponent<Rigidbody3D>() is not { } body)
+            {
                 continue;
+            }
+
             item.GameObject.Network.AssignOwnership(null);
             item.Transform.Position = item.Home;
             item.Transform.Rotation = Quaternion.Identity;
@@ -204,7 +281,8 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         }
     }
 
-    private void Pedestal(Float3 center) => Add(Block("Pedestal", new Float3(1.6f, 1f, 1.6f), _stone, center + new Float3(0f, 0.5f, 0f)));
+    private void Pedestal(Float3 center) =>
+        Add(Block("Pedestal", new Float3(1.6f, 1f, 1.6f), _stone, center + new Float3(0f, 0.5f, 0f)));
 
     /// <summary>Placed in the scene as a networked object, which belongs to the host until it hands it out.</summary>
     private GameObject Networked(GameObject go)
@@ -227,7 +305,9 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         }
 
         if (!Networking.IsActive)
+        {
             return;
+        }
 
         FollowTheHost();
         DragPucks();
@@ -240,13 +320,15 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         {
             if (IsClientWindow)
             {
-                NetSession session = Networking.Join(new KcpTransport(), joinAddress!, $"Client {Environment.ProcessId % 1000}");
-                session.Ended += (reason, message) => _status = $"Session ended: {reason}{(message == null ? "" : ", " + message)}";
+                NetSession session = Networking.Join(new KcpTransport(), joinAddress!,
+                    $"Client {Environment.ProcessId % 1000}");
+                session.Ended += (reason, message) =>
+                    _status = $"Session ended: {reason}{(message == null ? "" : ", " + message)}";
                 _status = $"Joining {joinAddress}";
             }
             else
             {
-                NetSession session = Networking.Host(new KcpTransport(new KcpTransportOptions { Port = Port }), "Host");
+                NetSession session = Networking.Host(new KcpTransport(new KcpTransportOptions { Port = Port }));
                 session.PeerJoined += peer => Find<Guestbook>()?.Sign($"{peer.Name} joined at {DateTime.Now:HH:mm:ss}");
                 session.PeerLeft += (peer, reason) => Find<Guestbook>()?.Sign($"{peer.Name} left ({reason})");
                 Find<Guestbook>()?.Sign($"The host opened at {DateTime.Now:HH:mm:ss}");
@@ -263,17 +345,26 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
     private void FollowTheHost()
     {
         if (Find<Tour>() is not { } tour)
+        {
             return;
+        }
 
         if (Networking.IsHost)
+        {
             tour.Station = CurrentStation;
+        }
         else if (tour.Station != CurrentStation)
+        {
             GoToStation(tour.Station);
+        }
     }
 
     protected override void OnStationChanged(int index) => _dragging = null;
 
-    /// <summary>Left mouse on a puck asks for control of it; while this window has it, the puck follows the mouse along the floor.</summary>
+    /// <summary>
+    ///     Left mouse on a puck asks for control of it; while this window has it, the puck follows the mouse along the
+    ///     floor.
+    /// </summary>
     private void DragPucks()
     {
         if (CurrentStation != OwnershipStation)
@@ -290,15 +381,21 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
                 .OrderBy(p => Float3.Distance(ray.Origin, p.Transform.Position))
                 .FirstOrDefault();
             if (_dragging != null && _dragging.GameObject.IsProxy)
+            {
                 _dragging.TakeControl();
+            }
         }
 
         if (!Input.GetMouseButton(0))
+        {
             _dragging = null;
+        }
 
         // Until the host hands it over, the puck is a proxy here, and moving it would be undone.
         if (_dragging is { } puck && puck.IsValid() && !puck.GameObject.IsProxy && ray.Direction.Y < -0.01f)
+        {
             puck.Transform.Position = ray.Origin + ray.Direction * ((PuckHeight - ray.Origin.Y) / ray.Direction.Y);
+        }
     }
 
     private static bool Hits(Ray ray, Float3 center, float radius)
@@ -312,7 +409,9 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
     {
         double now = Time.TimeSinceStartup;
         if (now < _nextRate)
+        {
             return;
+        }
 
         long sent = 0, received = 0;
         foreach (NetPeer peer in Networking.Session!.Peers)
@@ -335,44 +434,26 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         string self = Environment.ProcessPath!;
         string arguments = $"--join 127.0.0.1:{Networking.LocalPort}";
         if (Path.GetFileNameWithoutExtension(self).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+        {
             arguments = $"\"{typeof(Program).Assembly.Location}\" {arguments}";
-        Process.Start(new ProcessStartInfo(self, arguments) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory });
+        }
+
+        Process.Start(new ProcessStartInfo(self, arguments)
+        {
+            UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory
+        });
     }
 
     /// <summary>The stage's component in the replicated scene, which on a client is the host's, once it has arrived.</summary>
-    private static T? Find<T>() where T : Component => Scene.Current.FindObjectsOfType<T>().FirstOrDefault(c => c.IsValid());
+    private static T? Find<T>() where T : Component =>
+        Scene.Current.FindObjectsOfType<T>().FirstOrDefault(c => c.IsValid());
 
     private static string Who(NetPeer? peer) => peer == null ? "the host" : peer.IsLocal ? "you" : peer.Name;
 
-    private static string Control(Component c) => c.GameObject.IsProxy ? "a proxy in this window" : "controlled from this window";
+    private static string Control(Component c) =>
+        c.GameObject.IsProxy ? "a proxy in this window" : "controlled from this window";
 
     private static string Kilobytes(double bytes) => $"{bytes / 1024.0:0.0} KB/s";
-
-    public override string Stats
-    {
-        get
-        {
-            if (!Networking.IsActive)
-                return _status;
-
-            return CurrentStation switch
-            {
-                0 when Find<SyncLamp>() is { } lamp => $"Color {lamp.ColorIndex}, height {lamp.Height:0.0}, {Control(lamp)}",
-                1 when Find<Rover>() is { } rover => $"Rover driven by {Who(rover.GameObject.Network.Owner)} at speed {rover.Speed:0.0}    "
-                    + $"Pucks here: {Scene.Current.FindObjectsOfType<Grabbable>().Count(p => p != null && p.GetComponent<Rigidbody3D>() == null && !p.GameObject.IsProxy)} of 4",
-                2 when Find<Bell>() is { } bell => $"The host has counted {bell.Requests} request(s)",
-                3 when Find<Reactor>() is { } reactor => $"Heat {reactor.Heat}",
-                4 when Find<Board>() is { } board => $"{board.Bars.Count} bar(s), {board.Votes.Values.Sum()} vote(s) from {board.Voters.Count} voter(s)",
-                5 when Find<Armory>() is { } armory => $"{armory.Current.Weapon}, {armory.Current.Ammo} of {armory.Current.Magazine}{(armory.Current.Silenced ? ", silenced" : "")}",
-                6 when Find<Hangar>() is { } hangar => $"{hangar.Crates} crate(s) in the hangar",
-                7 => PhysicsStats(),
-                8 when Find<Swarm>() is { } swarm => $"{swarm.Drones} drone(s), {Networking.NetworkObjectCount} networked object(s)    "
-                    + $"Sent {Kilobytes(_sentPerSecond)}, received {Kilobytes(_receivedPerSecond)}",
-                9 when Find<Guestbook>() is { } book => $"{book.Entries.Count} entr(ies) in the guestbook, {Networking.Session!.Peers.Count} peer(s) here now",
-                _ => "Waiting for the host's scene",
-            };
-        }
-    }
 
     // --------------------------------------------------------------------
     //  Controls
@@ -406,7 +487,10 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
     {
         Header(paper, font, "Lamp");
         if (lamp.GameObject.IsProxy)
+        {
             Label(paper, font, "The host controls the lamp. Try it: nothing changes.", 1);
+        }
+
         Button(paper, font, "Next color", lamp.NextColor);
         Slider(paper, font, "Height", lamp.Height, 0.8f, 4f, v => lamp.Height = v, "0.0");
     }
@@ -419,18 +503,26 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         Header(paper, font, "Rover", 2);
         Label(paper, font, $"Driven by {Who(rover.GameObject.Network.Owner)}", 3);
         if (rover.GameObject.IsProxy)
+        {
             Label(paper, font, "This window follows its transform.", 4);
+        }
         else
+        {
             Slider(paper, font, "Speed", rover.Speed, -3f, 3f, v => rover.Speed = v, "0.0", 5);
+        }
 
         if (!Networking.IsHost)
+        {
             return;
+        }
 
         Header(paper, font, "Hand the rover to", 6);
         Button(paper, font, "The host", () => rover.GameObject.Network.AssignOwnership(null), 7);
         int id = 8;
         foreach (NetPeer peer in Networking.Session!.Peers.Where(p => !p.IsLocal))
+        {
             Button(paper, font, peer.Name, () => rover.GameObject.Network.AssignOwnership(peer), id++);
+        }
     }
 
     private static void BellControls(Paper paper, FontFile font, Bell bell)
@@ -440,7 +532,9 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         Button(paper, font, "Ask the host", bell.AskHost, 2);
         Header(paper, font, "Calls in this window", 3);
         for (int i = 0; i < bell.Log.Count; i++)
+        {
             Label(paper, font, bell.Log[i], 10 + i);
+        }
     }
 
     private static void ReactorControls(Paper paper, FontFile font, Reactor reactor)
@@ -450,7 +544,9 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         Button(paper, font, "Cool it (-10)", () => reactor.Stoke(-10), 2);
         Header(paper, font, "Hook calls in this window", 3);
         for (int i = 0; i < reactor.Log.Count; i++)
+        {
             Label(paper, font, reactor.Log[i], 10 + i);
+        }
     }
 
     private static void BoardControls(Paper paper, FontFile font, Board board)
@@ -466,12 +562,19 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
 
         Header(paper, font, "Vote", 5);
         foreach ((string option, int id) in new[] { ("Red", 6), ("Green", 7), ("Blue", 8) })
-            Button(paper, font, $"{option}  ({(board.Votes.TryGetValue(option, out int votes) ? votes : 0)})", () => board.Vote(option), id);
-        Label(paper, font, board.Voters.Count == 0 ? "Nobody has voted" : "Voters: " + string.Join(", ", board.Voters), 9);
+        {
+            Button(paper, font, $"{option}  ({(board.Votes.TryGetValue(option, out int votes) ? votes : 0)})",
+                () => board.Vote(option), id);
+        }
+
+        Label(paper, font, board.Voters.Count == 0 ? "Nobody has voted" : "Voters: " + string.Join(", ", board.Voters),
+            9);
 
         Header(paper, font, "Changes seen here", 10);
         for (int i = 0; i < board.Events.Count; i++)
+        {
             Label(paper, font, board.Events[i], 20 + i);
+        }
     }
 
     private static void ArmoryControls(Paper paper, FontFile font, Armory armory)
@@ -498,13 +601,20 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         Header(paper, font, "Hangar");
         Button(paper, font, Networking.IsHost ? "Spawn a crate" : "Ask for a crate of my own", hangar.RequestCrate, 1);
         if (Networking.IsHost)
+        {
             Button(paper, font, "Clear the crates", hangar.ClearCrates, 2);
+        }
     }
 
     private static string PhysicsStats()
     {
-        List<Rigidbody3D> bodies = [.. Scene.Current.FindObjectsOfType<Rigidbody3D>().OfType<Rigidbody3D>().Where(b => b.GameObject.Network.Active)];
-        return $"{bodies.Count(b => !b.GameObject.IsProxy)} of {bodies.Count} bodies simulated in this window; the rest follow the windows that control them";
+        List<Rigidbody3D> bodies =
+        [
+            .. Scene.Current.FindObjectsOfType<Rigidbody3D>().OfType<Rigidbody3D>()
+                .Where(b => b.GameObject.Network.Active)
+        ];
+        return
+            $"{bodies.Count(b => !b.GameObject.IsProxy)} of {bodies.Count} bodies simulated in this window; the rest follow the windows that control them";
     }
 
     private static void PhysicsControls(Paper paper, FontFile font)
@@ -513,7 +623,9 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         Label(paper, font, "Grab a body with the left mouse and throw it.", 1);
         Label(paper, font, "Bodies in your color simulate here.", 2);
         if (Networking.IsHost)
+        {
             Button(paper, font, "Restack the pile", RestackPhysics, 3);
+        }
     }
 
     private void StressControls(Paper paper, FontFile font, Swarm swarm)
@@ -528,7 +640,8 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         Slider(paper, font, "Drones to spawn", _stressCount, 10f, 1000f, v => _stressCount = (int)v, "0", 1);
         Button(paper, font, $"Spawn {_stressCount}", () => swarm.Spawn(_stressCount), 2);
         Button(paper, font, "Clear", swarm.Clear, 3);
-        Toggle(paper, font, "Churn: change a [Sync] value on every drone every frame", swarm.Churn, v => swarm.Churn = v, 4);
+        Toggle(paper, font, "Churn: change a [Sync] value on every drone every frame", swarm.Churn,
+            v => swarm.Churn = v, 4);
         Button(paper, font, "Spread them over every window", swarm.Spread, 5);
         Button(paper, font, "Give them all back to the host", swarm.Gather, 6);
     }
@@ -537,23 +650,31 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
     {
         Header(paper, font, "Guestbook");
         for (int i = 0; i < book.Entries.Count; i++)
+        {
             Label(paper, font, book.Entries[i], 10 + i);
+        }
     }
 
     public override void DrawSceneControls(Paper paper, FontFile font)
     {
         Header(paper, font, "Session");
-        string role = Networking.IsHost ? "Host" : Networking.IsActive ? $"Client, peer #{Networking.Session!.LocalPeer?.Id}" : "Not connected";
+        string role = Networking.IsHost ? "Host" :
+            Networking.IsActive ? $"Client, peer #{Networking.Session!.LocalPeer?.Id}" : "Not connected";
         Label(paper, font, $"{role}    {_status}", 1);
 
         if (Networking.Session is { } session)
         {
             int id = 10;
             foreach (NetPeer peer in session.Peers)
-                Label(paper, font, $"{peer}{(peer.IsLocal ? "" : $"    {peer.RoundTripTime.TotalMilliseconds:0} ms")}", id++);
+            {
+                Label(paper, font, $"{peer}{(peer.IsLocal ? "" : $"    {peer.RoundTripTime.TotalMilliseconds:0} ms")}",
+                    id++);
+            }
         }
 
         if (Networking.IsHost)
+        {
             Button(paper, font, "Launch a client", LaunchClient, 2);
+        }
     }
 }

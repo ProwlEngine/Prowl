@@ -9,6 +9,7 @@ using Prowl.Editor.Core;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Runtime;
 using Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Attributes;
 using Prowl.Runtime.Resources;
 using Prowl.Warp.Transports.Kcp;
 using Prowl.Warp;

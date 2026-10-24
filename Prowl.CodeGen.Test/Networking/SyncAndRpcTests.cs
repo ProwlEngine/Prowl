@@ -5,6 +5,9 @@ using System.Reflection;
 
 using Prowl.CodeGen.Networking;
 using Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Enums;
+using Prowl.Runtime.Networking.Serialization;
+using Prowl.Runtime.Networking.Utilities;
 using Prowl.Vector;
 using Prowl.Warp;
 
@@ -113,6 +116,10 @@ public class SyncAndRpcTests
             TestScripts.ShipPartA, """
                                    using Prowl.Runtime;
                                    using Prowl.Runtime.Networking;
+                                   using Prowl.Runtime.Networking.Attributes;
+                                   using Prowl.Runtime.Networking.Collections;
+                                   using Prowl.Runtime.Networking.Enums;
+                                   using Prowl.Runtime.Networking.Serialization;
                                    using Fleet.Stats;
 
                                    namespace Fleet;
@@ -136,6 +143,10 @@ public class SyncAndRpcTests
         Type holderType = Scripts.Compile("""
                                           using Prowl.Runtime;
                                           using Prowl.Runtime.Networking;
+                                          using Prowl.Runtime.Networking.Attributes;
+                                          using Prowl.Runtime.Networking.Collections;
+                                          using Prowl.Runtime.Networking.Enums;
+                                          using Prowl.Runtime.Networking.Serialization;
 
                                           public class Holder<T> : Component
                                           {
@@ -159,10 +170,10 @@ public class SyncAndRpcTests
         Assert.NotNull(Scripts.Compile("""
                                        public class StatsNames : Prowl.Runtime.Component
                                        {
-                                           [Prowl.Runtime.Networking.Rpc.Broadcast]
+                                           [Prowl.Runtime.Networking.Attributes.Rpc.Broadcast]
                                            public void WithParameter(int __rpc_stats) { }
 
-                                           [Prowl.Runtime.Networking.Rpc.Broadcast]
+                                           [Prowl.Runtime.Networking.Attributes.Rpc.Broadcast]
                                            public void WithLocal() { int __rpc_stats = 1; }
                                        }
                                        """).GetType("StatsNames"));

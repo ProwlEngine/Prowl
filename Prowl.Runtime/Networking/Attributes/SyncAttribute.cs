@@ -3,7 +3,11 @@
 
 using System;
 
-namespace Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Collections;
+using Prowl.Runtime.Networking.Enums;
+using Prowl.Runtime.Networking.Serialization;
+
+namespace Prowl.Runtime.Networking.Attributes;
 
 /// <summary>
 ///     Keeps a property of a <see cref="Component" /> the same on every peer. Whoever controls the object

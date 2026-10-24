@@ -3,7 +3,9 @@
 
 using System;
 
-namespace Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Enums;
+
+namespace Prowl.Runtime.Networking.Attributes;
 
 public static partial class Rpc
 {

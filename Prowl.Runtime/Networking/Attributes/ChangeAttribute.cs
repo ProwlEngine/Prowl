@@ -3,7 +3,9 @@
 
 using System;
 
-namespace Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Collections;
+
+namespace Prowl.Runtime.Networking.Attributes;
 
 /// <summary>
 ///     Calls a method of the component whenever a <see cref="SyncAttribute" /> property's value changes, as in

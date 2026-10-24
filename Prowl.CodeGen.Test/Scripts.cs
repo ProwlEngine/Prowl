@@ -9,6 +9,7 @@ using Microsoft.CodeAnalysis.CSharp;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Utilities;
 
 using Xunit;
 

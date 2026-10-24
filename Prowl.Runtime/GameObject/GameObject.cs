@@ -11,6 +11,9 @@ using System.Runtime.CompilerServices;
 using Prowl.Ember;
 using Prowl.Echo;
 using Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Enums;
+using Prowl.Runtime.Networking.Objects;
+using Prowl.Runtime.Networking.Serialization;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
@@ -64,7 +67,7 @@ public partial class GameObject : EngineObject, ISerializable
     public NetworkAccessor Network => _network ??= new NetworkAccessor(this);
 
     /// <summary>True when this peer receives the object's state from its controller.</summary>
-    public bool IsProxy => Networking.Networking.IsProxy(this);
+    public bool IsProxy => Networking.Networking.System?.IsProxy(this) == true;
 
     /// <summary> The Tag Index of this GameObject </summary>
     public int TagIndex;
@@ -313,8 +316,8 @@ public partial class GameObject : EngineObject, ISerializable
 
         if (!IsDisposed)
         {
-            Networking.Networking.AssertHierarchyEditable(this);
-            Networking.Networking.AssertHierarchyEditable(NewParent);
+            Networking.Networking.System?.AssertHierarchyEditable(this);
+            Networking.Networking.System?.AssertHierarchyEditable(NewParent);
         }
         SceneEvents.Invalidate();
 
@@ -604,7 +607,7 @@ public partial class GameObject : EngineObject, ISerializable
         HashSet<Type>? pending)
     {
         MainThreadContext.AssertOwner(this, nameof(AddComponent));
-        Networking.Networking.AssertStructureEditable(this);
+        Networking.Networking.System?.AssertStructureEditable(this);
         if (!CanConstruct(type)) return null;
 
         if (RefusesAnother(type)) return null;
@@ -705,8 +708,8 @@ public partial class GameObject : EngineObject, ISerializable
         MainThreadContext.AssertOwner(comp.GameObject);
 
         if (ReferenceEquals(comp.GameObject, this)) return true;
-        Networking.Networking.AssertStructureEditable(this);
-        Networking.Networking.AssertStructureEditable(comp.GameObject);
+        Networking.Networking.System?.AssertStructureEditable(this);
+        Networking.Networking.System?.AssertStructureEditable(comp.GameObject);
         if (RefusesAnother(comp.GetType())) return false;
 
         // A component belongs to exactly one GameObject. Leaving it registered on its previous one
@@ -778,7 +781,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <typeparam name="T">The type of components to remove.</typeparam>
     public void RemoveAll<T>() where T : Component
     {
-        Networking.Networking.AssertStructureEditable(this);
+        Networking.Networking.System?.AssertStructureEditable(this);
         if (_componentCache.TryGetValue(typeof(T), out IReadOnlyCollection<Component>? components))
         {
             // Create a copy to avoid potential collection modification issues
@@ -848,7 +851,7 @@ public partial class GameObject : EngineObject, ISerializable
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
         MainThreadContext.AssertOwner(this, nameof(RemoveComponent));
-        if (!IsDisposed && !IsDestroyQueued) Networking.Networking.AssertStructureEditable(this);
+        if (!IsDisposed && !IsDestroyQueued) Networking.Networking.System?.AssertStructureEditable(this);
         if (component.CanDestroy() == false) return;
 
         if (_components.Remove(component))
@@ -1170,13 +1173,13 @@ public partial class GameObject : EngineObject, ISerializable
         return false;
     }
 
-    private protected override void AssertCanDestroy() => Networking.Networking.AssertObjectDestroyable(this);
+    private protected override void AssertCanDestroy() => Networking.Networking.System?.AssertObjectDestroyable(this);
 
     private protected override void AssertCanDispose()
     {
         MainThreadContext.AssertOwner(this, nameof(Dispose));
         AssertCanDestroy();
-        Networking.Networking.BeforeObjectDisposed(this);
+        Networking.Networking.System?.BeforeObjectDisposed(this);
     }
 
     /// <summary>
@@ -1186,7 +1189,7 @@ public partial class GameObject : EngineObject, ISerializable
     {
         // On the host, a networked object going away goes away everywhere.
         if (NetworkAccessor.ModeOf(this) == NetworkMode.Object)
-            Networking.Networking.OnGameObjectDisposed(this);
+            Networking.Networking.System?.OnGameObjectDisposed(this);
 
         for (int i = Children.Count - 1; i >= 0; i--)
             Children[i].Dispose();

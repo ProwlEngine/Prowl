@@ -3,6 +3,8 @@
 
 using System;
 
+using Prowl.Runtime.Networking.Enums;
+using Prowl.Runtime.Networking.Systems;
 using Prowl.Warp;
 using Prowl.Warp.Transports.Kcp;
 using Prowl.Warp.Transports.Local;
@@ -22,12 +24,13 @@ public static partial class Networking
     {
         ArgumentNullException.ThrowIfNull(configuration);
         s_configuration = configuration.ValidatedCopy();
+        System?.Configure(s_configuration);
         TickRate = s_configuration.TickRate;
         InterpolationDelay = TimeSpan.FromMilliseconds(s_configuration.InterpolationMilliseconds);
     }
 
     /// <summary>Creates a transport using project defaults. Local transports share a network within this process only.</summary>
-    public static Transport CreateTransport(bool hosting)
+    internal static Transport CreateTransport(bool hosting)
     {
         if (s_configuration.Transport == NetworkTransport.Local)
         {
@@ -42,31 +45,15 @@ public static partial class Networking
     public static NetSession Host(string name = "Host")
     {
         BeginSession();
-        Transport transport = CreateTransport(true);
-        try
-        {
-            return Host(transport, name);
-        }
-        catch
-        {
-            transport.Dispose();
-            throw;
-        }
+        NetworkSystem.ValidateSceneMessageLimit(null);
+        return Host(CreateTransport(true), name);
     }
 
     /// <summary>Joins using the project's transport and session defaults. KCP addresses may include a port.</summary>
     public static NetSession Join(string address, string name, ReadOnlySpan<byte> token = default)
     {
         BeginSession();
-        Transport transport = CreateTransport(false);
-        try
-        {
-            return Join(transport, address, name, token);
-        }
-        catch
-        {
-            transport.Dispose();
-            throw;
-        }
+        NetworkSystem.ValidateSceneMessageLimit(null);
+        return Join(CreateTransport(false), address, name, token);
     }
 }

@@ -2,14 +2,14 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime;
-using Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Attributes;
 using Prowl.Vector;
 
 namespace NetworkingShowcase;
 
 /// <summary>
-/// A struct of the game's own. Nothing marks it for the network: the script compiler sees a [Sync] value and
-/// an RPC use it, and writes its serializer from its public fields and auto-properties.
+///     A struct of the game's own. Nothing marks it for the network: the script compiler sees a [Sync] value and
+///     an RPC use it, and writes its serializer from its public fields and auto-properties.
 /// </summary>
 public struct Loadout
 {
@@ -21,8 +21,8 @@ public struct Loadout
 }
 
 /// <summary>
-/// Stage 6. A [Sync] struct goes as one value: change any field and the whole loadout arrives together. The
-/// same struct is an RPC argument too, when someone shows theirs off.
+///     Stage 6. A [Sync] struct goes as one value: change any field and the whole loadout arrives together. The
+///     same struct is an RPC argument too, when someone shows theirs off.
 /// </summary>
 public class Armory : Component
 {
@@ -30,12 +30,12 @@ public class Armory : Component
     [
         new() { Weapon = "Pistol", Ammo = 12, Magazine = 12, Tint = new Color(0.8f, 0.8f, 0.85f, 1f) },
         new() { Weapon = "Rifle", Ammo = 30, Magazine = 30, Tint = new Color(0.3f, 0.9f, 0.4f, 1f) },
-        new() { Weapon = "Launcher", Ammo = 4, Magazine = 4, Tint = new Color(1f, 0.4f, 0.1f, 1f) },
+        new() { Weapon = "Launcher", Ammo = 4, Magazine = 4, Tint = new Color(1f, 0.4f, 0.1f, 1f) }
     ];
 
-    [Sync] public Loadout Current { get; set; } = Weapons[0];
-
     private readonly Tint _tint = new();
+
+    [Sync] public Loadout Current { get; set; } = Weapons[0];
 
     public string LastShown { get; private set; } = "Nobody has shown off yet";
 
@@ -53,7 +53,8 @@ public class Armory : Component
 
     [Rpc.Broadcast]
     public void ShowOff(Loadout loadout) =>
-        LastShown = $"{Rpc.Caller?.Name ?? "You"} showed a {(loadout.Silenced ? "silenced " : "")}{loadout.Weapon}, {loadout.Ammo} of {loadout.Magazine}";
+        LastShown =
+            $"{Rpc.Caller?.Name ?? "You"} showed a {(loadout.Silenced ? "silenced " : "")}{loadout.Weapon}, {loadout.Ammo} of {loadout.Magazine}";
 
     public override void Update()
     {

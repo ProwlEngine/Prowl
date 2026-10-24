@@ -4,9 +4,12 @@
 using System;
 using System.IO;
 
+using Prowl.Runtime.Networking.Attributes;
+using Prowl.Runtime.Networking.Systems;
+using Prowl.Runtime.Networking.Utilities;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking;
+namespace Prowl.Runtime.Networking.Collections;
 
 /// <summary>
 ///     Base of <see cref="NetList{T}" />, <see cref="NetDictionary{TKey,TValue}" /> and <see cref="NetSet{T}" />:
@@ -36,7 +39,7 @@ public abstract class NetCollection
     // The changes not sent yet, already written, the first of them being number _changesFrom.
     private NetWriter? _changes;
     private uint _changesFrom;
-    private int _changesSession;
+    private object? _changesSession;
     private SyncMember? _member;
 
     private Component? _owner;
@@ -79,23 +82,23 @@ public abstract class NetCollection
             return true;
         }
 
-        if (!Networking.HasControl(_owner, _member.Flags))
+        if (!Networking.System!.HasControl(_owner, _member.Flags))
         {
-            Networking.WarnSyncOnce(_owner, _member, "was changed on a peer that doesn't control it");
+            Networking.System!.Sync.WarnSyncOnce(_owner, _member, "was changed on a peer that doesn't control it");
             return false;
         }
 
-        if (!Networking.MarkSyncDirty(_owner, _member.Slot))
+        if (!Networking.System!.Sync.MarkSyncDirty(_owner, _member.Slot))
         {
             return true;
         }
 
         // What a previous session left unsent goes nowhere now.
-        if (_changes == null || _changesSession != Networking.SessionNumber)
+        if (_changes == null || _changesSession != Networking.System?.Identity)
         {
             (_changes ??= new NetWriter()).Reset();
             _changeCount = 0;
-            _changesSession = Networking.SessionNumber;
+            _changesSession = Networking.System?.Identity;
         }
 
         if (_changeCount == 0)
@@ -118,7 +121,7 @@ public abstract class NetCollection
 
     internal void WriteChanges(NetWriter writer)
     {
-        bool pending = _changes != null && _changesSession == Networking.SessionNumber;
+        bool pending = _changes != null && _changesSession == Networking.System?.Identity;
         writer.WriteByte(Changes);
         writer.WriteVarUInt32(pending ? _changesFrom : _sequence);
         writer.WriteVarUInt32(pending ? _changeCount : 0);
@@ -230,7 +233,7 @@ public abstract class NetCollection
 
         if (received)
         {
-            Networking.Notify(() => handler(change));
+            SyncSystem.NotifyChange(() => handler(change));
         }
         else
         {

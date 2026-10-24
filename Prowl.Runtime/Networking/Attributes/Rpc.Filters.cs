@@ -5,10 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Runtime.Networking.Utilities;
 using Prowl.Runtime.Tasks;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking;
+namespace Prowl.Runtime.Networking.Attributes;
 
 public static partial class Rpc
 {

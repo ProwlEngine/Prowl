@@ -1,5 +1,6 @@
 using System;
 
+using Prowl.Runtime.Networking.Enums;
 using Prowl.Warp;
 using Prowl.Warp.Transports.Kcp;
 
@@ -47,9 +48,6 @@ public sealed class NetworkConfiguration
     public NetworkTransport Transport = NetworkTransport.Kcp;
 
     public int UpdateIntervalMilliseconds = 10;
-
-    // Retained for existing serialized projects. False selects inline execution in Auto mode.
-    public bool UseNetworkThread = true;
 
     /// <summary>Returns an independent, normalized copy so editing project defaults cannot mutate a running session.</summary>
     public NetworkConfiguration ValidatedCopy()
@@ -116,7 +114,7 @@ public sealed class NetworkConfiguration
         }
 
         return Execution == NetworkExecution.DedicatedThread ||
-               (Execution == NetworkExecution.Auto && UseNetworkThread &&
+               (Execution == NetworkExecution.Auto &&
                 capabilities.Execution == TransportExecution.WorkerPreferred);
     }
 

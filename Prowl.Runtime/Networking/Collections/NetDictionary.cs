@@ -7,9 +7,12 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 
+using Prowl.Runtime.Networking.Attributes;
+using Prowl.Runtime.Networking.Enums;
+using Prowl.Runtime.Networking.Serialization;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking;
+namespace Prowl.Runtime.Networking.Collections;
 
 /// <summary>A change to a <see cref="NetDictionary{TKey,TValue}" />.</summary>
 /// <param name="Kind">What happened.</param>
@@ -50,7 +53,7 @@ public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKe
         set => Set(key, value, false);
     }
 
-    /// <exception cref="ArgumentException">There's already a value under <paramref name="key" />.</exception>
+    /// <exception cref="key">There's already a value under <paramref name="key" />.</exception>
     public void Add(TKey key, TValue value)
     {
         ArgumentNullException.ThrowIfNull(key);

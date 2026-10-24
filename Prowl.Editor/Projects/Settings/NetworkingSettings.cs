@@ -6,6 +6,7 @@ using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Enums;
 
 namespace Prowl.Editor.Projects.Settings;
 
@@ -45,8 +46,8 @@ public sealed class NetworkingSettings : ProjectSettingsBase
             Toggle(paper, "batchmessages", "Batch Messages", Configuration.BatchMessages, v => Configuration.BatchMessages = v);
             EditorGUI.SettingsRow(paper, "netsettings_execution", "Execution", () =>
                 Origami.Dropdown(paper, "netsettings_execution_v",
-                    (int)(Configuration.Execution == NetworkExecution.Auto && !Configuration.UseNetworkThread ? NetworkExecution.Inline : Configuration.Execution),
-                    v => { Configuration.Execution = (NetworkExecution)v; Configuration.UseNetworkThread = true; Changed(); },
+                    (int)Configuration.Execution,
+                    v => { Configuration.Execution = (NetworkExecution)v; Changed(); },
                     ["Automatic", "Inline", "Dedicated Thread"]).Show());
             Integer(paper, "port", "Port (0 = automatic)", Configuration.Port, v => Configuration.Port = v, 0, 65535);
             Unsigned(paper, "protocol", "Protocol ID", Configuration.ProtocolId, v => Configuration.ProtocolId = v);

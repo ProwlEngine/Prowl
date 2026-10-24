@@ -1,7 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-namespace Prowl.Runtime.Networking;
+namespace Prowl.Runtime.Networking.Enums;
 
 /// <summary>What happened to a network collection.</summary>
 public enum NetChangeKind : byte

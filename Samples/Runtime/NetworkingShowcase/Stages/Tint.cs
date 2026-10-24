@@ -14,7 +14,9 @@ public sealed class Tint
     public void Apply(GameObject go, Color color, float glow = 2f)
     {
         if (color.Equals(_current) || go.GetComponent<MeshRenderer>()?.Material is not { } material)
+        {
             return;
+        }
 
         _current = color;
         material.SetColor("_MainColor", color);

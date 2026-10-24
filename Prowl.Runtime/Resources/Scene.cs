@@ -10,6 +10,8 @@ using Prowl.Echo;
 using Prowl.PaperUI;
 using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Enums;
+using Prowl.Runtime.Networking.Serialization;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
@@ -649,7 +651,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         EnsureNotDisposed();
         MainThreadContext.AssertOwner(this);
         MainThreadContext.AssertOwner(obj);
-        if (obj.Scene != this) Networking.Networking.AssertHierarchyEditable(obj);
+        if (obj.Scene != this) Networking.Networking.System?.AssertHierarchyEditable(obj);
         if (obj.Scene.IsValid() && obj.Scene != this) obj.Scene.Remove(obj);
         AddObject(obj);
     }
@@ -703,7 +705,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </remarks>
     public void Remove(GameObject obj)
     {
-        Networking.Networking.AssertHierarchyEditable(obj);
+        Networking.Networking.System?.AssertHierarchyEditable(obj);
         EnsureNotDisposed();
         MainThreadContext.AssertOwner(this);
 

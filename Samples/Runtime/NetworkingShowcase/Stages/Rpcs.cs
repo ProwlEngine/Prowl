@@ -2,24 +2,24 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime;
-using Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Attributes;
+using Prowl.Runtime.Networking.Enums;
 using Prowl.Vector;
 
 namespace NetworkingShowcase;
 
 /// <summary>
-/// Stage 3. Calling an RPC runs it where its attribute says: <see cref="Ring"/> on every peer, the caller too;
-/// <see cref="AskHost"/> on the host only, which keeps a count only it may change. Inside an RPC,
-/// <see cref="Rpc.Caller"/> is the peer that called it.
+///     Stage 3. Calling an RPC runs it where its attribute says: <see cref="Ring" /> on every peer, the caller too;
+///     <see cref="AskHost" /> on the host only, which keeps a count only it may change. Inside an RPC,
+///     <see cref="Rpc.Caller" /> is the peer that called it.
 /// </summary>
 public class Bell : Component
 {
-    [Sync(SyncFlags.FromHost)] public int Requests { get; set; }
-
     private readonly List<string> _log = [];
     private readonly Tint _tint = new();
     private Color _color = new(0.6f, 0.6f, 0.65f, 1f);
     private float _ring;
+    [Sync(SyncFlags.FromHost)] public int Requests { get; set; }
 
     public IReadOnlyList<string> Log => _log;
 
@@ -42,7 +42,9 @@ public class Bell : Component
     {
         _log.Add(line);
         if (_log.Count > 6)
+        {
             _log.RemoveAt(0);
+        }
     }
 
     public override void Update()

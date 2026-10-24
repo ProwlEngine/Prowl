@@ -12,6 +12,8 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Enums;
+using Prowl.Runtime.Networking.Objects;
 
 using FontFile = Prowl.Scribe.FontFile;
 using TextWrapMode = Prowl.Scribe.TextWrapMode;
@@ -46,7 +48,7 @@ internal static class NetworkPopover
         if (!Application.IsPlaying || NetworkAccessor.IsExcludedFromNetwork(go))
             return null;
 
-        if (Networking.IsNetworked(go))
+        if (go.Network.Active)
         {
             string owner = go.Network.Owner is { } peer
                 ? peer.Name

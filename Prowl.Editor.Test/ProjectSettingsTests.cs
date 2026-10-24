@@ -5,6 +5,7 @@ using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Runtime;
 using Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Enums;
 
 using Xunit;
 
@@ -119,7 +120,7 @@ public class ProjectSettingsTests : EditorTestHarness
             settings.Configuration.ProtocolId = 4567;
             settings.Configuration.PacketLossPercent = 12;
             settings.Configuration.BatchMessages = false;
-            settings.Configuration.UseNetworkThread = false;
+            settings.Configuration.Execution = NetworkExecution.Inline;
             settings.Apply();
             EditorRegistries.SaveSettings();
             Assert.True(File.Exists(Path.Combine(Project.ProjectSettingsPath, "Networking.yaml")));
@@ -138,7 +139,7 @@ public class ProjectSettingsTests : EditorTestHarness
             Assert.Equal(4567u, Networking.Configuration.ProtocolId);
             Assert.Equal(12, Networking.Configuration.PacketLossPercent);
             Assert.False(Networking.Configuration.BatchMessages);
-            Assert.False(Networking.Configuration.UseNetworkThread);
+            Assert.Equal(NetworkExecution.Inline, Networking.Configuration.Execution);
             Assert.Equal(24, Networking.TickRate);
         }
         finally { Networking.Configure(previous); }

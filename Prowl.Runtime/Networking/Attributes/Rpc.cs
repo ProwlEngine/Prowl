@@ -1,9 +1,10 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Runtime.Networking.Serialization;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking;
+namespace Prowl.Runtime.Networking.Attributes;
 
 /// <summary>
 ///     Remote procedure calls. Mark an instance method on a <see cref="Component" />, or a static method on
@@ -23,8 +24,8 @@ public static partial class Rpc
     ///     The peer whose call is running right now. Inside an RPC that came over the network, the caller;
     ///     anywhere else, the local peer. Null without a session.
     /// </summary>
-    public static NetPeer? Caller => Networking.CurrentCaller ?? Networking.Session?.LocalPeer;
+    public static NetPeer? Caller => Networking.System?.Rpcs.CurrentCaller ?? Networking.Session?.LocalPeer;
 
     /// <summary>True while running an RPC that came over the network.</summary>
-    public static bool IsRemote => Networking.CurrentCaller != null;
+    public static bool IsRemote => Networking.System?.Rpcs.CurrentCaller != null;
 }

@@ -18,7 +18,7 @@ internal sealed class NetworkingThread : IDisposable
     private readonly List<Connection> _closing = new(); // Caller only.
     private readonly Queue<Command> _commands = new();
     private readonly Dictionary<int, QueuedConnection> _connections = new(); // Caller only.
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly int _interval, _maxMessages;
     private readonly ManualResetEventSlim _listenDone = new(false);
     private readonly long _maxBytes, _maxPeerBytes;

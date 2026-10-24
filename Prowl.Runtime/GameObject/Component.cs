@@ -15,6 +15,7 @@ using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
 using Prowl.Ember;
+using Prowl.Runtime.Networking.Objects;
 
 namespace Prowl.Runtime;
 
@@ -655,7 +656,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     private protected override void AssertCanDestroy()
     {
-        if (_go.IsValid() && !_go.IsDestroyQueued) Networking.Networking.AssertStructureEditable(_go);
+        if (_go.IsValid() && !_go.IsDestroyQueued) Networking.Networking.System?.AssertStructureEditable(_go);
     }
 
     /// <summary>Throws when this component's live object is touched from a thread other than the main one.</summary>

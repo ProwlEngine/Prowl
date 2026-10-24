@@ -12,6 +12,7 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Diagnostics;
 using Prowl.Scribe;
 using Prowl.Warp;
 
@@ -32,7 +33,7 @@ public class NetworkDiagnosticsPanel : DockPanel
 
     private readonly List<NetworkDiagnostics.Entry> _history = new();
     private readonly List<NetworkDiagnostics.Entry> _filtered = new();
-    private readonly List<Networking.ObjectDiagnostic> _objects = new();
+    private readonly List<NetworkDiagnostics.ObjectDiagnostic> _objects = new();
     private readonly List<NetPeer> _peers = new();
     private readonly Dictionary<NetPeer, ConnectionStats> _peerStatBaselines = new();
     private string _search = "";
@@ -84,7 +85,7 @@ public class NetworkDiagnosticsPanel : DockPanel
                 }
                 string status = session == null ? "Offline" : Networking.IsActive ? session.IsHost ? "Hosting" : "Client" : session.State.ToString();
                 string details = session == null ? "Start a network session in Play mode."
-                    : $"Role: {(session.IsHost ? "Host" : "Client")}\nState: {session.State}\nTransport: {session.Transport.GetType().Name}\nLocal peer: #{session.LocalPeer?.Id}\n{_peers.Count} peers and {Networking.NetworkObjectCount} objects\nTick rate: {Networking.TickRate:0.#} Hz\nInterpolation: {Networking.InterpolationDelay.TotalMilliseconds:0} ms\n{Networking.PendingSyncCount} pending SyncVars\nSent: {Bytes(_sent)}\nReceived: {Bytes(_received)}\nUpload: {Bytes(_sendRate)}/s\nDownload: {Bytes(_receiveRate)}/s";
+                    : $"Role: {(session.IsHost ? "Host" : "Client")}\nState: {session.State}\nTransport: {session.Transport.GetType().Name}\nLocal peer: #{session.LocalPeer?.Id}\n{_peers.Count} peers and {NetworkDiagnostics.NetworkObjectCount} objects\nTick rate: {Networking.TickRate:0.#} Hz\nInterpolation: {Networking.InterpolationDelay.TotalMilliseconds:0} ms\n{NetworkDiagnostics.PendingSyncCount} pending SyncVars\nSent: {Bytes(_sent)}\nReceived: {Bytes(_received)}\nUpload: {Bytes(_sendRate)}/s\nDownload: {Bytes(_receiveRate)}/s";
                 paper.Box("net_status").Width(UnitValue.Stretch()).Height(26).PaddingLeft(4)
                     .Text(status, font).FontSize(EditorTheme.FontSizeSmall)
                     .TextColor(Networking.IsActive ? EditorTheme.Green400 : EditorTheme.Ink400)
@@ -406,7 +407,7 @@ public class NetworkDiagnosticsPanel : DockPanel
 
     private void DrawObjects(Paper paper, FontFile font, float width, float height)
     {
-        Networking.GetObjectDiagnostics(_objects);
+        NetworkDiagnostics.GetObjectDiagnostics(_objects);
         _objects.RemoveAll(o => !Matches($"{o.Name} {o.Identifier} {o.OwnerId} {OwnerName(o.OwnerId)}"));
         _objects.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
         if (_objects.Count == 0)
@@ -421,7 +422,7 @@ public class NetworkDiagnosticsPanel : DockPanel
             .Column("Object", 2).Column("Owner", 1).Column("Control", 1).Column("Transform sync", 1)
             .RowCount(_objects.Count).CellContent((i, col) =>
             {
-                Networking.ObjectDiagnostic o = _objects[i];
+                NetworkDiagnostics.ObjectDiagnostic o = _objects[i];
                 string text = col switch { 0 => o.Name, 1 => OwnerName(o.OwnerId),
                     2 => o.Controlled ? "Local" : "Remote", _ => o.SyncTransform ? "On" : "Off" };
                 string? tooltip = col == 0 ? $"{o.Name}\n{o.Identifier}\nBuffered samples: {o.BufferedSamples}\nLast received tick: {o.LastReceivedTick}"

@@ -38,11 +38,11 @@ namespace Prowl.CodeGen.Networking;
 /// </remarks>
 internal sealed partial class NetworkCodeGen : IScriptGenerator
 {
-    private const string SyncFlagsType = "global::Prowl.Runtime.Networking.SyncFlags";
-    private const string RpcFlagsType = "global::Prowl.Runtime.Networking.RpcFlags";
-    private const string RpcModeType = "global::Prowl.Runtime.Networking.RpcMode";
-    private const string Serializer = "global::Prowl.Runtime.Networking.NetSerializer";
-    private const string TypeSerializer = "global::Prowl.Runtime.Networking.NetTypeSerializer";
+    private const string SyncFlagsType = "global::Prowl.Runtime.Networking.Enums.SyncFlags";
+    private const string RpcFlagsType = "global::Prowl.Runtime.Networking.Enums.RpcFlags";
+    private const string RpcModeType = "global::Prowl.Runtime.Networking.Enums.RpcMode";
+    private const string Serializer = "global::Prowl.Runtime.Networking.Serialization.NetSerializer";
+    private const string TypeSerializer = "global::Prowl.Runtime.Networking.Serialization.NetTypeSerializer";
     private const string WriterType = "global::Prowl.Warp.NetWriter";
     private const string ReaderType = "global::Prowl.Warp.NetReader";
 
@@ -215,17 +215,17 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         {
             INamedTypeSymbol? Get(string name) => compilation.GetTypeByMetadataName(name);
             return Get("Prowl.Runtime.Component") is { } component && Get("Prowl.Runtime.GameObject") is { } gameObject
-                                                                   && Get("Prowl.Runtime.Networking.NetCollection") is
+                                                                   && Get("Prowl.Runtime.Networking.Collections.NetCollection") is
                                                                        { } collection
-                                                                   && Get("Prowl.Runtime.Networking.INetSerializable`1")
+                                                                   && Get("Prowl.Runtime.Networking.Serialization.INetSerializable`1")
                                                                        is { } selfSerializable
-                                                                   && Get("Prowl.Runtime.Networking.SyncAttribute") is
+                                                                   && Get("Prowl.Runtime.Networking.Attributes.SyncAttribute") is
                                                                        { } sync
-                                                                   && Get("Prowl.Runtime.Networking.ChangeAttribute") is
+                                                                   && Get("Prowl.Runtime.Networking.Attributes.ChangeAttribute") is
                                                                        { } change
-                                                                   && Get("Prowl.Runtime.Networking.Rpc+RpcAttribute")
+                                                                   && Get("Prowl.Runtime.Networking.Attributes.Rpc+RpcAttribute")
                                                                        is { } rpc
-                                                                   && Get("Prowl.Runtime.Networking.NetSerializer`1") is
+                                                                   && Get("Prowl.Runtime.Networking.Serialization.NetSerializer`1") is
                                                                        { } serializer
                 ? new Symbols(component, gameObject, collection, selfSerializable, sync, change, rpc,
                     BuiltInTypes(serializer))

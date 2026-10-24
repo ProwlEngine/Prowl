@@ -6,9 +6,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 
+using Prowl.Runtime.Networking.Attributes;
+using Prowl.Runtime.Networking.Enums;
+using Prowl.Runtime.Networking.Serialization;
 using Prowl.Warp;
 
-namespace Prowl.Runtime.Networking;
+namespace Prowl.Runtime.Networking.Collections;
 
 /// <summary>A change to a <see cref="NetList{T}" />.</summary>
 /// <param name="Kind">What happened.</param>

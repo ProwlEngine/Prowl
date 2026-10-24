@@ -3,7 +3,9 @@
 
 using System;
 
-namespace Prowl.Runtime.Networking;
+using Prowl.Runtime.Networking.Attributes;
+
+namespace Prowl.Runtime.Networking.Enums;
 
 /// <summary>Describes how a <see cref="SyncAttribute" /> property is synchronized.</summary>
 [Flags]
