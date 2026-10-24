@@ -103,27 +103,34 @@ public class BinaryTagConverterTests
         compound.Add("bytes", new EchoObject(EchoType.ByteArray, bytes));
 
         using var stream = new MemoryStream();
-        using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
-        {
-            compound.WriteToBinary(writer, new BinarySerializationOptions { EncodingMode = mode, Compressed = true });
-            writer.Write(42);
-        }
+        EchoBinaryFormat.WriteToFile(compound, stream, new BinarySerializationOptions { EncodingMode = mode, Compressed = true });
+        stream.Write(BitConverter.GetBytes(42));
 
         stream.Position = 0;
-        using var reader = new BinaryReader(stream);
-        var deserialized = EchoObject.ReadFromBinary(reader);
+        var deserialized = EchoBinaryFormat.ReadFromFile(stream);
 
         Assert.True(stream.Length < bytes.Length / 100);
         Assert.Equal(bytes, deserialized.Get("bytes").ByteArrayValue);
-        Assert.Equal(42, reader.ReadInt32());
+        Assert.Equal(42, new BinaryReader(stream).ReadInt32());
+    }
+
+    [Fact]
+    public void TestWriterOutputHasNoHeader()
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
+            new EchoObject(42).WriteToBinary(writer, new BinarySerializationOptions { Compressed = true });
+
+        Assert.Equal((byte)EchoType.Int, stream.ToArray()[0]);
+        stream.Position = 0;
+        Assert.Equal(42, EchoObject.ReadFromBinary(new BinaryReader(stream)).IntValue);
     }
 
     [Fact]
     public void TestDataWithoutAHeaderStillReads()
     {
         byte[] legacy = [(byte)EchoType.Int, 0x2A, 0, 0, 0];
-        using var reader = new BinaryReader(new MemoryStream(legacy));
-        Assert.Equal(42, EchoObject.ReadFromBinary(reader).IntValue);
+        Assert.Equal(42, EchoBinaryFormat.ReadFromFile(new MemoryStream(legacy)).IntValue);
     }
 
     [Fact]
