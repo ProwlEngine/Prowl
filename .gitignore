@@ -23,6 +23,7 @@ bld/
 [Oo]bj/
 [Ll]og/
 Build/
+
 # MSBuild integration for script codegen, not build output.
 !/Prowl.CodeGen/build/
 
