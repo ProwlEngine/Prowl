@@ -294,7 +294,7 @@ public class ColorPropertyEditor : PropertyEditor
 
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        var color = (Color)(value ?? new Color(1, 1, 1, 1));
+        var color = (Color)(value ?? Color.White);
         ColorPalette palette = GetEditorPalette();
 
         // Set the OnAdd to capture the current color value

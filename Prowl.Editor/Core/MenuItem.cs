@@ -15,6 +15,10 @@ public static class MenuContext
 {
     private static GameObject? _pinned;
     private static bool _isPinned;
+    private static IReadOnlyList<GameObject> _targets = [];
+
+    /// <summary> Every GameObject a row menu was opened over, when more than one is selected; empty otherwise. </summary>
+    public static IReadOnlyList<GameObject> Targets => _targets;
 
     /// <summary> Returns the explicitly pinned GameObject for context menus, or the first selected GameObject when no pin is active. </summary>
     public static GameObject? ActiveGameObject => _isPinned
@@ -26,6 +30,14 @@ public static class MenuContext
     {
         _pinned = go;
         _isPinned = true;
+        _targets = [];
+    }
+
+    /// <summary> Pins the context to the first of several GameObjects, remembering all of them for per-target items. </summary>
+    public static void SetMany(IReadOnlyList<GameObject> gos)
+    {
+        Set(gos.Count > 0 ? gos[0] : null);
+        if (gos.Count > 1) _targets = gos;
     }
 
     /// <summary> Drops the pin so the context follows the active selection again. </summary>
@@ -33,6 +45,7 @@ public static class MenuContext
     {
         _pinned = null;
         _isPinned = false;
+        _targets = [];
     }
 }
 
@@ -50,6 +63,8 @@ public sealed class MenuItemAttribute : Attribute
     public string Icon { get; init; } = "";
     /// <summary> When true, inserts a separator before this menu item. </summary>
     public bool Separator { get; init; } = false;
+    /// <summary> When true, the item acts on the whole selection itself instead of being run once per multi-selected target. </summary>
+    public bool SelectionWide { get; init; } = false;
 
     /// <summary> Initializes a new menu item attribute with the specified path, validation flag, and priority. </summary>
     public MenuItemAttribute(string path, bool isValidate = false, int priority = 1000)
@@ -59,7 +74,7 @@ public sealed class MenuItemAttribute : Attribute
         Priority = priority;
     }
 
-    private sealed record Entry(string Path, Action Action, int Priority, string Icon, Type DeclaringType, bool Separator = false);
+    private sealed record Entry(string Path, Action Action, int Priority, string Icon, Type DeclaringType, bool Separator = false, bool SelectionWide = false);
 
     private static readonly List<Entry> _entries = [];
     private static readonly Dictionary<string, Func<bool>> _validators = new(StringComparer.Ordinal);
@@ -82,7 +97,7 @@ public sealed class MenuItemAttribute : Attribute
                 try
                 {
                     var del = (Action)Delegate.CreateDelegate(typeof(Action), method);
-                    _entries.Add(new Entry(attr.Path, del, attr.Priority, attr.Icon, method.DeclaringType!, attr.Separator));
+                    _entries.Add(new Entry(attr.Path, del, attr.Priority, attr.Icon, method.DeclaringType!, attr.Separator, attr.SelectionWide));
                     _dirty = true;
                 }
                 catch { }
@@ -199,6 +214,25 @@ public sealed class MenuItemAttribute : Attribute
         BuildLevel(builder, relevant, prefix);
     }
 
+    private static Action PerTarget(Entry leaf)
+    {
+        IReadOnlyList<GameObject> targets = MenuContext.Targets;
+        if (targets.Count < 2 || leaf.SelectionWide) return leaf.Action;
+        return () =>
+        {
+            try
+            {
+                foreach (GameObject target in targets)
+                {
+                    if (target.IsNotValid()) continue;
+                    MenuContext.Set(target);
+                    leaf.Action();
+                }
+            }
+            finally { MenuContext.SetMany(targets); }
+        };
+    }
+
     private static void BuildLevel(ContextBuilder builder, List<Entry> entries, string prefix)
     {
         var leaves = new List<Entry>();
@@ -237,7 +271,7 @@ public sealed class MenuItemAttribute : Attribute
             if (leaf != null)
             {
                 Func<bool>? validator = _validators.TryGetValue(leaf.Path, out Func<bool>? v) ? v : null;
-                builder.Item(leaf.Path.Substring(prefix.Length), leaf.Action, enabled: validator?.Invoke() ?? true, icon: leaf.Icon);
+                builder.Item(leaf.Path.Substring(prefix.Length), PerTarget(leaf), enabled: validator?.Invoke() ?? true, icon: leaf.Icon);
             }
             else if (branch != null)
             {

@@ -90,8 +90,7 @@ public class PlayerAssetBackend : AssetBackend, IDisposable
         if (data == null) return false;
 
         using var stream = new MemoryStream(data);
-        using var reader = new BinaryReader(stream);
-        return ReadInto(EchoObject.ReadFromBinary(reader), staging, context);
+        return ReadInto(EchoBinaryFormat.ReadFromFile(stream), staging, context);
     }
 
     private static byte[]? LoadFromFile(string path) => File.Exists(path) ? File.ReadAllBytes(path) : null;
@@ -160,8 +159,7 @@ public class PlayerAssetBackend : AssetBackend, IDisposable
         using Stream? stream = assembly.GetManifestResourceStream("Assets._manifest.bin");
         if (stream == null) { Debug.LogError("[PlayerAssetBackend] Embedded manifest not found."); return; }
 
-        using var reader = new BinaryReader(stream);
-        ParseManifest(EchoObject.ReadFromBinary(reader));
+        ParseManifest(EchoBinaryFormat.ReadFromFile(stream));
     }
 
     private void ParseManifest(EchoObject echo)

@@ -135,7 +135,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// Whether gameplay callbacks run now. A component enabled while gameplay was gated off, such as the edit
     /// scene in the frame play mode starts, stays inert until it is enabled again.
     /// </summary>
-    private bool RunsGameplay => _gameplayEnabled && ShouldExecuteGameplay;
+    internal bool RunsGameplay => _gameplayEnabled && ShouldExecuteGameplay;
 
     /// <summary>
     /// Gets the identifier for this Component.

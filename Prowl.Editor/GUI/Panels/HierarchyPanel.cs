@@ -748,7 +748,7 @@ public class HierarchyPanel : DockPanel
         Origami.RightClickMenu(paper, "hier_bg_ctx", builder =>
         {
             builder.Header(Loc.Get("hierarchy.create"));
-            BuildCreateMenuFor(builder, null);
+            BuildCreateMenuFor(builder, (GameObject?)null);
         });
     }
 
@@ -764,8 +764,7 @@ public class HierarchyPanel : DockPanel
 
             builder.Title(multiSelect ? Loc.Get("project.item_count", new { count = Selection.Count }) : firstSelected.Name, iconDraw: GetGoStyle(firstSelected).icon);
 
-            // Create parent to first selected
-            builder.Submenu(Loc.Get("hierarchy.create"), (b) => { BuildCreateMenuFor(b, firstSelected); }, EditorIcons.Plus);
+            builder.Submenu(Loc.Get("hierarchy.create"), (b) => { BuildCreateMenuFor(b, selectedGOs); }, EditorIcons.Plus);
 
             builder.Separator();
 
@@ -933,9 +932,12 @@ public class HierarchyPanel : DockPanel
 
     /// <summary>Create menu for a menu that knows what it was opened over: <paramref name="parent"/>
     /// for a GameObject row, null for empty space (meaning the scene root).</summary>
-    private static void BuildCreateMenuFor(ContextBuilder builder, GameObject? parent)
+    private static void BuildCreateMenuFor(ContextBuilder builder, GameObject? parent) =>
+        BuildCreateMenuFor(builder, parent != null ? [parent] : []);
+
+    private static void BuildCreateMenuFor(ContextBuilder builder, IReadOnlyList<GameObject> parents)
     {
-        MenuContext.Set(parent);
+        MenuContext.SetMany(parents);
         MenuItemAttribute.BuildContextMenu(builder, "GameObject");
     }
 

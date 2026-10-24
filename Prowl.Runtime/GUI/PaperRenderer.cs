@@ -136,6 +136,7 @@ public class PaperRenderer : ICanvasRenderer
         public required byte[] Vertices;
         public required uint[] Indices;
         public required Call[] Calls;
+        public required GTexture[] Sampled;
         public required float SdfRange;
         public required bool Clear;
         public required Sampler LinearClamp;
@@ -176,6 +177,15 @@ public class PaperRenderer : ICanvasRenderer
             call.Blur = (float)drawCall.Brush.BackdropBlur;
         }
 
+        List<GTexture> sampled = [];
+        foreach (Call call in calls)
+        {
+            if (call.Texture is { } gpu && (gpu.Usage & TextureUsage.RenderTarget) != 0 && !sampled.Contains(gpu))
+                sampled.Add(gpu);
+        }
+        foreach (FramebufferAttachment attachment in framebuffer.ColorTargets)
+            sampled.Remove(attachment.Target);
+
         bool drawnUnder = false;
         foreach (Graphite.Rendering.ViewDesc view in Graphics.FrameViews)
             if (view.Target == framebuffer) drawnUnder = true;
@@ -188,6 +198,7 @@ public class PaperRenderer : ICanvasRenderer
             Vertices = MemoryMarshal.AsBytes(canvas.Vertices).ToArray(),
             Indices = canvas.Indices.ToArray(),
             Calls = calls,
+            Sampled = sampled.ToArray(),
             SdfRange = canvas.Text.FontEngine.DistanceRange,
             Clear = !drawnUnder,
             LinearClamp = Graphics.GetSampler(SamplerDescription.Linear with { AddressModeU = SamplerAddressMode.Clamp, AddressModeV = SamplerAddressMode.Clamp, AddressModeW = SamplerAddressMode.Clamp }),
@@ -250,7 +261,13 @@ public class PaperRenderer : ICanvasRenderer
         {
             TextureHandle handle = graph.Import(target);
             TargetLoadStoreOps ops = new(view.Clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 1f)) : AttachmentOps.Loaded, AttachmentOps.Loaded);
-            graph.AddPass("Paper", pass => pass.Write(handle, TextureState.Attachment | TextureState.Sampled, firstWrite: ops), context => Render(context, view));
+            TextureHandle[] reads = new TextureHandle[view.Sampled.Length];
+            for (int i = 0; i < reads.Length; i++) reads[i] = graph.Import(view.Sampled[i]);
+            graph.AddPass("Paper", pass =>
+            {
+                foreach (TextureHandle read in reads) pass.Read(read);
+                pass.Write(handle, TextureState.Attachment | TextureState.Sampled, firstWrite: ops);
+            }, context => Render(context, view));
         }
 
         private void EnsurePrograms(GraphicsDevice device)

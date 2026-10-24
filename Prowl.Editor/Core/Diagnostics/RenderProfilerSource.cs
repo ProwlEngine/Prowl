@@ -3,14 +3,13 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 
-using Prowl.Echo;
 using Prowl.Graphite;
 using Prowl.Graphite.Debugger;
 using Prowl.Graphite.Debugger.Serialization;
 using Prowl.Graphite.Debugger.Viewer;
+using Prowl.Graphite.Debugging;
 using Prowl.OrigamiUI;
 using Prowl.Runtime;
 
@@ -135,7 +134,7 @@ internal sealed class RenderProfilerSource : IRenderProfilerSource
 
         return new FrameTiming(
             stages.Sum(s => s.Milliseconds),
-            recording.CommandBuffers.Sum(b => b.Milliseconds ?? 0),
+            recording.CommandBuffers.Where(b => !b.Name.StartsWith(CaptureCopy.BufferPrefix, StringComparison.Ordinal)).Sum(b => b.Milliseconds ?? 0),
             frameMilliseconds,
             0,
             recording.CommandBuffers.Length,
@@ -166,16 +165,12 @@ internal sealed class RenderProfilerSource : IRenderProfilerSource
     {
         if (Snapshot == null)
             throw new InvalidOperationException("There is no snapshot to save.");
-        using BinaryWriter writer = new(File.Create(path));
-        Serializer.Serialize(Snapshot).WriteToBinary(writer);
+        DebuggerSerialization.Save(Snapshot, path);
     }
 
     public void LoadSnapshot(string path)
     {
-        DeepRecording recording;
-        using (BinaryReader reader = new(File.OpenRead(path)))
-            recording = Serializer.Deserialize<DeepRecording>(EchoObject.ReadFromBinary(reader))
-                ?? throw new InvalidDataException($"{path} is not a Graphite debugger recording.");
+        DeepRecording recording = DebuggerSerialization.Load(path);
         Open(recording, Measure(recording.Recording, 0));
     }
 }

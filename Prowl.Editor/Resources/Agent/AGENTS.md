@@ -17,3 +17,4 @@ Read these guides before working in their area:
 - `.claude/skills/prowl-ui/SKILL.md`: game UI with Paper in OnGui or GameObject UI, cursor locking.
 - `.claude/skills/prowl-rendering/SKILL.md`: materials, cameras, lights, environment, lightmaps, particles.
 - `.claude/skills/prowl-paper/SKILL.md`: the Paper UI library in depth: layout, styling, animation, events, text fields, scrolling, custom drawing.
+- `.claude/skills/prowl-profiler/SKILL.md`: capturing, saving, loading, dumping and replaying frame snapshots to debug rendering.
