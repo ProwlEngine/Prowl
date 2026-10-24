@@ -69,6 +69,10 @@ The host's configuration controls which channels receivers apply, including RPC 
 catch-up, and ownership handoff. Disabled channels keep their local values. Initial scene/spawn
 poses still include the complete transform. Old interpolation samples are discarded when flags change.
 
+Transforms are sent every tick an object moves (changes below a small epsilon don't count). Once it
+has been still for a few ticks, its final pose is sent reliably and nothing more is sent until it
+moves again. Objects marked `IsStatic` are not transform-synced at all.
+
 ```csharp
 public struct Loadout { public int Ammo; public string Weapon; }
 

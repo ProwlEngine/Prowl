@@ -11,8 +11,9 @@ using Prowl.Warp;
 namespace Prowl.Runtime.Networking;
 
 // Networked objects' transforms. Whoever controls an object sends its local position, rotation and
-// scale every tick it changes (and once a second regardless, since these normally go unreliably). Everyone
-// else buffers them and shows the object InterpolationDelay in the past, blending between updates.
+// scale every tick it moves, and once more reliably when it has been still for SettleTicks; after that
+// it sends nothing until it moves again. Static GameObjects are never synced. Everyone else buffers
+// the updates and shows the object InterpolationDelay in the past, blending between them.
 //
 // A Transform message is a run of [guid][u32 generation][u32 tick][f64 sender time][float3 position][quaternion rotation][float3 scale].
 public static partial class Networking
@@ -24,9 +25,18 @@ public static partial class Networking
     // A preferred working buffer size, not a requirement on the transport.
     private const int TransformBatchBytes = 1000;
     private const int MaxSamples = 32;
-    private const double TransformRefreshSeconds = 1;
+
+    // Quiet ticks before the final pose goes out reliably.
+    private const int SettleTicks = 3;
+
+    // Smaller changes don't count as movement, so a body jittering in place still settles. They accumulate
+    // against the last pose sent, so slow motion is still sent once it adds up.
+    private const float PositionEpsilon = 1e-4f;
+    private const float RotationEpsilon = 1e-5f;
+    private const float ScaleEpsilon = 1e-4f;
 
     private static uint s_tick;
+    private static double s_lastTransformTime;
 
     private static void ValidateSceneMessageLimit(NetSessionOptions? options)
     {
@@ -43,7 +53,8 @@ public static partial class Networking
         s_tick++;
         double now = Now;
 
-        using NetWriter message = new(1024);
+        using NetWriter moving = new(1024);
+        using NetWriter settled = new(1024);
         foreach (NetworkEntry entry in s_entries.Values)
         {
             GameObject go = entry.GameObject;
@@ -57,10 +68,33 @@ public static partial class Networking
             Quaternion rotation = t.LocalRotation;
             Float3 scale = t.LocalScale;
 
-            bool unchanged = entry.HasSent && (!go.Network.SyncsTransform(NetworkFlags.NoPositionSync) || position.Equals(entry.SentPosition)) &&
-                             (!go.Network.SyncsTransform(NetworkFlags.NoRotationSync) || rotation.Equals(entry.SentRotation)) &&
-                             (!go.Network.SyncsTransform(NetworkFlags.NoScaleSync) || scale.Equals(entry.SentScale));
-            if (unchanged && now - entry.LastSentTime < TransformRefreshSeconds)
+            bool changed = !entry.HasSent ||
+                           (go.Network.SyncsTransform(NetworkFlags.NoPositionSync) && Moved(position, entry.SentPosition, PositionEpsilon)) ||
+                           (go.Network.SyncsTransform(NetworkFlags.NoRotationSync) && Moved(rotation, entry.SentRotation)) ||
+                           (go.Network.SyncsTransform(NetworkFlags.NoScaleSync) && Moved(scale, entry.SentScale, ScaleEpsilon));
+
+            NetWriter message;
+            if (changed)
+            {
+                // Receivers last heard the rest pose when it settled. Repeat it as of the previous tick so they
+                // blend from rest over one tick, not over the whole time it sat still.
+                if (entry.HasSent && entry.Settled && s_lastTransformTime > entry.LastSentTime)
+                {
+                    WriteTransformRecord(moving, go, entry.Generation, s_tick - 1, s_lastTransformTime,
+                        entry.SentPosition, entry.SentRotation, entry.SentScale, reliable: false);
+                }
+
+                entry.QuietTicks = 0;
+                entry.Settled = false;
+                message = moving;
+            }
+            else if (!entry.Settled && ++entry.QuietTicks >= SettleTicks)
+            {
+                // Updates while moving can be lost, so the pose it comes to rest at must arrive.
+                entry.Settled = true;
+                message = settled;
+            }
+            else
             {
                 continue;
             }
@@ -70,30 +104,50 @@ public static partial class Networking
             entry.SentPosition = position;
             entry.SentRotation = rotation;
             entry.SentScale = scale;
-
-            message.WriteGuid(go.Identifier);
-            message.WriteUInt32(entry.Generation);
-            message.WriteUInt32(s_tick);
-            message.WriteDouble(now);
-            NetSerializers.WriteFloat3(message, position);
-            NetSerializers.WriteQuaternion(message, rotation);
-            NetSerializers.WriteFloat3(message, scale);
-
-            // Keep capture bounded; sending splits records to each connection's limit.
-            if (message.Length + TransformRecordSize > TransformBatchBytes)
-            {
-                SendTransformMessage(message, null);
-                message.Reset();
-            }
+            WriteTransformRecord(message, go, entry.Generation, s_tick, now, position, rotation, scale,
+                reliable: message == settled);
         }
 
-        if (message.Length > 0)
+        if (moving.Length > 0)
         {
-            SendTransformMessage(message, null);
+            SendTransformMessage(moving, null, reliable: false);
+        }
+
+        if (settled.Length > 0)
+        {
+            SendTransformMessage(settled, null, reliable: true);
+        }
+
+        s_lastTransformTime = now;
+    }
+
+    private static void WriteTransformRecord(NetWriter message, GameObject go, uint generation, uint tick, double time,
+        Float3 position, Quaternion rotation, Float3 scale, bool reliable)
+    {
+        message.WriteGuid(go.Identifier);
+        message.WriteUInt32(generation);
+        message.WriteUInt32(tick);
+        message.WriteDouble(time);
+        NetSerializers.WriteFloat3(message, position);
+        NetSerializers.WriteQuaternion(message, rotation);
+        NetSerializers.WriteFloat3(message, scale);
+
+        // Keep capture bounded; sending splits records to each connection's limit.
+        if (message.Length + TransformRecordSize > TransformBatchBytes)
+        {
+            SendTransformMessage(message, null, reliable);
+            message.Reset();
         }
     }
 
-    private static void SendTransformMessage(NetWriter message, NetPeer? except)
+    private static bool Moved(Float3 a, Float3 b, float epsilon) =>
+        MathF.Abs(a.X - b.X) > epsilon || MathF.Abs(a.Y - b.Y) > epsilon || MathF.Abs(a.Z - b.Z) > epsilon;
+
+    private static bool Moved(Quaternion a, Quaternion b) =>
+        MathF.Abs(a.X - b.X) > RotationEpsilon || MathF.Abs(a.Y - b.Y) > RotationEpsilon ||
+        MathF.Abs(a.Z - b.Z) > RotationEpsilon || MathF.Abs(a.W - b.W) > RotationEpsilon;
+
+    private static void SendTransformMessage(NetWriter message, NetPeer? except, bool reliable)
     {
         NetSession session = Session!;
         if (IsHost)
@@ -102,17 +156,17 @@ public static partial class Networking
             {
                 if (!peer.IsLocal && peer != except)
                 {
-                    SendTransformMessage(peer, message.WrittenSpan);
+                    SendTransformMessage(peer, message.WrittenSpan, reliable);
                 }
             }
         }
         else
         {
-            SendTransformMessage(session.HostPeer!, message.WrittenSpan);
+            SendTransformMessage(session.HostPeer!, message.WrittenSpan, reliable);
         }
     }
 
-    private static void SendTransformMessage(NetPeer peer, ReadOnlySpan<byte> records)
+    private static void SendTransformMessage(NetPeer peer, ReadOnlySpan<byte> records, bool reliable)
     {
         if (peer.Connection is not { IsConnected: true } connection)
         {
@@ -121,7 +175,7 @@ public static partial class Networking
 
         int limit = Session!.Options.MaxMessageSize;
         Delivery delivery = Delivery.Reliable;
-        if (Session.Transport.Capabilities.Supports(Delivery.Unreliable) &&
+        if (!reliable && Session.Transport.Capabilities.Supports(Delivery.Unreliable) &&
             connection.GetMaxMessageSize(Delivery.Unreliable) >= TransformRecordSize + SessionMessageHeaderSize)
         {
             delivery = Delivery.Unreliable;
@@ -216,9 +270,10 @@ public static partial class Networking
             }
         }
 
+        // Relay as received, so a settled pose stays reliable.
         if (relay != null && relay.Length > 0)
         {
-            SendTransformMessage(relay, sender);
+            SendTransformMessage(relay, sender, delivery == Delivery.Reliable);
         }
     }
 

@@ -571,9 +571,11 @@ public static partial class Networking
         public int NotifiedOwnerId = NoOwner;
         public NetworkOrphaned Orphaned;
         public int Owner = NoOwner;
+        public int QuietTicks;
         public Float3 SentPosition;
         public Quaternion SentRotation;
         public Float3 SentScale;
+        public bool Settled;
         public bool SpawnNotified;
         public bool TearingDown;
         public Float3? TransferVelocity;
