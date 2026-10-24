@@ -156,9 +156,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     /// <param name="options">Optional serialization options</param>
     public void WriteToBinary(FileInfo file, BinarySerializationOptions? options = null)
     {
-        using var stream = file.Create();
-        using var writer = new BinaryWriter(stream);
-        EchoBinaryFormat.WriteTo(this, writer, options);
+        EchoBinaryFormat.WriteToFile(this, file, options);
     }
 
     /// <summary>

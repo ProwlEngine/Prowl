@@ -88,6 +88,10 @@ public sealed class EchoBinaryFormat : IFileFormat
         return ReadFrom(reader, Options);
     }
 
+    public void WriteToFile(EchoObject tag, string path) => WriteToFile(tag, new FileInfo(path), Options);
+
+    public EchoObject ReadFromFile(string path) => ReadFromFile(new FileInfo(path), Options);
+
     #region LZW Compression
     // Codes below 256 are single bytes, every later code is an earlier code plus one byte.
     private const int MaxDictionarySize = 4096;
@@ -273,17 +277,23 @@ public sealed class EchoBinaryFormat : IFileFormat
     public static void WriteToFile(EchoObject tag, FileInfo file, BinarySerializationOptions? options = null)
     {
         using var stream = file.Create();
-        using var writer = new BinaryWriter(stream);
-        WriteTo(tag, writer, options);
+        WriteToFile(tag, stream, options);
     }
+
+    /// <summary>
+    /// Writes the bare tag with no header, for networking. Neither the header nor compression apply.
+    /// </summary>
+    public static void WriteTo(EchoObject tag, BinaryWriter writer, BinarySerializationOptions? options = null)
+        => WriteTag(tag, writer, options ?? BinarySerializationOptions.Default);
 
     /// <summary>
     /// Writes a header naming the encoding and compression, then the tag. A compressed tag is prefixed with its
     /// length, so a reader stops exactly at its end.
     /// </summary>
-    public static void WriteTo(EchoObject tag, BinaryWriter writer, BinarySerializationOptions? options = null)
+    public static void WriteToFile(EchoObject tag, Stream destination, BinarySerializationOptions? options = null)
     {
         options ??= BinarySerializationOptions.Default;
+        using var writer = new BinaryWriter(destination, Encoding.UTF8, leaveOpen: true);
         HeaderFlags flags = (options.EncodingMode == BinaryEncodingMode.Size ? HeaderFlags.Size : HeaderFlags.None)
             | (options.Compressed ? HeaderFlags.Compressed : HeaderFlags.None);
         writer.Write(Magic);
@@ -455,20 +465,27 @@ public sealed class EchoBinaryFormat : IFileFormat
         return Encoding.UTF8.GetString(lzw.Bytes, 0, length);
     }
 
+    /// <summary>
+    /// Reads a bare tag written by <see cref="WriteTo"/> using the encoding in <paramref name="options"/>.
+    /// </summary>
+    public static EchoObject ReadFrom(BinaryReader reader, BinarySerializationOptions? options = null)
+        => ReadTag(reader, options ?? BinarySerializationOptions.Default);
+
     public static EchoObject ReadFromFile(FileInfo file, BinarySerializationOptions? options = null)
     {
         using var stream = file.OpenRead();
-        using var reader = new BinaryReader(stream);
-        return ReadFrom(reader, options);
+        return ReadFromFile(stream, options);
     }
 
     /// <summary>
-    /// Reads a tag written by <see cref="WriteTo"/>, taking the encoding and compression from its header. Data written
-    /// before the header existed is read with the encoding in <paramref name="options"/>.
+    /// Reads a tag written by <see cref="WriteToFile(EchoObject, Stream, BinarySerializationOptions)"/>, taking the
+    /// encoding and compression from its header. Data written before the header existed is read with the encoding in
+    /// <paramref name="options"/>.
     /// </summary>
-    public static EchoObject ReadFrom(BinaryReader reader, BinarySerializationOptions? options = null)
+    public static EchoObject ReadFromFile(Stream source, BinarySerializationOptions? options = null)
     {
         options ??= BinarySerializationOptions.Default;
+        using var reader = new BinaryReader(source, Encoding.UTF8, leaveOpen: true);
         byte first = reader.ReadByte();
         if (first != Magic[0])
             return ReadValue((EchoType)first, reader, options);
