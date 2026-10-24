@@ -44,7 +44,7 @@ public partial class NetworkingTests
         root.AddComponent<NetworkLifecycleListener>().TryEditOnSpawn = true;
         scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
         LocalNetwork network = new();
-        byte[] snapshot, rpc, oldSync, nextSync;
+        byte[] snapshot, rpc, nextSync;
         byte[]? stateSync = null;
         try
         {
@@ -52,10 +52,6 @@ public partial class NetworkingTests
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.Has(FakePeer.SceneSnapshot), client);
             snapshot = client.Last(FakePeer.SceneSnapshot);
-            component.Health = 50;
-            SendSyncChanges();
-            Pump(() => client.Has(FakePeer.Sync), client);
-            oldSync = client.WireReceived.Last(m => m.Id == FakePeer.Sync).Data;
             component.Health = 0;
             component.Scores.Add(7);
             if (unreliable) component.ObserveUnreliable(); else component.Observe();
@@ -96,8 +92,7 @@ public partial class NetworkingTests
             host.Session.Flush();
             Pump(() => proxy.Observed.Count == 1, host);
             Assert.Equal(unreliable ? (100, 0, 0f) : (0, 1, 0f), proxy.Observed[0]);
-            // Revisions still keep an older Sync from overwriting a newer one, and a repeat from applying twice.
-            host.Session.SendRaw(client, FakePeer.Sync, oldSync);
+            // The state follows; collection changes the proxy already has aren't applied twice.
             host.Session.SendRaw(client, FakePeer.Sync, nextSync);
             host.Session.Flush(); PumpFor(10, host);
             Assert.Equal(0, proxy.Health);
@@ -135,7 +130,7 @@ public partial class NetworkingTests
             component.HostValue = 9;
             uint generation = NetworkGeneration(root);
             client.Session.SendRaw(client.Session.HostPeer!, FakePeer.Sync,
-                ClientSync(component, owner.Id, generation, 1, 0));
+                ClientSync(component, owner.Id, generation, 0));
             client.Session.SendRaw(client.Session.HostPeer!, FakePeer.RpcToHost, Call(component, (uint)method));
             client.Session.Flush();
             // An Owner call addressed to its own caller has no body anywhere else.
@@ -160,7 +155,7 @@ public partial class NetworkingTests
                     // The host's own pending value goes out just ahead of the reliable relay.
                     NetReader sync = new(observer.WireReceived[rpcIndex - 1].Data);
                     Assert.Equal(FakePeer.Sync, observer.WireReceived[rpcIndex - 1].Id);
-                    Assert.Equal(NetPeer.HostId, sync.ReadInt32()); sync.ReadUInt64();
+                    Assert.Equal(NetPeer.HostId, sync.ReadInt32());
                     Assert.Equal(1u, sync.ReadVarUInt32());
                     sync.ReadGuid(); Assert.Equal(799u, sync.ReadVarUInt32()); sync.ReadUInt32();
                     NetReader hostValue = new(sync.ReadBytesWithLength());
@@ -235,13 +230,14 @@ public partial class NetworkingTests
         return rpc.ToArray();
     }
 
-    private static byte[] ClientSync(Component component, int origin, uint generation, ulong revision, int health)
+    private static byte[] ClientSync(Component component, int origin, uint generation, int value,
+        uint slot = NetCollectionTestComponent.HealthSlot)
     {
-        using NetWriter sync = new(), value = new();
-        NetSerializer<int>.Write(value, health);
-        sync.WriteInt32(origin); sync.WriteUInt64(revision); sync.WriteVarUInt32(1);
-        sync.WriteGuid(component.Identifier); sync.WriteVarUInt32(NetCollectionTestComponent.HealthSlot);
-        sync.WriteUInt32(generation); sync.WriteBytesWithLength(value.WrittenSpan);
+        using NetWriter sync = new(), payload = new();
+        NetSerializer<int>.Write(payload, value);
+        sync.WriteInt32(origin); sync.WriteVarUInt32(1);
+        sync.WriteGuid(component.Identifier); sync.WriteVarUInt32(slot);
+        sync.WriteUInt32(generation); sync.WriteBytesWithLength(payload.WrittenSpan);
         return sync.ToArray();
     }
 
@@ -279,7 +275,7 @@ public partial class NetworkingTests
             uint generation = NetworkGeneration(root);
             root.Network.AssignOwnership(null); root.Network.AssignOwnership(owner);
             using NetWriter sync = new(), value = new();
-            sync.WriteInt32(owner.Id); sync.WriteUInt64(1); sync.WriteVarUInt32(1);
+            sync.WriteInt32(owner.Id); sync.WriteVarUInt32(1);
             sync.WriteGuid(component.Identifier); sync.WriteVarUInt32(NetCollectionTestComponent.HealthSlot);
             sync.WriteUInt32(generation); NetSerializer<int>.Write(value, 0); sync.WriteBytesWithLength(value.WrittenSpan);
             client.Session.SendRaw(client.Session.HostPeer!, FakePeer.Sync, sync.WrittenSpan);
@@ -290,21 +286,14 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
-    /// <summary>One ownership state frame: a Sync value and the root's pose, as a handoff carries them.</summary>
-    private static byte[] StateFrames(GameObject root, Component component, int origin, uint generation,
-        ulong revision, int health, float position, uint slot = NetCollectionTestComponent.HealthSlot)
+    /// <summary>A handoff's poses: just the root's, at <paramref name="x" /> along X.</summary>
+    private static byte[] Poses(GameObject root, float x)
     {
-        using NetWriter value = new(), sync = new(), pose = new(), state = new(), states = new();
-        NetSerializer<int>.Write(value, health);
-        sync.WriteVarUInt32(1); sync.WriteGuid(component.Identifier); sync.WriteVarUInt32(slot); sync.WriteUInt32(generation);
-        sync.WriteBytesWithLength(value.WrittenSpan);
-        pose.WriteGuid(root.Identifier); pose.WriteUInt32((uint)revision);
-        NetSerializers.WriteFloat3(pose, new Float3(position, 0, 0));
-        NetSerializers.WriteQuaternion(pose, Quaternion.Identity);
-        NetSerializers.WriteFloat3(pose, Float3.One);
-        state.WriteInt32(origin); state.WriteUInt64(revision); state.WriteGuid(root.Identifier); state.WriteUInt32(generation);
-        state.WriteBytesWithLength(sync.WrittenSpan); state.WriteBytesWithLength(pose.WrittenSpan);
-        states.WriteVarUInt32(1); states.WriteBytesWithLength(state.WrittenSpan);
-        return states.ToArray();
+        using NetWriter poses = new();
+        poses.WriteVarUInt32(1); poses.WriteGuid(root.Identifier);
+        NetSerializers.WriteFloat3(poses, new Float3(x, 0, 0));
+        NetSerializers.WriteQuaternion(poses, Quaternion.Identity);
+        NetSerializers.WriteFloat3(poses, Float3.One);
+        return poses.ToArray();
     }
 }

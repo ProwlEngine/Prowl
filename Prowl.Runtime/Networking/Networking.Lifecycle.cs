@@ -104,7 +104,6 @@ public static partial class Networking
             return;
         }
 
-        ClearStateRevisions(entry.GameObject);
         // End membership before notifying listeners so nested teardown cannot notify twice.
         entry.SpawnNotified = false;
         entry.TearingDown = true;

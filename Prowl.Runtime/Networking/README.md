@@ -90,7 +90,7 @@ public class Player : Component
   for state that arrives with a snapshot or spawn: that is in place before `OnEnable`. Received `[Change]`
   hooks run once the whole tick's block of values is applied.
 - Incoming Sync blocks validate their complete framing and accepted values before applying state,
-  advancing revisions, relaying values, or running callbacks. Malformed later records reject the block
+  relaying values, or running callbacks. Malformed later records reject the block
   without applying earlier values. Unknown, unauthorized, and stale entries remain skippable;
   accepted values and standalone Sync messages must not contain trailing bytes. Custom serializers
   run during validation and application and must read deterministically without side effects.
@@ -188,8 +188,8 @@ operation is unavailable or already satisfied. On clients, true means the reques
 requests from loading peers, unauthorized drops, and requests for an obsolete ownership generation.
 Competing requests for the same generation cannot both succeed.
 
-Each transfer reliably delivers Sync values and enabled transforms before its ownership notification,
-and clears interpolation history. A voluntary drop includes the owner's final state; a forced takeover
+Each transfer sends the pending Sync values first, then the enabled transforms' final poses, ahead of
+its ownership notification, and clears interpolation history. A voluntary drop includes the owner's final state; a forced takeover
 uses the latest state accepted by the host. Root rigidbodies also hand off linear velocity. Gameplay
 approval callbacks and a `Request` transfer policy are left to a future feature.
 
@@ -252,9 +252,9 @@ a call. An `Unreliable` call promises nothing: it can be lost, duplicated, or ar
 caller's state, which follows with the next tick. Transforms are not part of a call; a proxy is shown
 `InterpolationDelay` in the past, so pass a position the method needs as an argument.
 
-State revisions prevent an older Sync packet from overwriting newer state from the same writer.
-Ownership generations reject traffic from an earlier owner assignment, including when ownership returns
-to the same peer. Independent objects have no implicit state ordering guarantee. An RPC does not grant
+Each value has one writer at a time, its controller or the host for `FromHost` values, and its changes
+arrive in the order they were made, so the latest to arrive is the newest. Ownership generations reject
+traffic from an earlier owner assignment, including when ownership returns to the same peer. Independent objects have no implicit state ordering guarantee. An RPC does not grant
 authority to write another object's state. An unreliable call uses reliable delivery with Warp
 fragmentation when it exceeds the transport's datagram limit.
 

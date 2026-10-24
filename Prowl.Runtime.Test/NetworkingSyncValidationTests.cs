@@ -20,7 +20,7 @@ public partial class NetworkingTests
     private static byte[] SyncWithMalformedTail(int origin, NetCollectionTestComponent component, string kind)
     {
         using NetWriter message = new();
-        message.WriteInt32(origin); message.WriteUInt64(100);
+        message.WriteInt32(origin);
         message.WriteVarUInt32(kind == "trailing-block" ? 2u : 3u);
         using NetWriter health = new(); health.WriteVarInt32(42);
         WriteSyncRecord(message, component, NetCollectionTestComponent.HealthSlot, health.WrittenSpan);
@@ -128,10 +128,8 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void InvalidInitialCollectionStateDoesNotPartiallyApplyCatchUp(bool handoffPayload)
+    [Fact]
+    public void InvalidInitialCollectionStateDoesNotPartiallyApplyCatchUp()
     {
         Scene source = CreateScene(); GameObject root = CreateGameObject();
         NetCollectionTestComponent original = root.AddComponent<NetCollectionTestComponent>();
@@ -150,8 +148,7 @@ public partial class NetworkingTests
             Pump(() => Networking.Networking.JoinState == NetworkJoinState.Synchronizing && host.Has(FakePeer.SceneLoaded), host);
             NetCollectionTestComponent component = Find(Scene.Current, root.Identifier).GetComponent<NetCollectionTestComponent>()!;
             using NetWriter collection = new();
-            if (handoffPayload) original.Scores.WriteHandoff(collection);
-            else original.Scores.WriteChanges(collection);
+            original.Scores.WriteChanges(collection);
             host.Send(FakePeer.SceneCatchUp, w =>
             {
                 w.WriteUInt64(generation); w.WriteVarUInt32(2);
@@ -174,7 +171,6 @@ public partial class NetworkingTests
     [InlineData("unknown")]
     [InlineData("unauthorized")]
     [InlineData("stale")]
-    [InlineData("duplicate")]
     public void ValidSyncSkipsRejectedValuesAndNotifiesOnceAfterTheWholeBlock(string skipped)
     {
         Scene scene = CreateScene(); MakeCurrent(scene);
@@ -196,7 +192,7 @@ public partial class NetworkingTests
             List<int> healthAtScoreCallback = new();
             component.Scores.Changed += _ => healthAtScoreCallback.Add(component.Health);
             using NetWriter message = new();
-            message.WriteInt32(peer.Id); message.WriteUInt64(100); message.WriteVarUInt32(3);
+            message.WriteInt32(peer.Id); message.WriteVarUInt32(3);
             byte[] scores = ListChange(0, w => { w.WriteByte((byte)NetChangeKind.Added); w.WriteVarUInt32(0); w.WriteVarInt32(7); });
             WriteSyncRecord(message, component, NetCollectionTestComponent.ScoresSlot, scores);
             using NetWriter health = new(); health.WriteVarInt32(42);

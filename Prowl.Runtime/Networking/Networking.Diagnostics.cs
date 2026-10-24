@@ -253,7 +253,6 @@ public static partial class Networking
             }
 
             reader.ReadInt32(); // Original state writer, preserved by host relaying.
-            reader.ReadUInt64();
             uint count = reader.ReadVarUInt32();
             StringBuilder context = new($"{count} SyncVar value(s)");
             List<string> names = new();

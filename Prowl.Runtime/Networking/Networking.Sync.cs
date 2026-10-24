@@ -4,19 +4,23 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 
 using Prowl.Warp;
 
 namespace Prowl.Runtime.Networking;
 
 // [Sync] properties. Changes are collected as they happen and sent once per tick, reliably: from the
-// host to every client, or from a client to the host, which applies them and passes them on.
+// host to every client, or from a client to the host, which applies them and passes them on. A reliable RPC
+// or an ownership handoff sends them early, so they arrive ahead of it.
 //
 // A block of values, as in a Sync message, a snapshot or a spawn, is
 // [varuint count] then per value [guid component][varuint slot][u32 ownership generation][bytes value, length prefixed].
-// Ongoing Sync messages prefix this block with [i32 original writer][u64 state revision].
-// The length lets a receiver skip values for components it doesn't have or won't accept.
+// Ongoing Sync messages prefix this block with [i32 original writer]. The length lets a receiver skip values for
+// components it doesn't have or won't accept.
+//
+// Each value has one writer at a time (its controller, or the host for FromHost ones), whose changes travel in
+// order on one reliable channel, relayed in order by the host. So the newest value is simply the last to arrive;
+// an earlier controller's late changes are told apart by their ownership generation.
 //
 // A network collection's value is its changes since the last tick, or all of it in a snapshot or spawn;
 // NetCollection has the layout. Either way it travels, is relayed and is authorized like any other value.
@@ -27,10 +31,6 @@ public static partial class Networking
     private static readonly HashSet<string> s_syncWarnings = new();
     private static readonly List<Action> s_notifications = new();
     private static int s_applying;
-    private static ulong s_outgoingStateRevision;
-
-    private static readonly Dictionary<(Guid Component, uint Slot, int Origin, uint Generation), ulong>
-        s_stateRevisions = new();
 
     /// <summary>Goes up when a session ends, so what was queued for one is never sent in the next.</summary>
     internal static int SessionNumber { get; private set; }
@@ -94,7 +94,6 @@ public static partial class Networking
         }
 
         message.WriteInt32(Session!.LocalPeer!.Id);
-        message.WriteUInt64(checked(++s_outgoingStateRevision));
         message.WriteVarUInt32((uint)count);
         message.WriteBytes(values.WrittenSpan);
 
@@ -109,7 +108,7 @@ public static partial class Networking
     }
 
     /// <summary>Writes one value: what changed since it was last sent if <paramref name="changes" />, else all of it.</summary>
-    private static bool WriteValue(NetWriter output, Component component, uint slot, bool changes, bool handoff = false)
+    private static bool WriteValue(NetWriter output, Component component, uint slot, bool changes)
     {
         if (NetworkMembers.Of(component).Sync(slot) is not { } sync)
         {
@@ -121,10 +120,6 @@ public static partial class Networking
         {
             sync.WriteChanges(component, s_valueWriter);
             sync.ChangesSent(component);
-        }
-        else if (handoff)
-        {
-            sync.WriteHandoff(component, s_valueWriter);
         }
         else
         {
@@ -168,27 +163,6 @@ public static partial class Networking
         output.WriteBytes(values.WrittenSpan);
     }
 
-    private static void ClearStateRevisions(GameObject root)
-    {
-        HashSet<Guid> identifiers = new();
-        foreach (GameObject go in root.GetChildrenDeep().Prepend(root))
-        {
-            identifiers.Add(go.Identifier);
-            foreach (Component part in go.GetComponents())
-            {
-                identifiers.Add(part.Identifier);
-            }
-        }
-
-        foreach ((Guid Component, uint Slot, int Origin, uint Generation) key in s_stateRevisions.Keys.ToArray())
-        {
-            if (identifiers.Contains(key.Component))
-            {
-                s_stateRevisions.Remove(key);
-            }
-        }
-    }
-
     private static void OnSync(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
         if (!IsHost && !sender.IsHost)
@@ -198,8 +172,7 @@ public static partial class Networking
 
         NetSession? session = Session;
         int originId = reader.ReadInt32();
-        ulong revision = reader.ReadUInt64();
-        if ((!sender.IsHost && originId != sender.Id) || revision == 0)
+        if (!sender.IsHost && originId != sender.Id)
         {
             throw new InvalidDataException("Invalid Sync origin.");
         }
@@ -210,14 +183,13 @@ public static partial class Networking
         }
 
         using NetWriter? relay = IsHost ? new NetWriter(1024) : null;
-        int relayed = ApplySyncState(origin, ref reader, relay, false, revision, true);
+        int relayed = ApplySyncState(origin, ref reader, relay, false, true);
 
         // The host passes on what it accepted from a client to everyone else.
         if (Session == session && relay != null && relayed > 0)
         {
             using NetWriter message = new(relay.Length + 8);
             message.WriteInt32(originId);
-            message.WriteUInt64(revision);
             message.WriteVarUInt32((uint)relayed);
             message.WriteBytes(relay.WrittenSpan);
             BroadcastEngine(EngineMessage.Sync, message.WrittenSpan, except: sender);
@@ -231,11 +203,11 @@ public static partial class Networking
     ///     so nothing is notified. Otherwise notifications run once every value in the block is in place.
     /// </summary>
     private static int ApplySyncState(NetPeer sender, ref NetReader reader, NetWriter? relay, bool initial,
-        ulong revision = 0, bool requireEnd = false)
+        bool requireEnd = false)
     {
-        // Validate all framing and accepted values before changing live state, revisions, or relays.
+        // Validate all framing and accepted values before changing live state or relays.
         // Collection validation reads into a detached copy, so partial operations cannot leak out.
-        ValidateSyncState(sender, reader, initial, revision, requireEnd);
+        ValidateSyncState(sender, reader, initial, requireEnd);
         int relayed = 0;
         uint count = reader.ReadVarUInt32();
         int notificationsFrom = s_notifications.Count;
@@ -259,21 +231,10 @@ public static partial class Networking
                 SyncMember? sync = NetworkMembers.Of(component).Sync(slot);
                 bool accepted = sync != null && AcceptSync(sender, component, sync.Flags) &&
                                 (initial || generation == GenerationOf(component.GameObject));
-                (Guid Identifier, uint slot, int Id, uint generation) revisionKey = (component.Identifier, slot,
-                    sender.Id, generation);
-                if (accepted && revision != 0 && s_stateRevisions.GetValueOrDefault(revisionKey) >= revision)
-                {
-                    accepted = false;
-                }
-
                 if (accepted)
                 {
                     NetReader valueReader = new(value);
                     sync!.Read(component, ref valueReader, initial);
-                    if (revision != 0)
-                    {
-                        s_stateRevisions[revisionKey] = revision;
-                    }
                 }
 
                 TraceMember("SyncVar", accepted ? "Apply" : "Rejected", sender, component, slot, false,
@@ -302,8 +263,7 @@ public static partial class Networking
         return relayed;
     }
 
-    private static void ValidateSyncState(NetPeer sender, NetReader reader, bool initial, ulong revision,
-        bool requireEnd)
+    private static void ValidateSyncState(NetPeer sender, NetReader reader, bool initial, bool requireEnd)
     {
         uint count = reader.ReadVarUInt32();
         // Each record needs a guid, slot, generation, and value length, even when it is skipped.
@@ -312,7 +272,6 @@ public static partial class Networking
             throw new InvalidDataException("Sync count exceeds the remaining data.");
         }
 
-        HashSet<(Guid, uint, uint)>? seen = revision == 0 ? null : new HashSet<(Guid, uint, uint)>();
         for (uint i = 0; i < count; i++)
         {
             Guid id = reader.ReadGuid();
@@ -322,13 +281,6 @@ public static partial class Networking
             if (FindByIdentifier(id) is not Component component || NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
                 NetworkMembers.Of(component).Sync(slot) is not { } sync || !AcceptSync(sender, component, sync.Flags) ||
                 (!initial && generation != GenerationOf(component.GameObject)))
-            {
-                continue;
-            }
-
-            // Match application: only the first accepted value for a slot advances this revision.
-            if (revision != 0 && (s_stateRevisions.GetValueOrDefault((id, slot, sender.Id, generation)) >= revision ||
-                                  !seen!.Add((id, slot, generation))))
             {
                 continue;
             }

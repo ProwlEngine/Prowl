@@ -30,7 +30,7 @@ namespace Prowl.Runtime.Networking;
 /// </remarks>
 public abstract class NetCollection
 {
-    private const byte Whole = 0, Changes = 1, Handoff = 2;
+    private const byte Whole = 0, Changes = 1;
     private uint _changeCount;
 
     // The changes not sent yet, already written, the first of them being number _changesFrom.
@@ -134,18 +134,6 @@ public abstract class NetCollection
         _changeCount = 0;
     }
 
-    // For an ownership handoff: pending operations for callbacks, plus a complete recovery state. Neither is
-    // consumed, since every other peer still needs its ordinary tick update.
-    internal void WriteHandoff(NetWriter writer)
-    {
-        using NetWriter changes = new(), whole = new();
-        WriteChanges(changes);
-        WriteAll(whole);
-        writer.WriteByte(Handoff);
-        writer.WriteBytesWithLength(changes.WrittenSpan);
-        writer.WriteBytesWithLength(whole.WrittenSpan);
-    }
-
     internal abstract NetCollection CreateEmptyCopy();
 
     internal void Validate(ref NetReader reader, bool initial = false)
@@ -165,12 +153,6 @@ public abstract class NetCollection
         if (initial && kind != Whole)
         {
             throw new InvalidDataException("Initial collection state must contain complete contents.");
-        }
-
-        if (kind == Handoff)
-        {
-            ReadHandoff(ref reader);
-            return;
         }
 
         uint sequence = reader.ReadVarUInt32();
@@ -205,37 +187,6 @@ public abstract class NetCollection
             {
                 _sequence++;
             }
-        }
-    }
-
-    private void ReadHandoff(ref NetReader reader)
-    {
-        ReadOnlySpan<byte> delta = reader.ReadBytesWithLength();
-        ReadOnlySpan<byte> whole = reader.ReadBytesWithLength();
-        NetReader header = new(delta);
-        if (header.ReadByte() != Changes || whole.IsEmpty || whole[0] != Whole)
-        {
-            throw new InvalidDataException("Invalid handoff collection state.");
-        }
-
-        uint from = header.ReadVarUInt32();
-        if (from <= _sequence)
-        {
-            NetReader operations = new(delta);
-            Read(ref operations, false);
-            if (!operations.IsAtEnd)
-            {
-                throw new InvalidDataException("Trailing collection operation bytes.");
-            }
-        }
-
-        // Operations after changes this peer never had are unsafe to replay. The complete contents
-        // still recover the right state without inventing callbacks for them.
-        NetReader contents = new(whole);
-        Read(ref contents, true);
-        if (!contents.IsAtEnd)
-        {
-            throw new InvalidDataException("Trailing collection state bytes.");
         }
     }
 

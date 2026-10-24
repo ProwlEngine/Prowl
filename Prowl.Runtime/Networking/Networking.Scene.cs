@@ -201,7 +201,6 @@ public static partial class Networking
             s_index.Clear();
             s_indexFrame = -1;
             s_entries.Clear();
-            s_stateRevisions.Clear();
             s_dirty.Clear();
 
             uint count = reader.ReadVarUInt32();

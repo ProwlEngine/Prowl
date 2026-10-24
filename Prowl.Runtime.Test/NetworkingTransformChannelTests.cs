@@ -82,15 +82,11 @@ public partial class NetworkingTests
             }
             else
             {
-                using NetWriter transforms = new(), state = new(), states = new(), message = new();
-                transforms.WriteGuid(proxy.Identifier); transforms.WriteUInt32(1); WritePose(transforms);
-                state.WriteInt32(NetPeer.HostId); state.WriteUInt64(1);
-                state.WriteGuid(proxy.Identifier); state.WriteUInt32(generation);
-                state.WriteBytesWithLength(new byte[] { 0 }); state.WriteBytesWithLength(transforms.WrittenSpan);
-                states.WriteVarUInt32(1); states.WriteBytesWithLength(state.WrittenSpan);
+                using NetWriter poses = new(), message = new();
+                poses.WriteVarUInt32(1); poses.WriteGuid(proxy.Identifier); WritePose(poses);
                 message.WriteGuid(proxy.Identifier); message.WriteUInt32(generation);
                 NetSerializers.WriteFloat3(message, Float3.Zero);
-                message.WriteBytesWithLength(states.WrittenSpan);
+                message.WriteBytesWithLength(poses.WrittenSpan);
                 host.Session.SendRaw(client, FakePeer.OwnershipState, message.WrittenSpan);
                 host.Session.Flush();
             }

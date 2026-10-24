@@ -139,7 +139,6 @@ public sealed class FakePeer : IDisposable
         }
     }
 
-    private ulong _stateRevision;
 
     public NetSession Session { get; }
 
@@ -156,7 +155,7 @@ public sealed class FakePeer : IDisposable
     {
         if (id == Sync)
         {
-            reader.ReadInt32(); reader.ReadUInt64();
+            reader.ReadInt32();
             using NetWriter logical = new();
             uint count = reader.ReadVarUInt32(); logical.WriteVarUInt32(count);
             for (uint i = 0; i < count; i++)
@@ -191,7 +190,6 @@ public sealed class FakePeer : IDisposable
         if (id == Sync)
         {
             wire.WriteInt32(Session.LocalPeer!.Id);
-            wire.WriteUInt64(++_stateRevision);
         }
         if (id == RpcToHost || id == RpcFromHost)
         {

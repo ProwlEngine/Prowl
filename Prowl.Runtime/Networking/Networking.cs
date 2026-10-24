@@ -311,8 +311,6 @@ public static partial class Networking
         s_entries.Clear();
         s_index.Clear();
         s_dirty.Clear();
-        s_stateRevisions.Clear();
-        s_outgoingStateRevision = 0;
         SessionNumber++;
         s_incoming = null;
         s_incomingStatic = null;

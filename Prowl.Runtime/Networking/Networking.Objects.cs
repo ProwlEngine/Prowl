@@ -471,7 +471,6 @@ public static partial class Networking
         Float3 velocity = entry.TransferVelocity ?? OwnershipVelocity(entry);
         entry.TransferVelocity = null;
         SendOwnershipState(entry, velocity);
-        ClearStateRevisions(entry.GameObject);
         entry.Owner = owner;
         entry.Generation = NextGeneration();
         entry.HasSent = false;
@@ -502,7 +501,6 @@ public static partial class Networking
         {
             Float3 velocity = entry.TransferVelocity ?? SampledVelocity(entry);
             entry.TransferVelocity = null;
-            ClearStateRevisions(entry.GameObject);
             entry.Owner = owner;
             entry.Generation = generation;
             entry.HasSent = false;

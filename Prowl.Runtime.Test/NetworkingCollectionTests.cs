@@ -99,16 +99,13 @@ public class NetCollectionTestComponent : Component
 
 public partial class NetworkingTests
 {
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void InitialCollectionsRejectOperationsAndHandoffPayloadsWithoutChangingContents(bool handoffPayload)
+    [Fact]
+    public void InitialCollectionsRejectOperationsWithoutChangingContents()
     {
         NetList<int> source = new();
         source.Add(1);
         using NetWriter writer = new();
-        if (handoffPayload) source.WriteHandoff(writer);
-        else source.WriteChanges(writer);
+        source.WriteChanges(writer);
         byte[] data = writer.ToArray();
         NetList<int> target = new();
         target.Add(9);

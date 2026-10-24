@@ -79,17 +79,19 @@ public static partial class Networking
             return true;
         }
 
-        using NetWriter message = new(), state = new();
+        using NetWriter message = new(), poses = new();
         message.WriteGuid(entry.GameObject.Identifier);
         message.WriteUInt32(entry.Generation);
         message.WriteBool(take);
         NetSerializers.WriteFloat3(message, take ? Float3.Zero : OwnershipVelocity(entry));
         if (!take)
         {
-            WriteOwnershipFrames(entry.GameObject, state, false);
+            // Ahead of the request, so the host has this peer's final values before it hands the object on.
+            SendSyncChanges();
+            WriteHandoffPoses(entry.GameObject, poses, false);
         }
 
-        message.WriteBytesWithLength(state.WrittenSpan);
+        message.WriteBytesWithLength(poses.WrittenSpan);
         SendEngine(session.HostPeer!, EngineMessage.OwnershipRequest, message.WrittenSpan);
         return true;
     }
@@ -105,8 +107,8 @@ public static partial class Networking
         uint generation = reader.ReadUInt32();
         bool take = reader.ReadBool();
         Float3 velocity = NetSerializers.ReadFloat3(ref reader);
-        ReadOnlySpan<byte> state = reader.ReadBytesWithLength();
-        if (!reader.IsAtEnd || delivery != Delivery.Reliable || !Finite(velocity) || (take && !state.IsEmpty))
+        ReadOnlySpan<byte> poses = reader.ReadBytesWithLength();
+        if (!reader.IsAtEnd || delivery != Delivery.Reliable || !Finite(velocity) || (take && !poses.IsEmpty))
         {
             throw new InvalidDataException("Invalid ownership transfer request.");
         }
@@ -132,12 +134,7 @@ public static partial class Networking
                 return;
             }
 
-            if (!ProcessHandoffStates(entry.GameObject, state, sender, false) ||
-                !ProcessHandoffStates(entry.GameObject, state, sender, true, true))
-            {
-                return;
-            }
-
+            ApplyHandoffPoses(entry.GameObject, poses, sender);
             entry.TransferVelocity = velocity;
         }
 
@@ -150,14 +147,6 @@ public static partial class Networking
         ? body.LinearVelocity
         : SampledVelocity(entry);
 
-    private static void WriteOwnershipFrames(GameObject root, NetWriter output, bool includeAll)
-    {
-        using NetWriter frame = new();
-        WriteHandoffState(root, frame, includeAll);
-        output.WriteVarUInt32(1);
-        output.WriteBytesWithLength(frame.WrittenSpan);
-    }
-
     private static void SendOwnershipState(NetworkEntry entry, Float3 velocity)
     {
         // A forced takeover starts from the host's latest accepted state, without interpolation delay.
@@ -167,12 +156,14 @@ public static partial class Networking
             ApplyNetworkTransform(entry.GameObject, sample.Position, sample.Rotation, sample.Scale);
         }
 
-        using NetWriter state = new(), message = new();
-        WriteOwnershipFrames(entry.GameObject, state, true);
+        // Every value the host has accepted is already on its way to everyone; its own pending ones go now.
+        SendSyncChanges();
+        using NetWriter poses = new(), message = new();
+        WriteHandoffPoses(entry.GameObject, poses, true);
         message.WriteGuid(entry.GameObject.Identifier);
         message.WriteUInt32(entry.Generation);
         NetSerializers.WriteFloat3(message, velocity);
-        message.WriteBytesWithLength(state.WrittenSpan);
+        message.WriteBytesWithLength(poses.WrittenSpan);
         BroadcastEngine(EngineMessage.OwnershipState, message.WrittenSpan);
     }
 
@@ -186,7 +177,7 @@ public static partial class Networking
         Guid id = reader.ReadGuid();
         uint generation = reader.ReadUInt32();
         Float3 velocity = NetSerializers.ReadFloat3(ref reader);
-        ReadOnlySpan<byte> state = reader.ReadBytesWithLength();
+        ReadOnlySpan<byte> poses = reader.ReadBytesWithLength();
         if (!reader.IsAtEnd || delivery != Delivery.Reliable || !Finite(velocity))
         {
             throw new InvalidDataException("Invalid ownership handoff state.");
@@ -197,10 +188,7 @@ public static partial class Networking
             return;
         }
 
-        if (ProcessHandoffStates(entry.GameObject, state, sender, false) &&
-            ProcessHandoffStates(entry.GameObject, state, sender, true, true))
-        {
-            entry.TransferVelocity = velocity;
-        }
+        ApplyHandoffPoses(entry.GameObject, poses, sender);
+        entry.TransferVelocity = velocity;
     }
 }
