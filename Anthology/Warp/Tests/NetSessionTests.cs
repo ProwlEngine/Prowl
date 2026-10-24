@@ -195,6 +195,20 @@ public abstract class NetSessionTests : IDisposable
     }
 
     [Fact]
+    public void UnreliableMessageSentOnAdmissionDoesNotBreakJoin()
+    {
+        SessionProbe host = Host();
+        host.Session.PeerJoined += peer => host.Session.Send(peer, new PositionMessage(), Delivery.Unreliable);
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active || alice.EndedWith != null, host,
+            alice);
+        SessionProbe.PumpFor(100, host, alice);
+
+        Assert.Null(alice.EndedWith);
+        Assert.Equal(SessionState.Active, alice.Session.State);
+    }
+
+    [Fact]
     public void MessagesFlowBetweenHostAndClients()
     {
         SessionProbe host = Host();

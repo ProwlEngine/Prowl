@@ -42,6 +42,12 @@ public sealed class KcpConnection : Connection
     /// <summary>Picked by the client, echoed through the handshake so both sides know which attempt a packet belongs to.</summary>
     internal uint ClientNonce { get; init; }
 
+    /// <summary>
+    ///     Host side: the nonce of a newer ConnectRequest from this address, the only attempt allowed to
+    ///     replace this session.
+    /// </summary>
+    internal uint? RestartNonce { get; set; }
+
     /// <summary>Picked by the host on Accept. Tags every session packet, and doubles as the KCP conversation id.</summary>
     internal uint SessionId { get; set; }
 

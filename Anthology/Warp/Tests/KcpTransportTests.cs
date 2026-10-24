@@ -2,7 +2,9 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Buffers.Binary;
 using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -312,5 +314,68 @@ public class KcpTransportTests
         Assert.NotNull(await KcpTransport.TryResolveAsync("127.0.0.1", 7777, AddressFamily.InterNetwork, default));
         Assert.Null(await KcpTransport.TryResolveAsync("[::1]:7777", 0, AddressFamily.InterNetwork, default));
         Assert.Null(await KcpTransport.TryResolveAsync("localhost:notaport", 0, AddressFamily.InterNetworkV6, default));
+    }
+
+    [Fact]
+    public void FormatsAddressesFromEitherSocketFamily()
+    {
+        Assert.Equal("127.0.0.1:7777",
+            KcpTransport.Format(new IPEndPoint(IPAddress.Loopback, 7777).Serialize()));
+        Assert.Equal("127.0.0.1:7777",
+            KcpTransport.Format(new IPEndPoint(IPAddress.Loopback.MapToIPv6(), 7777).Serialize()));
+        Assert.Equal("[::1]:7777", KcpTransport.Format(new IPEndPoint(IPAddress.IPv6Loopback, 7777).Serialize()));
+    }
+
+    [Fact]
+    public void ReplayedHandshakeDoesNotReplaceLiveConnection()
+    {
+        using KcpTransport host = new(FastOptions());
+        host.Listen();
+        using Socket raw = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        raw.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        raw.Connect(new IPEndPoint(IPAddress.Loopback, host.LocalPort));
+        Pump pump = new(host);
+
+        byte[] first = RawHandshake(raw, pump, 0x1111);
+        Connection firstConnection = Assert.Single(host.Connections);
+
+        // The client restarts from the same address: the new attempt replaces the old session.
+        RawHandshake(raw, pump, 0x2222);
+        Connection restarted = Assert.Single(host.Connections);
+        Assert.NotSame(firstConnection, restarted);
+
+        // A late copy of the first attempt's response must not tear the new session down.
+        raw.Send(first);
+        pump.For(200);
+        Assert.Same(restarted, Assert.Single(host.Connections));
+        Assert.True(restarted.IsConnected);
+    }
+
+    /// <summary>Runs the client half of the handshake by hand, returning the ChallengeResponse it sent.</summary>
+    private static byte[] RawHandshake(Socket raw, Pump pump, uint nonce)
+    {
+        byte[] request = new byte[KcpPacket.HandshakeRequestSize];
+        request[0] = (byte)KcpPacketType.ConnectRequest;
+        BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(1), new KcpTransportOptions().ProtocolId);
+        BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(5), nonce);
+        raw.Send(request);
+        byte[] challenge = Expect(raw, pump, KcpPacketType.Challenge);
+
+        byte[] response = (byte[])request.Clone();
+        response[0] = (byte)KcpPacketType.ChallengeResponse;
+        challenge.AsSpan(5, KcpPacket.CookieSize).CopyTo(response.AsSpan(9));
+        raw.Send(response);
+        byte[] accept = Expect(raw, pump, KcpPacketType.Accept);
+        Assert.Equal(nonce, BinaryPrimitives.ReadUInt32LittleEndian(accept.AsSpan(1)));
+        return response;
+    }
+
+    private static byte[] Expect(Socket raw, Pump pump, KcpPacketType type)
+    {
+        byte[] buffer = new byte[KcpPacket.MaxDatagramSize];
+        int length = 0;
+        pump.Until(() => raw.Available > 0 && (length = raw.Receive(buffer)) > 0 && buffer[0] == (byte)type,
+            what: type.ToString());
+        return buffer[..length];
     }
 }

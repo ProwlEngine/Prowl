@@ -864,6 +864,13 @@ public sealed class NetSession : IDisposable
             switch (id)
             {
                 case (ushort)InternalMessage.Batch:
+                    // Unreliable batches skip the reliable queue, so one sent right after the host admitted
+                    // us can beat JoinAccepted here. Drop it, like any other unreliable message before joining.
+                    if (!reassembled && State == SessionState.Joining && delivery == Delivery.Unreliable)
+                    {
+                        break;
+                    }
+
                     if (reassembled || State != SessionState.Active || !_batchWithHost)
                     {
                         throw new InvalidDataException("Unexpected message batch.");

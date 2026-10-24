@@ -300,7 +300,7 @@ public sealed class KcpTransport : Transport
         switch ((KcpPacketType)packet[0])
         {
             case KcpPacketType.ConnectRequest:
-                HandleConnectRequest(from, packet);
+                HandleConnectRequest(from, packet, out _);
                 break;
 
             case KcpPacketType.ChallengeResponse:
@@ -309,21 +309,23 @@ public sealed class KcpTransport : Transport
         }
     }
 
-    private void HandleConnectRequest(SocketAddress from, ReadOnlySpan<byte> packet)
+    private bool HandleConnectRequest(SocketAddress from, ReadOnlySpan<byte> packet, out uint nonce)
     {
+        nonce = 0;
         if (packet.Length != KcpPacket.HandshakeRequestSize ||
             BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != Settings.ProtocolId)
         {
-            return;
+            return false;
         }
 
-        uint nonce = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
+        nonce = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
 
         Span<byte> reply = stackalloc byte[KcpPacket.ChallengeSize];
         reply[0] = (byte)KcpPacketType.Challenge;
         BinaryPrimitives.WriteUInt32LittleEndian(reply[1..], nonce);
         ComputeCookie(from, nonce, NowMs / CookieWindowMs, reply[5..]);
         SendRaw(null, from, reply);
+        return true;
     }
 
     private void HandleChallengeResponse(SocketAddress from, ReadOnlySpan<byte> packet, long now)
@@ -369,7 +371,11 @@ public sealed class KcpTransport : Transport
         switch ((KcpPacketType)packet[0])
         {
             case KcpPacketType.ConnectRequest:
-                HandleConnectRequest(remote, packet);
+                if (HandleConnectRequest(remote, packet, out uint requestNonce) && requestNonce != connection.ClientNonce)
+                {
+                    connection.RestartNonce = requestNonce;
+                }
+
                 break;
 
             case KcpPacketType.ChallengeResponse:
@@ -381,6 +387,13 @@ public sealed class KcpTransport : Transport
                 if (nonce == connection.ClientNonce)
                 {
                     SendAccept(connection);
+                    return;
+                }
+
+                // Only the attempt that asked to restart since this session began may replace it. Anything
+                // else is a delayed or replayed response from an attempt that is already over.
+                if (nonce != connection.RestartNonce)
+                {
                     return;
                 }
 
@@ -744,9 +757,10 @@ public sealed class KcpTransport : Transport
         return fallback;
     }
 
-    private static string Format(SocketAddress address)
+    internal static string Format(SocketAddress address)
     {
-        IPEndPoint endpoint = (IPEndPoint)new IPEndPoint(IPAddress.IPv6Any, 0).Create(address);
+        IPAddress any = address.Family == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
+        IPEndPoint endpoint = (IPEndPoint)new IPEndPoint(any, 0).Create(address);
         if (endpoint.Address.IsIPv4MappedToIPv6)
         {
             endpoint = new IPEndPoint(endpoint.Address.MapToIPv4(), endpoint.Port);
