@@ -51,7 +51,7 @@ public static partial class Networking
         }
     }
 
-    /// <summary>How fast an object was moving, from the last two transform samples its controller sent.</summary>
+    /// <summary>How fast an object was moving in world space, from the last two transform samples its controller sent.</summary>
     private static Float3 SampledVelocity(NetworkEntry entry)
     {
         List<TransformSample> samples = entry.Samples;
@@ -62,7 +62,15 @@ public static partial class Networking
 
         TransformSample last = samples[^1], before = samples[^2];
         double elapsed = last.Time - before.Time;
-        return elapsed > 0 ? (last.Position - before.Position) / (float)elapsed : Float3.Zero;
+        if (elapsed <= 0)
+        {
+            return Float3.Zero;
+        }
+
+        // Samples are local positions; rigidbody velocity is world space.
+        Float3 velocity = (last.Position - before.Position) / (float)elapsed;
+        GameObject? parent = entry.GameObject.Parent;
+        return parent.IsValid() ? parent.Transform.TransformVector(velocity) : velocity;
     }
 
     /// <summary>

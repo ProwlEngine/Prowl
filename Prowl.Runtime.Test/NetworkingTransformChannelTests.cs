@@ -172,6 +172,50 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
+    [Fact]
+    public void HandoffVelocityIsInWorldSpaceUnderATransformedParent()
+    {
+        Scene scene = CreateScene();
+        GameObject parent = CreateGameObject();
+        parent.Transform.LocalRotation = Quaternion.AxisAngle(Float3.UnitY, MathF.PI * 0.5f);
+        parent.Transform.LocalScale = new Float3(2, 2, 2);
+        GameObject root = CreateGameObject();
+        root.Network.Mode = NetworkMode.Object;
+        root.Network.Flags = NetworkFlags.NoInterpolation; // Keep both samples.
+        root.SetParent(parent);
+        scene.Add(parent); MakeCurrent(scene);
+        LocalNetwork network = new();
+        try
+        {
+            Networking.Networking.Host(new LocalTransport(network, "host"));
+            using FakePeer owner = FakePeer.Join(network, "owner");
+            using FakePeer observer = FakePeer.Join(network, "observer");
+            Pump(() => owner.IsReady && observer.IsReady, owner, observer);
+            root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => p.Name == "owner"));
+            // Moving one unit along local X per second.
+            owner.Send(FakePeer.Transform, w =>
+            {
+                for (uint i = 0; i < 2; i++)
+                {
+                    w.WriteGuid(root.Identifier); w.WriteUInt32(NetworkGeneration(root)); w.WriteUInt32(i + 1); w.WriteDouble(1 + i);
+                    NetSerializers.WriteFloat3(w, new Float3(i, 0, 0));
+                    NetSerializers.WriteQuaternion(w, Quaternion.Identity);
+                    NetSerializers.WriteFloat3(w, Float3.One);
+                }
+            });
+            Pump(() => root.Transform.LocalPosition == new Float3(1, 0, 0), owner, observer);
+            observer.Received.Clear();
+            root.Network.AssignOwnership(null);
+            Pump(() => observer.Has(FakePeer.OwnershipState), owner, observer);
+            NetReader handoff = new(observer.Last(FakePeer.OwnershipState));
+            handoff.ReadGuid(); handoff.ReadUInt32();
+            Float3 velocity = NetSerializers.ReadFloat3(ref handoff);
+            Float3 expected = parent.Transform.TransformVector(Float3.UnitX);
+            Assert.True(Float3.Distance(velocity, expected) < 1e-4f, $"{velocity} != {expected}");
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
     [Theory]
     [InlineData(NetworkFlags.NoTransformSync)]
     [InlineData(NetworkFlags.NoScaleSync | NetworkFlags.NoRotationSync)]
