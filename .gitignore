@@ -23,6 +23,8 @@ bld/
 [Oo]bj/
 [Ll]og/
 Build/
+# MSBuild integration for script codegen, not build output.
+!/Prowl.CodeGen/build/
 
 # Visual Studio 2015 cache/options directory
 .vs/
