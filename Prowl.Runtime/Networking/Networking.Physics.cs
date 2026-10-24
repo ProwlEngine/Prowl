@@ -54,7 +54,7 @@ public static partial class Networking
     /// <summary>How fast an object was moving in world space, from the last two transform samples its controller sent.</summary>
     private static Float3 SampledVelocity(NetworkEntry entry)
     {
-        List<TransformSample> samples = entry.Samples;
+        List<TransformSample> samples = entry.TransformSync.Samples;
         if (samples.Count < 2)
         {
             return Float3.Zero;

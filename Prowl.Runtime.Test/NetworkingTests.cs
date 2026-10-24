@@ -892,7 +892,8 @@ public partial class NetworkingTests : RuntimeTestBase
             object table = state.GetType().GetField("Entries")!.GetValue(state)!;
             object entry = ((System.Collections.IEnumerable)table.GetType().GetProperty("Values")!.GetValue(table)!).Cast<object>()
                 .Single(e => ReferenceEquals(e.GetType().GetProperty("GameObject")!.GetValue(e), proxy));
-            var samples = (System.Collections.IEnumerable)entry.GetType().GetField("Samples")!.GetValue(entry)!;
+            object sync = entry.GetType().GetField("TransformSync")!.GetValue(entry)!;
+            var samples = (System.Collections.IEnumerable)sync.GetType().GetProperty("Samples")!.GetValue(sync)!;
             double[] times = samples.Cast<object>().Select(sample => (double)sample.GetType().GetProperty("Time")!.GetValue(sample)!).ToArray();
             Assert.Equal(3, times.Length);
             Assert.InRange(times[2] - times[0], 0.06, 0.07);

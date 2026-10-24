@@ -150,9 +150,9 @@ public static partial class Networking
     private static void SendOwnershipState(NetworkEntry entry, Float3 velocity)
     {
         // A forced takeover starts from the host's latest accepted state, without interpolation delay.
-        if (!HasControl(entry.GameObject) && entry.Samples.Count > 0)
+        if (!HasControl(entry.GameObject) && entry.TransformSync.Samples.Count > 0)
         {
-            TransformSample sample = entry.Samples[^1];
+            TransformSample sample = entry.TransformSync.Samples[^1];
             ApplyNetworkTransform(entry.GameObject, sample.Position, sample.Rotation, sample.Scale);
         }
 

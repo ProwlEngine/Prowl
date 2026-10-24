@@ -294,7 +294,7 @@ public static partial class Networking
         {
             message.WriteVarUInt32(entry.NetId);
             message.WriteVarUInt32(entry.Generation);
-            message.WriteVarUInt32(entry.HasReceived ? entry.LastReceivedTick : s_state.Tick);
+            message.WriteVarUInt32(entry.TransformSync.HasReceived ? entry.TransformSync.LastReceivedTick : s_state.Tick);
             Transform transform = entry.GameObject.Transform;
             NetSerializers.WriteFloat3(message, transform.LocalPosition);
             NetSerializers.WriteQuaternion(message, transform.LocalRotation);
@@ -319,17 +319,10 @@ public static partial class Networking
                 throw new InvalidDataException("Scene catch-up contains an invalid transform.");
             }
 
-            if (!s_state.Entries.TryGetNet(netId, out NetworkEntry? entry) || entry.Generation != generation ||
-                (entry.HasReceived && (int)(tick - entry.LastReceivedTick) < 0))
+            if (s_state.Entries.TryGetNet(netId, out NetworkEntry? entry) && entry.Generation == generation)
             {
-                continue;
+                entry.TransformSync.Snap(entry.GameObject, tick, position, Quaternion.Normalize(rotation), scale);
             }
-
-            entry.Samples.Clear();
-            entry.Timeline.Clear();
-            entry.HasReceived = true;
-            entry.LastReceivedTick = tick;
-            ApplyNetworkTransform(entry.GameObject, position, Quaternion.Normalize(rotation), scale);
         }
     }
 

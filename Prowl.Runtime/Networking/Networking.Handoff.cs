@@ -92,8 +92,7 @@ public static partial class Networking
         // Older interpolation samples would pull it back from the pose it was handed over at.
         if (FindEntry(root) is { } entry)
         {
-            entry.Samples.Clear();
-            entry.Timeline.Clear();
+            entry.TransformSync.ClearHistory();
         }
     }
 

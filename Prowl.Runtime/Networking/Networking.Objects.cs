@@ -477,10 +477,7 @@ public static partial class Networking
         SendOwnershipState(entry, velocity);
         entry.Owner = owner;
         entry.Generation = NextGeneration();
-        entry.HasSent = false;
-        entry.HasReceived = false;
-        entry.Samples.Clear();
-        entry.Timeline.Clear();
+        entry.TransformSync.Reset();
         ControlChanged(entry.GameObject, velocity);
 
         using NetWriter message = new(32);
@@ -507,10 +504,7 @@ public static partial class Networking
             entry.TransferVelocity = null;
             entry.Owner = owner;
             entry.Generation = generation;
-            entry.HasSent = false;
-            entry.HasReceived = false;
-            entry.Samples.Clear();
-            entry.Timeline.Clear();
+            entry.TransformSync.Reset();
             ControlChanged(entry.GameObject, velocity);
             NotifyOwnership(entry);
         }
@@ -562,31 +556,16 @@ public static partial class Networking
     private sealed class NetworkEntry(GameObject gameObject)
     {
         public readonly HashSet<Component> AuthorityListeners = new();
-        public readonly List<TransformSample> Samples = new();
         public readonly HashSet<Component> SpawnListeners = new();
-        public readonly TransformTimeline Timeline = new();
+        public readonly TransformSync TransformSync = new();
         public uint Generation;
         public bool HasLocalAuthority;
-        public bool HasReceived;
-
-        // Transform sync: what this side last sent, and what it has received from whoever controls it.
-        public bool HasSent;
-        public uint LastReceivedTick;
-        public double LastSentTime;
-
-        // Ticks each channel keeps being sent after it last changed, in case the change was lost.
-        public int LingerPosition, LingerRotation, LingerScale;
 
         /// <summary>The host-assigned number messages use for this object in place of its identifier.</summary>
         public uint NetId;
         public int NotifiedOwnerId = NoOwner;
         public NetworkOrphaned Orphaned;
         public int Owner = NoOwner;
-        public int QuietTicks;
-        public Float3 SentPosition;
-        public Quaternion SentRotation;
-        public Float3 SentScale;
-        public bool Settled;
         public bool SpawnNotified;
         public bool TearingDown;
         public Float3? TransferVelocity;

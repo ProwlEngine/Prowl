@@ -46,8 +46,6 @@ public static partial class Networking
         go.Network.ApplyFlags(flags);
         if (go != entry.GameObject) return;
         // Old samples must not restore values from a previously enabled channel.
-        entry.Samples.Clear();
-        entry.Timeline.Clear();
-        entry.HasSent = false;
+        entry.TransformSync.Reset();
     }
 }
