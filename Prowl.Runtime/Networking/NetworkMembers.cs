@@ -35,7 +35,7 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
     /// <summary>Writes what changed since the last send. For most values, that's the value.</summary>
     internal virtual void WriteChanges(Component component, NetWriter writer) => Write(component, writer);
 
-    internal virtual void WriteRpc(Component component, NetWriter writer) => Write(component, writer);
+    internal virtual void WriteHandoff(Component component, NetWriter writer) => Write(component, writer);
 
     /// <summary>What <see cref="WriteChanges" /> wrote has been sent.</summary>
     internal virtual void ChangesSent(Component component)
@@ -143,7 +143,7 @@ public sealed class SyncCollectionMember<TComponent, TCollection>(
 
     internal override void WriteChanges(Component component, NetWriter writer) => Bound(component).WriteChanges(writer);
 
-    internal override void WriteRpc(Component component, NetWriter writer) => Bound(component).WriteRpc(writer);
+    internal override void WriteHandoff(Component component, NetWriter writer) => Bound(component).WriteHandoff(writer);
 
     internal override void ChangesSent(Component component) => Bound(component).ClearChanges();
 

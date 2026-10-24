@@ -132,8 +132,8 @@ public static partial class Networking
                 return;
             }
 
-            if (!ProcessRpcStates(entry.GameObject, state, sender, false) ||
-                !ProcessRpcStates(entry.GameObject, state, sender, true, true))
+            if (!ProcessHandoffStates(entry.GameObject, state, sender, false) ||
+                !ProcessHandoffStates(entry.GameObject, state, sender, true, true))
             {
                 return;
             }
@@ -153,7 +153,7 @@ public static partial class Networking
     private static void WriteOwnershipFrames(GameObject root, NetWriter output, bool includeAll)
     {
         using NetWriter frame = new();
-        WriteRpcState(root, frame, includeAll);
+        WriteHandoffState(root, frame, includeAll);
         output.WriteVarUInt32(1);
         output.WriteBytesWithLength(frame.WrittenSpan);
     }
@@ -197,8 +197,8 @@ public static partial class Networking
             return;
         }
 
-        if (ProcessRpcStates(entry.GameObject, state, sender, false) &&
-            ProcessRpcStates(entry.GameObject, state, sender, true, true))
+        if (ProcessHandoffStates(entry.GameObject, state, sender, false) &&
+            ProcessHandoffStates(entry.GameObject, state, sender, true, true))
         {
             entry.TransferVelocity = velocity;
         }

@@ -16,7 +16,7 @@ namespace Prowl.Runtime.Networking;
 // new controller starts from the old one's final state, ahead of the ownership change itself.
 public static partial class Networking
 {
-    private static void WriteRpcState(GameObject target, NetWriter output, bool includeAll = false)
+    private static void WriteHandoffState(GameObject target, NetWriter output, bool includeAll = false)
     {
         NetworkEntry? entry = FindEntry(target);
         GameObject root = entry != null ? entry.GameObject : target;
@@ -70,7 +70,7 @@ public static partial class Networking
     }
 
     // Validation is a separate pass so a malformed final record cannot leave earlier records applied.
-    private static bool ProcessRpcStates(EngineObject target, ReadOnlySpan<byte> states, NetPeer caller, bool apply,
+    private static bool ProcessHandoffStates(GameObject target, ReadOnlySpan<byte> states, NetPeer sender, bool apply,
         bool forceTransforms = false)
     {
         NetSession? session = Session;
@@ -79,21 +79,20 @@ public static partial class Networking
             return false;
         }
 
-        GameObject targetObject = target is Component component ? component.GameObject : (GameObject)target;
         NetReader reader = new(states);
         uint count = reader.ReadVarUInt32();
         if (count > 1)
         {
-            throw new InvalidDataException("Invalid RPC state count.");
+            throw new InvalidDataException("Invalid handoff state count.");
         }
 
         for (uint i = 0; i < count; i++)
         {
-            RpcStateFrame frame = new(reader.ReadBytesWithLength());
-            bool allowedOrigin = frame.OriginId == caller.Id || (!IsHost && frame.OriginId == NetPeer.HostId);
+            HandoffFrame frame = new(reader.ReadBytesWithLength());
+            bool allowedOrigin = frame.OriginId == sender.Id || (!IsHost && frame.OriginId == NetPeer.HostId);
             if (!allowedOrigin || frame.Revision == 0)
             {
-                throw new InvalidDataException("Invalid RPC state origin or revision.");
+                throw new InvalidDataException("Invalid handoff state origin or revision.");
             }
 
             if (!session.TryGetPeer(frame.OriginId, out NetPeer? origin))
@@ -101,8 +100,8 @@ public static partial class Networking
                 return false;
             }
 
-            NetworkEntry? entry = FindEntry(targetObject);
-            GameObject root = entry != null ? entry.GameObject : targetObject;
+            NetworkEntry? entry = FindEntry(target);
+            GameObject root = entry != null ? entry.GameObject : target;
             if (root.Identifier != frame.RootId || (entry?.Generation ?? 0) != frame.Generation)
             {
                 return false;
@@ -110,17 +109,17 @@ public static partial class Networking
 
             if (!apply)
             {
-                ValidateRpcSyncs(frame, origin, root);
+                ValidateHandoffSyncs(frame, origin, root);
             }
 
-            ProcessRpcTransforms(frame, origin, root, entry, apply, forceTransforms);
+            ProcessHandoffTransforms(frame, origin, root, entry, apply, forceTransforms);
 
             if (apply)
             {
                 NetReader syncs = new(frame.Syncs);
                 ApplySyncState(origin, ref syncs, null, false, frame.Revision);
                 if (Session != session || !target.IsValid() || target.IsDestroyQueued ||
-                    GenerationOf(targetObject) != frame.Generation)
+                    GenerationOf(target) != frame.Generation)
                 {
                     return false;
                 }
@@ -129,13 +128,13 @@ public static partial class Networking
 
         if (!reader.IsAtEnd)
         {
-            throw new InvalidDataException("RPC states contain trailing bytes.");
+            throw new InvalidDataException("Handoff states contain trailing bytes.");
         }
 
         return true;
     }
 
-    private static void ValidateRpcSyncs(RpcStateFrame frame, NetPeer origin, GameObject root)
+    private static void ValidateHandoffSyncs(HandoffFrame frame, NetPeer origin, GameObject root)
     {
         NetReader reader = new(frame.Syncs);
         uint count = reader.ReadVarUInt32();
@@ -146,17 +145,17 @@ public static partial class Networking
             uint generation = reader.ReadUInt32();
             NetReader value = new(reader.ReadBytesWithLength());
             if (FindByIdentifier(id) is not Component component || NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
-                !InRpcTree(component.GameObject, root) || generation != frame.Generation ||
+                !InHandoffTree(component.GameObject, root) || generation != frame.Generation ||
                 NetworkMembers.Of(component).Sync(slot) is not { } sync)
             {
-                throw new InvalidDataException("RPC state contains an unknown Sync value.");
+                throw new InvalidDataException("Handoff state contains an unknown Sync value.");
             }
 
             bool authorized = origin.IsHost || ((sync.Flags & SyncFlags.FromHost) == 0 &&
                                                 OwnerOf(component.GameObject) == origin.Id);
             if (!authorized)
             {
-                throw new InvalidDataException("RPC state contains an unauthorized Sync value.");
+                throw new InvalidDataException("Handoff state contains an unauthorized Sync value.");
             }
 
             try
@@ -166,51 +165,51 @@ public static partial class Networking
             catch (Exception e) when (e is ArgumentException or OverflowException or FormatException
                                           or IndexOutOfRangeException)
             {
-                throw new InvalidDataException("RPC contains malformed Sync state.", e);
+                throw new InvalidDataException("Handoff contains malformed Sync state.", e);
             }
 
             if (!value.IsAtEnd)
             {
-                throw new InvalidDataException("RPC Sync value has trailing bytes.");
+                throw new InvalidDataException("Handoff Sync value has trailing bytes.");
             }
         }
 
         if (!reader.IsAtEnd)
         {
-            throw new InvalidDataException("RPC state has trailing Sync bytes.");
+            throw new InvalidDataException("Handoff state has trailing Sync bytes.");
         }
     }
 
-    private static void ProcessRpcTransforms(RpcStateFrame frame, NetPeer origin, GameObject root,
+    private static void ProcessHandoffTransforms(HandoffFrame frame, NetPeer origin, GameObject root,
         NetworkEntry? entry, bool apply, bool forceTransforms)
     {
         NetReader reader = new(frame.Transforms);
         while (!reader.IsAtEnd)
         {
-            RpcTransform pose = new(reader.ReadGuid(), reader.ReadUInt32(), NetSerializers.ReadFloat3(ref reader),
+            HandoffTransform pose = new(reader.ReadGuid(), reader.ReadUInt32(), NetSerializers.ReadFloat3(ref reader),
                 NetSerializers.ReadQuaternion(ref reader), NetSerializers.ReadFloat3(ref reader));
-            if (FindByIdentifier(pose.ObjectId) is not GameObject go || !InRpcTree(go, root) || NetworkAccessor.IsExcludedFromNetwork(go) ||
+            if (FindByIdentifier(pose.ObjectId) is not GameObject go || !InHandoffTree(go, root) || NetworkAccessor.IsExcludedFromNetwork(go) ||
                 (!origin.IsHost && OwnerOf(go) != origin.Id))
             {
-                throw new InvalidDataException("RPC state contains an unknown or unauthorized transform.");
+                throw new InvalidDataException("Handoff state contains an unknown or unauthorized transform.");
             }
 
             float rotationLength = Quaternion.LengthSquared(pose.Rotation);
             if (!Finite(pose.Position) || !Finite(pose.Scale) || !float.IsFinite(rotationLength) ||
                 rotationLength < 1e-12f)
             {
-                throw new InvalidDataException("RPC state contains an invalid transform.");
+                throw new InvalidDataException("Handoff state contains an invalid transform.");
             }
 
             if (apply && go.Network.HasTransformSync && (forceTransforms || !HasControl(go)))
             {
-                ApplyRpcTransform(go, root, entry, frame, pose, forceTransforms);
+                ApplyHandoffTransform(go, root, entry, frame, pose, forceTransforms);
             }
         }
     }
 
-    private static void ApplyRpcTransform(GameObject go, GameObject root, NetworkEntry? entry,
-        RpcStateFrame frame, RpcTransform pose, bool forceTransforms)
+    private static void ApplyHandoffTransform(GameObject go, GameObject root, NetworkEntry? entry,
+        HandoffFrame frame, HandoffTransform pose, bool forceTransforms)
     {
         (Guid Identifier, uint MaxValue, int OriginId, uint Generation) key = (go.Identifier, uint.MaxValue,
             frame.OriginId, frame.Generation);
@@ -237,7 +236,7 @@ public static partial class Networking
         ApplyNetworkTransform(go, pose.Position, Quaternion.Normalize(pose.Rotation), pose.Scale);
     }
 
-    private static bool InRpcTree(GameObject go, GameObject root)
+    private static bool InHandoffTree(GameObject go, GameObject root)
     {
         if (FindEntry(go) != FindEntry(root))
         {
@@ -255,14 +254,14 @@ public static partial class Networking
         return false;
     }
 
-    private readonly record struct RpcTransform(
+    private readonly record struct HandoffTransform(
         Guid ObjectId,
         uint Tick,
         Float3 Position,
         Quaternion Rotation,
         Float3 Scale);
 
-    private readonly ref struct RpcStateFrame
+    private readonly ref struct HandoffFrame
     {
         public readonly int OriginId;
         public readonly ulong Revision;
@@ -271,7 +270,7 @@ public static partial class Networking
         [ReloadIgnore] public readonly ReadOnlySpan<byte> Syncs;
         [ReloadIgnore] public readonly ReadOnlySpan<byte> Transforms;
 
-        public RpcStateFrame(ReadOnlySpan<byte> payload)
+        public HandoffFrame(ReadOnlySpan<byte> payload)
         {
             NetReader reader = new(payload);
             OriginId = reader.ReadInt32();
@@ -282,7 +281,7 @@ public static partial class Networking
             Transforms = reader.ReadBytesWithLength();
             if (!reader.IsAtEnd)
             {
-                throw new InvalidDataException("RPC state contains trailing bytes.");
+                throw new InvalidDataException("Handoff state contains trailing bytes.");
             }
         }
     }

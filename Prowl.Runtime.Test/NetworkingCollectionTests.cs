@@ -102,12 +102,12 @@ public partial class NetworkingTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void InitialCollectionsRejectOperationsAndRpcPayloadsWithoutChangingContents(bool rpcPayload)
+    public void InitialCollectionsRejectOperationsAndHandoffPayloadsWithoutChangingContents(bool handoffPayload)
     {
         NetList<int> source = new();
         source.Add(1);
         using NetWriter writer = new();
-        if (rpcPayload) source.WriteRpc(writer);
+        if (handoffPayload) source.WriteHandoff(writer);
         else source.WriteChanges(writer);
         byte[] data = writer.ToArray();
         NetList<int> target = new();

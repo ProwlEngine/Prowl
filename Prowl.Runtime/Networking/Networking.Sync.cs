@@ -109,7 +109,7 @@ public static partial class Networking
     }
 
     /// <summary>Writes one value: what changed since it was last sent if <paramref name="changes" />, else all of it.</summary>
-    private static bool WriteValue(NetWriter output, Component component, uint slot, bool changes, bool rpc = false)
+    private static bool WriteValue(NetWriter output, Component component, uint slot, bool changes, bool handoff = false)
     {
         if (NetworkMembers.Of(component).Sync(slot) is not { } sync)
         {
@@ -122,9 +122,9 @@ public static partial class Networking
             sync.WriteChanges(component, s_valueWriter);
             sync.ChangesSent(component);
         }
-        else if (rpc)
+        else if (handoff)
         {
-            sync.WriteRpc(component, s_valueWriter);
+            sync.WriteHandoff(component, s_valueWriter);
         }
         else
         {

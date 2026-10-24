@@ -131,7 +131,7 @@ public partial class NetworkingTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void InvalidInitialCollectionStateDoesNotPartiallyApplyCatchUp(bool rpcPayload)
+    public void InvalidInitialCollectionStateDoesNotPartiallyApplyCatchUp(bool handoffPayload)
     {
         Scene source = CreateScene(); GameObject root = CreateGameObject();
         NetCollectionTestComponent original = root.AddComponent<NetCollectionTestComponent>();
@@ -150,7 +150,7 @@ public partial class NetworkingTests
             Pump(() => Networking.Networking.JoinState == NetworkJoinState.Synchronizing && host.Has(FakePeer.SceneLoaded), host);
             NetCollectionTestComponent component = Find(Scene.Current, root.Identifier).GetComponent<NetCollectionTestComponent>()!;
             using NetWriter collection = new();
-            if (rpcPayload) original.Scores.WriteRpc(collection);
+            if (handoffPayload) original.Scores.WriteHandoff(collection);
             else original.Scores.WriteChanges(collection);
             host.Send(FakePeer.SceneCatchUp, w =>
             {
