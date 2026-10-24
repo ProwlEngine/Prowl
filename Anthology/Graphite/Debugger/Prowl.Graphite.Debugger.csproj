@@ -11,21 +11,24 @@
 
     <PropertyGroup>
         <PackageId>Prowl.Graphite.Debugger</PackageId>
-        <Description>Records Graphite graph executions into a serializable trace and replays them down to a single GPU event, with a viewer and render profiler UI.</Description>
+        <Description>Records Graphite graph executions into a serializable trace and replays them down to a single GPU event.</Description>
         <PackageTags>Graphics Vulkan Debugger Capture Replay</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Remove="Viewer\**" />
+        <EmbeddedResource Remove="Viewer\**" />
+        <None Remove="Viewer\**" />
+    </ItemGroup>
+
+    <ItemGroup>
         <InternalsVisibleTo Include="Prowl.Graphite.Debugger.Tests" />
+        <InternalsVisibleTo Include="Prowl.Graphite.Debugger.Viewer" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
         <ProjectReference Include="..\..\Echo\Echo\Echo.csproj" />
-        <ProjectReference Include="..\Rendering\Prowl.Graphite.Rendering.csproj" />
-        <ProjectReference Include="..\..\Origami\Origami\Origami.csproj" />
-        <ProjectReference Include="..\..\Paper\Paper\Paper.csproj" />
-        <ProjectReference Include="..\..\Quill\Quill\Quill.csproj" />
     </ItemGroup>
 
 </Project>
