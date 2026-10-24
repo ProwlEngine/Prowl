@@ -21,62 +21,49 @@ public static partial class Networking
     private const int NoOwner = -1;
     private static uint s_nextGeneration;
 
-    private static readonly EntryTable s_entries = new();
-
-    // Identifier lookups for messages, over the replicated scene. Filled on demand and rebuilt on a miss,
-    // at most once a frame, so a stream of unknown ids can't make every lookup walk the whole scene.
-    private static readonly Dictionary<Guid, EngineObject> s_index = new();
-    private static int s_indexFrame = -1;
-
-    // The object a spawn is building, by identifier, until it joins the scene.
-    private static Dictionary<Guid, EngineObject>? s_spawning;
-
     private static uint NextGeneration() => checked(++s_nextGeneration);
 
-    // Host only. Zero is never an object.
-    private static uint s_nextNetId;
-
-    private static uint NextNetId() => checked(++s_nextNetId);
+    private static uint NextNetId() => checked(++s_state.NextNetId);
 
     /// <summary>The GameObject or Component with this identifier in the replicated scene, or null.</summary>
     internal static EngineObject? FindByIdentifier(Guid id)
     {
-        if (id == Guid.Empty || s_scene == null)
+        if (id == Guid.Empty || s_state.Scene == null)
         {
             return null;
         }
 
-        if (s_spawning != null && s_spawning.TryGetValue(id, out EngineObject? spawning))
+        if (s_state.Spawning != null && s_state.Spawning.TryGetValue(id, out EngineObject? spawning))
         {
             return spawning;
         }
 
-        if (s_index.TryGetValue(id, out EngineObject? found) && IsLive(found, id))
+        if (s_state.Index.TryGetValue(id, out EngineObject? found) && IsLive(found, id))
         {
             return found;
         }
 
-        if (s_indexFrame == s_frame)
+        if (s_state.IndexFrame == s_frame)
         {
             return null;
         }
 
-        s_indexFrame = s_frame;
-        s_index.Clear();
-        foreach (GameObject go in s_scene.AllObjects)
+        s_state.IndexFrame = s_frame;
+        s_state.Index.Clear();
+        foreach (GameObject go in s_state.Scene.AllObjects)
         {
             Index(go);
         }
 
-        return s_index.TryGetValue(id, out found) && IsLive(found, id) ? found : null;
+        return s_state.Index.TryGetValue(id, out found) && IsLive(found, id) ? found : null;
     }
 
     private static void Index(GameObject go)
     {
-        s_index[go.Identifier] = go;
+        s_state.Index[go.Identifier] = go;
         foreach (Component component in go.GetComponents<Component>())
         {
-            s_index[component.Identifier] = component;
+            s_state.Index[component.Identifier] = component;
         }
     }
 
@@ -91,8 +78,8 @@ public static partial class Networking
 
     private static bool IsLive(EngineObject obj, Guid id) => obj switch
     {
-        GameObject go => !go.IsDisposed && go.Identifier == id && go.Scene == s_scene,
-        Component c => !c.IsDisposed && c.Identifier == id && c.GameObject.IsValid() && c.GameObject.Scene == s_scene,
+        GameObject go => !go.IsDisposed && go.Identifier == id && go.Scene == s_state.Scene,
+        Component c => !c.IsDisposed && c.Identifier == id && c.GameObject.IsValid() && c.GameObject.Scene == s_state.Scene,
         _ => false
     };
 
@@ -100,7 +87,7 @@ public static partial class Networking
     private static NetworkEntry? FindEntry(GameObject go)
     {
         GameObject? root = NetworkAccessor.RootOf(go);
-        return root != null && s_entries.TryGetValue(root.Identifier, out NetworkEntry? entry) &&
+        return root != null && s_state.Entries.TryGetValue(root.Identifier, out NetworkEntry? entry) &&
                entry.GameObject == root
             ? entry
             : null;
@@ -170,7 +157,7 @@ public static partial class Networking
                 throw new InvalidOperationException("An object being despawned cannot be spawned again.");
             }
 
-            if (go.Scene != s_scene)
+            if (go.Scene != s_state.Scene)
             {
                 throw new InvalidOperationException(
                     $"'{go.Name}' has to be in the current scene before it can be spawned.");
@@ -198,7 +185,7 @@ public static partial class Networking
         }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
-        if (s_entries.TryGetValue(go.Identifier, out NetworkEntry? existing) && existing.GameObject == go)
+        if (s_state.Entries.TryGetValue(go.Identifier, out NetworkEntry? existing) && existing.GameObject == go)
         {
             ChangeOwner(existing, owner?.Id ?? NoOwner);
             return;
@@ -206,7 +193,7 @@ public static partial class Networking
 
         NetworkEntry entry =
             new(go) { Owner = owner?.Id ?? NoOwner, Orphaned = orphaned, Generation = NextGeneration(), NetId = NextNetId() };
-        s_entries.Add(entry);
+        s_state.Entries.Add(entry);
         IndexTree(go);
 
         using NetWriter message = new(4096);
@@ -250,13 +237,13 @@ public static partial class Networking
 
     private static void OnSpawn(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
-        if (IsHost || s_scene == null)
+        if (IsHost || s_state.Scene == null)
         {
             return;
         }
 
         NetSession? session = Session;
-        Scene scene = s_scene;
+        Scene scene = s_state.Scene;
         Guid id = reader.ReadGuid();
         Guid parentId = reader.ReadGuid();
         int owner = (int)reader.ReadVarUInt32() - 1;
@@ -275,7 +262,7 @@ public static partial class Networking
         bool attached = false;
         try
         {
-            if (Session != session || s_scene != scene)
+            if (Session != session || s_state.Scene != scene)
             {
                 return;
             }
@@ -286,15 +273,15 @@ public static partial class Networking
             }
 
             // Resolve initial Sync references within the new tree before enabling its components.
-            s_spawning = new Dictionary<Guid, EngineObject>();
+            s_state.Spawning = new Dictionary<Guid, EngineObject>();
             try
             {
                 foreach (GameObject part in (List<GameObject>)[go, .. go.GetChildrenDeep()])
                 {
-                    s_spawning[part.Identifier] = part;
+                    s_state.Spawning[part.Identifier] = part;
                     foreach (Component component in part.GetComponents<Component>())
                     {
-                        s_spawning[component.Identifier] = component;
+                        s_state.Spawning[component.Identifier] = component;
                     }
                 }
 
@@ -302,17 +289,17 @@ public static partial class Networking
             }
             finally
             {
-                s_spawning = null;
+                s_state.Spawning = null;
             }
 
-            if (Session != session || s_scene != scene)
+            if (Session != session || s_state.Scene != scene)
             {
                 return;
             }
 
             NetworkEntry entry = new(go) { Owner = owner, Orphaned = orphaned, Generation = generation, NetId = netId };
             go.Network.ApplyOrphaned(orphaned);
-            s_entries.Add(entry);
+            s_state.Entries.Add(entry);
             ControlChanged(go);
             if (FindByIdentifier(parentId) is GameObject parent)
             {
@@ -324,7 +311,7 @@ public static partial class Networking
             }
 
             attached = true;
-            if (Session != session || s_scene != scene)
+            if (Session != session || s_state.Scene != scene)
             {
                 return;
             }
@@ -338,9 +325,9 @@ public static partial class Networking
             // Sync state, or attachment must release components and any resources they own.
             if (!attached)
             {
-                if (s_entries.TryGetValue(go!.Identifier, out NetworkEntry? pending) && pending.GameObject == go)
+                if (s_state.Entries.TryGetValue(go!.Identifier, out NetworkEntry? pending) && pending.GameObject == go)
                 {
-                    s_entries.Remove(go.Identifier);
+                    s_state.Entries.Remove(go.Identifier);
                 }
 
                 go.Dispose();
@@ -351,13 +338,13 @@ public static partial class Networking
     /// <summary>A GameObject was disposed. On the host, a networked object going away goes away everywhere.</summary>
     internal static void OnGameObjectDisposed(GameObject go)
     {
-        if (!IsHost || !s_entries.TryGetValue(go.Identifier, out NetworkEntry? entry) || entry.GameObject != go)
+        if (!IsHost || !s_state.Entries.TryGetValue(go.Identifier, out NetworkEntry? entry) || entry.GameObject != go)
         {
             return;
         }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
-        s_entries.Remove(go.Identifier);
+        s_state.Entries.Remove(go.Identifier);
 
         // A scene being swapped out is disabled first. Its objects aren't destroyed, they're replaced by the next snapshot.
         if (go.Scene is not { IsDisposed: false, IsActive: true } || !IsActive)
@@ -378,7 +365,7 @@ public static partial class Networking
         }
 
         Guid id = reader.ReadGuid();
-        if (s_entries.Remove(id, out NetworkEntry? entry) && entry.GameObject.IsValid())
+        if (s_state.Entries.Remove(id, out NetworkEntry? entry) && entry.GameObject.IsValid())
         {
             NotifyDespawn(entry);
             entry.GameObject.Destroy();
@@ -401,7 +388,7 @@ public static partial class Networking
 
         ValidateOwner(owner);
 
-        if (!s_entries.TryGetValue(go.Identifier, out NetworkEntry? entry) || entry.GameObject != go ||
+        if (!s_state.Entries.TryGetValue(go.Identifier, out NetworkEntry? entry) || entry.GameObject != go ||
             entry.TearingDown)
         {
             throw new InvalidOperationException($"'{go.Name}' is not a spawned networked object.");
@@ -471,7 +458,7 @@ public static partial class Networking
             throw new InvalidDataException("Invalid orphaned policy message.");
         }
 
-        if (s_entries.TryGetValue(id, out NetworkEntry? entry) && entry.Generation == generation)
+        if (s_state.Entries.TryGetValue(id, out NetworkEntry? entry) && entry.Generation == generation)
         {
             entry.Orphaned = orphaned;
             entry.GameObject.Network.ApplyOrphaned(orphaned);
@@ -514,7 +501,7 @@ public static partial class Networking
         Guid id = reader.ReadGuid();
         int owner = (int)reader.ReadVarUInt32() - 1;
         uint generation = reader.ReadUInt32();
-        if (s_entries.TryGetValue(id, out NetworkEntry? entry))
+        if (s_state.Entries.TryGetValue(id, out NetworkEntry? entry))
         {
             Float3 velocity = entry.TransferVelocity ?? SampledVelocity(entry);
             entry.TransferVelocity = null;
@@ -532,7 +519,7 @@ public static partial class Networking
     private static void OnPeerLeft(NetPeer peer, SessionEndReason reason)
     {
         NetSession? session = Session;
-        s_peerReadiness.Remove(peer.Id);
+        s_state.PeerReadiness.Remove(peer.Id);
         DispatchNetworkListener(e => e.OnPeerDisconnected(peer, reason));
         if (Session != session)
         {
@@ -540,7 +527,7 @@ public static partial class Networking
         }
 
         List<NetworkEntry> orphans = new();
-        foreach (NetworkEntry entry in s_entries.Values)
+        foreach (NetworkEntry entry in s_state.Entries.Values)
         {
             if (entry.Owner == peer.Id)
             {

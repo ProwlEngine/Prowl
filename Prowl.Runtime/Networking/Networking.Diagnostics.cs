@@ -108,14 +108,14 @@ public static class NetworkDiagnostics
 
 public static partial class Networking
 {
-    public static int NetworkObjectCount => s_entries.Count;
-    public static int PendingSyncCount => s_dirty.Count;
+    public static int NetworkObjectCount => s_state.Entries.Count;
+    public static int PendingSyncCount => s_state.Dirty.Count;
 
     /// <summary>Copies live object diagnostics without keeping scene objects alive.</summary>
     public static void GetObjectDiagnostics(List<ObjectDiagnostic> output)
     {
         output.Clear();
-        foreach (NetworkEntry entry in s_entries.Values)
+        foreach (NetworkEntry entry in s_state.Entries.Values)
         {
             GameObject go = entry.GameObject;
             if (!go.IsValid())

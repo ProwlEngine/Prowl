@@ -888,7 +888,8 @@ public partial class NetworkingTests : RuntimeTestBase
             SendProxyTransform(host, client, proxy.Identifier, 3, 3);
             // Receive all three at once, before interpolation can discard samples.
             Networking.Networking.Receive();
-            object table = typeof(Networking.Networking).GetField("s_entries", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+            object state = typeof(Networking.Networking).GetField("s_state", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+            object table = state.GetType().GetField("Entries")!.GetValue(state)!;
             object entry = ((System.Collections.IEnumerable)table.GetType().GetProperty("Values")!.GetValue(table)!).Cast<object>()
                 .Single(e => ReferenceEquals(e.GetType().GetProperty("GameObject")!.GetValue(e), proxy));
             var samples = (System.Collections.IEnumerable)entry.GetType().GetField("Samples")!.GetValue(entry)!;

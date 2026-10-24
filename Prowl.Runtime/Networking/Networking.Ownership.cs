@@ -47,7 +47,7 @@ public static partial class Networking
             throw new InvalidDataException("Invalid ownership transfer policy.");
         }
 
-        if (s_entries.TryGetValue(id, out NetworkEntry? entry) && entry.Generation == generation)
+        if (s_state.Entries.TryGetValue(id, out NetworkEntry? entry) && entry.Generation == generation)
         {
             entry.GameObject.Network.ApplyOwnerTransfer(policy);
         }
@@ -113,7 +113,7 @@ public static partial class Networking
             throw new InvalidDataException("Invalid ownership transfer request.");
         }
 
-        if (!s_entries.TryGetValue(id, out NetworkEntry? entry) || entry.TearingDown ||
+        if (!s_state.Entries.TryGetValue(id, out NetworkEntry? entry) || entry.TearingDown ||
             entry.Generation != generation ||
             !entry.GameObject.IsValid())
         {
@@ -183,7 +183,7 @@ public static partial class Networking
             throw new InvalidDataException("Invalid ownership handoff state.");
         }
 
-        if (!s_entries.TryGetValue(id, out NetworkEntry? entry) || entry.Generation != generation)
+        if (!s_state.Entries.TryGetValue(id, out NetworkEntry? entry) || entry.Generation != generation)
         {
             return;
         }

@@ -122,7 +122,7 @@ public static partial class Networking
 
     internal static void BeforeObjectDisposed(GameObject go)
     {
-        if (s_entries.TryGetValue(go.Identifier, out NetworkEntry? entry) && entry.GameObject == go)
+        if (s_state.Entries.TryGetValue(go.Identifier, out NetworkEntry? entry) && entry.GameObject == go)
         {
             NotifyDespawn(entry);
         }
@@ -130,7 +130,7 @@ public static partial class Networking
 
     internal static void AssertStructureEditable(GameObject? go)
     {
-        if (!go.IsValid() || !IsActive || go.Scene != s_scene || go.Scene is not { IsDisposed: false })
+        if (!go.IsValid() || !IsActive || go.Scene != s_state.Scene || go.Scene is not { IsDisposed: false })
         {
             return;
         }

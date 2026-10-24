@@ -43,12 +43,10 @@ public static partial class Networking
     /// </summary>
     public const ushort EngineMessageIds = 0xFE00;
 
-    // The scene this session replicates: the current one on the host, the last one received on a client
-    // (which only becomes current at the end of the frame it arrived in).
-    private static Scene? s_scene;
+    // What the running session knows. Replaced whole when a session ends, so nothing carries into the next.
+    private static ReplicationState s_state = new();
 
     private static readonly Stopwatch s_clock = Stopwatch.StartNew();
-    private static double s_nextTick;
     private static int s_frame;
     private static NetworkingContext? s_context;
     private static bool s_endingSession;
@@ -97,12 +95,12 @@ public static partial class Networking
 
         Attach(session, context);
 
-        s_scene = Scene.Current;
-        s_sceneGeneration = 1;
+        s_state.Scene = Scene.Current;
+        s_state.SceneGeneration = 1;
         session.PeerJoined += OnPeerConnected;
         session.PeerLeft += OnPeerLeft;
         Scene.OnSceneLoaded += OnHostSceneLoaded;
-        RegisterSceneObjects(s_scene);
+        RegisterSceneObjects(s_state.Scene);
         if (Session == session)
         {
             DispatchNetworkListener(e => e.OnNetworkLoading());
@@ -190,11 +188,11 @@ public static partial class Networking
         }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
-        if (IsActive && (IsHost || IsReady) && Now >= s_nextTick)
+        if (IsActive && (IsHost || IsReady) && Now >= s_state.NextTick)
         {
             // Fall behind by more than a tick, after a hitch, and the schedule restarts rather than bursting to catch up.
             double interval = 1.0 / Math.Max(TickRate, 1f);
-            s_nextTick = Math.Max(s_nextTick + interval, Now);
+            s_state.NextTick = Math.Max(s_state.NextTick + interval, Now);
 
             SendSyncChanges();
             SendTransforms();
@@ -228,9 +226,9 @@ public static partial class Networking
     {
         Session = session;
         s_context = context;
-        s_nextTick = Now;
-        s_joinState = session.IsHost ? NetworkJoinState.Loading : NetworkJoinState.Connecting;
-        s_readyDeadline = Now + s_configuration.SceneLoadTimeoutSeconds;
+        s_state.NextTick = Now;
+        s_state.JoinState = session.IsHost ? NetworkJoinState.Loading : NetworkJoinState.Connecting;
+        s_state.ReadyDeadline = Now + s_configuration.SceneLoadTimeoutSeconds;
         Scene.OnSceneLoaded += OnNetworkSceneActivated;
         session.Joined += OnSessionAdmitted;
         NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty,
@@ -300,18 +298,19 @@ public static partial class Networking
 
     private static void ResetState()
     {
-        NetworkEntry[] entries = s_entries.Values.ToArray();
+        NetworkEntry[] entries = s_state.Entries.Values.ToArray();
         foreach (NetworkEntry entry in entries)
         {
             NotifyDespawn(entry);
         }
 
-        ResetReadiness();
-        s_scene = null;
-        s_entries.Clear();
-        s_nextNetId = 0;
-        s_index.Clear();
-        s_dirty.Clear();
+        // A received scene queued for activation must not replace the current scene after disconnect.
+        if (s_state.Scene.IsValid())
+        {
+            Scene.CancelPendingLoad(s_state.Scene!);
+        }
+
+        s_state = new ReplicationState();
         SessionNumber++;
         s_incoming = null;
         s_incomingStatic = null;

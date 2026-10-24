@@ -28,14 +28,14 @@ public static partial class Networking
 
         // Objects that survived the swap (DontDestroyOnLoad) keep their network state; the rest went with the old scene.
         using FrameStatScope stats = FrameStats.Network.Scope();
-        s_scene = Scene.Current;
-        s_sceneGeneration++;
-        s_joinState = NetworkJoinState.Loading;
-        s_index.Clear();
-        s_dirty.Clear();
-        foreach (NetworkEntry entry in s_entries.Values.ToArray())
+        s_state.Scene = Scene.Current;
+        s_state.SceneGeneration++;
+        s_state.JoinState = NetworkJoinState.Loading;
+        s_state.Index.Clear();
+        s_state.Dirty.Clear();
+        foreach (NetworkEntry entry in s_state.Entries.Values.ToArray())
         {
-            if (!entry.GameObject.IsValid() || entry.GameObject.Scene != s_scene)
+            if (!entry.GameObject.IsValid() || entry.GameObject.Scene != s_state.Scene)
             {
                 NotifyDespawn(entry);
             }
@@ -46,8 +46,8 @@ public static partial class Networking
             }
         }
 
-        s_entries.RemoveWhere(e => !e.GameObject.IsValid() || e.GameObject.Scene != s_scene);
-        RegisterSceneObjects(s_scene);
+        s_state.Entries.RemoveWhere(e => !e.GameObject.IsValid() || e.GameObject.Scene != s_state.Scene);
+        RegisterSceneObjects(s_state.Scene);
 
         if (Session != session)
         {
@@ -72,7 +72,7 @@ public static partial class Networking
     /// <summary>Starts <paramref name="peers" /> loading the scene, from one snapshot written for all of them.</summary>
     private static void SendSnapshot(params NetPeer[] peers)
     {
-        if (Session is not { } session || s_scene == null || peers.Length == 0)
+        if (Session is not { } session || s_state.Scene == null || peers.Length == 0)
         {
             return;
         }
@@ -84,7 +84,7 @@ public static partial class Networking
 
         using NetWriter message = new(64 * 1024);
         using FrameStatScope stats = FrameStats.Network.Scope();
-        WriteSnapshot(s_scene, message);
+        WriteSnapshot(s_state.Scene, message);
         // Writing runs components' serialization callbacks, which could end the session.
         if (Session != session)
         {
@@ -116,12 +116,12 @@ public static partial class Networking
         }
 
         output.WriteByte(SnapshotFormat);
-        output.WriteUInt64(Math.Max(s_sceneGeneration, 1));
+        output.WriteUInt64(Math.Max(s_state.SceneGeneration, 1));
         output.WriteString(scene.Name);
         output.WriteBytesWithLength(Compress(echo));
 
-        output.WriteVarUInt32((uint)s_entries.Count);
-        foreach (NetworkEntry entry in s_entries.Values)
+        output.WriteVarUInt32((uint)s_state.Entries.Count);
+        foreach (NetworkEntry entry in s_state.Entries.Values)
         {
             output.WriteGuid(entry.GameObject.Identifier);
             output.WriteVarUInt32((uint)(entry.Owner + 1));
@@ -181,17 +181,17 @@ public static partial class Networking
         bool queuedForActivation = false;
         try
         {
-            if (Session != session || sceneGeneration <= s_sceneGeneration)
+            if (Session != session || sceneGeneration <= s_state.SceneGeneration)
             {
                 return;
             }
 
-            s_sceneGeneration = sceneGeneration;
-            s_joinState = NetworkJoinState.Loading;
-            s_catchUpApplied = false;
-            s_readyDeadline = Now + s_configuration.SceneLoadTimeoutSeconds;
+            s_state.SceneGeneration = sceneGeneration;
+            s_state.JoinState = NetworkJoinState.Loading;
+            s_state.CatchUpApplied = false;
+            s_state.ReadyDeadline = Now + s_configuration.SceneLoadTimeoutSeconds;
 
-            foreach (NetworkEntry entry in s_entries.Values.ToArray())
+            foreach (NetworkEntry entry in s_state.Entries.Values.ToArray())
             {
                 NotifyDespawn(entry);
                 if (Session != session)
@@ -201,11 +201,11 @@ public static partial class Networking
             }
 
             // Incoming messages can resolve this scene before it becomes current at the frame boundary.
-            s_scene = scene;
-            s_index.Clear();
-            s_indexFrame = -1;
-            s_entries.Clear();
-            s_dirty.Clear();
+            s_state.Scene = scene;
+            s_state.Index.Clear();
+            s_state.IndexFrame = -1;
+            s_state.Entries.Clear();
+            s_state.Dirty.Clear();
 
             uint count = reader.ReadVarUInt32();
             for (uint i = 0; i < count; i++)
@@ -218,14 +218,14 @@ public static partial class Networking
                 if (FindByIdentifier(id) is GameObject go)
                 {
                     go.Network.ApplyOrphaned(orphaned);
-                    s_entries.Add(new NetworkEntry(go)
+                    s_state.Entries.Add(new NetworkEntry(go)
                         { Owner = owner, Orphaned = orphaned, Generation = generation, NetId = netId });
                     ControlChanged(go);
                 }
             }
 
             ApplySyncState(sender, ref reader, null, true);
-            foreach (NetworkEntry entry in s_entries.Values.ToArray())
+            foreach (NetworkEntry entry in s_state.Entries.Values.ToArray())
             {
                 NotifySpawn(entry);
                 if (Session != session)
@@ -265,17 +265,17 @@ public static partial class Networking
         NetSession? session = Session;
         foreach (GameObject go in scene.AllObjects.ToArray())
         {
-            if (Session != session || !IsActive || s_scene != scene)
+            if (Session != session || !IsActive || s_state.Scene != scene)
             {
                 break;
             }
 
             if (NetworkAccessor.ModeOf(go) == NetworkMode.Object && go.Network.Root == go && !NetworkAccessor.IsExcludedFromNetwork(go) &&
-                !s_entries.Contains(go.Identifier))
+                !s_state.Entries.Contains(go.Identifier))
             {
                 NetworkEntry entry = new(go)
                     { Orphaned = go.Network.Orphaned, Generation = NextGeneration(), NetId = NextNetId() };
-                s_entries.Add(entry);
+                s_state.Entries.Add(entry);
                 NotifySpawn(entry);
             }
         }

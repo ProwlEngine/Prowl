@@ -14,11 +14,6 @@ namespace Prowl.Runtime.Networking;
 
 public static partial class Networking
 {
-    private static NetworkJoinState s_joinState;
-    private static ulong s_sceneGeneration;
-    private static double s_readyDeadline;
-    private static bool s_catchUpApplied;
-    private static readonly Dictionary<int, PeerReadiness> s_peerReadiness = new();
 
     /// <summary>Current connection, admission, scene loading, or gameplay readiness stage.</summary>
     public static NetworkJoinState JoinState
@@ -32,7 +27,7 @@ public static partial class Networking
 
             if (session.State != SessionState.Joining)
             {
-                return s_joinState;
+                return s_state.JoinState;
             }
 
             return session.HostConnection is { IsConnected: true }
@@ -42,7 +37,7 @@ public static partial class Networking
     }
 
     /// <summary>True after scene activation and the readiness handshake. IsActive only means session admission.</summary>
-    public static bool IsReady => IsActive && s_joinState == NetworkJoinState.Ready;
+    public static bool IsReady => IsActive && s_state.JoinState == NetworkJoinState.Ready;
 
     /// <summary>Readiness of this peer. Remote readiness is known only on the host; other clients return false.</summary>
     public static bool IsPeerReady(NetPeer peer) => Session is { } session &&
@@ -51,15 +46,15 @@ public static partial class Networking
                                                     (peer.IsLocal
                                                         ? IsReady
                                                         : session.IsHost &&
-                                                          s_peerReadiness.TryGetValue(peer.Id,
+                                                          s_state.PeerReadiness.TryGetValue(peer.Id,
                                                               out PeerReadiness? state) &&
-                                                          state.Generation == s_sceneGeneration &&
+                                                          state.Generation == s_state.SceneGeneration &&
                                                           state.Stage == NetworkJoinState.Ready);
 
     private static void OnSessionAdmitted()
     {
-        s_joinState = NetworkJoinState.WaitingForScene;
-        s_readyDeadline = Now + s_configuration.SceneLoadTimeoutSeconds;
+        s_state.JoinState = NetworkJoinState.WaitingForScene;
+        s_state.ReadyDeadline = Now + s_configuration.SceneLoadTimeoutSeconds;
     }
 
     private static void OnPeerConnected(NetPeer peer)
@@ -78,30 +73,30 @@ public static partial class Networking
         }
     }
 
-    private static void BeginPeerLoad(NetPeer peer) => s_peerReadiness[peer.Id] =
-        new PeerReadiness(s_sceneGeneration, Now + s_configuration.SceneLoadTimeoutSeconds);
+    private static void BeginPeerLoad(NetPeer peer) => s_state.PeerReadiness[peer.Id] =
+        new PeerReadiness(s_state.SceneGeneration, Now + s_configuration.SceneLoadTimeoutSeconds);
 
     private static void OnNetworkSceneActivated()
     {
         // A joining client can still activate local scenes before the host supplies its first snapshot.
         // Only guard scene replacement once there is a network scene to protect (including a queued one).
-        if (!IsClient || s_scene is null)
+        if (!IsClient || s_state.Scene is null)
         {
             return;
         }
 
-        if (Scene.Current != s_scene)
+        if (Scene.Current != s_state.Scene)
         {
             Shutdown("The network scene was replaced locally during the session.");
             return;
         }
 
-        if (s_joinState != NetworkJoinState.Loading)
+        if (s_state.JoinState != NetworkJoinState.Loading)
         {
             return;
         }
 
-        s_joinState = NetworkJoinState.Synchronizing;
+        s_state.JoinState = NetworkJoinState.Synchronizing;
         SendSceneGeneration(Session!.HostPeer!, EngineMessage.SceneLoaded);
     }
 
@@ -117,7 +112,7 @@ public static partial class Networking
 
         using NetWriter message = new();
         message.WriteUInt64(generation);
-        WriteSyncState(message, s_scene!.AllObjects);
+        WriteSyncState(message, s_state.Scene!.AllObjects);
         WriteCatchUpTransforms(message);
         state!.Stage = NetworkJoinState.Synchronizing;
         SendEngine(peer, EngineMessage.SceneCatchUp, message.WrittenSpan);
@@ -131,8 +126,8 @@ public static partial class Networking
         }
 
         ulong generation = reader.ReadUInt64();
-        if (!IsClient || !peer.IsHost || generation != s_sceneGeneration ||
-            s_joinState != NetworkJoinState.Synchronizing || Scene.Current != s_scene || s_catchUpApplied)
+        if (!IsClient || !peer.IsHost || generation != s_state.SceneGeneration ||
+            s_state.JoinState != NetworkJoinState.Synchronizing || Scene.Current != s_state.Scene || s_state.CatchUpApplied)
         {
             return;
         }
@@ -150,7 +145,7 @@ public static partial class Networking
             throw new InvalidDataException("Scene catch-up contains trailing bytes.");
         }
 
-        s_catchUpApplied = true;
+        s_state.CatchUpApplied = true;
         SendSceneGeneration(peer, EngineMessage.SceneReady);
     }
 
@@ -177,8 +172,8 @@ public static partial class Networking
     private static void OnSceneActivate(NetPeer peer, ref NetReader reader, Delivery delivery)
     {
         ulong generation = ReadSceneGeneration(ref reader, delivery);
-        if (IsClient && peer.IsHost && generation == s_sceneGeneration && s_catchUpApplied &&
-            s_joinState == NetworkJoinState.Synchronizing && Scene.Current == s_scene)
+        if (IsClient && peer.IsHost && generation == s_state.SceneGeneration && s_state.CatchUpApplied &&
+            s_state.JoinState == NetworkJoinState.Synchronizing && Scene.Current == s_state.Scene)
         {
             SetLocalReady();
         }
@@ -188,8 +183,8 @@ public static partial class Networking
         out PeerReadiness? state)
     {
         state = null;
-        return IsHost && generation == s_sceneGeneration &&
-               s_peerReadiness.TryGetValue(peer.Id, out state) && state.Generation == generation &&
+        return IsHost && generation == s_state.SceneGeneration &&
+               s_state.PeerReadiness.TryGetValue(peer.Id, out state) && state.Generation == generation &&
                state.Stage == stage;
     }
 
@@ -207,25 +202,25 @@ public static partial class Networking
     private static void SendSceneGeneration(NetPeer peer, EngineMessage kind)
     {
         using NetWriter message = new();
-        message.WriteUInt64(s_sceneGeneration);
+        message.WriteUInt64(s_state.SceneGeneration);
         SendEngine(peer, kind, message.WrittenSpan);
     }
 
     private static void SetLocalReady()
     {
-        if (!IsActive || s_joinState == NetworkJoinState.Ready)
+        if (!IsActive || s_state.JoinState == NetworkJoinState.Ready)
         {
             return;
         }
 
-        s_joinState = NetworkJoinState.Ready;
+        s_state.JoinState = NetworkJoinState.Ready;
         DispatchNetworkListener(e => e.OnNetworkReady());
     }
 
     private static void DispatchNetworkListener(Action<INetworkListener> action)
     {
         NetSession? session = Session;
-        Scene? scene = s_scene;
+        Scene? scene = s_state.Scene;
         if (scene.IsNotValid())
         {
             return;
@@ -234,7 +229,7 @@ public static partial class Networking
         scene!.RunEvent<INetworkListener>(listener =>
         {
             // A previous listener can shut down or replace the scene during the same dispatch.
-            if (Session == session && s_scene == scene)
+            if (Session == session && s_state.Scene == scene)
             {
                 action(listener);
             }
@@ -266,7 +261,7 @@ public static partial class Networking
 
         if (IsClient)
         {
-            if (!IsReady && Now >= s_readyDeadline)
+            if (!IsReady && Now >= s_state.ReadyDeadline)
             {
                 Shutdown($"Scene readiness timed out during {JoinState}.");
             }
@@ -275,7 +270,7 @@ public static partial class Networking
         }
 
         NetSession session = Session!;
-        foreach ((int id, PeerReadiness state) in s_peerReadiness.ToArray())
+        foreach ((int id, PeerReadiness state) in s_state.PeerReadiness.ToArray())
         {
             if (Session != session)
             {
@@ -290,29 +285,16 @@ public static partial class Networking
         }
     }
 
-    private static void ResetReadiness()
-    {
-        s_joinState = NetworkJoinState.Disconnected;
-        s_sceneGeneration = 0;
-        s_peerReadiness.Clear();
-        s_catchUpApplied = false;
-        // A received scene queued for activation must not replace the current scene after disconnect.
-        if (s_scene.IsValid())
-        {
-            Scene.CancelPendingLoad(s_scene!);
-        }
-    }
-
     private static void WriteCatchUpTransforms(NetWriter message)
     {
-        NetworkEntry[] entries = s_entries.Values
+        NetworkEntry[] entries = s_state.Entries.Values
             .Where(e => e.GameObject.IsValid() && e.GameObject.Network.HasTransformSync).ToArray();
         message.WriteVarUInt32((uint)entries.Length);
         foreach (NetworkEntry entry in entries)
         {
             message.WriteVarUInt32(entry.NetId);
             message.WriteVarUInt32(entry.Generation);
-            message.WriteVarUInt32(entry.HasReceived ? entry.LastReceivedTick : s_tick);
+            message.WriteVarUInt32(entry.HasReceived ? entry.LastReceivedTick : s_state.Tick);
             Transform transform = entry.GameObject.Transform;
             NetSerializers.WriteFloat3(message, transform.LocalPosition);
             NetSerializers.WriteQuaternion(message, transform.LocalRotation);
@@ -337,7 +319,7 @@ public static partial class Networking
                 throw new InvalidDataException("Scene catch-up contains an invalid transform.");
             }
 
-            if (!s_entries.TryGetNet(netId, out NetworkEntry? entry) || entry.Generation != generation ||
+            if (!s_state.Entries.TryGetNet(netId, out NetworkEntry? entry) || entry.Generation != generation ||
                 (entry.HasReceived && (int)(tick - entry.LastReceivedTick) < 0))
             {
                 continue;

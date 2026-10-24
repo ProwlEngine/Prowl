@@ -39,8 +39,6 @@ public static partial class Networking
     private const float RotationEpsilon = 1e-5f;
     private const float ScaleEpsilon = 1e-4f;
 
-    private static uint s_tick;
-    private static double s_lastTransformTime;
 
     [Flags]
     private enum TransformChannels : byte
@@ -75,11 +73,11 @@ public static partial class Networking
 
     private static void SendTransforms()
     {
-        s_tick++;
+        s_state.Tick++;
         double now = Now;
 
-        using TransformBatch moving = new(s_tick, now), settled = new(s_tick, now);
-        foreach (NetworkEntry entry in s_entries.Values)
+        using TransformBatch moving = new(s_state.Tick, now), settled = new(s_state.Tick, now);
+        foreach (NetworkEntry entry in s_state.Entries.Values)
         {
             GameObject go = entry.GameObject;
             if (!go.IsValid() || !go.Network.HasTransformSync || !HasControl(go))
@@ -99,10 +97,10 @@ public static partial class Networking
             if (changed != 0)
             {
                 channels = changed | Lingering(entry, changed);
-                if (entry.HasSent && entry.Settled && s_lastTransformTime > entry.LastSentTime)
+                if (entry.HasSent && entry.Settled && s_state.LastTransformTime > entry.LastSentTime)
                 {
                     channels |= TransformChannels.Resumed;
-                    stillFor = (float)(now - s_lastTransformTime);
+                    stillFor = (float)(now - s_state.LastTransformTime);
                 }
 
                 entry.QuietTicks = 0;
@@ -133,7 +131,7 @@ public static partial class Networking
 
         moving.Send(null, reliable: false);
         settled.Send(null, reliable: true);
-        s_lastTransformTime = now;
+        s_state.LastTransformTime = now;
     }
 
     private static TransformChannels Changes(NetworkEntry entry, TransformChannels synced, Float3 position,
@@ -235,7 +233,7 @@ public static partial class Networking
                 throw new InvalidDataException("A transform contains invalid coordinates, rotation or time.");
             }
 
-            if (!s_entries.TryGetNet(netId, out NetworkEntry? entry) || !entry.GameObject.IsValid() ||
+            if (!s_state.Entries.TryGetNet(netId, out NetworkEntry? entry) || !entry.GameObject.IsValid() ||
                 !entry.GameObject.Network.HasTransformSync || HasControl(entry.GameObject) ||
                 entry.Generation != generation)
             {
@@ -312,7 +310,7 @@ public static partial class Networking
     {
         double now = Now;
 
-        foreach (NetworkEntry entry in s_entries.Values)
+        foreach (NetworkEntry entry in s_state.Entries.Values)
         {
             if (entry.Samples.Count == 0 || !entry.GameObject.IsValid() || HasControl(entry.GameObject) ||
                 (entry.GameObject.Network.Flags & NetworkFlags.NoInterpolation) != 0)

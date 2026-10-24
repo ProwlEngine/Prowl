@@ -26,7 +26,6 @@ namespace Prowl.Runtime.Networking;
 // NetCollection has the layout. Either way it travels, is relayed and is authorized like any other value.
 public static partial class Networking
 {
-    private static readonly HashSet<(Component Component, uint Slot)> s_dirty = new();
     private static readonly NetWriter s_valueWriter = new();
     private static readonly HashSet<string> s_syncWarnings = new();
     private static readonly List<Action> s_notifications = new();
@@ -43,7 +42,7 @@ public static partial class Networking
             return false;
         }
 
-        s_dirty.Add((component, slot));
+        s_state.Dirty.Add((component, slot));
         return true;
     }
 
@@ -70,7 +69,7 @@ public static partial class Networking
 
     private static void SendSyncChanges()
     {
-        if (s_dirty.Count == 0)
+        if (s_state.Dirty.Count == 0)
         {
             return;
         }
@@ -78,7 +77,7 @@ public static partial class Networking
         using NetWriter message = new(1024);
         int count = 0;
         using NetWriter values = new(1024);
-        foreach ((Component component, uint slot) in s_dirty)
+        foreach ((Component component, uint slot) in s_state.Dirty)
         {
             if (!component.IsDisposed && WriteValue(values, component, slot, true))
             {
@@ -86,7 +85,7 @@ public static partial class Networking
             }
         }
 
-        s_dirty.Clear();
+        s_state.Dirty.Clear();
 
         if (count == 0)
         {
