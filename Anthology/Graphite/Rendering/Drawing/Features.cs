@@ -455,6 +455,7 @@ public sealed class FeatureBuilder
         if (_pass.Output is { } output && output == View.Scene)
             throw new InvalidOperationException($"{_pass.Name} reads the scene it draws onto.");
         _pass.SceneRead = _graph.Read(View.Scene, TextureState.Sampled, TextureState.Sampled);
+        ReadPostViews();
     }
 
     /// <summary>Reads the current colour.</summary>
