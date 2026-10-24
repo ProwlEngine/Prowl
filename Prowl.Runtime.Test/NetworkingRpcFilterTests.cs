@@ -81,7 +81,6 @@ public partial class NetworkingTests
             message.WriteGuid(state.Identifier); message.WriteUInt32(NetTestComponent.ShoutId);
             using NetWriter arguments = new(); arguments.WriteString("bing");
             message.WriteBytesWithLength(arguments.WrittenSpan);
-            message.WriteBytesWithLength(new byte[] { 0 });
         }
         message.WriteVarUInt32((uint)recipients.Length);
         foreach (int id in recipients) message.WriteVarUInt32((uint)id);
@@ -221,7 +220,6 @@ public partial class NetworkingTests
                 NetReader wire = new(host.WireReceived.Last(m => m.Id == kind).Data);
                 if (kind == FakePeer.RpcToHost) wire.ReadGuid(); else wire.ReadString();
                 wire.ReadUInt32(); wire.ReadBytesWithLength();
-                if (kind == FakePeer.RpcToHost) wire.ReadBytesWithLength();
                 Assert.Equal(1u, wire.ReadVarUInt32());
                 Assert.Equal((uint)garry.Session.LocalPeer!.Id, wire.ReadVarUInt32());
                 Assert.True(wire.IsAtEnd);

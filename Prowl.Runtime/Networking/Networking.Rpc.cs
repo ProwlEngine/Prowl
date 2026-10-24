@@ -10,10 +10,13 @@ using Prowl.Warp;
 
 namespace Prowl.Runtime.Networking;
 
-// RPCs. A call is [guid component][u32 method id][length-prefixed arguments][length-prefixed dependent states].
-// Clients send theirs to the host, which
-// checks it against the method's own RpcMode and RpcFlags (never trusting the caller about them), runs
-// it if it should and passes it on; calls from the host carry the original caller's id in front.
+// RPCs. A call is [guid component][u32 method id][length-prefixed arguments]. Clients send theirs to the host,
+// followed by the recipients they chose, and the host checks it against the method's own RpcMode and RpcFlags
+// (never trusting the caller about them), runs it if it should and passes it on; calls from the host carry the
+// original caller's id in front.
+//
+// A call carries no state. A reliable one sends the caller's pending Sync changes first, on the same ordered
+// channel, so it arrives after them. An unreliable one promises no ordering with anything.
 public static partial class Networking
 {
     private static readonly NetWriter s_rpcWriter = new();
@@ -109,21 +112,16 @@ public static partial class Networking
             return false;
         }
 
-        // Reliable delivery is ordered, so Sync changes sent now arrive before the call.
-        bool reliable = delivery == Delivery.Reliable;
-        if (reliable)
+        if (delivery == Delivery.Reliable)
         {
             SendSyncChanges();
         }
 
-        using NetWriter states = new();
-        WriteRpcStates(component, states, includeSyncs: !reliable);
-        using NetWriter envelope = new(writer.Length + 128);
+        using NetWriter envelope = new(writer.Length + 32);
         NetReader raw = new(writer.WrittenSpan);
         envelope.WriteGuid(raw.ReadGuid());
         envelope.WriteUInt32(raw.ReadUInt32());
         envelope.WriteBytesWithLength(raw.ReadBytes(raw.Remaining));
-        envelope.WriteBytesWithLength(states.WrittenSpan);
 
         if (!IsHost)
         {
@@ -169,7 +167,6 @@ public static partial class Networking
         Guid id = reader.ReadGuid();
         uint method = reader.ReadUInt32();
         ReadOnlySpan<byte> arguments = reader.ReadBytesWithLength();
-        ReadOnlySpan<byte> states = reader.ReadBytesWithLength();
         RpcRecipients? recipients = RpcRecipients.Read(ref reader);
 
         if (FindByIdentifier(id) is not Component component || NetworkAccessor.IsExcludedFromNetwork(component.GameObject)
@@ -193,21 +190,12 @@ public static partial class Networking
         // Validate on the host even when only another owner will execute the call.
         NetReader validation = new(arguments);
         rpc.ValidateArguments(component, ref validation);
-        if (!ProcessRpcStates(component, states, sender, false))
-        {
-            return;
-        }
-
-        if (!ProcessRpcStates(component, states, sender, true) || !IsActive || !component.IsValid())
-        {
-            return;
-        }
 
         Delivery relayDelivery = (flags & RpcFlags.Unreliable) != 0 ? Delivery.Unreliable : Delivery.Reliable;
         switch (mode)
         {
             case RpcMode.Broadcast:
-                Relay(component, sender, id, method, arguments, states, relayDelivery, null, recipients);
+                Relay(sender, id, method, arguments, relayDelivery, null, recipients);
                 if (RpcRecipients.Includes(recipients, Session!.LocalPeer!))
                 {
                     Invoke(component, rpc, arguments, sender);
@@ -234,31 +222,27 @@ public static partial class Networking
                 }
                 else if (owner != sender.Id && Session!.TryGetPeer(owner, out NetPeer? ownerPeer))
                 {
-                    Relay(component, sender, id, method, arguments, states, relayDelivery, ownerPeer, recipients);
+                    Relay(sender, id, method, arguments, relayDelivery, ownerPeer, recipients);
                 }
 
                 break;
         }
     }
 
-    private static void Relay(Component component, NetPeer caller, Guid id, uint method, ReadOnlySpan<byte> arguments,
-        ReadOnlySpan<byte> capturedStates, Delivery delivery, NetPeer? to, RpcRecipients? recipients)
+    private static void Relay(NetPeer caller, Guid id, uint method, ReadOnlySpan<byte> arguments, Delivery delivery,
+        NetPeer? to, RpcRecipients? recipients)
     {
-        // The client's Sync changes were relayed as they arrived, ahead of this; send the host's own the same way.
-        bool reliable = delivery == Delivery.Reliable;
-        if (reliable)
+        // The caller's Sync changes were relayed as they arrived, ahead of this; send the host's own the same way.
+        if (delivery == Delivery.Reliable)
         {
             SendSyncChanges();
         }
 
-        using NetWriter states = new();
-        WriteRelayedRpcStates(component, capturedStates, states, includeSyncs: !reliable);
         using NetWriter message = new(arguments.Length + 32);
         message.WriteVarUInt32((uint)caller.Id);
         message.WriteGuid(id);
         message.WriteUInt32(method);
         message.WriteBytesWithLength(arguments);
-        message.WriteBytesWithLength(states.WrittenSpan);
 
         if (to != null)
         {
@@ -284,7 +268,6 @@ public static partial class Networking
         Guid id = reader.ReadGuid();
         uint method = reader.ReadUInt32();
         ReadOnlySpan<byte> arguments = reader.ReadBytesWithLength();
-        ReadOnlySpan<byte> states = reader.ReadBytesWithLength();
         if (!reader.IsAtEnd)
         {
             throw new InvalidDataException("RPC contains trailing bytes.");
@@ -303,16 +286,6 @@ public static partial class Networking
 
         NetReader validation = new(arguments);
         rpc.ValidateArguments(component, ref validation);
-        if (!ProcessRpcStates(component, states, caller, false))
-        {
-            return;
-        }
-
-        if (!ProcessRpcStates(component, states, caller, true) || !IsActive || !component.IsValid())
-        {
-            return;
-        }
-
         Invoke(component, rpc, arguments, caller);
     }
 

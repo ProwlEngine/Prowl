@@ -12,15 +12,11 @@ using Prowl.Warp;
 
 namespace Prowl.Runtime.Networking;
 
+// A tree's state as one frame: its controller's [Sync] values and transforms. Ownership handoff carries one so the
+// new controller starts from the old one's final state, ahead of the ownership change itself.
 public static partial class Networking
 {
-    // Without syncs, the state is only transforms: the call is reliable, so the Sync changes sent just before it
-    // arrive first, and capturing every value again would only cost bandwidth.
-    private static void WriteRpcState(Component component, NetWriter output, bool includeSyncs) =>
-        WriteRpcState(component.GameObject, output, includeSyncs: includeSyncs);
-
-    private static void WriteRpcState(GameObject target, NetWriter output, bool includeAll = false,
-        bool includeSyncs = true)
+    private static void WriteRpcState(GameObject target, NetWriter output, bool includeAll = false)
     {
         NetworkEntry? entry = FindEntry(target);
         GameObject root = entry != null ? entry.GameObject : target;
@@ -42,7 +38,7 @@ public static partial class Networking
             {
                 foreach (SyncMember sync in NetworkMembers.Of(part).Syncs)
                 {
-                    if (!includeSyncs || (!includeAll && !HasControl(part, sync.Flags)))
+                    if (!includeAll && !HasControl(part, sync.Flags))
                     {
                         continue;
                     }
@@ -73,26 +69,6 @@ public static partial class Networking
         output.WriteBytesWithLength(transforms.WrittenSpan);
     }
 
-    private static void WriteRpcStates(Component component, NetWriter states, bool includeSyncs)
-    {
-        using NetWriter state = new();
-        WriteRpcState(component, state, includeSyncs);
-        states.WriteVarUInt32(1);
-        states.WriteBytesWithLength(state.WrittenSpan);
-    }
-
-    private static void WriteRelayedRpcStates(Component component, ReadOnlySpan<byte> captured, NetWriter states,
-        bool includeSyncs)
-    {
-        using NetWriter hostState = new();
-        NetReader reader = new(captured);
-        uint count = reader.ReadVarUInt32();
-        states.WriteVarUInt32(count + 1);
-        states.WriteBytes(reader.ReadBytes(reader.Remaining));
-        WriteRpcState(component, hostState, includeSyncs);
-        states.WriteBytesWithLength(hostState.WrittenSpan);
-    }
-
     // Validation is a separate pass so a malformed final record cannot leave earlier records applied.
     private static bool ProcessRpcStates(EngineObject target, ReadOnlySpan<byte> states, NetPeer caller, bool apply,
         bool forceTransforms = false)
@@ -106,8 +82,7 @@ public static partial class Networking
         GameObject targetObject = target is Component component ? component.GameObject : (GameObject)target;
         NetReader reader = new(states);
         uint count = reader.ReadVarUInt32();
-        int maximum = IsHost ? 1 : 2; // Caller state, followed by host state when relayed.
-        if (count > maximum)
+        if (count > 1)
         {
             throw new InvalidDataException("Invalid RPC state count.");
         }
@@ -255,13 +230,8 @@ public static partial class Networking
         {
             entry.HasReceived = true;
             entry.LastReceivedTick = pose.Tick;
-            // A handoff starts over from this pose. A call only needs it while its body runs: interpolation
-            // takes over again this frame, so a proxy calling RPCs as it moves doesn't snap.
-            if (forceTransforms)
-            {
-                entry.Samples.Clear();
-                entry.Timeline.Clear();
-            }
+            entry.Samples.Clear();
+            entry.Timeline.Clear();
         }
 
         ApplyNetworkTransform(go, pose.Position, Quaternion.Normalize(pose.Rotation), pose.Scale);

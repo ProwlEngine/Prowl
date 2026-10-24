@@ -200,7 +200,6 @@ public sealed class FakePeer : IDisposable
             wire.WriteGuid(arguments.ReadGuid());
             wire.WriteUInt32(arguments.ReadUInt32());
             wire.WriteBytesWithLength(arguments.ReadBytes(arguments.Remaining));
-            wire.WriteBytesWithLength(new byte[] { 0 }); // This test call supplies no dependent state.
         }
         else if (id == Sync)
         {

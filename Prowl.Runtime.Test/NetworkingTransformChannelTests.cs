@@ -13,7 +13,7 @@ public partial class NetworkingTests
     public static IEnumerable<object[]> TransformChannelCases()
     {
         for (byte mask = 0; mask <= (byte)(NetworkFlags.NoTransformSync | NetworkFlags.NoInterpolation); mask++)
-            foreach (string path in new[] { "Tick", "Rpc", "CatchUp", "Ownership" })
+            foreach (string path in new[] { "Tick", "CatchUp", "Ownership" })
                 yield return new object[] { (NetworkFlags)mask, path };
     }
 
@@ -27,7 +27,7 @@ public partial class NetworkingTests
         root.Network.Flags = mask;
         root.Transform.LocalPosition = new Float3(2, 3, 4);
         root.Transform.LocalScale = new Float3(2, 2, 2);
-        NetTestComponent component = root.AddComponent<NetTestComponent>();
+        root.AddComponent<NetTestComponent>();
         scene.Add(root); MakeCurrent(scene);
         using NetWriter snapshot = new();
         uint generation;
@@ -88,23 +88,11 @@ public partial class NetworkingTests
                 state.WriteGuid(proxy.Identifier); state.WriteUInt32(generation);
                 state.WriteBytesWithLength(new byte[] { 0 }); state.WriteBytesWithLength(transforms.WrittenSpan);
                 states.WriteVarUInt32(1); states.WriteBytesWithLength(state.WrittenSpan);
-                if (path == "Ownership")
-                {
-                    message.WriteGuid(proxy.Identifier); message.WriteUInt32(generation);
-                    NetSerializers.WriteFloat3(message, Float3.Zero);
-                    message.WriteBytesWithLength(states.WrittenSpan);
-                    host.Session.SendRaw(client, FakePeer.OwnershipState, message.WrittenSpan);
-                }
-                else
-                {
-                    message.WriteVarUInt32((uint)NetPeer.HostId);
-                    message.WriteGuid(component.Identifier); message.WriteUInt32(NetTestComponent.ShoutId);
-                    using NetWriter arguments = new(); arguments.WriteString("channels");
-                    message.WriteBytesWithLength(arguments.WrittenSpan); message.WriteBytesWithLength(states.WrittenSpan);
-                    host.Session.SendRaw(client, FakePeer.RpcFromHost, message.WrittenSpan);
-                }
+                message.WriteGuid(proxy.Identifier); message.WriteUInt32(generation);
+                NetSerializers.WriteFloat3(message, Float3.Zero);
+                message.WriteBytesWithLength(states.WrittenSpan);
+                host.Session.SendRaw(client, FakePeer.OwnershipState, message.WrittenSpan);
                 host.Session.Flush();
-                if (path == "Rpc") Pump(() => proxy.GetComponent<NetTestComponent>()!.Shouts.Count == 1, host);
             }
             PumpFor(20, host);
             Assert.True(Networking.Networking.IsActive);

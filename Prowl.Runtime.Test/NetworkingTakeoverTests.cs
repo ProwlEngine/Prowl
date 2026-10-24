@@ -67,12 +67,9 @@ public partial class NetworkingTests
             RequestOwnership(other, root, generation, false);
             PumpFor(20, owner, other);
             Assert.NotNull(root.Network.Owner);
-            // Reuse the normal dependent-state encoding, including the owner's final transform.
-            byte[] rpc = StateRpc(root, state, 0, owner.Session.LocalPeer!.Id, generation, 100, 17, 42,
+            // The owner's final state, including its final transform.
+            byte[] frames = StateFrames(root, state, owner.Session.LocalPeer!.Id, generation, 100, 17, 42,
                 NetTestComponent.HealthSlot);
-            NetReader reader = new(rpc);
-            reader.ReadGuid(); reader.ReadUInt32(); reader.ReadBytesWithLength();
-            byte[] frames = reader.ReadBytesWithLength().ToArray();
             RequestOwnership(owner, root, generation, false, frames);
             Pump(() => root.Network.Owner == null, owner, other);
             Assert.False(root.IsProxy);
@@ -215,12 +212,10 @@ public partial class NetworkingTests
             Pump(() => owner.IsReady, owner);
             root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
             uint generation = NetworkGeneration(root);
-            byte[] rpc = StateRpc(root, state, 0, owner.Session.LocalPeer!.Id,
+            byte[] frames = StateFrames(root, state, owner.Session.LocalPeer!.Id,
                 stale ? generation - 1 : generation, 100, 66, 42,
                 stale ? NetTestComponent.HealthSlot : NetTestComponent.ScoreSlot);
-            NetReader reader = new(rpc);
-            reader.ReadGuid(); reader.ReadUInt32(); reader.ReadBytesWithLength();
-            RequestOwnership(owner, root, generation, false, reader.ReadBytesWithLength().ToArray());
+            RequestOwnership(owner, root, generation, false, frames);
             PumpFor(30, owner);
             Assert.Equal(100, state.Health);
             Assert.Equal(0, state.Score);

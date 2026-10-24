@@ -243,26 +243,20 @@ network scene still queued for activation. Replacing the network scene locally o
 session. Authentication/admission remains Warp's version checks and join approval/token mechanism;
 a separate content download pipeline and asynchronous snapshot capture are future work.
 
-## State before RPCs
+## RPCs and state
 
-A component RPC carries the caller's authorized Sync values, collection contents and pending operations, and
-synchronized local transforms within its network root (or its own tree for a snapshot-only object).
-Receivers validate the arguments and complete dependent-state envelope before applying it and invoking
-the method. The host preserves client state when relaying and appends the host-authoritative values.
-This works for reliable and unreliable RPCs without depending on ordering between delivery channels.
+An RPC carries only its arguments. A reliable call (the default) first sends the caller's pending Sync
+values and collection operations, on the same ordered channel, so a receiver runs the method with the
+state the caller had when it called. The host does the same with its own pending values before relaying
+a call. An `Unreliable` call promises nothing: it can be lost, duplicated, or arrive before or after the
+caller's state, which follows with the next tick. Transforms are not part of a call; a proxy is shown
+`InterpolationDelay` in the past, so pass a position the method needs as an argument.
 
-State revisions prevent an older Sync packet or captured value from overwriting newer state from
-the same writer. Ownership generations reject traffic from an earlier owner assignment, including
-when ownership returns to the same peer. Newer accepted state can supersede a call's captured state;
-unreliable RPC execution itself can still be lost, duplicated, or reordered. Independent objects have
-no implicit state ordering guarantee. An RPC does not grant authority to write another object's state.
-Transform state used for a call is applied immediately and obsolete interpolation samples are cleared.
-
-Collection capture retains pending operations for normal tick recipients and skips operations a peer
-already includes. Known operations still raise `Changed`; a complete copy recovers contents when an
-unreliable prerequisite was lost, without inventing callbacks for unknown historical operations.
-Capturing state adds payload and serialization cost. An unreliable call, including its dependent state,
-uses reliable delivery with Warp fragmentation when it exceeds the transport's datagram limit.
+State revisions prevent an older Sync packet from overwriting newer state from the same writer.
+Ownership generations reject traffic from an earlier owner assignment, including when ownership returns
+to the same peer. Independent objects have no implicit state ordering guarantee. An RPC does not grant
+authority to write another object's state. An unreliable call uses reliable delivery with Warp
+fragmentation when it exceeds the transport's datagram limit.
 
 ## Static RPCs
 
@@ -324,7 +318,7 @@ session, RPCs remain ordinary local calls and filters have no effect.
 A client evaluates its predicates against its current peer list and sends selected peer IDs with the
 call. The host validates the RPC and relays only to those peers, even when excluded from execution
 itself. Predicates are not serialized, and filters active on the receiving host do not alter an incoming
-call's recipients. The host still receives routed arguments and dependent state to validate and relay
+call's recipients. The host still receives routed arguments to validate and relay
 it. Filters do not limit ordinary Sync/transform replication or provide private-state visibility.
 
 ## Runtime structure
@@ -336,5 +330,5 @@ before mutation. Clients cannot destroy replicated roots locally. Ordinary edits
 replicated trees remain available. Use the GameObject/Scene mutation APIs; editing `Children` directly
 is unsupported. Structural delta replication and gameplay readiness remain future work.
 
-The engine Sync/RPC wire layout changed with these guarantees; scene snapshots use format 7. Peers
+The engine Sync/RPC wire layout changed with these guarantees; scene snapshots use format 10. Peers
 must run matching engine builds.
