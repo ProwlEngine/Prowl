@@ -303,6 +303,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
         // Insert at new position
         GameObject._components.Insert(index, this);
+        SceneEvents.Invalidate();
     }
     #endregion
 

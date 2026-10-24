@@ -571,6 +571,7 @@ public partial class GameObject : EngineObject, ISerializable
 
         // Insert at new position
         Parent.Children.Insert(index, this);
+        SceneEvents.Invalidate();
 
         // Sibling order feeds the canvas draw-order (depth-first index); force a rebuild so the
         // reorder is reflected instead of drawing in the stale order.

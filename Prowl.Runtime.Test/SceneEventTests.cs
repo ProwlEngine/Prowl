@@ -137,6 +137,27 @@ public class SceneEventTests : RuntimeTestBase
     }
 
     [Fact]
+    public void ReorderingAfterAWarmDispatchChangesTheOrder()
+    {
+        GameObject root = CreateGameObject(), first = CreateGameObject(), second = CreateGameObject();
+        first.SetParent(root); second.SetParent(root);
+        List<string> order = new();
+        root.AddComponent<Listener>().Action = () => order.Add("a");
+        Listener b = root.AddComponent<Listener>();
+        b.Action = () => order.Add("b");
+        first.AddComponent<Listener>().Action = () => order.Add("first");
+        second.AddComponent<Listener>().Action = () => order.Add("second");
+        root.RunEvent<ITestEvent>(e => e.Fire());
+        Assert.Equal(new[] { "a", "b", "first", "second" }, order);
+
+        order.Clear();
+        b.SetSiblingIndex(0);
+        second.SetSiblingIndex(0);
+        root.RunEvent<ITestEvent>(e => e.Fire());
+        Assert.Equal(new[] { "b", "a", "second", "first" }, order);
+    }
+
+    [Fact]
     public void DisabledListenerEligibilityIsCheckedAgainDuringDispatch()
     {
         GameObject go = CreateGameObject();
