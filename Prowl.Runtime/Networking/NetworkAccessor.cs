@@ -95,7 +95,8 @@ public sealed class NetworkAccessor
     /// <summary>Relinquishes ownership to the host's simulation.</summary>
     public bool DropOwnership() => Networking.TransferOwnership(_object, take: false);
 
-    internal bool HasTransformSync => (Flags & NetworkFlags.NoTransformSync) != NetworkFlags.NoTransformSync;
+    // Static objects don't move, so there is nothing to sync.
+    internal bool HasTransformSync => !_object.IsStatic && (Flags & NetworkFlags.NoTransformSync) != NetworkFlags.NoTransformSync;
     internal bool SyncsTransform(NetworkFlags exclusion) => (Flags & exclusion) == 0;
     internal void ApplyFlags(NetworkFlags value) => _flags = value;
     internal void ApplyOwnerTransfer(OwnerTransfer value) => _ownerTransfer = value;
