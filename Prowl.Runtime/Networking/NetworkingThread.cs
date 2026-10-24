@@ -29,7 +29,7 @@ internal sealed class NetworkingThread : IDisposable
     private bool _disposed;
     private Exception? _failure;
     private int _localPort;
-    private int _nextId, _pendingData, _pendingControls;
+    private int _nextId, _pendingData, _pendingControls, _outgoingCount;
     private long _outgoingBytes, _incomingBytes;
     private byte[]? _polledBuffer;
     private volatile bool _stop, _listening;
@@ -165,7 +165,8 @@ internal sealed class NetworkingThread : IDisposable
     {
         lock (_gate)
         {
-            if (_commands.Count >= _maxMessages)
+            // Sends have their own limits, per connection; this bounds everything else.
+            if (_commands.Count - _outgoingCount >= _maxMessages)
             {
                 throw new InvalidOperationException("Networking command queue is full.");
             }
@@ -186,24 +187,73 @@ internal sealed class NetworkingThread : IDisposable
 
         byte[] buffer = ArrayPool<byte>.Shared.Rent(data.Length);
         data.CopyTo(buffer);
-        bool accepted;
+        QueuedConnection? closing = null;
         lock (_gate)
         {
-            accepted = _commands.Count < _maxMessages && buffer.Length <= _maxBytes - _outgoingBytes;
-            if (accepted)
+            // Too many messages for one connection is that connection's backlog. Too many bytes in all is
+            // whichever connection has the most queued: closing the latest sender would punish a healthy peer.
+            if (peer.OutgoingCount >= _maxMessages)
+            {
+                closing = peer;
+            }
+            else if (buffer.Length > _maxBytes - LiveOutgoingBytes())
+            {
+                closing = LargestBacklog(peer, buffer.Length);
+            }
+
+            // When another connection goes, this send still fits once that one's backlog is let go.
+            if (closing != peer)
             {
                 _outgoingBytes += buffer.Length;
+                _outgoingCount++;
+                peer.OutgoingBytes += buffer.Length;
+                peer.OutgoingCount++;
                 _commands.Enqueue(new Command(CommandKind.Send, peer, buffer, data.Length, delivery, flags));
             }
         }
 
-        if (!accepted)
+        if (closing == peer)
         {
             ArrayPool<byte>.Shared.Return(buffer);
-            RequestClose(peer, DisconnectReason.ResourceLimit);
+        }
+
+        if (closing != null)
+        {
+            RequestClose(closing, DisconnectReason.ResourceLimit);
         }
 
         _wake.Set();
+    }
+
+    // Under _gate. Queued bytes of connections already closing are on their way out, so they don't count.
+    private long LiveOutgoingBytes()
+    {
+        long live = _outgoingBytes;
+        foreach (QueuedConnection other in _connections.Values)
+        {
+            if (Volatile.Read(ref other.CloseRequested) != 0)
+            {
+                live -= other.OutgoingBytes;
+            }
+        }
+
+        return live;
+    }
+
+    // Under _gate. The open connection with the most queued, counting what peer is about to add; peer on a tie.
+    private QueuedConnection LargestBacklog(QueuedConnection peer, long adding)
+    {
+        QueuedConnection largest = peer;
+        long most = peer.OutgoingBytes + adding;
+        foreach (QueuedConnection other in _connections.Values)
+        {
+            if (other != peer && Volatile.Read(ref other.CloseRequested) == 0 && other.OutgoingBytes > most)
+            {
+                (largest, most) = (other, other.OutgoingBytes);
+            }
+        }
+
+        return largest;
     }
 
     private void RequestClose(QueuedConnection peer, DisconnectReason reason)
@@ -357,7 +407,7 @@ internal sealed class NetworkingThread : IDisposable
                         {
                             lock (_gate)
                             {
-                                _outgoingBytes -= command.Buffer.Length;
+                                Dequeued(command);
                             }
 
                             ArrayPool<byte>.Shared.Return(command.Buffer);
@@ -424,15 +474,23 @@ internal sealed class NetworkingThread : IDisposable
                 {
                     if (pending.Buffer != null)
                     {
+                        Dequeued(pending);
                         ArrayPool<byte>.Shared.Return(pending.Buffer);
                     }
                 }
-
-                _outgoingBytes = 0;
             }
 
             _listenDone.Set();
         }
+    }
+
+    // Under _gate: a send left the queue, sent or not.
+    private void Dequeued(in Command send)
+    {
+        _outgoingBytes -= send.Buffer!.Length;
+        _outgoingCount--;
+        send.Peer!.OutgoingBytes -= send.Buffer.Length;
+        send.Peer.OutgoingCount--;
     }
 
     private void Handle(in TransportEvent ev)
@@ -567,11 +625,10 @@ internal sealed class NetworkingThread : IDisposable
                 {
                     if (pending.Buffer != null)
                     {
+                        Dequeued(pending);
                         ArrayPool<byte>.Shared.Return(pending.Buffer);
                     }
                 }
-
-                _outgoingBytes = 0;
             }
         }
         else
@@ -635,8 +692,8 @@ internal sealed class NetworkingThread : IDisposable
         : Connection(owner.Transport, id, address, outgoing)
     {
         public int CloseRequested;
-        public long IncomingBytes;
-        public int IncomingCount;
+        public long IncomingBytes, OutgoingBytes; // Under _gate.
+        public int IncomingCount, OutgoingCount; // Under _gate.
         public Connection? Inner; // Worker only.
         public bool Registered; // Caller only.
         private int _reliableMax, _unreliableMax, _reliableThreshold, _unreliableThreshold;

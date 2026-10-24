@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Prowl.Warp.Transports.Kcp;
@@ -186,6 +187,51 @@ public class NetworkingThreadTests
     }
 
     [Fact]
+    public void OutgoingBudgetClosesTheLargestBacklogNotTheLatestSender()
+    {
+        GatedTransport transport = new();
+        using NetworkingThread thread = new(transport, maxQueuedBytes: 4096);
+        thread.Listen();
+        Connection big = thread.Connect("big"), small = thread.Connect("small");
+        WorkerPump pump = new(thread);
+        pump.Until(() => big.IsConnected && small.IsConnected);
+        // Hold the worker in Receive so sends queue up instead of draining.
+        transport.Open.Reset();
+        Assert.True(transport.Waiting.Wait(TimeSpan.FromSeconds(2)));
+        big.Send(new byte[3000], Delivery.Reliable);
+        small.Send(new byte[100], Delivery.Reliable);
+        transport.Open.Set();
+        pump.Until(() => !big.IsConnected);
+        pump.For(10);
+        Assert.True(small.IsConnected);
+        Assert.Equal(DisconnectReason.ResourceLimit,
+            pump.EventsOf(thread).Single(e => e.Type == TransportEventType.Disconnected).Reason);
+        Assert.Equal(new[] { "small" }, transport.SentTo());
+        Assert.Equal(0, thread.PendingSendBytes);
+    }
+
+    [Fact]
+    public void ABurstAcrossManyPeersStaysWithinEachPeersLimit()
+    {
+        GatedTransport transport = new();
+        using NetworkingThread thread = new(transport, maxQueuedMessages: 8);
+        thread.Listen();
+        Connection[] peers = Enumerable.Range(0, 4).Select(i => thread.Connect($"peer{i}")).ToArray();
+        WorkerPump pump = new(thread);
+        pump.Until(() => peers.All(p => p.IsConnected));
+        transport.Open.Reset();
+        Assert.True(transport.Waiting.Wait(TimeSpan.FromSeconds(2)));
+        // 24 queued in all, more than the limit, but no more than 6 for any one peer.
+        for (int i = 0; i < 6; i++)
+            foreach (Connection peer in peers)
+                peer.Send(new byte[] { 1 }, Delivery.Reliable);
+        transport.Open.Set();
+        pump.Until(() => transport.SentTo().Length == 24);
+        Assert.All(peers, p => Assert.True(p.IsConnected));
+        Assert.DoesNotContain(pump.EventsOf(thread), e => e.Type == TransportEventType.Disconnected);
+    }
+
+    [Fact]
     public void StalledGameThreadHasBoundedIncomingStorageAndHealthyPeersSurvive()
     {
         LocalNetwork network = new();
@@ -243,6 +289,40 @@ public class NetworkingThreadTests
         pump.Until(() => Volatile.Read(ref transport.SendThread) != 0);
         Assert.Equal(transport.ListenThread, transport.SendThread);
         Assert.NotEqual(Environment.CurrentManagedThreadId, transport.SendThread);
+    }
+
+    /// <summary>Connects instantly and can hold the worker in Receive, so sends queue up.</summary>
+    private sealed class GatedTransport : Transport
+    {
+        public readonly ManualResetEventSlim Open = new(true), Waiting = new(false);
+        private readonly List<string> _sent = new();
+        public override bool IsListening => true;
+        public override void Listen() { }
+        public override Connection Connect(string address)
+        {
+            GatedConnection connection = new(this, NextConnectionId(), address);
+            AddConnection(connection);
+            RaiseConnected(connection);
+            return connection;
+        }
+        public override void Receive()
+        {
+            if (Open.IsSet) return;
+            Waiting.Set();
+            Open.Wait();
+        }
+        public override void Flush() { }
+        public override void Shutdown() => Open.Set();
+        public string[] SentTo() { lock (_sent) return _sent.ToArray(); }
+
+        private sealed class GatedConnection(GatedTransport owner, int id, string address) : Connection(owner, id, address, true)
+        {
+            public override TimeSpan RoundTripTime => TimeSpan.Zero;
+            public override int GetMaxMessageSize(Delivery delivery) => 1 << 20;
+            public override int GetBatchThreshold(Delivery delivery) => 1 << 20;
+            public override void Send(ReadOnlySpan<byte> data, Delivery delivery) { lock (owner._sent) owner._sent.Add(Address); }
+            public override void Disconnect() => owner.RaiseDisconnected(this, DisconnectReason.Requested);
+        }
     }
 
     private sealed class ProbeTransport : Transport
