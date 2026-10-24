@@ -469,6 +469,36 @@ public partial class NetworkingTests : RuntimeTestBase
         }
     }
 
+    public class SerializeCounter : Component
+    {
+        public static int Count;
+        public override void OnBeforeSerialize() => Count++;
+    }
+
+    [Fact]
+    public void SceneChangeSerializesTheSnapshotOnceForEveryClient()
+    {
+        MakeCurrent(CreateScene());
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice"), bob = FakePeer.Join(network, "bob");
+        try
+        {
+            Pump(() => alice.IsReady && bob.IsReady, alice, bob);
+            Scene next = CreateScene();
+            GameObject arena = CreateGameObject("Arena");
+            arena.AddComponent<SerializeCounter>();
+            next.Add(arena);
+            SerializeCounter.Count = 0;
+            MakeCurrent(next);
+            Assert.Equal(1, SerializeCounter.Count);
+            Pump(() => alice.Received.Count(m => m.Id == FakePeer.SceneSnapshot) == 2 &&
+                       bob.Received.Count(m => m.Id == FakePeer.SceneSnapshot) == 2, alice, bob);
+            Assert.Equal(alice.Last(FakePeer.SceneSnapshot), bob.Last(FakePeer.SceneSnapshot));
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
     // --- Host side -------------------------------------------------------------------------------
 
     [Fact]

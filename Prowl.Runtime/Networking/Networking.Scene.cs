@@ -66,32 +66,35 @@ public static partial class Networking
             return;
         }
 
-        foreach (NetPeer peer in session.Peers.ToArray())
-        {
-            if (!peer.IsLocal)
-            {
-                SendSnapshot(peer);
-            }
-        }
+        SendSnapshot(session.Peers.Where(peer => !peer.IsLocal).ToArray());
     }
 
-    private static void SendSnapshot(NetPeer peer)
+    /// <summary>Starts <paramref name="peers" /> loading the scene, from one snapshot written for all of them.</summary>
+    private static void SendSnapshot(params NetPeer[] peers)
     {
-        if (Session is not { } session || s_scene == null)
+        if (Session is not { } session || s_scene == null || peers.Length == 0)
         {
             return;
         }
 
-        BeginPeerLoad(peer);
-        if (Session != session || s_scene == null)
+        foreach (NetPeer peer in peers)
         {
-            return;
+            BeginPeerLoad(peer);
         }
 
         using NetWriter message = new(64 * 1024);
         using FrameStatScope stats = FrameStats.Network.Scope();
         WriteSnapshot(s_scene, message);
-        SendEngine(peer, EngineMessage.SceneSnapshot, message.WrittenSpan);
+        // Writing runs components' serialization callbacks, which could end the session.
+        if (Session != session)
+        {
+            return;
+        }
+
+        foreach (NetPeer peer in peers)
+        {
+            SendEngine(peer, EngineMessage.SceneSnapshot, message.WrittenSpan);
+        }
     }
 
     /// <summary>
