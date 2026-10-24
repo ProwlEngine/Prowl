@@ -217,7 +217,10 @@ public static partial class Networking
         try
         {
             // References out of the tree go by identifier and land on the client's own objects.
-            echo = Serializer.Serialize(typeof(GameObject), go, SceneReferenceResolver.ContextForTree(go));
+            echo = Serializer.Serialize(typeof(GameObject), go, new SerializationContext
+            {
+                ExternalReferences = new NetworkSerialization.SnapshotReferences(SceneReferenceResolver.ForTree(go))
+            });
         }
         finally
         {

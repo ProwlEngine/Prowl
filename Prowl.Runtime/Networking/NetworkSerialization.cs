@@ -4,6 +4,7 @@
 using System;
 
 using Prowl.Echo;
+using Prowl.Vector;
 
 namespace Prowl.Runtime.Networking;
 
@@ -12,6 +13,32 @@ internal static class NetworkSerialization
     [ThreadStatic] internal static bool WritingSnapshot;
 
     internal static bool Include(GameObject go) => !WritingSnapshot || NetworkAccessor.ModeOf(go) != NetworkMode.Never;
+
+    /// <summary>
+    ///     For writing what clients receive: a reference to anything <see cref="NetworkMode.Never" /> is linked to
+    ///     nothing instead of written by value, so a field pointing at it can't carry it along. Everything else
+    ///     goes to <paramref name="inner" />, or is written as usual without one.
+    /// </summary>
+    internal sealed class SnapshotReferences(IExternalReferenceResolver? inner = null) : IExternalReferenceResolver
+    {
+        public object? GetReferenceKey(object value)
+        {
+            GameObject? owner = value switch
+            {
+                GameObject go => go,
+                Component component => component.GameObject,
+                Transform transform => transform.GameObject,
+                _ => null
+            };
+
+            // Guid.Empty names no object, so it reads back as null without revealing which one it was.
+            return owner.IsValid() && NetworkAccessor.IsExcludedFromNetwork(owner!)
+                ? Guid.Empty
+                : inner?.GetReferenceKey(value);
+        }
+
+        public object? ResolveReference(object key, Type targetType) => inner?.ResolveReference(key, targetType);
+    }
 
     internal static void Write(GameObject go, EchoObject output)
     {

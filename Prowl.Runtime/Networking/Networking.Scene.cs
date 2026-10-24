@@ -17,7 +17,7 @@ namespace Prowl.Runtime.Networking;
 public static partial class Networking
 {
     // Bumped whenever the snapshot layout changes, so a mismatched client fails clearly.
-    private const byte SnapshotFormat = 9;
+    private const byte SnapshotFormat = 10;
 
     private static void OnHostSceneLoaded()
     {
@@ -105,7 +105,7 @@ public static partial class Networking
         NetworkSerialization.WritingSnapshot = true;
         try
         {
-            AsSetUp(() => echo = Serializer.Serialize(scene));
+            AsSetUp(() => echo = Serializer.Serialize(scene, SnapshotContext()));
         }
         finally
         {
@@ -150,7 +150,7 @@ public static partial class Networking
         }
 
         string name = reader.ReadString();
-        Scene? scene = Serializer.Deserialize<Scene>(Decompress(reader.ReadBytesWithLength()));
+        Scene? scene = Serializer.Deserialize<Scene>(Decompress(reader.ReadBytesWithLength()), SnapshotContext());
         if (scene.IsNotValid())
         {
             throw new InvalidDataException("The host's scene snapshot was empty.");
@@ -274,6 +274,10 @@ public static partial class Networking
             }
         }
     }
+
+    // Writing, a reference to a NetworkMode.Never object becomes an empty link; reading, that link becomes null.
+    private static SerializationContext SnapshotContext() =>
+        new() { ExternalReferences = new NetworkSerialization.SnapshotReferences() };
 
     internal static byte[] Compress(EchoObject echo)
     {

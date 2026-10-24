@@ -360,6 +360,80 @@ public partial class NetworkingTests : RuntimeTestBase
         }
     }
 
+    public class ReferenceHolder : Component
+    {
+        public GameObject? Target;
+        public Component? Part;
+        public Transform? Pose;
+    }
+
+    public class SecretHolder : Component { public string Value = ""; }
+
+    private const string HostSecret = "host-only-7f3a";
+
+    private GameObject Secret(string name)
+    {
+        GameObject secret = CreateGameObject(name);
+        secret.Network.Mode = NetworkMode.Never;
+        secret.AddComponent<SecretHolder>().Value = HostSecret;
+        return secret;
+    }
+
+    private static ReferenceHolder ReferTo(GameObject holder, GameObject target)
+    {
+        ReferenceHolder refs = holder.AddComponent<ReferenceHolder>();
+        refs.Target = target;
+        refs.Part = target.GetComponent<SecretHolder>();
+        refs.Pose = target.Transform;
+        return refs;
+    }
+
+    [Fact]
+    public void SnapshotDoesNotCarryNeverObjectsThroughReferences()
+    {
+        Scene scene = CreateScene();
+        GameObject level = CreateGameObject("Level");
+        GameObject secret = Secret("Secret");
+        ReferTo(level, secret);
+        scene.Add(level); scene.Add(secret);
+
+        using NetWriter writer = new();
+        Networking.Networking.WriteSnapshot(scene, writer);
+        NetReader header = new(writer.WrittenSpan);
+        header.ReadByte(); header.ReadUInt64(); header.ReadString();
+        Assert.DoesNotContain(HostSecret, Networking.Networking.Decompress(header.ReadBytesWithLength()).WriteToJson());
+
+        using Scene received = RoundTrip(scene);
+        Assert.Equal(new[] { "Level" }, received.AllObjects.Select(o => o.Name));
+        ReferenceHolder refs = Find(received, "Level").GetComponent<ReferenceHolder>()!;
+        Assert.Null(refs.Target);
+        Assert.Null(refs.Part);
+        Assert.Null(refs.Pose);
+    }
+
+    [Fact]
+    public void SpawnDoesNotCarryNeverObjectsThroughReferences()
+    {
+        Scene scene = CreateScene();
+        GameObject root = CreateGameObject("Root");
+        root.Network.Mode = NetworkMode.Object;
+        GameObject inside = Secret("Inside");
+        inside.SetParent(root);
+        GameObject outside = Secret("Outside");
+        ReferTo(root, inside);
+        ReferTo(root, outside);
+        scene.Add(root); scene.Add(outside);
+
+        using NetWriter writer = new();
+        Networking.Networking.WriteSpawn(root, -1, NetworkOrphaned.Destroy, writer);
+        NetReader spawn = new(writer.WrittenSpan);
+        spawn.ReadGuid(); spawn.ReadGuid(); spawn.ReadVarUInt32(); spawn.ReadByte(); spawn.ReadUInt32();
+        string json = Networking.Networking.Decompress(spawn.ReadBytesWithLength()).WriteToJson();
+        Assert.DoesNotContain(HostSecret, json);
+        Assert.DoesNotContain(inside.Identifier.ToString(), json);
+        Assert.DoesNotContain(outside.Identifier.ToString(), json);
+    }
+
     [Fact]
     public void JoiningClientsGetTheHostSceneAndEverySceneChange()
     {
