@@ -53,6 +53,8 @@ internal sealed partial class ProfilerView
     private float _exposure;
     private int _mip;
     private (float U, float V)? _pixel;
+    private bool _showCoverage;
+    private float _zoom = 1f, _viewU, _viewV;
     private bool _meshShaded = true, _meshWire = true;
     private int _meshOverlay;
     private float _yaw = -35f, _pitch = 22f;
@@ -320,6 +322,11 @@ internal sealed partial class ProfilerView
                 Origami.Slider(_paper, "ev", _exposure, v => _exposure = MathF.Round(v * 2f) / 2f, -4f, 4f).Small().ShowValue(false).Show();
             Mono("evv", (_exposure >= 0 ? "+" : "") + Style.F(_exposure, "0.0") + " EV", Style.InkSoft);
 
+            Origami.IconButton(_paper, "cover", OrigamiGlyphs.Compass_I, () => _showCoverage = !_showCoverage).Small().NotFocusable()
+                .Tooltip(_showCoverage ? "Changed-pixel overlay: on" : "Changed-pixel overlay: off").Show();
+            if (_zoom > 1f)
+                Origami.IconButton(_paper, "zoomreset", Glyph.Rotate, () => (_zoom, _viewU, _viewV) = (1f, 0f, 0f)).Small().NotFocusable().Subtle().Tooltip("Reset zoom").Show();
+
             Dim("mipl", "Mip");
             using (_paper.Row("mips").Width(100).Height(Metrics.HeaderHeight).AlignItems(LayoutAlignment.Center).Enter())
                 Origami.IntSlider(_paper, "mip", _mip, v => _mip = v, 0, Math.Max(1, mipMax)).Small().ShowValue(false).Disabled(mipMax == 0).Show();
@@ -337,16 +344,32 @@ internal sealed partial class ProfilerView
         int pw = data.PreviewWidth, ph = data.PreviewHeight;
         byte[] bytes = data.Bytes, mask = data.Coverage ?? [];
         object? image = UploadTexture(slot + "|image", pw, ph, $"{Identity(bytes)}|{string.Join("", _channels)}|{_exposure}", () => ApplyChannels(bytes));
-        object? coverage = data.Coverage != null
+        object? coverage = data.Coverage != null && _showCoverage
             ? UploadTexture(slot + "|coverage", pw, ph, $"coverage {Identity(mask)}", () => mask)
             : null;
 
         float aspect = (float)pw / ph;
+        float zoom = _zoom;
+        (float U, float V) view = (_viewU, _viewV);
         float displayWidth = MathF.Min(width, (compact ? 240f : 560f) * aspect);
         ElementBuilder box = _paper.Box("img").Width(displayWidth).Height(displayWidth / aspect)
             .Rounded(4).BorderColor(Style.Border).BorderWidth(1).Clip()
             .Cursor(PaperCursor.Crosshair)
-            .OnClick(e => _pixel = (Math.Clamp((float)e.NormalizedPosition.X, 0f, 1f), Math.Clamp((float)e.NormalizedPosition.Y, 0f, 1f)));
+            .OnClick(e => _pixel = (Math.Clamp(_viewU + (float)e.NormalizedPosition.X / _zoom, 0f, 1f), Math.Clamp(_viewV + (float)e.NormalizedPosition.Y / _zoom, 0f, 1f)))
+            .OnDragging(e =>
+            {
+                _viewU -= (float)e.Delta.X / (displayWidth * _zoom);
+                _viewV -= (float)e.Delta.Y / (displayWidth / aspect * _zoom);
+                ClampView();
+            })
+            .OnScroll(e =>
+            {
+                float u = _viewU + (float)e.NormalizedPosition.X / _zoom, v = _viewV + (float)e.NormalizedPosition.Y / _zoom;
+                _zoom = Math.Clamp(_zoom * MathF.Pow(1.2f, e.Delta), 1f, 64f);
+                _viewU = u - (float)e.NormalizedPosition.X / _zoom;
+                _viewV = v - (float)e.NormalizedPosition.Y / _zoom;
+                ClampView();
+            });
 
         using (box.Enter())
         {
@@ -359,7 +382,7 @@ internal sealed partial class ProfilerView
                     for (float cx = ((int)(cy / cell) % 2) * cell; cx < w; cx += cell * 2)
                         canvas.RectFilled(x + cx, y + cy, MathF.Min(cell, w - cx), MathF.Min(cell, h - cy), Style.Theme.Neutral.C300);
                 if (image != null)
-                    canvas.DrawImage(image, x, y, w, h);
+                    canvas.DrawImage(image, x - view.U * zoom * w, y - view.V * zoom * h, w * zoom, h * zoom);
             });
 
             using (_paper.Box("over").PositionType(PositionType.SelfDirected).Position(0, 0).Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).IsNotInteractable().Enter())
@@ -369,10 +392,10 @@ internal sealed partial class ProfilerView
                 {
                     float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, h = (float)r.Size.Y;
                     if (coverage != null)
-                        canvas.DrawImage(coverage, x, y, w, h);
+                        canvas.DrawImage(coverage, x - view.U * zoom * w, y - view.V * zoom * h, w * zoom, h * zoom);
                     if (pick is { } p)
                     {
-                        float px = x + p.U * w, py = y + p.V * h;
+                        float px = x + (p.U - view.U) * zoom * w, py = y + (p.V - view.V) * zoom * h;
                         void Cross()
                         {
                             canvas.BeginPath();
@@ -393,6 +416,13 @@ internal sealed partial class ProfilerView
 
         if (!compact)
             Mono("readout", PixelReadout(data), Style.InkSoft);
+    }
+
+    private void ClampView()
+    {
+        float span = 1f - 1f / _zoom;
+        _viewU = Math.Clamp(_viewU, 0f, span);
+        _viewV = Math.Clamp(_viewV, 0f, span);
     }
 
     private string PixelReadout(ViewerData data)
