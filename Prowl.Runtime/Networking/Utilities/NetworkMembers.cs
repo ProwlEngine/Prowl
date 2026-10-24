@@ -7,9 +7,9 @@ using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 using Prowl.Runtime.Diagnostics;
+using Prowl.Ember;
 using Prowl.Warp;
 
 namespace Prowl.Runtime.Networking;
@@ -237,8 +237,7 @@ public sealed class RpcMember<TComponent>(
 /// <summary>The [Sync] properties and RPCs of a component type, its base types' included.</summary>
 internal sealed class NetworkMembers
 {
-    // Weak, so a script assembly that hot reload replaced can still unload.
-    private static readonly ConditionalWeakTable<Type, NetworkMembers> s_byType = new();
+    private static readonly ReloadCache<Type, NetworkMembers> s_byType = new(Build);
 
     private static readonly NetworkMembers s_none = new();
 
@@ -251,7 +250,7 @@ internal sealed class NetworkMembers
 
     public static NetworkMembers Of(Component component) => Of(component.GetType());
 
-    public static NetworkMembers Of(Type type) => s_byType.GetValue(type, Build);
+    public static NetworkMembers Of(Type type) => s_byType[type];
 
     public SyncMember? Sync(uint slot) => _syncs.GetValueOrDefault(slot);
 

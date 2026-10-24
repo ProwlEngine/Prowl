@@ -7,9 +7,9 @@ using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 using Prowl.Warp;
+using Prowl.Ember;
 
 namespace Prowl.Runtime.Networking;
 
@@ -21,8 +21,7 @@ public delegate void StaticRpcInvoker(ref NetReader reader, bool execute);
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class StaticRpcMember
 {
-    // A replaced script type and its delegates must be able to unload after hot reload.
-    private static readonly ConditionalWeakTable<Type, Dictionary<uint, StaticRpcMember>> s_members = new();
+    private static readonly ReloadCache<Type, Dictionary<uint, StaticRpcMember>> s_members = new(Build);
     private readonly StaticRpcInvoker _invoke;
 
     public StaticRpcMember([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields |
@@ -84,7 +83,7 @@ public sealed class StaticRpcMember
     {
         Type? type = RuntimeUtils.ResolveType(typeName);
         return type is { IsClass: true, ContainsGenericParameters: false }
-            ? s_members.GetValue(type, Build).GetValueOrDefault(id)
+            ? s_members[type].GetValueOrDefault(id)
             : null;
     }
 
