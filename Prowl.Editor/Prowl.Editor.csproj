@@ -47,6 +47,7 @@
     <ProjectReference Include="$(AnthologyDir)Origami\CSharp\Prowl.Origami.CSharp.csproj" />
     <ProjectReference Include="$(AnthologyDir)Origami\Graphite\Prowl.Origami.Graphite.csproj" />
     <ProjectReference Include="$(AnthologyDir)Graphite\Debugger\Prowl.Graphite.Debugger.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Graphite\Debugger\Viewer\Prowl.Graphite.Debugger.Viewer.csproj" />
     <ProjectReference Include="$(AnthologyDir)Photonic\Photonic\Photonic.csproj" />
     <ProjectReference Include="$(AnthologyDir)Rosetta\Rosetta\Rosetta.csproj" />
     <ProjectReference Include="$(AnthologyDir)Unwrapper\Unwrapper\Unwrapper.csproj" />
@@ -59,6 +60,7 @@
     <PackageReference Include="Prowl.Origami.CSharp" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Origami.Graphite" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Graphite.Debugger" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Graphite.Debugger.Viewer" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Photonic" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Rosetta" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
