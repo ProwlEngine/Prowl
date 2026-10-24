@@ -85,7 +85,7 @@ public partial class NetworkingTests
             NetworkLifecycleListener lifecycle = proxy.GameObject.GetComponent<NetworkLifecycleListener>()!;
             Assert.Equal(new[] { "spawn" }, lifecycle.Events);
             Assert.Equal(100, lifecycle.HealthAtSpawn);
-            Assert.True(lifecycle.StructuralEditRejected);
+            Assert.True(lifecycle.StructuralEditApplied);
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
             if (stateSync != null) host.Session.SendRaw(client, FakePeer.Sync, stateSync);
             host.Session.SendRaw(client, FakePeer.RpcFromHost, rpc, unreliable ? Delivery.Unreliable : Delivery.Reliable);

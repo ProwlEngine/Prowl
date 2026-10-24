@@ -331,10 +331,18 @@ internal sealed partial class NetworkSystem
         }
     }
 
+    internal void BeforeObjectDisposed(GameObject go)
+    {
+        if (Entries.TryGetValue(go.Identifier, out NetworkObject? entry) && entry.GameObject == go)
+        {
+            entry.NotifyDespawn();
+        }
+    }
+
     /// <summary>A GameObject was disposed. On the host, a networked object going away goes away everywhere.</summary>
     internal void OnGameObjectDisposed(GameObject go)
     {
-        if (!IsHost || !Entries.TryGetValue(go.Identifier, out NetworkObject? entry) || entry.GameObject != go)
+        if (!Entries.TryGetValue(go.Identifier, out NetworkObject? entry) || entry.GameObject != go)
         {
             return;
         }
@@ -343,7 +351,7 @@ internal sealed partial class NetworkSystem
         Entries.Remove(go.Identifier);
 
         // A scene being swapped out is disabled first. Its objects aren't destroyed, they're replaced by the next snapshot.
-        if (go.Scene is not { IsDisposed: false, IsActive: true } || !IsActive)
+        if (!IsHost || go.Scene is not { IsDisposed: false, IsActive: true } || !IsActive)
         {
             return;
         }

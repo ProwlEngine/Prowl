@@ -16,15 +16,15 @@ public class NetworkLifecycleListener : Component, INetworkEvents
     [SerializeIgnore] public int? HealthAtSpawn;
     public bool TryEditOnSpawn;
     public bool EndSessionOnSpawn;
-    [SerializeIgnore] public bool StructuralEditRejected;
+    [SerializeIgnore] public bool StructuralEditApplied;
     [SerializeIgnore] public bool? WasNetworkedAtDespawn;
     public void OnNetworkSpawn()
     {
         HealthAtSpawn = GameObject.GetComponent<NetCollectionTestComponent>()?.Health;
         if (TryEditOnSpawn)
         {
-            try { GameObject.AddComponent<NetTestComponent>(); }
-            catch (InvalidOperationException) { StructuralEditRejected = true; }
+            GameObject.AddComponent<NetTestComponent>();
+            StructuralEditApplied = true;
         }
         Events.Add("spawn"); SpawnAction?.Invoke();
         if (EndSessionOnSpawn) Networking.Networking.Shutdown();
@@ -152,28 +152,42 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void StructuralChangesAreRejectedBeforeAnyMutation()
+    public void NetworkedTreesAllowLocalStructuralChanges()
     {
         var (root, listener, _) = LifecycleHost();
         GameObject outside = CreateGameObject();
+        Scene.Current.Add(outside);
         try
         {
-            Assert.Throws<InvalidOperationException>(() => root.AddComponent<NetTestComponent>());
-            Assert.Throws<InvalidOperationException>(() => root.RemoveComponent(listener));
-            Assert.Throws<InvalidOperationException>(() => root.RemoveAll<NetworkLifecycleListener>());
-            Assert.Throws<InvalidOperationException>(() => listener.Destroy());
-            Assert.Throws<InvalidOperationException>(() => listener.Dispose());
-            Assert.Throws<InvalidOperationException>(() => root.SetParent(outside));
-            Assert.Throws<InvalidOperationException>(() => outside.SetParent(root));
-            Assert.Throws<InvalidOperationException>(() => outside.AddComponent(listener));
-            Assert.Throws<InvalidOperationException>(() => root.Scene!.Remove(root));
-            Assert.Throws<InvalidOperationException>(() => root.Network.Mode = NetworkMode.Never);
-            Assert.Same(root, listener.GameObject);
-            Assert.False(listener.IsDisposed);
-            Assert.False(listener.IsDestroyQueued);
-            Assert.Null(root.Parent);
-            Assert.Null(outside.Parent);
+            NetTestComponent added = root.AddComponent<NetTestComponent>();
+            Assert.True(root.RemoveComponent(added));
+            Assert.True(added.IsDestroyQueued);
+            root.AddComponent<NetTestComponent>();
+            root.RemoveAll<NetTestComponent>();
             Assert.Null(root.GetComponent<NetTestComponent>());
+
+            NetTestComponent disposed = root.AddComponent<NetTestComponent>();
+            disposed.Dispose();
+            Assert.True(disposed.IsDisposed);
+            NetTestComponent destroyed = root.AddComponent<NetTestComponent>();
+            destroyed.Destroy();
+            EngineObject.ProcessDestroyed();
+            Assert.True(destroyed.IsDisposed);
+
+            Assert.True(outside.AddComponent(listener));
+            Assert.Same(outside, listener.GameObject);
+            Assert.True(root.SetParent(outside));
+            Assert.True(root.SetParent(null!));
+            Assert.True(outside.SetParent(root));
+            Assert.True(outside.SetParent(null!));
+
+            Scene scene = root.Scene!;
+            scene.Remove(root);
+            scene.Add(root);
+            root.Network.Mode = NetworkMode.Never;
+            Assert.Equal(NetworkMode.Never, root.Network.Mode);
+            root.Dispose();
+            Assert.Equal(0, NetworkDiagnostics.NetworkObjectCount);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -192,8 +206,7 @@ public partial class NetworkingTests
             scene.Add(root);
             root.Network.Spawn();
             Assert.Equal(new[] { "spawn", "authority gained" }, listener.Events);
-            Assert.Throws<InvalidOperationException>(() => child.Destroy());
-            Assert.Throws<InvalidOperationException>(() => child.AddComponent<NetTestComponent>());
+            Assert.NotNull(child.AddComponent<NetTestComponent>());
             root.Destroy(); EngineObject.ProcessDestroyed();
             Assert.Equal(new[] { "spawn", "authority gained", "authority lost", "despawn" }, listener.Events);
         }
@@ -295,12 +308,15 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
-    [Fact]
-    public void ClientCannotDestroyAnOrdinaryParentOfASpawnedRoot()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ClientCanDestroyALocalNetworkTreeWithoutDespawningItOnTheHost(bool disposeImmediately)
     {
         Scene original = CreateScene();
         GameObject parent = CreateGameObject("Parent"), root = CreateGameObject("Root");
         root.Network.Mode = NetworkMode.Object;
+        root.AddComponent<NetworkLifecycleListener>();
         root.SetParent(parent);
         original.Add(parent); Scene.Load(original); Scene.ProcessPendingLoad();
         byte[] snapshot;
@@ -322,13 +338,20 @@ public partial class NetworkingTests
             Pump(() => Networking.Networking.IsReady, host);
             GameObject receivedParent = Find(Scene.Current, parent.Identifier);
             GameObject receivedRoot = Find(Scene.Current, root.Identifier);
-            Assert.Throws<InvalidOperationException>(() => receivedParent.Destroy());
-            Assert.Throws<InvalidOperationException>(() => receivedParent.Dispose());
-            Assert.False(receivedParent.IsDestroyQueued);
-            Assert.False(receivedParent.IsDisposed);
-            Assert.False(receivedRoot.IsDisposed);
-            Assert.Same(receivedParent, receivedRoot.Parent);
-            Assert.True(receivedRoot.Network.Active);
+            NetworkLifecycleListener listener = receivedRoot.GetComponent<NetworkLifecycleListener>()!;
+            if (disposeImmediately) receivedParent.Dispose();
+            else
+            {
+                receivedParent.Destroy();
+                EngineObject.ProcessDestroyed();
+            }
+            Assert.True(receivedParent.IsDisposed);
+            Assert.True(receivedRoot.IsDisposed);
+            Assert.Equal(new[] { "spawn", "despawn" }, listener.Events);
+            Assert.Equal(0, NetworkDiagnostics.NetworkObjectCount);
+            Frame([host]);
+            Assert.False(host.Has(FakePeer.Despawn));
+            Assert.True(Networking.Networking.IsActive);
         }
         finally { Networking.Networking.Shutdown(); }
     }

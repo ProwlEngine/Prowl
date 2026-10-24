@@ -650,12 +650,6 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     private protected override void AssertCanDispose()
     {
         MainThreadContext.AssertOwner(_go, nameof(Dispose));
-        AssertCanDestroy();
-    }
-
-    private protected override void AssertCanDestroy()
-    {
-        if (_go.IsValid() && !_go.IsDestroyQueued) Networking.Networking.System?.AssertStructureEditable(_go);
     }
 
     /// <summary>Throws when this component's live object is touched from a thread other than the main one.</summary>

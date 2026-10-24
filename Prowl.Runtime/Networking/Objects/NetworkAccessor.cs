@@ -34,7 +34,6 @@ public sealed class NetworkAccessor
                 return;
             }
 
-            Networking.System?.AssertHierarchyEditable(_object);
             _mode = value;
         }
     }
