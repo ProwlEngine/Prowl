@@ -283,6 +283,9 @@ public sealed class CodeLocation
     /// <summary>What to call it in a list: the symbol's full name, or for a reference the whole source line it is on.</summary>
     public string Display { get; init; } = "";
     public CodeSymbolKind Kind { get; init; }
+
+    /// <summary>For a symbol with no source to open: the assembly or library it comes from, to tell the user.</summary>
+    public string? Assembly { get; init; }
 }
 
 /// <summary>A note drawn after a declaration, such as how many references it has. Clicking it lists them.</summary>

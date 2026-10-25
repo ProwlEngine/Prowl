@@ -82,6 +82,12 @@ public sealed partial class ShaderSession : CodeLanguageSession
             if (offset < include.ScopeStart || offset > include.ScopeEnd) continue;
             AddInclude(include.Name, index.Path ?? _path, result, seen);
         }
+
+        // Surface code sees what the model shader has in scope where the code is spliced in, after the file's own.
+        if (index.IsShaderFile && index.SurfaceAt(offset) is { } surface && _workspace.Surface(surface.Model) is { } model && model.Index != index)
+            foreach (var s in Visible(model.Index, model.SpliceOffset))
+                if (s.Kind != ShaderSymbolKind.Property || !result.Exists(r => r.Kind == ShaderSymbolKind.Property && r.Name == s.Name))
+                    result.Add(s);
         return result;
     }
 

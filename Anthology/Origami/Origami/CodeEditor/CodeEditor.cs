@@ -502,6 +502,7 @@ public sealed partial class CodeEditor : IDisposable
         var ct = _analysisCts.Token;
         int version = Document.Version;
 
+        if (!Options.ShowDiagnostics) return;
         Continue(Session.GetDiagnosticsAsync(ct), version, ApplyDiagnostics);
     }
 
