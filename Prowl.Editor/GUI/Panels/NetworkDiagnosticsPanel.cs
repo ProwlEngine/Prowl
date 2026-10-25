@@ -45,9 +45,11 @@ public class NetworkDiagnosticsPanel : DockPanel
     private long _sent, _received;
     private double _sendRate, _receiveRate;
     private bool _usingPeerBaseline;
+    private long _historyVersion = -1;
+    private string? _filterKey;
 
     private static readonly string[] Views = ["Traffic", "Peers", "Objects"];
-    private static readonly string[] Kinds = ["All events", "RPC", "SyncVar", "Transform", "Session", "SceneSnapshot", "Spawn", "Despawn", "Owner"];
+    private static readonly string[] Kinds = ["All events", "RPC", "SyncVar", "Snapshot", "Session", "SceneSnapshot", "Spawn", "Despawn", "Owner"];
     private static readonly string[] Directions = ["All directions", "In", "Out", "Rejected"];
 
     public override void OnGUI(Paper paper, float width, float height)
@@ -60,10 +62,13 @@ public class NetworkDiagnosticsPanel : DockPanel
         _peers.Sort((a, b) => a.Id.CompareTo(b.Id));
         SampleRates(session);
 
-        if (!_paused)
+        // Only copy and refilter when something was captured, not every frame.
+        if (!_paused && _historyVersion != NetworkDiagnostics.Version)
         {
+            _historyVersion = NetworkDiagnostics.Version;
             _history.Clear();
             for (int i = NetworkDiagnostics.Count - 1; i >= 0; i--) _history.Add(NetworkDiagnostics.GetEntry(i));
+            _filterKey = null;
         }
 
         using (paper.Column("net_root").Size(width, height).Clip().Enter())
@@ -211,6 +216,7 @@ public class NetworkDiagnosticsPanel : DockPanel
         {
             NetworkDiagnostics.Clear();
             _history.Clear();
+            _filterKey = null;
             _selected = null;
         });
         EditorGUI.ToolbarIconBtn(paper, "net_internal_events", EditorIcons.Microscope,
@@ -228,19 +234,11 @@ public class NetworkDiagnosticsPanel : DockPanel
 
     private void DrawTraffic(Paper paper, FontFile font, float width, float height)
     {
-        _filtered.Clear();
-        foreach (NetworkDiagnostics.Entry entry in _history)
+        string filterKey = $"{_search}\n{_kind}\n{_direction}\n{_showInternalEvents}";
+        if (_filterKey != filterKey)
         {
-            if (!_showInternalEvents && IsInternalEvent(entry)) continue;
-            if (_kind > 0 && !(Kinds[_kind] switch
-            {
-                "RPC" => entry.Kind.StartsWith("Rpc", StringComparison.OrdinalIgnoreCase),
-                "SyncVar" => entry.Kind is "Sync" or "SyncVar",
-                _ => entry.Kind == Kinds[_kind],
-            })) continue;
-            if (_direction > 0 && TrafficDirection(entry) != Directions[_direction]) continue;
-            if (!Matches($"{entry.Kind} {entry.Name} {entry.Direction} {entry.Peer} {entry.Detail} {entry.Target} {entry.Context}")) continue;
-            _filtered.Add(entry);
+            _filterKey = filterKey;
+            Refilter();
         }
         float footerHeight = Math.Min(24, height);
         float availableHeight = Math.Max(0, height - footerHeight);
@@ -256,8 +254,9 @@ public class NetworkDiagnosticsPanel : DockPanel
                     : _paused ? "View paused. Resume to see new events." : "Waiting for network events…", font);
         }
         else
+            // Virtualized: only the rows in view are built, however many events are retained.
             Origami.Table(paper, "net_events", -1, i => _selected = _filtered[i])
-                .Bordered(false).Scroll(width, tableHeight).RowHeight(EditorTheme.RowHeight)
+                .Bordered(false).Scroll(width, tableHeight).Virtualize().RowHeight(EditorTheme.RowHeight)
                 .Column("Time (UTC)", 1).Column("Event", 1.4f).Column("Name", 2)
                 .Column("Peer", 1.2f).Column("Size", 0.7f)
                 .IsSelected(i => _selected?.Sequence == _filtered[i].Sequence)
@@ -358,6 +357,25 @@ public class NetworkDiagnosticsPanel : DockPanel
                     .Text($"↑ {Bytes(_sendRate)}/s  ↓ {Bytes(_receiveRate)}/s", font)
                     .FontSize(EditorTheme.FontSizeSmall).TextColor(EditorTheme.Ink400)
                     .Alignment(TextAlignment.MiddleRight);
+        }
+    }
+
+    private void Refilter()
+    {
+        _filtered.Clear();
+        foreach (NetworkDiagnostics.Entry entry in _history)
+        {
+            if (!_showInternalEvents && IsInternalEvent(entry)) continue;
+            if (_kind > 0 && !(Kinds[_kind] switch
+            {
+                "RPC" => entry.Kind.StartsWith("Rpc", StringComparison.OrdinalIgnoreCase),
+                "SyncVar" => entry.Kind is "Sync" or "SyncVar",
+                "Snapshot" => entry.Kind is "Snapshot" or "SnapshotAck",
+                _ => entry.Kind == Kinds[_kind],
+            })) continue;
+            if (_direction > 0 && TrafficDirection(entry) != Directions[_direction]) continue;
+            if (!Matches($"{entry.Kind} {entry.Name} {entry.Direction} {entry.Peer} {entry.Detail} {entry.Target} {entry.Context}")) continue;
+            _filtered.Add(entry);
         }
     }
 

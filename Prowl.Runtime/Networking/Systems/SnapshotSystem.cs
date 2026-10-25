@@ -697,6 +697,16 @@ internal sealed class SnapshotSystem : IDisposable
         }
     }
 
+    /// <summary>The component ids snapshots use with this peer: those this peer gave, and those it learned from the other.</summary>
+    internal bool TryGetComponentIds(NetPeer peer, out IReadOnlyDictionary<Component, uint> given,
+        out IReadOnlyDictionary<uint, Guid> received)
+    {
+        bool known = _peers.TryGetValue(peer.Id, out PeerState? state);
+        given = state?.ComponentIds ?? (IReadOnlyDictionary<Component, uint>)new Dictionary<Component, uint>();
+        received = state?.ReceivedIds ?? (IReadOnlyDictionary<uint, Guid>)new Dictionary<uint, Guid>();
+        return known;
+    }
+
     /// <summary>Reads a snapshot's values into <see cref="_translated" /> as a SyncBlock, learning the ids it defines.</summary>
     private void ReadValues(PeerState state, ref NetReader reader)
     {

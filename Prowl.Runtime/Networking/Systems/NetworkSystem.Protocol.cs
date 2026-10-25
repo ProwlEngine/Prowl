@@ -20,7 +20,7 @@ internal sealed partial class NetworkSystem
             {
                 NetReader copy = reader;
                 ReadOnlySpan<byte> payload = copy.ReadBytes(copy.Remaining);
-                (string? Context, string? Name) description = NetworkDiagnostics.DescribePayload(this, kind, payload);
+                (string? Context, string? Name) description = NetworkDiagnostics.DescribePayload(this, kind, payload, peer);
                 NetworkDiagnostics.Record(kind.ToString(), "In", peer, Guid.Empty, Describe(delivery, channel),
                     payload, description.Context, description.Name);
             }
@@ -78,7 +78,7 @@ internal sealed partial class NetworkSystem
         Session!.SendRaw(peer, (ushort)kind, payload, delivery, channel: channel);
         if (NetworkDiagnostics.Enabled)
         {
-            (string? Context, string? Name) description = NetworkDiagnostics.DescribePayload(this, kind, payload);
+            (string? Context, string? Name) description = NetworkDiagnostics.DescribePayload(this, kind, payload, peer, true);
             NetworkDiagnostics.Record(kind.ToString(), "Out", peer, Guid.Empty, Describe(delivery, channel), payload,
                 description.Context, description.Name);
         }
@@ -117,7 +117,7 @@ internal sealed partial class NetworkSystem
             return;
         }
 
-        (string? Context, string? Name) description = NetworkDiagnostics.DescribePayload(this, kind, payload);
+        (string? Context, string? Name) description = NetworkDiagnostics.DescribePayload(this, kind, payload, outgoing: true);
         foreach (NetPeer peer in Session.Peers)
         {
             if (!peer.IsLocal && peer != except)

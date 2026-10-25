@@ -25,6 +25,9 @@ public static class NetworkDiagnostics
     public static int Count { get; private set; }
 
     public static long Overwritten { get; private set; }
+
+    /// <summary>Changes whenever entries are recorded or cleared, so a viewer can skip unchanged frames.</summary>
+    public static long Version { get; private set; }
     public static int NetworkObjectCount => Networking.System?.Entries.Count ?? 0;
     public static int PendingSyncCount => Networking.System?.Sync.Dirty.Count ?? 0;
 
@@ -45,6 +48,7 @@ public static class NetworkDiagnostics
         Array.Clear(s_entries);
         s_start = Count = 0;
         Overwritten = 0;
+        Version++;
     }
 
     /// <summary>Formats a generated SyncVar diagnostic without allowing user ToString failures to affect replication.</summary>
@@ -79,6 +83,7 @@ public static class NetworkDiagnostics
         {
             Context = context, Name = name
         };
+        Version++;
         if (Count == Capacity)
         {
             s_entries[s_start] = entry;
@@ -114,10 +119,12 @@ public static class NetworkDiagnostics
     }
 
     // Decode a separate reader into captured text. Never apply values or invoke an RPC for diagnostics.
+    // The peer is who the message went to or came from, which snapshot component ids are relative to.
     internal static (string? Context, string? Name) DescribePayload(NetworkSystem scene, EngineMessage kind,
-        ReadOnlySpan<byte> payload)
+        ReadOnlySpan<byte> payload, NetPeer? peer = null, bool outgoing = false)
     {
-        if (kind is not (EngineMessage.Sync or EngineMessage.RpcToHost or EngineMessage.RpcFromHost))
+        if (kind is not (EngineMessage.Sync or EngineMessage.RpcToHost or EngineMessage.RpcFromHost
+            or EngineMessage.Snapshot or EngineMessage.SnapshotAck))
         {
             return (null, null);
         }
@@ -125,6 +132,16 @@ public static class NetworkDiagnostics
         try
         {
             NetReader reader = new(payload);
+            if (kind == EngineMessage.Snapshot)
+            {
+                return DescribeSnapshot(scene, ref reader, peer, outgoing);
+            }
+
+            if (kind == EngineMessage.SnapshotAck)
+            {
+                return DescribeAck(ref reader);
+            }
+
             if (kind is EngineMessage.RpcToHost or EngineMessage.RpcFromHost)
             {
                 string caller = kind == EngineMessage.RpcFromHost
@@ -153,33 +170,8 @@ public static class NetworkDiagnostics
             for (uint i = 0; i < Math.Min(count, 32u); i++)
             {
                 SyncValue message = SyncValue.Read(ref reader);
-                Guid id = message.ComponentId;
-                uint slot = message.Slot;
-                ReadOnlySpan<byte> value = message.Value;
-                if (scene.FindByIdentifier(id) is not Component component)
-                {
-                    context.Append($"\n\nComponent: {id}\nUnknown SyncVar #{slot}");
-                    if (i < 2)
-                    {
-                        names.Add($"Unknown SyncVar #{slot}");
-                    }
-
-                    continue;
-                }
-
-                SyncMember? sync = NetworkMembers.Of(component).Sync(slot);
-                if (i < 2)
-                {
-                    names.Add($"{component.GetType().Name}.{sync?.Name ?? $"#{slot}"}");
-                }
-
-                NetReader valueReader = new(value);
-                context.Append(
-                    $"\n\nObject: {component.GameObject.Name}\nProperty: {component.GetType().Name}.{sync?.Name ?? $"#{slot}"}");
-                if (sync != null)
-                {
-                    context.Append($"\nValue: {sync.FormatPayload(ref valueReader)}");
-                }
+                AppendValue(context, names, scene.FindByIdentifier(message.ComponentId) as Component,
+                    message.ComponentId.ToString(), message.Slot, message.Value);
             }
 
             if (count > 32)
@@ -187,13 +179,7 @@ public static class NetworkDiagnostics
                 context.Append($"\n\n{count - 32} more values omitted");
             }
 
-            string name = count == 0 ? "No SyncVars" : string.Join(", ", names);
-            if (count > 2)
-            {
-                name += $" (+{count - 2} more)";
-            }
-
-            return (context.ToString(), name);
+            return (context.ToString(), count == 0 ? "No SyncVars" : JoinNames(names, (int)count));
         }
         catch (Exception)
         {
@@ -201,6 +187,148 @@ public static class NetworkDiagnostics
             return ("Payload context unavailable", null);
         }
     }
+
+    private static (string Context, string Name) DescribeSnapshot(NetworkSystem scene, ref NetReader reader,
+        NetPeer? peer, bool outgoing)
+    {
+        SnapshotMessage header = SnapshotMessage.Read(ref reader);
+        StringBuilder context = new($"Snapshot #{header.Id}, tick {header.Tick}, scene epoch {header.Epoch}"
+            + (header.Id == 0 ? " (no acknowledgement)" : ""));
+        List<string> names = new();
+
+        int transforms = 0;
+        uint groups = TransformGroupBlock.Read(ref reader).Count;
+        for (uint g = 0; g < groups; g++)
+        {
+            TransformGroup group = TransformGroup.Read(ref reader);
+            for (uint i = 0; i < group.Count; i++, transforms++)
+            {
+                TransformRecord record = TransformRecord.Read(ref reader);
+                // Bound capture work and retained text, as for sync values.
+                if (transforms < 32)
+                {
+                    string target = scene.Entries.TryGetNet(record.NetId, out NetworkObject? entry) &&
+                                    entry.GameObject.IsValid()
+                        ? entry.GameObject.Name
+                        : $"Unknown object #{record.NetId}";
+                    context.Append($"\n\nTransform: {target}\nTick: {group.Tick}\nChannels: {record.Update.Channels}");
+                }
+            }
+        }
+
+        if (transforms > 32)
+        {
+            context.Append($"\n\n{transforms - 32} more transforms omitted");
+        }
+
+        uint count = reader.ReadVarUInt32();
+        for (uint i = 0; i < Math.Min(count, 32u); i++)
+        {
+            SnapshotValue value = SnapshotValue.Read(ref reader);
+            Component? component = value.Definition is { } guid
+                ? scene.FindByIdentifier(guid) as Component
+                : SnapshotComponent(scene, peer, value.ComponentId, outgoing);
+            AppendValue(context, names, component, value.Definition?.ToString() ?? $"#{value.ComponentId}", value.Slot,
+                value.Value);
+        }
+
+        if (count > 32)
+        {
+            context.Append($"\n\n{count - 32} more values omitted");
+        }
+
+        string transformText = transforms == 1 ? "1 transform" : $"{transforms} transforms";
+        string name = (transforms, count) switch
+        {
+            (0, 0) => "Empty",
+            (_, 0) => transformText,
+            (0, _) => JoinNames(names, (int)count),
+            _ => $"{transformText}, {JoinNames(names, (int)count)}"
+        };
+        return (context.ToString(), name);
+    }
+
+    // An id this peer gave when sending, or one the other peer defined when receiving.
+    private static Component? SnapshotComponent(NetworkSystem scene, NetPeer? peer, uint id, bool outgoing)
+    {
+        if (peer == null || !scene.Snapshots.TryGetComponentIds(peer, out var given, out var received))
+        {
+            return null;
+        }
+
+        if (!outgoing)
+        {
+            return received.TryGetValue(id, out Guid guid) ? scene.FindByIdentifier(guid) as Component : null;
+        }
+
+        foreach ((Component component, uint value) in given)
+        {
+            if (value == id)
+            {
+                return component;
+            }
+        }
+
+        return null;
+    }
+
+    private static (string Context, string Name) DescribeAck(ref NetReader reader)
+    {
+        uint ids = SnapshotAckMessage.ReadCount(ref reader, 1);
+        List<uint> acknowledged = new();
+        for (uint i = 0; i < ids; i++)
+        {
+            acknowledged.Add(reader.ReadVarUInt32());
+        }
+
+        uint components = SnapshotAckMessage.ReadCount(ref reader, 16);
+        for (uint i = 0; i < components; i++)
+        {
+            reader.ReadGuid();
+        }
+
+        uint objects = SnapshotAckMessage.ReadCount(ref reader, 1);
+        string name = ids == 1 ? $"Snapshot #{acknowledged[0]}" : $"{ids} snapshots";
+        if (components + objects > 0)
+        {
+            name += $", {components + objects} rejected";
+        }
+
+        return ($"Acknowledges: {string.Join(", ", acknowledged)}\nRejected components: {components}\nRejected objects: {objects}",
+            name);
+    }
+
+    private static void AppendValue(StringBuilder context, List<string> names, Component? component, string id,
+        uint slot, ReadOnlySpan<byte> value)
+    {
+        if (component == null)
+        {
+            context.Append($"\n\nComponent: {id}\nUnknown SyncVar #{slot}");
+            if (names.Count < 2)
+            {
+                names.Add($"Unknown SyncVar #{slot}");
+            }
+
+            return;
+        }
+
+        SyncMember? sync = NetworkMembers.Of(component).Sync(slot);
+        string property = $"{component.GetType().Name}.{sync?.Name ?? $"#{slot}"}";
+        if (names.Count < 2)
+        {
+            names.Add(property);
+        }
+
+        context.Append($"\n\nObject: {component.GameObject.Name}\nProperty: {property}");
+        if (sync != null)
+        {
+            NetReader valueReader = new(value);
+            context.Append($"\nValue: {sync.FormatPayload(ref valueReader)}");
+        }
+    }
+
+    private static string JoinNames(List<string> names, int count) =>
+        string.Join(", ", names) + (count > 2 ? $" (+{count - 2} more)" : "");
 
     internal static void TraceMember(string kind, string direction, NetPeer? peer, Component component, uint id,
         bool rpc, string result, ReadOnlySpan<byte> payload)
