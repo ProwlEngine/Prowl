@@ -22,10 +22,15 @@ public enum TransportExecution
 }
 
 /// <summary>Immutable backend metadata. Wrappers preserve the inner backend's requirements.</summary>
+/// <remarks>
+///     <see cref="Channels" /> counts the independent channels per delivery mode, numbered from zero. Reliable
+///     messages are ordered within a channel only, so a stalled channel never holds up another.
+/// </remarks>
 public readonly record struct TransportCapabilities(
     bool IsAvailable,
     DeliverySupport Deliveries,
-    TransportExecution Execution)
+    TransportExecution Execution,
+    int Channels = 1)
 {
     public bool Supports(Delivery delivery) => delivery switch
     {

@@ -57,6 +57,53 @@ public abstract class TransportContractTests : IDisposable
         return (host, client, pump, toHost);
     }
 
+    [Fact]
+    public void MessagesArriveOnTheChannelTheyWereSentOn()
+    {
+        (Transport host, _, Pump pump, Connection toHost) = Connect();
+        toHost.Send(new byte[] { 1 }, Delivery.Reliable, channel: 2);
+        toHost.Send(new byte[] { 2 }, Delivery.Unreliable);
+        toHost.Send(new byte[] { 3 }, Delivery.Reliable, channel: 3);
+
+        pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 3, what: "data");
+        Received[] data = pump.EventsOf(host).Where(e => e.Type == TransportEventType.Data)
+            .OrderBy(e => e.Data[0]).ToArray();
+        Assert.Equal((Delivery.Reliable, (byte)2), (data[0].Delivery, data[0].Channel));
+        Assert.Equal((Delivery.Unreliable, (byte)0), (data[1].Delivery, data[1].Channel));
+        Assert.Equal((Delivery.Reliable, (byte)3), (data[2].Delivery, data[2].Channel));
+    }
+
+    [Fact]
+    public void ReliableMessagesStayInOrderWithinEachChannel()
+    {
+        (Transport host, _, Pump pump, Connection toHost) = Connect();
+        for (int i = 0; i < 50; i++)
+        {
+            toHost.Send(BitConverter.GetBytes(i), Delivery.Reliable, channel: 0);
+            toHost.Send(BitConverter.GetBytes(i), Delivery.Reliable, channel: 1);
+        }
+
+        pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 100, what: "data");
+        foreach (byte channel in new byte[] { 0, 1 })
+        {
+            Assert.Equal(Enumerable.Range(0, 50), pump.EventsOf(host)
+                .Where(e => e.Type == TransportEventType.Data && e.Channel == channel)
+                .Select(e => BitConverter.ToInt32(e.Data)));
+        }
+    }
+
+    [Fact]
+    public void ChannelsBeyondTheTransportAndUnreliableChannelsAreRejected()
+    {
+        (_, _, _, Connection toHost) = Connect();
+        byte channels = (byte)toHost.Transport.Capabilities.Channels;
+        Assert.Equal(4, channels);
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            toHost.Send(new byte[] { 1 }, Delivery.Reliable, channel: channels));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            toHost.Send(new byte[] { 1 }, Delivery.Unreliable, channel: 1));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

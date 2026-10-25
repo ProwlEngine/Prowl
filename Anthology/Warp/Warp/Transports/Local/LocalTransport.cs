@@ -12,7 +12,7 @@ namespace Prowl.Warp.Transports.Local;
 /// <summary>
 ///     A transport that connects to other transports in the same process, through a shared
 ///     <see cref="LocalNetwork" />. Nothing touches a socket: messages are handed across in memory,
-///     both deliveries arrive reliably and in order, and the maximum message size is unbounded.
+///     every delivery mode arrives reliably and in order, and the maximum message size is unbounded.
 /// </summary>
 /// <remarks>
 ///     Use it to run a host and its clients in one process, such as in the editor or in tests. Like a real
@@ -55,6 +55,9 @@ public sealed class LocalTransport : Transport
     public int MaxPacketsPerReceive { get; init; } = 1024;
     public int MaxConnections { get; init; } = 64;
 
+    /// <summary>Channels per delivery mode. Both ends must use the same count.</summary>
+    public int Channels { get; init; } = 4;
+
     public long PendingInboxBytes
     {
         get
@@ -71,7 +74,7 @@ public sealed class LocalTransport : Transport
     public string Address { get; }
 
     public override TransportCapabilities Capabilities =>
-        new(true, DeliverySupport.All, TransportExecution.InlinePreferred);
+        new(true, DeliverySupport.All, TransportExecution.InlinePreferred, Channels);
 
     public override bool IsListening => _listening;
 
@@ -171,7 +174,8 @@ public sealed class LocalTransport : Transport
                     if (packet.Target!.State == ConnectionState.Connected)
                     {
                         packet.Target.RecordReceived(packet.Length);
-                        RaiseDataPooled(packet.Target, packet.Buffer!, packet.Length, packet.Delivery);
+                        RaiseDataPooled(packet.Target, packet.Buffer!, packet.Length, packet.Delivery,
+                            packet.Channel);
                     }
                     else
                     {
@@ -322,6 +326,11 @@ public sealed class LocalTransport : Transport
 
     private void ValidateOptions()
     {
+        if (Channels < 1 || Channels > byte.MaxValue + 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(Channels));
+        }
+
         if (MaxInboxPackets <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(MaxInboxPackets));
@@ -383,7 +392,8 @@ public sealed class LocalTransport : Transport
         byte[]? Buffer,
         int Length,
         Delivery Delivery,
-        DisconnectReason Reason);
+        DisconnectReason Reason,
+        byte Channel = 0);
 }
 
 /// <summary>A <see cref="Connection" /> on a <see cref="LocalTransport" />.</summary>
@@ -408,10 +418,8 @@ public sealed class LocalConnection : Connection
 
     public override int GetMaxMessageSize(Delivery delivery) => int.MaxValue;
 
-    public override void Send(ReadOnlySpan<byte> data, Delivery delivery)
+    protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
     {
-        ValidateSend(data, delivery);
-
         // Disconnected from the other side, and we haven't received that news yet.
         LocalConnection? peer = Peer;
         if (peer == null)
@@ -422,7 +430,7 @@ public sealed class LocalConnection : Connection
         byte[] buffer = ArrayPool<byte>.Shared.Rent(data.Length);
         data.CopyTo(buffer);
         if (!peer.Post(new LocalTransport.Packet(LocalTransport.PacketKind.Data, peer, this, buffer, data.Length,
-                delivery, default)))
+                delivery, default, channel)))
         {
             ((LocalTransport)Transport).Close(this, DisconnectReason.ResourceLimit);
             return;

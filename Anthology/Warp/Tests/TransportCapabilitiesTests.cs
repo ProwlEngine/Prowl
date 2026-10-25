@@ -65,7 +65,9 @@ public class TransportCapabilitiesTests
         {
             public override TimeSpan RoundTripTime => default;
             public override int GetMaxMessageSize(Delivery delivery) => 65536;
-            public override void Send(ReadOnlySpan<byte> data, Delivery delivery) => ValidateSend(data, delivery);
+            protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
+            {
+            }
 
             public override void Disconnect()
             {

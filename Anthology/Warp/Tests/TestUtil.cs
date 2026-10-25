@@ -14,7 +14,8 @@ public readonly record struct Received(
     Connection Connection,
     byte[] Data,
     Delivery Delivery,
-    DisconnectReason Reason);
+    DisconnectReason Reason,
+    byte Channel = 0);
 
 /// <summary>Pumps a set of transports like a game loop would, recording every event.</summary>
 public sealed class Pump
@@ -49,7 +50,8 @@ public sealed class Pump
     {
         while (transport.Poll(out TransportEvent ev))
         {
-            _events[transport].Add(new Received(ev.Type, ev.Connection, ev.Data.ToArray(), ev.Delivery, ev.Reason));
+            _events[transport].Add(new Received(ev.Type, ev.Connection, ev.Data.ToArray(), ev.Delivery, ev.Reason,
+                ev.Channel));
         }
     }
 

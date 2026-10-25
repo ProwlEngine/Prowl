@@ -67,6 +67,24 @@ public class SessionBatcherTests
     }
 
     [Fact]
+    public void KeepsASeparateBatchPerChannel()
+    {
+        using Backend backend = new();
+        using SessionBatcher batcher = new(4096);
+        Assert.True(batcher.TrySend(backend.Peer, new byte[] { 42, 0, 1 }, Delivery.Reliable, SendFlags.None, 0));
+        Assert.True(batcher.TrySend(backend.Peer, new byte[] { 42, 0, 2 }, Delivery.Reliable, SendFlags.None, 1));
+        Assert.True(batcher.TrySend(backend.Peer, new byte[] { 42, 0, 3 }, Delivery.Reliable, SendFlags.None, 0));
+
+        batcher.Flush(backend.Peer, Delivery.Reliable, 1);
+        Assert.Equal(new byte[] { 1 }, backend.SendChannels);
+        Assert.Equal(new[] { new byte[] { 42, 0, 2 } }, Decode(backend.Sends[0].Data));
+
+        batcher.FlushAll();
+        Assert.Equal(new byte[] { 1, 0 }, backend.SendChannels);
+        Assert.Equal(new[] { new byte[] { 42, 0, 1 }, new byte[] { 42, 0, 3 } }, Decode(backend.Sends[1].Data));
+    }
+
+    [Fact]
     public void ImmediateSubmitsBothChannelsBeforeFlushingConnection()
     {
         using Backend backend = new();
@@ -198,11 +216,16 @@ public class SessionBatcherTests
     {
         public readonly Connection Peer;
         public readonly List<(byte[] Data, Delivery Delivery)> Sends = new();
+        public readonly List<byte> SendChannels = new();
         public int ConnectionFlushes, TransportFlushes, SendsAtFlush;
         public bool ReliableOnly, ThrowOnSend;
         public int Threshold = 128, Maximum = 4096;
         public Backend() => Peer = new RecordingConnection(this);
         public override bool IsListening => false;
+
+        public override TransportCapabilities Capabilities => new(true,
+            ReliableOnly ? DeliverySupport.Reliable : DeliverySupport.Reliable | DeliverySupport.Unreliable,
+            TransportExecution.WorkerPreferred, 4);
 
         public override void Listen()
         {
@@ -243,15 +266,15 @@ public class SessionBatcherTests
                 return _owner.Threshold;
             }
 
-            public override void Send(ReadOnlySpan<byte> data, Delivery delivery)
+            protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
             {
-                ValidateSend(data, delivery);
                 if (_owner.ThrowOnSend)
                 {
                     throw new IOException("Send failed");
                 }
 
                 _owner.Sends.Add((data.ToArray(), delivery));
+                _owner.SendChannels.Add(channel);
             }
 
             public override void Flush()

@@ -29,4 +29,4 @@ public interface INetMessage
 public delegate void MessageHandler<T>(NetPeer sender, T message) where T : INetMessage;
 
 /// <summary>Handles a message registered by id with <see cref="NetSession.OnRaw" />, reading its payload directly.</summary>
-public delegate void RawMessageHandler(NetPeer sender, ref NetReader reader, Delivery delivery);
+public delegate void RawMessageHandler(NetPeer sender, ref NetReader reader, Delivery delivery, byte channel);

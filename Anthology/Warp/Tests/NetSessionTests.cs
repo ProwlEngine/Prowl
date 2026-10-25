@@ -167,6 +167,62 @@ public abstract class NetSessionTests : IDisposable
     }
 
     [Fact]
+    public void ChannelsReachRawHandlersBothWaysAndThroughLoopback()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        List<(Delivery, byte, byte)> atHost = new(), atAlice = new();
+        host.Session.OnRaw(30, (_, ref reader, delivery, channel) => atHost.Add((delivery, channel, reader.ReadByte())));
+        alice.Session.OnRaw(30,
+            (_, ref reader, delivery, channel) => atAlice.Add((delivery, channel, reader.ReadByte())));
+
+        NetPeer aliceAtHost = host.Session.Peers.Single(p => !p.IsLocal);
+        host.Session.SendRaw(aliceAtHost, 30, new byte[] { 1 }, Delivery.Reliable, channel: 2);
+        host.Session.SendRaw(aliceAtHost, 30, new byte[] { 2 }, Delivery.Unreliable);
+        alice.Session.SendRaw(alice.Session.HostPeer!, 30, new byte[] { 3 }, Delivery.Reliable, channel: 3);
+        host.Session.SendRaw(host.Session.LocalPeer!, 30, new byte[] { 4 }, Delivery.Reliable, channel: 1);
+        SessionProbe.PumpUntil(() => atHost.Count == 2 && atAlice.Count == 2, host, alice);
+
+        Assert.Equal(new (Delivery, byte, byte)[] { (Delivery.Reliable, 2, 1), (Delivery.Unreliable, 0, 2) },
+            atAlice.OrderBy(m => m.Item3));
+        Assert.Equal(new (Delivery, byte, byte)[] { (Delivery.Reliable, 3, 3), (Delivery.Reliable, 1, 4) },
+            atHost.OrderBy(m => m.Item3));
+    }
+
+    [Fact]
+    public void FragmentedMessagesOnDifferentChannelsAreReassembledIndependently()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        Dictionary<byte, byte[]> received = new();
+        alice.Session.OnRaw(31,
+            (_, ref reader, _, channel) => received[channel] = reader.ReadBytes(reader.Remaining).ToArray());
+
+        byte[] first = TestData.Pattern(400_000, 1), second = TestData.Pattern(300_000, 2);
+        NetPeer aliceAtHost = host.Session.Peers.Single(p => !p.IsLocal);
+        host.Session.SendRaw(aliceAtHost, 31, first, channel: 0);
+        host.Session.SendRaw(aliceAtHost, 31, second, channel: 1);
+        SessionProbe.PumpUntil(() => received.Count == 2, host, alice);
+
+        Assert.Equal(first, received[0]);
+        Assert.Equal(second, received[1]);
+        Assert.Equal(0, alice.Session.PendingReassemblyBytes);
+    }
+
+    [Fact]
+    public void ChannelsBeyondTheTransportAndUnreliableChannelsAreRejected()
+    {
+        SessionProbe host = Host();
+        byte channels = (byte)host.Session.Transport.Capabilities.Channels;
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            host.Session.SendRaw(host.Session.LocalPeer!, 30, new byte[] { 1 }, channel: channels));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            host.Session.SendRaw(host.Session.LocalPeer!, 30, new byte[] { 1 }, Delivery.Unreliable, channel: 1));
+    }
+
+    [Fact]
     public void ClientsJoinAndEveryoneAgreesOnThePeerList()
     {
         SessionProbe host = Host();
@@ -394,7 +450,7 @@ public abstract class NetSessionTests : IDisposable
     public void MalformedMessagesGetTheSenderRemoved()
     {
         SessionProbe host = Host();
-        host.Session.OnRaw(10, (sender, ref reader, delivery) => reader.ReadInt64());
+        host.Session.OnRaw(10, (sender, ref reader, delivery, _) => reader.ReadInt64());
 
         SessionProbe alice = Join("alice");
         SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
@@ -477,10 +533,11 @@ public abstract class NetSessionTests : IDisposable
         Assert.True(receiver.PendingReassemblyBytes >= 100_000);
         receiver.Shutdown();
         Assert.Equal(0, receiver.PendingReassemblyBytes);
-        Assert.Null(toClient
+        object? released = toClient
             ? typeof(NetSession).GetField("_incomingFromHost", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .GetValue(receiver)
-            : remote!.GetType().GetField("Incoming")!.GetValue(remote));
+            : remote!.GetType().GetField("Incoming")!.GetValue(remote);
+        Assert.All(((Array)released!).Cast<object?>(), Assert.Null);
     }
 
     [Theory]
@@ -647,7 +704,7 @@ public abstract class NetSessionTests : IDisposable
         SessionProbe alice = Join("alice");
         byte[]? received = null;
         alice.Session.OnRaw(20,
-            (sender, ref reader, delivery) => received = reader.ReadBytes(reader.Remaining).ToArray());
+            (sender, ref reader, delivery, _) => received = reader.ReadBytes(reader.Remaining).ToArray());
         SessionProbe.PumpUntil(() => host.Session.Peers.Count == 2 && alice.Session.State == SessionState.Active, host,
             alice);
 
@@ -686,7 +743,7 @@ public abstract class NetSessionTests : IDisposable
     {
         SessionProbe host = Host();
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            host.Session.OnRaw(NetSession.ReservedMessageIds, (s, ref r, d) => { }));
+            host.Session.OnRaw(NetSession.ReservedMessageIds, (s, ref r, d, _) => { }));
         Assert.Throws<InvalidOperationException>(() => host.Session.On<ChatMessage>((s, m) => { }));
         Assert.True(host.Session.Off<ChatMessage>());
         host.Session.On<ChatMessage>((s, m) => { });

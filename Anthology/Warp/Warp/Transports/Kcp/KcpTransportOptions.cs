@@ -31,6 +31,12 @@ public sealed class KcpTransportOptions
     public int MaxConnections { get; set; } = 64;
 
     /// <summary>
+    ///     Independent channels per delivery mode. Each reliable channel orders its own messages only, so a
+    ///     lost packet on one never holds up another. Both ends must use the same count.
+    /// </summary>
+    public int Channels { get; set; } = 4;
+
+    /// <summary>
     ///     Largest UDP payload sent, in bytes. 1200 fits through practically every network path without
     ///     fragmenting at the IP layer.
     /// </summary>
@@ -66,6 +72,9 @@ public sealed class KcpTransportOptions
     /// <summary>Conservative memory budget for queued and unacknowledged reliable segments per peer.</summary>
     public long MaxPendingReliableBytes { get; set; } = 32 * 1024 * 1024;
 
+    /// <summary>The most channels a <see cref="KcpTransport" /> supports.</summary>
+    public const int MaxChannels = 32;
+
     internal KcpTransportOptions CopyValidated()
     {
         Validate();
@@ -86,6 +95,12 @@ public sealed class KcpTransportOptions
         {
             throw new ArgumentOutOfRangeException(nameof(Mtu), Mtu,
                 $"MTU must be between {KcpPacket.SessionHeaderSize + 64} and {KcpPacket.MaxDatagramSize}.");
+        }
+
+        if (Channels < 1 || Channels > MaxChannels)
+        {
+            throw new ArgumentOutOfRangeException(nameof(Channels), Channels,
+                $"Channels must be between 1 and {MaxChannels}.");
         }
 
         if (MaxConnections < 0)

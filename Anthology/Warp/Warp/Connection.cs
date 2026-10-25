@@ -72,24 +72,32 @@ public abstract class Connection
     ///     Reliable messages are queued and go out on the transport's next <see cref="Transport.Flush" />;
     ///     depending on the transport, unreliable ones may go out straight away.
     /// </summary>
+    /// <param name="data">The message.</param>
+    /// <param name="delivery">How the message travels.</param>
+    /// <param name="flags">Timing policy. Immediate preserves ordering with earlier queued messages.</param>
+    /// <param name="channel">
+    ///     Which of the transport's <see cref="TransportCapabilities.Channels" /> a reliable message goes on; messages
+    ///     are ordered within a channel only. Unreliable messages have no order to keep, so they always use channel 0.
+    /// </param>
     /// <exception cref="InvalidOperationException">The connection is not <see cref="ConnectionState.Connected" />.</exception>
     /// <exception cref="ArgumentException">The message is larger than <see cref="GetMaxMessageSize" />.</exception>
-    public abstract void Send(ReadOnlySpan<byte> data, Delivery delivery);
-
-    /// <summary>Sends with an explicit timing policy. Immediate preserves ordering with earlier queued messages.</summary>
-    public virtual void Send(ReadOnlySpan<byte> data, Delivery delivery, SendFlags flags)
+    public void Send(ReadOnlySpan<byte> data, Delivery delivery, SendFlags flags = SendFlags.None, byte channel = 0)
     {
         if ((flags & ~SendFlags.Immediate) != 0)
         {
             throw new ArgumentOutOfRangeException(nameof(flags));
         }
 
-        Send(data, delivery);
+        ValidateSend(data, delivery, channel);
+        SendCore(data, delivery, channel);
         if ((flags & SendFlags.Immediate) != 0)
         {
             Flush();
         }
     }
+
+    /// <summary>Queues or sends a message that <see cref="Send" /> has already validated.</summary>
+    protected abstract void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel);
 
     /// <summary>Submits queued sends. An externally driven connection may forward this as a queued request.</summary>
     public virtual void Flush() => Transport.Flush();
@@ -101,7 +109,7 @@ public abstract class Connection
     public abstract void Disconnect();
 
     /// <summary>Throws unless the connection can send a message of this size right now.</summary>
-    protected void ValidateSend(ReadOnlySpan<byte> data, Delivery delivery)
+    private void ValidateSend(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
     {
         if (State != ConnectionState.Connected)
         {
@@ -116,6 +124,12 @@ public abstract class Connection
         if (!Transport.Capabilities.Supports(delivery))
         {
             throw new NotSupportedException($"Transport does not support {delivery} delivery.");
+        }
+
+        if (channel >= Transport.Capabilities.Channels || (channel != 0 && delivery != Delivery.Reliable))
+        {
+            throw new ArgumentOutOfRangeException(nameof(channel), channel,
+                $"Transport has {Transport.Capabilities.Channels} channels, and only reliable messages use any but 0.");
         }
 
         int max = GetMaxMessageSize(delivery);

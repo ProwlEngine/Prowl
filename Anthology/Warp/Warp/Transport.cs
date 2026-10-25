@@ -154,7 +154,8 @@ public abstract class Transport : IDisposable
             data = new ReadOnlyMemory<byte>(pending.Buffer, 0, pending.Length);
         }
 
-        ev = new TransportEvent(pending.Type, pending.Connection, data, pending.Delivery, pending.Reason);
+        ev = new TransportEvent(pending.Type, pending.Connection, data, pending.Delivery, pending.Reason,
+            pending.Channel);
         return true;
     }
 
@@ -188,7 +189,7 @@ public abstract class Transport : IDisposable
         }
 
         connection.State = ConnectionState.Connected;
-        _events.Enqueue(new PendingEvent(TransportEventType.Connected, connection, null, 0, default, default));
+        _events.Enqueue(new PendingEvent(TransportEventType.Connected, connection, null, 0, default, default, 0));
     }
 
     /// <summary>
@@ -204,22 +205,23 @@ public abstract class Transport : IDisposable
 
         connection.State = ConnectionState.Disconnected;
         _connections.Remove(connection.Id);
-        _events.Enqueue(new PendingEvent(TransportEventType.Disconnected, connection, null, 0, default, reason));
+        _events.Enqueue(new PendingEvent(TransportEventType.Disconnected, connection, null, 0, default, reason, 0));
     }
 
     /// <summary>Queues a <see cref="TransportEventType.Data" /> event with a copy of <paramref name="data" />.</summary>
-    protected void RaiseData(Connection connection, ReadOnlySpan<byte> data, Delivery delivery)
+    protected void RaiseData(Connection connection, ReadOnlySpan<byte> data, Delivery delivery, byte channel = 0)
     {
         byte[] buffer = ArrayPool<byte>.Shared.Rent(data.Length);
         data.CopyTo(buffer);
-        RaiseDataPooled(connection, buffer, data.Length, delivery);
+        RaiseDataPooled(connection, buffer, data.Length, delivery, channel);
     }
 
     /// <summary>
     ///     Queues a <see cref="TransportEventType.Data" /> event for a buffer rented from
     ///     <see cref="ArrayPool{T}.Shared" />. The transport takes ownership and returns it once polled.
     /// </summary>
-    protected void RaiseDataPooled(Connection connection, byte[] rentedBuffer, int length, Delivery delivery)
+    protected void RaiseDataPooled(Connection connection, byte[] rentedBuffer, int length, Delivery delivery,
+        byte channel = 0)
     {
         (int count, long bytes) = _queuedData.GetValueOrDefault(connection);
         if (!connection.IsConnected || count >= MaxQueuedDataEventsPerConnection ||
@@ -252,7 +254,8 @@ public abstract class Transport : IDisposable
 
         _queuedData[connection] = (count + 1, bytes + rentedBuffer.Length);
         _queuedDataBytes += rentedBuffer.Length;
-        _events.Enqueue(new PendingEvent(TransportEventType.Data, connection, rentedBuffer, length, delivery, default));
+        _events.Enqueue(new PendingEvent(TransportEventType.Data, connection, rentedBuffer, length, delivery, default,
+            channel));
     }
 
     /// <summary>Closes a peer that exhausted the receive queue budget.</summary>
@@ -279,5 +282,6 @@ public abstract class Transport : IDisposable
         byte[]? Buffer,
         int Length,
         Delivery Delivery,
-        DisconnectReason Reason);
+        DisconnectReason Reason,
+        byte Channel);
 }

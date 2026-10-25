@@ -10,15 +10,18 @@ namespace Prowl.Warp.Transports.Kcp;
 ///     <para>Wire format, all integers little-endian:</para>
 ///     <code>
 /// Handshake (before a session exists)
-///   ConnectRequest     [type][u32 protocolId][u32 nonce]                 padded to 64 bytes
+///   ConnectRequest     [type][u32 protocolId][u32 nonce][16 zero bytes][u8 wireVersion][u8 channels]
+///                                                                         padded to 64 bytes
 ///   Challenge          [type][u32 nonce][16 byte cookie]                 21 bytes
-///   ChallengeResponse  [type][u32 protocolId][u32 nonce][16 byte cookie] padded to 64 bytes
+///   ChallengeResponse  [type][u32 protocolId][u32 nonce][16 byte cookie][u8 wireVersion][u8 channels]
+///                                                                         padded to 64 bytes
 ///   Accept             [type][u32 nonce][u32 sessionId]                  9 bytes
 ///   Reject             [type][u32 nonce][u8 DisconnectReason]            6 bytes
 /// 
 /// Session (after Accept)
 ///   [type][u32 sessionId][body]
-///   Reliable           body = KCP segments
+///   Reliable           body = KCP segments of channel 0
+///   ReliableChannel    body = [u8 channel, 1 or more] KCP segments of that channel
 ///   Unreliable         body = one message
 ///   Ping               body = u32 sender time in ms
 ///   Pong               body = u32 time echoed from the Ping
@@ -29,6 +32,11 @@ namespace Prowl.Warp.Transports.Kcp;
 ///         client proves it can receive at its claimed address. Requests are padded to be larger than any
 ///         reply, so the host can never be used to amplify traffic towards a spoofed address. The random
 ///         session id then tags every packet, so packets injected without seeing the handshake are dropped.
+///     </para>
+///     <para>
+///         Each reliable channel has its own KCP conversation, so channels never wait on each other. Channel 0,
+///         which carries most traffic, is implied by its packet type rather than spending a byte on it.
+///         A host rejects a handshake whose wire version or channel count differs from its own.
 ///     </para>
 /// </remarks>
 internal enum KcpPacketType : byte
@@ -43,7 +51,8 @@ internal enum KcpPacketType : byte
     Unreliable = 17,
     Ping = 18,
     Pong = 19,
-    Disconnect = 20
+    Disconnect = 20,
+    ReliableChannel = 21
 }
 
 internal static class KcpPacket
@@ -53,6 +62,15 @@ internal static class KcpPacket
 
     /// <summary>Type byte plus session id, in front of every session packet.</summary>
     public const int SessionHeaderSize = 5;
+
+    /// <summary>Session header plus the channel, in front of a reliable packet for a channel other than 0.</summary>
+    public const int ChannelHeaderSize = SessionHeaderSize + 1;
+
+    /// <summary>Bumped whenever the datagram format changes, so mismatched builds refuse each other.</summary>
+    public const byte WireVersion = 3;
+
+    /// <summary>Where a handshake request carries <see cref="WireVersion" />, then the channel count.</summary>
+    public const int HandshakeVersionOffset = 9 + CookieSize;
 
     public const int CookieSize = 16;
 

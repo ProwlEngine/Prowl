@@ -44,6 +44,22 @@ transport.Flush();
 
 `NetWriter` and `NetReader` serialize primitives, strings, GUIDs and varints.
 
+## Channels
+
+Reliable messages take an optional channel, `0` to `Capabilities.Channels - 1` (KCP and Local default to 4). Each
+channel is its own ordered stream; on KCP, its own conversation, so a lost packet on one never holds up another.
+Unreliable messages have no order to keep, so they always use channel 0. Channel 0 costs nothing on the wire;
+other channels add one byte per reliable packet.
+
+```csharp
+session.SendRaw(peer, ChatId, payload, Delivery.Reliable, channel: 1);  // doesn't wait behind channel 0
+```
+
+- Nothing is ordered across channels. Session messages (joining, the peer list, goodbyes) use channel 0, so a
+  message on another channel may arrive before a `PeerJoined` or after a `PeerLeft` sent around it.
+- Both ends must use the same channel count. A KCP host refuses a client with a different count, or from a build
+  with a different wire format, with `DisconnectReason.ProtocolError`.
+
 ## Sessions
 
 `NetSession` adds admission, peer lists, typed/raw messages and fragmentation. Clients connect to

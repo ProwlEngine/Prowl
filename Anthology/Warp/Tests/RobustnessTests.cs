@@ -189,7 +189,7 @@ public class RobustnessTests
             SessionProbe.PumpUntil(() => client.State == SessionState.Active, hostProbe, clientProbe);
             byte[] bulk = TestData.Pattern(350_000, round);
             byte[]? received = null;
-            client.OnRaw(20, (sender, ref reader, delivery) => received = reader.ReadBytes(reader.Remaining).ToArray());
+            client.OnRaw(20, (sender, ref reader, delivery, _) => received = reader.ReadBytes(reader.Remaining).ToArray());
             host.SendRaw(host.Peers.Single(p => !p.IsLocal), 20, bulk);
             client.SendToHost(new ChatMessage("alive"));
             SessionProbe.PumpUntil(() => received != null && hostProbe.Chat.Count == 1, hostProbe, clientProbe);

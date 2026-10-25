@@ -39,11 +39,14 @@ public readonly struct TransportEvent
     /// <summary>How the message for a <see cref="TransportEventType.Data" /> event was sent.</summary>
     public Delivery Delivery { get; }
 
+    /// <summary>The channel a <see cref="TransportEventType.Data" /> event's message was sent on.</summary>
+    public byte Channel { get; }
+
     /// <summary>Why the connection closed, for a <see cref="TransportEventType.Disconnected" /> event.</summary>
     public DisconnectReason Reason { get; }
 
     public TransportEvent(TransportEventType type, Connection connection, ReadOnlyMemory<byte> data = default,
-        Delivery delivery = default, DisconnectReason reason = default)
+        Delivery delivery = default, DisconnectReason reason = default, byte channel = 0)
     {
         ArgumentNullException.ThrowIfNull(connection);
         if (!Enum.IsDefined(type))
@@ -61,11 +64,12 @@ public readonly struct TransportEvent
         Data = data;
         Delivery = delivery;
         Reason = reason;
+        Channel = channel;
     }
 
     public override string ToString() => Type switch
     {
-        TransportEventType.Data => $"Data({Data.Length} bytes, {Delivery}) from {Connection}",
+        TransportEventType.Data => $"Data({Data.Length} bytes, {Delivery}, channel {Channel}) from {Connection}",
         TransportEventType.Disconnected => $"Disconnected({Reason}) {Connection}",
         _ => $"{Type} {Connection}"
     };

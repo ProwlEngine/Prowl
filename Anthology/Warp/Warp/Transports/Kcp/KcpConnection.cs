@@ -17,10 +17,12 @@ public sealed class KcpConnection : Connection
     private readonly KcpTransport _transport;
     private bool _hasCookie;
     private bool _hasRtt;
-    private Protocol.Kcp? _kcp;
     private long _lastReceiveMs;
     private long _nextHandshakeMs;
     private long _nextPingMs;
+
+    // One KCP conversation per channel, created when the channel is first used.
+    private Protocol.Kcp?[]? _reliable;
     private byte[] _sendScratch = Array.Empty<byte>();
     private double _smoothedRttMs;
 
@@ -55,37 +57,36 @@ public sealed class KcpConnection : Connection
 
     public override int GetMaxMessageSize(Delivery delivery)
     {
-        int payload = _options.Mtu - KcpPacket.SessionHeaderSize;
         if (delivery == Delivery.Unreliable)
         {
-            return payload;
+            return _options.Mtu - KcpPacket.SessionHeaderSize;
         }
 
         // KCP numbers a message's fragments in one byte, and the receiver must be able to hold them all
-        // in its window. kcp2k raises any window below its default up to that default.
-        int segmentSize = payload - Protocol.Kcp.OVERHEAD;
+        // in its window. kcp2k raises any window below its default up to that default. Sized for the smaller
+        // segments of channels other than 0, so the limit holds on every channel.
+        int segmentSize = _options.Mtu - KcpPacket.ChannelHeaderSize - Protocol.Kcp.OVERHEAD;
         int window = (int)Math.Max(_options.Reliability.ReceiveWindow, Protocol.Kcp.WND_RCV);
         int fragments = Math.Min(Protocol.Kcp.FRG_MAX, window - 1);
         return segmentSize * fragments;
     }
 
-    public override int GetBatchThreshold(Delivery delivery) => Math.Min(GetMaxMessageSize(delivery),
-        _options.Mtu - KcpPacket.SessionHeaderSize - (delivery == Delivery.Reliable ? Protocol.Kcp.OVERHEAD : 0));
+    public override int GetBatchThreshold(Delivery delivery) => delivery == Delivery.Reliable
+        ? Math.Min(GetMaxMessageSize(delivery), _options.Mtu - KcpPacket.ChannelHeaderSize - Protocol.Kcp.OVERHEAD)
+        : GetMaxMessageSize(delivery);
 
-    public override void Send(ReadOnlySpan<byte> data, Delivery delivery)
+    protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
     {
-        ValidateSend(data, delivery);
-
         if (delivery == Delivery.Unreliable)
         {
             _transport.SendSession(this, KcpPacketType.Unreliable, data);
             return;
         }
 
-        int segmentSize = _options.Mtu - KcpPacket.SessionHeaderSize - Protocol.Kcp.OVERHEAD;
+        int segmentSize = _options.Mtu - HeaderSize(channel) - Protocol.Kcp.OVERHEAD;
         long segments = Math.Max(1L, ((long)data.Length + segmentSize - 1) / segmentSize);
         long segmentBytes = Math.Max(_options.Mtu, Protocol.Kcp.MTU_DEF);
-        if ((_kcp!.WaitSnd + segments) * segmentBytes > _options.MaxPendingReliableBytes)
+        if ((PendingReliableSegments() + segments) * segmentBytes > _options.MaxPendingReliableBytes)
         {
             _transport.Close(this, DisconnectReason.ResourceLimit, true);
             return;
@@ -99,7 +100,7 @@ public sealed class KcpConnection : Connection
 
         data.CopyTo(_sendScratch);
 
-        int result = _kcp!.Send(_sendScratch, 0, data.Length);
+        int result = Reliable(channel).Send(_sendScratch, 0, data.Length);
         if (result < 0)
         {
             throw new InvalidOperationException($"KCP refused a {data.Length} byte message (error {result}).");
@@ -108,22 +109,50 @@ public sealed class KcpConnection : Connection
 
     public override void Disconnect() => _transport.Close(this, DisconnectReason.Requested, true);
 
-    /// <summary>Sets up the reliable channel once the session id is known.</summary>
+    /// <summary>Sets up the channels once the session id is known.</summary>
     internal void StartSession(long now)
     {
-        KcpReliabilityOptions reliability = _options.Reliability;
-
-        Protocol.Kcp kcp = new(SessionId,
-            (buffer, length) => _transport.SendSession(this, KcpPacketType.Reliable, buffer.AsSpan(0, length)));
-        kcp.SetNoDelay(reliability.NoDelay ? 1u : 0u, reliability.Interval, reliability.FastResend,
-            !reliability.CongestionControl);
-        kcp.SetWindowSize(reliability.SendWindow, reliability.ReceiveWindow);
-        kcp.SetMtu((uint)(_options.Mtu - KcpPacket.SessionHeaderSize));
-        kcp.dead_link = reliability.MaxRetransmits;
-        _kcp = kcp;
+        _reliable = new Protocol.Kcp?[_options.Channels];
+        Reliable(0);
 
         _lastReceiveMs = now;
         _nextPingMs = now;
+    }
+
+    /// <summary>The KCP conversation carrying a reliable channel, created on first use.</summary>
+    private Protocol.Kcp Reliable(byte channel) => _reliable![channel] ??= CreateReliable(channel);
+
+    private Protocol.Kcp CreateReliable(byte channel)
+    {
+        KcpReliabilityOptions reliability = _options.Reliability;
+        byte[] prefix = { channel };
+
+        Protocol.Kcp kcp = new(SessionId, channel == 0
+            ? (buffer, length) => _transport.SendSession(this, KcpPacketType.Reliable, buffer.AsSpan(0, length))
+            : (buffer, length) =>
+                _transport.SendSession(this, KcpPacketType.ReliableChannel, prefix, buffer.AsSpan(0, length)));
+        kcp.SetNoDelay(reliability.NoDelay ? 1u : 0u, reliability.Interval, reliability.FastResend,
+            !reliability.CongestionControl);
+        kcp.SetWindowSize(reliability.SendWindow, reliability.ReceiveWindow);
+        kcp.SetMtu((uint)(_options.Mtu - HeaderSize(channel)));
+        kcp.dead_link = reliability.MaxRetransmits;
+        return kcp;
+    }
+
+    /// <summary>Header bytes in front of a reliable channel's KCP segments: channel 0's is implied by its packet type.</summary>
+    private static int HeaderSize(byte channel) =>
+        channel == 0 ? KcpPacket.SessionHeaderSize : KcpPacket.ChannelHeaderSize;
+
+    /// <summary>Queued and unacknowledged reliable segments, across every channel.</summary>
+    private long PendingReliableSegments()
+    {
+        long total = 0;
+        foreach (Protocol.Kcp? kcp in _reliable!)
+        {
+            total += kcp?.WaitSnd ?? 0;
+        }
+
+        return total;
     }
 
     internal void HandlePacket(byte[] buffer, int length, long now)
@@ -172,9 +201,12 @@ public sealed class KcpConnection : Connection
                     ReadNonce(packet) == ClientNonce)
                 {
                     RecordPacketReceived(length);
-                    DisconnectReason reason = (DisconnectReason)packet[5] == DisconnectReason.ServerFull
-                        ? DisconnectReason.ServerFull
-                        : DisconnectReason.Rejected;
+                    DisconnectReason reason = (DisconnectReason)packet[5] switch
+                    {
+                        DisconnectReason.ServerFull => DisconnectReason.ServerFull,
+                        DisconnectReason.ProtocolError => DisconnectReason.ProtocolError,
+                        _ => DisconnectReason.Rejected
+                    };
                     _transport.Close(this, reason, false);
                 }
 
@@ -195,15 +227,20 @@ public sealed class KcpConnection : Connection
         switch (type)
         {
             case KcpPacketType.Reliable:
-                if (_kcp!.Input(buffer, KcpPacket.SessionHeaderSize, body.Length) >= 0)
+                InputReliable(0, buffer, KcpPacket.SessionHeaderSize, length);
+                break;
+
+            // Channel 0 always goes as Reliable, so a channel byte of 0 isn't valid here.
+            case KcpPacketType.ReliableChannel:
+                if (body.Length >= 1 && body[0] != 0 && body[0] < _options.Channels)
                 {
-                    DrainReliable(_kcp, Delivery.Reliable);
+                    InputReliable(body[0], buffer, KcpPacket.ChannelHeaderSize, length);
                 }
 
                 break;
 
             case KcpPacketType.Unreliable:
-                _transport.OnData(this, body, Delivery.Unreliable);
+                _transport.OnData(this, body, Delivery.Unreliable, 0);
                 break;
 
             case KcpPacketType.Ping:
@@ -274,48 +311,64 @@ public sealed class KcpConnection : Connection
         FlushReliable(now);
 
         // kcp2k flags the link as dead once a segment has been resent dead_link times without an ack.
-        if (_kcp!.state == -1)
+        foreach (Protocol.Kcp? kcp in _reliable!)
         {
-            _transport.Close(this, DisconnectReason.Timeout, false);
+            if (kcp?.state == -1)
+            {
+                _transport.Close(this, DisconnectReason.Timeout, false);
+                return;
+            }
         }
     }
 
-    /// <summary>Sends whatever the reliable channel has due: new messages, acks and retransmits.</summary>
+    /// <summary>Sends whatever the reliable channels have due: new messages, acks and retransmits.</summary>
     internal void FlushReliable(long now)
     {
-        if (_kcp == null)
+        if (_reliable == null)
         {
             return;
         }
 
         // Update only flushes once per KCP interval. Flushing on every call as well sends new messages
         // and acks on this tick instead of up to an interval later; retransmits are still timer driven.
-        _kcp.Update((uint)now);
-        _kcp.Flush();
+        foreach (Protocol.Kcp? kcp in _reliable)
+        {
+            kcp?.Update((uint)now);
+            kcp?.Flush();
+        }
     }
 
     internal void ReleaseBuffers()
     {
-        _kcp = null;
+        _reliable = null;
         _sendScratch = Array.Empty<byte>();
     }
 
     internal void RecordSent(int bytes) => RecordPacketSent(bytes);
 
-    private void DrainReliable(Protocol.Kcp channel, Delivery delivery)
+    private void InputReliable(byte channel, byte[] buffer, int offset, int length)
+    {
+        Protocol.Kcp kcp = Reliable(channel);
+        if (kcp.Input(buffer, offset, length - offset) >= 0)
+        {
+            DrainReliable(kcp, channel);
+        }
+    }
+
+    private void DrainReliable(Protocol.Kcp kcp, byte channel)
     {
         int size;
-        while (IsConnected && (size = channel.PeekSize()) >= 0)
+        while (IsConnected && (size = kcp.PeekSize()) >= 0)
         {
             byte[] message = ArrayPool<byte>.Shared.Rent(size);
-            int received = channel.Receive(message, size);
+            int received = kcp.Receive(message, size);
             if (received < 0)
             {
                 ArrayPool<byte>.Shared.Return(message);
                 break;
             }
 
-            _transport.OnDataPooled(this, message, received, delivery);
+            _transport.OnDataPooled(this, message, received, Delivery.Reliable, channel);
         }
     }
 

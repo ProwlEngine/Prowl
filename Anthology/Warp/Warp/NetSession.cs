@@ -38,6 +38,11 @@ public enum SessionState : byte
 ///         There is no host migration: when the host leaves, the session ends for everyone.
 ///     </para>
 ///     <para>
+///         Messages can travel on any of the transport's channels. The session's own messages (joining, the peer
+///         list, goodbyes) use channel 0, so only channel 0 is ordered with them: a message on another channel may
+///         arrive before a <see cref="PeerJoined" /> or after a <see cref="PeerLeft" /> sent earlier or later.
+///     </para>
+///     <para>
 ///         Like transports, a session does nothing in the background. Pump it with <see cref="Receive" /> and
 ///         <see cref="Flush" /> (or <see cref="Update" />); events and message handlers run inside
 ///         <see cref="Receive" />, on the calling thread. Host/Join attach a single-threaded transport pump.
@@ -72,7 +77,10 @@ public sealed class NetSession : IDisposable
     private bool _batchWithHost;
     private string? _goodbyeMessage;
     private SessionEndReason? _goodbyeReason;
-    private Reassembly? _incomingFromHost;
+
+    // Client only: reliable messages on other channels that overtook JoinAccepted, replayed once joined.
+    private readonly Queue<Loopback> _heldUntilJoined = new();
+    private Reassembly?[]? _incomingFromHost;
     private long _joinDeadlineMs = long.MaxValue;
     private long _loopbackBytes;
 
@@ -121,7 +129,10 @@ public sealed class NetSession : IDisposable
         HostConnection = connection ?? _pump!.Connect(address);
     }
 
-    /// <summary>Pooled bytes currently retained by incomplete incoming messages.</summary>
+    /// <summary>
+    ///     Pooled bytes currently retained by incomplete incoming messages, and by messages on other channels that
+    ///     reached a joining client before it was let in.
+    /// </summary>
     public long PendingReassemblyBytes { get; private set; }
 
     public bool IsExternallyPumped => _pump == null;
@@ -261,7 +272,7 @@ public sealed class NetSession : IDisposable
     public void On<T>(MessageHandler<T> handler) where T : INetMessage, new()
     {
         ArgumentNullException.ThrowIfNull(handler);
-        OnRaw(T.Id, (sender, ref reader, _) =>
+        OnRaw(T.Id, (sender, ref reader, _, _) =>
         {
             T message = new();
             try
@@ -309,26 +320,29 @@ public sealed class NetSession : IDisposable
     /// <remarks>
     ///     Reliable messages can be any size up to the receiver's <see cref="NetSessionOptions.MaxMessageSize" />:
     ///     ones the transport can't carry whole are split and reassembled. Unreliable ones must fit the transport.
+    ///     <paramref name="channel" /> picks one of the transport's channels; messages are ordered within a channel only.
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     ///     The session is not <see cref="SessionState.Active" />, or a client targets
     ///     another client.
     /// </exception>
-    public void Send<T>(NetPeer to, T message, Delivery delivery = Delivery.Reliable, SendFlags flags = SendFlags.None)
+    public void Send<T>(NetPeer to, T message, Delivery delivery = Delivery.Reliable, SendFlags flags = SendFlags.None,
+        byte channel = 0)
         where T : INetMessage
     {
         ArgumentNullException.ThrowIfNull(to);
         BeginUserMessage(T.Id);
         message.Write(_writer);
-        SendWritten(to, delivery, flags);
+        SendWritten(to, delivery, flags, channel);
     }
 
     /// <summary>Sends a message to the host. On the host, delivers it to itself.</summary>
-    public void SendToHost<T>(T message, Delivery delivery = Delivery.Reliable, SendFlags flags = SendFlags.None)
+    public void SendToHost<T>(T message, Delivery delivery = Delivery.Reliable, SendFlags flags = SendFlags.None,
+        byte channel = 0)
         where T : INetMessage
     {
         EnsureActive();
-        Send(HostPeer!, message, delivery, flags);
+        Send(HostPeer!, message, delivery, flags, channel);
     }
 
     /// <summary>
@@ -336,34 +350,34 @@ public sealed class NetSession : IDisposable
     ///     <paramref name="includeLocal" />.
     /// </summary>
     public void Broadcast<T>(T message, Delivery delivery = Delivery.Reliable, NetPeer? except = null,
-        bool includeLocal = false, SendFlags flags = SendFlags.None) where T : INetMessage
+        bool includeLocal = false, SendFlags flags = SendFlags.None, byte channel = 0) where T : INetMessage
     {
         EnsureHost();
         BeginUserMessage(T.Id);
         message.Write(_writer);
-        BroadcastWritten(delivery, except, includeLocal, flags);
+        BroadcastWritten(delivery, except, includeLocal, flags, channel);
     }
 
     /// <summary>Like <see cref="Send{T}" />, with a payload you have already serialized.</summary>
     public void SendRaw(NetPeer to, ushort id, ReadOnlySpan<byte> payload, Delivery delivery = Delivery.Reliable,
-        SendFlags flags = SendFlags.None)
+        SendFlags flags = SendFlags.None, byte channel = 0)
     {
         ArgumentNullException.ThrowIfNull(to);
         ValidateUserId(id);
         BeginUserMessage(id);
         _writer.WriteBytes(payload);
-        SendWritten(to, delivery, flags);
+        SendWritten(to, delivery, flags, channel);
     }
 
     /// <summary>Like <see cref="Broadcast{T}" />, with a payload you have already serialized.</summary>
     public void BroadcastRaw(ushort id, ReadOnlySpan<byte> payload, Delivery delivery = Delivery.Reliable,
-        NetPeer? except = null, bool includeLocal = false, SendFlags flags = SendFlags.None)
+        NetPeer? except = null, bool includeLocal = false, SendFlags flags = SendFlags.None, byte channel = 0)
     {
         EnsureHost();
         ValidateUserId(id);
         BeginUserMessage(id);
         _writer.WriteBytes(payload);
-        BroadcastWritten(delivery, except, includeLocal, flags);
+        BroadcastWritten(delivery, except, includeLocal, flags, channel);
     }
 
     // --- Membership ------------------------------------------------------------------------------
@@ -475,7 +489,7 @@ public sealed class NetSession : IDisposable
                         break;
                     }
 
-                    if (remote.Incoming is { } incoming && now >= incoming.DeadlineMs)
+                    if (Expired(remote.Incoming, now))
                     {
                         Goodbye(connection, remote, SessionEndReason.Timeout, "Fragmented message timed out.");
                         continue;
@@ -505,9 +519,9 @@ public sealed class NetSession : IDisposable
                 _scratch.Clear();
             }
         }
-        else if (_incomingFromHost is { } incoming && now >= incoming.DeadlineMs)
+        else if (Expired(_incomingFromHost, now))
         {
-            ReleaseReassembly(ref _incomingFromHost);
+            ReleaseReassemblies(_incomingFromHost);
             _goodbyeReason = SessionEndReason.Timeout;
             _goodbyeMessage = "Fragmented message timed out.";
             HostConnection!.Disconnect();
@@ -545,14 +559,14 @@ public sealed class NetSession : IDisposable
                 break;
 
             case TransportEventType.Data:
-                HostReceive(ev.Connection, ev.Data.Span, ev.Delivery);
+                HostReceive(ev.Connection, ev.Data.Span, ev.Delivery, ev.Channel);
                 break;
 
             case TransportEventType.Disconnected:
                 _batcher.Remove(ev.Connection);
                 if (_remotes.Remove(ev.Connection, out Remote? remote))
                 {
-                    ReleaseReassembly(ref remote.Incoming);
+                    ReleaseReassemblies(remote.Incoming);
                     if (remote.Pending != null)
                     {
                         remote.Pending.IsResolved = true;
@@ -575,7 +589,7 @@ public sealed class NetSession : IDisposable
         }
     }
 
-    private void HostReceive(Connection connection, ReadOnlySpan<byte> data, Delivery delivery,
+    private void HostReceive(Connection connection, ReadOnlySpan<byte> data, Delivery delivery, byte channel,
         bool reassembled = false)
     {
         if (!_remotes.TryGetValue(connection, out Remote? remote))
@@ -593,6 +607,12 @@ public sealed class NetSession : IDisposable
                     $"A {data.Length} byte message exceeds the {_options.MaxMessageSize} byte limit.");
             }
 
+            // Only channel 0 is ordered with joining, so a client has nothing to say elsewhere until it is in.
+            if (channel != 0 && remote.Stage is RemoteStage.AwaitingRequest or RemoteStage.Pending)
+            {
+                throw new InvalidDataException("A message on another channel arrived before joining.");
+            }
+
             if (id == (ushort)InternalMessage.Batch)
             {
                 if (reassembled || remote.Stage != RemoteStage.Joined || !remote.BatchMessages)
@@ -600,7 +620,7 @@ public sealed class NetSession : IDisposable
                     throw new InvalidDataException("Unexpected message batch.");
                 }
 
-                ReceiveBatch(connection, reader.ReadBytes(reader.Remaining), delivery);
+                ReceiveBatch(connection, reader.ReadBytes(reader.Remaining), delivery, channel);
                 return;
             }
 
@@ -612,14 +632,15 @@ public sealed class NetSession : IDisposable
                 }
 
                 if (delivery == Delivery.Reliable && remote.Stage is RemoteStage.AwaitingRequest or RemoteStage.Joined
-                                                  && Reassemble(ref remote.Incoming, ref reader, out int length,
+                                                  && Reassemble(ref Incoming(ref remote.Incoming, channel),
+                                                      ref reader, out int length,
                                                       remote.Stage == RemoteStage.Joined
                                                           ? _options.MaxMessageSize
                                                           : 8192) is { } whole)
                 {
                     try
                     {
-                        HostReceive(connection, whole.AsSpan(0, length), delivery, true);
+                        HostReceive(connection, whole.AsSpan(0, length), delivery, channel, true);
                     }
                     finally
                     {
@@ -644,7 +665,7 @@ public sealed class NetSession : IDisposable
                     // Clients have no business sending Warp's own messages once joined.
                     if (id < ReservedMessageIds)
                     {
-                        Dispatch(remote.Peer!, id, ref reader, delivery);
+                        Dispatch(remote.Peer!, id, ref reader, delivery, channel);
                     }
 
                     break;
@@ -778,7 +799,7 @@ public sealed class NetSession : IDisposable
             remote.Pending = null;
         }
 
-        ReleaseReassembly(ref remote.Incoming);
+        ReleaseReassemblies(remote.Incoming);
         NetPeer? peer = remote.Peer;
         remote.Peer = null;
         remote.Stage = RemoteStage.Lingering;
@@ -829,7 +850,7 @@ public sealed class NetSession : IDisposable
                 break;
 
             case TransportEventType.Data:
-                ClientReceive(ev.Data.Span, ev.Delivery);
+                ClientReceive(ev.Data.Span, ev.Delivery, ev.Channel);
                 break;
 
             case TransportEventType.Disconnected:
@@ -849,11 +870,23 @@ public sealed class NetSession : IDisposable
         }
     }
 
-    private void ClientReceive(ReadOnlySpan<byte> data, Delivery delivery, bool reassembled = false)
+    private void ClientReceive(ReadOnlySpan<byte> data, Delivery delivery, byte channel, bool reassembled = false)
     {
         NetReader reader = new(data);
         try
         {
+            // Another channel can overtake JoinAccepted. Keep reliable messages for after joining; the rest is
+            // dropped, like any other unreliable message before joining.
+            if (channel != 0 && State == SessionState.Joining && !reassembled)
+            {
+                if (delivery == Delivery.Reliable)
+                {
+                    HoldUntilJoined(data, channel);
+                }
+
+                return;
+            }
+
             ushort id = reader.ReadUInt16();
             if (id != (ushort)InternalMessage.Batch && data.Length > _options.MaxMessageSize)
             {
@@ -876,7 +909,7 @@ public sealed class NetSession : IDisposable
                         throw new InvalidDataException("Unexpected message batch.");
                     }
 
-                    ReceiveBatch(HostConnection!, reader.ReadBytes(reader.Remaining), delivery);
+                    ReceiveBatch(HostConnection!, reader.ReadBytes(reader.Remaining), delivery, channel);
                     break;
 
                 case (ushort)InternalMessage.Fragment:
@@ -886,11 +919,12 @@ public sealed class NetSession : IDisposable
                     }
 
                     if (delivery == Delivery.Reliable
-                        && Reassemble(ref _incomingFromHost, ref reader, out int length) is { } whole)
+                        && Reassemble(ref Incoming(ref _incomingFromHost, channel), ref reader, out int length) is
+                            { } whole)
                     {
                         try
                         {
-                            ClientReceive(whole.AsSpan(0, length), delivery, true);
+                            ClientReceive(whole.AsSpan(0, length), delivery, channel, true);
                         }
                         finally
                         {
@@ -942,7 +976,7 @@ public sealed class NetSession : IDisposable
                 default:
                     if (State == SessionState.Active && id < ReservedMessageIds)
                     {
-                        Dispatch(HostPeer!, id, ref reader, delivery);
+                        Dispatch(HostPeer!, id, ref reader, delivery, channel);
                     }
 
                     break;
@@ -950,7 +984,7 @@ public sealed class NetSession : IDisposable
         }
         catch (Exception e) when (e is ResourceLimitException or ReassemblyTimeoutException)
         {
-            ReleaseReassembly(ref _incomingFromHost);
+            ReleaseReassemblies(_incomingFromHost);
             _goodbyeReason = e is ResourceLimitException ? SessionEndReason.ResourceLimit : SessionEndReason.Timeout;
             _goodbyeMessage = e.Message;
             HostConnection!.Disconnect();
@@ -994,6 +1028,38 @@ public sealed class NetSession : IDisposable
         State = SessionState.Active;
         _joinDeadlineMs = long.MaxValue;
         Joined?.Invoke();
+
+        while (State == SessionState.Active && _heldUntilJoined.TryDequeue(out Loopback held))
+        {
+            PendingReassemblyBytes -= held.Buffer.Length;
+            try
+            {
+                ClientReceive(held.Buffer.AsSpan(0, held.Length), held.Delivery, held.Channel);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(held.Buffer);
+            }
+        }
+    }
+
+    private void HoldUntilJoined(ReadOnlySpan<byte> data, byte channel)
+    {
+        if (data.Length > _options.MaxReassemblyBytes - PendingReassemblyBytes)
+        {
+            throw new ResourceLimitException("Session reassembly budget exceeded.");
+        }
+
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(data.Length);
+        if (buffer.Length > _options.MaxReassemblyBytes - PendingReassemblyBytes)
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+            throw new ResourceLimitException("Session reassembly budget exceeded.");
+        }
+
+        PendingReassemblyBytes += buffer.Length;
+        data.CopyTo(buffer);
+        _heldUntilJoined.Enqueue(new Loopback(buffer, data.Length, Delivery.Reliable, channel));
     }
 
     private static int ReadPeerId(ref NetReader reader)
@@ -1015,7 +1081,7 @@ public sealed class NetSession : IDisposable
 
     // --- Shared --------------------------------------------------------------------------------
 
-    private void ReceiveBatch(Connection connection, ReadOnlySpan<byte> data, Delivery delivery)
+    private void ReceiveBatch(Connection connection, ReadOnlySpan<byte> data, Delivery delivery, byte channel)
     {
         _batcher.Validate(data);
         NetReader reader = new(data);
@@ -1027,23 +1093,23 @@ public sealed class NetSession : IDisposable
             ReadOnlySpan<byte> message = reader.ReadBytes(length);
             if (IsHost)
             {
-                HostReceive(connection, message, delivery);
+                HostReceive(connection, message, delivery, channel);
             }
             else
             {
-                ClientReceive(message, delivery);
+                ClientReceive(message, delivery, channel);
             }
         }
     }
 
-    private void Dispatch(NetPeer sender, ushort id, ref NetReader reader, Delivery delivery)
+    private void Dispatch(NetPeer sender, ushort id, ref NetReader reader, Delivery delivery, byte channel)
     {
         // Messages nobody registered for are dropped; a peer on a newer build may know more messages.
         if (_handlers.TryGetValue(id, out RawMessageHandler? handler))
         {
             try
             {
-                handler(sender, ref reader, delivery);
+                handler(sender, ref reader, delivery, channel);
             }
             catch (Exception e) when (e is not (EndOfStreamException or InvalidDataException))
             {
@@ -1081,17 +1147,9 @@ public sealed class NetSession : IDisposable
         _writer.WriteUInt16(id);
     }
 
-    private void SendWritten(NetPeer to, Delivery delivery, SendFlags flags = SendFlags.None)
+    private void SendWritten(NetPeer to, Delivery delivery, SendFlags flags, byte channel)
     {
-        if (!Enum.IsDefined(delivery))
-        {
-            throw new ArgumentOutOfRangeException(nameof(delivery));
-        }
-
-        if ((flags & ~SendFlags.Immediate) != 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(flags));
-        }
+        ValidateSend(delivery, flags, channel);
 
         if (to.IsLocal)
         {
@@ -1117,7 +1175,7 @@ public sealed class NetSession : IDisposable
 
             _loopbackBytes += buffer.Length;
             _writer.WrittenSpan.CopyTo(buffer);
-            _loopback.Enqueue(new Loopback(buffer, _writer.Length, delivery));
+            _loopback.Enqueue(new Loopback(buffer, _writer.Length, delivery, channel));
             return;
         }
 
@@ -1131,13 +1189,13 @@ public sealed class NetSession : IDisposable
         if (to.Connection is { IsConnected: true } connection && _peers.TryGetValue(to.Id, out NetPeer? current) &&
             current == to)
         {
-            SendToConnection(connection, _writer.WrittenSpan, delivery, flags);
+            SendToConnection(connection, _writer.WrittenSpan, delivery, flags, channel);
         }
     }
 
     /// <summary>Sends a message, splitting a reliable one into fragments if the transport can't take it whole.</summary>
     private void SendToConnection(Connection connection, ReadOnlySpan<byte> message, Delivery delivery,
-        SendFlags flags = SendFlags.None)
+        SendFlags flags = SendFlags.None, byte channel = 0)
     {
         if (!connection.IsConnected)
         {
@@ -1153,16 +1211,19 @@ public sealed class NetSession : IDisposable
             ? _remotes.TryGetValue(connection, out Remote? remote) && remote.BatchMessages
             : _batchWithHost;
         if (batching && BinaryPrimitives.ReadUInt16LittleEndian(message) < ReservedMessageIds &&
-            _batcher.TrySend(connection, message, delivery, flags))
+            _batcher.TrySend(connection, message, delivery, flags, channel))
         {
             return;
         }
 
         // Control messages and large messages must not overtake buffered messages on this channel.
-        _batcher.Flush(connection, delivery);
         if ((flags & SendFlags.Immediate) != 0)
         {
-            _batcher.Flush(connection, delivery == Delivery.Reliable ? Delivery.Unreliable : Delivery.Reliable);
+            _batcher.FlushConnection(connection);
+        }
+        else
+        {
+            _batcher.Flush(connection, delivery, channel);
         }
 
         // Submitting a batch can exhaust the backend's queue budget and close this connection.
@@ -1174,7 +1235,7 @@ public sealed class NetSession : IDisposable
         int max = connection.GetMaxMessageSize(delivery);
         if (delivery == Delivery.Unreliable || message.Length <= max)
         {
-            connection.Send(message, delivery, flags);
+            connection.Send(message, delivery, flags, channel);
             return;
         }
 
@@ -1197,7 +1258,7 @@ public sealed class NetSession : IDisposable
             }
 
             _fragmentWriter.WriteBytes(message.Slice(offset, length));
-            connection.Send(_fragmentWriter.WrittenSpan, delivery);
+            connection.Send(_fragmentWriter.WrittenSpan, delivery, channel: channel);
         }
 
         if ((flags & SendFlags.Immediate) != 0)
@@ -1279,20 +1340,66 @@ public sealed class NetSession : IDisposable
         return whole;
     }
 
-    private void ReleaseReassembly(ref Reassembly? state)
+    /// <summary>The reassembly state for one channel, allocating the per-channel slots on first use.</summary>
+    private ref Reassembly? Incoming(ref Reassembly?[]? states, byte channel)
     {
-        if (state == null)
+        states ??= new Reassembly?[Transport.Capabilities.Channels];
+        return ref states[channel];
+    }
+
+    private static bool Expired(Reassembly?[]? states, long now)
+    {
+        if (states == null)
+        {
+            return false;
+        }
+
+        foreach (Reassembly? state in states)
+        {
+            if (state is { } incoming && now >= incoming.DeadlineMs)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void ReleaseReassemblies(Reassembly?[]? states)
+    {
+        if (states == null)
         {
             return;
         }
 
-        PendingReassemblyBytes -= state.Value.Buffer.Length;
-        ArrayPool<byte>.Shared.Return(state.Value.Buffer);
-        state = null;
+        for (int i = 0; i < states.Length; i++)
+        {
+            if (states[i] is { } state)
+            {
+                PendingReassemblyBytes -= state.Buffer.Length;
+                ArrayPool<byte>.Shared.Return(state.Buffer);
+                states[i] = null;
+            }
+        }
     }
 
     private void BroadcastWritten(Delivery delivery, NetPeer? except, bool includeLocal,
-        SendFlags flags = SendFlags.None)
+        SendFlags flags = SendFlags.None, byte channel = 0)
+    {
+        ValidateSend(delivery, flags, channel);
+
+        foreach (NetPeer peer in _peers.Values)
+        {
+            if (peer == except || (peer.IsLocal && !includeLocal))
+            {
+                continue;
+            }
+
+            SendWritten(peer, delivery, flags, channel);
+        }
+    }
+
+    private void ValidateSend(Delivery delivery, SendFlags flags, byte channel)
     {
         if (!Enum.IsDefined(delivery))
         {
@@ -1304,14 +1411,10 @@ public sealed class NetSession : IDisposable
             throw new ArgumentOutOfRangeException(nameof(flags));
         }
 
-        foreach (NetPeer peer in _peers.Values)
+        if (channel >= Transport.Capabilities.Channels || (channel != 0 && delivery != Delivery.Reliable))
         {
-            if (peer == except || (peer.IsLocal && !includeLocal))
-            {
-                continue;
-            }
-
-            SendWritten(peer, delivery, flags);
+            throw new ArgumentOutOfRangeException(nameof(channel), channel,
+                $"The transport has {Transport.Capabilities.Channels} channels, and only reliable messages use any but 0.");
         }
     }
 
@@ -1327,7 +1430,7 @@ public sealed class NetSession : IDisposable
             {
                 NetReader reader = new(message.Buffer.AsSpan(0, message.Length));
                 ushort id = reader.ReadUInt16();
-                Dispatch(LocalPeer!, id, ref reader, message.Delivery);
+                Dispatch(LocalPeer!, id, ref reader, message.Delivery, message.Channel);
             }
             finally
             {
@@ -1355,10 +1458,16 @@ public sealed class NetSession : IDisposable
 
         _batcher.Dispose();
 
-        ReleaseReassembly(ref _incomingFromHost);
+        ReleaseReassemblies(_incomingFromHost);
+        while (_heldUntilJoined.TryDequeue(out Loopback held))
+        {
+            PendingReassemblyBytes -= held.Buffer.Length;
+            ArrayPool<byte>.Shared.Return(held.Buffer);
+        }
+
         foreach (Remote remote in _remotes.Values)
         {
-            ReleaseReassembly(ref remote.Incoming);
+            ReleaseReassemblies(remote.Incoming);
             if (remote.Pending != null)
             {
                 remote.Pending.IsResolved = true;
@@ -1445,13 +1554,15 @@ public sealed class NetSession : IDisposable
     {
         public bool BatchMessages;
         public long DeadlineMs;
-        public Reassembly? Incoming;
+
+        // Fragmented messages being reassembled, one per channel.
+        public Reassembly?[]? Incoming;
         public NetPeer? Peer;
         public PendingJoin? Pending;
         public RemoteStage Stage;
     }
 
-    private readonly record struct Loopback(byte[] Buffer, int Length, Delivery Delivery);
+    private readonly record struct Loopback(byte[] Buffer, int Length, Delivery Delivery, byte Channel);
 
     private sealed class ResourceLimitException(string message) : Exception(message);
 

@@ -24,14 +24,14 @@ public class SessionBatchingTests
     {
         using Pair pair = new(hostBatches, clientBatches);
         List<byte> atHost = new(), atClient = new();
-        pair.Host.OnRaw(42, (_, ref reader, channel) =>
+        pair.Host.OnRaw(42, (_, ref reader, actualDelivery, _) =>
         {
-            Assert.Equal(delivery, channel);
+            Assert.Equal(delivery, actualDelivery);
             atHost.Add(reader.ReadByte());
         });
-        pair.Client.OnRaw(42, (_, ref reader, channel) =>
+        pair.Client.OnRaw(42, (_, ref reader, actualDelivery, _) =>
         {
-            Assert.Equal(delivery, channel);
+            Assert.Equal(delivery, actualDelivery);
             atClient.Add(reader.ReadByte());
         });
         long before = pair.Client.HostPeer!.Connection!.Stats.PacketsSent;
@@ -56,7 +56,7 @@ public class SessionBatchingTests
     {
         using Pair pair = new();
         List<byte[]> received = new();
-        pair.Host.OnRaw(42, (_, ref reader, _) => received.Add(reader.ReadBytes(reader.Remaining).ToArray()));
+        pair.Host.OnRaw(42, (_, ref reader, _, _) => received.Add(reader.ReadBytes(reader.Remaining).ToArray()));
         byte[][] payloads = { new byte[] { 1 }, new byte[2000], Array.Empty<byte>(), new byte[] { 2 } };
         foreach (byte[] payload in payloads)
         {
@@ -84,9 +84,9 @@ public class SessionBatchingTests
         NetPeer destination = toClient ? pair.Remote : pair.Client.HostPeer!;
         Connection receivingConnection = toClient ? pair.Client.HostPeer!.Connection! : pair.Remote.Connection!;
         List<string> events = new();
-        receiver.OnRaw(42, (_, ref reader, channel) =>
+        receiver.OnRaw(42, (_, ref reader, actualDelivery, _) =>
         {
-            Assert.Equal(delivery, channel);
+            Assert.Equal(delivery, actualDelivery);
             events.Add($"message {reader.ReadByte()}");
         });
         receiver.PeerLeft += (_, _) => events.Add("disconnected");
@@ -119,7 +119,7 @@ public class SessionBatchingTests
         NetSession receiver = toClient ? pair.Client : pair.Host;
         NetPeer destination = toClient ? pair.Remote : pair.Client.HostPeer!;
         int received = 0;
-        receiver.OnRaw(42, (_, ref reader, _) =>
+        receiver.OnRaw(42, (_, ref reader, _, _) =>
         {
             received++;
             receiver.Shutdown();
@@ -139,7 +139,7 @@ public class SessionBatchingTests
     {
         using Pair pair = new();
         List<byte> received = new();
-        pair.Host.OnRaw(42, (_, ref reader, _) => received.Add(reader.ReadByte()));
+        pair.Host.OnRaw(42, (_, ref reader, _, _) => received.Add(reader.ReadByte()));
         pair.Client.SendRaw(pair.Client.HostPeer!, 42, new byte[] { 1 }, Delivery.Unreliable);
         byte[] payload = new byte[large ? 2000 : 1];
         payload[0] = 2;
@@ -155,7 +155,7 @@ public class SessionBatchingTests
         using Pair pair = new();
         bool received = false;
         SessionEndReason? ended = null;
-        pair.Client.OnRaw(42, (_, ref reader, _) => received = reader.ReadByte() == 1);
+        pair.Client.OnRaw(42, (_, ref reader, _, _) => received = reader.ReadByte() == 1);
         pair.Client.Ended += (reason, _) => ended = reason;
         pair.Host.SendRaw(pair.Remote, 42, new byte[] { 1 });
         pair.Host.Kick(pair.Remote, "done");
@@ -169,7 +169,7 @@ public class SessionBatchingTests
     {
         using Pair pair = new(hostMaximum: 64);
         int received = 0;
-        pair.Host.OnRaw(42, (_, ref reader, _) => received++);
+        pair.Host.OnRaw(42, (_, ref reader, _, _) => received++);
         for (int i = 0; i < 30; i++)
         {
             pair.Client.SendRaw(pair.Client.HostPeer!, 42, new byte[] { 1 });
@@ -209,7 +209,7 @@ public class SessionBatchingTests
         using Pair pair = new();
         NetSession receiver = toClient ? pair.Client : pair.Host;
         int received = 0;
-        receiver.OnRaw(42, (_, ref reader, _) => received++);
+        receiver.OnRaw(42, (_, ref reader, _, _) => received++);
         SessionEndReason? ended = null;
         pair.Client.Ended += (reason, _) => ended = reason;
         using NetWriter frame = new();

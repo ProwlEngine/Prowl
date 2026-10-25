@@ -16,7 +16,7 @@ namespace Prowl.Warp.Transports.Kcp;
 
 /// <summary>
 ///     A transport over UDP: <see cref="Delivery.Reliable" /> messages are carried by an embedded KCP
-///     implementation, <see cref="Delivery.Unreliable" /> ones as plain datagrams. One socket serves both
+///     implementation, one conversation per channel, and unreliable ones as plain datagrams. One socket serves both
 ///     incoming and outgoing connections. Addresses are <c>host:port</c>, <c>host</c> (using
 ///     <see cref="KcpTransportOptions.Port" />), or <c>[ipv6]:port</c>.
 /// </summary>
@@ -72,6 +72,9 @@ public sealed class KcpTransport : Transport
     public KcpTransportOptions Options => Settings.CopyValidated();
 
     public override bool IsListening => _listening;
+
+    public override TransportCapabilities Capabilities =>
+        new(true, DeliverySupport.All, TransportExecution.WorkerPreferred, Settings.Channels);
 
     /// <summary>The port the socket is bound to, or 0 if it isn't bound yet.</summary>
     public override int LocalPort => (_socket?.LocalEndPoint as IPEndPoint)?.Port ?? 0;
@@ -319,6 +322,11 @@ public sealed class KcpTransport : Transport
         }
 
         nonce = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
+        if (!MatchesVersion(packet))
+        {
+            SendReject(from, nonce, DisconnectReason.ProtocolError);
+            return false;
+        }
 
         Span<byte> reply = stackalloc byte[KcpPacket.ChallengeSize];
         reply[0] = (byte)KcpPacketType.Challenge;
@@ -337,11 +345,7 @@ public sealed class KcpTransport : Transport
 
         if (_incomingCount >= Settings.MaxConnections)
         {
-            Span<byte> reject = stackalloc byte[KcpPacket.RejectSize];
-            reject[0] = (byte)KcpPacketType.Reject;
-            BinaryPrimitives.WriteUInt32LittleEndian(reject[1..], nonce);
-            reject[5] = (byte)DisconnectReason.ServerFull;
-            SendRaw(null, from, reject);
+            SendReject(from, nonce, DisconnectReason.ServerFull);
             return;
         }
 
@@ -408,7 +412,7 @@ public sealed class KcpTransport : Transport
     {
         nonce = 0;
         if (packet.Length != KcpPacket.HandshakeRequestSize ||
-            BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != Settings.ProtocolId)
+            BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != Settings.ProtocolId || !MatchesVersion(packet))
         {
             return false;
         }
@@ -428,6 +432,26 @@ public sealed class KcpTransport : Transport
 
         ComputeCookie(from, nonce, window - 1, expected);
         return CryptographicOperations.FixedTimeEquals(cookie, expected);
+    }
+
+    /// <summary>Whether a handshake request comes from a build with this wire format and channel count.</summary>
+    private bool MatchesVersion(ReadOnlySpan<byte> packet) =>
+        packet[KcpPacket.HandshakeVersionOffset] == KcpPacket.WireVersion &&
+        packet[KcpPacket.HandshakeVersionOffset + 1] == Settings.Channels;
+
+    private void WriteVersion(Span<byte> packet)
+    {
+        packet[KcpPacket.HandshakeVersionOffset] = KcpPacket.WireVersion;
+        packet[KcpPacket.HandshakeVersionOffset + 1] = (byte)Settings.Channels;
+    }
+
+    private void SendReject(SocketAddress to, uint nonce, DisconnectReason reason)
+    {
+        Span<byte> reject = stackalloc byte[KcpPacket.RejectSize];
+        reject[0] = (byte)KcpPacketType.Reject;
+        BinaryPrimitives.WriteUInt32LittleEndian(reject[1..], nonce);
+        reject[5] = (byte)reason;
+        SendRaw(null, to, reject);
     }
 
     private void ComputeCookie(SocketAddress address, uint nonce, long window, Span<byte> destination)
@@ -451,6 +475,7 @@ public sealed class KcpTransport : Transport
         packet[0] = (byte)KcpPacketType.ConnectRequest;
         BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], Settings.ProtocolId);
         BinaryPrimitives.WriteUInt32LittleEndian(packet[5..], connection.ClientNonce);
+        WriteVersion(packet);
         SendRaw(connection, connection.RemoteAddress!, packet);
     }
 
@@ -462,6 +487,7 @@ public sealed class KcpTransport : Transport
         BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], Settings.ProtocolId);
         BinaryPrimitives.WriteUInt32LittleEndian(packet[5..], connection.ClientNonce);
         cookie.CopyTo(packet[9..]);
+        WriteVersion(packet);
         SendRaw(connection, connection.RemoteAddress!, packet);
     }
 
@@ -475,9 +501,14 @@ public sealed class KcpTransport : Transport
     }
 
     /// <summary>Sends <c>[type][sessionId][body]</c> to the connection's remote end.</summary>
-    internal void SendSession(KcpConnection connection, KcpPacketType type, ReadOnlySpan<byte> body)
+    internal void SendSession(KcpConnection connection, KcpPacketType type, ReadOnlySpan<byte> body) =>
+        SendSession(connection, type, ReadOnlySpan<byte>.Empty, body);
+
+    /// <summary>Sends <c>[type][sessionId][prefix][body]</c>, the prefix being a data packet's channel and sequence.</summary>
+    internal void SendSession(KcpConnection connection, KcpPacketType type, ReadOnlySpan<byte> prefix,
+        ReadOnlySpan<byte> body)
     {
-        int length = KcpPacket.SessionHeaderSize + body.Length;
+        int length = KcpPacket.SessionHeaderSize + prefix.Length + body.Length;
         if (_sendBuffer.Length < length)
         {
             _sendBuffer = new byte[Math.Max(length, Settings.Mtu)];
@@ -486,7 +517,8 @@ public sealed class KcpTransport : Transport
         Span<byte> packet = _sendBuffer.AsSpan(0, length);
         packet[0] = (byte)type;
         BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], connection.SessionId);
-        body.CopyTo(packet[KcpPacket.SessionHeaderSize..]);
+        prefix.CopyTo(packet[KcpPacket.SessionHeaderSize..]);
+        body.CopyTo(packet[(KcpPacket.SessionHeaderSize + prefix.Length)..]);
         SendRaw(connection, connection.RemoteAddress!, packet);
     }
 
@@ -563,11 +595,12 @@ public sealed class KcpTransport : Transport
 
     internal void OnConnected(KcpConnection connection) => RaiseConnected(connection);
 
-    internal void OnData(KcpConnection connection, ReadOnlySpan<byte> data, Delivery delivery) =>
-        RaiseData(connection, data, delivery);
+    internal void OnData(KcpConnection connection, ReadOnlySpan<byte> data, Delivery delivery, byte channel) =>
+        RaiseData(connection, data, delivery, channel);
 
-    internal void OnDataPooled(KcpConnection connection, byte[] rentedBuffer, int length, Delivery delivery) =>
-        RaiseDataPooled(connection, rentedBuffer, length, delivery);
+    internal void OnDataPooled(KcpConnection connection, byte[] rentedBuffer, int length, Delivery delivery,
+        byte channel) =>
+        RaiseDataPooled(connection, rentedBuffer, length, delivery, channel);
 
     // --- Link simulation ------------------------------------------------------------------------
 

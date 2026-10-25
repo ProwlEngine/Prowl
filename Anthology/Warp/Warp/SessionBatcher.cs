@@ -23,7 +23,8 @@ internal sealed class SessionBatcher(int maxMessageSize) : IDisposable
         _batches.Clear();
     }
 
-    public bool TrySend(Connection connection, ReadOnlySpan<byte> message, Delivery delivery, SendFlags flags)
+    public bool TrySend(Connection connection, ReadOnlySpan<byte> message, Delivery delivery, SendFlags flags,
+        byte channel = 0)
     {
         int threshold = Math.Min(MaxBatchSize, Math.Min(_maxMessageSize,
             Math.Min(connection.GetBatchThreshold(delivery), connection.GetMaxMessageSize(delivery))));
@@ -39,10 +40,10 @@ internal sealed class SessionBatcher(int maxMessageSize) : IDisposable
             _batches.Add(connection, pending);
         }
 
-        NetWriter writer = pending.Get(delivery);
+        NetWriter writer = pending.Get(delivery, channel);
         if (writer.Length != 0 && message.Length + 4 > threshold - writer.Length)
         {
-            Flush(connection, delivery);
+            Flush(connection, delivery, channel);
         }
 
         if (!connection.IsConnected)
@@ -59,28 +60,63 @@ internal sealed class SessionBatcher(int maxMessageSize) : IDisposable
         writer.WriteBytes(message);
         if ((flags & SendFlags.Immediate) != 0)
         {
-            // Match Connection.Flush: submit earlier sends on both channels before flushing I/O.
-            Flush(connection, Delivery.Reliable);
-            Flush(connection, Delivery.Unreliable);
+            // Match Connection.Flush: submit earlier sends on every channel before flushing I/O.
+            FlushConnection(connection);
             connection.Flush();
         }
         else if (writer.Length >= threshold)
         {
-            Flush(connection, delivery);
+            Flush(connection, delivery, channel);
         }
 
         return true;
     }
 
-    public void Flush(Connection connection, Delivery delivery)
+    public void Flush(Connection connection, Delivery delivery, byte channel = 0)
+    {
+        if (_batches.TryGetValue(connection, out OutgoingBatch? pending) &&
+            pending.Writers.TryGetValue((delivery, channel), out NetWriter? writer))
+        {
+            Submit(connection, writer, delivery, channel);
+        }
+    }
+
+    /// <summary>Submits every pending batch for one connection, reliable ones first.</summary>
+    public void FlushConnection(Connection connection)
     {
         if (!_batches.TryGetValue(connection, out OutgoingBatch? pending))
         {
             return;
         }
 
-        NetWriter? writer = delivery == Delivery.Reliable ? pending.Reliable : pending.Unreliable;
-        if (writer == null || writer.Length == 0)
+        foreach (((Delivery delivery, byte channel), NetWriter writer) in pending.Writers)
+        {
+            if (delivery == Delivery.Reliable)
+            {
+                Submit(connection, writer, delivery, channel);
+            }
+        }
+
+        foreach (((Delivery delivery, byte channel), NetWriter writer) in pending.Writers)
+        {
+            if (delivery != Delivery.Reliable)
+            {
+                Submit(connection, writer, delivery, channel);
+            }
+        }
+    }
+
+    public void FlushAll()
+    {
+        foreach (Connection connection in _batches.Keys)
+        {
+            FlushConnection(connection);
+        }
+    }
+
+    private static void Submit(Connection connection, NetWriter writer, Delivery delivery, byte channel)
+    {
+        if (writer.Length == 0)
         {
             return;
         }
@@ -89,21 +125,12 @@ internal sealed class SessionBatcher(int maxMessageSize) : IDisposable
         {
             if (connection.IsConnected)
             {
-                connection.Send(writer.WrittenSpan, delivery);
+                connection.Send(writer.WrittenSpan, delivery, channel: channel);
             }
         }
         finally
         {
             writer.Reset();
-        }
-    }
-
-    public void FlushAll()
-    {
-        foreach (Connection connection in _batches.Keys)
-        {
-            Flush(connection, Delivery.Reliable);
-            Flush(connection, Delivery.Unreliable);
         }
     }
 
@@ -145,16 +172,28 @@ internal sealed class SessionBatcher(int maxMessageSize) : IDisposable
 
     private sealed class OutgoingBatch : IDisposable
     {
-        public NetWriter? Reliable, Unreliable;
+        /// <summary>One pending batch per delivery mode and channel, each its own stream on the transport.</summary>
+        public readonly Dictionary<(Delivery Delivery, byte Channel), NetWriter> Writers = new();
 
         public void Dispose()
         {
-            Reliable?.Dispose();
-            Unreliable?.Dispose();
+            foreach (NetWriter writer in Writers.Values)
+            {
+                writer.Dispose();
+            }
+
+            Writers.Clear();
         }
 
-        public NetWriter Get(Delivery delivery) => delivery == Delivery.Reliable
-            ? Reliable ??= new NetWriter()
-            : Unreliable ??= new NetWriter();
+        public NetWriter Get(Delivery delivery, byte channel)
+        {
+            if (!Writers.TryGetValue((delivery, channel), out NetWriter? writer))
+            {
+                writer = new NetWriter();
+                Writers.Add((delivery, channel), writer);
+            }
+
+            return writer;
+        }
     }
 }

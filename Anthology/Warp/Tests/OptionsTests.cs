@@ -67,6 +67,8 @@ public class OptionsTests
     [InlineData(1)]
     [InlineData(2)]
     [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
     public void KcpRejectsInvalidNestedSettings(int invalid)
     {
         KcpTransportOptions options = new();
@@ -76,6 +78,8 @@ public class OptionsTests
             case 1: options.Reliability.ReceiveWindow = uint.MaxValue; break;
             case 2: options.Reliability.MaxRetransmits = 0; break;
             case 3: options.Simulation = new LinkSimulation { PacketLoss = double.NaN }; break;
+            case 4: options.Channels = 0; break;
+            case 5: options.Channels = KcpTransportOptions.MaxChannels + 1; break;
         }
 
         Assert.Throws<ArgumentOutOfRangeException>(() => new KcpTransport(options));

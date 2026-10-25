@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
@@ -112,6 +113,60 @@ public class SessionProcessingTests
     }
 
     [Fact]
+    public void ClientKeepsReliableMessagesOnOtherChannelsThatOvertakeAdmission()
+    {
+        using ProbeTransport transport = new();
+        ProbeConnection connection = transport.OpenPeer();
+        using NetSession client = CreateClient(connection);
+        List<string> log = new();
+        client.Joined += () => log.Add("joined");
+        client.OnRaw(30, (_, ref reader, delivery, channel) => log.Add($"{delivery} {channel} {reader.ReadByte()}"));
+        client.ProcessEvent(new TransportEvent(TransportEventType.Connected, connection));
+
+        using NetWriter early = new();
+        early.WriteUInt16(30);
+        early.WriteByte(7);
+        client.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, early.WrittenMemory,
+            Delivery.Reliable, default, 1));
+        // Unreliable messages before joining are dropped.
+        client.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, early.WrittenMemory,
+            Delivery.Unreliable));
+        Assert.Empty(log);
+        Assert.True(client.PendingReassemblyBytes > 0);
+
+        using NetWriter accepted = new();
+        accepted.WriteUInt16(NetSession.ReservedMessageIds + 1);
+        accepted.WriteVarUInt32(1);
+        accepted.WriteVarUInt32(2);
+        accepted.WriteVarUInt32(NetPeer.HostId);
+        accepted.WriteString("host");
+        accepted.WriteVarUInt32(1);
+        accepted.WriteString("client");
+        accepted.WriteBool(false);
+        client.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, accepted.WrittenMemory));
+
+        Assert.Equal(new[] { "joined", "Reliable 1 7" }, log);
+        Assert.Equal(0, client.PendingReassemblyBytes);
+    }
+
+    [Fact]
+    public void HostRefusesMessagesOnOtherChannelsBeforeJoining()
+    {
+        using ProbeTransport transport = new();
+        using NetSession host = CreateHost(transport);
+        ProbeConnection connection = transport.OpenPeer();
+        host.ProcessEvent(new TransportEvent(TransportEventType.Connected, connection));
+
+        using NetWriter message = new();
+        message.WriteUInt16(30);
+        host.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, message.WrittenMemory,
+            Delivery.Reliable, default, 1));
+        // Treated as a protocol error, so the join request that follows is ignored.
+        SendJoinRequest(host, connection);
+        Assert.Single(host.Peers);
+    }
+
+    [Fact]
     public void EventsFromAnotherTransportAreRejected()
     {
         using ProbeTransport transport = new(), other = new();
@@ -125,6 +180,12 @@ public class SessionProcessingTests
     {
         ProbeConnection connection = transport.OpenPeer();
         host.ProcessEvent(new TransportEvent(TransportEventType.Connected, connection));
+        SendJoinRequest(host, connection);
+        return connection;
+    }
+
+    private static void SendJoinRequest(NetSession host, Connection connection)
+    {
         using NetWriter request = new();
         request.WriteUInt16(NetSession.ReservedMessageIds);
         request.WriteUInt32(0);
@@ -132,13 +193,16 @@ public class SessionProcessingTests
         request.WriteBytesWithLength(ReadOnlySpan<byte>.Empty);
         request.WriteBool(true);
         host.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, request.WrittenMemory));
-        return connection;
     }
 
     private sealed class ProbeTransport : Transport
     {
         public int ListenCalls, ConnectCalls, ReceiveCalls, FlushCalls, ShutdownCalls;
         public override bool IsListening => false;
+
+        public override TransportCapabilities Capabilities =>
+            new(true, DeliverySupport.All, TransportExecution.WorkerPreferred, 4);
+
         public override void Listen() => ListenCalls++;
 
         public override Connection Connect(string address)
@@ -170,7 +234,7 @@ public class SessionProcessingTests
         public override TimeSpan RoundTripTime => TimeSpan.Zero;
         public override int GetMaxMessageSize(Delivery delivery) => 128;
 
-        public override void Send(ReadOnlySpan<byte> data, Delivery delivery)
+        protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
         {
         }
 

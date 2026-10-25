@@ -57,8 +57,8 @@ public class SessionAllocationTests
         Assert.Equal(SessionState.Active, client.State);
 
         int received = 0;
-        host.OnRaw(10, (peer, ref reader, channel) => { received += reader.ReadBytes(reader.Remaining).Length; });
-        client.OnRaw(10, (peer, ref reader, channel) => { received += reader.ReadBytes(reader.Remaining).Length; });
+        host.OnRaw(10, (peer, ref reader, actualDelivery, _) => { received += reader.ReadBytes(reader.Remaining).Length; });
+        client.OnRaw(10, (peer, ref reader, actualDelivery, _) => { received += reader.ReadBytes(reader.Remaining).Length; });
         byte[] payload = new byte[size];
 
         void Round()
@@ -170,10 +170,9 @@ public class SessionAllocationTests
             public override TimeSpan RoundTripTime => TimeSpan.Zero;
             public override int GetMaxMessageSize(Delivery delivery) => 128;
 
-            public override void Send(ReadOnlySpan<byte> data, Delivery delivery)
+            protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
             {
-                ValidateSend(data, delivery);
-                ((DirectTransport)Remote.Transport).RaiseData(Remote, data, delivery);
+                ((DirectTransport)Remote.Transport).RaiseData(Remote, data, delivery, channel);
             }
 
             public override void Disconnect()

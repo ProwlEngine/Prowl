@@ -174,7 +174,7 @@ public class KcpTransportTests
         using (client)
         {
             int max = toHost.GetMaxMessageSize(Delivery.Unreliable);
-            Assert.Equal(1200 - 5, max);
+            Assert.Equal(1200 - KcpPacket.SessionHeaderSize, max);
             toHost.Send(new byte[max], Delivery.Unreliable);
             Assert.Throws<ArgumentException>(() => toHost.Send(new byte[max + 1], Delivery.Unreliable));
         }
@@ -336,11 +336,11 @@ public class KcpTransportTests
         raw.Connect(new IPEndPoint(IPAddress.Loopback, host.LocalPort));
         Pump pump = new(host);
 
-        byte[] first = RawHandshake(raw, pump, 0x1111);
+        byte[] first = RawHandshake(raw, pump, 0x1111, out _);
         Connection firstConnection = Assert.Single(host.Connections);
 
         // The client restarts from the same address: the new attempt replaces the old session.
-        RawHandshake(raw, pump, 0x2222);
+        RawHandshake(raw, pump, 0x2222, out _);
         Connection restarted = Assert.Single(host.Connections);
         Assert.NotSame(firstConnection, restarted);
 
@@ -351,13 +351,108 @@ public class KcpTransportTests
         Assert.True(restarted.IsConnected);
     }
 
+    [Fact]
+    public void AStalledReliableChannelDoesNotHoldUpAnother()
+    {
+        using KcpTransport host = new(FastOptions());
+        host.Listen();
+        using Socket raw = RawSocket(host);
+        Pump pump = new(host);
+        RawHandshake(raw, pump, 0x4444, out uint session);
+
+        // Channel 0 gets its second segment while the first is still missing, so it must wait.
+        // Channel 1's first segment is complete and is delivered regardless.
+        raw.Send(RawSegment(session, 0, 1, 10));
+        raw.Send(RawSegment(session, 1, 0, 20));
+        pump.For(200);
+
+        Received delivered = Assert.Single(pump.EventsOf(host), e => e.Type == TransportEventType.Data);
+        Assert.Equal((byte)1, delivered.Channel);
+        Assert.Equal(20, delivered.Data[0]);
+
+        raw.Send(RawSegment(session, 0, 0, 9));
+        pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 3,
+            what: "channel 0 to catch up");
+        Assert.Equal(new byte[] { 20, 9, 10 }, pump.EventsOf(host)
+            .Where(e => e.Type == TransportEventType.Data)
+            .Select(e => e.Data[0]));
+    }
+
+    [Theory]
+    [InlineData(KcpPacket.WireVersion + 1, 4)]
+    [InlineData(KcpPacket.WireVersion, 3)]
+    public void HandshakesFromAnotherWireVersionOrChannelCountAreRejected(int version, int channels)
+    {
+        using KcpTransport host = new(FastOptions());
+        host.Listen();
+        using Socket raw = RawSocket(host);
+        Pump pump = new(host);
+
+        byte[] request = new byte[KcpPacket.HandshakeRequestSize];
+        request[0] = (byte)KcpPacketType.ConnectRequest;
+        BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(1), new KcpTransportOptions().ProtocolId);
+        BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(5), 0x5555);
+        request[KcpPacket.HandshakeVersionOffset] = (byte)version;
+        request[KcpPacket.HandshakeVersionOffset + 1] = (byte)channels;
+        raw.Send(request);
+
+        byte[] reject = Expect(raw, pump, KcpPacketType.Reject);
+        Assert.Equal((byte)DisconnectReason.ProtocolError, reject[5]);
+        Assert.Empty(host.Connections);
+    }
+
+    [Fact]
+    public void ClientsWithAnotherChannelCountAreRefused()
+    {
+        KcpTransportOptions clientOptions = FastOptions();
+        clientOptions.Channels = 2;
+        using KcpTransport host = new(FastOptions());
+        host.Listen();
+        using KcpTransport client = new(clientOptions);
+        Pump pump = new(host, client);
+
+        Connection toHost = client.Connect($"127.0.0.1:{host.LocalPort}");
+        pump.Until(() => toHost.State == ConnectionState.Disconnected, what: "refusal");
+        Assert.Equal(DisconnectReason.ProtocolError,
+            Assert.Single(pump.EventsOf(client), e => e.Type == TransportEventType.Disconnected).Reason);
+    }
+
+    private static Socket RawSocket(KcpTransport host)
+    {
+        Socket raw = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        raw.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        raw.Connect(new IPEndPoint(IPAddress.Loopback, host.LocalPort));
+        return raw;
+    }
+
+    /// <summary>A reliable packet holding one KCP data segment of a single byte. Channel 0 goes without a channel byte.</summary>
+    private static byte[] RawSegment(uint session, byte channel, uint sequence, byte value)
+    {
+        int header = channel == 0 ? KcpPacket.SessionHeaderSize : KcpPacket.ChannelHeaderSize;
+        byte[] packet = new byte[header + Transports.Kcp.Protocol.Kcp.OVERHEAD + 1];
+        packet[0] = (byte)(channel == 0 ? KcpPacketType.Reliable : KcpPacketType.ReliableChannel);
+        BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(1), session);
+        if (channel != 0) packet[KcpPacket.SessionHeaderSize] = channel;
+        Span<byte> segment = packet.AsSpan(header);
+        BinaryPrimitives.WriteUInt32LittleEndian(segment, session); // conversation
+        segment[4] = Transports.Kcp.Protocol.Kcp.CMD_PUSH;
+        segment[5] = 0; // not fragmented
+        BinaryPrimitives.WriteUInt16LittleEndian(segment[6..], 128); // window
+        BinaryPrimitives.WriteUInt32LittleEndian(segment[12..], sequence);
+        BinaryPrimitives.WriteUInt32LittleEndian(segment[20..], 1); // length
+        segment[24] = value;
+        return packet;
+    }
+
     /// <summary>Runs the client half of the handshake by hand, returning the ChallengeResponse it sent.</summary>
-    private static byte[] RawHandshake(Socket raw, Pump pump, uint nonce)
+    private static byte[] RawHandshake(Socket raw, Pump pump, uint nonce, out uint session)
     {
         byte[] request = new byte[KcpPacket.HandshakeRequestSize];
         request[0] = (byte)KcpPacketType.ConnectRequest;
         BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(1), new KcpTransportOptions().ProtocolId);
         BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(5), nonce);
+        request[KcpPacket.HandshakeVersionOffset] = KcpPacket.WireVersion;
+        request[KcpPacket.HandshakeVersionOffset + 1] = (byte)new KcpTransportOptions().Channels;
         raw.Send(request);
         byte[] challenge = Expect(raw, pump, KcpPacketType.Challenge);
 
@@ -367,6 +462,7 @@ public class KcpTransportTests
         raw.Send(response);
         byte[] accept = Expect(raw, pump, KcpPacketType.Accept);
         Assert.Equal(nonce, BinaryPrimitives.ReadUInt32LittleEndian(accept.AsSpan(1)));
+        session = BinaryPrimitives.ReadUInt32LittleEndian(accept.AsSpan(5));
         return response;
     }
 
