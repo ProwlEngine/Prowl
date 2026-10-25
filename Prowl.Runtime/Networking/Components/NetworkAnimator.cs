@@ -24,23 +24,28 @@ public sealed class NetworkAnimator : Component, INetworkEvents
 
     private Animator? _bound;
     private double _nextSample;
-    private readonly Dictionary<ushort, ParameterValue> _lastSamples = new();
-    private readonly NetDictionary<ushort, AnimatorParameterValue> _parameters = new();
-    private readonly NetDictionary<ushort, uint> _triggers = new();
-    private readonly Dictionary<ushort, uint> _seenTriggers = new();
-    private readonly Dictionary<ushort, uint> _pendingTriggers = new();
+    private readonly Dictionary<int, ParameterValue> _lastSamples = new();
+    private readonly Dictionary<int, uint> _seenTriggers = new();
+    private readonly Dictionary<int, uint> _pendingTriggers = new();
     private readonly Dictionary<string, bool> _triggerLevels = new();
+    // Plain values rather than network collections, so they ride in snapshots: only the newest state matters.
+    private AnimatorParameters _parameters;
+    private AnimatorTriggers _triggers;
     private float _speed = 1f;
     private bool _applying;
 
-    private static readonly SyncCollectionMember<NetworkAnimator, NetDictionary<ushort, AnimatorParameterValue>> s_parameters =
-        new(1, "Parameters", SyncFlags.None, static c => c._parameters);
-    private static readonly SyncCollectionMember<NetworkAnimator, NetDictionary<ushort, uint>> s_triggers =
-        new(2, "Triggers", SyncFlags.None, static c => c._triggers);
+    private static readonly SyncMember<NetworkAnimator, AnimatorParameters> s_parameters =
+        new(1, "Parameters", SyncFlags.None, static c => c._parameters, static (c, v) => c._parameters = v);
+    private static readonly SyncMember<NetworkAnimator, AnimatorTriggers> s_triggers =
+        new(2, "Triggers", SyncFlags.None, static c => c._triggers, static (c, v) => c._triggers = v);
     private static readonly SyncMember<NetworkAnimator, float> s_speed =
         new(3, "Speed", SyncFlags.None, static c => c._speed, static (c, v) => c._speed = v);
 
-    static NetworkAnimator() => NetSerializer<AnimatorParameterValue>.Register(AnimatorParameterValue.Write, AnimatorParameterValue.Read);
+    static NetworkAnimator()
+    {
+        NetSerializer<AnimatorParameters>.Register(AnimatorParameters.Write, AnimatorParameters.Read);
+        NetSerializer<AnimatorTriggers>.Register(AnimatorTriggers.Write, AnimatorTriggers.Read);
+    }
 
     public override void OnEnable()
     {
@@ -55,8 +60,6 @@ public sealed class NetworkAnimator : Component, INetworkEvents
         ArgumentNullException.ThrowIfNull(animator);
         Unbind();
         Animator = _bound = animator;
-        s_parameters.Bind(this);
-        s_triggers.Bind(this);
         animator.BeforeEvaluate += Synchronize;
         animator.ParameterWritten += ParameterWritten;
         animator.TriggerWritten += TriggerWritten;
@@ -80,7 +83,7 @@ public sealed class NetworkAnimator : Component, INetworkEvents
         if (IsProxy) ApplyState();
         else if (Time.TimeSinceStartup >= _nextSample)
         {
-            // Never faster than the network sends, which would queue several changes to one parameter per send.
+            // No faster than the network sends; a sample in between would never be seen.
             _nextSample = Time.TimeSinceStartup + Math.Max(SendInterval, 1.0 / Math.Max(1, Networking.TickRate));
             CaptureState();
         }
@@ -89,12 +92,11 @@ public sealed class NetworkAnimator : Component, INetworkEvents
     internal void CaptureState()
     {
         if (_bound.IsNotValid()) return;
-        s_parameters.Bind(this);
-        s_triggers.Bind(this);
         s_speed.Set(this, ref _speed, _bound!.Speed);
         if (_bound.Graph.IsNotValid()) return;
         List<GraphParameterRecord> parameters = _bound.Graph!.Parameters;
-        for (ushort index = 0; index < parameters.Count; index++)
+        AnimatorParameterValue[]? changed = null;
+        for (int index = 0; index < parameters.Count; index++)
         {
             GraphParameterRecord parameter = parameters[index];
             if (parameter.Trigger || parameter.Kind == NodeValueKind.Target) continue;
@@ -107,17 +109,18 @@ public sealed class NetworkAnimator : Component, INetworkEvents
                 NodeValueKind.Id => ParameterValue.FromId(_bound.GetId(parameter.Name)),
                 _ => default
             };
-            if (ShouldSend(index, value)) _parameters[index] = new(value);
+            if (ShouldSend(index, value)) (changed ??= _parameters.ToArray(parameters.Count))[index] = new(value);
         }
+        if (changed != null) s_parameters.Set(this, ref _parameters, new AnimatorParameters(changed));
     }
 
     // Continuous inputs such as velocity jitter every frame. Send them past the tolerance, or exactly once they stop moving.
-    private bool ShouldSend(ushort index, ParameterValue value)
+    private bool ShouldSend(int index, ParameterValue value)
     {
         bool settled = _lastSamples.TryGetValue(index, out ParameterValue last) && Within(last, value, 0f);
         _lastSamples[index] = value;
-        if (!_parameters.TryGetValue(index, out AnimatorParameterValue sent)) return true;
-        return !Within(sent.Value, value, settled ? 0f : ParameterTolerance);
+        AnimatorParameterValue sent = _parameters[index];
+        return !sent.IsSet || !Within(sent.Value, value, settled ? 0f : ParameterTolerance);
     }
 
     private static bool Within(ParameterValue a, ParameterValue b, float tolerance) => a.Type == b.Type && a.Type switch
@@ -140,12 +143,12 @@ public sealed class NetworkAnimator : Component, INetworkEvents
     {
         _bound!.Speed = _speed;
         List<GraphParameterRecord> parameters = _bound.Graph!.Parameters;
-        foreach ((ushort index, AnimatorParameterValue value) in _parameters)
-            if (index < parameters.Count) value.Apply(_bound, parameters[index].Name);
-        foreach ((ushort index, uint revision) in _triggers)
+        for (int index = 0; index < Math.Min(_parameters.Count, parameters.Count); index++)
+            _parameters[index].Apply(_bound, parameters[index].Name);
+        for (int index = 0; index < _triggers.Count; index++)
         {
-            uint seen = _seenTriggers.GetValueOrDefault(index);
-            uint added = unchecked(revision - seen);
+            uint revision = _triggers[index];
+            uint added = unchecked(revision - _seenTriggers.GetValueOrDefault(index));
             if (added != 0)
             {
                 _pendingTriggers[index] = _pendingTriggers.GetValueOrDefault(index) + added;
@@ -153,7 +156,7 @@ public sealed class NetworkAnimator : Component, INetworkEvents
             }
         }
         // A graph may consume a trigger during evaluation. Keep successive events for successive evaluations.
-        foreach (ushort index in new List<ushort>(_pendingTriggers.Keys))
+        foreach (int index in new List<int>(_pendingTriggers.Keys))
         {
             uint count = _pendingTriggers[index];
             if (count == 0) continue;
@@ -177,8 +180,7 @@ public sealed class NetworkAnimator : Component, INetworkEvents
         if (_applying || IsProxy || _bound.IsNotValid() || _bound!.Graph.IsNotValid()) return;
         int index = _bound.Graph!.Parameters.FindIndex(p => p.Name == name);
         if (index < 0) return;
-        s_triggers.Bind(this);
-        _triggers[(ushort)index] = unchecked(_triggers.GetValueOrDefault((ushort)index) + 1);
+        s_triggers.Set(this, ref _triggers, _triggers.Fired(index));
     }
 
     public void OnNetworkSpawn() => ResetTriggerBaseline();
@@ -196,6 +198,6 @@ public sealed class NetworkAnimator : Component, INetworkEvents
         _triggerLevels.Clear();
         _lastSamples.Clear();
         _nextSample = 0;
-        foreach ((ushort index, uint revision) in _triggers) _seenTriggers[index] = revision;
+        for (int index = 0; index < _triggers.Count; index++) _seenTriggers[index] = _triggers[index];
     }
 }
