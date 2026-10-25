@@ -265,7 +265,7 @@ internal sealed class MeshLayout
         return bounds;
     }
 
-    private static uint[] Convert(in VertexStream stream, uint vertexCount)
+    internal static uint[] Convert(in VertexStream stream, uint vertexCount)
     {
         uint words = WordsPerVertex(stream.Semantic);
         uint sourceSize = stream.Format.GetSizeInBytes();
