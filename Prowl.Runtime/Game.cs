@@ -481,7 +481,11 @@ public abstract class Game
         return new Float2(p.X * csFbWin / cs, p.Y * csFbWin / cs);
     }
 
-    private void UpdatePaperInput() => PaperInputBridge.Pump(_paper, GetPaperMousePosition());
+    /// <summary>Whether the main Paper should see the pointer this frame. Disabled while the cursor is locked,
+    /// so the pinned pointer can't hover UI the user cannot see or aim at.</summary>
+    protected virtual bool PaperReceivesPointerInput => true;
+
+    private void UpdatePaperInput() => PaperInputBridge.Pump(_paper, GetPaperMousePosition(), PaperReceivesPointerInput);
 
     /// <summary>Reset the fixed-update accumulator. Call when entering play mode to prevent a burst.</summary>
     protected void ResetFixedTimeAccumulator() => Time.FixedAccumulator = 0f;
