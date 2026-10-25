@@ -30,7 +30,7 @@ public sealed class NetworkingWanTests : RuntimeTestBase
             Scene.Load(scene); Scene.ProcessPendingLoad();
             NetSession server = Networking.Networking.Host(Stack(42));
             List<int> ordered = new();
-            server.OnRaw(42, (NetPeer peer, ref NetReader reader, Delivery delivery) => ordered.Add(reader.ReadInt32()));
+            server.OnRaw(42, (NetPeer peer, ref NetReader reader, Delivery delivery, byte channel) => ordered.Add(reader.ReadInt32()));
             byte[] payload = new byte[350_000];
             new Random(42).NextBytes(payload);
             for (int round = 0; round < rounds; round++)
@@ -41,7 +41,7 @@ public sealed class NetworkingWanTests : RuntimeTestBase
                 Until(() => session.State == SessionState.Active && server.Peers.Count == 2, Pump);
                 ordered.Clear();
                 bool received = false;
-                session.OnRaw(43, (NetPeer peer, ref NetReader reader, Delivery delivery) =>
+                session.OnRaw(43, (NetPeer peer, ref NetReader reader, Delivery delivery, byte channel) =>
                     received = reader.ReadBytes(reader.Remaining).SequenceEqual(payload));
                 server.SendRaw(server.Peers.Single(peer => !peer.IsLocal), 43, payload);
                 for (int i = 0; i < 128; i++) session.SendRaw(session.HostPeer!, 42, BitConverter.GetBytes(i));

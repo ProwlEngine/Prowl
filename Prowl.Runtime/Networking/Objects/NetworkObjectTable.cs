@@ -15,7 +15,8 @@ internal sealed class NetworkObjectTable
 
     public int Count => _byId.Count;
 
-    public IEnumerable<NetworkObject> Values => _byId.Values;
+    // The collection itself, not IEnumerable, so a foreach over it every frame doesn't box an enumerator.
+    public Dictionary<Guid, NetworkObject>.ValueCollection Values => _byId.Values;
 
     public void Add(NetworkObject entry)
     {

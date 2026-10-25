@@ -198,6 +198,14 @@ internal sealed partial class NetworkSystem
         using NetWriter message = new(4096);
         WriteSpawn(go, entry.Owner, entry.Orphaned, message, entry.Generation, entry.NetId);
         BroadcastEngine(EngineMessage.Spawn, message.WrittenSpan);
+        foreach (NetPeer peer in Session!.Peers)
+        {
+            if (!peer.IsLocal)
+            {
+                Snapshots.Delivered(peer, go);
+            }
+        }
+
         entry.UpdatePhysics();
         entry.NotifySpawn();
     }
@@ -473,6 +481,7 @@ internal sealed partial class NetworkSystem
     {
         NetSession? session = Session;
         LoadingPeers.Remove(peer.Id);
+        Snapshots.RemovePeer(peer.Id);
         DispatchNetworkListener(e => e.OnPeerDisconnected(peer, reason));
         if (Session != session)
         {

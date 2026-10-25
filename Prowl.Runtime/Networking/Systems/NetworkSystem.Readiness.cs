@@ -71,8 +71,11 @@ internal sealed partial class NetworkSystem
         }
     }
 
-    internal void BeginPeerLoad(NetPeer peer) => LoadingPeers[peer.Id] =
-        new PeerReadiness(SceneGeneration, Now + Configuration.SceneLoadTimeoutSeconds);
+    internal void BeginPeerLoad(NetPeer peer)
+    {
+        LoadingPeers[peer.Id] = new PeerReadiness(SceneGeneration, Now + Configuration.SceneLoadTimeoutSeconds);
+        Snapshots.Delivered(peer);
+    }
 
     internal void OnNetworkSceneActivated()
     {
@@ -109,6 +112,7 @@ internal sealed partial class NetworkSystem
         }
 
         using NetWriter message = new();
+        Snapshots.Delivered(peer);
         new SceneCatchUpMessage(generation).Write(message);
         Sync.WriteSyncState(message, ReplicatedScene!.AllObjects);
         WriteCatchUpTransforms(message);
@@ -236,8 +240,8 @@ internal sealed partial class NetworkSystem
 
     internal bool CanReceiveEngineMessage(NetPeer peer, EngineMessage kind)
     {
-        if (IsHost && !peer.IsLocal && kind is EngineMessage.Sync or EngineMessage.Transform or EngineMessage.RpcToHost
-                or EngineMessage.StaticRpcToHost)
+        if (IsHost && !peer.IsLocal && kind is EngineMessage.Sync or EngineMessage.Snapshot or EngineMessage.SnapshotAck
+                or EngineMessage.RpcToHost or EngineMessage.StaticRpcToHost)
         {
             return IsPeerReady(peer);
         }

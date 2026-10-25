@@ -8,23 +8,6 @@ using Prowl.Warp;
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>Header followed by TransformRecord values until the end of the message.</summary>
-internal readonly record struct TransformMessage(uint Tick, double SentAt)
-{
-    internal const int HeaderSize = 5 + 8;
-    internal const int MinMessageSize = sizeof(ushort) + HeaderSize + TransformRecord.MaxSize;
-
-    internal void Write(NetWriter writer)
-    {
-        writer.WriteVarUInt32(Tick);
-        writer.WriteDouble(SentAt);
-    }
-
-    internal static TransformMessage Read(ref NetReader reader) => new(
-        reader.ReadVarUInt32(),
-        reader.ReadDouble());
-}
-
 internal readonly record struct TransformRecord(uint NetId, uint Generation, TransformUpdate Update)
 {
     internal const int MaxSize = 5 + 5 + 1 + 4 + 12 + 16 + 12;

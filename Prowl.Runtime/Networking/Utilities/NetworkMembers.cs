@@ -29,6 +29,9 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
 
     public SyncFlags Flags { get; } = flags;
 
+    /// <summary>A network collection, whose changes travel reliably rather than in snapshots.</summary>
+    internal virtual bool IsCollection => false;
+
     /// <summary>Writes the whole value, for a snapshot or spawn.</summary>
     internal abstract void Write(Component component, NetWriter writer);
 
@@ -149,6 +152,8 @@ public sealed class SyncCollectionMember<TComponent, TCollection>(
     /// <summary>Generated getter: binds the component's collection to this property.</summary>
     public TCollection Bind(TComponent component) => Bound(component);
 
+    internal override bool IsCollection => true;
+
     internal override void Write(Component component, NetWriter writer) => Bound(component).WriteAll(writer);
 
     internal override void WriteChanges(Component component, NetWriter writer) => Bound(component).WriteChanges(writer);
@@ -176,7 +181,7 @@ public sealed class SyncCollectionMember<TComponent, TCollection>(
 
 /// <summary>An RPC, as the script compiler describes it. Not meant to be created by hand.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public abstract class RpcMember(uint id, string signature, RpcMode mode, RpcFlags flags)
+public abstract class RpcMember(uint id, string signature, RpcMode mode, RpcFlags flags, byte channel = 0)
 {
     public uint Id { get; } = id;
 
@@ -186,6 +191,9 @@ public abstract class RpcMember(uint id, string signature, RpcMode mode, RpcFlag
     public RpcMode Mode { get; } = mode;
 
     public RpcFlags Flags { get; } = flags;
+
+    /// <summary>The transport channel calls travel on.</summary>
+    public byte Channel { get; } = channel;
 
     /// <summary>Generated prologue: true supplies an argument writer; false executes the body locally.</summary>
     public bool Begin(Component component, out NetWriter writer)
@@ -218,8 +226,9 @@ public sealed class RpcMember<TComponent>(
     string signature,
     RpcMode mode,
     RpcFlags flags,
-    RpcInvoker<TComponent> invoke)
-    : RpcMember(id, signature, mode, flags) where TComponent : Component
+    RpcInvoker<TComponent> invoke,
+    byte channel = 0)
+    : RpcMember(id, signature, mode, flags, channel) where TComponent : Component
 {
     internal override void Invoke(Component component, ref NetReader reader) =>
         invoke((TComponent)component, ref reader, true);

@@ -21,6 +21,16 @@ public static partial class Rpc
         public RpcMode Mode { get; }
 
         public RpcFlags Flags { get; }
+
+        /// <summary>
+        ///     The channel the call is sent on. Calls stay in order only with traffic on the same channel; the engine
+        ///     uses channel 0, the default.
+        /// </summary>
+        /// <remarks>
+        ///     Only reliable calls use it. With <see cref="RpcFlags.Unreliable" /> it is ignored and the call goes on
+        ///     channel 0, since unreliable calls have no order to keep.
+        /// </remarks>
+        public byte Channel { get; set; }
     }
 
     /// <summary>Runs on everyone, the caller included.</summary>

@@ -21,12 +21,12 @@ public partial class NetworkingTests
     }
 
     [Theory]
-    [InlineData(false, NetworkExecution.Inline, 70, DeliverySupport.All)]
-    [InlineData(true, NetworkExecution.Inline, 70, DeliverySupport.All)]
-    [InlineData(false, NetworkExecution.DedicatedThread, 70, DeliverySupport.All)]
-    [InlineData(true, NetworkExecution.DedicatedThread, 70, DeliverySupport.All)]
-    [InlineData(false, NetworkExecution.Inline, 69, DeliverySupport.All)]
-    [InlineData(true, NetworkExecution.DedicatedThread, 69, DeliverySupport.All)]
+    [InlineData(false, NetworkExecution.Inline, 92, DeliverySupport.All)]
+    [InlineData(true, NetworkExecution.Inline, 92, DeliverySupport.All)]
+    [InlineData(false, NetworkExecution.DedicatedThread, 92, DeliverySupport.All)]
+    [InlineData(true, NetworkExecution.DedicatedThread, 92, DeliverySupport.All)]
+    [InlineData(false, NetworkExecution.Inline, 91, DeliverySupport.All)]
+    [InlineData(true, NetworkExecution.DedicatedThread, 91, DeliverySupport.All)]
     [InlineData(false, NetworkExecution.Inline, 0, DeliverySupport.Reliable)]
     [InlineData(true, NetworkExecution.DedicatedThread, 0, DeliverySupport.Reliable)]
     public void TransformBatchesAndRelaysRespectEachConnectionsLimit(bool batching, NetworkExecution execution, int smallLimit, DeliverySupport deliveries)
@@ -51,13 +51,13 @@ public partial class NetworkingTests
                 return go;
             }).ToArray();
             Pump(() => TransformIds(small).Count == 5 && TransformIds(wide).Count == 5, peers);
-            // Under 70 bytes a datagram can't hold one whole record, so transforms fall back to reliable delivery.
-            int smallMax = smallLimit >= 70 ? smallLimit - 2 : 1000;
+            // Under 92 bytes (SnapshotMessage.MinMessageSize) a datagram can't hold one whole record, so transforms fall back to reliable delivery.
+            int smallMax = smallLimit >= 92 ? smallLimit - 2 : 1000;
             int wideMax = deliveries == DeliverySupport.Reliable ? 1000 : 155 - 2;
             AssertTransformBatches(small, smallMax, objects);
             AssertTransformBatches(wide, wideMax, objects);
-            Assert.All(small.Deliveries.Where(m => m.Id == FakePeer.Transform), m =>
-                Assert.Equal(smallLimit < 70 ? Delivery.Reliable : Delivery.Unreliable, m.Delivery));
+            Assert.All(small.Deliveries.Where(m => m.Id == FakePeer.Snapshot), m =>
+                Assert.Equal(smallLimit < 92 ? Delivery.Reliable : Delivery.Unreliable, m.Delivery));
 
             StaticRpcMember rpc = new(typeof(NetworkingTests), 998, "Broadcast", RpcMode.Broadcast, RpcFlags.Unreliable,
                 static (ref NetReader reader, bool execute) => { });
@@ -78,7 +78,7 @@ public partial class NetworkingTests
             using NetWriter message = new();
             WriteTransforms(message, 500, 10, objects.Select(go => (NetworkTestScene.Current.NetIdOf(go),
                 NetworkTestScene.Current.GenerationOf(go), new Float3(42, 0, 0), Quaternion.Identity, Float3.One)).ToArray());
-            sender.Session.SendRaw(sender.Session.HostPeer!, FakePeer.Transform, message.WrittenSpan,
+            sender.Session.SendRaw(sender.Session.HostPeer!, FakePeer.Snapshot, message.WrittenSpan,
                 deliveries == DeliverySupport.Reliable ? Delivery.Reliable : Delivery.Unreliable);
             Pump(() => TransformIds(small).Count == 5 && TransformIds(wide).Count == 5, peers);
             AssertTransformBatches(small, smallMax, objects);
@@ -114,15 +114,15 @@ public partial class NetworkingTests
         Networking.Networking.Join(transport, "host", "client");
         try
         {
-            Pump(() => Networking.Networking.IsReady && host.Has(FakePeer.Transform), host);
+            Pump(() => Networking.Networking.IsReady && host.Has(FakePeer.Snapshot), host);
             GameObject local = Find(Scene.Current, ship.Identifier);
             host.WireReceived.Clear();
             local.Transform.LocalPosition = new Float3(42, 0, 0);
-            Pump(() => host.Has(FakePeer.Transform) && host.WireReceived.Any(m => m.Id == FakePeer.Transform), host);
-            Assert.All(host.Deliveries.Where(m => m.Id == FakePeer.Transform), m => Assert.Equal(Delivery.Reliable, m.Delivery));
+            Pump(() => host.Has(FakePeer.Snapshot) && host.WireReceived.Any(m => m.Id == FakePeer.Snapshot), host);
+            Assert.All(host.Deliveries.Where(m => m.Id == FakePeer.Snapshot), m => Assert.Equal(Delivery.Reliable, m.Delivery));
             uint shipNetId = NetworkTestScene.Current.NetIdOf(local);
             Assert.Contains(shipNetId, TransformIds(host));
-            TransformRecord moved = ReadTransforms(host.WireReceived.Last(m => m.Id == FakePeer.Transform).Data)
+            TransformRecord moved = ReadTransforms(host.WireReceived.Last(m => m.Id == FakePeer.Snapshot).Data)
                 .Single(r => r.NetId == shipNetId);
             Assert.Equal(new Float3(42, 0, 0), moved.Position);
 
@@ -138,14 +138,14 @@ public partial class NetworkingTests
     }
 
     private static HashSet<uint> TransformIds(FakePeer peer) =>
-        peer.WireReceived.Where(m => m.Id == FakePeer.Transform)
+        peer.WireReceived.Where(m => m.Id == FakePeer.Snapshot)
             .SelectMany(m => ReadTransforms(m.Data)).Select(r => r.NetId).ToHashSet();
 
     private static void AssertTransformBatches(FakePeer peer, int maxPayload, GameObject[] objects)
     {
         Assert.True(TransformIds(peer).SetEquals(objects.Select(NetworkTestScene.Current.NetIdOf)));
         // Every message fits the connection, and holds whole records.
-        Assert.All(peer.WireReceived.Where(m => m.Id == FakePeer.Transform), m =>
+        Assert.All(peer.WireReceived.Where(m => m.Id == FakePeer.Snapshot), m =>
         {
             Assert.InRange(m.Data.Length, 1, maxPayload);
             Assert.NotEmpty(ReadTransforms(m.Data));
@@ -180,7 +180,7 @@ public partial class NetworkingTests
                 LimitedConnection peer = Wrap(ev.Connection);
                 if (ev.Type == TransportEventType.Connected) RaiseConnected(peer);
                 else if (ev.Type == TransportEventType.Disconnected) RaiseDisconnected(peer, ev.Reason);
-                else RaiseData(peer, ev.Data.Span, ev.Delivery);
+                else RaiseData(peer, ev.Data.Span, ev.Delivery, ev.Channel);
             }
         }
         public override void Flush() => _inner.Flush();
@@ -191,7 +191,7 @@ public partial class NetworkingTests
         {
             public override TimeSpan RoundTripTime => inner.RoundTripTime;
             public override int GetMaxMessageSize(Delivery delivery) => delivery == Delivery.Unreliable ? limit : 64;
-            public override void Send(ReadOnlySpan<byte> data, Delivery delivery) { ValidateSend(data, delivery); inner.Send(data, delivery); }
+            protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel) => inner.Send(data, delivery, channel: channel);
             public override void Disconnect() => inner.Disconnect();
         }
     }

@@ -9,9 +9,10 @@ using Prowl.Warp;
 
 namespace Prowl.Runtime.Networking;
 
-// [Sync] properties. Changes are collected as they happen and sent once per tick, reliably: from the
-// host to every client, or from a client to the host, which applies them and passes them on. A reliable RPC
-// or an ownership handoff sends them early, so they arrive ahead of it.
+// [Sync] properties. Values travel in snapshots (SnapshotSystem), unreliably and acknowledged. Network collections
+// are collected as they change and sent once per tick, reliably: from the host to every client, or from a client to
+// the host, which applies them and passes them on. A reliable RPC or an ownership handoff sends them early, so they
+// arrive ahead of it. This file also applies blocks of values, from whichever message carries them.
 //
 // A block of values, as in a Sync message, a snapshot or a spawn, is
 // [varuint count] then per value [guid component][varuint slot][varuint ownership generation][bytes value, length prefixed].
@@ -26,6 +27,7 @@ namespace Prowl.Runtime.Networking;
 // NetCollection has the layout. Either way it travels, is relayed and is authorized like any other value.
 internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
 {
+    // Network collections with changes not yet sent. Other values are SnapshotSystem's.
     internal readonly HashSet<(Component Component, uint Slot)> Dirty = new();
     internal readonly List<Action> _notifications = new();
     internal readonly HashSet<string> _syncWarnings = new();
@@ -53,7 +55,15 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             return false;
         }
 
-        Dirty.Add((component, slot));
+        if (NetworkMembers.Of(component).Sync(slot) is { IsCollection: false } sync)
+        {
+            scene.Snapshots.MarkChanged(component, sync);
+        }
+        else
+        {
+            Dirty.Add((component, slot));
+        }
+
         return true;
     }
 
@@ -211,13 +221,16 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     ///     Accepted ones are copied to <paramref name="relay" /> when given; returns how many were.
     ///     <paramref name="initial" /> for a snapshot or spawn, whose values change nothing that was running,
     ///     so nothing is notified. Otherwise notifications run once every value in the block is in place.
+    ///     <paramref name="filter" /> can skip values that would otherwise be accepted; <paramref name="accepted" />
+    ///     collects the ones applied, and <paramref name="rejected" /> the components that weren't there to apply to.
     /// </summary>
     internal int ApplySyncState(NetPeer sender, ref NetReader reader, NetWriter? relay, bool initial,
-        bool requireEnd = false)
+        bool requireEnd = false, Func<Component, SyncMember, bool>? filter = null,
+        List<(Component Component, SyncMember Sync)>? accepted = null, HashSet<Guid>? rejected = null)
     {
         // Validate all framing and accepted values before changing live state or relays.
         // Collection validation only reads, so partial operations cannot leak out.
-        ValidateSyncState(sender, reader, initial, requireEnd);
+        ValidateSyncState(sender, reader, initial, requireEnd, filter);
         int relayed = 0;
         uint count = SyncBlock.Read(ref reader).Count;
         int notificationsFrom = _notifications.Count;
@@ -236,22 +249,30 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
                 {
                     NetworkDiagnostics.Record("SyncVar", "Rejected", sender, id,
                         $"Unknown or excluded component, slot #{slot}", value);
+                    rejected?.Add(id);
                     continue;
                 }
 
+                if (!initial && generation != scene.GenerationOf(component.GameObject))
+                {
+                    rejected?.Add(id);
+                }
+
                 SyncMember? sync = NetworkMembers.Of(component).Sync(slot);
-                bool accepted = sync != null && AcceptSync(sender, component, sync.Flags) &&
-                                (initial || generation == scene.GenerationOf(component.GameObject));
-                if (accepted)
+                bool take = sync != null && AcceptSync(sender, component, sync.Flags) &&
+                            (initial || generation == scene.GenerationOf(component.GameObject)) &&
+                            (filter == null || filter(component, sync));
+                if (take)
                 {
                     NetReader valueReader = new(value);
                     sync!.Read(component, ref valueReader, initial);
+                    accepted?.Add((component, sync));
                 }
 
-                NetworkDiagnostics.TraceMember("SyncVar", accepted ? "Apply" : "Rejected", sender, component, slot,
+                NetworkDiagnostics.TraceMember("SyncVar", take ? "Apply" : "Rejected", sender, component, slot,
                     false,
-                    accepted ? "Applied" : "Unknown slot or unauthorized", value);
-                if (accepted && relay != null)
+                    take ? "Applied" : "Unknown slot or unauthorized", value);
+                if (take && relay != null)
                 {
                     new SyncValue(id, slot, generation, value).Write(relay);
                     relayed++;
@@ -272,7 +293,8 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         return relayed;
     }
 
-    internal void ValidateSyncState(NetPeer sender, NetReader reader, bool initial, bool requireEnd)
+    internal void ValidateSyncState(NetPeer sender, NetReader reader, bool initial, bool requireEnd,
+        Func<Component, SyncMember, bool>? filter = null)
     {
         uint count = SyncBlock.Read(ref reader).Count;
         for (uint i = 0; i < count; i++)
@@ -284,7 +306,8 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             if (scene.FindByIdentifier(id) is not Component component ||
                 NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
                 NetworkMembers.Of(component).Sync(slot) is not { } sync || !AcceptSync(sender, component, sync.Flags) ||
-                (!initial && generation != scene.GenerationOf(component.GameObject)))
+                (!initial && generation != scene.GenerationOf(component.GameObject)) ||
+                (filter != null && !filter(component, sync)))
             {
                 continue;
             }

@@ -66,12 +66,14 @@ internal sealed partial class RpcSystem
         Delivery delivery = StaticRpcDelivery(rpc);
         if (scene.IsHost)
         {
-            SendRpcRecipients(EngineMessage.StaticRpcFromHost, message.WrittenSpan, delivery, recipients);
+            SendRpcRecipients(EngineMessage.StaticRpcFromHost, message.WrittenSpan, delivery, recipients,
+                channel: rpc.Channel);
         }
         else
         {
             new RpcRecipientMessage(recipients).Write(message);
-            scene.SendEngine(session.HostPeer!, EngineMessage.StaticRpcToHost, message.WrittenSpan, delivery);
+            scene.SendEngine(session.HostPeer!, EngineMessage.StaticRpcToHost, message.WrittenSpan, delivery,
+                rpc.Channel);
         }
 
         return rpc.Mode == RpcMode.Broadcast && localIncluded;
@@ -114,7 +116,7 @@ internal sealed partial class RpcSystem
             new RpcCallerMessage(sender.Id).Write(relay);
             WriteStaticCall(relay, rpc, arguments);
             SendRpcRecipients(EngineMessage.StaticRpcFromHost, relay.WrittenSpan, StaticRpcDelivery(rpc), recipients,
-                sender);
+                sender, rpc.Channel);
         }
 
         if (RpcRecipients.Includes(recipients, scene.Session!.LocalPeer!))

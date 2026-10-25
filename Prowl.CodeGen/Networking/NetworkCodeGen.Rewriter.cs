@@ -187,7 +187,8 @@ internal sealed partial class NetworkCodeGen
                     string declaringType = rpc.Static ? $"typeof({self}), " : "";
                     members.Add(
                         $"{Descriptor} global::Prowl.Runtime.Networking.{descriptorType} {rpc.Descriptor} = new({declaringType}{rpc.Id}u, "
-                        + $"{SymbolDisplay.FormatLiteral(rpc.Signature, true)}, {RpcModeType}.{rpc.Mode}, ({RpcFlagsType}){rpc.Flags}u, {invoke});");
+                        + $"{SymbolDisplay.FormatLiteral(rpc.Signature, true)}, {RpcModeType}.{rpc.Mode}, ({RpcFlagsType}){rpc.Flags}u, {invoke}"
+                        + (rpc.Channel == 0 ? "" : $", {rpc.Channel}") + ");");
                 }
             }
 
@@ -374,6 +375,8 @@ internal sealed partial class NetworkCodeGen
             }
 
             uint flags = rpc.ConstructorArguments.Select(a => Convert.ToUInt32(a.Value)).FirstOrDefault();
+            byte channel = rpc.NamedArguments.Where(a => a.Key == "Channel")
+                .Select(a => Convert.ToByte(a.Value.Value)).LastOrDefault();
             if (method.IsStatic && (kind.Name == "OwnerAttribute" || (flags & 4u) != 0 ||
                                     GenericContainer(method.ContainingType)))
             {
@@ -392,7 +395,7 @@ internal sealed partial class NetworkCodeGen
             string key = $"{method.Name}({string.Join(",", types)})";
             context.ClaimId(method.ContainingType, true, key, location);
             return new RpcInfo(method.Name, NetworkId(key), kind.Name[..^"Attribute".Length], flags, types,
-                method.IsStatic);
+                method.IsStatic, channel);
         }
 
         private static bool GenericContainer(INamedTypeSymbol? type)

@@ -148,6 +148,13 @@ public partial class NetworkingTests
     private static List<KeyValuePair<uint, byte[]>> SyncValues(FakePeer peer, Guid component)
     {
         List<KeyValuePair<uint, byte[]>> values = new();
+        // Collections travel in Sync messages, other values in snapshots.
+        foreach ((Guid target, uint slot, byte[] value) in peer.SnapshotValues())
+        {
+            if (target == component)
+                values.Add(new(slot, value));
+        }
+
         foreach ((ushort id, byte[] data) in peer.Received.Where(m => m.Id == FakePeer.Sync))
         {
             NetReader reader = new(data);
@@ -320,7 +327,8 @@ public partial class NetworkingTests
             NetCollectionTestComponent later = CreateGameObject("Later").AddComponent<NetCollectionTestComponent>();
             Apply(later, WholeState(component), initial: true);
 
-            Pump(() => SyncValues(alice, component.Identifier).Any(v => v.Key == NetCollectionTestComponent.ScoresSlot), alice);
+            Pump(() => SyncValues(alice, component.Identifier).Any(v => v.Key == NetCollectionTestComponent.ScoresSlot) &&
+                       SyncValues(alice, component.Identifier).Any(v => v.Key == NetCollectionTestComponent.HealthSlot), alice);
             List<KeyValuePair<uint, byte[]>> changes = SyncValues(alice, component.Identifier);
             Apply(earlier, changes, initial: false);
             Apply(later, changes, initial: false);
@@ -350,8 +358,12 @@ public partial class NetworkingTests
             alice.Received.Clear();
             later.ClearSeen();
             component.Scores.Add(4);
-            Pump(() => SyncValues(alice, component.Identifier).Count > 0, alice);
-            changes = SyncValues(alice, component.Identifier);
+            // Only collections travel as Sync messages; other values may still be on their way in snapshots.
+            List<KeyValuePair<uint, byte[]>> Collections() => SyncValues(alice, component.Identifier)
+                .Where(v => v.Key is NetCollectionTestComponent.ScoresSlot or NetCollectionTestComponent.StatsSlot
+                    or NetCollectionTestComponent.TagsSlot).ToList();
+            Pump(() => Collections().Count > 0, alice);
+            changes = Collections();
             Assert.Equal(NetCollectionTestComponent.ScoresSlot, Assert.Single(changes).Key);
             Apply(later, changes, initial: false);
             Assert.Equal([9, 5, 4], later.Scores);

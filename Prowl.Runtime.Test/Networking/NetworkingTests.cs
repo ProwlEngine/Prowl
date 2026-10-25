@@ -84,29 +84,131 @@ public class NetTestComponent : Component
 public sealed class FakePeer : IDisposable
 {
     public const ushort SceneSnapshot = Networking.Networking.EngineMessageIds, Spawn = SceneSnapshot + 1, Despawn = SceneSnapshot + 2,
-        Owner = SceneSnapshot + 3, Sync = SceneSnapshot + 4, Transform = SceneSnapshot + 5, RpcToHost = SceneSnapshot + 6, RpcFromHost = SceneSnapshot + 7, SceneLoaded = SceneSnapshot + 8, SceneCatchUp = SceneSnapshot + 9,
+        Owner = SceneSnapshot + 3, Sync = SceneSnapshot + 4, Snapshot = SceneSnapshot + 5, RpcToHost = SceneSnapshot + 6, RpcFromHost = SceneSnapshot + 7, SceneLoaded = SceneSnapshot + 8, SceneCatchUp = SceneSnapshot + 9,
         SceneReady = SceneSnapshot + 10, SceneActivate = SceneSnapshot + 11, StaticRpcToHost = SceneSnapshot + 12, StaticRpcFromHost = SceneSnapshot + 13,
         Orphaned = SceneSnapshot + 14, OwnershipRequest = SceneSnapshot + 15, OwnershipState = SceneSnapshot + 16,
-        OwnerTransfer = SceneSnapshot + 17, NetworkFlags = SceneSnapshot + 18;
+        OwnerTransfer = SceneSnapshot + 17, NetworkFlags = SceneSnapshot + 18, SnapshotAck = SceneSnapshot + 19;
 
     private FakePeer(NetSession session)
     {
         Session = session;
-        for (ushort id = SceneSnapshot; id <= NetworkFlags; id++)
+        for (ushort id = SceneSnapshot; id <= SnapshotAck; id++)
         {
             ushort captured = id;
-            session.OnRaw(id, (NetPeer sender, ref NetReader reader, Delivery delivery) =>
+            session.OnRaw(id, (NetPeer sender, ref NetReader reader, Delivery delivery, byte channel) =>
             {
                 NetReader wire = reader;
                 WireReceived.Add((captured, wire.ReadBytes(wire.Remaining).ToArray()));
                 Deliveries.Add((captured, delivery));
+                Channels.Add((captured, channel));
                 Received.Add((captured, ReadEnginePayload(captured, ref reader)));
+                if (captured == Snapshot) SnapshotValues(WireReceived[^1].Data);
                 if (AutoReady) HandleReadiness(sender, captured, WireReceived[^1].Data);
+                if (AutoAck && captured == Snapshot) Acknowledge(sender, WireReceived[^1].Data);
             });
         }
     }
 
     public bool AutoReady { get; set; } = true;
+
+    /// <summary>Acknowledges every Snapshot that asks for it, as a real peer would.</summary>
+    public bool AutoAck { get; set; } = true;
+
+    private void Acknowledge(NetPeer sender, byte[] snapshot)
+    {
+        NetReader reader = new(snapshot);
+        uint id = reader.ReadVarUInt32();
+        if (id == 0) return;
+        using NetWriter ack = new();
+        ack.WriteVarUInt32(1); ack.WriteVarUInt32(id);
+        ack.WriteVarUInt32(0); ack.WriteVarUInt32(0);
+        Session.SendRaw(sender, SnapshotAck, ack.WrittenSpan, Delivery.Unreliable);
+    }
+
+    // Component ids senders defined in the snapshots received so far, as they defined them.
+    private readonly Dictionary<uint, Guid> _componentIds = new();
+
+    /// <summary>
+    ///     The [Sync] values in a Snapshot message, as (component, slot, value bytes). Learns the component ids it
+    ///     defines; it must be read after any snapshot defining the ids it uses, as messages are on arrival.
+    /// </summary>
+    public List<(Guid Component, uint Slot, byte[] Value)> SnapshotValues(byte[] snapshot)
+    {
+        NetReader r = new(snapshot);
+        r.ReadVarUInt32(); r.ReadVarUInt32(); r.ReadVarUInt32();
+        SkipTransformGroups(ref r);
+        List<(Guid, uint, byte[])> values = new();
+        uint count = r.ReadVarUInt32();
+        for (uint i = 0; i < count; i++)
+        {
+            uint key = r.ReadVarUInt32();
+            if ((key & 1) != 0) _componentIds[key >> 1] = r.ReadGuid();
+            Guid component = _componentIds[key >> 1];
+            uint slot = r.ReadVarUInt32(); r.ReadVarUInt32();
+            values.Add((component, slot, r.ReadBytesWithLength().ToArray()));
+        }
+
+        return values;
+    }
+
+    /// <summary>The latest int value of a [Sync] slot received in snapshots, or null if none came.</summary>
+    public int? SnapshotInt(Guid component, uint slot)
+    {
+        foreach ((Guid id, uint s, byte[] value) in Enumerable.Reverse(SnapshotValues()))
+        {
+            if (id == component && s == slot)
+            {
+                NetReader reader = new(value);
+                return NetSerializer<int>.Read(ref reader);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Every [Sync] value received in snapshots so far, latest last.</summary>
+    public List<(Guid Component, uint Slot, byte[] Value)> SnapshotValues() =>
+        WireReceived.Where(m => m.Id == Snapshot).SelectMany(m => SnapshotValues(m.Data)).ToList();
+
+    internal static void SkipTransformGroups(ref NetReader r)
+    {
+        uint groups = r.ReadVarUInt32();
+        for (uint g = 0; g < groups; g++)
+        {
+            r.ReadVarUInt32(); r.ReadDouble();
+            uint records = r.ReadVarUInt32();
+            for (uint i = 0; i < records; i++)
+            {
+                r.ReadVarUInt32(); r.ReadVarUInt32();
+                byte channels = r.ReadByte();
+                if ((channels & 16) != 0) r.ReadSingle();
+                if ((channels & 1) != 0) r.ReadBytes(12);
+                if ((channels & 2) != 0) r.ReadBytes((channels & 8) != 0 ? 16 : 4);
+                if ((channels & 4) != 0) r.ReadBytes(12);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Sends [Sync] values the way a peer does: in a Snapshot with this id (zero for no acknowledgement) and tick, in
+    ///     the current scene, each component defined by its guid.
+    /// </summary>
+    public void SendSnapshotValues(NetPeer? to, uint id, uint tick, params (Guid Component, uint Slot, uint Generation, byte[] Value)[] values)
+    {
+        using NetWriter w = new();
+        w.WriteVarUInt32(id); w.WriteVarUInt32((uint)NetworkTestScene.Current.SceneGeneration); w.WriteVarUInt32(tick);
+        w.WriteVarUInt32(0);
+        w.WriteVarUInt32((uint)values.Length);
+        for (int i = 0; i < values.Length; i++)
+        {
+            var value = values[i];
+            w.WriteVarUInt32((uint)(i + 1) << 1 | 1); w.WriteGuid(value.Component);
+            w.WriteVarUInt32(value.Slot); w.WriteVarUInt32(value.Generation);
+            w.WriteBytesWithLength(value.Value);
+        }
+        Session.SendRaw(to ?? Session.HostPeer!, Snapshot, w.WrittenSpan, Delivery.Unreliable);
+        Session.Flush();
+    }
     public ulong SceneGeneration { get; private set; }
     public bool IsReady { get; private set; }
 
@@ -145,6 +247,7 @@ public sealed class FakePeer : IDisposable
     public List<(ushort Id, byte[] Data)> Received { get; } = new();
     public List<(ushort Id, byte[] Data)> WireReceived { get; } = new();
     public List<(ushort Id, Delivery Delivery)> Deliveries { get; } = new();
+    public List<(ushort Id, byte Channel)> Channels { get; } = new();
 
     public static FakePeer Join(LocalNetwork network, string name) =>
         new(NetSession.Join(new LocalTransport(network, name), "host", name));
@@ -182,7 +285,7 @@ public sealed class FakePeer : IDisposable
 
     public byte[] Last(ushort id) => Received.Last(m => m.Id == id).Data;
 
-    public void Send(ushort id, Action<NetWriter> write, NetPeer? to = null)
+    public void Send(ushort id, Action<NetWriter> write, NetPeer? to = null, byte channel = 0)
     {
         using NetWriter writer = new();
         write(writer);
@@ -214,7 +317,7 @@ public sealed class FakePeer : IDisposable
             }
         }
         else wire.WriteBytes(writer.WrittenSpan);
-        Session.SendRaw(to ?? Session.HostPeer!, id, wire.WrittenSpan);
+        Session.SendRaw(to ?? Session.HostPeer!, id, wire.WrittenSpan, channel: channel);
         Session.Flush();
     }
 
@@ -530,7 +633,7 @@ public partial class NetworkingTests : RuntimeTestBase
             Assert.Equal(100, component.Health);
             Assert.Equal(5, component.Score);
 
-            Pump(() => alice.Has(FakePeer.Spawn) && alice.Has(FakePeer.Sync), alice);
+            Pump(() => alice.Has(FakePeer.Spawn) && alice.SnapshotInt(component.Identifier, NetTestComponent.ScoreSlot) == 5, alice);
             NetReader spawn = new(alice.Last(FakePeer.Spawn));
             Assert.Equal(ship.Identifier, spawn.ReadGuid());
 
@@ -542,7 +645,7 @@ public partial class NetworkingTests : RuntimeTestBase
             Assert.Equal(5, component.Score);
 
             // Her transform updates move it on the host, smoothed.
-            alice.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
+            alice.Send(FakePeer.Snapshot, w => WriteTransforms(w, 1, 1,
                 (NetworkTestScene.Current.NetIdOf(ship), NetworkTestScene.Current.GenerationOf(ship), new Float3(3, 4, 5),
                     Quaternion.Identity, Float3.One)));
             Pump(() => ship.Transform.LocalPosition.Equals(new Float3(3, 4, 5)), alice);
@@ -589,14 +692,9 @@ public partial class NetworkingTests : RuntimeTestBase
 
             component.Health = 7;
             crate.Transform.LocalPosition = new Float3(1, 2, 3);
-            Pump(() => alice.Has(FakePeer.Sync) && alice.Has(FakePeer.Transform), alice);
-
-            NetReader sync = new(alice.Last(FakePeer.Sync));
-            Assert.Equal(1u, sync.ReadVarUInt32());
-            Assert.Equal(component.Identifier, sync.ReadGuid());
-            Assert.Equal(NetTestComponent.HealthSlot, sync.ReadVarUInt32());
-            NetReader value = new(sync.ReadBytesWithLength());
-            Assert.Equal(7, NetSerializer<int>.Read(ref value));
+            // Both travel in snapshots.
+            Pump(() => alice.SnapshotInt(component.Identifier, NetTestComponent.HealthSlot) == 7 &&
+                       TransformIds(alice).Contains(NetworkTestScene.Current.NetIdOf(crate)), alice);
 
             // A client can't change what it doesn't own, nor call host-only things through a broadcast.
             alice.SendSync(component.Identifier, NetTestComponent.HealthSlot, 1);
@@ -764,18 +862,20 @@ public partial class NetworkingTests : RuntimeTestBase
     private static void SendProxyTransform(FakePeer host, NetPeer client, Guid id, uint tick, float position, uint generation = 0)
     {
         uint netId = NetworkTestScene.Current.NetIdOf(Find(Scene.Current, id));
-        host.Send(FakePeer.Transform, w => WriteTransforms(w, tick, tick / 30.0,
+        host.Send(FakePeer.Snapshot, w => WriteTransforms(w, tick, tick / 30.0,
             (netId, generation, new Float3(position, 0, 0), Quaternion.Identity, Float3.One)), client);
     }
 
     // Transform channel bits, as Networking.Transform.cs defines them.
     private const byte PositionChannel = 1, RotationChannel = 2, ScaleChannel = 4, ExactRotationChannel = 8, ResumedChannel = 16;
 
-    /// <summary>A Transform message: one tick and time, then a full, exact pose for each object.</summary>
+    /// <summary>A Snapshot holding one transform group, at one tick and time, of a full, exact pose for each object.</summary>
     private static void WriteTransforms(NetWriter w, uint tick, double time,
         params (uint NetId, uint Generation, Float3 Position, Quaternion Rotation, Float3 Scale)[] records)
     {
-        w.WriteVarUInt32(tick); w.WriteDouble(time);
+        w.WriteVarUInt32(0); w.WriteVarUInt32((uint)NetworkTestScene.Current.SceneGeneration); w.WriteVarUInt32(tick);
+        w.WriteVarUInt32(1);
+        w.WriteVarUInt32(tick); w.WriteDouble(time); w.WriteVarUInt32((uint)records.Length);
         foreach (var record in records)
         {
             w.WriteVarUInt32(record.NetId); w.WriteVarUInt32(record.Generation);
@@ -784,27 +884,34 @@ public partial class NetworkingTests : RuntimeTestBase
             NetSerializers.WriteQuaternion(w, record.Rotation);
             NetSerializers.WriteFloat3(w, record.Scale);
         }
+        w.WriteVarUInt32(0);
     }
 
     private readonly record struct TransformRecord(uint NetId, uint Generation, byte Channels, Float3? Position,
         Quaternion? Rotation, Float3? Scale);
 
-    /// <summary>Decodes a Transform message's records; a channel left out is null.</summary>
+    /// <summary>Decodes a Snapshot message's transform records, from every group; a channel left out is null.</summary>
     private static List<TransformRecord> ReadTransforms(byte[] message)
     {
         NetReader r = new(message);
-        r.ReadVarUInt32(); r.ReadDouble();
+        r.ReadVarUInt32(); r.ReadVarUInt32(); r.ReadVarUInt32();
         List<TransformRecord> records = new();
-        while (!r.IsAtEnd)
+        uint groups = r.ReadVarUInt32();
+        for (uint g = 0; g < groups; g++)
         {
-            uint netId = r.ReadVarUInt32(), generation = r.ReadVarUInt32();
-            byte channels = r.ReadByte();
-            if ((channels & ResumedChannel) != 0) r.ReadSingle();
-            Float3? position = (channels & PositionChannel) != 0 ? NetSerializers.ReadFloat3(ref r) : null;
-            Quaternion? rotation = (channels & RotationChannel) == 0 ? null :
-                (channels & ExactRotationChannel) != 0 ? NetSerializers.ReadQuaternion(ref r) : NetSerializers.ReadCompactQuaternion(ref r);
-            Float3? scale = (channels & ScaleChannel) != 0 ? NetSerializers.ReadFloat3(ref r) : null;
-            records.Add(new TransformRecord(netId, generation, channels, position, rotation, scale));
+            r.ReadVarUInt32(); r.ReadDouble();
+            uint count = r.ReadVarUInt32();
+            for (uint i = 0; i < count; i++)
+            {
+                uint netId = r.ReadVarUInt32(), generation = r.ReadVarUInt32();
+                byte channels = r.ReadByte();
+                if ((channels & ResumedChannel) != 0) r.ReadSingle();
+                Float3? position = (channels & PositionChannel) != 0 ? NetSerializers.ReadFloat3(ref r) : null;
+                Quaternion? rotation = (channels & RotationChannel) == 0 ? null :
+                    (channels & ExactRotationChannel) != 0 ? NetSerializers.ReadQuaternion(ref r) : NetSerializers.ReadCompactQuaternion(ref r);
+                Float3? scale = (channels & ScaleChannel) != 0 ? NetSerializers.ReadFloat3(ref r) : null;
+                records.Add(new TransformRecord(netId, generation, channels, position, rotation, scale));
+            }
         }
 
         return records;
@@ -906,7 +1013,7 @@ public partial class NetworkingTests : RuntimeTestBase
         using (host)
         try
         {
-            host.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
+            host.Send(FakePeer.Snapshot, w => WriteTransforms(w, 1, 1,
                 (NetworkTestScene.Current.NetIdOf(proxy), 0, new Float3(position, 0, 0),
                     zeroRotation ? new Quaternion(0, 0, 0, 0) : Quaternion.Identity, Float3.One)), client);
             Frame([host]);
@@ -974,7 +1081,7 @@ public partial class NetworkingTests : RuntimeTestBase
             shipComponent.Health = 10;
             levelHere.Health = 50;
             Assert.Equal(3, levelHere.Health);
-            Pump(() => host.Has(FakePeer.Sync), host);
+            Pump(() => host.SnapshotInt(shipComponent.Identifier, NetTestComponent.HealthSlot) == 10, host);
 
             // A host RPC goes to the host instead of running here.
             shipComponent.AskHost(7);
@@ -984,7 +1091,7 @@ public partial class NetworkingTests : RuntimeTestBase
             // The host moves the crate; it follows, smoothed.
             NetPeer bob = host.Session.Peers.Single(p => !p.IsLocal);
             uint crateNetId = NetworkTestScene.Current.NetIdOf(Find(Scene.Current, crateId));
-            host.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
+            host.Send(FakePeer.Snapshot, w => WriteTransforms(w, 1, 1,
                 (crateNetId, 0, new Float3(7, 8, 9), Quaternion.Identity, Float3.One)), to: bob);
             Pump(() => crateHere.Transform.LocalPosition.Equals(new Float3(7, 8, 9)), host);
 

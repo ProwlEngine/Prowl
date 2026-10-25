@@ -155,6 +155,36 @@ public class SyncAndRpcTests
     }
 
     [Fact]
+    public void RpcChannelsAreCarriedIntoTheDescriptors()
+    {
+        Assembly assembly = Scripts.Compile("""
+                                            using Prowl.Runtime;
+                                            using Prowl.Runtime.Networking;
+
+                                            public class Radio : Component
+                                            {
+                                                [Rpc.Broadcast(Channel = 2)] public void Chat(string text) { }
+                                                [Rpc.Host(RpcFlags.Unreliable, Channel = 1)] public void Ping() { }
+                                                [Rpc.Broadcast] public void Plain() { }
+                                                [Rpc.Broadcast(Channel = 3)] public static void Announce(int code) { }
+                                            }
+                                            """);
+        Type radio = assembly.GetType("Radio")!;
+        Scripts.WithComponent(radio, component =>
+        {
+            NetworkMembers members = NetworkMembers.Of(component);
+            Assert.Equal(2, members.Rpc(NetworkCodeGen.NetworkId("Chat(string)"))!.Channel);
+            RpcMember ping = members.Rpc(NetworkCodeGen.NetworkId("Ping()"))!;
+            Assert.Equal((RpcFlags.Unreliable, (byte)1), (ping.Flags, ping.Channel));
+            Assert.Equal(0, members.Rpc(NetworkCodeGen.NetworkId("Plain()"))!.Channel);
+        });
+
+        StaticRpcMember announce = StaticRpcMember.Find($"{radio.FullName}, {assembly.GetName().Name}",
+            NetworkCodeGen.NetworkId("Announce(int)"))!;
+        Assert.Equal(3, announce.Channel);
+    }
+
+    [Fact]
     public void RpcPrologueDoesNotCollideWithTheMethodsOwnNames() =>
         Assert.NotNull(Scripts.Compile("""
                                        public class StatsNames : Prowl.Runtime.Component

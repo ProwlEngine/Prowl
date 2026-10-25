@@ -8,18 +8,29 @@ using Prowl.Warp;
 
 namespace Prowl.Runtime.Networking;
 
+/// <summary>Handles one kind of engine message.</summary>
+internal delegate void EngineMessageHandler(NetPeer sender, ref NetReader reader, Delivery delivery);
+
 internal sealed partial class NetworkSystem
 {
-    internal void RegisterEngineMessage(NetSession session, EngineMessage kind, RawMessageHandler handler) =>
-        session.OnRaw((ushort)kind, (peer, ref reader, delivery) =>
+    internal void RegisterEngineMessage(NetSession session, EngineMessage kind, EngineMessageHandler handler) =>
+        session.OnRaw((ushort)kind, (peer, ref reader, delivery, channel) =>
         {
             if (NetworkDiagnostics.Enabled)
             {
                 NetReader copy = reader;
                 ReadOnlySpan<byte> payload = copy.ReadBytes(copy.Remaining);
                 (string? Context, string? Name) description = NetworkDiagnostics.DescribePayload(this, kind, payload);
-                NetworkDiagnostics.Record(kind.ToString(), "In", peer, Guid.Empty, delivery.ToString(),
+                NetworkDiagnostics.Record(kind.ToString(), "In", peer, Guid.Empty, Describe(delivery, channel),
                     payload, description.Context, description.Name);
+            }
+
+            // Replication relies on everything but RPCs sharing channel 0, so one can't overtake another.
+            if (channel != 0 && kind is not (EngineMessage.RpcToHost or EngineMessage.RpcFromHost
+                    or EngineMessage.StaticRpcToHost or EngineMessage.StaticRpcFromHost))
+            {
+                NetworkDiagnostics.Record(kind.ToString(), "Rejected", peer, Guid.Empty, $"Sent on channel {channel}");
+                return;
             }
 
             try
@@ -46,7 +57,7 @@ internal sealed partial class NetworkSystem
         });
 
     internal void SendEngine(NetPeer peer, EngineMessage kind, ReadOnlySpan<byte> payload,
-        Delivery delivery = Delivery.Reliable)
+        Delivery delivery = Delivery.Reliable, byte channel = 0)
     {
         if (IsHost && kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost && !IsPeerReady(peer))
         {
@@ -63,17 +74,28 @@ internal sealed partial class NetworkSystem
             delivery = Delivery.Reliable;
         }
 
-        Session!.SendRaw(peer, (ushort)kind, payload, delivery);
+        channel = EngineChannel(channel, delivery);
+        Session!.SendRaw(peer, (ushort)kind, payload, delivery, channel: channel);
         if (NetworkDiagnostics.Enabled)
         {
             (string? Context, string? Name) description = NetworkDiagnostics.DescribePayload(this, kind, payload);
-            NetworkDiagnostics.Record(kind.ToString(), "Out", peer, Guid.Empty, delivery.ToString(), payload,
+            NetworkDiagnostics.Record(kind.ToString(), "Out", peer, Guid.Empty, Describe(delivery, channel), payload,
                 description.Context, description.Name);
         }
     }
 
+    /// <summary>
+    ///     A channel is a preference too: unreliable messages, and a transport with fewer channels, carry everything on
+    ///     channel 0.
+    /// </summary>
+    private byte EngineChannel(byte channel, Delivery delivery) =>
+        delivery == Delivery.Reliable && channel < Session!.Transport.Capabilities.Channels ? channel : (byte)0;
+
+    private static string Describe(Delivery delivery, byte channel) =>
+        channel == 0 ? delivery.ToString() : $"{delivery}, channel {channel}";
+
     internal void BroadcastEngine(EngineMessage kind, ReadOnlySpan<byte> payload,
-        Delivery delivery = Delivery.Reliable, NetPeer? except = null)
+        Delivery delivery = Delivery.Reliable, NetPeer? except = null, byte channel = 0)
     {
         if (delivery == Delivery.Unreliable || kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost)
         {
@@ -81,14 +103,15 @@ internal sealed partial class NetworkSystem
             {
                 if (!peer.IsLocal && peer != except)
                 {
-                    SendEngine(peer, kind, payload, delivery);
+                    SendEngine(peer, kind, payload, delivery, channel);
                 }
             }
 
             return;
         }
 
-        Session!.BroadcastRaw((ushort)kind, payload, delivery, except);
+        channel = EngineChannel(channel, delivery);
+        Session!.BroadcastRaw((ushort)kind, payload, delivery, except, channel: channel);
         if (!NetworkDiagnostics.Enabled)
         {
             return;
@@ -99,8 +122,8 @@ internal sealed partial class NetworkSystem
         {
             if (!peer.IsLocal && peer != except)
             {
-                NetworkDiagnostics.Record(kind.ToString(), "Out", peer, Guid.Empty, delivery.ToString(), payload,
-                    description.Context, description.Name);
+                NetworkDiagnostics.Record(kind.ToString(), "Out", peer, Guid.Empty, Describe(delivery, channel),
+                    payload, description.Context, description.Name);
             }
         }
     }

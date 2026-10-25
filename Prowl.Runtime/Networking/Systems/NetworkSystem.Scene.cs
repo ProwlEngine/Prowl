@@ -36,6 +36,7 @@ internal sealed partial class NetworkSystem
         LocalJoinState = NetworkJoinState.Loading;
         Index.Clear();
         Sync.Dirty.Clear();
+        Snapshots.Clear();
         foreach (NetworkObject entry in Entries.Values.ToArray())
         {
             if (!entry.GameObject.IsValid() || entry.GameObject.Scene != ReplicatedScene)
@@ -192,6 +193,7 @@ internal sealed partial class NetworkSystem
             IndexFrame = -1;
             Entries.Clear();
             Sync.Dirty.Clear();
+            Snapshots.Clear();
 
             uint count = ObjectStateBlock.Read(ref reader).Count;
             for (uint i = 0; i < count; i++)

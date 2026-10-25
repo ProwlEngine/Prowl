@@ -65,7 +65,7 @@ public partial class NetworkingTests
             }
             uint netId = NetworkTestScene.Current.NetIdOf(proxy);
             if (path == "Tick")
-                host.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
+                host.Send(FakePeer.Snapshot, w => WriteTransforms(w, 1, 1,
                     (netId, generation, remotePosition, remoteRotation, remoteScale)), client);
             else if (path == "CatchUp")
             {
@@ -85,6 +85,7 @@ public partial class NetworkingTests
                 message.WriteGuid(proxy.Identifier); message.WriteUInt32(generation);
                 NetSerializers.WriteFloat3(message, Float3.Zero);
                 message.WriteBytesWithLength(poses.WrittenSpan);
+                message.WriteVarUInt32(1); message.WriteVarUInt32(0); // No values.
                 host.Session.SendRaw(client, FakePeer.OwnershipState, message.WrittenSpan);
                 host.Session.Flush();
             }
@@ -135,13 +136,13 @@ public partial class NetworkingTests
             Pump(() => owner.Has(FakePeer.SceneSnapshot) && observer.Has(FakePeer.SceneSnapshot), owner, observer);
             root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => p.Name == "owner"));
             observer.Received.Clear();
-            owner.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
+            owner.Send(FakePeer.Snapshot, w => WriteTransforms(w, 1, 1,
                 (NetworkTestScene.Current.NetIdOf(root), NetworkGeneration(root), new Float3(5, 6, 7), Quaternion.Identity,
                     new Float3(99, 99, 99))));
-            Pump(() => root.Transform.LocalPosition == new Float3(5, 6, 7) && observer.Has(FakePeer.Transform), owner, observer);
+            Pump(() => root.Transform.LocalPosition == new Float3(5, 6, 7) && observer.Has(FakePeer.Snapshot), owner, observer);
             Assert.Equal(new Float3(2, 2, 2), root.Transform.LocalScale);
             // The relay leaves the disabled scale out, so observers keep their own.
-            TransformRecord relayed = Assert.Single(ReadTransforms(observer.Last(FakePeer.Transform)));
+            TransformRecord relayed = Assert.Single(ReadTransforms(observer.Last(FakePeer.Snapshot)));
             Assert.Equal(new Float3(5, 6, 7), relayed.Position);
             Assert.Null(relayed.Scale);
             root.Network.AssignOwnership(null); // Handoff must also preserve the disabled scale.
@@ -183,12 +184,12 @@ public partial class NetworkingTests
             Networking.Networking.Host(new LocalTransport(network, "host"));
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.IsReady, client);
-            Action send = Networking.Networking.System!.SendTransforms;
+            Action send = Networking.Networking.System!.Snapshots.Send;
             uint netId = NetworkTestScene.Current.NetIdOf(root);
             List<TransformRecord> Sent()
             {
                 PumpFor(5, client);
-                List<TransformRecord> records = client.WireReceived.Where(m => m.Id == FakePeer.Transform)
+                List<TransformRecord> records = client.WireReceived.Where(m => m.Id == FakePeer.Snapshot)
                     .SelectMany(m => ReadTransforms(m.Data)).Where(r => r.NetId == netId).ToList();
                 client.WireReceived.Clear();
                 return records;
@@ -212,13 +213,16 @@ public partial class NetworkingTests
             Assert.All(moving, r => Assert.Null(r.Scale));
             Assert.Equal(new Float3(8, 0, 0), moving[^1].Position);
 
-            // Still: once settled, the whole pose goes once, exactly, then nothing.
-            for (int i = 0; i < 6; i++) send();
+            // Still: once settled, the whole pose goes once, exactly, then nothing once it's acknowledged.
+            // Real ticks, so acknowledgements arrive in between as they would.
+            PumpFor(400, client);
             TransformRecord settled = Assert.Single(Sent());
             Assert.NotEqual(0, settled.Channels & ExactRotationChannel);
             Assert.Equal(root.Transform.LocalRotation, settled.Rotation);
             Assert.Equal(Float3.One, settled.Scale);
-            Assert.Equal(Delivery.Reliable, client.Deliveries.Last(m => m.Id == FakePeer.Transform).Delivery);
+            Assert.Equal(Delivery.Unreliable, client.Deliveries.Last(m => m.Id == FakePeer.Snapshot).Delivery);
+            for (int i = 0; i < 6; i++) send();
+            Assert.Empty(Sent());
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -248,7 +252,7 @@ public partial class NetworkingTests
             for (uint i = 0; i < 2; i++)
             {
                 uint tick = i;
-                owner.Send(FakePeer.Transform, w => WriteTransforms(w, tick + 1, 1 + tick,
+                owner.Send(FakePeer.Snapshot, w => WriteTransforms(w, tick + 1, 1 + tick,
                     (netId, generation, new Float3(tick, 0, 0), Quaternion.Identity, Float3.One)));
             }
             Pump(() => root.Transform.LocalPosition == new Float3(1, 0, 0), owner, observer);
@@ -282,18 +286,18 @@ public partial class NetworkingTests
             Networking.Networking.Host(new LocalTransport(network, "host"));
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.Has(FakePeer.SceneSnapshot), client);
-            Action send = Networking.Networking.System!.SendTransforms;
+            Action send = Networking.Networking.System!.Snapshots.Send;
             if ((mask & NetworkFlags.NoPositionSync) == 0) root.Transform.LocalPosition = Float3.One;
             else if ((mask & NetworkFlags.NoRotationSync) == 0) root.Transform.LocalRotation = new Quaternion(0, 0, 1, 0);
             send();
             PumpFor(10, client);
-            int count = client.Received.Count(m => m.Id == FakePeer.Transform);
+            int count = client.Received.Count(m => m.Id == FakePeer.Snapshot);
             if (mask == NetworkFlags.NoTransformSync) Assert.Equal(0, count);
             else Assert.True(count > 0);
             root.Transform.LocalScale = new Float3(9, 9, 9);
             send();
             PumpFor(10, client);
-            Assert.Equal(count, client.Received.Count(m => m.Id == FakePeer.Transform));
+            Assert.Equal(count, client.Received.Count(m => m.Id == FakePeer.Snapshot));
         }
         finally { Networking.Networking.Shutdown(); }
     }

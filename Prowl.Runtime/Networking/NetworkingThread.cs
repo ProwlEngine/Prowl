@@ -177,7 +177,7 @@ internal sealed class NetworkingThread : IDisposable
         _wake.Set();
     }
 
-    private void Send(QueuedConnection peer, ReadOnlySpan<byte> data, Delivery delivery, SendFlags flags)
+    private void Send(QueuedConnection peer, ReadOnlySpan<byte> data, Delivery delivery, byte channel)
     {
         CheckFailure();
         if (Volatile.Read(ref peer.CloseRequested) != 0)
@@ -208,7 +208,7 @@ internal sealed class NetworkingThread : IDisposable
                 _outgoingCount++;
                 peer.OutgoingBytes += buffer.Length;
                 peer.OutgoingCount++;
-                _commands.Enqueue(new Command(CommandKind.Send, peer, buffer, data.Length, delivery, flags));
+                _commands.Enqueue(new Command(CommandKind.Send, peer, buffer, data.Length, delivery, channel));
             }
         }
 
@@ -313,7 +313,7 @@ internal sealed class NetworkingThread : IDisposable
 
             ev = new TransportEvent(notice.Type, peer,
                 notice.Buffer == null ? default : notice.Buffer.AsMemory(0, notice.Length),
-                notice.Delivery, notice.Reason);
+                notice.Delivery, notice.Reason, notice.Channel);
             return true;
         }
 
@@ -392,7 +392,7 @@ internal sealed class NetworkingThread : IDisposable
                                     Volatile.Read(ref command.Peer.CloseRequested) == 0)
                                 {
                                     target.Send(command.Buffer.AsSpan(0, command.Length), command.Delivery,
-                                        command.Flags);
+                                        channel: command.Channel);
                                 }
 
                                 break;
@@ -527,7 +527,8 @@ internal sealed class NetworkingThread : IDisposable
                     peer.IncomingBytes += buffer.Length;
                     peer.IncomingCount++;
                     _pendingData++;
-                    _notices.Enqueue(new Notice(ev.Type, peer, buffer, ev.Data.Length, ev.Delivery));
+                    _notices.Enqueue(new Notice(ev.Type, peer, buffer, ev.Data.Length, ev.Delivery,
+                        Channel: ev.Channel));
                 }
             }
 
@@ -678,7 +679,7 @@ internal sealed class NetworkingThread : IDisposable
         byte[]? Buffer = null,
         int Length = 0,
         Delivery Delivery = default,
-        SendFlags Flags = default);
+        byte Channel = 0);
 
     private readonly record struct Notice(
         TransportEventType Type,
@@ -686,7 +687,8 @@ internal sealed class NetworkingThread : IDisposable
         byte[]? Buffer = null,
         int Length = 0,
         Delivery Delivery = default,
-        DisconnectReason Reason = default);
+        DisconnectReason Reason = default,
+        byte Channel = 0);
 
     private sealed class QueuedConnection(NetworkingThread owner, int id, string address, bool outgoing)
         : Connection(owner.Transport, id, address, outgoing)
@@ -758,19 +760,10 @@ internal sealed class NetworkingThread : IDisposable
             }
         }
 
-        public override void Send(ReadOnlySpan<byte> data, Delivery delivery) => Send(data, delivery, SendFlags.None);
         public override void Flush() => owner.RequestFlush();
 
-        public override void Send(ReadOnlySpan<byte> data, Delivery delivery, SendFlags flags)
-        {
-            ValidateSend(data, delivery);
-            if ((flags & ~SendFlags.Immediate) != 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(flags));
-            }
-
-            owner.Send(this, data, delivery, flags);
-        }
+        protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel) =>
+            owner.Send(this, data, delivery, channel);
 
         public override void Disconnect()
         {

@@ -75,7 +75,7 @@ public class NetworkingThreadTests
         byte[] payload = new byte[350_000];
         new Random(42).NextBytes(payload);
         byte[]? received = null;
-        client.OnRaw(20, (NetPeer peer, ref NetReader reader, Delivery delivery) => received = reader.ReadBytes(reader.Remaining).ToArray());
+        client.OnRaw(20, (NetPeer peer, ref NetReader reader, Delivery delivery, byte channel) => received = reader.ReadBytes(reader.Remaining).ToArray());
         host.SendRaw(host.Peers.Single(p => !p.IsLocal), 20, payload);
         WorkerSessionProbe.PumpUntil(() => received != null, hostProbe, clientProbe);
         Assert.Equal(payload, received);
@@ -121,7 +121,7 @@ public class NetworkingThreadTests
         WorkerSessionProbe.PumpUntil(() => client.State == SessionState.Active, hostProbe, clientProbe);
         int callerThread = Environment.CurrentManagedThreadId, callbackThread = 0;
         byte[]? received = null;
-        host.OnRaw(20, (NetPeer peer, ref NetReader reader, Delivery delivery) =>
+        host.OnRaw(20, (NetPeer peer, ref NetReader reader, Delivery delivery, byte channel) =>
         {
             callbackThread = Environment.CurrentManagedThreadId;
             received = reader.ReadBytes(reader.Remaining).ToArray();
@@ -320,7 +320,7 @@ public class NetworkingThreadTests
             public override TimeSpan RoundTripTime => TimeSpan.Zero;
             public override int GetMaxMessageSize(Delivery delivery) => 1 << 20;
             public override int GetBatchThreshold(Delivery delivery) => 1 << 20;
-            public override void Send(ReadOnlySpan<byte> data, Delivery delivery) { lock (owner._sent) owner._sent.Add(Address); }
+            protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel) { lock (owner._sent) owner._sent.Add(Address); }
             public override void Disconnect() => owner.RaiseDisconnected(this, DisconnectReason.Requested);
         }
     }
@@ -359,7 +359,7 @@ public class NetworkingThreadTests
             public override TimeSpan RoundTripTime => TimeSpan.Zero;
             public override int GetMaxMessageSize(Delivery delivery) => 128;
             public override int GetBatchThreshold(Delivery delivery) => 64;
-            public override void Send(ReadOnlySpan<byte> data, Delivery delivery)
+            protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
             {
                 owner.AssertWorkerThread();
                 Volatile.Write(ref owner.SendThread, Environment.CurrentManagedThreadId);

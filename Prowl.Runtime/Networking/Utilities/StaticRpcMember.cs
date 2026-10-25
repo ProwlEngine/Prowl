@@ -26,7 +26,8 @@ public sealed class StaticRpcMember
 
     public StaticRpcMember([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields |
                                                        DynamicallyAccessedMemberTypes.NonPublicFields)]
-        Type declaringType, uint id, string signature, RpcMode mode, RpcFlags flags, StaticRpcInvoker invoke)
+        Type declaringType, uint id, string signature, RpcMode mode, RpcFlags flags, StaticRpcInvoker invoke,
+        byte channel = 0)
     {
         if (!declaringType.IsClass || declaringType.ContainsGenericParameters ||
             mode is not (RpcMode.Broadcast or RpcMode.Host) ||
@@ -41,6 +42,7 @@ public sealed class StaticRpcMember
         Signature = signature;
         Mode = mode;
         Flags = flags;
+        Channel = channel;
         _invoke = invoke;
     }
 
@@ -50,6 +52,9 @@ public sealed class StaticRpcMember
     public string Signature { get; }
     public RpcMode Mode { get; }
     public RpcFlags Flags { get; }
+
+    /// <summary>The transport channel calls travel on.</summary>
+    public byte Channel { get; }
 
     /// <summary>Generated prologue: false means execute locally; true supplies an argument writer the caller must dispose.</summary>
     public bool Begin(out NetWriter writer)

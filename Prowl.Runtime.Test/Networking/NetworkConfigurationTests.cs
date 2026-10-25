@@ -181,7 +181,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
             Networking.Networking.Configure(config);
             NetSession client = Networking.Networking.Join("127.0.0.1", "client");
             bool received = false;
-            host.OnRaw(20, (NetPeer peer, ref NetReader reader, Delivery delivery) => received = reader.ReadByte() == 42);
+            host.OnRaw(20, (NetPeer peer, ref NetReader reader, Delivery delivery, byte channel) => received = reader.ReadByte() == 42);
             for (int i = 0; i < 2000 && client.State != SessionState.Active; i++)
             {
                 host.Update(); Networking.Networking.Receive(); Networking.Networking.Flush(); Thread.Sleep(1);

@@ -304,7 +304,8 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         string Mode,
         uint Flags,
         IReadOnlyList<string> ParameterTypes,
-        bool Static = false)
+        bool Static = false,
+        byte Channel = 0)
     {
         public string Signature => $"{Name}({string.Join(",", ParameterTypes)})";
 

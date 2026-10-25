@@ -19,6 +19,7 @@ internal sealed partial class NetworkSystem : IDisposable
     internal readonly Dictionary<Guid, EngineObject> Index = new();
     internal readonly Dictionary<int, PeerReadiness> LoadingPeers = new();
     internal readonly RpcSystem Rpcs;
+    internal readonly SnapshotSystem Snapshots;
     internal readonly SyncSystem Sync;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     internal bool CatchUpApplied;
@@ -40,6 +41,7 @@ internal sealed partial class NetworkSystem : IDisposable
         Configuration = configuration.ValidatedCopy();
         Session = session;
         Sync = new SyncSystem(this);
+        Snapshots = new SnapshotSystem(this);
         Rpcs = new RpcSystem(this);
     }
 
@@ -78,6 +80,8 @@ internal sealed partial class NetworkSystem : IDisposable
         LoadingPeers.Clear();
         Sync.Dirty.Clear();
         Sync.Dispose();
+        Snapshots.Clear();
+        Snapshots.Dispose();
         Rpcs.Dispose();
     }
 
@@ -102,7 +106,8 @@ internal sealed partial class NetworkSystem : IDisposable
         RegisterEngineMessage(session, EngineMessage.Despawn, OnDespawn);
         RegisterEngineMessage(session, EngineMessage.Owner, OnOwner);
         RegisterEngineMessage(session, EngineMessage.Sync, Sync.OnSync);
-        RegisterEngineMessage(session, EngineMessage.Transform, OnTransform);
+        RegisterEngineMessage(session, EngineMessage.Snapshot, Snapshots.OnSnapshot);
+        RegisterEngineMessage(session, EngineMessage.SnapshotAck, Snapshots.OnAck);
         RegisterEngineMessage(session, EngineMessage.RpcToHost, Rpcs.OnRpcToHost);
         RegisterEngineMessage(session, EngineMessage.RpcFromHost, Rpcs.OnRpcFromHost);
 
@@ -155,7 +160,13 @@ internal sealed partial class NetworkSystem : IDisposable
             double interval = 1.0 / Math.Max(Networking.TickRate, 1f);
             NextTick = Math.Max(NextTick + interval, Now);
             Sync.SendSyncChanges();
-            SendTransforms();
+            Snapshots.Send();
+        }
+
+        // Acknowledged every frame, not every tick, so the sender learns as soon as it can.
+        if (IsActive)
+        {
+            Snapshots.SendAcks();
         }
     }
 }

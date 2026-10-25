@@ -116,7 +116,8 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return false;
         }
 
-        if (delivery == Delivery.Reliable)
+        // Only channel 0 keeps the call behind the Sync changes made before it.
+        if (delivery == Delivery.Reliable && rpc.Channel == 0)
         {
             scene.Sync.SendSyncChanges();
         }
@@ -128,7 +129,8 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         if (!scene.IsHost)
         {
             new RpcRecipientMessage(recipients).Write(envelope);
-            scene.SendEngine(session.HostPeer!, EngineMessage.RpcToHost, envelope.WrittenSpan, delivery);
+            scene.SendEngine(session.HostPeer!, EngineMessage.RpcToHost, envelope.WrittenSpan, delivery,
+                rpc.Channel);
             NetworkDiagnostics.TraceMember("RPC", "Send", session.HostPeer, component, id, true, $"{mode}, {delivery}",
                 writer.WrittenSpan);
             return mode == RpcMode.Broadcast && localIncluded;
@@ -143,14 +145,15 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         switch (mode)
         {
             case RpcMode.Broadcast:
-                SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients);
+                SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients,
+                    channel: rpc.Channel);
                 return localIncluded;
 
             case RpcMode.Owner:
                 // The prologue only sends when another peer controls it.
                 if (scene.GetOwner(component.GameObject) is { } owner && RpcRecipients.Includes(recipients, owner))
                 {
-                    scene.SendEngine(owner, EngineMessage.RpcFromHost, message.WrittenSpan, delivery);
+                    scene.SendEngine(owner, EngineMessage.RpcFromHost, message.WrittenSpan, delivery, rpc.Channel);
                 }
 
                 return false;
@@ -203,7 +206,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         switch (mode)
         {
             case RpcMode.Broadcast:
-                Relay(sender, id, method, arguments, relayDelivery, null, recipients);
+                Relay(sender, id, method, arguments, relayDelivery, null, recipients, rpc.Channel);
                 if (RpcRecipients.Includes(recipients, scene.Session!.LocalPeer!))
                 {
                     Invoke(component, rpc, arguments, sender);
@@ -230,7 +233,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
                 }
                 else if (owner != sender.Id && scene.Session!.TryGetPeer(owner, out NetPeer? ownerPeer))
                 {
-                    Relay(sender, id, method, arguments, relayDelivery, ownerPeer, recipients);
+                    Relay(sender, id, method, arguments, relayDelivery, ownerPeer, recipients, rpc.Channel);
                 }
 
                 break;
@@ -238,10 +241,10 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     }
 
     internal void Relay(NetPeer caller, Guid id, uint method, ReadOnlySpan<byte> arguments, Delivery delivery,
-        NetPeer? to, RpcRecipients? recipients)
+        NetPeer? to, RpcRecipients? recipients, byte channel = 0)
     {
         // The caller's Sync changes were relayed as they arrived, ahead of this; send the host's own the same way.
-        if (delivery == Delivery.Reliable)
+        if (delivery == Delivery.Reliable && channel == 0)
         {
             scene.Sync.SendSyncChanges();
         }
@@ -254,12 +257,12 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         {
             if (RpcRecipients.Includes(recipients, to))
             {
-                scene.SendEngine(to, EngineMessage.RpcFromHost, message.WrittenSpan, delivery);
+                scene.SendEngine(to, EngineMessage.RpcFromHost, message.WrittenSpan, delivery, channel);
             }
         }
         else
         {
-            SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients, caller);
+            SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients, caller, channel);
         }
     }
 
@@ -344,13 +347,13 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     }
 
     internal void SendRpcRecipients(EngineMessage kind, ReadOnlySpan<byte> payload, Delivery delivery,
-        RpcRecipients? recipients, NetPeer? except = null)
+        RpcRecipients? recipients, NetPeer? except = null, byte channel = 0)
     {
         foreach (NetPeer peer in scene.Session!.Peers)
         {
             if (!peer.IsLocal && peer != except && RpcRecipients.Includes(recipients, peer))
             {
-                scene.SendEngine(peer, kind, payload, delivery);
+                scene.SendEngine(peer, kind, payload, delivery, channel);
             }
         }
     }

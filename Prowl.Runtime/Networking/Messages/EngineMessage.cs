@@ -10,7 +10,7 @@ internal enum EngineMessage : ushort
     Despawn,
     Owner,
     Sync,
-    Transform,
+    Snapshot,
     RpcToHost,
     RpcFromHost,
     SceneLoaded,
@@ -23,5 +23,6 @@ internal enum EngineMessage : ushort
     OwnershipRequest,
     OwnershipState,
     OwnerTransfer,
-    NetworkFlags
+    NetworkFlags,
+    SnapshotAck
 }

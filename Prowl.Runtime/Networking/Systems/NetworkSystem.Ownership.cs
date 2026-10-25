@@ -78,16 +78,18 @@ internal sealed partial class NetworkSystem
             return true;
         }
 
-        using NetWriter message = new(), poses = new();
+        using NetWriter message = new(), poses = new(), values = new();
         if (!take)
         {
-            // Ahead of the request, so the host has this peer's final values before it hands the object on.
+            // The host needs this peer's final values before it hands the object on: collections go ahead of the
+            // request, other values with it, since snapshots still carrying them would be turned away after.
             Sync.SendSyncChanges();
             entry.WriteHandoffPoses(poses, false);
+            Snapshots.WriteHandoffValues(values, entry, false);
         }
 
         new OwnershipRequestMessage(entry.GameObject.Identifier, entry.Generation, take,
-            take ? Float3.Zero : entry.OwnershipVelocity(), poses.WrittenSpan).Write(message);
+            take ? Float3.Zero : entry.OwnershipVelocity(), poses.WrittenSpan, values.WrittenSpan).Write(message);
         SendEngine(session.HostPeer!, EngineMessage.OwnershipRequest, message.WrittenSpan);
         return true;
     }
@@ -104,8 +106,9 @@ internal sealed partial class NetworkSystem
         uint generation = message.Generation;
         bool take = message.Take;
         Float3 velocity = message.Velocity;
-        ReadOnlySpan<byte> poses = message.Poses;
-        if (!reader.IsAtEnd || delivery != Delivery.Reliable || !Finite(velocity) || (take && !poses.IsEmpty))
+        ReadOnlySpan<byte> poses = message.Poses, values = message.Values;
+        if (!reader.IsAtEnd || delivery != Delivery.Reliable || !Finite(velocity) ||
+            (take && (!poses.IsEmpty || !values.IsEmpty)))
         {
             throw new InvalidDataException("Invalid ownership transfer request.");
         }
@@ -132,6 +135,7 @@ internal sealed partial class NetworkSystem
             }
 
             entry.ApplyHandoffPoses(poses, sender);
+            Snapshots.ApplyHandoffValues(sender, values);
             entry.TransferVelocity = velocity;
         }
 
@@ -161,6 +165,7 @@ internal sealed partial class NetworkSystem
         }
 
         entry.ApplyHandoffPoses(poses, sender);
+        Snapshots.ApplyHandoffValues(sender, message.Values);
         entry.TransferVelocity = velocity;
     }
 

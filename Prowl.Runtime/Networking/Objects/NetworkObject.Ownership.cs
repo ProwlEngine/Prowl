@@ -119,11 +119,21 @@ internal sealed partial class NetworkObject
             ApplyNetworkTransform(GameObject, sample.Position, sample.Rotation, sample.Scale);
         }
 
-        // Every value the host has accepted is already on its way to everyone; its own pending ones go now.
+        // Collection changes go ahead of the handoff. Other values go with it, since snapshots would stop carrying
+        // them to the new owner once it controls them, acknowledged or not.
         System.Sync.SendSyncChanges();
-        using NetWriter poses = new(), message = new();
+        using NetWriter poses = new(), values = new(), message = new();
         WriteHandoffPoses(poses, true);
-        new OwnershipStateMessage(GameObject.Identifier, Generation, velocity, poses.WrittenSpan).Write(message);
+        System.Snapshots.WriteHandoffValues(values, this, true);
+        new OwnershipStateMessage(GameObject.Identifier, Generation, velocity, poses.WrittenSpan, values.WrittenSpan)
+            .Write(message);
         System.BroadcastEngine(EngineMessage.OwnershipState, message.WrittenSpan);
+        foreach (NetPeer peer in System.Session!.Peers)
+        {
+            if (!peer.IsLocal)
+            {
+                System.Snapshots.Delivered(peer, GameObject);
+            }
+        }
     }
 }

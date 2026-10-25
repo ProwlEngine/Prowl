@@ -10,12 +10,24 @@ namespace Prowl.Runtime.Test;
 public partial class NetworkingTests
 {
     private static void RequestOwnership(FakePeer peer, GameObject root, uint generation, bool take,
-        byte[]? state = null) => peer.Send(FakePeer.OwnershipRequest, w =>
+        byte[]? state = null, byte[]? values = null) => peer.Send(FakePeer.OwnershipRequest, w =>
         {
             w.WriteGuid(root.Identifier); w.WriteUInt32(generation); w.WriteBool(take);
             NetSerializers.WriteFloat3(w, Float3.Zero);
             w.WriteBytesWithLength(state ?? Array.Empty<byte>());
+            w.WriteBytesWithLength(values ?? Array.Empty<byte>());
         });
+
+    /// <summary>A SyncBlock holding one int value, as a handoff carries them.</summary>
+    private static byte[] HandoffValue(Component component, uint slot, uint generation, int value)
+    {
+        using NetWriter w = new(), v = new();
+        NetSerializer<int>.Write(v, value);
+        w.WriteVarUInt32(1);
+        w.WriteGuid(component.Identifier); w.WriteVarUInt32(slot); w.WriteVarUInt32(generation);
+        w.WriteBytesWithLength(v.WrittenSpan);
+        return w.ToArray();
+    }
 
     [Fact]
     public void TakeoverRequiresReadyPeerAndPolicyAndRejectsCompetingStaleRequests()
@@ -67,10 +79,9 @@ public partial class NetworkingTests
             RequestOwnership(other, root, generation, false);
             PumpFor(20, owner, other);
             Assert.NotNull(root.Network.Owner);
-            // The owner's final values go ahead of the request, which carries its final pose.
-            owner.Session.SendRaw(owner.Session.HostPeer!, FakePeer.Sync,
-                ClientSync(state, owner.Session.LocalPeer!.Id, generation, 17, NetTestComponent.HealthSlot));
-            RequestOwnership(owner, root, generation, false, Poses(root, 42));
+            // The release carries the owner's final values and pose.
+            RequestOwnership(owner, root, generation, false, Poses(root, 42),
+                HandoffValue(state, NetTestComponent.HealthSlot, generation, 17));
             Pump(() => root.Network.Owner == null, owner, other);
             Assert.False(root.IsProxy);
             Assert.Equal(17, state.Health);
@@ -86,7 +97,7 @@ public partial class NetworkingTests
         var (_, state, network) = ReadinessHost();
         GameObject original = state.GameObject;
         original.Network.OwnerTransfer = OwnerTransfer.Takeover;
-        byte[] snapshot, values, handoff, ownerMessage;
+        byte[] snapshot, handoff, ownerMessage;
         using (FakePeer observer = FakePeer.Join(network, "observer"))
         {
             try
@@ -101,9 +112,7 @@ public partial class NetworkingTests
                     observer.Received.FindIndex(m => m.Id == FakePeer.Owner));
                 handoff = observer.Last(FakePeer.OwnershipState);
                 ownerMessage = observer.Last(FakePeer.Owner);
-                // The host's values go ahead of the handoff, which carries only poses.
-                int handoffIndex = observer.WireReceived.FindLastIndex(m => m.Id == FakePeer.OwnershipState);
-                values = observer.WireReceived.Take(handoffIndex).Last(m => m.Id == FakePeer.Sync).Data;
+                // The handoff carries the host's values along with the poses.
             }
             finally { Networking.Networking.Shutdown(); }
         }
@@ -146,7 +155,6 @@ public partial class NetworkingTests
             Assert.Equal(root.Identifier, request.ReadGuid()); request.ReadUInt32();
             Assert.True(request.ReadBool()); NetSerializers.ReadFloat3(ref request);
             Assert.Empty(request.ReadBytesWithLength().ToArray());
-            host.Session.SendRaw(client, FakePeer.Sync, values);
             host.Send(FakePeer.OwnershipState, w => w.WriteBytes(handoff), client);
             host.Send(FakePeer.Owner, w => w.WriteBytes(ownerMessage), client);
             Pump(() => !root.IsProxy, host);
@@ -217,9 +225,8 @@ public partial class NetworkingTests
             root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
             uint generation = NetworkGeneration(root);
             // A client can't write a FromHost value, even on its way out.
-            owner.Session.SendRaw(owner.Session.HostPeer!, FakePeer.Sync,
-                ClientSync(state, owner.Session.LocalPeer!.Id, generation, 66, NetTestComponent.ScoreSlot));
-            RequestOwnership(owner, root, stale ? generation - 1 : generation, false, Poses(root, 42));
+            RequestOwnership(owner, root, stale ? generation - 1 : generation, false, Poses(root, 42),
+                HandoffValue(state, NetTestComponent.ScoreSlot, generation, 66));
             PumpFor(30, owner);
             Assert.Equal(SessionState.Active, owner.Session.State);
             Assert.Equal(0, state.Score);
