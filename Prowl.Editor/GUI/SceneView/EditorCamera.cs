@@ -37,6 +37,9 @@ public class EditorCamera
     private Float3 _orbitPivot;
     private bool _wasOrbiting;
 
+    // Our lock context is on Input's stack while RMB flying, even if the hovered panel changes mid-gesture.
+    private bool _flying;
+
     // Toggles
     public bool ShowGrid { get; set; } = true;
     public bool ShowGizmos { get; set; } = true;
@@ -334,7 +337,9 @@ public class EditorCamera
     /// </summary>
     public bool ProcessInput(float dt, bool isHovered, Float2 mousePos, Float2 panelOrigin, Float2 panelSize)
     {
-        if (!isHovered) return false;
+        // While flying the pointer is pinned at the lock center rather than under the panel, so hover
+        // cannot be trusted until the gesture ends and the lock context is back off the stack.
+        if (!isHovered && !_flying) return false;
 
         bool consumed = false;
         float scroll = Input.MouseWheelDelta;
@@ -421,6 +426,7 @@ public class EditorCamera
         {
             _lockContext.PanelOrigin = panelOrigin;
             _lockContext.PanelSize = panelSize;
+            _flying = true;
             Input.PushLockContext(_lockContext);
             Input.LockCursor();
         }
@@ -467,8 +473,11 @@ public class EditorCamera
             consumed = true;
         }
 
-        if (Input.GetMouseButtonUp(1))
+        // The up edge can land in a frame before this runs, so flying also releases once the
+        // button is no longer held; a lock left engaged would strand the cursor at the lock center.
+        if (Input.GetMouseButtonUp(1) || (_flying && !Input.GetMouseButton(1)))
         {
+            _flying = false;
             Input.UnlockCursor();
             Input.PopLockContext();
         }
@@ -481,6 +490,16 @@ public class EditorCamera
         }
 
         return consumed;
+    }
+
+    /// <summary>Releases a mid-gesture flight whose owning panel closed before RMB went up; without this
+    /// the lock context and locked cursor would stay stranded on Input's stacks.</summary>
+    public void ReleaseFlight()
+    {
+        if (!_flying) return;
+        _flying = false;
+        Input.UnlockCursor();
+        Input.PopLockContext();
     }
 
     /// <summary>

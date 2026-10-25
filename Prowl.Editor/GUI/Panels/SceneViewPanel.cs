@@ -910,6 +910,7 @@ public class SceneViewPanel : DockPanel
     public override void OnClosed()
     {
         if (_wasGizmoActive) EndGizmoDrag();
+        _editorCamera?.ReleaseFlight();
     }
 
     private void EndGizmoDrag()
