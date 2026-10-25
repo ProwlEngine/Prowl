@@ -101,6 +101,7 @@ public class NetworkAnimatorTests
         var child = new GameObject("New model");
         child.SetParent(replica.Root, false);
         var replacement = child.AddComponent<Animator>();
+        replacement.Graph = replica.Animator.Graph;
         replica.Network.Bind(replacement);
         replica.Network.ApplyState();
         Assert.Equal(7.5f, replacement.GetFloat("Speed"));
