@@ -61,6 +61,8 @@ public class NetworkDiagnosticsPanel : DockPanel
         if (session != null) _peers.AddRange(session.Peers);
         _peers.Sort((a, b) => a.Id.CompareTo(b.Id));
         SampleRates(session);
+        string peersLabel = $"Peers ({_peers.Count})";
+        string objectsLabel = $"Objects ({NetworkDiagnostics.NetworkObjectCount})";
 
         // Only copy and refilter when something was captured, not every frame.
         if (!_paused && _historyVersion != NetworkDiagnostics.Version)
@@ -76,14 +78,14 @@ public class NetworkDiagnosticsPanel : DockPanel
             using (paper.Row("net_views").Height(34).Padding(8, 4).Gap(4).Enter())
             {
                 if (width < 480)
-                    Origami.Dropdown(paper, "net_view", _view, v => _view = v, Views).Width(92).Show();
+                    Origami.Dropdown(paper, "net_view", _view, v => _view = v, [Views[0], peersLabel, objectsLabel]).Width(124).Show();
                 else for (int i = 0; i < Views.Length; i++)
                 {
                     int view = i;
-                    paper.Box($"net_view_{i}").Width(width < 640 ? 60 : 76).Height(26).Rounded(EditorTheme.Roundness)
+                    paper.Box($"net_view_{i}").Width(i == 2 ? 112 : i == 1 ? 92 : width < 640 ? 60 : 76).Height(26).Rounded(EditorTheme.Roundness)
                         .BackgroundColor(_view == i ? EditorTheme.Ink200 : EditorTheme.Ink100)
                         .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                        .Text(Views[i], font).FontSize(EditorTheme.FontSizeSmall)
+                        .Text(i == 2 ? objectsLabel : i == 1 ? peersLabel : Views[i], font).FontSize(EditorTheme.FontSizeSmall)
                         .TextColor(_view == i ? EditorTheme.Ink500 : EditorTheme.Ink400)
                         .Alignment(TextAlignment.MiddleCenter).Cursor(PaperCursor.Pointer).OnClick(_ => _view = view);
                 }
