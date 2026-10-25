@@ -48,6 +48,9 @@ internal sealed class TransformSync
 
     public bool HasReceived { get; private set; }
 
+    /// <summary>True while received samples still need to be played back.</summary>
+    public bool HasPendingInterpolation { get; private set; }
+
     public uint LastReceivedTick { get; private set; }
 
     /// <summary>True once the object has come to rest and its exact pose has gone out reliably.</summary>
@@ -66,6 +69,7 @@ internal sealed class TransformSync
     {
         Samples.Clear();
         _timeline.Clear();
+        HasPendingInterpolation = false;
     }
 
     /// <summary>
@@ -163,6 +167,7 @@ internal sealed class TransformSync
         HasReceived = true;
         LastReceivedTick = tick;
         AddSample(new TransformSample(sentAt, position, rotation, scale));
+        HasPendingInterpolation = (go.Network.Flags & NetworkFlags.NoInterpolation) == 0;
         if ((go.Network.Flags & NetworkFlags.NoInterpolation) != 0)
         {
             ApplyNetworkTransform(go, position, rotation, scale);
@@ -188,7 +193,7 @@ internal sealed class TransformSync
     /// <summary>Shows the object where its controller had it, InterpolationDelay ago.</summary>
     public void Interpolate(GameObject go, double now)
     {
-        if (Samples.Count == 0 || (go.Network.Flags & NetworkFlags.NoInterpolation) != 0)
+        if (!HasPendingInterpolation || Samples.Count == 0 || (go.Network.Flags & NetworkFlags.NoInterpolation) != 0)
         {
             return;
         }
@@ -216,6 +221,9 @@ internal sealed class TransformSync
 
         ApplyNetworkTransform(go, Maths.Lerp(from.Position, to.Position, t),
             Quaternion.Slerp(from.Rotation, to.Rotation, t), Maths.Lerp(from.Scale, to.Scale, t));
+
+        // Keep the final sample for future updates, but stop applying it once playback catches up.
+        HasPendingInterpolation = renderTime < Samples[^1].Time;
     }
 
     private void AddSample(TransformSample sample)

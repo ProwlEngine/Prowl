@@ -30,13 +30,13 @@ internal sealed partial class NetworkSystem
         (go.Network.SyncsTransform(NetworkFlags.NoRotationSync) ? TransformChannels.Rotation : 0) |
         (go.Network.SyncsTransform(NetworkFlags.NoScaleSync) ? TransformChannels.Scale : 0);
 
-    /// <summary>Moves every object this peer doesn't control to where its controller had it, InterpolationDelay ago.</summary>
+    /// <summary>Plays pending transform samples for objects this peer doesn't control, InterpolationDelay behind.</summary>
     internal void ApplyInterpolation()
     {
         double now = Now;
         foreach (NetworkObject entry in Entries.Values)
         {
-            if (entry.GameObject.IsValid() && !HasControl(entry.GameObject))
+            if (entry.TransformSync.HasPendingInterpolation && entry.GameObject.IsValid() && !HasControl(entry.GameObject))
             {
                 entry.TransformSync.Interpolate(entry.GameObject, now);
             }
