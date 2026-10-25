@@ -435,7 +435,7 @@ public class NetworkDiagnosticsPanel : DockPanel
             return;
         }
         Origami.Table(paper, "net_objects", -1, _ => { })
-            .Bordered(false).Scroll(width, height).RowHeight(EditorTheme.RowHeight)
+            .Bordered(false).Scroll(width, height).Virtualize().RowHeight(EditorTheme.RowHeight)
             .Column("Object", 2).Column("Owner", 1).Column("Control", 1).Column("Transform sync", 1)
             .RowCount(_objects.Count).CellContent((i, col) =>
             {
