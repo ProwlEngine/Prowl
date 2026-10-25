@@ -65,6 +65,9 @@ public sealed class NetworkingSettings : ProjectSettingsBase
         Header(paper, "replication", "Replication");
         Number(paper, "tick", "Tick Rate (Hz)", Configuration.TickRate, v => Configuration.TickRate = v, 1, 240);
         Number(paper, "interpolation", "Interpolation Delay (ms)", Configuration.InterpolationMilliseconds, v => Configuration.InterpolationMilliseconds = v, 0, 5000);
+        Number(paper, "positionthreshold", "Position Settle Threshold (units)", Configuration.TransformPositionThreshold, v => Configuration.TransformPositionThreshold = v, 0, float.MaxValue);
+        Number(paper, "rotationthreshold", "Rotation Settle Threshold (degrees)", Configuration.TransformRotationThresholdDegrees, v => Configuration.TransformRotationThresholdDegrees = v, 0, 180);
+        Number(paper, "scalethreshold", "Scale Settle Threshold", Configuration.TransformScaleThreshold, v => Configuration.TransformScaleThreshold = v, 0, float.MaxValue);
 
         Header(paper, "snapshots", "Snapshot Limits");
         Integer(paper, "snapshotbytes", "Maximum Decompressed Bytes", Configuration.MaxSnapshotDecompressedBytes, v => Configuration.MaxSnapshotDecompressedBytes = v, 1, 1073741824);

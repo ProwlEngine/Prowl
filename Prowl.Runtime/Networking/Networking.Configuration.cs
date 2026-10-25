@@ -17,6 +17,8 @@ public static partial class Networking
     /// <summary>A copy of the configured project defaults.</summary>
     public static NetworkConfiguration Configuration => s_configuration.ValidatedCopy();
 
+    internal static NetworkConfiguration TransformConfiguration => System?.Configuration ?? s_configuration;
+
     /// <summary>Applies replication timing now; transport and session options apply to subsequent sessions.</summary>
     public static void Configure(NetworkConfiguration configuration)
     {

@@ -43,6 +43,15 @@ public sealed class NetworkConfiguration
     public int SendWindow = 4096;
     public bool SimulateNetwork;
     public float TickRate = 30;
+
+    /// <summary>Local position change from the last sent pose required to resume transform updates.</summary>
+    public float TransformPositionThreshold = 0.001f;
+
+    /// <summary>Rotation change in degrees from the last sent pose required to resume transform updates.</summary>
+    public float TransformRotationThresholdDegrees = 0.1f;
+
+    /// <summary>Local scale change from the last sent pose required to resume transform updates.</summary>
+    public float TransformScaleThreshold = 0.0001f;
     public float TimeoutSeconds = 10;
     public NetworkTransport Transport = NetworkTransport.Kcp;
 
@@ -70,6 +79,9 @@ public sealed class NetworkConfiguration
 
         copy.TickRate = Limit(copy.TickRate, 1, 240, 30);
         copy.InterpolationMilliseconds = Limit(copy.InterpolationMilliseconds, 0, 5000, 100);
+        copy.TransformPositionThreshold = Limit(copy.TransformPositionThreshold, 0, float.MaxValue, 0.001f);
+        copy.TransformRotationThresholdDegrees = Limit(copy.TransformRotationThresholdDegrees, 0, 180, 0.1f);
+        copy.TransformScaleThreshold = Limit(copy.TransformScaleThreshold, 0, float.MaxValue, 0.0001f);
         copy.MaxPeers = Math.Clamp(copy.MaxPeers, 1, 4096);
         copy.MaxMessageSize = Math.Clamp(copy.MaxMessageSize, 1024, 1024 * 1024 * 1024);
         copy.MaxSnapshotDecompressedBytes = Math.Clamp(copy.MaxSnapshotDecompressedBytes, 1, 1024 * 1024 * 1024);

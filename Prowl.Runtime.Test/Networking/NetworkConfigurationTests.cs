@@ -9,6 +9,28 @@ namespace Prowl.Runtime.Test;
 
 public class NetworkConfigurationTests : RuntimeTestBase
 {
+    [Fact]
+    public void TransformThresholdsNormalizeInvalidValuesAndAllowZero()
+    {
+        NetworkConfiguration normalized = new NetworkConfiguration
+        {
+            TransformPositionThreshold = float.NaN,
+            TransformRotationThresholdDegrees = 500,
+            TransformScaleThreshold = -1
+        }.ValidatedCopy();
+        Assert.Equal(0.001f, normalized.TransformPositionThreshold);
+        Assert.Equal(180f, normalized.TransformRotationThresholdDegrees);
+        Assert.Equal(0f, normalized.TransformScaleThreshold);
+
+        normalized.TransformPositionThreshold = 0;
+        normalized.TransformRotationThresholdDegrees = float.PositiveInfinity;
+        normalized.TransformScaleThreshold = float.NaN;
+        normalized = normalized.ValidatedCopy();
+        Assert.Equal(0f, normalized.TransformPositionThreshold);
+        Assert.Equal(0.1f, normalized.TransformRotationThresholdDegrees);
+        Assert.Equal(0.0001f, normalized.TransformScaleThreshold);
+    }
+
     [Theory]
     [InlineData(NetworkExecution.Auto, false)]
     [InlineData(NetworkExecution.Inline, false)]

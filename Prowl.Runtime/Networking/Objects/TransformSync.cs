@@ -26,12 +26,6 @@ internal sealed class TransformSync
     // Ticks a channel is still sent after it stops changing, while the rest of the object moves on.
     private const int LingerTicks = 3;
 
-    // Smaller changes don't count as movement, so a body jittering in place still settles. They accumulate
-    // against the last pose sent, so slow motion is still sent once it adds up.
-    private const float PositionEpsilon = 1e-4f;
-    private const float RotationEpsilon = 1e-5f;
-    private const float ScaleEpsilon = 1e-4f;
-
     private readonly TransformTimeline _timeline = new();
 
     // Sending, while this peer controls the object.
@@ -236,16 +230,20 @@ internal sealed class TransformSync
         Samples.Add(sample);
     }
 
-    private TransformChannels Changes(TransformChannels synced, Float3 position, Quaternion rotation, Float3 scale) =>
-        ((synced & TransformChannels.Position) != 0 && Moved(position, _sentPosition, PositionEpsilon)
+    // Compare with the last sent pose so slow movement accumulates, while bounded physics jitter can settle.
+    private TransformChannels Changes(TransformChannels synced, Float3 position, Quaternion rotation, Float3 scale)
+    {
+        NetworkConfiguration configuration = Networking.TransformConfiguration;
+        return ((synced & TransformChannels.Position) != 0 && Moved(position, _sentPosition, configuration.TransformPositionThreshold)
             ? TransformChannels.Position
             : 0) |
-        ((synced & TransformChannels.Rotation) != 0 && Moved(rotation, _sentRotation)
+        ((synced & TransformChannels.Rotation) != 0 && Moved(rotation, _sentRotation, configuration.TransformRotationThresholdDegrees)
             ? TransformChannels.Rotation
             : 0) |
-        ((synced & TransformChannels.Scale) != 0 && Moved(scale, _sentScale, ScaleEpsilon)
+        ((synced & TransformChannels.Scale) != 0 && Moved(scale, _sentScale, configuration.TransformScaleThreshold)
             ? TransformChannels.Scale
             : 0);
+    }
 
     /// <summary>The channels that changed recently but not this tick, counting down how long each has left.</summary>
     private TransformChannels Lingering(TransformChannels changed) =>
@@ -273,7 +271,15 @@ internal sealed class TransformSync
     internal bool Moved(Float3 a, Float3 b, float epsilon) =>
         MathF.Abs(a.X - b.X) > epsilon || MathF.Abs(a.Y - b.Y) > epsilon || MathF.Abs(a.Z - b.Z) > epsilon;
 
-    internal bool Moved(Quaternion a, Quaternion b) =>
-        MathF.Abs(a.X - b.X) > RotationEpsilon || MathF.Abs(a.Y - b.Y) > RotationEpsilon ||
-        MathF.Abs(a.Z - b.Z) > RotationEpsilon || MathF.Abs(a.W - b.W) > RotationEpsilon;
+    private static bool Moved(Quaternion a, Quaternion b, float degrees)
+    {
+        a = Quaternion.Normalize(a);
+        b = Quaternion.Normalize(b);
+        // q and -q describe the same rotation. Use the shorter chord, avoiding acos precision loss near rest.
+        float dx = a.X - b.X, dy = a.Y - b.Y, dz = a.Z - b.Z, dw = a.W - b.W;
+        float sx = a.X + b.X, sy = a.Y + b.Y, sz = a.Z + b.Z, sw = a.W + b.W;
+        float chord = 2 * MathF.Sin(degrees * Maths.Deg2Rad * 0.25f);
+        return MathF.Min(dx * dx + dy * dy + dz * dz + dw * dw,
+            sx * sx + sy * sy + sz * sz + sw * sw) > chord * chord;
+    }
 }
