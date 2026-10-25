@@ -50,6 +50,11 @@ internal static class Scripts
         return (errors.Count == 0 ? Assembly.Load(image.ToArray()) : null, errors);
     }
 
+    /// <summary>The warnings generation reports for <paramref name="sources" />, one file each.</summary>
+    public static IReadOnlyList<Diagnostic> Warnings(params string[] sources) =>
+        Generate(sources.Select((source, i) => Parse(source, $"Script{i}.cs")).ToArray()).Diagnostics
+            .Where(d => d.Severity == DiagnosticSeverity.Warning).ToList();
+
     /// <summary>Compiles <paramref name="sources" />, which must have no errors, and loads them.</summary>
     public static Assembly Compile(params string[] sources)
     {

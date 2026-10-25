@@ -89,6 +89,11 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         "Static RPC '{0}' must be declared in a non-generic class and cannot use Owner or OwnerOnly",
         "Networking", DiagnosticSeverity.Error, true);
 
+    private static readonly DiagnosticDescriptor s_unreliableChannel = new(
+        "PROWLNET009", "Channel ignored on an unreliable RPC",
+        "RPC '{0}' is unreliable, so its Channel is ignored: unreliable calls have no order to keep and go on channel 0",
+        "Networking", DiagnosticSeverity.Warning, true);
+
     // A file whose rewrite comes out the same gets back the very same tree, so the compiler's incremental reuse holds.
     private static readonly ConditionalWeakTable<SyntaxTree, Rewritten> s_rewritten = new();
 

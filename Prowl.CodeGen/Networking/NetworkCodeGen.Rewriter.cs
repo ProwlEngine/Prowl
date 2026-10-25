@@ -377,6 +377,11 @@ internal sealed partial class NetworkCodeGen
             uint flags = rpc.ConstructorArguments.Select(a => Convert.ToUInt32(a.Value)).FirstOrDefault();
             byte channel = rpc.NamedArguments.Where(a => a.Key == "Channel")
                 .Select(a => Convert.ToByte(a.Value.Value)).LastOrDefault();
+            if (channel != 0 && (flags & 1u) != 0)
+            {
+                context.Report(s_unreliableChannel, location, method.Name);
+            }
+
             if (method.IsStatic && (kind.Name == "OwnerAttribute" || (flags & 4u) != 0 ||
                                     GenericContainer(method.ContainingType)))
             {

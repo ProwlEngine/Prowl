@@ -79,6 +79,21 @@ public class DiagnosticTests
         Assert.Contains(Scripts.Build(script).Errors, e => e.Id == id);
 
     [Fact]
+    public void AChannelOnAnUnreliableRpcIsAWarning()
+    {
+        const string script = """
+                              using Prowl.Runtime.Networking;
+                              public class A : Prowl.Runtime.Component
+                              {
+                                  [Rpc.Broadcast(RpcFlags.Unreliable, Channel = 1)] public void Loose() { }
+                                  [Rpc.Broadcast(Channel = 1)] public void Ordered() { }
+                              }
+                              """;
+        Assert.Contains("Loose", Assert.Single(Scripts.Warnings(script), w => w.Id == "PROWLNET009").GetMessage());
+        Assert.NotNull(Scripts.Compile(script));
+    }
+
+    [Fact]
     public void AChangeHookCanBeNamedByAConstant() => Scripts.Compile(
         "public class A : Prowl.Runtime.Component { const string Name = \"F\"; [Prowl.Runtime.Networking.Sync, Prowl.Runtime.Networking.Change(Name)] public int X { get; set; } void F() { } }");
 }
