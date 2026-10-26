@@ -122,17 +122,17 @@ full past of that library.
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/MiniMe453">
-                    <img src="https://avatars.githubusercontent.com/u/25212675?v=4" width="100;" alt="MiniMe453"/>
-                    <br />
-                    <sub><b>MiniMe453</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/paulbartrum">
                     <img src="https://avatars.githubusercontent.com/u/1572571?v=4" width="100;" alt="paulbartrum"/>
                     <br />
                     <sub><b>paulbartrum</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/MiniMe453">
+                    <img src="https://avatars.githubusercontent.com/u/25212675?v=4" width="100;" alt="MiniMe453"/>
+                    <br />
+                    <sub><b>MiniMe453</b></sub>
                 </a>
             </td>
 		</tr>
