@@ -1982,8 +1982,9 @@ public class EditorAssetBackend : AssetBackend
             return false;
         }
 
-        if (isFolder && (newPath.Equals(source, StringComparison.OrdinalIgnoreCase)
-                         || newPath.StartsWith(source + "/", StringComparison.OrdinalIgnoreCase)))
+        // Resolved paths, so a "./" or ".." in either can't slip a folder into itself
+        if (isFolder && (newAbsolute.Equals(sourceAbsolute, StringComparison.OrdinalIgnoreCase)
+                         || newAbsolute.StartsWith(sourceAbsolute + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
         {
             Runtime.Debug.LogWarning($"Skipped: can't copy folder '{source}' into itself.");
             return false;

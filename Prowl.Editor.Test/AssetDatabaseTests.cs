@@ -577,16 +577,16 @@ public class AssetDatabaseTests : EditorTestHarness
         Assets.Refresh();
         int before = Directory.GetFileSystemEntries(Project.AssetsPath, "*", SearchOption.AllDirectories).Length;
 
-        List<string> copied = Assets.CopyAssets([("F", "F")]);
+        Assert.Empty(Assets.CopyAssets([("F", "F")]));
+        Assert.Empty(Assets.CopyAssets([("./F", "F")]));
+        Assert.False(Assets.CopyAsset("./F", "F/Copy"));
 
-        Assert.Empty(copied);
         Assert.Equal(before, Directory.GetFileSystemEntries(Project.AssetsPath, "*", SearchOption.AllDirectories).Length);
     }
 
     [Fact]
     public void CopyAssets_BesideItself_CountsOn()
     {
-        CreateMaterial("M.mat");
         CreateMaterial("M (1).mat");
 
         string copy = Assert.Single(Assets.CopyAssets([("M (1).mat", "")]));

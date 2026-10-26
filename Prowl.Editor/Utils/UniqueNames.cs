@@ -28,13 +28,15 @@ public static class UniqueNames
     /// <param name="closeSeparator">String appended after the number - e.g. <c>")"</c> for the parens style, empty for the others.</param>
     /// <param name="stripExistingSuffix">When true, an existing trailing suffix matching this format is parsed off and its number used as the starting point. <c>"Cube (3)"</c> tries <c>"Cube (4)"</c> first instead of <c>"Cube (3) (1)"</c>.</param>
     /// <param name="startNumber">First number to try when no suffix is found / parsed. Defaults to 1.</param>
+    /// <param name="allowBaseName">When a suffix was stripped, whether the bare base name may be returned if it is free. False always counts on, so <c>"Cube (3)"</c> never comes back as <c>"Cube"</c>.</param>
     public static string MakeUnique(
         string desired,
         Func<string, bool> exists,
         string openSeparator = " (",
         string closeSeparator = ")",
         bool stripExistingSuffix = true,
-        int startNumber = 1)
+        int startNumber = 1,
+        bool allowBaseName = true)
     {
         ArgumentNullException.ThrowIfNull(desired);
         ArgumentNullException.ThrowIfNull(exists);
@@ -60,7 +62,7 @@ public static class UniqueNames
         }
 
         if (!exists(desired)) return desired;
-        if (baseName != desired && !exists(baseName)) return baseName;
+        if (allowBaseName && baseName != desired && !exists(baseName)) return baseName;
 
         while (true)
         {
@@ -93,16 +95,16 @@ public static class UniqueNames
     /// must include the leading dot (or be empty for folders). Uses the <c>" (N)"</c> convention.
     /// </summary>
     public static string ForFile(string folder, string baseName, string ext)
-        => UniqueFileName(folder, baseName, ext, stripExistingSuffix: false);
+        => UniqueFileName(folder, baseName, ext, countOn: false);
 
     /// <summary>
     /// Like <see cref="ForFile"/>, but count on from an existing <c>" (N)"</c> suffix, so copying <c>"Mat (1)"</c>
     /// beside itself yields <c>"Mat (2)"</c>.
     /// </summary>
     public static string ForCopy(string folder, string baseName, string ext)
-        => UniqueFileName(folder, baseName, ext, stripExistingSuffix: true);
+        => UniqueFileName(folder, baseName, ext, countOn: true);
 
-    private static string UniqueFileName(string folder, string baseName, string ext, bool stripExistingSuffix)
+    private static string UniqueFileName(string folder, string baseName, string ext, bool countOn)
     {
         ArgumentNullException.ThrowIfNull(folder);
         ArgumentNullException.ThrowIfNull(baseName);
@@ -114,7 +116,7 @@ public static class UniqueNames
             return File.Exists(full) || Directory.Exists(full);
         }
 
-        string unique = MakeUnique(baseName, Exists, stripExistingSuffix: stripExistingSuffix);
+        string unique = MakeUnique(baseName, Exists, stripExistingSuffix: countOn, allowBaseName: !countOn);
         return unique + ext;
     }
 }
