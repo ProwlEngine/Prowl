@@ -91,7 +91,7 @@ public abstract class StationGame : Game
         CameraObject = new GameObject("Main Camera") { Tag = "Main Camera" };
         MainCamera = CameraObject.AddComponent<Camera>();
         MainCamera.FarClipPlane = 500f;
-        MainCamera.Profile = new VolumeProfile();
+        MainCamera.Profile = VolumeProfile.CreateCameraDefault("Main Camera Profile");
         Bloom bloom = MainCamera.Profile.Add<Bloom>();
         bloom.Intensity.Set(0.4f);
         bloom.Threshold.Set(1.0f);

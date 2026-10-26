@@ -86,6 +86,17 @@ public class HeadlessGraphicsTests
     }
 
     [Fact]
+    public void CustomTonemapShaders_CompileInsideTheDisplayEncode()
+    {
+        string shader = Rendering.PostEffect.TonemapShader("void main() { vec4 c = Graphite_SampleSource(vUV); outColor = vec4(c.rgb / (1.0 + c.rgb), c.a); }");
+        ShaderPass pass = FullscreenProgram.Pass(shader, "CustomTonemap");
+        List<Keyword> combo = [];
+        foreach (VariantSpace axis in Graphics.Compiler.GetAxes(pass))
+            combo.Add(new Keyword(axis.Name, axis.Name == "GRAPHITE_NO_SOURCE" ? "false" : axis.Values[0]));
+        Graphics.Compiler.CompileProgram(pass, [.. combo]);
+    }
+
+    [Fact]
     public void Lit_ExposesPbrFactors()
     {
         // The model importer sets these factors, so every glTF material without textures depends on them

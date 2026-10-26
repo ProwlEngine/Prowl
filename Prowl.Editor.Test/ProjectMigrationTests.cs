@@ -193,6 +193,103 @@ public class ProjectMigrationTests : IDisposable
         Assert.Equal($"{target}/{unrelated}/Color.R", items[2]["Path"].StringValue);
     }
 
+    private static EchoObject Profile(params EchoObject[] components)
+    {
+        var values = EchoObject.NewList();
+        foreach (EchoObject component in components)
+            values.ListAdd(component);
+        var list = EchoObject.NewCompound();
+        list["$values"] = values;
+        var profile = EchoObject.NewCompound();
+        profile["Components"] = list;
+        profile["Name"] = new EchoObject("Profile");
+        return profile;
+    }
+
+    private static EchoObject VolumeComponent(string type, long? mode = null)
+    {
+        var component = EchoObject.NewCompound();
+        component["$type"] = new EchoObject($"Prowl.Runtime.Rendering.{type}, Prowl.Runtime");
+        if (mode is long value)
+        {
+            var parameter = EchoObject.NewCompound();
+            parameter["Value"] = new EchoObject(value);
+            parameter["Override"] = new EchoObject(true);
+            component["Mode"] = parameter;
+        }
+        component["Active"] = new EchoObject(true);
+        return component;
+    }
+
+    private static EchoObject[] ProfileComponents(EchoObject camera) => [.. camera["Profile"]["Components"]["$values"].List];
+
+    private static long TonemappingMode(EchoObject camera)
+        => ProfileComponents(camera).Single(c => c["$type"].StringValue.StartsWith("Prowl.Runtime.Rendering.Tonemapping,")).Get("Mode")!["Value"].LongValue;
+
+    [Fact]
+    public void CameraTonemapping_MovesIntoTheBaseProfile()
+    {
+        EchoObject sharedAsset = Profile();
+        sharedAsset["$type"] = new EchoObject("Prowl.Runtime.Rendering.VolumeProfile, Prowl.Runtime");
+        string profilePath = WriteAsset("Shared.volume", sharedAsset.WriteToString(), "CustomAssetImporter");
+        Guid shared = MetaFile.Read(profilePath + ".meta").Guid;
+        var sharedRef = EchoObject.NewCompound();
+        sharedRef["$asset"] = new EchoObject(shared.ToString());
+
+        string scene = WriteAsset("Main.scene", Scene(
+            OldComponent("Camera", Guid.NewGuid(), ("Tonemapping", new EchoObject(0L))),
+            OldComponent("Camera", Guid.NewGuid(), ("Tonemapping", new EchoObject(2L)), ("HDR", new EchoObject(false))),
+            OldComponent("Camera", Guid.NewGuid(), ("Profile", Profile(VolumeComponent("Bloom")))),
+            OldComponent("Camera", Guid.NewGuid(), ("Tonemapping", new EchoObject(3L)), ("Profile", Profile(VolumeComponent("Tonemapping", 5L)))),
+            OldComponent("Camera", Guid.NewGuid(), ("Tonemapping", new EchoObject(5L)), ("Profile", sharedRef))), "SceneImporter");
+        WriteProwlFile("1.0-preview.5");
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject[] cameras = [.. Item(scene).List];
+        Assert.All(cameras, c => Assert.False(c.TryGet("Tonemapping", out _)));
+        Assert.Equal(1L, TonemappingMode(cameras[0]));
+        Assert.False(cameras[1].TryGet("Profile", out _));
+        Assert.Equal(3L, TonemappingMode(cameras[2]));
+        Assert.Equal(2, ProfileComponents(cameras[2]).Length);
+        Assert.Equal(5L, TonemappingMode(cameras[3]));
+        Assert.Single(ProfileComponents(cameras[3]));
+        Assert.Equal(shared.ToString(), cameras[4]["Profile"]["$asset"].StringValue);
+
+        EchoObject sharedProfile = EchoObject.ReadFromString(File.ReadAllText(profilePath));
+        Assert.Equal(6L, Assert.Single(sharedProfile["Components"]["$values"].List).Get("Mode")!["Value"].LongValue);
+
+        var profile = Serializer.Deserialize<Prowl.Runtime.Rendering.VolumeProfile>(cameras[0]["Profile"])!;
+        var tonemapping = profile.Get<Prowl.Runtime.Rendering.Tonemapping>()!;
+        Assert.Equal(Prowl.Runtime.Rendering.TonemappingMode.ACES, tonemapping.Mode.Value);
+        Assert.True(tonemapping.Mode.Override);
+    }
+
+    [Fact]
+    public void CameraTonemappingOverrides_AreDropped_AndTheStepCanRunAgain()
+    {
+        Guid camera = Guid.NewGuid();
+        WriteAsset("Rig.prefab", Scene(OldComponent("Camera", camera, ("Tonemapping", new EchoObject(1L)))), "PrefabImporter");
+        EchoObject Override(string path)
+        {
+            var entry = EchoObject.NewCompound();
+            entry["Path"] = new EchoObject(path);
+            entry["Value"] = new EchoObject(4L);
+            return entry;
+        }
+        string target = Guid.NewGuid().ToString();
+        string scene = WriteAsset("Main.scene", Scene(Override($"{target}/{camera}/Tonemapping"), Override($"{target}/{camera}/HDR")), "SceneImporter");
+        WriteProwlFile("1.0-preview.5");
+
+        ProjectMigration.Migrate(Project.Open(_root));
+        Migration.Releases.Release_1_0.CameraTonemappingToProfile(new MigrationContext(Project.Open(_root)));
+
+        Assert.Equal($"{target}/{camera}/HDR", Assert.Single(Item(scene).List)["Path"].StringValue);
+        EchoObject rig = Item(Path.Combine(_root, "Assets", "Rig.prefab"))[0];
+        Assert.Equal(2L, TonemappingMode(rig));
+        Assert.Single(ProfileComponents(rig));
+    }
+
     [Fact]
     public void LegacyPreviewProject_NeedsMigration()
     {

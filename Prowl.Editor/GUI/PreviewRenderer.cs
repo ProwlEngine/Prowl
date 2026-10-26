@@ -81,6 +81,7 @@ public class PreviewRenderer : IDisposable
         _camera.FarClipPlane = 100f;
         _camera.Background = CameraBackground.Skybox;
         _camera.StereoTargetEye = StereoTargetEyeMask.None;
+        _camera.Profile = VolumeProfile.CreateCameraDefault("Preview Profile");
         _scene.Add(_cameraGo);
 
         // Light

@@ -97,9 +97,11 @@ public class Camera : Component
     [ShowIf(nameof(UsesSmaa))] public SmaaSettings Smaa = new();
     [ShowIf(nameof(UsesTaa))] public TaaSettings Taa = new();
 
-    /// <summary>Renders into 16 bit float colour and tonemaps it. Off renders into 8 bit sRGB, where light above 1 clips.</summary>
+    /// <summary>
+    /// Renders into 16 bit float colour, which a <see cref="Rendering.Tonemapping"/> volume component maps to the display.
+    /// Off renders into 8 bit sRGB, where light above 1 clips.
+    /// </summary>
     public bool HDR = true;
-    [ShowIf(nameof(HDR))] public TonemappingMode Tonemapping = TonemappingMode.AgXPunchy;
 
     private bool UsesFxaa => AntiAliasing == AntiAliasingMode.FXAA;
     private bool UsesSmaa => AntiAliasing == AntiAliasingMode.SMAA;
@@ -185,7 +187,6 @@ public class Camera : Component
     [SerializeIgnore, NonSerialized, NotHeld] private readonly List<RenderFeature> _activeFeatures = [];
     [SerializeIgnore, NonSerialized, NotHeld] private VolumeStack? _volumes;
     [SerializeIgnore, NonSerialized, NotHeld] private AntiAliasingFeatures? _antiAliasing;
-    [SerializeIgnore, NonSerialized, NotHeld] private TonemappingFeature? _tonemapping;
     [NonSerialized, NotHeld] private readonly Dictionary<Type, object> _renderData = [];
 
     /// <summary>The id of this camera's view, which keys Graphite's state for it such as temporal history.</summary>
@@ -476,7 +477,7 @@ public class Camera : Component
             new Float4(0, 0, near, 0));
     }
 
-    // The features of the blended volumes, the tonemapper and the anti aliasing, then the render's own
+    // The features of the blended volumes and the anti aliasing, then the render's own
     private FeatureSet BuildFeatures(IReadOnlyList<RenderFeature>? extra)
     {
         Renderer renderer = Graphics.Renderer!;
@@ -485,11 +486,6 @@ public class Camera : Component
         {
             ResolveVolumes();
             Volumes.CollectFeatures(renderer, this, _activeFeatures);
-        }
-        if (HDR)
-        {
-            _tonemapping ??= new TonemappingFeature();
-            _activeFeatures.Add(_tonemapping.Get(renderer, Tonemapping));
         }
         _antiAliasing ??= new AntiAliasingFeatures();
         RenderFeature? antiAliasing = _antiAliasing.Get(renderer, AntiAliasing, Fxaa, Smaa, Taa);

@@ -19,7 +19,143 @@ internal sealed class Release_1_0 : MigrationRelease
         new("Mesh, sprite and text renderer settings saved behind properties", ctx => RenameSettings(ctx, s_rendererRenames)),
         new("Light, fog light, decal and reflection probe settings saved behind properties", ctx => RenameSettings(ctx, s_lightRenames)),
         new("Texture import types: masks become linear Default textures, sprites need the Sprite type, sizes kept", ctx => ctx.RewriteImporterSettings("TextureImporter", TextureImportTypes)),
+        new("Camera tonemapping moved into the camera's base profile as a Tonemapping volume component", CameraTonemappingToProfile),
     ];
+
+    private const string CameraType = "Prowl.Runtime.Camera";
+    private const string VolumeProfileType = "Prowl.Runtime.Rendering.VolumeProfile";
+    private const string TonemappingType = "Prowl.Runtime.Rendering.Tonemapping";
+
+    // TonemappingMode.AgXPunchy, the camera's old default. The volume enum puts None first, one before the camera's values.
+    private const long AgXPunchy = 3;
+
+    /// <summary>
+    /// An HDR camera's Tonemapping mode becomes a Tonemapping component in its base profile: added to an inline profile,
+    /// to a profile asset it references, or in a new inline profile. A profile that has one already keeps it. Prefab
+    /// overrides of the old field are dropped, as a profile component has no override path.
+    /// </summary>
+    internal static void CameraTonemappingToProfile(MigrationContext ctx)
+    {
+        Dictionary<Guid, long> sharedProfiles = [];
+        HashSet<string> cameras = new(StringComparer.OrdinalIgnoreCase);
+        ctx.RewriteEchoAssets(echo => MoveCameraTonemapping(echo, sharedProfiles, cameras));
+        ctx.RewriteEchoAssets((guid, echo) =>
+            sharedProfiles.TryGetValue(guid, out long mode) && TypeName(echo) == VolumeProfileType && AddTonemapping(echo, mode) ? echo : null);
+        ctx.RewriteEchoAssets(echo => DropTonemappingOverrides(echo, cameras));
+    }
+
+    private static EchoObject? MoveCameraTonemapping(EchoObject echo, Dictionary<Guid, long> sharedProfiles, HashSet<string> cameras)
+    {
+        bool changed = false;
+        MoveCameraTonemapping(echo, sharedProfiles, cameras, ref changed);
+        return changed ? echo : null;
+    }
+
+    private static void MoveCameraTonemapping(EchoObject tag, Dictionary<Guid, long> sharedProfiles, HashSet<string> cameras, ref bool changed)
+    {
+        if (tag.TagType == EchoType.List)
+        {
+            foreach (EchoObject item in tag.List)
+                MoveCameraTonemapping(item, sharedProfiles, cameras, ref changed);
+            return;
+        }
+        if (tag.TagType != EchoType.Compound) return;
+
+        if (TypeName(tag) == CameraType)
+        {
+            foreach (string id in new[] { "_identifier", "_prefabTemplateIdentity" })
+            {
+                if (tag.TryGet(id, out EchoObject? guid) && guid!.TagType == EchoType.String)
+                    cameras.Add(guid.StringValue);
+            }
+
+            long mode = AgXPunchy;
+            if (tag.TryGet("Tonemapping", out EchoObject? old))
+            {
+                if (old!.TagType is not (EchoType.String or EchoType.Null) && old.LongValue is >= 0 and <= 5) mode = old.LongValue + 1;
+                tag.Remove("Tonemapping");
+                changed = true;
+            }
+
+            bool hdr = !tag.TryGet("HDR", out EchoObject? hdrTag) || hdrTag!.TagType != EchoType.Bool || hdrTag.BoolValue;
+            if (hdr) changed |= EnsureTonemapping(tag, mode, sharedProfiles);
+        }
+
+        foreach (string child in tag.GetNames().ToList())
+            MoveCameraTonemapping(tag[child], sharedProfiles, cameras, ref changed);
+    }
+
+    private static bool EnsureTonemapping(EchoObject camera, long mode, Dictionary<Guid, long> sharedProfiles)
+    {
+        if (!camera.TryGet("Profile", out EchoObject? profile) || profile!.TagType != EchoType.Compound)
+        {
+            var created = EchoObject.NewCompound();
+            created["Name"] = new EchoObject("Camera Profile");
+            AddTonemapping(created, mode);
+            camera["Profile"] = created;
+            return true;
+        }
+
+        if (profile.TryGet("$asset", out EchoObject? asset))
+        {
+            if (asset!.TagType == EchoType.String && Guid.TryParse(asset.StringValue, out Guid guid)) sharedProfiles.TryAdd(guid, mode);
+            return false;
+        }
+        return !profile.TryGet("$ref", out _) && AddTonemapping(profile, mode);
+    }
+
+    private static bool AddTonemapping(EchoObject profile, long mode)
+    {
+        if (!profile.TryGet("Components", out EchoObject? components) || components!.TagType is not (EchoType.Compound or EchoType.List))
+        {
+            components = EchoObject.NewCompound();
+            components["$values"] = EchoObject.NewList();
+            profile["Components"] = components;
+        }
+
+        EchoObject list = components.TagType == EchoType.List ? components : components.TryGet("$values", out EchoObject? values) ? values! : components["$values"] = EchoObject.NewList();
+        if (list.List.Any(c => c.TagType == EchoType.Compound && TypeName(c) == TonemappingType)) return false;
+
+        var parameter = EchoObject.NewCompound();
+        parameter["Value"] = new EchoObject(mode);
+        parameter["Override"] = new EchoObject(true);
+        var tonemapping = EchoObject.NewCompound();
+        tonemapping["$type"] = new EchoObject(TonemappingType + ", Prowl.Runtime");
+        tonemapping["Mode"] = parameter;
+        tonemapping["Active"] = new EchoObject(true);
+        list.ListAdd(tonemapping);
+        return true;
+    }
+
+    // Prefab override lists hold compounds with a Path of {object}/{component}/{member}
+    private static EchoObject? DropTonemappingOverrides(EchoObject echo, HashSet<string> cameras)
+    {
+        bool changed = false;
+        DropTonemappingOverrides(echo, cameras, ref changed);
+        return changed ? echo : null;
+    }
+
+    private static void DropTonemappingOverrides(EchoObject tag, HashSet<string> cameras, ref bool changed)
+    {
+        if (tag.TagType == EchoType.List)
+        {
+            int removed = tag.List.RemoveAll(item => IsTonemappingOverride(item, cameras));
+            changed |= removed > 0;
+            foreach (EchoObject item in tag.List)
+                DropTonemappingOverrides(item, cameras, ref changed);
+            return;
+        }
+        if (tag.TagType != EchoType.Compound) return;
+        foreach (string child in tag.GetNames().ToList())
+            DropTonemappingOverrides(tag[child], cameras, ref changed);
+    }
+
+    private static bool IsTonemappingOverride(EchoObject item, HashSet<string> cameras)
+    {
+        if (item.TagType != EchoType.Compound || !item.TryGet("Path", out EchoObject? path) || path!.TagType != EchoType.String) return false;
+        string[] parts = path.StringValue.Split('/', 3);
+        return parts.Length == 3 && cameras.Contains(parts[1]) && (parts[2] == "Tonemapping" || parts[2].StartsWith("Tonemapping.", StringComparison.Ordinal));
+    }
 
     /// <summary>
     /// Mask textures (type 2) become Default with sRGB off, any texture slicing sprites becomes a Sprite (type 3), baked

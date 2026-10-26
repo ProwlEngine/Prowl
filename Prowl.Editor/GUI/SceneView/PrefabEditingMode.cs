@@ -11,6 +11,7 @@ using Prowl.Editor.Projects;
 using Prowl.OrigamiUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -167,6 +168,7 @@ public static class PrefabEditingMode
         camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
         Camera cam = camGo.AddComponent<Camera>();
         cam.Depth = -1;
+        cam.Profile = VolumeProfile.CreateCameraDefault("PrefabEdit Camera Profile");
         editScene.Add(camGo);
 
         var lightGo = new GameObject("PrefabEdit Light");

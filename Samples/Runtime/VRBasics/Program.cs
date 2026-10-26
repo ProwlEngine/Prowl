@@ -78,6 +78,7 @@ public sealed class VRBasicsGame : Game
         head.SetParent(rig);
         head.Transform.LocalPosition = new Float3(0f, 1.65f, 0f);
         Camera camera = head.AddComponent<Camera>();
+        camera.Profile = VolumeProfile.CreateCameraDefault("Head Camera Profile");
         camera.NearClipPlane = 0.05f;
         head.AddComponent<TrackedPoseDriver>().Node = XRNode.Head;
 

@@ -10,6 +10,7 @@ using Prowl.Editor.Prefabs;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -103,6 +104,7 @@ public static class EditorSceneManager
         camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
         Camera cam = camGo.AddComponent<Camera>();
         cam.Depth = -1;
+        cam.Profile = VolumeProfile.CreateCameraDefault("Main Camera Profile");
         scene.Add(camGo);
 
         var lightGo = new GameObject("Directional Light");

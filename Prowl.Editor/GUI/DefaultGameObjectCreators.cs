@@ -6,6 +6,7 @@ using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Terrain;
 using Prowl.Runtime.UI;
@@ -431,7 +432,7 @@ internal static class DefaultGameObjectCreators
     static void CreateCamera()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Camera", MenuContext.ActiveGameObject);
-        go.AddComponent<Camera>();
+        go.AddComponent<Camera>().Profile = VolumeProfile.CreateCameraDefault("Camera Profile");
     }
 
     private static void CreatePrimitive(string name, DefaultModel model)

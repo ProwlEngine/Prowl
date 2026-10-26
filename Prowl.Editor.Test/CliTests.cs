@@ -591,6 +591,22 @@ public class CliEditorCommandTests : EditorTestHarness
         Assert.DoesNotContain(created["roots"]!.AsArray(), r => r!.GetValue<string>() == "OnlyInTheOldScene");
         Assert.DoesNotContain(Scene.Current.AllObjects, g => g.Name == "OnlyInTheOldScene");
     }
+
+    [Fact]
+    public void NewScenesAndTheCameraMenu_GiveCamerasTonemapping()
+    {
+        static void AssertTonemaps(Camera camera)
+        {
+            var tonemapping = camera.Profile!.Get<Prowl.Runtime.Rendering.Tonemapping>()!;
+            Assert.Equal(Prowl.Runtime.Rendering.TonemappingMode.AgXPunchy, tonemapping.Mode.Value);
+            Assert.True(tonemapping.Mode.Override);
+        }
+
+        AssertTonemaps(Assert.Single(EditorSceneManager.CreateDefaultScene().FindObjectsOfType<Camera>())!);
+
+        typeof(GUI.DefaultGameObjectCreators).GetMethod("CreateCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, null);
+        AssertTonemaps(Scene.Current.AllObjects.Single(g => g.Name == "Camera").GetComponent<Camera>()!);
+    }
 }
 
 /// <summary> Asset, prefab, script and import settings commands against a throwaway project. </summary>

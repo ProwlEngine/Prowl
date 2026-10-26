@@ -115,7 +115,7 @@ public sealed class ParticleShowcaseGame : StationGame
 
         MainCamera.Background = CameraBackground.Color;
         MainCamera.BackgroundColor = new Color(0.02f, 0.025f, 0.045f, 1f);
-        MainCamera.Profile = new VolumeProfile();
+        MainCamera.Profile = VolumeProfile.CreateCameraDefault("Main Camera Profile");
         Bloom bloom = MainCamera.Profile.Add<Bloom>();
         bloom.Intensity.Set(0.6f);
         bloom.Threshold.Set(1.0f);

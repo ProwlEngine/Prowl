@@ -274,18 +274,20 @@ public class EditorCamera
         _camera.ReleaseVolumes();
     }
 
-    // The scene view resolves volumes itself; only the main camera's base profile, volume layers, HDR, tonemapping and
-    // anti aliasing are borrowed
+    private VolumeProfile? _defaultProfile;
+
+    // The scene view resolves volumes itself; only the main camera's base profile, volume layers, HDR and anti aliasing
+    // are borrowed, a new camera's default profile standing in without one
     private void MirrorSceneCamera(Scene scene)
     {
         _camera.PostProcessing = PostProcessing;
         Camera? sceneCamera = FindSceneCamera(scene);
         if (sceneCamera.IsNotValid() || sceneCamera == _camera)
         {
-            _camera.Profile = null;
+            if (_defaultProfile.IsNotValid()) _defaultProfile = VolumeProfile.CreateCameraDefault("Scene View Profile");
+            _camera.Profile = _defaultProfile;
             _camera.VolumeMask = LayerMask.Everything;
             _camera.HDR = true;
-            _camera.Tonemapping = TonemappingMode.AgXPunchy;
             _camera.AntiAliasing = AntiAliasingMode.None;
             return;
         }
@@ -293,7 +295,6 @@ public class EditorCamera
         _camera.Profile = sceneCamera.Profile;
         _camera.VolumeMask = sceneCamera.VolumeMask;
         _camera.HDR = sceneCamera.HDR;
-        _camera.Tonemapping = sceneCamera.Tonemapping;
         _camera.AntiAliasing = sceneCamera.AntiAliasing;
         _camera.Fxaa = sceneCamera.Fxaa;
         _camera.Smaa = sceneCamera.Smaa;

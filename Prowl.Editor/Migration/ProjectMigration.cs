@@ -149,11 +149,15 @@ public sealed class MigrationContext
         RewriteProjectSettings(convert);
     }
 
-    public void RewriteEchoAssets(Func<EchoObject, EchoObject?> convert)
+    public void RewriteEchoAssets(Func<EchoObject, EchoObject?> convert) => RewriteEchoAssets((_, echo) => convert(echo));
+
+    /// <summary> Runs convert on every Echo asset file with the asset's GUID. Convert returns null to leave one alone. </summary>
+    public void RewriteEchoAssets(Func<Guid, EchoObject, EchoObject?> convert)
     {
         foreach (string metaPath in MetaFiles())
         {
-            string importer = ShortName(MetaFile.Read(metaPath).ImporterType);
+            MetaFileData meta = MetaFile.Read(metaPath);
+            string importer = ShortName(meta.ImporterType);
             bool binary = s_echoBinaryImporters.Contains(importer);
             if (!binary && !s_echoTextImporters.Contains(importer)) continue;
 
@@ -161,7 +165,7 @@ public sealed class MigrationContext
             if (!File.Exists(path)) continue;
 
             EchoObject echo = binary ? EchoObject.ReadFromBinary(new FileInfo(path)) : EchoObject.ReadFromString(File.ReadAllText(path));
-            if (convert(echo) is not { } result) continue;
+            if (convert(meta.Guid, echo) is not { } result) continue;
 
             if (binary) result.WriteToBinary(new FileInfo(path));
             else File.WriteAllText(path, result.WriteToString());
