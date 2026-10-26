@@ -32,11 +32,17 @@
     #define GRAPHITE_STANDARD_LIT
 #endif
 
+// Passes whose fragments read the vertex colour and world position: forward, and the depth passes of cutout surfaces
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(_SURFACE_CUTOUT)
+    #define GRAPHITE_STANDARD_VERTEX_DATA
+#endif
+
 #ifdef GRAPHITE_VERTEX
     #define GRAPHITE_STANDARD_VARYING out
     #include "Graphite/Vertex.glsl"
 #else
     #define GRAPHITE_STANDARD_VARYING in
+    #include "Graphite/Core.glsl"
     #ifdef GRAPHITE_STANDARD_FORWARD
         #include "Graphite/Lighting.glsl"
         #include "Graphite/Decals.glsl"
@@ -112,9 +118,12 @@ GRAPHITE_STANDARD_VARYING vec2 vUV;
 GRAPHITE_STANDARD_VARYING vec2 vUV1;
 #endif
 
-#ifdef GRAPHITE_STANDARD_FORWARD
+#ifdef GRAPHITE_STANDARD_VERTEX_DATA
 GRAPHITE_STANDARD_VARYING vec3 vWorldPos;
 GRAPHITE_STANDARD_VARYING vec4 vColor;
+#endif
+
+#ifdef GRAPHITE_STANDARD_FORWARD
 #ifdef GRAPHITE_STANDARD_LIT
 GRAPHITE_STANDARD_VARYING vec3 vNormal;
 GRAPHITE_STANDARD_VARYING vec3 vTangent;

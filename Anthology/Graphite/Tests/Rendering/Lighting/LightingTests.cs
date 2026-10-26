@@ -1347,6 +1347,50 @@ public sealed class LightingTests : IDisposable
             Assert.True(MathF.Abs(near[i].X - far[i].X) < 2e-3f + 0.01f * near[i].X, $"pixel {i}: {near[i].X} near, {far[i].X} far");
     }
 
+    // Kept only where its absolute world x is below -1, the same in every pass
+    private const string WorldCutoutSource = """
+        Shader "Test/WorldCutout"
+        {
+            Surface "Unlit"
+            {
+                GLSLPROGRAM
+                void Surface(inout Graphite_SurfaceData s)
+                {
+                    s.Alpha = Graphite_AbsoluteFromRelative(s.WorldPos).x < -1.0 ? 1.0 : 0.0;
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    [Fact]
+    public void CutoutSurfaceFunctions_CutShadowsByTheirWorldPosition()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z)));
+        LightDesc sun = new()
+        {
+            Type = LightType.Directional,
+            Direction = Normalize(new Float3(0.5f, 0.25f, 1)),
+            Intensity = 0.1f,
+            Shadow = new ShadowDesc { Enabled = true },
+        };
+        _world.AddLight(sun);
+
+        Material cutout = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(WorldCutoutSource)));
+        cutout.Surface = new SurfaceSettings(SurfaceType.Cutout, Cull: SurfaceCull.Off);
+        _world.Add(new RenderableDesc
+        {
+            Mesh = _quad,
+            Transform = Double4x4.CreateTranslation(_origin + new Double3(-1, -1, 8)) * Double4x4.CreateScale(0.5),
+            Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly,
+        }, [cutout]);
+
+        // The caster's left half, x from -3 to -1, shadows x from -2 to 0 on the quad, moved along the light
+        AssertShadowed(p => Reference.Directional(sun, p, s_normal, albedo, 0, 0.5f),
+            p => MathF.Max(MathF.Abs(p.X + 1) - 1, MathF.Abs(p.Y + 0.5f) - 2), Frame(), 0.6f);
+    }
+
     private static Float3 Normalize(Float3 v) => v / MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
 
     [Fact]

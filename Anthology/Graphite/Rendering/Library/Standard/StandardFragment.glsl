@@ -186,9 +186,12 @@ void Graphite_StandardFragment()
 void Graphite_StandardFragment()
 {
 #ifdef _SURFACE_CUTOUT
-    vec4 albedo = texture(_MainTex, Graphite_StandardUV(_MainTexUV, _MainTex_ST, vUV, vUV1)) * _MainColor;
+    vec4 albedo = texture(_MainTex, Graphite_StandardUV(_MainTexUV, _MainTex_ST, vUV, vUV1)) * _MainColor * vColor;
 #ifdef GRAPHITE_SURFACE_FUNCTION
     Graphite_SurfaceData s = Graphite_NewSurfaceData(vUV, vUV1, albedo.rgb, albedo.a);
+    s.VertexColor = vColor;
+    s.WorldPos = vWorldPos;
+    s.ViewDir = normalize(-vWorldPos);
     Surface(s);
     albedo.a = s.Alpha;
 #endif

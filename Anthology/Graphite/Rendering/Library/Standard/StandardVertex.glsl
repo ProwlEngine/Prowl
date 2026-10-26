@@ -40,12 +40,15 @@ void Graphite_StandardVertex()
     vUV1 = v.UV1;
 #endif
 
-#ifdef GRAPHITE_STANDARD_FORWARD
+#ifdef GRAPHITE_STANDARD_VERTEX_DATA
     vWorldPos = world;
     vColor = v.Color;
 #ifdef _INSTANCE_TINT
     vColor *= Graphite_Object().custom0;
 #endif
+#endif
+
+#ifdef GRAPHITE_STANDARD_FORWARD
 #ifdef GRAPHITE_STANDARD_LIT
     vNormal = Graphite_ObjectToWorldNormal(v.Normal);
     vec4 tangent = v.Tangent;
