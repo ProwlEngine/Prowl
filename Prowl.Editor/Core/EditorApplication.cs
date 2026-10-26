@@ -1613,7 +1613,12 @@ public class EditorApplication : Game
             dynamicLabel: () => Undo.RedoDescription);
         MenuRegistry.RegisterSeparator(edit);
         MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.project_settings")}", () => OpenPanel(typeof(ProjectSettingsPanel)));
-        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.save_layout")}", () => SaveProjectState());
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.save_layout")}", () =>
+        {
+            SaveProjectState();
+            // An explicit save also becomes the layout every project without one of its own starts from.
+            if (!Application.IsPlaying) SaveDockLayout(UserLayoutPath);
+        });
         MenuRegistry.RegisterSeparator(edit);
         MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.preferences")}", () => OpenPanel(typeof(PreferencesPanel)));
 
@@ -1737,16 +1742,26 @@ public class EditorApplication : Game
         _dockSpace.Root = root;
     }
 
+    /// <summary>The layout last saved with Edit > Save Layout, used by projects that have none of their own.</summary>
+    private static readonly string UserLayoutPath = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Prowl", "EditorLayout.json");
+
     internal void SaveDockLayout()
     {
         if (Project.Current == null) return;
+        SaveDockLayout(Project.Current.EditorStatePath);
+    }
+
+    private void SaveDockLayout(string path)
+    {
         try
         {
             // Save the layout as the user arranged it, which a maximized panel only covers for the moment.
             var layout = new DockSpace(_panelMaximizer.LayoutRoot);
             layout.FloatingWindows.AddRange(_dockSpace.FloatingWindows);
             string json = DockSerializer.Serialize(layout);
-            System.IO.File.WriteAllText(Project.Current.EditorStatePath, json);
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+            System.IO.File.WriteAllText(path, json);
         }
         catch (Exception ex) { Runtime.Debug.LogError($"Failed to save layout: {ex.Message}"); }
     }
@@ -1755,6 +1770,7 @@ public class EditorApplication : Game
     {
         if (Project.Current == null) return null;
         string path = Project.Current.EditorStatePath;
+        if (!System.IO.File.Exists(path)) path = UserLayoutPath;
         if (!System.IO.File.Exists(path)) return null;
         try
         {
