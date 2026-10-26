@@ -1937,42 +1937,74 @@ public class EditorAssetBackend : AssetBackend
         {
             string source = NormalizePath(rawSource);
             string destinationFolder = NormalizePath(rawFolder);
-            if (!TryResolveAssetPath(source, out string sourceAbsolute)) continue;
-
-            bool isFolder = Directory.Exists(sourceAbsolute);
-            if (!isFolder && !File.Exists(sourceAbsolute))
-            {
-                Runtime.Debug.LogWarning($"Skipped: '{source}' no longer exists.");
-                continue;
-            }
-
-            if (isFolder
-                && (destinationFolder.Equals(source, StringComparison.OrdinalIgnoreCase)
-                    || destinationFolder.StartsWith(source + "/", StringComparison.OrdinalIgnoreCase)))
-            {
-                Runtime.Debug.LogWarning($"Skipped: can't copy folder '{source}' into itself.");
-                continue;
-            }
+            bool isFolder = Directory.Exists(Path.Combine(_project.AssetsPath, source));
 
             string name = Utils.UniqueNames.ForCopy(
                 Path.Combine(_project.AssetsPath, destinationFolder),
                 isFolder ? Path.GetFileName(source) : Path.GetFileNameWithoutExtension(source),
                 isFolder ? "" : Path.GetExtension(source));
             string newPath = destinationFolder.Length == 0 ? name : $"{destinationFolder}/{name}";
-            if (!TryResolveAssetPath(newPath, out string newAbsolute)) continue;
-
-            try
-            {
-                if (isFolder) CopyFolder(sourceAbsolute, newAbsolute, files);
-                else CopyFile(sourceAbsolute, newAbsolute, files);
-                copied.Add(newPath);
-            }
-            catch (Exception ex)
-            {
-                Runtime.Debug.LogError($"Failed to copy '{source}' to '{newPath}': {ex.Message}");
-            }
+            if (CopyOne(source, newPath, files)) copied.Add(newPath);
         }
 
+        ImportCopies(files);
+        return copied;
+    }
+
+    /// <summary>
+    /// Copy one file or folder to an exact path under fresh GUIDs, keeping its import settings and what it references, and import it. False, and logged, when it could not be copied or the path is taken.
+    /// </summary>
+    public bool CopyAsset(string sourcePath, string destinationPath)
+    {
+        string destination = NormalizePath(destinationPath);
+        if (!TryResolveAssetPath(destination, out string destinationAbsolute)) return false;
+        if (File.Exists(destinationAbsolute) || Directory.Exists(destinationAbsolute))
+        {
+            Runtime.Debug.LogWarning($"Skipped: '{destination}' already exists.");
+            return false;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(destinationAbsolute)!);
+        var files = new List<string>();
+        bool copied = CopyOne(NormalizePath(sourcePath), destination, files);
+        ImportCopies(files);
+        return copied;
+    }
+
+    private bool CopyOne(string source, string newPath, List<string> files)
+    {
+        if (!TryResolveAssetPath(source, out string sourceAbsolute) || !TryResolveAssetPath(newPath, out string newAbsolute)) return false;
+
+        bool isFolder = Directory.Exists(sourceAbsolute);
+        if (!isFolder && !File.Exists(sourceAbsolute))
+        {
+            Runtime.Debug.LogWarning($"Skipped: '{source}' no longer exists.");
+            return false;
+        }
+
+        if (isFolder && (newPath.Equals(source, StringComparison.OrdinalIgnoreCase)
+                         || newPath.StartsWith(source + "/", StringComparison.OrdinalIgnoreCase)))
+        {
+            Runtime.Debug.LogWarning($"Skipped: can't copy folder '{source}' into itself.");
+            return false;
+        }
+
+        try
+        {
+            if (isFolder) CopyFolder(sourceAbsolute, newAbsolute, files);
+            else CopyFile(sourceAbsolute, newAbsolute, files);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Failed to copy '{source}' to '{newPath}': {ex.Message}");
+            return false;
+        }
+    }
+
+    // Every file is registered before any is imported, so a copied model finds its copied textures
+    private void ImportCopies(List<string> files)
+    {
         var toImport = new List<AssetEntry>();
         foreach (string file in files)
         {
@@ -1982,7 +2014,6 @@ public class EditorAssetBackend : AssetBackend
 
         ImportRegistered(toImport, []);
         InvalidateFolderIndex();
-        return copied;
     }
 
     private void CopyFile(string sourceAbsolute, string destinationAbsolute, List<string> files)
