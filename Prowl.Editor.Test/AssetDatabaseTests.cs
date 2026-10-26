@@ -481,6 +481,119 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.Equal(2f, material._properties.GetFloat("_Value"));
     }
 
+    [Fact]
+    public void MoveAssets_ReturnsWhereEachNowLives()
+    {
+        CreateMaterial("A.mat");
+        CreateMaterial("Dest/B.mat");
+
+        List<string> moved = Assets.MoveAssets(["A.mat", "Dest/B.mat"], "Dest");
+
+        Assert.Equal(["Dest/A.mat", "Dest/B.mat"], moved);
+        Assert.False(File.Exists(AssetAbsolutePath("A.mat")));
+        Assert.True(File.Exists(AssetAbsolutePath("Dest/A.mat")));
+    }
+
+    #endregion
+
+    #region Copy
+
+    private Guid MetaGuid(string path) => MetaFile.Read(MetaFile.GetMetaPath(AssetAbsolutePath(path))).Guid;
+
+    [Fact]
+    public void CopyAssets_File_GetsFreshGuidAndKeepsValues()
+    {
+        Material material = CreateMaterial("M.mat", 3f);
+
+        string copy = Assert.Single(Assets.CopyAssets([("M.mat", "")]));
+
+        Guid copyGuid = Assets.PathToGuid(copy);
+        Assert.NotEqual(Guid.Empty, copyGuid);
+        Assert.NotEqual(material.AssetID, copyGuid);
+        Assert.True(File.Exists(AssetAbsolutePath(copy)));
+        Assert.True(File.Exists(AssetAbsolutePath(copy) + ".meta"));
+        Assert.Equal(3f, Load<Material>(copyGuid)!._properties.GetFloat("_Value"));
+    }
+
+    [Fact]
+    public void CopyAssets_LoadedAsset_CopiesUnsavedEdits()
+    {
+        Material material = CreateMaterial("M.mat", 1f);
+        string saved = File.ReadAllText(AssetAbsolutePath("M.mat"));
+        material.SetFloat("_Value", 5f);
+
+        string copy = Assert.Single(Assets.CopyAssets([("M.mat", "")]));
+
+        Assert.Equal(5f, Load<Material>(Assets.PathToGuid(copy))!._properties.GetFloat("_Value"));
+        Assert.Equal(saved, File.ReadAllText(AssetAbsolutePath("M.mat")));
+    }
+
+    [Fact]
+    public void CopyAssets_KeepsImporterSettings()
+    {
+        CreateMaterial("M.mat");
+        string metaPath = AssetAbsolutePath("M.mat.meta");
+        MetaFileData source = MetaFile.Read(metaPath);
+        EchoObject settings = EchoObject.NewCompound();
+        settings["Marker"] = new EchoObject(7);
+        source.Settings = settings;
+        MetaFile.Write(metaPath, source);
+
+        string copy = Assert.Single(Assets.CopyAssets([("M.mat", "")]));
+
+        MetaFileData copied = MetaFile.Read(AssetAbsolutePath(copy) + ".meta");
+        Assert.NotEqual(source.Guid, copied.Guid);
+        Assert.True(copied.Settings!.TryGet("Marker", out EchoObject? marker));
+        Assert.NotNull(marker);
+        Assert.Equal(7, marker.IntValue);
+    }
+
+    [Fact]
+    public void CopyAssets_Folder_CopiesTreeUnderFreshGuids()
+    {
+        CreateMaterial("F/A.mat");
+        CreateMaterial("F/Sub/B.mat");
+        Assets.Refresh();
+        string[] sources = ["F", "F/A.mat", "F/Sub", "F/Sub/B.mat"];
+
+        string copy = Assert.Single(Assets.CopyAssets([("F", "")]));
+
+        Assert.Equal("F (1)", copy);
+        string[] copies = ["F (1)", "F (1)/A.mat", "F (1)/Sub", "F (1)/Sub/B.mat"];
+        var sourceGuids = sources.Select(MetaGuid).ToHashSet();
+        foreach (string path in copies)
+        {
+            Assert.DoesNotContain(MetaGuid(path), sourceGuids);
+            Assert.True(File.Exists(AssetAbsolutePath(path)) || Directory.Exists(AssetAbsolutePath(path)));
+        }
+        Assert.Equal(4, copies.Select(MetaGuid).Distinct().Count());
+        Assert.Equal(MetaGuid("F (1)/Sub/B.mat"), Assets.PathToGuid("F (1)/Sub/B.mat"));
+    }
+
+    [Fact]
+    public void CopyAssets_FolderIntoItself_IsSkipped()
+    {
+        CreateMaterial("F/A.mat");
+        Assets.Refresh();
+        int before = Directory.GetFileSystemEntries(Project.AssetsPath, "*", SearchOption.AllDirectories).Length;
+
+        List<string> copied = Assets.CopyAssets([("F", "F")]);
+
+        Assert.Empty(copied);
+        Assert.Equal(before, Directory.GetFileSystemEntries(Project.AssetsPath, "*", SearchOption.AllDirectories).Length);
+    }
+
+    [Fact]
+    public void CopyAssets_BesideItself_CountsOn()
+    {
+        CreateMaterial("M.mat");
+        CreateMaterial("M (1).mat");
+
+        string copy = Assert.Single(Assets.CopyAssets([("M (1).mat", "")]));
+
+        Assert.Equal("M (2).mat", copy);
+    }
+
     #endregion
 
     #region Residency

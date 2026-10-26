@@ -93,6 +93,16 @@ public static class UniqueNames
     /// must include the leading dot (or be empty for folders). Uses the <c>" (N)"</c> convention.
     /// </summary>
     public static string ForFile(string folder, string baseName, string ext)
+        => UniqueFileName(folder, baseName, ext, stripExistingSuffix: false);
+
+    /// <summary>
+    /// Like <see cref="ForFile"/>, but count on from an existing <c>" (N)"</c> suffix, so copying <c>"Mat (1)"</c>
+    /// beside itself yields <c>"Mat (2)"</c>.
+    /// </summary>
+    public static string ForCopy(string folder, string baseName, string ext)
+        => UniqueFileName(folder, baseName, ext, stripExistingSuffix: true);
+
+    private static string UniqueFileName(string folder, string baseName, string ext, bool stripExistingSuffix)
     {
         ArgumentNullException.ThrowIfNull(folder);
         ArgumentNullException.ThrowIfNull(baseName);
@@ -104,7 +114,7 @@ public static class UniqueNames
             return File.Exists(full) || Directory.Exists(full);
         }
 
-        string unique = MakeUnique(baseName, Exists, stripExistingSuffix: false);
+        string unique = MakeUnique(baseName, Exists, stripExistingSuffix: stripExistingSuffix);
         return unique + ext;
     }
 }
