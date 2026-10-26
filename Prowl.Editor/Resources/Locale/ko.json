@@ -104,6 +104,10 @@
   "hierarchy.rename": "이름 변경",
 
   "project.copy_path": "경로 복사",
+  "project.cut": "잘라내기",
+  "project.copy": "복사",
+  "project.paste": "붙여넣기",
+  "project.duplicate": "복제",
   "project.delete": "삭제",
   "project.reimport": "재가져오기",
   "project.refresh": "새로고침",

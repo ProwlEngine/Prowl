@@ -104,6 +104,10 @@
   "hierarchy.rename": "Renommer",
 
   "project.copy_path": "Copier le chemin",
+  "project.cut": "Couper",
+  "project.copy": "Copier",
+  "project.paste": "Coller",
+  "project.duplicate": "Dupliquer",
   "project.delete": "Supprimer",
   "project.reimport": "Reimporter",
   "project.refresh": "Actualiser",

@@ -104,6 +104,10 @@
   "hierarchy.rename": "Renomear",
 
   "project.copy_path": "Copiar Caminho",
+  "project.cut": "Recortar",
+  "project.copy": "Copiar",
+  "project.paste": "Colar",
+  "project.duplicate": "Duplicar",
   "project.delete": "Excluir",
   "project.reimport": "Reimportar",
   "project.refresh": "Atualizar",
