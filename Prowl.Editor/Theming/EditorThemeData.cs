@@ -253,14 +253,6 @@ public class EditorThemeData
     /// <summary> Whether only the last clicked panel keeps the accent on its tab. </summary>
     public bool HighlightFocusedPanel { get; set; } = true;
 
-    // Play mode spotlight: dims the editor around the Game view while the game runs, so play mode is hard to miss.
-    /// <summary> Whether the editor around the Game view is dimmed while playing. </summary>
-    public bool PlayModeSpotlight { get; set; } = true;
-    /// <summary> How dark the editor around the Game view gets while playing, from 0 to 1. </summary>
-    public float PlayModeDim { get; set; } = 0.55f;
-    /// <summary> Whether a short callout explaining play mode shows next to the Game view when play starts. </summary>
-    public bool PlayModeHint { get; set; } = true;
-
     // Default ramp stops (RGB) = Origami's ramps. Customization is applied on top of Origami's
     // live theme, preserving each stop's alpha, so translucent glass surfaces stay glass.
     private static readonly Color[] DefaultNeutral = [H("#06060E"), H("#96A0FF"), H("#161628"), H("#0E0E1C"), H("#181830"), H("#22223E"), H("#30304E")];

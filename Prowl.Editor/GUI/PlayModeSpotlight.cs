@@ -4,6 +4,7 @@
 using System;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -50,8 +51,8 @@ public static class PlayModeSpotlight
         if (playing && !s_wasPlaying) { s_hintTime = 0f; s_hintDismissed = false; }
         s_wasPlaying = playing;
 
-        EditorThemeData? theme = EditorTheme.Customization;
-        bool on = playing && visible && theme is { PlayModeSpotlight: true };
+        PlayModePreferences prefs = Preferences.Get<PlayModePreferences>();
+        bool on = playing && visible && prefs.SpotlightGameView;
         s_alpha = Math.Clamp(s_alpha + (on ? dt : -dt) * 6f, 0f, 1f);
         if (s_alpha <= 0f) return;
 
@@ -63,7 +64,7 @@ public static class PlayModeSpotlight
         var (hx, hy, hw, hh) = s_rect;
 
         // Four rects around the hole. The header stays undimmed so Stop / Pause stay easy to find.
-        Color back = Color.FromArgb((int)(Math.Clamp(theme?.PlayModeDim ?? 0.55f, 0f, 1f) * 255 * appear), 4, 3, 9);
+        Color back = Color.FromArgb((int)(Math.Clamp(prefs.SpotlightDim, 0f, 1f) * 255 * appear), 4, 3, 9);
         float top = Math.Min(headerHeight, hy);
         Dim(paper, "pms_t", 0, top, W, hy - top, back);
         Dim(paper, "pms_b", 0, hy + hh, W, H - (hy + hh), back);
@@ -78,7 +79,7 @@ public static class PlayModeSpotlight
             .BorderColor(Color.FromArgb((int)(230 * appear), ringC)).BorderWidth(2)
             .Glow(0, 0, 22, 2, Color.FromArgb((int)(140 * pulse * appear), ringC));
 
-        if (theme is { PlayModeHint: true } && !s_hintDismissed && s_hintTime < HintDuration + 0.4f)
+        if (prefs.ShowPlayModeHint && !s_hintDismissed && s_hintTime < HintDuration + 0.4f)
         {
             float fade = appear * Math.Clamp((HintDuration + 0.4f - s_hintTime) / 0.4f, 0f, 1f);
             DrawCallout(paper, hx, hy, hw, hh, W, H, headerHeight, fade);
@@ -142,8 +143,9 @@ public static class PlayModeSpotlight
                 paper.Box("pms_spc").Width(UnitValue.StretchOne).Height(1).IsNotInteractable();
                 Origami.Button(paper, "pms_never", Loc.Get("play.hint.dont_show"), () =>
                 {
-                    EditorSettings.Instance.Theme.PlayModeHint = false;
-                    EditorSettings.Instance.Save();
+                    PlayModePreferences prefs = Preferences.Get<PlayModePreferences>();
+                    prefs.ShowPlayModeHint = false;
+                    Preferences.Changed(Preferences.SectionOf(prefs));
                 }).Subtle().Show();
                 Origami.Button(paper, "pms_ok", Loc.Get("play.hint.got_it"), () => s_hintDismissed = true).Primary().Show();
             }

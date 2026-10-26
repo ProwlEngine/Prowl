@@ -38,6 +38,15 @@ public sealed class PlayModePreferences : EditorPreferences
     [Tooltip("What the Game view does when play starts.")]
     public GameViewOnPlay GameViewOnPlay = GameViewOnPlay.Focus;
 
+    [Tooltip("Dims the editor around the Game view while the game runs.")]
+    public bool SpotlightGameView = true;
+
+    [Tooltip("How dark the editor around the Game view gets while playing.")]
+    [Range(0, 1)] public float SpotlightDim = 0.55f;
+
+    [Tooltip("Shows a short note next to the Game view when play starts.")]
+    public bool ShowPlayModeHint = true;
+
     public bool ClearConsoleOnPlay;
     public bool ClearConsoleOnBuild;
 
