@@ -32,8 +32,8 @@ void Graphite_StandardVertex()
 #endif
 #endif
 
-    vec3 world = Graphite_ObjectToWorld(v.Position);
-    gl_Position = Graphite_RelativeToClip(world);
+    vec3 relative = Graphite_ObjectToRelative(v.Position);
+    gl_Position = Graphite_RelativeToClip(relative);
 
 #if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA)
     vUV = v.UV;
@@ -41,7 +41,7 @@ void Graphite_StandardVertex()
 #endif
 
 #ifdef GRAPHITE_STANDARD_VERTEX_DATA
-    vWorldPos = world;
+    vRelativePos = relative;
     vColor = v.Color;
 #ifdef _INSTANCE_TINT
     vColor *= Graphite_Object().custom0;

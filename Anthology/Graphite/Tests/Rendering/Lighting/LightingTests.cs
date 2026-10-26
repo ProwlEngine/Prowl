@@ -41,7 +41,7 @@ public sealed class LightingTests : IDisposable
                     layout(location = 1) out vec3 vNormal;
                     void main()
                     {
-                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        vWorld = Graphite_ObjectToRelative(vertexPosition);
                         vNormal = Graphite_ObjectToWorldNormal(vertexNormal);
                         gl_Position = Graphite_RelativeToClip(vWorld);
                     }
@@ -63,7 +63,7 @@ public sealed class LightingTests : IDisposable
                         vec3 albedo = _Color.rgb;
                         float roughness = _Roughness, metallic = _Metallic, ao = 1.0;
                         Graphite_ApplyDecals(vWorld, n, albedo, n, roughness, metallic, ao);
-                        vec3 color = CalculateForwardLighting(vWorld, n, GetWorldViewDir(vWorld), albedo, metallic, roughness, ao) + CalculateAmbient(n) * albedo;
+                        vec3 color = CalculateForwardLighting(vWorld, n, Graphite_ViewDir(vWorld), albedo, metallic, roughness, ao) + CalculateAmbient(n) * albedo;
                         outColor = vec4(ApplyFog(color, vWorld), 1.0);
                         Graphite_WriteGBuffer(n, roughness, metallic);
                     }
@@ -160,7 +160,7 @@ public sealed class LightingTests : IDisposable
                     layout(location = 0) out vec3 vWorld;
                     void main()
                     {
-                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        vWorld = Graphite_ObjectToRelative(vertexPosition);
                         gl_Position = Graphite_RelativeToClip(vWorld);
                     }
                 }
@@ -231,7 +231,7 @@ public sealed class LightingTests : IDisposable
                     layout(location = 1) out vec3 vNormal;
                     void main()
                     {
-                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        vWorld = Graphite_ObjectToRelative(vertexPosition);
                         vNormal = Graphite_ObjectToWorldNormal(vertexNormal);
                         gl_Position = Graphite_RelativeToClip(vWorld);
                     }
@@ -246,7 +246,7 @@ public sealed class LightingTests : IDisposable
                     layout(location = 0) out vec4 outColor;
                     void main()
                     { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
-                        outColor = vec4(EvaluateReflectionProbes(vWorld, normalize(vNormal), GetWorldViewDir(vWorld), _Roughness), 1.0);
+                        outColor = vec4(EvaluateReflectionProbes(vWorld, normalize(vNormal), Graphite_ViewDir(vWorld), _Roughness), 1.0);
                     }
                 }
                 ENDGLSL
@@ -904,7 +904,7 @@ public sealed class LightingTests : IDisposable
                     layout(location = 0) out vec3 vWorld;
                     void main()
                     {
-                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        vWorld = Graphite_ObjectToRelative(vertexPosition);
                         gl_Position = Graphite_RelativeToClip(vWorld);
                     }
                 }
@@ -923,7 +923,7 @@ public sealed class LightingTests : IDisposable
 
                     void main()
                     {
-                        Graphite_Surface s = Graphite_MakeSurface(vWorld, vec3(0.0, 0.0, -1.0), vec3(0.0, 0.0, -1.0), GetWorldViewDir(vWorld), vec3(1.0), 0.0, 0.5, 1.0);
+                        Graphite_Surface s = Graphite_MakeSurface(vWorld, vec3(0.0, 0.0, -1.0), vec3(0.0, 0.0, -1.0), Graphite_ViewDir(vWorld), vec3(1.0), 0.0, 0.5, 1.0);
                         outColor = vec4(Graphite_ShadeLights(s), 1.0);
                         Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
                     }
@@ -1073,7 +1073,7 @@ public sealed class LightingTests : IDisposable
                     layout(location = 0) out vec3 vWorld;
                     void main()
                     {
-                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        vWorld = Graphite_ObjectToRelative(vertexPosition);
                         gl_Position = Graphite_RelativeToClip(vWorld);
                     }
                 }
@@ -1139,7 +1139,7 @@ public sealed class LightingTests : IDisposable
                     layout(location = 0) out vec3 vWorld;
                     void main()
                     {
-                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        vWorld = Graphite_ObjectToRelative(vertexPosition);
                         gl_Position = Graphite_RelativeToClip(vWorld);
                     }
                 }
@@ -1356,7 +1356,7 @@ public sealed class LightingTests : IDisposable
                 GLSLPROGRAM
                 void Surface(inout Graphite_SurfaceData s)
                 {
-                    s.Alpha = Graphite_AbsoluteFromRelative(s.WorldPos).x < -1.0 ? 1.0 : 0.0;
+                    s.Alpha = Graphite_RelativeToWorld(s.RelativePos).x < -1.0 ? 1.0 : 0.0;
                 }
                 ENDGLSL
             }

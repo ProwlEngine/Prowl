@@ -1,5 +1,6 @@
 // The renderer's data for every material pass: the view block, the draw and object records, and camera relative transforms.
-// World positions in shaders are relative to the camera, so objects far from the origin keep their precision.
+// Positions in shaders are relative: world space moved so the camera sits at the origin, which keeps the precision of
+// objects far from it. World means true world space, which directions and normals are in as moving changes none of them.
 #pragma once
 
 #extension GL_EXT_multiview : require
@@ -66,11 +67,17 @@ vec3 Graphite_CameraOffset(vec3 high, vec3 low)
     return offset;
 }
 
-// An absolute world position, as a float. Fine near the origin, for noise and other effects that need world space.
-vec3 Graphite_AbsoluteFromRelative(vec3 relative)
+// The world position of a relative one, as a float. Fine near the origin, for noise and other effects that need world space.
+vec3 Graphite_RelativeToWorld(vec3 relative)
 {
     Graphite_ViewData view = Graphite_View();
     return relative + view.cameraHigh.xyz + view.cameraLow.xyz;
+}
+
+// Unit direction from a relative position to the camera
+vec3 Graphite_ViewDir(vec3 relativePos)
+{
+    return normalize(-relativePos);
 }
 
 mat3 Graphite_Linear(Graphite_Transform t) { return transpose(mat3(t.row0.xyz, t.row1.xyz, t.row2.xyz)); }

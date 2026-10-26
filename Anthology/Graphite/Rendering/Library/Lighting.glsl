@@ -4,7 +4,7 @@
 // energy stays right. Every light becomes a Graphite_LightContribution shaded by Graphite_BRDF, which a shader may
 // supply itself by defining GRAPHITE_CUSTOM_BRDF before including this.
 //
-// worldPos is camera relative, as every world position in Graphite shaders is, so the camera sits at the origin.
+// Positions are relative, as every position in Graphite shaders is, so the camera sits at the origin. See Core.glsl.
 // Spot and directional lights cast shadows through Graphite/Shadows.glsl.
 #pragma once
 
@@ -132,14 +132,14 @@ vec3 Graphite_LightRadiance(LightSample L)
 }
 
 // How much of a local light reaches a surface past its shadow, 1 lit
-float Graphite_LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal)
+float Graphite_LocalLightShadow(LightSample L, vec3 relativePos, vec3 geomNormal)
 {
     if (L.RecordArray == GRAPHITE_TREE_INVALID || (L.Type != GRAPHITE_LIGHT_POINT && L.Type != GRAPHITE_LIGHT_SPOT) || !Graphite_ReceivesShadows())
         return 1.0;
     int slot = floatBitsToInt(Graphite_SpatialVec4(L.RecordArray, L.RecordWord + 6u).z);
     if (slot < 0)
         return 1.0;
-    return Graphite_LocalShadow(slot, L.Type == GRAPHITE_LIGHT_POINT, L.Position, Graphite_LightDirection(L), Graphite_LightSourceRadius(L), worldPos, geomNormal);
+    return Graphite_LocalShadow(slot, L.Type == GRAPHITE_LIGHT_POINT, L.Position, Graphite_LightDirection(L), Graphite_LightSourceRadius(L), relativePos, geomNormal);
 }
 
 // Reads where a recorded light is and what it is. offset and offsetLow move camera relative positions into its tree.
@@ -170,14 +170,14 @@ struct Graphite_LightIterator
     uint count;
 };
 
-Graphite_LightIterator Graphite_BeginLights(vec3 worldPos)
+Graphite_LightIterator Graphite_BeginLights(vec3 relativePos)
 {
     Graphite_LightIterator it;
     it.next = 0u;
     it.count = 0u;
     uint layers = Graphite_SurfaceLayers();
     Graphite_TreeQuery q;
-    Graphite_BeginQuery(q, worldPos, GRAPHITE_SET_LIGHTS);
+    Graphite_BeginQuery(q, relativePos, GRAPHITE_SET_LIGHTS);
     uint array, first, last;
     while (it.count < uint(GRAPHITE_MAX_HITS) && Graphite_NextRun(q, array, first, last))
     {
@@ -185,7 +185,7 @@ Graphite_LightIterator Graphite_BeginLights(vec3 worldPos)
         {
             vec4 positionRange = Graphite_SpatialVec4(array, k * 9u);
             precise vec3 position = (positionRange.xyz - q.offset) - q.offsetLow;
-            vec3 d = worldPos - position;
+            vec3 d = relativePos - position;
             if (dot(d, d) <= positionRange.w * positionRange.w && (floatBitsToUint(Graphite_SpatialVec4(array, k * 9u + 6u).w) & layers) != 0u)
                 graphite_Hits[it.count++] = uvec2(k | ((array & 1u) << 31), q.region);
         }
@@ -240,16 +240,10 @@ Graphite_DirectionalLight Graphite_GetDirectional(uint index)
     return d;
 }
 
-// Unit direction from the surface to the camera, world space
-vec3 GetWorldViewDir(vec3 worldPos)
-{
-    return normalize(-worldPos);
-}
-
 // Unit direction from the surface to the camera, in tangent space
-vec3 GetTangentViewDir(vec3 worldPos, vec3 worldNormal, vec3 worldTangent, vec3 worldBitangent)
+vec3 GetTangentViewDir(vec3 relativePos, vec3 worldNormal, vec3 worldTangent, vec3 worldBitangent)
 {
-    vec3 viewDir = GetWorldViewDir(worldPos);
+    vec3 viewDir = Graphite_ViewDir(relativePos);
     return normalize(vec3(dot(viewDir, normalize(worldTangent)), dot(viewDir, normalize(worldBitangent)), dot(viewDir, normalize(worldNormal))));
 }
 
@@ -272,10 +266,10 @@ struct Graphite_Surface
 // The surface's reflectance at normal incidence
 vec3 Graphite_SurfaceF0(Graphite_Surface s) { return mix(vec3(0.04), s.albedo, s.metallic); }
 
-Graphite_Surface Graphite_MakeSurface(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir, vec3 albedo, float metallic, float roughness, float ao)
+Graphite_Surface Graphite_MakeSurface(vec3 relativePos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir, vec3 albedo, float metallic, float roughness, float ao)
 {
     Graphite_Surface s;
-    s.position = worldPos;
+    s.position = relativePos;
     s.normal = worldNormal;
     s.geomNormal = geomNormal;
     s.view = viewDir;
@@ -599,23 +593,23 @@ bool Graphite_ContributeLocal(LightSample L, Graphite_Surface s, bool backLit, o
 }
 
 // How much of a directional light reaches a surface past its shadow, 1 lit. index is its place in the world's buffer.
-float Graphite_DirectionalLightShadow(Graphite_DirectionalLight d, uint index, vec3 worldPos, vec3 geomNormal)
+float Graphite_DirectionalLightShadow(Graphite_DirectionalLight d, uint index, vec3 relativePos, vec3 geomNormal)
 {
 #ifdef SG_NO_SHADOWS
     return 1.0;
 #else
     if (!d.shadow || !Graphite_ReceivesShadows())
         return 1.0;
-    return Graphite_DirectionalShadow(index, d.direction, d.shadowDepthBias, d.shadowNormalBias, d.shadowStrength, d.shadowFilter, d.sinRadius / max(d.cosRadius, 1e-4), worldPos, geomNormal);
+    return Graphite_DirectionalShadow(index, d.direction, d.shadowDepthBias, d.shadowNormalBias, d.shadowStrength, d.shadowFilter, d.sinRadius / max(d.cosRadius, 1e-4), relativePos, geomNormal);
 #endif
 }
 
 // The sun's shadow, 1 lit
-float MainDirectionalShadowFactor(vec3 worldPos, vec3 geomNormal)
+float MainDirectionalShadowFactor(vec3 relativePos, vec3 geomNormal)
 {
     if (Graphite_DirectionalCount() == 0u)
         return 1.0;
-    return Graphite_DirectionalLightShadow(Graphite_GetDirectional(0u), 0u, worldPos, geomNormal);
+    return Graphite_DirectionalLightShadow(Graphite_GetDirectional(0u), 0u, relativePos, geomNormal);
 }
 
 // What a directional light gives a surface, its specular from the nearest direction inside its disk. index 0 is the sun.
@@ -706,10 +700,10 @@ vec3 Graphite_ShadeLights(Graphite_Surface s)
 //  Prowl's entry points
 // ============================================================
 
-vec3 EvaluateLocalLight(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
+vec3 EvaluateLocalLight(LightSample L, vec3 relativePos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                         vec3 albedo, float metallic, float roughness, float ao)
 {
-    Graphite_Surface s = Graphite_MakeSurface(worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao);
+    Graphite_Surface s = Graphite_MakeSurface(relativePos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao);
     Graphite_LightContribution c;
     return Graphite_ContributeLocal(L, s, false, c) ? Graphite_BRDF(s, c) * ao : vec3(0.0);
 }
@@ -739,12 +733,12 @@ vec3 Graphite_AnisoBRDF(Graphite_Surface s, Graphite_LightContribution c, vec3 w
     return (kD * s.albedo * diffuse * c.diffuse + max(0.0, V * D) * PI * F * (c.specular * energy)) * c.radiance;
 }
 
-vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
+vec3 EvaluateLocalLightAniso(LightSample L, vec3 relativePos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                               vec3 worldTangent, vec3 worldBitangent,
                               vec3 albedo, float metallic, float mt, float mb,
                               float perceptualRoughness, float ao)
 {
-    Graphite_Surface s = Graphite_MakeSurface(worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, perceptualRoughness, ao);
+    Graphite_Surface s = Graphite_MakeSurface(relativePos, worldNormal, geomNormal, viewDir, albedo, metallic, perceptualRoughness, ao);
     Graphite_LightContribution c;
     return Graphite_ContributeLocal(L, s, false, c) ? Graphite_AnisoBRDF(s, c, worldTangent, worldBitangent, mt, mb) * ao : vec3(0.0);
 }
@@ -766,10 +760,10 @@ vec3 ShadeDirectional(vec3 lightDir, vec3 lightColor, float shadowFactor, vec3 w
     return Graphite_BRDF(s, c) * ao;
 }
 
-vec3 EvaluateDirectional(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
+vec3 EvaluateDirectional(vec3 relativePos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                          vec3 albedo, float metallic, float roughness, float ao)
 {
-    Graphite_Surface s = Graphite_MakeSurface(worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao);
+    Graphite_Surface s = Graphite_MakeSurface(relativePos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao);
     vec3 total = vec3(0.0);
     Graphite_LightContribution c;
     for (uint i = 0u; i < Graphite_DirectionalCount(); i++)
@@ -781,14 +775,14 @@ vec3 EvaluateDirectional(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 
 }
 
 // geomNormal is the interpolated surface normal before normal mapping, used to offset shadow lookups
-vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
+vec3 CalculateForwardLighting(vec3 relativePos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                               vec3 albedo, float metallic, float roughness, float ao)
 {
     roughness = ApplySpecularAA(roughness, worldNormal);
-    return Graphite_ShadeLights(Graphite_MakeSurface(worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao));
+    return Graphite_ShadeLights(Graphite_MakeSurface(relativePos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao));
 }
 
-vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
+vec3 CalculateForwardLightingAniso(vec3 relativePos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                                     vec3 worldTangent, vec3 worldBitangent,
                                     vec3 albedo, float metallic,
                                     float roughness, float anisotropy, float ao)
@@ -798,7 +792,7 @@ vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 geomNor
     float roughnessB = roughness * (1.0 - anisotropy);
     float mt = roughnessT * roughnessT;
     float mb = roughnessB * roughnessB;
-    Graphite_Surface s = Graphite_MakeSurface(worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao);
+    Graphite_Surface s = Graphite_MakeSurface(relativePos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao);
 
     vec3 total = vec3(0.0);
     Graphite_LightContribution c;
@@ -808,7 +802,7 @@ vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 geomNor
             total += Graphite_AnisoBRDF(s, c, worldTangent, worldBitangent, mt, mb);
     }
 
-    Graphite_LightIterator it = Graphite_BeginLights(worldPos);
+    Graphite_LightIterator it = Graphite_BeginLights(relativePos);
     LightSample L;
     while (Graphite_NextLight(it, L))
     {
@@ -832,23 +826,23 @@ vec3 Graphite_TranslucentLight(Graphite_Surface s, Graphite_LightContribution c,
     return result;
 }
 
-vec3 EvaluateLocalLightTranslucent(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
+vec3 EvaluateLocalLightTranslucent(LightSample L, vec3 relativePos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                                     vec3 albedo, float metallic, float roughness, float ao,
                                     float translucency, float scatterPower, float scatterDist, float scatterScale)
 {
-    Graphite_Surface s = Graphite_MakeSurface(worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao);
+    Graphite_Surface s = Graphite_MakeSurface(relativePos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao);
     Graphite_LightContribution c;
     return Graphite_ContributeLocal(L, s, true, c) ? Graphite_TranslucentLight(s, c, translucency, scatterPower, scatterDist, scatterScale) : vec3(0.0);
 }
 
 // Forward lighting with translucency: the BRDF and scattering share each light's attenuation and shadow
-vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
+vec3 CalculateForwardLighting(vec3 relativePos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                               vec3 albedo, float metallic, float roughness, float ao,
                               float translucency, float scatterPower,
                               float scatterDist, float scatterScale)
 {
     roughness = ApplySpecularAA(roughness, worldNormal);
-    Graphite_Surface s = Graphite_MakeSurface(worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao);
+    Graphite_Surface s = Graphite_MakeSurface(relativePos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao);
 
     vec3 total = vec3(0.0);
     Graphite_LightContribution c;
@@ -858,7 +852,7 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, 
             total += Graphite_TranslucentLight(s, c, translucency, scatterPower, scatterDist, scatterScale);
     }
 
-    Graphite_LightIterator it = Graphite_BeginLights(worldPos);
+    Graphite_LightIterator it = Graphite_BeginLights(relativePos);
     LightSample L;
     while (Graphite_NextLight(it, L))
     {
@@ -869,27 +863,27 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, 
 }
 
 // Shading normal doubles as the shadow normal, for surfaces without a separate geometric normal
-vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+vec3 CalculateForwardLighting(vec3 relativePos, vec3 worldNormal, vec3 viewDir,
                               vec3 albedo, float metallic, float roughness, float ao)
 {
-    return CalculateForwardLighting(worldPos, worldNormal, worldNormal, viewDir, albedo, metallic, roughness, ao);
+    return CalculateForwardLighting(relativePos, worldNormal, worldNormal, viewDir, albedo, metallic, roughness, ao);
 }
 
-vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+vec3 CalculateForwardLightingAniso(vec3 relativePos, vec3 worldNormal, vec3 viewDir,
                                     vec3 worldTangent, vec3 worldBitangent,
                                     vec3 albedo, float metallic,
                                     float roughness, float anisotropy, float ao)
 {
-    return CalculateForwardLightingAniso(worldPos, worldNormal, worldNormal, viewDir, worldTangent, worldBitangent,
+    return CalculateForwardLightingAniso(relativePos, worldNormal, worldNormal, viewDir, worldTangent, worldBitangent,
                                          albedo, metallic, roughness, anisotropy, ao);
 }
 
-vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+vec3 CalculateForwardLighting(vec3 relativePos, vec3 worldNormal, vec3 viewDir,
                               vec3 albedo, float metallic, float roughness, float ao,
                               float translucency, float scatterPower,
                               float scatterDist, float scatterScale)
 {
-    return CalculateForwardLighting(worldPos, worldNormal, worldNormal, viewDir, albedo, metallic, roughness, ao,
+    return CalculateForwardLighting(relativePos, worldNormal, worldNormal, viewDir, albedo, metallic, roughness, ao,
                                     translucency, scatterPower, scatterDist, scatterScale);
 }
 
@@ -1047,10 +1041,10 @@ vec3 SampleSkyProbe(vec3 dir, float roughness)
 }
 
 // A camera relative point in the probe's box space. offset and offsetLow move camera relative positions into its region.
-vec3 Graphite_ProbeLocal(Graphite_ReflectionProbe probe, vec3 worldPos, vec3 offset, vec3 offsetLow)
+vec3 Graphite_ProbeLocal(Graphite_ReflectionProbe probe, vec3 relativePos, vec3 offset, vec3 offsetLow)
 {
     precise vec3 center = (vec3(probe.row0.w, probe.row1.w, probe.row2.w) - offset) - offsetLow;
-    precise vec3 q = worldPos - center;
+    precise vec3 q = relativePos - center;
     return vec3(dot(probe.row0.xyz, q), dot(probe.row1.xyz, q), dot(probe.row2.xyz, q));
 }
 
@@ -1084,10 +1078,10 @@ struct Graphite_ProbeIterator
     uint last;
 };
 
-Graphite_ProbeIterator Graphite_BeginProbes(vec3 worldPos)
+Graphite_ProbeIterator Graphite_BeginProbes(vec3 relativePos)
 {
     Graphite_ProbeIterator it;
-    Graphite_BeginQuery(it.query, worldPos, GRAPHITE_SET_PROBES);
+    Graphite_BeginQuery(it.query, relativePos, GRAPHITE_SET_PROBES);
     it.k = 0u;
     it.last = 0u;
     return it;
@@ -1112,7 +1106,7 @@ bool Graphite_NextProbe(inout Graphite_ProbeIterator it, out Graphite_Reflection
 }
 
 // Blends the most important probes around the point by how far inside their boxes it is, the sky filling the rest
-vec3 EvaluateReflectionProbes(vec3 worldPos, vec3 N, vec3 V, float roughness)
+vec3 EvaluateReflectionProbes(vec3 relativePos, vec3 N, vec3 V, float roughness)
 {
     // Rough lobes lean toward the normal
     float a = roughness * roughness;
@@ -1125,7 +1119,7 @@ vec3 EvaluateReflectionProbes(vec3 worldPos, vec3 N, vec3 V, float roughness)
     float priority[MAX_BLENDED_PROBES];
     int count = 0;
 
-    Graphite_ProbeIterator it = Graphite_BeginProbes(worldPos);
+    Graphite_ProbeIterator it = Graphite_BeginProbes(relativePos);
     Graphite_ReflectionProbe probe;
     vec3 p;
     while (Graphite_NextProbe(it, probe, p))
@@ -1171,7 +1165,7 @@ vec3 EvaluateReflectionProbes(vec3 worldPos, vec3 N, vec3 V, float roughness)
 // Specular light from the environment: the reflection probes once the sky is captured, else an approximation from the
 // ambient light, Fresnel at the view angle and a roughness falloff, as the Standard shader does. ambientLight is the
 // indirect diffuse light times occlusion.
-vec3 Graphite_IndirectSpecular(vec3 worldPos, vec3 N, vec3 V, vec3 F0, float roughness, float ao, vec3 ambientLight)
+vec3 Graphite_IndirectSpecular(vec3 relativePos, vec3 N, vec3 V, vec3 F0, float roughness, float ao, vec3 ambientLight)
 {
 #ifdef GRAPHITE_FRAGMENT
     ao *= Graphite_ScreenOcclusion();
@@ -1179,7 +1173,7 @@ vec3 Graphite_IndirectSpecular(vec3 worldPos, vec3 N, vec3 V, vec3 F0, float rou
     float NdotV = max(dot(N, V), 0.0);
     vec3 F = EnvBRDF(F0, roughness, NdotV);
     if (ReflectionProbesReady())
-        return EvaluateReflectionProbes(worldPos, N, V, roughness) * F * SpecularOcclusion(NdotV, ao, roughness);
+        return EvaluateReflectionProbes(relativePos, N, V, roughness) * F * SpecularOcclusion(NdotV, ao, roughness);
     float specOcclusion = 1.0 - roughness * roughness;
     return ambientLight * F * mix(specOcclusion, 1.0, 0.25);
 }
@@ -1191,31 +1185,31 @@ vec3 Graphite_IndirectSpecular(vec3 worldPos, vec3 N, vec3 V, vec3 F0, float rou
 // How blurred the sky is that fog takes its color from, as a sky probe roughness
 #define FOG_SKY_ROUGHNESS 0.35
 
-// The fog color seen toward worldPos, either the flat fog color or the sky behind it from the sky probe, so it
+// The fog color seen toward relativePos, either the flat fog color or the sky behind it from the sky probe, so it
 // meets whatever sky is drawn seamlessly
-vec3 FogColor(vec3 worldPos)
+vec3 FogColor(vec3 relativePos)
 {
     if (graphite_World.fogStates.w < 0.5 || !ReflectionProbesReady())
         return graphite_World.fogColor.rgb;
 
     // Below the horizon the fog keeps the horizon's color rather than the ground under the sky
-    vec3 dir = worldPos;
+    vec3 dir = relativePos;
     dir.y = max(dir.y, 0.0);
     dir = length(dir) > 1e-4 ? normalize(dir) : vec3(0.0, 0.0, 1.0);
     return SampleSkyProbe(dir, FOG_SKY_ROUGHNESS);
 }
 
-vec3 ApplyFog(vec3 color, vec3 worldPos)
+vec3 ApplyFog(vec3 color, vec3 relativePos)
 {
     vec4 states = graphite_World.fogStates;
     if (states.x + states.y + states.z < 0.5)
         return color;
 
     vec4 params = graphite_World.fogParams;
-    float fogCoord = length(worldPos);
+    float fogCoord = length(relativePos);
     float prowlFog = 0.0;
     prowlFog += (fogCoord * params.z + params.w) * states.x;
     prowlFog += exp2(-fogCoord * params.y) * states.y;
     prowlFog += exp2(-fogCoord * fogCoord * params.x * params.x) * states.z;
-    return mix(FogColor(worldPos), color, clamp(prowlFog, 0.0, 1.0));
+    return mix(FogColor(relativePos), color, clamp(prowlFog, 0.0, 1.0));
 }

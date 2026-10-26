@@ -32,7 +32,7 @@
     #define GRAPHITE_STANDARD_LIT
 #endif
 
-// Passes whose fragments read the vertex colour and world position: forward, and the depth passes of cutout surfaces
+// Passes whose fragments read the vertex colour and relative position: forward, and the depth passes of cutout surfaces
 #if defined(GRAPHITE_STANDARD_FORWARD) || defined(_SURFACE_CUTOUT)
     #define GRAPHITE_STANDARD_VERTEX_DATA
 #endif
@@ -119,7 +119,7 @@ GRAPHITE_STANDARD_VARYING vec2 vUV1;
 #endif
 
 #ifdef GRAPHITE_STANDARD_VERTEX_DATA
-GRAPHITE_STANDARD_VARYING vec3 vWorldPos;
+GRAPHITE_STANDARD_VARYING vec3 vRelativePos;
 GRAPHITE_STANDARD_VARYING vec4 vColor;
 #endif
 
@@ -179,7 +179,7 @@ struct Graphite_SurfaceData
     vec2 UV;                // UV0, moved by parallax, before any texture's scale and offset
     vec2 UV1;               // UV1, before any texture's scale and offset
     vec4 VertexColor;
-    vec3 WorldPos;          // camera relative
+    vec3 RelativePos;       // relative to the camera, Graphite_RelativeToWorld for world space
     vec3 ViewDir;           // from the surface toward the camera
     vec3 GeometryNormal;    // the mesh's, facing the camera on back faces
     vec3 Tangent;           // world space, with Bitangent and GeometryNormal the frame tangent space normal maps use,
@@ -199,7 +199,7 @@ Graphite_SurfaceData Graphite_NewSurfaceData(vec2 uv, vec2 uv1, vec3 baseColor, 
     s.UV = uv;
     s.UV1 = uv1;
     s.VertexColor = vec4(1.0);
-    s.WorldPos = vec3(0.0);
+    s.RelativePos = vec3(0.0);
     s.ViewDir = vec3(0.0, 0.0, 1.0);
     s.GeometryNormal = vec3(0.0, 1.0, 0.0);
     s.Tangent = vec3(1.0, 0.0, 0.0);

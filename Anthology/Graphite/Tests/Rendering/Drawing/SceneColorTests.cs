@@ -30,8 +30,8 @@ public sealed class SceneColorTests : IDisposable
                     layout(location = 0) out vec3 vWorld;
                     void main()
                     {
-                        vec3 relative = Graphite_ObjectToWorld(vertexPosition);
-                        vWorld = Graphite_AbsoluteFromRelative(relative);
+                        vec3 relative = Graphite_ObjectToRelative(vertexPosition);
+                        vWorld = Graphite_RelativeToWorld(relative);
                         gl_Position = Graphite_RelativeToClip(relative);
                     }
                 }
@@ -75,7 +75,7 @@ public sealed class SceneColorTests : IDisposable
                     layout(location = 0) out vec3 vRelative;
                     void main()
                     {
-                        vRelative = Graphite_ObjectToWorld(vertexPosition);
+                        vRelative = Graphite_ObjectToRelative(vertexPosition);
                         gl_Position = Graphite_RelativeToClip(vRelative);
                     }
                 }

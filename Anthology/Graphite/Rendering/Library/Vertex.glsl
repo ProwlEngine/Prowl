@@ -63,8 +63,8 @@ vec4 Graphite_LoadCustom(uint index) { uint stream = 10u + index; return Graphit
 #define vertexCustom0 Graphite_LoadCustom(0u)
 #define vertexCustom1 Graphite_LoadCustom(1u)
 
-// The camera relative world position of an object space point.
-vec3 Graphite_ObjectToWorld(vec3 p)
+// The relative position of an object space point.
+vec3 Graphite_ObjectToRelative(vec3 p)
 {
     Graphite_ViewData view = Graphite_View();
     return Graphite_TransformPoint(Graphite_ObjectTransform(), p, view.cameraHigh.xyz, view.cameraLow.xyz);
@@ -82,7 +82,7 @@ vec2 Graphite_LightmapUV()
     return uv * scaleOffset.xy + scaleOffset.zw;
 }
 
-vec4 Graphite_ObjectToClip(vec3 p) { return Graphite_RelativeToClip(Graphite_ObjectToWorld(p)); }
+vec4 Graphite_ObjectToClip(vec3 p) { return Graphite_RelativeToClip(Graphite_ObjectToRelative(p)); }
 
 // Where the point was last frame in last frame's clip space, for motion vectors. Objects without a previous transform did not move.
 vec4 Graphite_PreviousObjectToClip(vec3 p)

@@ -2,7 +2,7 @@
 // surface to Graphite_DebugView, which returns what the value shows in place of the lit colour, and calls
 // Graphite_DebugInputs before lighting so the LIGHTING view shades a white surface. The Debug pass declares the axis
 // itself, "#pragma variant global GRAPHITE_DEBUG" with the values below, so no other pass compiles a variant per view.
-// World positions are camera relative, normals in world space.
+// Positions are relative, normals in world space.
 //   UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY
 #pragma once
 

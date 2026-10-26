@@ -48,10 +48,10 @@ Graphite_DecalRecord Graphite_DecalAt(uint array, uint index)
 }
 
 // The unit box position of a camera relative point. offset and offsetLow move camera relative positions into the decal's tree.
-vec3 Graphite_DecalLocal(Graphite_DecalRecord d, vec3 worldPos, vec3 offset, vec3 offsetLow)
+vec3 Graphite_DecalLocal(Graphite_DecalRecord d, vec3 relativePos, vec3 offset, vec3 offsetLow)
 {
     precise vec3 center = (vec3(d.row0.w, d.row1.w, d.row2.w) - offset) - offsetLow;
-    precise vec3 q = worldPos - center;
+    precise vec3 q = relativePos - center;
     return vec3(dot(d.row0.xyz, q), dot(d.row1.xyz, q), dot(d.row2.xyz, q));
 }
 
@@ -112,9 +112,9 @@ bool Graphite_DecalBefore(float priority, uint sequence, float otherPriority, ui
     return priority < otherPriority || (priority == otherPriority && sequence < otherSequence);
 }
 
-// Applies every decal whose box holds worldPos, camera relative, to the surface. geomNormal is the normal before
+// Applies every decal whose box holds relativePos, camera relative, to the surface. geomNormal is the normal before
 // normal mapping, used to fade decals on surfaces turned away from them.
-void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
+void Graphite_ApplyDecals(vec3 relativePos, vec3 geomNormal,
                           inout vec3 albedo, inout vec3 normal, inout float roughness, inout float metallic, inout float occlusion)
 {
 #ifndef GRAPHITE_DECALS
@@ -130,14 +130,14 @@ void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
     int hits = 0;
 
     Graphite_TreeQuery query;
-    Graphite_BeginQuery(query, worldPos, GRAPHITE_SET_DECALS);
+    Graphite_BeginQuery(query, relativePos, GRAPHITE_SET_DECALS);
     uint tree, first, last;
     while (Graphite_NextRun(query, tree, first, last))
     {
         for (uint i = first; i < last; i++)
         {
             Graphite_DecalRecord d = Graphite_DecalAt(tree, i);
-            vec3 local = Graphite_DecalLocal(d, worldPos, query.offset, query.offsetLow);
+            vec3 local = Graphite_DecalLocal(d, relativePos, query.offset, query.offsetLow);
             float coverage = Graphite_DecalCoverage(d, local, geomNormal, layers);
             if (coverage <= 0.0)
                 continue;

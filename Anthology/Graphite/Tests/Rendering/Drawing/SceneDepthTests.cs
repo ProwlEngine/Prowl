@@ -25,7 +25,7 @@ public sealed class SceneDepthTests : IDisposable
                 Vertex
                 {
                     #include "Graphite/Vertex.glsl"
-                    void main() { gl_Position = Graphite_RelativeToClip(Graphite_ObjectToWorld(vertexPosition)); }
+                    void main() { gl_Position = Graphite_RelativeToClip(Graphite_ObjectToRelative(vertexPosition)); }
                 }
                 Fragment
                 {
@@ -54,7 +54,7 @@ public sealed class SceneDepthTests : IDisposable
                 Vertex
                 {
                     #include "Graphite/Vertex.glsl"
-                    void main() { gl_Position = Graphite_RelativeToClip(Graphite_ObjectToWorld(vertexPosition)); }
+                    void main() { gl_Position = Graphite_RelativeToClip(Graphite_ObjectToRelative(vertexPosition)); }
                 }
                 Fragment
                 {

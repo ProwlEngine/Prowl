@@ -14,7 +14,7 @@ void Graphite_StandardFragment()
 {
     vec2 uv = vUV;
     vec2 uv1 = vUV1;
-    vec3 viewDir = GetWorldViewDir(vWorldPos);
+    vec3 viewDir = Graphite_ViewDir(vRelativePos);
 
 #ifdef GRAPHITE_STANDARD_LIT
     vec3 N = normalize(vNormal);
@@ -91,13 +91,13 @@ void Graphite_StandardFragment()
     emission = texture(_EmissionTex, Graphite_StandardUV(_EmissionTexUV, _EmissionTex_ST, uv, uv1)).rgb * _EmissiveColor.rgb * _EmissionIntensity;
 #endif
 
-    Graphite_ApplyDecals(vWorldPos, N, baseColor, worldNormal, roughness, metallic, ao);
+    Graphite_ApplyDecals(vRelativePos, N, baseColor, worldNormal, roughness, metallic, ao);
 #endif
 
 #ifdef GRAPHITE_SURFACE_FUNCTION
     Graphite_SurfaceData s = Graphite_NewSurfaceData(uv, uv1, baseColor, alpha);
     s.VertexColor = vColor;
-    s.WorldPos = vWorldPos;
+    s.RelativePos = vRelativePos;
     s.ViewDir = viewDir;
     s.GeometryNormal = N;
 #ifdef GRAPHITE_STANDARD_LIT
@@ -124,9 +124,9 @@ void Graphite_StandardFragment()
 #endif
 
 #ifdef GRAPHITE_STANDARD_UNLIT
-    vec3 color = ApplyFog(baseColor + emission, vWorldPos);
+    vec3 color = ApplyFog(baseColor + emission, vRelativePos);
 #ifdef GRAPHITE_STANDARD_DEBUG
-    color = Graphite_DebugView(color, baseColor, vec3(0.0), 1.0, 0.0, 1.0, vec3(0.0), vWorldPos, vec2(0.0));
+    color = Graphite_DebugView(color, baseColor, vec3(0.0), 1.0, 0.0, 1.0, vec3(0.0), vRelativePos, vec2(0.0));
 #endif
 #ifndef _SURFACE_TRANSPARENT
     Graphite_WriteGBuffer(vec3(0.0, 1.0, 0.0), 1.0, 0.0);
@@ -150,23 +150,23 @@ void Graphite_StandardFragment()
         anisoTangent = normalize(T * anisoDir.x + B * anisoDir.y);
         anisoBitangent = normalize(cross(worldNormal, anisoTangent));
     }
-    vec3 lighting = CalculateForwardLightingAniso(vWorldPos, worldNormal, N, viewDir, anisoTangent, anisoBitangent,
+    vec3 lighting = CalculateForwardLightingAniso(vRelativePos, worldNormal, N, viewDir, anisoTangent, anisoBitangent,
                                                   baseColor, metallic, roughness, _Anisotropy, ao);
 #elif defined(_TRANSLUCENCY)
-    vec3 lighting = CalculateForwardLighting(vWorldPos, worldNormal, N, viewDir, baseColor, metallic, roughness, ao,
+    vec3 lighting = CalculateForwardLighting(vRelativePos, worldNormal, N, viewDir, baseColor, metallic, roughness, ao,
                                              translucency, scatteringPower, scatteringDistortion, scatteringScale);
 #else
-    vec3 lighting = CalculateForwardLighting(vWorldPos, worldNormal, N, viewDir, baseColor, metallic, roughness, ao);
+    vec3 lighting = CalculateForwardLighting(vRelativePos, worldNormal, N, viewDir, baseColor, metallic, roughness, ao);
 #endif
 
     vec3 ambientLight = Graphite_IndirectDiffuse(worldNormal, vLightmapUV) * ao;
     vec3 ambientDiffuse = ambientLight * baseColor * (1.0 - metallic);
     vec3 F0 = mix(vec3(0.04), baseColor, metallic);
-    vec3 ambientSpecular = Graphite_IndirectSpecular(vWorldPos, worldNormal, viewDir, F0, roughness, ao, ambientLight);
+    vec3 ambientSpecular = Graphite_IndirectSpecular(vRelativePos, worldNormal, viewDir, F0, roughness, ao, ambientLight);
 
-    vec3 color = ApplyFog(ambientDiffuse + ambientSpecular + lighting + emission, vWorldPos);
+    vec3 color = ApplyFog(ambientDiffuse + ambientSpecular + lighting + emission, vRelativePos);
 #ifdef GRAPHITE_STANDARD_DEBUG
-    color = Graphite_DebugView(color, baseColor, worldNormal, roughness, metallic, ao, emission, vWorldPos, vLightmapUV);
+    color = Graphite_DebugView(color, baseColor, worldNormal, roughness, metallic, ao, emission, vRelativePos, vLightmapUV);
 #endif
 #ifndef _SURFACE_TRANSPARENT
     Graphite_WriteGBuffer(worldNormal, roughness, metallic);
@@ -190,8 +190,8 @@ void Graphite_StandardFragment()
 #ifdef GRAPHITE_SURFACE_FUNCTION
     Graphite_SurfaceData s = Graphite_NewSurfaceData(vUV, vUV1, albedo.rgb, albedo.a);
     s.VertexColor = vColor;
-    s.WorldPos = vWorldPos;
-    s.ViewDir = normalize(-vWorldPos);
+    s.RelativePos = vRelativePos;
+    s.ViewDir = Graphite_ViewDir(vRelativePos);
     Surface(s);
     albedo.a = s.Alpha;
 #endif

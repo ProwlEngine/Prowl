@@ -267,10 +267,10 @@ struct Graphite_ItemIterator
     uint stride;             // 16 byte words per record, the centre and radius included
 };
 
-Graphite_ItemIterator Graphite_BeginItems(uint set, uint stride, vec3 worldPos)
+Graphite_ItemIterator Graphite_BeginItems(uint set, uint stride, vec3 relativePos)
 {
     Graphite_ItemIterator it;
-    Graphite_BeginQuery(it.query, worldPos, set);
+    Graphite_BeginQuery(it.query, relativePos, set);
     it.array = 0u;
     it.k = 0u;
     it.last = 0u;

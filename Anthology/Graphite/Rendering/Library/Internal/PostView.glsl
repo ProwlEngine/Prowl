@@ -19,7 +19,7 @@ vec3 Graphite_PostViewPosition(Graphite_ViewData view, vec2 uv, float depth)
     return mat3(view.view) * (p.xyz / p.w);
 }
 
-// The camera relative world position of a uv and depth
+// The relative position of a uv and depth
 vec3 Graphite_PostRelativePosition(Graphite_ViewData view, vec2 uv, float depth)
 {
     vec4 p = view.inverseViewProjection * vec4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0);

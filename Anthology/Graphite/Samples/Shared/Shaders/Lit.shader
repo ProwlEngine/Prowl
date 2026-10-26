@@ -42,7 +42,7 @@ Shader "PBRRenderer/Lit"
             layout(location = 2) out vec2 vUV;
             void main()
             {
-                vWorld = Graphite_ObjectToWorld(vertexPosition);
+                vWorld = Graphite_ObjectToRelative(vertexPosition);
                 vNormal = Graphite_ObjectToWorldNormal(vertexNormal);
                 vUV = vertexUV0;
                 gl_Position = Graphite_RelativeToClip(vWorld);
@@ -94,7 +94,7 @@ Shader "PBRRenderer/Lit"
                     albedo *= Graphite_Object().custom0.rgb;
                 if (_Grid > 0.0)
                 {
-                    vec2 p = Graphite_AbsoluteFromRelative(vWorld).xz / _Grid;
+                    vec2 p = Graphite_RelativeToWorld(vWorld).xz / _Grid;
                     vec2 g = abs(fract(p - 0.5) - 0.5) / max(fwidth(p), vec2(1e-4));
                     albedo *= mix(1.0, 0.5, 1.0 - min(min(g.x, g.y), 1.0));
                 }
@@ -104,7 +104,7 @@ Shader "PBRRenderer/Lit"
                 float metallic = clamp(_Metallic * metalRough.b, 0.0, 1.0);
                 float ao = 1.0;
 
-                vec3 V = GetWorldViewDir(vWorld);
+                vec3 V = Graphite_ViewDir(vWorld);
                 vec3 F0 = mix(vec3(0.04), albedo, metallic);
                 vec3 direct = CalculateForwardLighting(vWorld, N, n, V, albedo, metallic, roughness, ao);
                 vec3 diffuseGI = Graphite_IndirectDiffuse(N, vec2(0.0));
