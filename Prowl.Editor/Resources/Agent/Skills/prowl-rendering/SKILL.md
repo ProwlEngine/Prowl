@@ -34,9 +34,10 @@ The built in `Standard` shader uses these property names. `material <ref>` lists
 - A newly added Camera component has `FarClipPlane` 100, `FieldOfView` 60, no `Profile` and `AntiAliasing` `None`. The default scene's Main Camera is the same.
 - `Camera.Main` is the enabled camera with the highest `Depth` that draws to the screen.
 - Anti aliasing is a camera field, not an effect: `camera.AntiAliasing = AntiAliasingMode.FXAA` (also `SMAA`, `TAA`), tuned through `camera.Fxaa`, `camera.Smaa` and `camera.Taa`.
-- Post processing comes from volume profiles. A `VolumeProfile` holds volume components from `Prowl.Runtime.Rendering`: `Tonemapping`, `Bloom`, `AutoExposure`, `AmbientOcclusion`, `ScreenSpaceReflections`, `MotionBlur`, `DepthOfField`, `GodRays`, `Vignette`, `ChromaticAberration`, `FilmGrain`, `ColorGrading`, `ColorLookup`, `Sharpen`, `EdgeDetection`, `Pixelation`, `VolumetricFog`. The camera's own `Profile` applies under every `Volume` component in the scene. A `Volume` is global by default, or set `IsGlobal = false` and a `Size` to apply it only inside a box.
+- Tonemapping is a camera field too, not an effect. An `HDR` camera (the default) always tonemaps with `camera.Tonemapping`, a `TonemappingMode`: `AgXPunchy` (default), `AgXNeutral`, `ACES`, `Reinhard`, `RomBinDaHouse` or `Uncharted2`. `camera.HDR = false` renders 8 bit sRGB with no tonemapping, where light above 1 clips.
+- Post processing comes from volume profiles. A `VolumeProfile` holds volume components from `Prowl.Runtime.Rendering`: `Bloom`, `AutoExposure`, `AmbientOcclusion`, `ScreenSpaceReflections`, `MotionBlur`, `DepthOfField`, `GodRays`, `Vignette`, `ChromaticAberration`, `FilmGrain`, `ColorGrading`, `ColorLookup`, `Sharpen`, `EdgeDetection`, `Pixelation`, `VolumetricFog`. The camera's own `Profile` applies under every `Volume` component in the scene. A `Volume` is global by default, or set `IsGlobal = false` and a `Size` to apply it only inside a box.
 - Each setting is a `VolumeParameter` and only counts once overridden. Use `.Set(value)` to set and override it in one go, or `Add<T>(overrideAll: true)`.
-- `Bloom` is off until `Intensity` is above 0. `Threshold` defaults to 1.2, so mostly emissive and very bright surfaces bloom. Lower it to make lit surfaces glow too. `Tonemapping` is off while `Mode` is `TonemappingMode.None`. `AgX` is a soft filmic curve that desaturates bright colours, `ACES` keeps colours punchier.
+- `Bloom` is off until `Intensity` is above 0. `Threshold` defaults to 1.2, so mostly emissive and very bright surfaces bloom. Lower it to make lit surfaces glow too. For tonemapping, `AgXNeutral` is a soft filmic curve that desaturates bright colours, `AgXPunchy` adds contrast and saturation, and `ACES` keeps colours punchier still.
 
 ```csharp
 // prowl eval: bloom, tonemapping and FXAA on the main camera
@@ -44,7 +45,7 @@ using Prowl.Runtime.Rendering;
 var camera = Scene.Current.FindObjectsOfType<Camera>()[0]!;
 camera.Profile = new VolumeProfile { Name = "Main Camera Profile" };
 camera.Profile.Add<Bloom>().Intensity.Set(1f);
-camera.Profile.Add<Tonemapping>().Mode.Set(TonemappingMode.ACES);
+camera.Tonemapping = TonemappingMode.ACES;
 camera.AntiAliasing = AntiAliasingMode.FXAA;
 return camera.Profile.Components.Count;
 ```
