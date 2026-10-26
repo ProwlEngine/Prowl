@@ -1582,32 +1582,13 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0, 1, 0), pixels, i => i % Size >= Size / 2);
     }
 
-    private sealed class Outlines : RenderFeature
-    {
-        public static readonly PassType Outline = new("Outline");
-
-        public override RenderSlot Slot => RenderSlot.AfterOpaques;
-
-        public override void Setup(FeatureBuilder builder, in FeatureView view)
-        {
-            builder.DrawsPass(Outline);
-            builder.DrawToScene();
-        }
-
-        public override void Render(FeatureContext context)
-        {
-            context.BeginOutput();
-            context.DrawPass(Outline);
-        }
-    }
-
     [Fact]
     public void FeaturesDrawAnyPassType_IncludingRenderablesAddedLater()
     {
         Shader outlined = _renderer.LoadShader(ShaderParser.Parse(OutlinedSource));
         Material material = _renderer.CreateMaterial(outlined);
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [material]);
-        _world.Features.Add(new Outlines());
+        _world.Features.Add(new DrawPassFeature(new PassType("Outline"), RenderSlot.AfterOpaques));
 
         Float4[] pixels = Frame(View());
         AssertAll(new Float3(0, 1, 0), pixels, Centre);
@@ -1623,6 +1604,24 @@ public sealed class FeatureTests : IDisposable
 
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 30)) }, [material]);
         AssertAll(new Float3(0, 1, 0), Frame(View()));
+    }
+
+    [Theory]
+    [InlineData(RenderSlot.AfterPrepass, false)]
+    [InlineData(RenderSlot.AfterOpaques, true)]
+    [InlineData(RenderSlot.AfterTransparents, true)]
+    public void DrawPassFeature_DrawsItsPassInItsSlot(RenderSlot slot, bool overOpaques)
+    {
+        Shader outlined = _renderer.LoadShader(ShaderParser.Parse(OutlinedSource));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [_renderer.CreateMaterial(outlined)]);
+        DrawPassFeature feature = new(new PassType("Outline"), slot);
+        _world.Features.Add(feature);
+
+        // Before the opaques, the object's own forward pass draws over its outline
+        AssertAll(overOpaques ? new Float3(0, 1, 0) : new Float3(1, 0, 0), Frame(View()), Centre);
+
+        feature.Enabled = false;
+        AssertAll(new Float3(1, 0, 0), Frame(View()), Centre);
     }
 
     // Adds a quarter to what it held last frame, and publishes it

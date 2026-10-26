@@ -1092,6 +1092,32 @@ public sealed class TransparentFeature : RenderFeature
 }
 
 /// <summary>
+/// Draws the visible renderables' pass of one type, the shader pass tagged "LightMode" = type, onto the scene in a slot,
+/// such as "Outline" after the opaques. Each pass draws with its own render state, so outlines, silhouettes seen through
+/// walls and similar effects need only the pass in their shaders.
+/// </summary>
+public sealed class DrawPassFeature(PassType type, RenderSlot slot, int order = 0) : RenderFeature
+{
+    public PassType Type { get; } = type;
+
+    public override RenderSlot Slot => slot;
+
+    public override int Order { get; set; } = order;
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
+    {
+        builder.DrawsPass(Type);
+        builder.DrawToScene();
+    }
+
+    public override void Render(FeatureContext context)
+    {
+        context.BeginOutput();
+        context.DrawPass(Type);
+    }
+}
+
+/// <summary>
 /// Copies the view's colour after the opaque surfaces and the sky into its scene colour and fills the mips, for passes
 /// tagged "SceneColor" = "Read" to sample through Graphite/SceneColor.glsl. Active once such a pass was in the view's
 /// transparent list, recording nothing on frames without one.
