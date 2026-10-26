@@ -1,5 +1,6 @@
 // Graphite's standard physically based surface: metallic and roughness, normal, occlusion, emission, parallax, translucency and anisotropy, each input compiled in only while used.
 // Also the "Lit" surface model: a shader with Surface "Lit" takes these passes and properties, its code in place of each "#pragma surface".
+// A Surface block's Vertex code goes in place of each "#pragma surface_vertex".
 // A Surface block's Lighting code supplies Graphite_BRDF to the passes marked "#pragma surface_lighting".
 Shader "Graphite/Lit"
 {
@@ -60,6 +61,8 @@ Shader "Graphite/Lit"
         }
         Vertex
         {
+            #pragma surface_vertex
+            #include "Graphite/Standard/StandardVertex.glsl"
             void main() { Graphite_StandardVertex(); }
         }
         Fragment
@@ -83,6 +86,8 @@ Shader "Graphite/Lit"
         }
         Vertex
         {
+            #pragma surface_vertex
+            #include "Graphite/Standard/StandardVertex.glsl"
             void main() { Graphite_StandardVertex(); }
         }
         Fragment
@@ -106,6 +111,8 @@ Shader "Graphite/Lit"
         }
         Vertex
         {
+            #pragma surface_vertex
+            #include "Graphite/Standard/StandardVertex.glsl"
             void main() { Graphite_StandardVertex(); }
         }
         Fragment
@@ -139,6 +146,8 @@ Shader "Graphite/Lit"
         }
         Vertex
         {
+            #pragma surface_vertex
+            #include "Graphite/Standard/StandardVertex.glsl"
             void main() { Graphite_StandardVertex(); }
         }
         Fragment

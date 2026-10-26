@@ -160,7 +160,33 @@ Shader "MyGame/Rim"
 }
 ```
 
-An optional `Lighting` block after the code replaces the BRDF every light goes through, for toon ramps and other
+An optional `Vertex` block moves vertices for wind, waves and wobble. It defines
+`void SurfaceVertex(inout Graphite_SurfaceVertex v)` over the object space `Position`, `Normal`, `Tangent` (w the
+handedness), `Color`, `UV` and `UV1`, run before the vertex is transformed in every pass, so shadows and depth match.
+Animate with `v.Time` rather than the view's time: the forward pass runs the function again at last frame's time to find
+where the vertex was, which keeps motion vectors, TAA and motion blur right.
+
+```
+Surface "Lit"
+{
+    Vertex
+    {
+        GLSLPROGRAM
+        uniform float _WaveHeight;
+
+        void SurfaceVertex(inout Graphite_SurfaceVertex v)
+        {
+            v.Position += v.Normal * sin(v.Position.x * 2.0 + v.Time) * _WaveHeight;
+        }
+        ENDGLSL
+    }
+}
+```
+
+A surface model marks where this goes with a `#pragma surface_vertex` line in each pass's Vertex section, before
+Graphite/Standard/StandardVertex.glsl is included.
+
+An optional `Lighting` block replaces the BRDF every light goes through, for toon ramps and other
 custom shading. It defines `vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c)` and may call
 `Graphite_DefaultBRDF(s, c)`. Only the lit passes take it, Forward and Debug for `Surface "Lit"`, so parallax, decals,
 translucency, anisotropy and every surface type keep working. `Surface "Unlit"` has no lights and refuses one.

@@ -1,5 +1,6 @@
 // Graphite's standard unlit surface: a texture times a tint and the vertex colour, fogged.
 // Also the "Unlit" surface model: a shader with Surface "Unlit" takes these passes and properties, its code in place of each "#pragma surface".
+// A Surface block's Vertex code goes in place of each "#pragma surface_vertex".
 Shader "Graphite/Unlit"
 {
     Properties
@@ -24,6 +25,8 @@ Shader "Graphite/Unlit"
         }
         Vertex
         {
+            #pragma surface_vertex
+            #include "Graphite/Standard/StandardVertex.glsl"
             void main() { Graphite_StandardVertex(); }
         }
         Fragment
@@ -48,6 +51,8 @@ Shader "Graphite/Unlit"
         }
         Vertex
         {
+            #pragma surface_vertex
+            #include "Graphite/Standard/StandardVertex.glsl"
             void main() { Graphite_StandardVertex(); }
         }
         Fragment
@@ -72,6 +77,8 @@ Shader "Graphite/Unlit"
         }
         Vertex
         {
+            #pragma surface_vertex
+            #include "Graphite/Standard/StandardVertex.glsl"
             void main() { Graphite_StandardVertex(); }
         }
         Fragment
@@ -98,6 +105,8 @@ Shader "Graphite/Unlit"
         }
         Vertex
         {
+            #pragma surface_vertex
+            #include "Graphite/Standard/StandardVertex.glsl"
             void main() { Graphite_StandardVertex(); }
         }
         Fragment

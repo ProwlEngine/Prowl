@@ -458,6 +458,7 @@ public sealed class Shader
     }
 
     private static readonly System.Text.RegularExpressions.Regex s_surfaceMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
+    private static readonly System.Text.RegularExpressions.Regex s_vertexMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface_vertex[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
     private static readonly System.Text.RegularExpressions.Regex s_lightingMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface_lighting[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
 
     /// <summary>
@@ -466,7 +467,9 @@ public sealed class Shader
     /// void Surface(inout Graphite_SurfaceData s) over the standard surface before it is lit, with
     /// GRAPHITE_SURFACE_FUNCTION defined. A Lighting block's code defines Graphite_BRDF for the passes with a
     /// "#pragma surface_lighting" line, which becomes the GRAPHITE_CUSTOM_BRDF define, the code following the block's at
-    /// their "#pragma surface". The model's properties come before the shader's own, which replace any of the same name.
+    /// their "#pragma surface". A Vertex block's code, defining void SurfaceVertex(inout Graphite_SurfaceVertex v), goes
+    /// in place of each "#pragma surface_vertex" line with GRAPHITE_SURFACE_VERTEX_FUNCTION defined. The model's
+    /// properties come before the shader's own, which replace any of the same name.
     /// </summary>
     private static void ExpandSurface(ShaderDefinition definition)
     {
@@ -481,11 +484,16 @@ public sealed class Shader
 
         string code = surface.Code.Length > 0 ? "#define GRAPHITE_SURFACE_FUNCTION\n" + surface.Code : "";
         string lighting = surface.Lighting;
+        string vertex = surface.Vertex.Length > 0 ? "#define GRAPHITE_SURFACE_VERTEX_FUNCTION\n" + surface.Vertex : "";
         ShaderPass[] standard = model.Passes ?? [];
         bool spliced = false;
         bool lit = false;
+        bool moved = false;
         foreach (ShaderPass pass in standard)
         {
+            moved |= s_vertexMarker.IsMatch(pass.Source);
+            pass.Source = s_vertexMarker.Replace(pass.Source, _ => vertex);
+
             string passCode = code;
             if (s_lightingMarker.IsMatch(pass.Source))
             {
@@ -500,6 +508,8 @@ public sealed class Shader
         }
         if (code.Length > 0 && !spliced)
             throw new ShaderLoadException($"{name}:{surface.Line}: the surface model {path} has no \"#pragma surface\" line for the Surface block's code.");
+        if (vertex.Length > 0 && !moved)
+            throw new ShaderLoadException($"{name}:{surface.Line}: the surface model {path} has no \"#pragma surface_vertex\" line for the Vertex block's code.");
         if (lighting.Length > 0 && !lit)
             throw new ShaderLoadException($"{name}:{surface.Line}: the surface model {path} has no \"#pragma surface_lighting\" line for the Lighting block's code.");
 

@@ -68,15 +68,18 @@ public static class ShaderParser
             ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
             string code = t.Peek().Kind == ShaderToken.GlslProgram ? ParserUtility.Program(ref t) : "";
             string lighting = "";
-            if (ParserUtility.PeekKeyword(ref t, "Lighting"))
+            string vertex = "";
+            while (true)
             {
-                t.Next();
-                ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
-                lighting = ParserUtility.Program(ref t);
-                ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+                if (lighting.Length == 0 && ParserUtility.PeekKeyword(ref t, "Lighting"))
+                    lighting = ParseSubProgram(ref t);
+                else if (vertex.Length == 0 && ParserUtility.PeekKeyword(ref t, "Vertex"))
+                    vertex = ParseSubProgram(ref t);
+                else
+                    break;
             }
             ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
-            surface = new ShaderSurface(model, code, surfaceToken.Line, lighting);
+            surface = new ShaderSurface(model, code, surfaceToken.Line, lighting, vertex);
         }
 
         while (ParserUtility.PeekKeyword(ref t, "Pass"))
@@ -118,6 +121,17 @@ public static class ShaderParser
             Fallback = fallback,
             Surface = surface,
         };
+    }
+
+
+    // A named block of a Surface block holding one program, such as Lighting { GLSLPROGRAM ... ENDGLSL }
+    static string ParseSubProgram(ref Tokenizer<ShaderToken> t)
+    {
+        t.Next();
+        ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
+        string code = ParserUtility.Program(ref t);
+        ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+        return code;
     }
 
 

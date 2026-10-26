@@ -174,6 +174,88 @@ public sealed class StandardShaderTests : IDisposable
         }
     }
 
+    private static string WaveSource(string model) => $$"""
+        Shader "Tests/Wave"
+        {
+            Properties
+            {
+                _WaveHeight("Wave Height", Float) = 0.2
+            }
+
+            Surface "{{model}}"
+            {
+                Vertex
+                {
+                    GLSLPROGRAM
+                    uniform float _WaveHeight;
+                    void SurfaceVertex(inout Graphite_SurfaceVertex v)
+                    {
+                        v.Position += v.Normal * sin(v.Position.x + v.Time) * _WaveHeight * v.Color.a;
+                        v.UV += v.UV1 * 0.0;
+                        v.Tangent.xyz = normalize(v.Tangent.xyz);
+                    }
+                    ENDGLSL
+                }
+            }
+        }
+        """;
+
+    [Theory]
+    [InlineData("Lit", "OPAQUE")]
+    [InlineData("Lit", "CUTOUT")]
+    [InlineData("Lit", "TRANSPARENT")]
+    [InlineData("Unlit", "OPAQUE")]
+    [InlineData("Unlit", "CUTOUT")]
+    [InlineData("Unlit", "TRANSPARENT")]
+    public void SurfaceVertex_RunsInEveryPass_AndCompiles(string model, string surface)
+    {
+        ShaderDefinition definition = new Shader(ShaderParser.Parse(WaveSource(model)), _compiler).Definition;
+        Assert.Equal(["Forward", "Prepass", "ShadowCaster", "Debug"], definition.Passes!.Select(p => p.Name));
+
+        foreach (ShaderPass pass in definition.Passes!)
+        {
+            Assert.Contains("void SurfaceVertex(inout Graphite_SurfaceVertex v)", pass.Source);
+            List<Keyword> combo = [new Keyword("_SURFACE", surface)];
+            foreach (VariantSpace axis in _compiler.GetAxes(pass))
+            {
+                if (axis.IsToggle)
+                    combo.Add(new Keyword(axis.Name, VariantSpace.ToggleValues[1]));
+            }
+            _compiler.CompileProgram(pass, [.. combo]);
+        }
+    }
+
+    [Fact]
+    public void SurfaceVertex_TakesSurfaceAndLightingBlocksAlongside()
+    {
+        ShaderDefinition definition = new Shader(ShaderParser.Parse("""
+            Shader "Tests/All"
+            {
+                Surface "Lit"
+                {
+                    GLSLPROGRAM
+                    void Surface(inout Graphite_SurfaceData s) { s.Roughness = 0.5; }
+                    ENDGLSL
+                    Vertex
+                    {
+                        GLSLPROGRAM
+                        void SurfaceVertex(inout Graphite_SurfaceVertex v) { v.Position.y += 1.0; }
+                        ENDGLSL
+                    }
+                    Lighting
+                    {
+                        GLSLPROGRAM
+                        vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c) { return Graphite_DefaultBRDF(s, c); }
+                        ENDGLSL
+                    }
+                }
+            }
+            """), _compiler).Definition;
+
+        ShaderPass forward = definition.Passes!.Single(p => p.Name == "Forward");
+        _compiler.CompileProgram(forward, [new Keyword("_SURFACE", "OPAQUE")]);
+    }
+
     [Fact]
     public void SurfaceLighting_OnAModelWithoutLights_FailsToLoad()
     {

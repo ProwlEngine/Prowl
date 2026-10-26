@@ -7,8 +7,8 @@ using Prowl.Vector;
 namespace Prowl.Graphite.ShaderDef;
 
 
-/// <summary>A Surface block: the shading model it names, its code, the document line it starts on and its Lighting code.</summary>
-public sealed record ShaderSurface(string Model, string Code, int Line, string Lighting = "");
+/// <summary>A Surface block: the shading model it names, its code, the document line it starts on, and its Lighting and Vertex code.</summary>
+public sealed record ShaderSurface(string Model, string Code, int Line, string Lighting = "", string Vertex = "");
 
 
 /// <summary>

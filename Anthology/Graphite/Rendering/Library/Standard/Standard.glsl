@@ -1,12 +1,15 @@
 // The standard surface shared by Graphite/Lit, Graphite/Unlit and every shader with a Surface block, whose passes are
 // the surface model's: each defines its pass and model in its Shared section and includes this in both stages. The
-// vertex stage calls Graphite_StandardVertex from main, the fragment stage includes Graphite/Standard/StandardFragment.glsl
-// after the model's "#pragma surface" line and calls Graphite_StandardFragment from main.
+// vertex stage includes Graphite/Standard/StandardVertex.glsl after the model's "#pragma surface_vertex" line and calls
+// Graphite_StandardVertex from main, the fragment stage includes Graphite/Standard/StandardFragment.glsl after the
+// model's "#pragma surface" line and calls Graphite_StandardFragment from main.
 //
 // Pass defines, exactly one: GRAPHITE_STANDARD_FORWARD, GRAPHITE_STANDARD_DEPTH (prepass and shadow caster).
 // GRAPHITE_STANDARD_DEBUG: with the forward define, the Debug pass, showing the view's GRAPHITE_DEBUG value. See Graphite/Debug.glsl.
 // Model define: GRAPHITE_STANDARD_UNLIT for no lighting, ambient or PBR inputs.
 // GRAPHITE_SURFACE_FUNCTION: the shader defines void Surface(inout Graphite_SurfaceData s), run before lighting.
+// GRAPHITE_SURFACE_VERTEX_FUNCTION: the shader defines void SurfaceVertex(inout Graphite_SurfaceVertex v), run in every
+// pass before the vertex is transformed, so shadows and depth match. It animates with v.Time for motion vectors to follow.
 //
 // Material axes, set by SurfaceSettings and by the properties that drive them:
 //   _SURFACE        OPAQUE, CUTOUT (alpha test against _AlphaCutoff) or TRANSPARENT (alpha reaches the target)
@@ -138,33 +141,17 @@ void Graphite_StandardTangentFrame(vec3 worldNormal, vec3 worldTangent, float ha
 
 #ifdef GRAPHITE_VERTEX
 
-void Graphite_StandardVertex()
+// The vertex a SurfaceVertex function may move before it is transformed, in object space
+struct Graphite_SurfaceVertex
 {
-    vec3 world = Graphite_ObjectToWorld(vertexPosition);
-    gl_Position = Graphite_RelativeToClip(world);
-
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA)
-    vUV = vertexUV0;
-    vUV1 = vertexUV1;
-#endif
-
-#ifdef GRAPHITE_STANDARD_FORWARD
-    vWorldPos = world;
-    vColor = vertexColor;
-#ifdef _INSTANCE_TINT
-    vColor *= Graphite_Object().custom0;
-#endif
-#ifdef GRAPHITE_STANDARD_LIT
-    vNormal = Graphite_ObjectToWorldNormal(vertexNormal);
-    vec4 tangent = vertexTangent;
-    bool hasTangents = Graphite_HasStream(2u);
-    vec3 worldTangent = hasTangents ? normalize(Graphite_ObjectToWorldDirection(tangent.xyz)) : vec3(1.0, 0.0, 0.0);
-    Graphite_StandardTangentFrame(vNormal, worldTangent, tangent.w, hasTangents, vTangent, vBitangent);
-    vHasTangents = hasTangents ? 1.0 : 0.0;
-    vLightmapUV = Graphite_LightmapUV();
-#endif
-#endif
-}
+    vec3 Position;
+    vec3 Normal;
+    vec4 Tangent;           // w is the handedness
+    vec4 Color;
+    vec2 UV;
+    vec2 UV1;
+    float Time;             // seconds, last frame's while the forward pass finds where the vertex was for motion vectors
+};
 
 #endif
 

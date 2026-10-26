@@ -118,26 +118,21 @@ void Graphite_SetPreviousPosition(vec3 p)
     graphite_PreviousPosition = p;
 }
 
-// The vertex's clip position now and last frame, for the forward pass's motion vectors, from last frame's pose when skinned
+// The vertex's object space position last frame: last frame's pose when skinned, else where it is now
+vec3 Graphite_PreviousVertexPosition()
+{
+    uint previous = Graphite_Object().previousPositions;
+    if (previous == 0u)
+        return vertexPosition;
+    uint at = previous - 1u + uint(gl_VertexIndex) * 3u;
+    return uintBitsToFloat(uvec3(graphite_Words[at], graphite_Words[at + 1u], graphite_Words[at + 2u]));
+}
+
+// The vertex's clip position now and last frame, for the forward pass's motion vectors
 void Graphite_EndVertex()
 {
     graphite_MotionCurrent = gl_Position;
-    uint previous = Graphite_Object().previousPositions;
-    vec3 position;
-    if (graphite_PreviousSet)
-    {
-        position = graphite_PreviousPosition;
-    }
-    else if (previous == 0u)
-    {
-        position = vertexPosition;
-    }
-    else
-    {
-        uint at = previous - 1u + uint(gl_VertexIndex) * 3u;
-        position = uintBitsToFloat(uvec3(graphite_Words[at], graphite_Words[at + 1u], graphite_Words[at + 2u]));
-    }
-    graphite_MotionPrevious = Graphite_PreviousObjectToClip(position);
+    graphite_MotionPrevious = Graphite_PreviousObjectToClip(graphite_PreviousSet ? graphite_PreviousPosition : Graphite_PreviousVertexPosition());
 }
 
 void main()
