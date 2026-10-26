@@ -53,8 +53,11 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     /// <summary>Font family or font file for code. Empty follows the editor's mono font. Picked above the other settings.</summary>
     [HideInInspector] public string Font = "";
 
+    public const float DefaultFontSize = 15f;
+
     [Header("Text")]
-    [Range(6, 48)] public float FontSize = 15f;
+    [Range(6, 48), Tooltip("Ctrl+wheel in a script changes this too. The status bar shows it as a zoom of the default size.")]
+    public float FontSize = DefaultFontSize;
     [Range(1, 2.5f), Tooltip("Row height as a multiple of the font size.")] public float LineHeight = 1.5f;
     [Range(1, 8)] public int TabSize = 4;
     [Tooltip("Tab and auto indent insert spaces instead of tab characters.")] public bool InsertSpaces = true;
@@ -274,7 +277,8 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     public void ApplyTo(CodeEditorOptions options)
     {
         ApplyFonts(options);
-        options.FontSize = FontSize;
+        // The editor's zoom is measured from here. ScriptEditorWindow zooms it to FontSize.
+        options.FontSize = DefaultFontSize;
         options.LineHeight = LineHeight;
         options.TabSize = TabSize;
         options.InsertSpaces = InsertSpaces;
@@ -424,6 +428,15 @@ public class ScriptEditorWindow : DockPanel
         if (line > 0) editor.GoToLine(line, column);
     }
 
+    // Scripts zoom from the default font size, so the status bar's percentage is the Font Size preference against it.
+    private static void SetFontSize(OrigamiUI.CodeEditor editor, float size)
+    {
+        size = Math.Clamp(size, editor.Options.MinFontSize, editor.Options.MaxFontSize);
+        if (MathF.Abs(editor.FontSize - size) < 0.05f) return;
+        editor.ResetZoom();
+        editor.Zoom(size - editor.Options.FontSize);
+    }
+
     // Ctrl+wheel zoom and the find bar's toggles carry over to every script and the next session.
     private static void RememberEditorState(OrigamiUI.CodeEditor editor)
     {
@@ -478,16 +491,19 @@ public class ScriptEditorWindow : DockPanel
         return s_keymap = keymap;
     }
 
+    private static float s_appliedFontSize = -1f;
+
     internal static void ApplyPreferences()
     {
         if (s_window == null) return;
         ScriptEditorPreferences prefs = Preferences.Get<ScriptEditorPreferences>();
+        // Only a new font size is pushed, so a Ctrl+wheel not recorded yet survives other preference changes.
+        bool resize = prefs.FontSize != s_appliedFontSize;
+        s_appliedFontSize = prefs.FontSize;
         foreach (var tab in s_window._tabs)
         {
-            float oldSize = tab.Editor.Options.FontSize;
             ApplyOptions(tab.Editor, tab.ReadOnly);
-            // A new font size replaces any Ctrl+wheel zoom.
-            if (oldSize != prefs.FontSize) tab.Editor.ResetZoom();
+            if (resize) SetFontSize(tab.Editor, prefs.FontSize);
         }
     }
 
@@ -545,6 +561,7 @@ public class ScriptEditorWindow : DockPanel
             : new RoslynCSharpLanguage(ScriptWorkspaces.Get(path, out onFallback), path);
         var editor = new OrigamiUI.CodeEditor(text, language) { FilePath = path };
         ApplyOptions(editor, readOnly);
+        SetFontSize(editor, Preferences.Get<ScriptEditorPreferences>().FontSize);
 
         var backend = EditorAssetBackend.Instance;
         var tab = new ScriptTab
