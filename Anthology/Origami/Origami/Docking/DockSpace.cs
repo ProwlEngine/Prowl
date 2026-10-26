@@ -319,7 +319,7 @@ public class DockSpace
             // In a floating window, dragging the tab-bar background (behind the tabs) moves the whole
             // window — the tabs sit on top with StopEventPropagation, so a tab drag still detaches it.
             if (fw != null)
-                tabbar.OnDragging(fw, (cap, e) => cap.Position += e.Delta).Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing);
+                tabbar.OnDragging(fw, (cap, e) => cap.Position += e.Delta);
             else
                 tabbar.IsNotInteractable();
 
@@ -363,7 +363,7 @@ public class DockSpace
                 int ci = i;
                 float tw = tabWidths[i];
                 float tx = tabPositions[i];
-
+                
                 Color idleFill = m.TabStyle switch
                 {
                     TabStyle.Filled => isActive ? OrigamiTheme.WithAlpha(accent, 60) : Color.FromArgb(0, 0, 0, 0),
@@ -385,14 +385,14 @@ public class DockSpace
                     .OnDragStart((node, ci, fw), (cap, e) =>
                     {
                         e.StopPropagation();
-                        var srcNode = cap.Item1;
-                        var srcIdx = cap.Item2;
-                        var srcFw = cap.Item3;
+                        var srcNode = cap.node;
+                        var srcIdx = cap.ci;
+                        var srcFw = cap.fw;
 
                         _draggedPanel = srcNode.Tabs![srcIdx];
                         _isDragging = true;
-                        _dragPos = e.PointerPosition;
-                        _prevDragPos = e.PointerPosition;
+                        _dragPos = e.StartPosition;
+                        _prevDragPos = e.StartPosition;
 
                         // Detach the tab immediately into a new floating window that follows the cursor —
                         // uniform whether it came from the root or another floating window. This makes
@@ -401,14 +401,14 @@ public class DockSpace
                         srcNode.RemoveTab(srcIdx);
                         var newNode = DockNode.Leaf(_draggedPanel);
                         var newFw = new FloatingWindow(newNode,
-                            e.PointerPosition - new Float2(100, 15),
+                            e.ElementRect.Min, // The tab is at the top-left of the new window.
                             srcFw?.Size ?? new Float2(400, 300));
                         FloatingWindows.Add(newFw);
+                        FocusedNode = newNode;
                         _dragSourceNode = newNode;
                         _dragSourceWindow = newFw;
                         CleanupTree();
-                    })
-                    .Cursor(PaperCursor.Pointer).CursorDragging(PaperCursor.Grabbing);
+                    });
 
                 // Full-height separator on the left edge of every tab after the first.
                 if (i > 0)
@@ -963,6 +963,8 @@ public class DockSpace
                 newFirst ? newLeaf : Root,
                 newFirst ? Root : newLeaf);
 
+            FocusedNode = newLeaf;
+
             CleanupTree();
             return;
         }
@@ -979,9 +981,16 @@ public class DockSpace
 
             // Dock it
             if (_hoveredZone == DockZone.Center)
+            {
                 _hoveredLeaf.InsertTab(_draggedPanel);
+                FocusedNode = _hoveredLeaf;
+            }
             else if (_hoveredZone == DockZone.Tab)
-                _hoveredLeaf.InsertTab(_draggedPanel, _hoveredTabIndex);   // between-tabs insert / reorder
+            {
+                // between-tabs insert / reorder
+                _hoveredLeaf.InsertTab(_draggedPanel, _hoveredTabIndex);
+                FocusedNode = _hoveredLeaf;
+            }
             else
                 SplitLeaf(_hoveredLeaf, _draggedPanel, _hoveredZone);
 
@@ -997,6 +1006,7 @@ public class DockSpace
         bool newFirst = zone == DockZone.Left || zone == DockZone.Top;
         var split = DockNode.Split(dir, 0.5f, newFirst ? newLeaf : target, newFirst ? target : newLeaf);
         ReplaceInTree(target, split);
+        FocusedNode = newLeaf;
     }
 
     // ================================================================
