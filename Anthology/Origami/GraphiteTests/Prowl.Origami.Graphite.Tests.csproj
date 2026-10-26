@@ -11,5 +11,6 @@
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
     <ProjectReference Include="../Graphite/Prowl.Origami.Graphite.csproj" />
+    <ProjectReference Include="../../Graphite/Rendering/Prowl.Graphite.Rendering.csproj" />
   </ItemGroup>
 </Project>

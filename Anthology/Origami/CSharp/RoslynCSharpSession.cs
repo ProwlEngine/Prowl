@@ -328,9 +328,17 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
                     result.Add(ToLocation(document, tree, location, display, kind));
 
             if (result.Count == 0)
-                result.Add(new CodeLocation { Display = display, Kind = kind });
+                result.Add(await AssemblyLocationAsync(document, definition, display, kind, ct).ConfigureAwait(false));
             return result;
         }, ct);
+
+    // A symbol from a referenced assembly: its source when the assembly's PDB names files on this machine, else its assembly name.
+    private static async Task<CodeLocation> AssemblyLocationAsync(Document document, ISymbol symbol, string display, CodeSymbolKind kind, CancellationToken ct)
+    {
+        var compilation = await document.Project.GetCompilationAsync(ct).ConfigureAwait(false);
+        return (compilation != null ? PdbSourceLocator.Find(compilation, symbol, display, kind) : null)
+            ?? new CodeLocation { Display = display, Kind = kind, Assembly = symbol.ContainingAssembly?.Name };
+    }
 
     public override Task<IReadOnlyList<CodeLocation>> FindReferencesAsync(int offset, CancellationToken ct)
         => Run<IReadOnlyList<CodeLocation>>(Array.Empty<CodeLocation>(), async (document, ct) =>

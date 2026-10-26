@@ -23,6 +23,7 @@ public sealed class ShaderWorkspace
     private readonly Func<string, string?, ShaderSource?>? _resolve;
     private readonly Func<string?, IEnumerable<string>>? _includeNames;
     private readonly ConcurrentDictionary<string, (string Text, ShaderIndex Index)> _indexes = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, SurfaceModel?> _surfaceModels = new(StringComparer.Ordinal);
     private GlslShaderCompiler? _compiler;
 
     /// <param name="resolveInclude">Resolves an include name seen in a file to its source, or null. Graphite/ names never reach it.</param>
@@ -69,10 +70,24 @@ public sealed class ShaderWorkspace
         return index;
     }
 
+    /// <summary>
+    /// The model shader of a Surface block and the place in it the block's code is spliced, the first "#pragma surface".
+    /// What is visible there is visible to the block. Null when the model cannot be found.
+    /// </summary>
+    internal SurfaceModel? Surface(string model) => _surfaceModels.GetOrAdd(model, m =>
+    {
+        var source = Resolve($"{ShaderLibrary.Prefix}Standard/{m}.shader", null);
+        if (source == null) return null;
+        var index = new ShaderIndex(source.Text, source.Path, isShaderFile: true);
+        var pragma = index.Directives.Find(d => d.Name == "pragma" && d.Args.Trim() == "surface");
+        return pragma == null ? null : new SurfaceModel(index, pragma.Offset);
+    });
+
     /// <summary>Drops cached include indexes, such as after an include file changed on disk.</summary>
     public void Invalidate()
     {
         _indexes.Clear();
+        _surfaceModels.Clear();
         _compiler?.Invalidate();
     }
 
@@ -101,6 +116,8 @@ public sealed class ShaderWorkspace
         }
     }
 }
+
+internal sealed record SurfaceModel(ShaderIndex Index, int SpliceOffset);
 
 /// <summary>Which kind of shader file a document is.</summary>
 public enum ShaderFileKind

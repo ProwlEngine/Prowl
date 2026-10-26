@@ -68,6 +68,9 @@ internal sealed record ShaderSection(string Name, int HeaderOffset, int BodyStar
 
 internal sealed record ShaderProgram(int Start, int End);
 
+/// <summary>A Surface block: its code runs inside the passes of a model shader, such as Graphite/Standard/Lit.shader.</summary>
+internal sealed record SurfaceBlock(string Model, ShaderProgram Program);
+
 internal sealed record Directive(string Name, string Args, int Offset, int ArgsOffset, int End);
 
 /// <summary>
@@ -91,6 +94,7 @@ public sealed class ShaderIndex
     internal List<ShaderSection> Sections { get; } = new();
     internal List<ShaderProgram> Programs { get; } = new();
     internal List<Directive> Directives { get; } = new();
+    internal List<SurfaceBlock> Surfaces { get; } = new();
 
     private Dictionary<int, int> _match = new();
 
@@ -101,6 +105,7 @@ public sealed class ShaderIndex
         IsShaderFile = isShaderFile;
         Scan();
         MatchBrackets();
+        FindSurfaces();
         FindSections();
         foreach (var program in Programs) ParseProgram(program);
         ParseWrapper();
@@ -280,6 +285,27 @@ public sealed class ShaderIndex
         return null;
     }
 
+    /// <summary>The Surface block an offset is in, or null.</summary>
+    internal SurfaceBlock? SurfaceAt(int offset)
+    {
+        foreach (var s in Surfaces)
+            if (offset >= s.Program.Start && offset <= s.Program.End) return s;
+        return null;
+    }
+
+    // Surface "Model" followed by its block: the next program is the block's code.
+    private void FindSurfaces()
+    {
+        for (int i = 0; i + 1 < WrapperTokens.Count; i++)
+        {
+            var t = WrapperTokens[i];
+            var next = WrapperTokens[i + 1];
+            if (t.Kind != TokKind.Ident || !string.Equals(t.Text, "Surface", StringComparison.OrdinalIgnoreCase) || next.Kind != TokKind.String) continue;
+            var program = Programs.Find(p => p.Start > next.End);
+            if (program != null) Surfaces.Add(new SurfaceBlock(next.Text.Trim('"'), program));
+        }
+    }
+
     internal ShaderProgram? ProgramAt(int offset)
     {
         foreach (var p in Programs)
@@ -300,6 +326,7 @@ public sealed class ShaderIndex
     internal GlslStages StagesAt(int offset)
     {
         if (!IsShaderFile) return GlslStages.All;
+        if (SurfaceAt(offset) != null) return GlslStages.Fragment;
         return SectionAt(offset)?.Name switch
         {
             "Vertex" => GlslStages.Vertex,

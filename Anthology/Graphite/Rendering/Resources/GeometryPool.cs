@@ -44,6 +44,12 @@ public sealed class GpuMesh : IDisposable
 
     public bool IsDisposed { get; private set; }
 
+    /// <summary>
+    /// Whether the mesh's data has been placed on the GPU and can draw. A renderable switched to a mesh that is not
+    /// resident yet draws nothing until it is, so swap meshes once this is true to avoid a blank frame. Any thread.
+    /// </summary>
+    public bool IsResident => Volatile.Read(ref _placement) != null;
+
     /// <summary>Where the data lives, null until it is resident. Render thread only.</summary>
     internal MeshPlacement? Placement
     {
@@ -83,6 +89,17 @@ public sealed class GpuMesh : IDisposable
         Interlocked.Increment(ref _version);
         Describe(layout);
         _pool.Queue(this, layout);
+    }
+
+    /// <summary>
+    /// Overwrites one vertex stream in place and keeps everything else, for data that changes often while the shape
+    /// stays. The stream must exist and match the vertex count of the data last given, otherwise
+    /// the write is dropped. Thread safe, the upload happens on a later frame.
+    /// </summary>
+    public void SetStream(in VertexStream stream, uint vertexCount)
+    {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        _pool.QueueStream(this, (int)stream.Semantic, MeshLayout.Convert(stream, vertexCount));
     }
 
     /// <summary>Frees the mesh's geometry once the GPU no longer uses it.</summary>
@@ -224,6 +241,7 @@ internal sealed class GeometryPool(GraphicsDevice device, RenderStore store, uin
 
     private readonly object _lock = new();
     private readonly List<(GpuMesh Mesh, MeshLayout? Layout)> _pending = new();
+    private readonly List<(GpuMesh Mesh, int Stream, uint[] Words)> _streamWrites = new();
     private readonly Stack<int> _freeIds = new();
     private int _nextId;
 
@@ -254,6 +272,45 @@ internal sealed class GeometryPool(GraphicsDevice device, RenderStore store, uin
     {
         lock (_lock)
             _pending.Add((mesh, layout));
+    }
+
+    internal void QueueStream(GpuMesh mesh, int stream, uint[] words)
+    {
+        lock (_lock)
+            _streamWrites.Add((mesh, stream, words));
+    }
+
+    /// <summary>
+    /// Writes queued single stream updates for resident meshes. Writes for meshes still waiting on new data, or placed in
+    /// this same apply, stay queued so they land after the full upload.
+    /// </summary>
+    private long ApplyStreamWrites(Uploader uploader, List<GpuMesh> placedNow)
+    {
+        if (_streamWrites.Count == 0)
+            return 0;
+        HashSet<GpuMesh> waiting = new(placedNow);
+        foreach (var (mesh, _) in _pending)
+            waiting.Add(mesh);
+        long bytes = 0;
+        int kept = 0;
+        for (int i = 0; i < _streamWrites.Count; i++)
+        {
+            var write = _streamWrites[i];
+            if (write.Mesh.IsDisposed)
+                continue;
+            if (write.Mesh.Placement is not { } placement || waiting.Contains(write.Mesh))
+            {
+                _streamWrites[kept++] = write;
+                continue;
+            }
+            uint expected = placement.VertexCount * MeshLayout.WordsPerVertex((VertexSemantic)write.Stream);
+            if ((placement.StreamsPresent & (1u << write.Stream)) == 0 || write.Words.Length != expected)
+                continue;
+            uploader.Write(Pages[placement.Page].Vertices, placement.StreamOffsets[write.Stream], write.Words);
+            bytes += write.Words.Length * 4L;
+        }
+        _streamWrites.RemoveRange(kept, _streamWrites.Count - kept);
+        return bytes;
     }
 
     /// <summary>
@@ -300,6 +357,7 @@ internal sealed class GeometryPool(GraphicsDevice device, RenderStore store, uin
             }
 
             _pending.RemoveRange(0, applied);
+            ApplyStreamWrites(uploader, changed);
         }
 
         bool moved = Chunks.Flush(uploader) | Meshes.Flush(uploader);

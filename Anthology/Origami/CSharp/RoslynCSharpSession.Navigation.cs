@@ -112,7 +112,7 @@ public sealed partial class RoslynCSharpSession
                 result.Add(ToLocation(document, tree, location, display, kind));
                 any = true;
             }
-            if (!any) result.Add(new CodeLocation { Display = display, Kind = kind });
+            if (!any) result.Add(await AssemblyLocationAsync(document, symbol, display, kind, ct).ConfigureAwait(false));
         }
         return result;
     }
