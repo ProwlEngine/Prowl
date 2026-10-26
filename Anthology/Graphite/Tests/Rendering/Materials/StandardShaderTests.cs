@@ -300,6 +300,77 @@ public sealed class StandardShaderTests : IDisposable
     }
 
     [Fact]
+    public void SurfaceLighting_SharesUniformsTheSurfaceCodeDeclares()
+    {
+        ShaderDefinition definition = new Shader(ShaderParser.Parse("""
+            Shader "Tests/Bands"
+            {
+                Properties
+                {
+                    _Bands("Bands", Float) = 3.0
+                    _Ramp("Ramp", Texture2D) = "white" {}
+                }
+
+                Surface "Lit"
+                {
+                    GLSLPROGRAM
+                    uniform float _Bands;
+                    uniform sampler2D _Ramp;
+                    void Surface(inout Graphite_SurfaceData s) { s.Roughness = texture(_Ramp, s.UV).r / _Bands; }
+                    ENDGLSL
+                    Lighting
+                    {
+                        GLSLPROGRAM
+                        uniform float _Bands;
+                        uniform sampler2D _Ramp;
+                        vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c)
+                        {
+                            return floor(Graphite_DefaultBRDF(s, c) * _Bands) / _Bands * texture(_Ramp, vec2(0.5)).rgb;
+                        }
+                        vec3 Graphite_AmbientBRDF(Graphite_Surface s, vec3 irradiance, vec3 specular)
+                        {
+                            return floor(irradiance * _Bands) / _Bands * s.albedo + specular;
+                        }
+                        ENDGLSL
+                    }
+                }
+            }
+            """), _compiler).Definition;
+
+        foreach (ShaderPass pass in definition.Passes!)
+        {
+            List<Keyword> combo = [new Keyword("_SURFACE", "OPAQUE")];
+            if (pass.Name == "Debug")
+                combo.Add(new Keyword(Shader.DebugAxis, "LIGHTING"));
+            _compiler.CompileProgram(pass, [.. combo]);
+        }
+    }
+
+    [Fact]
+    public void SurfaceLighting_DefinesOnlyTheHooksItsCodeHas()
+    {
+        ShaderDefinition definition = new Shader(ShaderParser.Parse("""
+            Shader "Tests/AmbientOnly"
+            {
+                Surface "Lit"
+                {
+                    Lighting
+                    {
+                        GLSLPROGRAM
+                        vec3 Graphite_AmbientBRDF(Graphite_Surface s, vec3 irradiance, vec3 specular) { return irradiance * s.albedo; }
+                        ENDGLSL
+                    }
+                }
+            }
+            """), _compiler).Definition;
+
+        ShaderPass forward = definition.Passes!.Single(p => p.Name == "Forward");
+        Assert.Contains("#define GRAPHITE_CUSTOM_AMBIENT_BRDF", forward.Source);
+        Assert.DoesNotContain("#define GRAPHITE_CUSTOM_BRDF", forward.Source);
+        _compiler.CompileProgram(forward, [new Keyword("_SURFACE", "OPAQUE")]);
+    }
+
+    [Fact]
     public void SurfaceLighting_OnAModelWithoutLights_FailsToLoad()
     {
         ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => new Shader(ShaderParser.Parse("""

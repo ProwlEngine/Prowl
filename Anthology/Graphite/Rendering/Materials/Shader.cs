@@ -459,15 +459,17 @@ public sealed class Shader
 
     private static readonly System.Text.RegularExpressions.Regex s_surfaceMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
     private static readonly System.Text.RegularExpressions.Regex s_vertexMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface_vertex[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
+    private static readonly System.Text.RegularExpressions.Regex s_brdfDefinition = new(@"\bvec3\s+Graphite_BRDF\s*\(");
+    private static readonly System.Text.RegularExpressions.Regex s_ambientDefinition = new(@"\bvec3\s+Graphite_AmbientBRDF\s*\(");
     private static readonly System.Text.RegularExpressions.Regex s_lightingMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface_lighting[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
 
     /// <summary>
     /// Expands a Surface block into the passes of its model, the library shader Graphite/Standard/{Model}.shader: each
     /// "#pragma surface" line of the model's passes becomes the block's code, which defines
     /// void Surface(inout Graphite_SurfaceData s) over the standard surface before it is lit, with
-    /// GRAPHITE_SURFACE_FUNCTION defined. A Lighting block's code defines Graphite_BRDF for the passes with a
-    /// "#pragma surface_lighting" line, which becomes the GRAPHITE_CUSTOM_BRDF define, the code following the block's at
-    /// their "#pragma surface". A Vertex block's code, defining void SurfaceVertex(inout Graphite_SurfaceVertex v), goes
+    /// GRAPHITE_SURFACE_FUNCTION defined. A Lighting block's code defines Graphite_BRDF, Graphite_AmbientBRDF or both
+    /// for the passes with a "#pragma surface_lighting" line, which becomes GRAPHITE_CUSTOM_BRDF and
+    /// GRAPHITE_CUSTOM_AMBIENT_BRDF for the ones it defines, the code following the block's at their "#pragma surface". A Vertex block's code, defining void SurfaceVertex(inout Graphite_SurfaceVertex v), goes
     /// in place of each "#pragma surface_vertex" line with GRAPHITE_SURFACE_VERTEX_FUNCTION defined. The model's
     /// properties come before the shader's own, which replace any of the same name.
     /// </summary>
@@ -484,6 +486,10 @@ public sealed class Shader
 
         string code = surface.Code.Length > 0 ? "#define GRAPHITE_SURFACE_FUNCTION\n" + surface.Code : "";
         string lighting = surface.Lighting;
+        string lightingDefines = (s_brdfDefinition.IsMatch(lighting) ? "#define GRAPHITE_CUSTOM_BRDF\n" : "")
+            + (s_ambientDefinition.IsMatch(lighting) ? "#define GRAPHITE_CUSTOM_AMBIENT_BRDF\n" : "");
+        if (lighting.Length > 0 && lightingDefines.Length == 0)
+            throw new ShaderLoadException($"{name}:{surface.Line}: the Lighting block defines neither Graphite_BRDF nor Graphite_AmbientBRDF.");
         string vertex = surface.Vertex.Length > 0 ? "#define GRAPHITE_SURFACE_VERTEX_FUNCTION\n" + surface.Vertex : "";
         ShaderPass[] standard = model.Passes ?? [];
         bool spliced = false;
@@ -498,7 +504,7 @@ public sealed class Shader
             if (s_lightingMarker.IsMatch(pass.Source))
             {
                 lit = true;
-                pass.Source = s_lightingMarker.Replace(pass.Source, _ => lighting.Length > 0 ? "#define GRAPHITE_CUSTOM_BRDF" : "");
+                pass.Source = s_lightingMarker.Replace(pass.Source, _ => lightingDefines);
                 if (lighting.Length > 0)
                     passCode = code + "\n" + lighting;
             }

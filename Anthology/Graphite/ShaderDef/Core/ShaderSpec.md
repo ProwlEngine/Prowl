@@ -198,10 +198,19 @@ Surface "Lit"
 A surface model marks where this goes with a `#pragma surface_vertex` line in each pass's Vertex section, before
 Graphite/Standard/StandardVertex.glsl is included.
 
-An optional `Lighting` block replaces the BRDF every light goes through, for toon ramps and other
-custom shading. It defines `vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c)` and may call
-`Graphite_DefaultBRDF(s, c)`. Only the lit passes take it, Forward and Debug for `Surface "Lit"`, so parallax, decals,
-translucency, anisotropy and every surface type keep working. `Surface "Unlit"` has no lights and refuses one.
+An optional `Lighting` block replaces how the surface is lit, for toon ramps and other custom shading. It defines
+either function below or both:
+
+- `vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c)`, which every light goes through. It may call
+  `Graphite_DefaultBRDF(s, c)`.
+- `vec3 Graphite_AmbientBRDF(Graphite_Surface s, vec3 irradiance, vec3 specular)`, which ambient light goes through:
+  `irradiance` is the diffuse light from the lightmap, probes or sky, `specular` the reflections weighted by Fresnel,
+  both with occlusion applied. The default returns `irradiance * s.albedo * (1.0 - s.metallic) + specular`, and a toon
+  surface can band or tint its shadow side here.
+
+Only the lit passes take it, Forward and Debug for `Surface "Lit"`, so parallax, decals, translucency, anisotropy and
+every surface type keep working. `Surface "Unlit"` has no lights and refuses one. Its uniforms may repeat the surface
+code's, as every material uniform is a property.
 
 ```
 Surface "Lit"

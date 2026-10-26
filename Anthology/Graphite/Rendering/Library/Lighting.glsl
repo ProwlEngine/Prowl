@@ -675,6 +675,18 @@ vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c)
 }
 #endif
 
+// The ambient light a standard surface reflects. irradiance is the diffuse light reaching it from the lightmap, probes or
+// sky, specular its reflections weighted by Fresnel, both with occlusion applied. Define GRAPHITE_CUSTOM_AMBIENT_BRDF and
+// write this function to shade them with your own.
+vec3 Graphite_AmbientBRDF(Graphite_Surface s, vec3 irradiance, vec3 specular);
+
+#ifndef GRAPHITE_CUSTOM_AMBIENT_BRDF
+vec3 Graphite_AmbientBRDF(Graphite_Surface s, vec3 irradiance, vec3 specular)
+{
+    return irradiance * s.albedo * (1.0 - s.metallic) + specular;
+}
+#endif
+
 // Every directional and local light on a surface through Graphite_BRDF
 vec3 Graphite_ShadeLights(Graphite_Surface s)
 {

@@ -160,11 +160,12 @@ void Graphite_StandardFragment()
 #endif
 
     vec3 ambientLight = Graphite_IndirectDiffuse(worldNormal, vLightmapUV) * ao;
-    vec3 ambientDiffuse = ambientLight * baseColor * (1.0 - metallic);
     vec3 F0 = mix(vec3(0.04), baseColor, metallic);
     vec3 ambientSpecular = Graphite_IndirectSpecular(vRelativePos, worldNormal, viewDir, F0, roughness, ao, ambientLight);
+    Graphite_Surface ambientSurface = Graphite_MakeSurface(vRelativePos, worldNormal, N, viewDir, baseColor, metallic, roughness, ao);
+    vec3 ambient = Graphite_AmbientBRDF(ambientSurface, ambientLight, ambientSpecular);
 
-    vec3 color = ApplyFog(ambientDiffuse + ambientSpecular + lighting + emission, vRelativePos);
+    vec3 color = ApplyFog(ambient + lighting + emission, vRelativePos);
 #ifdef GRAPHITE_STANDARD_DEBUG
     color = Graphite_DebugView(color, baseColor, worldNormal, roughness, metallic, ao, emission, vRelativePos, vLightmapUV);
 #endif

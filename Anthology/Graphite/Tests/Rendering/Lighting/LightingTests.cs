@@ -1347,6 +1347,38 @@ public sealed class LightingTests : IDisposable
             Assert.True(MathF.Abs(near[i].X - far[i].X) < 2e-3f + 0.01f * near[i].X, $"pixel {i}: {near[i].X} near, {far[i].X} far");
     }
 
+    // Ambient light shown as red alone: the blue of the irradiance reaching it
+    private const string AmbientHookSource = """
+        Shader "Test/AmbientHook"
+        {
+            Surface "Lit"
+            {
+                Lighting
+                {
+                    GLSLPROGRAM
+                    vec3 Graphite_AmbientBRDF(Graphite_Surface s, vec3 irradiance, vec3 specular)
+                    {
+                        return vec3(irradiance.b, 0.0, 0.0);
+                    }
+                    ENDGLSL
+                }
+            }
+        }
+        """;
+
+    [Fact]
+    public void SurfaceLighting_ShadesAmbientLightThroughTheAmbientHook()
+    {
+        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Uniform, AmbientColor = new Float4(0.2f, 0.4f, 0.8f, 1), Fog = default };
+        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(AmbientHookSource)));
+        material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
+        AddQuad(material);
+
+        Float4 centre = Frame()[Size / 2 * Size + Size / 2];
+        Assert.True(centre.X > 0.1f, $"red {centre.X}");
+        Assert.True(centre.Y < 1e-3f && centre.Z < 1e-3f, $"green {centre.Y}, blue {centre.Z}");
+    }
+
     // Kept only where its absolute world x is below -1, the same in every pass
     private const string WorldCutoutSource = """
         Shader "Test/WorldCutout"
