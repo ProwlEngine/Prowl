@@ -361,6 +361,30 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.Equal("New/S.scene", AssetDatabase.Get(g)!.AssetPath);
     }
 
+    [Fact]
+    public void MoveFolder_MovesItsMeta()
+    {
+        CreateScene("Old/S.scene");
+        Guid folderGuid = MetaFile.EnsureMeta(AssetAbsolutePath("Old"), "DefaultImporter").Guid;
+
+        Assert.True(Assets.MoveFolder("Old", "New"));
+
+        Assert.False(File.Exists(AssetAbsolutePath("Old.meta")));
+        Assert.Equal(folderGuid, MetaFile.Read(AssetAbsolutePath("New.meta")).Guid);
+    }
+
+    [Fact]
+    public void MoveFolder_ReplacesAnOrphanMetaAtTheTarget()
+    {
+        CreateScene("Old/S.scene");
+        Guid folderGuid = MetaFile.EnsureMeta(AssetAbsolutePath("Old"), "DefaultImporter").Guid;
+        MetaFile.EnsureMeta(AssetAbsolutePath("New"), "DefaultImporter");
+
+        Assert.True(Assets.MoveFolder("Old", "New"));
+
+        Assert.Equal(folderGuid, MetaFile.Read(AssetAbsolutePath("New.meta")).Guid);
+    }
+
     // A moved script keeps its content and timestamp, so nothing else asks for a recompile - but the
     // generated csproj still points at the old path and the owning assembly may have changed.
     [Fact]

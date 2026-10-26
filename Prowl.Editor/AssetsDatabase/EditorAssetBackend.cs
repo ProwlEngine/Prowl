@@ -1806,12 +1806,27 @@ public class EditorAssetBackend : AssetBackend
 
         Directory.CreateDirectory(Path.GetDirectoryName(newAbs)!);
 
+        // The folder's .meta sits beside it, not inside, so it has to move on its own.
+        string oldMeta = MetaFile.GetMetaPath(oldAbs);
+        string newMeta = MetaFile.GetMetaPath(newAbs);
+        bool folderMoved = false;
+
         try
         {
             Directory.Move(oldAbs, newAbs);
+            folderMoved = true;
+
+            // Nothing exists at the new path, so a .meta already there is an orphan and can be replaced.
+            if (File.Exists(oldMeta))
+                File.Move(oldMeta, newMeta, overwrite: true);
         }
         catch (Exception ex)
         {
+            if (folderMoved && Directory.Exists(newAbs) && !Directory.Exists(oldAbs))
+            {
+                try { Directory.Move(newAbs, oldAbs); }
+                catch { /* best effort rollback */ }
+            }
             Runtime.Debug.LogError($"Failed to move folder '{oldRelativeFolder}' -> '{newRelativeFolder}': {ex.Message}");
             return false;
         }
