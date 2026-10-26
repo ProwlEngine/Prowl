@@ -1981,10 +1981,15 @@ public class EditorAssetBackend : AssetBackend
 
         switch (evt.Type)
         {
-            // Already imported as it now is, as after the editor's own save.
-            case FileEventType.Modified when _pathToGuid.TryGetValue(relativePath, out Guid known)
-                                          && _guidToEntry.TryGetValue(known, out AssetEntry? current)
-                                          && !current.NeedsReimport && !IsSourceNewerThanImport(current):
+            // Moved or deleted since, so its own Renamed or Deleted event does the bookkeeping.
+            case FileEventType.Created or FileEventType.Modified when !File.Exists(evt.Path):
+                break;
+
+            // Already imported as it now is, as after the editor's own save or import.
+            case FileEventType.Created or FileEventType.Modified
+                when _pathToGuid.TryGetValue(relativePath, out Guid known)
+                     && _guidToEntry.TryGetValue(known, out AssetEntry? current)
+                     && !current.NeedsReimport && !IsSourceNewerThanImport(current):
                 break;
 
             case FileEventType.Created:
