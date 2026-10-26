@@ -133,7 +133,13 @@ standard ones, replacing any of the same name.
 The optional GLSLPROGRAM block holds fragment code defining `void Surface(inout Graphite_SurfaceData s)`, which may
 change the surface before it is lit: `BaseColor`, `Alpha`, `Normal` (world space), `Metallic`, `Roughness`,
 `Occlusion` and `Emission`, reading `UV`, `UV1`, `VertexColor`, `WorldPos` (camera relative), `ViewDir` and
-`GeometryNormal`. The depth passes run it only for cutout surfaces, with the UVs, base colour and alpha filled in.
+`GeometryNormal`, `Tangent` and `Bitangent`. The depth passes run it only for cutout surfaces, with the UVs, base colour
+and alpha filled in.
+
+`Normal` is world space. A tangent space normal map, such as a detail map, goes through
+`Graphite_SurfaceNormalMap(s, texel, scale)`, which places it on the mesh's frame and returns a world normal.
+`Graphite_StandardNormalMap(texel, normal, tangent, bitangent, scale)` takes any frame, for blending onto `s.Normal` or
+for triplanar mapping.
 
 ```
 Shader "MyGame/Rim"

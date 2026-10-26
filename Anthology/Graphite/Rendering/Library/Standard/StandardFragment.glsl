@@ -10,21 +10,6 @@
 
 layout(location = 0) out vec4 fragColor;
 
-#ifdef GRAPHITE_STANDARD_LIT
-// A tangent space normal map texel, scaled, into world space, the surface normal when the result is degenerate.
-// Z is rebuilt from X and Y, so two channel maps such as BC5 read the same as three channel ones.
-vec3 Graphite_StandardNormalMap(vec3 texel, vec3 normal, vec3 tangent, vec3 bitangent, float scale)
-{
-    vec3 normalTS;
-    normalTS.xy = texel.xy * 2.0 - 1.0;
-    normalTS.z = sqrt(max(0.0, 1.0 - dot(normalTS.xy, normalTS.xy)));
-    normalTS.xy *= scale;
-    vec3 n = mat3(normalize(tangent), normalize(bitangent), normalize(normal)) * normalTS;
-    float len2 = dot(n, n);
-    return len2 > 1e-8 ? n * inversesqrt(len2) : normalize(normal);
-}
-#endif
-
 void Graphite_StandardFragment()
 {
     vec2 uv = vUV;
@@ -115,6 +100,10 @@ void Graphite_StandardFragment()
     s.WorldPos = vWorldPos;
     s.ViewDir = viewDir;
     s.GeometryNormal = N;
+#ifdef GRAPHITE_STANDARD_LIT
+    s.Tangent = T;
+    s.Bitangent = B;
+#endif
     s.Normal = worldNormal;
     s.Metallic = metallic;
     s.Roughness = roughness;

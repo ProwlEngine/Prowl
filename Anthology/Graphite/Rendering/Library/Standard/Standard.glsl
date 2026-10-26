@@ -173,6 +173,8 @@ struct Graphite_SurfaceData
     vec3 WorldPos;          // camera relative
     vec3 ViewDir;           // from the surface toward the camera
     vec3 GeometryNormal;    // the mesh's, facing the camera on back faces
+    vec3 Tangent;           // world space, with Bitangent and GeometryNormal the frame tangent space normal maps use,
+    vec3 Bitangent;         // arbitrary when the mesh has no tangents
     vec3 BaseColor;
     float Alpha;
     vec3 Normal;            // world space, after the normal map
@@ -191,6 +193,8 @@ Graphite_SurfaceData Graphite_NewSurfaceData(vec2 uv, vec2 uv1, vec3 baseColor, 
     s.WorldPos = vec3(0.0);
     s.ViewDir = vec3(0.0, 0.0, 1.0);
     s.GeometryNormal = vec3(0.0, 1.0, 0.0);
+    s.Tangent = vec3(1.0, 0.0, 0.0);
+    s.Bitangent = vec3(0.0, 0.0, -1.0);
     s.BaseColor = baseColor;
     s.Alpha = alpha;
     s.Normal = vec3(0.0, 1.0, 0.0);
@@ -199,6 +203,25 @@ Graphite_SurfaceData Graphite_NewSurfaceData(vec2 uv, vec2 uv1, vec3 baseColor, 
     s.Occlusion = 1.0;
     s.Emission = vec3(0.0);
     return s;
+}
+
+// A tangent space normal map texel, scaled, into world space, the surface normal when the result is degenerate.
+// Z is rebuilt from X and Y, so two channel maps such as BC5 read the same as three channel ones.
+vec3 Graphite_StandardNormalMap(vec3 texel, vec3 normal, vec3 tangent, vec3 bitangent, float scale)
+{
+    vec3 normalTS;
+    normalTS.xy = texel.xy * 2.0 - 1.0;
+    normalTS.z = sqrt(max(0.0, 1.0 - dot(normalTS.xy, normalTS.xy)));
+    normalTS.xy *= scale;
+    vec3 n = mat3(normalize(tangent), normalize(bitangent), normalize(normal)) * normalTS;
+    float len2 = dot(n, n);
+    return len2 > 1e-8 ? n * inversesqrt(len2) : normalize(normal);
+}
+
+// A tangent space normal map texel on the surface's mesh frame, scaled, into a world space normal for s.Normal
+vec3 Graphite_SurfaceNormalMap(Graphite_SurfaceData s, vec3 texel, float scale)
+{
+    return Graphite_StandardNormalMap(texel, s.GeometryNormal, s.Tangent, s.Bitangent, scale);
 }
 
 #endif

@@ -225,6 +225,49 @@ public sealed class StandardShaderTests : IDisposable
         }
     }
 
+    private static string DetailSource(string model) => $$"""
+        Shader "Tests/Detail"
+        {
+            Properties
+            {
+                _DetailTex("Detail Normal", Texture2D) = "normal" {}
+            }
+
+            Surface "{{model}}"
+            {
+                GLSLPROGRAM
+                uniform sampler2D _DetailTex;
+                void Surface(inout Graphite_SurfaceData s)
+                {
+                    vec3 detail = Graphite_SurfaceNormalMap(s, texture(_DetailTex, s.UV * 4.0).rgb, 1.0);
+                    vec3 frame = cross(s.Tangent, s.Bitangent);
+                    s.Normal = normalize(s.Normal + detail + frame * 0.0);
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    [Theory]
+    [InlineData("Lit", "OPAQUE")]
+    [InlineData("Lit", "CUTOUT")]
+    [InlineData("Unlit", "OPAQUE")]
+    [InlineData("Unlit", "CUTOUT")]
+    public void SurfaceData_HasTheTangentFrame_AndANormalMapHelper(string model, string surface)
+    {
+        ShaderDefinition definition = new Shader(ShaderParser.Parse(DetailSource(model)), _compiler).Definition;
+        foreach (ShaderPass pass in definition.Passes!)
+        {
+            List<Keyword> combo = [new Keyword("_SURFACE", surface)];
+            foreach (VariantSpace axis in _compiler.GetAxes(pass))
+            {
+                if (axis.IsToggle)
+                    combo.Add(new Keyword(axis.Name, VariantSpace.ToggleValues[1]));
+            }
+            _compiler.CompileProgram(pass, [.. combo]);
+        }
+    }
+
     [Fact]
     public void SurfaceVertex_TakesSurfaceAndLightingBlocksAlongside()
     {
