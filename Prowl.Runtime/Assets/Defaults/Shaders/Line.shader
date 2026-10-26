@@ -20,14 +20,14 @@ Shader "Default/Line"
             #include "Graphite/Vertex.glsl"
 
             out vec2 vUV;
-            out vec3 vWorldPos;
+            out vec3 vRelativePos;
             out vec4 vColor;
 
             void main()
             {
                 vec3 point = vertexPosition;
                 vec4 tangent = vertexTangent;
-                vec3 center = Graphite_ObjectToWorld(point);
+                vec3 center = Graphite_ObjectToRelative(point);
                 vec3 direction = normalize(Graphite_ObjectToWorldDirection(tangent.xyz));
 
                 // The camera sits at the origin of camera relative space
@@ -39,12 +39,12 @@ Shader "Default/Line"
                 }
                 vec3 offset = normalize(right) * tangent.w;
 
-                vec3 world = center + offset;
-                gl_Position = Graphite_RelativeToClip(world);
+                vec3 relative = center + offset;
+                gl_Position = Graphite_RelativeToClip(relative);
                 Graphite_SetPreviousPosition(point + inverse(Graphite_Linear(Graphite_ObjectTransform())) * offset);
 
                 vUV = vertexUV0;
-                vWorldPos = world;
+                vRelativePos = relative;
                 vColor = vertexColor;
             }
         }
@@ -56,7 +56,7 @@ Shader "Default/Line"
             uniform sampler2D _MainTex;
 
             in vec2 vUV;
-            in vec3 vWorldPos;
+            in vec3 vRelativePos;
             in vec4 vColor;
 
             layout(location = 0) out vec4 fragColor;
@@ -64,7 +64,7 @@ Shader "Default/Line"
             void main()
             {
                 vec4 texel = texture(_MainTex, vUV);
-                vec3 color = ApplyFog(texel.rgb * vColor.rgb, vWorldPos);
+                vec3 color = ApplyFog(texel.rgb * vColor.rgb, vRelativePos);
                 fragColor = vec4(color, texel.a * vColor.a);
             }
         }

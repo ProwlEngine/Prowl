@@ -215,10 +215,10 @@ vec2 sampleWindZones(vec3 worldPosition, float time)
 
 // A blade vertex's offset from its root at a time, bent along an arc rather than dragged sideways: a blade lays
 // over in strong wind, it does not stretch. Saturates at a right angle, so it never goes inside out.
-vec3 grassOffset(vec3 vertex, vec3 rootAbsolute, vec3 up, vec3 right, vec2 scale, float windPhase, float time)
+vec3 grassOffset(vec3 vertex, vec3 rootWorld, vec3 up, vec3 right, vec2 scale, float windPhase, float time)
 {
-    float sway = sin(time * _WindSpeed + rootAbsolute.x * 0.7 + rootAbsolute.z * 0.4 + windPhase) * _WindStrength;
-    vec2 windForce = (vec2(sway, sway * 0.3) + sampleWindZones(rootAbsolute, time)) * _ProtoBendFactor;
+    float sway = sin(time * _WindSpeed + rootWorld.x * 0.7 + rootWorld.z * 0.4 + windPhase) * _WindStrength;
+    vec2 windForce = (vec2(sway, sway * 0.3) + sampleWindZones(rootWorld, time)) * _ProtoBendFactor;
 
     float windMag = length(windForce);
     vec3 bendDir = windMag > 1e-4 ? vec3(windForce.x, 0.0, windForce.y) / windMag : vec3(0.0);
@@ -237,11 +237,11 @@ vec3 grassOffset(vec3 vertex, vec3 rootAbsolute, vec3 up, vec3 right, vec2 scale
     return right * vertex.x * scale.x + up * (alongUp * scale.y) + bendDir * (alongWind * scale.y) + up * 0.01 * scale.y;
 }
 
-// Places this vertex of this instance's blade: its camera relative world position, normal and tint. Hands last
+// Places this vertex of this instance's blade: its relative position, normal and tint. Hands last
 // frame's bend to the motion vectors. False for an instance without a blade, whose quad collapses.
-bool grassVertex(out vec3 world, out vec3 normal, out vec4 color)
+bool grassVertex(out vec3 relative, out vec3 normal, out vec4 color)
 {
-    world = vec3(0.0);
+    relative = vec3(0.0);
     normal = vec3(0.0, 1.0, 0.0);
     color = vec4(0.0);
 
@@ -253,8 +253,8 @@ bool grassVertex(out vec3 world, out vec3 normal, out vec4 color)
     vec2 scale = vec2(mix(_ProtoSize.x, _ProtoSize.y, sizeT), mix(_ProtoSize.z, _ProtoSize.w, sizeT)) * blade.fade;
 
     vec3 rootLocal = vec3(blade.localXZ.x, terrainHeight(blade.terrainUV), blade.localXZ.y);
-    vec3 root = Graphite_ObjectToWorld(rootLocal);
-    vec3 rootAbsolute = Graphite_AbsoluteFromRelative(root);
+    vec3 root = Graphite_ObjectToRelative(rootLocal);
+    vec3 rootWorld = Graphite_RelativeToWorld(root);
 
     vec3 up = _AlignToNormal > 0.5
         ? Graphite_ObjectToWorldNormal(terrainNormal(blade.terrainUV))
@@ -268,11 +268,11 @@ bool grassVertex(out vec3 world, out vec3 normal, out vec4 color)
 
     vec3 vertex = vertexPosition;
     float time = view.time.x;
-    vec3 offset = grassOffset(vertex, rootAbsolute, up, right, scale, blade.windPhase, time);
-    vec3 previousOffset = grassOffset(vertex, rootAbsolute, up, right, scale, blade.windPhase, time - view.time.y);
+    vec3 offset = grassOffset(vertex, rootWorld, up, right, scale, blade.windPhase, time);
+    vec3 previousOffset = grassOffset(vertex, rootWorld, up, right, scale, blade.windPhase, time - view.time.y);
     Graphite_SetPreviousPosition(rootLocal + inverse(Graphite_Linear(Graphite_ObjectTransform())) * previousOffset);
 
-    world = root + offset;
+    relative = root + offset;
     normal = normalize(cross(up, right));
     color = mix(_ProtoHealthyColor, _ProtoDryColor, 1.0 - blade.noise);
     return true;
