@@ -91,10 +91,16 @@ public static class Application
         set
         {
             s_vsync = value;
+            if (Graphics.VSync == value) return;
             // Silk.NET's own window property is only read by the automatic Run loop, which Prowl
             // does not use. The swap interval is the whole setting, and the render thread applies
             // it because it is the thread holding the context.
             Graphics.VSync = value;
+            // Left alone, the swapchain is remade for the new present mode mid frame on the render
+            // thread, which leaves the window blank until the next resize. Remake it here instead,
+            // between frames, the same way a resize does.
+            if (Window.InternalWindow is { } window)
+                Graphics.Resize(window.FramebufferSize.X, window.FramebufferSize.Y);
         }
     }
 

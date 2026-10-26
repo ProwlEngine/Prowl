@@ -112,6 +112,7 @@ public class GameViewPanel : DockPanel
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
 
+        PlayModeSpotlight.MarkGameViewDrawn();
         using (paper.Column("gv_root").Size(width, height).Enter())
         {
             // Hover-scoped like the other panels' shortcuts.
