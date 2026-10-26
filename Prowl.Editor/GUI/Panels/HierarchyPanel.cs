@@ -152,7 +152,7 @@ public class HierarchyPanel : DockPanel
             // Toolbar
             DrawToolbar(paper, font, width);
 
-            if (scene == null)
+            if (scene.IsNotValid())
             {
                 EditorGUI.EmptyState(paper, "hier_empty", Loc.Get("hierarchy.no_scene_loaded"), font);
                 Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => EditorSceneManager.CreateAndLoadDefaultScene()).Width(120).Show();
@@ -247,7 +247,7 @@ public class HierarchyPanel : DockPanel
                     else if (ShortcutManager.IsPressed("Hierarchy/Rename"))
                     {
                         GameObject? first = Selection.GetSelected<GameObject>().FirstOrDefault();
-                        if (first != null)
+                        if (first.IsValid())
                             StartRenameGO(first, Selection.GetSelected<GameObject>());
                     }
                     else if (ShortcutManager.IsPressed("Hierarchy/CreateEmptyChild"))
@@ -455,7 +455,7 @@ public class HierarchyPanel : DockPanel
                 // Only process drops that land inside the hierarchy panel
                 if (DragDrop.IsDropFrame && bgHovered && DragDrop.Payload is GameObjectDragPayload goDrop)
                 {
-                    if (_dragHoverTarget != null && _dragHoverTargetId != null)
+                    if (_dragHoverTarget.IsValid() && _dragHoverTargetId != null)
                     {
                         // Dropped on a GO row use normalized Y to determine Above/Into/Below
                         DropPosition dropPos;
@@ -478,14 +478,14 @@ public class HierarchyPanel : DockPanel
                         // Dropped on empty background unparent to root
                         foreach (GameObject dragged in goDrop.GameObjects)
                         {
-                            if (dragged.Parent != null && dragged.Parent.IsValid())
+                            if (dragged.Parent.IsValid())
                             {
                                 Guid oldParentId = dragged.Parent.Identifier;
                                 int oldSibIdx = dragged.GetSiblingIndex() ?? -1;
                                 Guid dId = dragged.Identifier;
                                 Undo.RegisterAction("Unparent",
-                                    undo: () => { Scene s = Scene.Current; if (s == null) return; GameObject? d = FindGOById(s, dId); GameObject? p = FindGOById(s, oldParentId); if (d != null && p != null) { d.SetParent(p); if (oldSibIdx >= 0) d.SetSiblingIndex(oldSibIdx); } },
-                                    redo: () => { Scene s = Scene.Current; if (s == null) return; GameObject? d = FindGOById(s, dId); if (d != null) d.SetParent(default); });
+                                    undo: () => { Scene s = Scene.Current; if (s.IsNotValid()) return; GameObject? d = FindGOById(s, dId); GameObject? p = FindGOById(s, oldParentId); if (d.IsValid() && p.IsValid()) { d.SetParent(p); if (oldSibIdx >= 0) d.SetSiblingIndex(oldSibIdx); } },
+                                    redo: () => { Scene s = Scene.Current; if (s.IsNotValid()) return; GameObject? d = FindGOById(s, dId); if (d.IsValid()) d.SetParent(default); });
                                 dragged.SetParent(default);
                             }
                         }
@@ -583,7 +583,7 @@ public class HierarchyPanel : DockPanel
     private void ProcessGODropCore(List<GameObject> draggedObjects, GameObject target, string targetId, DropPosition dropPos, int insertIndex)
     {
         GameObject? targetParent = target.Parent;
-        bool targetIsRoot = targetParent == null || !targetParent.IsValid();
+        bool targetIsRoot = targetParent.IsNotValid();
 
         // A descendant dragged alongside its own ancestor moves implicitly with it; reparenting it
         // again here would yank it out from under the ancestor and flatten it as a sibling instead.
@@ -613,10 +613,10 @@ public class HierarchyPanel : DockPanel
                     if (targetIsRoot)
                     {
                         Scene scene = Scene.Current;
-                        if (scene == null) break;
+                        if (scene.IsNotValid()) break;
 
                         // Unparent if needed
-                        if (dragged.Parent != null && dragged.Parent.IsValid())
+                        if (dragged.Parent.IsValid())
                             dragged.SetParent(default);
 
                         // Root reorder via Scene list
@@ -655,9 +655,9 @@ public class HierarchyPanel : DockPanel
                     undo: () =>
                     {
                         Scene scene = Scene.Current;
-                        if (scene == null) return;
+                        if (scene.IsNotValid()) return;
                         GameObject? d = FindGOById(scene, draggedId);
-                        if (d == null) return;
+                        if (d.IsNotValid()) return;
                         if (oldParentId == Guid.Empty)
                         {
                             d.SetParent(default);
@@ -666,15 +666,15 @@ public class HierarchyPanel : DockPanel
                         else
                         {
                             GameObject? p = FindGOById(scene, oldParentId);
-                            if (p != null) { d.SetParent(p); if (oldSiblingIdx >= 0) d.SetSiblingIndex(oldSiblingIdx); }
+                            if (p.IsValid()) { d.SetParent(p); if (oldSiblingIdx >= 0) d.SetSiblingIndex(oldSiblingIdx); }
                         }
                     },
                     redo: () =>
                     {
                         Scene scene = Scene.Current;
-                        if (scene == null) return;
+                        if (scene.IsNotValid()) return;
                         GameObject? d = FindGOById(scene, draggedId);
-                        if (d == null) return;
+                        if (d.IsNotValid()) return;
                         if (newParentId == Guid.Empty)
                         {
                             d.SetParent(default);
@@ -683,7 +683,7 @@ public class HierarchyPanel : DockPanel
                         else
                         {
                             GameObject? p = FindGOById(scene, newParentId);
-                            if (p != null) { d.SetParent(p); if (newSiblingIdx >= 0) d.SetSiblingIndex(newSiblingIdx); }
+                            if (p.IsValid()) { d.SetParent(p); if (newSiblingIdx >= 0) d.SetSiblingIndex(newSiblingIdx); }
                         }
                     });
             }
@@ -696,7 +696,7 @@ public class HierarchyPanel : DockPanel
     private static bool IsDescendantOf(GameObject potentialChild, GameObject potentialParent)
     {
         GameObject? current = potentialChild.Parent;
-        while (current != null && current.IsValid())
+        while (current.IsValid())
         {
             if (current == potentialParent) return true;
             current = current.Parent;
@@ -785,8 +785,8 @@ public class HierarchyPanel : DockPanel
                     bool newState = !anyEnabled;
                     var oldStates = selectedGOs.Select(g => (g.Identifier, g.Enabled)).ToList();
                     Undo.RegisterAction(newState ? "Enable All" : "Disable All",
-                        undo: () => { foreach ((Guid id, bool old) in oldStates) { GameObject? r = Undo.FindGO(id); if (r != null) r.Enabled = old; } },
-                        redo: () => { foreach ((Guid id, bool _) in oldStates) { GameObject? r = Undo.FindGO(id); if (r != null) r.Enabled = newState; } });
+                        undo: () => { foreach ((Guid id, bool old) in oldStates) { GameObject? r = Undo.FindGO(id); if (r.IsValid()) r.Enabled = old; } },
+                        redo: () => { foreach ((Guid id, bool _) in oldStates) { GameObject? r = Undo.FindGO(id); if (r.IsValid()) r.Enabled = newState; } });
                     foreach (GameObject? go in selectedGOs) go.Enabled = newState;
                 }, icon: anyEnabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
             }
@@ -924,7 +924,7 @@ public class HierarchyPanel : DockPanel
     /// <summary>Create menu for a menu that knows what it was opened over: <paramref name="parent"/>
     /// for a GameObject row, null for empty space (meaning the scene root).</summary>
     private static void BuildCreateMenuFor(ContextBuilder builder, GameObject? parent) =>
-        BuildCreateMenuFor(builder, parent != null ? [parent] : []);
+        BuildCreateMenuFor(builder, parent.IsValid() ? [parent] : []);
 
     private static void BuildCreateMenuFor(ContextBuilder builder, IReadOnlyList<GameObject> parents)
     {
@@ -950,11 +950,11 @@ public class HierarchyPanel : DockPanel
     internal static GameObject CreateGameObject(string name, GameObject? parent, bool select = true, bool beginRename = true)
     {
         Scene scene = Scene.Current;
-        if (scene == null) return new GameObject(name);
+        if (scene.IsNotValid()) return new GameObject(name);
 
         var go = new GameObject(name);
         scene.Add(go);
-        if (parent != null)
+        if (parent.IsValid())
             go.SetParent(parent);
         if (select)
             Selection.Select(go);
@@ -980,8 +980,8 @@ public class HierarchyPanel : DockPanel
             string oldName = go.Name;
             if (newName == oldName) return;
             Undo.RegisterAction("Rename",
-                () => { GameObject? r = Undo.FindGO(goGuid); if (r != null) r.Name = oldName; },
-                () => { GameObject? r = Undo.FindGO(goGuid); if (r != null) r.Name = newName; });
+                () => { GameObject? r = Undo.FindGO(goGuid); if (r.IsValid()) r.Name = oldName; },
+                () => { GameObject? r = Undo.FindGO(goGuid); if (r.IsValid()) r.Name = newName; });
             go.Name = newName;
             EditorSceneManager.MarkDirty();
         });
@@ -996,7 +996,7 @@ public class HierarchyPanel : DockPanel
     internal static void CreateEmptyParent()
     {
         Scene scene = Scene.Current;
-        if (scene == null) return;
+        if (scene.IsNotValid()) return;
 
         // Only the top-level selection moves: an object whose ancestor is also selected already
         // travels with that ancestor, and reparenting it too would flatten it out of its own parent.
@@ -1015,13 +1015,13 @@ public class HierarchyPanel : DockPanel
     private static void CreateEmptyParentCore(List<GameObject> targets)
     {
         Scene scene = Scene.Current;
-        if (scene == null) return;
+        if (scene.IsNotValid()) return;
 
         // The first selected object anchors the group: the new parent drops into its place in the
         // hierarchy, so the wrapped objects stay where they were in the tree.
         GameObject anchor = targets[0];
         GameObject? anchorParent = anchor.Parent.IsValid() ? anchor.Parent : null;
-        int anchorIndex = anchorParent != null ? (anchor.GetSiblingIndex() ?? -1) : scene.GetRootIndex(anchor);
+        int anchorIndex = anchorParent.IsValid() ? (anchor.GetSiblingIndex() ?? -1) : scene.GetRootIndex(anchor);
 
         Float3 centre = Float3.Zero;
         foreach (GameObject target in targets)
@@ -1030,7 +1030,7 @@ public class HierarchyPanel : DockPanel
 
         var newParent = new GameObject("GameObject");
         scene.Add(newParent);
-        if (anchorParent != null)
+        if (anchorParent.IsValid())
         {
             newParent.SetParent(anchorParent);
             if (anchorIndex >= 0) newParent.SetSiblingIndex(anchorIndex);
@@ -1063,7 +1063,7 @@ public class HierarchyPanel : DockPanel
         Guid newParentId = newParent.Identifier;
         GameObject? oldParent = go.Parent.IsValid() ? go.Parent : null;
         Guid oldParentId = oldParent.IsValid() ? oldParent.Identifier : Guid.Empty;
-        int oldIndex = oldParent != null ? (go.GetSiblingIndex() ?? -1) : (Scene.Current.IsValid() ? Scene.Current.GetRootIndex(go) : -1);
+        int oldIndex = oldParent.IsValid() ? (go.GetSiblingIndex() ?? -1) : (Scene.Current.IsValid() ? Scene.Current.GetRootIndex(go) : -1);
 
         go.SetParent(newParent);
 
@@ -1072,7 +1072,7 @@ public class HierarchyPanel : DockPanel
             {
                 Scene scene = Scene.Current;
                 GameObject? g = Undo.FindGO(goId);
-                if (scene == null || g == null) return;
+                if (scene.IsNotValid() || g.IsNotValid()) return;
                 if (oldParentId == Guid.Empty)
                 {
                     g.SetParent(default);
@@ -1081,7 +1081,7 @@ public class HierarchyPanel : DockPanel
                 else
                 {
                     GameObject? p = Undo.FindGO(oldParentId);
-                    if (p == null) return;
+                    if (p.IsNotValid()) return;
                     g.SetParent(p);
                     if (oldIndex >= 0) g.SetSiblingIndex(oldIndex);
                 }
@@ -1090,7 +1090,7 @@ public class HierarchyPanel : DockPanel
             {
                 GameObject? g = Undo.FindGO(goId);
                 GameObject? p = Undo.FindGO(newParentId);
-                if (g != null && p != null) g.SetParent(p);
+                if (g.IsValid() && p.IsValid()) g.SetParent(p);
             }
         );
     }
@@ -1134,8 +1134,8 @@ public class HierarchyPanel : DockPanel
         {
             if (oldNames.All(n => n.Name == newName)) return;
             Undo.RegisterAction("Rename",
-                undo: () => { foreach ((Guid id, string? old) in oldNames) { GameObject? r = Undo.FindGO(id); if (r != null) r.Name = old; } },
-                redo: () => { foreach ((Guid id, string _) in oldNames) { GameObject? r = Undo.FindGO(id); if (r != null) r.Name = newName; } });
+                undo: () => { foreach ((Guid id, string? old) in oldNames) { GameObject? r = Undo.FindGO(id); if (r.IsValid()) r.Name = old; } },
+                redo: () => { foreach ((Guid id, string _) in oldNames) { GameObject? r = Undo.FindGO(id); if (r.IsValid()) r.Name = newName; } });
             foreach (GameObject? go in targets)
                 go.Name = newName;
             EditorSceneManager.MarkDirty();
@@ -1172,7 +1172,7 @@ public class HierarchyPanel : DockPanel
     internal static void DeleteOneGameObject(GameObject go)
     {
         Scene scene = Scene.Current;
-        if (scene == null) return;
+        if (scene.IsNotValid()) return;
 
         Undo.RegisterDestroyObject(go, "Delete GameObject");
 
@@ -1192,7 +1192,7 @@ public class HierarchyPanel : DockPanel
         foreach (GameObject root in scene.RootObjects)
         {
             GameObject found = root.FindChildByIdentifier(id);
-            if (found != null) return found;
+            if (found.IsValid()) return found;
         }
         return null;
     }
@@ -1229,7 +1229,7 @@ public class HierarchyPanel : DockPanel
         if (first is Light)                return (EditorIcons.Lightbulb_I, EditorTheme.Amber400);    // amber
         if (first is SkinnedMeshRenderer)  return (EditorIcons.Cubes_I, EditorTheme.Purple400);    // purple
         if (first is MeshRenderer)         return (EditorIcons.Cube_I, EditorTheme.Purple400);    // purple
-        if (first != null)                 return (EditorIcons.FileCode_I, EditorTheme.Green400);   // any other component = green script
+        if (first.IsValid())                 return (EditorIcons.FileCode_I, EditorTheme.Green400);   // any other component = green script
         // Empty GameObject: a group icon when it parents others, else a dim generic mark.
         return go.Children.Count > 0
             ? (EditorIcons.ObjectGroup_I, EditorTheme.Ink300)
@@ -1239,7 +1239,7 @@ public class HierarchyPanel : DockPanel
     private GameObject? FindGOByIdentifier(string id)
     {
         Scene scene = Scene.Current;
-        if (scene == null) return null;
+        if (scene.IsNotValid()) return null;
         return scene.AllObjects.FirstOrDefault(g => g.Identifier.ToString() == id);
     }
 
@@ -1288,10 +1288,10 @@ public class HierarchyPanel : DockPanel
     public static void SpawnAssetInScene(AssetDragPayload payload, GameObject? parent, Float3 position)
     {
         Scene scene = Scene.Current;
-        if (scene == null) return;
+        if (scene.IsNotValid()) return;
 
         Asset? asset = Runtime.AssetDatabase.Get(payload.AssetGuid);
-        if (asset == null) return;
+        if (asset.IsNotValid()) return;
 
         string name = System.IO.Path.GetFileNameWithoutExtension(payload.AssetName);
 
@@ -1303,7 +1303,7 @@ public class HierarchyPanel : DockPanel
             renderer.Mesh = mesh;
             renderer.Material = new Material(Shader.LoadDefault(DefaultShader.Lit));
             scene.Add(go);
-            if (parent != null) go.SetParent(parent);
+            if (parent.IsValid()) go.SetParent(parent);
             Selection.Select(go);
             Undo.RegisterCreatedObject(go, "Spawn Mesh");
         }
@@ -1314,7 +1314,7 @@ public class HierarchyPanel : DockPanel
             SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
             renderer.Sprite = sprite;
             scene.Add(go);
-            if (parent != null) go.SetParent(parent);
+            if (parent.IsValid()) go.SetParent(parent);
             Selection.Select(go);
             Undo.RegisterCreatedObject(go, "Spawn Sprite");
         }
@@ -1344,13 +1344,13 @@ public class HierarchyPanel : DockPanel
         Runtime.Resources.Scene scene, bool flatten)
     {
         GameObject? instance = PrefabUtility.InstantiatePrefab(payload.AssetGuid);
-        if (instance == null) return;
+        if (instance.IsNotValid()) return;
 
         if (flatten) PrefabUtility.DropPrefabLink(instance);
 
         instance.Transform.Position = position;
         scene.Add(instance);
-        if (parent != null) instance.SetParent(parent);
+        if (parent.IsValid()) instance.SetParent(parent);
         Selection.Select(instance);
         Undo.RegisterCreatedObject(instance, flatten ? "Add Prefab Contents" : "Spawn Prefab");
     }

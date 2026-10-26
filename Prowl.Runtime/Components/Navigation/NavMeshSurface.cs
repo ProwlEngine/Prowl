@@ -171,7 +171,7 @@ public class NavMeshSurface : Component
     public bool BuildNavMesh()
     {
         Runtime.NavMeshData? data = BuildNavMeshData();
-        if (data == null) return false;
+        if (data.IsNotValid()) return false;
 
         ApplyNavMeshData(data);
         return true;
@@ -185,7 +185,7 @@ public class NavMeshSurface : Component
     public Runtime.NavMeshData? BuildNavMeshData()
     {
         Runtime.NavMeshData? data = PrepareBake()(default);
-        if (data == null)
+        if (data.IsNotValid())
             Debug.LogWarning($"[Navigation] Bake of '{GameObject.Name}' produced no walkable geometry.");
 
         return data;

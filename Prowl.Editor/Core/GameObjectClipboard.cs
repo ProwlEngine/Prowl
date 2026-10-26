@@ -74,7 +74,7 @@ public static class GameObjectClipboard
             if (root == null || root.TagType != EchoType.List) return results;
 
             Scene scene = Scene.Current;
-            if (scene == null) return results;
+            if (scene.IsNotValid()) return results;
 
             // Shared context so a reference between two pasted objects resolves to the pasted one,
             // and a resolver so a reference out of the selection binds to the live scene object.
@@ -83,7 +83,7 @@ public static class GameObjectClipboard
             foreach (EchoObject item in root.List)
             {
                 GameObject? go = Serializer.Deserialize<GameObject>(item, context);
-                if (go == null) continue;
+                if (go.IsNotValid()) continue;
 
                 // The clipboard carries whatever prefab data the copied objects had. Only a whole
                 // instance may keep it, and the paste has no original to ask, so the object answers for
@@ -93,7 +93,7 @@ public static class GameObjectClipboard
 
                 go.Name = UniqueNames.ForGameObjectSibling(go.Name, parent, scene);
                 scene.Add(go);
-                if (parent != null)
+                if (parent.IsValid())
                     // Keep the deserialized local transform (see Duplicate); don't preserve world pos.
                     go.SetParent(parent, worldPositionStays: false);
                 results.Add(go);
@@ -124,7 +124,7 @@ public static class GameObjectClipboard
     {
         var results = new List<GameObject>();
         Scene scene = Scene.Current;
-        if (scene == null) return results;
+        if (scene.IsNotValid()) return results;
 
         List<GameObject> roots = FilterToRoots(gameObjects);
         if (roots.Count == 0) return results;
@@ -151,7 +151,7 @@ public static class GameObjectClipboard
 
             clone.Name = UniqueNames.ForGameObjectSibling(source.Name, source.Parent, scene);
             scene.Add(clone);
-            if (source.Parent != null)
+            if (source.Parent.IsValid())
                 // Keep the clone's copied local transform; don't preserve world position (the
                 // clone is briefly a root, so that path would reinterpret its local pos as world).
                 clone.SetParent(source.Parent, worldPositionStays: false);
@@ -179,7 +179,7 @@ public static class GameObjectClipboard
         {
             bool ancestorSelected = false;
             GameObject? parent = go.Parent;
-            while (parent != null)
+            while (parent.IsValid())
             {
                 if (set.Contains(parent))
                 {

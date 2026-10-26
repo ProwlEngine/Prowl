@@ -408,7 +408,7 @@ public sealed class MainThreadContext : SynchronizationContext
     internal static void AssertOwner(GameObject? go, [CallerMemberName] string member = "")
     {
         if (OnMainThread) return;
-        if (go is not null && go.Scene is { IsDisposed: false, IsActive: true }) ThrowOffThread(member);
+        if (!ReferenceEquals(go, null) && go.Scene is { IsDisposed: false, IsActive: true }) ThrowOffThread(member);
     }
 
     /// <inheritdoc cref="AssertOwner(GameObject?, string)"/>

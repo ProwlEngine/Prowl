@@ -80,7 +80,7 @@ public static class UniqueNames
         ArgumentNullException.ThrowIfNull(scene);
 
         var taken = new HashSet<string>(StringComparer.Ordinal);
-        IEnumerable<GameObject> siblings = parent != null ? parent.Children : scene.RootObjects;
+        IEnumerable<GameObject> siblings = parent.IsValid() ? parent.Children : scene.RootObjects;
         foreach (GameObject s in siblings)
             taken.Add(s.Name);
 

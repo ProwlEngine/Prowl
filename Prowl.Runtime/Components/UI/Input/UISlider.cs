@@ -151,7 +151,7 @@ public class UISlider : Selectable, IDragHandler, IBeginDragHandler
         bool horizontal = _direction is SliderDirection.LeftToRight or SliderDirection.RightToLeft;
         bool reversed = _direction is SliderDirection.RightToLeft or SliderDirection.TopToBottom;
 
-        if (_fillRect != null)
+        if (_fillRect.IsValid())
         {
             // Grow the fill from the low edge to the current fraction via anchors (padding size = 0).
             Float2 aMin = Float2.Zero, aMax = Float2.One;
@@ -171,7 +171,7 @@ public class UISlider : Selectable, IDragHandler, IBeginDragHandler
             _fillRect.AnchoredPosition = Float2.Zero;
         }
 
-        if (_handleRect != null)
+        if (_handleRect.IsValid())
         {
             // Center the knob at the current fraction; it keeps its own SizeDelta on the moving axis.
             float hn = reversed ? 1f - n : n;

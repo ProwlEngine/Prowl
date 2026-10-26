@@ -485,7 +485,7 @@ public static class ScriptAssemblyManager
             // BEFORE committing the new context as active, so a mid-migration throw leaves the old assemblies
             // as the active set - the editor then keeps running on the old code. The walk also migrates the
             // editor's own references into the scene (selection, inspector, hierarchy), so no repointing needed.
-            if (scene != null)
+            if (scene.IsValid())
             {
                 var pairs = new List<(Assembly, Assembly)>();
                 foreach (Assembly? oldAsm in oldAssemblies)

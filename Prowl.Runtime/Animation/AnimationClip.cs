@@ -78,7 +78,7 @@ public sealed class AnimationClip : Asset, ISerializable
             return _skeletal;
 
         Avatar? avatar = Avatar;
-        if (avatar is null || avatar.Skeleton == null)
+        if (avatar.IsNotValid() || avatar.Skeleton == null)
             return null;
 
         Motion.Skeleton skeleton = avatar.Skeleton;

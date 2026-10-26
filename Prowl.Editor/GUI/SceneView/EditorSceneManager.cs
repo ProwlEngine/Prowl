@@ -177,7 +177,7 @@ public static class EditorSceneManager
             SerializationContext ctx = ImportHelper.CreateTrackingContext(out _);
             Scene? scene = Serializer.Deserialize<Scene>(echo, ctx);
 
-            if (scene == null)
+            if (scene.IsNotValid())
             {
                 Debug.LogError($"Failed to deserialize scene: {relativePath}");
                 return false;
@@ -267,7 +267,7 @@ public static class EditorSceneManager
 
     private static bool SaveTo(string relativePath)
     {
-        if (Project.Current == null || Scene.Current == null) return false;
+        if (Project.Current == null || Scene.Current.IsNotValid()) return false;
         // The prefab session's scene holds the prefab and the editor-only viewing rig, which is not a
         // scene anyone means to save. Its own save goes through PrefabEditingMode.
         if (!GuardNotEditingPrefab("save a scene")) return false;

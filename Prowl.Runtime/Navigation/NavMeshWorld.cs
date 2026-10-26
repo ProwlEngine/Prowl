@@ -222,7 +222,7 @@ public sealed class NavMeshWorld
     /// </summary>
     public NavMeshInstance? AddNavMeshData(NavMeshData data)
     {
-        if (data == null || !data.HasTiles) return null;
+        if (data.IsNotValid() || !data.HasTiles) return null;
 
         // Refused before instantiating: a query attaches to exactly one Detour navmesh, so a
         // second registration would contour every tile and then never be consulted.

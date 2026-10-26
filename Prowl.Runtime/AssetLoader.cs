@@ -272,7 +272,7 @@ internal static class AssetLoader
             if (AssetDatabase.ReadContent(job.Asset.AssetID, staging)) job.Staging = staging;
         }
 
-        if (job.Staging != null) AssetDatabase.Publish(job.Asset, job.Staging, ReloadReason.Load);
+        if (job.Staging.IsValid()) AssetDatabase.Publish(job.Asset, job.Staging, ReloadReason.Load);
         else AssetDatabase.PublishFailed(job.Asset);
     }
 

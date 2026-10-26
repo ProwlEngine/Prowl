@@ -398,7 +398,7 @@ public static class CliEditorCommands
                 if (PrefabUtility.NeedsBreaking(targets))
                     throw new CliException("Moving this would change a prefab instance's structure. Run 'prefab --action unpack' on the instance first.");
                 foreach (GameObject go in targets)
-                    if (newParent != null && GameObject.IsChildOrSameTransform(newParent, go))
+                    if (newParent.IsValid() && GameObject.IsChildOrSameTransform(newParent, go))
                         throw new CliException($"{CliRefs.PathOf(newParent)} is {go.Name} or inside it.");
 
                 CliEdit.Run("Parent", () =>

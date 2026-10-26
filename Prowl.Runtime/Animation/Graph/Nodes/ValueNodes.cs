@@ -448,7 +448,7 @@ public sealed class ParameterNode : AnimationGraphNode
 
     public override NodePinKind OutputOf(AnimationGraph? asset, GraphNodeRecord r)
     {
-        if (asset == null) return Output;
+        if (asset.IsNotValid()) return Output;
         string name = r.Get(NameSetting);
         foreach (GraphParameterRecord parameter in asset.Parameters)
             if (parameter.Name == name) return PinKindOf(parameter.Kind);

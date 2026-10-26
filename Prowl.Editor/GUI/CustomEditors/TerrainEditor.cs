@@ -76,7 +76,7 @@ public class TerrainEditor : CustomEditor
         PropertyGridUtils.DrawField(paper, $"{id}_data", "Terrain Data", typeof(TerrainData), terrain.Data,
             v => terrain.Data = v as TerrainData, 0);
 
-        if (terrainData == null)
+        if (terrainData.IsNotValid())
         {
             DrawEmptyState(paper, $"{id}_empty", font);
             return;
@@ -269,7 +269,7 @@ public class TerrainEditor : CustomEditor
                     ElementBuilder swBox = paper.Box($"{id}_l{i}_sw").Width(16).Height(16).Rounded(m.SmallRounding)
                         .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                         .BorderColor(EditorTheme.WithAlpha(SColor.White, 38)).BorderWidth(1).IsNotInteractable();
-                    if (albThumb != null)
+                    if (albThumb.IsValid())
                         swBox.Clip().OnPostLayout((h, rect) => paper.Draw(ref h, (canvas, rr) =>
                             canvas.DrawImageRounded(albThumb, (float)rr.Min.X, (float)rr.Min.Y,
                                 (float)rr.Size.X, (float)rr.Size.Y, m.SmallRounding)));
@@ -648,7 +648,7 @@ public class TerrainEditor : CustomEditor
                                 .BackgroundColor(EditorTheme.WithAlpha(tint, 34))
                                 .BorderColor(EditorTheme.WithAlpha(tint, 85)).BorderWidth(1)
                                 .IsNotInteractable();
-                            if (thumb != null)
+                            if (thumb.IsValid())
                                 thumbBox.Clip().OnPostLayout((h, rect) => paper.Draw(ref h, (canvas, rr) =>
                                     canvas.DrawImageRounded(thumb, (float)rr.Min.X, (float)rr.Min.Y,
                                         (float)rr.Size.X, (float)rr.Size.Y, m.Rounding)));
@@ -719,7 +719,7 @@ public class TerrainEditor : CustomEditor
 
             using (paper.Column($"{id}_col").Width(UnitValue.StretchOne).Height(UnitValue.Auto).Enter())
             {
-                if (mesh == null)
+                if (mesh.IsNotValid())
                 {
                     // No mesh assigned show a single material field (will end up as submesh 0).
                     AssetRef<Material> single = materials.Count > 0 ? materials[0] : default;
@@ -1054,17 +1054,17 @@ public class TerrainEditor : CustomEditor
     [OnSceneSaved]
     static void OnSceneSaved()
     {
-        if (Scene.Current == null) return;
+        if (Scene.Current.IsNotValid()) return;
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db == null) return;
 
         foreach (GameObject go in Scene.Current.ActiveObjects)
         {
             TerrainComponent? terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
-            if (terrain == null) continue;
+            if (terrain.IsNotValid()) continue;
 
             TerrainData? terrainData = terrain.Data;
-            if (terrainData == null || terrainData.AssetID == Guid.Empty) continue;
+            if (terrainData.IsNotValid() || terrainData.AssetID == Guid.Empty) continue;
 
             try
             {
@@ -1085,18 +1085,18 @@ public class TerrainEditor : CustomEditor
     [OnUndoRedo]
     static void OnUndoRedo()
     {
-        if (Scene.Current == null) return;
+        if (Scene.Current.IsNotValid()) return;
 
         foreach (GameObject go in Scene.Current.ActiveObjects)
         {
             TerrainComponent? terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
-            if (terrain == null) continue;
+            if (terrain.IsNotValid()) continue;
 
             terrain.InvalidateDetailCache();
 
             // Re-mark GPU textures as dirty so they regenerate
             TerrainData? data = terrain.Data;
-            if (data != null)
+            if (data.IsValid())
             {
                 data.SetHeightmapDirty();
                 data.SetSplatmapDirty();

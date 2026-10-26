@@ -6,7 +6,7 @@ public class {[className]} : Component
 
     public override void OnEnable()
     {
-        if (Instance != null && Instance != this)
+        if (Instance.IsValid() && Instance != this)
         {
             Debug.LogWarning($"Multiple {nameof({[className]})} instances keeping the first.");
             return;

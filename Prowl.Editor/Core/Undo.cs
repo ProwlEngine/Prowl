@@ -239,8 +239,8 @@ public static class Undo
     public static void RecordGameObjectChange<T>(GameObject go, string description, T oldValue, T newValue, Action<GameObject, T> apply, bool coalesce = false)
     {
         Guid id = go.Identifier;
-        void undo() { GameObject? g = FindGO(id); if (g != null) apply(g, oldValue); }
-        void redo() { GameObject? g = FindGO(id); if (g != null) apply(g, newValue); }
+        void undo() { GameObject? g = FindGO(id); if (g.IsValid()) apply(g, oldValue); }
+        void redo() { GameObject? g = FindGO(id); if (g.IsValid()) apply(g, newValue); }
         if (coalesce) RegisterCoalescableAction(description, undo, redo);
         else RegisterAction(description, undo, redo);
     }
@@ -311,8 +311,8 @@ public static class Undo
             Guid id = go.Identifier;
             T oldV = get(go);
             T captured = newValue;
-            actions.Add((() => { GameObject? g = FindGO(id); if (g != null) set(g, oldV); },
-                         () => { GameObject? g = FindGO(id); if (g != null) set(g, captured); }
+            actions.Add((() => { GameObject? g = FindGO(id); if (g.IsValid()) set(g, oldV); },
+                         () => { GameObject? g = FindGO(id); if (g.IsValid()) set(g, captured); }
             ));
             set(go, newValue);
         }
@@ -331,7 +331,7 @@ public static class Undo
     public static void RegisterCreatedObject(GameObject go, string description)
     {
         if (Application.IsPlaying) return;
-        if (go == null) return;
+        if (go.IsNotValid()) return;
 
         _pendingStructural.Add((go, description, isCreate: true));
     }
@@ -359,15 +359,15 @@ public static class Undo
         MemoryCopy copy = SceneReferenceResolver.WriteMemoryCopy(go);
         Guid goId = go.Identifier;
         Guid parentId = go.Parent.IsValid() ? go.Parent.Identifier : Guid.Empty;
-        int siblingIndex = go.Parent != null ? go.Parent.Children.IndexOf(go) : -1;
+        int siblingIndex = go.Parent.IsValid() ? go.Parent.Children.IndexOf(go) : -1;
 
         return (
             undo: () =>
             {
                 Scene scene = Scene.Current;
-                if (scene == null) return;
+                if (scene.IsNotValid()) return;
                 GameObject? target = FindGameObjectByIdentifier(scene, goId);
-                if (target == null) return;
+                if (target.IsNotValid()) return;
 
                 if (Selection.IsSelected(target))
                     Selection.Clear();
@@ -378,18 +378,18 @@ public static class Undo
             redo: () =>
             {
                 Scene scene = Scene.Current;
-                if (scene == null) return;
+                if (scene.IsNotValid()) return;
 
                 // Preserving identifiers: what comes back has to be the object that went away, or
                 // every other record addressing it stops resolving.
                 var restored = GameObject.DeserializePreservingIdentifiers(copy.Data, SceneReferenceResolver.ContextForLinking());
-                if (restored == null) return;
+                if (restored.IsNotValid()) return;
 
                 scene.Add(restored);
                 if (parentId != Guid.Empty)
                 {
                     GameObject? parent = FindGameObjectByIdentifier(scene, parentId);
-                    if (parent != null)
+                    if (parent.IsValid())
                     {
                         restored.SetParent(parent);
                         if (siblingIndex >= 0 && siblingIndex < parent.Children.Count)
@@ -410,31 +410,31 @@ public static class Undo
     public static void RegisterDestroyObject(GameObject go, string description)
     {
         if (Application.IsPlaying) return;
-        if (go == null) return;
+        if (go.IsNotValid()) return;
 
         // Serialize the entire GO tree before destruction
         // Linked, not copied: see CaptureCreatedObject.
         MemoryCopy copy = SceneReferenceResolver.WriteMemoryCopy(go);
         Guid parentId = go.Parent.IsValid() ? go.Parent.Identifier : Guid.Empty;
-        int siblingIndex = go.Parent != null ? go.Parent.Children.IndexOf(go) : -1;
+        int siblingIndex = go.Parent.IsValid() ? go.Parent.Children.IndexOf(go) : -1;
         Guid goId = go.Identifier;
 
         RegisterAction(description,
             undo: () =>
             {
                 Scene scene = Scene.Current;
-                if (scene == null) return;
+                if (scene.IsNotValid()) return;
 
                 // Preserving identifiers: what comes back has to be the object that went away, or
                 // every other record addressing it stops resolving.
                 var restored = GameObject.DeserializePreservingIdentifiers(copy.Data, SceneReferenceResolver.ContextForLinking());
-                if (restored == null) return;
+                if (restored.IsNotValid()) return;
 
                 scene.Add(restored);
                 if (parentId != Guid.Empty)
                 {
                     GameObject? parent = FindGameObjectByIdentifier(scene, parentId);
-                    if (parent != null)
+                    if (parent.IsValid())
                     {
                         restored.SetParent(parent);
                         if (siblingIndex >= 0 && siblingIndex < parent.Children.Count)
@@ -448,9 +448,9 @@ public static class Undo
             redo: () =>
             {
                 Scene scene = Scene.Current;
-                if (scene == null) return;
+                if (scene.IsNotValid()) return;
                 GameObject? target = FindGameObjectByIdentifier(scene, goId);
-                if (target == null) return;
+                if (target.IsNotValid()) return;
 
                 if (Selection.IsSelected(target))
                     Selection.Clear();
@@ -480,7 +480,7 @@ public static class Undo
 
         foreach (GameObject go in targets)
         {
-            if (go == null) continue;
+            if (go.IsNotValid()) continue;
             _continuousStartState.Add((go.Identifier, go.Transform.LocalPosition, go.Transform.LocalRotation, go.Transform.LocalScale));
         }
     }
@@ -497,7 +497,7 @@ public static class Undo
         foreach ((Guid goId, Float3 startPos, Quaternion startRot, Float3 startScale) in _continuousStartState)
         {
             GameObject? go = FindGO(goId);
-            if (go == null) continue;
+            if (go.IsNotValid()) continue;
 
             Float3 endPos = go.Transform.LocalPosition;
             Quaternion endRot = go.Transform.LocalRotation;
@@ -514,7 +514,7 @@ public static class Undo
                 undo: () =>
                 {
                     GameObject? g = FindGO(capturedId);
-                    if (g == null) return;
+                    if (g.IsNotValid()) return;
                     g.Transform.LocalPosition = sPos;
                     g.Transform.LocalRotation = sRot;
                     g.Transform.LocalScale = sScale;
@@ -522,7 +522,7 @@ public static class Undo
                 redo: () =>
                 {
                     GameObject? g = FindGO(capturedId);
-                    if (g == null) return;
+                    if (g.IsNotValid()) return;
                     g.Transform.LocalPosition = ePos;
                     g.Transform.LocalRotation = eRot;
                     g.Transform.LocalScale = eScale;
@@ -549,7 +549,7 @@ public static class Undo
         foreach ((Guid goId, Float3 startPos, Quaternion startRot, Float3 startScale) in _continuousStartState)
         {
             GameObject? go = FindGO(goId);
-            if (go == null) continue;
+            if (go.IsNotValid()) continue;
             go.Transform.LocalPosition = startPos;
             go.Transform.LocalRotation = startRot;
             go.Transform.LocalScale = startScale;
@@ -741,7 +741,7 @@ public static class Undo
         // Flush deferred structural operations first (serializes created GOs now that components are added)
         foreach ((GameObject? go, string? desc, bool isCreate) in _pendingStructural)
         {
-            if (go == null || go.IsDisposed) continue;
+            if (ReferenceEquals(go, null) || go.IsDisposed) continue;
             if (isCreate)
                 FlushCreatedObject(go, desc);
         }
@@ -957,11 +957,11 @@ public static class Undo
     public static GameObject? FindGO(Guid identifier)
     {
         Scene scene = Scene.Current;
-        if (scene == null) return null;
+        if (scene.IsNotValid()) return null;
         foreach (GameObject root in scene.RootObjects)
         {
             GameObject found = root.FindChildByIdentifier(identifier);
-            if (found != null) return found;
+            if (found.IsValid()) return found;
         }
         return null;
     }
@@ -972,11 +972,11 @@ public static class Undo
     public static Component? FindComponent(Guid identifier)
     {
         Scene scene = Scene.Current;
-        if (scene == null) return null;
+        if (scene.IsNotValid()) return null;
         foreach (GameObject go in scene.AllObjects)
         {
             Component? comp = go.GetComponentByIdentifier(identifier);
-            if (comp != null) return comp;
+            if (comp.IsValid()) return comp;
         }
         return null;
     }
@@ -986,11 +986,11 @@ public static class Undo
 
     private static GameObject? FindGameObjectByIdentifier(Scene scene, Guid identifier)
     {
-        if (scene == null) return null;
+        if (scene.IsNotValid()) return null;
         foreach (GameObject root in scene.RootObjects)
         {
             GameObject found = root.FindChildByIdentifier(identifier);
-            if (found != null) return found;
+            if (found.IsValid()) return found;
         }
         return null;
     }

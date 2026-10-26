@@ -18,7 +18,7 @@ public sealed class Texture3D : Texture, ISerializable
     {
         get
         {
-            if (_white == null || !_white.IsValid())
+            if (_white.IsNotValid())
             {
                 _white = new Texture3D(1, 1, 1);
                 byte[] data = [255, 255, 255, 255]; // RGBA white

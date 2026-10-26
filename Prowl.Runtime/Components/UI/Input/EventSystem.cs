@@ -140,7 +140,7 @@ public sealed class EventSystem : Component
     public override void Update()
     {
         // Reclaim the role if the active system went away, so a surviving instance keeps input alive.
-        if (s_current is null || s_current.IsDisposed) s_current = this;
+        if (s_current.IsNotValid()) s_current = this;
         if (!ReferenceEquals(s_current, this)) return;
         Tick(Time.UnscaledTotalTime);
     }
@@ -172,7 +172,7 @@ public sealed class EventSystem : Component
 
         _selected = go;
 
-        if (go != null)
+        if (go.IsValid())
             ExecuteHierarchy<ISelectHandler>(go, h => h.OnSelect());
     }
 
@@ -187,10 +187,10 @@ public sealed class EventSystem : Component
     public static GameObject? ExecuteHierarchy<TInterface>(GameObject? root, Action<TInterface> action)
         where TInterface : class
     {
-        if (root == null || action == null) return null;
+        if (root.IsNotValid() || action == null) return null;
 
         GameObject? node = root;
-        while (node != null)
+        while (node.IsValid())
         {
             foreach (Component comp in node.GetComponents<Component>())
             {
@@ -214,12 +214,12 @@ public sealed class EventSystem : Component
     internal static GameObject? Bubble<TInterface>(GameObject? root, PointerEventData e, Action<TInterface, PointerEventData> action)
         where TInterface : class
     {
-        if (root == null || action == null) return null;
+        if (root.IsNotValid() || action == null) return null;
         e.Used = false;
 
         GameObject? node = root;
         GameObject? first = null;
-        while (node != null)
+        while (node.IsValid())
         {
             foreach (Component comp in node.GetComponents<Component>())
             {
@@ -253,7 +253,7 @@ public sealed class EventSystem : Component
     /// <paramref name="of"/> is never contained.</summary>
     private static bool IsAncestorOrSelf(GameObject node, GameObject? of)
     {
-        for (GameObject? c = of; c != null; c = c.Parent)
+        for (GameObject? c = of; c.IsValid(); c = c.Parent)
             if (ReferenceEquals(c, node)) return true;
         return false;
     }
@@ -262,7 +262,7 @@ public sealed class EventSystem : Component
     /// <typeparamref name="TInterface"/>, or null.</summary>
     internal static GameObject? FindHandler<TInterface>(GameObject? from) where TInterface : class
     {
-        for (GameObject? node = from; node != null; node = node.Parent)
+        for (GameObject? node = from; node.IsValid(); node = node.Parent)
             foreach (Component comp in node.GetComponents<Component>())
                 if (comp is TInterface && comp.EnabledInHierarchy) return node;
         return null;
@@ -273,9 +273,9 @@ public sealed class EventSystem : Component
     private static GameObject? FindAncestor<T>(GameObject from) where T : Component
     {
         GameObject? node = from;
-        while (node != null)
+        while (node.IsValid())
         {
-            if (node.GetComponent<T>() != null) return node;
+            if (node.GetComponent<T>().IsValid()) return node;
             node = node.Parent;
         }
         return null;
@@ -362,7 +362,7 @@ public sealed class EventSystem : Component
 
         // 4) Scroll dispatch - only when the pointer is over something hittable.
         float scroll = Input.MouseWheelDelta;
-        if (Maths.Abs(scroll) > 0.0001f && hovered != null)
+        if (Maths.Abs(scroll) > 0.0001f && hovered.IsValid())
         {
             FillCommon(_left, hovered, hoveredCanvas, pos, delta, designPos);
             _left.ScrollDelta = scroll;
@@ -400,9 +400,9 @@ public sealed class EventSystem : Component
         GameObject? oldHover = _lastHovered is { IsDisposed: false } ? _lastHovered : null;
         FillCommon(_left, hovered, hoveredCanvas, pos, delta, designPos);
 
-        for (GameObject? n = oldHover; n != null && !IsAncestorOrSelf(n, hovered); n = n.Parent)
+        for (GameObject? n = oldHover; n.IsValid() && !IsAncestorOrSelf(n, hovered); n = n.Parent)
             DispatchNode<IPointerExitHandler>(n, _left, static (h, e) => h.OnPointerExit(e));
-        for (GameObject? n = hovered; n != null && !IsAncestorOrSelf(n, oldHover); n = n.Parent)
+        for (GameObject? n = hovered; n.IsValid() && !IsAncestorOrSelf(n, oldHover); n = n.Parent)
             DispatchNode<IPointerEnterHandler>(n, _left, static (h, e) => h.OnPointerEnter(e));
 
         _lastHovered = hovered;
@@ -435,7 +435,7 @@ public sealed class EventSystem : Component
 
     private void DispatchMove(MoveDirection dir)
     {
-        if (_selected == null) return;
+        if (_selected.IsNotValid()) return;
         ExecuteHierarchy<IMoveHandler>(_selected, h => h.OnMove(dir));
     }
 
@@ -458,13 +458,13 @@ public sealed class EventSystem : Component
         // When the pointer leaves every raycast target mid-interaction the hit-test yields no design
         // position (it falls back to zero). Recover it from the active drag/press target's canvas so
         // drags keep tracking the pointer instead of snapping the value to the canvas origin.
-        if (hovered == null)
+        if (hovered.IsNotValid())
         {
             GameObject? tracked = e.Dragging.IsValid() ? e.Dragging : e.PressedOn;
             GameCanvas? canvas = tracked.IsValid() ? tracked.GetComponentInParent<GameCanvas>(includeSelf: true) : null;
             bool projected = false;
             Float2 dp = Float2.Zero;
-            if (canvas != null)
+            if (canvas.IsValid())
                 projected = WorldPointer is { } ray
                     ? UIRaycaster.TryProjectRay(canvas, ray.Ray, out dp)
                     : UIRaycaster.TryProjectPointer(canvas, pos, winSize, out dp);
@@ -481,25 +481,25 @@ public sealed class EventSystem : Component
             e.IsDragging = false;
             e.Dragging = null;
 
-            if (e.ClickTarget != null &&
+            if (e.ClickTarget.IsValid() &&
                 currentTime - e.LastClickTime <= _multiClickWindow &&
                 ReferenceEquals(e.ClickTarget, e.LastClickTarget))
                 e.ClickCount++;
             else
                 e.ClickCount = 1;
 
-            if (hovered != null)
+            if (hovered.IsValid())
                 Bubble<IPointerDownHandler>(hovered, e, static (h, ev) => h.OnPointerDown(ev));
 
             // Focus follows the press: a Selectable under the pointer takes focus, and a press on
             // anything else - including empty space - clears it. Without the clear, an input field
             // would keep its caret and keep eating keystrokes after the user clicked away.
             if (button == MouseButton.Left)
-                SetSelected(hovered != null ? FindAncestor<Selectable>(hovered) : null);
+                SetSelected(hovered.IsValid() ? FindAncestor<Selectable>(hovered) : null);
         }
 
         // ---- Drag detection / continuation ----
-        if (held && e.PressedOn != null)
+        if (held && e.PressedOn.IsValid())
         {
             if (!e.IsDragging)
             {
@@ -507,7 +507,7 @@ public sealed class EventSystem : Component
                 // press stays a press, so a button still clicks when the pointer shifts a few pixels.
                 Float2 fromPress = pos - e.PressPosition;
                 float distSqr = fromPress.X * fromPress.X + fromPress.Y * fromPress.Y;
-                if (distSqr >= _dragThreshold * _dragThreshold && FindHandler<IDragHandler>(e.PressedOn) != null)
+                if (distSqr >= _dragThreshold * _dragThreshold && FindHandler<IDragHandler>(e.PressedOn).IsValid())
                 {
                     e.IsDragging = true;
                     e.Dragging = e.PressedOn;
@@ -527,16 +527,16 @@ public sealed class EventSystem : Component
         {
             // PointerUp goes to the element that received PointerDown, wherever the pointer is now, so a
             // widget released off-target doesn't get stranded in its Pressed state.
-            if (e.PressedOn != null)
+            if (e.PressedOn.IsValid())
                 Bubble<IPointerUpHandler>(e.PressedOn, e, static (h, ev) => h.OnPointerUp(ev));
 
-            if (e.IsDragging && e.Dragging != null)
+            if (e.IsDragging && !ReferenceEquals(e.Dragging, null))
             {
                 Bubble<IEndDragHandler>(e.Dragging, e, static (h, ev) => h.OnEndDrag(ev));
-                if (hovered != null && !ReferenceEquals(hovered, e.Dragging))
+                if (hovered.IsValid() && !ReferenceEquals(hovered, e.Dragging))
                     Bubble<IDropHandler>(hovered, e, static (h, ev) => h.OnDrop(ev));
             }
-            else if (e.ClickTarget != null && ReferenceEquals(e.ClickTarget, FindHandler<IPointerClickHandler>(hovered)))
+            else if (e.ClickTarget.IsValid() && ReferenceEquals(e.ClickTarget, FindHandler<IPointerClickHandler>(hovered)))
             {
                 // Click: released over the same clickable the press started on (a label inside a button
                 // counts as the button), without a drag.

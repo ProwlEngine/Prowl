@@ -56,7 +56,7 @@ public class UIImage : Graphic
     {
         get
         {
-            if (_defaultTexture != null) return _defaultTexture;
+            if (_defaultTexture.IsValid()) return _defaultTexture;
             //Texture2D.LoadDefault(DefaultTexture.White)
             var tex = new Texture2D(1, 1);
             tex.SetData(new System.Memory<byte>([255, 255, 255, 255]), 0,0,1,1);
@@ -87,7 +87,7 @@ public class UIImage : Graphic
     private Texture2D? SourceTexture { get { Sprite? s = Spr; return s is { IsLoaded: true } ? s.Texture : null; } }
 
     /// <summary>A sprite is assigned but it (or its texture) is still loading, so this image drew nothing.</summary>
-    public override bool IsContentPending => _sprite is not null && SourceTexture is null;
+    public override bool IsContentPending => _sprite.IsValid() && SourceTexture.IsNotValid();
 
     public override int ContentVersion => _sprite is Sprite s ? s.ContentVersion : 0;
 
@@ -176,12 +176,12 @@ public class UIImage : Graphic
     public override void GenerateMesh(UIMeshBuilder b, in UIContext ctx)
     {
         RectTransform? rt = GameObject.RectTransform;
-        if (rt is null) return;
+        if (rt.IsNotValid()) return;
         Rect r = rt.ComputedRect;
         if (r.Size.X <= 0 || r.Size.Y <= 0) return;
 
         // Nothing to draw without a sprite - the element is still a raycast target, just invisible.
-        if (SourceTexture is null) return;
+        if (SourceTexture.IsNotValid()) return;
 
         // Remap generated UVs onto the sprite's atlas sub-rect (identity when it covers the whole texture).
         ApplySpriteUVRect(b);

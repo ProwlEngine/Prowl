@@ -136,7 +136,7 @@ public class UIScrollbar : Selectable, IDragHandler, IBeginDragHandler
 
     private void UpdateVisuals()
     {
-        if (_handleRect == null) return;
+        if (_handleRect.IsNotValid()) return;
 
         float s = Maths.Clamp(_size, 0.02f, 1f);
         float span = 1f - s;

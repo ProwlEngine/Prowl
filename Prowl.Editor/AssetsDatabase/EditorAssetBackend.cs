@@ -728,7 +728,7 @@ public class EditorAssetBackend : AssetBackend
             long sourceTicks = File.GetLastWriteTimeUtc(absolutePath).Ticks;
             bool success = importer.Import(ctx);
 
-            if (!success || ctx.MainAsset == null)
+            if (!success || ctx.MainAsset.IsNotValid())
             {
                 // Clearing the list alone would strand the sub-assets in the index and their caches on
                 // disk, leaving GUIDs that resolve to a parent claiming it has no sub-assets.
@@ -765,7 +765,7 @@ public class EditorAssetBackend : AssetBackend
                 for (int i = 0; i < ctx.SubAssets.Count; i++)
                 {
                     Asset sub = ctx.SubAssets[i];
-                    if (sub == null) continue;
+                    if (sub.IsNotValid()) continue;
 
                     // A sub-asset (e.g. a Sprite) can reference assets of its own - track those under its
                     // own GUID, or a DependenciesOnly build's walk stops at the sub-asset.

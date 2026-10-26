@@ -1902,7 +1902,7 @@ public static class MeshGeometry
 
         // Blend shape layout comes from the template when there is one, otherwise from the attributes found
         var frameCounts = new List<int>();
-        if (source != null)
+        if (source.IsValid())
         {
             foreach (BlendShape shape in source.BlendShapes) frameCounts.Add(shape.Frames.Length);
         }
@@ -1980,7 +1980,7 @@ public static class MeshGeometry
             return created;
         }
 
-        int subMeshCount = source != null ? source.SubMeshCount : 1;
+        int subMeshCount = source.IsValid() ? source.SubMeshCount : 1;
         foreach (GeometryData.Face face in geometry.Faces)
             subMeshCount = Math.Max(subMeshCount, SubMeshOf(face) + 1);
 
@@ -2002,9 +2002,9 @@ public static class MeshGeometry
             }
         }
 
-        var mesh = new Mesh { Name = source != null ? source.Name : "Mesh" };
-        if (source != null && source.BindPoses is { } bindPoses) mesh.BindPoses = (Float4x4[])bindPoses.Clone();
-        if (source != null && source.BoneNames is { } boneNames) mesh.BoneNames = (string[])boneNames.Clone();
+        var mesh = new Mesh { Name = source.IsValid() ? source.Name : "Mesh" };
+        if (source.IsValid() && source.BindPoses is { } bindPoses) mesh.BindPoses = (Float4x4[])bindPoses.Clone();
+        if (source.IsValid() && source.BoneNames is { } boneNames) mesh.BoneNames = (string[])boneNames.Clone();
 
         // Nothing to draw: vertex streams cannot be assigned without vertices, so only the submesh slots stay
         if (positions.Count == 0)
@@ -2020,7 +2020,7 @@ public static class MeshGeometry
         if (hasUV2) mesh.UV2 = [.. uv2];
         if (hasColor)
         {
-            if (source != null && source.HasColors32 && !source.HasColors)
+            if (source.IsValid() && source.HasColors32 && !source.HasColors)
             {
                 var bytes = new Color32[colors.Count];
                 for (int i = 0; i < bytes.Length; i++)
@@ -2043,7 +2043,7 @@ public static class MeshGeometry
             int layer = 0;
             for (int s = 0; s < shapes.Length; s++)
             {
-                BlendShape? shape = source != null && s < source.BlendShapes.Length ? source.BlendShapes[s] : null;
+                BlendShape? shape = source.IsValid() && s < source.BlendShapes.Length ? source.BlendShapes[s] : null;
                 shapes[s] = new BlendShape { Name = shape?.Name ?? $"Shape{s}", Frames = new BlendShapeFrame[frameCounts[s]] };
                 for (int f = 0; f < frameCounts[s]; f++, layer++)
                 {

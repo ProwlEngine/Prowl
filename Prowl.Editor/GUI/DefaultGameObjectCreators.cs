@@ -25,13 +25,13 @@ internal static class DefaultGameObjectCreators
     static void CreateEmptyChild()
     {
         GameObject? parent = MenuContext.ActiveGameObject;
-        if (parent == null) return;
+        if (parent.IsNotValid()) return;
         HierarchyPanel.CreateGameObject("GameObject", parent);
     }
 
     // Nothing to parent to from the scene-root menu, or with an empty selection.
     [MenuItem("GameObject/Empty Child", isValidate: true)]
-    static bool ValidateCreateEmptyChild() => MenuContext.ActiveGameObject != null;
+    static bool ValidateCreateEmptyChild() => MenuContext.ActiveGameObject.IsValid();
 
     [MenuItem("GameObject/Empty Parent", priority: 2, Icon = EditorIcons.ObjectGroup, SelectionWide = true)]
     static void CreateEmptyParent() => HierarchyPanel.CreateEmptyParent();
@@ -454,9 +454,9 @@ internal static class DefaultGameObjectCreators
     private static void EnsureEventSystem(Scene? scene)
     {
         if (scene.IsNotValid()) scene = Scene.Current;
-        if (scene == null) return;
+        if (scene.IsNotValid()) return;
         foreach (EventSystem? es in scene.FindObjectsOfType<EventSystem>())
-            if (es != null) return;
+            if (es.IsValid()) return;
         GameObject esGo = HierarchyPanel.CreateGameObject("Event System", null, select: false, beginRename: false);
         esGo.AddComponent<EventSystem>();
     }
@@ -464,13 +464,13 @@ internal static class DefaultGameObjectCreators
     private static GameObject ResolveCanvasParent(GameObject? parent)
     {
         GameCanvas? canvas = parent.IsValid() ? parent.GetComponentInParent<GameCanvas>(includeSelf: true) : null;
-        if (canvas != null) return parent!;
+        if (canvas.IsValid()) return parent!;
 
         Scene scene = Scene.Current;
-        if (scene != null)
+        if (scene.IsValid())
         {
             foreach (GameCanvas? c in scene.FindObjectsOfType<GameCanvas>())
-                if (c != null) return c.GameObject;
+                if (c.IsValid()) return c.GameObject;
         }
 
         GameObject canvasGo = HierarchyPanel.CreateGameObject("Canvas", null, select: false, beginRename: false);

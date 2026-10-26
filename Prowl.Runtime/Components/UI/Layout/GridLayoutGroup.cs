@@ -85,7 +85,7 @@ public sealed class GridLayoutGroup : LayoutGroup
     private float ContentWidth()
     {
         RectTransform? rt = GameObject.RectTransform;
-        float w = rt is null ? 0f : rt.ComputedRect.Size.X;
+        float w = rt.IsNotValid() ? 0f : rt.ComputedRect.Size.X;
         return Maths.Max(0f, w - _paddingLeft - _paddingRight);
     }
 

@@ -269,7 +269,7 @@ public class ProjectPanel : DockPanel
             case GameObjectDragPayload gp:
                 // Roots only: making a prefab of a parent already captures its children, and making
                 // one of a child afterwards would tear that subtree back out of the parent's instance.
-                foreach (GameObject go in GameObjectClipboard.FilterToRoots(gp.GameObjects.Where(g => g != null)))
+                foreach (GameObject go in GameObjectClipboard.FilterToRoots(gp.GameObjects.Where(g => g.IsValid())))
                     CreatePrefabInFolder(go, targetFolder);
                 DragDrop.EndDrag();
                 break;
@@ -1326,7 +1326,7 @@ public class ProjectPanel : DockPanel
         {
             Texture2D? thumbTex = EditorAssetBackend.Instance?.GetThumbnailTexture(sub.Guid);
             float thumbRound = EditorTheme.Roundness;
-            if (thumbTex != null)
+            if (thumbTex.IsValid())
             {
                 paper.Box($"proj_subth_{sub.Guid}").Width(42).Height(42).Margin(UnitValue.StretchOne, UnitValue.StretchOne, 0, 0)
                     .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
@@ -1431,7 +1431,7 @@ public class ProjectPanel : DockPanel
 
             // Thumbnail area
             Texture2D? thumbTex = EditorAssetBackend.Instance?.GetThumbnailTexture(item.Guid);
-            if (thumbTex != null)
+            if (thumbTex.IsValid())
             {
                 // Rounded image tile (texture-brushed rounded rect) + a matching rounded border.
                 paper.Box("t")

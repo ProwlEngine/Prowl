@@ -80,7 +80,7 @@ internal sealed class InputBindingPopup
     /// <summary>Draws the backdrop and panel over the inspector's visible area of <paramref name="areaWidth"/> by <paramref name="areaHeight"/>.</summary>
     public void Draw(Paper paper, string id, float areaWidth, float areaHeight)
     {
-        if (_map == null || _action == null || !_map.Actions.Contains(_action) || (_entry != null && !Owns(_action, _entry)))
+        if (_map.IsNotValid() || _action == null || !_map.Actions.Contains(_action) || (_entry != null && !Owns(_action, _entry)))
         {
             Close();
             return;

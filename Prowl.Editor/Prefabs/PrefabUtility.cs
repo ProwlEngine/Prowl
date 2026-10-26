@@ -49,7 +49,7 @@ public static partial class PrefabUtility
     /// <returns>True if successful.</returns>
     public static bool SaveAsPrefabAssetAndConnect(GameObject source, string relativeSavePath, bool overwrite = false)
     {
-        if (source == null || Project.Current == null) return false;
+        if (source.IsNotValid() || Project.Current == null) return false;
         if (!GuardNotPlaying("create a prefab")) return false;
 
         if (!relativeSavePath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
@@ -68,7 +68,7 @@ public static partial class PrefabUtility
         // Serialize a copy with this object's own prefab data stripped. Nested instances keep theirs,
         // so saving a hierarchy that contains prefabs preserves those links.
         GameObject? cleanCopy = CloneWithoutPrefabData(source);
-        if (cleanCopy == null) return false;
+        if (cleanCopy.IsNotValid()) return false;
 
         FlattenNestedPrefabs(cleanCopy);
         StabilizeSourceIdentifiers(cleanCopy);
@@ -180,7 +180,7 @@ public static partial class PrefabUtility
         if (IsEditablePrefab(prefabGuid)) return true;
 
         string name = EditorAssetBackend.Instance?.GetEntry(prefabGuid)?.Path ?? prefabGuid.ToString();
-        Runtime.Debug.LogWarning(LoadPrefab(prefabGuid) is not null
+        Runtime.Debug.LogWarning(LoadPrefab(prefabGuid).IsValid()
             ? $"[Prefab] Cannot {operation}: '{name}' is generated from its source file. " +
               "Change it there and reimport, or unpack the instance."
             : $"[Prefab] Cannot {operation}: prefab asset '{name}' could not be loaded.");
@@ -198,14 +198,14 @@ public static partial class PrefabUtility
     public static GameObject? InstantiatePrefab(Guid prefabGuid)
     {
         PrefabAsset? prefab = LoadPrefab(prefabGuid);
-        if (prefab == null)
+        if (prefab.IsNotValid())
         {
             Runtime.Debug.LogWarning($"[Prefab] Failed to load prefab asset {prefabGuid}");
             return null;
         }
 
         var instance = GameObject.InstantiateDetached(prefab);
-        if (instance != null) RaiseInstantiated(instance);
+        if (instance.IsValid()) RaiseInstantiated(instance);
         return instance;
     }
 
@@ -292,7 +292,7 @@ public static partial class PrefabUtility
 
         // Serialize the instance tree with prefab data stripped
         GameObject? cleanCopy = CloneWithoutPrefabData(instanceRoot);
-        if (cleanCopy == null) return;
+        if (cleanCopy.IsNotValid()) return;
 
         // What the instance added is the instance's, not the prefab's. Writing it into the asset would
         // hand it to every other instance, and it was never listed as an override for the user to see.
@@ -367,7 +367,7 @@ public static partial class PrefabUtility
     private static void RevertOverridesCore(GameObject instanceRoot, bool recordUndo)
     {
         PrefabAsset? prefab = LoadPrefab(instanceRoot.PrefabAssetId);
-        if (prefab == null)
+        if (prefab.IsNotValid())
         {
             Runtime.Debug.LogWarning("[Prefab] Cannot revert prefab asset not found.");
             return;
@@ -375,7 +375,7 @@ public static partial class PrefabUtility
 
         // Nothing to swap into, so leave the instance alone rather than reporting success and
         // selecting a replacement that is in no scene.
-        if (instanceRoot.Scene == null)
+        if (instanceRoot.Scene.IsNotValid())
         {
             Runtime.Debug.LogWarning("[Prefab] Cannot revert an instance that is not in a scene.");
             return;
@@ -387,7 +387,7 @@ public static partial class PrefabUtility
         Guid rootId = instanceRoot.Identifier;
 
         var source = GameObject.InstantiateDetached(prefab);
-        if (source == null) return;
+        if (source.IsNotValid()) return;
 
         // Reverting brings the instance back into line with the prefab and drops what made it differ.
         // The objects themselves stay, so anything holding a reference to them still does.
@@ -405,7 +405,7 @@ public static partial class PrefabUtility
                     // Preserving identifiers: this replaces the instance, so it has to come back as
                     // the same object or every record addressing it stops resolving.
                     var restored = GameObject.DeserializePreservingIdentifiers(oldSerialized, InstanceValueContext());
-                    if (restored == null) return;
+                    if (restored.IsNotValid()) return;
 
                     SwapInPlace(live!, restored);
                     Selection.Select(restored);
@@ -428,17 +428,17 @@ public static partial class PrefabUtility
     private static void SwapInPlace(GameObject existing, GameObject replacement)
     {
         Scene? scene = existing.Scene;
-        if (scene == null) return;
+        if (scene.IsNotValid()) return;
 
         GameObject? parent = existing.Parent;
         int siblingIdx = existing.GetSiblingIndex() ?? -1;
-        int rootIdx = parent == null ? scene.GetRootIndex(existing) : -1;
+        int rootIdx = parent.IsNotValid() ? scene.GetRootIndex(existing) : -1;
 
         scene.Remove(existing);
         existing.Destroy();
         scene.Add(replacement);
 
-        if (parent != null)
+        if (parent.IsValid())
         {
             replacement.SetParent(parent);
             if (siblingIdx >= 0) replacement.SetSiblingIndex(siblingIdx);
@@ -518,7 +518,7 @@ public static partial class PrefabUtility
         // Built like an instance so its objects carry the source identifiers the override path is
         // written in terms of; the instance markings are taken back off before it is written out.
         var source = GameObject.InstantiateDetached(prefab);
-        if (source == null) return;
+        if (source.IsNotValid()) return;
 
         // Apply each override value to the source. A scene reference resolves here and is linked, not
         // copied, when the source is written back below.
@@ -591,7 +591,7 @@ public static partial class PrefabUtility
     private static void RevertSingleOverrideCore(GameObject instanceGO, string overridePath, bool recordUndo)
     {
         GameObject? source = GetCachedPrefabSource(instanceGO.PrefabAssetId);
-        if (source == null) return;
+        if (source.IsNotValid()) return;
 
         // Find the source value via the path
         ParseOverridePath(source, overridePath, out object? sourceTarget, out string sourceFieldPath);
@@ -968,7 +968,7 @@ public static partial class PrefabUtility
         string? oldFileContent = File.Exists(absolutePath) ? File.ReadAllText(absolutePath) : null;
 
         GameObject? source = GameObject.InstantiateDetached(prefab);
-        if (source == null) return;
+        if (source.IsNotValid()) return;
 
         if (!WriteAdditionInto(source, root, addition, prefabGuid, out Action adopt))
             return;
@@ -1032,11 +1032,11 @@ public static partial class PrefabUtility
             if (added.IsNotValid() || parent.IsNotValid()) return false;
 
             GameObject? sourceParent = FindBySourceIdentifier(source, parent!.SourceIdentifier, source.PrefabAssetId);
-            if (sourceParent == null) return false;
+            if (sourceParent.IsNotValid()) return false;
 
             GameObject? copy = Serializer.Deserialize<GameObject>(
                 Serializer.Serialize(typeof(object), added, TreeValueContext(added!)), InstanceValueContext());
-            if (copy == null) return false;
+            if (copy.IsNotValid()) return false;
 
             copy.SetParent(sourceParent, worldPositionStays: false);
             copy.ClearPrefabDataRecursive();
@@ -1053,7 +1053,7 @@ public static partial class PrefabUtility
         if (component.IsNotValid()) return false;
 
         GameObject? sourceOwner = FindBySourceIdentifier(source, owner!.SourceIdentifier, source.PrefabAssetId);
-        if (sourceOwner == null) return false;
+        if (sourceOwner.IsNotValid()) return false;
 
         Component copied = sourceOwner.AddComponent(component!.GetType());
         EchoObject? state = Serializer.Serialize(component!.GetType(), component, ComponentValueContext(component!));
@@ -1287,7 +1287,7 @@ public static partial class PrefabUtility
 
         described.InstanceValue = Describe(GetMemberValue(target, memberPath));
 
-        if (source != null)
+        if (source.IsValid())
         {
             ParseOverridePath(source, ov.Path, out object? sourceTarget, out string sourceMemberPath);
             if (sourceTarget != null && GetMemberByPath(sourceTarget, sourceMemberPath).IsValid)
@@ -1396,7 +1396,7 @@ public static partial class PrefabUtility
 
             // Whether instances may be rebuilt right now is a separate question.
             if (s_refreshingFromApply || Application.IsPlaying) continue;
-            if (Scene.Current == null || PrefabEditingMode.IsEditing) continue;
+            if (Scene.Current.IsNotValid() || PrefabEditingMode.IsEditing) continue;
 
             try
             {
@@ -1428,7 +1428,7 @@ public static partial class PrefabUtility
             if (db.GetEntry(prefabGuid) != null) continue;
 
             // Keeping it is what lets instances go on recording overrides while the prefab is away.
-            if (scene != null && scene.AllObjects.Any(go => go.PrefabAssetId == prefabGuid)) continue;
+            if (scene.IsValid() && scene.AllObjects.Any(go => go.PrefabAssetId == prefabGuid)) continue;
 
             InvalidateSource(prefabGuid);
         }
@@ -1450,7 +1450,7 @@ public static partial class PrefabUtility
         if (PrefabEditingMode.IsEditing) return;
 
         Scene? scene = Scene.Current;
-        if (scene == null) return;
+        if (scene.IsNotValid()) return;
 
         // Collected before anything is refreshed, since a refresh adds and removes objects.
         var prefabs = new HashSet<Guid>();
@@ -1483,7 +1483,7 @@ public static partial class PrefabUtility
     public static void RefreshAllInstances(Guid prefabGuid)
     {
         Scene? scene = Scene.Current;
-        if (scene != null) RefreshInstancesOf(prefabGuid, scene);
+        if (scene.IsValid()) RefreshInstancesOf(prefabGuid, scene);
     }
 
     private static void RefreshInstancesOf(Guid prefabGuid, Scene scene)
@@ -1494,11 +1494,11 @@ public static partial class PrefabUtility
         if (roots.Count == 0) return;
 
         PrefabAsset? prefab = LoadPrefab(prefabGuid);
-        if (prefab == null) return;
+        if (prefab.IsNotValid()) return;
 
         // One copy of the prefab's contents, read from by every instance. Never mutated.
         var source = GameObject.InstantiateDetached(prefab);
-        if (source == null) return;
+        if (source.IsNotValid()) return;
 
         foreach (GameObject root in roots)
             RefreshInstance(root, source, prefabGuid);
@@ -1569,7 +1569,7 @@ public static partial class PrefabUtility
     private static bool SitsWhereThePrefabPutsIt(GameObject go, GameObject? source, Guid prefabGuid)
     {
         // Nothing to judge it against, so leave it be rather than unlink on a guess.
-        if (source == null) return true;
+        if (source.IsNotValid()) return true;
 
         GameObject? sourceObject = FindBySourceIdentifier(source, go.SourceIdentifier, prefabGuid);
 
@@ -1582,7 +1582,7 @@ public static partial class PrefabUtility
         GameObject? belongsUnder = FindBySourceIdentifier(instanceRoot!, sourceObject.Parent!.SourceIdentifier, prefabGuid);
 
         // Null means the prefab restructured and the instance has yet to catch up.
-        return belongsUnder == null || ReferenceEquals(belongsUnder, go.Parent);
+        return belongsUnder.IsNotValid() || ReferenceEquals(belongsUnder, go.Parent);
     }
 
     /// <summary>
@@ -1617,7 +1617,7 @@ public static partial class PrefabUtility
         if (LoadPrefab(instanceRoot.PrefabAssetId) is not PrefabAsset prefab) return;
 
         var source = GameObject.InstantiateDetached(prefab);
-        if (source == null) return;
+        if (source.IsNotValid()) return;
 
         RefreshInstance(instanceRoot, source, instanceRoot.PrefabAssetId);
     }
@@ -1744,7 +1744,7 @@ public static partial class PrefabUtility
             }
 
             Component? paired = match.IsValid() ? match! : instance.AttachBareComponent(sourceComponent.GetType());
-            if (paired is null) continue;
+            if (paired.IsNotValid()) continue;
 
             map.Fill(sourceComponent, paired);
         }
@@ -1875,7 +1875,7 @@ public static partial class PrefabUtility
 
         // Stops at the first object that is an instance in its own right, which is what an instance of a
         // prefab placed inside another instance of the same prefab is.
-        while (!IsInstanceRoot(root) && root.Parent != null && root.Parent.IsValid()
+        while (!IsInstanceRoot(root) && root.Parent.IsValid()
                && root.Parent.PrefabAssetId == prefabId)
             root = root.Parent;
 
@@ -1924,7 +1924,7 @@ public static partial class PrefabUtility
 
         // The prefab is gone, so nothing can say which object this was. Fall back to the shape of the
         // hierarchy, which is all that is left to go on.
-        return go.Parent == null || !go.Parent.IsValid() || go.Parent.PrefabAssetId != go.PrefabAssetId;
+        return go.Parent.IsNotValid() || go.Parent.PrefabAssetId != go.PrefabAssetId;
     }
 
     /// <summary>
@@ -1938,7 +1938,7 @@ public static partial class PrefabUtility
     public static bool IsNestedPrefabRoot(GameObject go)
     {
         if (!go.IsPrefabInstance) return false;
-        return go.Parent != null && go.Parent.IsValid() && go.Parent.IsPrefabInstance
+        return go.Parent.IsValid() && go.Parent.IsPrefabInstance
             && go.Parent.PrefabAssetId != go.PrefabAssetId;
     }
 
@@ -1977,7 +1977,7 @@ public static partial class PrefabUtility
         if (!instanceGO.IsPrefabInstance) return;
 
         GameObject? source = GetComparisonBaseline(instanceGO.PrefabAssetId);
-        if (source == null) return;
+        if (source.IsNotValid()) return;
 
         // The component this one came from, found by identity rather than by position, so adding or
         // reordering components on either side does not change which one it is compared against.
@@ -2046,7 +2046,7 @@ public static partial class PrefabUtility
     public static void ReconcileOpenScene()
     {
         Scene? scene = Scene.Current;
-        if (scene == null) return;
+        if (scene.IsNotValid()) return;
 
         // Anything that drifted out of its instance is settled first, so what follows records overrides
         // for objects that can still say which prefab object they are.
@@ -2085,7 +2085,7 @@ public static partial class PrefabUtility
         if (!instanceGO.IsPrefabInstance) return;
 
         GameObject? source = GetComparisonBaseline(instanceGO.PrefabAssetId);
-        if (source == null) return;
+        if (source.IsNotValid()) return;
 
         string pathPrefix = GetOverridePath(instanceGO, "");
         ParseOverridePath(source, pathPrefix, out object? sourceTarget, out _);
@@ -2258,7 +2258,7 @@ public static partial class PrefabUtility
         // would produce and, importantly, so its objects carry the same source identifiers that
         // override paths are written in terms of.
         var source = GameObject.InstantiateDetached(prefab);
-        if (source != null)
+        if (source.IsValid())
             s_sourceCache[prefabGuid] = source;
 
         return source;
@@ -2288,7 +2288,7 @@ public static partial class PrefabUtility
     private static GameObject? GetComparisonBaseline(Guid prefabGuid)
     {
         GameObject? source = GetCachedPrefabSource(prefabGuid);
-        if (source != null) return source;
+        if (source.IsValid()) return source;
 
         // Reached once per drawn component per frame, so this must not log per occurrence.
         string name = EditorAssetBackend.Instance?.GetEntry(prefabGuid)?.Path ?? prefabGuid.ToString();
@@ -2387,7 +2387,7 @@ public static partial class PrefabUtility
     private static void PreserveSourceIdentity(GameObject cleanCopy, Guid prefabGuid)
     {
         GameObject? source = GetCachedPrefabSource(prefabGuid);
-        if (source == null) return;
+        if (source.IsNotValid()) return;
 
         cleanCopy.Name = source.Name;
         cleanCopy.Transform.LocalPosition = source.Transform.LocalPosition;
@@ -2438,7 +2438,7 @@ public static partial class PrefabUtility
         // The prefab's own tree is the authority on what it provides. Asking the instance's objects
         // instead cannot tell content the prefab has always held from an instance of another prefab
         // dropped onto this one, since both carry a source identity.
-        if (source == null) return;
+        if (source.IsNotValid()) return;
 
         // By identifier rather than position, so a component that failed to load cannot shift the rest.
         var sourceComponents = source.GetComponents<Component>().ToList();
@@ -2464,7 +2464,7 @@ public static partial class PrefabUtility
                 ? null
                 : source.Children.FirstOrDefault(c => c.SourceIdentifier == sourceId);
 
-            if (sourceChild == null)
+            if (sourceChild.IsNotValid())
             {
                 copyChild.SetParent(null!);
                 copyChild.Dispose();
@@ -2485,7 +2485,7 @@ public static partial class PrefabUtility
         // Preserving identifiers, so StripInstanceAdditions can pair the copy with the live tree by
         // identifier rather than by position.
         var clone = GameObject.DeserializePreservingIdentifiers(echo, InstanceValueContext());
-        if (clone == null) return null;
+        if (clone.IsNotValid()) return null;
 
         // Strip prefab data from the clone
         StripInstanceDataForEditing(clone, source.PrefabAssetId);

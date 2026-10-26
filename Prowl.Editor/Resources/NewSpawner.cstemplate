@@ -30,7 +30,7 @@ public class {[className]} : Component
     public GameObject? Spawn()
     {
         var go = Prefab.Res?.Instantiate();
-        if (go == null) return null;
+        if (go.IsNotValid()) return null;
 
         go.Transform.Position = Transform.Position + Transform.Rotation * SpawnOffset;
         go.Transform.Rotation = Transform.Rotation;

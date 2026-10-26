@@ -103,7 +103,7 @@ public class PreviewRenderer : IDisposable
     public void SetupForMesh(Mesh mesh, Material? material = null)
     {
         ClearSubject();
-        if (mesh == null) return;
+        if (mesh.IsNotValid()) return;
 
         _subjectGo = new GameObject("PreviewSubject");
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
@@ -176,10 +176,10 @@ public class PreviewRenderer : IDisposable
     public void SetupForPrefab(PrefabAsset prefab)
     {
         ClearSubject();
-        if (prefab == null) return;
+        if (prefab.IsNotValid()) return;
 
         _subjectGo = GameObject.InstantiateDetached(prefab);
-        if (_subjectGo == null) { _subjectGo = new GameObject("PreviewSubject"); return; }
+        if (_subjectGo.IsNotValid()) { _subjectGo = new GameObject("PreviewSubject"); return; }
         _subjectGo.Name = "PreviewSubject";
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
 
@@ -225,14 +225,14 @@ public class PreviewRenderer : IDisposable
     public void SetupForMaterial(Material material)
     {
         ClearSubject();
-        if (material == null) return;
+        if (material.IsNotValid()) return;
 
         _subjectGo = new GameObject("PreviewSubject");
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
         MeshRenderer renderer = _subjectGo.AddComponent<MeshRenderer>();
         renderer.Mesh = Mesh.CreateSphere(0.5f, 32, 32);
 
-        if (material.Shader == null || !material.Shader.IsValid())
+        if (material.Shader.IsNotValid())
             material.Shader = Shader.LoadDefault(DefaultShader.Lit);
         renderer.Material = material;
 
@@ -246,7 +246,7 @@ public class PreviewRenderer : IDisposable
     /// <summary>Render the preview to the RenderTexture.</summary>
     public void Render()
     {
-        if (_rt == null) return;
+        if (_rt.IsNotValid()) return;
 
         _camera.UpdateRenderData(_rt);
 
@@ -287,7 +287,7 @@ public class PreviewRenderer : IDisposable
         Resize((int)width, (int)height);
         Render();
 
-        if (_rt == null || _rt.MainTexture == null) return;
+        if (_rt.IsNotValid() || _rt.MainTexture.IsNotValid()) return;
         float round = Prowl.OrigamiUI.Origami.Current.Metrics.ContainerRounding;
 
         ElementBuilder box = paper.Box(id)
@@ -355,9 +355,9 @@ public class PreviewRenderer : IDisposable
         // Fast path for single-MeshRenderer subjects (SetupForMesh case): use the mesh's own
         // bounds directly, since there is no child hierarchy to walk and world == local at this
         // point thanks to the identity reset above.
-        if (meshRenderer != null && meshRenderer.Mesh != null && subject.Children.Count == 0)
+        if (meshRenderer.IsValid() && meshRenderer.Mesh.IsValid() && subject.Children.Count == 0)
             bounds = meshRenderer.Mesh.bounds;
-        else if (skinnedRenderer != null && skinnedRenderer.SharedMesh != null && subject.Children.Count == 0)
+        else if (skinnedRenderer.IsValid() && skinnedRenderer.SharedMesh.IsValid() && subject.Children.Count == 0)
             bounds = skinnedRenderer.SharedMesh.bounds;
         else
             bounds = ComputeHierarchyBounds(subject);
@@ -377,7 +377,7 @@ public class PreviewRenderer : IDisposable
         _avatar = null;
         _clips.Clear();
 
-        if (_subjectGo != null)
+        if (!ReferenceEquals(_subjectGo, null))
         {
             _scene.Remove(_subjectGo);
             _subjectGo.Dispose();
@@ -440,10 +440,10 @@ public class PreviewRenderer : IDisposable
     {
         // Check MeshRenderer
         MeshRenderer? mr = go.GetComponent<MeshRenderer>();
-        if (mr != null)
+        if (mr.IsValid())
         {
             Mesh? mesh = mr.Mesh;
-            if (mesh != null)
+            if (mesh.IsValid())
             {
                 AABB worldBounds = mesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
                 min = new Float3(MathF.Min(min.X, worldBounds.Min.X), MathF.Min(min.Y, worldBounds.Min.Y), MathF.Min(min.Z, worldBounds.Min.Z));
@@ -454,10 +454,10 @@ public class PreviewRenderer : IDisposable
 
         // Check SkinnedMeshRenderer
         SkinnedMeshRenderer? smr = go.GetComponent<SkinnedMeshRenderer>();
-        if (smr != null)
+        if (smr.IsValid())
         {
             Mesh? mesh = smr.SharedMesh;
-            if (mesh != null)
+            if (mesh.IsValid())
             {
                 AABB worldBounds = mesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
                 min = new Float3(MathF.Min(min.X, worldBounds.Min.X), MathF.Min(min.Y, worldBounds.Min.Y), MathF.Min(min.Z, worldBounds.Min.Z));

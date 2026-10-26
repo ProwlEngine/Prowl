@@ -156,7 +156,7 @@ internal static class ClayBackedImporter
             for (int i = 0; i < clayModel.Materials.Count; i++)
             {
                 PMaterial? extracted = settings.MaterialResolver is { } materialResolver ? materialResolver.Resolve(MaterialName(clayModel, i)) : null;
-                if (extracted is not null) { materialRefs.Add(extracted); continue; }
+                if (extracted.IsValid()) { materialRefs.Add(extracted); continue; }
 
                 PMaterial built = BuildMaterial(clayModel.Materials[i], textureCache);
                 built.Name = MaterialName(clayModel, i);

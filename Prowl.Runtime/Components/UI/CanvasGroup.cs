@@ -32,7 +32,7 @@ public class CanvasGroup : UIBehaviour
             if (!isRoot)
             {
                 // Don't descend into a nested canvas - it owns its own dirty state.
-                if (go.GetComponent<GameCanvas>() != null) return;
+                if (go.GetComponent<GameCanvas>().IsValid()) return;
 
                 // A nested CanvasGroup that ignores parents starts a fresh context.
                 CanvasGroup? nested = go.GetComponent<CanvasGroup>();
@@ -70,7 +70,7 @@ public class CanvasGroup : UIBehaviour
         {
             if (!isRoot)
             {
-                if (go.GetComponent<GameCanvas>() != null) return;
+                if (go.GetComponent<GameCanvas>().IsValid()) return;
                 CanvasGroup? nested = go.GetComponent<CanvasGroup>();
                 if (nested is { IgnoreParentGroups: true }) return;
             }

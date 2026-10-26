@@ -73,7 +73,7 @@ public sealed class NavMeshBakeService
             Runtime.Debug.LogWarning("[Navigation] The surface was destroyed while its navmesh baked; the result was discarded.");
             return;
         }
-        if (task.Result == null)
+        if (task.Result.IsNotValid())
         {
             Status = "Nothing to bake";
             Runtime.Debug.LogWarning($"[Navigation] Bake of '{surface.GameObject.Name}' produced no walkable geometry.");

@@ -58,7 +58,7 @@ public sealed class MeshSDF : Asset, IMeshFeature
         compoundTag.Add("Res.Z", new(Resolution.Z));
         compoundTag.Add("VoxelSize", new(VoxelSize));
         compoundTag.Add("MaxDistance", new(MaxDistance));
-        if (Volume != null)
+        if (!ReferenceEquals(Volume, null))
             compoundTag.Add("Volume", Serializer.Serialize(typeof(Texture3D), Volume, ctx));
     }
 

@@ -96,7 +96,7 @@ public static partial class PrefabUtility
         if (!Guid.TryParse(parts[0], out Guid goSourceId)) return;
 
         GameObject? go = FindBySourceIdentifier(root, goSourceId, root.PrefabAssetId);
-        if (go == null) return;
+        if (go.IsNotValid()) return;
 
         memberPath = parts[2];
 
@@ -130,7 +130,7 @@ public static partial class PrefabUtility
             if (IsSeparateInstance(child, boundaryPrefabId)) continue;
 
             GameObject? found = FindBySourceIdentifier(child, sourceId, boundaryPrefabId);
-            if (found != null) return found;
+            if (found.IsValid()) return found;
         }
 
         return null;

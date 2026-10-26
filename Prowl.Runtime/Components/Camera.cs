@@ -146,7 +146,7 @@ public class Camera : Component
         get
         {
             Scene scene = Scene.Current;
-            if (s_mainFrame != Time.FrameCount || s_mainScene != scene || (s_main != null && s_main.IsNotValid()))
+            if (s_mainFrame != Time.FrameCount || s_mainScene != scene || (!ReferenceEquals(s_main, null) && s_main.IsNotValid()))
             {
                 s_main = scene.FindMainCamera();
                 s_mainScene = scene;
@@ -279,7 +279,7 @@ public class Camera : Component
         if (GameObject.HideFlags.HasFlag(HideFlags.NoGizmos)) return;
 
         Texture2D icon = Texture2D.LoadDefault(DefaultTexture.IconCamera);
-        if (icon != null) Debug.DrawIcon(icon, Transform.Position, 0.5f, Color.White);
+        if (icon.IsValid()) Debug.DrawIcon(icon, Transform.Position, 0.5f, Color.White);
 
         // The aspect of the camera's last render, 16:9 before it has rendered.
         float aspect = _aspect > 0 ? _aspect : 16f / 9f;

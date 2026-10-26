@@ -32,7 +32,7 @@ public class MeshImporter : AssetImporter
             SerializationContext serCtx = ImportHelper.CreateTrackingContext(out HashSet<Guid>? dependencies);
 
             Mesh? mesh = Serializer.Deserialize<Mesh>(echo, serCtx);
-            if (mesh == null)
+            if (mesh.IsNotValid())
             {
                 Debug.LogError($"Failed to deserialize mesh: {ctx.AbsolutePath}");
                 return false;

@@ -249,7 +249,7 @@ public class UIInputField : Selectable,
     private int IndexFromLocalX(float localX)
     {
         string d = DisplayText;
-        if (_textComponent is null || d.Length == 0 || localX <= 0f) return 0;
+        if (_textComponent.IsNotValid() || d.Length == 0 || localX <= 0f) return 0;
         return Math.Clamp(_textComponent.MeasureCaretIndexAt(d, localX), 0, d.Length);
     }
 
@@ -479,13 +479,13 @@ public class UIInputField : Selectable,
 
     private void UpdateDisplay()
     {
-        if (_textComponent != null) _textComponent.Text = DisplayText;
+        if (_textComponent.IsValid()) _textComponent.Text = DisplayText;
         UpdatePlaceholder();
     }
 
     private void UpdatePlaceholder()
     {
-        if (_placeholder is null) return;
+        if (_placeholder.IsNotValid()) return;
         bool show = _text.Length == 0;
         if (show == _placeholderShown) return;
         _placeholderShown = show;
@@ -500,7 +500,7 @@ public class UIInputField : Selectable,
 
     private void UpdateCaretVisual()
     {
-        if (_textComponent is null) return;
+        if (_textComponent.IsNotValid()) return;
 
         string d = DisplayText;
         float caretX = _textComponent.MeasureCaretOffset(d, _caretPos);
@@ -514,10 +514,10 @@ public class UIInputField : Selectable,
 
         ShiftText(-_scrollX);
 
-        if (_caret != null)
+        if (_caret.IsValid())
             _caret.AnchoredPosition = new Float2(caretX - _scrollX, _caret.AnchoredPosition.Y);
 
-        if (_selection != null && HasSelection)
+        if (_selection.IsValid() && HasSelection)
         {
             float aX = _textComponent.MeasureCaretOffset(d, SelMin);
             float bX = _textComponent.MeasureCaretOffset(d, SelMax);
@@ -529,7 +529,7 @@ public class UIInputField : Selectable,
     private void ShiftText(float x)
     {
         RectTransform? trt = _textComponent.IsValid() ? _textComponent.GameObject.RectTransform : null;
-        if (trt is null) return;
+        if (trt.IsNotValid()) return;
         if (trt.AnchoredPosition.X != x)
             trt.AnchoredPosition = new Float2(x, trt.AnchoredPosition.Y);
     }
@@ -537,9 +537,9 @@ public class UIInputField : Selectable,
     private void ApplyCaretColors(bool focused)
     {
         UIImage? ci = CaretImage;
-        if (ci != null) ci.Color = (focused && _blinkOn) ? _caretColor : s_transparent;
+        if (ci.IsValid()) ci.Color = (focused && _blinkOn) ? _caretColor : s_transparent;
 
         UIImage? si = SelectionImage;
-        if (si != null) si.Color = (focused && HasSelection) ? _selectionColor : s_transparent;
+        if (si.IsValid()) si.Color = (focused && HasSelection) ? _selectionColor : s_transparent;
     }
 }

@@ -26,7 +26,7 @@ public static class LightmapUVGenerator
     /// on failure (degenerate geometry, etc.) it logs a warning and leaves the mesh unchanged.</summary>
     public static void Generate(Mesh mesh)
     {
-        if (mesh == null || mesh.MeshTopology != Topology.Triangles) return;
+        if (mesh.IsNotValid() || mesh.MeshTopology != Topology.Triangles) return;
 
         Float3[] verts = mesh.Vertices;
         uint[] indices = mesh.Indices;

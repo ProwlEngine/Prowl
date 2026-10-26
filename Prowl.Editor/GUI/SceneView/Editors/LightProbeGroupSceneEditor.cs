@@ -58,7 +58,7 @@ public class LightProbeGroupSceneEditor : SceneTool
     /// <summary> Processes scene input each frame: keyboard shortcuts (Delete, Ctrl+D, Ctrl+A), the position-handle drag for the current selection, and per-probe click selection with Shift-add and Ctrl-toggle modifiers. </summary>
     public override void OnSceneInput(SceneToolContext toolCtx)
     {
-        if (_group == null) return;
+        if (_group.IsNotValid()) return;
         HandleContext ctx = toolCtx.Handles;
         _cam = ctx.Camera;
 
@@ -127,7 +127,7 @@ public class LightProbeGroupSceneEditor : SceneTool
     /// <summary> Draws the tool strip with Add, Duplicate, Delete, Select All, Select None buttons and a selection-count label. </summary>
     public override void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id)
     {
-        if (_group == null) return;
+        if (_group.IsNotValid()) return;
         Scribe.FontFile font = Theming.EditorTheme.DefaultFont!;
 
         EditorGUI.ToolStripButton(paper, $"{id}_add", EditorIcons.Plus_I, "Add Probe", false, AddProbe);
@@ -147,9 +147,9 @@ public class LightProbeGroupSceneEditor : SceneTool
 
     private void AddProbe()
     {
-        if (_group == null) return;
+        if (_group.IsNotValid()) return;
         Undo.Snapshot(_group);
-        Float3 world = _cam != null
+        Float3 world = _cam.IsValid()
             ? _cam.GameObject.Transform.Position + _cam.GameObject.Transform.Forward * 5f
             : _group.Transform.Position;
         _group.ProbePositions.Add(_group.Transform.InverseTransformPoint(world));
@@ -160,7 +160,7 @@ public class LightProbeGroupSceneEditor : SceneTool
 
     private void DeleteSelected()
     {
-        if (_group == null || _selection.Count == 0) return;
+        if (_group.IsNotValid() || _selection.Count == 0) return;
         Undo.Snapshot(_group);
         _selection.Sort();
         for (int k = _selection.Count - 1; k >= 0; k--)
@@ -175,7 +175,7 @@ public class LightProbeGroupSceneEditor : SceneTool
 
     private void DuplicateSelected()
     {
-        if (_group == null || _selection.Count == 0) return;
+        if (_group.IsNotValid() || _selection.Count == 0) return;
         Undo.Snapshot(_group);
         var dup = new List<int>();
         var src = new List<int>(_selection);
@@ -192,7 +192,7 @@ public class LightProbeGroupSceneEditor : SceneTool
 
     private void SelectAll()
     {
-        if (_group == null) return;
+        if (_group.IsNotValid()) return;
         _selection.Clear();
         for (int i = 0; i < _group.ProbePositions.Count; i++) _selection.Add(i);
     }
@@ -220,7 +220,7 @@ public class LightProbeGroupSceneEditor : SceneTool
 
     private void DrawProbes()
     {
-        if (_group == null) return;
+        if (_group.IsNotValid()) return;
         Float4x4 l2w = _group.Transform.LocalToWorldMatrix;
         var selColor = new Color(0.3f, 0.6f, 1f, 1f);
         foreach (int i in _selection)

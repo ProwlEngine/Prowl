@@ -220,7 +220,7 @@ public class EditorCamera
     {
         if (width == 0 || height == 0) return;
 
-        if (_renderTarget == null || _renderTarget.Width != width || _renderTarget.Height != height)
+        if (_renderTarget.IsNotValid() || _renderTarget.Width != width || _renderTarget.Height != height)
         {
             if (_renderTarget.IsValid()) _renderTarget.Dispose();
             _renderTarget = new RenderTexture(
@@ -240,7 +240,7 @@ public class EditorCamera
     /// </summary>
     public void Render(Scene scene, bool drawUI = true)
     {
-        if (_renderTarget == null) return;
+        if (_renderTarget.IsNotValid()) return;
 
         MirrorSceneCamera(scene);
         if (DebugView != DebugViewMode.Lit) _camera.PostProcessing = false;
@@ -249,7 +249,7 @@ public class EditorCamera
         _camera.UpdateRenderData(_renderTarget);
 
         // Add camera object to scene temporarily if needed
-        bool wasInScene = _cameraObject.Scene != null;
+        bool wasInScene = _cameraObject.Scene.IsValid();
         if (!wasInScene)
             scene.Add(_cameraObject);
 
@@ -309,7 +309,7 @@ public class EditorCamera
             if (!go.CompareTag("Main Camera")) continue;
 
             Camera? cam = go.GetComponent<Camera>();
-            if (cam != null) return cam;
+            if (cam.IsValid()) return cam;
         }
 
         // Fallback: first visible Camera in the scene
@@ -318,7 +318,7 @@ public class EditorCamera
             if (go.HideFlags.HasFlag(HideFlags.HideAndDontSave)) continue;
 
             Camera? cam = go.GetComponent<Camera>();
-            if (cam != null) return cam;
+            if (cam.IsValid()) return cam;
         }
 
         return null;
@@ -572,7 +572,7 @@ public class EditorCamera
     private static void AccumulateRendererBounds(GameObject go, ref Float3 min, ref Float3 max, ref bool any)
     {
         MeshRenderer? mr = go.GetComponent<MeshRenderer>();
-        if (mr != null && mr.Mesh != null)
+        if (mr.IsValid() && mr.Mesh.IsValid())
         {
             AABB wb = mr.Mesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
             min = new Float3(MathF.Min(min.X, wb.Min.X), MathF.Min(min.Y, wb.Min.Y), MathF.Min(min.Z, wb.Min.Z));
@@ -580,7 +580,7 @@ public class EditorCamera
             any = true;
         }
         SkinnedMeshRenderer? smr = go.GetComponent<SkinnedMeshRenderer>();
-        if (smr != null && smr.SharedMesh != null)
+        if (smr.IsValid() && smr.SharedMesh.IsValid())
         {
             AABB wb = smr.SharedMesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
             min = new Float3(MathF.Min(min.X, wb.Min.X), MathF.Min(min.Y, wb.Min.Y), MathF.Min(min.Z, wb.Min.Z));

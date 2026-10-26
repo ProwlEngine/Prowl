@@ -257,7 +257,7 @@ public class GameViewPanel : DockPanel
         using (paper.Box("gv_game").Clip().Enter())
         {
             Scene scene = Scene.Current;
-            if (scene == null)
+            if (scene.IsNotValid())
             {
                 paper.Box("gv_no_scene")
                     .Size(width, height)
@@ -370,7 +370,7 @@ public class GameViewPanel : DockPanel
             }
 
             // Render game UI into the RT
-            if (Application.IsPlaying && _rt != null)
+            if (Application.IsPlaying && _rt.IsValid())
             {
                 EnsureGamePaper(rtW, rtH);
                 _gamePaperRenderer!.UpdateProjection(rtW, rtH);
@@ -398,7 +398,7 @@ public class GameViewPanel : DockPanel
             }
 
             // Display with letterboxing
-            if (_rt != null && _rt.MainTexture != null)
+            if (_rt.IsValid() && _rt.MainTexture.IsValid())
             {
                 float aspect = rtW / (float)rtH;
                 float panelAspect = width / height;
@@ -464,7 +464,7 @@ public class GameViewPanel : DockPanel
                         _displayAbsRect = rect;
                         paper.Draw(ref handle, (canvas, r) =>
                     {
-                        if (capturedRT.IsNotValid() || capturedRT.MainTexture == null) return;
+                        if (capturedRT.IsNotValid() || capturedRT.MainTexture.IsNotValid()) return;
                         float rx = (float)r.Min.X;
                         float ry = (float)r.Min.Y;
                         float rw = (float)r.Size.X;
@@ -545,7 +545,7 @@ public class GameViewPanel : DockPanel
                     DrawFrameTimeGraph(canvas, r, font)));
 
             // General info
-            if (_rt != null)
+            if (_rt.IsValid())
                 Row(paper, font, "gv_r", $"{_rt.Width}x{_rt.Height}", $"{s.Views} views", fs, rowH);
 
             Section(paper, font, "gv_ht", Loc.Get("gameview.sec_target"), "", fs);
@@ -677,7 +677,7 @@ public class GameViewPanel : DockPanel
 
     private void EnsureRT(int w, int h)
     {
-        if (_rt != null && _rt.Width == w && _rt.Height == h) return;
+        if (_rt.IsValid() && _rt.Width == w && _rt.Height == h) return;
         if (_rt.IsValid()) _rt.Dispose();
         _rt = new RenderTexture(w, h, true, [TextureFormat.RGBA8]);
     }

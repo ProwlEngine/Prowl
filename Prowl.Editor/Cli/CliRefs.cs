@@ -119,7 +119,7 @@ public static class CliRefs
             var matches = level.Where(g => g.Name == name).ToList();
             if (matches.Count == 0)
             {
-                string where = current == null ? "the scene root" : PathOf(current);
+                string where = current.IsNotValid() ? "the scene root" : PathOf(current);
                 var names = level.Select(g => g.Name).Distinct().Take(20).ToList();
                 throw new CliException($"No '{name}' under {where}. There is: {(names.Count == 0 ? "nothing" : string.Join(", ", names))}.");
             }
@@ -235,7 +235,7 @@ public static class CliRefs
     public static string PathOf(GameObject go)
     {
         var names = new List<string>();
-        for (GameObject? current = go; current != null; current = current.Parent)
+        for (GameObject? current = go; current.IsValid(); current = current.Parent)
         {
             IEnumerable<GameObject> siblings = current.Parent.IsValid() ? current.Parent.Children
                 : current.Scene.IsValid() ? current.Scene.RootObjects : [current];

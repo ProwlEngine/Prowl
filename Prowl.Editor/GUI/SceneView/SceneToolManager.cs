@@ -149,7 +149,7 @@ public static class SceneToolManager
     private static bool SelectionHasComponent(Type componentType)
     {
         GameObject? go = Selection.GetSelected<GameObject>().FirstOrDefault();
-        return go.IsValid() && go.GetComponent(componentType) != null;
+        return go.IsValid() && go.GetComponent(componentType).IsValid();
     }
 
     // ================================================================

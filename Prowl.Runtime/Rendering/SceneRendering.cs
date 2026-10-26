@@ -314,7 +314,7 @@ public sealed class SceneRendering : IDisposable
 
         Light? sun = null;
         foreach (Light light in _directionals)
-            if (light.Handle.IsValid && (sun == null || light.Intensity > sun.Intensity)) sun = light;
+            if (light.Handle.IsValid && (sun.IsNotValid() || light.Intensity > sun.Intensity)) sun = light;
         env.Sun = sun.IsValid() ? sun.Handle : default;
     }
 

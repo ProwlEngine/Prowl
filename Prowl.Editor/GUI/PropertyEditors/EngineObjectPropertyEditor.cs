@@ -28,19 +28,19 @@ public class EngineObjectPropertyEditor : PropertyEditor
         bool missing = asset is { IsMissing: true };
 
         PropertyGridUtils.ObjectField(paper, id, label,
-            eo != null ? EditorIcons.Cube : EditorIcons.Circle,
-            missing ? EditorTheme.Red400 : eo != null ? EditorTheme.Purple400 : EditorTheme.Ink300,
+            eo.IsValid() ? EditorIcons.Cube : EditorIcons.Circle,
+            missing ? EditorTheme.Red400 : eo.IsValid() ? EditorTheme.Purple400 : EditorTheme.Ink300,
             PropertyGridUtils.DescribeObjectRef(eo, fieldType),
-            eo != null,
+            eo.IsValid(),
             EditorGUI.IsCompatibleDragTarget(fieldType),
             // Click pings what is assigned or opens the selector when empty, double click selects what is assigned.
             onClick: () =>
             {
-                if (eo == null) OpenAssetSelector(fieldType, onChange);
+                if (eo.IsNotValid()) OpenAssetSelector(fieldType, onChange);
                 else if (isAsset) Selection.Ping(asset!.AssetID);
                 else if (PingTarget(eo) is { } go) Selection.Ping(go.Identifier);
             },
-            onDoubleClick: () => { if (eo != null) Selection.Select(eo); },
+            onDoubleClick: () => { if (eo.IsValid()) Selection.Select(eo); },
             onPick: () => OpenAssetSelector(fieldType, onChange),
             acceptDrops: () => HandleDrops(paper, fieldType, onChange));
     }
@@ -63,7 +63,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
         if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is GameObjectDragPayload goDrop)
         {
             GameObject? go = goDrop.GameObjects.Length > 0 ? goDrop.GameObjects[0] : null;
-            if (go != null)
+            if (go.IsValid())
             {
                 if (typeof(GameObject).IsAssignableFrom(fieldType))
                     onChange(go);
