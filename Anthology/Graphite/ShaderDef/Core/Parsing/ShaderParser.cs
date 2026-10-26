@@ -67,8 +67,16 @@ public static class ShaderParser
             string model = ParserUtility.QuotedString(ref t);
             ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
             string code = t.Peek().Kind == ShaderToken.GlslProgram ? ParserUtility.Program(ref t) : "";
+            string lighting = "";
+            if (ParserUtility.PeekKeyword(ref t, "Lighting"))
+            {
+                t.Next();
+                ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
+                lighting = ParserUtility.Program(ref t);
+                ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+            }
             ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
-            surface = new ShaderSurface(model, code, surfaceToken.Line);
+            surface = new ShaderSurface(model, code, surfaceToken.Line, lighting);
         }
 
         while (ParserUtility.PeekKeyword(ref t, "Pass"))

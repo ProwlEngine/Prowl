@@ -1,5 +1,6 @@
 // Graphite's standard physically based surface: metallic and roughness, normal, occlusion, emission, parallax, translucency and anisotropy, each input compiled in only while used.
 // Also the "Lit" surface model: a shader with Surface "Lit" takes these passes and properties, its code in place of each "#pragma surface".
+// A Surface block's Lighting code supplies Graphite_BRDF to the passes marked "#pragma surface_lighting".
 Shader "Graphite/Lit"
 {
     Properties
@@ -54,6 +55,7 @@ Shader "Graphite/Lit"
             #pragma variant _PARALLAXMAP
             #pragma variant _TRANSLUCENCY
             #pragma variant _ANISOTROPIC
+            #pragma surface_lighting
             #include "Graphite/Standard/Standard.glsl"
         }
         Vertex
@@ -132,6 +134,7 @@ Shader "Graphite/Lit"
             #pragma variant _TRANSLUCENCY
             #pragma variant _ANISOTROPIC
             #pragma variant global GRAPHITE_DEBUG UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY
+            #pragma surface_lighting
             #include "Graphite/Standard/Standard.glsl"
         }
         Vertex

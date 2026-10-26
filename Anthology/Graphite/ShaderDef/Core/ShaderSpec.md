@@ -160,6 +160,30 @@ Shader "MyGame/Rim"
 }
 ```
 
+An optional `Lighting` block after the code replaces the BRDF every light goes through, for toon ramps and other
+custom shading. It defines `vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c)` and may call
+`Graphite_DefaultBRDF(s, c)`. Only the lit passes take it, Forward and Debug for `Surface "Lit"`, so parallax, decals,
+translucency, anisotropy and every surface type keep working. `Surface "Unlit"` has no lights and refuses one.
+
+```
+Surface "Lit"
+{
+    Lighting
+    {
+        GLSLPROGRAM
+        vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c)
+        {
+            float ramp = step(0.5, dot(s.normal, c.diffuseL) * 0.5 + 0.5);
+            return s.albedo * ramp * c.diffuse * c.radiance;
+        }
+        ENDGLSL
+    }
+}
+```
+
+A surface model marks where this goes with a `#pragma surface_lighting` line in a pass's Shared section, before
+Graphite/Standard/Standard.glsl is included.
+
 Further `Pass` blocks may follow, such as a pass of a type a render feature draws.
 
 ---

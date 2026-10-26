@@ -458,13 +458,15 @@ public sealed class Shader
     }
 
     private static readonly System.Text.RegularExpressions.Regex s_surfaceMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
+    private static readonly System.Text.RegularExpressions.Regex s_lightingMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface_lighting[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
 
     /// <summary>
     /// Expands a Surface block into the passes of its model, the library shader Graphite/Standard/{Model}.shader: each
     /// "#pragma surface" line of the model's passes becomes the block's code, which defines
     /// void Surface(inout Graphite_SurfaceData s) over the standard surface before it is lit, with
-    /// GRAPHITE_SURFACE_FUNCTION defined. The model's properties come before the shader's own, which replace any of the
-    /// same name.
+    /// GRAPHITE_SURFACE_FUNCTION defined. A Lighting block's code defines Graphite_BRDF for the passes with a
+    /// "#pragma surface_lighting" line, which becomes the GRAPHITE_CUSTOM_BRDF define, the code following the block's at
+    /// their "#pragma surface". The model's properties come before the shader's own, which replace any of the same name.
     /// </summary>
     private static void ExpandSurface(ShaderDefinition definition)
     {
@@ -478,16 +480,28 @@ public sealed class Shader
         ShaderDefinition model = ShaderParser.Parse(source);
 
         string code = surface.Code.Length > 0 ? "#define GRAPHITE_SURFACE_FUNCTION\n" + surface.Code : "";
+        string lighting = surface.Lighting;
         ShaderPass[] standard = model.Passes ?? [];
         bool spliced = false;
+        bool lit = false;
         foreach (ShaderPass pass in standard)
         {
+            string passCode = code;
+            if (s_lightingMarker.IsMatch(pass.Source))
+            {
+                lit = true;
+                pass.Source = s_lightingMarker.Replace(pass.Source, _ => lighting.Length > 0 ? "#define GRAPHITE_CUSTOM_BRDF" : "");
+                if (lighting.Length > 0)
+                    passCode = code + "\n" + lighting;
+            }
             spliced |= s_surfaceMarker.IsMatch(pass.Source);
-            pass.Source = s_surfaceMarker.Replace(pass.Source, _ => code);
+            pass.Source = s_surfaceMarker.Replace(pass.Source, _ => passCode);
             pass.SourceName = name;
         }
         if (code.Length > 0 && !spliced)
             throw new ShaderLoadException($"{name}:{surface.Line}: the surface model {path} has no \"#pragma surface\" line for the Surface block's code.");
+        if (lighting.Length > 0 && !lit)
+            throw new ShaderLoadException($"{name}:{surface.Line}: the surface model {path} has no \"#pragma surface_lighting\" line for the Lighting block's code.");
 
         foreach (ShaderPass own in definition.Passes ?? [])
         {

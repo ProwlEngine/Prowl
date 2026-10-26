@@ -124,6 +124,76 @@ public sealed class StandardShaderTests : IDisposable
             _compiler.CompileProgram(pass, [new Keyword("_SURFACE", surface), new Keyword("_NORMALMAP", VariantSpace.ToggleValues[1])]);
     }
 
+    private const string ToonSource = """
+        Shader "Tests/Toon"
+        {
+            Surface "Lit"
+            {
+                GLSLPROGRAM
+                void Surface(inout Graphite_SurfaceData s) { s.Roughness = 0.5; }
+                ENDGLSL
+
+                Lighting
+                {
+                    GLSLPROGRAM
+                    vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c)
+                    {
+                        float ramp = step(0.5, dot(s.normal, c.diffuseL) * 0.5 + 0.5);
+                        return s.albedo * ramp * c.diffuse * c.radiance;
+                    }
+                    ENDGLSL
+                }
+            }
+        }
+        """;
+
+    [Theory]
+    [InlineData("OPAQUE")]
+    [InlineData("CUTOUT")]
+    [InlineData("TRANSPARENT")]
+    public void SurfaceLighting_ReplacesTheBRDF_AndEveryFeatureStillCompiles(string surface)
+    {
+        ShaderDefinition definition = new Shader(ShaderParser.Parse(ToonSource), _compiler).Definition;
+        Assert.Equal(["Forward", "Prepass", "ShadowCaster", "Debug"], definition.Passes!.Select(p => p.Name));
+
+        foreach (ShaderPass pass in definition.Passes!)
+        {
+            bool lit = pass.Name is "Forward" or "Debug";
+            Assert.Equal(lit, pass.Source.Contains("#define GRAPHITE_CUSTOM_BRDF"));
+            Assert.Equal(lit, pass.Source.Contains("float ramp"));
+
+            List<Keyword> combo = [new Keyword("_SURFACE", surface)];
+            if (pass.Name == "Debug")
+                combo.Add(new Keyword(Shader.DebugAxis, "LIGHTING"));
+            foreach (VariantSpace axis in _compiler.GetAxes(pass))
+            {
+                if (axis.IsToggle)
+                    combo.Add(new Keyword(axis.Name, VariantSpace.ToggleValues[1]));
+            }
+            _compiler.CompileProgram(pass, [.. combo]);
+        }
+    }
+
+    [Fact]
+    public void SurfaceLighting_OnAModelWithoutLights_FailsToLoad()
+    {
+        ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => new Shader(ShaderParser.Parse("""
+            Shader "Tests/UnlitToon"
+            {
+                Surface "Unlit"
+                {
+                    Lighting
+                    {
+                        GLSLPROGRAM
+                        vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c) { return vec3(0.0); }
+                        ENDGLSL
+                    }
+                }
+            }
+            """), _compiler));
+        Assert.Contains("surface_lighting", error.Message);
+    }
+
     [Fact]
     public void AnUnknownSurfaceModel_FailsToLoad()
     {
