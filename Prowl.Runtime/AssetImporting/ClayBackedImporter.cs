@@ -708,8 +708,11 @@ internal static class ClayBackedImporter
         int body = avatar.Runtime is { IsHuman: true } && avatar.Description is { } description
             ? description.GetSkeletonBoneIndex(Motion.HumanBodyBone.Hips)
             : ModelRigBuilder.AnimatedRootBone(source, rig.Skeleton);
+        int[]? feet = avatar.Runtime is { IsHuman: true } && avatar.Description is { } bodyMap
+            ? [bodyMap.GetSkeletonBoneIndex(Motion.HumanBodyBone.LeftFoot), bodyMap.GetSkeletonBoneIndex(Motion.HumanBodyBone.RightFoot)]
+            : null;
         var root = new ModelRigBuilder.RootExtraction(body,
-            overrides.RootTravel ?? true, overrides.RootTurn ?? true, overrides.RootHeight ?? false);
+            overrides.RootTravel ?? true, overrides.RootTurn ?? true, overrides.RootHeight ?? false, feet);
 
         Motion.CompressedAnimationClip sampled = ModelRigBuilder.BuildClip(
             source, clayModel, rig, settings.AnimationSampleRate, overrides.TrimStart, overrides.TrimEnd, root);

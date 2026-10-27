@@ -19,7 +19,7 @@ public class EditorModelImporter : AssetImporter
     // 8: normals now come from Clay, which splits vertices on hard edges.
     // 12: Clay negates X instead of Z, so models face +Z as authored, and cameras and lights sit on a child.
     // 13: only cameras and spot lights sit on a turned child, directional and point lights stay on the node.
-    private const int BaseVersion = 16;
+    private const int BaseVersion = 17;
     /// <summary> Combined version: the importer's own base version plus the aggregate version from MeshFeatureRegistry, so any change to mesh feature generation invalidates the cache. </summary>
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
