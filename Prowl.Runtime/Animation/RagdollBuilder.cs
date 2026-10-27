@@ -131,6 +131,8 @@ public static class RagdollBuilder
 
             Rigidbody3D body = go.AddComponent<Rigidbody3D>();
             body.Mass = settings.TotalMass * part.Mass / massTotal;
+            // Round limbs lying on the floor roll back and forth forever without a little damping, and never sleep
+            body.AngularDamping = 0.02f;
             bodies[part.Bone] = body;
 
             AddCollider(go, part, bone, bones, forward);

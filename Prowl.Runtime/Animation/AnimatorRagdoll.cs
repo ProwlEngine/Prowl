@@ -333,7 +333,7 @@ internal sealed class AnimatorRagdoll
         {
             ref Part part = ref _parts[i];
             if (!IsLive(part.Body)) continue;
-            part.Body.SetActive(true);
+            if (muscle > 0f || pin > 0f) part.Body.SetActive(true);
 
             if (part.Parent >= 0 && IsLive(_parts[part.Parent].Body)) Flex(world, ref part, ref _parts[part.Parent], muscle, hanging, dt, substep);
             bool pinned = part.Parent < 0 || pinning == RagdollPinning.All;
