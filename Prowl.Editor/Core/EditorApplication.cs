@@ -902,6 +902,14 @@ public class EditorApplication : Game
     /// <summary> Ends the editor GUI frame: draws the on-boarding guide overlay, renders Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips), plays the intro animation, and pops the Origami theme. </summary>
     public override void EndGui(Paper paper)
     {
+        // Play mode spotlight on the Game view (above panels, below popups/toasts).
+        if (Project.Current != null && !ProjectLauncher.IsOpen)
+        {
+            // The docked window's own rect, tab bar included, so the ring sits on the window's edge.
+            Vector.Rect? gameRect = _dockSpace.TryGetPanelRect(typeof(GameViewPanel), out Vector.Rect r) ? r : null;
+            GUI.PlayModeSpotlight.Draw(paper, (float)Time.UnscaledDeltaTime, gameRect, EditorTheme.MenuBarHeight + EditorTheme.DockPadding);
+        }
+
         GUI.Popups.RenameOverlay.EndFrame();
 
         // Render all Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips)
