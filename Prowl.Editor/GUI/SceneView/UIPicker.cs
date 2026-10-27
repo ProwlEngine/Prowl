@@ -34,7 +34,7 @@ internal static class UIPicker
     public static bool TryPick(Scene? scene, Ray ray, out Hit hit)
     {
         hit = default;
-        if (scene == null) return false;
+        if (scene.IsNotValid()) return false;
 
         GameObject? bestGO = null;
         GameCanvas? bestCanvas = null;
@@ -44,12 +44,12 @@ internal static class UIPicker
         foreach (GameObject go in scene.ActiveObjects)
         {
             GameCanvas? canvas = go.GetComponent<GameCanvas>();
-            if (canvas == null || !canvas.EnabledInHierarchy) continue;
+            if (canvas.IsNotValid() || !canvas.EnabledInHierarchy) continue;
 
             canvas.RebuildIfDirty();
 
             (GameObject? localHit, float tHit) = PickTopmost(canvas, canvas.GameObject, ray);
-            if (localHit == null) continue;
+            if (localHit.IsNotValid()) continue;
 
             // Prefer higher canvas sort order, then the nearer hit along the ray.
             bool wins =
@@ -65,7 +65,7 @@ internal static class UIPicker
             }
         }
 
-        if (bestGO == null || bestCanvas == null) return false;
+        if (bestGO.IsNotValid() || bestCanvas.IsNotValid()) return false;
         hit = new Hit(bestGO, bestCanvas, bestT);
         return true;
     }
@@ -84,13 +84,13 @@ internal static class UIPicker
         {
             GameObject child = children[i];
             if (!child.EnabledInHierarchy) continue;
-            if (child.GetComponent<GameCanvas>() != null) continue; // nested canvas owns its own tree
+            if (child.GetComponent<GameCanvas>().IsValid()) continue; // nested canvas owns its own tree
 
             (GameObject? go, float t) deeper = PickTopmost(canvas, child, ray);
-            if (deeper.go != null) return deeper;
+            if (deeper.go.IsValid()) return deeper;
 
             RectTransform? rt = child.RectTransform;
-            if (rt != null && IsPickable(child))
+            if (rt.IsValid() && IsPickable(child))
             {
                 Float4x4 model = canvas.CanvasToWorld * canvas.BuildRectModel(rt);
                 if (UIRaycaster.RayHitsRect(model, rt, ray.Origin, ray.Direction, out float t))

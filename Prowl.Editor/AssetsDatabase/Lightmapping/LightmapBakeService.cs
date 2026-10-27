@@ -131,7 +131,7 @@ public sealed class LightmapBakeService
         foreach (GameObject go in scene.AllObjects)
         {
             LightProbeGroup? grp = go.GetComponent<LightProbeGroup>();
-            if (grp != null && grp.EnabledInHierarchy) _probePositions.AddRange(grp.GetWorldPositions());
+            if (grp.IsValid() && grp.EnabledInHierarchy) _probePositions.AddRange(grp.GetWorldPositions());
         }
 
         bake.End();
@@ -353,7 +353,7 @@ public sealed class LightmapBakeService
     {
         result = null!;
         hasLightmapUV = false;
-        if (mesh == null || mesh.VertexCount == 0) return false;
+        if (mesh.IsNotValid() || mesh.VertexCount == 0) return false;
 
         // Lightmap UV: prefer the dedicated UV2 set (generated at import), fall back to the primary
         // UVs as a fallback. A mesh with no UVs at all still builds (as an occluder); zeros fill the
@@ -383,14 +383,14 @@ public sealed class LightmapBakeService
             string matName = $"m{matCounter++}";
             BakeMaterial bmat = bake.CreateMaterial(matName);
             Material? pm = s < materials.Count ? materials[s] : materials.Count > 0 ? materials[^1] : default;
-            if (pm != null)
+            if (pm.IsValid())
             {
                 Color c = pm._properties.GetColor("_MainColor");
                 bmat.DiffuseColor = new Float3((float)c.R, (float)c.G, (float)c.B);
 
                 // Feed the diffuse albedo texture so bounced light picks up its colour.
                 Texture2D? tex = pm._properties.GetTexture("_MainTex");
-                if (tex is not null) tex.Load();
+                if (tex.IsValid()) tex.Load();
                 if (tex is { IsLoaded: true })
                 {
                     BakeTexture? bt = GetOrCreateDiffuse(bake, tex);

@@ -107,8 +107,8 @@ public class UIImageEditor : CustomEditor
         Color color = img.Color;
 
         // Aspect of the drawn region: the sprite's rect when available, else the texture.
-        float srcW = sprite != null ? sprite.Rect.Width : tex.Width;
-        float srcH = sprite != null ? sprite.Rect.Height : tex.Height;
+        float srcW = sprite.IsValid() ? sprite.Rect.Width : tex.Width;
+        float srcH = sprite.IsValid() ? sprite.Rect.Height : tex.Height;
 
         paper.Box(id)
             .Size(size, size)
@@ -138,7 +138,7 @@ public class UIImageEditor : CustomEditor
                 // Draw only the sprite's sub-rect (flipped V, textures are Y-up); no sprite -> whole texture.
                 float texW = tex.Width, texH = tex.Height;
                 float u0 = 0f, v0 = 0f, du = 1f, dv = 1f;
-                if (sprite != null && texW > 0 && texH > 0)
+                if (sprite.IsValid() && texW > 0 && texH > 0)
                 {
                     u0 = sprite.Rect.X / texW; v0 = sprite.Rect.Y / texH;
                     du = sprite.Rect.Width / texW; dv = sprite.Rect.Height / texH;
@@ -231,7 +231,7 @@ public class UIImageEditor : CustomEditor
             {
                 GameObject go = img.GameObject;
                 RectTransform? rt = go.IsValid() ? go.RectTransform : null;
-                if (rt == null) return;
+                if (rt.IsNotValid()) return;
                 Undo.Snapshot(rt);
 
                 // A stretched anchor (edge/fullscreen) makes SizeDelta a padding offset, so setting a

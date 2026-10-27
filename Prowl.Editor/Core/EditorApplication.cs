@@ -1118,7 +1118,7 @@ public class EditorApplication : Game
             string? scenePath = EditorSceneManager.CurrentScenePath;
             string sceneName = !string.IsNullOrEmpty(scenePath)
                 ? System.IO.Path.GetFileNameWithoutExtension(scenePath)
-                : (Runtime.Resources.Scene.Current != null ? Loc.Get("editor.untitled_scene") : Loc.Get("hierarchy.no_scene_loaded"));
+                : (Runtime.Resources.Scene.Current.IsValid() ? Loc.Get("editor.untitled_scene") : Loc.Get("hierarchy.no_scene_loaded"));
             using (paper.Row("sb_scene").Width(UnitValue.Auto).Height(sh).Padding(pad, pad, 0, 0).Enter())
                 GlyphCell("sb_scene_cell", EditorIcons.Shapes, EditorTheme.Ink300, sceneName, EditorTheme.Ink400);
 
@@ -1912,7 +1912,7 @@ public class EditorApplication : Game
         }
 
         Scene scene = Runtime.Resources.Scene.Current;
-        if (scene == null) return;
+        if (scene.IsNotValid()) return;
 
         PlayModePreferences prefs = Preferences.Get<PlayModePreferences>();
         if (prefs.SaveSceneOnPlay && EditorSceneManager.IsDirty && EditorSceneManager.CurrentScenePath != null)
@@ -1942,7 +1942,7 @@ public class EditorApplication : Game
         // the frame, so a failure here leaves the editor scene loaded and the editor usable.
         SerializationContext playCtx = Importers.ImportHelper.CreateTrackingContext(out _);
         Scene? playScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, playCtx);
-        if (playScene == null)
+        if (playScene.IsNotValid())
         {
             Runtime.Debug.LogError("Failed to deserialize play scene.");
             return;
@@ -2020,7 +2020,7 @@ public class EditorApplication : Game
 
             SerializationContext ctx = Importers.ImportHelper.CreateTrackingContext(out _);
             Scene? restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, ctx);
-            if (restoredScene != null)
+            if (restoredScene.IsValid())
             {
                 // Ends the play session at the swap, once the play scene's teardown has run, so nothing still
                 // awaiting can resume against the edit scene.

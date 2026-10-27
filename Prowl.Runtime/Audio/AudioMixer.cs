@@ -168,7 +168,7 @@ public sealed class AudioMixerGroup : Asset
             // Soloing one bus changes what every other bus does, so the whole mixer is re-applied.
             AudioMixer? owner = _owningMixer;
 
-            if (owner is not null) owner.ApplyVolumes();
+            if (owner.IsValid()) owner.ApplyVolumes();
             else ApplyVolume();
         }
     }
@@ -180,7 +180,7 @@ public sealed class AudioMixerGroup : Asset
         {
             AudioMixer? owner = _owningMixer;
 
-            if (owner is null || !owner.AnySolo) return false;
+            if (owner.IsNotValid() || !owner.AnySolo) return false;
 
             foreach (AudioMixerGroup soloed in owner.Groups)
             {
@@ -535,7 +535,7 @@ public sealed class AudioMixerGroup : Asset
     {
         AudioMixer? owner = _owningMixer;
 
-        if (owner is null || !owner.IsLoaded)
+        if (ReferenceEquals(owner, null) || !owner.IsLoaded)
             return;
 
         foreach (AudioMixerGroup group in owner.Groups)
@@ -678,7 +678,7 @@ public sealed class AudioMixer : Asset, ISerializationCallbackReceiver
     {
         EnsureBound();
 
-        int parentIndex = parent != null ? _groups.IndexOf(parent) : (_groups.Count > 0 ? 0 : -1);
+        int parentIndex = parent.IsValid() ? _groups.IndexOf(parent) : (_groups.Count > 0 ? 0 : -1);
 
         var group = new AudioMixerGroup { GroupName = groupName, Name = groupName };
         group.ParentIndex = parentIndex;
@@ -932,7 +932,7 @@ public sealed class AudioMixer : Asset, ISerializationCallbackReceiver
         EnsureBound();
 
         // Groups read from a cache are other assets, loaded later on the main thread. Only groups written inline can be checked here.
-        if (_groups.TrueForAll(g => g is null || !g.IsFromDatabase))
+        if (_groups.TrueForAll(g => ReferenceEquals(g, null) || !g.IsFromDatabase))
             ValidateHierarchy();
     }
 

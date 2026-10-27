@@ -67,15 +67,15 @@ Shader "Default/Terrain"
             #include "Prowl/TerrainHeight.glsl"
 
             out vec2 vTerrainUV;
-            out vec3 vWorldPos;
+            out vec3 vRelativePos;
             out vec3 vNormal;
 
             void main()
             {
                 vec3 local = terrainVertex(vTerrainUV);
-                vWorldPos = Graphite_ObjectToWorld(local);
+                vRelativePos = Graphite_ObjectToRelative(local);
                 vNormal = Graphite_ObjectToWorldNormal(terrainNormal(vTerrainUV));
-                gl_Position = Graphite_RelativeToClip(vWorldPos);
+                gl_Position = Graphite_RelativeToClip(vRelativePos);
             }
         }
         Fragment
@@ -92,7 +92,7 @@ Shader "Default/Terrain"
             layout(location = 0) out vec4 fragColor;
 
             in vec2 vTerrainUV;
-            in vec3 vWorldPos;
+            in vec3 vRelativePos;
             in vec3 vNormal;
 
             // Each splatmap holds four layer weights as RGBA
@@ -219,19 +219,19 @@ Shader "Default/Terrain"
                 }
 
                 float ao = 1.0;
-                Graphite_ApplyDecals(vWorldPos, N, baseColor, worldNormal, roughness, metallic, ao);
+                Graphite_ApplyDecals(vRelativePos, N, baseColor, worldNormal, roughness, metallic, ao);
                 Graphite_DebugInputs(baseColor, metallic);
 
-                vec3 viewDir = GetWorldViewDir(vWorldPos);
-                vec3 lighting = CalculateForwardLighting(vWorldPos, worldNormal, N, viewDir, baseColor, metallic, roughness, ao);
+                vec3 viewDir = Graphite_ViewDir(vRelativePos);
+                vec3 lighting = CalculateForwardLighting(vRelativePos, worldNormal, N, viewDir, baseColor, metallic, roughness, ao);
 
                 vec3 ambientLight = Graphite_IndirectDiffuse(worldNormal, vec2(0.0)) * ao;
                 vec3 ambientDiffuse = ambientLight * baseColor * (1.0 - metallic);
                 vec3 F0 = mix(vec3(0.04), baseColor, metallic);
-                vec3 ambientSpecular = Graphite_IndirectSpecular(vWorldPos, worldNormal, viewDir, F0, roughness, ao, ambientLight);
+                vec3 ambientSpecular = Graphite_IndirectSpecular(vRelativePos, worldNormal, viewDir, F0, roughness, ao, ambientLight);
 
-                vec3 color = ApplyFog(ambientDiffuse + ambientSpecular + lighting, vWorldPos);
-                fragColor = vec4(Graphite_DebugView(color, baseColor, worldNormal, roughness, metallic, ao, vec3(0.0), vWorldPos, vec2(0.0)), 1.0);
+                vec3 color = ApplyFog(ambientDiffuse + ambientSpecular + lighting, vRelativePos);
+                fragColor = vec4(Graphite_DebugView(color, baseColor, worldNormal, roughness, metallic, ao, vec3(0.0), vRelativePos, vec2(0.0)), 1.0);
                 Graphite_WriteGBuffer(worldNormal, roughness, metallic);
             }
         }

@@ -336,6 +336,10 @@ public class ScriptEditorWindow : DockPanel
         public bool IsShader;
         public bool Asking;
         public bool Gone;
+        /// <summary>A library file such as Graphite/Core.glsl, or a source file outside the project's Assets.</summary>
+        public bool ReadOnly;
+        /// <summary>A library file, named by its include name rather than a path on disk.</summary>
+        public bool IsLibrary => !System.IO.Path.IsPathRooted(Path);
         public string Name => System.IO.Path.GetFileName(Path);
     }
 
@@ -387,10 +391,13 @@ public class ScriptEditorWindow : DockPanel
         return true;
     }
 
-    /// <summary>Opens a script as a tab of the script window, or switches to its tab, optionally at a 1 based line and column.</summary>
+    /// <summary>
+    /// Opens a script as a tab of the script window, or switches to its tab, optionally at a 1 based line and column.
+    /// A shader library name such as Graphite/Core.glsl, or a file outside the project's Assets, opens read only.
+    /// </summary>
     public static void OpenFor(string path, int line = 0, int column = 1)
     {
-        path = Path.GetFullPath(path);
+        if (Path.IsPathRooted(path)) path = Path.GetFullPath(path);
         var window = s_window;
         bool created = window == null;
         window ??= new ScriptEditorWindow();
@@ -478,31 +485,58 @@ public class ScriptEditorWindow : DockPanel
         foreach (var tab in s_window._tabs)
         {
             float oldSize = tab.Editor.Options.FontSize;
-            prefs.ApplyTo(tab.Editor);
+            ApplyOptions(tab.Editor, tab.ReadOnly);
             // A new font size replaces any Ctrl+wheel zoom.
             if (oldSize != prefs.FontSize) tab.Editor.ResetZoom();
         }
     }
+
+    // Code shown outside the project it builds in would light up with errors that are not real, so it gets no diagnostics or reference counts.
+    private static void ApplyOptions(OrigamiUI.CodeEditor editor, bool readOnly)
+    {
+        Preferences.Get<ScriptEditorPreferences>().ApplyTo(editor);
+        if (!readOnly) return;
+        editor.Options.ReadOnly = true;
+        editor.Options.ShowDiagnostics = false;
+        editor.Options.ShowCodeLens = false;
+    }
+
+    private static bool InAssets(string path)
+        => Project.Current is { } project && Path.GetFullPath(path).StartsWith(Path.GetFullPath(project.AssetsPath) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
     private static bool SamePath(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
     private ScriptTab? Load(string path)
     {
         string text;
-        bool bom;
-        DateTime time;
-        try
+        bool bom = false;
+        DateTime time = default;
+        bool library = !Path.IsPathRooted(path);
+        if (library)
         {
-            byte[] bytes = File.ReadAllBytes(path);
-            bom = HasBom(bytes);
-            text = new UTF8Encoding(false).GetString(bytes, bom ? 3 : 0, bytes.Length - (bom ? 3 : 0));
-            time = File.GetLastWriteTimeUtc(path);
+            if (ShaderWorkspaces.Shared.Resolve(path, null) is not { } source)
+            {
+                Toasts.Info("No source", $"{path} is not a shader library file this editor knows.");
+                return null;
+            }
+            text = source.Text;
         }
-        catch (Exception e)
+        else
         {
-            Runtime.Debug.LogError($"[ScriptEditor] Could not open '{path}': {e.Message}");
-            return null;
+            try
+            {
+                byte[] bytes = File.ReadAllBytes(path);
+                bom = HasBom(bytes);
+                text = new UTF8Encoding(false).GetString(bytes, bom ? 3 : 0, bytes.Length - (bom ? 3 : 0));
+                time = File.GetLastWriteTimeUtc(path);
+            }
+            catch (Exception e)
+            {
+                Runtime.Debug.LogError($"[ScriptEditor] Could not open '{path}': {e.Message}");
+                return null;
+            }
         }
+        bool readOnly = library || !InAssets(path);
 
         bool onFallback = false;
         var shaderKind = ShaderLanguage.KindFor(Path.GetExtension(path));
@@ -510,13 +544,14 @@ public class ScriptEditorWindow : DockPanel
             ? new ShaderLanguage(ShaderWorkspaces.Shared, kind, path)
             : new RoslynCSharpLanguage(ScriptWorkspaces.Get(path, out onFallback), path);
         var editor = new OrigamiUI.CodeEditor(text, language) { FilePath = path };
-        Preferences.Get<ScriptEditorPreferences>().ApplyTo(editor);
+        ApplyOptions(editor, readOnly);
 
         var backend = EditorAssetBackend.Instance;
         var tab = new ScriptTab
         {
-            Path = path, Editor = editor, Guid = backend?.PathToGuid(backend.ToRelativePath(path)) ?? Guid.Empty, Id = ++s_nextTabId,
-            OnFallback = onFallback, IsShader = shaderKind != null, HadBom = bom, DiskTime = time,
+            Path = path, Editor = editor, Id = ++s_nextTabId,
+            Guid = !readOnly && backend != null ? backend.PathToGuid(backend.ToRelativePath(path)) : Guid.Empty,
+            OnFallback = onFallback && !readOnly, IsShader = shaderKind != null, HadBom = bom, DiskTime = time, ReadOnly = readOnly,
         };
         editor.SaveRequested += () => SaveManager.RequestSave();
         editor.NavigateRequested += Navigate;
@@ -557,7 +592,7 @@ public class ScriptEditorWindow : DockPanel
             var tabs = Origami.Tabs(paper, "se_tabs", _active, i => { _active = i; _tabs[i].Editor.Focus(); })
                 .Width(UnitValue.Stretch()).Height(tabsH)
                 .Closeable(i => CloseTab(i));
-            foreach (var tab in _tabs) tabs.Tab(tab.Editor.IsDirty ? tab.Name + " *" : tab.Name);
+            foreach (var tab in _tabs) tabs.Tab(tab.ReadOnly ? tab.Name + " (read only)" : tab.Editor.IsDirty ? tab.Name + " *" : tab.Name);
             tabs.Show();
 
             using (paper.Row("se_bar").Width(UnitValue.Stretch()).Height(toolbarH)
@@ -565,13 +600,14 @@ public class ScriptEditorWindow : DockPanel
                 .BackgroundColor(EditorTheme.Neutral200)
                 .AlignItems(LayoutAlignment.Center).Enter())
             {
-                string shown = Project.Current is { } project ? Path.GetRelativePath(project.AssetsPath, active.Path) : active.Path;
+                string shown = !active.ReadOnly && Project.Current is { } project ? Path.GetRelativePath(project.AssetsPath, active.Path) : active.Path;
                 paper.Box("se_path").Width(UnitValue.Stretch()).Height(toolbarH).IsNotInteractable()
                     .Text(shown, EditorTheme.FontMono ?? Origami.Current.Font!).TextColor(EditorTheme.Ink400)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
-                EditorGUI.PillButton(paper, "se_ext", "Open Externally", false, () => OpenExternally(active));
-                EditorGUI.PillButton(paper, "se_save", active.Editor.IsDirty ? "Save" : "Saved", active.Editor.IsDirty, () => Save(active));
+                if (!active.IsLibrary) EditorGUI.PillButton(paper, "se_ext", "Open Externally", false, () => OpenExternally(active));
+                if (active.ReadOnly) EditorGUI.PillButton(paper, "se_ro", "Read Only", false, () => { });
+                else EditorGUI.PillButton(paper, "se_save", active.Editor.IsDirty ? "Save" : "Saved", active.Editor.IsDirty, () => Save(active));
             }
 
             // Keyed per tab so each script keeps its own scroll, caret and popups while tabs switch and files get renamed.
@@ -626,7 +662,13 @@ public class ScriptEditorWindow : DockPanel
 
         foreach (var tab in _tabs.ToArray())
         {
-            if (tab.Asking) continue;
+            if (tab.Asking || tab.IsLibrary) continue;
+            if (tab.ReadOnly)
+            {
+                // Nothing here to lose, so a read only file just follows its changes on disk.
+                if (File.Exists(tab.Path) && File.GetLastWriteTimeUtc(tab.Path) != tab.DiskTime) Reload(tab);
+                continue;
+            }
             if (!File.Exists(tab.Path))
             {
                 if (!tab.Gone) CheckMissing(tab);
@@ -778,6 +820,7 @@ public class ScriptEditorWindow : DockPanel
     // The save steps the user picked, applied as edits so they can be undone, then the file in the chosen line endings and encoding.
     private static bool Save(ScriptTab tab, bool automatic = false)
     {
+        if (tab.ReadOnly) return false;
         ScriptEditorPreferences prefs = Preferences.Get<ScriptEditorPreferences>();
         OrigamiUI.CodeEditor editor = tab.Editor;
 
@@ -845,14 +888,21 @@ public class ScriptEditorWindow : DockPanel
             ExternalTools.OpenWithSystem(tab.Path);
     }
 
+    // Into scripts, shader library files and, through an assembly's PDB, engine sources on this machine. Nothing is decompiled.
     private static void Navigate(CodeLocation location)
     {
-        if (location.Path != null && File.Exists(location.Path))
+        string? path = location.Path;
+        bool exists = path != null && (Path.IsPathRooted(path) ? File.Exists(path) : ShaderWorkspaces.Shared.Resolve(path, null) != null);
+        if (exists)
         {
-            OpenFor(location.Path, location.Line + 1, location.Column + 1);
+            OpenFor(path!, location.Line + 1, location.Column + 1);
             return;
         }
-        Toasts.Info(location.Path != null ? "Built in file" : "Defined in an assembly", location.Display);
+
+        string reason = location.Assembly != null
+            ? $"It is compiled into {location.Assembly}, and no source file for it was found on this machine."
+            : path != null ? $"{path} could not be found." : "Its source is not available.";
+        Toasts.Info($"No source for {location.Display}", reason);
     }
 
     // Rename and some code actions touch other scripts. Open ones get the edits in their tab, closed ones are rewritten on disk.
@@ -861,8 +911,9 @@ public class ScriptEditorWindow : DockPanel
         foreach (var (path, fileEdits) in edits)
         {
             var open = _tabs.Find(t => SamePath(t.Path, path));
+            if (open is { ReadOnly: true }) continue;
             if (open != null) open.Editor.ApplyEdits(fileEdits);
-            else RewriteOnDisk(path, fileEdits);
+            else if (Path.IsPathRooted(path) && InAssets(path)) RewriteOnDisk(path, fileEdits);
         }
     }
 
@@ -870,7 +921,8 @@ public class ScriptEditorWindow : DockPanel
     {
         if (_tabs.Count == 0 || Project.Current is not { } project) return false;
         var scripts = new JsonArray();
-        foreach (var tab in _tabs) scripts.Add(Path.GetRelativePath(project.AssetsPath, tab.Path));
+        foreach (var tab in _tabs)
+            if (!tab.ReadOnly) scripts.Add(Path.GetRelativePath(project.AssetsPath, tab.Path));
         state["scripts"] = scripts;
         state["active"] = _active;
         return true;

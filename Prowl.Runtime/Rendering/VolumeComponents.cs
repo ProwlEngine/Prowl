@@ -14,6 +14,40 @@ internal static class EffectSettings
     public static Float4 ToFloat4(this Color color) => new(color.R, color.G, color.B, color.A);
 }
 
+/// <summary>How an HDR camera maps its colour to the display.</summary>
+public enum TonemappingMode
+{
+    None,
+    ACES,
+
+    /// <summary>AgX with no look, flat and desaturated.</summary>
+    AgXNeutral,
+
+    /// <summary>AgX with the reference Punchy look: more contrast and saturation.</summary>
+    AgXPunchy,
+
+    /// <summary>Extended Reinhard on luminance, white at 2.</summary>
+    Reinhard,
+    RomBinDaHouse,
+    Uncharted2,
+}
+
+/// <summary>
+/// Maps HDR colour to the display. Off while the mode is None, when an HDR camera clips light above 1. New cameras get
+/// one in their base profile, see <see cref="VolumeProfile.CreateCameraDefault"/>.
+/// </summary>
+[VolumeComponentMenu("Image/Tonemapping")]
+public sealed class Tonemapping : VolumeComponent<G.Tonemapper>
+{
+    public VolumeParameter<TonemappingMode> Mode = new(TonemappingMode.None);
+
+    public override bool IsActive => Mode.Value != TonemappingMode.None;
+
+    protected override G.Tonemapper CreateFeature(G.Renderer renderer) => new(renderer);
+
+    protected override void Apply(G.Tonemapper feature, Camera camera) => feature.Operator = (G.TonemapOperator)((int)Mode.Value - 1);
+}
+
 /// <summary>Adapts exposure to the scene's brightness over time.</summary>
 [VolumeComponentMenu("Camera/Auto Exposure")]
 public sealed class AutoExposure : VolumeComponent<G.AutoExposure>

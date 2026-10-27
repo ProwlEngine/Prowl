@@ -253,6 +253,14 @@ public sealed class VolumeProfile : Asset
         return existing != null && Components.Remove(existing);
     }
 
+    /// <summary>The base profile new cameras get: AgX Punchy tonemapping.</summary>
+    public static VolumeProfile CreateCameraDefault(string name)
+    {
+        var profile = new VolumeProfile { Name = name };
+        profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgXPunchy);
+        return profile;
+    }
+
     /// <summary>A runtime copy of this profile, owned by the caller.</summary>
     public VolumeProfile Clone()
     {
@@ -578,6 +586,12 @@ public enum PostEffectStage
     /// <summary>After the transparents and before tonemapping, in linear light, as bloom and depth of field are.</summary>
     BeforeTonemap,
 
+    /// <summary>
+    /// In place of the <see cref="Tonemapping"/> component, as a custom tonemapper: the shader maps linear HDR light to
+    /// linear 0 to 1, and the result is clamped and encoded for the display after it.
+    /// </summary>
+    Tonemap,
+
     /// <summary>On the colour as it is displayed, after tonemapping.</summary>
     AfterTonemap,
 }
@@ -625,10 +639,26 @@ public abstract class PostEffect : VolumeComponent<PostEffectFeature>
         {
             PostEffectStage.AfterOpaques => RenderSlot.AfterOpaques,
             PostEffectStage.BeforeTonemap => RenderSlot.HdrPost,
+            PostEffectStage.Tonemap => RenderSlot.Tonemap,
             _ => RenderSlot.DisplayPost,
         };
-        return new PostEffectFeature(renderer.CreateFullscreenProgram(Shader, GetType().Name), slot, Order, ReadsDepth, ParameterFields(GetType()));
+        bool tonemap = Stage == PostEffectStage.Tonemap;
+        string shader = tonemap ? TonemapShader(Shader) : Shader;
+        return new PostEffectFeature(renderer.CreateFullscreenProgram(shader, GetType().Name), slot, Order, ReadsDepth, ParameterFields(GetType()), tonemap);
     }
+
+    // The tonemapper's own main, then its colour clamped and sRGB encoded as the built in tonemapper's is
+    internal static string TonemapShader(string shader) => $$"""
+        #define main prowl_TonemapMain
+        {{shader}}
+        #undef main
+        void main()
+        {
+            prowl_TonemapMain();
+            vec3 c = clamp(outColor.rgb, 0.0, 1.0);
+            outColor.rgb = mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+        }
+        """;
 
     protected sealed override void Apply(PostEffectFeature feature, Camera camera) => feature.Capture(this);
 }
@@ -639,15 +669,15 @@ public sealed class PostEffectFeature : RenderFeature, IDisposable
     private readonly FullscreenProgram _program;
     private readonly RenderSlot _slot;
     private readonly int _order;
-    private readonly bool _depth;
+    private readonly bool _depth, _tonemap;
     private readonly FieldInfo[] _fields;
     private readonly PropertyID[] _names;
     private readonly object?[] _pending, _values;
     private readonly PropertySet _properties = new();
 
-    internal PostEffectFeature(FullscreenProgram program, RenderSlot slot, int order, bool depth, FieldInfo[] fields)
+    internal PostEffectFeature(FullscreenProgram program, RenderSlot slot, int order, bool depth, FieldInfo[] fields, bool tonemap)
     {
-        (_program, _slot, _order, _depth, _fields) = (program, slot, order, depth, fields);
+        (_program, _slot, _order, _depth, _fields, _tonemap) = (program, slot, order, depth, fields, tonemap);
         _names = [.. fields.Select(f => (PropertyID)("_" + f.Name))];
         _pending = new object?[fields.Length];
         _values = new object?[fields.Length];
@@ -655,6 +685,7 @@ public sealed class PostEffectFeature : RenderFeature, IDisposable
 
     public override RenderSlot Slot => _slot;
     public override int Order => _order;
+    public override string? ExclusiveGroup => _tonemap ? "Tonemap" : null;
 
     internal void Capture(PostEffect effect)
     {
@@ -673,6 +704,7 @@ public sealed class PostEffectFeature : RenderFeature, IDisposable
     {
         if (_depth) builder.ReadScene();
         builder.WriteColor();
+        if (_tonemap) builder.EncodesForDisplay();
     }
 
     public override void Render(FeatureContext context)

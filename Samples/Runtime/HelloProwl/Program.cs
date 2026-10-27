@@ -48,6 +48,7 @@ public sealed class HelloProwlGame : Game
         // The camera the game renders through. The "Main Camera" tag marks it as the one to use.
         var cameraObject = new GameObject("Main Camera") { Tag = "Main Camera" };
         Camera camera = cameraObject.AddComponent<Camera>();
+        camera.Profile = VolumeProfile.CreateCameraDefault("Main Camera Profile");
         camera.AntiAliasing = AntiAliasingMode.FXAA;
         cameraObject.Transform.Position = new Float3(0f, 3f, -8f);
         cameraObject.Transform.LookAt(new Float3(0f, 1f, 0f));

@@ -110,7 +110,7 @@ internal sealed class UIRenderItem
         Float4x4 world = Owner.Transform.LocalToWorldMatrix;
         if (world == LastOwnerWorld) return;
         Model = Canvas.BuildItemModel(Owner);
-        if (HasClip && ClipSource != null)
+        if (HasClip && ClipSource.IsValid())
             ClipToLocal = Canvas.BuildItemModel(ClipSource).Invert();
         LastOwnerWorld = world;
         ClipCoordsDirty = true;

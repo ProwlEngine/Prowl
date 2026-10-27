@@ -204,7 +204,7 @@ internal sealed class SceneDispatcher
         for (int i = 0; i < _count; i++)
         {
             Component c = _registered[i];
-            if (c is null) continue;
+            if (ReferenceEquals(c, null)) continue;
 
             c._dispatchSlot = 0;
             c._callbacks = default; // unresolved, so the new type decides membership
@@ -409,7 +409,7 @@ internal sealed class SceneDispatcher
 
     public static void CollisionBegin(GameObject go, in Collision collision)
     {
-        if (go is null) return;
+        if (go.IsNotValid()) return;
 
         int count = Collect(go, SceneCallbacks.CollisionBegin, out Component single, out Component[]? many);
         if (count == 0) return;
@@ -421,7 +421,7 @@ internal sealed class SceneDispatcher
 
     public static void CollisionStay(GameObject go, in Collision collision)
     {
-        if (go is null) return;
+        if (go.IsNotValid()) return;
 
         int count = Collect(go, SceneCallbacks.CollisionStay, out Component single, out Component[]? many);
         if (count == 0) return;
@@ -434,7 +434,7 @@ internal sealed class SceneDispatcher
     /// <summary>Whether any live component on the GameObject listens for the callback.</summary>
     public static bool HasRecipient(GameObject go, SceneCallbacks which)
     {
-        if (go is null) return false;
+        if (go.IsNotValid()) return false;
 
         List<Component> components = go._components;
         for (int i = 0; i < components.Count; i++)
@@ -448,7 +448,7 @@ internal sealed class SceneDispatcher
 
     public static void CollisionEnd(GameObject go, in Collision collision)
     {
-        if (go is null) return;
+        if (go.IsNotValid()) return;
 
         int count = Collect(go, SceneCallbacks.CollisionEnd, out Component single, out Component[]? many);
         if (count == 0) return;
@@ -460,7 +460,7 @@ internal sealed class SceneDispatcher
 
     public static void TriggerEnter(GameObject go, Rigidbody3D other)
     {
-        if (go is null) return;
+        if (go.IsNotValid()) return;
 
         int count = Collect(go, SceneCallbacks.TriggerEnter, out Component single, out Component[]? many);
         if (count == 0) return;
@@ -472,7 +472,7 @@ internal sealed class SceneDispatcher
 
     public static void TriggerStay(GameObject go, Rigidbody3D other)
     {
-        if (go is null) return;
+        if (go.IsNotValid()) return;
 
         int count = Collect(go, SceneCallbacks.TriggerStay, out Component single, out Component[]? many);
         if (count == 0) return;
@@ -484,7 +484,7 @@ internal sealed class SceneDispatcher
 
     public static void TriggerExit(GameObject go, Rigidbody3D other)
     {
-        if (go is null) return;
+        if (go.IsNotValid()) return;
 
         int count = Collect(go, SceneCallbacks.TriggerExit, out Component single, out Component[]? many);
         if (count == 0) return;
@@ -496,7 +496,7 @@ internal sealed class SceneDispatcher
 
     public static void CharacterEnter(GameObject go, CharacterController character)
     {
-        if (go is null) return;
+        if (go.IsNotValid()) return;
 
         int count = Collect(go, SceneCallbacks.CharacterEnter, out Component single, out Component[]? many);
         if (count == 0) return;
@@ -508,7 +508,7 @@ internal sealed class SceneDispatcher
 
     public static void CharacterStay(GameObject go, CharacterController character)
     {
-        if (go is null) return;
+        if (go.IsNotValid()) return;
 
         int count = Collect(go, SceneCallbacks.CharacterStay, out Component single, out Component[]? many);
         if (count == 0) return;
@@ -520,7 +520,7 @@ internal sealed class SceneDispatcher
 
     public static void CharacterExit(GameObject go, CharacterController character)
     {
-        if (go is null) return;
+        if (go.IsNotValid()) return;
 
         int count = Collect(go, SceneCallbacks.CharacterExit, out Component single, out Component[]? many);
         if (count == 0) return;

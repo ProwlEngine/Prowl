@@ -104,6 +104,10 @@
   "hierarchy.rename": "名前変更",
 
   "project.copy_path": "パスをコピー",
+  "project.cut": "切り取り",
+  "project.copy": "コピー",
+  "project.paste": "貼り付け",
+  "project.duplicate": "複製",
   "project.delete": "削除",
   "project.reimport": "再インポート",
   "project.refresh": "更新",

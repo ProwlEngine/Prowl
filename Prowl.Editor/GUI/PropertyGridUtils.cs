@@ -24,10 +24,10 @@ public static class PropertyGridUtils
     /// </summary>
     public static string DescribeObjectRef(EngineObject? instance, Type fieldType)
     {
-        if (instance == null)
+        if (instance.IsNotValid())
             return $"None ({fieldType.Name})";
 
-        if (instance is Component mb && mb.GameObject != null)
+        if (instance is Component mb && mb.GameObject.IsValid())
             return $"{mb.GameObject.Name} ({instance.GetType().Name})";
 
         if (instance is Asset { IsMissing: true } missing)

@@ -15,7 +15,7 @@ public class {[className]} : Component
 
     public void Play()
     {
-        if (_source.Clip != null) _source.Play();
+        if (_source.Clip.IsValid()) _source.Play();
     }
 
     public void Stop() => _source.Stop();

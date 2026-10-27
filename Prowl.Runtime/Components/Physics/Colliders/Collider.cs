@@ -209,7 +209,7 @@ public abstract class Collider : Component
             return;
 
         // Create shapes based on whether we're attached to a Rigidbody3D or static
-        if (_attachedRigidbody3D != null)
+        if (_attachedRigidbody3D.IsValid())
         {
             // Use transformed shapes for Rigidbody3D (existing behavior)
             _attachedShapes = CreateTransformedShapes();

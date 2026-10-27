@@ -181,7 +181,7 @@ public static class AssetCreateMenu
 
     private const string ShaderTemplate = @"// A lit surface with every feature of the standard Lit shader: shadows, lightmaps, probes, decals, fog, surface
 // types and the Lit material inputs. Surface runs before lighting and may change BaseColor, Alpha, Normal, Metallic,
-// Roughness, Occlusion and Emission, reading UV, UV1, VertexColor, WorldPos, ViewDir and GeometryNormal.
+// Roughness, Occlusion and Emission, reading UV, UV1, VertexColor, RelativePos, ViewDir, GeometryNormal, Tangent and Bitangent.
 // Surface ""Unlit"" gives the Unlit shader's passes instead.
 Shader ""Custom/New Shader""
 {

@@ -113,7 +113,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
 
     public void OnBeginDrag(PointerEventData e)
     {
-        if (_content == null) return;
+        if (_content.IsNotValid()) return;
         _dragging = true;
         _velocity = Float2.Zero;
         _dragStartContent = _content.AnchoredPosition;
@@ -123,7 +123,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
 
     public void OnDrag(PointerEventData e)
     {
-        if (_content == null || !_dragging) return;
+        if (_content.IsNotValid() || !_dragging) return;
 
         Float2 delta = e.DesignPosition - _dragStartPointer;
         Float2 target = _dragStartContent;
@@ -173,7 +173,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
 
     public void OnScroll(PointerEventData e)
     {
-        if (_content == null) return;
+        if (_content.IsNotValid()) return;
 
         Float2 pos = _content.AnchoredPosition;
         // Wheel scrolls the vertical axis when it exists, otherwise the horizontal one.
@@ -188,7 +188,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
 
     public override void Update()
     {
-        if (!Application.IsPlaying || _content == null) return;
+        if (!Application.IsPlaying || _content.IsNotValid()) return;
 
         // Auto-hide / expand scrollbars based on whether each axis needs to scroll (play mode only; in
         // edit mode the authored layout with both bars shown is kept).
@@ -242,7 +242,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
 
     private void SetContentPosition(Float2 pos)
     {
-        if (_content == null) return;
+        if (_content.IsNotValid()) return;
         if (_content.AnchoredPosition == pos) return;
         _content.AnchoredPosition = pos;
         try { OnValueChanged?.Invoke(); }
@@ -257,7 +257,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
     /// </summary>
     private Float2 ClampContent(Float2 candidate)
     {
-        if (_content == null) return candidate;
+        if (_content.IsNotValid()) return candidate;
 
         Rect vp = ViewportRect();
         Rect ct = _content.ComputedRect;
@@ -277,7 +277,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
     {
         get
         {
-            if (_content == null) return Float2.Zero;
+            if (_content.IsNotValid()) return Float2.Zero;
             Float2 pos = _content.AnchoredPosition;
             return pos - ClampContent(pos);
         }
@@ -295,7 +295,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
     /// </summary>
     private void UpdateScrollbarVisibility()
     {
-        if (_content == null) return;
+        if (_content.IsNotValid()) return;
 
         Rect rootRect = GameObject.RectTransform!.ComputedRect;
         Rect ct = _content.ComputedRect;
@@ -304,8 +304,8 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
 
         RectTransform? vRt = _verticalScrollbar.IsValid() ? _verticalScrollbar.GameObject.RectTransform : null;
         RectTransform? hRt = _horizontalScrollbar.IsValid() ? _horizontalScrollbar.GameObject.RectTransform : null;
-        float vbarW = vRt != null ? MathF.Abs(vRt.SizeDelta.X) : 0f; // fixed thickness (line-anchored axis)
-        float hbarH = hRt != null ? MathF.Abs(hRt.SizeDelta.Y) : 0f;
+        float vbarW = vRt.IsValid() ? MathF.Abs(vRt.SizeDelta.X) : 0f; // fixed thickness (line-anchored axis)
+        float hbarH = hRt.IsValid() ? MathF.Abs(hRt.SizeDelta.Y) : 0f;
 
         bool vExpand = _verticalScrollbarVisibility == ScrollbarVisibilityMode.AutoHideAndExpandViewport;
         bool hExpand = _horizontalScrollbarVisibility == ScrollbarVisibilityMode.AutoHideAndExpandViewport;
@@ -317,26 +317,26 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
         {
             float rw = (vExpand && vNeeded) ? vbarW + _verticalScrollbarSpacing : 0f;
             float rh = (hExpand && hNeeded) ? hbarH + _horizontalScrollbarSpacing : 0f;
-            hNeeded = _horizontal && _horizontalScrollbar != null && contentW > (fullW - rw) + 0.01f;
-            vNeeded = _vertical && _verticalScrollbar != null && contentH > (fullH - rh) + 0.01f;
+            hNeeded = _horizontal && _horizontalScrollbar.IsValid() && contentW > (fullW - rw) + 0.01f;
+            vNeeded = _vertical && _verticalScrollbar.IsValid() && contentH > (fullH - rh) + 0.01f;
         }
 
-        bool vVisible = _verticalScrollbar != null && (_verticalScrollbarVisibility == ScrollbarVisibilityMode.Permanent || vNeeded);
-        bool hVisible = _horizontalScrollbar != null && (_horizontalScrollbarVisibility == ScrollbarVisibilityMode.Permanent || hNeeded);
+        bool vVisible = _verticalScrollbar.IsValid() && (_verticalScrollbarVisibility == ScrollbarVisibilityMode.Permanent || vNeeded);
+        bool hVisible = _horizontalScrollbar.IsValid() && (_horizontalScrollbarVisibility == ScrollbarVisibilityMode.Permanent || hNeeded);
 
         // Expand mode frees the reserved room when the bar hides; the other modes keep it reserved.
-        bool vReserve = _verticalScrollbar != null && _vertical && (!vExpand || vNeeded);
-        bool hReserve = _horizontalScrollbar != null && _horizontal && (!hExpand || hNeeded);
+        bool vReserve = _verticalScrollbar.IsValid() && _vertical && (!vExpand || vNeeded);
+        bool hReserve = _horizontalScrollbar.IsValid() && _horizontal && (!hExpand || hNeeded);
         float reserveW = vReserve ? vbarW + _verticalScrollbarSpacing : 0f;
         float reserveH = hReserve ? hbarH + _horizontalScrollbarSpacing : 0f;
 
-        if (_verticalScrollbar != null && _verticalScrollbar.GameObject.Enabled != vVisible)
+        if (_verticalScrollbar.IsValid() && _verticalScrollbar.GameObject.Enabled != vVisible)
             _verticalScrollbar.GameObject.Enabled = vVisible;
-        if (_horizontalScrollbar != null && _horizontalScrollbar.GameObject.Enabled != hVisible)
+        if (_horizontalScrollbar.IsValid() && _horizontalScrollbar.GameObject.Enabled != hVisible)
             _horizontalScrollbar.GameObject.Enabled = hVisible;
 
         // Viewport fills the root, inset by the reserved gutters on the right and bottom.
-        if (_viewport != null)
+        if (_viewport.IsValid())
         {
             _viewport.AnchorMin = Float2.Zero;
             _viewport.AnchorMax = Float2.One;
@@ -346,12 +346,12 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
         }
 
         // Each bar is shortened by the other's reserved gutter so they leave the corner free.
-        if (vRt != null)
+        if (vRt.IsValid())
         {
             vRt.SizeDelta = new Float2(vbarW, -reserveH);
             vRt.AnchoredPosition = new Float2(0f, reserveH * 0.5f);
         }
-        if (hRt != null)
+        if (hRt.IsValid())
         {
             hRt.SizeDelta = new Float2(-reserveW, hbarH);
             hRt.AnchoredPosition = new Float2(-reserveW * 0.5f, 0f);
@@ -360,7 +360,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
 
     private void SyncScrollbar(UIScrollbar? bar, bool horizontal)
     {
-        if (bar == null || _content == null) return;
+        if (bar.IsNotValid() || _content.IsNotValid()) return;
 
         if (bar.IsPressed)
         {
@@ -406,7 +406,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
 
     public void SetHorizontalNormalized(float f)
     {
-        if (_content == null) return;
+        if (_content.IsNotValid()) return;
         Rect vp = ViewportRect(); Rect ct = _content.ComputedRect;
         float over = ct.Size.X - vp.Size.X;
         if (over <= 1e-4f) return;
@@ -418,7 +418,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
 
     public void SetVerticalNormalized(float f)
     {
-        if (_content == null) return;
+        if (_content.IsNotValid()) return;
         Rect vp = ViewportRect(); Rect ct = _content.ComputedRect;
         float over = ct.Size.Y - vp.Size.Y;
         if (over <= 1e-4f) return;

@@ -104,6 +104,10 @@
   "hierarchy.rename": "重命名",
 
   "project.copy_path": "复制路径",
+  "project.cut": "剪切",
+  "project.copy": "复制",
+  "project.paste": "粘贴",
+  "project.duplicate": "创建副本",
   "project.delete": "删除",
   "project.reimport": "重新导入",
   "project.refresh": "刷新",

@@ -591,6 +591,22 @@ public class CliEditorCommandTests : EditorTestHarness
         Assert.DoesNotContain(created["roots"]!.AsArray(), r => r!.GetValue<string>() == "OnlyInTheOldScene");
         Assert.DoesNotContain(Scene.Current.AllObjects, g => g.Name == "OnlyInTheOldScene");
     }
+
+    [Fact]
+    public void NewScenesAndTheCameraMenu_GiveCamerasTonemapping()
+    {
+        static void AssertTonemaps(Camera camera)
+        {
+            var tonemapping = camera.Profile!.Get<Prowl.Runtime.Rendering.Tonemapping>()!;
+            Assert.Equal(Prowl.Runtime.Rendering.TonemappingMode.AgXPunchy, tonemapping.Mode.Value);
+            Assert.True(tonemapping.Mode.Override);
+        }
+
+        AssertTonemaps(Assert.Single(EditorSceneManager.CreateDefaultScene().FindObjectsOfType<Camera>())!);
+
+        typeof(GUI.DefaultGameObjectCreators).GetMethod("CreateCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, null);
+        AssertTonemaps(Scene.Current.AllObjects.Single(g => g.Name == "Camera").GetComponent<Camera>()!);
+    }
 }
 
 /// <summary> Asset, prefab, script and import settings commands against a throwaway project. </summary>
@@ -657,6 +673,25 @@ public class CliAssetCommandTests : EditorTestHarness
         Assert.Contains("--confirm", Fails("asset", "delete", "--path", "Masks/Top.mask"));
         Ok("asset", "delete", "--path", "Masks/Top.mask", "--confirm");
         Assert.False(File.Exists(AssetAbsolutePath("Masks/Top.mask")));
+    }
+
+    [Fact]
+    public void AssetsAreCopiedUnderFreshGuids()
+    {
+        Ok("asset", "create", "--path", "Masks/Upper", "--type", "AvatarMask");
+        Guid original = Assets.PathToGuid("Masks/Upper.mask");
+
+        JsonNode copied = Ok("asset", "copy", "--path", "Masks/Upper.mask", "--to", "Copies/Lower")!;
+        Assert.Equal("Copies/Lower.mask", copied["path"]!.GetValue<string>());
+        Assert.NotEqual(original, Assets.PathToGuid("Copies/Lower.mask"));
+        Assert.Equal(original, Assets.PathToGuid("Masks/Upper.mask"));
+        Assert.Contains("already exists", Fails("asset", "copy", "--path", "Masks/Upper.mask", "--to", "Copies/Lower.mask"));
+        Assert.Contains("already exists", Fails("asset", "copy", "--path", "Masks/Upper.mask", "--to", "Copies"));
+        Assert.Contains("needs the .mask extension", Fails("asset", "copy", "--path", "Masks/Upper.mask", "--to", "Copies/Lower.mat"));
+
+        Ok("asset", "copy", "--path", "Masks", "--to", "MoreMasks");
+        Assert.True(File.Exists(AssetAbsolutePath("MoreMasks/Upper.mask")));
+        Assert.NotEqual(original, Assets.PathToGuid("MoreMasks/Upper.mask"));
     }
 
     [Fact]

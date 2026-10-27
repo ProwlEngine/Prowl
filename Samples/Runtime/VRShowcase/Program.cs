@@ -161,7 +161,7 @@ public sealed partial class VRShowcaseGame : StationGame
         Camera camera = head.AddComponent<Camera>();
         camera.NearClipPlane = 0.05f;
         camera.FarClipPlane = 300f;
-        camera.Profile = new VolumeProfile();
+        camera.Profile = VolumeProfile.CreateCameraDefault("Head Camera Profile");
         Bloom bloom = camera.Profile.Add<Bloom>();
         bloom.Intensity.Set(0.4f);
         bloom.Threshold.Set(1.0f);

@@ -23,8 +23,8 @@ public struct AssetRef<T> : IAssetRef, IEquatable<AssetRef<T>>, ISerializable wh
 
     public AssetRef(T? asset)
     {
-        _assetId = asset is null ? Guid.Empty : asset.AssetID;
-        if (asset is not null && _assetId == Guid.Empty)
+        _assetId = ReferenceEquals(asset, null) ? Guid.Empty : asset.AssetID;
+        if (!ReferenceEquals(asset, null) && _assetId == Guid.Empty)
             Debug.LogWarningOnce($"AssetRef.Runtime.{asset.InstanceID}", $"'{asset.Name}' ({typeof(T).Name}) is not in the asset database, so an AssetRef can not point at it.");
     }
 

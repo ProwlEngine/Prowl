@@ -629,7 +629,7 @@ public partial class GameObject : EngineObject, ISerializable
         try
         {
             component = Activator.CreateInstance(type) as Component;
-            return component is not null;
+            return component.IsValid();
         }
         catch (Exception e)
         {
@@ -729,7 +729,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     internal void OnHotReload()
     {
-        _components.RemoveAll(c => c is null);
+        _components.RemoveAll(c => ReferenceEquals(c, null));
 
         _componentCache = [];
         foreach (Component comp in _components)
@@ -1492,7 +1492,7 @@ public partial class GameObject : EngineObject, ISerializable
         Justification = "Component types keep their parameterless constructor by contract.")]
     internal Component? AttachBareComponent(Type type)
     {
-        if (!TryConstruct(type, out Component? component) || component is null)
+        if (!TryConstruct(type, out Component? component) || component.IsNotValid())
             return null;
 
         component.AttachToGameObject(this);

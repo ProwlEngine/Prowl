@@ -58,7 +58,7 @@ public class EnvironmentPanel : DockPanel
         _bake.Poll();
 
         Scene scene = Scene.Current;
-        if (scene == null)
+        if (scene.IsNotValid())
         {
             paper.Box("env_noscene").Height(30)
                 .Text(Loc.Get("selector.no_scene"), font).TextColor(EditorTheme.Ink300)

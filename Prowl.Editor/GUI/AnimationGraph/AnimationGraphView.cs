@@ -51,7 +51,7 @@ public sealed class AnimationGraphDomain : GraphDomain<GraphNodeRecord>
     public override bool Restore(EchoObject snapshot, bool compiles)
     {
         AnimationGraph? restored = Serializer.Deserialize<AnimationGraph>(snapshot.Clone());
-        if (restored == null) return false;
+        if (restored.IsNotValid()) return false;
 
         Graph.Nodes = restored.Nodes;
         Graph.Parameters = restored.Parameters;
@@ -867,7 +867,7 @@ internal sealed class AnimationGraphProbe : IGraphProbe
         get
         {
             Animator? animator = Animator;
-            return animator == null ? null : animator.GraphInstance;
+            return animator.IsNotValid() ? null : animator.GraphInstance;
         }
     }
 

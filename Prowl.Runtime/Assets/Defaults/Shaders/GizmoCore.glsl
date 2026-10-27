@@ -19,10 +19,10 @@ void main()
     mat4 view = Graphite_View().view;
     vec3 right = vec3(view[0][0], view[1][0], view[2][0]);
     vec3 up = vec3(view[0][1], view[1][1], view[2][1]);
-    vec3 center = Graphite_ObjectToWorld(vec3(0.0));
+    vec3 center = Graphite_ObjectToRelative(vec3(0.0));
     float scale = length(Graphite_ObjectToWorldDirection(vec3(1.0, 0.0, 0.0)));
-    vec3 world = center + (right * vertexPosition.x + up * vertexPosition.y) * scale;
-    gl_Position = Graphite_RelativeToClip(world);
+    vec3 relative = center + (right * vertexPosition.x + up * vertexPosition.y) * scale;
+    gl_Position = Graphite_RelativeToClip(relative);
     vColor = _Color;
     vUV = vec2(vertexUV0.x, 1.0 - vertexUV0.y);
 #else

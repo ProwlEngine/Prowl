@@ -119,11 +119,11 @@ public class NavMeshSurfaceEditor : CustomEditor
     private static string? RegistrationNotice(NavMeshSurface surface, NavMeshSurface? rival)
     {
         string agentType = NavMeshAgentTypes.GetName(RegistrationKey(surface));
-        if (rival != null && surface.Instance == null && rival.Instance != null)
+        if (rival.IsValid() && surface.Instance == null && rival.Instance != null)
             return $"'{rival!.GameObject.Name}' provides the {agentType} navmesh; this surface is ignored. Bake as a single surface, or give them separate agent types.";
-        if (rival != null && surface.Instance != null)
+        if (rival.IsValid() && surface.Instance != null)
             return $"'{rival.GameObject.Name}' also targets the {agentType} navmesh and is ignored; one surface per agent type per scene.";
-        if (rival != null)
+        if (rival.IsValid())
             return $"'{rival.GameObject.Name}' also targets the {agentType} navmesh; only one of these will be used.";
 
         // Baked, enabled, and still unregistered with no rival to blame: something else holds the

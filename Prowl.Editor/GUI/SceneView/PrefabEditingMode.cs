@@ -11,6 +11,7 @@ using Prowl.Editor.Projects;
 using Prowl.OrigamiUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -44,7 +45,7 @@ public static class PrefabEditingMode
     private static readonly ConditionalWeakTable<Scene, object> _editScenes = [];
 
     /// <summary>Whether <paramref name="scene"/> was built to edit a prefab in, rather than opened as a scene.</summary>
-    public static bool IsPrefabEditScene(Scene? scene) => scene != null && _editScenes.TryGetValue(scene, out _);
+    public static bool IsPrefabEditScene(Scene? scene) => !ReferenceEquals(scene, null) && _editScenes.TryGetValue(scene, out _);
 
     /// <summary>
     /// Enter prefab editing mode. If another prefab is already being edited with unsaved
@@ -97,7 +98,7 @@ public static class PrefabEditingMode
         }
 
         PrefabAsset? prefab = PrefabUtility.LoadPrefab(prefabGuid);
-        if (prefab == null)
+        if (prefab.IsNotValid())
         {
             Debug.LogWarning("[Prefab] Cannot edit prefab asset not found.");
             return;
@@ -118,7 +119,7 @@ public static class PrefabEditingMode
         // Save current scene. Reconciled first: the session ends by restoring this snapshot and
         // refreshing its instances, which would otherwise drop any edit nothing had recorded yet.
         Scene currentScene = Scene.Current;
-        if (currentScene != null)
+        if (currentScene.IsValid())
         {
             PrefabUtility.ReconcileOpenScene();
             OriginalSceneName = currentScene.Name;
@@ -133,7 +134,7 @@ public static class PrefabEditingMode
         _editScenes.AddOrUpdate(editScene, new object());
 
         var go = GameObject.InstantiateDetached(prefab);
-        if (go == null)
+        if (go.IsNotValid())
         {
             // The scene snapshot above is only meaningful to a session that started. Dropped here, or
             // the next session would restore a scene from whenever this failed.
@@ -167,6 +168,7 @@ public static class PrefabEditingMode
         camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
         Camera cam = camGo.AddComponent<Camera>();
         cam.Depth = -1;
+        cam.Profile = VolumeProfile.CreateCameraDefault("PrefabEdit Camera Profile");
         editScene.Add(camGo);
 
         var lightGo = new GameObject("PrefabEdit Light");
@@ -222,7 +224,7 @@ public static class PrefabEditingMode
         }
 
         Scene scene = Scene.Current;
-        if (scene == null) return false;
+        if (scene.IsNotValid()) return false;
 
         // The tracked prefab root, and only that: it is what skips the editor-only camera and light.
         // If it is no longer the session's own object then something replaced the scene underneath us,
@@ -352,7 +354,7 @@ public static class PrefabEditingMode
         if (_savedSceneState != null)
         {
             Scene? restoredScene = Serializer.Deserialize<Scene>(_savedSceneState);
-            if (restoredScene != null)
+            if (restoredScene.IsValid())
             {
                 Scene.Load(restoredScene);
                 EditorSceneManager.CurrentScenePath = _savedScenePath;

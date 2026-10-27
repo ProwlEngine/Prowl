@@ -728,7 +728,7 @@ public class EditorAssetBackend : AssetBackend
             long sourceTicks = File.GetLastWriteTimeUtc(absolutePath).Ticks;
             bool success = importer.Import(ctx);
 
-            if (!success || ctx.MainAsset == null)
+            if (!success || ctx.MainAsset.IsNotValid())
             {
                 // Clearing the list alone would strand the sub-assets in the index and their caches on
                 // disk, leaving GUIDs that resolve to a parent claiming it has no sub-assets.
@@ -765,7 +765,7 @@ public class EditorAssetBackend : AssetBackend
                 for (int i = 0; i < ctx.SubAssets.Count; i++)
                 {
                     Asset sub = ctx.SubAssets[i];
-                    if (sub == null) continue;
+                    if (sub.IsNotValid()) continue;
 
                     // A sub-asset (e.g. a Sprite) can reference assets of its own - track those under its
                     // own GUID, or a DependenciesOnly build's walk stops at the sub-asset.
@@ -1373,10 +1373,7 @@ public class EditorAssetBackend : AssetBackend
         // Serialize to the file (typeof(object) forces $type inclusion)
         EchoObject echo = Serializer.Serialize(typeof(object), obj);
         if (echo != null)
-        {
-            if (importer?.Source == EchoSource.Binary) echo.WriteToBinary(new FileInfo(absolutePath));
-            else File.WriteAllText(absolutePath, echo.WriteToString());
-        }
+            WriteEcho(echo, absolutePath, importer?.Source ?? EchoSource.None);
 
         // Create meta with correct importer version
         MetaFileData meta = MetaFile.CreateNew(importerName, importer?.Version ?? 1);
@@ -1452,6 +1449,35 @@ public class EditorAssetBackend : AssetBackend
         RunImport(entry);
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         return meta.Guid;
+    }
+
+    /// <summary>
+    /// Write a sub-asset out as a standalone asset in a folder, under its type's Assets/Create extension, and import it. Null, and logged, when its type has no such entry.
+    /// </summary>
+    public string? ExtractSubAsset(Guid subAsset, string destinationFolder)
+    {
+        if (AssetDatabase.Load<Asset>(subAsset) is not { IsLoaded: true } asset) return null;
+
+        AssetMenuEntry menuEntry = EditorRegistries.AssetMenuEntries.FirstOrDefault(e => e.Type == asset.GetType());
+        if (menuEntry.Type == null)
+        {
+            Runtime.Debug.LogError($"Can't extract '{asset.Name}': a {asset.GetType().Name} can't be a file of its own.");
+            return null;
+        }
+
+        destinationFolder = NormalizePath(destinationFolder);
+        string fileName = Utils.UniqueNames.ForCopy(
+            Path.Combine(_project.AssetsPath, destinationFolder),
+            Utils.EditorUtils.SafeFileName(asset.Name, "Extracted"),
+            menuEntry.Extension);
+        string relativePath = destinationFolder.Length == 0 ? fileName : $"{destinationFolder}/{fileName}";
+        if (!TryResolveAssetPath(relativePath, out string absolutePath)) return null;
+
+        // Written as the root, so in full, with whatever it references kept as references.
+        EchoObject echo = Serializer.Serialize(typeof(object), asset);
+        WriteEcho(echo, absolutePath, EditorRegistries.GetImporter(menuEntry.Extension)?.Source ?? EchoSource.None);
+        ImportFile(relativePath);
+        return relativePath;
     }
 
     /// <summary>
@@ -1535,9 +1561,7 @@ public class EditorAssetBackend : AssetBackend
 
         try
         {
-            string path = Path.Combine(_project.AssetsPath, entry.Path);
-            if (source == EchoSource.Binary) serialized.WriteToBinary(new FileInfo(path));
-            else File.WriteAllText(path, serialized.WriteToString());
+            WriteEcho(serialized, Path.Combine(_project.AssetsPath, entry.Path), source);
         }
         catch (Exception ex)
         {
@@ -1547,6 +1571,12 @@ public class EditorAssetBackend : AssetBackend
 
         Reimport(guid, ReloadReason.Save);
         return true;
+    }
+
+    private static void WriteEcho(EchoObject echo, string absolutePath, EchoSource source)
+    {
+        if (source == EchoSource.Binary) echo.WriteToBinary(new FileInfo(absolutePath));
+        else File.WriteAllText(absolutePath, echo.WriteToString());
     }
 
     /// <summary>
@@ -1806,12 +1836,27 @@ public class EditorAssetBackend : AssetBackend
 
         Directory.CreateDirectory(Path.GetDirectoryName(newAbs)!);
 
+        // The folder's .meta sits beside it, not inside, so it has to move on its own.
+        string oldMeta = MetaFile.GetMetaPath(oldAbs);
+        string newMeta = MetaFile.GetMetaPath(newAbs);
+        bool folderMoved = false;
+
         try
         {
             Directory.Move(oldAbs, newAbs);
+            folderMoved = true;
+
+            // Nothing exists at the new path, so a .meta already there is an orphan and can be replaced.
+            if (File.Exists(oldMeta))
+                File.Move(oldMeta, newMeta, overwrite: true);
         }
         catch (Exception ex)
         {
+            if (folderMoved && Directory.Exists(newAbs) && !Directory.Exists(oldAbs))
+            {
+                try { Directory.Move(newAbs, oldAbs); }
+                catch { /* best effort rollback */ }
+            }
             Runtime.Debug.LogError($"Failed to move folder '{oldRelativeFolder}' -> '{newRelativeFolder}': {ex.Message}");
             return false;
         }
@@ -1837,6 +1882,200 @@ public class EditorAssetBackend : AssetBackend
         if (recompile)
             ScriptAssemblyManager.RequestRecompile();
         return true;
+    }
+
+    /// <summary>
+    /// Move files and folders into a folder, keeping their GUIDs. A name already taken there gets a " (N)" suffix, and a folder is never moved into itself. Returns where each one now lives, including any already in the folder.
+    /// </summary>
+    public List<string> MoveAssets(IReadOnlyList<string> sourcePaths, string destinationFolder)
+    {
+        var moved = new List<string>();
+
+        destinationFolder = NormalizePath(destinationFolder);
+        string destinationAbsolute = Path.Combine(_project.AssetsPath, destinationFolder);
+        if (!Directory.Exists(destinationAbsolute)) return moved;
+
+        int movedCount = 0;
+        foreach (string rawSource in sourcePaths)
+        {
+            if (string.IsNullOrEmpty(rawSource)) continue;
+            string source = NormalizePath(rawSource);
+            string sourceName = Path.GetFileName(source);
+            string sourceFolder = Path.GetDirectoryName(source)?.Replace('\\', '/') ?? "";
+
+            if (sourceFolder.Equals(destinationFolder, StringComparison.OrdinalIgnoreCase))
+            {
+                moved.Add(source);
+                continue;
+            }
+
+            string sourceAbsolute = Path.Combine(_project.AssetsPath, source);
+            bool isFolder = Directory.Exists(sourceAbsolute) && !File.Exists(sourceAbsolute);
+            if (!isFolder && !File.Exists(sourceAbsolute)) continue;
+
+            // Moving a folder into itself or a descendant would delete it mid-move
+            if (isFolder
+                && (destinationFolder.Equals(source, StringComparison.OrdinalIgnoreCase)
+                    || destinationFolder.StartsWith(source + "/", StringComparison.OrdinalIgnoreCase)))
+            {
+                Runtime.Debug.LogWarning($"Skipped: can't move folder '{source}' into itself.");
+                continue;
+            }
+
+            string unique = Utils.UniqueNames.ForFile(destinationAbsolute,
+                isFolder ? sourceName : Path.GetFileNameWithoutExtension(sourceName),
+                isFolder ? "" : Path.GetExtension(sourceName));
+            string newPath = destinationFolder.Length == 0 ? unique : destinationFolder + "/" + unique;
+            if (isFolder ? MoveFolder(source, newPath) : MoveAsset(source, newPath))
+            {
+                moved.Add(newPath);
+                movedCount++;
+            }
+        }
+
+        if (movedCount > 0)
+            Runtime.Debug.Log($"Moved {movedCount} item(s) to '{(destinationFolder.Length == 0 ? "Assets" : destinationFolder)}'.");
+
+        return moved;
+    }
+
+    /// <summary>
+    /// Copy files and folders into folders under fresh GUIDs, each keeping its import settings and what it references, then import the whole batch together so a copied model finds its copied textures. A loaded asset that Echo writes is copied as it is in memory, unsaved edits included. Returns the new paths, skipping what could not be copied.
+    /// </summary>
+    public List<string> CopyAssets(IReadOnlyList<(string SourcePath, string DestinationFolder)> copies)
+    {
+        var copied = new List<string>();
+        var files = new List<string>();
+
+        // One at a time, so two sources with the same name in a batch can't claim the same name
+        foreach ((string rawSource, string rawFolder) in copies)
+        {
+            string source = NormalizePath(rawSource);
+            string destinationFolder = NormalizePath(rawFolder);
+            bool isFolder = Directory.Exists(Path.Combine(_project.AssetsPath, source));
+
+            string name = Utils.UniqueNames.ForCopy(
+                Path.Combine(_project.AssetsPath, destinationFolder),
+                isFolder ? Path.GetFileName(source) : Path.GetFileNameWithoutExtension(source),
+                isFolder ? "" : Path.GetExtension(source));
+            string newPath = destinationFolder.Length == 0 ? name : $"{destinationFolder}/{name}";
+            if (CopyOne(source, newPath, files)) copied.Add(newPath);
+        }
+
+        ImportCopies(files);
+        return copied;
+    }
+
+    /// <summary>
+    /// Copy one file or folder to an exact path under fresh GUIDs, keeping its import settings and what it references, and import it. False, and logged, when it could not be copied or the path is taken.
+    /// </summary>
+    public bool CopyAsset(string sourcePath, string destinationPath)
+    {
+        string destination = NormalizePath(destinationPath);
+        if (!TryResolveAssetPath(destination, out string destinationAbsolute)) return false;
+        if (File.Exists(destinationAbsolute) || Directory.Exists(destinationAbsolute))
+        {
+            Runtime.Debug.LogWarning($"Skipped: '{destination}' already exists.");
+            return false;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(destinationAbsolute)!);
+        var files = new List<string>();
+        bool copied = CopyOne(NormalizePath(sourcePath), destination, files);
+        ImportCopies(files);
+        return copied;
+    }
+
+    private bool CopyOne(string source, string newPath, List<string> files)
+    {
+        if (!TryResolveAssetPath(source, out string sourceAbsolute) || !TryResolveAssetPath(newPath, out string newAbsolute)) return false;
+
+        bool isFolder = Directory.Exists(sourceAbsolute);
+        if (!isFolder && !File.Exists(sourceAbsolute))
+        {
+            Runtime.Debug.LogWarning($"Skipped: '{source}' no longer exists.");
+            return false;
+        }
+
+        // Resolved paths, so a "./" or ".." in either can't slip a folder into itself
+        if (isFolder && (newAbsolute.Equals(sourceAbsolute, StringComparison.OrdinalIgnoreCase)
+                         || newAbsolute.StartsWith(sourceAbsolute + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+        {
+            Runtime.Debug.LogWarning($"Skipped: can't copy folder '{source}' into itself.");
+            return false;
+        }
+
+        try
+        {
+            if (isFolder) CopyFolder(sourceAbsolute, newAbsolute, files);
+            else CopyFile(sourceAbsolute, newAbsolute, files);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Failed to copy '{source}' to '{newPath}': {ex.Message}");
+            return false;
+        }
+    }
+
+    // Every file is registered before any is imported, so a copied model finds its copied textures
+    private void ImportCopies(List<string> files)
+    {
+        var toImport = new List<AssetEntry>();
+        foreach (string file in files)
+        {
+            try { RegisterFileChange(file, ToRelativePath(file), toImport); }
+            catch (Exception ex) { Runtime.Debug.LogError($"Failed to register copy '{file}': {ex.Message}"); }
+        }
+
+        ImportRegistered(toImport, []);
+        InvalidateFolderIndex();
+    }
+
+    private void CopyFile(string sourceAbsolute, string destinationAbsolute, List<string> files)
+    {
+        AssetEntry? entry = GetEntry(ToRelativePath(sourceAbsolute));
+        EchoSource source = SourceOf(entry);
+
+        if (entry != null && source != EchoSource.None
+            && AssetDatabase.TryGetExisting(entry.Guid, out Asset loaded) && loaded.IsLoaded
+            && SerializeForSave(loaded) is { } echo)
+            WriteEcho(echo, destinationAbsolute, source);
+        else
+            File.Copy(sourceAbsolute, destinationAbsolute);
+        files.Add(destinationAbsolute);
+
+        string sourceMeta = MetaFile.GetMetaPath(sourceAbsolute);
+        if (File.Exists(sourceMeta))
+        {
+            MetaFileData meta = MetaFile.Read(sourceMeta);
+            meta.Guid = Guid.NewGuid();
+            MetaFile.Write(MetaFile.GetMetaPath(destinationAbsolute), meta);
+        }
+    }
+
+    private void CopyFolder(string sourceAbsolute, string destinationAbsolute, List<string> files)
+    {
+        Directory.CreateDirectory(destinationAbsolute);
+        MetaFile.EnsureMeta(destinationAbsolute, "DefaultImporter");
+
+        foreach (string file in Directory.EnumerateFiles(sourceAbsolute))
+        {
+            string fileName = Path.GetFileName(file);
+            if (fileName.EndsWith(".meta", StringComparison.OrdinalIgnoreCase) || fileName.StartsWith('.')) continue;
+
+            CopyFile(file, Path.Combine(destinationAbsolute, fileName), files);
+        }
+
+        foreach (string directory in Directory.EnumerateDirectories(sourceAbsolute))
+        {
+            string directoryName = Path.GetFileName(directory);
+            if (directoryName.StartsWith('.')) continue;
+            // Junctions and symlinks can cycle back into an ancestor
+            if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) continue;
+
+            CopyFolder(directory, Path.Combine(destinationAbsolute, directoryName), files);
+        }
     }
 
     /// <summary> Reimport an asset by GUID: clear thumbnails, run the importer, which refills every loaded object from it, and regenerate thumbnails. </summary>
@@ -1927,7 +2166,6 @@ public class EditorAssetBackend : AssetBackend
         List<FileEvent> events = _watcher.DrainEvents(force);
         if (events.Count == 0) return;
 
-        var imported = new List<string>();
         var deleted = new List<string>();
         var toImport = new List<AssetEntry>();
 
@@ -1941,6 +2179,13 @@ public class EditorAssetBackend : AssetBackend
             try { ProcessFileEvent(evt, toImport, deleted); }
             catch (Exception ex) { Runtime.Debug.LogError($"Failed to process change to '{evt.Path}': {ex.Message}"); }
         }
+
+        ImportRegistered(toImport, deleted);
+    }
+
+    private void ImportRegistered(List<AssetEntry> toImport, List<string> deleted)
+    {
+        var imported = new List<string>();
 
         foreach (AssetEntry entry in toImport)
         {
@@ -1981,10 +2226,15 @@ public class EditorAssetBackend : AssetBackend
 
         switch (evt.Type)
         {
-            // Already imported as it now is, as after the editor's own save.
-            case FileEventType.Modified when _pathToGuid.TryGetValue(relativePath, out Guid known)
-                                          && _guidToEntry.TryGetValue(known, out AssetEntry? current)
-                                          && !current.NeedsReimport && !IsSourceNewerThanImport(current):
+            // Moved or deleted since, so its own Renamed or Deleted event does the bookkeeping.
+            case FileEventType.Created or FileEventType.Modified when !File.Exists(evt.Path):
+                break;
+
+            // Already imported as it now is, as after the editor's own save or import.
+            case FileEventType.Created or FileEventType.Modified
+                when _pathToGuid.TryGetValue(relativePath, out Guid known)
+                     && _guidToEntry.TryGetValue(known, out AssetEntry? current)
+                     && !current.NeedsReimport && !IsSourceNewerThanImport(current):
                 break;
 
             case FileEventType.Created:

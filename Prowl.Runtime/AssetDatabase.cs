@@ -132,7 +132,7 @@ public static class AssetDatabase
     public static async Task<T?> LoadAsync<T>(Guid assetId, CancellationToken cancel = default) where T : Asset
     {
         T? asset = Get<T>(assetId);
-        if (asset != null) await asset.LoadAsync(cancel);
+        if (asset.IsValid()) await asset.LoadAsync(cancel);
         return asset;
     }
 
@@ -145,7 +145,7 @@ public static class AssetDatabase
         if (assetId == Guid.Empty) return null;
 
         Asset? asset = s_assets.TryGetValue(assetId, out Asset? existing) ? existing : null;
-        if (asset == null)
+        if (ReferenceEquals(asset, null))
         {
             Type? type = GetAssetType(assetId);
             if (type != null) asset = GetOrCreate(assetId, type, AssetState.Unloaded);
@@ -460,7 +460,7 @@ public static class AssetDatabase
     public static async Task<T?> FindResourceAsync<T>(string loadPath, CancellationToken cancel = default) where T : Asset
     {
         T? asset = FindUnloaded<T>(loadPath);
-        if (asset != null) await asset.LoadAsync(cancel);
+        if (asset.IsValid()) await asset.LoadAsync(cancel);
         return asset;
     }
 

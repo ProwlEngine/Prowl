@@ -44,7 +44,7 @@ public static class ImportHelper
             EchoObject echo = read(ctx.AbsolutePath);
             SerializationContext serCtx = CreateTrackingContext(out HashSet<Guid>? dependencies);
             T? asset = Serializer.Deserialize<T>(echo, serCtx);
-            if (asset != null)
+            if (asset.IsValid())
             {
                 asset.Name = ctx.FileName;
                 ctx.SetMainAsset(asset);

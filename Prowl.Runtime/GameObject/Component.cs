@@ -524,7 +524,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     {
         // Reference check rather than validity: this also runs while the GameObject is being disposed,
         // when it already reads as invalid but its scene link is still intact. Leaving must always work.
-        if (GameObject is not null)
+        if (!ReferenceEquals(GameObject, null))
         {
             Scene? scene = GameObject.Scene;
             if (scene.IsValid())

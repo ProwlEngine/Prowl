@@ -82,7 +82,7 @@ public class EditorModelImporter : AssetImporter
             for (int i = 0; i < data.Materials.Count; i++)
                 ctx.AddSubAsset(data.Materials[i].Name ?? $"Material_{i}", data.Materials[i], SubAssetIdentity.Order);
 
-            if (data.Avatar != null)
+            if (data.Avatar.IsValid())
                 ctx.AddSubAsset(data.Avatar.Name ?? "Avatar", data.Avatar, SubAssetIdentity.Order);
 
             for (int i = 0; i < data.Animations.Count; i++)
@@ -101,7 +101,7 @@ public class EditorModelImporter : AssetImporter
             //    A model is a prefab: dropping one into a scene produces an instance linked back here,
             //    so changing import settings and reimporting updates those instances in place.
             var prefab = new PrefabAsset { Name = ctx.FileName, InstanceType = PrefabInstanceType.Model };
-            if (data.RootGO != null)
+            if (data.RootGO.IsValid())
             {
                 // The tree is built fresh from the file on every import, so its identities would be new
                 // every time and every instance in the project would lose its overrides on any reimport.

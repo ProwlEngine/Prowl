@@ -264,8 +264,8 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
 
         _asset = LoadAsset(_assetGuid);
         if (_asset is not { IsLoaded: true }) _asset = null;
-        _seenContent = _asset is null ? -1 : _asset.ContentVersion;
-        _domain = _asset is null ? null : CreateDomain(_asset);
+        _seenContent = _asset.IsNotValid() ? -1 : _asset.ContentVersion;
+        _domain = _asset.IsNotValid() ? null : CreateDomain(_asset);
         View.Records = _domain;
         ClearSelection();
 

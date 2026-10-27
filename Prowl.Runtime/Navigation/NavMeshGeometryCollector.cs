@@ -54,8 +54,8 @@ public static class NavMeshGeometryCollector
             // pay it for objects that contribute nothing. If it ever shows in a profile,
             // resolve lazily on the first collectible component that survives the bounds test.
             NavMeshModifier? modifier = ResolveModifier(go, agentTypeId, modifierCache);
-            if (modifier != null && modifier.IgnoreFromBuild) continue;
-            int area = modifier != null && modifier.OverrideArea ? modifier.Area : defaultArea;
+            if (modifier.IsValid() && modifier.IgnoreFromBuild) continue;
+            int area = modifier.IsValid() && modifier.OverrideArea ? modifier.Area : defaultArea;
 
             if (geometry == NavMeshCollectGeometry.RenderMeshes)
             {
@@ -119,7 +119,7 @@ public static class NavMeshGeometryCollector
         Dictionary<GameObject, NavMeshModifier?> cache)
     {
         NavMeshModifier? own = ValidModifier(go, agentTypeId);
-        if (own != null) return own;
+        if (own.IsValid()) return own;
         GameObject? parent = go.Parent;
         return parent.IsValid() ? InheritableModifier(parent!, agentTypeId, cache) : null;
     }
@@ -132,7 +132,7 @@ public static class NavMeshGeometryCollector
 
         NavMeshModifier? own = ValidModifier(go, agentTypeId);
         NavMeshModifier? result;
-        if (own != null && own.ApplyToChildren)
+        if (own.IsValid() && own.ApplyToChildren)
         {
             result = own;
         }

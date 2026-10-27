@@ -72,7 +72,7 @@ public static class TransformHandles
         hot = false;
         Camera camera = ctx.Camera;
         GameObject? camGo = camera.IsValid() ? camera.GameObject : null;
-        if (camGo == null) return false;
+        if (camGo.IsNotValid()) return false;
 
         if (!_gizmos.TryGetValue(id, out TransformGizmo? g))
         {

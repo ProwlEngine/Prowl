@@ -97,7 +97,7 @@ public class TextComponent : Graphic, ILayoutElement
         if (font.IsNotValid() || font.FontFile is null || string.IsNullOrEmpty(Text)) return;
 
         RectTransform? rt = GameObject.RectTransform;
-        if (rt is null) return;
+        if (rt.IsNotValid()) return;
         Rect r = rt.ComputedRect;
         if (r.Size.X <= 0 || r.Size.Y <= 0) return;
 

@@ -66,7 +66,7 @@ public partial class GameObject
             return null;
         }
 
-        if (clone == null)
+        if (clone.IsNotValid())
         {
             Debug.LogError($"[Instantiate] Prefab '{prefab.Name}' did not deserialize into a GameObject.");
             return null;
@@ -172,7 +172,7 @@ public partial class GameObject
     public static GameObject? Instantiate(PrefabAsset prefab, GameObject? parent, bool worldPositionStays = false)
     {
         GameObject? instance = Instantiate(prefab, parent.IsValid() ? parent!.Scene : Scene.Current);
-        if (instance == null) return null;
+        if (instance.IsNotValid()) return null;
 
         if (parent.IsValid())
             instance.SetParent(parent!, worldPositionStays);
@@ -184,7 +184,7 @@ public partial class GameObject
     public static GameObject? Instantiate(PrefabAsset prefab, Scene? scene)
     {
         GameObject? instance = InstantiateDetached(prefab);
-        if (instance == null) return null; // InstantiateDetached already reported why
+        if (instance.IsNotValid()) return null; // InstantiateDetached already reported why
 
         return AddToScene(instance, scene);
     }
@@ -193,7 +193,7 @@ public partial class GameObject
     public static GameObject? Instantiate(PrefabAsset prefab, Scene? scene, Float3 position, Quaternion rotation)
     {
         GameObject? instance = InstantiateDetached(prefab);
-        if (instance == null) return null;
+        if (instance.IsNotValid()) return null;
 
         // Placed before the object enters the scene, so anything reacting to OnEnable sees where it
         // actually is rather than the prefab's authored transform.
@@ -215,7 +215,7 @@ public partial class GameObject
     public static GameObject? Instantiate(GameObject original, Float3 position, Quaternion rotation)
     {
         GameObject? clone = Clone(original);
-        if (clone == null) return null;
+        if (clone.IsNotValid()) return null;
 
         clone.Transform.Position = position;
         clone.Transform.Rotation = rotation;
@@ -229,7 +229,7 @@ public partial class GameObject
     {
         Scene? target = parent.IsValid() ? parent!.Scene : (original.IsValid() ? original.Scene : null);
         GameObject? clone = Instantiate(original, target);
-        if (clone == null) return null;
+        if (clone.IsNotValid()) return null;
 
         if (parent.IsValid())
             clone.SetParent(parent!, worldPositionStays);
@@ -241,7 +241,7 @@ public partial class GameObject
     public static GameObject? Instantiate(GameObject original, Scene? scene)
     {
         GameObject? clone = Clone(original);
-        return clone == null ? null : AddToScene(clone, scene);
+        return clone.IsNotValid() ? null : AddToScene(clone, scene);
     }
 
     /// <summary>
@@ -269,7 +269,7 @@ public partial class GameObject
 
     private static GameObject? AddToScene(GameObject instance, Scene? scene)
     {
-        if (scene == null)
+        if (scene.IsNotValid())
         {
             // Handing back a live-looking object that is in no scene, gets no callbacks and never
             // renders would be worse than saying so.

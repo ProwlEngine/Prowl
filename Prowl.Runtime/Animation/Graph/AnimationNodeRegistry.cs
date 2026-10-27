@@ -480,7 +480,7 @@ public sealed class GraphCompileContext
     public Motion.AnimationClipBase? Clip(GraphNodeRecord record, AssetSetting setting)
     {
         AnimationClip? asset = ClipAsset(record, setting);
-        if (asset == null) return null;
+        if (asset.IsNotValid()) return null;
 
         Motion.AnimationClipBase? clip = asset.GetClip(Avatar);
         if (clip == null)

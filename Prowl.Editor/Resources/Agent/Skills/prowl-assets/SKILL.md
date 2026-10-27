@@ -86,7 +86,7 @@ Builds only ship the scenes in the build, everything they reference (plain field
 
 ## Gotchas
 
-- Never use `?.`, `??` or `??=` on an asset or any `EngineObject`. They are compile errors (PROWLEO001, PROWLEO002). Use `x.IsValid()` and `x.IsNotValid()`.
+- Never use `?.`, `??`, `??=`, `== null`, `!= null`, `is null` or `is not null` on an asset or any `EngineObject`. They are compile errors (PROWLEO001, PROWLEO002, PROWLEO003). Use `x.IsValid()` and `x.IsNotValid()`.
 - Never block on a task in a script with `.Result`, `.Wait()` or `GetAwaiter().GetResult()` (PROWLTH001). Loads finish on the main thread, so the wait never returns. `await` instead, or call the blocking `Load()`.
 - Blocking loads hitch the frame. Use the async calls or `LoadGroup` for large content.
 - `Material.LoadDefault(...)` returns a new copy you own. The other built in `LoadDefault` calls return a shared asset.

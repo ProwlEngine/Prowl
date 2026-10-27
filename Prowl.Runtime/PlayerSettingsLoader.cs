@@ -92,7 +92,7 @@ public static class PlayerSettingsLoader
             float specRelax = settings.TryGet("SpeculativeRelaxationFactor", out EchoObject? sr) ? sr!.FloatValue : 0.9f;
 
             Scene scene = Resources.Scene.Current;
-            if (scene != null)
+            if (scene.IsValid())
             {
                 scene.Physics.Gravity = new Vector.Float3(gx, gy, gz);
                 scene.Physics.SolverIterations = solverIter;

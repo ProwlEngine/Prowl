@@ -675,7 +675,7 @@ public sealed class AudioSource : Component
     /// Returns false if the clip hasn't streamed in yet so the caller can defer.</summary>
     private bool TryAutoPlay()
     {
-        if (_clip == null) return false;
+        if (_clip.IsNotValid()) return false;
 
         if (_playOnStart)
             Play();
@@ -797,7 +797,7 @@ public sealed class AudioSource : Component
         _resumePlaying = false;
         _resumeCursor = 0;
 
-        if (!resume || _clip == null) return;
+        if (!resume || _clip.IsNotValid()) return;
 
         Play();
         Cursor = resumeFrom;
@@ -887,7 +887,7 @@ public sealed class AudioSource : Component
     public void Play()
     {
         AssertOwner();
-        if (_soundGroup.pointer == IntPtr.Zero || _clip == null) return;
+        if (_soundGroup.pointer == IntPtr.Zero || _clip.IsNotValid()) return;
         if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
 
         _mainSource.atEnd = false;
@@ -1032,7 +1032,7 @@ public sealed class AudioSource : Component
     public void PlayOneShot(AudioClip clip, float volumeScale = 1.0f)
     {
         AssertOwner();
-        if (_soundGroup.pointer == IntPtr.Zero || clip == null) return;
+        if (_soundGroup.pointer == IntPtr.Zero || clip.IsNotValid()) return;
 
         SourceInfo voice = AcquireOneShotVoice();
 
@@ -1183,7 +1183,7 @@ public sealed class AudioSource : Component
     /// </summary>
     public static AudioSource PlayClipAtPoint(AudioClip clip, Float3 position, float volume = 1.0f)
     {
-        if (clip == null) return null;
+        if (clip.IsNotValid()) return null;
 
         // The temporary object is destroyed by the End event, which only fires while audio is running.
         // Without a device it would never fire, so a headless run would leak an object per call.
@@ -1192,7 +1192,7 @@ public sealed class AudioSource : Component
 
         Scene scene = Scene.Current;
 
-        if (scene == null)
+        if (scene.IsNotValid())
         {
             Debug.LogWarning("PlayClipAtPoint needs a loaded scene to place the sound in.");
             return null;
@@ -1456,7 +1456,7 @@ public sealed class AudioSource : Component
     {
         // Attached straight to the engine endpoint, which only moves when the device does, and that
         // is handled by the rebuild in Update.
-        if (_routedGroup is null)
+        if (ReferenceEquals(_routedGroup, null))
             return false;
 
         // The group object itself has gone, which is what a mixer reimport does to every one of them.
@@ -1474,12 +1474,12 @@ public sealed class AudioSource : Component
 
         // Not guarded on validity: a disposed group can still be holding this handler, and leaving it
         // there keeps the source alive behind it.
-        if (_routedGroup is not null)
+        if (!ReferenceEquals(_routedGroup, null))
             _routedGroup.NativeReleasing -= OnOutputGroupReleasing;
 
         _routedGroup = group;
 
-        if (_routedGroup is not null)
+        if (!ReferenceEquals(_routedGroup, null))
             _routedGroup.NativeReleasing += OnOutputGroupReleasing;
     }
 

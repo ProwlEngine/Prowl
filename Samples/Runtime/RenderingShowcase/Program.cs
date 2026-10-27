@@ -61,6 +61,7 @@ public sealed class RenderingShowcaseGame : StationGame
     private VolumetricClouds _clouds = null!;
     private float _cloudFlightSpeed = 300f;
     private Bloom _bloom = null!;
+    private Tonemapping _tonemapping = null!;
 
     private float _hours = 14f;
     private bool _animateSky;
@@ -89,6 +90,7 @@ public sealed class RenderingShowcaseGame : StationGame
         _fog.GlobalDensity.Value = 0.02f;
         _fog.MaxDistance.Value = 60f;
         _bloom = MainCamera.Profile.Get<Bloom>()!;
+        _tonemapping = MainCamera.Profile.Get<Tonemapping>()!;
         SampleScene.Environment.Fog.Mode = FogMode.Off;
 
         float length = StationSpacing * StationCount + 30f;
@@ -223,7 +225,7 @@ public sealed class RenderingShowcaseGame : StationGame
         Toggle(paper, font, "Bloom", _bloom.Active, v => _bloom.Active = v);
         Slider(paper, font, "Bloom intensity", _bloom.Intensity, 0f, 2f, v => _bloom.Intensity.Value = v);
         Toggle(paper, font, "Volumetric fog", _fog.Enabled, v => _fog.Enabled.Value = v);
-        Cycle(paper, font, "Tonemapper", MainCamera.Tonemapping, v => MainCamera.Tonemapping = v);
+        Cycle(paper, font, "Tonemapper", _tonemapping.Mode.Value, v => _tonemapping.Mode.Value = v);
     }
 
     // ----------------------------------------------------------------
@@ -729,6 +731,7 @@ public sealed class RenderingShowcaseGame : StationGame
         GameObject pole = Add(Model("Pole", Mesh.CreateCylinder(0.06f, 3f, 8), _dark, c + new Float3(-4f, 1.5f, 3f)));
         GameObject head = Model("Security Camera", Mesh.CreateCube(new Float3(0.3f, 0.3f, 0.6f)), Lit(new Color(0.6f, 0.6f, 0.6f, 1f), 0.5f, 0.4f), c + new Float3(-4f, 3.1f, 3f));
         Camera security = head.AddComponent<Camera>();
+        security.Profile = VolumeProfile.CreateCameraDefault("Security Camera Profile");
         security.Target = target;
         security.Depth = -2;
         security.FieldOfView = 70f;

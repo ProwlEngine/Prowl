@@ -104,6 +104,10 @@
   "hierarchy.rename": "Yeniden Adlandir",
 
   "project.copy_path": "Yolu Kopyala",
+  "project.cut": "Kes",
+  "project.copy": "Kopyala",
+  "project.paste": "Yapistir",
+  "project.duplicate": "Cogalt",
   "project.delete": "Sil",
   "project.reimport": "Yeniden Ice Aktar",
   "project.refresh": "Yenile",

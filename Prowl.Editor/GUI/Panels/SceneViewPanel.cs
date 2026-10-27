@@ -270,7 +270,7 @@ public class SceneViewPanel : DockPanel
         Scene scene = Scene.Current;
         RenderTexture? rt = _editorCamera.RenderTarget;
 
-        if (scene == null)
+        if (scene.IsNotValid())
         {
             // No scene show message and create button
             using (paper.Column("sv_no_scene")
@@ -313,7 +313,7 @@ public class SceneViewPanel : DockPanel
             // Everything interactive in the viewport registers a control with the same context, so
             // the nearest one to the cursor wins rather than an editor claiming the whole frame.
             Camera cam = _editorCamera.Camera;
-            if (cam != null)
+            if (cam.IsValid())
             {
                 // Both paper.PointerPos and _viewportAbsoluteRect are in Paper-logical space.
                 Float2 origin = new((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
@@ -361,7 +361,7 @@ public class SceneViewPanel : DockPanel
             GameCanvas.EditorWorldSpaceOverride = prevWorldSpace;
         }
 
-        if (rt != null && rt.MainTexture != null)
+        if (rt.IsValid() && rt.MainTexture.IsValid())
         {
             paper.Box("sv_viewport")
                 .Size(width, height)
@@ -564,7 +564,7 @@ public class SceneViewPanel : DockPanel
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 
             MeshRenderer? meshRenderer = go.GetComponent<MeshRenderer>();
-            if (meshRenderer != null && meshRenderer.EnabledInHierarchy && meshRenderer.Raycast(ray, out float dist))
+            if (meshRenderer.IsValid() && meshRenderer.EnabledInHierarchy && meshRenderer.Raycast(ray, out float dist))
             {
                 if (dist < bestDist) { bestDist = dist; bestHit = go; }
                 continue;
@@ -590,7 +590,7 @@ public class SceneViewPanel : DockPanel
         try
         {
             GameObject? uiHit = UIPicker.Pick(scene, ray);
-            if (uiHit != null) return uiHit;
+            if (uiHit.IsValid()) return uiHit;
         }
         finally
         {
@@ -677,7 +677,7 @@ public class SceneViewPanel : DockPanel
     private static bool TryGetSelectionAnchor(GameObject go, out Float3 anchor)
     {
         MeshRenderer? mr = go.GetComponent<MeshRenderer>();
-        if (mr != null && mr.EnabledInHierarchy && mr.Mesh != null)
+        if (mr.IsValid() && mr.EnabledInHierarchy && mr.Mesh.IsValid())
         {
             AABB b = mr.Mesh.bounds;
             anchor = Float4x4.TransformPoint((b.Min + b.Max) * 0.5f, go.Transform.LocalToWorldMatrix);
@@ -685,7 +685,7 @@ public class SceneViewPanel : DockPanel
         }
 
         SkinnedMeshRenderer? smr = go.GetComponent<SkinnedMeshRenderer>();
-        if (smr != null && smr.EnabledInHierarchy && smr.SharedMesh != null)
+        if (smr.IsValid() && smr.EnabledInHierarchy && smr.SharedMesh.IsValid())
         {
             AABB b = smr.SharedMesh.bounds;
             anchor = Float4x4.TransformPoint((b.Min + b.Max) * 0.5f, go.Transform.LocalToWorldMatrix);
@@ -701,7 +701,7 @@ public class SceneViewPanel : DockPanel
     {
         GameObject? bestHit = PickObjectAt(scene, _editorCamera!, screenPos, panelSize);
 
-        if (bestHit != null)
+        if (bestHit.IsValid())
         {
             if (Input.IsCtrlPressed)
                 Selection.ToggleSelection(bestHit);
@@ -784,7 +784,7 @@ public class SceneViewPanel : DockPanel
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 
             MeshRenderer? meshRenderer = go.GetComponent<MeshRenderer>();
-            if (meshRenderer != null && meshRenderer.Raycast(ray, out float dist))
+            if (meshRenderer.IsValid() && meshRenderer.Raycast(ray, out float dist))
             {
                 if (dist < bestDist)
                 {
@@ -869,12 +869,12 @@ public class SceneViewPanel : DockPanel
     {
         // Check MeshRenderer
         MeshRenderer? mr = go.GetComponent<MeshRenderer>();
-        if (mr != null && mr.Mesh != null)
+        if (mr.IsValid() && mr.Mesh.IsValid())
             ExpandBounds(mr.Mesh.bounds, go.Transform.LocalToWorldMatrix, ref min, ref max, ref found);
 
         // Check SkinnedMeshRenderer
         SkinnedMeshRenderer? smr = go.GetComponent<SkinnedMeshRenderer>();
-        if (smr != null && smr.SharedMesh != null)
+        if (smr.IsValid() && smr.SharedMesh.IsValid())
             ExpandBounds(smr.SharedMesh.bounds, go.Transform.LocalToWorldMatrix, ref min, ref max, ref found);
 
         // Recurse into children
@@ -943,7 +943,7 @@ public class SceneViewPanel : DockPanel
         _gizmoActive = true;
 
         GameObject firstGO = selectedGOs.Current;
-        if (firstGO == null) return;
+        if (firstGO.IsNotValid()) return;
 
         // Create gizmo if needed
         _transformGizmo ??= new Gizmo.TransformGizmo(SceneTools.GizmoMode);

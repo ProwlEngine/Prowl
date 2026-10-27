@@ -30,7 +30,7 @@ internal static class UIRaycaster
     public static bool TryPick(Scene? scene, Float2 screenPos, Float2 windowSize, out Hit hit)
     {
         hit = default;
-        if (scene == null) return false;
+        if (scene.IsNotValid()) return false;
 
         GameObject? bestGO = null;
         GameCanvas? bestCanvas = null;
@@ -59,7 +59,7 @@ internal static class UIRaycaster
             GameObject? localHit = null;
             int localDfs = -1;
             WalkRecurse(canvas, canvas.GameObject, rayO, rayD, blocksRaycasts: true, ref dfs, ref localHit, ref localDfs);
-            if (localHit == null) continue;
+            if (localHit.IsNotValid()) continue;
 
             // Rank with the same key the renderer sorts by (SortOrder, then a per-canvas discriminator,
             // then depth-first index) so the element the pointer picks is always the one drawn on top.
@@ -75,10 +75,10 @@ internal static class UIRaycaster
         }
 
         // No screen-space hit -> fall back to world-space canvases via a 3D camera ray.
-        if (bestGO == null)
+        if (bestGO.IsNotValid())
             TryPickWorld(scene, screenPos, windowSize, ref bestGO, ref bestCanvas, ref bestDesign);
 
-        if (bestGO == null || bestCanvas == null) return false;
+        if (bestGO.IsNotValid() || bestCanvas.IsNotValid()) return false;
         hit = new Hit(bestGO, bestCanvas, bestDesign);
         return true;
     }
@@ -92,7 +92,7 @@ internal static class UIRaycaster
         ref GameObject? bestGO, ref GameCanvas? bestCanvas, ref Float2 bestDesign)
     {
         Camera? cam = ResolveMainCamera(scene);
-        if (cam == null) return;
+        if (cam.IsNotValid()) return;
         PickWorld(scene, cam.ScreenPointToRay(screenPos, windowSize), ref bestGO, ref bestCanvas, ref bestDesign, out _);
     }
 
@@ -104,9 +104,9 @@ internal static class UIRaycaster
         GameCanvas? canvas = null;
         Float2 design = Float2.Zero;
         distance = 0f;
-        if (scene == null) return false;
+        if (scene.IsNotValid()) return false;
         PickWorld(scene, ray, ref go, ref canvas, ref design, out distance);
-        if (go == null || canvas == null) return false;
+        if (go.IsNotValid() || canvas.IsNotValid()) return false;
         hit = new Hit(go, canvas, design);
         return true;
     }
@@ -136,7 +136,7 @@ internal static class UIRaycaster
             GameObject? localHit = null;
             int localDfs = -1;
             WalkRecurse(canvas, canvas.GameObject, rayO, rayD, blocksRaycasts: true, ref dfs, ref localHit, ref localDfs);
-            if (localHit == null) continue;
+            if (localHit.IsNotValid()) continue;
 
             bestT = t;
             bestGO = localHit;
@@ -152,8 +152,8 @@ internal static class UIRaycaster
         foreach (GameObject go in scene.ActiveObjects)
         {
             Camera? c = go.GetComponent<Camera>();
-            if (c == null || !c.EnabledInHierarchy) continue;
-            if (best == null || c.Depth > best.Depth) best = c;
+            if (c.IsNotValid() || !c.EnabledInHierarchy) continue;
+            if (best.IsNotValid() || c.Depth > best.Depth) best = c;
         }
         return best;
     }
@@ -196,9 +196,9 @@ internal static class UIRaycaster
         {
             designPt = Float2.Zero;
             Scene? scene = canvas.GameObject.Scene;
-            if (scene == null) return false;
+            if (scene.IsNotValid()) return false;
             Camera? cam = ResolveMainCamera(scene);
-            if (cam == null) return false;
+            if (cam.IsNotValid()) return false;
             Ray ray = cam.ScreenPointToRay(screenPos, windowSize);
             return WorldRayToDesign(canvas, ray, out designPt, out _);
         }
@@ -222,12 +222,12 @@ internal static class UIRaycaster
         foreach (GameObject child in parent.Children)
         {
             if (!child.EnabledInHierarchy) continue;
-            if (child.GetComponent<GameCanvas>() != null) continue; // nested canvas owns its own tree
+            if (child.GetComponent<GameCanvas>().IsValid()) continue; // nested canvas owns its own tree
 
             // Outside a mask nothing under it can be hit. Each mask is tested where it is met, so nested
             // masks intersect naturally.
             RectMask? rectMask = child.GetComponent<RectMask>();
-            if (rectMask != null && rectMask.EnabledInHierarchy && child.RectTransform is { } maskRt
+            if (rectMask.IsValid() && rectMask.EnabledInHierarchy && child.RectTransform is { } maskRt
                 && !RayHitsMask(canvas, rectMask, maskRt, rayO, rayD))
                 continue;
 
@@ -235,7 +235,7 @@ internal static class UIRaycaster
             // children still draw, they just don't consume input. IgnoreParentGroups restarts the chain.
             bool childBlocks = blocksRaycasts;
             CanvasGroup? grp = child.GetComponent<CanvasGroup>();
-            if (grp != null && grp.EnabledInHierarchy)
+            if (grp.IsValid() && grp.EnabledInHierarchy)
                 childBlocks = (grp.IgnoreParentGroups || blocksRaycasts) && grp.BlocksRaycasts;
 
             dfs++;

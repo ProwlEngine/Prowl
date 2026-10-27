@@ -52,19 +52,19 @@ Shader "Default/Grass"
 
             out vec2 vUV;
             out vec4 vColor;
-            out vec3 vWorldPos;
+            out vec3 vRelativePos;
             out vec3 vNormal;
 
             void main()
             {
                 vUV = vertexUV0;
-                if (!grassVertex(vWorldPos, vNormal, vColor))
+                if (!grassVertex(vRelativePos, vNormal, vColor))
                 {
                     // Every vertex of an absent blade lands on one point, so it rasterizes nothing
                     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
                     return;
                 }
-                gl_Position = Graphite_RelativeToClip(vWorldPos);
+                gl_Position = Graphite_RelativeToClip(vRelativePos);
             }
         }
         Fragment
@@ -79,7 +79,7 @@ Shader "Default/Grass"
 
             in vec2 vUV;
             in vec4 vColor;
-            in vec3 vWorldPos;
+            in vec3 vRelativePos;
             in vec3 vNormal;
 
             uniform sampler2D _MainTex;
@@ -101,13 +101,13 @@ Shader "Default/Grass"
                 float metallic = 0.0;
                 Graphite_DebugInputs(baseColor, metallic);
 
-                vec3 viewDir = GetWorldViewDir(vWorldPos);
-                vec3 lighting = CalculateForwardLighting(vWorldPos, normal, viewDir, baseColor, 0.0, 0.9, 1.0,
+                vec3 viewDir = Graphite_ViewDir(vRelativePos);
+                vec3 lighting = CalculateForwardLighting(vRelativePos, normal, viewDir, baseColor, 0.0, 0.9, 1.0,
                                                          _Translucency, _ScatterPower, _ScatterDistortion, _ScatterScale);
                 vec3 ambient = Graphite_IndirectDiffuse(normal, vec2(0.0)) * baseColor;
 
-                vec3 color = ApplyFog(ambient + lighting, vWorldPos);
-                fragColor = vec4(Graphite_DebugView(color, baseColor, normal, 0.9, 0.0, 1.0, vec3(0.0), vWorldPos, vec2(0.0)), 1.0);
+                vec3 color = ApplyFog(ambient + lighting, vRelativePos);
+                fragColor = vec4(Graphite_DebugView(color, baseColor, normal, 0.9, 0.0, 1.0, vec3(0.0), vRelativePos, vec2(0.0)), 1.0);
                 Graphite_WriteGBuffer(normal, 0.9, 0.0);
             }
         }
@@ -129,9 +129,9 @@ Shader "Default/Grass"
             void main()
             {
                 vUV = vertexUV0;
-                vec3 world, normal;
+                vec3 relative, normal;
                 vec4 color;
-                gl_Position = grassVertex(world, normal, color) ? Graphite_RelativeToClip(world) : vec4(2.0, 2.0, 2.0, 1.0);
+                gl_Position = grassVertex(relative, normal, color) ? Graphite_RelativeToClip(relative) : vec4(2.0, 2.0, 2.0, 1.0);
             }
         }
         Fragment
@@ -165,9 +165,9 @@ Shader "Default/Grass"
             void main()
             {
                 vUV = vertexUV0;
-                vec3 world, normal;
+                vec3 relative, normal;
                 vec4 color;
-                gl_Position = grassVertex(world, normal, color) ? Graphite_RelativeToClip(world) : vec4(2.0, 2.0, 2.0, 1.0);
+                gl_Position = grassVertex(relative, normal, color) ? Graphite_RelativeToClip(relative) : vec4(2.0, 2.0, 2.0, 1.0);
             }
         }
         Fragment

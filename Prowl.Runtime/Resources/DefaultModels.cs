@@ -44,7 +44,7 @@ public static class DefaultModels
                 CalculateTangentSpace = true
             });
 
-        if (importResult.RootGO != null)
+        if (importResult.RootGO.IsValid())
             result.GameObjectData = Serializer.Serialize(typeof(object), importResult.RootGO);
 
         return result;

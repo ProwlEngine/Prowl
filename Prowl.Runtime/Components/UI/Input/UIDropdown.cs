@@ -125,7 +125,7 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
 
     private void UpdateCaption()
     {
-        if (_captionText is null) return;
+        if (_captionText.IsNotValid()) return;
         _captionText.Text = (_value >= 0 && _value < _options.Count) ? _options[_value] : string.Empty;
     }
 
@@ -154,7 +154,7 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
 
     private void Open()
     {
-        if (_open || !Application.IsPlaying || _optionsRoot is null) return;
+        if (_open || !Application.IsPlaying || _optionsRoot.IsNotValid()) return;
         _open = true;
         RebuildItems();
         _optionsRoot.GameObject.Enabled = true;
@@ -185,7 +185,7 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
     private bool IsWithinDropdown(GameObject? go)
     {
         GameObject? listRoot = _optionsRoot.IsValid() ? _optionsRoot.GameObject : null;
-        for (GameObject? n = go; n != null; n = n.Parent)
+        for (GameObject? n = go; n.IsValid(); n = n.Parent)
             if (ReferenceEquals(n, GameObject) || ReferenceEquals(n, listRoot)) return true;
         return false;
     }
@@ -196,7 +196,7 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
 
     private void RebuildItems()
     {
-        if (_optionsRoot is null) return;
+        if (_optionsRoot.IsNotValid()) return;
 
         while (_items.Count < _options.Count)
             _items.Add(CreateItem(_items.Count));

@@ -78,7 +78,7 @@ public class TextureImporter : AssetImporter
         if (spriteSettings.Mode == SpriteMode.None) spriteSettings.Mode = SpriteMode.Single;
 
         foreach (KeyValuePair<string, Texture2D> kv in spriteSettings.SecondaryTextures)
-            if (kv.Value is not null) ctx.AddDependency(kv.Value.AssetID);
+            if (kv.Value.IsValid()) ctx.AddDependency(kv.Value.AssetID);
 
         foreach ((SpriteSliceData? slice, Sprite? sprite) in SpriteBuilder.Build(texture, spriteSettings, image.Width, image.Height, pixels))
             ctx.AddSubAsset(slice.Name, sprite, SpriteBuilder.IdentityOf(spriteSettings, slice));

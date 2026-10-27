@@ -339,10 +339,10 @@ internal sealed class ModelRuntimeImporter : RuntimeImporter
         foreach (Mesh mesh in result.Meshes) context.AddSubAsset(mesh.Name, mesh);
         foreach (Material material in result.Materials) context.AddSubAsset(material.Name, material);
         foreach (AnimationClip clip in result.Animations) context.AddSubAsset(clip.Name, clip);
-        if (result.Avatar != null) context.AddSubAsset("Avatar", result.Avatar);
+        if (result.Avatar.IsValid()) context.AddSubAsset("Avatar", result.Avatar);
 
         var prefab = new PrefabAsset { InstanceType = PrefabInstanceType.Model };
-        if (result.RootGO != null) prefab.GameObjectData = Serializer.Serialize(typeof(object), result.RootGO);
+        if (result.RootGO.IsValid()) prefab.GameObjectData = Serializer.Serialize(typeof(object), result.RootGO);
         context.SetMain(prefab);
     }
 
@@ -552,7 +552,7 @@ public sealed class SourceAssetBackend : AssetBackend
             return false;
         }
 
-        if (context.Main == null)
+        if (context.Main.IsNotValid())
         {
             Debug.LogError($"Importing '{entry.FilePath}' from '{Files.Name}' made no asset.");
             return false;

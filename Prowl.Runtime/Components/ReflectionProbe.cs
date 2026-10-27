@@ -230,7 +230,7 @@ public class ReflectionProbe : Component, IRenderSync
     public override void DrawGizmos()
     {
         Texture2D icon = Texture2D.LoadDefault(DefaultTexture.IconLight);
-        if (icon != null) Debug.DrawIcon(icon, CapturePosition, 0.5f, new Color(0.6f, 0.8f, 1f, 1f));
+        if (icon.IsValid()) Debug.DrawIcon(icon, CapturePosition, 0.5f, new Color(0.6f, 0.8f, 1f, 1f));
     }
 
     public override void DrawGizmosSelected()
