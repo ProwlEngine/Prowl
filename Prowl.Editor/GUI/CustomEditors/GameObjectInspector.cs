@@ -62,15 +62,32 @@ public static class GameObjectInspector
     private static bool IsExpanded(string id) => !s_collapsedSections.Contains(id);
     private static void ToggleSection(string id) { if (!s_collapsedSections.Add(id)) s_collapsedSections.Remove(id); }
 
+    // The section whose menu is showing. Origami only says whether some menu is open, so the section notes
+    // itself each time its menu builds and is forgotten once no menu is open.
+    private static string? s_menuSection;
+
+    private static bool IsMenuOpen(string id)
+    {
+        if (!ContextMenu.IsOpen) s_menuSection = null;
+        return s_menuSection == id;
+    }
+
     private static bool SectionHeader(Paper paper, Prowl.Scribe.FontFile font, string id,
-        string glyph, string title, Color titleColor, Action? trailing = null, Action? onDragStart = null)
+        string glyph, string title, Color titleColor, Action? trailing = null, Action? onDragStart = null,
+        Action<ContextBuilder>? contextMenu = null)
     {
         bool expanded = IsExpanded(id);
         Scribe.FontFile semi = EditorTheme.FontSemiBold ?? font;
+        Action<ContextBuilder>? menu = contextMenu == null ? null : b => { s_menuSection = id; contextMenu(b); };
         using (paper.Row($"{id}_head").Height(30).Padding(10, 8, 0, 0).Gap(7).Enter())
         {
+            if (menu != null)
+                Origami.RightClickMenu(paper, $"{id}_ctx", menu);
+
+            Color highlight = Color.FromArgb(13, EditorTheme.Purple400);
             ElementBuilder clickRow = paper.Row($"{id}_hclick").Width(UnitValue.Stretch()).Height(30).Gap(7).Rounded(EditorTheme.Roundness)
-                .Hovered.BackgroundColor(Color.FromArgb(13, EditorTheme.Purple400)).End()
+                .BackgroundColor(IsMenuOpen(id) ? highlight : Color.Transparent)
+                .Hovered.BackgroundColor(highlight).End()
                 .OnClick(id, (i, _) => ToggleSection(i));
             if (onDragStart != null)
                 clickRow.OnDragStart(0, (_, _) => onDragStart());
@@ -89,6 +106,9 @@ public static class GameObjectInspector
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
             }
             trailing?.Invoke();
+            if (menu != null)
+                EditorGUI.HeaderIconButton(paper, $"{id}_dots", EditorIcons.EllipsisVertical, Loc.Get("inspector.options"), () =>
+                    Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, menu));
         }
         return expanded;
     }
@@ -400,13 +420,9 @@ public static class GameObjectInspector
         Guid goId = go.Identifier;
 
         bool expanded = SectionHeader(paper, font, $"gi_transform_{goId}", EditorIcons.ArrowsUpDownLeftRight,
-            Loc.Get("inspector.transform"), EditorTheme.Ink500, () =>
-            {
-                EditorGUI.HeaderIconButton(paper, "gi_tf_reset", EditorIcons.ArrowRotateRight, Loc.Get("inspector.reset"), () => ResetTransform(go));
-                EditorGUI.HeaderIconButton(paper, "gi_tf_dots", EditorIcons.EllipsisVertical, Loc.Get("inspector.options"), () =>
-                    Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
-                        b.Item(Loc.Get("inspector.reset"), () => ResetTransform(go), icon: EditorIcons.ArrowRotateRight)));
-            });
+            Loc.Get("inspector.transform"), EditorTheme.Ink500,
+            () => EditorGUI.HeaderIconButton(paper, "gi_tf_reset", EditorIcons.ArrowRotateRight, Loc.Get("inspector.reset"), () => ResetTransform(go)),
+            contextMenu: b => b.Item(Loc.Get("inspector.reset"), () => ResetTransform(go), icon: EditorIcons.ArrowRotateRight));
         if (!expanded) return;
 
         // Position
@@ -839,11 +855,9 @@ public static class GameObjectInspector
                         Origami.Checkbox(paper, $"{compId}_en", comp.Enabled,
                             v => { bool old = comp.Enabled; Guid cId = comp.Identifier; Undo.RegisterAction("Toggle Component", () => { Component? c = Undo.FindComponent(cId); if (c.IsValid()) { c.Enabled = old; c.OnValidate(); } }, () => { Component? c = Undo.FindComponent(cId); if (c.IsValid()) { c.Enabled = v; c.OnValidate(); } }); comp.Enabled = v; comp.OnValidate(); })
                             .NoLabel().Show();
-                    EditorGUI.HeaderIconButton(paper, $"{compId}_gear", EditorIcons.EllipsisVertical, Loc.Get("inspector.options"), () =>
-                        Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
-                            BuildComponentContextMenu(b, go, comp, capturedI)));
                 },
-                onDragStart: () => DragDrop.StartDrag(new ComponentDragPayload(go, comp)));
+                onDragStart: () => DragDrop.StartDrag(new ComponentDragPayload(go, comp)),
+                contextMenu: b => BuildComponentContextMenu(b, go, comp, capturedI));
 
             if (expanded)
             {
