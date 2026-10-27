@@ -377,6 +377,8 @@ public static class ShaderParser
 
         ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
         states.Add(new() { Set = PassStateFields.StencilTest, DepthStencil = new() { StencilTestEnabled = true } });
+        // Earlier entries win, so these only fill masks the block left unset
+        states.Add(new() { Set = PassStateFields.StencilReadMask | PassStateFields.StencilWriteMask, DepthStencil = new() { StencilReadMask = 255, StencilWriteMask = 255 } });
         return FromSeveral(states);
     }
 
