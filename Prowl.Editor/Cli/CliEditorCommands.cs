@@ -677,15 +677,15 @@ public static class CliEditorCommands
     //  Assets
     // ================================================================
 
-    public enum AssetAction { Find, Info, Create, Import, Refresh, Move, Delete, Reimport, Types }
+    public enum AssetAction { Find, Info, Create, Import, Refresh, Copy, Move, Delete, Reimport, Types }
 
-    [CliCommand("asset", "Finds, inspects, creates, imports, moves, deletes or reimports assets. Paths are relative to Assets. Run refresh or import after writing files yourself")]
+    [CliCommand("asset", "Finds, inspects, creates, imports, copies, moves, deletes or reimports assets. Paths are relative to Assets. Run refresh or import after writing files yourself")]
     public static object Asset(
         [CliArg("action")] AssetAction action,
         [CliArg("path", "Asset path or ref, or a folder for find")] string path = "",
         [CliArg("type", "Asset type to find or create, such as Material, AnimationGraph or Folder")] string type = "",
         [CliArg("query", "Text the path must contain, for find")] string query = "",
-        [CliArg("to", "New path, for move")] string to = "",
+        [CliArg("to", "New path, for move or copy")] string to = "",
         [CliArg("limit", "Most results for find")] int limit = 50,
         [CliArg("overwrite", "Allow create to replace an existing file")] bool overwrite = false,
         [CliArg("confirm", "Required to delete, since deleting removes the file")] bool confirm = false)
@@ -793,6 +793,49 @@ public static class CliEditorCommands
                 bool moved = isFolder ? assets.MoveFolder(from, target) : assets.MoveAsset(from, target);
                 if (!moved) throw new CliException($"Could not move '{from}' to '{target}'. See the logs.");
                 return new { moved = from, to = target };
+            }
+
+            case AssetAction.Copy:
+            {
+                string from = CliRefs.AssetPath(Require(path, "path"));
+                bool isFolder = Directory.Exists(Path.Combine(Project.Current!.AssetsPath, from));
+                Guid source = isFolder ? Guid.Empty : CliRefs.ResolveAssetGuid(path);
+                AssetEntry? entry = isFolder ? null : assets.GetEntry(source);
+                bool isSubAsset = !isFolder && entry == null;
+                if (isSubAsset && !assets.TryGetParentGuid(source, out _)) throw new CliException($"No asset at '{path}'.");
+                if (entry != null) from = entry.Path;
+
+                string target = CliRefs.AssetPath(Require(to, "to"));
+                if (Directory.Exists(Path.Combine(Project.Current!.AssetsPath, target))) throw new CliException($"'{target}' already exists.");
+                string? extension = isFolder ? null
+                    : isSubAsset ? EditorRegistries.AssetMenuEntries.FirstOrDefault(e => e.Type == AssetDatabase.GetAssetType(source)).Extension
+                    : Path.GetExtension(from);
+                if (!string.IsNullOrEmpty(extension))
+                {
+                    if (Path.GetExtension(target).Length == 0) target += extension;
+                    else if (!Path.GetExtension(target).Equals(extension, StringComparison.OrdinalIgnoreCase))
+                        throw new CliException($"'{target}' needs the {extension} extension.");
+                }
+                string targetAbsolute = Path.Combine(Project.Current!.AssetsPath, target);
+                if (File.Exists(targetAbsolute) || Directory.Exists(targetAbsolute)) throw new CliException($"'{target}' already exists.");
+
+                if (!isSubAsset)
+                {
+                    if (!assets.CopyAsset(from, target)) throw new CliException($"Could not copy '{from}' to '{target}'. See the logs.");
+                }
+                else
+                {
+                    // ExtractSubAsset only takes a folder and picks its own name, so the copy is renamed after
+                    string folder = Path.GetDirectoryName(target)?.Replace('\\', '/') ?? "";
+                    Directory.CreateDirectory(Path.Combine(Project.Current!.AssetsPath, folder));
+                    string copied = assets.ExtractSubAsset(source, folder) ?? throw new CliException($"Could not copy '{from}' to '{target}'. See the logs.");
+                    if (!copied.Equals(target, StringComparison.Ordinal) && !assets.MoveAsset(copied, target))
+                        throw new CliException($"Copied '{from}' to '{copied}' but could not rename it to '{target}'. See the logs.");
+                }
+
+                if (isFolder) return new { copied = from, to = target };
+                Guid guid = assets.PathToGuid(target);
+                return CliRefs.AssetSummary(guid, AssetDatabase.GetAssetType(guid));
             }
 
             case AssetAction.Delete:

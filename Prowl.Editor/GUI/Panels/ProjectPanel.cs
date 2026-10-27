@@ -107,6 +107,7 @@ public class ProjectPanel : DockPanel
     private const float ToolbarHeight = 34;
     private const float FooterHeight = 26;
     private const float FolderTreeWidth = 172f;
+    private const float CutOpacity = 0.5f;
 
     // -- asset-browser view state --
     private enum SortMode { Name, Type, Size, Modified }
@@ -263,7 +264,7 @@ public class ProjectPanel : DockPanel
         switch (payload)
         {
             case AssetDragPayload ap when CanAcceptAssetDropInto(targetFolder):
-                PerformAssetMove(ap, targetFolder);
+                EditorAssetBackend.Instance?.MoveAssets(ap.AssetPaths, targetFolder);
                 DragDrop.EndDrag();
                 break;
             case GameObjectDragPayload gp:
@@ -430,69 +431,6 @@ public class ProjectPanel : DockPanel
     }
 
     /// <summary>
-    /// Move every asset/folder in <paramref name="payload"/> into <paramref name="destRelFolder"/>
-    /// (assets-relative; empty = root). Skips no-ops and self-containment cycles, resolves
-    /// name collisions with " (N)" suffixes, and refreshes thumbnails after the move.
-    /// </summary>
-    private void PerformAssetMove(AssetDragPayload payload, string destRelFolder)
-    {
-        EditorAssetBackend? db = EditorAssetBackend.Instance;
-        if (db == null || Project.Current == null) return;
-
-        destRelFolder = (destRelFolder ?? "").Replace('\\', '/').TrimEnd('/');
-        string destAbs = string.IsNullOrEmpty(destRelFolder)
-            ? Project.Current.AssetsPath
-            : Path.Combine(Project.Current.AssetsPath, destRelFolder);
-        if (!Directory.Exists(destAbs)) return;
-
-        int moved = 0;
-        foreach (string rawSrc in payload.AssetPaths)
-        {
-            if (string.IsNullOrEmpty(rawSrc)) continue;
-            string src = rawSrc.Replace('\\', '/').TrimEnd('/');
-            string srcName = Path.GetFileName(src);
-            string srcDir = Path.GetDirectoryName(src)?.Replace('\\', '/') ?? "";
-
-            // Already in target folder nothing to do.
-            if (srcDir.Equals(destRelFolder, StringComparison.OrdinalIgnoreCase)) continue;
-
-            string srcAbs = Path.Combine(Project.Current.AssetsPath, src);
-            bool isFolder = Directory.Exists(srcAbs) && !File.Exists(srcAbs);
-
-            if (isFolder)
-            {
-                // Can't drop a folder on itself or into one of its descendants that would
-                // delete the folder mid-move.
-                string srcWithSlash = src + "/";
-                if (destRelFolder.Equals(src, StringComparison.OrdinalIgnoreCase)
-                    || destRelFolder.StartsWith(srcWithSlash, StringComparison.OrdinalIgnoreCase))
-                {
-                    Runtime.Debug.LogWarning($"Skipped: can't move folder '{src}' into itself.");
-                    continue;
-                }
-
-                string unique = AssetCreateMenu.FindUniqueName(destAbs, srcName, "");
-                string newRel = string.IsNullOrEmpty(destRelFolder) ? unique : destRelFolder + "/" + unique;
-                if (db.MoveFolder(src, newRel)) moved++;
-            }
-            else if (File.Exists(srcAbs))
-            {
-                string ext = Path.GetExtension(srcName);
-                string baseName = Path.GetFileNameWithoutExtension(srcName);
-                string unique = AssetCreateMenu.FindUniqueName(destAbs, baseName, ext);
-                string newRel = string.IsNullOrEmpty(destRelFolder) ? unique : destRelFolder + "/" + unique;
-                if (db.MoveAsset(src, newRel)) moved++;
-            }
-        }
-
-        if (moved > 0)
-        {
-            // Thumbnails are keyed by GUID, not path, so a move/rename doesn't invalidate them.
-            Runtime.Debug.Log($"Moved {moved} item(s) to '{(string.IsNullOrEmpty(destRelFolder) ? "Assets" : destRelFolder)}'.");
-        }
-    }
-
-    /// <summary>
     /// Create a prefab for <paramref name="go"/> inside <paramref name="destRelFolder"/>
     /// (assets-relative; empty = root). Uniquifies the filename against what's already there.
     /// </summary>
@@ -619,11 +557,12 @@ public class ProjectPanel : DockPanel
                 .CustomRowContent((p, node, isSel, isExp) =>
                 {
                     string relativePath = (string)node.UserData!;
+                    float opacity = AssetClipboard.IsCut(_folderTreeItemsByPath[relativePath]) ? CutOpacity : 1f;
 
                     // Rows are their own elements, so these ids only need to be unique within the row.
                     // Folder icon
                     p.Box("proj_fi")
-                        .Width(18).Height(22)
+                        .Width(18).Height(22).Opacity(opacity)
                         .Text(EditorIcons.Folder, font)
                         .TextColor(EditorTheme.Amber400)
                         .FontSize(12f).Alignment(TextAlignment.MiddleCenter);
@@ -631,7 +570,7 @@ public class ProjectPanel : DockPanel
                     // Name (inline rename or label)
                     if (RenameOverlay.IsRenaming($"proj_folder_{relativePath}"))
                     {
-                        using (p.Box("proj_ft_rename_slot").Width(UnitValue.Stretch()).Height(22).Margin(4, 4, 0, 0).Enter())
+                        using (p.Box("proj_ft_rename_slot").Width(UnitValue.Stretch()).Height(22).Margin(4, 4, 0, 0).Opacity(opacity).Enter())
                             RenameOverlay.Draw(p, $"proj_ft_rename_{node.Id.GetHashCode()}", 20);
                     }
                     else
@@ -639,6 +578,7 @@ public class ProjectPanel : DockPanel
                         p.Box("proj_fl")
                             .Height(22)
                             .Margin(4, 0, 0, 0)
+                            .Opacity(opacity)
                             .Text(node.Label, font)
                             .TextColor(EditorTheme.Ink500)
                             .FontSize(EditorTheme.FontSize)
@@ -746,6 +686,16 @@ public class ProjectPanel : DockPanel
                     ContentItem? first = Selection.GetSelected<ContentItem>().FirstOrDefault();
                     if (first != null) StartRename(first);
                 }
+                else if (ShortcutManager.IsPressed("Project/Duplicate"))
+                    AssetClipboard.Duplicate(Selection.GetSelected<ContentItem>());
+                else if (ShortcutManager.IsPressed("Project/Copy"))
+                    AssetClipboard.Copy(Selection.GetSelected<ContentItem>());
+                else if (ShortcutManager.IsPressed("Project/Cut"))
+                    AssetClipboard.Cut(Selection.GetSelected<ContentItem>());
+                else if (ShortcutManager.IsPressed("Project/Paste"))
+                    AssetClipboard.Paste(_currentFolder);
+                else if (ShortcutManager.IsPressed("Project/CancelCut"))
+                    AssetClipboard.CancelCut();
             }
 
             // While any drag is active, show a banner at the top of the content area
@@ -896,13 +846,14 @@ public class ProjectPanel : DockPanel
         bool hasSubs = item.Subs.Count > 0;
         bool expanded = hasSubs && _expandedAssets.Contains(item.Guid);
         AssetTypeStyle style = item.IsFolder ? FolderStyle(item.RelativePath) : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
+        float opacity = AssetClipboard.IsCut(item) ? CutOpacity : 1f;
 
         if (col == 0)
         {
             if (isSub)
-                paper.Box($"proj_tcind_{id}").Width(20).Height(TableRowH).IsNotInteractable();
+                paper.Box($"proj_tcind_{id}").Width(20).Height(TableRowH).Opacity(opacity).IsNotInteractable();
             else if (hasSubs)
-                paper.Box($"proj_tccar_{id}").Width(15).Height(TableRowH)
+                paper.Box($"proj_tccar_{id}").Width(15).Height(TableRowH).Opacity(opacity)
                     .StopEventPropagation()
                     .OnClick(item.Guid, (g, _) =>
                     {
@@ -911,9 +862,9 @@ public class ProjectPanel : DockPanel
                     })
                     .Icon(paper, expanded ? EditorIcons.ChevronDown_I : EditorIcons.ChevronRight_I, EditorTheme.InkDim, size: 11f);
             else
-                paper.Box($"proj_tcsp_{id}").Width(15).Height(TableRowH).IsNotInteractable();
+                paper.Box($"proj_tcsp_{id}").Width(15).Height(TableRowH).Opacity(opacity).IsNotInteractable();
 
-            ElementBuilder ic = paper.Box($"proj_tcico_{id}").Width(18).Height(TableRowH).Margin(2, 0, 0, 0);
+            ElementBuilder ic = paper.Box($"proj_tcico_{id}").Width(18).Height(TableRowH).Margin(2, 0, 0, 0).Opacity(opacity);
             if (style.Badge != null)
                 ic.Text(style.Badge, mono).TextColor(style.Color).FontSize(10f).Alignment(TextAlignment.MiddleCenter);
             else
@@ -921,40 +872,42 @@ public class ProjectPanel : DockPanel
 
             if (RenameOverlay.IsRenaming($"proj_asset_{item.RelativePath}"))
             {
-                using (paper.Box($"proj_tcrn_slot_{id}").Width(UnitValue.Stretch()).Height(TableRowH).Margin(6, 4, 0, 0).Enter())
+                using (paper.Box($"proj_tcrn_slot_{id}").Width(UnitValue.Stretch()).Height(TableRowH).Margin(6, 4, 0, 0).Opacity(opacity).Enter())
                     RenameOverlay.Draw(paper, $"proj_tcrn_{id}", TableRowH - 2);
             }
             else
             {
                 // Name hugs its text so the sub-count tag sits right beside it; a trailing spacer fills the rest.
-                paper.Box($"proj_tclbl_{id}").Width(UnitValue.Auto).Height(TableRowH).Margin(6, 0, 0, 0).Clip()
+                paper.Box($"proj_tclbl_{id}").Width(UnitValue.Auto).Height(TableRowH).Margin(6, 0, 0, 0).Opacity(opacity).Clip()
                     .Text(DisplayName(item), font)
                     .TextColor(isSub ? EditorTheme.Ink400 : EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
                 if (hasSubs)
                     paper.Box($"proj_tctag_{id}").Width(UnitValue.Auto).Height(17).Rounded(Origami.Current.Metrics.SmallRounding).Padding(6, 6, 0, 0).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                        .Opacity(opacity)
                         .BackgroundColor(EditorTheme.Selected).BorderColor(Color.FromArgb(77, EditorTheme.Purple400)).BorderWidth(1)
                         .Text(item.Subs.Count.ToString(), semi).TextColor(EditorTheme.AccentText)
                         .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
                 else if (isSub)
                     paper.Box($"proj_tctag_{id}").Width(UnitValue.Auto).Height(17).Rounded(Origami.Current.Metrics.SmallRounding).Padding(6, 6, 0, 0).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                        .Opacity(opacity)
                         .BackgroundColor(EditorTheme.Selected).BorderColor(Color.FromArgb(77, EditorTheme.Purple400)).BorderWidth(1)
                         .Text("sub", semi).TextColor(EditorTheme.AccentText)
                         .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
 
-                paper.Box($"proj_tcnsp_{id}").Height(TableRowH).IsNotInteractable();
+                paper.Box($"proj_tcnsp_{id}").Height(TableRowH).Opacity(opacity).IsNotInteractable();
             }
         }
         else if (col == 1)
         {
-            paper.Box($"proj_tctype_{id}").Height(TableRowH).IsNotInteractable()
+            paper.Box($"proj_tctype_{id}").Height(TableRowH).Opacity(opacity).IsNotInteractable()
                 .Text(item.IsFolder ? Loc.Get("inspector.folder") : item.TypeLabel, font).TextColor(EditorTheme.Ink300)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
         }
         else
         {
-            paper.Box($"proj_tcsize_{id}").Height(TableRowH).IsNotInteractable()
+            paper.Box($"proj_tcsize_{id}").Height(TableRowH).Opacity(opacity).IsNotInteractable()
                 .Text(item.IsFolder || isSub ? "-" : FormatSize(item.Size), mono)
                 .TextColor(isSub ? EditorTheme.InkFaint : EditorTheme.InkDim).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
         }
@@ -998,6 +951,14 @@ public class ProjectPanel : DockPanel
             builder.Separator();
 
             builder.Item(Loc.Get("project.rename"), () => StartRename(item, inTree), enabled: !isMulti && !isRoot && CanRename(item), icon: EditorIcons.PenToSquare);
+            builder.Item(Loc.Get("project.cut"), () => AssetClipboard.Cut(Selection.GetSelected<ContentItem>()),
+                enabled: !isRoot && !item.IsSubAsset, shortcut: ShortcutText("Project/Cut"), icon: EditorIcons.Scissors);
+            builder.Item(Loc.Get("project.copy"), () => AssetClipboard.Copy(Selection.GetSelected<ContentItem>()),
+                enabled: !isRoot, shortcut: ShortcutText("Project/Copy"), icon: EditorIcons.Copy);
+            builder.Item(Loc.Get("project.paste"), () => AssetClipboard.Paste(folder),
+                enabled: AssetClipboard.HasContent, shortcut: ShortcutText("Project/Paste"), icon: EditorIcons.Paste);
+            builder.Item(Loc.Get("project.duplicate"), () => AssetClipboard.Duplicate(Selection.GetSelected<ContentItem>()),
+                enabled: !isRoot, shortcut: ShortcutText("Project/Duplicate"), icon: EditorIcons.Clone);
             builder.Item(Loc.Get("project.copy_path"), () => paper_SetClipboard(item.RelativePath), icon: EditorIcons.Copy);
             if (!item.IsFolder && item.Guid != Guid.Empty)
                 builder.Item(Loc.Get("project.copy_guid"), () => paper_SetClipboard(item.Guid.ToString()), icon: EditorIcons.Fingerprint);
@@ -1037,6 +998,8 @@ public class ProjectPanel : DockPanel
 
     private void paper_SetClipboard(string text) => _paper?.SetClipboard(text);
 
+    private static string ShortcutText(string id) => ShortcutManager.GetDisplayString(ShortcutManager.GetBinding(id));
+
     private void BuildBackgroundContextMenu(Paper paper, string id)
     {
         Origami.RightClickMenu(paper, id, builder =>
@@ -1044,6 +1007,8 @@ public class ProjectPanel : DockPanel
             string folder = _currentFolder;
 
             builder.Submenu(Loc.Get("project.create"), sub => MenuItemAttribute.BuildContextMenu(sub, "Assets/Create"), icon: EditorIcons.FileCirclePlus);
+            builder.Item(Loc.Get("project.paste"), () => AssetClipboard.Paste(folder),
+                enabled: AssetClipboard.HasContent, shortcut: ShortcutText("Project/Paste"), icon: EditorIcons.Paste);
             builder.Separator();
 
             builder.Item(Loc.Get("project.show_in_explorer"), () =>
@@ -1373,6 +1338,7 @@ public class ProjectPanel : DockPanel
             .BorderColor(isSelected ? Color.FromArgb(102, EditorTheme.Purple400) : Color.Transparent).BorderWidth(1)
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Selected : EditorTheme.Hover).End()
             .Rounded(cellRound)
+            .Opacity(AssetClipboard.IsCut(item) ? CutOpacity : 1f)
             .OnClick((item, idx, itemObjects), (cap, e) =>
             {
                 e.StopPropagation();

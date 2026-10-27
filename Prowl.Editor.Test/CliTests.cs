@@ -676,6 +676,25 @@ public class CliAssetCommandTests : EditorTestHarness
     }
 
     [Fact]
+    public void AssetsAreCopiedUnderFreshGuids()
+    {
+        Ok("asset", "create", "--path", "Masks/Upper", "--type", "AvatarMask");
+        Guid original = Assets.PathToGuid("Masks/Upper.mask");
+
+        JsonNode copied = Ok("asset", "copy", "--path", "Masks/Upper.mask", "--to", "Copies/Lower")!;
+        Assert.Equal("Copies/Lower.mask", copied["path"]!.GetValue<string>());
+        Assert.NotEqual(original, Assets.PathToGuid("Copies/Lower.mask"));
+        Assert.Equal(original, Assets.PathToGuid("Masks/Upper.mask"));
+        Assert.Contains("already exists", Fails("asset", "copy", "--path", "Masks/Upper.mask", "--to", "Copies/Lower.mask"));
+        Assert.Contains("already exists", Fails("asset", "copy", "--path", "Masks/Upper.mask", "--to", "Copies"));
+        Assert.Contains("needs the .mask extension", Fails("asset", "copy", "--path", "Masks/Upper.mask", "--to", "Copies/Lower.mat"));
+
+        Ok("asset", "copy", "--path", "Masks", "--to", "MoreMasks");
+        Assert.True(File.Exists(AssetAbsolutePath("MoreMasks/Upper.mask")));
+        Assert.NotEqual(original, Assets.PathToGuid("MoreMasks/Upper.mask"));
+    }
+
+    [Fact]
     public void ScriptsAreWrittenFromATemplate()
     {
         JsonNode result = Ok("script", "Scripts/Gun")!;

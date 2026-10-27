@@ -104,6 +104,10 @@
   "hierarchy.rename": "Переименовать",
 
   "project.copy_path": "Копировать путь",
+  "project.cut": "Вырезать",
+  "project.copy": "Копировать",
+  "project.paste": "Вставить",
+  "project.duplicate": "Дублировать",
   "project.delete": "Удалить",
   "project.reimport": "Переимпортировать",
   "project.refresh": "Обновить",

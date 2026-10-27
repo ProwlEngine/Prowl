@@ -104,6 +104,10 @@
   "hierarchy.rename": "Zmien nazwe",
 
   "project.copy_path": "Kopiuj sciezke",
+  "project.cut": "Wytnij",
+  "project.copy": "Kopiuj",
+  "project.paste": "Wklej",
+  "project.duplicate": "Duplikuj",
   "project.delete": "Usun",
   "project.reimport": "Reimportuj",
   "project.refresh": "Odswiez",
