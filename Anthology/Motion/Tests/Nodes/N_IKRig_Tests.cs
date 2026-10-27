@@ -86,4 +86,38 @@ public class N_IKRig_Tests
         i.Pose.CalculateModelSpaceTransforms();
         Assert.Equal(0.0, (double)i.Pose.GetModelSpaceTransform(foot).position.Y, 2);
     }
+
+    // A humanoid arm with fingers: the palm, midway from the wrist to the knuckles, is what reaches
+    private static (Avatar Avatar, AnimationClip Clip, int Upper, int Lower, int Hand, int Knuckle) MakeArm()
+    {
+        Avatar avatar = new HumanoidTestRig { Fingers = true, ArmDownDegrees = 60f }.BuildAvatar();
+        HumanoidRig rig = avatar.Humanoid!;
+        Skeleton skeleton = avatar.Skeleton!;
+        var pose = new Pose(skeleton);
+        pose.SetToReferencePose();
+        return (avatar, new AnimationClip(skeleton, new[] { pose, pose }, 1f), rig.GetSkeletonBoneIndex(HumanBodyBone.RightUpperArm),
+            rig.GetSkeletonBoneIndex(HumanBodyBone.RightLowerArm), rig.GetSkeletonBoneIndex(HumanBodyBone.RightHand), rig.GetSkeletonBoneIndex(HumanBodyBone.RightIndexProximal));
+    }
+
+    private static Float3 PalmAfterUpdate(AnimationGraph graph, Avatar avatar, int hand, int knuckle, Float3 goal)
+    {
+        AnimationGraphInstance instance = graph.CreateInstance(avatar);
+        instance.SetTarget("T", Target.FromWorld(new Transform3D(goal, Quaternion.Identity, Float3.One)));
+        instance.Update(0.016f);
+        return (instance.Pose.GetModelSpaceTransform(hand).position + instance.Pose.GetModelSpaceTransform(knuckle).position) * 0.5f;
+    }
+
+    [Fact]
+    public void IKRigNode_OnAHumanoidHand_ReachesWithThePalm()
+    {
+        var arm = MakeArm();
+        var g = new AnimationGraph();
+        int target = g.AddTargetParameter("T");
+        g.SetRoot(g.AddIKRig(g.AddClip(arm.Clip), new[] { new IKEffectorInfo("Hand", new[] { arm.Upper, arm.Lower, arm.Hand }, target) }));
+
+        var goal = new Float3(0.35f, 1.15f, 0.3f);
+        Float3 palm = PalmAfterUpdate(g, arm.Avatar, arm.Hand, arm.Knuckle, goal);
+
+        Assert.True(Float3.Distance(palm, goal) < 5e-3f, $"palm {palm} missed {goal}");
+    }
 }
