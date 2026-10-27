@@ -110,9 +110,10 @@ public sealed class MobileSupportTests
     }
 
     [Fact]
-    public void SceneDepthFallsBackToD16()
+    public void SceneDepthHasStencil_AndFallsBackToD32ThenD16()
     {
-        Assert.Equal(PixelFormat.D32_Float, ViewGraph.SceneDepth(_ => true));
-        Assert.Equal(PixelFormat.D16_UNorm, ViewGraph.SceneDepth(format => format != PixelFormat.D32_Float));
+        Assert.Equal(PixelFormat.D32_Float_S8_UInt, ViewGraph.SceneDepth(_ => true));
+        Assert.Equal(PixelFormat.D32_Float, ViewGraph.SceneDepth(format => format != PixelFormat.D32_Float_S8_UInt));
+        Assert.Equal(PixelFormat.D16_UNorm, ViewGraph.SceneDepth(format => format == PixelFormat.D16_UNorm));
     }
 }

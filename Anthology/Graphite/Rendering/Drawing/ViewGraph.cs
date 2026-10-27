@@ -9,8 +9,10 @@ internal sealed class ViewGraph
     internal static PixelFormat[] SceneFormats(Func<PixelFormat, bool> drawable)
         => [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_Float, drawable(PixelFormat.R16_G16_SNorm) ? PixelFormat.R16_G16_SNorm : PixelFormat.R16_G16_Float, PixelFormat.R8_G8_UNorm];
 
+    // Stencil bits when the device has them, keeping float depth for reversed Z
     internal static PixelFormat SceneDepth(Func<PixelFormat, bool> drawable)
-        => drawable(PixelFormat.D32_Float) ? PixelFormat.D32_Float : PixelFormat.D16_UNorm;
+        => drawable(PixelFormat.D32_Float_S8_UInt) ? PixelFormat.D32_Float_S8_UInt
+        : drawable(PixelFormat.D32_Float) ? PixelFormat.D32_Float : PixelFormat.D16_UNorm;
 
     public const PixelFormat LdrColorFormat = PixelFormat.R8_G8_B8_A8_UNorm_SRgb;
 
