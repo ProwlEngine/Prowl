@@ -68,6 +68,9 @@ public class PhysicsWorld
         _contactFiltersChanged = true;
     }
 
+    /// <summary>Whether the two bodies may collide, after the layer matrix, ignored pairs and constraints.</summary>
+    internal bool Collides(Rigidbody3D a, Rigidbody3D b) => a.Native != null && b.Native != null && _layerFilter.BodiesCollide(a.Native, b.Native);
+
     /// <summary>Forgets every pair passed to <see cref="IgnoreCollisionBetween"/>.</summary>
     public void ClearIgnoredCollisions() => _layerFilter.ClearIgnoredCollisions();
 
