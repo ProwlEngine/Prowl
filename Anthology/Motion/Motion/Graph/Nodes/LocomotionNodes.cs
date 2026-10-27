@@ -161,6 +161,8 @@ public sealed class StrideWarpDefinition : PoseNodeDefinition
         /// <summary>The rate the clip is currently being played at.</summary>
         public float Scale => _scale;
 
+        public override float AverageLinearSpeed => Child.AverageLinearSpeed * _scale;
+
         public override void Bind(GraphBindContext context)
         {
             BindChild(context, _def.Child);
@@ -206,7 +208,7 @@ public sealed class StrideWarpDefinition : PoseNodeDefinition
             return Math.Clamp(desired / natural, MathF.Min(min, max), MathF.Max(min, max));
         }
 
-        private float NaturalFromChild() => Child is ClipNodeInstance clip ? clip.Clip.AverageLinearSpeed : 0f;
+        private float NaturalFromChild() => Child.AverageLinearSpeed;
     }
 }
 

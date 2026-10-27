@@ -220,7 +220,7 @@ internal sealed class ClipNodeInstance : PoseNodeInstance
     public AnimationClipBase Clip => _def.Clip;
 
     /// <summary>Average linear root speed (units/second) at the node's playback rate, 0 without root motion.</summary>
-    public float AverageLinearSpeed => _def.Clip.AverageLinearSpeed * MathF.Max(_def.SpeedMultiplier, 0f);
+    public override float AverageLinearSpeed => _def.Clip.AverageLinearSpeed * MathF.Max(_def.SpeedMultiplier, 0f);
 
     public override void Bind(GraphBindContext context)
     {
@@ -425,6 +425,11 @@ internal abstract class ParameterizedBlend1DInstance : PoseNodeInstance, IBlendW
         PlayingBackward = backward;
         LoopCount += backward ? -wraps : wraps;
     }
+
+    public override float AverageLinearSpeed
+        => Children == null || Children.Length == 0 ? 0f
+        : _low == _high ? Children[_low].AverageLinearSpeed
+        : Children[_low].AverageLinearSpeed * (1f - _weight) + Children[_high].AverageLinearSpeed * _weight;
 
     public float WeightOf(int childNodeIndex)
     {

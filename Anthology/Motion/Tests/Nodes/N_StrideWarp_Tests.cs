@@ -50,6 +50,29 @@ public class N_StrideWarp_Tests
     }
 
     [Fact]
+    public void StrideWarp_AfterABlend_MeasuresTheBlendsSpeed()
+    {
+        Skeleton skeleton = TestSkeletons.MakeChain();
+        var graph = new AnimationGraph();
+        int blendAt = graph.AddFloatParameter("Blend", 2f);
+        int desired = graph.AddFloatParameter("Speed", 4f);
+        int slow = graph.AddClip(TestClips.Ramp(skeleton, rootTravel: 1f));
+        int fast = graph.AddClip(TestClips.Ramp(skeleton, rootTravel: 3f));
+        int blend = graph.AddBlend1D(blendAt, [(slow, 1f), (fast, 3f)]);
+        graph.SetRoot(graph.AddStrideWarp(blend, desired));
+        AnimationGraphInstance instance = graph.CreateInstance(skeleton);
+
+        float travelled = 0f;
+        for (int i = 0; i < 60; i++)
+        {
+            instance.Update(1f / 60f, Transform3D.Identity);
+            travelled += instance.RootMotionDelta.position.Z;
+        }
+
+        Assert.Equal(4f, travelled, 1);
+    }
+
+    [Fact]
     public void StrideWarp_StaysWithinItsLimits()
     {
         (AnimationGraph graph, int warp, Skeleton skeleton) = WalkGraph(100f);
