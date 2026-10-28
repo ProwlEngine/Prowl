@@ -53,9 +53,14 @@ public static class PropertyGridUtils
         OrigamiMetrics m = theme.Metrics;
         float rh = m.RowHeight;
 
-        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Gap(m.Padding).Enter())
+        // If no label is provided, then the object reference is an element in a list.
+        bool hasLabel = !string.IsNullOrEmpty(label);
+
+        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh)
+            .Padding(hasLabel ? m.PaddingLarge : 0, hasLabel ? m.PaddingLarge : 0, 0, 0)
+            .Gap(m.Padding).Enter())
         {
-            if (!string.IsNullOrEmpty(label))
+            if (hasLabel)
                 paper.Box($"{id}_lbl")
                     .Width(m.LabelWidth).Height(rh).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                     .IsNotInteractable()
