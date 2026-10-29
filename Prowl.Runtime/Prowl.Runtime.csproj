@@ -16,6 +16,7 @@
     <InternalsVisibleTo Include="Prowl.Runtime.Test" />
     <InternalsVisibleTo Include="Prowl.Editor" />
     <InternalsVisibleTo Include="Prowl.Editor.Test" />
+    <InternalsVisibleTo Include="Prowl.CodeGen.Test" />
   </ItemGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -40,6 +41,11 @@
     <ProjectReference Include="$(AnthologyDir)Graphite\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" />
     <ProjectReference Include="$(AnthologyDir)Graphite\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
     <ProjectReference Include="$(AnthologyDir)Graphite\Rendering\Prowl.Graphite.Rendering.csproj" />
+  </ItemGroup>
+
+  <!-- Prowl.Warp isn't on NuGet yet, so it always builds from the sibling Anthology checkout. -->
+  <ItemGroup>
+    <ProjectReference Include="$(AnthologyDir)Warp\Warp\Prowl.Warp.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(ProwlLocalAnthology)' != 'true'">

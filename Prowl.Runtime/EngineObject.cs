@@ -69,6 +69,7 @@ public abstract class EngineObject : IDisposable
 
     /// <summary>Throws before anything is torn down when this may not be disposed from the calling thread.</summary>
     private protected virtual void AssertCanDispose() { }
+    private protected virtual void AssertCanDestroy() { }
 
     private static readonly List<EngineObject> s_destroyQueue = [];
 
@@ -87,6 +88,7 @@ public abstract class EngineObject : IDisposable
             throw new InvalidOperationException($"'{Name}' ({GetType().Name}) belongs to the asset database. Use AssetDatabase.Unload to free its memory.");
 
         if (IsDisposed || _destroyQueued) return;
+        AssertCanDestroy();
         _destroyQueued = true;
         lock (s_destroyQueue) s_destroyQueue.Add(this);
     }

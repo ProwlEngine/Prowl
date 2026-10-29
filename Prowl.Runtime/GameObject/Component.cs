@@ -8,6 +8,7 @@ using System.Threading;
 
 using Prowl.Echo;
 using Prowl.PaperUI;
+using Prowl.Runtime.Networking;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
@@ -64,6 +65,12 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     [SerializeIgnore]
     private bool? _executeAlwaysCached;
+
+    /// <summary>The owning GameObject's network configuration, ownership and replication operations.</summary>
+    public NetworkAccessor Network => GameObject.Network;
+
+    /// <summary>True when this peer receives the object's state from its controller.</summary>
+    public bool IsProxy => GameObject.IsProxy;
 
     [SerializeIgnore]
     private CancellationTokenSource? _destroyCancellation;
@@ -296,6 +303,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
         // Insert at new position
         GameObject._components.Insert(index, this);
+        SceneEvents.Invalidate();
     }
     #endregion
 
@@ -305,6 +313,8 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// <param name="go">The GameObject to attach to.</param>
     internal void AttachToGameObject(GameObject go)
     {
+        EventAttachmentVersion++;
+        SceneEvents.Invalidate();
         _go = go;
 
         bool isEnabled = _enabled && _go.EnabledInHierarchy;
@@ -316,7 +326,14 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// frame, so without this a removed component keeps ticking off the already-built dispatch list
     /// while nothing can find it on the GameObject any more.
     /// </summary>
-    internal void DetachFromGameObject() => _enabledInHierarchy = false;
+    [SerializeIgnore, ReloadIgnore] internal int EventAttachmentVersion;
+
+    internal void DetachFromGameObject()
+    {
+        EventAttachmentVersion++;
+        SceneEvents.Invalidate();
+        _enabledInHierarchy = false;
+    }
 
     /// <summary>
     /// Updates the enabled state based on changes in the hierarchy.
@@ -630,7 +647,10 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// Override to react to freshly loaded values.</summary>
     public virtual void OnAfterDeserialize() { }
 
-    private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(_go, nameof(Dispose));
+    private protected override void AssertCanDispose()
+    {
+        MainThreadContext.AssertOwner(_go, nameof(Dispose));
+    }
 
     /// <summary>Throws when this component's live object is touched from a thread other than the main one.</summary>
     private protected void AssertOwner([System.Runtime.CompilerServices.CallerMemberName] string member = "")
@@ -638,6 +658,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     private protected override void OnDisposed()
     {
+        SceneEvents.Invalidate();
         CancellationTokenSource? cancellation = Interlocked.Exchange(ref _destroyCancellation, null);
         if (cancellation == null) return;
 

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- [Sync] properties and RPCs compile the way game scripts do (see Prowl.CodeGen). -->
+    <ProwlCodeGen>true</ProwlCodeGen>
+  </PropertyGroup>
+
+</Project>

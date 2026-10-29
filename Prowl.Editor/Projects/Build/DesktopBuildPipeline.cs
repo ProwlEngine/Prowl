@@ -893,6 +893,12 @@ public class DesktopBuildPipeline : BuildPipeline
         };
         references.AddRange(gameAssemblies.Select(a => new AssemblyRef(a.Name, a.DllPath)));
 
+        // Prowl.Warp builds from source until it is on NuGet (see Prowl.Runtime.csproj), so it isn't among the
+        // runtime's PackageReferences yet and has to be handed over as a file. Once packaged, it arrives that way.
+        string warpPath = Path.Combine(engineDir, "Prowl.Warp.dll");
+        if (File.Exists(warpPath) && !GetRuntimePackageReferences().Any(p => p.Name == "Prowl.Warp"))
+            references.Add(new AssemblyRef("Prowl.Warp", warpPath));
+
         // Everything the engine reaches through reflection (serialized types, components, volume settings)
         // is rooted whole.
         if (desktopProfile.PublishAot)

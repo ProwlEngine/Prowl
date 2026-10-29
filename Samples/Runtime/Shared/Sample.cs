@@ -146,6 +146,14 @@ public abstract class StationGame : Game
     /// <summary>Shows only the stats, the frame rate and the sample's controls, for a sample played in a headset.</summary>
     public virtual bool CompactHud => false;
 
+    /// <summary>
+    /// Whether whoever's watching picks the station: the station bar, the station keys and their help. Off when
+    /// something else takes the camera from station to station.
+    /// </summary>
+    public virtual bool ChoosesStations => true;
+
+    private bool ShowsStations => ChoosesStations && Stations.Count > 1;
+
     public string KeyHelp
     {
         get
@@ -157,7 +165,7 @@ public abstract class StationGame : Game
                 10 => "1 to 9, 0",
                 _ => $"1 to {Stations.Count}",
             };
-            string keys = Stations.Count > 1 ? $"{range}  stations    {MoveKeys}" : MoveKeys;
+            string keys = ShowsStations ? $"{range}  stations    {MoveKeys}" : MoveKeys;
             return string.IsNullOrEmpty(ExtraKeys) ? keys : keys + "    " + ExtraKeys;
         }
     }
@@ -185,7 +193,7 @@ public abstract class StationGame : Game
 
     public override void BeginUpdate()
     {
-        for (int i = 0; i < StationKeys.Length && Stations.Count > 1 && i < Stations.Count; i++)
+        for (int i = 0; i < StationKeys.Length && ShowsStations && i < Stations.Count; i++)
             if (Input.GetKeyDown(StationKeys[i]))
                 GoToStation(i);
 
@@ -641,6 +649,15 @@ public sealed class PhysicsGrabber : Component
     private Float3 _localAnchor;
     private float _distance;
     private Float3 _target;
+
+    // A body that wasn't dynamic when clicked: held as soon as it is, if the button still is down.
+    private Rigidbody3D? _wanted;
+
+    /// <summary>
+    /// A body that can't be held right now, one that isn't dynamic, was clicked. The grab takes hold if it turns
+    /// dynamic while the button is still down, so whoever listens can make that happen.
+    /// </summary>
+    public event Action<Rigidbody3D>? UnheldClicked;
     private LineRenderer _line = null!;
 
     public bool IsHolding => _held.IsValid();
@@ -666,7 +683,9 @@ public sealed class PhysicsGrabber : Component
         if (Input.GetMouseButtonDown(0) && !overUi)
             TryGrab(ray);
         else if (!Input.GetMouseButton(0))
-            _held = null;
+            _held = _wanted = null;
+        else if (_wanted.IsValid() && _wanted!.MotionType == Jitter2.Dynamics.MotionType.Dynamic)
+            TryGrab(ray);
 
         _line.Points.Clear();
         if (!IsHolding) return;
@@ -683,7 +702,15 @@ public sealed class PhysicsGrabber : Component
         if (!physics.Raycast(ray.Origin, ray.Direction, out RaycastHit hit, 200f, QueryFilter.Default)) return;
 
         Rigidbody3D body = hit.Rigidbody;
-        if (body.IsNotValid() || body.MotionType != Jitter2.Dynamics.MotionType.Dynamic) return;
+        if (body.IsNotValid()) return;
+
+        _wanted = null;
+        if (body.MotionType != Jitter2.Dynamics.MotionType.Dynamic)
+        {
+            _wanted = body;
+            UnheldClicked?.Invoke(body);
+            return;
+        }
 
         _held = body;
         _localAnchor = Quaternion.Inverse(body.Rotation) * (hit.Point - body.Position);
@@ -781,8 +808,8 @@ public sealed class SampleHud : Component
 
         Game.DrawOverlay(paper, font);
 
-        // A sample that is one world to walk around has nowhere else to go.
-        if (Game.Stations.Count > 1) StationBar(paper, font, index);
+        // A sample that is one world to walk around has nowhere else to go, and one that's shown around has no choice.
+        if (Game.Stations.Count > 1 && Game.ChoosesStations) StationBar(paper, font, index);
     }
 
     /// <summary>The station's title, description, live stats and the key help.</summary>
@@ -796,7 +823,7 @@ public sealed class SampleHud : Component
             if (!Game.CompactHud)
             {
                 paper.Box("title").Height(30)
-                    .Text(Game.Stations.Count > 1 ? $"{StationGame.StationKey(index)}  {station.Name}" : station.Name, font).FontSize(24).TextColor(Accent)
+                    .Text(Game.Stations.Count > 1 && Game.ChoosesStations ? $"{StationGame.StationKey(index)}  {station.Name}" : station.Name, font).FontSize(24).TextColor(Accent)
                     .Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box("description").Height(UnitValue.Auto)

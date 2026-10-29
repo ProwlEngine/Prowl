@@ -400,6 +400,15 @@ public class HierarchyPanel : DockPanel
                                 .Alignment(TextAlignment.MiddleLeft);
                         }
 
+                        // Show current network status only during play.
+                        if (Application.IsPlaying && Inspector.NetworkPopover.HierarchyMarker(go) is { } net)
+                        {
+                            paper.Box("hier_net")
+                                .Width(18).Height(EditorTheme.RowHeight)
+                                .Tooltip(net.Tooltip)
+                                .Icon(paper, net.Icon, go.EnabledInHierarchy ? net.Color : Color.FromArgb(120, net.Color), size: 11f);
+                        }
+
                         // Visibility eye
                         paper.Box("hier_vis")
                             .Width(18).Height(EditorTheme.RowHeight)

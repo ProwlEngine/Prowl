@@ -1,0 +1,63 @@
+<Project>
+
+  <!--
+    Script code generation in `dotnet build`, the way the editor's script compiler does it: [Sync] properties,
+    RPCs and the serializers of the game's own types. Import this and set ProwlCodeGen to true; the generated
+    sources replace the project's own in the compile, with #line directives so errors and the debugger point
+    at the originals. Design-time builds (IntelliSense) see the sources as written, which already make sense.
+  -->
+
+  <PropertyGroup>
+    <ProwlCodeGenProject>$(MSBuildThisFileDirectory)..\Prowl.CodeGen.csproj</ProwlCodeGenProject>
+    <ProwlCodeGenOutput>$(IntermediateOutputPath)ProwlCodeGen\</ProwlCodeGenOutput>
+  </PropertyGroup>
+
+  <!-- Builds the generator first, without referencing it. -->
+  <ItemGroup Condition=" '$(ProwlCodeGen)' == 'true' ">
+    <ProjectReference Include="$(ProwlCodeGenProject)" ReferenceOutputAssembly="false" Private="false"/>
+  </ItemGroup>
+
+  <Target Name="ProwlCodeGenResolve" Condition=" '$(ProwlCodeGen)' == 'true' and '$(DesignTimeBuild)' != 'true' ">
+    <MSBuild Projects="$(ProwlCodeGenProject)" Targets="GetTargetPath" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" PropertyName="ProwlCodeGenTool"/>
+    </MSBuild>
+    <ItemGroup>
+      <_ProwlCodeGenDefine Include="$(DefineConstants)"/>
+      <_ProwlCodeGenArguments Include="out:$(ProwlCodeGenOutput)"/>
+      <_ProwlCodeGenArguments Include="name:$(AssemblyName)"/>
+      <_ProwlCodeGenArguments Include="lang:$(LangVersion)"/>
+      <_ProwlCodeGenArguments Include="nullable:$(Nullable)"/>
+      <_ProwlCodeGenArguments Include="unsafe:$(AllowUnsafeBlocks)"/>
+      <_ProwlCodeGenArguments Include="@(_ProwlCodeGenDefine->'define:%(Identity)')"/>
+      <_ProwlCodeGenArguments Include="@(ReferencePath->'ref:%(FullPath)')"/>
+      <_ProwlCodeGenArguments Include="@(Compile->'src:%(FullPath)')"/>
+    </ItemGroup>
+  </Target>
+
+  <!-- Only reruns when a source, a reference or the generator changed; the swap below happens either way. -->
+  <Target Name="ProwlCodeGenRun" DependsOnTargets="ProwlCodeGenResolve"
+          Condition=" '$(ProwlCodeGen)' == 'true' and '$(DesignTimeBuild)' != 'true' "
+          Inputs="@(Compile);@(ReferencePath);$(ProwlCodeGenTool);$(MSBuildProjectFullPath)"
+          Outputs="$(ProwlCodeGenOutput)compile.txt">
+    <WriteLinesToFile File="$(ProwlCodeGenOutput)arguments.txt" Lines="@(_ProwlCodeGenArguments)" Overwrite="true"/>
+    <!-- Its errors come out in the compiler's format, so MSBuild reports them itself. -->
+    <Exec Command="dotnet &quot;$(ProwlCodeGenTool)&quot; &quot;$(ProwlCodeGenOutput)arguments.txt&quot;" IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="_ProwlCodeGenExitCode"/>
+    </Exec>
+    <Error Condition=" '$(_ProwlCodeGenExitCode)' != '0' and '$(MSBuildLastTaskResult)' == 'true' "
+           Text="Prowl code generation failed (exit code $(_ProwlCodeGenExitCode))."/>
+  </Target>
+
+  <Target Name="ProwlCodeGen" BeforeTargets="CoreCompile" DependsOnTargets="ProwlCodeGenRun"
+          Condition=" '$(ProwlCodeGen)' == 'true' and '$(DesignTimeBuild)' != 'true' ">
+    <ReadLinesFromFile File="$(ProwlCodeGenOutput)compile.txt">
+      <Output TaskParameter="Lines" ItemName="_ProwlCodeGenCompile"/>
+    </ReadLinesFromFile>
+    <ItemGroup>
+      <Compile Remove="@(Compile)"/>
+      <Compile Include="@(_ProwlCodeGenCompile)"/>
+      <FileWrites Include="$(ProwlCodeGenOutput)**"/>
+    </ItemGroup>
+  </Target>
+
+</Project>
