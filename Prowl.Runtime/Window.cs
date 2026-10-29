@@ -338,8 +338,7 @@ public static class Window
     }
 
 
-    // Sets the window icon from a raw-RGBA resource embedded in the entry assembly whose name ends with
-    // ".prowl-icon.rgba".
+    // Sets the window icon from a raw-RGBA resource embedded in the entry assembly whose name is "prowl-icon.rgba".
     // Format: int32 count, then per image: int32 width, int32 height, width*height*4 straight-alpha RGBA.
     private static void TrySetWindowIcon()
     {
