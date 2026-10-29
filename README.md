@@ -1,4 +1,4 @@
-<img src="https://i.imgur.com/qoJ4RTS.png" width="100%" alt="Prowl logo image">
+<img src="https://i.imgur.com/qoJ4RTS.png" width="100%" alt="Prowl">
 
 <p align="center">
   <a href="https://github.com/ProwlEngine/Prowl/releases"><img alt="Release" src="https://img.shields.io/github/v/release/ProwlEngine/Prowl?include_prereleases&style=flat-square"></a>
@@ -44,8 +44,8 @@ In Prowl, engine and game are the same language.
   change. Built-in components are regular scripts, so yours can do anything they can.
 - **Your tools just work.** Projects are standard .NET `.csproj` files. Use Rider, VS Code or Visual
   Studio, with no plugin or extension.
-- **Hot-reload, even in play mode.** Save a script and the change lands in the running game. No
-  restart, no lost state.
+- **Hot-reload, even in play mode.** Save a script and the change lands in the running game, with
+  no restart. Components keep their field values across the reload.
 - **Familiar if you know Unity.** GameObjects, components, prefabs and a similar scripting API, so
   Unity projects and habits port over with as little resistance as possible. Prowl still aims to stay
   small, simple and customizable.
@@ -81,6 +81,10 @@ Grab the latest build for Windows, macOS or Linux from the
 [Releases page](https://github.com/ProwlEngine/Prowl/releases), unzip it and run the editor. New to
 Prowl? Watch [Getting Started with Prowl](https://www.youtube.com/watch?v=GY8VC1gQJ7g).
 
+> [!NOTE]
+> The macOS build isn't code-signed yet, so macOS blocks it the first time. Right-click `Prowl.app`
+> and choose **Open**, then confirm, and it opens normally from then on.
+
 ### Build from source
 
 ```sh
@@ -95,8 +99,17 @@ Or open `Prowl.slnx` in [Visual Studio](https://visualstudio.microsoft.com/),
 
 ### Or skip the editor
 
-The runtime works fully standalone. Reference `Prowl.Runtime` from your own .NET project and ship a
-game with zero editor dependency:
+The runtime works fully standalone, so you can ship a game with zero editor dependency. It isn't on
+NuGet yet: clone this repo and add a project reference to it from your own .NET 10 console app, which
+also copies the native libraries it needs into your build output:
+
+```xml
+<ItemGroup>
+  <ProjectReference Include="path/to/Prowl/Prowl.Runtime/Prowl.Runtime.csproj" />
+</ItemGroup>
+```
+
+Then a whole game fits in one file:
 
 ```csharp
 using Prowl.Runtime;
@@ -196,7 +209,7 @@ Click a category to expand it.
 - Animation graph, avatar, animation curve and gradient editors, plus a ragdoll generator
 - Volume profile, input action, sprite and terrain editors
 - Rebindable shortcuts
-- 12 built-in themes with customizable color palettes, sizing and wallpapers
+- 13 built-in themes, including light and high-contrast, with customizable color palettes, sizing and wallpapers
 - Playtest directly in the editor
 - Hot-reloading scripts
 - Localized into English, German, Spanish, French, Italian, Japanese, Korean, Polish, Portuguese, Russian, Turkish and Chinese
@@ -587,6 +600,7 @@ it, but it saved hours of development time getting the engine to a usable state.
 ### Dependencies
 
 - [Silk.NET](https://github.com/dotnet/Silk.NET): windowing, input and OpenXR bindings
+- [Roslyn](https://github.com/dotnet/roslyn): in-process script compilation and the scripting analyzers
 - [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2): physics
 - [miniaudio](https://github.com/mackron/miniaudio): audio
 
