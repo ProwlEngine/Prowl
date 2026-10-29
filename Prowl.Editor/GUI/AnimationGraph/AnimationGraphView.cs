@@ -485,7 +485,7 @@ internal sealed class AnimationGraphView : GraphView<GraphNodeRecord>
 
         var node = new GraphNode
         {
-            Title = type?.DisplayName ?? record.Type,
+            Title = record.Title,
             Width = 182f,
             Accent = AnimationGraphDomain.CategoryColor(type?.Category),
             Icon = editor?.Icon ?? EditorIcons.Cube_I,
