@@ -207,10 +207,6 @@ public static class EditorTheme
     /// <summary> Multiplier for UI animation lengths, 0 for none. </summary>
     public static float AnimationScale = 1f;
 
-    /// <summary> Tint drawn over the backdrop while playing, transparent when the tint is off. </summary>
-    public static Color PlayModeTint => Customization is { PlayModeTint: true } t
-        ? Color.FromArgb((int)(Math.Clamp(t.PlayModeTintStrength, 0f, 1f) * 255), ColorRamp.ParseHex(t.PlayModeTintColor))
-        : Color.Transparent;
     /// <summary> Font family name for the bold UI face. </summary>
     public static string DefaultBoldFontName = "Geist";
     /// <summary> Font family name or font file path for the monospace face. </summary>
