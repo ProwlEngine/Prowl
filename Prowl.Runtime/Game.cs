@@ -130,9 +130,7 @@ public abstract class Game
                 Time.TimeStack.Clear();
                 Time.TimeStack.Push(time);
 
-                // Input interaction timing (Hold/Tap/MultiTap windows) is real-world timing, so it uses
-                // UNSCALED delta
-                Input.UpdateActions(Time.UnscaledDeltaTime);
+                UpdateInputActions();
 
                 BeginUpdate();
 
@@ -305,7 +303,7 @@ public abstract class Game
                 Time.TimeStack.Clear();
                 Time.TimeStack.Push(time);
 
-                Input.UpdateActions(Time.UnscaledDeltaTime);
+                UpdateInputActions();
 
                 BeginUpdate();
                 SimulationStep(Time.DeltaTime);
@@ -351,6 +349,23 @@ public abstract class Game
 
     /// <summary>Signals a running <see cref="RunHeadless"/> loop to exit after the current frame.</summary>
     public void RequestHeadlessQuit() => _headlessQuitRequested = true;
+
+    /// <summary>
+    /// Updates the input action maps. Shared by the windowed and headless loops.
+    /// </summary>
+    private static void UpdateInputActions()
+    {
+        // Actions are gameplay input and their callbacks are gameplay code, so in the editor they read input the
+        // way the scene update does: from the game view only, in its pixels, with simulated input included.
+        if (Application.ShouldRunGameplay)
+            Application.IsGameplayExecuting = true;
+
+        // Input interaction timing (Hold/Tap/MultiTap windows) is real-world timing, so it uses
+        // UNSCALED delta
+        Input.UpdateActions(Time.UnscaledDeltaTime);
+
+        Application.IsGameplayExecuting = false;
+    }
 
     /// <summary>
     /// Advances one simulation step: the fixed-update loop (when gameplay should run) followed by
