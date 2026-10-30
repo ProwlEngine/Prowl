@@ -115,17 +115,17 @@ full past of that library.
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/xZekro51">
-                    <img src="https://avatars.githubusercontent.com/u/28503323?v=4" width="100;" alt="xZekro51"/>
-                    <br />
-                    <sub><b>Paolo</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/paulbartrum">
                     <img src="https://avatars.githubusercontent.com/u/1572571?v=4" width="100;" alt="paulbartrum"/>
                     <br />
                     <sub><b>paulbartrum</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/xZekro51">
+                    <img src="https://avatars.githubusercontent.com/u/28503323?v=4" width="100;" alt="xZekro51"/>
+                    <br />
+                    <sub><b>Paolo</b></sub>
                 </a>
             </td>
             <td align="center">
