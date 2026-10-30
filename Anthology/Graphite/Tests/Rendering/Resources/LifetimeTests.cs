@@ -47,7 +47,7 @@ public sealed class LifetimeTests : IDisposable
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
     private readonly RendererTextures _textures;
     private readonly MaterialSystem _materials;
     private readonly Shader _shader;
@@ -63,7 +63,6 @@ public sealed class LifetimeTests : IDisposable
     public void Dispose()
     {
         _textures.Dispose();
-        _compiler.Dispose();
         _store.Dispose();
         _device.Dispose();
     }
@@ -129,7 +128,7 @@ public sealed class LifetimeTests : IDisposable
     [Fact]
     public void DrawProgramIds_AreFreedWhenUnreferenced_AndReusedForTheNextProgram()
     {
-        DrawPrograms programs = new() { IdleFrames = 0 };
+        DrawPrograms programs = new();
         List<ushort> freed = new();
         programs.Freed += freed.Add;
         Material plain = _materials.Create(_shader);

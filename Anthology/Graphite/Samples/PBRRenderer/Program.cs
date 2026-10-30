@@ -96,9 +96,10 @@ internal sealed class DemoWindow
         _device = DeviceCreateUtilities.CreateDevice(_window, new GraphicsDeviceOptions { PreferDepthRangeZeroToOne = true }, new SwapchainDescription { SyncToVerticalBlank = true }, GraphicsBackend.Vulkan);
         _window.FramebufferResize += size =>
         {
-            _demo?.Renderer.WaitForRenderThread();
-            _device.WaitForIdle();
-            _device.ResizeMainWindow((uint)size.X, (uint)size.Y);
+            if (_demo != null)
+                _demo.Renderer.Resize((uint)size.X, (uint)size.Y);
+            else
+                _device.ResizeMainWindow((uint)size.X, (uint)size.Y);
         };
 
         _device.SyncToVerticalBlank = !_noVsync;

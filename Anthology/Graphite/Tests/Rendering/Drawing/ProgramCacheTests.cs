@@ -10,13 +10,6 @@ using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-file sealed class NoResources : IMaterialResources
-{
-    public uint TextureSlot(Texture? texture, MaterialPropertyType type, string defaultName) => 0;
-
-    public uint SamplerSlot(SamplerDescription? sampler) => 0;
-}
-
 /// <summary>Holds back compiles of variants with a gated keyword until released, and fails variants with a broken one.</summary>
 internal sealed class GatedCompiler(GlslShaderCompiler inner) : IShaderCompiler
 {
@@ -79,7 +72,7 @@ public sealed class ProgramCacheTests : IDisposable
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _glsl = new();
+    private readonly GlslShaderCompiler _glsl = TestCompiler.Shared;
     private readonly GatedCompiler _compiler;
     private readonly MaterialSystem _materials;
     private readonly GlobalRegistry _globals;
@@ -94,7 +87,7 @@ public sealed class ProgramCacheTests : IDisposable
         _compiler = new GatedCompiler(_glsl);
         _materials = new MaterialSystem(_device, _store, new NoResources());
         _globals = new GlobalRegistry(_device, _store, new NoResources());
-        _cache = new ProgramCache(_device, _compiler, _globals, _programs, deterministic: false, error => _reports.Add(error.Message));
+        _cache = new ProgramCache(_device, _compiler, _globals, _programs, error => _reports.Add(error.Message));
         _shader = new Shader(ShaderParser.Parse(Source), _compiler);
     }
 
@@ -102,7 +95,6 @@ public sealed class ProgramCacheTests : IDisposable
     {
         _compiler.Gate.Set();
         _cache.Dispose();
-        _glsl.Dispose();
         _store.Dispose();
         _device.Dispose();
     }
@@ -117,18 +109,22 @@ public sealed class ProgramCacheTests : IDisposable
         return id;
     }
 
-    private GraphicsProgram? Get(ushort id) => _cache.Get(id, false, _globals.Renderer.KeywordSnapshot);
+    private KeywordSet Keywords => KeywordSet.Intern(_globals.Renderer.KeywordSnapshot);
+
+    private GraphicsProgram? Get(ushort id) => _cache.Get(id, false, Keywords);
+
+    // Takes compiles in as frames do until the condition holds, failing after 20 seconds
+    private void Until(Func<bool> condition) => Assert.True(SpinWait.SpinUntil(() =>
+    {
+        _cache.Advance();
+        return condition();
+    }, TimeSpan.FromSeconds(20)), "Timed out waiting on a compile.");
 
     private GraphicsProgram WaitFor(ushort id)
     {
-        Stopwatch watch = Stopwatch.StartNew();
-        while (watch.Elapsed < TimeSpan.FromSeconds(20))
-        {
-            if (Get(id) is { } program && _cache.Pending == 0)
-                return program;
-            Thread.Sleep(1);
-        }
-        throw new TimeoutException("The variant never compiled.");
+        GraphicsProgram? program = null;
+        Until(() => (program = Get(id)) != null && _cache.Pending == 0);
+        return program!;
     }
 
     [Fact]
@@ -157,14 +153,8 @@ public sealed class ProgramCacheTests : IDisposable
         Assert.Equal(1, _cache.Compiling);
 
         _compiler.Gate.Set();
-        Stopwatch watch = Stopwatch.StartNew();
-        while (_cache.Compiling > 0 && watch.Elapsed < TimeSpan.FromSeconds(20))
-        {
-            _cache.Advance();
-            Thread.Sleep(1);
-        }
-        Assert.Equal(0, _cache.Compiling);
-        Assert.True(_cache.Ready(plain, false, _globals.Renderer.KeywordSnapshot));
+        Until(() => _cache.Compiling == 0);
+        Assert.True(_cache.Ready(plain, false, Keywords));
     }
 
     [Fact]
@@ -173,17 +163,12 @@ public sealed class ProgramCacheTests : IDisposable
         _compiler.GatedAxis = "_TINT";
         _compiler.GatedValue = "true";
         ushort tinted = Program(("_TINT", "true"));
-        Stopwatch watch = Stopwatch.StartNew();
-        GraphicsProgram? fallback;
-        while ((fallback = Get(tinted)) == null && watch.Elapsed < TimeSpan.FromSeconds(20))
-            Thread.Sleep(5);
-        Assert.NotNull(fallback);
-        Assert.False(_cache.Ready(tinted, false, _globals.Renderer.KeywordSnapshot));
+        GraphicsProgram? fallback = null;
+        Until(() => (fallback = Get(tinted)) != null);
+        Assert.False(_cache.Ready(tinted, false, Keywords));
 
         _compiler.Gate.Set();
-        watch.Restart();
-        while (!_cache.Ready(tinted, false, _globals.Renderer.KeywordSnapshot) && watch.Elapsed < TimeSpan.FromSeconds(20))
-            Thread.Sleep(5);
+        Until(() => _cache.Ready(tinted, false, Keywords));
         Assert.NotSame(fallback, Get(tinted));
     }
 
@@ -194,13 +179,10 @@ public sealed class ProgramCacheTests : IDisposable
         _compiler.GatedAxis = "_TINT";
         _compiler.GatedValue = "false";
         ushort plain = Program();
-        Stopwatch watch = Stopwatch.StartNew();
-        GraphicsProgram? fallback;
-        while ((fallback = Get(plain)) == null && watch.Elapsed < TimeSpan.FromSeconds(20))
-            Thread.Sleep(5);
-        Assert.NotNull(fallback);
+        GraphicsProgram? fallback = null;
+        Until(() => (fallback = Get(plain)) != null);
         Assert.StartsWith("Graphite/Fallback", fallback!.Name);
-        Assert.False(_cache.Ready(plain, false, _globals.Renderer.KeywordSnapshot));
+        Assert.False(_cache.Ready(plain, false, Keywords));
     }
 
     [Fact]
@@ -209,20 +191,15 @@ public sealed class ProgramCacheTests : IDisposable
         ushort plain = Program();
         ushort broken = Program(("_BROKEN", "true"));
         WaitFor(plain);
-        Stopwatch first = Stopwatch.StartNew();
-        while (!_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot) && first.Elapsed < TimeSpan.FromSeconds(20))
-            Thread.Sleep(5);
-        Assert.True(_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot));
+        Until(() => _cache.Failed(broken, false, Keywords));
         int compiles = _compiler.Compiles;
 
         _shader.Definition.Passes![0].Source += Environment.NewLine;
-        Assert.False(_cache.Ready(plain, false, _globals.Renderer.KeywordSnapshot));
+        _cache.Advance();
+        Assert.False(_cache.Ready(plain, false, Keywords));
+        Assert.False(_cache.Failed(broken, false, Keywords));
         WaitFor(plain);
-        Assert.False(_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot));
-        Stopwatch watch = Stopwatch.StartNew();
-        while (!_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot) && watch.Elapsed < TimeSpan.FromSeconds(20))
-            Thread.Sleep(5);
-        Assert.True(_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot));
+        Until(() => _cache.Failed(broken, false, Keywords));
         Assert.True(_compiler.Compiles >= compiles + 2);
     }
 
@@ -280,24 +257,22 @@ public sealed class ProgramCacheTests : IDisposable
     {
         ushort broken = Program(("_BROKEN", "true"));
         GraphicsProgram fallback = WaitFor(broken);
-        Assert.True(_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot));
+        Assert.True(_cache.Failed(broken, false, Keywords));
         Assert.Same(fallback, Get(broken));
     }
 
     [Fact]
-    public void FreedProgramIds_DropTheirCompiledVariants_OnceIdleLongEnough()
+    public void FreedProgramIds_DropTheirCompiledVariants_AtTheNextSweep()
     {
         _programs.Freed += _cache.Drop;
-        _programs.IdleFrames = 2;
         ushort plain = Program();
         _programs.Acquire(plain);
         WaitFor(plain);
         Assert.Equal(1, _cache.EntryCount);
 
-        _programs.Release(plain);
-        _programs.Sweep();
         _programs.Sweep();
         Assert.Equal(1, _cache.EntryCount);
+        _programs.Release(plain);
         _programs.Sweep();
         Assert.Equal(0, _cache.EntryCount);
     }
@@ -329,12 +304,11 @@ public sealed class ProgramCacheTests : IDisposable
     public void BrokenVariants_AreReportedOnce_AndDrawNothing()
     {
         ushort broken = Program(("_BROKEN", "true"));
-        Stopwatch watch = Stopwatch.StartNew();
-        while (_reports.Count == 0 && watch.Elapsed < TimeSpan.FromSeconds(20))
+        Until(() =>
         {
             Assert.Null(Get(broken));
-            Thread.Sleep(1);
-        }
+            return _reports.Count > 0;
+        });
 
         Assert.Null(Get(broken));
         Assert.Single(_reports);

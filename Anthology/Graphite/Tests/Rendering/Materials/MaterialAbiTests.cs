@@ -98,7 +98,7 @@ public sealed class MaterialAbiTests : IDisposable
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
     private readonly SlotResources _resources = new();
     private readonly GlobalRegistry _registry;
     private readonly MaterialSystem _materials;
@@ -115,7 +115,6 @@ public sealed class MaterialAbiTests : IDisposable
         _device.WaitForIdle();
         for (int i = _owned.Count - 1; i >= 0; i--)
             _owned[i].Dispose();
-        _compiler.Dispose();
         _store.Dispose();
         _device.Dispose();
     }

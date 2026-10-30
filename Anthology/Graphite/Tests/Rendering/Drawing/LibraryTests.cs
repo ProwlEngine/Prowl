@@ -11,13 +11,6 @@ using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-file sealed class NoResources : IMaterialResources
-{
-    public uint TextureSlot(Texture? texture, MaterialPropertyType type, string defaultName) => 0;
-
-    public uint SamplerSlot(SamplerDescription? sampler) => 0;
-}
-
 [StructLayout(LayoutKind.Sequential)]
 file struct Push
 {
@@ -76,7 +69,7 @@ public sealed class LibraryTests : IDisposable
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
     private readonly List<IDisposable> _owned = new();
 
     public void Dispose()
@@ -84,7 +77,6 @@ public sealed class LibraryTests : IDisposable
         _device.WaitForIdle();
         for (int i = _owned.Count - 1; i >= 0; i--)
             _owned[i].Dispose();
-        _compiler.Dispose();
         _store.Dispose();
         _device.Dispose();
     }

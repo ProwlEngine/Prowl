@@ -124,7 +124,7 @@ public sealed partial class LightingTests
                     Assert.True(MathF.Abs(pixels[p][c] - 1) <= 2e-3f, $"{tier} volume {i} pixel {p} channel {c}: {pixels[p][c]}");
             }
             if (tier == "FULL")
-                Assert.True(_renderer.Frame.Camera(1)!.BackDepthUsed);
+                Assert.True(_renderer.LastFrameStats.View(1)!.BackDepthUsed);
         }
     }
 
@@ -282,28 +282,29 @@ public sealed partial class LightingTests
     {
         DarkWorld();
         CameraFrame Camera() => _renderer.Frame.Camera(1)!;
+        ViewStats Drawn() => _renderer.LastFrameStats.View(1)!;
         Material material = Glass(m => m.Surface = new SurfaceSettings(SurfaceType.Transparent));
         AddSlab(1, material);
         Frame();
-        Assert.False(Camera().SceneColorUsed || Camera().SceneDepthUsed || Camera().BackDepthUsed);
+        Assert.False(Drawn().SceneColorUsed || Drawn().SceneDepthUsed || Drawn().BackDepthUsed);
         Assert.Null(Camera().SceneColor);
         Assert.Null(Camera().BackDepth);
 
         material.SetFloat("transmission_weight", 1);
         Frame();
-        Assert.True(Camera().SceneColorUsed && Camera().SceneDepthUsed && Camera().BackDepthUsed);
+        Assert.True(Drawn().SceneColorUsed && Drawn().SceneDepthUsed && Drawn().BackDepthUsed);
         Assert.NotNull(Camera().SceneColor);
         Assert.NotNull(Camera().BackDepth);
 
         material.SetInt("geometry_thin_walled", 1);
         Frame();
-        Assert.True(Camera().SceneColorUsed);
-        Assert.False(Camera().BackDepthUsed);
+        Assert.True(Drawn().SceneColorUsed);
+        Assert.False(Drawn().BackDepthUsed);
 
         material.SetInt("geometry_thin_walled", 0);
         _world.Globals.SetKeyword("PBR_TIER", "LITE");
         Frame();
-        Assert.False(Camera().SceneColorUsed || Camera().SceneDepthUsed || Camera().BackDepthUsed);
+        Assert.False(Drawn().SceneColorUsed || Drawn().SceneDepthUsed || Drawn().BackDepthUsed);
     }
 
     // Shows the scene's reactive mask in red, read after the transparent surfaces
@@ -362,16 +363,7 @@ public sealed partial class LightingTests
         }
     }
 
-    private Float4[] FrameOf(ViewDesc view)
-    {
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
-        _device.WaitForIdle();
-        _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
-        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
-        _device.Unmap(_readback);
-        Assert.Empty(_errors);
-        return pixels;
-    }
+    private Float4[] FrameOf(ViewDesc view) => _harness.Frame(view);
 
     private ViewDesc ViewWith(int id, params RenderFeature[] features)
     {
@@ -379,7 +371,7 @@ public sealed partial class LightingTests
         foreach (RenderFeature feature in features)
             set.Add(feature);
         ViewDesc view = new() { World = _world, EV100 = _ev100, ViewId = id, Target = _framebuffer, Features = set };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
+        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin };
         return view;
     }
 

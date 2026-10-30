@@ -11,13 +11,6 @@ using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-file sealed class NoResources : IMaterialResources
-{
-    public uint TextureSlot(Texture? texture, MaterialPropertyType type, string defaultName) => 0;
-
-    public uint SamplerSlot(SamplerDescription? sampler) => 0;
-}
-
 [Collection("GPU Tests")]
 public sealed class BucketTests : IDisposable
 {
@@ -34,7 +27,7 @@ public sealed class BucketTests : IDisposable
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
     private readonly Uploader _uploader;
     private readonly GeometryPool _geometry;
     private readonly MaterialSystem _materials;
@@ -68,7 +61,6 @@ public sealed class BucketTests : IDisposable
     {
         _world.Dispose();
         _uploader.Dispose();
-        _compiler.Dispose();
         _store.Dispose();
         _device.Dispose();
     }
@@ -354,16 +346,15 @@ public sealed class BucketTests : IDisposable
     }
 
     [Fact]
-    public void ProgramIds_OfEmptiedBuckets_StayParked_ThenAreFreed()
+    public void ProgramIds_OfEmptiedBuckets_AreFreedAtTheNextSweep()
     {
-        _programs.IdleFrames = 2;
         Material material = Material();
         Add(_triangle, material);
         Frame(Forward);
         int ids = _programs.Count;
 
-        // Switching back and forth keeps both variants' ids, no more, and passes without the axis keep one id. The Debug
-        // pass draws through its Forward pass's id.
+        // Each switch takes the new variant's ids and frees the old ones at the next sweep, and passes without the axis
+        // keep one id. The Debug pass draws through its Forward pass's id.
         int reading = 0;
         for (int p = 0; p < _lit.Definition.Passes!.Length; p++)
             reading += _lit.PassHasAxis(p, "_NORMALMAP") && p != _lit.PassIndex(PassType.Debug) ? 1 : 0;
@@ -376,8 +367,7 @@ public sealed class BucketTests : IDisposable
         Assert.True(reading < ids);
         Assert.Equal(ids + reading, _programs.Count);
 
-        for (int i = 0; i < 3; i++)
-            _programs.Sweep();
+        _programs.Sweep();
         Assert.Equal(ids, _programs.Count);
     }
 

@@ -82,11 +82,11 @@ internal sealed partial class FramePipeline : IDisposable
     private int _frame;
 
     private readonly RendererTextures _textures;
-    private readonly bool _deterministic;
+    private readonly bool _syncCompiles;
 
     private readonly Uploader _uploader;
 
-    public FramePipeline(GraphicsDevice device, RenderStore store, IShaderCompiler? compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, bool deterministic, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async)
+    public FramePipeline(GraphicsDevice device, RenderStore store, IShaderCompiler? compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async)
     {
         Report = report;
         _device = device;
@@ -94,12 +94,12 @@ internal sealed partial class FramePipeline : IDisposable
         _textures = textures;
         _store = store;
         _uploader = uploader;
-        _deterministic = deterministic;
+        _syncCompiles = policy == CompilePolicy.Sync;
         Geometry = geometry;
         Materials = materials;
         Globals = globals;
         DrawPrograms = programs;
-        Programs = new ProgramCache(device, compiler, globals, programs, deterministic, report, policy, _retired.Add);
+        Programs = new ProgramCache(device, compiler, globals, programs, report, policy, _retired.Add);
         programs.Freed += Programs.Drop;
         _graph = new FrameGraph(device, "Graphite");
         _probeGraph = new FrameGraph(device, "Graphite probe");
@@ -360,7 +360,6 @@ internal sealed partial class FramePipeline : IDisposable
         return source;
     }
 
-    /// <summary>Culls and compacts every view, then dispatches the frame. Returns the execution. Render thread.</summary>
     private int _drawCalls, _drawCommands, _shadowDrawCalls, _shadowDrawCommands;
 
     /// <summary>The counts of the last frame recorded. Any thread.</summary>
@@ -373,9 +372,9 @@ internal sealed partial class FramePipeline : IDisposable
         else { _drawCalls++; _drawCommands += commands; }
     }
 
+    /// <summary>Culls and compacts every view, then dispatches the frame. Returns the execution. Render thread.</summary>
     public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, List<ReadbackRequest> readbacks, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time, IProfiler[]? profilers = null)
     {
-        LastStats = new FrameStats(views.Length, _drawCalls, _drawCommands, _shadowDrawCalls, _shadowDrawCommands, ShadowsAdded, ShadowsGrown, ShadowsShrunk);
         _drawCalls = _drawCommands = _shadowDrawCalls = _shadowDrawCommands = 0;
         _frame++;
         _currentTime = time;
@@ -392,7 +391,6 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (WorldFrame world in allWorlds)
         {
             world.World.Render.BeginFrame();
-            world.Programs.Sweep();
         }
 
         foreach (WorldFrame world in allWorlds)
@@ -447,7 +445,7 @@ internal sealed partial class FramePipeline : IDisposable
         }
 
         ResolvePrograms();
-        if (_deterministic && Globals.NeedsGrowth)
+        if (_syncCompiles && Globals.NeedsGrowth)
         {
             Globals.Extract();
             Globals.Flush(_uploader, lastDispatched);
@@ -468,6 +466,7 @@ internal sealed partial class FramePipeline : IDisposable
             throw;
         }
         ExecutionTask task = _graph.Execute(profilers ?? []);
+        LastStats = Stats(views);
         _store.RetireAll(task);
         ReturnShadowCameras();
         foreach (IDisposable retired in _shadowRetired)
@@ -479,6 +478,18 @@ internal sealed partial class FramePipeline : IDisposable
         ReleaseStaleCameras();
         ReleaseIdleCaptures();
         return task;
+    }
+
+    // The counts of the frame just recorded, and what each host view drawn did
+    private FrameStats Stats(ReadOnlySpan<ViewDesc> views)
+    {
+        List<ViewStats> drawn = new(views.Length);
+        foreach (int index in _viewOrder)
+        {
+            if (_cameras.TryGetValue(views[index].ViewId, out CameraFrame? camera) && camera.LastFrame == _frame)
+                drawn.Add(new ViewStats(camera.Desc.ViewId, camera.SceneColorUsed, camera.SceneDepthUsed, camera.BackDepthUsed, camera.Jitter));
+        }
+        return new FrameStats(views.Length, _drawCalls, _drawCommands, _shadowDrawCalls, _shadowDrawCommands, ShadowsAdded, ShadowsGrown, ShadowsShrunk, ShadowViewsDrawn, ShadowCopiesMade) { ViewStats = drawn };
     }
 
     private void Draw(CameraFrame camera, in ViewDesc view, RenderFeature[] features, WorldFrame world, in FrameTime time)
@@ -981,7 +992,6 @@ internal sealed partial class FramePipeline : IDisposable
     /// <summary>Releases what the frame pipeline keeps for a removed world. Render thread idle.</summary>
     public void ForgetWorld(WorldFrame world)
     {
-        world.Programs.Clear();
         if (world.Shadows != null)
         {
             foreach (ShadowPage page in world.Shadows.AllPages())
@@ -1008,13 +1018,15 @@ internal sealed partial class FramePipeline : IDisposable
         }
     }
 
-    // Asks for every call's program before recording, so compiles start early and deterministic ones finish here.
+    // Takes in finished compiles and source edits, then asks for every call's program before recording, so compiles
+    // start early and Sync ones finish here.
     private void ResolvePrograms()
     {
+        Programs.Advance();
         foreach (WorldFrame world in _frameWorlds)
         {
             if (world.SkyProgram is ushort sky)
-                Programs.Get(sky, false, world.World.Globals.KeywordSnapshot);
+                Programs.Get(sky, false, world.World.Globals.KeywordSet);
         }
         foreach (CameraFrame camera in Active())
         {
@@ -1029,10 +1041,9 @@ internal sealed partial class FramePipeline : IDisposable
             foreach (DrawList list in camera.Lists)
             {
                 foreach (DrawCall call in list.Calls)
-                    Programs.Get(call.Program, call.Mirrored != camera.Mirrored, camera.Keywords, priority);
+                    Programs.Get(call.Program, call.Mirrored != camera.Mirrored, camera.KeywordSet, priority);
             }
         }
-        Programs.Advance();
     }
 
     private void Prepare(CameraFrame camera, in ViewDesc view, WorldFrame world, in FrameTime time, uint width, uint height)
@@ -1228,6 +1239,29 @@ internal sealed partial class FramePipeline : IDisposable
 /// <summary>
 /// What a frame drew: the views asked for, and the indirect draw calls recorded with the draws inside them (each
 /// command one mesh piece, instanced or not), split between camera views and shadow views, and the local light shadows
-/// that were given tiles, grew or shrank.
+/// that were given tiles, grew or shrank. ShadowViewsDrawn counts one per cascade or local light face drawn again, faces
+/// still cached are not counted, and ShadowCopiesMade the static shadow tiles copied back under lights whose moving casters drew again.
 /// </summary>
-public sealed record FrameStats(int Views, int DrawCalls, int DrawCommands, int ShadowDrawCalls, int ShadowDrawCommands, int ShadowsAdded = 0, int ShadowsGrown = 0, int ShadowsShrunk = 0);
+public sealed record FrameStats(int Views, int DrawCalls, int DrawCommands, int ShadowDrawCalls, int ShadowDrawCommands, int ShadowsAdded = 0, int ShadowsGrown = 0, int ShadowsShrunk = 0, int ShadowViewsDrawn = 0, int ShadowCopiesMade = 0)
+{
+    /// <summary>The host views drawn, in the order they drew.</summary>
+    public IReadOnlyList<ViewStats> ViewStats { get; init; } = [];
+
+    /// <summary>The stats of the view with the given id, or null when it was not drawn.</summary>
+    public ViewStats? View(int viewId)
+    {
+        foreach (ViewStats view in ViewStats)
+        {
+            if (view.ViewId == viewId)
+                return view;
+        }
+        return null;
+    }
+}
+
+/// <summary>
+/// What one host view did in a frame: whether a transparent pass read the scene colour or depth, so the view copied its
+/// opaque colour or depth, whether a transmissive pass read the back depth, so the view drew its volumes' back faces,
+/// and the sub pixel offset its projection was shifted by in clip space, zero when no feature asks for one.
+/// </summary>
+public sealed record ViewStats(int ViewId, bool SceneColorUsed, bool SceneDepthUsed, bool BackDepthUsed, Float2 Jitter);

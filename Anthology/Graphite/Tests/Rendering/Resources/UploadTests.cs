@@ -15,7 +15,7 @@ public sealed class UploadTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
     private readonly Uploader _uploader;
 
     public UploadTests()
@@ -27,7 +27,6 @@ public sealed class UploadTests : IDisposable
     public void Dispose()
     {
         _uploader.Dispose();
-        _compiler.Dispose();
         _store.Dispose();
         _device.Dispose();
     }

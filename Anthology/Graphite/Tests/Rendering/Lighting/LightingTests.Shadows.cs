@@ -177,13 +177,8 @@ public sealed partial class LightingTests
         other.AddLight(sun);
 
         ViewDesc view = new() { World = other, EV100 = _ev100, ViewId = 1, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
-        _device.WaitForIdle();
-        _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
-        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
-        _device.Unmap(_readback);
-        Assert.Empty(_errors);
+        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin };
+        Float4[] pixels = _harness.Frame(view);
 
         for (int y = 0; y < Size; y++)
         {

@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 
 using Prowl.Graphite.ShaderDef;
-using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
 
 using Xunit;
+
+using static Prowl.Graphite.Rendering.Tests.RendererHarness;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
@@ -99,53 +99,25 @@ public sealed class SceneColorTests : IDisposable
         }
         """;
 
-    private const int Size = 16;
     private static readonly Float3 s_tint = new(0.5f, 1, 2);
 
-    // Orthographic and reversed Z: sees x and y from -4 to 4, and z from 0 (depth 1) to 100 (depth 0).
-    private static readonly Float4x4 s_projection = new(new Float4(0.25f, 0, 0, 0), new Float4(0, 0.25f, 0, 0), new Float4(0, 0, -0.01f, 0), new Float4(0, 0, 1, 1));
-
-    private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GlslShaderCompiler _compiler = new();
-    private readonly Texture _target;
-    private readonly Framebuffer _framebuffer;
-    private readonly DeviceBuffer _readback;
+    private readonly RendererHarness _harness = new();
+    private readonly GraphicsDevice _device;
     private readonly Renderer _renderer;
     private readonly RenderWorld _world;
     private readonly Shader _glass;
     private readonly GpuMesh _quad;
-    private readonly List<RendererError> _errors = new();
+    private readonly List<RendererError> _errors;
 
     public SceneColorTests()
     {
-        _target = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
-        _framebuffer = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _target));
-        _readback = _device.ResourceFactory.CreateBuffer(new BufferDescription(Size * Size * 16, BufferUsage.Staging));
-        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = RenderThreading.Inline, Deterministic = true, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
-        _renderer.Error += _errors.Add;
-        _world = _renderer.CreateWorld();
-        _world.Environment = new EnvironmentDesc { AmbientColor = default, Fog = default };
+        (_device, _renderer, _world, _errors) = (_harness.Device, _harness.Renderer, _harness.World, _harness.Errors);
         _glass = _renderer.LoadShader(ShaderParser.Parse(GlassSource));
-
-        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
-        _quad = _renderer.CreateMesh(new MeshData
-        {
-            VertexCount = 4,
-            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
-            Indices = new uint[] { 0, 1, 2, 0, 2, 3 },
-        });
+        _quad = _harness.CreateQuad();
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(2) }, [_renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(BackdropSource)))]);
     }
 
-    public void Dispose()
-    {
-        _renderer.Dispose();
-        _readback.Dispose();
-        _framebuffer.Dispose();
-        _target.Dispose();
-        _compiler.Dispose();
-        _device.Dispose();
-    }
+    public void Dispose() => _harness.Dispose();
 
     private RenderableHandle AddGlass(Shader shader, float lod = 0, bool project = false)
     {
@@ -159,23 +131,9 @@ public sealed class SceneColorTests : IDisposable
         return _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 5)) }, [material]);
     }
 
-    private ViewDesc View(int id = 1)
-    {
-        ViewDesc view = new() { World = _world, ViewId = id, Target = _framebuffer, Sky = false, ClearColor = new Float4(0, 0, 0, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection };
-        return view;
-    }
+    private ViewDesc View(int id = 1) => _harness.View(id);
 
-    private Float4[] Frame(ViewDesc? view = null)
-    {
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view ?? View() } });
-        _device.WaitForIdle();
-        _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
-        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
-        _device.Unmap(_readback);
-        Assert.Empty(_errors);
-        return pixels;
-    }
+    private Float4[] Frame(ViewDesc? view = null) => _harness.Frame(view ?? View());
 
     private static void AssertTinted(Float4[] behind, Float4[] seen, float tolerance = 2e-3f)
     {
@@ -188,6 +146,8 @@ public sealed class SceneColorTests : IDisposable
     }
 
     private CameraFrame Camera(int id = 1) => _renderer.Frame.Camera(id)!;
+
+    private ViewStats Drawn(int id = 1) => _renderer.LastFrameStats.View(id)!;
 
     [Theory]
     [InlineData(false)]
@@ -226,12 +186,12 @@ public sealed class SceneColorTests : IDisposable
         RenderableHandle reader = AddGlass(_glass);
         Frame();
         Assert.NotNull(Camera().SceneColor);
-        Assert.True(Camera().SceneColorUsed);
+        Assert.True(Drawn().SceneColorUsed);
 
         // Once the reader is gone the view keeps its graph but records no copy
         _world.Remove(reader);
         Frame();
-        Assert.False(Camera().SceneColorUsed);
+        Assert.False(Drawn().SceneColorUsed);
     }
 
     [Fact]
@@ -242,7 +202,7 @@ public sealed class SceneColorTests : IDisposable
         using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 2 });
         ViewDesc stereo = new() { World = _world, ViewId = 5, Target = layered, LayerCount = 2, Sky = false, ClearColor = new Float4(0, 0, 0, 1) };
         for (int layer = 0; layer < 2; layer++)
-            stereo.Layers[layer] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = new Double3(layer * 2 - 1, layer, 0) };
+            stereo.Layers[layer] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = new Double3(layer * 2 - 1, layer, 0) };
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { stereo } });
         _device.WaitForIdle();
         Assert.Empty(_errors);

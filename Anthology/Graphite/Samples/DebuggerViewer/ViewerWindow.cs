@@ -73,7 +73,13 @@ internal sealed class ViewerWindow : IDisposable
     {
         _device = DeviceCreateUtilities.CreateDevice(_window, new GraphicsDeviceOptions { PreferDepthRangeZeroToOne = true }, new SwapchainDescription { SyncToVerticalBlank = true }, GraphicsBackend.Vulkan);
         _device.SyncToVerticalBlank = true;
-        _window.FramebufferResize += size => _device.ResizeMainWindow((uint)size.X, (uint)size.Y);
+        _window.FramebufferResize += size =>
+        {
+            if (_scene != null)
+                _scene.Renderer.Resize((uint)size.X, (uint)size.Y);
+            else
+                _device.ResizeMainWindow((uint)size.X, (uint)size.Y);
+        };
 
         _renderer = new GraphiteRenderer(_device);
         _renderer.Initialize(_window.FramebufferSize.X, _window.FramebufferSize.Y);

@@ -1517,10 +1517,10 @@ public sealed class DrawItemSink
 
         void Into(DrawList list, PassType pass, bool sorted)
         {
-            if (!_world.Programs.TryGet(material, draw.Sides?.Front ?? draw, pass, out ushort program))
+            if (!_world.Programs.Hold(draw.Sides?.Front ?? draw, pass, out ushort program))
                 return;
             BucketSet.TransparentItem entry = Next();
-            entry.BackProgram = draw.Sides is { } sides && _world.Programs.TryGet(material, sides.Back, pass, out ushort back, backFaces: true) ? back : -1;
+            entry.BackProgram = draw.Sides is { } sides && _world.Programs.Hold(sides.Back, pass, out ushort back) ? back : -1;
             entry.Provided = true;
             entry.Object = (int)objectIndex;
             entry.Program = program;
@@ -1601,57 +1601,5 @@ public sealed class DrawItemSink
         BucketSet.TransparentItem item = _pool[_used++];
         item.FirstCommand = -1;
         return item;
-    }
-}
-
-/// <summary>The draw programs of providers' materials, held while the material lives and draws the same. Render thread.</summary>
-internal sealed class ProviderPrograms(DrawPrograms programs)
-{
-    private readonly Dictionary<(Material Material, string Pass), (MaterialDraw Draw, ushort Program, bool Has)> _entries = new();
-    private readonly List<(Material, string)> _stale = new();
-
-    public bool TryGet(Material material, MaterialDraw draw, PassType pass, out ushort program, bool backFaces = false)
-    {
-        (Material, string) key = (material, backFaces ? pass.Name + " back faces" : pass.Name);
-        if (_entries.TryGetValue(key, out (MaterialDraw Draw, ushort Program, bool Has) entry))
-        {
-            if (ReferenceEquals(entry.Draw, draw))
-            {
-                program = entry.Program;
-                return entry.Has;
-            }
-            if (entry.Has)
-                programs.Release(entry.Program);
-        }
-        bool has = programs.TryGet(draw, pass, out program);
-        if (has)
-            programs.Acquire(program);
-        _entries[key] = (draw, program, has);
-        return has;
-    }
-
-    /// <summary>Lets the programs of disposed materials go.</summary>
-    public void Sweep()
-    {
-        _stale.Clear();
-        foreach (KeyValuePair<(Material Material, string Pass), (MaterialDraw Draw, ushort Program, bool Has)> pair in _entries)
-        {
-            if (pair.Key.Material.IsDisposed)
-                _stale.Add(pair.Key);
-        }
-        foreach ((Material, string) key in _stale)
-            Remove(key);
-    }
-
-    public void Clear()
-    {
-        foreach ((Material, string) key in new List<(Material, string)>(_entries.Keys))
-            Remove(key);
-    }
-
-    private void Remove((Material, string) key)
-    {
-        if (_entries.Remove(key, out (MaterialDraw Draw, ushort Program, bool Has) entry) && entry.Has)
-            programs.Release(entry.Program);
     }
 }

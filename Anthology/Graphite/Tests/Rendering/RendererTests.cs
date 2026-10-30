@@ -97,7 +97,7 @@ public sealed class RendererTests : IDisposable
     private const uint Size = 16;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
     private readonly Texture _target;
     private readonly Framebuffer _framebuffer;
     private readonly DeviceBuffer _readback;
@@ -106,9 +106,6 @@ public sealed class RendererTests : IDisposable
     private Shader _shader = null!;
     private GpuMesh _quad = null!;
     private readonly List<RendererError> _errors = new();
-
-    // Orthographic and reversed Z: sees x and y from -4 to 4, and z from 0 (depth 1) to 100 (depth 0).
-    private static readonly Float4x4 s_projection = new(new Float4(0.25f, 0, 0, 0), new Float4(0, 0.25f, 0, 0), new Float4(0, 0, -0.01f, 0), new Float4(0, 0, 1, 1));
 
     public RendererTests()
     {
@@ -120,7 +117,7 @@ public sealed class RendererTests : IDisposable
 
     private void Start(RenderThreading threading)
     {
-        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = threading, Deterministic = threading == RenderThreading.Inline, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
+        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = threading, Compile = threading == RenderThreading.Inline ? CompilePolicy.Sync : CompilePolicy.Async, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
         _renderer.Error += _errors.Add;
         _world = _renderer.CreateWorld();
         _shader = _renderer.LoadShader(ShaderParser.Parse(Source));
@@ -140,7 +137,6 @@ public sealed class RendererTests : IDisposable
         _readback.Dispose();
         _framebuffer.Dispose();
         _target.Dispose();
-        _compiler.Dispose();
         _device.Dispose();
     }
 
@@ -157,7 +153,7 @@ public sealed class RendererTests : IDisposable
     private Color32[] Frame(Double3 camera = default)
     {
         ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer, ClearColor = new Float4(0, 0, 0, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = camera };
+        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = camera };
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _renderer.WaitForRenderThread();
         Assert.DoesNotContain(_errors, e => e.Message.StartsWith("The frame failed"));
@@ -178,7 +174,7 @@ public sealed class RendererTests : IDisposable
         RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _quad, Name = "Quad", Transform = Double4x4.CreateScale(new Double3(2, 2, 2)) }, [material]);
         PayloadSink sink = new();
         ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer, ClearColor = new Float4(0, 0, 0, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection };
+        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection };
 
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view }, Profilers = [sink] });
         _renderer.WaitForRenderThread();

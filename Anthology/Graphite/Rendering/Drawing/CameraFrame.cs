@@ -230,6 +230,9 @@ internal sealed class CameraFrame : IDisposable
 
     /// <summary>The world's global keywords with the view's own over them, what its draws pick their variants by.</summary>
     public IReadOnlyDictionary<string, string> Keywords = new Dictionary<string, string>();
+
+    /// <summary><see cref="Keywords"/> interned, what the view's draws look their programs up by.</summary>
+    public KeywordSet KeywordSet = KeywordSet.Empty;
     private IReadOnlyDictionary<string, string>? _worldKeywords;
     private Keyword[] _viewKeywords = [];
 
@@ -245,12 +248,14 @@ internal sealed class CameraFrame : IDisposable
         if (view.Length == 0)
         {
             Keywords = world;
+            KeywordSet = World.World.Globals.KeywordSet;
             return;
         }
         Dictionary<string, string> merged = new(world, StringComparer.Ordinal);
         foreach (Keyword keyword in view)
             merged[keyword.Name] = keyword.Value;
         Keywords = merged;
+        KeywordSet = KeywordSet.Intern(merged);
     }
     public int LastFrame;
     public readonly CameraView View = new();

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
@@ -21,7 +22,7 @@ public sealed class StandardShaderTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
     private readonly MaterialSystem _system;
     private readonly Shader _pbr;
     private readonly Shader _unlit;
@@ -36,7 +37,6 @@ public sealed class StandardShaderTests : IDisposable
 
     public void Dispose()
     {
-        _compiler.Dispose();
         _store.Dispose();
         _device.Dispose();
     }
@@ -65,6 +65,7 @@ public sealed class StandardShaderTests : IDisposable
     public void EveryPassOfAVariantCompiles(string shader, string surface, string tier)
     {
         Shader loaded = shader == "Lit" ? _pbr : _unlit;
+        List<(ShaderPass, Keyword[])> variants = [];
         foreach (ShaderPass pass in loaded.Definition.Passes!)
         {
             IReadOnlyList<string> views = _compiler.GetAxes(pass).Where(a => a.Name == Shader.DebugAxis).Select(a => a.Values).FirstOrDefault() ?? [""];
@@ -73,9 +74,28 @@ public sealed class StandardShaderTests : IDisposable
                 List<Keyword> combo = [new Keyword("_SURFACE", surface), new Keyword("PBR_TIER", tier)];
                 if (view.Length > 0)
                     combo.Add(new Keyword(Shader.DebugAxis, view));
-                _compiler.CompileProgram(pass, [.. combo]);
+                variants.Add((pass, [.. combo]));
             }
         }
+        CompileAll(variants);
+    }
+
+    // Compiles variants on every core, failing with each variant that did not compile
+    private void CompileAll(List<(ShaderPass Pass, Keyword[] Combo)> variants)
+    {
+        System.Collections.Concurrent.ConcurrentBag<string> failures = [];
+        Parallel.ForEach(variants, variant =>
+        {
+            try
+            {
+                _compiler.CompileProgram(variant.Pass, variant.Combo);
+            }
+            catch (Exception e)
+            {
+                failures.Add($"{variant.Pass.Name} [{string.Join(", ", variant.Combo.Select(k => $"{k.Name}={k.Value}"))}]: {e.Message}");
+            }
+        });
+        Assert.Empty(failures);
     }
 
     private const string RimSource = """
@@ -490,6 +510,7 @@ public sealed class StandardShaderTests : IDisposable
         ShaderPass forward = _pbr.Definition.Passes!.First(p => p.Name == "Forward");
         ShaderPass transmission = _pbr.Definition.Passes!.First(p => p.Name == "Transmission");
         ShaderPass debug = _pbr.Definition.Passes!.First(p => p.Name == "Debug");
+        List<(ShaderPass, Keyword[])> variants = [];
         foreach (string tier in new[] { "FULL", "LITE" })
         {
             for (int mask = 0; mask < 1 << s_lobes.Length; mask++)
@@ -497,21 +518,22 @@ public sealed class StandardShaderTests : IDisposable
                 List<Keyword> combo = [new Keyword("_SURFACE", "OPAQUE"), new Keyword("PBR_TIER", tier)];
                 for (int i = 0; i < s_lobes.Length; i++)
                     combo.Add(new Keyword(s_lobes[i], (mask & (1 << i)) != 0 ? "true" : "false"));
-                _compiler.CompileProgram(forward, [.. combo]);
-                _compiler.CompileProgram(transmission, [.. combo]);
+                variants.Add((forward, [.. combo]));
+                variants.Add((transmission, [.. combo]));
                 if (mask == 0 || mask == (1 << s_lobes.Length) - 1)
                 {
                     foreach (string transmits in new[] { "false", "true" })
                     {
                         foreach (string view in new[] { "DIFFUSE", "SPECULAR", "FURNACE", "COAT", "FUZZ", "THIN_FILM", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS" })
-                            _compiler.CompileProgram(debug, [.. combo, new Keyword("PBR_TRANSMISSION", transmits), new Keyword(Shader.DebugAxis, view)]);
+                            variants.Add((debug, [.. combo, new Keyword("PBR_TRANSMISSION", transmits), new Keyword(Shader.DebugAxis, view)]));
                     }
                 }
             }
         }
         ShaderPass backDepth = _pbr.Definition.Passes!.First(p => p.Name == "BackDepth");
         foreach (string surface in new[] { "OPAQUE", "CUTOUT", "TRANSPARENT" })
-            _compiler.CompileProgram(backDepth, [new Keyword("_SURFACE", surface)]);
+            variants.Add((backDepth, [new Keyword("_SURFACE", surface)]));
+        CompileAll(variants);
     }
 
     // The shadow caster at every surface and every combination of the axes deciding what it lets through
@@ -519,6 +541,7 @@ public sealed class StandardShaderTests : IDisposable
     public void EveryShadowCasterVariant_Compiles()
     {
         ShaderPass caster = _pbr.Definition.Passes!.First(p => p.Name == "ShadowCaster");
+        List<(ShaderPass, Keyword[])> variants = [];
         foreach (string surface in new[] { "OPAQUE", "CUTOUT", "TRANSPARENT" })
         {
             for (int mask = 0; mask < 1 << s_shadowAxes.Length; mask++)
@@ -526,9 +549,10 @@ public sealed class StandardShaderTests : IDisposable
                 List<Keyword> combo = [new Keyword("_SURFACE", surface)];
                 for (int i = 0; i < s_shadowAxes.Length; i++)
                     combo.Add(new Keyword(s_shadowAxes[i], (mask & (1 << i)) != 0 ? "true" : "false"));
-                _compiler.CompileProgram(caster, [.. combo]);
+                variants.Add((caster, [.. combo]));
             }
         }
+        CompileAll(variants);
     }
 
     // transmission_weight turns PBR_TRANSMISSION on, which draws the material as transparent through its Transmission

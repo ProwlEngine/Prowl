@@ -1,7 +1,5 @@
 using System;
 
-using Prowl.Graphite.ShaderDef.Compiler;
-
 using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
@@ -10,19 +8,12 @@ namespace Prowl.Graphite.Rendering.Tests;
 [Collection("GPU Tests")]
 public sealed class EffectResourcesTests : IDisposable
 {
-    private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly RendererHarness _harness = new();
     private readonly Renderer _renderer;
 
-    public EffectResourcesTests()
-        => _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = RenderThreading.Inline, Deterministic = true, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
+    public EffectResourcesTests() => _renderer = _harness.Renderer;
 
-    public void Dispose()
-    {
-        _renderer.Dispose();
-        _compiler.Dispose();
-        _device.Dispose();
-    }
+    public void Dispose() => _harness.Dispose();
 
     [Fact]
     public void SecondInstance_ReusesPrograms()

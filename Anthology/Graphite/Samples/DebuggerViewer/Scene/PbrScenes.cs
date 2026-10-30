@@ -14,6 +14,8 @@ internal sealed class PbrScenes : IDisposable
     public static readonly string[] Names = ["Helmet", "Lights", "Shadows"];
 
     private readonly Demo _demo;
+
+    public Renderer Renderer => _demo.Renderer;
     private readonly DemoScene?[] _scenes = new DemoScene?[Names.Length];
     private readonly FlyCamera _camera = new();
     private DemoScene _scene = null!;

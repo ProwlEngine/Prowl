@@ -287,63 +287,31 @@ public sealed partial class LightingTests : IDisposable
         }
         """;
 
-    private const int Size = 16;
+    private const int Size = RendererHarness.Size;
     private const float QuadDepth = 10;
 
     // Views and captures expose by 1, so pixels hold radiance as it is
     private static readonly float UnitEV100 = -MathF.Log2(1.2f);
 
-    // Orthographic and reversed Z: sees x and y from -4 to 4, and z from 0 (depth 1) to 100 (depth 0).
-    private static readonly Float4x4 s_projection = new(new Float4(0.25f, 0, 0, 0), new Float4(0, 0.25f, 0, 0), new Float4(0, 0, -0.01f, 0), new Float4(0, 0, 1, 1));
-
-    private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GlslShaderCompiler _compiler = new();
-    private readonly Texture _target;
+    private readonly RendererHarness _harness = new();
+    private readonly GraphicsDevice _device;
     private readonly Framebuffer _framebuffer;
-    private readonly DeviceBuffer _readback;
     private readonly Renderer _renderer;
     private readonly RenderWorld _world;
     private readonly Shader _shader;
     private readonly GpuMesh _quad;
-    private readonly List<RendererError> _errors = new();
+    private readonly List<RendererError> _errors;
     private Double3 _origin;
 
     public LightingTests()
     {
-        _target = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
-        _framebuffer = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _target));
-        _readback = _device.ResourceFactory.CreateBuffer(new BufferDescription(Size * Size * 16, BufferUsage.Staging));
-        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = RenderThreading.Inline, Deterministic = true, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
-        _renderer.Error += _errors.Add;
-        _world = _renderer.CreateWorld();
+        (_device, _framebuffer, _renderer, _world, _errors) = (_harness.Device, _harness.Framebuffer, _harness.Renderer, _harness.World, _harness.Errors);
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = default, Fog = default };
         _shader = _renderer.LoadShader(ShaderParser.Parse(Source));
-
-        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
-        Float3[] normals = [new(0, 0, -1), new(0, 0, -1), new(0, 0, -1), new(0, 0, -1)];
-        _quad = _renderer.CreateMesh(new MeshData
-        {
-            VertexCount = 4,
-            Streams =
-            [
-                new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() },
-                new VertexStream { Semantic = VertexSemantic.Normal, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(normals.AsSpan()).ToArray() },
-            ],
-            Indices = new uint[] { 0, 1, 2, 0, 2, 3 },
-        });
+        _quad = _harness.CreateQuad(normals: true);
     }
 
-    public void Dispose()
-    {
-        _renderer.Dispose();
-        foreach (Texture texture in _textures)
-            texture.Dispose();
-        _readback.Dispose();
-        _framebuffer.Dispose();
-        _target.Dispose();
-        _compiler.Dispose();
-        _device.Dispose();
-    }
+    public void Dispose() => _harness.Dispose();
 
     private Material Surface(Float3 albedo, float roughness = 0.5f, float metallic = 0)
     {
@@ -362,14 +330,8 @@ public sealed partial class LightingTests : IDisposable
     private Float4[] Frame(params IProfiler[] profilers)
     {
         ViewDesc view = new() { World = _world, EV100 = _ev100, ViewId = 1, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view }, Profilers = profilers });
-        _device.WaitForIdle();
-        _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
-        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
-        _device.Unmap(_readback);
-        Assert.Empty(_errors);
-        return pixels;
+        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin };
+        return _harness.Frame(new FrameDesc { Views = new[] { view }, Profilers = profilers });
     }
 
     // Camera relative position of a pixel's centre on the quad
@@ -534,7 +496,7 @@ public sealed partial class LightingTests : IDisposable
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
             _device.WaitForIdle();
             Assert.Empty(_errors);
-            return ReadLayer(_target, 0);
+            return _harness.ReadTarget();
         }
 
         Float4[] alone = Perspective();
@@ -774,7 +736,7 @@ public sealed partial class LightingTests : IDisposable
         byte[] texels = [.. Enumerable.Repeat((byte)255, 8), .. Enumerable.Repeat((byte)0, 8)];
         Texture profile = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(2, 2, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
         _device.UpdateTexture<byte>(profile, texels, new TextureRegion(0, 0, 0, 2, 2, 1, 0, 0));
-        _textures.Add(profile);
+        _harness.Owned.Add(profile);
         spot.IesProfile = profile;
         spot.CookieSampler = SamplerDescription.Point;
         _world.SetLight(handle, spot);
@@ -1572,7 +1534,7 @@ public sealed partial class LightingTests : IDisposable
         Shadow = new ShadowDesc { Enabled = true },
     };
 
-    private FramePipeline Pipeline => _renderer.Frame;
+    private FrameStats Stats => _renderer.LastFrameStats;
 
     [Fact]
     public void CachedShadows_DrawAgainOnlyWhenTheirLightOrACasterNearItChanges()
@@ -1583,25 +1545,25 @@ public sealed partial class LightingTests : IDisposable
         LightHandle handle = _world.AddLight(light);
         RenderableHandle caster = AddCaster(1, 0.5, 6);
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
 
         // A caster far outside the light's reach changes nothing, the one in it draws the light again
         AddCaster(200, 0, 6);
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
         _world.SetTransform(caster, Double4x4.CreateTranslation(new Double3(-1, -0.5, 6)) * Double4x4.CreateScale(0.25));
         Float4[] pixels = Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, -2, -1, 2), pixels, 0.6f);
 
         _world.SetLight(handle, light with { Intensity = 0.3f });
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
         _world.SetLight(handle, light with { Direction = Normalize(new Float3(0.05f, 0, 1)) });
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1632,15 +1594,15 @@ public sealed partial class LightingTests : IDisposable
         Float4x4 identity = Float4x4.Identity;
         _world.SetBones(caster, [identity]);
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
         _world.SetBones(caster, [identity]);
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
 
         // Eight object units left and four down at a quarter scale puts the caster where the moved caster test does
         _world.SetBones(caster, [new Float4x4(new Float4(1, 0, 0, 0), new Float4(0, 1, 0, 0), new Float4(0, 0, 1, 0), new Float4(-8, -4, 0, 1))]);
         Float4[] pixels = Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, -2, -1, 2), pixels, 0.6f);
     }
 
@@ -1654,7 +1616,7 @@ public sealed partial class LightingTests : IDisposable
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly }, [animated]);
         Frame();
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1668,19 +1630,19 @@ public sealed partial class LightingTests : IDisposable
         RenderableHandle moving = AddCaster(-1.5, -1.5, 6, half: 0.5);
 
         Float4[] pixels = Frame();
-        Assert.Equal(2, Pipeline.ShadowViewsDrawn);
-        Assert.Equal(1, Pipeline.ShadowCopiesMade);
+        Assert.Equal(2, Stats.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowCopiesMade);
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => MathF.Min(SquareEdge(p, 2, 1, 2), SquareEdge(p, -3, -3, 1)), pixels, 0.6f);
 
         // From 2 through 6 to 10 the square doubles, the moving one's shadow goes from -3, -3 to -3, 3
         _world.SetTransform(moving, Double4x4.CreateTranslation(new Double3(-1.5, 1.5, 6)) * Double4x4.CreateScale(0.5 / 4));
         pixels = Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
-        Assert.Equal(1, Pipeline.ShadowCopiesMade);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowCopiesMade);
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => MathF.Min(SquareEdge(p, 2, 1, 2), SquareEdge(p, -3, 3, 1)), pixels, 0.6f);
 
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1692,7 +1654,7 @@ public sealed partial class LightingTests : IDisposable
         _world.AddLight(light);
         AddCaster(1, 0.5, 6);
         Float4[] pixels = Frame();
-        Assert.Equal(6, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(6, Stats.ShadowViewsDrawn);
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, 2, 1, 2), pixels, 0.6f);
     }
 
@@ -1755,7 +1717,7 @@ public sealed partial class LightingTests : IDisposable
         AddSurfaceCaster(Surface(new Float3(0, 1, 0)), -1.5, -1.5, 6);
         AddSurfaceCaster(Surface(new Float3(0, 0, 1)), -1.5, 1.5, 6);
         Float4[] pixels = Frame();
-        Assert.Equal(1, Pipeline.ShadowCallsDrawn);
+        Assert.Equal(1, Stats.ShadowDrawCalls);
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f),
             p => MathF.Min(SquareEdge(p, 2, 1, 2), MathF.Min(SquareEdge(p, -3, -3, 2), SquareEdge(p, -3, 3, 2))), pixels, 0.6f);
     }
@@ -1846,9 +1808,9 @@ public sealed partial class LightingTests : IDisposable
         AddCaster(-1.5, -1.5, 6, half: 0.5);
         Frame();
         Frame();
-        Assert.Equal(2, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(2, Stats.ShadowViewsDrawn);
         Frame();
-        Assert.Equal(2, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(2, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1859,14 +1821,14 @@ public sealed partial class LightingTests : IDisposable
         AddCaster(1, 0.5, 6, isStatic: true);
         Frame();
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
 
         RenderableHandle moving = AddCaster(-1.5, -1.5, 6, half: 0.5);
         Frame();
         _world.SetTransform(moving, Double4x4.CreateTranslation(new Double3(-1.5, 1.5, 6)) * Double4x4.CreateScale(0.5 / 4));
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
-        Assert.Equal(1, Pipeline.ShadowCopiesMade);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowCopiesMade);
     }
 
     [Fact]
@@ -1882,7 +1844,7 @@ public sealed partial class LightingTests : IDisposable
         Frame();
         Frame();
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1897,7 +1859,7 @@ public sealed partial class LightingTests : IDisposable
         Frame();
         _origin = at;
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -2008,7 +1970,7 @@ public sealed partial class LightingTests : IDisposable
         WorldShadows shadows = _renderer.ShadowsOf(_world)!;
         Assert.All(shadows.Lights.Values, light => Assert.Equal(128, light.Size));
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -2022,11 +1984,11 @@ public sealed partial class LightingTests : IDisposable
         _world.Shadows.MaxResizesPerFrame = 1;
         _world.Shadows.TexelsPerPixel = 8;
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -2062,7 +2024,7 @@ public sealed partial class LightingTests : IDisposable
         AddCaster(1, 0.5, 6, isStatic: true);
         AddCaster(-1.5, -1.5, 6, half: 0.5);
         Frame();
-        Assert.Equal(1, Pipeline.ShadowCopiesMade);
+        Assert.Equal(1, Stats.ShadowCopiesMade);
 
         LightHandle added = _world.AddLight(ShadowSpot() with { Position = new Double3(0.5, 0, 2), Shadow = new ShadowDesc { Enabled = true, Resolution = 128 } });
         Frame();
@@ -2110,7 +2072,7 @@ public sealed partial class LightingTests : IDisposable
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly | RenderableFlags.Static }, [uncast]);
         AddCaster(-1.5, -1.5, 6, half: 0.5);
         Frame();
-        Assert.Equal(0, Pipeline.ShadowCopiesMade);
+        Assert.Equal(0, Stats.ShadowCopiesMade);
     }
 
     [Fact]
@@ -2123,7 +2085,7 @@ public sealed partial class LightingTests : IDisposable
         Frame();
         _world.Globals.SetKeyword("UNUSED_BY_CASTERS", "On");
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -2137,11 +2099,11 @@ public sealed partial class LightingTests : IDisposable
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly }, [caster]);
         Frame();
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
 
         _world.Globals.SetKeyword("CASTER_WIND", "On");
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -2152,11 +2114,11 @@ public sealed partial class LightingTests : IDisposable
         AddCaster(-1.5, -1.5, 6, half: 0.5);
         Frame();
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
 
         _world.Providers.Add(new ShadowItem(_quad, Surface(new Float3(1, 1, 1))));
         Frame();
-        Assert.True(Pipeline.ShadowViewsDrawn > 0);
+        Assert.True(Stats.ShadowViewsDrawn > 0);
     }
 
     [Fact]
@@ -2270,7 +2232,7 @@ public sealed partial class LightingTests : IDisposable
     private void FrameExpectingErrors()
     {
         ViewDesc view = new() { World = _world, EV100 = UnitEV100, ViewId = 1, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
+        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin };
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         _errors.Clear();
@@ -2287,7 +2249,7 @@ public sealed partial class LightingTests : IDisposable
         FrameExpectingErrors();
         FrameExpectingErrors();
         FrameExpectingErrors();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -2522,14 +2484,6 @@ public sealed partial class LightingTests : IDisposable
         (new(-1, 0, 0), new(0, 1, 0), new(0, 0, -1)),
     ];
 
-    private Float4[] ReadLayer(Texture texture, uint layer)
-    {
-        _device.Record(cmd => cmd.CopyTextureToBuffer(texture, _readback, 0, TextureRegion.Whole(texture, 0, layer))).Wait();
-        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
-        _device.Unmap(_readback);
-        return pixels;
-    }
-
     [Fact]
     public void LayeredViews_DrawEachLayerExactlyLikeAViewOfItsOwn()
     {
@@ -2558,12 +2512,12 @@ public sealed partial class LightingTests : IDisposable
 
         for (int f = 0; f < 6; f++)
         {
-            Float4[] got = ReadLayer(layers, (uint)f);
+            Float4[] got = _harness.ReadLayer(layers, (uint)f);
             ViewDesc mono = new() { World = _world, EV100 = UnitEV100, ViewId = 8, Target = _framebuffer };
             mono.Layers[0] = cube.Layers[f];
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { mono } });
             _device.WaitForIdle();
-            Float4[] want = ReadLayer(_target, 0);
+            Float4[] want = _harness.ReadTarget();
 
             Assert.True(want.Any(p => p.X > 0.01f), $"layer {f} sees nothing");
             for (int i = 0; i < want.Length; i++)
@@ -2600,7 +2554,7 @@ public sealed partial class LightingTests : IDisposable
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
-        Float4[] pixels = ReadLayer(_target, 0);
+        Float4[] pixels = _harness.ReadTarget();
 
         for (int i = 0; i < pixels.Length; i++)
         {
@@ -2621,7 +2575,7 @@ public sealed partial class LightingTests : IDisposable
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
-        Assert.All(ReadLayer(_target, 0), p => Assert.True(Vector3.Distance(new Vector3(p.X, p.Y, p.Z), new Vector3(0.25f, 0.5f, 0.75f)) < 1e-3f));
+        Assert.All(_harness.ReadTarget(), p => Assert.True(Vector3.Distance(new Vector3(p.X, p.Y, p.Z), new Vector3(0.25f, 0.5f, 0.75f)) < 1e-3f));
     }
 
     [Fact]
@@ -2639,7 +2593,7 @@ public sealed partial class LightingTests : IDisposable
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { cube } });
             _device.WaitForIdle();
             Assert.Empty(_errors);
-            return Enumerable.Range(0, 6).Select(f => ReadLayer(layers, (uint)f)).ToArray();
+            return Enumerable.Range(0, 6).Select(f => _harness.ReadLayer(layers, (uint)f)).ToArray();
         }
 
         Float4[][] sky = Capture();
@@ -2886,7 +2840,7 @@ public sealed partial class LightingTests : IDisposable
         desc.Mode = ReflectionProbeMode.Baked;
         desc.Cubemap = _renderer.CreateReflectionCubemap(baked);
         desc.CubemapExposure = baked.Exposure;
-        _textures.Add(desc.Cubemap);
+        _harness.Owned.Add(desc.Cubemap);
         _world.SetReflectionProbe(probe, desc);
         Frame();
         Float4[] shown = Frame();
@@ -2922,7 +2876,7 @@ public sealed partial class LightingTests : IDisposable
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
-        return ReadLayer(_target, 0);
+        return _harness.ReadTarget();
     }
 
     private static void AssertPixels(Func<int, Vector3> expected, Float4[] pixels, float tolerance)
@@ -3023,7 +2977,7 @@ public sealed partial class LightingTests : IDisposable
         Assert.Empty(_errors);
 
         for (int f = 0; f < 6; f++)
-            AssertPixels(_ => new Vector3(colors[f].X, colors[f].Y, colors[f].Z) * 0.5f, ReadLayer(layers, (uint)f), 1e-3f);
+            AssertPixels(_ => new Vector3(colors[f].X, colors[f].Y, colors[f].Z) * 0.5f, _harness.ReadLayer(layers, (uint)f), 1e-3f);
     }
 
     [Fact]
@@ -3069,7 +3023,7 @@ public sealed partial class LightingTests : IDisposable
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { cube } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
-        return Enumerable.Range(0, 6).Select(f => ReadLayer(layers, (uint)f)).ToArray();
+        return Enumerable.Range(0, 6).Select(f => _harness.ReadLayer(layers, (uint)f)).ToArray();
     }
 
     [Fact]
@@ -3079,7 +3033,7 @@ public sealed partial class LightingTests : IDisposable
         Texture texture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled) with { Type = TextureType.TextureCube });
         for (uint f = 0; f < 6; f++)
             _device.UpdateTexture<Float4>(texture, [colors[f]], new TextureRegion(0, 0, 0, 1, 1, 1, 0, f));
-        _textures.Add(texture);
+        _harness.Owned.Add(texture);
         Material sky = _renderer.CreateMaterial(_renderer.Skies.Cubemap);
         sky.SetTexture("_Cubemap", texture, SamplerDescription.Point);
         sky.SetFloat("_Exposure", 0.5f);
@@ -3304,11 +3258,11 @@ public sealed partial class LightingTests : IDisposable
         Float4[] Draw()
         {
             ViewDesc view = new() { World = _world, EV100 = UnitEV100, ViewId = 16, Target = _framebuffer };
-            view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
+            view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin };
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
             _device.WaitForIdle();
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
-            return ReadLayer(_target, 0);
+            return _harness.ReadTarget();
         }
 
         Float4[] missing = Draw();
@@ -3356,8 +3310,8 @@ public sealed partial class LightingTests : IDisposable
     public void OpaqueForwardPasses_WriteTheGBufferTargetsTheyStore()
     {
         ShaderPass pass = ShaderParser.Parse(Source).Passes![0];
-        ShaderDescription lit = _compiler.Compile(pass, [], _device.BackendType);
-        ShaderDescription unlit = _compiler.Compile(ShaderParser.Parse(Source.Replace("Graphite_WriteGBuffer(c.normal, c.specularAlbedo, c.roughness);", "")).Passes![0], [], _device.BackendType);
+        ShaderDescription lit = TestCompiler.Shared.Compile(pass, [], _device.BackendType);
+        ShaderDescription unlit = TestCompiler.Shared.Compile(ShaderParser.Parse(Source.Replace("Graphite_WriteGBuffer(c.normal, c.specularAlbedo, c.roughness);", "")).Passes![0], [], _device.BackendType);
         PassState opaque = new();
         PassState blended = ShaderParser.ParsePassState("Blend SourceAlpha InverseSourceAlpha");
 
@@ -3376,7 +3330,7 @@ public sealed partial class LightingTests : IDisposable
         Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Graphite_WriteGBuffer(c.normal, c.specularAlbedo, c.roughness);", ""))));
         AddQuad(material);
         ViewDesc view = new() { World = _world, EV100 = UnitEV100, ViewId = 1, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
+        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin };
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
@@ -3411,13 +3365,11 @@ public sealed partial class LightingTests : IDisposable
             Lightmap = lightmap ?? LightmapBinding.None,
         }, [_renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(IndirectSource)))]);
 
-    private readonly List<Texture> _textures = new();
-
     private Texture Lightmap<T>(uint width, PixelFormat format, T[] texels) where T : unmanaged
     {
         Texture texture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(width, 1, 1, 1, format, TextureUsage.Sampled));
         _device.UpdateTexture<T>(texture, texels, new TextureRegion(0, 0, 0, width, 1, 1, 0, 0));
-        _textures.Add(texture);
+        _harness.Owned.Add(texture);
         return texture;
     }
 

@@ -4,10 +4,11 @@ using System.Linq;
 using System.Runtime.InteropServices;
 
 using Prowl.Graphite.ShaderDef;
-using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
 
 using Xunit;
+
+using static Prowl.Graphite.Rendering.Tests.RendererHarness;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
@@ -15,37 +16,6 @@ namespace Prowl.Graphite.Rendering.Tests;
 [Collection("GPU Tests")]
 public sealed class PostStackTests : IDisposable
 {
-    private const string UnlitSource = """
-        Shader "Test/Unlit"
-        {
-            Properties
-            {
-                _Color("Color", Color) = (1, 1, 1, 1)
-            }
-
-            Pass
-            {
-                Tags { "LightMode" = "Forward" }
-                Cull Off
-                GLSLPROGRAM
-                Vertex
-                {
-                    #include "Graphite/Vertex.glsl"
-                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
-                }
-                Fragment
-                {
-                    #include "Graphite/Passes.glsl"
-                    #include "Graphite/Core.glsl"
-                    uniform vec4 _Color;
-                    layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0); outColor = vec4(_Color.rgb * Graphite_Exposure(), 1.0); }
-                }
-                ENDGLSL
-            }
-        }
-        """;
-
     // Indirect diffuse along -z plus a constant standing in for direct light, with a depth prepass for screen lighting to read
     private const string IndirectSource = """
         Shader "Test/Indirect"
@@ -177,57 +147,26 @@ public sealed class PostStackTests : IDisposable
         }
         """;
 
-    private const int Size = 16;
-
-    // Orthographic and reversed Z: sees x and y from -4 to 4, and z from 0 (depth 1) to 100 (depth 0).
-    private static readonly Float4x4 s_projection = new(new Float4(0.25f, 0, 0, 0), new Float4(0, 0.25f, 0, 0), new Float4(0, 0, -0.01f, 0), new Float4(0, 0, 1, 1));
-
     // Views expose by 1, so the unlit surfaces' radiance reaches the effects as it is
     private static readonly float UnitEV100 = -MathF.Log2(1.2f);
 
-    private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GlslShaderCompiler _compiler = new();
-    private readonly Texture _target;
-    private readonly Framebuffer _framebuffer;
-    private readonly DeviceBuffer _readback;
+    private readonly RendererHarness _harness = new();
+    private readonly GraphicsDevice _device;
     private readonly Renderer _renderer;
     private readonly RenderWorld _world;
     private readonly Shader _unlit;
     private readonly GpuMesh _quad;
-    private readonly List<RendererError> _errors = new();
-    private readonly List<IDisposable> _owned = new();
+    private readonly List<RendererError> _errors;
+    private readonly List<IDisposable> _owned;
 
     public PostStackTests()
     {
-        _target = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
-        _framebuffer = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _target));
-        _readback = _device.ResourceFactory.CreateBuffer(new BufferDescription(Size * Size * 16, BufferUsage.Staging));
-        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = RenderThreading.Inline, Deterministic = true, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
-        _renderer.Error += _errors.Add;
-        _world = _renderer.CreateWorld();
-        _world.Environment = new EnvironmentDesc { AmbientColor = default, Fog = default };
-        _unlit = _renderer.LoadShader(ShaderParser.Parse(UnlitSource));
-
-        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
-        _quad = _renderer.CreateMesh(new MeshData
-        {
-            VertexCount = 4,
-            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
-            Indices = new uint[] { 0, 1, 2, 0, 2, 3 },
-        });
+        (_device, _renderer, _world, _errors, _owned) = (_harness.Device, _harness.Renderer, _harness.World, _harness.Errors, _harness.Owned);
+        _unlit = _renderer.LoadShader(ShaderParser.Parse(UnlitSource(exposed: true)));
+        _quad = _harness.CreateQuad();
     }
 
-    public void Dispose()
-    {
-        _renderer.Dispose();
-        foreach (IDisposable owned in _owned)
-            owned.Dispose();
-        _readback.Dispose();
-        _framebuffer.Dispose();
-        _target.Dispose();
-        _compiler.Dispose();
-        _device.Dispose();
-    }
+    public void Dispose() => _harness.Dispose();
 
     private T Effect<T>(T effect) where T : RenderFeature
     {
@@ -248,32 +187,13 @@ public sealed class PostStackTests : IDisposable
 
     private ViewDesc View(int id = 1)
     {
-        ViewDesc view = new() { World = _world, EV100 = UnitEV100, ViewId = id, Target = _framebuffer, Sky = false, ClearColor = new Float4(0, 0, 0, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection };
+        ViewDesc view = _harness.View(id);
+        view.EV100 = UnitEV100;
         return view;
     }
 
     private Float4[] Frame(float deltaTime = 1f / 60, ViewDesc? view = null)
-    {
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view ?? View() }, Time = new FrameTime { DeltaTime = deltaTime } });
-        _device.WaitForIdle();
-        _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
-        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
-        _device.Unmap(_readback);
-        Assert.Empty(_errors);
-        return pixels;
-    }
-
-    private static void AssertAll(Float3 expected, Float4[] pixels, float tolerance = 2e-3f, Func<int, bool>? where = null)
-    {
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            if (where != null && !where(i))
-                continue;
-            Float4 p = pixels[i];
-            Assert.True(MathF.Abs(p.X - expected.X) < tolerance && MathF.Abs(p.Y - expected.Y) < tolerance && MathF.Abs(p.Z - expected.Z) < tolerance, $"pixel {i}: expected {expected}, got {p}");
-        }
-    }
+        => _harness.Frame(new FrameDesc { Views = new[] { view ?? View() }, Time = new FrameTime { DeltaTime = deltaTime } });
 
     private static Float3 Map(Float3 c, Func<float, float> f) => new(f(c.X), f(c.Y), f(c.Z));
 
@@ -523,7 +443,7 @@ public sealed class PostStackTests : IDisposable
 
         // Without ambient light only the direct light is left, and GTAO takes none of it
         _world.Environment = new EnvironmentDesc { AmbientColor = default, Fog = default };
-        AssertAll(new Float3(0.25f), Frame());
+        AssertAll(new Float3(0.25f), Frame(), 2e-3f);
     }
 
     // A mirror over the lower half turned 45 degrees about x, so it faces the camera and up, and reflects up the view.
@@ -564,7 +484,7 @@ public sealed class PostStackTests : IDisposable
         AddBackdrop(new Float3(0.2f, 0.4f, 0.6f));
         Effect(new ScreenSpaceReflections(_renderer));
         Frame();
-        AssertAll(new Float3(0.2f, 0.4f, 0.6f), Frame());
+        AssertAll(new Float3(0.2f, 0.4f, 0.6f), Frame(), 2e-3f);
     }
 
     [Fact]
@@ -736,7 +656,7 @@ public sealed class PostStackTests : IDisposable
         _world.Add(new RenderableDesc { Mesh = facing, Transform = Double4x4.CreateTranslation(new Double3(4, 0, 10)) }, [fallback]);
         ShowMaterialTarget();
         Float4[] pixels = Frame();
-        AssertAll(new Float3(0, 0, 0), pixels);
+        AssertAll(new Float3(0, 0, 0), pixels, 2e-3f);
         Assert.All(pixels, p => Assert.Equal(1f, p.W));
     }
 
@@ -816,7 +736,7 @@ public sealed class PostStackTests : IDisposable
     {
         AddBackdrop(new Float3(0.2f, 0.3f, 0.1f));
         ColorGrading grading = Effect(new ColorGrading(_renderer) { PostExposure = 1 });
-        AssertAll(new Float3(0.4f, 0.6f, 0.2f), Frame());
+        AssertAll(new Float3(0.4f, 0.6f, 0.2f), Frame(), 2e-3f);
 
         _world.Features.Remove(grading);
         Effect(new Vignette(_renderer));
@@ -911,7 +831,7 @@ public sealed class PostStackTests : IDisposable
         using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 2 });
         ViewDesc stereo = new() { World = _world, EV100 = UnitEV100, ViewId = 5, Target = layered, LayerCount = 2, Sky = false, ClearColor = new Float4(0, 0, 0, 1) };
         for (int layer = 0; layer < 2; layer++)
-            stereo.Layers[layer] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = new Double3(layer * 0.5 - 0.25, 0, 0) };
+            stereo.Layers[layer] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = new Double3(layer * 0.5 - 0.25, 0, 0) };
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { stereo }, Time = new FrameTime { DeltaTime = 1f / 60 } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
@@ -938,7 +858,7 @@ public sealed class PostStackTests : IDisposable
         Float3 dim = new(0.4f, 0.5f, 0.3f);
         RenderableHandle backdrop = AddBackdrop(dim);
         Effect(new Bloom(_renderer) { Threshold = 1, SoftKnee = 0.5f, Intensity = 0.75f, Iterations = 3 });
-        AssertAll(dim, Frame());
+        AssertAll(dim, Frame(), 2e-3f);
 
         // A uniform colour blooms into itself: every level of the chain holds the prefiltered colour
         Float3 bright = new(1.2f, 2, 0.6f);

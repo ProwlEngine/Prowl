@@ -9,43 +9,14 @@ using Prowl.Vector;
 
 using Xunit;
 
+using static Prowl.Graphite.Rendering.Tests.RendererHarness;
+
 namespace Prowl.Graphite.Rendering.Tests;
 
 // Host features in a view's slots: which run, in what order, and what they draw onto
 [Collection("GPU Tests")]
 public sealed class FeatureTests : IDisposable
 {
-    private const string UnlitSource = """
-        Shader "Test/Unlit"
-        {
-            Properties
-            {
-                _Color("Color", Color) = (1, 1, 1, 1)
-            }
-
-            Pass
-            {
-                Tags { "LightMode" = "Forward" }
-                Cull Off
-                GLSLPROGRAM
-                Vertex
-                {
-                    #include "Graphite/Vertex.glsl"
-                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
-                }
-                Fragment
-                {
-                    #include "Graphite/Passes.glsl"
-                    #include "Graphite/Core.glsl"
-                    uniform vec4 _Color;
-                    layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0); outColor = vec4(_Color.rgb, 1.0); }
-                }
-                ENDGLSL
-            }
-        }
-        """;
-
     // Unlit, plus an Outline pass drawing green over everything wherever the renderable is
     private const string OutlinedSource = """
         Shader "Test/Outlined"
@@ -251,55 +222,24 @@ public sealed class FeatureTests : IDisposable
         }
         """;
 
-    private const int Size = 16;
-
-    // Orthographic and reversed Z: sees x and y from -4 to 4, and z from 0 (depth 1) to 100 (depth 0).
-    private static readonly Float4x4 s_projection = new(new Float4(0.25f, 0, 0, 0), new Float4(0, 0.25f, 0, 0), new Float4(0, 0, -0.01f, 0), new Float4(0, 0, 1, 1));
-
-    private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GlslShaderCompiler _compiler = new();
-    private readonly Texture _target;
-    private readonly Framebuffer _framebuffer;
-    private readonly DeviceBuffer _readback;
-    private readonly RendererOptions _options = new() { Threading = RenderThreading.Inline, Deterministic = true, PageVertexWords = 1 << 16, PageIndices = 1 << 16 };
+    private readonly RendererHarness _harness = new();
+    private readonly GraphicsDevice _device;
+    private readonly RendererOptions _options;
     private readonly Renderer _renderer;
     private readonly RenderWorld _world;
     private readonly Shader _unlit;
     private readonly GpuMesh _quad;
-    private readonly List<RendererError> _errors = new();
-    private readonly List<IDisposable> _owned = new();
+    private readonly List<RendererError> _errors;
+    private readonly List<IDisposable> _owned;
 
     public FeatureTests()
     {
-        _target = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
-        _framebuffer = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _target));
-        _readback = _device.ResourceFactory.CreateBuffer(new BufferDescription(Size * Size * 16, BufferUsage.Staging));
-        _renderer = new Renderer(_device, _compiler, _options);
-        _renderer.Error += _errors.Add;
-        _world = _renderer.CreateWorld();
-        _world.Environment = new EnvironmentDesc { AmbientColor = default, Fog = default };
-        _unlit = _renderer.LoadShader(ShaderParser.Parse(UnlitSource));
-
-        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
-        _quad = _renderer.CreateMesh(new MeshData
-        {
-            VertexCount = 4,
-            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
-            Indices = new uint[] { 0, 1, 2, 0, 2, 3 },
-        });
+        (_device, _options, _renderer, _world, _errors, _owned) = (_harness.Device, _harness.Options, _harness.Renderer, _harness.World, _harness.Errors, _harness.Owned);
+        _unlit = _renderer.LoadShader(ShaderParser.Parse(UnlitSource(exposed: false)));
+        _quad = _harness.CreateQuad();
     }
 
-    public void Dispose()
-    {
-        _renderer.Dispose();
-        foreach (IDisposable owned in _owned)
-            owned.Dispose();
-        _readback.Dispose();
-        _framebuffer.Dispose();
-        _target.Dispose();
-        _compiler.Dispose();
-        _device.Dispose();
-    }
+    public void Dispose() => _harness.Dispose();
 
     private void AddQuad(Float3 color, uint layer = ~0u, double scale = 1)
     {
@@ -310,34 +250,9 @@ public sealed class FeatureTests : IDisposable
 
     private static bool Centre(int i) => i % Size is >= 4 and < 12 && i / Size is >= 4 and < 12;
 
-    private ViewDesc View(int id = 1)
-    {
-        ViewDesc view = new() { World = _world, ViewId = id, Target = _framebuffer, Sky = false, ClearColor = new Float4(0, 0, 0, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection };
-        return view;
-    }
+    private ViewDesc View(int id = 1) => _harness.View(id);
 
-    private Float4[] Frame(params ViewDesc[] views)
-    {
-        _renderer.SubmitFrame(new FrameDesc { Views = views });
-        _device.WaitForIdle();
-        _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
-        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
-        _device.Unmap(_readback);
-        Assert.Empty(_errors);
-        return pixels;
-    }
-
-    private static void AssertAll(Float3 expected, Float4[] pixels, Func<int, bool>? where = null)
-    {
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            if (where != null && !where(i))
-                continue;
-            Float4 p = pixels[i];
-            Assert.True(MathF.Abs(p.X - expected.X) < 1e-3f && MathF.Abs(p.Y - expected.Y) < 1e-3f && MathF.Abs(p.Z - expected.Z) < 1e-3f, $"pixel {i}: expected {expected}, got {p}");
-        }
-    }
+    private Float4[] Frame(params ViewDesc[] views) => _harness.Frame(views);
 
     private FullscreenProgram Program(string fragment)
     {
@@ -1235,7 +1150,7 @@ public sealed class FeatureTests : IDisposable
     {
         AddQuad(new Float3(1, 1, 1));
         Frame(View());
-        Assert.Equal(default, _renderer.Frame.Camera(1)!.Jitter);
+        Assert.Equal(default, _renderer.LastFrameStats.View(1)!.Jitter);
 
         TemporalAntiAliasing taa = new(_renderer) { JitterSpread = 4 };
         _world.Features.Add(taa);
@@ -1243,7 +1158,7 @@ public sealed class FeatureTests : IDisposable
         for (int frame = 0; frame < 5; frame++)
         {
             Frame(View());
-            jitters.Add(_renderer.Frame.Camera(1)!.Jitter);
+            jitters.Add(_renderer.LastFrameStats.View(1)!.Jitter);
         }
 
         // Within half a pixel, four different offsets, then the first again
@@ -1720,7 +1635,7 @@ public sealed class FeatureTests : IDisposable
 
         TextureReadback? texture = null;
         byte[]? bytes = null;
-        _renderer.Readback(_target, data => texture = data);
+        _renderer.Readback(_harness.Target, data => texture = data);
         _renderer.Readback(buffer, data => bytes = data.Data, offset: 4, size: 8);
         Frame(View());
         Assert.Null(texture);
@@ -1755,14 +1670,6 @@ public sealed class FeatureTests : IDisposable
         Assert.Throws<ArgumentOutOfRangeException>(() => _renderer.Readback(texture, _ => { }, region: new TextureRegion(0, 0, 0, 2, 2, 1, 1, 0)));
         using DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly));
         Assert.Throws<ArgumentOutOfRangeException>(() => _renderer.Readback(buffer, _ => { }, offset: 8, size: uint.MaxValue - 4));
-    }
-
-    private Float4[] ReadTarget()
-    {
-        _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
-        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
-        _device.Unmap(_readback);
-        return pixels;
     }
 
     private sealed class Glows : RenderFeature
@@ -2039,7 +1946,7 @@ public sealed class FeatureTests : IDisposable
                 void main() { words[1] = push.count; }
             }
             """;
-        ComputeProgram program = _device.ResourceFactory.CreateComputeProgram(_compiler.CompileCompute(new ShaderPass { State = new PassState(), Source = source }, [], _device.BackendType));
+        ComputeProgram program = _device.ResourceFactory.CreateComputeProgram(TestCompiler.Shared.CompileCompute(new ShaderPass { State = new PassState(), Source = source }, [], _device.BackendType));
         _owned.Add(program);
 
         // A world object draws first, so the provider's commands are not the view's first
@@ -2121,7 +2028,7 @@ public sealed class FeatureTests : IDisposable
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
         _device.WaitForIdle();
         _errors.Clear();
-        AssertAll(new Float3(0, 0, 1), ReadTarget(), Centre);
+        AssertAll(new Float3(0, 0, 1), _harness.ReadTarget(), Centre);
     }
 
     [Fact]

@@ -23,7 +23,7 @@ public sealed class GlobalsTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
     private readonly GlobalRegistry _registry;
     private readonly Uploader _uploader;
     private readonly List<RendererError> _reports = new();
@@ -38,7 +38,6 @@ public sealed class GlobalsTests : IDisposable
     public void Dispose()
     {
         _uploader.Dispose();
-        _compiler.Dispose();
         _store.Dispose();
         _device.Dispose();
     }

@@ -32,7 +32,7 @@ internal sealed partial class FramePipeline
         WorldReflections reflections = world.World.Reflections;
         world.SkyCamera ??= Capturing();
         WorldReflections.Scratch scratch = reflections.SkyScratch!;
-        if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSnapshot))
+        if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSet))
             reflections.SkyIncomplete();
 
         ViewDesc capture = new()
@@ -77,7 +77,7 @@ internal sealed partial class FramePipeline
         WorldReflections.Target target = reflections.ProbeTarget(work.Index);
         WorldReflections.Scratch scratch = work.Scratch;
         Float4x4 projection = WorldReflections.FaceProjectionBetween(probe.NearClip, probe.FarClip);
-        if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSnapshot) && !Programs.Failed(sky, false, world.World.Globals.KeywordSnapshot))
+        if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSet) && !Programs.Failed(sky, false, world.World.Globals.KeywordSet))
             reflections.Request(work.Index);
         int faces = work.EndFace - work.FirstFace;
         if (faces == 6)

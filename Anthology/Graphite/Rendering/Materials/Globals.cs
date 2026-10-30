@@ -36,6 +36,9 @@ public sealed class GlobalProperties
     /// <summary>The resolved keywords as of the last extraction: this set's over the fallback's. The render thread reads only this.</summary>
     internal IReadOnlyDictionary<string, string> KeywordSnapshot { get; private set; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
+    /// <summary>The snapshot interned, what draws without view keywords look their programs up by.</summary>
+    internal KeywordSet KeywordSet { get; private set; } = KeywordSet.Empty;
+
     private (uint Own, uint Fallback) _snapshotVersions = (uint.MaxValue, uint.MaxValue);
 
     internal void SnapshotKeywords()
@@ -48,6 +51,7 @@ public sealed class GlobalProperties
         foreach (KeyValuePair<string, string> pair in _keywords)
             snapshot[pair.Key] = pair.Value;
         KeywordSnapshot = snapshot;
+        KeywordSet = KeywordSet.Intern(snapshot);
         _snapshotVersions = versions;
     }
 

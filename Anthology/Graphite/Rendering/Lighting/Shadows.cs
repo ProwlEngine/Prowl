@@ -1110,11 +1110,8 @@ internal static class ShadowMath
 /// </summary>
 internal sealed partial class FramePipeline
 {
-    /// <summary>Shadow views drawn and static copies made in the last frame, for tests.</summary>
+    /// <summary>Shadow views drawn and static copies made in the last frame.</summary>
     internal int ShadowViewsDrawn { get; private set; }
-
-    /// <summary>Multi draw calls the shadow views drawn in the last frame made, for tests.</summary>
-    internal int ShadowCallsDrawn { get; private set; }
 
     /// <summary>Lights given tiles this frame that held none, and lights whose tiles grew or shrank.</summary>
     internal int ShadowsAdded { get; private set; }
@@ -1170,7 +1167,6 @@ internal sealed partial class FramePipeline
     private void PrepareShadows()
     {
         ShadowViewsDrawn = 0;
-        ShadowCallsDrawn = 0;
         ShadowsAdded = ShadowsGrown = ShadowsShrunk = 0;
         ShadowCopiesMade = 0;
         foreach (WorldFrame world in _frameWorlds)
@@ -1735,7 +1731,7 @@ internal sealed partial class FramePipeline
     {
         if (camera.FindList(PassType.ShadowCaster) is not { } list)
             return true;
-        IReadOnlyDictionary<string, string> keywords = camera.World.World.Globals.KeywordSnapshot;
+        KeywordSet keywords = camera.KeywordSet;
         foreach (DrawCall call in list.Calls)
         {
             bool mirrored = call.Mirrored != camera.Mirrored;
@@ -2062,13 +2058,14 @@ internal sealed partial class FramePipeline
     }
 
     // A shadow view's casters culled against the given frustum for a tile of the given size, its draw lists ready to record
-    private void DrawShadowView(CameraFrame camera, WorldFrame world, int tile, in ViewLayer layer, in CullFrustum cull, float near, float far, CasterFilter filter)
+    private void DrawShadowView(CameraFrame camera, WorldFrame world, int tile, in ViewLayer layer, in CullFrustum cull, float near, float far, CasterFilter filter, Keyword[]? keywords = null)
     {
         ViewDesc view = new()
         {
             World = world.World,
             Kind = ViewKind.Shadow,
             ViewId = camera.View.ViewId,
+            Keywords = keywords,
             Sky = false,
             Near = near,
             FarDistance = far,
@@ -2078,7 +2075,6 @@ internal sealed partial class FramePipeline
         camera.ShadowFilter = filter;
         ShadowViewsDrawn++;
         PrepareShadowView(camera, view, world, (uint)tile);
-        ShadowCallsDrawn += camera.FindList(PassType.ShadowCaster)?.Calls.Count ?? 0;
     }
 
     private void PrepareShadowView(CameraFrame camera, in ViewDesc view, WorldFrame world, uint size)
@@ -2238,7 +2234,7 @@ internal sealed partial class FramePipeline
                 cascade.DepthRange = radius + reach;
                 ShadowTile whole = new(0, 0, (int)resolution);
                 ViewLayer layer = new() { View = rotation, Projection = projection, Position = cascade.Center };
-                DrawShadowView(cascade.Camera!, camera.World, (int)resolution, layer, new CullFrustum(cascade.Shape, cascade.Center, nearPlane: false), -reach, radius, CasterFilter.All);
+                DrawShadowView(cascade.Camera!, camera.World, (int)resolution, layer, new CullFrustum(cascade.Shape, cascade.Center, nearPlane: false), -reach, radius, CasterFilter.All, camera.Desc.Keywords);
                 cascade.Draws.Add(new ShadowDraw(cascade.Camera!, whole, Clear: true, cascadeLight.Light, c, Cascade: true));
             }
 

@@ -112,7 +112,7 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         WorldFrame world = camera.World;
         if (!camera.Desc.Sky || camera.Desc.Overlay || world.SkyProgram is not ushort id || world.World.Lighting.Environment.Sky is not { IsDisposed: false, Table: { } table } sky)
             return;
-        GraphicsProgram? program = frame.Programs.Get(id, false, camera.Keywords);
+        GraphicsProgram? program = frame.Programs.Get(id, false, camera.KeywordSet);
         if (program == null || !BindUserBuffers(program, sky.Shader))
             return;
 
@@ -134,7 +134,7 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         foreach (DrawCall call in list.Calls)
         {
             frame.CountDraw(shadow, call.CommandCount);
-            GraphicsProgram? program = frame.Programs.Get(call.Program, call.Mirrored != camera.Mirrored, camera.Keywords);
+            GraphicsProgram? program = frame.Programs.Get(call.Program, call.Mirrored != camera.Mirrored, camera.KeywordSet);
             if (program == null)
                 continue;
 

@@ -41,12 +41,9 @@ public sealed class RendererOptions
     public uint PageIndices = GeometryPool.DefaultPageIndices;
 
     /// <summary>
-    /// Forces Inline threading and blocking variant compiles, so no fallback variant is ever drawn. For golden images
-    /// and tests.
+    /// When shader variants compile. Sync with Inline threading never draws a stand in, for golden images and tests.
+    /// Players with only baked shaders use BakedOnly.
     /// </summary>
-    public bool Deterministic;
-
-    /// <summary>When shader variants compile. Deterministic forces Sync, players with only baked shaders use BakedOnly.</summary>
     public CompilePolicy Compile = CompilePolicy.Async;
 
     /// <summary>Format of reflection probe and sky probe cubes. B10G11R11 halves their memory, alpha is never used.</summary>
@@ -342,7 +339,7 @@ public sealed class Renderer : IDisposable
         _materials = new MaterialSystem(device, _store, Textures) { Reporter = Report };
         _globals = new GlobalRegistry(device, _store, Textures) { Reporter = Report };
         _programs.Reporter = Report;
-        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report, _options.Compile) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
+        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, Report, _options.Compile) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
         FrameFeatures.Add(new DeformFeature());
         FrameFeatures.Add(new ReadbackFeature());
         _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
@@ -352,7 +349,7 @@ public sealed class Renderer : IDisposable
         _programs.DepthCaster = LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}DepthCaster.shader")!));
         _depthCasterMaterial = CreateMaterial(_programs.DepthCaster);
 
-        if (_options.Threading == RenderThreading.RenderThread && !_options.Deterministic)
+        if (_options.Threading == RenderThreading.RenderThread)
         {
             _thread = new Thread(RenderLoop) { Name = "Graphite Render", IsBackground = true };
             _thread.Start();
@@ -802,6 +799,14 @@ public sealed class Renderer : IDisposable
     /// Waits until the render thread has finished the CPU side of the last submitted frame, then hands readbacks and
     /// probe bakes the GPU has finished to their callbacks. Host thread.
     /// </summary>
+    /// <summary>Resizes the device's main swapchain once the render thread and the GPU are done with it. Host thread.</summary>
+    public void Resize(uint width, uint height)
+    {
+        WaitForRenderThread();
+        Device.WaitForIdle();
+        Device.ResizeMainWindow(width, height);
+    }
+
     public void WaitForRenderThread()
     {
         _frameDone.Wait();

@@ -10,13 +10,11 @@ using Xunit;
 namespace Prowl.Graphite.Rendering.Tests;
 
 [Collection("GPU Tests")]
-public sealed class DebugViewTests : IDisposable
+public sealed class DebugViewTests
 {
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
 
     public DebugViewTests() => ShaderLibrary.Register(typeof(Renderer).Assembly);
-
-    public void Dispose() => _compiler.Dispose();
 
     // Made into a renderer shader, so its passes compile with the material ABI
     private ShaderDefinition Load(string name)

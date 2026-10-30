@@ -13,8 +13,8 @@ namespace Prowl.Graphite.Rendering;
 /// <summary>A world as the frame pipeline draws it: its buckets, its globals region and its frame table.</summary>
 internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globalRegion, DrawPrograms programs) : IDisposable
 {
-    /// <summary>The draw programs of the materials the world's providers draw with.</summary>
-    public ProviderPrograms Programs { get; } = new(programs);
+    /// <summary>The renderer's draw program ids, which the world's providers hold theirs in.</summary>
+    public DrawPrograms Programs { get; } = programs;
 
     private static int s_nextCapture;
 
