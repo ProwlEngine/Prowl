@@ -30,8 +30,8 @@ Shader "Graphite/Sky/Procedural"
             layout(location = 0) out vec4 outColor;
             void main()
             {
-                vec3 color = Graphite_ProceduralSky(Graphite_SkyDirection(), Graphite_SunDirection(), _SunSize, _SunGlow, _Exposure, _Tint.rgb, _GroundColor.rgb);
-                outColor = vec4(color, 1.0);
+                vec3 color = Graphite_ProceduralSky(Graphite_SkyDirection(), Graphite_SunDirection(), Graphite_SunIlluminance(), _SunSize, _SunGlow, _Exposure, _Tint.rgb, _GroundColor.rgb);
+                outColor = vec4(Graphite_SaturateHalf(color * Graphite_Exposure()), 1.0);
             }
         }
         ENDGLSL

@@ -5,17 +5,18 @@ using Prowl.Vector;
 namespace Prowl.Graphite.Rendering;
 
 /// <summary>
-/// Prowl's temporal anti aliasing, in the Upscale slot: while it runs the view's projection jitters through Halton(2, 3)
+/// Temporal anti aliasing, in the Upscale slot: while it runs the view's projection jitters through Halton(2, 3)
 /// sub pixel offsets, and each frame blends with the last ones reprojected by the scene's motion, clipped to the
-/// neighbourhood's colour spread, then sharpened. Layered views keep a history per layer. In the AntiAliasing group with
-/// FXAA and SMAA.
+/// neighbourhood's colour spread, then sharpened. Where the scene's reactive mask says transmissive surfaces show what
+/// they refract, which their motion does not carry, at most <see cref="ReactiveBlendFactor"/> of history is kept. Layered
+/// views keep a history per layer. In the AntiAliasing group with FXAA and SMAA.
 /// </summary>
 public sealed class TemporalAntiAliasing : RenderFeature
 {
-    public override SceneTargets SceneReads => SceneTargets.Motion;
+    public override SceneTargets SceneReads => SceneTargets.Motion | SceneTargets.Reactive;
 
     private readonly EffectResources _resources;
-    private readonly FullscreenProgram _resolve, _sharpen;
+    private readonly FullscreenProgram _resolve, _reactiveResolve, _sharpen;
     private readonly PropertySet _properties = new(), _sharpening = new();
     private Settings _settings;
 
@@ -25,12 +26,13 @@ public sealed class TemporalAntiAliasing : RenderFeature
         public TextureHandle Texture;
     }
 
-    private readonly record struct Settings(float BlendFactor, float MotionBlendFactor, float MotionScale, float Sharpness);
+    private readonly record struct Settings(float BlendFactor, float MotionBlendFactor, float ReactiveBlendFactor, float MotionScale, float Sharpness);
 
     public TemporalAntiAliasing(Renderer renderer)
     {
         _resources = renderer.Effects;
         _resolve = _resources.Program("Taa");
+        _reactiveResolve = _resources.Program("Taa", "#define TAA_REACTIVE 1\n");
         _sharpen = _resources.Program("Taa", "#define TAA_SHARPEN 1\n");
     }
 
@@ -39,6 +41,9 @@ public sealed class TemporalAntiAliasing : RenderFeature
 
     /// <summary>How much history is kept where the image moves fast, 0 to 0.99.</summary>
     public float MotionBlendFactor { get; set; } = 0.85f;
+
+    /// <summary>How much history is kept where the reactive mask is full, 0 to 0.99, blended toward the usual amount as it falls.</summary>
+    public float ReactiveBlendFactor { get; set; } = 0.5f;
 
     /// <summary>How much faster motion tightens the history's clip.</summary>
     public float MotionScale { get; set; } = 2;
@@ -58,7 +63,7 @@ public sealed class TemporalAntiAliasing : RenderFeature
     public override float JitterMipBias => MipBias;
 
     public override void Extract()
-        => _settings = new Settings(Math.Clamp(BlendFactor, 0, 0.99f), Math.Clamp(MotionBlendFactor, 0, 0.99f), Math.Max(MotionScale, 0), Math.Clamp(Sharpness, 0, 1));
+        => _settings = new Settings(Math.Clamp(BlendFactor, 0, 0.99f), Math.Clamp(MotionBlendFactor, 0, 0.99f), Math.Clamp(ReactiveBlendFactor, 0, 0.99f), Math.Max(MotionScale, 0), Math.Clamp(Sharpness, 0, 1));
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
@@ -76,13 +81,16 @@ public sealed class TemporalAntiAliasing : RenderFeature
 
         _properties.SetTexture("_History", previous?.ColorTextures[0] ?? context.Color!, _resources.LinearClamp);
         _properties.SetTexture("_Motion", context.Motion!, _resources.PointClamp);
+        if (context.Reactive is { } reactive)
+            _properties.SetTexture("_Reactive", reactive, _resources.PointClamp);
         _properties.SetTexture("_Depth", context.Depth!, _resources.PointClamp);
         _properties.SetFloat2("_Resolution", resolution);
         _properties.SetFloat("_HistoryValid", previous != null && context.HasPreviousFrame ? 1 : 0);
         _properties.SetFloat("_BlendFactor", _settings.BlendFactor);
         _properties.SetFloat("_MotionBlendFactor", _settings.MotionBlendFactor);
+        _properties.SetFloat("_ReactiveBlendFactor", _settings.ReactiveBlendFactor);
         _properties.SetFloat("_MotionScale", _settings.MotionScale);
-        context.Fullscreen(_resolve, history, _properties);
+        context.Fullscreen(context.Reactive != null ? _reactiveResolve : _resolve, history, _properties);
 
         // Sharpened on the way out, after the history took the resolve, so sharpening never feeds back
         _sharpening.SetTexture("_Resolved", history.ColorTextures[0], _resources.PointClamp);

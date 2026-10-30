@@ -29,7 +29,7 @@ Shader "Graphite/Sky/Cubemap"
             void main()
             {
                 vec3 color = texture(_Cubemap, Graphite_RotateSkyY(Graphite_SkyDirection(), -_Rotation)).rgb;
-                outColor = vec4(color * _Tint.rgb * _Exposure, 1.0);
+                outColor = vec4(Graphite_SaturateHalf(color * _Tint.rgb * (_Exposure * Graphite_Exposure())), 1.0);
             }
         }
         ENDGLSL

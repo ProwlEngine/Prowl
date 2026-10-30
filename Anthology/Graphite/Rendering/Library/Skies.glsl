@@ -1,7 +1,15 @@
 // The built in skies' shared parts: the procedural sky's radiance and its sun, rotation and panorama mapping. Sky shaders include Graphite/Sky.glsl first.
+// Skies give radiance in nits, which the sky shaders pre-expose.
 #pragma once
 
 #include "Graphite/Lighting.glsl"
+
+// The procedural sky's luminance in nits per lux of sun. With the sun 60 degrees up the sky then lights a level surface
+// with a fifth of the sun's illuminance, a clear day's 20000 lux of sky under a 100000 lux sun.
+#define GRAPHITE_SKY_NITS_PER_LUX 2.8
+
+// The illuminance of a sun when the world has no directional light, a clear day's
+#define GRAPHITE_DEFAULT_SUN_LUX 100000.0
 
 // The direction toward the sun: the world's sun light, else a default low in the sky
 vec3 Graphite_SunDirection()
@@ -9,8 +17,14 @@ vec3 Graphite_SunDirection()
     return Graphite_DirectionalCount() > 0u ? Graphite_GetDirectional(0u).direction : normalize(vec3(-0.5, 0.7, -0.5));
 }
 
-// Procedural sky radiance along a unit world direction, sun is the unit direction toward the sun.
-// sunGlow scales the glow around the sun, 0 turns it off.
+// The sun's colour times its illuminance in lux: the world's sun light, else a default white sun
+vec3 Graphite_SunIlluminance()
+{
+    return Graphite_DirectionalCount() > 0u ? Graphite_GetDirectional(0u).color : vec3(GRAPHITE_DEFAULT_SUN_LUX);
+}
+
+// Procedural sky radiance along a unit world direction per unit of the sky's brightness, sun is the unit direction
+// toward the sun. sunGlow scales the glow around the sun, 0 turns it off.
 vec3 Graphite_SkyRadiance(vec3 view, vec3 sun, float sunGlow)
 {
     float up = max(sun.y, 0.0), dep = max(-sun.y, 0.0) * 28.2;
@@ -52,27 +66,22 @@ vec3 Graphite_SkyRadiance(vec3 view, vec3 sun, float sunGlow)
     return (single + bounce * (1.0 - viewT)) * 1.7557;
 }
 
-vec3 Graphite_JodieReinhard(vec3 c)
+// The procedural sky in nits: the scattered light of a sun of sunLux, its colour times lux, times tint, the sun's disk
+// scaled by sunSize (0 hides it) shining that illuminance, the light at the horizon times ground below it, all times
+// intensity. Captures leave the disk out while a directional light is the sun, which lights everything already.
+vec3 Graphite_ProceduralSky(vec3 view, vec3 sun, vec3 sunLux, float sunSize, float sunGlow, float intensity, vec3 tint, vec3 ground)
 {
-    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-    vec3 tc = c / (c + 1.0);
-    return mix(c / (l + 1.0), tc, tc);
-}
-
-// The procedural sky as drawn: the scattered light times tint, the sun disk scaled by sunSize (0 hides it), the light
-// at the horizon times ground below it, then exposed and tonemapped
-vec3 Graphite_ProceduralSky(vec3 view, vec3 sun, float sunSize, float sunGlow, float exposure, vec3 tint, vec3 ground)
-{
-    vec3 color = Graphite_SkyRadiance(view, sun, sunGlow) * tint;
-    if (sunSize > 0.0)
+    float lux = dot(sunLux, vec3(0.2126, 0.7152, 0.0722));
+    vec3 color = Graphite_SkyRadiance(view, sun, sunGlow) * tint * (lux * GRAPHITE_SKY_NITS_PER_LUX);
+    if (sunSize > 0.0 && !(Graphite_IsCapture() && Graphite_DirectionalCount() > 0u))
     {
+        // The disk fades in over its rim, so its solid angle is 2 pi times its blend's mean width in cosine
         float size2 = sunSize * sunSize;
-        float sunTransmittance = exp(-dot(vec3(0.33), vec3(5.802e-6, 13.558e-6, 33.1e-6)) * 8000.0 / max(view.y, 0.02));
         float disk = smoothstep(1.0 - 1.5e-4 * size2, 1.0 - 1e-5 * size2, dot(view, sun)) * step(0.0, view.y);
-        color += disk * 2000.0 * sunTransmittance * vec3(1.0, 0.9, 0.8);
+        color += disk * sunLux / (2.0 * PI * 8e-5 * size2);
     }
     color = mix(color, color * ground, smoothstep(0.0, -0.02, view.y));
-    return Graphite_JodieReinhard(color * (40.0 * exposure));
+    return color * intensity;
 }
 
 // A direction turned about the up axis by degrees, for skies that rotate their image

@@ -35,7 +35,7 @@ void Graphite_StandardVertex()
     vec3 relative = Graphite_ObjectToRelative(v.Position);
     gl_Position = Graphite_RelativeToClip(relative);
 
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA)
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)
     vUV = v.UV;
     vUV1 = v.UV1;
 #endif
@@ -43,12 +43,8 @@ void Graphite_StandardVertex()
 #ifdef GRAPHITE_STANDARD_VERTEX_DATA
     vRelativePos = relative;
     vColor = v.Color;
-#ifdef _INSTANCE_TINT
-    vColor *= Graphite_Object().custom0;
-#endif
 #endif
 
-#ifdef GRAPHITE_STANDARD_FORWARD
 #ifdef GRAPHITE_STANDARD_LIT
     vNormal = Graphite_ObjectToWorldNormal(v.Normal);
     vec4 tangent = v.Tangent;
@@ -57,7 +53,6 @@ void Graphite_StandardVertex()
     Graphite_StandardTangentFrame(vNormal, worldTangent, tangent.w, hasTangents, vTangent, vBitangent);
     vHasTangents = hasTangents ? 1.0 : 0.0;
     vLightmapUV = Graphite_LightmapUV();
-#endif
 #endif
 }
 

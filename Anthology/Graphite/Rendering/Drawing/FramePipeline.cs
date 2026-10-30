@@ -28,6 +28,14 @@ internal sealed partial class FramePipeline : IDisposable
         public uint Flags;
     }
 
+    private struct ExposurePush
+    {
+        public float Host;
+        public uint Flags;
+        public uint Layers;
+        private uint _pad;
+    }
+
     private static readonly List<RenderResourceID> s_bufferIds = new();
 
     private readonly GraphicsDevice _device;
@@ -119,6 +127,9 @@ internal sealed partial class FramePipeline : IDisposable
         SmaaAreaLayered = LoadData(device, "SmaaArea.bin", 160, 560, mipmapped: false, layers: 6);
         SmaaSearchLayered = LoadData(device, "SmaaSearch.bin", 64, 16, mipmapped: false, layers: 6);
         textures.RegisterDefault("noise", Noise);
+        Dfg = LoadTable(device, "Dfg.bin", PixelFormat.R16_G16_B16_A16_Float, 128, 128, 1);
+        DielectricE = LoadTable(device, "DielectricE.bin", PixelFormat.R16_Float, 32, 32, 32);
+        AnisotropicDfg = LoadTable(device, "AnisotropicDfg.bin", PixelFormat.R16_G16_B16_A16_Float, 32, 16, 64);
         NoScreenVisibility = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R8_UNorm, TextureUsage.Sampled));
         NoScreenIrradiance = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
         NoSceneColor = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
@@ -136,6 +147,9 @@ internal sealed partial class FramePipeline : IDisposable
             blend: new BlendStateDescription(default, BlendAttachmentDescription.OverrideBlend, untouched, untouched));
         PrefilterProgram = Fullscreen(device, compiler, "Internal/Prefilter.glsl");
         SkyAmbientProgram = InternalShaders.Compute(device, compiler, "Internal/SkyAmbient.glsl");
+        ExposureProgram = InternalShaders.Compute(device, compiler, "Internal/Exposure.glsl");
+        NoExposure = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_Float, TextureUsage.Sampled));
+        device.UpdateTexture<float>(NoExposure, [0f], TextureRegion.Whole(NoExposure, 0, 0));
         TrilinearClamp = device.ResourceFactory.CreateSampler(SamplerDescription.Linear with
         {
             AddressModeU = SamplerAddressMode.Clamp,
@@ -160,7 +174,7 @@ internal sealed partial class FramePipeline : IDisposable
     /// </summary>
     public FullscreenProgram Present(bool decode, bool encode, bool over) => _present[(decode ? 2 : encode ? 4 : 0) + (over ? 1 : 0)];
 
-    /// <summary>Prowl's noise: blue noise in red, white noise in green, voronoi in blue, 256 square, mipmapped.</summary>
+    /// <summary>The noise texture: blue noise in red, white noise in green, voronoi in blue, 256 square, mipmapped.</summary>
     public Texture Noise { get; }
 
     /// <summary>The SMAA reference's area and search tables, RGBA8 in its row order.</summary>
@@ -179,6 +193,11 @@ internal sealed partial class FramePipeline : IDisposable
     public Texture NoSceneColor { get; }
     public Texture NoSceneDepth { get; }
 
+    /// <summary>The GGX energy tables of Graphite/PBR/Energy.glsl, generated and verified by the rendering tests.</summary>
+    public Texture Dfg { get; }
+    public Texture DielectricE { get; }
+    public Texture AnisotropicDfg { get; }
+
     // An RGBA8 texture from the library's data, in its stored row order, in every layer, mipmapped on the GPU when asked
     private static Texture LoadData(GraphicsDevice device, string file, uint width, uint height, bool mipmapped, uint layers = 1)
     {
@@ -193,6 +212,23 @@ internal sealed partial class FramePipeline : IDisposable
             device.UpdateTexture<byte>(texture, pixels, TextureRegion.Whole(texture, 0, layer));
         if (mipmapped)
             device.Record(cmd => cmd.GenerateMipmaps(texture)).Wait();
+        return texture;
+    }
+
+    // A half float table from the library's data, x fastest, then y, then z
+    private static Texture LoadTable(GraphicsDevice device, string file, PixelFormat format, uint width, uint height, uint depth)
+    {
+        using System.IO.Stream stream = typeof(FramePipeline).Assembly.GetManifestResourceStream("Graphite/Data/" + file)
+            ?? throw new InvalidOperationException($"The library has no Data/{file}.");
+        uint channels = format == PixelFormat.R16_Float ? 1u : 4u;
+        ushort[] texels = new ushort[width * height * depth * channels];
+        stream.ReadExactly(MemoryMarshal.AsBytes(texels.AsSpan()));
+        TextureDescription description = depth > 1
+            ? TextureDescription.Texture3D(width, height, depth, 1, format, TextureUsage.Sampled)
+            : TextureDescription.Texture2D(width, height, 1, 1, format, TextureUsage.Sampled);
+        Texture texture = device.ResourceFactory.CreateTexture(description);
+        texture.Name = "Graphite " + System.IO.Path.GetFileNameWithoutExtension(file);
+        device.UpdateTexture<ushort>(texture, texels, TextureRegion.Whole(texture, 0, 0));
         return texture;
     }
 
@@ -214,6 +250,11 @@ internal sealed partial class FramePipeline : IDisposable
     /// <summary>Reports a problem once per key.</summary>
     public Action<RendererError> Report { get; }
     public ComputeProgram SkyAmbientProgram { get; }
+    public ComputeProgram ExposureProgram { get; }
+
+    /// <summary>What the exposure pass reads for a view an AutoExposure has not measured yet.</summary>
+    public Texture NoExposure { get; }
+    private readonly PropertySet _exposureProperties = new();
 
     /// <summary>Frames a view keeps its per view state after it was last drawn.</summary>
     public int StaleViewFrames { get; init; } = 8;
@@ -364,7 +405,9 @@ internal sealed partial class FramePipeline : IDisposable
             if (reflections.CaptureDue)
             {
                 CaptureSky(world, time);
-                readbacks.Add(new ReadbackRequest { Name = $"{WorldName(world)} sky ambient readback", Buffer = reflections.SkyAmbient, Size = reflections.SkyAmbient.SizeInBytes, BufferDone = world.World.ReceiveSkyAmbient });
+                float exposure = reflections.CaptureExposure;
+                RenderWorld host = world.World;
+                readbacks.Add(new ReadbackRequest { Name = $"{WorldName(world)} sky ambient readback", Buffer = reflections.SkyAmbient, Size = reflections.SkyAmbient.SizeInBytes, BufferDone = readback => host.ReceiveSkyAmbient(readback, exposure) });
             }
             foreach (ProbeCapture capture in reflections.Captures)
                 CaptureProbe(world, capture, time);
@@ -458,6 +501,10 @@ internal sealed partial class FramePipeline : IDisposable
         camera.Info = new FeatureView(view, width, height);
         camera.SelectFeatures(world.World.FeatureSnapshot, features);
         camera.PruneStates(world.World.FeatureSnapshot, features);
+        camera.WasAutoExposed = camera.AutoExposed;
+        camera.AutoExposed = camera.Selected.Exists(static feature => feature.MeasuresExposure);
+        if (camera.AutoExposed)
+            camera.EnsureExposure();
         (CascadeSlot[] _, string _) = CascadesOf(camera, view, camera.World);
         CameraShape shape = CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length, camera.Cubes.Length);
         camera.ShapeKey = shape;
@@ -472,6 +519,9 @@ internal sealed partial class FramePipeline : IDisposable
         Prepare(camera, view, world, time, width, height);
         UpdateSceneColor(camera, shape, width, height);
         UpdateSceneDepth(camera, shape, width, height);
+        UpdateBackDepth(camera, shape, width, height);
+        if ((shape.Targets & SceneTargets.Reactive) != 0 && !DrawsTransmission(camera))
+            camera.ShapeKey = shape with { Targets = shape.Targets & ~SceneTargets.Reactive };
         camera.View.PixelWidth = width;
         camera.View.PixelHeight = height;
         bool capture = view.Kind is ViewKind.SkyCapture or ViewKind.ReflectionProbe;
@@ -516,6 +566,7 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (CameraFrame camera in Active())
             Buffers.Cameras.Add(camera);
         _upload.Add(_graph, Buffers);
+        AddExposure();
         AddFrameFeatures(FrameSlot.Deform, FrameSlot.BeforeViews);
         _counts.Add(_graph);
         AddFrameFeatures(FrameSlot.Shadows, FrameSlot.Shadows, rendererOnly: true);
@@ -540,6 +591,47 @@ internal sealed partial class FramePipeline : IDisposable
         _exports.Verify();
         if (_readback.Requests.Count > 0 && !_exports.Provided(RendererOutputs.ReadbackStaging))
             throw new InvalidOperationException($"The host asked for readbacks, which read '{RenderResourceID.ToString(RendererOutputs.ReadbackStaging)}', and no active frame feature provided it.");
+    }
+
+    // Views an AutoExposure drives, or drove last frame, take their exposure on the GPU after the view blocks upload
+    private void AddExposure()
+    {
+        List<(CameraFrame Camera, ExposurePush Push, bool Measured)> exposed = new();
+        foreach (CameraFrame camera in Active())
+        {
+            bool fromState = camera.WasAutoExposed && camera.HadPrevious;
+            if (camera.LastFrame != _frame || !camera.AutoExposed && !fromState)
+                continue;
+            bool measured = camera.AutoExposed && camera.WasAutoExposed;
+            uint flags = (measured ? 1u : 0) | (fromState ? 2u : 0) | (camera.HadPrevious ? 0 : 4u);
+            exposed.Add((camera, new ExposurePush { Host = camera.HostExposure, Flags = flags, Layers = (uint)camera.LayerCount }, measured));
+        }
+        if (exposed.Count == 0)
+            return;
+
+        _graph.AddPass("Graphite.Exposure", builder =>
+        {
+            foreach ((CameraFrame camera, ExposurePush _, bool measured) in exposed)
+            {
+                builder.Write(_graph.Import(camera.ViewBlocks.Buffer), BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+                builder.Write(_graph.Import(camera.ExposureState!), BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+                if (measured)
+                    builder.Read(_graph.Import(camera.MeasuredExposure!), TextureState.Sampled);
+            }
+        }, context =>
+        {
+            CommandBuffer cmd = context.Command;
+            cmd.SetComputeShader(ExposureProgram);
+            foreach ((CameraFrame camera, ExposurePush push, bool measured) in exposed)
+            {
+                _exposureProperties.SetTexture("Graphite_Measured", measured ? camera.MeasuredExposure!.ColorTextures[0] : NoExposure, TrilinearClamp);
+                _exposureProperties.SetBuffer("Graphite_ExposureState", camera.ExposureState!);
+                _exposureProperties.SetBuffer("Graphite_ExposureViews", camera.ViewBlocks.Buffer);
+                cmd.SetProperties(_exposureProperties);
+                cmd.SetPushConstants(push);
+                cmd.Dispatch(1, 1, 1);
+            }
+        });
     }
 
     // The active features of the slots, in order: a world's own, the renderer's own, or every one
@@ -609,7 +701,7 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (DrawCall call in camera.Transparent.Calls)
         {
             DrawProgram program = DrawPrograms[call.Program];
-            if (program.Shader.PassReadsSceneColor(program.PassIndex))
+            if (program.Shader.PassReadsSceneColor(program.PassIndex) && program.Shader.PassReadsIn(program.PassIndex, camera.Keywords))
             {
                 used = true;
                 break;
@@ -627,7 +719,7 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (DrawCall call in camera.Transparent.Calls)
         {
             DrawProgram program = DrawPrograms[call.Program];
-            if (program.Shader.PassReadsSceneDepth(program.PassIndex))
+            if (program.Shader.PassReadsSceneDepth(program.PassIndex) && program.Shader.PassReadsIn(program.PassIndex, camera.Keywords))
             {
                 used = true;
                 break;
@@ -636,6 +728,41 @@ internal sealed partial class FramePipeline : IDisposable
         camera.SceneDepthUsed = used;
         if (used)
             camera.EnsureSceneDepth(width, height, (uint)shape.Layers, camera.Build.SceneDepthFormat);
+    }
+
+    // Whether the view's transparent list holds a Transmission pass, the only writer of the reactive mask
+    private bool DrawsTransmission(CameraFrame camera)
+    {
+        foreach (DrawCall call in camera.Transparent.Calls)
+        {
+            DrawProgram program = DrawPrograms[call.Program];
+            if (program.PassIndex == program.Shader.PassIndex(PassType.Transmission))
+                return true;
+        }
+        return false;
+    }
+
+    // Whether the view's transparent list reads the back depth of its volumes this frame and any volume draws it
+    private void UpdateBackDepth(CameraFrame camera, CameraShape shape, uint width, uint height)
+    {
+        bool used = false;
+        if (camera.FindList(PassType.BackDepth) is not { Calls.Count: > 0 })
+        {
+            camera.BackDepthUsed = false;
+            return;
+        }
+        foreach (DrawCall call in camera.Transparent.Calls)
+        {
+            DrawProgram program = DrawPrograms[call.Program];
+            if (program.Shader.PassReadsBackDepth(program.PassIndex) && program.Shader.PassReadsIn(program.PassIndex, camera.Keywords))
+            {
+                used = true;
+                break;
+            }
+        }
+        camera.BackDepthUsed = used;
+        if (used)
+            camera.EnsureBackDepth(width, height, (uint)shape.Layers, camera.Build.SceneDepthFormat);
     }
 
     internal FrameTime CurrentTime => _currentTime;
@@ -899,6 +1026,7 @@ internal sealed partial class FramePipeline : IDisposable
                     Programs.Get(call.Program, call.Mirrored != camera.Mirrored, camera.Keywords);
             }
         }
+        Programs.Advance();
     }
 
     private void Prepare(CameraFrame camera, in ViewDesc view, WorldFrame world, in FrameTime time, uint width, uint height)
@@ -963,6 +1091,8 @@ internal sealed partial class FramePipeline : IDisposable
             camera.Jitter = new Float2((Halton(phase, 2) - 0.5f) * 2f / width, (Halton(phase, 3) - 0.5f) * 2f / height);
         }
         _textures.SetViewBias(camera.ViewTable, phases > 0 ? mipBias : 0);
+        float exposure = ViewDesc.ExposureOf(view.EV100);
+        bool capture = view.Kind is ViewKind.SkyCapture or ViewKind.ReflectionProbe;
 
         for (int l = 0; l < layers; l++)
         {
@@ -973,6 +1103,7 @@ internal sealed partial class FramePipeline : IDisposable
             else
                 (projection.c2.X, projection.c2.Y) = (projection.c2.X + camera.Jitter.X, projection.c2.Y + camera.Jitter.Y);
             ViewBlock block = ViewBlock.Create(layer.View, projection, layer.Position, width, height, view.Near, view.FarDistance);
+            block.Exposure = new Float4(exposure, camera.HasPrevious ? camera.HostExposure : exposure, capture ? 1 : 0, 0);
             block.Jitter = new Float4(camera.Jitter.X, camera.Jitter.Y, camera.PreviousJitter.X, camera.PreviousJitter.Y);
             float timeHigh = (float)time.Time;
             block.Time = new Float4(timeHigh, time.DeltaTime, time.FrameIndex, (float)(time.Time - timeHigh));
@@ -988,6 +1119,7 @@ internal sealed partial class FramePipeline : IDisposable
             camera.Blocks[l] = block;
         }
         camera.HasPrevious = true;
+        camera.HostExposure = exposure;
         camera.Upload(_uploader, camera.Blocks.AsSpan(0, layers));
         camera.PlanCounts();
     }
@@ -1071,12 +1203,17 @@ internal sealed partial class FramePipeline : IDisposable
         NoScreenIrradiance.Dispose();
         NoSceneColor.Dispose();
         NoSceneDepth.Dispose();
+        Dfg.Dispose();
+        DielectricE.Dispose();
+        AnisotropicDfg.Dispose();
         ClearProgram.Dispose();
         CopyBackProgram.Dispose();
         foreach (IDisposable retired in _retired)
             retired.Dispose();
         PrefilterProgram.Dispose();
         SkyAmbientProgram.Dispose();
+        ExposureProgram.Dispose();
+        NoExposure.Dispose();
         TrilinearClamp.Dispose();
         LinearSampler.Dispose();
     }

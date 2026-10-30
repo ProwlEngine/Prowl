@@ -86,7 +86,18 @@ public struct LightDesc
 
     /// <summary>Linear colour.</summary>
     public Float3 Color;
+
+    /// <summary>
+    /// Illuminance in lux for a directional light, luminous intensity in candela for a point or spot, luminance in nits
+    /// for a rect, disk or tube.
+    /// </summary>
     public float Intensity;
+
+    /// <summary>
+    /// Makes a spot's intensity the flux of a point light of that intensity, focused into its outer cone, so narrowing
+    /// the cone brightens it rather than leaving it as a masked point light.
+    /// </summary>
+    public bool NormalizeSpotCone;
 
     /// <summary>Distance from its centre at which a local light reaches zero.</summary>
     public float Range;
@@ -255,6 +266,7 @@ public struct FogDesc : IEquatable<FogDesc>
 public sealed class EnvironmentDesc
 {
     public AmbientMode Ambient;
+    /// <summary>The uniform and hemisphere ambient light, and the fog's colour, are radiance in nits.</summary>
     public Float4 AmbientColor = new(0.43f, 0.55f, 0.65f, 1);
     public Float4 AmbientSky = new(0.3f, 0.3f, 0.4f, 1);
     public Float4 AmbientGround = new(0.2f, 0.2f, 0.2f, 1);
@@ -267,7 +279,7 @@ public sealed class EnvironmentDesc
     /// <summary>The sky, a material with a Sky pass, drawn behind everything and captured into the sky probe. Null for none.</summary>
     public Material? Sky;
 
-    /// <summary>What the sky probe sees where no sky material draws.</summary>
+    /// <summary>What the sky probe sees where no sky material draws, in nits.</summary>
     public Float4 SkyColor = new(0.2f, 0.3f, 0.5f, 1);
     public SkyCaptureMode SkyCapture;
 
@@ -277,13 +289,19 @@ public sealed class EnvironmentDesc
     /// <summary>Frames at least between two sky captures in <see cref="SkyCaptureMode.OnChange"/>.</summary>
     public int SkyCaptureInterval = 2;
 
+    /// <summary>
+    /// The exposure value the sky probe and reflection probes are captured at, which keeps their half float texels in
+    /// range. Captures store it and are rescaled to each view's exposure when sampled, so it changes no image.
+    /// </summary>
+    public float CaptureEV100 = 15;
+
     internal EnvironmentDesc Copy() => (EnvironmentDesc)MemberwiseClone();
 
     internal bool Same(EnvironmentDesc other)
         => Ambient == other.Ambient && AmbientColor == other.AmbientColor && AmbientSky == other.AmbientSky && AmbientGround == other.AmbientGround
         && AmbientIntensity == other.AmbientIntensity && Fog == other.Fog && Sun == other.Sun
         && Sky == other.Sky && SkyColor == other.SkyColor && SkyCapture == other.SkyCapture
-        && SkyProbeResolution == other.SkyProbeResolution && SkyCaptureInterval == other.SkyCaptureInterval;
+        && SkyProbeResolution == other.SkyProbeResolution && SkyCaptureInterval == other.SkyCaptureInterval && CaptureEV100 == other.CaptureEV100;
 }
 
 /// <summary>A light record as the shaders read it, 144 bytes, matching Graphite_LightRecord. Positions are in its tree's space.</summary>
@@ -346,6 +364,9 @@ internal struct WorldLightingRecord
     public uint ProbeSampler;
     public uint ProbeMips;
     public uint ProbesReady;
+
+    /// <summary>One over the exposure the sky probe and its harmonics were captured at.</summary>
+    public Float4 SkyScale;
     public Float4 AmbientColor;
     public Float4 AmbientSky;
     public Float4 AmbientGround;
@@ -537,6 +558,7 @@ internal sealed class WorldLighting
     private bool _worldRecordDirty = true;
     private bool _hasProbes;
     private uint _probeSlot, _probeSampler, _probeMips;
+    private float _skyExposure = 1;
     private readonly List<int> _directionalOrder = new();
 
     private struct LightSlots
@@ -735,6 +757,14 @@ internal sealed class WorldLighting
         _worldRecordDirty = true;
     }
 
+    internal void SetSkyExposure(float exposure)
+    {
+        if (exposure == _skyExposure)
+            return;
+        _skyExposure = exposure;
+        _worldRecordDirty = true;
+    }
+
     internal void SetProbes(bool hasProbes)
     {
         _hasProbes = hasProbes;
@@ -836,10 +866,11 @@ internal sealed class WorldLighting
         bool shadowed = light.Shadow.Enabled && (spot || light.Type == LightType.Point);
         uint flags = type | (shadowed ? 16u : 0) | slots.Flags;
         float outer = MathF.Cos(light.OuterAngle * MathF.PI / 180f);
+        float intensity = spot && light.NormalizeSpotCone ? light.Intensity * 2f / MathF.Max(1f - outer, 1e-4f) : light.Intensity;
         return new LightRecord
         {
             PositionRange = new Float4((float)p.X, (float)p.Y, (float)p.Z, light.Range),
-            ColorIntensity = new Float4(light.Color.X, light.Color.Y, light.Color.Z, light.Intensity),
+            ColorIntensity = new Float4(light.Color.X, light.Color.Y, light.Color.Z, intensity),
             DirectionType = new Float4(light.Direction.X, light.Direction.Y, light.Direction.Z, BitConverter.UInt32BitsToSingle(flags)),
             UpSize = new Float4(light.Up.X, light.Up.Y, light.Up.Z, light.Size.X),
             Shape = new Float4(light.Size.Y, light.SourceRadius, 0, 0),
@@ -923,7 +954,7 @@ internal sealed class WorldLighting
             && _lightGeneration[env.Sun.Index] == env.Sun.Generation && _lights[env.Sun.Index].Type == LightType.Directional)
             sun = env.Sun.Index;
 
-        SkyInputs = HashCode.Combine(sun >= 0 ? _lights[sun].Direction : default, env.SkyColor);
+        SkyInputs = HashCode.Combine(sun >= 0 ? _lights[sun].Direction : default, sun >= 0 ? _lights[sun].Color * _lights[sun].Intensity : default, env.SkyColor, env.CaptureEV100);
 
         uint count = 0;
         _shaderOrder.Clear();
@@ -945,6 +976,7 @@ internal sealed class WorldLighting
         record.ProbeSampler = _probeSampler;
         record.ProbeMips = _probeMips;
         record.ProbesReady = _probeMips > 0 ? 1u : 0;
+        record.SkyScale = new Float4(1f / _skyExposure, 0, 0, 0);
 
         record.AmbientColor = env.AmbientColor;
         record.AmbientSky = env.AmbientSky;

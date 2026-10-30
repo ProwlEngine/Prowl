@@ -51,6 +51,44 @@ internal sealed class CameraFrame : IDisposable
     public bool SceneDepthUsed;
     private TextureView? _sceneDepthView;
 
+    /// <summary>
+    /// The far side of the view's transmissive volumes, made the first time its transparent list holds a pass tagged
+    /// "BackDepth" = "Read": their back faces' distance along the view ray in R32 float, 0 where there is none, over a
+    /// depth target of its own. Used says whether this frame's list holds one.
+    /// </summary>
+    public RenderTexture? BackDepth;
+    public bool BackDepthUsed;
+    private (RenderTexture? Texture, TextureView? View) _backDepthView;
+
+    /// <summary>Makes the back depth for the view's size. Render thread.</summary>
+    public void EnsureBackDepth(uint width, uint height, uint layers, PixelFormat depthFormat)
+    {
+        layers = layers > 1 ? layers : 0;
+        if (BackDepth is { } existing && existing.Desc.Width == width && existing.Desc.Height == height && existing.Desc.ArrayLayers == layers && existing.Desc.DepthFormat == depthFormat)
+            return;
+        ReleaseBackDepth();
+        GraphTextureDesc desc = new()
+        {
+            Width = (int)width,
+            Height = (int)height,
+            ColorFormats = [PixelFormat.R32_Float],
+            EnableDepth = true,
+            DepthFormat = depthFormat,
+            ArrayLayers = layers,
+        };
+        BackDepth = new RenderTexture(_device, PersistentTexture.Describe(desc));
+        BackDepth.Name = $"Graphite.BackDepth {View.ViewId}";
+    }
+
+    public void ReleaseBackDepth()
+    {
+        if (BackDepth != null)
+            _frame.Store.Retire(BackDepth);
+        BackDepth = null;
+    }
+
+    public TextureView? BackDepthView() => ArrayView(ref _backDepthView, BackDepth);
+
     /// <summary>The cube a capture view presents into.</summary>
     public RenderTexture? CaptureCube;
 
@@ -76,6 +114,29 @@ internal sealed class CameraFrame : IDisposable
         RenderTexture created = new(_device, PersistentTexture.Describe(GraphTextureDesc.Sized((int)width, (int)height, format) with { ArrayLayers = layers > 1 ? layers : 0 }));
         created.Name = $"{name} {View.ViewId}";
         return created;
+    }
+
+    /// <summary>The exposure an AutoExposure measured for the view's next frame, one R32 texel, made the first time one runs on it.</summary>
+    public RenderTexture? MeasuredExposure;
+
+    /// <summary>The exposure the GPU gave the view last, kept while an AutoExposure drives it.</summary>
+    public DeviceBuffer? ExposureState;
+
+    /// <summary>Whether an AutoExposure measures the view this frame, and did the last frame it drew.</summary>
+    public bool AutoExposed, WasAutoExposed;
+
+    /// <summary>The exposure the host's EV100 gave the view last frame.</summary>
+    public float HostExposure;
+
+    /// <summary>Makes what an AutoExposure needs to drive the view's exposure. Render thread.</summary>
+    public void EnsureExposure()
+    {
+        if (MeasuredExposure != null)
+            return;
+        MeasuredExposure = new RenderTexture(_device, PersistentTexture.Describe(GraphTextureDesc.Sized(1, 1, PixelFormat.R32_Float)));
+        MeasuredExposure.Name = $"Graphite.MeasuredExposure {View.ViewId}";
+        ExposureState = _device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        ExposureState.Name = $"Graphite.Exposure {View.ViewId}";
     }
 
     public TextureView? ScreenVisibilityView() => ArrayView(ref _visibilityView, ScreenVisibility);
@@ -127,7 +188,7 @@ internal sealed class CameraFrame : IDisposable
             int at = Lists.IndexOf(list);
             if (at < 0 || item.FirstCommand < 0)
                 continue;
-            for (int c = 0; c < item.Chunks.Length; c++)
+            for (int c = 0; c < BucketSet.CommandsOf(item); c++)
                 Counts.Add((source, offset, (uint)(CommandBases[at] + item.FirstCommand + c) * stride + 4));
         }
     }
@@ -453,6 +514,8 @@ internal sealed class CameraFrame : IDisposable
         SceneColor?.Dispose();
         _sceneDepthView?.Dispose();
         SceneDepth?.Dispose();
+        _backDepthView.View?.Dispose();
+        BackDepth?.Dispose();
         foreach (object state in States.Values)
             (state as IDisposable)?.Dispose();
         ViewTable.Dispose();
@@ -465,5 +528,7 @@ internal sealed class CameraFrame : IDisposable
         _irradianceView.View?.Dispose();
         ScreenVisibility?.Dispose();
         ScreenIrradiance?.Dispose();
+        MeasuredExposure?.Dispose();
+        ExposureState?.Dispose();
     }
 }

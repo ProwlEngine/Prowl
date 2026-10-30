@@ -63,7 +63,7 @@ public class RendererBenchmarks
                     void main()
                     {
                         outColor = _Color * (0.5 + 0.5 * normalize(vNormal).y);
-                        Graphite_WriteGBuffer(vNormal, 1.0, 0.0);
+                        Graphite_WriteGBuffer(vNormal, vec3(0.0), 1.0);
                     }
                 }
                 ENDGLSL

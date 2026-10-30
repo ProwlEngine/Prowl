@@ -1,4 +1,4 @@
-// Prowl's motion blur: the colour sampled along each pixel's motion, clamped to a largest radius, jittered by
+// Motion blur: the colour sampled along each pixel's motion, clamped to a largest radius, jittered by
 // interleaved gradient noise, and weighted by how near each sample's depth is to the pixel's so background does not
 // bleed over foreground.
 

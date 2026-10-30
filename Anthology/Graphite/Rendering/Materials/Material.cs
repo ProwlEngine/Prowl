@@ -72,8 +72,32 @@ public sealed class Material : IDisposable
             keywords[i] = new Keyword(axes[i].Name, HasValue(axes[i], value) ? value : axes[i].Values[0]);
         }
 
-        return new MaterialDraw(_shader, RenderQueue, StateOverride, CastShadows, keywords, Surface?.Type);
+        bool twoSided = AxisOn(_shader.TwoSidedAxis);
+        MaterialDraw draw = !AxisOn(_shader.TransmissiveAxis)
+            ? new MaterialDraw(_shader, RenderQueue, DrawState(twoSided, false), CastShadows, keywords, Surface?.Type)
+            : new MaterialDraw(_shader, Math.Max(RenderQueue, SurfaceSettings.TransparentQueue), DrawState(twoSided, true), CastShadows, keywords, SurfaceType.Transparent)
+            {
+                Transmissive = true,
+                Volume = !twoSided,
+            };
+        if (!draw.Transparent || draw.StateOverride is not { } state || !CullsNone(state))
+            return draw;
+        return draw with { Sides = (draw with { StateOverride = Culling(FaceCullMode.Front).Apply(state) }, draw with { StateOverride = Culling(FaceCullMode.Back).Apply(state) }) };
     }
+
+    // Whether a state draws both sides without writing depth, so a closed mesh's faces would blend in index order
+    private static bool CullsNone(PassState state)
+        => (state.Set & PassStateFields.CullMode) != 0 && state.Raster.CullMode == FaceCullMode.None
+            && !((state.Set & PassStateFields.DepthWrite) != 0 && state.DepthStencil.DepthWriteEnabled);
+
+    private static PassState Culling(FaceCullMode mode)
+    {
+        PassState state = new() { Set = PassStateFields.CullMode };
+        state.Raster.CullMode = mode;
+        return state;
+    }
+
+    private bool AxisOn(string? axis) => axis != null && GetKeyword(axis) == VariantSpace.ToggleValues[1];
 
     /// <summary>Swapping keeps every value whose name the new shader still has, and keeps the others for later.</summary>
     public Shader Shader
@@ -146,7 +170,7 @@ public sealed class Material : IDisposable
     {
         get
         {
-            PassState? inherited = _surface is { } surface ? surface.State : _parent?.StateOverride;
+            PassState? inherited = _surface is { } surface ? surface.StateFor(_shader.PremultipliedOutput) : _parent?.StateOverride;
             return _stateOverride is { } local ? inherited is { } below ? local.Apply(below) : local : inherited;
         }
         set
@@ -154,6 +178,26 @@ public sealed class Material : IDisposable
             _stateOverride = value;
             Changed(Dirt.Draw);
         }
+    }
+
+    /// <summary>
+    /// The state the material draws with: <see cref="StateOverride"/>, culling off while the shader's
+    /// <see cref="Shader.TwoSidedAxis"/> is on, and a transparent surface's blending while it transmits.
+    /// </summary>
+    private PassState? DrawState(bool twoSided, bool transmissive)
+    {
+        PassState? state = StateOverride;
+        if (transmissive && Surface?.Type != SurfaceType.Transparent)
+        {
+            SurfaceSettings surface = Surface ?? new SurfaceSettings();
+            PassState blended = (surface with { Type = SurfaceType.Transparent }).StateFor(_shader.PremultipliedOutput);
+            state = state is { } below ? blended.Apply(below) : blended;
+        }
+        if (!twoSided)
+            return state;
+        PassState cullOff = new() { Set = PassStateFields.CullMode };
+        cullOff.Raster.CullMode = FaceCullMode.None;
+        return state is { } under ? cullOff.Apply(under) : cullOff;
     }
 
     public bool CastShadows
@@ -180,25 +224,51 @@ public sealed class Material : IDisposable
 
     public void SetMatrix(PropertyID name, Float4x4 value) => Set(name, MaterialValue.FromMatrix(value));
 
-    /// <summary>Sets a texture, keeping its scale offset. A null texture means the schema default.</summary>
+    /// <summary>Sets a texture, keeping its scale offset, rotation, channel and UV set. A null texture means the schema default.</summary>
     public void SetTexture(PropertyID name, Texture? texture, SamplerDescription? sampler = null)
     {
         int index = _shader.FindProperty(name);
         MaterialPropertyType type = index >= 0 && _shader.Properties[index].Type >= MaterialPropertyType.Texture2D
             ? _shader.Properties[index].Type
             : TextureTypeOf(texture);
-        Float4 scaleOffset = TryGet(name, out MaterialValue current) && current.IsTexture ? current.ScaleOffset : MaterialValue.IdentityScaleOffset;
-        Set(name, MaterialValue.FromTexture(type, texture, sampler, scaleOffset));
+        bool has = TryGet(name, out MaterialValue current) && current.IsTexture;
+        Float4 scaleOffset = has ? current.ScaleOffset : MaterialValue.IdentityScaleOffset;
+        Set(name, MaterialValue.FromTexture(type, texture, sampler, scaleOffset, has ? current.MapChannel : 0, has ? current.MapUVSet : 0, has ? current.Rotation : 0));
     }
 
     public void SetTextureScaleOffset(PropertyID name, Float4 scaleOffset)
     {
-        if (!TryGet(name, out MaterialValue current) || !current.IsTexture)
-        {
-            _system.Report(new RendererError("material.texture.missing", $"The shader {_shader.Name} has no texture {name.Text()} to set a scale offset on.", RendererErrorSeverity.Warning, this) { Key = $"{_shader.Name}.{name.Text()}" });
-            return;
-        }
-        Set(name, current.WithScaleOffset(scaleOffset));
+        if (CurrentTexture(name, "a scale offset") is { } current)
+            Set(name, current.WithScaleOffset(scaleOffset));
+    }
+
+    /// <summary>The radians a [Map] texture turns its UVs counter clockwise by, after its scale and before its offset, as KHR_texture_transform.</summary>
+    public void SetTextureRotation(PropertyID name, float radians)
+    {
+        if (CurrentTexture(name, "a rotation") is { } current)
+            Set(name, current.WithRotation(radians));
+    }
+
+    /// <summary>The channel a map reads for a scalar input, 0 to 3 for R to A. Colour inputs read RGB.</summary>
+    public void SetTextureChannel(PropertyID name, int channel)
+    {
+        if (CurrentTexture(name, "a channel") is { } current)
+            Set(name, current.WithMapping(Math.Clamp(channel, 0, 3), current.MapUVSet));
+    }
+
+    /// <summary>The UV set a map samples, 0 or 1.</summary>
+    public void SetTextureUVSet(PropertyID name, int uvSet)
+    {
+        if (CurrentTexture(name, "a UV set") is { } current)
+            Set(name, current.WithMapping(current.MapChannel, Math.Clamp(uvSet, 0, 1)));
+    }
+
+    private MaterialValue? CurrentTexture(PropertyID name, string what)
+    {
+        if (TryGet(name, out MaterialValue current) && current.IsTexture)
+            return current;
+        _system.Report(new RendererError("material.texture.missing", $"The shader {_shader.Name} has no texture {name.Text()} to set {what} on.", RendererErrorSeverity.Warning, this) { Key = $"{_shader.Name}.{name.Text()}" });
+        return null;
     }
 
     /// <summary>Picks a value of a material axis. Global axes are set by the renderer, a world or a view and are ignored here.</summary>
@@ -288,17 +358,18 @@ public sealed class Material : IDisposable
                 return surface.SurfaceKeyword;
         }
 
+        bool bound = false, on = false;
         foreach (KeywordBinding binding in _shader.KeywordBindings)
         {
-            if (binding.Axis != axis || !TryGet(_shader.Properties[binding.Property].Name, out MaterialValue bound))
+            if (binding.Axis != axis || !TryGet(_shader.Properties[binding.Property].Name, out MaterialValue value))
                 continue;
-            return binding.Kind switch
-            {
-                KeywordBindingKind.Texture => VariantSpace.ToggleValues[bound.Texture != null ? 1 : 0],
-                KeywordBindingKind.Toggle => VariantSpace.ToggleValues[(bound.Type == MaterialPropertyType.Int ? bound.Int : bound.Float) != 0 ? 1 : 0],
-                _ => space.Values[Math.Clamp(bound.Type == MaterialPropertyType.Int ? bound.Int : (int)bound.Float, 0, space.Values.Count - 1)],
-            };
+            if (binding.Kind == KeywordBindingKind.Enum)
+                return space.Values[Math.Clamp(value.Type == MaterialPropertyType.Int ? value.Int : (int)value.Float, 0, space.Values.Count - 1)];
+            bound = true;
+            on |= binding.Kind == KeywordBindingKind.Texture ? value.Texture != null : (value.Type == MaterialPropertyType.Int ? value.Int : value.Float) != 0;
         }
+        if (bound)
+            return VariantSpace.ToggleValues[on ? 1 : 0];
 
         return space.Values[0];
     }
@@ -668,6 +739,18 @@ internal sealed class MaterialSystem(GraphicsDevice device, RenderStore store, I
 /// <summary>A material's draw deciding state, snapshotted at extraction: shader, queue, state, shadows and its material keywords.</summary>
 internal sealed record MaterialDraw(Shader Shader, int RenderQueue, PassState? StateOverride, bool CastShadows, Keyword[] Keywords, SurfaceType? Surface = null)
 {
+    /// <summary>Whether the shader's <see cref="Shader.TransmissiveAxis"/> is on, so it draws its Transmission pass for Forward.</summary>
+    public bool Transmissive { get; init; }
+
+    /// <summary>Whether it transmits through a volume, one sided, so it draws its BackDepth pass.</summary>
+    public bool Volume { get; init; }
+
+    /// <summary>
+    /// For a transparent draw of both sides without depth writes: the same draw culling front faces, then culling back
+    /// faces, which sorted draws take in that order so a closed mesh's far side stays behind its near side.
+    /// </summary>
+    public (MaterialDraw Back, MaterialDraw Front)? Sides { get; init; }
+
     /// <summary>The surface decides when there is one, else queues from 2500 up are transparent.</summary>
     public bool Transparent => Surface is { } surface ? surface == SurfaceType.Transparent : RenderQueue >= Shader.TransparentQueue;
 }

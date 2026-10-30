@@ -83,6 +83,9 @@ public struct ReflectionProbeDesc
     /// </summary>
     public Texture? Cubemap;
 
+    /// <summary>The exposure <see cref="Cubemap"/> was captured at, <see cref="BakedReflectionProbe.Exposure"/> for a bake.</summary>
+    public float CubemapExposure;
+
     public ReflectionProbeDesc()
     {
         Rotation = Quaternion.Identity;
@@ -95,6 +98,7 @@ public struct ReflectionProbeDesc
         FarClip = 1000;
         CullingMask = ~0u;
         Resolution = 128;
+        CubemapExposure = 1;
     }
 }
 
@@ -110,6 +114,9 @@ public sealed class BakedReflectionProbe
     /// <summary>The texel format of every face, the renderer's reflection format when baked.</summary>
     public PixelFormat Format = PixelFormat.R16_G16_B16_A16_Float;
     public byte[][] Faces = [];
+
+    /// <summary>The exposure its texels were captured at, so they hold radiance times this.</summary>
+    public float Exposure = 1;
 }
 
 public readonly record struct ReflectionProbeHandle(int Index, int Generation)
@@ -191,11 +198,11 @@ public sealed partial class RenderWorld
         return light * env.AmbientIntensity;
     }
 
-    internal void ReceiveSkyAmbient(BufferReadback readback)
+    internal void ReceiveSkyAmbient(BufferReadback readback, float exposure)
     {
         if (readback.Failed || readback.Data.Length < Marshal.SizeOf<ProbeShRecord>())
             return;
-        SkyAmbient = SphericalHarmonicsL2.Unpack(MemoryMarshal.Read<ProbeShRecord>(readback.Data));
+        SkyAmbient = SphericalHarmonicsL2.Unpack(MemoryMarshal.Read<ProbeShRecord>(readback.Data)) * (1f / exposure);
         SkyAmbientVersion++;
     }
 
@@ -283,6 +290,7 @@ internal sealed class WorldReflections : IDisposable
         public required Scratch Scratch;
         public Action<BakedReflectionProbe>? Bake;
         public int Faces;
+        public float Exposure;
     }
 
     private readonly GraphicsDevice _device;
@@ -296,6 +304,7 @@ internal sealed class WorldReflections : IDisposable
     private Material? _capturedSky;
     private uint _capturedVersion;
     private int _capturedInputs;
+    private float _captureExposure = 1;
 
     private ReflectionProbeDesc[] _probes = new ReflectionProbeDesc[8];
     private bool[] _alive = new bool[8];
@@ -307,6 +316,7 @@ internal sealed class WorldReflections : IDisposable
     private int[] _generations = new int[8];
     private Texture?[] _baked = new Texture?[8];
     private uint[] _bakedSlot = new uint[8];
+    private float[] _exposures = new float[8];
     private readonly List<int> _bakedDirty = new();
     private readonly List<Job> _jobs = new();
     private readonly List<int> _joining = new();
@@ -328,6 +338,7 @@ internal sealed class WorldReflections : IDisposable
         public required Action<BakedReflectionProbe> Done;
         public required int Size;
         public required int Mips;
+        public required float Exposure;
         public ulong Execution;
     }
 
@@ -356,6 +367,9 @@ internal sealed class WorldReflections : IDisposable
     public uint SamplerSlot { get; private set; }
 
     public int PrefilterSamples => _settings.PrefilterSamples;
+
+    /// <summary>The exposure this frame's captures are drawn at, from the environment's capture EV100.</summary>
+    public float CaptureExposure => _captureExposure;
 
     /// <summary>Whether the sky is captured this frame. Decided before the frame's records are written.</summary>
     public bool CaptureDue { get; private set; }
@@ -417,6 +431,7 @@ internal sealed class WorldReflections : IDisposable
             Array.Resize(ref _generations, size);
             Array.Resize(ref _baked, size);
             Array.Resize(ref _bakedSlot, size);
+            Array.Resize(ref _exposures, size);
         }
 
         ReflectionProbeDesc old = _probes[index];
@@ -533,6 +548,7 @@ internal sealed class WorldReflections : IDisposable
         }
 
         EnvironmentDesc environment = lighting.Environment;
+        _captureExposure = ViewDesc.ExposureOf(environment.CaptureEV100);
         uint skyResolution = Pow2(environment.SkyProbeResolution, "sky probe");
         if (Sky == null || Sky.Resolution != skyResolution)
         {
@@ -558,14 +574,14 @@ internal sealed class WorldReflections : IDisposable
     public bool Flush(Uploader uploader) => Regions.StaticRecords.Flush(uploader) | Regions.StaticNodes.Flush(uploader);
 
     /// <summary>A buffer a bake reads a probe's cube back into, collected once its frame completes. Render thread.</summary>
-    private DeviceBuffer BakeBuffer(int index, Target target, Action<BakedReflectionProbe> done)
+    private DeviceBuffer BakeBuffer(int index, Target target, float exposure, Action<BakedReflectionProbe> done)
     {
         uint bytes = 0;
         for (int mip = 0; mip < target.Mips; mip++)
             bytes += 6 * FaceBytes(target.Resolution, mip, _settings.Format);
         DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(bytes, BufferUsage.Staging));
         buffer.Name = "Reflection probe bake";
-        _pendingBakes.Add(new PendingBake { Index = index, Generation = _generations[index], Buffer = buffer, Done = done, Size = (int)target.Resolution, Mips = (int)target.Mips });
+        _pendingBakes.Add(new PendingBake { Index = index, Generation = _generations[index], Buffer = buffer, Done = done, Size = (int)target.Resolution, Mips = (int)target.Mips, Exposure = exposure });
         return buffer;
     }
 
@@ -595,7 +611,7 @@ internal sealed class WorldReflections : IDisposable
                 continue;
 
             ReadOnlySpan<byte> data = _device.Map<byte>(bake.Buffer);
-            BakedReflectionProbe baked = new() { Size = bake.Size, Mips = bake.Mips, Format = _settings.Format, Faces = new byte[6 * bake.Mips][] };
+            BakedReflectionProbe baked = new() { Size = bake.Size, Mips = bake.Mips, Format = _settings.Format, Faces = new byte[6 * bake.Mips][], Exposure = bake.Exposure };
             int offset = 0;
             for (int face = 0; face < 6; face++)
             {
@@ -646,6 +662,7 @@ internal sealed class WorldReflections : IDisposable
         _capturedSky = sky;
         _capturedVersion = lighting.SkyVersion;
         _capturedInputs = lighting.SkyInputs;
+        lighting.SetSkyExposure(_captureExposure);
     }
 
     // A baked probe shows the host's prefiltered cube as it is, through its own slot
@@ -766,8 +783,14 @@ internal sealed class WorldReflections : IDisposable
         _scratchUsed.Add(job.Scratch);
         if (_probes[job.Index].Mode != ReflectionProbeMode.Realtime)
             return;
+        bool rescaled = _exposures[job.Index] != job.Exposure;
+        _exposures[job.Index] = job.Exposure;
         if (_captured[job.Index])
+        {
             _capturedAt[job.Index] = _frame;
+            if (rescaled)
+                Regions.Set(job.Index, _probes[job.Index].Position, Radius(_probes[job.Index]), true);
+        }
         else if (joinNow)
             MarkCaptured(job.Index, _frame);
         else
@@ -779,7 +802,7 @@ internal sealed class WorldReflections : IDisposable
     private Job StartJob(int index)
     {
         EnsureRealtimeTarget(index);
-        Job job = new() { Index = index, Scratch = RentScratch(_targets[index]!.Resolution) };
+        Job job = new() { Index = index, Scratch = RentScratch(_targets[index]!.Resolution), Exposure = _captureExposure };
         _jobs.Add(job);
         _working[index] = true;
         return job;
@@ -802,7 +825,7 @@ internal sealed class WorldReflections : IDisposable
     }
 
     // The buffer a filtered bake reads back into, planned now so a failed frame asks for the bake again
-    private DeviceBuffer? Readback(Job job) => job.Bake != null ? BakeBuffer(job.Index, _targets[job.Index]!, job.Bake) : null;
+    private DeviceBuffer? Readback(Job job) => job.Bake != null ? BakeBuffer(job.Index, _targets[job.Index]!, job.Exposure, job.Bake) : null;
 
     private bool WantsCapture(int index)
     {
@@ -927,7 +950,7 @@ internal sealed class WorldReflections : IDisposable
 
     //   +0..+2  the box's axes, its centre in its region's space in w
     //   +3      box half size, blend distance
-    //   +4      intensity, box projection, priority, the cube's slot and mip count (slot | mips << 16) as uint bits
+    //   +4      intensity over the capture's exposure, box projection, priority, the cube's slot and mip count (slot | mips << 16) as uint bits
     private ReflectionProbeRecord Pack(int index, Double3 origin)
     {
         ReflectionProbeDesc desc = _probes[index];
@@ -937,13 +960,14 @@ internal sealed class WorldReflections : IDisposable
         Float3 x = rotation * new Float3(1, 0, 0), y = rotation * new Float3(0, 1, 0), z = rotation * new Float3(0, 0, 1);
         Double3 c = desc.Position - origin;
         float volume = 8 * half.X * half.Y * half.Z;
+        float exposure = desc.Mode == ReflectionProbeMode.Baked ? desc.CubemapExposure : _exposures[index];
         return new ReflectionProbeRecord
         {
             Row0 = new Float4(x.X, x.Y, x.Z, (float)c.X),
             Row1 = new Float4(y.X, y.Y, y.Z, (float)c.Y),
             Row2 = new Float4(z.X, z.Y, z.Z, (float)c.Z),
             Box = new Float4(half.X, half.Y, half.Z, MathF.Max(desc.BlendDistance, 0)),
-            Params = new Float4(MathF.Max(desc.Intensity, 0), desc.BoxProjection ? 1 : 0, desc.Importance + 1f / (1f + volume), BitConverter.UInt32BitsToSingle(slot | (mips << 16))),
+            Params = new Float4(MathF.Max(desc.Intensity, 0) / MathF.Max(exposure, 1e-30f), desc.BoxProjection ? 1 : 0, desc.Importance + 1f / (1f + volume), BitConverter.UInt32BitsToSingle(slot | (mips << 16))),
         };
     }
 

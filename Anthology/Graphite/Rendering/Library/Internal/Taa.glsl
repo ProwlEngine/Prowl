@@ -1,8 +1,10 @@
 #pragma variant TAA_SHARPEN
-// Prowl's temporal anti aliasing resolve and sharpen, on a fullscreen pass. The resolve blends the jittered frame with the
+#pragma variant TAA_REACTIVE
+// Temporal anti aliasing resolve and sharpen, on a fullscreen pass. The resolve blends the jittered frame with the
 // history reprojected by the nearest surface's motion, clipped to the neighbourhood's colour spread, in tonemapped YCoCg.
-// Sky pixels carry no motion, so they reproject their direction through last frame's view instead. Layered views resolve
-// each layer against its own history and view.
+// Sky pixels carry no motion, so they reproject their direction through last frame's view instead. Pixels showing what
+// transmissive surfaces refract keep less history, by the reactive mask, with TAA_REACTIVE on frames the view has one.
+// Layered views resolve each layer against its own history and view.
 
 float Taa_MaxChannel(vec3 c) { return max(c.r, max(c.g, c.b)); }
 
@@ -36,11 +38,15 @@ void main()
 
 uniform GRAPHITE_SCREEN_TEXTURE _History;
 uniform GRAPHITE_SCREEN_TEXTURE _Motion;
+#ifdef TAA_REACTIVE
+uniform GRAPHITE_SCREEN_TEXTURE _Reactive;
+#endif
 uniform GRAPHITE_SCREEN_TEXTURE _Depth;
 uniform vec2 _Resolution;
 uniform float _HistoryValid;
 uniform float _BlendFactor;
 uniform float _MotionBlendFactor;
+uniform float _ReactiveBlendFactor;
 uniform float _MotionScale;
 
 // Catmull Rom history in four bilinear taps per row, sharper than bilinear
@@ -130,7 +136,7 @@ void main()
         return;
     }
 
-    vec3 history = Taa_ToYCoCg(Taa_Tonemap(Taa_Sanitize(Taa_SampleHistory(historyUV, texelSize).rgb)));
+    vec3 history = Taa_ToYCoCg(Taa_Tonemap(Taa_Sanitize(Taa_SampleHistory(historyUV, texelSize).rgb * Graphite_PostExposureRatio(Graphite_PostView()))));
     m1 /= 9.0;
     m2 /= 9.0;
     vec3 sigma = sqrt(max(m2 - m1 * m1, vec3(0.0)));
@@ -146,6 +152,9 @@ void main()
     float blendFactor = mix(_BlendFactor, _MotionBlendFactor, clamp(motionLength * 0.1, 0.0, 1.0));
     float lumaDifference = abs(current.x - history.x) / max(max(current.x, history.x), 0.2);
     blendFactor = mix(blendFactor, max(blendFactor, 0.98), (1.0 - lumaDifference) * (1.0 - lumaDifference));
+#ifdef TAA_REACTIVE
+    blendFactor = mix(blendFactor, min(blendFactor, _ReactiveBlendFactor), Graphite_Sample(_Reactive, vUV).r);
+#endif
     vec3 result = Taa_FromYCoCg(mix(current, history, blendFactor));
     outColor = vec4(Taa_InverseTonemap(max(result, vec3(0.0))), Graphite_SampleSource(vUV).a);
 }

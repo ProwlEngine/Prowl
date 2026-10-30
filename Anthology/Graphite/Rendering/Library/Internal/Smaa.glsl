@@ -1,5 +1,5 @@
 #pragma variant SMAA BLEND EDGES WEIGHTS
-// SMAA 1x with luma edges at the reference's high quality, as Prowl runs it: edge detection, blend weights from the
+// SMAA 1x with luma edges at the reference's high quality: edge detection, blend weights from the
 // area and search tables, then neighbourhood blending. Each pass computes its vertex offsets in the fragment stage,
 // as they follow from the texture coordinate alone. Textures are arrays on layered views, the tables too.
 

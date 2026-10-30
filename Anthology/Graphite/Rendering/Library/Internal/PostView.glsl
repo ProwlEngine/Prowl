@@ -9,6 +9,9 @@ layout(std430) readonly buffer Graphite_PostViews { Graphite_ViewData graphite_P
 // The layer this fragment draws, jittered when the view jitters
 Graphite_ViewData Graphite_PostView() { return graphite_PostViews[GRAPHITE_LAYER]; }
 
+// What colour from last frame is multiplied by to match this frame's exposure
+float Graphite_PostExposureRatio(Graphite_ViewData view) { return view.exposure.x / max(view.exposure.y, 1e-30); }
+
 // Whether the layer's projection is orthographic, from the row that makes w
 bool Graphite_PostOrthographic(Graphite_ViewData view) { return abs(view.projection[2][3]) < 0.5; }
 

@@ -48,6 +48,11 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         camera.ViewTable.Set("Graphite_SceneColor", 0, camera.SceneColor != null ? camera.SceneColorView() : frame.NoSceneColor);
         camera.ViewTable.Set("Graphite_SceneColorSampler", 0, frame.TrilinearClamp);
         camera.ViewTable.Set("Graphite_SceneDepth", 0, camera.SceneDepth != null ? camera.SceneDepthView() : frame.NoSceneDepth);
+        camera.ViewTable.Set("Graphite_Dfg", 0, frame.Dfg);
+        camera.ViewTable.Set("Graphite_DielectricE", 0, frame.DielectricE);
+        camera.ViewTable.Set("Graphite_AnisotropicDfg", 0, frame.AnisotropicDfg);
+        camera.ViewTable.Set("Graphite_BackDepth", 0, (object?)camera.BackDepthView() ?? frame.NoSceneDepth);
+        camera.ViewTable.Set("Graphite_TableSampler", 0, frame.TrilinearClamp);
         _viewTable = camera.ViewTable.Get(ring);
         _properties.SetBuffer(GraphiteBindings.InstancesName, camera.Instances.Buffer);
         _properties.SetBuffer(GraphiteBindings.DrawRecordsName, camera.Records.Buffer);

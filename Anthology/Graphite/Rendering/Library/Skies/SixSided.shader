@@ -58,7 +58,7 @@ Shader "Graphite/Sky/SixSided"
             void main()
             {
                 vec4 color = SampleCubemap(Graphite_SkyDirection());
-                outColor = vec4(color.rgb * _Tint.rgb * _Exposure, 1.0);
+                outColor = vec4(Graphite_SaturateHalf(color.rgb * _Tint.rgb * (_Exposure * Graphite_Exposure())), 1.0);
             }
         }
         ENDGLSL

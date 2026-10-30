@@ -1,7 +1,7 @@
 // Deforming renderables' copies of their meshes. Mode 0 copies words, filling a new copy from its mesh or a morphing
 // copy's rest pose. Mode 2 adds one blend shape frame's weighted deltas to a copy, a thread per vertex the frame moves.
 // Mode 1 skins a copy's positions, normals and tangents, from the mesh's rest pose or the copy's morphed one, with up to
-// four bones a vertex, as Prowl does: bone index 0 is none, as are indices past the bones, under 0.01 total weight
+// four bones a vertex: bone index 0 is none, as are indices past the bones, under 0.01 total weight
 // keeps the pose, and normals and tangents are normalized unless they cancel to nothing.
 Compute
 {

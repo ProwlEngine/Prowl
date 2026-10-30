@@ -26,7 +26,7 @@ struct Graphite_ObjectData
     uint lightmapSampler;           // the lightmap's sampler slot, its encoding in the high 16 bits (0 linear, 1 RGBM)
     uint currentPositions;          // a skinned copy's current and last frame's positions, first word plus one, 0 for none
     uint previousPositions;
-    uint pad0;
+    float lightmapScale;            // what decoded lightmap texels are multiplied by
     vec4 lightmapScaleOffset;
     vec4 custom0;
     vec4 custom1;
@@ -59,6 +59,15 @@ layout(set = 2, binding = 2, std430) readonly buffer Graphite_DrawRecords { Grap
 layout(push_constant) uniform Graphite_Push { uint drawRecordBase; uint instanceBase; uint viewBase; uint flags; } graphite_Push;
 
 Graphite_ViewData Graphite_View() { return graphite_Views[graphite_Push.viewBase + gl_ViewIndex]; }
+
+// The scale every light the view draws is pre-exposed by, 1 / (1.2 * 2^EV100)
+float Graphite_Exposure() { return Graphite_View().exposure.x; }
+
+// Whether the view is capturing the sky or a reflection probe
+bool Graphite_IsCapture() { return Graphite_View().exposure.z > 0.5; }
+
+// Colour clamped to the largest half float, so a pre-exposed light too bright for a half float target saturates
+vec3 Graphite_SaturateHalf(vec3 c) { return min(c, vec3(65504.0)); }
 
 vec3 Graphite_CameraOffset(vec3 high, vec3 low)
 {

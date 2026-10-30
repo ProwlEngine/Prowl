@@ -1,5 +1,5 @@
 #pragma variant GTAO COPY DEPTH AO TEMPORAL BLUR
-// Prowl's GTAO, written as the view's screen lighting visibility: depth point sampled to the AO resolution, the horizon
+// GTAO, written as the view's screen lighting visibility: depth point sampled to the AO resolution, the horizon
 // search over slices with blue noise scrolled per frame, temporal accumulation clamped to the 3x3 neighbourhood, then a
 // depth aware blur. Normals are rebuilt from depth, which is all the prepass leaves, and history is reprojected through
 // depth and last frame's view, as motion is not drawn yet. Positions are in the view matrix's space, the forward axis
@@ -190,7 +190,7 @@ float LinearDepth(Graphite_ViewData view, vec2 uv)
     return abs(Graphite_PostViewPosition(view, uv, max(Graphite_Sample(_CameraDepthTexture, uv).r, 1e-7)).z);
 }
 
-// Depth aware, its taps a texel of the full resolution apart as Prowl's are, the depth difference taken as a fraction
+// Depth aware, its taps a texel of the full resolution apart, the depth difference taken as a fraction
 // of the centre's depth
 void main()
 {

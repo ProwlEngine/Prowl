@@ -1,5 +1,5 @@
 #pragma variant CINEMATIC VIGNETTE PIXELATION CHROMATIC_ABERRATION SHARPEN EDGE_DETECTION COLOR_GRADING LUT FILM_GRAIN
-// Prowl's cinematic effects on display referred colour, one per define, each its own pass: pixelation, chromatic
+// Cinematic effects on display referred colour, one per define, each its own pass: pixelation, chromatic
 // aberration, CAS sharpening, Sobel edges, colour grading, a strip LUT, film grain and vignette.
 
 uniform vec2 _Resolution;

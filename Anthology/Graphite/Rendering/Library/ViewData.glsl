@@ -17,4 +17,5 @@ struct Graphite_ViewData
     vec4 time;                      // time, delta time, frame index, the part of time the first lost
     vec4 depth;                     // near plane, logical far distance
     vec4 treeOffset;                // this layer's camera minus the first layer's, which the view's trees are built around
+    vec4 exposure;                  // the exposure light is pre-exposed by, last frame's, 1 in a capture, unused
 };

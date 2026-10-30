@@ -37,7 +37,7 @@ Shader "Graphite/Sky/Panorama"
                 if (abs(dFdy(seamless)) < abs(dy.x)) dy.x = dFdy(seamless);
 
                 vec3 color = textureGrad(_Panorama, uv, dx, dy).rgb;
-                outColor = vec4(color * _Tint.rgb * _Exposure, 1.0);
+                outColor = vec4(Graphite_SaturateHalf(color * _Tint.rgb * (_Exposure * Graphite_Exposure())), 1.0);
             }
         }
         ENDGLSL

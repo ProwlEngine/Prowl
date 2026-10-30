@@ -26,7 +26,7 @@ Shader "Graphite/Sky/Gradient"
             void main()
             {
                 float t = pow(clamp(Graphite_SkyDirection().y * 0.5 + 0.5, 0.0, 1.0), _Exponent);
-                outColor = vec4(mix(_BottomColor.rgb, _TopColor.rgb, t), 1.0);
+                outColor = vec4(Graphite_SaturateHalf(mix(_BottomColor.rgb, _TopColor.rgb, t) * Graphite_Exposure()), 1.0);
             }
         }
         ENDGLSL

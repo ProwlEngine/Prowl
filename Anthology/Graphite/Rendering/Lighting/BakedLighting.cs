@@ -38,6 +38,13 @@ public struct SphericalHarmonicsL2
     /// <summary>Harmonics that light every normal with the same radiance.</summary>
     public static SphericalHarmonicsL2 FromConstant(Float3 color) => new() { C0 = color / (A0 * K0) };
 
+    public static SphericalHarmonicsL2 operator *(in SphericalHarmonicsL2 sh, float scale) => new()
+    {
+        C0 = sh.C0 * scale, C1 = sh.C1 * scale, C2 = sh.C2 * scale,
+        C3 = sh.C3 * scale, C4 = sh.C4 * scale, C5 = sh.C5 * scale,
+        C6 = sh.C6 * scale, C7 = sh.C7 * scale, C8 = sh.C8 * scale,
+    };
+
     /// <summary>The seven vectors the shaders evaluate with one dot each per band, so a normal gives irradiance over pi.</summary>
     internal readonly ProbeShRecord Pack()
     {

@@ -6,198 +6,219 @@
 
 #ifdef GRAPHITE_FRAGMENT
 
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT)
+// The inputs from the varyings, the frame flipped on back faces. Depth passes keep the frame at its defaults.
+Graphite_SurfaceData graphite_StandardInputs()
+{
+    Graphite_SurfaceData i = Graphite_NewSurfaceData(vUV, vUV1);
+    i.VertexColor = vColor;
+    i.RelativePos = vRelativePos;
+    i.ViewDir = Graphite_ViewDir(vRelativePos);
+#ifdef GRAPHITE_STANDARD_LIT
+    i.GeometryNormal = normalize(vNormal);
+    i.Tangent = normalize(vTangent);
+    i.Bitangent = normalize(vBitangent);
+    if (!gl_FrontFacing)
+    {
+        i.GeometryNormal = -i.GeometryNormal;
+        i.Tangent = -i.Tangent;
+        i.Bitangent = -i.Bitangent;
+    }
+#endif
+    return i;
+}
+#endif
+
 #ifdef GRAPHITE_STANDARD_FORWARD
 
 layout(location = 0) out vec4 fragColor;
 
+#ifdef GRAPHITE_STANDARD_UNLIT
+
 void Graphite_StandardFragment()
 {
-    vec2 uv = vUV;
-    vec2 uv1 = vUV1;
-    vec3 viewDir = Graphite_ViewDir(vRelativePos);
-
-#ifdef GRAPHITE_STANDARD_LIT
-    vec3 N = normalize(vNormal);
-    vec3 T = normalize(vTangent);
-    vec3 B = normalize(vBitangent);
-    if (!gl_FrontFacing)
-    {
-        N = -N;
-        B = -B;
-    }
-    bool hasTangents = vHasTangents > 0.5;
-
-    // Parallax occlusion mapping moves UV0 only, a height map means nothing in a second set's parameterisation. The
-    // shift found in the height map's scale and offset moves UV0 by the same amount in that texture's units.
-#ifdef _PARALLAXMAP
-    if (hasTangents && _Parallax > 0.0 && _ParallaxSteps > 0)
-    {
-        mat3 TBN = mat3(T, B, N);
-        vec3 viewDirTS = normalize(transpose(TBN) * viewDir);
-        vec2 heightUV = Graphite_StandardUV(0, _ParallaxMap_ST, uv, uv1);
-        vec2 shifted = ParallaxOcclusionMapping(_ParallaxMap_Texture, _ParallaxMap_Sampler, heightUV, viewDirTS, _Parallax, _ParallaxSteps);
-        uv += (shifted - heightUV) / _ParallaxMap_ST.xy;
-    }
-#endif
-#else
-    vec3 N = vec3(0.0, 1.0, 0.0);
-#endif
-
-    vec4 albedoTexel = texture(_MainTex, Graphite_StandardUV(_MainTexUV, _MainTex_ST, uv, uv1));
-    vec3 baseColor = albedoTexel.rgb * _MainColor.rgb * vColor.rgb;
-    float alpha = albedoTexel.a * _MainColor.a * vColor.a;
-
-#if defined(_SURFACE_CUTOUT) && !defined(GRAPHITE_SURFACE_FUNCTION)
-    if (alpha < _AlphaCutoff)
-        discard;
-#endif
-
-    vec3 worldNormal = N;
-    float roughness = 1.0, metallic = 0.0, ao = 1.0;
-    vec3 emission = vec3(0.0);
-
-#ifdef GRAPHITE_STANDARD_LIT
-#ifdef _NORMALMAP
-    if (hasTangents)
-        worldNormal = Graphite_StandardNormalMap(texture(_NormalTex, Graphite_StandardUV(_NormalTexUV, _NormalTex_ST, uv, uv1)).rgb, N, T, B, _NormalScale);
-#endif
-
-    // Surface map: G roughness, B metallic, each scaling its factor
-    roughness = _Roughness;
-    metallic = _Metallic;
-#ifdef _SURFACEMAP
-    vec4 surface = texture(_SurfaceTex, Graphite_StandardUV(_SurfaceTexUV, _SurfaceTex_ST, uv, uv1));
-    roughness *= surface.g;
-    metallic *= surface.b;
-#endif
-
-#ifdef _OCCLUSIONMAP
-    ao = mix(1.0, texture(_OcclusionTex, Graphite_StandardUV(_OcclusionTexUV, _OcclusionTex_ST, uv, uv1)).r, _OcclusionStrength);
-#endif
-
-    // Translucency map: G extra occlusion, B thickness
-    float translucency = 0.0;
-    float scatteringPower = 0.0, scatteringDistortion = 0.5, scatteringScale = 1.0;
-#ifdef _TRANSLUCENCY
-    vec4 transOcc = texture(_TranslucencyMap, Graphite_StandardUV(0, _TranslucencyMap_ST, uv, uv1));
-    ao *= transOcc.g;
-    translucency = transOcc.b * _TranslucencyStrength;
-    scatteringPower = _ScatteringPower;
-    scatteringDistortion = _ScatteringDistortion;
-    scatteringScale = _ScatteringScale;
-#endif
-
-#ifdef _EMISSION
-    emission = texture(_EmissionTex, Graphite_StandardUV(_EmissionTexUV, _EmissionTex_ST, uv, uv1)).rgb * _EmissiveColor.rgb * _EmissionIntensity;
-#endif
-
-    Graphite_ApplyDecals(vRelativePos, N, baseColor, worldNormal, roughness, metallic, ao);
-#endif
-
+    Graphite_SurfaceData i = graphite_StandardInputs();
+    Unlit_Params p = Unlit_MaterialParams(i);
 #ifdef GRAPHITE_SURFACE_FUNCTION
-    Graphite_SurfaceData s = Graphite_NewSurfaceData(uv, uv1, baseColor, alpha);
-    s.VertexColor = vColor;
-    s.RelativePos = vRelativePos;
-    s.ViewDir = viewDir;
-    s.GeometryNormal = N;
-#ifdef GRAPHITE_STANDARD_LIT
-    s.Tangent = T;
-    s.Bitangent = B;
+    Surface(p, i);
 #endif
-    s.Normal = worldNormal;
-    s.Metallic = metallic;
-    s.Roughness = roughness;
-    s.Occlusion = ao;
-    s.Emission = emission;
-    Surface(s);
-    baseColor = s.BaseColor;
-    alpha = s.Alpha;
-    worldNormal = normalize(s.Normal);
-    metallic = s.Metallic;
-    roughness = s.Roughness;
-    ao = s.Occlusion;
-    emission = s.Emission;
 #ifdef _SURFACE_CUTOUT
-    if (alpha < _AlphaCutoff)
+    if (p.Alpha < _AlphaCutoff)
         discard;
 #endif
-#endif
 
-#ifdef GRAPHITE_STANDARD_UNLIT
-    vec3 color = ApplyFog(baseColor + emission, vRelativePos);
+    vec3 color = Graphite_SaturateHalf(Graphite_ApplyFog(p.BaseColor, vRelativePos));
 #ifdef GRAPHITE_STANDARD_DEBUG
-    color = Graphite_DebugView(color, baseColor, vec3(0.0), 1.0, 0.0, 1.0, vec3(0.0), vRelativePos, vec2(0.0));
+    color = Graphite_DebugView(color, p.BaseColor, vec3(0.0), 1.0, 0.0, 1.0, vec3(0.0), vRelativePos, vec2(0.0));
 #endif
-#ifndef _SURFACE_TRANSPARENT
-    Graphite_WriteGBuffer(vec3(0.0, 1.0, 0.0), 1.0, 0.0);
-#endif
-#else
-    roughness = clamp(roughness, GRAPHITE_MIN_ROUGHNESS, 1.0);
-    metallic = clamp(metallic, 0.0, 1.0);
-#ifdef GRAPHITE_STANDARD_DEBUG
-    Graphite_DebugInputs(baseColor, metallic);
-#endif
-
-#ifdef _ANISOTROPIC
-    // RG holds a direction in the tangent plane, (0.5, 0.5) keeps the mesh tangent
-    vec2 anisoDir = texture(_AnisoDirectionMap, Graphite_StandardUV(0, _AnisoDirectionMap_ST, uv, uv1)).rg * 2.0 - 1.0;
-    float anisoDirLen = length(anisoDir);
-    vec3 anisoTangent = T;
-    vec3 anisoBitangent = B;
-    if (anisoDirLen > 0.01)
-    {
-        anisoDir /= anisoDirLen;
-        anisoTangent = normalize(T * anisoDir.x + B * anisoDir.y);
-        anisoBitangent = normalize(cross(worldNormal, anisoTangent));
-    }
-    vec3 lighting = CalculateForwardLightingAniso(vRelativePos, worldNormal, N, viewDir, anisoTangent, anisoBitangent,
-                                                  baseColor, metallic, roughness, _Anisotropy, ao);
-#elif defined(_TRANSLUCENCY)
-    vec3 lighting = CalculateForwardLighting(vRelativePos, worldNormal, N, viewDir, baseColor, metallic, roughness, ao,
-                                             translucency, scatteringPower, scatteringDistortion, scatteringScale);
-#else
-    vec3 lighting = CalculateForwardLighting(vRelativePos, worldNormal, N, viewDir, baseColor, metallic, roughness, ao);
-#endif
-
-    vec3 ambientLight = Graphite_IndirectDiffuse(worldNormal, vLightmapUV) * ao;
-    vec3 F0 = mix(vec3(0.04), baseColor, metallic);
-    vec3 ambientSpecular = Graphite_IndirectSpecular(vRelativePos, worldNormal, viewDir, F0, roughness, ao, ambientLight);
-    Graphite_Surface ambientSurface = Graphite_MakeSurface(vRelativePos, worldNormal, N, viewDir, baseColor, metallic, roughness, ao);
-    vec3 ambient = Graphite_AmbientBRDF(ambientSurface, ambientLight, ambientSpecular);
-
-    vec3 color = ApplyFog(ambient + lighting + emission, vRelativePos);
-#ifdef GRAPHITE_STANDARD_DEBUG
-    color = Graphite_DebugView(color, baseColor, worldNormal, roughness, metallic, ao, emission, vRelativePos, vLightmapUV);
-#endif
-#ifndef _SURFACE_TRANSPARENT
-    Graphite_WriteGBuffer(worldNormal, roughness, metallic);
-#endif
-#endif
-
 #ifdef _SURFACE_TRANSPARENT
-    fragColor = vec4(color, alpha);
+    fragColor = vec4(color, p.Alpha);
 #else
+    Graphite_WriteGBuffer(vec3(0.0, 1.0, 0.0), vec3(0.0), 1.0);
     fragColor = vec4(color, 1.0);
 #endif
 }
 
 #else
 
-// Prepass and shadow caster: depth only, cut out where the alpha test fails
+// The PBR model: material inputs, decals, the Surface function, then the closure lit by every light and its
+// surroundings. Transparent surfaces write premultiplied colour with geometry_opacity as coverage, which the
+// "Output" = "Premultiplied" tag of the model's passes has SurfaceSettings blend once. Transmissive ones always draw
+// so, adding what they let through from behind, and write their motion and their coverage as the reactive mask, see
+// PBR_ReactiveCoverage.
+void Graphite_StandardFragment()
+{
+    Graphite_SurfaceData i = graphite_StandardInputs();
+    float mapVariance;
+    PBR_Params p = PBR_MaterialParams(i, vHasTangents > 0.5, mapVariance);
+    Graphite_ApplyDecals(vRelativePos, i.GeometryNormal, p.baseColor, p.geometryNormal, p.specularRoughness, p.baseMetalness, p.occlusion);
+#ifdef GRAPHITE_SURFACE_FUNCTION
+    Surface(p, i);
+#endif
+#ifdef _SURFACE_CUTOUT
+    if (p.geometryOpacity < alpha_cutoff)
+        discard;
+#endif
+#ifdef GRAPHITE_STANDARD_DEBUG
+    Graphite_DebugInputs(p.baseColor, p.baseMetalness);
+#endif
+
+    PBR_Closure c = PBR_Prepare(p, vRelativePos, i.ViewDir, i.GeometryNormal, mapVariance);
+    vec3 direct = PBR_ShadeLights(c);
+    Graphite_ProbeSet probes = PBR_FindProbes(c);
+    PBR_Indirect indirect = PBR_GatherIndirect(c, vLightmapUV, probes);
+    vec3 ambient = Graphite_AmbientBRDF(c, indirect);
+    vec3 transmitted = vec3(0.0);
+    vec3 transmittedWhite = vec3(0.0);
+    float pathLength = 0.0;
+#ifdef PBR_TRANSMISSION
+    PBR_Transmitted behind = PBR_GatherTransmitted(c, p, probes);
+    transmitted = PBR_Transmittance(c) * behind.light;
+    transmittedWhite = PBR_Transmittance(c) * behind.throughput;
+    pathLength = behind.pathLength;
+#endif
+    vec3 color = Graphite_SaturateHalf(Graphite_ApplyFog(direct + ambient + transmitted + c.emission * Graphite_Exposure(), vRelativePos));
+#ifdef GRAPHITE_STANDARD_DEBUG
+    color = PBR_DebugView(color, p, c, direct, ambient, indirect, vLightmapUV, transmitted, transmittedWhite, pathLength);
+#endif
+#if defined(_SURFACE_TRANSPARENT) || defined(PBR_TRANSMISSION)
+    fragColor = vec4(color * c.opacity, c.opacity);
+#ifdef PBR_TRANSMISSION
+    Graphite_WriteMotion(graphite_MotionCurrent, graphite_MotionPrevious);
+    Graphite_WriteReactive(PBR_ReactiveCoverage(c, p));
+#endif
+#else
+    vec3 topNormal;
+    float topRoughness;
+    vec3 topReflectance = PBR_TopReflectance(c, topNormal, topRoughness);
+    Graphite_WriteGBuffer(topNormal, topReflectance, topRoughness);
+    fragColor = vec4(color, 1.0);
+#endif
+}
+
+#endif
+
+#elif defined(GRAPHITE_STANDARD_BACK_DEPTH)
+
+layout(location = 0) out float fragDistance;
+
+// Back depth: the far side's distance along the pixel's view ray, cut out where the alpha test fails
 void Graphite_StandardFragment()
 {
 #ifdef _SURFACE_CUTOUT
-    vec4 albedo = texture(_MainTex, Graphite_StandardUV(_MainTexUV, _MainTex_ST, vUV, vUV1)) * _MainColor * vColor;
+    Graphite_SurfaceData i = graphite_StandardInputs();
+    float mapVariance;
+    PBR_Params p = PBR_MaterialParams(i, false, mapVariance);
 #ifdef GRAPHITE_SURFACE_FUNCTION
-    Graphite_SurfaceData s = Graphite_NewSurfaceData(vUV, vUV1, albedo.rgb, albedo.a);
-    s.VertexColor = vColor;
-    s.RelativePos = vRelativePos;
-    s.ViewDir = Graphite_ViewDir(vRelativePos);
-    Surface(s);
-    albedo.a = s.Alpha;
+    Surface(p, i);
 #endif
-    if (albedo.a < _AlphaCutoff)
+    if (p.geometryOpacity < alpha_cutoff)
         discard;
+#endif
+    fragDistance = dot(vRelativePos, Graphite_PixelRay());
+}
+
+#else
+
+#ifdef GRAPHITE_STANDARD_SHADOW_DITHER
+// A 4 x 4 ordered dither the shadow filter averages evenly into the fraction let through. An orthographic shadow view
+// takes it on the light's texel grid from the world origin, so it stays on the caster as the cascades refit.
+bool graphite_ShadowDiscards(float transmittance)
+{
+    Graphite_ViewData v = Graphite_View();
+    vec2 cell = gl_FragCoord.xy;
+    if (v.projection[3][3] > 0.5)
+    {
+        float texel = 2.0 / abs(v.projection[0][0] * v.screen.x);
+        vec2 high = (v.view * vec4(v.cameraHigh.xyz, 0.0)).xy / texel;
+        vec2 low = (v.view * vec4(v.cameraLow.xyz + vRelativePos, 0.0)).xy / texel;
+        cell = mod(high, 4096.0) + low;
+    }
+    vec2 texel = floor(cell);
+    ivec2 p = ivec2(mod(texel, 4.0));
+    const float bayer[16] = float[](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+    // Each 4 x 4 block offsets its thresholds by its own fraction, so the mean is exact between the sixteenths
+    uvec2 block = uvec2(ivec2(floor(texel / 4.0)));
+    uint h = block.x * 1664525u + block.y * 1013904223u;
+    h ^= h >> 16u;
+    h *= 2246822519u;
+    h ^= h >> 13u;
+    float offset = float(h >> 8u) / 16777216.0;
+    return (bayer[p.y * 4 + p.x] + offset) / 16.0 < transmittance;
+}
+
+// The cosine between the face and the light's ray through this fragment, for any projection
+float graphite_ShadowCosine()
+{
+    vec4 clip = Graphite_View().viewProjection * vec4(vRelativePos, 1.0);
+    vec3 ray = Graphite_ViewRay(clip.xy / clip.w);
+    vec3 normal = normalize(cross(dFdx(vRelativePos), dFdy(vRelativePos)));
+    return clamp(abs(dot(normal, ray)), 1e-4, 1.0);
+}
+#endif
+
+// Prepass and shadow caster: depth only, cut out where the alpha test fails. Dithered casters then let their
+// transmittance through.
+void Graphite_StandardFragment()
+{
+#if defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)
+    Graphite_SurfaceData i = graphite_StandardInputs();
+#ifdef GRAPHITE_STANDARD_UNLIT
+    Unlit_Params p = Unlit_MaterialParams(i);
+#ifdef GRAPHITE_SURFACE_FUNCTION
+    Surface(p, i);
+#endif
+#ifdef _SURFACE_CUTOUT
+    if (p.Alpha < _AlphaCutoff)
+        discard;
+#endif
+#ifdef GRAPHITE_STANDARD_SHADOW_DITHER
+    if (graphite_ShadowDiscards(1.0 - p.Alpha))
+        discard;
+#endif
+#else
+#ifdef GRAPHITE_STANDARD_SHADOW_DITHER
+    float cosine = graphite_ShadowCosine();
+#endif
+    float mapVariance;
+    PBR_Params p = PBR_MaterialParams(i, false, mapVariance);
+#ifdef GRAPHITE_SURFACE_FUNCTION
+    Surface(p, i);
+#endif
+#ifdef _SURFACE_CUTOUT
+    if (p.geometryOpacity < alpha_cutoff)
+        discard;
+#endif
+#ifdef GRAPHITE_STANDARD_SHADOW_DITHER
+#if defined(_SURFACE_TRANSPARENT) || defined(PBR_TRANSMISSION)
+    float coverage = p.geometryOpacity;
+#else
+    float coverage = 1.0;
+#endif
+    if (graphite_ShadowDiscards(PBR_ShadowTransmittance(p, coverage, cosine)))
+        discard;
+#endif
+#endif
 #endif
 }
 

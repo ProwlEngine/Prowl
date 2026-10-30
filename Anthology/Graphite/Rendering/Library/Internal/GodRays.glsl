@@ -1,4 +1,4 @@
-// Prowl's god rays, out of its cinematic pass into an HDR effect of its own: bright sky pixels sampled along the line to
+// God rays as an HDR effect of their own: bright sky pixels sampled along the line to
 // the sun's place on screen, decaying with each step, added as warm light shafts. The sun is the world's, a far point
 // against the light's direction from the camera.
 

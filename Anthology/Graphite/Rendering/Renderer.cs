@@ -88,8 +88,8 @@ public sealed class BuiltInSkies(Renderer renderer)
 }
 
 /// <summary>
-/// The standard surface shaders Graphite ships, loaded the first time they are asked for: Lit, physically based with
-/// optional maps and models compiled in only while a material uses them, and Unlit. Both take <see cref="SurfaceSettings"/>.
+/// The standard surface shaders Graphite ships, loaded the first time they are asked for: Lit, OpenPBR Surface with a
+/// map for every texturable input, and Unlit. Both take <see cref="SurfaceSettings"/>.
 /// </summary>
 public sealed class BuiltInStandard(Renderer renderer)
 {
@@ -169,6 +169,12 @@ public struct ViewDesc
     /// <summary>The logical far distance, for effects that need one with an infinite projection.</summary>
     public float FarDistance;
 
+    /// <summary>
+    /// The camera's exposure value at ISO 100, which every light the view draws is pre-exposed by through
+    /// <see cref="ExposureOf"/>. An <see cref="AutoExposure"/> on the view replaces it with its own from its second frame.
+    /// </summary>
+    public float EV100;
+
     /// <summary>What the view is for, which decides the features that run on it.</summary>
     public ViewKind Kind;
 
@@ -225,6 +231,9 @@ public struct ViewDesc
         Viewport = new Float4(0, 0, 1, 1);
         RenderScale = 1;
     }
+
+    /// <summary>The scale an exposure value at ISO 100 gives light, 1 / (1.2 * 2^EV100), as a camera of ISO 100 and K 12.5 sees it.</summary>
+    public static float ExposureOf(float ev100) => 1f / (1.2f * MathF.Pow(2f, ev100));
 }
 
 public struct FrameTime

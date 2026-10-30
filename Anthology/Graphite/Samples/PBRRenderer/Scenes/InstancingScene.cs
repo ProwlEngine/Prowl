@@ -14,6 +14,7 @@ internal sealed class InstancingScene : DemoScene
     private const int Rings = 20;
     private const int PerRing = 400;
 
+    private readonly GpuMesh _orbiterMesh;
     private readonly InstanceBatchHandle _wave;
     private readonly InstanceBatchHandle _orbiters;
     private readonly InstanceData[] _waveData = new InstanceData[Side * Side];
@@ -21,18 +22,17 @@ internal sealed class InstancingScene : DemoScene
 
     public InstancingScene(Demo demo) : base(demo)
     {
-        Material instanced = Lit(new Float3(1, 1, 1), 0.1f, 0.35f);
-        instanced.SetFloat("_InstanceColor", 1f);
-        Material glossy = Lit(new Float3(1, 1, 1), 0.9f, 0.2f);
-        glossy.SetFloat("_InstanceColor", 1f);
+        Material instanced = Pbr(new Float3(1, 1, 1), 0.1f, 0.35f, instanceColor: true);
+        Material glossy = Pbr(new Float3(1, 1, 1), 0.9f, 0.2f, instanceColor: true);
 
-        Add(Demo.Cube, Lit(new Float3(0.45f, 0.45f, 0.48f), 0f, 0.8f, grid: 4f), new Double3(0, -0.25, 0), new Double3(900, 0.5, 900));
+        Add(Demo.Cube, Pbr(new Float3(0.45f, 0.45f, 0.48f), 0f, 0.8f, grid: 4f), new Double3(0, -0.25, 0), new Double3(900, 0.5, 900));
 
         FillWave(0f);
         FillOrbiters(0f);
 
         _wave = World.AddInstanceBatch(new InstanceBatchDesc { Mesh = Demo.Cube }, [instanced], _waveData);
-        _orbiters = World.AddInstanceBatch(new InstanceBatchDesc { Mesh = Demo.Sphere }, [glossy], _orbiterData);
+        _orbiterMesh = demo.Renderer.CreateMesh(Geometry.Sphere(10, 20));
+        _orbiters = World.AddInstanceBatch(new InstanceBatchDesc { Mesh = _orbiterMesh }, [glossy], _orbiterData);
 
         LightHandle sun = World.AddLight(new LightDesc
         {
@@ -40,7 +40,7 @@ internal sealed class InstancingScene : DemoScene
             Type = LightType.Directional,
             Direction = Float3.Normalize(new Float3(0.45f, -0.6f, 0.5f)),
             Color = new Float3(1f, 0.92f, 0.8f),
-            Intensity = 0.55f,
+            Intensity = 100000f,
             AngularRadius = 0.5f,
             Shadow = new ShadowDesc { Enabled = true, Resolution = 4096, Cascades = 4, Distance = 300 },
         });
@@ -71,6 +71,12 @@ internal sealed class InstancingScene : DemoScene
         FillOrbiters(time);
         World.SetInstances(_wave, _waveData);
         World.SetInstances(_orbiters, _orbiterData);
+    }
+
+    public override void Dispose()
+    {
+        base.Dispose();
+        _orbiterMesh.Dispose();
     }
 
     private void FillWave(float time)

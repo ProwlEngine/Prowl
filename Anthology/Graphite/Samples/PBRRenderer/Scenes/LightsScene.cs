@@ -28,13 +28,13 @@ internal sealed class LightsScene : DemoScene
 
     public LightsScene(Demo demo) : base(demo)
     {
-        Add(Demo.Cube, Lit(new Float3(0.55f, 0.55f, 0.57f), 0f, 0.55f, grid: 2f), new Double3(0, -0.25, 0), new Double3(160, 0.5, 160));
+        Add(Demo.Cube, Pbr(new Float3(0.55f, 0.55f, 0.57f), 0f, 0.55f, grid: 2f), new Double3(0, -0.25, 0), new Double3(160, 0.5, 160));
 
         Material[] pillars =
         [
-            Lit(new Float3(0.75f, 0.75f, 0.72f), 0f, 0.7f),
-            Lit(new Float3(0.2f, 0.22f, 0.26f), 0.8f, 0.3f),
-            Lit(new Float3(0.9f, 0.9f, 0.92f), 0f, 0.25f),
+            Pbr(new Float3(0.75f, 0.75f, 0.72f), 0f, 0.7f),
+            Pbr(new Float3(0.2f, 0.22f, 0.26f), 0.8f, 0.3f),
+            Pbr(new Float3(0.9f, 0.9f, 0.92f), 0f, 0.25f),
         ];
         for (int x = 0; x < Grid; x++)
         {
@@ -58,7 +58,7 @@ internal sealed class LightsScene : DemoScene
                 Type = LightType.Point,
                 Position = _base[i],
                 Color = Hsv((float)_random.NextDouble(), 0.75f, 1f),
-                Intensity = 0.15f,
+                Intensity = 1.13f,
                 Range = 5f,
                 SourceRadius = 0.08f,
                 Static = i % DynamicStride != 0,
@@ -75,11 +75,11 @@ internal sealed class LightsScene : DemoScene
             Up = new Float3(0, 0, 1),
             Size = new Float2(10, 4),
             Color = new Float3(1f, 0.95f, 0.88f),
-            Intensity = 4f,
+            Intensity = 0.75f,
             Range = 32f,
             Static = true,
         });
-        Add(Demo.Cube, Lit(new Float3(0, 0, 0), 0f, 1f, new Float3(10f, 9.5f, 8.8f)), new Double3(0, 7.05, 0), new Double3(10, 0.1, 4), flags: RenderableFlags.None);
+        Add(Demo.Cube, Pbr(new Float3(0, 0, 0), 0f, 1f, new Float3(0.75f, 0.71f, 0.66f)), new Double3(0, 7.05, 0), new Double3(10, 0.1, 4), flags: RenderableFlags.None);
 
         World.AddLight(new LightDesc
         {
@@ -90,11 +90,11 @@ internal sealed class LightsScene : DemoScene
             Size = new Float2(16, 0),
             SourceRadius = 0.15f,
             Color = new Float3(0.2f, 0.9f, 1f),
-            Intensity = 3f,
+            Intensity = 4.7f,
             Range = 22f,
             Static = true,
         });
-        Add(Demo.Cylinder, Lit(new Float3(0, 0, 0), 0f, 1f, new Float3(1.5f, 7f, 10f)), new Double3(-24, 1.5, -24), new Double3(0.3, 16, 0.3), Quaternion.AxisAngle(Float3.UnitZ, MathF.PI * 0.5f), RenderableFlags.None);
+        Add(Demo.Cylinder, Pbr(new Float3(0, 0, 0), 0f, 1f, new Float3(0.94f, 4.23f, 4.7f)), new Double3(-24, 1.5, -24), new Double3(0.3, 16, 0.3), Quaternion.AxisAngle(Float3.UnitZ, MathF.PI * 0.5f), RenderableFlags.None);
 
         World.AddLight(new LightDesc
         {
@@ -104,11 +104,11 @@ internal sealed class LightsScene : DemoScene
             Direction = new Float3(0, -1, 0),
             Size = new Float2(3, 0),
             Color = new Float3(1f, 0.25f, 0.8f),
-            Intensity = 3f,
+            Intensity = 0.8f,
             Range = 22f,
             Static = true,
         });
-        Add(Demo.Cylinder, Lit(new Float3(0, 0, 0), 0f, 1f, new Float3(9f, 2f, 7f)), new Double3(24, 6.05, 12), new Double3(6, 0.1, 6), flags: RenderableFlags.None);
+        Add(Demo.Cylinder, Pbr(new Float3(0, 0, 0), 0f, 1f, new Float3(0.8f, 0.2f, 0.64f)), new Double3(24, 6.05, 12), new Double3(6, 0.1, 6), flags: RenderableFlags.None);
 
         Double3[] corners = [new(-30, 12, -30), new(30, 12, -30), new(30, 12, 30), new(-30, 12, 30)];
         for (int i = 0; i < _spots.Length; i++)
@@ -120,7 +120,7 @@ internal sealed class LightsScene : DemoScene
                 Position = corners[i],
                 Direction = Float3.Normalize(new Float3((float)-corners[i].X, (float)-corners[i].Y, (float)-corners[i].Z)),
                 Color = i % 2 == 0 ? new Float3(1f, 0.95f, 0.85f) : new Float3(0.7f, 0.85f, 1f),
-                Intensity = 300f,
+                Intensity = 2250f,
                 Range = 80f,
                 SourceRadius = 0.2f,
                 InnerAngle = 5f,
@@ -136,7 +136,7 @@ internal sealed class LightsScene : DemoScene
             Type = LightType.Directional,
             Direction = Float3.Normalize(new Float3(-0.3f, -1f, -0.4f)),
             Color = new Float3(0.55f, 0.65f, 1f),
-            Intensity = 0.04f,
+            Intensity = 0.3f,
             Shadow = new ShadowDesc { Enabled = true, Resolution = 2048, Cascades = 4, Distance = 100 },
         });
 
@@ -149,6 +149,8 @@ internal sealed class LightsScene : DemoScene
             Fog = new FogDesc { Mode = FogMode.ExponentialSquared, Color = new Float4(0.02f, 0.03f, 0.05f, 1), Density = 0.012f },
         };
     }
+
+    public override float StartEV100 => 1f;
 
     public override string Name => "Lights";
 

@@ -87,7 +87,7 @@ Fragment
             float mip = max(0.5 * log2(sampleSolidAngle / texelSolidAngle) + 1.0, 0.0);
 
             vec3 c = textureLod(Graphite_Source, l, mip).rgb;
-            sum += min(c, vec3(256.0)) * nDotL;
+            sum += c * nDotL;
             weight += nDotL;
         }
 

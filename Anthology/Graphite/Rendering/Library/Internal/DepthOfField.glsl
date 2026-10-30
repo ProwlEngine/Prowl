@@ -1,6 +1,6 @@
 #pragma variant DOF COMBINE COC PREFILTER BOKEH POSTFILTER FOCUS
 #pragma variant DOF_LAYERED_SOURCE
-// Prowl's bokeh depth of field with separate near and far fields. CoC: a signed circle of confusion in full resolution
+// Bokeh depth of field with separate near and far fields. CoC: a signed circle of confusion in full resolution
 // pixels, negative in front of focus. Prefilter: the colour of the taps sharing the block's strongest CoC, and that CoC,
 // at the blur resolution. Bokeh: the far field from a disk the size of the pixel's own blur, taking samples whose blur
 // reaches back, and the near field from a disk the size of the largest blur, weighted so full coverage sums to 1.

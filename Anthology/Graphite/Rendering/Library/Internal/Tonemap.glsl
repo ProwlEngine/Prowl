@@ -1,5 +1,5 @@
 #pragma variant TONEMAP CLAMP ACES AGX_NEUTRAL AGX_PUNCHY REINHARD ROMBINDAHOUSE UNCHARTED2
-// Prowl's tonemapper: one operator by define, clamped to 0 to 1, then sRGB encoded. Without an operator define it only
+// Tonemapper: one operator by define, clamped to 0 to 1, then sRGB encoded. Without an operator define it only
 // clamps.
 
 #if defined(TONEMAP_ACES)

@@ -10,7 +10,6 @@
         <ProjectReference Include="../Shared/Shared.csproj" />
         <ProjectReference Include="../../../Clay/Clay/Clay.csproj" />
         <ProjectReference Include="../../../Photonic/Photonic/Photonic.csproj" />
-        <ProjectReference Include="../../../Unwrapper/Unwrapper/Unwrapper.csproj" />
     </ItemGroup>
 
     <ItemGroup>

@@ -105,6 +105,18 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         return entry.Built ?? Fallback(entry);
     }
 
+    /// <summary>Carries on every unfinished variant, including ones no draw asks for anymore, so each one is built or fails. Render thread.</summary>
+    public void Advance()
+    {
+        if (Compiling == 0)
+            return;
+        foreach (Entry entry in Every())
+        {
+            if (entry.Built == null && !entry.Failed)
+                Complete(entry);
+        }
+    }
+
     private readonly Dictionary<GraphicsProgram, PropertyID[]> _userBuffers = new();
 
     /// <summary>The buffers a program reads that the host sets through Globals.SetBuffer.</summary>
@@ -145,14 +157,15 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         return entry;
     }
 
-    // A Forward pass draws through its shader's Debug pass while the view sets the debug axis
+    // A Forward or Transmission pass draws through its shader's Debug pass while the view sets the debug axis
     private static bool DebugProgram(ref DrawProgram program, IReadOnlyDictionary<string, string> keywords)
     {
         if (!keywords.ContainsKey(Shader.DebugAxis))
             return false;
         Shader shader = program.Shader;
         int debug = shader.PassIndex(PassType.Debug);
-        if (debug < 0 || !ShaderDefinition.PassHasTag(shader.Definition.Passes![program.PassIndex], PassType.Tag, PassType.Forward.Name))
+        ShaderPass pass = shader.Definition.Passes![program.PassIndex];
+        if (debug < 0 || !ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Forward.Name) && !ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Transmission.Name))
             return false;
         program = program with { PassIndex = debug, Variant = shader.PassVariant(debug, program.Keywords) };
         return true;
@@ -198,6 +211,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             combo[i] = program.Keywords[i];
         for (int i = 0; i < globalAxes.Count; i++)
             combo[materialAxes.Count + i] = new Keyword(globalAxes[i].Name, globalAxes[i].Values[globalValues[i]]);
+        program.Shader.ResolveUnused(program.PassIndex, combo);
 
         PassVariants variants = program.Shader.Definition.Passes![program.PassIndex].Variants(compiler, device.BackendType);
         if (!variants.TryGetKey(combo, out int key))
@@ -349,8 +363,9 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
 
     // Colour takes the pass's blend. An opaque forward pass writes the G-buffer targets its fragment stage stores, so they
     // match the surface that won the depth test; ones it does not store keep their clear, and transparent, blended and
-    // other passes leave them. The prepass writes no colour at all. Views with fewer targets ignore the extra states.
-    internal static BlendStateDescription SceneBlend(PassState state, bool forward, bool prepass, Func<uint, bool> stores)
+    // other passes leave them. Transmissive passes write motion and the reactive mask over them, which nothing else
+    // writes. The prepass writes no colour at all. Views with fewer targets ignore the extra states.
+    internal static BlendStateDescription SceneBlend(PassState state, bool forward, bool prepass, Func<uint, bool> stores, bool transmission = false)
     {
         BlendAttachmentDescription color = state.ToBlendState(BlendStateDescription.SingleOverrideBlend).AttachmentStates[0];
         bool gbuffer = WritesGBufferTargets(state, forward, prepass);
@@ -360,7 +375,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             color.ColorWriteMask = ColorWriteMask.None;
 
         BlendStateDescription blend = state.ToBlendState(BlendStateDescription.SingleOverrideBlend);
-        blend.AttachmentStates = [color, gbuffer && stores(1) ? target : masked, gbuffer && stores(2) ? target : masked, gbuffer && stores(3) ? target : masked];
+        blend.AttachmentStates = [color, (gbuffer || transmission) && stores(1) ? target : masked, transmission && stores(2) ? target : masked, gbuffer && stores(3) ? target : masked, gbuffer && stores(4) ? target : masked];
         return blend;
     }
 
@@ -378,8 +393,9 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         PassState state = program.StateOverride is { } over ? over.Apply(pass.State) : pass.State;
         bool forward = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Forward.Name) || ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Debug.Name);
         bool prepass = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Prepass.Name);
+        bool transmission = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Transmission.Name);
         ShaderDescription compiled = description;
-        description.BlendState = SceneBlend(state, forward, prepass, location => MaterialLayout.Stores(compiled, location));
+        description.BlendState = SceneBlend(state, forward, prepass, location => MaterialLayout.Stores(compiled, location), transmission);
         description.DepthStencilState = state.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyGreaterEqual);
         RasterizerStateDescription raster = state.ToRasterizerState(RasterizerStateDescription.Default);
         if (mirrored)
@@ -399,6 +415,13 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             raster.DepthBiasEnabled = true;
             raster.DepthBiasConstantFactor = -ShadowBias.Constant;
             raster.DepthBiasSlopeFactor = -ShadowBias.Slope;
+        }
+        // Back depth draws the far side alone whatever the material's culling and blending
+        if (ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.BackDepth.Name))
+        {
+            description.BlendState = BlendStateDescription.SingleOverrideBlend;
+            description.DepthStencilState = DepthStencilStateDescription.DepthOnlyGreaterEqual;
+            raster.CullMode = FaceCullMode.Front;
         }
         description.RasterizerState = raster;
 

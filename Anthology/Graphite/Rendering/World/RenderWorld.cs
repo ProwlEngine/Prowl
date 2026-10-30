@@ -38,12 +38,13 @@ public readonly record struct LightmapBinding
 {
     public static readonly LightmapBinding None = default;
 
-    public LightmapBinding(Texture? texture, Float4 scaleOffset, LightmapEncoding encoding = LightmapEncoding.RGBM, SamplerDescription? sampler = null)
+    public LightmapBinding(Texture? texture, Float4 scaleOffset, LightmapEncoding encoding = LightmapEncoding.RGBM, SamplerDescription? sampler = null, float scale = 1)
     {
         Texture = texture;
         ScaleOffset = scaleOffset;
         Encoding = encoding;
         Sampler = sampler;
+        Scale = scale;
         Lightmapped = true;
     }
 
@@ -55,6 +56,9 @@ public readonly record struct LightmapBinding
 
     /// <summary>Linear and clamped when null.</summary>
     public SamplerDescription? Sampler { get; }
+
+    /// <summary>What the decoded texels are multiplied by to give irradiance over pi, one over the exposure a bake stored them at.</summary>
+    public float Scale { get; }
 
     public bool Lightmapped { get; }
 }
@@ -222,7 +226,7 @@ internal struct ObjectAttributes
     /// <summary>The first word plus one of a skinned copy's current and last frame's positions, 0 for the chunk's own and none.</summary>
     public uint CurrentPositions;
     public uint PreviousPositions;
-    private uint _pad0;
+    public float LightmapScale;
     public Float4 LightmapScaleOffset;
     public Float4 Custom0;
     public Float4 Custom1;
@@ -783,7 +787,7 @@ public sealed partial class RenderWorld : IDisposable
     }
 
     /// <summary>
-    /// Weights the mesh's blend shapes, one per shape from 0 to 100 like Prowl, past either end to over or undershoot.
+    /// Weights the mesh's blend shapes, one per shape from 0 to 100, past either end to over or undershoot.
     /// Shapes past the span weigh 0, and an empty span rests every shape. Nothing changes when the weights equal the
     /// stored ones. A renderable whose mesh has blend shapes culls by its bounds override, which should hold every shape.
     /// </summary>
@@ -1185,6 +1189,7 @@ public sealed partial class RenderWorld : IDisposable
             LightmapBinding lightmap = host._lightmap[index];
             (attributes.LightmapTexture, attributes.LightmapSampler) = host.LightmapSlots(lightmap);
             attributes.LightmapScaleOffset = lightmap.Lightmapped ? lightmap.ScaleOffset : new Float4(1, 1, 0, 0);
+            attributes.LightmapScale = lightmap.Scale;
             attributes.Custom0 = host._custom0[index];
             attributes.Custom1 = host._custom1[index];
             attributes.LodFade = 1;
@@ -1328,7 +1333,7 @@ public sealed partial class RenderWorld : IDisposable
             return _boneRange[index].Size > 0 && (mesh.StreamsPresent & boneStreams) == boneStreams;
         }
 
-        // Prowl's frame pick: a lone frame scales by weight over its weight, several interpolate between the two around
+        // The frame pick: a lone frame scales by weight over its weight, several interpolate between the two around
         // the weight, clamped to the last; near zero weights and picks are left out
         private static (int Frame, float Weight)[] PickFrames(MeshPlacement mesh, float[]? weights)
         {

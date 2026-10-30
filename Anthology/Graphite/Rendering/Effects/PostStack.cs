@@ -48,14 +48,14 @@ internal sealed class EffectResources : IDisposable
     public Sampler LinearRepeat { get; }
 
     /// <summary>The program of a library file under a set of defines, each line ending in a newline, made the first time. Host thread.</summary>
-    public FullscreenProgram Program(string file, string defines = "", bool source = true, BlendStateDescription? blend = null)
+    public FullscreenProgram Program(string file, string defines = "", bool source = true, BlendStateDescription? blend = null, bool lit = false)
     {
-        string key = file + "\n" + defines + (source ? "\n1" : "\n0");
+        string key = file + "\n" + defines + (source ? "\n1" : "\n0") + (lit ? "\n1" : "\n0");
         lock (_programs)
         {
             if (!_programs.TryGetValue(key, out FullscreenProgram? program))
             {
-                program = _renderer.CreateFullscreenProgram(InternalShaders.PostFragment(file), $"Graphite/{file}", source, blend, variant: defines);
+                program = _renderer.CreateFullscreenProgram(InternalShaders.PostFragment(file), $"Graphite/{file}", source, blend, lit, defines);
                 _programs[key] = program;
             }
             return program;
@@ -64,7 +64,7 @@ internal sealed class EffectResources : IDisposable
 }
 
 /// <summary>
-/// A stock effect: a port of one of Prowl's image effects, its programs built from the library's Graphite/Internal files
+/// A stock effect: its programs built from the library's Graphite/Internal files
 /// and its settings copied at Extract. Effects of one renderer share their programs, which the renderer owns.
 /// </summary>
 public abstract class PostEffect(Renderer renderer) : RenderFeature
@@ -76,8 +76,8 @@ public abstract class PostEffect(Renderer renderer) : RenderFeature
     protected Sampler LinearRepeat => Resources.LinearRepeat;
 
     /// <summary>The program of a library file under a set of defines, each line ending in a newline, made the first time. Host thread.</summary>
-    protected FullscreenProgram Program(string file, string defines = "", bool source = true, BlendStateDescription? blend = null)
-        => Resources.Program(file, defines, source, blend);
+    protected FullscreenProgram Program(string file, string defines = "", bool source = true, BlendStateDescription? blend = null, bool lit = false)
+        => Resources.Program(file, defines, source, blend, lit);
 
     protected static PixelFormat Hdr => PixelFormat.R16_G16_B16_A16_Float;
 }
@@ -137,7 +137,7 @@ public enum TonemapOperator
 }
 
 /// <summary>
-/// Prowl's tonemapper, the Tonemap slot's exclusive feature: an operator into 0 to 1, then the sRGB encode. Later slots
+/// The tonemapper, the Tonemap slot's exclusive feature: an operator into 0 to 1, then the sRGB encode. Later slots
 /// read display encoded colour, which the present decodes for sRGB targets.
 /// </summary>
 public sealed class Tonemapper(Renderer renderer) : PostEffect(renderer)
@@ -174,22 +174,27 @@ public sealed class Tonemapper(Renderer renderer) : PostEffect(renderer)
 }
 
 /// <summary>
-/// Prowl's auto exposure: the colour's log luminance measured at half resolution and box downsampled, adapted over time
-/// toward its geometric mean, faster when brightening, and applied as a multiply before bloom. A layered view measures its
-/// first layer and its layers share one exposure.
+/// Auto exposure with a histogram meter: the scene's log luminance measured at half resolution with its
+/// pre-exposure undone, box downsampled, binned and averaged between <see cref="LowPercent"/> and
+/// <see cref="HighPercent"/>, adapted over time, faster when brightening, then metered into the exposure its views take
+/// from the next frame on, in place of their <see cref="ViewDesc.EV100"/>. It changes no colour itself. A
+/// layered view measures its first layer and its layers share one exposure.
 /// </summary>
 public sealed class AutoExposure : PostEffect
 {
-    private readonly FullscreenProgram _extract, _extractLayered, _downsample, _adapt, _apply;
+    private readonly FullscreenProgram _extract, _extractLayered, _downsample, _histogram, _adapt, _meter;
     private readonly PropertySet _properties = new();
-    private (float Compensation, float Up, float Down, float Min, float Max) _settings;
+    private (float Compensation, float Up, float Down, float Min, float Max, float Low, float High) _settings;
 
-    private const int LuminanceLevels = 13;
+    private const int Bins = 64;
+    private const float HistogramWidth = 64;
 
     private sealed class ViewState
     {
         public readonly List<TextureHandle> Levels = new();
+        public TextureHandle Histogram;
         public TextureHandle Adapted;
+        public TextureHandle Exposure;
     }
 
     public AutoExposure(Renderer renderer) : base(renderer)
@@ -197,36 +202,57 @@ public sealed class AutoExposure : PostEffect
         _extract = Program("AutoExposure", "#define AE_EXTRACT 1\n", source: false);
         _extractLayered = Program("AutoExposure", "#define AE_EXTRACT 1\n#define AE_LAYERED_SOURCE 1\n", source: false);
         _downsample = Program("AutoExposure", "#define AE_DOWNSAMPLE 1\n", source: false);
+        _histogram = Program("AutoExposure", "#define AE_HISTOGRAM 1\n", source: false);
         _adapt = Program("AutoExposure", "#define AE_ADAPT 1\n", source: false);
-        _apply = Program("AutoExposure");
+        _meter = Program("AutoExposure", source: false);
         Order = 20;
     }
 
-    /// <summary>Exposure compensation in stops, 0 for none.</summary>
-    public float ExposureCompensation { get; set; }
+    /// <summary>
+    /// Exposure compensation in stops, brighter when above 0. A K 12.5 meter alone puts the metered average at 0.104,
+    /// 0.79 stops under the 0.18 mid grey the tonemappers expect, and metering the brighter share between the
+    /// percentiles reads a daylight scene about 0.7 stops brighter than its whole average, so the default adds both.
+    /// </summary>
+    public float ExposureCompensation { get; set; } = 1.5f;
 
-    /// <summary>How fast exposure follows the scene getting brighter, per second.</summary>
+    /// <summary>How fast exposure follows the scene getting brighter, the gap in stops shrinking by exp(-speed * seconds).</summary>
     public float AdaptSpeedUp { get; set; } = 3;
 
-    /// <summary>How fast exposure follows the scene getting darker, per second.</summary>
+    /// <summary>How fast exposure follows the scene getting darker, the gap in stops shrinking by exp(-speed * seconds).</summary>
     public float AdaptSpeedDown { get; set; } = 1.5f;
 
-    public float MinExposure { get; set; } = 0.1f;
-    public float MaxExposure { get; set; } = 10;
+    /// <summary>The darkest scene metered, as the lowest EV100 the views take.</summary>
+    public float MinEV100 { get; set; } = -6;
+
+    /// <summary>The brightest scene metered, as the highest EV100 the views take.</summary>
+    public float MaxEV100 { get; set; } = 20;
+
+    /// <summary>The share of the darkest texels the meter leaves out, so a dark sky or a black backdrop does not pull it.</summary>
+    public float LowPercent { get; set; } = 0.7f;
+
+    /// <summary>The share of texels up to which the meter averages, leaving out the brightest highlights above it.</summary>
+    public float HighPercent { get; set; } = 0.98f;
 
     public override RenderSlot Slot => RenderSlot.HdrPost;
 
+    internal override bool MeasuresExposure => true;
+
     public override void Extract()
-        => _settings = (ExposureCompensation, Math.Max(0.01f, AdaptSpeedUp), Math.Max(0.01f, AdaptSpeedDown), MinExposure, MaxExposure);
+    {
+        float low = Math.Clamp(LowPercent, 0, 0.99f);
+        _settings = (ExposureCompensation, Math.Max(0.01f, AdaptSpeedUp), Math.Max(0.01f, AdaptSpeedDown), MinEV100, Math.Max(MinEV100, MaxEV100), low, Math.Clamp(HighPercent, low + 0.01f, 1));
+    }
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        builder.WriteColor();
+        builder.ReadColor();
         ViewState state = builder.GetViewState<ViewState>();
         state.Levels.Clear();
-        for (int level = 0; level < LuminanceLevels; level++)
+        for (int level = 0; level == 0 || view.Width * 0.5f / (1 << (level - 1)) > HistogramWidth; level++)
             state.Levels.Add(builder.Temporary("Luminance" + level, view.SharedTexture(PixelFormat.R16_Float, 0.5f / (1 << level))));
-        state.Adapted = builder.History("Adapted", FeatureView.Shared(1, 1, PixelFormat.R16_Float), usage: TextureState.Attachment | TextureState.Sampled);
+        state.Histogram = builder.Temporary("Histogram", FeatureView.Shared(Bins, 1, PixelFormat.R32_G32_Float));
+        state.Adapted = builder.History("Adapted", FeatureView.Shared(1, 1, PixelFormat.R32_Float), usage: TextureState.Attachment | TextureState.Sampled);
+        state.Exposure = builder.WriteExposure();
     }
 
     public override void Render(FeatureContext context)
@@ -240,10 +266,19 @@ public sealed class AutoExposure : PostEffect
             context.Fullscreen(_downsample, context.Get(state.Levels[i]), _properties, shared: true);
         }
 
+        // The bins span the metered range and a few stops past it, in the natural log luminance the levels hold
+        RenderTexture histogram = context.Get(state.Histogram);
+        _properties.SetTexture("_MainTex", context.Get(state.Levels[^1]).ColorTextures[0], LinearClamp);
+        _properties.SetFloat("_LogMin", (_settings.Min - 5) * MathF.Log(2));
+        _properties.SetFloat("_LogMax", (_settings.Max - 1) * MathF.Log(2));
+        context.Fullscreen(_histogram, histogram, _properties, shared: true);
+
         RenderTexture adapted = context.Get(state.Adapted);
         RenderTexture? previous = context.History(state.Adapted);
-        _properties.SetTexture("_MainTex", context.Get(state.Levels[^1]).ColorTextures[0], LinearClamp);
-        _properties.SetTexture("_AdaptedTex", (previous ?? context.Get(state.Levels[^1])).ColorTextures[0], LinearClamp);
+        _properties.SetTexture("_MainTex", histogram.ColorTextures[0], LinearClamp);
+        _properties.SetTexture("_AdaptedTex", (previous ?? histogram).ColorTextures[0], LinearClamp);
+        _properties.SetFloat("_LowPercent", _settings.Low);
+        _properties.SetFloat("_HighPercent", _settings.High);
         _properties.SetFloat("_AdaptSpeedUp", _settings.Up);
         _properties.SetFloat("_AdaptSpeedDown", _settings.Down);
         _properties.SetFloat("_HistoryValid", previous != null ? 1 : 0);
@@ -252,14 +287,14 @@ public sealed class AutoExposure : PostEffect
 
         _properties.SetTexture("_AdaptedTex", adapted.ColorTextures[0], LinearClamp);
         _properties.SetFloat("_ExposureComp", _settings.Compensation);
-        _properties.SetFloat("_MinExposure", _settings.Min);
-        _properties.SetFloat("_MaxExposure", _settings.Max);
-        context.Fullscreen(_apply, _properties);
+        _properties.SetFloat("_MinEV100", _settings.Min);
+        _properties.SetFloat("_MaxEV100", _settings.Max);
+        context.Fullscreen(_meter, context.Get(state.Exposure), _properties, shared: true);
     }
 }
 
 /// <summary>
-/// Prowl's dual filter bloom: bright colour past a soft knee threshold at half resolution, a chain of downsamples,
+/// Dual filter bloom: bright colour past a soft knee threshold at half resolution, a chain of downsamples,
 /// upsamples mixing each level with the blurred one below by scatter, added back to the colour.
 /// </summary>
 public sealed class Bloom : PostEffect
@@ -362,7 +397,7 @@ public sealed class Bloom : PostEffect
 }
 
 /// <summary>
-/// Prowl's GTAO as the view's screen lighting: visibility from a horizon search over slices of the depth, at a part of
+/// GTAO as the view's screen lighting: visibility from a horizon search over slices of the depth, at a part of
 /// the view's resolution, with blue noise scrolled per frame, accumulated over frames and blurred by depth. It occludes
 /// indirect light only, read by every renderable drawn after. Normals are rebuilt from depth and history follows depth
 /// and the camera, as the prepass leaves neither normals nor motion.
@@ -499,9 +534,10 @@ public sealed class Gtao : ScreenLightingFeature
 }
 
 /// <summary>
-/// Prowl's stochastic screen space reflections over the opaque scene: a GGX sampled ray per pixel at a part of the
+/// Stochastic screen space reflections over the opaque scene: a GGX sampled ray per pixel at a part of the
 /// resolution, resolved by reusing neighbouring rays with a pyramid level from a roughness cone, accumulated over frames
-/// with last frame's result fed back for a bounce, and added over the scene by Fresnel.
+/// with last frame's result fed back for a bounce. It takes the place of the reflection probes in the top specular lobe,
+/// weighted by the reflectance the material target holds.
 /// </summary>
 public sealed class ScreenSpaceReflections : PostEffect
 {
@@ -513,7 +549,7 @@ public sealed class ScreenSpaceReflections : PostEffect
     private Settings _settings;
     private (bool MipMap, bool Temporal, float Scale) _declared = (true, true, 0.5f);
 
-    private readonly record struct Settings(float RayDistance, float BrdfBias, bool RayReuse, bool Normalization, bool Fireflies, float TemporalScale, float TemporalResponse, bool ReflectionVelocity, bool Fresnel, float ScreenFade);
+    private readonly record struct Settings(float RayDistance, float BrdfBias, bool RayReuse, bool Normalization, bool Fireflies, float TemporalScale, float TemporalResponse, bool ReflectionVelocity, float ScreenFade);
 
     private sealed class ViewState
     {
@@ -529,7 +565,7 @@ public sealed class ScreenSpaceReflections : PostEffect
         _resolve = Program("Ssr", "#define SSR_RESOLVE 1\n", source: false);
         _temporal = Program("Ssr", "#define SSR_TEMPORAL 1\n", source: false);
         _reproject = Program("Ssr", "#define SSR_REPROJECT 1\n", source: false);
-        _combine = Program("Ssr", "#define SSR_COMBINE 1\n");
+        _combine = Program("Ssr", lit: true, defines: "#define SSR_COMBINE 1\n");
         _copy = Program("Ssr", "", source: false);
     }
 
@@ -566,9 +602,6 @@ public sealed class ScreenSpaceReflections : PostEffect
     /// <summary>Reprojects history by the reflection hit depth rather than the surface motion.</summary>
     public bool ReflectionVelocity { get; set; } = true;
 
-    /// <summary>Weights the reflection by Fresnel and the environment BRDF.</summary>
-    public bool UseFresnel { get; set; } = true;
-
     /// <summary>The part of the screen border reflections fade out over, 0 to 1.</summary>
     public float ScreenFadeSize { get; set; } = 0.25f;
 
@@ -576,7 +609,7 @@ public sealed class ScreenSpaceReflections : PostEffect
 
     public override void Extract()
     {
-        _settings = new Settings(Math.Clamp(RayDistance, 1, 100), Math.Clamp(BrdfBias, 0, 1), RayReuse, Normalization, ReduceFireflies, TemporalScale, Math.Clamp(TemporalResponse, 0, 1), ReflectionVelocity, UseFresnel, Math.Clamp(ScreenFadeSize, 0, 1));
+        _settings = new Settings(Math.Clamp(RayDistance, 1, 100), Math.Clamp(BrdfBias, 0, 1), RayReuse, Normalization, ReduceFireflies, TemporalScale, Math.Clamp(TemporalResponse, 0, 1), ReflectionVelocity, Math.Clamp(ScreenFadeSize, 0, 1));
         (bool, bool, float) declared = (UseMipMap, UseTemporal, RayResolution.Scale());
         if (declared != _declared)
         {
@@ -588,6 +621,7 @@ public sealed class ScreenSpaceReflections : PostEffect
     {
         builder.ReadScene();
         builder.WriteColor();
+        builder.DrawsRenderables();
         ViewState state = builder.GetViewState<ViewState>();
         if (_declared.Temporal)
         {
@@ -633,7 +667,6 @@ public sealed class ScreenSpaceReflections : PostEffect
         _properties.SetInt("_RayReuse", _settings.RayReuse ? 1 : 0);
         _properties.SetInt("_UseNormalization", _settings.Normalization ? 1 : 0);
         _properties.SetInt("_Fireflies", _settings.Fireflies ? 1 : 0);
-        _properties.SetInt("_UseFresnel", _settings.Fresnel ? 1 : 0);
         _properties.SetInt("_ReflectionVelocity", _settings.ReflectionVelocity ? 1 : 0);
 
         // The reflected scene: the last result moved by motion for a bounce, else these opaques
@@ -698,7 +731,7 @@ public sealed class ScreenSpaceReflections : PostEffect
 }
 
 /// <summary>
-/// Prowl's motion blur: the colour sampled along each pixel's motion, at most a largest radius in pixels, weighted by how
+/// Motion blur: the colour sampled along each pixel's motion, at most a largest radius in pixels, weighted by how
 /// close each sample's depth is so background does not bleed over foreground.
 /// </summary>
 public sealed class MotionBlur : PostEffect
@@ -758,7 +791,7 @@ public enum DepthOfFieldQuality
 }
 
 /// <summary>
-/// Prowl's bokeh depth of field: a signed circle of confusion splits the image into a far field behind focus and a near
+/// Bokeh depth of field: a signed circle of confusion splits the image into a far field behind focus and a near
 /// field in front, each gathered with a disk, so sharp objects do not halo into a blurred background and a blurred
 /// foreground spreads over what is behind it. The focus distance eases toward its target on the GPU, from the first
 /// layer's center when automatic, so a layered view's layers share it.
@@ -878,7 +911,7 @@ public sealed class DepthOfField : PostEffect
 }
 
 /// <summary>
-/// Prowl's god rays as an HDR effect: bright sky along the line to the sun on screen, decaying each step, added as warm
+/// God rays as an HDR effect: bright sky along the line to the sun on screen, decaying each step, added as warm
 /// shafts. The sun is the world's, so a world without a directional light draws none.
 /// </summary>
 public sealed class GodRays : PostEffect
@@ -935,8 +968,8 @@ public sealed class GodRays : PostEffect
 }
 
 /// <summary>
-/// One of Prowl's cinematic effects, a single pass over display referred colour in the DisplayPost slot. They run in
-/// Prowl's order: pixelation, chromatic aberration, sharpening, edges, grading and the LUT, then anti aliasing, then film
+/// One of the cinematic effects, a single pass over display referred colour in the DisplayPost slot. They run in
+/// this order: pixelation, chromatic aberration, sharpening, edges, grading and the LUT, then anti aliasing, then film
 /// grain and vignette so grain is not smoothed away.
 /// </summary>
 public abstract class DisplayEffect : PostEffect
@@ -965,7 +998,7 @@ public abstract class DisplayEffect : PostEffect
     private protected abstract void SetProperties(FeatureContext context, PropertySet properties);
 }
 
-/// <summary>Prowl's pixelation: the image in blocks of a size in pixels.</summary>
+/// <summary>Pixelation: the image in blocks of a size in pixels.</summary>
 public sealed class Pixelation(Renderer renderer) : DisplayEffect(renderer, "PIXELATION", 0)
 {
     private float _size;
@@ -977,7 +1010,7 @@ public sealed class Pixelation(Renderer renderer) : DisplayEffect(renderer, "PIX
     private protected override void SetProperties(FeatureContext context, PropertySet properties) => properties.SetFloat("_PixelSize", _size);
 }
 
-/// <summary>Prowl's chromatic aberration: red pushed outward and blue inward by a barrel distortion.</summary>
+/// <summary>Chromatic aberration: red pushed outward and blue inward by a barrel distortion.</summary>
 public sealed class ChromaticAberration(Renderer renderer) : DisplayEffect(renderer, "CHROMATIC_ABERRATION", 1)
 {
     private (float Intensity, float Distortion) _settings;
@@ -997,7 +1030,7 @@ public sealed class ChromaticAberration(Renderer renderer) : DisplayEffect(rende
     }
 }
 
-/// <summary>Prowl's contrast adaptive sharpening.</summary>
+/// <summary>Contrast adaptive sharpening.</summary>
 public sealed class Sharpen(Renderer renderer) : DisplayEffect(renderer, "SHARPEN", 2)
 {
     private (float Amount, float Radius) _settings;
@@ -1017,7 +1050,7 @@ public sealed class Sharpen(Renderer renderer) : DisplayEffect(renderer, "SHARPE
     }
 }
 
-/// <summary>Prowl's Sobel edge detection: edges drawn in a colour over the faded image.</summary>
+/// <summary>Sobel edge detection: edges drawn in a colour over the faded image.</summary>
 public sealed class EdgeDetection(Renderer renderer) : DisplayEffect(renderer, "EDGE_DETECTION", 3)
 {
     private (float Intensity, Float4 Color, float Fade) _settings;
@@ -1038,7 +1071,7 @@ public sealed class EdgeDetection(Renderer renderer) : DisplayEffect(renderer, "
     }
 }
 
-/// <summary>Prowl's colour grading: exposure, contrast around mid grey, temperature, saturation, then lift, gamma and gain.</summary>
+/// <summary>Colour grading: exposure, contrast around mid grey, temperature, saturation, then lift, gamma and gain.</summary>
 public sealed class ColorGrading(Renderer renderer) : DisplayEffect(renderer, "COLOR_GRADING", 4)
 {
     private (float Exposure, float Contrast, float Saturation, float Temperature, Float4 Lift, Float4 Gamma, Float4 Gain) _settings;
@@ -1078,7 +1111,7 @@ public sealed class ColorGrading(Renderer renderer) : DisplayEffect(renderer, "C
     }
 }
 
-/// <summary>Prowl's LUT grading from a strip texture, its slices side by side, 256 by 16 for a 16 cube. Without a texture it changes nothing.</summary>
+/// <summary>LUT grading from a strip texture, its slices side by side, 256 by 16 for a 16 cube. Without a texture it changes nothing.</summary>
 public sealed class ColorLookup(Renderer renderer) : DisplayEffect(renderer, "LUT", 5)
 {
     private (Texture? Texture, float Contribution) _settings;
@@ -1100,7 +1133,7 @@ public sealed class ColorLookup(Renderer renderer) : DisplayEffect(renderer, "LU
     }
 }
 
-/// <summary>Prowl's film grain, changing every frame, optionally stronger in highlights.</summary>
+/// <summary>Film grain, changing every frame, optionally stronger in highlights.</summary>
 public sealed class FilmGrain(Renderer renderer) : DisplayEffect(renderer, "FILM_GRAIN", 20)
 {
     private (float Intensity, float Response) _settings;
@@ -1120,7 +1153,7 @@ public sealed class FilmGrain(Renderer renderer) : DisplayEffect(renderer, "FILM
     }
 }
 
-/// <summary>Prowl's vignette, darkening toward the edges.</summary>
+/// <summary>Vignette, darkening toward the edges.</summary>
 public sealed class Vignette(Renderer renderer) : DisplayEffect(renderer, "VIGNETTE", 21)
 {
     private (float Intensity, float Smoothness, float Roundness) _settings;
@@ -1141,7 +1174,7 @@ public sealed class Vignette(Renderer renderer) : DisplayEffect(renderer, "VIGNE
     }
 }
 
-/// <summary>Prowl's FXAA 3.11 on display referred colour, in the AntiAliasing group with TAA and SMAA, before film grain and vignette.</summary>
+/// <summary>FXAA 3.11 on display referred colour, in the AntiAliasing group with TAA and SMAA, before film grain and vignette.</summary>
 public sealed class Fxaa : PostEffect
 {
     private readonly FullscreenProgram _program;
@@ -1181,7 +1214,7 @@ public sealed class Fxaa : PostEffect
 }
 
 /// <summary>
-/// Prowl's SMAA 1x with luma edges on display referred colour: edges, blend weights from the reference's area and search
+/// SMAA 1x with luma edges on display referred colour: edges, blend weights from the reference's area and search
 /// tables, then neighbourhood blending. In the AntiAliasing group with TAA and FXAA.
 /// </summary>
 public sealed class Smaa : PostEffect

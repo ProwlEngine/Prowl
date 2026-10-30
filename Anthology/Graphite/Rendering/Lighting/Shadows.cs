@@ -768,7 +768,7 @@ internal sealed class ShadowPlan
 }
 
 /// <summary>
-/// How a world's local light tiles are sized, Prowl's rules: a tile per light from its size on screen, kept until the
+/// How a world's local light tiles are sized: a tile per light from its size on screen, kept until the
 /// wish moves three quarters of an octave from it, every light scaling down together on a square root of two ladder
 /// when they do not fit in four fifths of the budget, and back up one step after fitting a step higher for 30 frames.
 /// </summary>
@@ -1522,10 +1522,19 @@ internal sealed partial class FramePipeline
         if (render.ShadowChanges.Count == 0 && ChangedMaterials.Count == 0)
             return;
         shadows.Grid.Clear();
+        int tiled = 0;
         foreach ((int index, LightShadow light) in shadows.Lights)
         {
             if (light.HasTiles && lighting.IsAlive(index))
+            {
                 shadows.Grid.Add(index, lighting.Light(index).Position, Math.Max(lighting.Light(index).Range, 1e-3f));
+                tiled++;
+            }
+        }
+        if (tiled == 0)
+        {
+            render.ShadowChanges.Clear();
+            return;
         }
 
         void Touch(Double3 center, float radius, bool isStatic)
@@ -2148,7 +2157,7 @@ internal sealed partial class FramePipeline
         int count = CascadeCount(light);
         uint resolution = CascadeResolution(light);
         int at = state.Lights.FindIndex(l => l.Slot == slot);
-        if (at >= 0 && state.Lights[at].Light != index)
+        if (at >= 0 && (state.Lights[at].Light != index || state.Lights[at].Resolution != resolution || state.Lights[at].Count != count))
         {
             ReleaseCascades(state, at);
             at = -1;

@@ -16,13 +16,6 @@ internal sealed class BloomSettings
 }
 
 
-internal sealed class TonemapSettings
-{
-    public float Exposure = 1.0f;
-    public float Vignette = 0.4f;
-}
-
-
 internal static class FullscreenPrograms
 {
     public static GraphicsProgram Create(GraphicsDevice device, IShaderCompiler compiler, string fragment, string name)
@@ -250,64 +243,4 @@ internal sealed class Bloom : System.IDisposable
         _composite.Dispose();
         _sampler.Dispose();
     }
-}
-
-
-internal sealed class Tonemap : RenderFeature, System.IDisposable
-{
-    private const string Fragment = """
-        uniform float _Exposure;
-        uniform float _Vignette;
-        uniform float _Encode;
-
-        vec3 ACES(vec3 x)
-        {
-            return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-        }
-
-        void main()
-        {
-            vec3 color = Graphite_SampleSource(vUV).rgb * _Exposure;
-            vec2 q = vUV - 0.5;
-            color *= 1.0 - _Vignette * dot(q, q) * 2.0;
-            color = ACES(color);
-            if (_Encode > 0.5)
-                color = pow(color, vec3(1.0 / 2.2));
-            outColor = vec4(color, 1.0);
-        }
-        """;
-
-    private readonly FullscreenProgram _program;
-    private readonly PropertySet _properties = new();
-    private readonly bool _encode;
-    private float _exposure;
-    private float _vignette;
-
-    public Tonemap(Renderer renderer, bool encode)
-    {
-        _program = renderer.CreateFullscreenProgram(Fragment, "Tonemap");
-        _encode = encode;
-    }
-
-    public TonemapSettings Settings { get; } = new();
-
-    public override RenderSlot Slot => RenderSlot.Tonemap;
-
-    public override void Extract()
-    {
-        _exposure = Settings.Exposure;
-        _vignette = Settings.Vignette;
-    }
-
-    public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
-
-    public override void Render(FeatureContext context)
-    {
-        _properties.SetFloat("_Exposure", _exposure);
-        _properties.SetFloat("_Vignette", _vignette);
-        _properties.SetFloat("_Encode", _encode ? 1f : 0f);
-        context.Fullscreen(_program, _properties);
-    }
-
-    public void Dispose() => _program.Dispose();
 }

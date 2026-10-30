@@ -1,5 +1,5 @@
 #pragma variant BLOOM COMPOSITE PREFILTER DOWNSAMPLE UPSAMPLE
-// Prowl's dual filter bloom: a soft knee threshold into half resolution, a chain of 4x4 downsamples, upsamples that mix
+// Dual filter bloom: a soft knee threshold into half resolution, a chain of 4x4 downsamples, upsamples that mix
 // each level with the blurred one below by scatter, then the composite adding it to the colour.
 
 float Luminance(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }

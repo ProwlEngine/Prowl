@@ -7,7 +7,7 @@ namespace Prowl.Graphite.Rendering;
 internal sealed class ViewGraph
 {
     internal static PixelFormat[] SceneFormats(Func<PixelFormat, bool> drawable)
-        => [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_Float, drawable(PixelFormat.R16_G16_SNorm) ? PixelFormat.R16_G16_SNorm : PixelFormat.R16_G16_Float, PixelFormat.R8_G8_UNorm];
+        => [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_Float, PixelFormat.R8_UNorm, drawable(PixelFormat.R16_G16_SNorm) ? PixelFormat.R16_G16_SNorm : PixelFormat.R16_G16_Float, PixelFormat.R8_G8_B8_A8_UNorm];
 
     // Stencil bits when the device has them, keeping float depth for reversed Z
     internal static PixelFormat SceneDepth(Func<PixelFormat, bool> drawable)
@@ -17,7 +17,7 @@ internal sealed class ViewGraph
     public const PixelFormat LdrColorFormat = PixelFormat.R8_G8_B8_A8_UNorm_SRgb;
 
     public static int SceneTargetCount(SceneTargets targets)
-        => (targets & (SceneTargets.Normals | SceneTargets.Material)) != 0 ? 4 : (targets & SceneTargets.Motion) != 0 ? 2 : 1;
+        => (targets & (SceneTargets.Normals | SceneTargets.Material)) != 0 ? 5 : (targets & SceneTargets.Reactive) != 0 ? 3 : (targets & SceneTargets.Motion) != 0 ? 2 : 1;
 
     private static readonly RenderResourceID s_sceneId = RenderResourceID.Intern("Graphite.Scene");
 

@@ -9,7 +9,6 @@ Shader "Graphite/Unlit"
         _MainColor("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
         _MainTexUV("UV Set", Integer) = 0 [Enum(UV0, UV1)]
         _AlphaCutoff("Alpha Cutoff", Float) = 0.5 [Range(0, 1)] [ShowIf(_SURFACE, CUTOUT)]
-        _InstanceTint("Instance Tint", Integer) = 0 [Toggle(_INSTANCE_TINT)]
     }
 
     Pass
@@ -72,6 +71,7 @@ Shader "Graphite/Unlit"
         Shared
         {
             #define GRAPHITE_STANDARD_DEPTH
+            #define GRAPHITE_STANDARD_SHADOW
             #define GRAPHITE_STANDARD_UNLIT
             #include "Graphite/Standard/Standard.glsl"
         }

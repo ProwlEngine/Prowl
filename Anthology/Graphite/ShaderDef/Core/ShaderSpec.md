@@ -108,7 +108,9 @@ inspectors built on it read.
 | `Gamma`                | `Color`            | The value is entered in gamma space and stored linear                  |
 | `Range(min, max)`      | `Float`, `Integer` | Shown as a slider between the bounds                                   |
 | `Keyword(AXIS)`        | textures           | The material toggle `AXIS` is on while a texture is set                |
-| `Toggle(AXIS)`         | `Float`, `Integer` | The material toggle `AXIS` is on while the value is not zero           |
+| `Toggle(AXIS)`         | `Float`, `Integer` | The material toggle `AXIS` is on while the value is not zero, or any of them when several drive it |
+| `TwoSided`             | `Float`, `Integer` | With `Toggle(AXIS)`: while that toggle is on the material draws both sides whatever its culling, back faces with the normal flipped |
+| `Transmissive`         | `Float`, `Integer` | With `Toggle(AXIS)`: while that toggle is on the material draws as transparent whatever its surface, through its `Transmission` pass in place of `Forward`, and unless it also draws two sided, through its `BackDepth` pass before the transparent surfaces |
 | `KeywordEnum(AXIS)`    | `Integer`          | The material axis `AXIS` takes the value at the integer's index        |
 | `Enum(A, B, C)`        | `Integer`          | Shown as a dropdown of the names, stored as their index                |
 | `Header("Text")`       | any                | A heading drawn above the property                                     |
@@ -118,6 +120,8 @@ inspectors built on it read.
 | `NoScaleOffset`        | textures           | No per texture scale and offset shown                                  |
 | `Normal`               | textures           | Expects a tangent space normal map                                     |
 | `HDR`                  | `Color`            | The colour may exceed 1                                                |
+| `Map`                  | `Texture2D`        | A packed map: 16 bytes holding the texture, sampler, channel, UV set and a half scale offset, read as `X`, `X_ST`, `X_Channel`, `X_UV` and `X_Present` |
+| `MapMask`              | `Integer`          | Filled with a bit per `Map` texture, in declaration order, set while it holds a texture |
 
 A material that sets an axis explicitly overrides what its properties drive.
 
@@ -126,26 +130,51 @@ A material that sets an axis explicitly overrides what its properties drive.
 ## Surface Block
 
 The quickest way to a custom lit or unlit shader. `Surface "Lit"` or `Surface "Unlit"` gives the shader Graphite's
-standard Forward, Prepass and ShadowCaster passes with every feature of Graphite/Lit or Graphite/Unlit: shadows,
+standard Forward, Prepass, ShadowCaster and Debug passes with every feature of Graphite/Lit or Graphite/Unlit: shadows,
 lightmaps, probes, decals, fog, surface types and their properties. The shader's own `Properties` are added to the
 standard ones, replacing any of the same name.
 
-The optional GLSLPROGRAM block holds fragment code defining `void Surface(inout Graphite_SurfaceData s)`, which may
-change the surface before it is lit: `BaseColor`, `Alpha`, `Normal` (world space), `Metallic`, `Roughness`,
-`Occlusion` and `Emission`, reading `UV`, `UV1`, `VertexColor`, `RelativePos`, `ViewDir` and
-`GeometryNormal`, `Tangent` and `Bitangent`. The depth passes run it only for cutout surfaces, with the UVs, base colour,
-alpha, vertex colour and relative position filled in, so a cutout driven by any of them cuts shadows and depth the same.
-Their `ViewDir` points toward the depth pass's own camera, a light's for shadows, and their normals keep defaults.
+Graphite/Lit is OpenPBR Surface v1.1.1. Its properties are the spec's parameters under their spec names, such as
+`base_color`, `specular_roughness` and `coat_weight`, and engine extensions under plain names: `ambient_occlusion`,
+`normal_scale`, `coat_normal_scale`, `tangent_rotation` and `alpha_cutoff`. Every texturable input `X` has a map `X_map`,
+and `geometry_normal_map`, `geometry_coat_normal_map` and `geometry_tangent_map` feed the frame. The input is `X` times
+its map wherever the map is set. A map's channel, UV set, scale and offset are part of its texture value, set with
+`Material.SetTextureChannel`, `SetTextureUVSet` and `SetTextureScaleOffset`. Transparent PBR surfaces write
+premultiplied colour with `geometry_opacity` as coverage. Its Forward, Transmission and Debug passes are tagged
+`"Output" = "Premultiplied"`, so `SurfaceSettings` blends them with premultiplied factors whichever `SurfaceBlend` is set:
+Alpha and Premultiplied as One, InverseSourceAlpha, Additive as One, One.
+
+The coat, fuzz, thin film and anisotropy are material toggles of the Forward and Debug passes, `PBR_COAT`, `PBR_FUZZ`,
+`PBR_THIN_FILM` and `PBR_ANISOTROPY`, each on while `coat_weight`, `fuzz_weight`, `thin_film_weight` or either roughness
+anisotropy is not zero, so surfaces without them pay nothing. A Surface function that raises one of those from zero
+needs its material to enable the toggle with `Material.EnableKeyword`. The global `PBR_TIER` LITE drops the thin film
+and anisotropy and lights the coat and fuzz from probes and ambient light only.
+
+`PBR_TRANSMISSION` follows `transmission_weight` (`[Transmissive]`). It is declared by the Debug pass, and the
+Transmission pass defines it: that pass refracts the view's opaque colour behind the surface through the volume whose
+far side the BackDepth pass draws, and is tagged `"ReadsWhen" = "PBR_TIER FULL"`, so LITE views copy nothing and
+refract the probes instead. See `Graphite/PBR/Transmission.glsl`.
+
+The optional GLSLPROGRAM block holds fragment code defining the model's Surface function, which may change the inputs
+before the surface is lit. Its second argument is read only: `UV`, `UV1`, `VertexColor`, `RelativePos`, `ViewDir` and
+`GeometryNormal`, `Tangent` and `Bitangent`.
+
+- PBR: `void Surface(inout PBR_Params p, Graphite_SurfaceData i)`. `PBR_Params` holds every spec parameter in camel
+  case, `baseColor` for `base_color`, with `geometryNormal` in world space and `occlusion` for `ambient_occlusion`.
+- Unlit: `void Surface(inout Unlit_Params p, Graphite_SurfaceData i)` over `BaseColor` and `Alpha`.
+
+The depth passes run it only for cutout surfaces, with the UVs, vertex colour and relative position filled in, so a
+cutout driven by any of them cuts shadows and depth the same. Their `ViewDir` points toward the depth pass's own camera,
+a light's for shadows, and their normals keep defaults.
 
 Positions in Graphite shaders are relative: world space moved so the camera sits at the origin, which keeps the
-precision of objects far from it. World means true world space. `Graphite_RelativeToWorld(s.RelativePos)` gives the
+precision of objects far from it. World means true world space. `Graphite_RelativeToWorld(i.RelativePos)` gives the
 world position, for effects fixed to the world such as a dissolve. Directions and normals are world space, as moving the
 origin changes none of them.
 
-`Normal` is world space. A tangent space normal map, such as a detail map, goes through
-`Graphite_SurfaceNormalMap(s, texel, scale)`, which places it on the mesh's frame and returns a world normal.
-`Graphite_StandardNormalMap(texel, normal, tangent, bitangent, scale)` takes any frame, for blending onto `s.Normal` or
-for triplanar mapping.
+A tangent space normal map, such as a detail map, goes through `Graphite_SurfaceNormalMap(i, texel, scale)`, which
+places it on the mesh's frame and returns a world normal. `Graphite_StandardNormalMap(texel, normal, tangent, bitangent,
+scale)` takes any frame, for blending onto `p.geometryNormal` or for triplanar mapping.
 
 ```
 Shader "MyGame/Rim"
@@ -156,16 +185,17 @@ Shader "MyGame/Rim"
         _RimPower("Rim Power", Float) = 3.0
     }
 
-    Surface "Lit"
+    Surface "PBR"
     {
         GLSLPROGRAM
         uniform vec4 _RimColor;
         uniform float _RimPower;
 
-        void Surface(inout Graphite_SurfaceData s)
+        void Surface(inout PBR_Params p, Graphite_SurfaceData i)
         {
-            float rim = 1.0 - max(dot(s.Normal, s.ViewDir), 0.0);
-            s.Emission += _RimColor.rgb * pow(rim, _RimPower);
+            float rim = 1.0 - max(dot(p.geometryNormal, i.ViewDir), 0.0);
+            p.emissionColor = _RimColor.rgb;
+            p.emissionLuminance = 500.0 * pow(rim, _RimPower);
         }
         ENDGLSL
     }
@@ -179,7 +209,7 @@ Animate with `v.Time` rather than the view's time: the forward pass runs the fun
 where the vertex was, which keeps motion vectors, TAA and motion blur right.
 
 ```
-Surface "Lit"
+Surface "PBR"
 {
     Vertex
     {
@@ -199,29 +229,30 @@ A surface model marks where this goes with a `#pragma surface_vertex` line in ea
 Graphite/Standard/StandardVertex.glsl is included.
 
 An optional `Lighting` block replaces how the surface is lit, for toon ramps and other custom shading. It defines
-either function below or both:
+either function below or both, over the closure Graphite/PBR/Closure.glsl prepares once per pixel:
 
-- `vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c)`, which every light goes through. It may call
-  `Graphite_DefaultBRDF(s, c)`.
-- `vec3 Graphite_AmbientBRDF(Graphite_Surface s, vec3 irradiance, vec3 specular)`, which ambient light goes through:
-  `irradiance` is the diffuse light from the lightmap, probes or sky, `specular` the reflections weighted by Fresnel,
-  both with occlusion applied. The default returns `irradiance * s.albedo * (1.0 - s.metallic) + specular`, and a toon
-  surface can band or tint its shadow side here.
+- `vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l)`, which every light goes through. It may call
+  `PBR_EvaluateLight(c, l)`, or `PBR_EvaluateDiffuse(c, L)` and `PBR_EvaluateSpecular(c, L)` for each lobe.
+- `vec3 Graphite_AmbientBRDF(PBR_Closure c, PBR_Indirect i)`, which ambient light goes through: `i.irradiance` is the
+  diffuse light over pi from the lightmap, probes or sky, `i.specular` the base lobe's probe radiance, both with
+  occlusion applied. The default, `PBR_EvaluateAmbient(c, i)`, returns
+  `c.diffuseAlbedo * i.irradiance + c.specularAlbedo * i.specular`, and a toon surface can band or tint its shadow
+  side here.
 
-Only the lit passes take it, Forward and Debug for `Surface "Lit"`, so parallax, decals, translucency, anisotropy and
-every surface type keep working. `Surface "Unlit"` has no lights and refuses one. Its uniforms may repeat the surface
-code's, as every material uniform is a property.
+Only the lit passes take it, Forward and Debug for `Surface "PBR"`, so decals and every surface type keep working.
+`Surface "Unlit"` has no lights and refuses one. Its uniforms may repeat the surface code's, as every material uniform
+is a property.
 
 ```
-Surface "Lit"
+Surface "PBR"
 {
     Lighting
     {
         GLSLPROGRAM
-        vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c)
+        vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l)
         {
-            float ramp = step(0.5, dot(s.normal, c.diffuseL) * 0.5 + 0.5);
-            return s.albedo * ramp * c.diffuse * c.radiance;
+            float ramp = step(0.5, dot(c.normal, l.diffuseL) * 0.5 + 0.5);
+            return c.diffuseAlbedo * ramp * l.diffuse * l.radiance;
         }
         ENDGLSL
     }
@@ -278,10 +309,12 @@ render pipeline; the shader system stores them but does not interpret them. Grap
 
 | Tag            | Values                                                        | Meaning                                                                 |
 |----------------|---------------------------------------------------------------|-------------------------------------------------------------------------|
-| `LightMode`    | `Prepass`, `Forward`, `ShadowCaster`, `ObjectId`, `Sky`, any other name a feature draws | The pass type the renderer draws the pass as                            |
+| `LightMode`    | `Prepass`, `Forward`, `ShadowCaster`, `ObjectId`, `Sky`, `Transmission`, `BackDepth`, any other name a feature draws | The pass type the renderer draws the pass as. `Transmission` replaces `Forward` for transmissive materials, `BackDepth` draws their back faces' distance along the view ray, culling front faces, unblended. `ShadowCaster` draws every material casting shadows, transparent ones included, unblended with depth written; one that lets light through discards fragments to cast a partial shadow |
 | `RenderQueue`  | an integer, 2500 and up transparent                           | The default render queue of the shader's materials                      |
 | `SceneColor`   | `Read`                                                        | The pass samples the view's opaque colour through `Graphite/SceneColor.glsl`. A view whose transparent list holds such a pass copies its colour after the opaque surfaces and the sky, with mips, before drawing its transparent surfaces |
 | `SceneDepth`   | `Read`                                                        | The pass fetches the view's opaque depth through `Graphite/SceneDepth.glsl`. A view whose transparent list holds such a pass copies its depth after the opaque surfaces before drawing its transparent surfaces |
+| `BackDepth`    | `Read`                                                        | The pass fetches the view's back depth, which `TransmissionDepthFeature` draws from the `BackDepth` passes of the view's transmissive volumes after the opaque surfaces |
+| `ReadsWhen`    | `AXIS VALUE`, a global axis and one of its values             | The pass's `SceneColor`, `SceneDepth` and `BackDepth` reads count only in views at that value, a view without the axis set taking its first |
 
 ---
 

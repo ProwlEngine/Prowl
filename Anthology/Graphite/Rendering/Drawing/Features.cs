@@ -181,7 +181,7 @@ public sealed class FeatureSet : IEnumerable<RenderFeature>
 /// </summary>
 /// <summary>
 /// Scene targets past colour and depth that a feature reads. A view allocates the ones its features read: motion as the
-/// second target, then normals and material together, each also bringing the ones before it.
+/// second target, then the reactive mask, then normals and material together, each also bringing the ones before it.
 /// </summary>
 [Flags]
 public enum SceneTargets
@@ -190,6 +190,12 @@ public enum SceneTargets
     Motion = 1,
     Normals = 2,
     Material = 4,
+
+    /// <summary>
+    /// How much of each pixel transmissive surfaces drew from what is behind them, 0 to 1, see
+    /// <see cref="FeatureContext.Reactive"/>. A view has it only on frames it draws a transmissive surface, else null.
+    /// </summary>
+    Reactive = 8,
 }
 
 public abstract class RenderFeature
@@ -222,6 +228,9 @@ public abstract class RenderFeature
 
     /// <summary>The scene targets past colour and depth the feature reads, so its views have them.</summary>
     public virtual SceneTargets SceneReads => SceneTargets.None;
+
+    /// <summary>Whether the feature measures the exposure its views take next frame, through <see cref="FeatureBuilder.WriteExposure"/>.</summary>
+    internal virtual bool MeasuresExposure => false;
 
     /// <summary>Copies settings the render thread reads. Host thread, at SubmitFrame.</summary>
     public virtual void Extract() { }
@@ -580,6 +589,22 @@ public sealed class FeatureBuilder
     /// <summary>State this feature keeps for this view, made the first time it is asked for and disposed with the view.</summary>
     public T GetViewState<T>() where T : class, new() => View.Camera.State<T>(_pass.Feature);
 
+    /// <summary>The texel a feature that measures exposure writes the view's next exposure into, as R32 float.</summary>
+    internal TextureHandle WriteExposure()
+    {
+        if (!_pass.Feature.MeasuresExposure || View.Camera.MeasuredExposure is not { } measured)
+            throw new InvalidOperationException($"{_pass.Name} writes the view's exposure without measuring it.");
+        return _graph.Write(FrameGraph.Import(measured), TextureState.Attachment);
+    }
+
+    /// <summary>The view's back depth, which <see cref="TransmissionDepthFeature"/> draws.</summary>
+    internal TextureHandle WriteBackDepth()
+    {
+        if (View.Camera.BackDepth is not { } target)
+            throw new InvalidOperationException($"{_pass.Name} draws the view's back depth, which the view does not use.");
+        return _graph.Write(FrameGraph.Import(target), TextureState.Attachment);
+    }
+
     /// <summary>Hands a texture to later features of the view by name.</summary>
     public void Publish(string name, TextureHandle texture) => View.Published[name] = texture;
 
@@ -649,11 +674,18 @@ public sealed class FeatureContext
     /// <summary>How far each opaque surface moved across the screen since last frame, in uv, when the feature reads the scene and declares it in SceneReads.</summary>
     public Texture? Motion => SceneTarget(1);
 
-    /// <summary>The scene's octahedral world normals, when the feature reads the scene and declares them in SceneReads.</summary>
-    public Texture? Normals => SceneTarget(2);
+    /// <summary>
+    /// How much of each pixel shows what transmissive surfaces refract from behind them, 0 to 1 in R8, when the feature
+    /// reads the scene, declares it in SceneReads and the view draws a transmissive surface this frame. Their motion does
+    /// not move that, so temporal effects trust history less there.
+    /// </summary>
+    public Texture? Reactive => SceneTarget(2);
 
-    /// <summary>The scene's roughness and metallic, when the feature reads the scene and declares them in SceneReads.</summary>
-    public Texture? Material => SceneTarget(3);
+    /// <summary>The scene's octahedral world normals, when the feature reads the scene and declares them in SceneReads.</summary>
+    public Texture? Normals => SceneTarget(3);
+
+    /// <summary>The scene's top layer specular reflectance in rgb and perceptual roughness in a, when the feature reads the scene and declares them in SceneReads.</summary>
+    public Texture? Material => SceneTarget(4);
 
     private Texture? SceneTarget(int index) => Scene is { } scene && index < scene.ColorTextures.Length ? scene.ColorTextures[index] : null;
 
@@ -1170,10 +1202,48 @@ public sealed class SceneDepthFeature : RenderFeature
     }
 }
 
+/// <summary>
+/// Draws the back faces of the view's transmissive volumes, their <see cref="PassType.BackDepth"/> pass, into its back
+/// depth after the opaque surfaces, for Transmission passes tagged "BackDepth" = "Read" to measure the path through
+/// them. Like <see cref="DrawPassFeature"/> it draws one pass of the visible renderables, onto a target of its own.
+/// Active once such a pass was in the view's transparent list, adding nothing on frames without one.
+/// </summary>
+public sealed class TransmissionDepthFeature : RenderFeature
+{
+    private sealed class State
+    {
+        public TextureHandle Target;
+    }
+
+    internal TransmissionDepthFeature() { }
+
+    public override RenderSlot Slot => RenderSlot.OpaqueColor;
+    public override int Order { get; set; } = 1;
+    public override string? ExclusiveGroup => "BackDepth";
+    public override ViewKinds RunsOn => ViewKinds.All;
+
+    internal override bool Skips(ViewGraph view) => !view.Probing && !view.Camera.BackDepthUsed;
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
+    {
+        builder.DrawsPass(PassType.BackDepth);
+        if (!builder.ViewGraph.Probing)
+            builder.GetViewState<State>().Target = builder.WriteBackDepth();
+    }
+
+    public override void Render(FeatureContext context)
+    {
+        RenderTexture target = context.Get(context.GetViewState<State>().Target);
+        context.Command.SetFramebuffer(target.Framebuffer, TargetLoadStoreOps.Clear(new Color(0f, 0f, 0f, 0f), 0f));
+        context.Command.SetFullViewport();
+        context.DrawPass(PassType.BackDepth);
+    }
+}
+
 /// <summary>Picks a view's features each frame: built in, world and view features, filtered and ordered.</summary>
 internal static class FeatureSelection
 {
-    public static readonly RenderFeature[] BuiltIn = [new SceneClearFeature(), new CascadeFeature(), new PrepassFeature(), new OpaqueFeature(), new SkyFeature(), new SceneColorFeature(), new SceneDepthFeature(), new TransparentFeature(), new PresentFeature()];
+    public static readonly RenderFeature[] BuiltIn = [new SceneClearFeature(), new CascadeFeature(), new PrepassFeature(), new OpaqueFeature(), new SkyFeature(), new SceneColorFeature(), new SceneDepthFeature(), new TransmissionDepthFeature(), new TransparentFeature(), new PresentFeature()];
 
     static FeatureSelection()
     {
@@ -1447,9 +1517,10 @@ public sealed class DrawItemSink
 
         void Into(DrawList list, PassType pass, bool sorted)
         {
-            if (!_world.Programs.TryGet(material, draw, pass, out ushort program))
+            if (!_world.Programs.TryGet(material, draw.Sides?.Front ?? draw, pass, out ushort program))
                 return;
             BucketSet.TransparentItem entry = Next();
+            entry.BackProgram = draw.Sides is { } sides && _world.Programs.TryGet(material, sides.Back, pass, out ushort back, backFaces: true) ? back : -1;
             entry.Provided = true;
             entry.Object = (int)objectIndex;
             entry.Program = program;
@@ -1470,7 +1541,7 @@ public sealed class DrawItemSink
                 Counts.Add((entry, list, source, offset));
         }
 
-        // The rules renderables' buckets follow: built in passes and feature passes skip shadow only items, the shadow pass draws only opaque casters
+        // The rules renderables' buckets follow: built in passes and feature passes skip shadow only items, the shadow pass draws every caster unsorted
         if (!shadowsOnly && !_shadowView)
         {
             if (draw.Transparent)
@@ -1485,11 +1556,10 @@ public sealed class DrawItemSink
         }
         foreach ((PassType type, DrawList list) in _camera.PassLists)
         {
-            bool skip = type == PassType.ShadowCaster
-                ? (flags & RenderableFlags.CastShadows) == 0 || !draw.CastShadows || draw.Transparent
-                : shadowsOnly;
+            bool shadows = type == PassType.ShadowCaster;
+            bool skip = shadows ? (flags & RenderableFlags.CastShadows) == 0 || !draw.CastShadows : shadowsOnly;
             if (!skip)
-                Into(list, type, sorted: draw.Transparent);
+                Into(list, type, sorted: draw.Transparent && !shadows);
         }
     }
 
@@ -1540,9 +1610,9 @@ internal sealed class ProviderPrograms(DrawPrograms programs)
     private readonly Dictionary<(Material Material, string Pass), (MaterialDraw Draw, ushort Program, bool Has)> _entries = new();
     private readonly List<(Material, string)> _stale = new();
 
-    public bool TryGet(Material material, MaterialDraw draw, PassType pass, out ushort program)
+    public bool TryGet(Material material, MaterialDraw draw, PassType pass, out ushort program, bool backFaces = false)
     {
-        (Material, string) key = (material, pass.Name);
+        (Material, string) key = (material, backFaces ? pass.Name + " back faces" : pass.Name);
         if (_entries.TryGetValue(key, out (MaterialDraw Draw, ushort Program, bool Has) entry))
         {
             if (ReferenceEquals(entry.Draw, draw))

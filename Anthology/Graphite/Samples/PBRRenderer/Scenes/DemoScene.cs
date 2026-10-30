@@ -33,6 +33,9 @@ internal abstract class DemoScene : IDisposable
 
     public abstract float StartPitch { get; }
 
+    /// <summary>The exposure the camera starts from before auto exposure has measured the scene.</summary>
+    public virtual float StartEV100 => 14f;
+
     public virtual string Status => "";
 
     public virtual string Controls => "";
@@ -43,10 +46,10 @@ internal abstract class DemoScene : IDisposable
     {
     }
 
-    protected Material Lit(Float3 color, float metallic = 0f, float roughness = 0.6f, Float3 emission = default, float grid = 0f)
+    protected Material Pbr(Float3 color, float metallic = 0f, float roughness = 0.6f, Float3 emission = default, float grid = 0f, bool instanceColor = false)
     {
-        Material material = Demo.CreateLit(color, metallic, roughness, emission, grid);
-        material.Name = $"Lit {_materials.Count}";
+        Material material = Demo.CreatePbr(color, metallic, roughness, emission, grid, instanceColor);
+        material.Name = $"PBR {_materials.Count}";
         _materials.Add(material);
         return material;
     }
