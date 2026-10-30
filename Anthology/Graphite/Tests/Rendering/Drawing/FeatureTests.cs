@@ -39,7 +39,7 @@ public sealed class FeatureTests : IDisposable
                     #include "Graphite/Core.glsl"
                     uniform vec4 _Color;
                     layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(_Color.rgb, 1.0); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0); outColor = vec4(_Color.rgb, 1.0); }
                 }
                 ENDGLSL
             }
@@ -65,7 +65,7 @@ public sealed class FeatureTests : IDisposable
                     #include "Graphite/Passes.glsl"
                     #include "Graphite/Core.glsl"
                     layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(1.0, 0.0, 0.0, 1.0); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0); outColor = vec4(1.0, 0.0, 0.0, 1.0); }
                 }
                 ENDGLSL
             }
@@ -180,7 +180,7 @@ public sealed class FeatureTests : IDisposable
                     void main()
                     {
                         outColor = vec4(Graphite_Object().custom0.rgb, 1.0);
-                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
                     }
                 }
                 ENDGLSL
@@ -216,7 +216,7 @@ public sealed class FeatureTests : IDisposable
                     void main()
                     {
                         outColor = vec4(vColor.rgb, 1.0);
-                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
                     }
                 }
                 ENDGLSL
@@ -430,7 +430,7 @@ public sealed class FeatureTests : IDisposable
                 {
                     GLSLPROGRAM
                     uniform float _Blue;
-                    void Surface(inout Graphite_SurfaceData s) { s.BaseColor = vec3(0.0, s.BaseColor.g * 0.5, _Blue); }
+                    void Surface(inout Unlit_Params p, Graphite_SurfaceData i) { p.BaseColor = vec3(0.0, p.BaseColor.g * 0.5, _Blue); }
                     ENDGLSL
                 }
             }
@@ -456,7 +456,7 @@ public sealed class FeatureTests : IDisposable
                 Surface "Unlit"
                 {
                     GLSLPROGRAM
-                    void Surface(inout Graphite_SurfaceData s) { s.BaseColor = vec3(0.0, s.BaseColor.g * 0.5, 1.0); }
+                    void Surface(inout Unlit_Params p, Graphite_SurfaceData i) { p.BaseColor = vec3(0.0, p.BaseColor.g * 0.5, 1.0); }
                     ENDGLSL
                 }
             }
@@ -1222,7 +1222,7 @@ public sealed class FeatureTests : IDisposable
         ScreenSpaceReflections ssr = new(_renderer);
         _world.Features.Add(ssr);
         Frame(View());
-        Assert.Equal(4, Targets());
+        Assert.Equal(5, Targets());
 
         _world.Features.Remove(ssr);
         _world.Features.Remove(taa);
@@ -2187,7 +2187,7 @@ public sealed class FeatureTests : IDisposable
         Named world = new("world", RenderSlot.Opaque);
         Named early = new("early", RenderSlot.Opaque, -1);
         Named post = new("post", RenderSlot.HdrPost);
-        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "early", "OpaqueFeature", "world", "view", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransparentFeature", "post", "PresentFeature"], Select([post, world, early], [view]));
+        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "early", "OpaqueFeature", "world", "view", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransmissionDepthFeature", "TransparentFeature", "post", "PresentFeature"], Select([post, world, early], [view]));
     }
 
     [Fact]
@@ -2213,8 +2213,8 @@ public sealed class FeatureTests : IDisposable
         Named probes = new("probes", RenderSlot.HdrPost, runsOn: ViewKinds.ReflectionProbe);
         Named off = new("off", RenderSlot.HdrPost, runsOn: ViewKinds.All) { Enabled = false };
 
-        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransparentFeature", "cameras", "PresentFeature"], Select([cameras, probes, off], []));
-        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransparentFeature", "probes", "PresentFeature"], Select([cameras, probes, off], [], ViewKind.ReflectionProbe));
+        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransmissionDepthFeature", "TransparentFeature", "cameras", "PresentFeature"], Select([cameras, probes, off], []));
+        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransmissionDepthFeature", "TransparentFeature", "probes", "PresentFeature"], Select([cameras, probes, off], [], ViewKind.ReflectionProbe));
     }
 
     // Takes a built in frame feature's group and provides what its consumers read

@@ -231,15 +231,19 @@ public sealed class BucketTests : IDisposable
         Assert.Equal(4, forward.InstanceCount);
     }
 
+    // A transparent material only casts from the buckets, its one bucket the shadow pass's
     [Fact]
     public void TransparentMaterials_StayOutOfTheOpaqueBuckets()
     {
         Material glass = Material();
         glass.RenderQueue = 3000;
-        Add(_triangle, glass);
+        RenderableHandle handle = Add(_triangle, glass);
 
         Assert.Equal(0, Frame(Forward).CommandCount);
-        Assert.Equal(0, _buckets.BucketCount);
+        Assert.Equal(0, Frame(Prepass).CommandCount);
+        DrawList shadows = Frame(Shadows);
+        Assert.Equal(new uint[] { (uint)handle.Index }, shadows.Instances[..shadows.InstanceCount]);
+        Assert.Equal(1, _buckets.BucketCount);
     }
 
     [Fact]
@@ -269,6 +273,26 @@ public sealed class BucketTests : IDisposable
         list = Frame(Transparent);
         Assert.Equal(3, list.CommandCount);
         Assert.Single(list.Calls);
+    }
+
+    // A transparent surface drawn on both sides without depth writes draws its back faces, then its front faces, so the
+    // far side of a closed mesh never blends over its near side
+    [Fact]
+    public void TwoSidedTransparentItems_DrawBackFacesFirst()
+    {
+        Material glass = Material();
+        glass.Surface = new SurfaceSettings(SurfaceType.Transparent, Cull: SurfaceCull.Off);
+        RenderableHandle handle = Add(_triangle, glass);
+
+        DrawList list = Frame(Transparent);
+        Assert.Equal(2, list.CommandCount);
+        Assert.Equal(new uint[] { (uint)handle.Index, (uint)handle.Index }, Instances(list));
+        Assert.Equal(2, list.Calls.Count);
+        Assert.Equal(FaceCullMode.Front, _programs[list.Calls[0].Program].StateOverride!.Raster.CullMode);
+        Assert.Equal(FaceCullMode.Back, _programs[list.Calls[1].Program].StateOverride!.Raster.CullMode);
+
+        glass.Surface = new SurfaceSettings(SurfaceType.Transparent);
+        Assert.Equal(1, Frame(Transparent).CommandCount);
     }
 
     [Fact]

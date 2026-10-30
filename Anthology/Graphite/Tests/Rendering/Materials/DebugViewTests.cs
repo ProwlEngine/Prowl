@@ -31,10 +31,15 @@ public sealed class DebugViewTests : IDisposable
 
     private static readonly string[] s_modes = ["UNLIT", "ALBEDO", "NORMALS", "ROUGHNESS", "METALLIC", "AO", "EMISSION", "LIGHTING", "CASCADES", "LIGHTMAP_DENSITY"];
 
+    // The PBR model's own views follow the shared ones
+    private static readonly string[] s_pbrModes = [.. s_modes, "DIFFUSE", "SPECULAR", "SPECULAR_ALBEDO", "THROUGHPUT", "DIRECT", "INDIRECT", "FURNACE", "COAT", "FUZZ", "THIN_FILM", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS"];
+
+    private static string[] ModesOf(string shader) => shader == "Lit" ? s_pbrModes : s_modes;
+
     public static IEnumerable<object[]> Modes()
     {
         foreach (string shader in new[] { "Lit", "Unlit" })
-            foreach (string mode in s_modes)
+            foreach (string mode in ModesOf(shader))
                 yield return [shader, mode];
     }
 
@@ -46,21 +51,23 @@ public sealed class DebugViewTests : IDisposable
             ShaderDefinition definition = Load(name);
             VariantSpace axis = _compiler.GetAxes(Pass(definition, "Debug")).Single(a => a.Name == Shader.DebugAxis);
             Assert.Equal(VariantScope.Global, axis.Scope);
-            Assert.Equal(s_modes, axis.Values);
+            Assert.Equal(ModesOf(name), axis.Values);
             foreach (ShaderPass pass in definition.Passes!.Where(p => p.Name != "Debug"))
                 Assert.DoesNotContain(_compiler.GetAxes(pass), a => a.Name == Shader.DebugAxis);
         }
     }
 
+    // PBR's Debug pass also declares PBR_TRANSMISSION, standing in for its Transmission pass as well
     [Fact]
     public void TheDebugPass_HasTheForwardPassesMaterialAxes()
     {
         foreach (string name in new[] { "Lit", "Unlit" })
         {
             ShaderDefinition definition = Load(name);
+            IEnumerable<string> forward = _compiler.GetAxes(Pass(definition, "Forward")).Select(a => a.Name);
             Assert.Equal(
-                _compiler.GetAxes(Pass(definition, "Forward")).Select(a => a.Name),
-                _compiler.GetAxes(Pass(definition, "Debug")).Where(a => a.Name != Shader.DebugAxis).Select(a => a.Name));
+                name == "Lit" ? forward.Append("PBR_TRANSMISSION").Order(StringComparer.Ordinal) : forward.Order(StringComparer.Ordinal),
+                _compiler.GetAxes(Pass(definition, "Debug")).Where(a => a.Name != Shader.DebugAxis).Select(a => a.Name).Order(StringComparer.Ordinal));
         }
     }
 

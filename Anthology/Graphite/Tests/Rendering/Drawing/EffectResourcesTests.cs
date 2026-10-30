@@ -33,6 +33,6 @@ public sealed class EffectResourcesTests : IDisposable
         _ = new TemporalAntiAliasing(_renderer);
         _ = new TemporalAntiAliasing(_renderer);
 
-        Assert.Equal(built + 2, _renderer.Effects.ProgramCount);
+        Assert.Equal(built + 3, _renderer.Effects.ProgramCount);
     }
 }

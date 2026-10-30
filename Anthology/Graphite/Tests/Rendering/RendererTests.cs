@@ -55,7 +55,7 @@ public sealed class RendererTests : IDisposable
                     #include "Graphite/Core.glsl"
                     uniform vec4 _Color;
                     layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = _Color; }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0); outColor = _Color; }
                 }
                 ENDGLSL
             }

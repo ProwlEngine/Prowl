@@ -42,7 +42,7 @@ public sealed class SceneColorTests : IDisposable
                     layout(location = 0) out vec4 outColor;
                     void main()
                     {
-                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
                         outColor = vec4(0.5 + vWorld.x / 8.0, 0.5 + vWorld.y / 8.0, 0.25, 1.0);
                     }
                 }

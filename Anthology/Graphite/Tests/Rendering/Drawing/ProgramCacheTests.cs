@@ -70,7 +70,7 @@ public sealed class ProgramCacheTests : IDisposable
                 {
                     #include "Graphite/Passes.glsl"
                     layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(1.0); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0); outColor = vec4(1.0); }
                 }
                 ENDGLSL
             }
@@ -145,6 +145,26 @@ public sealed class ProgramCacheTests : IDisposable
         GraphicsProgram program = WaitFor(plain);
         Assert.Same(program, Get(plain));
         Assert.Equal(1, _compiler.Compiles);
+    }
+
+    [Fact]
+    public void AVariantAskedForOnce_FinishesThroughAdvance()
+    {
+        _compiler.GatedAxis = "_TINT";
+        _compiler.GatedValue = "false";
+        ushort plain = Program();
+        Assert.Null(Get(plain));
+        Assert.Equal(1, _cache.Compiling);
+
+        _compiler.Gate.Set();
+        Stopwatch watch = Stopwatch.StartNew();
+        while (_cache.Compiling > 0 && watch.Elapsed < TimeSpan.FromSeconds(20))
+        {
+            _cache.Advance();
+            Thread.Sleep(1);
+        }
+        Assert.Equal(0, _cache.Compiling);
+        Assert.True(_cache.Ready(plain, false, _globals.Renderer.KeywordSnapshot));
     }
 
     [Fact]
@@ -319,5 +339,91 @@ public sealed class ProgramCacheTests : IDisposable
         Assert.Null(Get(broken));
         Assert.Single(_reports);
         Assert.Contains("broken variant", _reports[0]);
+    }
+
+    private const string UnusedSource = """
+        Shader "Test/Unused"
+        {
+            Pass
+            {
+                Tags { "LightMode" = "Forward" "UnusedWhen" = "_TIER LOW _EXTRA" }
+                GLSLPROGRAM
+                Shared
+                {
+                    #pragma variant global _TIER HIGH LOW
+                    #pragma variant _EXTRA
+                }
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
+                }
+                Fragment
+                {
+                    #include "Graphite/Passes.glsl"
+                    layout(location = 0) out vec4 outColor;
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0); outColor = vec4(1.0); }
+                }
+                ENDGLSL
+            }
+            Pass
+            {
+                Tags { "LightMode" = "ShadowCaster" "UnusedWhen" = "_EXTRA false _OTHER" }
+                GLSLPROGRAM
+                Shared
+                {
+                    #pragma variant _EXTRA
+                    #pragma variant _OTHER
+                }
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
+                }
+                Fragment
+                {
+                    void main() { }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    // Axes a pass's UnusedWhen tag names compile once while its condition holds, whether the condition is global or not
+    [Fact]
+    public void AxesUnusedUnderACondition_ShareOneVariant()
+    {
+        Shader shader = new(ShaderParser.Parse(UnusedSource), _compiler);
+        ushort Draw(PassType pass, params (string Axis, string Value)[] keywords)
+        {
+            Material material = _materials.Create(shader);
+            foreach ((string axis, string value) in keywords)
+                material.SetKeyword(axis, value);
+            _materials.Extract(new List<Material>());
+            Assert.True(_programs.TryGet(material.Draw, pass, out ushort id));
+            return id;
+        }
+        void Wait(ushort id, Dictionary<string, string> globals)
+        {
+            Stopwatch watch = Stopwatch.StartNew();
+            while (!_cache.Ready(id, false, globals) && watch.Elapsed < TimeSpan.FromSeconds(20))
+                Thread.Sleep(1);
+            Assert.True(_cache.Ready(id, false, globals));
+        }
+
+        _compiler.Gate.Set();
+        Dictionary<string, string> low = new() { ["_TIER"] = "LOW" };
+        Dictionary<string, string> high = new() { ["_TIER"] = "HIGH" };
+        ushort plain = Draw(PassType.Forward);
+        ushort extra = Draw(PassType.Forward, ("_EXTRA", "true"));
+        Wait(plain, low);
+        Wait(extra, low);
+        Assert.Equal(1, _compiler.Compiles);
+        Wait(plain, high);
+        Wait(extra, high);
+        Assert.Equal(3, _compiler.Compiles);
+
+        Assert.Equal(Draw(PassType.ShadowCaster), Draw(PassType.ShadowCaster, ("_OTHER", "true")));
+        Assert.NotEqual(Draw(PassType.ShadowCaster, ("_EXTRA", "true")), Draw(PassType.ShadowCaster, ("_EXTRA", "true"), ("_OTHER", "true")));
     }
 }
