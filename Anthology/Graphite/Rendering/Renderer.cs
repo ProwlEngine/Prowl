@@ -333,6 +333,7 @@ public sealed class Renderer : IDisposable
         if (_options.SmallestProbeMip is < 1 or > 2048 || !uint.IsPow2(_options.SmallestProbeMip))
             throw new ArgumentException($"SmallestProbeMip is {_options.SmallestProbeMip}, it must be a power of two from 1 to 2048.", nameof(options));
         InternalShaders.Register();
+        _fallbackShader = CompileFallback();
 
         Textures = new RendererTextures(device) { Reporter = Report };
         _uploader = new Uploader(device, InternalShaders.Compute(device, compiler, "Internal/Scatter.glsl"));
@@ -452,18 +453,57 @@ public sealed class Renderer : IDisposable
         return cube;
     }
 
-    /// <summary>Loads a shader through the renderer's compiler. Any thread.</summary>
-    /// <summary>A shader for materials. A Fallback naming "Graphite/Fallback" draws flat grey in its place while it compiles.</summary>
+    /// <summary>
+    /// A shader for materials, loaded through the renderer's compiler. A shader naming no Fallback, or "Graphite/Fallback",
+    /// draws flat grey in its place while it compiles. Any thread.
+    /// </summary>
     public Shader LoadShader(ShaderDefinition definition)
     {
         Shader shader = new(definition, _compiler);
-        if (definition.Fallback == FallbackShaderName)
-            shader.Fallback = _fallbackShader ??= new Shader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Fallback.shader")!), _compiler);
+        if (string.IsNullOrEmpty(definition.Fallback) || definition.Fallback == FallbackShaderName)
+            shader.Fallback = _fallbackShader;
         return shader;
     }
 
     public const string FallbackShaderName = "Graphite/Fallback";
-    private Shader? _fallbackShader;
+    private readonly Shader _fallbackShader;
+
+    // The grey stand in compiles before the first frame, so every frame has something to draw
+    private Shader CompileFallback()
+    {
+        Shader fallback = new(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Fallback.shader")!), _compiler);
+        if (_compiler == null || _options.Compile == CompilePolicy.BakedOnly)
+            return fallback;
+        foreach (ShaderPass pass in fallback.Definition.Passes ?? [])
+            pass.Variants(_compiler, Device.BackendType).Request(0, CompilePolicy.Sync, CompilePriority.Fallback, out _, out _);
+        return fallback;
+    }
+
+    /// <summary>
+    /// Starts compiling the variants a material draws with at background priority, so they are ready before it first
+    /// draws. Global axes take their value from the keywords, else their first value. Debug views compile on demand. Host thread.
+    /// </summary>
+    public void Prewarm(Material material, IReadOnlyDictionary<string, string>? keywords = null)
+    {
+        if (_compiler == null || _options.Compile == CompilePolicy.BakedOnly)
+            return;
+        MaterialDraw draw = material.SnapshotDraw();
+        Shader shader = draw.Shader;
+        Keyword[] combo = new Keyword[draw.Keywords.Length + shader.GlobalAxes.Count];
+        draw.Keywords.CopyTo(combo, 0);
+        for (int i = 0; i < shader.GlobalAxes.Count; i++)
+        {
+            VariantSpace axis = shader.GlobalAxes[i];
+            combo[draw.Keywords.Length + i] = new Keyword(axis.Name, keywords?.GetValueOrDefault(axis.Name) ?? axis.Values[0]);
+        }
+        foreach (ShaderPass pass in shader.Definition.Passes ?? [])
+        {
+            if (ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Debug.Name))
+                continue;
+            PassVariants variants = pass.Variants(_compiler, Device.BackendType);
+            variants.Request(variants.KeyOf(combo), CompilePolicy.Async, CompilePriority.Background, out _, out _);
+        }
+    }
 
     /// <summary>
     /// Extracts every change since the last frame and queues the frame. Waits for the render thread to finish the
@@ -614,8 +654,11 @@ public sealed class Renderer : IDisposable
     /// <summary>The counts of the last frame recorded. Any thread.</summary>
     public FrameStats LastFrameStats => _frame.LastStats;
 
-    /// <summary>Shader variants compiling in the background now. Draws needing one skip, or use a ready variant of the same pass, until it is done. Any thread.</summary>
+    /// <summary>Shader variants a draw waits on. Draws needing one use a stand in, or skip, until it is done. Any thread.</summary>
     public int ShaderCompilesPending => _frame.Programs.Compiling;
+
+    /// <summary>Shader variants compiling ahead of use, like debug views. Any thread.</summary>
+    public int ShaderCompilesBackground => _frame.Programs.Background;
 
     // Hands finished and failed readbacks to their callbacks. Host thread, render thread idle.
     private void RaiseReadbacks()

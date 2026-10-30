@@ -55,8 +55,8 @@ public sealed class GlslCompilerOptions
     public Dictionary<string, string> Defines = [];
 
     /// <summary>
-    /// A folder compiled SPIR-V is kept in across runs, keyed by the stage's full source and settings, so a variant
-    /// compiles once per machine. Null keeps compiled stages in memory only.
+    /// A folder finished variants are kept in across runs, keyed by the pass, the variant, the included files and the
+    /// settings, so a variant compiles once per machine and a cached one skips the compiler entirely. Null keeps nothing.
     /// </summary>
     public string? CacheDirectory;
 }
@@ -98,7 +98,10 @@ public sealed class GlslProgram
 public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
 {
     private readonly GlslCompilerOptions _options;
-    private readonly ConcurrentDictionary<(string File, string Source), (VariantSpace[] Axes, ShaderGlobal[] Globals)> _pragmas = new();
+    private readonly ConcurrentDictionary<(string File, string Source), (VariantSpace[] Axes, ShaderGlobal[] Globals, string Includes)> _pragmas = new();
+
+    // Variants whose preprocessed stages match compile once
+    private readonly ConcurrentDictionary<string, Lazy<GlslProgram>> _aliases = new(StringComparer.Ordinal);
     private int _sessionVersion;
     private bool _disposed;
 
@@ -123,6 +126,7 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
     public void Invalidate()
     {
         _pragmas.Clear();
+        _aliases.Clear();
         Interlocked.Increment(ref _sessionVersion);
     }
 
@@ -138,9 +142,7 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
     /// <inheritdoc/>
     public ShaderDescription Compile(ShaderPass pass, Keyword[] combo, GraphicsBackend backend)
     {
-        if (backend != GraphicsBackend.Vulkan)
-            throw new NotSupportedException($"The GLSL compiler targets Vulkan only, not {backend}.");
-
+        RequireVulkan(backend);
         return CompileProgram(pass, combo).Description;
     }
 
@@ -148,29 +150,48 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
     /// <inheritdoc/>
     public ComputeDescription CompileCompute(ShaderPass pass, Keyword[] combo, GraphicsBackend backend)
     {
-        if (backend != GraphicsBackend.Vulkan)
-            throw new NotSupportedException($"The GLSL compiler targets Vulkan only, not {backend}.");
-
+        RequireVulkan(backend);
         return CompileProgram(pass, combo).ToCompute();
     }
 
 
     /// <summary>
-    /// Compiles one variant of a pass, keeping the compute thread group size and the warnings.
+    /// Compiles one variant of a pass, keeping the compute thread group size and the warnings. Variants whose preprocessed
+    /// stages match compile once.
     /// </summary>
     public GlslProgram CompileProgram(ShaderPass pass, ReadOnlySpan<Keyword> combo)
     {
+        string key = CacheKey(pass, combo);
+        if (Load(key) is { } cached)
+            return cached;
+
         StringBuilder warnings = new();
         (List<GlslStageSource> stages, GlslProgramLayout layout) = Prepare(pass, combo, warnings);
-
-        string file = FileName(pass);
-        Dictionary<string, string> defines = Defines(pass, combo);
-        List<(GlslStage, byte[])> compiled = [];
+        List<(GlslStage Stage, string Source)> sources = [];
+        StringBuilder text = new();
         foreach (GlslStageSource stage in stages)
-            compiled.Add((stage.Stage, Run(stage.Rewrite(layout), stage.Stage, file, defines, preprocess: false, warnings)));
+        {
+            string source = stage.Rewrite(layout);
+            sources.Add((stage.Stage, source));
+            text.Append(stage.Stage).Append('|').Append(source).Append('|');
+        }
+        string file = FileName(pass);
+        Lazy<GlslProgram> program = _aliases.GetOrAdd(Hash(text.ToString()), _ => new Lazy<GlslProgram>(() =>
+        {
+            List<(GlslStage, byte[])> compiled = [];
+            foreach ((GlslStage stage, string source) in sources)
+                compiled.Add((stage, Invoke(source, stage, file, [], preprocess: false, warnings)));
+            (ShaderDescription description, uint x, uint y, uint z) = SpirvReflector.Reflect(compiled, layout);
+            return new GlslProgram { Description = description, ThreadGroupSize = (x, y, z), Warnings = warnings.ToString() };
+        }));
+        return Store(key, program.Value);
+    }
 
-        (ShaderDescription description, uint x, uint y, uint z) = SpirvReflector.Reflect(compiled, layout);
-        return new GlslProgram { Description = description, ThreadGroupSize = (x, y, z), Warnings = warnings.ToString() };
+
+    private static void RequireVulkan(GraphicsBackend backend)
+    {
+        if (backend != GraphicsBackend.Vulkan)
+            throw new NotSupportedException($"The GLSL compiler targets Vulkan only, not {backend}.");
     }
 
 
@@ -201,7 +222,7 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
         {
             string source = StageSource(file, shared, section);
             Dictionary<string, string> stageDefines = new(defines) { [StageDefine(stage)] = "1" };
-            string preprocessed = Encoding.UTF8.GetString(Run(source, stage, file, stageDefines, preprocess: true, warnings));
+            string preprocessed = Encoding.UTF8.GetString(Invoke(source, stage, file, stageDefines, preprocess: true, warnings));
             stages.Add(new GlslStageSource(stage, preprocessed));
         }
 
@@ -298,7 +319,8 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
     private VariantSpace[] Axes(ShaderPass pass) => Pragmas(pass).Axes;
 
 
-    private (VariantSpace[] Axes, ShaderGlobal[] Globals) Pragmas(ShaderPass pass)
+    // The pass's axes and globals, and a hash of every file it can include
+    private (VariantSpace[] Axes, ShaderGlobal[] Globals, string Includes) Pragmas(ShaderPass pass)
     {
         string file = FileName(pass);
         return _pragmas.GetOrAdd((file, pass.Source), _ =>
@@ -306,9 +328,16 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
             List<VariantSpace> axes = [];
             List<ShaderGlobal> globals = [];
             HashSet<string> visited = new(StringComparer.Ordinal);
+            StringBuilder included = new();
+            string? Include(string name, string from)
+            {
+                string? text = Resolve(name, from);
+                included.Append(name).Append('|').Append(text).Append('|');
+                return text;
+            }
             foreach (GlslSection section in GlslSection.Split(pass.Source, file, pass.SourceLine))
-                GlslPragmas.Collect(section.Body, file, axes, globals, visited, (name, from) => Resolve(name, from));
-            return ([.. axes], [.. globals]);
+                GlslPragmas.Collect(section.Body, file, axes, globals, visited, Include);
+            return ([.. axes], [.. globals], Hash(included.ToString()));
         });
     }
 
@@ -324,59 +353,69 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
 
     private static readonly System.Text.RegularExpressions.Regex s_resourceSet = new(@"#\s*pragma\s+resource_set\s+(\d+)");
 
-    private readonly ConcurrentDictionary<string, byte[]> _spirv = new(StringComparer.Ordinal);
+    // Bump when the compile settings below change in a way the key does not show
+    private const string CacheSalt = "graphite-prism-3";
 
-    // Bump when the compile settings below change in a way the source does not show
-    private const string CacheSalt = "graphite-prism-2";
+    private const uint CacheMagic = 0x47505643;
 
-    private byte[] Run(string source, GlslStage stage, string file, Dictionary<string, string> defines, bool preprocess, StringBuilder warnings)
+    private string CacheKey(ShaderPass pass, ReadOnlySpan<Keyword> combo)
     {
-        if (preprocess)
-            return Invoke(source, stage, file, defines, preprocess, warnings);
-
-        string key = CacheKey(source, stage, defines);
-        if (_spirv.TryGetValue(key, out byte[]? cached))
-            return cached;
-
-        string? path = _options.CacheDirectory is { Length: > 0 } directory ? Path.Combine(directory, key + ".spv") : null;
-        if (path != null && File.Exists(path))
-        {
-            try
-            {
-                byte[] stored = File.ReadAllBytes(path);
-                if (stored.Length > 0 && stored.Length % 4 == 0)
-                    return _spirv[key] = stored;
-            }
-            catch (IOException) { }
-        }
-
-        byte[] bytes = Invoke(source, stage, file, defines, preprocess, warnings);
-        _spirv[key] = bytes;
-        if (path != null)
-        {
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                string temporary = $"{path}.{Environment.CurrentManagedThreadId}.tmp";
-                File.WriteAllBytes(temporary, bytes);
-                File.Move(temporary, path, overwrite: true);
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
-        return bytes;
-    }
-
-    private string CacheKey(string source, GlslStage stage, Dictionary<string, string> defines)
-    {
-        StringBuilder text = new(source.Length + 128);
-        text.Append(CacheSalt).Append('|').Append(stage).Append('|').Append(_options.Optimize);
+        StringBuilder text = new(pass.Source.Length + 256);
+        text.Append(CacheSalt).Append('|').Append(_options.Optimize).Append('|').Append(FileName(pass)).Append('|').Append(pass.SourceLine).Append('|').Append(Pragmas(pass).Includes);
+        Dictionary<string, string> defines = Defines(pass, combo);
         List<string> names = [.. defines.Keys];
         names.Sort(StringComparer.Ordinal);
         foreach (string name in names)
             text.Append('|').Append(name).Append('=').Append(defines[name]);
-        text.Append('|').Append(source);
-        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
+        text.Append('|').Append(pass.Fingerprint);
+        return Hash(text.ToString());
+    }
+
+    private static string Hash(string text) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+
+    private string? CachePath(string key) => _options.CacheDirectory is { Length: > 0 } directory ? Path.Combine(directory, key + ".variant") : null;
+
+    private GlslProgram? Load(string key)
+    {
+        if (CachePath(key) is not { } path || !File.Exists(path))
+            return null;
+        try
+        {
+            using FileStream stream = File.OpenRead(path);
+            using BinaryReader reader = new(stream, Encoding.UTF8);
+            if (reader.ReadUInt32() != CacheMagic)
+                return null;
+            ShaderDescription description = BakedVariants.ReadDescription(reader);
+            return new GlslProgram { Description = description, ThreadGroupSize = (reader.ReadUInt32(), reader.ReadUInt32(), reader.ReadUInt32()) };
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private GlslProgram Store(string key, GlslProgram program)
+    {
+        if (CachePath(key) is not { } path)
+            return program;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            string temporary = $"{path}.{Environment.CurrentManagedThreadId}.tmp";
+            using (FileStream stream = File.Create(temporary))
+            using (BinaryWriter writer = new(stream, Encoding.UTF8))
+            {
+                writer.Write(CacheMagic);
+                BakedVariants.WriteDescription(writer, program.Description);
+                writer.Write(program.ThreadGroupSize.X);
+                writer.Write(program.ThreadGroupSize.Y);
+                writer.Write(program.ThreadGroupSize.Z);
+            }
+            File.Move(temporary, path, overwrite: true);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return program;
     }
 
     private byte[] Invoke(string source, GlslStage stage, string file, Dictionary<string, string> defines, bool preprocess, StringBuilder warnings)

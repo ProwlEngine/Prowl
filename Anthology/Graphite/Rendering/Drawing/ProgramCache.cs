@@ -13,8 +13,9 @@ namespace Prowl.Graphite.Rendering;
 /// <summary>
 /// Draw programs built from each pass's shared compiled variants: the global offsets, the renderer's layouts and the
 /// pipeline state of the draw put on top. A variant not ready yet, or failed, draws with the pass's default variant, every axis at its first
-/// value, else with the matching pass of the shader's declared fallback. Compiles follow the policy, blocking in deterministic mode. Only compiles run on workers,
-/// programs are created on the render thread. Failures are reported once.
+/// value, else with the matching pass of the shader's declared fallback. Compiles follow the policy, blocking in deterministic mode. Async
+/// compiles queue at the priority they are asked for at. Only compiles run on workers, programs are created on the render thread.
+/// Failures are reported once.
 /// </summary>
 internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compiler, GlobalRegistry globals, DrawPrograms programs, bool deterministic, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async, Action<IDisposable>? retire = null) : IDisposable
 {
@@ -25,6 +26,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         public required PassVariants Variants;
         public required int Key;
         public required int Revision;
+        public required CompilePriority Priority;
         public GraphicsProgram? Built;
         public bool Failed;
     }
@@ -78,10 +80,13 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     /// <summary>Variants known to the cache, ready, compiling or failed.</summary>
     internal int EntryCount => _entries.Count;
 
-    private int _compiling;
+    private int _compiling, _background;
 
-    /// <summary>Programs not built yet and not failed. Any thread.</summary>
+    /// <summary>Programs a draw waits on, not built yet and not failed. Any thread.</summary>
     public int Compiling => Volatile.Read(ref _compiling);
+
+    /// <summary>Programs asked for ahead of use, like debug views, not built yet and not failed. Any thread.</summary>
+    public int Background => Volatile.Read(ref _background);
 
     /// <summary>Programs not built yet and not failed.</summary>
     public int Pending
@@ -99,11 +104,14 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     }
 
     /// <summary>The program to draw with now: the wanted variant when it is built, else a fallback, else null. Render thread.</summary>
-    public GraphicsProgram? Get(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords)
+    public GraphicsProgram? Get(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords, CompilePriority priority = CompilePriority.Visible)
     {
-        Entry entry = Wanted(id, mirrored, keywords);
+        Entry entry = Wanted(id, mirrored, keywords, priority);
         return entry.Built ?? Fallback(entry);
     }
+
+    /// <summary>Starts compiling a variant without drawing with it. Render thread.</summary>
+    public void Prewarm(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords) => Wanted(id, mirrored, keywords, CompilePriority.Background);
 
     /// <summary>Carries on every unfinished variant, including ones no draw asks for anymore, so each one is built or fails. Render thread.</summary>
     public void Advance()
@@ -127,15 +135,17 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     }
 
     /// <summary>Whether the wanted variant itself is built, rather than a fallback standing in. Render thread.</summary>
-    public bool Ready(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords) => Wanted(id, mirrored, keywords).Built != null;
+    public bool Ready(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords) => Wanted(id, mirrored, keywords, CompilePriority.Visible).Built != null;
 
     /// <summary>Whether the wanted variant failed to compile, so it never becomes ready. Render thread.</summary>
-    public bool Failed(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords) => Wanted(id, mirrored, keywords).Failed;
+    public bool Failed(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords) => Wanted(id, mirrored, keywords, CompilePriority.Visible).Failed;
 
-    private Entry Wanted(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords)
+    private Entry Wanted(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords, CompilePriority priority)
     {
         DrawProgram program = programs[id];
         bool debug = DebugProgram(ref program, keywords);
+        if (debug)
+            priority = CompilePriority.Background;
         IReadOnlyList<VariantSpace> axes = program.Shader.GlobalAxes;
         ulong key = 0, stride = 1;
         Span<int> globalValues = stackalloc int[axes.Count];
@@ -150,8 +160,12 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
 
         if (!_entries.TryGetValue((id, mirrored, debug, key), out Entry? entry))
         {
-            entry = Create(program, mirrored, globalValues);
+            entry = Create(program, mirrored, globalValues, priority);
             _entries[(id, mirrored, debug, key)] = entry;
+        }
+        else if (priority < entry.Priority)
+        {
+            Raise(entry, priority);
         }
         Complete(entry);
         return entry;
@@ -202,7 +216,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
 
     private static Family FamilyOf(Entry entry) => new(entry.Program.Shader, entry.Program.PassIndex, entry.Program.StateOverride, entry.Mirrored);
 
-    private Entry Create(DrawProgram program, bool mirrored, ReadOnlySpan<int> globalValues)
+    private Entry Create(DrawProgram program, bool mirrored, ReadOnlySpan<int> globalValues, CompilePriority priority)
     {
         IReadOnlyList<VariantSpace> materialAxes = program.Shader.MaterialAxes;
         IReadOnlyList<VariantSpace> globalAxes = program.Shader.GlobalAxes;
@@ -211,16 +225,26 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             combo[i] = program.Keywords[i];
         for (int i = 0; i < globalAxes.Count; i++)
             combo[materialAxes.Count + i] = new Keyword(globalAxes[i].Name, globalAxes[i].Values[globalValues[i]]);
-        program.Shader.ResolveUnused(program.PassIndex, combo);
 
         PassVariants variants = program.Shader.Definition.Passes![program.PassIndex].Variants(compiler, device.BackendType);
-        if (!variants.TryGetKey(combo, out int key))
-            key = 0;
-        Entry entry = new() { Program = program, Mirrored = mirrored, Variants = variants, Key = key, Revision = variants.Revision };
+        Entry entry = new() { Program = program, Mirrored = mirrored, Variants = variants, Key = variants.KeyOf(combo), Revision = variants.Revision, Priority = priority };
         Family family = FamilyOf(entry);
         _families[family] = _families.GetValueOrDefault(family) + 1;
-        Interlocked.Increment(ref _compiling);
+        Unfinished(entry, 1);
         return entry;
+    }
+
+    // Counts an entry not built yet as a draw waiting on it, or as background work
+    private void Unfinished(Entry entry, int change) => Interlocked.Add(ref (entry.Priority >= CompilePriority.Background ? ref _background : ref _compiling), change);
+
+    private void Raise(Entry entry, CompilePriority priority)
+    {
+        bool waiting = entry.Built == null && !entry.Failed;
+        if (waiting)
+            Unfinished(entry, -1);
+        entry.Priority = priority;
+        if (waiting)
+            Unfinished(entry, 1);
     }
 
     // What stands in for a variant not built: the pass's default variant, else the declared fallback shader's pass of the same kind
@@ -231,8 +255,8 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         {
             if (!_defaults.TryGetValue(family, out Entry? fallback))
             {
-                fallback = new Entry { Program = wanted.Program, Mirrored = wanted.Mirrored, Variants = wanted.Variants, Key = 0, Revision = wanted.Variants.Revision };
-                Interlocked.Increment(ref _compiling);
+                fallback = new Entry { Program = wanted.Program, Mirrored = wanted.Mirrored, Variants = wanted.Variants, Key = 0, Revision = wanted.Variants.Revision, Priority = CompilePriority.Fallback };
+                Unfinished(fallback, 1);
                 _defaults[family] = fallback;
             }
             Complete(fallback);
@@ -263,9 +287,10 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             for (int a = 0; a < keywords.Length; a++)
                 keywords[a] = new Keyword(fallback.MaterialAxes[a].Name, fallback.MaterialAxes[a].Values[0]);
             DrawProgram program = new(fallback, i, 0, wanted.Program.StateOverride, keywords);
-            Interlocked.Increment(ref _compiling);
             PassVariants variants = passes[i].Variants(compiler, device.BackendType);
-            return new Entry { Program = program, Mirrored = wanted.Mirrored, Variants = variants, Key = 0, Revision = variants.Revision };
+            Entry entry = new() { Program = program, Mirrored = wanted.Mirrored, Variants = variants, Key = 0, Revision = variants.Revision, Priority = CompilePriority.Fallback };
+            Unfinished(entry, 1);
+            return entry;
         }
         return null;
     }
@@ -282,17 +307,17 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             {
                 Retire(entry.Built);
                 entry.Built = null;
-                Interlocked.Increment(ref _compiling);
+                Unfinished(entry, 1);
             }
             else if (entry.Failed)
             {
                 entry.Failed = false;
-                Interlocked.Increment(ref _compiling);
+                Unfinished(entry, 1);
             }
         }
         if (entry.Built != null || entry.Failed)
             return;
-        VariantState state = entry.Variants.Request(entry.Key, _policy, out ShaderDescription compiled, out Exception? error);
+        VariantState state = entry.Variants.Request(entry.Key, _policy, entry.Priority, out ShaderDescription compiled, out Exception? error);
         if (state == VariantState.Pending)
             return;
         if (state == VariantState.Failed)
@@ -309,7 +334,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
                 return;
             compiled.ResourceLayouts = MaterialLayout.Layouts(program.Shader.Name, compiled.ResourceLayouts ?? [], FrameLayout, ViewLayout);
             entry.Built = Build(program, compiled, entry.Mirrored);
-            Interlocked.Decrement(ref _compiling);
+            Unfinished(entry, -1);
         }
         catch (Exception e)
         {
@@ -319,8 +344,8 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
 
     private void Fail(Entry entry, Exception e)
     {
+        Unfinished(entry, -1);
         entry.Failed = true;
-        Interlocked.Decrement(ref _compiling);
         DrawProgram program = entry.Program;
         report(new RendererError("shader.compile", $"{program.Shader.Name}: {e.Message}", RendererErrorSeverity.Error, program.Shader) { Key = $"program.{program.Shader.Name}.{program.PassIndex}.{entry.Key}" });
     }
@@ -329,7 +354,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     private void Forget(Entry entry)
     {
         if (entry.Built == null && !entry.Failed)
-            Interlocked.Decrement(ref _compiling);
+            Unfinished(entry, -1);
     }
 
     private void Retire(GraphicsProgram program)

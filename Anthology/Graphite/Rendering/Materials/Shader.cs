@@ -476,12 +476,6 @@ public sealed class Shader
     public const string ReadsWhenTag = "ReadsWhen";
 
     /// <summary>
-    /// The pass tag naming axes a pass compiles the same at every value while another axis has a value,
-    /// "UnusedWhen" = "AXIS VALUE UNUSED...", so they take their first value there and share one variant.
-    /// </summary>
-    public const string UnusedWhenTag = "UnusedWhen";
-
-    /// <summary>
     /// The pass tag of a shader whose colour leaves already multiplied by its coverage, "Output" = "Premultiplied", so
     /// <see cref="SurfaceSettings"/> blends it with premultiplied factors. Graphite/PBR declares it.
     /// </summary>
@@ -494,7 +488,6 @@ public sealed class Shader
     private readonly bool[] _readsSceneDepth;
     private readonly bool[] _readsBackDepth;
     private readonly (string Axis, string Value)?[] _readsWhen;
-    private readonly (string Axis, string Value, string[] Unused)?[] _unusedWhen;
     private readonly HashSet<string>[] _passAxes;
 
     /// <summary>The shader drawing in this one's place while its variants compile or after they failed, from its Fallback declaration.</summary>
@@ -514,7 +507,6 @@ public sealed class Shader
         _readsSceneDepth = new bool[passes.Length];
         _readsBackDepth = new bool[passes.Length];
         _readsWhen = new (string, string)?[passes.Length];
-        _unusedWhen = new (string, string, string[])?[passes.Length];
         for (int i = 0; i < passes.Length; i++)
         {
             _readsSceneColor[i] = ShaderDefinition.PassHasTag(passes[i], SceneColorTag, "Read");
@@ -522,8 +514,6 @@ public sealed class Shader
             _readsBackDepth[i] = ShaderDefinition.PassHasTag(passes[i], BackDepthTag, "Read");
             if (passes[i].Tags != null && passes[i].Tags!.TryGetValue(ReadsWhenTag, out string? when) && when.Split(' ', StringSplitOptions.RemoveEmptyEntries) is [string axis, string value])
                 _readsWhen[i] = (axis, value);
-            if (passes[i].Tags != null && passes[i].Tags!.TryGetValue(UnusedWhenTag, out string? unused) && unused.Split(' ', StringSplitOptions.RemoveEmptyEntries) is [string condition, string at, .. string[] rest] && rest.Length > 0)
-                _unusedWhen[i] = (condition, at, rest);
             PremultipliedOutput |= ShaderDefinition.PassHasTag(passes[i], OutputTag, "Premultiplied");
         }
 
@@ -715,66 +705,23 @@ public sealed class Shader
     /// <summary>Whether a pass declares an axis, so its selection can tell that pass's programs apart.</summary>
     internal bool PassHasAxis(int passIndex, string axis) => _passAxes[passIndex].Contains(axis);
 
-    /// <summary>
-    /// The material variant as one pass sees it, axes the pass does not declare left out and ones its
-    /// <see cref="UnusedWhenTag"/> leaves unused at their first value. Keywords in material axis order.
-    /// </summary>
+    /// <summary>The material variant as one pass sees it, axes the pass does not declare left out. Keywords in material axis order.</summary>
     internal ulong PassVariant(int passIndex, Keyword[] keywords)
     {
-        bool unused = UnusedIn(passIndex, keywords);
         ulong variant = 0, stride = 1;
         for (int i = 0; i < MaterialAxes.Count; i++)
         {
             VariantSpace axis = MaterialAxes[i];
             if (!_passAxes[passIndex].Contains(axis.Name))
                 continue;
-            if (!(unused && Array.IndexOf(_unusedWhen[passIndex]!.Value.Unused, axis.Name) >= 0))
+            for (int v = 0; v < axis.Values.Count; v++)
             {
-                for (int v = 0; v < axis.Values.Count; v++)
-                {
-                    if (axis.Values[v] == keywords[i].Value)
-                        variant += (ulong)v * stride;
-                }
+                if (axis.Values[v] == keywords[i].Value)
+                    variant += (ulong)v * stride;
             }
             stride *= (ulong)axis.Values.Count;
         }
         return variant;
-    }
-
-    // Whether keywords meet the pass's UnusedWhen condition
-    private bool UnusedIn(int passIndex, ReadOnlySpan<Keyword> keywords)
-    {
-        if (_unusedWhen[passIndex] is not (string axis, string value, _))
-            return false;
-        foreach (Keyword keyword in keywords)
-        {
-            if (keyword.Name == axis)
-                return keyword.Value == value;
-        }
-        return false;
-    }
-
-    /// <summary>A pass's full keyword combination with the axes its <see cref="UnusedWhenTag"/> leaves unused at their first value, in place.</summary>
-    internal void ResolveUnused(int passIndex, Span<Keyword> combo)
-    {
-        if (!UnusedIn(passIndex, combo))
-            return;
-        string[] unused = _unusedWhen[passIndex]!.Value.Unused;
-        for (int i = 0; i < combo.Length; i++)
-        {
-            if (Array.IndexOf(unused, combo[i].Name) >= 0 && FirstValue(combo[i].Name) is { } first)
-                combo[i] = new Keyword(combo[i].Name, first);
-        }
-    }
-
-    private string? FirstValue(string axis)
-    {
-        foreach (VariantSpace space in MaterialAxes)
-        {
-            if (space.Name == axis)
-                return space.Values[0];
-        }
-        return GlobalAxisDefault(axis);
     }
 
     /// <summary>Default render queue of the shader's materials, from a RenderQueue pass tag.</summary>

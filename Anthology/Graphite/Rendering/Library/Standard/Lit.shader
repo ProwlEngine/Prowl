@@ -99,7 +99,7 @@ Shader "Graphite/Lit"
     Pass
     {
         Name "Forward"
-        Tags { "LightMode" = "Forward" "Output" = "Premultiplied" "UnusedWhen" = "PBR_TIER LITE PBR_THIN_FILM PBR_ANISOTROPY" }
+        Tags { "LightMode" = "Forward" "Output" = "Premultiplied" }
         GLSLPROGRAM
         Shared
         {
@@ -132,7 +132,7 @@ Shader "Graphite/Lit"
     Pass
     {
         Name "Transmission"
-        Tags { "LightMode" = "Transmission" "Output" = "Premultiplied" "SceneColor" = "Read" "SceneDepth" = "Read" "BackDepth" = "Read" "ReadsWhen" = "PBR_TIER FULL" "UnusedWhen" = "PBR_TIER LITE PBR_THIN_FILM PBR_ANISOTROPY" }
+        Tags { "LightMode" = "Transmission" "Output" = "Premultiplied" "SceneColor" = "Read" "SceneDepth" = "Read" "BackDepth" = "Read" "ReadsWhen" = "PBR_TIER FULL" }
         GLSLPROGRAM
         Shared
         {
@@ -217,7 +217,7 @@ Shader "Graphite/Lit"
     Pass
     {
         Name "ShadowCaster"
-        Tags { "LightMode" = "ShadowCaster" "UnusedWhen" = "PBR_THIN_WALLED false PBR_SUBSURFACE" }
+        Tags { "LightMode" = "ShadowCaster" }
         GLSLPROGRAM
         Shared
         {
@@ -246,7 +246,7 @@ Shader "Graphite/Lit"
     Pass
     {
         Name "Debug"
-        Tags { "LightMode" = "Debug" "Output" = "Premultiplied" "UnusedWhen" = "PBR_TIER LITE PBR_THIN_FILM PBR_ANISOTROPY" }
+        Tags { "LightMode" = "Debug" "Output" = "Premultiplied" }
         GLSLPROGRAM
         Shared
         {

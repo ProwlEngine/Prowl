@@ -409,7 +409,7 @@ public class GlslCompilerTests
 
 public class GlslCompilerCacheTests : System.IDisposable
 {
-    private readonly string _directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "GraphiteSpirvCache", System.Guid.NewGuid().ToString("N"));
+    private readonly string _directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "GraphiteVariantCache", System.Guid.NewGuid().ToString("N"));
 
     public void Dispose()
     {
@@ -417,26 +417,56 @@ public class GlslCompilerCacheTests : System.IDisposable
             System.IO.Directory.Delete(_directory, true);
     }
 
-    private GlslShaderCompiler Cached() => new(new GlslCompilerOptions { CacheDirectory = _directory });
+    private GlslShaderCompiler Cached(string? directory = null, Dictionary<string, string>? files = null) => new(new GlslCompilerOptions
+    {
+        CacheDirectory = directory ?? _directory,
+        ResolveInclude = (name, _) => files != null && files.TryGetValue(name, out string? source) ? source : null,
+    });
+
+    private string[] Stored(string? directory = null) => System.IO.Directory.GetFiles(directory ?? _directory, "*.variant");
 
     private static byte[] Fragment(GlslProgram program) => program.Description.Stages.Single(s => s.Stage == ShaderStages.Fragment).ShaderBytes;
 
+    private const string Toggled = """
+        Shared
+        {
+            #pragma variant _UNUSED
+            #pragma variant _HALF
+        }
+        Vertex
+        {
+            void main() { gl_Position = vec4(0, 0, 0, 1); }
+        }
+        Fragment
+        {
+            out vec4 color;
+            void main()
+            {
+            #ifdef _HALF
+                color = vec4(0.5);
+            #else
+                color = vec4(1);
+            #endif
+            }
+        }
+        """;
+
     [Fact]
-    public void CompiledStages_AreStored_AndAnotherCompilerReadsThemBack()
+    public void FinishedVariants_AreStored_AndAnotherCompilerReadsThemBack()
     {
         using (GlslShaderCompiler first = Cached())
             first.CompileProgram(Glsl.Pass(Glsl.Fullscreen), []);
-        string[] stored = System.IO.Directory.GetFiles(_directory, "*.spv");
-        Assert.Equal(2, stored.Length);
+        string stored = Assert.Single(Stored());
 
-        // The stored fragment stage swapped for another shader's shows the second compiler took it from the folder
-        byte[] other = Fragment(Glsl.Compile(Glsl.Fullscreen.Replace("vec4(1)", "vec4(0.5)")));
-        byte[] original = Fragment(Glsl.Compile(Glsl.Fullscreen));
-        string fragmentFile = stored.Single(f => System.IO.File.ReadAllBytes(f).SequenceEqual(original));
-        System.IO.File.WriteAllBytes(fragmentFile, other);
+        // The stored entry swapped for another shader's shows the second compiler took it from the folder
+        string other = System.IO.Path.Combine(_directory, "other");
+        GlslProgram half;
+        using (GlslShaderCompiler elsewhere = Cached(other))
+            half = elsewhere.CompileProgram(Glsl.Pass(Glsl.Fullscreen.Replace("vec4(1)", "vec4(0.5)")), []);
+        System.IO.File.Copy(Assert.Single(Stored(other)), stored, overwrite: true);
 
         using GlslShaderCompiler second = Cached();
-        Assert.Equal(other, Fragment(second.CompileProgram(Glsl.Pass(Glsl.Fullscreen), [])));
+        Assert.Equal(Fragment(half), Fragment(second.CompileProgram(Glsl.Pass(Glsl.Fullscreen), [])));
     }
 
     [Fact]
@@ -446,6 +476,66 @@ public class GlslCompilerCacheTests : System.IDisposable
         compiler.CompileProgram(Glsl.Pass(Glsl.Fullscreen), []);
         compiler.CompileProgram(Glsl.Pass(Glsl.Fullscreen.Replace("vec4(1)", "vec4(0.25)")), []);
 
-        Assert.Equal(3, System.IO.Directory.GetFiles(_directory, "*.spv").Length);
+        Assert.Equal(2, Stored().Length);
+    }
+
+    [Fact]
+    public void ChangedIncludes_GetDifferentEntries()
+    {
+        const string source = """
+            Vertex
+            {
+                void main() { gl_Position = vec4(0, 0, 0, 1); }
+            }
+            Fragment
+            {
+                #include "Shade.glsl"
+                out vec4 color;
+                void main() { color = Shade(); }
+            }
+            """;
+        using (GlslShaderCompiler compiler = Cached(files: new() { ["Shade.glsl"] = "vec4 Shade() { return vec4(1); }" }))
+            compiler.CompileProgram(Glsl.Pass(source), []);
+        using (GlslShaderCompiler compiler = Cached(files: new() { ["Shade.glsl"] = "vec4 Shade() { return vec4(0.5); }" }))
+            compiler.CompileProgram(Glsl.Pass(source), []);
+
+        Assert.Equal(2, Stored().Length);
+    }
+
+    [Fact]
+    public void VariantsPreprocessingTheSame_CompileOnce()
+    {
+        using GlslShaderCompiler compiler = Glsl.Compiler();
+        ShaderPass pass = Glsl.Pass(Toggled);
+        GlslProgram plain = compiler.CompileProgram(pass, []);
+
+        Assert.Same(Fragment(plain), Fragment(compiler.CompileProgram(pass, [new Keyword("_UNUSED", "true")])));
+        Assert.NotSame(Fragment(plain), Fragment(compiler.CompileProgram(pass, [new Keyword("_HALF", "true")])));
+    }
+}
+
+
+public class VariantKeyTests
+{
+    [Fact]
+    public void AnUnknownValue_TakesItsAxisFirstValue_AndKeepsTheOtherAxes()
+    {
+        const string source = """
+            Shared
+            {
+                #pragma variant global _VIEW ALBEDO NORMALS
+                #pragma variant _CUTOUT
+            }
+            Vertex
+            {
+                void main() { gl_Position = vec4(0, 0, 0, 1); }
+            }
+            """;
+        using GlslShaderCompiler compiler = Glsl.Compiler();
+        PassVariants variants = Glsl.Pass(source).Variants(compiler, GraphicsBackend.Vulkan);
+        int cutout = variants.KeyOf([new Keyword("_CUTOUT", "true")]);
+
+        Assert.NotEqual(0, cutout);
+        Assert.Equal(cutout, variants.KeyOf([new Keyword("_VIEW", "FURNACE"), new Keyword("_CUTOUT", "true")]));
     }
 }

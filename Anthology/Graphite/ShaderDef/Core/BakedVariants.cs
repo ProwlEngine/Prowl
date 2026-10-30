@@ -180,7 +180,7 @@ public static class BakedVariants
     }
 
     // Render state is left out, every user of a description sets its own
-    private static void WriteDescription(BinaryWriter writer, ShaderDescription description)
+    internal static void WriteDescription(BinaryWriter writer, ShaderDescription description)
     {
         ShaderStageDescription[] stages = description.Stages ?? [];
         writer.Write(stages.Length);
@@ -207,7 +207,7 @@ public static class BakedVariants
         writer.Write(description.PushConstants.SizeInBytes);
     }
 
-    private static ShaderDescription ReadDescription(BinaryReader reader)
+    internal static ShaderDescription ReadDescription(BinaryReader reader)
     {
         ShaderStageDescription[] stages = new ShaderStageDescription[reader.ReadInt32()];
         for (int s = 0; s < stages.Length; s++)

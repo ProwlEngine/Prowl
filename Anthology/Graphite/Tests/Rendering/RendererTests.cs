@@ -247,12 +247,12 @@ public sealed class RendererTests : IDisposable
     }
 
     [Fact]
-    public void ShadersThatFailToLoad_AreReportedOnce_AndDrawNothing()
+    public void ShadersThatFailToLoad_AreReportedOnce_AndDrawTheGreyFallback()
     {
         Shader broken = _renderer.LoadShader(ShaderParser.Parse(Source.Replace("uniform vec4 _Color;", "uniform vec4 _Color; uniform float _Undeclared;").Replace("outColor = _Color;", "outColor = _Color * _Undeclared;")));
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * (Double4x4)Float4x4.CreateScale(2) }, [_renderer.CreateMaterial(broken)]);
 
-        Assert.Equal(new Color32(0, 0, 0, 255), At(Frame(), 8, 8));
+        Assert.Equal(new Color32(188, 188, 188, 255), At(Frame(), 8, 8));
         Frame();
         Assert.Single(_errors, e => e.Message.Contains("_Undeclared"));
     }

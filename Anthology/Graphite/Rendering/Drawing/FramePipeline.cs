@@ -1020,10 +1020,16 @@ internal sealed partial class FramePipeline : IDisposable
         {
             if (camera.LastFrame != _frame)
                 continue;
+            CompilePriority priority = camera.Desc.Kind switch
+            {
+                ViewKind.Shadow => CompilePriority.Shadow,
+                ViewKind.ReflectionProbe or ViewKind.SkyCapture => CompilePriority.Capture,
+                _ => CompilePriority.Visible,
+            };
             foreach (DrawList list in camera.Lists)
             {
                 foreach (DrawCall call in list.Calls)
-                    Programs.Get(call.Program, call.Mirrored != camera.Mirrored, camera.Keywords);
+                    Programs.Get(call.Program, call.Mirrored != camera.Mirrored, camera.Keywords, priority);
             }
         }
         Programs.Advance();
