@@ -115,7 +115,7 @@ public sealed class GltfExtensionGatingTests
     public void UnimplementedExtensionThatIsOnlyUsed_StillLoads()
     {
         // Not required means the file renders acceptably without it, so it must not be a hard stop.
-        var model = Load(Doc("\"extensionsUsed\": [ \"KHR_materials_iridescence\" ],"));
+        var model = Load(Doc("\"extensionsUsed\": [ \"KHR_materials_variants\" ],"));
         Assert.NotNull(model.Root);
     }
 

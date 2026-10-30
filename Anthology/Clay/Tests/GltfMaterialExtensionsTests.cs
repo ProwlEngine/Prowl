@@ -47,13 +47,13 @@ public sealed class GltfMaterialExtensionsTests
     }
 
     [Fact]
-    public void UnknownExtension_PassesThroughToRawExtensions()
+    public void Iridescence_PopulatesTypedSurface_AndConsumesRawKey()
     {
-        // KHR_materials_iridescence is not mapped to a typed surface; consumers depending on
-        // raw-extension passthrough must still see it.
         var model = ModelImporter.Load(TestModels.Gltf("2.0/IridescentDishWithOlives/glTF-Binary/IridescentDishWithOlives.glb"));
 
-        Assert.Contains(model.Materials, m => m.RawExtensions.ContainsKey("KHR_materials_iridescence"));
+        Assert.Contains(model.Materials, m => m.Iridescence is not null && m.Iridescence.Factor > 0f);
+        foreach (var m in model.Materials)
+            Assert.DoesNotContain("KHR_materials_iridescence", m.RawExtensions.Keys);
     }
 
     [Fact]

@@ -181,6 +181,10 @@ internal sealed class GltfFormat : IModelFormat
         "KHR_materials_ior" or
         "KHR_materials_specular" or
         "KHR_materials_pbrSpecularGlossiness" or
+        "KHR_materials_iridescence" or
+        "KHR_materials_anisotropy" or
+        "KHR_materials_dispersion" or
+        "KHR_materials_diffuse_transmission" or
         // Quantized attributes need no special handling: the accessor reader already decodes every
         // integer component type the extension permits, normalized or not.
         "KHR_lights_punctual" or

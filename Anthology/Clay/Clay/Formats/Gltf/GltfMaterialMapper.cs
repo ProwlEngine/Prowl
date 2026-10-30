@@ -25,8 +25,12 @@ namespace Prowl.Clay.Formats.Gltf;
 ///   <item><c>KHR_materials_ior</c></item>
 ///   <item><c>KHR_materials_specular</c></item>
 ///   <item><c>KHR_materials_pbrSpecularGlossiness</c></item>
+///   <item><c>KHR_materials_iridescence</c></item>
+///   <item><c>KHR_materials_anisotropy</c></item>
+///   <item><c>KHR_materials_dispersion</c></item>
+///   <item><c>KHR_materials_diffuse_transmission</c></item>
 /// </list>
-/// Anything else (incl. VRMC_*, KHR_materials_iridescence, KHR_materials_anisotropy) lands in
+/// Anything else (incl. VRMC_*) lands in
 /// <see cref="IntermediateMaterial.RawExtensions"/> as a cloned <see cref="JsonElement"/>.
 /// </remarks>
 internal static class GltfMaterialMapper
@@ -241,6 +245,22 @@ internal static class GltfMaterialMapper
             case "KHR_materials_pbrSpecularGlossiness":
                 dst.SpecularGlossiness = ReadSpecularGlossiness(value);
                 return true;
+
+            case "KHR_materials_iridescence":
+                dst.Iridescence = ReadIridescence(value);
+                return true;
+
+            case "KHR_materials_anisotropy":
+                dst.Anisotropy = ReadAnisotropy(value);
+                return true;
+
+            case "KHR_materials_dispersion":
+                dst.Dispersion = ReadDispersion(value);
+                return true;
+
+            case "KHR_materials_diffuse_transmission":
+                dst.DiffuseTransmission = ReadDiffuseTransmission(value);
+                return true;
         }
 
         _ = ctx;
@@ -322,6 +342,7 @@ internal static class GltfMaterialMapper
             FactorTexture = GetSlot(v, "clearcoatTexture"),
             RoughnessTexture = GetSlot(v, "clearcoatRoughnessTexture"),
             NormalTexture = GetSlot(v, "clearcoatNormalTexture"),
+            NormalScale = v.TryGetProperty("clearcoatNormalTexture", out var normal) ? GetFloat(normal, "scale", 1f) : 1f,
         };
     }
 
@@ -404,6 +425,52 @@ internal static class GltfMaterialMapper
             GlossinessFactor = GetFloat(v, "glossinessFactor", 1f),
             DiffuseTexture = GetSlot(v, "diffuseTexture"),
             SpecularGlossinessTexture = GetSlot(v, "specularGlossinessTexture"),
+        };
+    }
+
+    private static IridescenceExtension? ReadIridescence(JsonElement v)
+    {
+        if (v.ValueKind != JsonValueKind.Object) return null;
+        return new IridescenceExtension
+        {
+            Factor = GetFloat(v, "iridescenceFactor", 0f),
+            FactorTexture = GetSlot(v, "iridescenceTexture"),
+            Ior = GetFloat(v, "iridescenceIor", 1.3f),
+            ThicknessMinimum = GetFloat(v, "iridescenceThicknessMinimum", 100f),
+            ThicknessMaximum = GetFloat(v, "iridescenceThicknessMaximum", 400f),
+            ThicknessTexture = GetSlot(v, "iridescenceThicknessTexture"),
+        };
+    }
+
+    private static AnisotropyExtension? ReadAnisotropy(JsonElement v)
+    {
+        if (v.ValueKind != JsonValueKind.Object) return null;
+        return new AnisotropyExtension
+        {
+            Strength = GetFloat(v, "anisotropyStrength", 0f),
+            Rotation = GetFloat(v, "anisotropyRotation", 0f),
+            Texture = GetSlot(v, "anisotropyTexture"),
+        };
+    }
+
+    private static DispersionExtension? ReadDispersion(JsonElement v)
+    {
+        if (v.ValueKind != JsonValueKind.Object) return null;
+        return new DispersionExtension { Dispersion = GetFloat(v, "dispersion", 0f) };
+    }
+
+    private static DiffuseTransmissionExtension? ReadDiffuseTransmission(JsonElement v)
+    {
+        if (v.ValueKind != JsonValueKind.Object) return null;
+        Color color = new(1f, 1f, 1f, 1f);
+        if (v.TryGetProperty("diffuseTransmissionColorFactor", out var cc) && cc.ValueKind == JsonValueKind.Array && cc.GetArrayLength() >= 3)
+            color = new Color(cc[0].GetSingle(), cc[1].GetSingle(), cc[2].GetSingle(), 1f);
+        return new DiffuseTransmissionExtension
+        {
+            Factor = GetFloat(v, "diffuseTransmissionFactor", 0f),
+            FactorTexture = GetSlot(v, "diffuseTransmissionTexture"),
+            ColorFactor = color,
+            ColorTexture = GetSlot(v, "diffuseTransmissionColorTexture"),
         };
     }
 
