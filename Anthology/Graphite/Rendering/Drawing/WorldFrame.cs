@@ -35,6 +35,19 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     public readonly List<CameraFrame> ProbeFaceCameras = new();
     public int ProbeCamerasUsed, ProbeFaceCamerasUsed;
 
+    private string? _shadowsName, _shadowsGroup;
+
+    /// <summary>The debug group the world's shadow passes record in, made again when the world is renamed.</summary>
+    public string ShadowsGroup(string name)
+    {
+        if (_shadowsGroup == null || !ReferenceEquals(_shadowsName, name))
+        {
+            _shadowsName = name;
+            _shadowsGroup = $"{name} shadows";
+        }
+        return _shadowsGroup;
+    }
+
     /// <summary>A new capture view id, below any a host may use.</summary>
     public static int NextCaptureViewId() => int.MinValue + Interlocked.Increment(ref s_nextCapture);
 

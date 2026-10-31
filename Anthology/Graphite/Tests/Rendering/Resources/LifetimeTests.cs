@@ -48,6 +48,7 @@ public sealed class LifetimeTests : IDisposable
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
     private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
+    private readonly Sampler _sampler;
     private readonly RendererTextures _textures;
     private readonly MaterialSystem _materials;
     private readonly Shader _shader;
@@ -55,7 +56,8 @@ public sealed class LifetimeTests : IDisposable
     public LifetimeTests()
     {
         InternalShaders.Register();
-        _textures = new RendererTextures(_device);
+        _sampler = _device.ResourceFactory.CreateSampler(SamplerDescription.Linear);
+        _textures = new RendererTextures(_device, _sampler);
         _materials = new MaterialSystem(_device, _store, _textures);
         _shader = new Shader(ShaderParser.Parse(Source), _compiler);
     }
@@ -63,6 +65,7 @@ public sealed class LifetimeTests : IDisposable
     public void Dispose()
     {
         _textures.Dispose();
+        _sampler.Dispose();
         _store.Dispose();
         _device.Dispose();
     }

@@ -1665,11 +1665,9 @@ public sealed partial class LightingTests : IDisposable
             => sink.AddIndirect(mesh, 0, material, new DrawItem { Transform = Double4x4.CreateTranslation(new Double3(0, 0, 30)) }, "Test.IndirectCount", 4);
     }
 
-    private sealed class IndirectCount : FrameFeature
+    private sealed class IndirectCount() : FrameFeature(FrameSlot.BeforeViews)
     {
         private BufferHandle _count;
-
-        public override FrameSlot Slot => FrameSlot.BeforeViews;
 
         public override void Setup(FrameBuilder builder)
         {
@@ -3285,10 +3283,8 @@ public sealed partial class LightingTests : IDisposable
         AssertMatches(_ => new Vector3(0.25f, 0.5f, 0.75f), Frame());
     }
 
-    private sealed class WriteHostBuffer(DeviceBuffer buffer, Float4 second) : FrameFeature
+    private sealed class WriteHostBuffer(DeviceBuffer buffer, Float4 second) : FrameFeature(FrameSlot.BeforeViews)
     {
-        public override FrameSlot Slot => FrameSlot.BeforeViews;
-
         public override void Setup(FrameBuilder builder) => builder.Write(buffer, BufferAccess.TransferWrite);
 
         public override void Render(FrameContext context) => context.Command.UpdateBuffer<Float4>(buffer, 0, [new Float4(9, 9, 9, 1), second]);

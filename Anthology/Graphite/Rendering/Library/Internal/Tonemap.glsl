@@ -1,8 +1,16 @@
-#pragma variant TONEMAP CLAMP ACES AGX_NEUTRAL AGX_PUNCHY REINHARD ROMBINDAHOUSE UNCHARTED2
-// Tonemapper: one operator by define, clamped to 0 to 1, then sRGB encoded. Without an operator define it only
+// Tonemapper: the operator _TonemapOperator picks, clamped to 0 to 1, then sRGB encoded. An unknown operator only
 // clamps.
 
-#if defined(TONEMAP_ACES)
+// The operators in TonemapOperator's order
+#define TONEMAP_ACES 0
+#define TONEMAP_AGX_NEUTRAL 1
+#define TONEMAP_AGX_PUNCHY 2
+#define TONEMAP_REINHARD 3
+#define TONEMAP_ROMBINDAHOUSE 4
+#define TONEMAP_UNCHARTED2 5
+
+uniform int _TonemapOperator;
+
 // ACES fitted, row major as written
 const mat3 ACESInputMat = mat3(
     0.59719, 0.35458, 0.04823,
@@ -21,15 +29,12 @@ vec3 RRTAndODTFit(vec3 v)
     return a / b;
 }
 
-vec3 Tonemap(vec3 color)
+vec3 Aces(vec3 color)
 {
     color = color * ACESInputMat;
     color = RRTAndODTFit(color);
     return color * ACESOutputMat;
 }
-#elif defined(TONEMAP_AGX_NEUTRAL) || defined(TONEMAP_AGX_PUNCHY)
-// AgX's curve already produces display encoded values
-#define TONEMAP_DISPLAY_ENCODED
 
 const mat3 agxTransform = mat3(
     0.842479062253094, 0.0423282422610123, 0.0423756549057051,
@@ -48,7 +53,8 @@ vec3 agxDefaultContrastApproximation(vec3 x)
     return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232;
 }
 
-vec3 Tonemap(vec3 color)
+// AgX's curve already produces display encoded values
+vec3 AgX(vec3 color, bool punchy)
 {
     const float minEv = -12.47393;
     const float maxEv = 4.026069;
@@ -57,43 +63,55 @@ vec3 Tonemap(vec3 color)
     color = (color - minEv) / (maxEv - minEv);
     color = agxDefaultContrastApproximation(color);
 
-#ifdef TONEMAP_AGX_PUNCHY
-    // The reference Punchy look, an ASC CDL power and saturation
-    float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
-    color = pow(max(color, vec3(0.0)), vec3(1.35));
-    color = luma + 1.4 * (color - luma);
-#endif
+    if (punchy)
+    {
+        // The reference Punchy look, an ASC CDL power and saturation
+        float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        color = pow(max(color, vec3(0.0)), vec3(1.35));
+        color = luma + 1.4 * (color - luma);
+    }
 
     return agxTransformInverse * color;
 }
-#elif defined(TONEMAP_REINHARD)
+
 // Extended Reinhard on luminance, white at 2
-vec3 Tonemap(vec3 color)
+vec3 Reinhard(vec3 color)
 {
     float white = 2.0;
     float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
     float mapped = luma * (1.0 + luma / (white * white)) / (1.0 + luma);
     return color * (mapped / max(luma, 1e-5));
 }
-#elif defined(TONEMAP_ROMBINDAHOUSE)
-vec3 Tonemap(vec3 color)
+
+vec3 RomBinDaHouse(vec3 color)
 {
     return exp(-1.0 / (2.72 * color + 0.15));
 }
-#elif defined(TONEMAP_UNCHARTED2)
+
 vec3 Uncharted2Curve(vec3 x)
 {
     const float A = 0.15, B = 0.50, C = 0.10, D = 0.20, E = 0.02, F = 0.30;
     return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
 }
 
-vec3 Tonemap(vec3 color)
+vec3 Uncharted2(vec3 color)
 {
     return Uncharted2Curve(color * 2.0) / Uncharted2Curve(vec3(11.2));
 }
-#else
-vec3 Tonemap(vec3 color) { return color; }
-#endif
+
+vec3 Tonemap(vec3 color)
+{
+    switch (_TonemapOperator)
+    {
+        case TONEMAP_ACES: return Aces(color);
+        case TONEMAP_AGX_NEUTRAL: return AgX(color, false);
+        case TONEMAP_AGX_PUNCHY: return AgX(color, true);
+        case TONEMAP_REINHARD: return Reinhard(color);
+        case TONEMAP_ROMBINDAHOUSE: return RomBinDaHouse(color);
+        case TONEMAP_UNCHARTED2: return Uncharted2(color);
+        default: return color;
+    }
+}
 
 vec3 LinearToSrgb(vec3 lin)
 {
@@ -105,8 +123,7 @@ void main()
 {
     vec4 source = Graphite_SampleSource(vUV);
     vec3 color = clamp(Tonemap(source.rgb), 0.0, 1.0);
-#ifndef TONEMAP_DISPLAY_ENCODED
-    color = LinearToSrgb(color);
-#endif
+    if (_TonemapOperator != TONEMAP_AGX_NEUTRAL && _TonemapOperator != TONEMAP_AGX_PUNCHY)
+        color = LinearToSrgb(color);
     outColor = vec4(color, source.a);
 }

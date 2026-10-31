@@ -42,17 +42,17 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         camera.ViewTable.Set("Graphite_ShadowSampler", 0, frame.ShadowSampler);
         camera.ViewTable.Set("Graphite_ShadowFaces", 0, camera.World.Shadows!.Faces.Buffer);
         camera.ViewTable.Set("Graphite_Cascades", 0, camera.Cascades.Buffer);
-        camera.ViewTable.Set("Graphite_ScreenVisibility", 0, (object?)camera.ScreenVisibilityView() ?? frame.NoScreenVisibility);
-        camera.ViewTable.Set("Graphite_ScreenIrradiance", 0, (object?)camera.ScreenIrradianceView() ?? frame.NoScreenIrradiance);
-        camera.ViewTable.Set("Graphite_ScreenSampler", 0, frame.TrilinearClamp);
-        camera.ViewTable.Set("Graphite_SceneColor", 0, camera.SceneColor != null ? camera.SceneColorView() : frame.NoSceneColor);
-        camera.ViewTable.Set("Graphite_SceneColorSampler", 0, frame.TrilinearClamp);
-        camera.ViewTable.Set("Graphite_SceneDepth", 0, camera.SceneDepth != null ? camera.SceneDepthView() : frame.NoSceneDepth);
-        camera.ViewTable.Set("Graphite_Dfg", 0, frame.Dfg);
-        camera.ViewTable.Set("Graphite_DielectricE", 0, frame.DielectricE);
-        camera.ViewTable.Set("Graphite_AnisotropicDfg", 0, frame.AnisotropicDfg);
-        camera.ViewTable.Set("Graphite_BackDepth", 0, (object?)camera.BackDepthView() ?? frame.NoSceneDepth);
-        camera.ViewTable.Set("Graphite_TableSampler", 0, frame.TrilinearClamp);
+        camera.ViewTable.Set("Graphite_ScreenVisibility", 0, (object?)camera.ScreenVisibilityView() ?? frame.Resources.NoScreenVisibility);
+        camera.ViewTable.Set("Graphite_ScreenIrradiance", 0, (object?)camera.ScreenIrradianceView() ?? frame.Resources.NoScreenIrradiance);
+        camera.ViewTable.Set("Graphite_ScreenSampler", 0, frame.Resources.LinearClamp);
+        camera.ViewTable.Set("Graphite_SceneColor", 0, camera.SceneColor != null ? camera.SceneColorView() : frame.Resources.NoSceneColor);
+        camera.ViewTable.Set("Graphite_SceneColorSampler", 0, frame.Resources.LinearClamp);
+        camera.ViewTable.Set("Graphite_SceneDepth", 0, camera.SceneDepth != null ? camera.SceneDepthView() : frame.Resources.NoSceneDepth);
+        camera.ViewTable.Set("Graphite_Dfg", 0, frame.Resources.Dfg);
+        camera.ViewTable.Set("Graphite_DielectricE", 0, frame.Resources.DielectricE);
+        camera.ViewTable.Set("Graphite_AnisotropicDfg", 0, frame.Resources.AnisotropicDfg);
+        camera.ViewTable.Set("Graphite_BackDepth", 0, (object?)camera.BackDepthView() ?? frame.Resources.NoSceneDepth);
+        camera.ViewTable.Set("Graphite_TableSampler", 0, frame.Resources.LinearClamp);
         _viewTable = camera.ViewTable.Get(ring);
         _properties.SetBuffer(GraphiteBindings.InstancesName, camera.Instances.Buffer);
         _properties.SetBuffer(GraphiteBindings.DrawRecordsName, camera.Records.Buffer);
@@ -61,7 +61,7 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
     /// <summary>Binds the frame's texture tables and the view's table for a program drawn without draw records.</summary>
     public void BindTables(CommandBuffer cmd)
     {
-        cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frame.TextureTable);
+        cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frame.Resources.TextureTable);
         cmd.SetDescriptorTable(GraphiteBindings.ViewSet, _viewTable);
         cmd.SetPushConstants(new FramePipeline.Push());
     }
@@ -118,7 +118,7 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
 
         cmd.SetShader(program);
         cmd.SetVertexSource(VertexSource.None);
-        cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frame.TextureTable);
+        cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frame.Resources.TextureTable);
         cmd.SetDescriptorTable(GraphiteBindings.ViewSet, _viewTable);
         _properties.SetBuffer(GraphiteBindings.MaterialsName, table.Records.Buffer);
         cmd.SetProperties(_properties);
@@ -148,7 +148,7 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
                 cmd.PushDebugGroup(shader.Name, DebugGroups.DrawCall(camera.World.World, shader, program, list, call));
             cmd.SetShader(program);
             cmd.SetVertexSource(frame.VertexSource(call.Page, call.Topology));
-            cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frame.TextureTable);
+            cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frame.Resources.TextureTable);
             cmd.SetDescriptorTable(GraphiteBindings.ViewSet, _viewTable);
             _properties.SetBuffer(GraphiteBindings.MaterialsName, table.Records.Buffer);
             _properties.SetBuffer(GraphiteBindings.VerticesName, page.Vertices);

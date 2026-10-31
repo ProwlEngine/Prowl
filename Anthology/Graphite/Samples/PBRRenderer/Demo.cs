@@ -39,7 +39,7 @@ internal sealed class Demo : IDisposable
     public GpuMesh Cube { get; }
     public GpuMesh Sphere { get; }
     public GpuMesh Cylinder { get; }
-    public FeatureSet Post { get; } = new();
+    public ExtensionSet<RenderFeature> Post { get; } = new();
     public TemporalAntiAliasing Taa { get; }
     public AutoExposure AutoExposure { get; }
     public Bloom Bloom { get; }

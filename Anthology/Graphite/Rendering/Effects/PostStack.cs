@@ -6,7 +6,7 @@ using Prowl.Vector;
 namespace Prowl.Graphite.Rendering;
 
 /// <summary>
-/// The fullscreen programs and samplers of the stock effects, built from the library's Graphite/Internal files and
+/// The fullscreen programs of the stock effects, built from the library's Graphite/Internal files and
 /// shared by every effect of a renderer, so a new effect instance compiles nothing already built. The renderer owns
 /// them and frees them when it is disposed.
 /// </summary>
@@ -20,32 +20,12 @@ internal sealed class EffectResources : IDisposable
         foreach (FullscreenProgram program in _programs.Values)
             program.Dispose();
         _programs.Clear();
-        LinearClamp.Dispose();
-        PointClamp.Dispose();
-        LinearRepeat.Dispose();
     }
 
     /// <summary>How many programs were built, for tests.</summary>
     internal int ProgramCount => _programs.Count;
 
-    public EffectResources(Renderer renderer)
-    {
-        _renderer = renderer;
-        SamplerDescription clamp = SamplerDescription.Linear with
-        {
-            AddressModeU = SamplerAddressMode.Clamp,
-            AddressModeV = SamplerAddressMode.Clamp,
-            AddressModeW = SamplerAddressMode.Clamp,
-        };
-        ResourceFactory factory = renderer.Device.ResourceFactory;
-        LinearClamp = factory.CreateSampler(clamp);
-        PointClamp = factory.CreateSampler(clamp with { MinFilter = FilterMode.Point, MagFilter = FilterMode.Point, MipFilter = FilterMode.Point });
-        LinearRepeat = factory.CreateSampler(SamplerDescription.Linear);
-    }
-
-    public Sampler LinearClamp { get; }
-    public Sampler PointClamp { get; }
-    public Sampler LinearRepeat { get; }
+    public EffectResources(Renderer renderer) => _renderer = renderer;
 
     /// <summary>The program of a library file under a set of defines, each line ending in a newline, made the first time. Host thread.</summary>
     public FullscreenProgram Program(string file, string defines = "", bool source = true, BlendStateDescription? blend = null, bool lit = false)
@@ -67,13 +47,15 @@ internal sealed class EffectResources : IDisposable
 /// A stock effect: its programs built from the library's Graphite/Internal files
 /// and its settings copied at Extract. Effects of one renderer share their programs, which the renderer owns.
 /// </summary>
-public abstract class PostEffect(Renderer renderer) : RenderFeature
+public abstract class PostEffect(Renderer renderer, RenderSlot slot, FeatureGroup? group = null, SceneTargets sceneReads = SceneTargets.None)
+    : RenderFeature(slot, group: group, sceneReads: sceneReads)
 {
     private protected EffectResources Resources { get; } = renderer.Effects;
+    private readonly RendererResources _shared = renderer.Resources;
 
-    protected Sampler LinearClamp => Resources.LinearClamp;
-    protected Sampler PointClamp => Resources.PointClamp;
-    protected Sampler LinearRepeat => Resources.LinearRepeat;
+    protected Sampler LinearClamp => _shared.LinearClamp;
+    protected Sampler PointClamp => _shared.PointClamp;
+    protected Sampler LinearRepeat => _shared.LinearRepeat;
 
     /// <summary>The program of a library file under a set of defines, each line ending in a newline, made the first time. Host thread.</summary>
     protected FullscreenProgram Program(string file, string defines = "", bool source = true, BlendStateDescription? blend = null, bool lit = false)
@@ -140,29 +122,19 @@ public enum TonemapOperator
 /// The tonemapper, the Tonemap slot's exclusive feature: an operator into 0 to 1, then the sRGB encode. Later slots
 /// read display encoded colour, which the present decodes for sRGB targets.
 /// </summary>
-public sealed class Tonemapper(Renderer renderer) : PostEffect(renderer)
+public sealed class Tonemapper : PostEffect
 {
-    private FullscreenProgram _program = null!;
+    private static readonly PropertyID s_operator = "_TonemapOperator";
+
+    private readonly FullscreenProgram _program;
+    private readonly PropertySet _properties = new();
+    private TonemapOperator _operator;
+
+    public Tonemapper(Renderer renderer) : base(renderer, RenderSlot.Tonemap, FeatureGroup.Tonemap) => _program = Program("Tonemap");
 
     public TonemapOperator Operator { get; set; } = TonemapOperator.AgXPunchy;
 
-    public override RenderSlot Slot => RenderSlot.Tonemap;
-    public override string? ExclusiveGroup => "Tonemap";
-
-    public override void Extract()
-    {
-        string define = Operator switch
-        {
-            TonemapOperator.Aces => "TONEMAP_ACES",
-            TonemapOperator.AgXNeutral => "TONEMAP_AGX_NEUTRAL",
-            TonemapOperator.AgXPunchy => "TONEMAP_AGX_PUNCHY",
-            TonemapOperator.Reinhard => "TONEMAP_REINHARD",
-            TonemapOperator.RomBinDaHouse => "TONEMAP_ROMBINDAHOUSE",
-            TonemapOperator.Uncharted2 => "TONEMAP_UNCHARTED2",
-            _ => "TONEMAP_CLAMP",
-        };
-        _program = Program("Tonemap", $"#define {define} 1\n");
-    }
+    public override void Extract() => _operator = Operator;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
@@ -170,7 +142,11 @@ public sealed class Tonemapper(Renderer renderer) : PostEffect(renderer)
         builder.EncodesForDisplay();
     }
 
-    public override void Render(FeatureContext context) => context.Fullscreen(_program);
+    public override void Render(FeatureContext context)
+    {
+        _properties.SetInt(s_operator, (int)_operator);
+        context.Fullscreen(_program, _properties);
+    }
 }
 
 /// <summary>
@@ -182,6 +158,11 @@ public sealed class Tonemapper(Renderer renderer) : PostEffect(renderer)
 /// </summary>
 public sealed class AutoExposure : PostEffect
 {
+    private static readonly PropertyID s_mainTex = "_MainTex", s_logMin = "_LogMin", s_logMax = "_LogMax", s_adaptedTex = "_AdaptedTex",
+        s_lowPercent = "_LowPercent", s_highPercent = "_HighPercent", s_adaptSpeedUp = "_AdaptSpeedUp", s_adaptSpeedDown = "_AdaptSpeedDown",
+        s_historyValid = "_HistoryValid", s_deltaTime = "_DeltaTime", s_exposureComp = "_ExposureComp", s_minEV100 = "_MinEV100",
+        s_maxEV100 = "_MaxEV100";
+
     private readonly FullscreenProgram _extract, _extractLayered, _downsample, _histogram, _adapt, _meter;
     private readonly PropertySet _properties = new();
     private (float Compensation, float Up, float Down, float Min, float Max, float Low, float High) _settings;
@@ -197,7 +178,7 @@ public sealed class AutoExposure : PostEffect
         public TextureHandle Exposure;
     }
 
-    public AutoExposure(Renderer renderer) : base(renderer)
+    public AutoExposure(Renderer renderer) : base(renderer, RenderSlot.HdrPost)
     {
         _extract = Program("AutoExposure", "#define AE_EXTRACT 1\n", source: false);
         _extractLayered = Program("AutoExposure", "#define AE_EXTRACT 1\n#define AE_LAYERED_SOURCE 1\n", source: false);
@@ -233,8 +214,6 @@ public sealed class AutoExposure : PostEffect
     /// <summary>The share of texels up to which the meter averages, leaving out the brightest highlights above it.</summary>
     public float HighPercent { get; set; } = 0.98f;
 
-    public override RenderSlot Slot => RenderSlot.HdrPost;
-
     internal override bool MeasuresExposure => true;
 
     public override void Extract()
@@ -249,7 +228,7 @@ public sealed class AutoExposure : PostEffect
         ViewState state = builder.GetViewState<ViewState>();
         state.Levels.Clear();
         for (int level = 0; level == 0 || view.Width * 0.5f / (1 << (level - 1)) > HistogramWidth; level++)
-            state.Levels.Add(builder.Temporary("Luminance" + level, view.SharedTexture(PixelFormat.R16_Float, 0.5f / (1 << level))));
+            state.Levels.Add(builder.Temporary("Luminance", level, view.SharedTexture(PixelFormat.R16_Float, 0.5f / (1 << level))));
         state.Histogram = builder.Temporary("Histogram", FeatureView.Shared(Bins, 1, PixelFormat.R32_G32_Float));
         state.Adapted = builder.History("Adapted", FeatureView.Shared(1, 1, PixelFormat.R32_Float), usage: TextureState.Attachment | TextureState.Sampled);
         state.Exposure = builder.WriteExposure();
@@ -258,37 +237,37 @@ public sealed class AutoExposure : PostEffect
     public override void Render(FeatureContext context)
     {
         ViewState state = context.GetViewState<ViewState>();
-        _properties.SetTexture("_MainTex", context.Color!, LinearClamp);
+        _properties.SetTexture(s_mainTex, context.Color!, LinearClamp);
         context.Fullscreen(context.View.LayerCount > 1 ? _extractLayered : _extract, context.Get(state.Levels[0]), _properties, shared: true);
         for (int i = 1; i < state.Levels.Count; i++)
         {
-            _properties.SetTexture("_MainTex", context.Get(state.Levels[i - 1]).ColorTextures[0], LinearClamp);
+            _properties.SetTexture(s_mainTex, context.Get(state.Levels[i - 1]).ColorTextures[0], LinearClamp);
             context.Fullscreen(_downsample, context.Get(state.Levels[i]), _properties, shared: true);
         }
 
         // The bins span the metered range and a few stops past it, in the natural log luminance the levels hold
         RenderTexture histogram = context.Get(state.Histogram);
-        _properties.SetTexture("_MainTex", context.Get(state.Levels[^1]).ColorTextures[0], LinearClamp);
-        _properties.SetFloat("_LogMin", (_settings.Min - 5) * MathF.Log(2));
-        _properties.SetFloat("_LogMax", (_settings.Max - 1) * MathF.Log(2));
+        _properties.SetTexture(s_mainTex, context.Get(state.Levels[^1]).ColorTextures[0], LinearClamp);
+        _properties.SetFloat(s_logMin, (_settings.Min - 5) * MathF.Log(2));
+        _properties.SetFloat(s_logMax, (_settings.Max - 1) * MathF.Log(2));
         context.Fullscreen(_histogram, histogram, _properties, shared: true);
 
         RenderTexture adapted = context.Get(state.Adapted);
         RenderTexture? previous = context.History(state.Adapted);
-        _properties.SetTexture("_MainTex", histogram.ColorTextures[0], LinearClamp);
-        _properties.SetTexture("_AdaptedTex", (previous ?? histogram).ColorTextures[0], LinearClamp);
-        _properties.SetFloat("_LowPercent", _settings.Low);
-        _properties.SetFloat("_HighPercent", _settings.High);
-        _properties.SetFloat("_AdaptSpeedUp", _settings.Up);
-        _properties.SetFloat("_AdaptSpeedDown", _settings.Down);
-        _properties.SetFloat("_HistoryValid", previous != null ? 1 : 0);
-        _properties.SetFloat("_DeltaTime", context.Time.DeltaTime);
+        _properties.SetTexture(s_mainTex, histogram.ColorTextures[0], LinearClamp);
+        _properties.SetTexture(s_adaptedTex, (previous ?? histogram).ColorTextures[0], LinearClamp);
+        _properties.SetFloat(s_lowPercent, _settings.Low);
+        _properties.SetFloat(s_highPercent, _settings.High);
+        _properties.SetFloat(s_adaptSpeedUp, _settings.Up);
+        _properties.SetFloat(s_adaptSpeedDown, _settings.Down);
+        _properties.SetFloat(s_historyValid, previous != null ? 1 : 0);
+        _properties.SetFloat(s_deltaTime, context.Time.DeltaTime);
         context.Fullscreen(_adapt, adapted, _properties, shared: true);
 
-        _properties.SetTexture("_AdaptedTex", adapted.ColorTextures[0], LinearClamp);
-        _properties.SetFloat("_ExposureComp", _settings.Compensation);
-        _properties.SetFloat("_MinEV100", _settings.Min);
-        _properties.SetFloat("_MaxEV100", _settings.Max);
+        _properties.SetTexture(s_adaptedTex, adapted.ColorTextures[0], LinearClamp);
+        _properties.SetFloat(s_exposureComp, _settings.Compensation);
+        _properties.SetFloat(s_minEV100, _settings.Min);
+        _properties.SetFloat(s_maxEV100, _settings.Max);
         context.Fullscreen(_meter, context.Get(state.Exposure), _properties, shared: true);
     }
 }
@@ -299,6 +278,9 @@ public sealed class AutoExposure : PostEffect
 /// </summary>
 public sealed class Bloom : PostEffect
 {
+    private static readonly PropertyID s_threshold = "_Threshold", s_softKnee = "_SoftKnee", s_clamp = "_Clamp", s_antiFlicker = "_AntiFlicker",
+        s_mainTex = "_MainTex", s_scatter = "_Scatter", s_highTex = "_HighTex", s_bloomTex = "_BloomTex", s_intensity = "_Intensity";
+
     private readonly FullscreenProgram _prefilter, _downsample, _upsample, _composite;
     private readonly PropertySet _properties = new();
     private (float Threshold, float Knee, float Clamp, bool AntiFlicker, float Scatter, float Intensity) _settings;
@@ -310,7 +292,7 @@ public sealed class Bloom : PostEffect
         public readonly List<TextureHandle> Up = new();
     }
 
-    public Bloom(Renderer renderer) : base(renderer)
+    public Bloom(Renderer renderer) : base(renderer, RenderSlot.HdrPost)
     {
         _prefilter = Program("Bloom", "#define BLOOM_PREFILTER 1\n");
         _downsample = Program("Bloom", "#define BLOOM_DOWNSAMPLE 1\n", source: false);
@@ -339,8 +321,6 @@ public sealed class Bloom : PostEffect
     /// <summary>How far it spreads, 0 tight to 1 wide, keeping about the same brightness.</summary>
     public float Scatter { get; set; } = 0.7f;
 
-    public override RenderSlot Slot => RenderSlot.HdrPost;
-
     public override void Extract()
     {
         _settings = (Math.Max(0, Threshold), Math.Clamp(SoftKnee, 0, 1), Math.Max(0, Clamp), AntiFlicker, Math.Clamp(Scatter, 0, 1), Intensity);
@@ -359,39 +339,39 @@ public sealed class Bloom : PostEffect
         state.Up.Clear();
         int count = _iterations + 1;
         for (int i = 0; i < count; i++)
-            state.Down.Add(builder.Temporary("Down" + i, view.Texture(Hdr, 0.5f / (1 << i))));
+            state.Down.Add(builder.Temporary("Down", i, view.Texture(Hdr, 0.5f / (1 << i))));
         for (int i = count - 2; i >= 0; i--)
-            state.Up.Add(builder.Temporary("Up" + i, view.Texture(Hdr, 0.5f / (1 << i))));
+            state.Up.Add(builder.Temporary("Up", i, view.Texture(Hdr, 0.5f / (1 << i))));
     }
 
     public override void Render(FeatureContext context)
     {
         ViewState state = context.GetViewState<ViewState>();
         _properties.Clear();
-        _properties.SetFloat("_Threshold", _settings.Threshold);
-        _properties.SetFloat("_SoftKnee", _settings.Knee);
-        _properties.SetFloat("_Clamp", _settings.Clamp);
-        _properties.SetFloat("_AntiFlicker", _settings.AntiFlicker ? 1 : 0);
+        _properties.SetFloat(s_threshold, _settings.Threshold);
+        _properties.SetFloat(s_softKnee, _settings.Knee);
+        _properties.SetFloat(s_clamp, _settings.Clamp);
+        _properties.SetFloat(s_antiFlicker, _settings.AntiFlicker ? 1 : 0);
         context.Fullscreen(_prefilter, context.Get(state.Down[0]), _properties);
         for (int i = 1; i < state.Down.Count; i++)
         {
-            _properties.SetTexture("_MainTex", context.Get(state.Down[i - 1]).ColorTextures[0], LinearClamp);
+            _properties.SetTexture(s_mainTex, context.Get(state.Down[i - 1]).ColorTextures[0], LinearClamp);
             context.Fullscreen(_downsample, context.Get(state.Down[i]), _properties);
         }
 
         Texture lower = context.Get(state.Down[^1]).ColorTextures[0];
-        _properties.SetFloat("_Scatter", _settings.Scatter);
+        _properties.SetFloat(s_scatter, _settings.Scatter);
         for (int i = 0; i < state.Up.Count; i++)
         {
             RenderTexture up = context.Get(state.Up[i]);
-            _properties.SetTexture("_MainTex", lower, LinearClamp);
-            _properties.SetTexture("_HighTex", context.Get(state.Down[state.Down.Count - 2 - i]).ColorTextures[0], LinearClamp);
+            _properties.SetTexture(s_mainTex, lower, LinearClamp);
+            _properties.SetTexture(s_highTex, context.Get(state.Down[state.Down.Count - 2 - i]).ColorTextures[0], LinearClamp);
             context.Fullscreen(_upsample, up, _properties);
             lower = up.ColorTextures[0];
         }
 
-        _properties.SetTexture("_BloomTex", lower, LinearClamp);
-        _properties.SetFloat("_Intensity", _settings.Intensity);
+        _properties.SetTexture(s_bloomTex, lower, LinearClamp);
+        _properties.SetFloat(s_intensity, _settings.Intensity);
         context.Fullscreen(_composite, _properties);
     }
 }
@@ -404,7 +384,13 @@ public sealed class Bloom : PostEffect
 /// </summary>
 public sealed class Gtao : ScreenLightingFeature
 {
+    private static readonly PropertyID s_cameraDepthTexture = "_CameraDepthTexture", s_noise = "_Noise", s_slices = "_Slices",
+        s_directionSamples = "_DirectionSamples", s_radius = "_Radius", s_intensity = "_Intensity", s_noiseScale = "_NoiseScale",
+        s_jitterOffset = "_JitterOffset", s_mainTex = "_MainTex", s_previousBuffer = "_PreviousBuffer", s_tResponse = "_TResponse",
+        s_blurRadius = "_BlurRadius", s_screenSize = "_ScreenSize", s_blurDirection = "_BlurDirection";
+
     private readonly EffectResources _resources;
+    private readonly RendererResources _shared;
     private readonly FullscreenProgram _depth, _ao, _temporal, _blur, _copy;
     private readonly PropertySet _properties = new();
     private Settings _settings;
@@ -420,6 +406,7 @@ public sealed class Gtao : ScreenLightingFeature
     public Gtao(Renderer renderer)
     {
         _resources = renderer.Effects;
+        _shared = renderer.Resources;
         _depth = _resources.Program("Gtao", "#define GTAO_DEPTH 1\n", source: false);
         _ao = _resources.Program("Gtao", "#define GTAO_AO 1\n", source: false);
         _temporal = _resources.Program("Gtao", "#define GTAO_TEMPORAL 1\n", source: false);
@@ -481,18 +468,18 @@ public sealed class Gtao : ScreenLightingFeature
         counter.Index = (counter.Index + 1) % 64;
         RenderTexture depth = context.Get(state.Depth), ao = context.Get(state.Ao);
 
-        _properties.SetTexture("_CameraDepthTexture", context.Depth!, _resources.PointClamp);
+        _properties.SetTexture(s_cameraDepthTexture, context.Depth!, _shared.PointClamp);
         context.Fullscreen(_depth, depth, _properties);
 
         Float2 size = new(depth.ColorTextures[0].Width, depth.ColorTextures[0].Height);
-        _properties.SetTexture("_CameraDepthTexture", depth.ColorTextures[0], _resources.PointClamp);
-        _properties.SetTexture("_Noise", context.Noise, _resources.LinearRepeat);
-        _properties.SetInt("_Slices", _settings.Slices);
-        _properties.SetInt("_DirectionSamples", _settings.DirectionSamples);
-        _properties.SetFloat("_Radius", _settings.Radius);
-        _properties.SetFloat("_Intensity", _settings.Intensity);
-        _properties.SetFloat2("_NoiseScale", size / 256f);
-        _properties.SetFloat2("_JitterOffset", new Float2(Halton.Of(counter.Index, 2), Halton.Of(counter.Index, 3)));
+        _properties.SetTexture(s_cameraDepthTexture, depth.ColorTextures[0], _shared.PointClamp);
+        _properties.SetTexture(s_noise, context.Noise, _shared.LinearRepeat);
+        _properties.SetInt(s_slices, _settings.Slices);
+        _properties.SetInt(s_directionSamples, _settings.DirectionSamples);
+        _properties.SetFloat(s_radius, _settings.Radius);
+        _properties.SetFloat(s_intensity, _settings.Intensity);
+        _properties.SetFloat2(s_noiseScale, size / 256f);
+        _properties.SetFloat2(s_jitterOffset, new Float2(Halton.Of(counter.Index, 2), Halton.Of(counter.Index, 3)));
         context.Fullscreen(_ao, ao, _properties);
 
         RenderTexture result = ao;
@@ -500,11 +487,11 @@ public sealed class Gtao : ScreenLightingFeature
         {
             RenderTexture history = context.Get(state.History);
             RenderTexture? previous = context.History(state.History);
-            _properties.SetTexture("_MainTex", ao.ColorTextures[0], _resources.LinearClamp);
+            _properties.SetTexture(s_mainTex, ao.ColorTextures[0], _shared.LinearClamp);
             if (previous != null && context.HasPreviousFrame)
             {
-                _properties.SetTexture("_PreviousBuffer", previous.ColorTextures[0], _resources.LinearClamp);
-                _properties.SetFloat("_TResponse", _settings.TemporalResponse);
+                _properties.SetTexture(s_previousBuffer, previous.ColorTextures[0], _shared.LinearClamp);
+                _properties.SetFloat(s_tResponse, _settings.TemporalResponse);
                 context.Fullscreen(_temporal, history, _properties);
             }
             else
@@ -518,17 +505,17 @@ public sealed class Gtao : ScreenLightingFeature
         if (_declared.Blur)
         {
             RenderTexture blur = context.Get(state.Blur);
-            _properties.SetFloat("_BlurRadius", _settings.BlurRadius);
-            _properties.SetFloat2("_ScreenSize", new Float2(context.View.Width, context.View.Height));
-            _properties.SetTexture("_MainTex", result.ColorTextures[0], _resources.LinearClamp);
-            _properties.SetFloat2("_BlurDirection", new Float2(1, 0));
+            _properties.SetFloat(s_blurRadius, _settings.BlurRadius);
+            _properties.SetFloat2(s_screenSize, new Float2(context.View.Width, context.View.Height));
+            _properties.SetTexture(s_mainTex, result.ColorTextures[0], _shared.LinearClamp);
+            _properties.SetFloat2(s_blurDirection, new Float2(1, 0));
             context.Fullscreen(_blur, blur, _properties);
-            _properties.SetTexture("_MainTex", blur.ColorTextures[0], _resources.LinearClamp);
-            _properties.SetFloat2("_BlurDirection", new Float2(0, 1));
+            _properties.SetTexture(s_mainTex, blur.ColorTextures[0], _shared.LinearClamp);
+            _properties.SetFloat2(s_blurDirection, new Float2(0, 1));
             context.Fullscreen(_blur, visibility, _properties);
             return;
         }
-        _properties.SetTexture("_MainTex", result.ColorTextures[0], _resources.LinearClamp);
+        _properties.SetTexture(s_mainTex, result.ColorTextures[0], _shared.LinearClamp);
         context.Fullscreen(_copy, visibility, _properties);
     }
 }
@@ -541,7 +528,14 @@ public sealed class Gtao : ScreenLightingFeature
 /// </summary>
 public sealed class ScreenSpaceReflections : PostEffect
 {
-    public override SceneTargets SceneReads => SceneTargets.Motion | SceneTargets.Normals | SceneTargets.Material;
+    private static readonly PropertyID s_cameraDepthTexture = "_CameraDepthTexture", s_cameraNormalsTexture = "_CameraNormalsTexture",
+        s_materialTexture = "_MaterialTexture", s_cameraMotionVectorsTexture = "_CameraMotionVectorsTexture", s_noise = "_Noise",
+        s_noiseSize = "_NoiseSize", s_jitterSizeAndOffset = "_JitterSizeAndOffset", s_resolveSize = "_ResolveSize", s_screenSize = "_ScreenSize",
+        s_numSteps = "_NumSteps", s_brdfBias = "_BRDFBias", s_edgeFactor = "_EdgeFactor", s_maxMipMap = "_MaxMipMap", s_rayReuse = "_RayReuse",
+        s_useNormalization = "_UseNormalization", s_fireflies = "_Fireflies", s_reflectionVelocity = "_ReflectionVelocity", s_mainTex = "_MainTex",
+        s_blurDir = "_BlurDir", s_rayCast = "_RayCast", s_previousBuffer = "_PreviousBuffer", s_tScale = "_TScale",
+        s_tResponse = "_TResponse", s_reflectionBuffer = "_ReflectionBuffer";
+    private static readonly PropertyID[] s_scenes = ["_Scene0", "_Scene1", "_Scene2", "_Scene3", "_Scene4"];
 
     private const int MaxMip = 5;
     private readonly FullscreenProgram _rayCast, _blur, _resolve, _temporal, _reproject, _combine, _copy;
@@ -558,7 +552,7 @@ public sealed class ScreenSpaceReflections : PostEffect
         public readonly TextureHandle[] Scratch = new TextureHandle[4];
     }
 
-    public ScreenSpaceReflections(Renderer renderer) : base(renderer)
+    public ScreenSpaceReflections(Renderer renderer) : base(renderer, RenderSlot.AfterOpaques, sceneReads: SceneTargets.Motion | SceneTargets.Normals | SceneTargets.Material)
     {
         _rayCast = Program("Ssr", "#define SSR_RAYCAST 1\n", source: false);
         _blur = Program("Ssr", "#define SSR_BLUR 1\n", source: false);
@@ -605,8 +599,6 @@ public sealed class ScreenSpaceReflections : PostEffect
     /// <summary>The part of the screen border reflections fade out over, 0 to 1.</summary>
     public float ScreenFadeSize { get; set; } = 0.25f;
 
-    public override RenderSlot Slot => RenderSlot.AfterOpaques;
-
     public override void Extract()
     {
         _settings = new Settings(Math.Clamp(RayDistance, 1, 100), Math.Clamp(BrdfBias, 0, 1), RayReuse, Normalization, ReduceFireflies, TemporalScale, Math.Clamp(TemporalResponse, 0, 1), ReflectionVelocity, Math.Clamp(ScreenFadeSize, 0, 1));
@@ -633,8 +625,8 @@ public sealed class ScreenSpaceReflections : PostEffect
         {
             for (int level = 0; level < 4; level++)
             {
-                state.Scratch[level] = builder.Temporary("Scratch" + level, view.Texture(Hdr, 1f / (1 << level)));
-                state.Pyramid[level] = builder.Temporary("Pyramid" + level, view.Texture(Hdr, 1f / (1 << (level + 1))));
+                state.Scratch[level] = builder.Temporary("Scratch", level, view.Texture(Hdr, 1f / (1 << level)));
+                state.Pyramid[level] = builder.Temporary("Pyramid", level, view.Texture(Hdr, 1f / (1 << (level + 1))));
             }
         }
         state.RayData = builder.Temporary("Rays", view.Texture(Hdr, _declared.Scale));
@@ -651,23 +643,23 @@ public sealed class ScreenSpaceReflections : PostEffect
         RenderTexture rays = context.Get(state.RayData);
         Float2 raySize = new(rays.ColorTextures[0].Width, rays.ColorTextures[0].Height);
 
-        _properties.SetTexture("_CameraDepthTexture", context.Depth!, PointClamp);
-        _properties.SetTexture("_CameraNormalsTexture", context.Normals!, PointClamp);
-        _properties.SetTexture("_MaterialTexture", context.Material!, PointClamp);
-        _properties.SetTexture("_CameraMotionVectorsTexture", context.Motion!, PointClamp);
-        _properties.SetTexture("_Noise", context.Noise, LinearRepeat);
-        _properties.SetFloat2("_NoiseSize", new Float2(256, 256));
-        _properties.SetFloat4("_JitterSizeAndOffset", new Float4(raySize.X / 256f, raySize.Y / 256f, jitter.X, jitter.Y));
-        _properties.SetFloat2("_ResolveSize", screen);
-        _properties.SetFloat2("_ScreenSize", screen);
-        _properties.SetFloat("_NumSteps", _settings.RayDistance);
-        _properties.SetFloat("_BRDFBias", _settings.BrdfBias);
-        _properties.SetFloat("_EdgeFactor", _settings.ScreenFade);
-        _properties.SetFloat("_MaxMipMap", MaxMip);
-        _properties.SetInt("_RayReuse", _settings.RayReuse ? 1 : 0);
-        _properties.SetInt("_UseNormalization", _settings.Normalization ? 1 : 0);
-        _properties.SetInt("_Fireflies", _settings.Fireflies ? 1 : 0);
-        _properties.SetInt("_ReflectionVelocity", _settings.ReflectionVelocity ? 1 : 0);
+        _properties.SetTexture(s_cameraDepthTexture, context.Depth!, PointClamp);
+        _properties.SetTexture(s_cameraNormalsTexture, context.Normals!, PointClamp);
+        _properties.SetTexture(s_materialTexture, context.Material!, PointClamp);
+        _properties.SetTexture(s_cameraMotionVectorsTexture, context.Motion!, PointClamp);
+        _properties.SetTexture(s_noise, context.Noise, LinearRepeat);
+        _properties.SetFloat2(s_noiseSize, new Float2(256, 256));
+        _properties.SetFloat4(s_jitterSizeAndOffset, new Float4(raySize.X / 256f, raySize.Y / 256f, jitter.X, jitter.Y));
+        _properties.SetFloat2(s_resolveSize, screen);
+        _properties.SetFloat2(s_screenSize, screen);
+        _properties.SetFloat(s_numSteps, _settings.RayDistance);
+        _properties.SetFloat(s_brdfBias, _settings.BrdfBias);
+        _properties.SetFloat(s_edgeFactor, _settings.ScreenFade);
+        _properties.SetFloat(s_maxMipMap, MaxMip);
+        _properties.SetInt(s_rayReuse, _settings.RayReuse ? 1 : 0);
+        _properties.SetInt(s_useNormalization, _settings.Normalization ? 1 : 0);
+        _properties.SetInt(s_fireflies, _settings.Fireflies ? 1 : 0);
+        _properties.SetInt(s_reflectionVelocity, _settings.ReflectionVelocity ? 1 : 0);
 
         // The reflected scene: the last result moved by motion for a bounce, else these opaques
         RenderTexture? previousCombined = _declared.Temporal ? context.History(state.Combined) : null;
@@ -675,31 +667,31 @@ public sealed class ScreenSpaceReflections : PostEffect
         if (previousCombined != null && context.HasPreviousFrame)
         {
             RenderTexture reprojected = context.Get(state.Source);
-            _properties.SetTexture("_MainTex", previousCombined.ColorTextures[0], LinearClamp);
+            _properties.SetTexture(s_mainTex, previousCombined.ColorTextures[0], LinearClamp);
             context.Fullscreen(_reproject, reprojected, _properties);
             source = reprojected.ColorTextures[0];
         }
 
-        _properties.SetTexture("_Scene0", source, LinearClamp);
+        _properties.SetTexture(s_scenes[0], source, LinearClamp);
         Texture level = source;
         for (int i = 0; i < 4; i++)
         {
             if (_declared.MipMap)
             {
                 RenderTexture scratch = context.Get(state.Scratch[i]), next = context.Get(state.Pyramid[i]);
-                _properties.SetTexture("_MainTex", level, LinearClamp);
-                _properties.SetFloat2("_BlurDir", new Float2(1, 0));
+                _properties.SetTexture(s_mainTex, level, LinearClamp);
+                _properties.SetFloat2(s_blurDir, new Float2(1, 0));
                 context.Fullscreen(_blur, scratch, _properties);
-                _properties.SetTexture("_MainTex", scratch.ColorTextures[0], LinearClamp);
-                _properties.SetFloat2("_BlurDir", new Float2(0, 1));
+                _properties.SetTexture(s_mainTex, scratch.ColorTextures[0], LinearClamp);
+                _properties.SetFloat2(s_blurDir, new Float2(0, 1));
                 context.Fullscreen(_blur, next, _properties);
                 level = next.ColorTextures[0];
             }
-            _properties.SetTexture("_Scene" + (i + 1), level, LinearClamp);
+            _properties.SetTexture(s_scenes[i + 1], level, LinearClamp);
         }
 
         context.Fullscreen(_rayCast, rays, _properties);
-        _properties.SetTexture("_RayCast", rays.ColorTextures[0], PointClamp);
+        _properties.SetTexture(s_rayCast, rays.ColorTextures[0], PointClamp);
         RenderTexture reflection = context.Get(state.Reflection);
         context.Fullscreen(_resolve, reflection, _properties);
 
@@ -708,16 +700,16 @@ public sealed class ScreenSpaceReflections : PostEffect
         {
             RenderTexture history = context.Get(state.ReflectionHistory);
             RenderTexture? previous = context.History(state.ReflectionHistory);
-            _properties.SetTexture("_MainTex", reflection.ColorTextures[0], LinearClamp);
+            _properties.SetTexture(s_mainTex, reflection.ColorTextures[0], LinearClamp);
             bool valid = previous != null && context.HasPreviousFrame;
-            _properties.SetTexture("_PreviousBuffer", (previous ?? reflection).ColorTextures[0], LinearClamp);
-            _properties.SetFloat("_TScale", _settings.TemporalScale);
-            _properties.SetFloat("_TResponse", valid ? _settings.TemporalResponse : 0);
+            _properties.SetTexture(s_previousBuffer, (previous ?? reflection).ColorTextures[0], LinearClamp);
+            _properties.SetFloat(s_tScale, _settings.TemporalScale);
+            _properties.SetFloat(s_tResponse, valid ? _settings.TemporalResponse : 0);
             context.Fullscreen(_temporal, history, _properties);
             final = history.ColorTextures[0];
         }
 
-        _properties.SetTexture("_ReflectionBuffer", final, LinearClamp);
+        _properties.SetTexture(s_reflectionBuffer, final, LinearClamp);
         if (!_declared.Temporal)
         {
             context.Fullscreen(_combine, _properties);
@@ -725,7 +717,7 @@ public sealed class ScreenSpaceReflections : PostEffect
         }
         RenderTexture combined = context.Get(state.Combined);
         context.Fullscreen(_combine, combined, _properties);
-        _properties.SetTexture("_MainTex", combined.ColorTextures[0], LinearClamp);
+        _properties.SetTexture(s_mainTex, combined.ColorTextures[0], LinearClamp);
         context.Fullscreen(_copy, _properties);
     }
 }
@@ -736,13 +728,14 @@ public sealed class ScreenSpaceReflections : PostEffect
 /// </summary>
 public sealed class MotionBlur : PostEffect
 {
-    public override SceneTargets SceneReads => SceneTargets.Motion;
+    private static readonly PropertyID s_motionVectorsTex = "_MotionVectorsTex", s_cameraDepthTexture = "_CameraDepthTexture",
+        s_resolution = "_Resolution", s_intensity = "_Intensity", s_samples = "_Samples", s_maxBlurRadius = "_MaxBlurRadius";
 
     private readonly FullscreenProgram _program;
     private readonly PropertySet _properties = new();
     private (float Intensity, int Samples, float MaxRadius) _settings;
 
-    public MotionBlur(Renderer renderer) : base(renderer) => _program = Program("MotionBlur");
+    public MotionBlur(Renderer renderer) : base(renderer, RenderSlot.HdrPost, sceneReads: SceneTargets.Motion) => _program = Program("MotionBlur");
 
     /// <summary>Blur strength, 1 physically correct.</summary>
     public float Intensity { get; set; } = 1;
@@ -752,8 +745,6 @@ public sealed class MotionBlur : PostEffect
 
     /// <summary>The longest blur in pixels.</summary>
     public float MaxBlurRadius { get; set; } = 40;
-
-    public override RenderSlot Slot => RenderSlot.HdrPost;
 
     public override void Extract() => _settings = (Intensity, Math.Clamp(Samples, 1, 32), Math.Max(1, MaxBlurRadius));
 
@@ -765,12 +756,12 @@ public sealed class MotionBlur : PostEffect
 
     public override void Render(FeatureContext context)
     {
-        _properties.SetTexture("_MotionVectorsTex", context.Motion!, PointClamp);
-        _properties.SetTexture("_CameraDepthTexture", context.Depth!, PointClamp);
-        _properties.SetFloat2("_Resolution", new Float2(context.View.Width, context.View.Height));
-        _properties.SetFloat("_Intensity", _settings.Intensity);
-        _properties.SetInt("_Samples", _settings.Samples);
-        _properties.SetFloat("_MaxBlurRadius", _settings.MaxRadius);
+        _properties.SetTexture(s_motionVectorsTex, context.Motion!, PointClamp);
+        _properties.SetTexture(s_cameraDepthTexture, context.Depth!, PointClamp);
+        _properties.SetFloat2(s_resolution, new Float2(context.View.Width, context.View.Height));
+        _properties.SetFloat(s_intensity, _settings.Intensity);
+        _properties.SetInt(s_samples, _settings.Samples);
+        _properties.SetFloat(s_maxBlurRadius, _settings.MaxRadius);
         context.Fullscreen(_program, _properties);
     }
 }
@@ -798,6 +789,12 @@ public enum DepthOfFieldQuality
 /// </summary>
 public sealed class DepthOfField : PostEffect
 {
+    private static readonly PropertyID s_cameraDepthTexture = "_CameraDepthTexture", s_prevFocusTex = "_PrevFocusTex",
+        s_useAutoFocus = "_UseAutoFocus", s_manualFocusPoint = "_ManualFocusPoint", s_focusBlend = "_FocusBlend",
+        s_focusHistoryValid = "_FocusHistoryValid", s_focusTex = "_FocusTex", s_focusStrength = "_FocusStrength", s_maxBlurRadius = "_MaxBlurRadius",
+        s_resolution = "_Resolution", s_downscale = "_Downscale", s_maxCoc = "_MaxCoC", s_rings = "_Rings", s_cocTex = "_CoCTex",
+        s_mainTex = "_MainTex", s_farTex = "_FarTex", s_nearTex = "_NearTex";
+
     private readonly FullscreenProgram _coc, _prefilter, _bokeh, _postfilter, _combine, _focus, _focusLayered;
     private readonly PropertySet _properties = new();
     private Settings _settings;
@@ -810,7 +807,7 @@ public sealed class DepthOfField : PostEffect
         public TextureHandle CoC, Prefiltered, Bokeh, Smoothed, Focus;
     }
 
-    public DepthOfField(Renderer renderer) : base(renderer)
+    public DepthOfField(Renderer renderer) : base(renderer, RenderSlot.HdrPost)
     {
         BlendStateDescription two = new(default, BlendAttachmentDescription.OverrideBlend, BlendAttachmentDescription.OverrideBlend);
         _coc = Program("DepthOfField", "#define DOF_COC 1\n", source: false);
@@ -839,8 +836,6 @@ public sealed class DepthOfField : PostEffect
 
     /// <summary>How fast the focus follows its target, per second, 0 or less to jump to it.</summary>
     public float FocusSpeed { get; set; } = 4;
-
-    public override RenderSlot Slot => RenderSlot.HdrPost;
 
     public override void Extract()
     {
@@ -877,35 +872,35 @@ public sealed class DepthOfField : PostEffect
         RenderTexture focus = context.Get(state.Focus);
         RenderTexture? previous = context.History(state.Focus);
         bool valid = previous != null && context.HasPreviousFrame;
-        _properties.SetTexture("_CameraDepthTexture", context.Depth!, PointClamp);
-        _properties.SetTexture("_PrevFocusTex", previous?.ColorTextures[0] ?? context.Noise, PointClamp);
-        _properties.SetFloat("_UseAutoFocus", _settings.AutoFocus ? 1 : 0);
-        _properties.SetFloat("_ManualFocusPoint", _settings.ManualFocus);
-        _properties.SetFloat("_FocusBlend", _settings.Speed > 0 ? 1 - MathF.Exp(-_settings.Speed * context.Time.DeltaTime) : 1);
-        _properties.SetFloat("_FocusHistoryValid", valid ? 1 : 0);
+        _properties.SetTexture(s_cameraDepthTexture, context.Depth!, PointClamp);
+        _properties.SetTexture(s_prevFocusTex, previous?.ColorTextures[0] ?? context.Noise, PointClamp);
+        _properties.SetFloat(s_useAutoFocus, _settings.AutoFocus ? 1 : 0);
+        _properties.SetFloat(s_manualFocusPoint, _settings.ManualFocus);
+        _properties.SetFloat(s_focusBlend, _settings.Speed > 0 ? 1 - MathF.Exp(-_settings.Speed * context.Time.DeltaTime) : 1);
+        _properties.SetFloat(s_focusHistoryValid, valid ? 1 : 0);
         context.Fullscreen(context.View.LayerCount > 1 ? _focusLayered : _focus, focus, _properties, shared: true);
 
-        _properties.SetTexture("_FocusTex", focus.ColorTextures[0], PointClamp);
-        _properties.SetFloat("_FocusStrength", _settings.Strength);
-        _properties.SetFloat("_MaxBlurRadius", _settings.MaxBlur);
-        _properties.SetFloat2("_Resolution", new Float2(width, height));
-        _properties.SetFloat("_Downscale", downscale);
-        _properties.SetFloat("_MaxCoC", _settings.MaxBlur * 0.01f * height / downscale);
-        _properties.SetInt("_Rings", _settings.Rings);
+        _properties.SetTexture(s_focusTex, focus.ColorTextures[0], PointClamp);
+        _properties.SetFloat(s_focusStrength, _settings.Strength);
+        _properties.SetFloat(s_maxBlurRadius, _settings.MaxBlur);
+        _properties.SetFloat2(s_resolution, new Float2(width, height));
+        _properties.SetFloat(s_downscale, downscale);
+        _properties.SetFloat(s_maxCoc, _settings.MaxBlur * 0.01f * height / downscale);
+        _properties.SetInt(s_rings, _settings.Rings);
         RenderTexture coc = context.Get(state.CoC);
         context.Fullscreen(_coc, coc, _properties);
 
-        _properties.SetTexture("_CoCTex", coc.ColorTextures[0], PointClamp);
+        _properties.SetTexture(s_cocTex, coc.ColorTextures[0], PointClamp);
         context.Fullscreen(_prefilter, prefiltered, _properties);
-        _properties.SetTexture("_MainTex", prefiltered.ColorTextures[0], LinearClamp);
+        _properties.SetTexture(s_mainTex, prefiltered.ColorTextures[0], LinearClamp);
         context.Fullscreen(_bokeh, bokeh, _properties);
-        _properties.SetTexture("_FarTex", bokeh.ColorTextures[0], LinearClamp);
-        _properties.SetTexture("_NearTex", bokeh.ColorTextures[1], LinearClamp);
+        _properties.SetTexture(s_farTex, bokeh.ColorTextures[0], LinearClamp);
+        _properties.SetTexture(s_nearTex, bokeh.ColorTextures[1], LinearClamp);
         context.Fullscreen(_postfilter, smoothed, _properties);
 
-        _properties.SetTexture("_FarTex", smoothed.ColorTextures[0], LinearClamp);
-        _properties.SetTexture("_NearTex", smoothed.ColorTextures[1], LinearClamp);
-        _properties.SetTexture("_CoCTex", coc.ColorTextures[0], LinearClamp);
+        _properties.SetTexture(s_farTex, smoothed.ColorTextures[0], LinearClamp);
+        _properties.SetTexture(s_nearTex, smoothed.ColorTextures[1], LinearClamp);
+        _properties.SetTexture(s_cocTex, coc.ColorTextures[0], LinearClamp);
         context.Fullscreen(_combine, _properties);
     }
 }
@@ -916,11 +911,15 @@ public sealed class DepthOfField : PostEffect
 /// </summary>
 public sealed class GodRays : PostEffect
 {
+    private static readonly PropertyID s_cameraDepthTexture = "_CameraDepthTexture", s_sunDirection = "_SunDirection",
+        s_godRayIntensity = "_GodRayIntensity", s_godRayDecay = "_GodRayDecay", s_godRayDensity = "_GodRayDensity", s_godRayWeight = "_GodRayWeight",
+        s_godRaySamples = "_GodRaySamples", s_godRayThreshold = "_GodRayThreshold";
+
     private readonly FullscreenProgram _program;
     private readonly PropertySet _properties = new();
     private (float Intensity, float Decay, float Density, float Weight, int Samples, float Threshold) _settings;
 
-    public GodRays(Renderer renderer) : base(renderer)
+    public GodRays(Renderer renderer) : base(renderer, RenderSlot.HdrPost)
     {
         _program = Program("GodRays");
         Order = 40;
@@ -943,8 +942,6 @@ public sealed class GodRays : PostEffect
     /// <summary>The luminance below which sky adds no rays.</summary>
     public float Threshold { get; set; } = 0.8f;
 
-    public override RenderSlot Slot => RenderSlot.HdrPost;
-
     public override void Extract() => _settings = (Intensity, Decay, Density, Weight, Math.Clamp(Samples, 8, 128), Threshold);
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
@@ -955,14 +952,14 @@ public sealed class GodRays : PostEffect
 
     public override void Render(FeatureContext context)
     {
-        _properties.SetTexture("_CameraDepthTexture", context.Depth!, PointClamp);
-        _properties.SetFloat3("_SunDirection", context.SunDirection ?? new Float3(0, -1, 0));
-        _properties.SetFloat("_GodRayIntensity", context.SunDirection == null ? 0 : _settings.Intensity);
-        _properties.SetFloat("_GodRayDecay", _settings.Decay);
-        _properties.SetFloat("_GodRayDensity", _settings.Density);
-        _properties.SetFloat("_GodRayWeight", _settings.Weight);
-        _properties.SetInt("_GodRaySamples", _settings.Samples);
-        _properties.SetFloat("_GodRayThreshold", _settings.Threshold);
+        _properties.SetTexture(s_cameraDepthTexture, context.Depth!, PointClamp);
+        _properties.SetFloat3(s_sunDirection, context.SunDirection ?? new Float3(0, -1, 0));
+        _properties.SetFloat(s_godRayIntensity, context.SunDirection == null ? 0 : _settings.Intensity);
+        _properties.SetFloat(s_godRayDecay, _settings.Decay);
+        _properties.SetFloat(s_godRayDensity, _settings.Density);
+        _properties.SetFloat(s_godRayWeight, _settings.Weight);
+        _properties.SetInt(s_godRaySamples, _settings.Samples);
+        _properties.SetFloat(s_godRayThreshold, _settings.Threshold);
         context.Fullscreen(_program, _properties);
     }
 }
@@ -974,22 +971,22 @@ public sealed class GodRays : PostEffect
 /// </summary>
 public abstract class DisplayEffect : PostEffect
 {
+    private static readonly PropertyID s_resolution = "_Resolution";
+
     private readonly FullscreenProgram _program;
     private readonly PropertySet _properties = new();
 
-    private protected DisplayEffect(Renderer renderer, string define, int order) : base(renderer)
+    private protected DisplayEffect(Renderer renderer, string define, int order) : base(renderer, RenderSlot.DisplayPost)
     {
         _program = Program("Cinematic", $"#define CINEMATIC_{define} 1\n");
         Order = order;
     }
 
-    public override RenderSlot Slot => RenderSlot.DisplayPost;
-
     public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
 
     public override void Render(FeatureContext context)
     {
-        _properties.SetFloat2("_Resolution", new Float2(context.View.Width, context.View.Height));
+        _properties.SetFloat2(s_resolution, new Float2(context.View.Width, context.View.Height));
         SetProperties(context, _properties);
         context.Fullscreen(_program, _properties);
     }
@@ -1001,18 +998,22 @@ public abstract class DisplayEffect : PostEffect
 /// <summary>Pixelation: the image in blocks of a size in pixels.</summary>
 public sealed class Pixelation(Renderer renderer) : DisplayEffect(renderer, "PIXELATION", 0)
 {
+    private static readonly PropertyID s_pixelSize = "_PixelSize";
+
     private float _size;
 
     public float PixelSize { get; set; } = 4;
 
     public override void Extract() => _size = MathF.Max(1, PixelSize);
 
-    private protected override void SetProperties(FeatureContext context, PropertySet properties) => properties.SetFloat("_PixelSize", _size);
+    private protected override void SetProperties(FeatureContext context, PropertySet properties) => properties.SetFloat(s_pixelSize, _size);
 }
 
 /// <summary>Chromatic aberration: red pushed outward and blue inward by a barrel distortion.</summary>
 public sealed class ChromaticAberration(Renderer renderer) : DisplayEffect(renderer, "CHROMATIC_ABERRATION", 1)
 {
+    private static readonly PropertyID s_chromaticIntensity = "_ChromaticIntensity", s_chromaticDistortion = "_ChromaticDistortion";
+
     private (float Intensity, float Distortion) _settings;
 
     /// <summary>The largest channel offset in pixels.</summary>
@@ -1025,14 +1026,16 @@ public sealed class ChromaticAberration(Renderer renderer) : DisplayEffect(rende
 
     private protected override void SetProperties(FeatureContext context, PropertySet properties)
     {
-        properties.SetFloat("_ChromaticIntensity", _settings.Intensity);
-        properties.SetFloat("_ChromaticDistortion", _settings.Distortion);
+        properties.SetFloat(s_chromaticIntensity, _settings.Intensity);
+        properties.SetFloat(s_chromaticDistortion, _settings.Distortion);
     }
 }
 
 /// <summary>Contrast adaptive sharpening.</summary>
 public sealed class Sharpen(Renderer renderer) : DisplayEffect(renderer, "SHARPEN", 2)
 {
+    private static readonly PropertyID s_sharpenAmount = "_SharpenAmount", s_sharpenRadius = "_SharpenRadius";
+
     private (float Amount, float Radius) _settings;
 
     /// <summary>Sharpening, 0 least to 1 most.</summary>
@@ -1045,14 +1048,16 @@ public sealed class Sharpen(Renderer renderer) : DisplayEffect(renderer, "SHARPE
 
     private protected override void SetProperties(FeatureContext context, PropertySet properties)
     {
-        properties.SetFloat("_SharpenAmount", _settings.Amount);
-        properties.SetFloat("_SharpenRadius", _settings.Radius);
+        properties.SetFloat(s_sharpenAmount, _settings.Amount);
+        properties.SetFloat(s_sharpenRadius, _settings.Radius);
     }
 }
 
 /// <summary>Sobel edge detection: edges drawn in a colour over the faded image.</summary>
 public sealed class EdgeDetection(Renderer renderer) : DisplayEffect(renderer, "EDGE_DETECTION", 3)
 {
+    private static readonly PropertyID s_edgeIntensity = "_EdgeIntensity", s_edgeColor = "_EdgeColor", s_edgeBackgroundFade = "_EdgeBackgroundFade";
+
     private (float Intensity, Float4 Color, float Fade) _settings;
 
     public float Intensity { get; set; } = 1;
@@ -1065,15 +1070,18 @@ public sealed class EdgeDetection(Renderer renderer) : DisplayEffect(renderer, "
 
     private protected override void SetProperties(FeatureContext context, PropertySet properties)
     {
-        properties.SetFloat("_EdgeIntensity", _settings.Intensity);
-        properties.SetFloat4("_EdgeColor", _settings.Color);
-        properties.SetFloat("_EdgeBackgroundFade", _settings.Fade);
+        properties.SetFloat(s_edgeIntensity, _settings.Intensity);
+        properties.SetFloat4(s_edgeColor, _settings.Color);
+        properties.SetFloat(s_edgeBackgroundFade, _settings.Fade);
     }
 }
 
 /// <summary>Colour grading: exposure, contrast around mid grey, temperature, saturation, then lift, gamma and gain.</summary>
 public sealed class ColorGrading(Renderer renderer) : DisplayEffect(renderer, "COLOR_GRADING", 4)
 {
+    private static readonly PropertyID s_postExposure = "_PostExposure", s_contrast = "_Contrast", s_saturation = "_Saturation",
+        s_temperature = "_Temperature", s_lift = "_Lift", s_gamma = "_Gamma", s_gain = "_Gain";
+
     private (float Exposure, float Contrast, float Saturation, float Temperature, Float4 Lift, Float4 Gamma, Float4 Gain) _settings;
 
     /// <summary>Exposure after the tonemapper, in stops.</summary>
@@ -1101,19 +1109,21 @@ public sealed class ColorGrading(Renderer renderer) : DisplayEffect(renderer, "C
 
     private protected override void SetProperties(FeatureContext context, PropertySet properties)
     {
-        properties.SetFloat("_PostExposure", _settings.Exposure);
-        properties.SetFloat("_Contrast", _settings.Contrast);
-        properties.SetFloat("_Saturation", _settings.Saturation);
-        properties.SetFloat("_Temperature", _settings.Temperature);
-        properties.SetFloat4("_Lift", _settings.Lift);
-        properties.SetFloat4("_Gamma", _settings.Gamma);
-        properties.SetFloat4("_Gain", _settings.Gain);
+        properties.SetFloat(s_postExposure, _settings.Exposure);
+        properties.SetFloat(s_contrast, _settings.Contrast);
+        properties.SetFloat(s_saturation, _settings.Saturation);
+        properties.SetFloat(s_temperature, _settings.Temperature);
+        properties.SetFloat4(s_lift, _settings.Lift);
+        properties.SetFloat4(s_gamma, _settings.Gamma);
+        properties.SetFloat4(s_gain, _settings.Gain);
     }
 }
 
 /// <summary>LUT grading from a strip texture, its slices side by side, 256 by 16 for a 16 cube. Without a texture it changes nothing.</summary>
 public sealed class ColorLookup(Renderer renderer) : DisplayEffect(renderer, "LUT", 5)
 {
+    private static readonly PropertyID s_lutTex = "_LUTTex", s_lutContribution = "_LUTContribution", s_lutSize = "_LUTSize";
+
     private (Texture? Texture, float Contribution) _settings;
 
     public Texture? Texture { get; set; }
@@ -1127,15 +1137,17 @@ public sealed class ColorLookup(Renderer renderer) : DisplayEffect(renderer, "LU
 
     private protected override void SetProperties(FeatureContext context, PropertySet properties)
     {
-        properties.SetTexture("_LUTTex", _settings.Texture!, LinearClamp);
-        properties.SetFloat("_LUTContribution", _settings.Contribution);
-        properties.SetFloat("_LUTSize", _settings.Texture!.Height);
+        properties.SetTexture(s_lutTex, _settings.Texture!, LinearClamp);
+        properties.SetFloat(s_lutContribution, _settings.Contribution);
+        properties.SetFloat(s_lutSize, _settings.Texture!.Height);
     }
 }
 
 /// <summary>Film grain, changing every frame, optionally stronger in highlights.</summary>
 public sealed class FilmGrain(Renderer renderer) : DisplayEffect(renderer, "FILM_GRAIN", 20)
 {
+    private static readonly PropertyID s_time = "_Time", s_grainIntensity = "_GrainIntensity", s_grainResponse = "_GrainResponse";
+
     private (float Intensity, float Response) _settings;
 
     public float Intensity { get; set; } = 0.15f;
@@ -1147,15 +1159,18 @@ public sealed class FilmGrain(Renderer renderer) : DisplayEffect(renderer, "FILM
 
     private protected override void SetProperties(FeatureContext context, PropertySet properties)
     {
-        properties.SetFloat("_Time", (float)context.Time.Time);
-        properties.SetFloat("_GrainIntensity", _settings.Intensity);
-        properties.SetFloat("_GrainResponse", _settings.Response);
+        properties.SetFloat(s_time, (float)context.Time.Time);
+        properties.SetFloat(s_grainIntensity, _settings.Intensity);
+        properties.SetFloat(s_grainResponse, _settings.Response);
     }
 }
 
 /// <summary>Vignette, darkening toward the edges.</summary>
 public sealed class Vignette(Renderer renderer) : DisplayEffect(renderer, "VIGNETTE", 21)
 {
+    private static readonly PropertyID s_vignetteIntensity = "_VignetteIntensity", s_vignetteSmoothness = "_VignetteSmoothness",
+        s_vignetteRoundness = "_VignetteRoundness";
+
     private (float Intensity, float Smoothness, float Roundness) _settings;
 
     public float Intensity { get; set; } = 0.4f;
@@ -1168,20 +1183,23 @@ public sealed class Vignette(Renderer renderer) : DisplayEffect(renderer, "VIGNE
 
     private protected override void SetProperties(FeatureContext context, PropertySet properties)
     {
-        properties.SetFloat("_VignetteIntensity", _settings.Intensity);
-        properties.SetFloat("_VignetteSmoothness", _settings.Smoothness);
-        properties.SetFloat("_VignetteRoundness", _settings.Roundness);
+        properties.SetFloat(s_vignetteIntensity, _settings.Intensity);
+        properties.SetFloat(s_vignetteSmoothness, _settings.Smoothness);
+        properties.SetFloat(s_vignetteRoundness, _settings.Roundness);
     }
 }
 
 /// <summary>FXAA 3.11 on display referred colour, in the AntiAliasing group with TAA and SMAA, before film grain and vignette.</summary>
 public sealed class Fxaa : PostEffect
 {
+    private static readonly PropertyID s_resolution = "_Resolution", s_edgeThresholdMax = "_EdgeThresholdMax",
+        s_edgeThresholdMin = "_EdgeThresholdMin", s_subpixelQuality = "_SubpixelQuality";
+
     private readonly FullscreenProgram _program;
     private readonly PropertySet _properties = new();
     private (float Max, float Min, float Subpixel) _settings;
 
-    public Fxaa(Renderer renderer) : base(renderer)
+    public Fxaa(Renderer renderer) : base(renderer, RenderSlot.DisplayPost, FeatureGroup.AntiAliasing)
     {
         _program = Program("Fxaa");
         Order = 10;
@@ -1196,19 +1214,16 @@ public sealed class Fxaa : PostEffect
     /// <summary>Subpixel smoothing, 0 to 1.</summary>
     public float SubpixelQuality { get; set; } = 0.75f;
 
-    public override RenderSlot Slot => RenderSlot.DisplayPost;
-    public override string? ExclusiveGroup => "AntiAliasing";
-
     public override void Extract() => _settings = (EdgeThresholdMax, EdgeThresholdMin, SubpixelQuality);
 
     public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
 
     public override void Render(FeatureContext context)
     {
-        _properties.SetFloat2("_Resolution", new Float2(context.View.Width, context.View.Height));
-        _properties.SetFloat("_EdgeThresholdMax", _settings.Max);
-        _properties.SetFloat("_EdgeThresholdMin", _settings.Min);
-        _properties.SetFloat("_SubpixelQuality", _settings.Subpixel);
+        _properties.SetFloat2(s_resolution, new Float2(context.View.Width, context.View.Height));
+        _properties.SetFloat(s_edgeThresholdMax, _settings.Max);
+        _properties.SetFloat(s_edgeThresholdMin, _settings.Min);
+        _properties.SetFloat(s_subpixelQuality, _settings.Subpixel);
         context.Fullscreen(_program, _properties);
     }
 }
@@ -1219,6 +1234,9 @@ public sealed class Fxaa : PostEffect
 /// </summary>
 public sealed class Smaa : PostEffect
 {
+    private static readonly PropertyID s_resolution = "_Resolution", s_edgeThreshold = "_EdgeThreshold", s_mainTex = "_MainTex",
+        s_areaTex = "_AreaTex", s_searchTex = "_SearchTex", s_blendTex = "_BlendTex";
+
     private readonly FullscreenProgram _edges, _weights, _blend;
     private readonly PropertySet _properties = new();
     private float _threshold;
@@ -1228,7 +1246,7 @@ public sealed class Smaa : PostEffect
         public TextureHandle Edges, Weights;
     }
 
-    public Smaa(Renderer renderer) : base(renderer)
+    public Smaa(Renderer renderer) : base(renderer, RenderSlot.DisplayPost, FeatureGroup.AntiAliasing)
     {
         _edges = Program("Smaa", "#define SMAA_EDGES 1\n", source: false);
         _weights = Program("Smaa", "#define SMAA_WEIGHTS 1\n", source: false);
@@ -1238,9 +1256,6 @@ public sealed class Smaa : PostEffect
 
     /// <summary>Edge sensitivity, about 0.05 to 0.2, lower finding more edges.</summary>
     public float EdgeThreshold { get; set; } = 0.1f;
-
-    public override RenderSlot Slot => RenderSlot.DisplayPost;
-    public override string? ExclusiveGroup => "AntiAliasing";
 
     public override void Extract() => _threshold = EdgeThreshold;
 
@@ -1256,16 +1271,16 @@ public sealed class Smaa : PostEffect
     {
         ViewState state = context.GetViewState<ViewState>();
         RenderTexture edges = context.Get(state.Edges), weights = context.Get(state.Weights);
-        (Texture area, Texture search) = context.SmaaTables;
-        _properties.SetFloat2("_Resolution", new Float2(context.View.Width, context.View.Height));
-        _properties.SetFloat("_EdgeThreshold", _threshold);
-        _properties.SetTexture("_MainTex", context.Color!, LinearClamp);
+        (TextureView area, TextureView search) = context.SmaaTables;
+        _properties.SetFloat2(s_resolution, new Float2(context.View.Width, context.View.Height));
+        _properties.SetFloat(s_edgeThreshold, _threshold);
+        _properties.SetTexture(s_mainTex, context.Color!, LinearClamp);
         context.Fullscreen(_edges, edges, _properties, clear: true);
-        _properties.SetTexture("_MainTex", edges.ColorTextures[0], LinearClamp);
-        _properties.SetTexture("_AreaTex", area, LinearClamp);
-        _properties.SetTexture("_SearchTex", search, LinearClamp);
+        _properties.SetTexture(s_mainTex, edges.ColorTextures[0], LinearClamp);
+        _properties.SetTexture(s_areaTex, area, LinearClamp);
+        _properties.SetTexture(s_searchTex, search, LinearClamp);
         context.Fullscreen(_weights, weights, _properties, clear: true);
-        _properties.SetTexture("_BlendTex", weights.ColorTextures[0], LinearClamp);
+        _properties.SetTexture(s_blendTex, weights.ColorTextures[0], LinearClamp);
         context.Fullscreen(_blend, _properties);
     }
 }

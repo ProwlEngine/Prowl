@@ -205,7 +205,7 @@ public struct ViewDesc
     public bool Cut;
 
     /// <summary>Features of this view alone, over the world's.</summary>
-    public FeatureSet? Features;
+    public ExtensionSet<RenderFeature>? Features;
 
     /// <summary>Values of global axes for this view alone, over the world's, such as GRAPHITE_DEBUG. Copied at SubmitFrame.</summary>
     public Keyword[]? Keywords;
@@ -316,7 +316,7 @@ public sealed class Renderer : IDisposable
     private bool _disposed;
 
     /// <summary>Frame features that are not per world, with the built in Deform and Readback. Host thread.</summary>
-    public FrameFeatureSet FrameFeatures { get; } = new(null);
+    public ExtensionSet<FrameFeature> FrameFeatures { get; } = new(null);
 
     public Renderer(GraphicsDevice device, IShaderCompiler? compiler, RendererOptions? options = null)
     {
@@ -332,14 +332,16 @@ public sealed class Renderer : IDisposable
         InternalShaders.Register();
         _fallbackShader = CompileFallback();
 
-        Textures = new RendererTextures(device) { Reporter = Report };
+        Resources = new RendererResources(device, compiler);
+        Textures = Resources.Textures;
+        Textures.Reporter = Report;
         _uploader = new Uploader(device, InternalShaders.Compute(device, compiler, "Internal/Scatter.glsl"));
         _store = new RenderStore();
         _geometry = new GeometryPool(device, _store, _options.PageVertexWords, _options.PageIndices);
         _materials = new MaterialSystem(device, _store, Textures) { Reporter = Report };
         _globals = new GlobalRegistry(device, _store, Textures) { Reporter = Report };
         _programs.Reporter = Report;
-        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, Report, _options.Compile) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
+        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Resources, Report, _options.Compile) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
         FrameFeatures.Add(new DeformFeature());
         FrameFeatures.Add(new ReadbackFeature());
         _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
@@ -385,6 +387,9 @@ public sealed class Renderer : IDisposable
     public GraphicsDevice Device { get; }
 
     public RendererTextures Textures { get; }
+
+    /// <summary>The GPU resources the frames, views and effects share.</summary>
+    internal RendererResources Resources { get; }
 
     /// <summary>Values and keywords every shader can read, overridden per world.</summary>
     public GlobalProperties Globals => _globals.Renderer;
@@ -713,7 +718,6 @@ public sealed class Renderer : IDisposable
         {
             foreach (FrameFeature feature in features)
             {
-                feature.TakeSnapshot();
                 if (feature.EnabledSnapshot)
                     feature.Extract();
             }
@@ -723,10 +727,7 @@ public sealed class Renderer : IDisposable
         {
             foreach (RenderFeature feature in features)
             {
-                if (!_extracted.Add(feature))
-                    continue;
-                feature.TakeSnapshot();
-                if (feature.EnabledSnapshot)
+                if (_extracted.Add(feature) && feature.EnabledSnapshot)
                     feature.Extract();
             }
         }
@@ -847,7 +848,7 @@ public sealed class Renderer : IDisposable
         _effects?.Dispose();
         _uploader.Dispose();
         _store.Dispose();
-        Textures.Dispose();
+        Resources.Dispose();
         _frameQueued.Dispose();
         _frameDone.Dispose();
     }

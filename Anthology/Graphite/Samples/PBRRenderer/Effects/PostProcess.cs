@@ -33,14 +33,11 @@ internal static class FullscreenPrograms
 }
 
 
-internal sealed class BloomStage(BloomSettings settings, GraphicsProgram program, Sampler sampler, int order, string? input, string? add, string output, float scale, bool prefilter) : RenderFeature
+internal sealed class BloomStage(BloomSettings settings, GraphicsProgram program, Sampler sampler, int order, string? input, string? add, string output, float scale, bool prefilter) : RenderFeature(RenderSlot.HdrPost, order: order)
 {
     private readonly PropertySet _properties = new();
     private float _threshold;
     private float _radius;
-
-    public override RenderSlot Slot => RenderSlot.HdrPost;
-    public override int Order => order;
 
     public override void Extract()
     {
@@ -94,13 +91,10 @@ internal sealed class BloomStage(BloomSettings settings, GraphicsProgram program
 }
 
 
-internal sealed class BloomComposite(BloomSettings settings, FullscreenProgram program, Sampler sampler, string input) : RenderFeature
+internal sealed class BloomComposite(BloomSettings settings, FullscreenProgram program, Sampler sampler, string input) : RenderFeature(RenderSlot.HdrPost, order: 100)
 {
     private readonly PropertySet _properties = new();
     private float _intensity;
-
-    public override RenderSlot Slot => RenderSlot.HdrPost;
-    public override int Order => 100;
 
     public override void Extract() => _intensity = settings.Intensity;
 
@@ -230,7 +224,7 @@ internal sealed class Bloom : System.IDisposable
         }
     }
 
-    public void AddTo(FeatureSet set)
+    public void AddTo(ExtensionSet<RenderFeature> set)
     {
         foreach (RenderFeature feature in _features)
             set.Add(feature);

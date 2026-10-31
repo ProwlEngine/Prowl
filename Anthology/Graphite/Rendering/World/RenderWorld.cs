@@ -295,13 +295,13 @@ public sealed partial class RenderWorld : IDisposable
     internal ShadowSettings ShadowSnapshot = new();
 
     /// <summary>Features every view of the world runs. Host thread.</summary>
-    public FeatureSet Features { get; } = new();
+    public ExtensionSet<RenderFeature> Features { get; } = new();
 
     /// <summary>GPU work run once a frame outside any view, with the world's built in LightProbes, LocalShadows and CaptureFill. Host thread.</summary>
-    public FrameFeatureSet FrameFeatures { get; }
+    public ExtensionSet<FrameFeature> FrameFeatures { get; }
 
     /// <summary>Host geometry drawn into each view through its passes without being renderables. Host thread.</summary>
-    public ProviderSet Providers { get; } = new();
+    public ExtensionSet<RenderProvider> Providers { get; } = new();
 
     /// <summary>The providers as of the last SubmitFrame. The render thread reads only this.</summary>
     internal RenderProvider[] ProviderSnapshot = [];
@@ -549,7 +549,7 @@ public sealed partial class RenderWorld : IDisposable
     {
         _owner = owner;
         _device = device;
-        FrameFeatures = new FrameFeatureSet(this) { new LightProbeFeature(), new LocalShadowFeature(), new CaptureFillFeature() };
+        FrameFeatures = new ExtensionSet<FrameFeature>(this) { new LightProbeFeature(), new LocalShadowFeature(), new CaptureFillFeature() };
         int id = System.Threading.Interlocked.Increment(ref s_nextId);
         Id = id;
         Name = $"World {id}";
@@ -819,9 +819,7 @@ public sealed partial class RenderWorld : IDisposable
         ProviderSnapshot = Providers.Snapshot();
         foreach (RenderProvider provider in ProviderSnapshot)
         {
-            provider.EnabledSnapshot = provider.Enabled;
-            provider.RunsOnSnapshot = provider.RunsOn;
-            if (!provider.Enabled)
+            if (!provider.EnabledSnapshot)
                 continue;
             try
             {

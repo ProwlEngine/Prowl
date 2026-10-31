@@ -196,10 +196,7 @@ internal sealed class CameraFrame : IDisposable
     public FeatureView Info;
 
     /// <summary>Adds the view's passes to the frame graph.</summary>
-    public readonly ViewGraph Build, Probe;
-
-    /// <summary>The pass types each selected feature asked for, learned by a probe the first time the view selects it.</summary>
-    public readonly Dictionary<RenderFeature, PassType[]> KnownTypes = new();
+    public readonly ViewGraph Build;
 
     /// <summary>What the features selected this frame ask of the view, as a shape.</summary>
     public CameraShape ShapeKey;
@@ -283,12 +280,16 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>The view's buffers for a set's trees.</summary>
     public SpatialView SpatialFor(int slot) => Spatial[slot] ??= new SpatialView(_tables.Scope($"Set{slot}"));
 
+    private string? _defaultName;
+
+    /// <summary>The name the view records under when the host gave it none.</summary>
+    public string DefaultName(bool capture) => _defaultName ??= capture ? $"Capture {View.ViewId}" : $"Camera {View.ViewId}";
+
     public CameraFrame(GraphicsDevice device, FramePipeline frame, int viewId)
     {
         _frame = frame;
         Drawer = new SceneDrawer(frame, this);
-        Build = new ViewGraph(frame, this, frame.Graph, probing: false);
-        Probe = new ViewGraph(frame, this, frame.ProbeGraph, probing: true);
+        Build = new ViewGraph(frame, this, frame.Graph);
         View.ViewId = viewId;
         Lists = [Prepass, Forward, Transparent];
         ViewTable = new TableRing(device, ProgramCache.ViewLayout, $"View table {viewId}");
@@ -305,7 +306,18 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>Picks this frame's features.</summary>
     public void SelectFeatures(RenderFeature[] world, RenderFeature[] view)
     {
-        FeatureSelection.Select(Selected, world, view, Info);
+        FeatureSelection.Select(Selected, _frame.BuiltIns, world, view, Info);
+    }
+
+    /// <summary>Makes the lists of the pass types the selected features draw, the built in lists kept.</summary>
+    public void ListSelectedPasses()
+    {
+        ResetPassLists();
+        foreach (RenderFeature feature in Selected)
+        {
+            foreach (PassType type in feature.PassArray)
+                ListFor(type);
+        }
     }
 
     /// <summary>The scene targets the selected features read.</summary>
@@ -315,7 +327,7 @@ internal sealed class CameraFrame : IDisposable
         {
             SceneTargets targets = SceneTargets.None;
             foreach (RenderFeature feature in Selected)
-                targets |= feature.SceneReadsSnapshot;
+                targets |= feature.SceneReads;
             return targets;
         }
     }
@@ -374,12 +386,7 @@ internal sealed class CameraFrame : IDisposable
     // States are kept while their feature is in the world's or view's set, so history survives toggles
     public void PruneStates(RenderFeature[] world, RenderFeature[] view)
     {
-        bool Known(RenderFeature feature) => Array.IndexOf(world, feature) >= 0 || Array.IndexOf(view, feature) >= 0 || Array.IndexOf(FeatureSelection.BuiltIn, feature) >= 0;
-        foreach (RenderFeature feature in new List<RenderFeature>(KnownTypes.Keys))
-        {
-            if (!Known(feature))
-                KnownTypes.Remove(feature);
-        }
+        bool Known(RenderFeature feature) => Array.IndexOf(world, feature) >= 0 || Array.IndexOf(view, feature) >= 0 || Array.IndexOf(_frame.BuiltIns, feature) >= 0;
         List<(RenderFeature, Type)>? stale = null;
         foreach ((RenderFeature feature, Type type) in States.Keys)
         {
@@ -417,7 +424,7 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>The frame's draw lists: prepass, opaque, transparent, then one per pass type a feature draws.</summary>
     public List<DrawList> Lists { get; }
 
-    /// <summary>The pass types features of the view draw, each with its list, as of the last graph build.</summary>
+    /// <summary>The pass types the view's selected features draw, each with its list.</summary>
     public readonly List<(PassType Type, DrawList List)> PassLists = new();
     private readonly Dictionary<PassType, DrawList> _passListPool = new();
 
@@ -427,7 +434,7 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>State features keep for this view, made the first time each asks.</summary>
     public readonly Dictionary<(RenderFeature Feature, Type Type), object> States = new();
 
-    /// <summary>The list of a pass type a feature draws, made when the view's graph is built.</summary>
+    /// <summary>The list of a pass type the view draws, made the first time it is asked for.</summary>
     public DrawList ListFor(PassType type)
     {
         if (type == PassType.Prepass)
@@ -461,7 +468,7 @@ internal sealed class CameraFrame : IDisposable
         return null;
     }
 
-    /// <summary>Forgets which pass lists the view draws before a graph build asks for them again, keeping what they hold.</summary>
+    /// <summary>Forgets which pass lists the view draws, keeping what they hold for when it asks for them again.</summary>
     public void ResetPassLists()
     {
         PassLists.Clear();

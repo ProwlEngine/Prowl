@@ -19,6 +19,12 @@ internal readonly record struct FrameEntry(FrameFeature Feature, WorldFrame? Wor
 
 internal sealed partial class FramePipeline : IDisposable
 {
+    private static readonly PropertyID s_measured = "Graphite_Measured", s_exposureState = "Graphite_ExposureState",
+        s_exposureViews = "Graphite_ExposureViews", s_chunks = "Graphite_Chunks", s_transforms = "Graphite_Transforms",
+        s_previousTransforms = "Graphite_PreviousTransforms", s_objects = "Graphite_Objects", s_materialSlots = "Graphite_MaterialSlots",
+        s_worldLighting = "Graphite_WorldLighting", s_objectProbes = "Graphite_ObjectProbes", s_skyAmbientSH = "Graphite_SkyAmbientSH",
+        s_directionals = "Graphite_Directionals";
+
     [StructLayout(LayoutKind.Sequential)]
     public struct Push
     {
@@ -48,7 +54,6 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly List<PlannedInstance> _planned = new();
     private readonly RenderStore _store;
     private readonly FrameGraph _graph;
-    private readonly FrameGraph _probeGraph;
 
     internal RenderStore Store => _store;
 
@@ -64,8 +69,8 @@ internal sealed partial class FramePipeline : IDisposable
     /// <summary>The graph every frame is built into.</summary>
     internal FrameGraph Graph => _graph;
 
-    /// <summary>A graph nobody runs, which views build into to learn what their features ask for.</summary>
-    internal FrameGraph ProbeGraph => _probeGraph;
+    /// <summary>The renderer's own view features, which every view runs unless a feature of their group replaces one.</summary>
+    internal RenderFeature[] BuiltIns { get; }
     private readonly List<CameraFrame> _captures = new();
     private readonly List<IDisposable> _retired = new();
     private readonly ProviderCountsPass _counts;
@@ -86,12 +91,13 @@ internal sealed partial class FramePipeline : IDisposable
 
     private readonly Uploader _uploader;
 
-    public FramePipeline(GraphicsDevice device, RenderStore store, IShaderCompiler? compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async)
+    public FramePipeline(GraphicsDevice device, RenderStore store, IShaderCompiler? compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererResources resources, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async)
     {
         Report = report;
         _device = device;
         _compiler = compiler;
-        _textures = textures;
+        Resources = resources;
+        _textures = resources.Textures;
         _store = store;
         _uploader = uploader;
         _syncCompiles = policy == CompilePolicy.Sync;
@@ -102,61 +108,13 @@ internal sealed partial class FramePipeline : IDisposable
         Programs = new ProgramCache(device, compiler, globals, programs, report, policy, _retired.Add);
         programs.Freed += Programs.Drop;
         _graph = new FrameGraph(device, "Graphite");
-        _probeGraph = new FrameGraph(device, "Graphite probe");
+        BuiltIns = FeatureSelection.BuiltIns(resources);
         Buffers = new FrameBuffers();
         _counts = new ProviderCountsPass(this);
         _upload = new UploadPass(uploader, store);
         _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl"));
         _deform = new DeformPass(InternalShaders.Compute(device, compiler, "Internal/Deform.glsl"), geometry);
         _readback = new ReadbackStaging(device, report);
-
-        const string present = InternalShaders.Present, decode = InternalShaders.Decode, encode = InternalShaders.Encode;
-        BlendStateDescription over = new(default, BlendAttachmentDescription.AlphaBlend with { SourceColorFactor = BlendFactor.One, SourceAlphaFactor = BlendFactor.One });
-        _present =
-        [
-            FullscreenProgram.Create(device, compiler, present, "Graphite/Present"),
-            FullscreenProgram.Create(device, compiler, present, "Graphite/PresentOver", blend: over),
-            FullscreenProgram.Create(device, compiler, decode, "Graphite/PresentDecode"),
-            FullscreenProgram.Create(device, compiler, decode, "Graphite/PresentDecodeOver", blend: over),
-            FullscreenProgram.Create(device, compiler, encode, "Graphite/PresentEncode"),
-            FullscreenProgram.Create(device, compiler, encode, "Graphite/PresentEncodeOver", blend: over),
-        ];
-        Noise = LoadData(device, "Noise.bin", 256, 256, mipmapped: true);
-        SmaaArea = LoadData(device, "SmaaArea.bin", 160, 560, mipmapped: false);
-        SmaaSearch = LoadData(device, "SmaaSearch.bin", 64, 16, mipmapped: false);
-        SmaaAreaLayered = LoadData(device, "SmaaArea.bin", 160, 560, mipmapped: false, layers: 6);
-        SmaaSearchLayered = LoadData(device, "SmaaSearch.bin", 64, 16, mipmapped: false, layers: 6);
-        textures.RegisterDefault("noise", Noise);
-        Dfg = LoadTable(device, "Dfg.bin", PixelFormat.R16_G16_B16_A16_Float, 128, 128, 1);
-        DielectricE = LoadTable(device, "DielectricE.bin", PixelFormat.R16_Float, 32, 32, 32);
-        AnisotropicDfg = LoadTable(device, "AnisotropicDfg.bin", PixelFormat.R16_G16_B16_A16_Float, 32, 16, 64);
-        NoScreenVisibility = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R8_UNorm, TextureUsage.Sampled));
-        NoScreenIrradiance = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
-        NoSceneColor = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
-        NoSceneDepth = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R32_Float, TextureUsage.Sampled));
-        for (uint layer = 0; layer < 6; layer++)
-        {
-            device.UpdateTexture<byte>(NoScreenVisibility, [255], TextureRegion.Whole(NoScreenVisibility, 0, layer));
-            device.UpdateTexture<ushort>(NoScreenIrradiance, [0, 0, 0, 0], TextureRegion.Whole(NoScreenIrradiance, 0, layer));
-            device.UpdateTexture<ushort>(NoSceneColor, [0, 0, 0, 0], TextureRegion.Whole(NoSceneColor, 0, layer));
-            device.UpdateTexture<float>(NoSceneDepth, [0f], TextureRegion.Whole(NoSceneDepth, 0, layer));
-        }
-        ClearProgram = FullscreenProgram.Create(device, compiler, InternalShaders.Clear, "Graphite/Clear", source: false);
-        BlendAttachmentDescription untouched = BlendAttachmentDescription.OverrideBlend with { ColorWriteMask = ColorWriteMask.None };
-        CopyBackProgram = FullscreenProgram.Create(device, compiler, InternalShaders.CopyBack, "Graphite/CopyBack",
-            blend: new BlendStateDescription(default, BlendAttachmentDescription.OverrideBlend, untouched, untouched));
-        PrefilterProgram = Fullscreen(device, compiler, "Internal/Prefilter.glsl");
-        SkyAmbientProgram = InternalShaders.Compute(device, compiler, "Internal/SkyAmbient.glsl");
-        ExposureProgram = InternalShaders.Compute(device, compiler, "Internal/Exposure.glsl");
-        NoExposure = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_Float, TextureUsage.Sampled));
-        device.UpdateTexture<float>(NoExposure, [0f], TextureRegion.Whole(NoExposure, 0, 0));
-        TrilinearClamp = device.ResourceFactory.CreateSampler(SamplerDescription.Linear with
-        {
-            AddressModeU = SamplerAddressMode.Clamp,
-            AddressModeV = SamplerAddressMode.Clamp,
-            AddressModeW = SamplerAddressMode.Clamp,
-        });
-        LinearSampler = device.ResourceFactory.CreateSampler(SamplerDescription.Linear);
     }
 
     public GraphicsDevice Device => _device;
@@ -165,83 +123,12 @@ internal sealed partial class FramePipeline : IDisposable
     public GlobalRegistry Globals { get; }
     public DrawPrograms DrawPrograms { get; }
     public ProgramCache Programs { get; }
-    private readonly FullscreenProgram[] _present;
 
-    /// <summary>
-    /// Copies the view's colour to its target with its rows reversed, the first row at the bottom of clip space. Decoding
-    /// undoes a tonemapper's encode for sRGB and float targets so theirs applies once, encoding sRGB encodes linear colour for
-    /// targets that store display values, and over blends it as premultiplied by its alpha.
-    /// </summary>
-    public FullscreenProgram Present(bool decode, bool encode, bool over) => _present[(decode ? 2 : encode ? 4 : 0) + (over ? 1 : 0)];
-
-    /// <summary>The noise texture: blue noise in red, white noise in green, voronoi in blue, 256 square, mipmapped.</summary>
-    public Texture Noise { get; }
-
-    /// <summary>The SMAA reference's area and search tables, RGBA8 in its row order.</summary>
-    public Texture SmaaArea { get; }
-    public Texture SmaaSearch { get; }
-
-    /// <summary>The SMAA tables in each of six layers, for layered views.</summary>
-    public Texture SmaaAreaLayered { get; }
-    public Texture SmaaSearchLayered { get; }
-
-    /// <summary>The screen lighting a view without a producer reads: full visibility, no irradiance, six layers.</summary>
-    public Texture NoScreenVisibility { get; }
-    public Texture NoScreenIrradiance { get; }
-
-    /// <summary>The scene colour a view without a copy reads: black, six layers.</summary>
-    public Texture NoSceneColor { get; }
-    public Texture NoSceneDepth { get; }
-
-    /// <summary>The GGX energy tables of Graphite/PBR/Energy.glsl, generated and verified by the rendering tests.</summary>
-    public Texture Dfg { get; }
-    public Texture DielectricE { get; }
-    public Texture AnisotropicDfg { get; }
-
-    // An RGBA8 texture from the library's data, in its stored row order, in every layer, mipmapped on the GPU when asked
-    private static Texture LoadData(GraphicsDevice device, string file, uint width, uint height, bool mipmapped, uint layers = 1)
-    {
-        using System.IO.Stream stream = typeof(FramePipeline).Assembly.GetManifestResourceStream("Graphite/Data/" + file)
-            ?? throw new InvalidOperationException($"The library has no Data/{file}.");
-        byte[] pixels = new byte[width * height * 4];
-        stream.ReadExactly(pixels);
-        uint mips = mipmapped ? (uint)Math.Log2(Math.Max(width, height)) + 1 : 1;
-        Texture texture = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(width, height, mips, layers, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
-        texture.Name = "Graphite " + System.IO.Path.GetFileNameWithoutExtension(file);
-        for (uint layer = 0; layer < layers; layer++)
-            device.UpdateTexture<byte>(texture, pixels, TextureRegion.Whole(texture, 0, layer));
-        if (mipmapped)
-            device.Record(cmd => cmd.GenerateMipmaps(texture)).Wait();
-        return texture;
-    }
-
-    // A half float table from the library's data, x fastest, then y, then z
-    private static Texture LoadTable(GraphicsDevice device, string file, PixelFormat format, uint width, uint height, uint depth)
-    {
-        using System.IO.Stream stream = typeof(FramePipeline).Assembly.GetManifestResourceStream("Graphite/Data/" + file)
-            ?? throw new InvalidOperationException($"The library has no Data/{file}.");
-        uint channels = format == PixelFormat.R16_Float ? 1u : 4u;
-        ushort[] texels = new ushort[width * height * depth * channels];
-        stream.ReadExactly(MemoryMarshal.AsBytes(texels.AsSpan()));
-        TextureDescription description = depth > 1
-            ? TextureDescription.Texture3D(width, height, depth, 1, format, TextureUsage.Sampled)
-            : TextureDescription.Texture2D(width, height, 1, 1, format, TextureUsage.Sampled);
-        Texture texture = device.ResourceFactory.CreateTexture(description);
-        texture.Name = "Graphite " + System.IO.Path.GetFileNameWithoutExtension(file);
-        device.UpdateTexture<ushort>(texture, texels, TextureRegion.Whole(texture, 0, 0));
-        return texture;
-    }
-
-    /// <summary>Fills a view's viewport with its clear colour when nothing drew.</summary>
-    public FullscreenProgram ClearProgram { get; }
-
-    /// <summary>Copies a colour features wrote back into the scene's colour, leaving its G-buffer.</summary>
-    public FullscreenProgram CopyBackProgram { get; }
+    /// <summary>The GPU resources shared by every frame, view and effect.</summary>
+    public RendererResources Resources { get; }
 
     /// <summary>Resources the frame stopped using, disposed once it is dispatched.</summary>
     public List<IDisposable> Retired => _retired;
-
-    public GraphicsProgram PrefilterProgram { get; }
 
     /// <summary>What the capture fill passes bind, one set each so nothing one binds reaches the other.</summary>
     internal PropertySet PrefilterProperties { get; } = new();
@@ -249,31 +136,10 @@ internal sealed partial class FramePipeline : IDisposable
 
     /// <summary>Reports a problem once per key.</summary>
     public Action<RendererError> Report { get; }
-    public ComputeProgram SkyAmbientProgram { get; }
-    public ComputeProgram ExposureProgram { get; }
-
-    /// <summary>What the exposure pass reads for a view an AutoExposure has not measured yet.</summary>
-    public Texture NoExposure { get; }
     private readonly PropertySet _exposureProperties = new();
 
     /// <summary>Frames a view keeps its per view state after it was last drawn.</summary>
     public int StaleViewFrames { get; init; } = 8;
-
-    /// <summary>The renderer's bindless texture table, set 0 of every material program.</summary>
-    public DescriptorTable TextureTable => _textures.Table;
-    public Sampler TrilinearClamp { get; }
-
-    private static GraphicsProgram Fullscreen(GraphicsDevice device, IShaderCompiler? compiler, string file)
-    {
-        ShaderDescription description = InternalShaders.FilePass(file).Variants(compiler, device.BackendType).Require();
-        description.BlendState = BlendStateDescription.SingleOverrideBlend;
-        description.DepthStencilState = DepthStencilStateDescription.Disabled;
-        description.RasterizerState = RasterizerStateDescription.CullNone;
-        GraphicsProgram program = device.ResourceFactory.CreateGraphicsProgram(description);
-        program.Name = ShaderLibrary.Prefix + file;
-        return program;
-    }
-    public Sampler LinearSampler { get; }
 
     /// <summary>Every persistent buffer the frame writes and its cameras read, in a stable order.</summary>
     public FrameBuffers Buffers { get; }
@@ -282,8 +148,7 @@ internal sealed partial class FramePipeline : IDisposable
     internal void DeclareDrawReads(ViewGraph view, PassBuilder builder, CameraFrame camera, bool screenVisibility, bool screenIrradiance)
     {
         FrameGraph graph = view.Graph;
-        if (!view.Probing)
-            RequireOutputs(view, camera);
+        RequireOutputs(view, camera);
         Buffers.ReadCamera(graph, builder, camera);
         DeclareShadowReads(graph, builder);
         foreach (DeviceBuffer buffer in camera.HostBuffers)
@@ -520,13 +385,7 @@ internal sealed partial class FramePipeline : IDisposable
         CameraShape shape = CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length, camera.Cubes.Length);
         camera.ShapeKey = shape;
         ResolveScreenLighting(camera, shape, width, height);
-        DiscoverPassTypes(camera, shape);
-        camera.ResetPassLists();
-        foreach (RenderFeature feature in camera.Selected)
-        {
-            foreach (PassType type in camera.KnownTypes[feature])
-                camera.ListFor(type);
-        }
+        camera.ListSelectedPasses();
         Prepare(camera, view, world, time, width, height);
         UpdateSceneColor(camera, shape, width, height);
         UpdateSceneDepth(camera, shape, width, height);
@@ -536,28 +395,7 @@ internal sealed partial class FramePipeline : IDisposable
         camera.View.PixelWidth = width;
         camera.View.PixelHeight = height;
         bool capture = view.Kind is ViewKind.SkyCapture or ViewKind.ReflectionProbe;
-        _planned.Add(new PlannedInstance(capture ? PlannedKind.Capture : PlannedKind.Host, world, camera, view.Name ?? (capture ? $"Capture {view.ViewId}" : $"Camera {view.ViewId}")));
-    }
-
-    // The pass types the view's features draw must be known before the view is culled, so the first time it selects a
-    // feature the view's setup runs once into a graph nobody executes
-    private void DiscoverPassTypes(CameraFrame camera, CameraShape shape)
-    {
-        bool unknown = false;
-        foreach (RenderFeature feature in camera.Selected)
-            unknown |= !camera.KnownTypes.ContainsKey(feature);
-        if (!unknown)
-            return;
-        try
-        {
-            camera.Probe.Build(shape);
-            foreach (RenderFeature feature in camera.Selected)
-                camera.KnownTypes[feature] = [.. camera.Probe.PassOf(feature).Types];
-        }
-        finally
-        {
-            _probeGraph.ResetFrame();
-        }
+        _planned.Add(new PlannedInstance(capture ? PlannedKind.Capture : PlannedKind.Host, world, camera, view.Name ?? camera.DefaultName(capture)));
     }
 
     private void ResolveScreenLighting(CameraFrame camera, CameraShape shape, uint width, uint height)
@@ -583,7 +421,7 @@ internal sealed partial class FramePipeline : IDisposable
         AddFrameFeatures(FrameSlot.Shadows, FrameSlot.Shadows, rendererOnly: true);
         foreach (WorldFrame world in _frameWorlds)
         {
-            using (_graph.Group($"{WorldName(world)} shadows"))
+            using (_graph.Group(world.ShadowsGroup(WorldName(world))))
                 AddFrameFeatures(FrameSlot.Shadows, FrameSlot.Shadows, world);
             foreach (PlannedInstance planned in _planned)
             {
@@ -632,12 +470,12 @@ internal sealed partial class FramePipeline : IDisposable
         }, context =>
         {
             CommandBuffer cmd = context.Command;
-            cmd.SetComputeShader(ExposureProgram);
+            cmd.SetComputeShader(Resources.ExposureProgram);
             foreach ((CameraFrame camera, ExposurePush push, bool measured) in exposed)
             {
-                _exposureProperties.SetTexture("Graphite_Measured", measured ? camera.MeasuredExposure!.ColorTextures[0] : NoExposure, TrilinearClamp);
-                _exposureProperties.SetBuffer("Graphite_ExposureState", camera.ExposureState!);
-                _exposureProperties.SetBuffer("Graphite_ExposureViews", camera.ViewBlocks.Buffer);
+                _exposureProperties.SetTexture(s_measured, measured ? camera.MeasuredExposure!.ColorTextures[0] : Resources.NoExposure, Resources.LinearClamp);
+                _exposureProperties.SetBuffer(s_exposureState, camera.ExposureState!);
+                _exposureProperties.SetBuffer(s_exposureViews, camera.ViewBlocks.Buffer);
                 cmd.SetProperties(_exposureProperties);
                 cmd.SetPushConstants(push);
                 cmd.Dispatch(1, 1, 1);
@@ -650,7 +488,7 @@ internal sealed partial class FramePipeline : IDisposable
     {
         foreach (FrameEntry entry in _frameFeatures)
         {
-            FrameSlot slot = entry.Feature.SlotSnapshot;
+            FrameSlot slot = entry.Feature.Slot;
             if (slot < first || slot > last || (world != null && entry.World != world) || (rendererOnly && entry.World != null))
                 continue;
             if (entry.World is { } owner && slot is not (FrameSlot.Shadows or FrameSlot.Captures))
@@ -792,12 +630,12 @@ internal sealed partial class FramePipeline : IDisposable
         for (int i = _frameFeatures.Count - 1; i >= 0; i--)
         {
             FrameEntry entry = _frameFeatures[i];
-            if (entry.Feature.GroupSnapshot is not { } group)
+            if (entry.Feature.Group is not { } group)
                 continue;
             for (int j = 0; j < _frameFeatures.Count; j++)
             {
                 FrameEntry other = _frameFeatures[j];
-                if (j == i || other.Feature.GroupSnapshot != group)
+                if (j == i || other.Feature.Group != group)
                     continue;
                 bool replaces = entry.Feature.IsBuiltIn ? !other.Feature.IsBuiltIn && (entry.World == null || other.World == null || other.World == entry.World)
                     : !other.Feature.IsBuiltIn && other.World == entry.World && j > i;
@@ -809,7 +647,7 @@ internal sealed partial class FramePipeline : IDisposable
             }
         }
 
-        _frameFeatures.Sort(static (a, b) => a.Feature.SlotSnapshot != b.Feature.SlotSnapshot ? a.Feature.SlotSnapshot.CompareTo(b.Feature.SlotSnapshot)
+        _frameFeatures.Sort(static (a, b) => a.Feature.Slot != b.Feature.Slot ? a.Feature.Slot.CompareTo(b.Feature.Slot)
             : a.Feature.OrderSnapshot != b.Feature.OrderSnapshot ? a.Feature.OrderSnapshot.CompareTo(b.Feature.OrderSnapshot) : a.Feature.Id.CompareTo(b.Feature.Id));
 
         int user = 0;
@@ -872,15 +710,15 @@ internal sealed partial class FramePipeline : IDisposable
     {
         RenderWorld.RenderSide render = world.Render;
         WorldLighting lighting = world.Lighting;
-        properties.SetBuffer("Graphite_Chunks", Geometry.Chunks.Buffer);
-        properties.SetBuffer("Graphite_Transforms", render.Transforms.Buffer);
-        properties.SetBuffer("Graphite_PreviousTransforms", render.PreviousTransforms.Buffer);
-        properties.SetBuffer("Graphite_Objects", render.Attributes.Buffer);
-        properties.SetBuffer("Graphite_MaterialSlots", render.MaterialSlots.Buffer);
-        properties.SetBuffer("Graphite_WorldLighting", lighting.World.Buffer);
-        properties.SetBuffer("Graphite_ObjectProbes", world.Probes.ObjectSh);
-        properties.SetBuffer("Graphite_SkyAmbientSH", world.Reflections.SkyAmbient);
-        properties.SetBuffer("Graphite_Directionals", lighting.Directionals.Buffer);
+        properties.SetBuffer(s_chunks, Geometry.Chunks.Buffer);
+        properties.SetBuffer(s_transforms, render.Transforms.Buffer);
+        properties.SetBuffer(s_previousTransforms, render.PreviousTransforms.Buffer);
+        properties.SetBuffer(s_objects, render.Attributes.Buffer);
+        properties.SetBuffer(s_materialSlots, render.MaterialSlots.Buffer);
+        properties.SetBuffer(s_worldLighting, lighting.World.Buffer);
+        properties.SetBuffer(s_objectProbes, world.Probes.ObjectSh);
+        properties.SetBuffer(s_skyAmbientSH, world.Reflections.SkyAmbient);
+        properties.SetBuffer(s_directionals, lighting.Directionals.Buffer);
     }
 
     private void PrepareFeatures(RenderFeature[] features)
@@ -908,7 +746,7 @@ internal sealed partial class FramePipeline : IDisposable
         ProviderView providerView = new(camera.Info, frustum);
         foreach (RenderProvider provider in world.World.ProviderSnapshot)
         {
-            if (!provider.EnabledSnapshot || (provider.RunsOnSnapshot & kind) == 0)
+            if (!provider.EnabledSnapshot || (provider.RunsOn & kind) == 0)
                 continue;
             try
             {
@@ -1203,36 +1041,13 @@ internal sealed partial class FramePipeline : IDisposable
         _shadowCameraPool.Clear();
         _providerProbe?.Dispose();
         _graph.Dispose();
-        _probeGraph.Dispose();
         _shadowSampler?.Dispose();
         _tileClear?.Dispose();
         _probes.Dispose();
         _deform.Dispose();
         Programs.Dispose();
-        foreach (FullscreenProgram program in _present)
-            program.Dispose();
-        Noise.Dispose();
-        SmaaArea.Dispose();
-        SmaaSearch.Dispose();
-        SmaaAreaLayered.Dispose();
-        SmaaSearchLayered.Dispose();
-        NoScreenVisibility.Dispose();
-        NoScreenIrradiance.Dispose();
-        NoSceneColor.Dispose();
-        NoSceneDepth.Dispose();
-        Dfg.Dispose();
-        DielectricE.Dispose();
-        AnisotropicDfg.Dispose();
-        ClearProgram.Dispose();
-        CopyBackProgram.Dispose();
         foreach (IDisposable retired in _retired)
             retired.Dispose();
-        PrefilterProgram.Dispose();
-        SkyAmbientProgram.Dispose();
-        ExposureProgram.Dispose();
-        NoExposure.Dispose();
-        TrilinearClamp.Dispose();
-        LinearSampler.Dispose();
     }
 }
 

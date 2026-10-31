@@ -1035,9 +1035,9 @@ internal static class CaptureFillPasses
         {
             cmd.SetFramebuffer(target.MipFramebuffer(mip), new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
             cmd.SetFullViewport();
-            cmd.SetShader(frame.PrefilterProgram);
+            cmd.SetShader(frame.Resources.PrefilterProgram);
             cmd.SetVertexSource(VertexSource.None);
-            frame.PrefilterProperties.SetTexture("Graphite_Source", source, frame.TrilinearClamp);
+            frame.PrefilterProperties.SetTexture("Graphite_Source", source, frame.Resources.LinearClamp);
             cmd.SetProperties(frame.PrefilterProperties);
             cmd.SetPushConstants(new PrefilterPush
             {
@@ -1072,8 +1072,8 @@ internal static class CaptureFillPasses
         const uint size = 16;
         CommandBuffer cmd = context.Command;
         Texture source = context.Get(sourceHandle).ColorTextures[0];
-        cmd.SetComputeShader(frame.SkyAmbientProgram);
-        frame.AmbientProperties.SetTexture("Graphite_Source", source, frame.TrilinearClamp);
+        cmd.SetComputeShader(frame.Resources.SkyAmbientProgram);
+        frame.AmbientProperties.SetTexture("Graphite_Source", source, frame.Resources.LinearClamp);
         frame.AmbientProperties.SetBuffer("Graphite_SkyAmbient", context.Get(output));
         cmd.SetProperties(frame.AmbientProperties);
         cmd.SetPushConstants(new AmbientPush { Lod = MathF.Max(MathF.Log2(source.Width / (float)size), 0), Size = size });

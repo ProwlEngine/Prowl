@@ -262,19 +262,15 @@ public sealed class FeatureTests : IDisposable
     }
 
     // A fullscreen program writing the next colour, with the order and slot given
-    private sealed class Effect(FullscreenProgram program, RenderSlot slot, int order = 0, PropertySet? properties = null) : RenderFeature
+    private sealed class Effect(FullscreenProgram program, RenderSlot slot, int order = 0, PropertySet? properties = null) : RenderFeature(slot, order: order)
     {
-        public override RenderSlot Slot => slot;
-        public override int Order => order;
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
         public override void Render(FeatureContext context) => context.Fullscreen(program, properties);
     }
 
     // Draws nothing onto the scene in place of a built in feature
-    private sealed class Nothing(string group, RenderSlot slot) : RenderFeature
+    private sealed class Nothing(FeatureGroup group, RenderSlot slot) : RenderFeature(slot, group: group)
     {
-        public override RenderSlot Slot => slot;
-        public override string? ExclusiveGroup => group;
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.DrawToColor();
         public override void Render(FeatureContext context) => context.BeginOutput();
     }
@@ -323,9 +319,8 @@ public sealed class FeatureTests : IDisposable
     }
 
     // A lit fullscreen program reading the world's lights through the library, as forward passes do
-    private sealed class LitEffectWith(FullscreenProgram program, PropertySet properties) : RenderFeature
+    private sealed class LitEffectWith(FullscreenProgram program, PropertySet properties) : RenderFeature(RenderSlot.HdrPost)
     {
-        public override RenderSlot Slot => RenderSlot.HdrPost;
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
             builder.DrawsRenderables();
@@ -468,12 +463,11 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Draws a procedural program twice into a texture of its own, once cleared and once blended over, then shows it
-    private sealed class ProceduralEffect(FullscreenProgram quad, FullscreenProgram copy, Sampler sampler) : RenderFeature
+    private sealed class ProceduralEffect(FullscreenProgram quad, FullscreenProgram copy, Sampler sampler) : RenderFeature(RenderSlot.HdrPost)
     {
         private readonly PropertySet _properties = new();
         private TextureHandle _drawn;
 
-        public override RenderSlot Slot => RenderSlot.HdrPost;
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
             builder.WriteColor();
@@ -497,7 +491,7 @@ public sealed class FeatureTests : IDisposable
         AddQuad(new Float3(0.25f, 0.5f, 1));
         Effect invert = new(Program("void main() { outColor = vec4(1.0 - Graphite_SampleSource(vUV).rgb, 1.0); }"), RenderSlot.HdrPost);
         ViewDesc inverted = View(2);
-        inverted.Features = new FeatureSet { invert };
+        inverted.Features = new ExtensionSet<RenderFeature> { invert };
 
         AssertAll(new Float3(0.75f, 0.5f, 0), Frame(inverted));
         AssertAll(new Float3(0.25f, 0.5f, 1), Frame(View(3)));
@@ -512,16 +506,14 @@ public sealed class FeatureTests : IDisposable
         AddQuad(new Float3(1, 1, 1));
         ViewDesc view = View();
         view.ClearColor = new Float4(0.1f, 0.2f, 0.3f, 1);
-        _world.Features.Add(new Nothing("Opaque", RenderSlot.Opaque));
+        _world.Features.Add(new Nothing(FeatureGroup.Opaque, RenderSlot.Opaque));
         AssertAll(new Float3(0.1f, 0.2f, 0.3f), Frame(view));
     }
 
     // Shows the scene's depth, read after the opaque pass
-    private sealed class ShowDepth(FullscreenProgram program, Sampler sampler) : RenderFeature
+    private sealed class ShowDepth(FullscreenProgram program, Sampler sampler) : RenderFeature(RenderSlot.AfterOpaques)
     {
         private readonly PropertySet _properties = new();
-
-        public override RenderSlot Slot => RenderSlot.AfterOpaques;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -549,12 +541,9 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Shows the scene's motion in red and green, read after the opaque pass
-    private sealed class ShowMotion(FullscreenProgram program, Sampler sampler) : RenderFeature
+    private sealed class ShowMotion(FullscreenProgram program, Sampler sampler) : RenderFeature(RenderSlot.AfterOpaques, sceneReads: SceneTargets.Motion)
     {
         private readonly PropertySet _properties = new();
-
-        public override RenderSlot Slot => RenderSlot.AfterOpaques;
-        public override SceneTargets SceneReads => SceneTargets.Motion;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -596,10 +585,9 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(-0.125f, 0, 0), Frame(moved), i => i % Size < Size - 2);
     }
 
-    private sealed class ViewPosition(FullscreenProgram program) : RenderFeature
+    private sealed class ViewPosition(FullscreenProgram program) : RenderFeature(RenderSlot.HdrPost)
     {
         public Double3 Seen;
-        public override RenderSlot Slot => RenderSlot.HdrPost;
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
         public override void Render(FeatureContext context)
         {
@@ -1219,11 +1207,9 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Remembers the render size of the views it runs on
-    private sealed class Probe : RenderFeature
+    private sealed class Probe() : RenderFeature(RenderSlot.Overlay)
     {
         public uint Width, Height;
-
-        public override RenderSlot Slot => RenderSlot.Overlay;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view) { }
 
@@ -1246,11 +1232,9 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Writes the output colour from the render resolution one, keeping what it was given to check
-    private sealed class Upscaler(FullscreenProgram program) : RenderFeature
+    private sealed class Upscaler(FullscreenProgram program) : RenderFeature(RenderSlot.Upscale)
     {
         public (uint, uint) Input, Output;
-
-        public override RenderSlot Slot => RenderSlot.Upscale;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteOutputColor();
 
@@ -1262,12 +1246,10 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Records the size of the colour it writes and the view it was given
-    private sealed class SizeProbe(FullscreenProgram program) : RenderFeature
+    private sealed class SizeProbe(FullscreenProgram program) : RenderFeature(RenderSlot.HdrPost)
     {
         public (uint, uint) View, Written;
         public bool Upscaled;
-
-        public override RenderSlot Slot => RenderSlot.HdrPost;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
 
@@ -1280,12 +1262,10 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Keeps a history of the colour, noting each frame whether it had one and a previous frame
-    private sealed class Remembers(FullscreenProgram program) : RenderFeature
+    private sealed class Remembers(FullscreenProgram program) : RenderFeature(RenderSlot.HdrPost)
     {
         private TextureHandle _history;
         public readonly List<(bool History, bool Previous)> Seen = new();
-
-        public override RenderSlot Slot => RenderSlot.HdrPost;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -1368,26 +1348,25 @@ public sealed class FeatureTests : IDisposable
         Assert.Equal("view.dependency.cycle", Assert.Single(_errors).Code);
     }
 
-    private sealed class Named(string name, RenderSlot slot, int order = 0, ViewKinds runsOn = ViewKinds.Cameras, string? group = null) : RenderFeature
+    private sealed class Named(string name, RenderSlot slot, int order = 0, ViewKinds runsOn = ViewKinds.Cameras, FeatureGroup? group = null) : RenderFeature(slot, order: order, group: group, runsOn: runsOn)
     {
-        public override RenderSlot Slot => slot;
-        public override int Order => order;
-        public override ViewKinds RunsOn => runsOn;
-        public override string? ExclusiveGroup => group;
         public override void Setup(FeatureBuilder builder, in FeatureView view) { }
         public override void Render(FeatureContext context) { }
         public override string ToString() => name;
     }
 
-    private static List<string> Select(RenderFeature[] world, RenderFeature[] view, ViewKind kind = ViewKind.Game)
+    // Names the built in draw features by their group, as PrepassFeature, OpaqueFeature, SkyFeature and TransparentFeature
+    private List<string> Select(RenderFeature[] world, RenderFeature[] view, ViewKind kind = ViewKind.Game)
     {
         foreach (RenderFeature feature in world.Concat(view))
-            feature.TakeSnapshot();
+            feature.Snapshot();
         ViewDesc desc = new() { Kind = kind };
         List<RenderFeature> result = new();
-        FeatureSelection.Select(result, world, view, new FeatureView(desc, 1, 1));
-        return result.Select(f => f is Named ? f.ToString()! : f.GetType().Name).ToList();
+        FeatureSelection.Select(result, _renderer.Frame.BuiltIns, world, view, new FeatureView(desc, 1, 1));
+        return result.Select(f => f is Named ? f.ToString()! : f.Name).ToList();
     }
+
+    private static FeatureGroup Group(string name) => (FeatureGroup)typeof(FeatureGroup).GetField(name)!.GetValue(null)!;
 
     [Fact]
     public void AColourWrittenBeforeTheOpaques_IsCopiedIntoTheScene_ThatTheyDrawOnto()
@@ -1401,10 +1380,8 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(1, 1, 1), pixels, i => !Centre(i));
     }
 
-    private sealed class Throws(bool inSetup) : RenderFeature
+    private sealed class Throws(bool inSetup) : RenderFeature(RenderSlot.HdrPost)
     {
-        public override RenderSlot Slot => RenderSlot.HdrPost;
-
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
             if (inSetup)
@@ -1437,11 +1414,9 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Inverts the colour once told to, which changes what it declares
-    private sealed class Toggle(FullscreenProgram program) : RenderFeature
+    private sealed class Toggle(FullscreenProgram program) : RenderFeature(RenderSlot.HdrPost)
     {
         public bool On;
-
-        public override RenderSlot Slot => RenderSlot.HdrPost;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -1476,12 +1451,12 @@ public sealed class FeatureTests : IDisposable
         ViewDesc empty = View(2);
         empty.Viewport = new Float4(0, 0, 0.5f, 1);
         empty.ClearColor = new Float4(0, 0, 1, 1);
-        empty.Features = new FeatureSet
+        empty.Features = new ExtensionSet<RenderFeature>
         {
-            new Named("no prepass", RenderSlot.Prepass, group: "Prepass"),
-            new Named("no opaque", RenderSlot.Opaque, group: "Opaque"),
-            new Named("no sky", RenderSlot.Sky, group: "Sky"),
-            new Named("no transparent", RenderSlot.Transparent, group: "Transparent"),
+            new Named("no prepass", RenderSlot.Prepass, group: FeatureGroup.Prepass),
+            new Named("no opaque", RenderSlot.Opaque, group: FeatureGroup.Opaque),
+            new Named("no sky", RenderSlot.Sky, group: FeatureGroup.Sky),
+            new Named("no transparent", RenderSlot.Transparent, group: FeatureGroup.Transparent),
         };
         Float4[] pixels = Frame(empty);
         AssertAll(new Float3(0, 0, 1), pixels, i => i % Size < Size / 2);
@@ -1540,12 +1515,10 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Adds a quarter to what it held last frame, and publishes it
-    private sealed class Accumulate(FullscreenProgram program) : RenderFeature
+    private sealed class Accumulate(FullscreenProgram program) : RenderFeature(RenderSlot.HdrPost)
     {
         private readonly PropertySet _properties = new();
         private TextureHandle _total;
-
-        public override RenderSlot Slot => RenderSlot.HdrPost;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -1570,12 +1543,10 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Shows what an earlier feature published
-    private sealed class Show(FullscreenProgram program) : RenderFeature
+    private sealed class Show(FullscreenProgram program) : RenderFeature(RenderSlot.Tonemap)
     {
         private readonly PropertySet _properties = new();
         private TextureHandle _shown;
-
-        public override RenderSlot Slot => RenderSlot.Tonemap;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -1605,11 +1576,10 @@ public sealed class FeatureTests : IDisposable
         public int Frames;
     }
 
-    private sealed class Counts : RenderFeature
+    private sealed class Counts() : RenderFeature(RenderSlot.Overlay)
     {
         public readonly Dictionary<int, int> Seen = new();
 
-        public override RenderSlot Slot => RenderSlot.Overlay;
         public override void Setup(FeatureBuilder builder, in FeatureView view) { }
         public override void Render(FeatureContext context) => Seen[context.View.ViewId] = ++context.GetViewState<Counter>().Frames;
     }
@@ -1672,15 +1642,13 @@ public sealed class FeatureTests : IDisposable
         Assert.Throws<ArgumentOutOfRangeException>(() => _renderer.Readback(buffer, _ => { }, offset: 8, size: uint.MaxValue - 4));
     }
 
-    private sealed class Glows : RenderFeature
+    private sealed class Glows() : RenderFeature(RenderSlot.AfterTransparents, passes: [Glow])
     {
         public static readonly PassType Glow = new("Glow");
 
-        public override RenderSlot Slot => RenderSlot.AfterTransparents;
-
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
-            builder.DrawsPass(Glow);
+            builder.DrawsRenderables();
             builder.DrawToScene();
         }
 
@@ -1710,9 +1678,8 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Declares a read of a texture that is not in the frame, which the graph refuses
-    private sealed class BreaksTheGraph : RenderFeature
+    private sealed class BreaksTheGraph() : RenderFeature(RenderSlot.HdrPost)
     {
-        public override RenderSlot Slot => RenderSlot.HdrPost;
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.Graph.Read(default(TextureHandle));
         public override void Render(FeatureContext context) { }
     }
@@ -1733,11 +1700,10 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Publishes the colour when on
-    private sealed class Publisher : RenderFeature
+    private sealed class Publisher() : RenderFeature(RenderSlot.HdrPost)
     {
         public bool On = true;
 
-        public override RenderSlot Slot => RenderSlot.HdrPost;
         public override bool IsActive(in FeatureView view) => On;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
@@ -1747,10 +1713,8 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Reads what the publisher published, and inverts the colour
-    private sealed class Reader(FullscreenProgram program) : RenderFeature
+    private sealed class Reader(FullscreenProgram program) : RenderFeature(RenderSlot.Tonemap)
     {
-        public override RenderSlot Slot => RenderSlot.Tonemap;
-
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
             builder.Read("Inverted");
@@ -1910,13 +1874,11 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Writes its count on the GPU each frame through a compute dispatch of its own
-    private sealed class ComputedCount(ComputeProgram program) : FrameFeature
+    private sealed class ComputedCount(ComputeProgram program) : FrameFeature(FrameSlot.BeforeViews)
     {
         private readonly PropertySet _properties = new();
         private BufferHandle _count;
         public uint Instances;
-
-        public override FrameSlot Slot => FrameSlot.BeforeViews;
 
         public override void Setup(FrameBuilder builder)
         {
@@ -2100,15 +2062,15 @@ public sealed class FeatureTests : IDisposable
     [Fact]
     public void Selection_ViewBeatsWorldBeatsBuiltIn_ForGroupsAndReplacements()
     {
-        Named worldSky = new("world sky", RenderSlot.Sky, group: "Sky");
-        Named viewSky = new("view sky", RenderSlot.Sky, group: "Sky");
+        Named worldSky = new("world sky", RenderSlot.Sky, group: FeatureGroup.Sky);
+        Named viewSky = new("view sky", RenderSlot.Sky, group: FeatureGroup.Sky);
         Assert.DoesNotContain("SkyFeature", Select([worldSky], []));
         Assert.Contains("world sky", Select([worldSky], []));
         List<string> both = Select([worldSky], [viewSky]);
         Assert.Contains("view sky", both);
         Assert.DoesNotContain("world sky", both);
 
-        Named opaque = new("opaque", RenderSlot.Opaque, group: "Opaque");
+        Named opaque = new("opaque", RenderSlot.Opaque, group: FeatureGroup.Opaque);
         Assert.DoesNotContain("OpaqueFeature", Select([opaque], []));
         Assert.Contains("opaque", Select([opaque], []));
     }
@@ -2134,11 +2096,9 @@ public sealed class FeatureTests : IDisposable
         _ => RendererOutputs.ReadbackStaging,
     };
 
-    private sealed class FrameStand(FrameSlot slot, string group, RenderResourceID? provides) : FrameFeature
+    private sealed class FrameStand(FrameSlot slot, string group, RenderResourceID? provides) : FrameFeature(slot, group: Group(group))
     {
         public int Runs;
-        public override FrameSlot Slot => slot;
-        public override string? ExclusiveGroup => group;
         public override void Setup(FrameBuilder builder)
         {
             if (provides is { } id)
@@ -2165,7 +2125,7 @@ public sealed class FeatureTests : IDisposable
 
         FrameFeature[] active = [.. _renderer.Frame.ActiveFrameFeatures];
         Assert.Contains(stand, active);
-        Assert.DoesNotContain(active, f => f.IsBuiltIn && f.ExclusiveGroup == group);
+        Assert.DoesNotContain(active, f => f.IsBuiltIn && f.Group == Group(group));
         Assert.Equal(1, stand.Runs);
     }
 
@@ -2180,12 +2140,9 @@ public sealed class FeatureTests : IDisposable
         _errors.Clear();
     }
 
-    private sealed class ViewStand(RenderSlot slot, string group, bool scene = false) : RenderFeature
+    private sealed class ViewStand(RenderSlot slot, string group, bool scene = false) : RenderFeature(slot, group: Group(group), runsOn: ViewKinds.All)
     {
         public int Setups;
-        public override RenderSlot Slot => slot;
-        public override string? ExclusiveGroup => group;
-        public override ViewKinds RunsOn => ViewKinds.All;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -2218,7 +2175,7 @@ public sealed class FeatureTests : IDisposable
         Assert.True(stand.Setups > 0);
         List<RenderFeature> selected = _renderer.Frame.Camera(1)!.Selected;
         Assert.Contains(stand, selected);
-        Assert.DoesNotContain(selected, f => f.ExclusiveGroup == group && f != stand);
+        Assert.DoesNotContain(selected, f => f.Group == Group(group) && f != stand);
         if (slot == RenderSlot.Present)
             AssertAll(new Float3(0, 0, 0), pixels);
         else if (slot != RenderSlot.Clear)

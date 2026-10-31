@@ -21,8 +21,8 @@ internal readonly record struct CameraShape(int Layers, bool Ldr, SceneTargets T
         bool irradiance = false;
         foreach (RenderFeature feature in selected)
         {
-            targets |= feature.SceneReadsSnapshot;
-            upscales |= feature.SlotSnapshot == RenderSlot.Upscale;
+            targets |= feature.SceneReads;
+            upscales |= feature.Slot == RenderSlot.Upscale;
             if (feature is ScreenLightingFeature producer)
             {
                 screen = Math.Max(1, (int)MathF.Round(producer.ScaleSnapshot * 256f));

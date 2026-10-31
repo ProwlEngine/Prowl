@@ -1,7 +1,5 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace Prowl.Graphite.Rendering;
@@ -25,30 +23,36 @@ public enum FrameSlot : byte
 
 /// <summary>
 /// GPU work a world's host runs once a frame, outside any view: simulation, generation, the instance counts of indirect
-/// provider items. Its resources are owned by the frame and named by the feature. Exports are readable by every view.
+/// provider items. Its resources are owned by the frame and named by the feature, so it belongs to one set. Exports are
+/// readable by every view. Its slot and group are fixed when it is made, Enabled and Order are read at SubmitFrame.
 /// </summary>
-public abstract class FrameFeature
+public abstract class FrameFeature : RenderExtension
 {
     private static int s_nextId;
+    private ExtensionSet<FrameFeature>? _owner;
+
+    /// <param name="slot">When in the frame it runs.</param>
+    /// <param name="order">Its order among frame features of the slot, lowest first.</param>
+    /// <param name="group">The group it replaces the built in feature of, see <see cref="FeatureGroup"/>.</param>
+    protected FrameFeature(FrameSlot slot, int order = 0, FeatureGroup? group = null)
+    {
+        Slot = slot;
+        Order = order;
+        Group = group;
+    }
 
     internal int Id { get; } = Interlocked.Increment(ref s_nextId);
-    internal FrameFeatureSet? Owner;
 
-    public abstract FrameSlot Slot { get; }
+    public FrameSlot Slot { get; }
 
     /// <summary>
     /// Of features sharing a group in one set the last added runs, and any feature replaces the built in one of its group:
     /// Deform, LightProbes, LocalShadows, CaptureFill or Readback.
     /// </summary>
-    public virtual string? ExclusiveGroup => null;
+    public FeatureGroup? Group { get; }
 
     /// <summary>Order among frame features of a slot, lowest first. Resources they declare decide the rest.</summary>
-    public virtual int Order { get; set; }
-
-    public bool Enabled { get; set; } = true;
-
-    /// <summary>Copies settings the render thread reads. Host thread, at SubmitFrame.</summary>
-    public virtual void Extract() { }
+    public int Order { get; set; }
 
     /// <summary>Whether the feature runs this frame. Render thread.</summary>
     public virtual bool IsActive() => true;
@@ -59,75 +63,28 @@ public abstract class FrameFeature
     /// <summary>Records the feature's work. Render thread.</summary>
     public abstract void Render(FrameContext context);
 
-    internal RenderWorld? World => Owner?.World;
-    internal bool EnabledSnapshot;
+    internal RenderWorld? World => _owner?.World;
     internal int OrderSnapshot;
-    internal FrameSlot SlotSnapshot;
-    internal string? GroupSnapshot;
 
     internal virtual bool IsBuiltIn => false;
 
     /// <summary>Adds a built in feature's passes and provides its outputs. The world is null for the renderer's.</summary>
     internal virtual void AddBuiltIn(FramePipeline frame, WorldFrame? world) => throw new NotSupportedException();
 
-    internal void TakeSnapshot()
+    internal override void Snapshot()
     {
-        EnabledSnapshot = Enabled;
+        base.Snapshot();
         OrderSnapshot = Order;
-        SlotSnapshot = Slot;
-        GroupSnapshot = ExclusiveGroup;
     }
-}
 
-/// <summary>Frame features added to a world or to the renderer. A feature belongs to one set. Host thread.</summary>
-public sealed class FrameFeatureSet : IEnumerable<FrameFeature>
-{
-    private readonly List<FrameFeature> _features = new();
-    private FrameFeature[] _snapshot = [];
-    private int _version, _snapshotVersion = -1;
-
-    internal FrameFeatureSet(RenderWorld? world) => World = world;
-
-    internal RenderWorld? World { get; }
-
-    public int Count => _features.Count;
-
-    public void Add(FrameFeature feature)
+    internal override void Attach(object set)
     {
-        ArgumentNullException.ThrowIfNull(feature);
-        if (feature.Owner is { } owner && owner != this)
-            throw new InvalidOperationException($"{feature.GetType().Name} is already added to another set, and its resources are named once.");
-        if (_features.Contains(feature))
-            return;
-        feature.Owner = this;
-        _features.Add(feature);
-        _version++;
+        if (_owner != null && _owner != set)
+            throw new InvalidOperationException($"{GetType().Name} is already added to another set, and its resources are named once.");
+        _owner = (ExtensionSet<FrameFeature>)set;
     }
 
-    public bool Remove(FrameFeature feature)
-    {
-        if (!_features.Remove(feature))
-            return false;
-        feature.Owner = null;
-        _version++;
-        return true;
-    }
-
-    public bool Contains(FrameFeature feature) => _features.Contains(feature);
-
-    public IEnumerator<FrameFeature> GetEnumerator() => _features.GetEnumerator();
-
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-    internal FrameFeature[] Snapshot()
-    {
-        if (_snapshotVersion != _version)
-        {
-            _snapshot = [.. _features];
-            _snapshotVersion = _version;
-        }
-        return _snapshot;
-    }
+    internal override void Detach(object set) => _owner = null;
 }
 
 /// <summary>
@@ -282,7 +239,7 @@ internal sealed class FrameFeaturePass(FramePipeline frame, FrameFeature feature
     public FrameFeature Feature => feature;
     public WorldFrame? World => world;
 
-    public string Name => $"Graphite.Frame {feature.GetType().Name}";
+    public string Name { get; } = $"Graphite.Frame {feature.GetType().Name}";
 
     public void Add()
     {

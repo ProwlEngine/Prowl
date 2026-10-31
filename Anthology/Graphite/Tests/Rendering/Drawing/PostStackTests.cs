@@ -458,9 +458,8 @@ public sealed class PostStackTests : IDisposable
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = turn * Double4x4.CreateScale(new Double3(1, 0.5, 1)) }, [mirror]);
     }
 
-    private sealed class Copy(FullscreenProgram program) : RenderFeature
+    private sealed class Copy(FullscreenProgram program) : RenderFeature(RenderSlot.HdrPost)
     {
-        public override RenderSlot Slot => RenderSlot.HdrPost;
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
         public override void Render(FeatureContext context) => context.Fullscreen(program);
     }
@@ -573,11 +572,9 @@ public sealed class PostStackTests : IDisposable
     }
 
     // Shows the scene's material target
-    private sealed class MaterialView(FullscreenProgram program, Sampler sampler) : RenderFeature
+    private sealed class MaterialView(FullscreenProgram program, Sampler sampler) : RenderFeature(RenderSlot.HdrPost, sceneReads: SceneTargets.Material)
     {
         private readonly PropertySet _properties = new();
-        public override RenderSlot Slot => RenderSlot.HdrPost;
-        public override SceneTargets SceneReads => SceneTargets.Material;
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
             builder.ReadScene();
@@ -597,7 +594,7 @@ public sealed class PostStackTests : IDisposable
             void main() { outColor = texture(_Material, vUV); }
             """, source: false);
         _owned.Add(program);
-        _world.Features.Add(new MaterialView(program, _renderer.Effects.PointClamp));
+        _world.Features.Add(new MaterialView(program, _renderer.Resources.PointClamp));
     }
 
     // The test quad wound to face the camera, its normal toward it

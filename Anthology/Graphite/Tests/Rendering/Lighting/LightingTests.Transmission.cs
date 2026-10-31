@@ -308,12 +308,9 @@ public sealed partial class LightingTests
     }
 
     // Shows the scene's reactive mask in red, read after the transparent surfaces
-    private sealed class ShowReactive(FullscreenProgram program, Sampler sampler) : RenderFeature
+    private sealed class ShowReactive(FullscreenProgram program, Sampler sampler) : RenderFeature(RenderSlot.AfterTransparents, sceneReads: SceneTargets.Reactive)
     {
         private readonly PropertySet _properties = new();
-
-        public override RenderSlot Slot => RenderSlot.AfterTransparents;
-        public override SceneTargets SceneReads => SceneTargets.Reactive;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -340,7 +337,7 @@ public sealed partial class LightingTests
             uniform sampler2D _Reactive;
             void main() { outColor = vec4(texture(_Reactive, vUV).r, 0.0, 0.0, 1.0); }
             """, source: false);
-        _world.Features.Add(new ShowReactive(program, _renderer.Effects.PointClamp));
+        _world.Features.Add(new ShowReactive(program, _renderer.Resources.PointClamp));
         AddBackdrop(_renderer.CreateMaterial(_renderer.Standard.Unlit));
         _world.Add(new RenderableDesc { Mesh = FacingQuad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)) * Double4x4.CreateScale(0.5) }, [Glass(m =>
         {
@@ -367,7 +364,7 @@ public sealed partial class LightingTests
 
     private ViewDesc ViewWith(int id, params RenderFeature[] features)
     {
-        FeatureSet set = new();
+        ExtensionSet<RenderFeature> set = new();
         foreach (RenderFeature feature in features)
             set.Add(feature);
         ViewDesc view = new() { World = _world, EV100 = _ev100, ViewId = id, Target = _framebuffer, Features = set };
@@ -402,12 +399,9 @@ public sealed partial class LightingTests
     }
 
     // Shows the scene's motion in red and green, read after the transparent surfaces
-    private sealed class ShowMotion(FullscreenProgram program, Sampler sampler) : RenderFeature
+    private sealed class ShowMotion(FullscreenProgram program, Sampler sampler) : RenderFeature(RenderSlot.AfterTransparents, sceneReads: SceneTargets.Motion)
     {
         private readonly PropertySet _properties = new();
-
-        public override RenderSlot Slot => RenderSlot.AfterTransparents;
-        public override SceneTargets SceneReads => SceneTargets.Motion;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -432,7 +426,7 @@ public sealed partial class LightingTests
             uniform sampler2D _Motion;
             void main() { outColor = vec4(texture(_Motion, vUV).rg, 0.0, 1.0); }
             """, source: false);
-        _world.Features.Add(new ShowMotion(program, _renderer.Effects.PointClamp));
+        _world.Features.Add(new ShowMotion(program, _renderer.Resources.PointClamp));
         AddBackdrop(_renderer.CreateMaterial(_renderer.Standard.Unlit));
         Double4x4 At(double x) => Double4x4.CreateTranslation(_origin + new Double3(x, 0, QuadDepth)) * Double4x4.CreateScale(0.5);
         RenderableHandle glass = _world.Add(new RenderableDesc { Mesh = FacingQuad, Transform = At(0), Flags = RenderableFlags.MotionVectors }, [Glass(m => m.SetFloat("transmission_weight", 1))]);
