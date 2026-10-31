@@ -45,7 +45,7 @@ public sealed class StandardShaderTests : IDisposable
 
     private Texture MakeTexture() => _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
 
-    private static string Keyword(Material material, string axis) => material.GetKeyword(axis);
+    private static string Keyword(Material material, string axis) => material.Get(material.Shader.Axis(axis));
 
     // Every surface at both tiers, the Debug pass at every view it shows
     public static IEnumerable<object[]> Variants()
@@ -114,8 +114,8 @@ public sealed class StandardShaderTests : IDisposable
                 void Surface(inout PBR_Params p, Graphite_SurfaceData i)
                 {
                     p.emissionColor = _RimColor.rgb;
-                    p.emissionLuminance = 100.0 * pow(1.0 - max(dot(p.geometryNormal, i.ViewDir), 0.0), 3.0);
-                    p.geometryOpacity *= i.VertexColor.a;
+                    p.emissionLuminance = 100.0 * pow(1.0 - max(dot(p.geometryNormal, i.viewDir), 0.0), 3.0);
+                    p.geometryOpacity *= i.vertexColor.a;
                 }
                 ENDGLSL
             }
@@ -204,9 +204,9 @@ public sealed class StandardShaderTests : IDisposable
                     uniform float _WaveHeight;
                     void SurfaceVertex(inout Graphite_SurfaceVertex v)
                     {
-                        v.Position += v.Normal * sin(v.Position.x + v.Time) * _WaveHeight * v.Color.a;
-                        v.UV += v.UV1 * 0.0;
-                        v.Tangent.xyz = normalize(v.Tangent.xyz);
+                        v.position += v.normal * sin(v.position.x + v.time) * _WaveHeight * v.color.a;
+                        v.uv += v.uv1 * 0.0;
+                        v.tangent.xyz = normalize(v.tangent.xyz);
                     }
                     ENDGLSL
                 }
@@ -247,9 +247,9 @@ public sealed class StandardShaderTests : IDisposable
                 uniform sampler2D _DetailTex;
                 void Surface(inout {{(model == "Lit" ? "PBR_Params" : "Unlit_Params")}} p, Graphite_SurfaceData i)
                 {
-                    vec3 detail = Graphite_SurfaceNormalMap(i, texture(_DetailTex, i.UV * 4.0).rgb, 1.0);
-                    vec3 frame = cross(i.Tangent, i.Bitangent);
-                    {{(model == "Lit" ? "p.geometryNormal = normalize(p.geometryNormal + detail + frame * 0.0);" : "p.BaseColor *= detail * 0.5 + 0.5 + frame * 0.0;")}}
+                    vec3 detail = Graphite_SurfaceNormalMap(i, texture(_DetailTex, i.uv * 4.0).rgb, 1.0);
+                    vec3 frame = cross(i.tangent, i.bitangent);
+                    {{(model == "Lit" ? "p.geometryNormal = normalize(p.geometryNormal + detail + frame * 0.0);" : "p.baseColor *= detail * 0.5 + 0.5 + frame * 0.0;")}}
                 }
                 ENDGLSL
             }
@@ -299,7 +299,7 @@ public sealed class StandardShaderTests : IDisposable
                     Vertex
                     {
                         GLSLPROGRAM
-                        void SurfaceVertex(inout Graphite_SurfaceVertex v) { v.Position.y += 1.0; }
+                        void SurfaceVertex(inout Graphite_SurfaceVertex v) { v.position.y += 1.0; }
                         ENDGLSL
                     }
                     Lighting
@@ -333,7 +333,7 @@ public sealed class StandardShaderTests : IDisposable
                     GLSLPROGRAM
                     uniform float _Bands;
                     uniform sampler2D _Ramp;
-                    void Surface(inout PBR_Params p, Graphite_SurfaceData i) { p.specularRoughness = texture(_Ramp, i.UV).r / _Bands; }
+                    void Surface(inout PBR_Params p, Graphite_SurfaceData i) { p.specularRoughness = texture(_Ramp, i.uv).r / _Bands; }
                     ENDGLSL
                     Lighting
                     {
@@ -494,7 +494,7 @@ public sealed class StandardShaderTests : IDisposable
         Assert.Equal(FaceCullMode.Back, Culling());
 
         material.Surface = new SurfaceSettings(Cull: SurfaceCull.Front);
-        material.EnableKeyword("PBR_THIN_WALLED");
+        material.Set(material.Shader.Axis("PBR_THIN_WALLED"), true);
         Assert.Equal(FaceCullMode.None, Culling());
 
         Material plain = _system.Create(_pbr);
@@ -659,7 +659,7 @@ public sealed class StandardShaderTests : IDisposable
         Assert.Equal(SurfaceSettings.TransparentQueue, child.RenderQueue);
 
         child.RenderQueue = 1000;
-        child.SetKeyword("_SURFACE", "OPAQUE");
+        child.Set(child.Shader.Axis("_SURFACE"), "OPAQUE");
         Assert.Equal(1000, child.RenderQueue);
         Assert.Equal("OPAQUE", Keyword(child, "_SURFACE"));
 
@@ -722,7 +722,7 @@ public sealed class StandardShaderTests : IDisposable
         foreach (string geometry in new[] { "geometry_normal_map", "geometry_coat_normal_map", "geometry_tangent_map", "ambient_occlusion_map" })
             Assert.True(properties[_pbr.FindProperty(geometry)].MapBit >= 0, geometry);
         Assert.Equal(30, properties.Count(p => p.MapBit >= 0));
-        Assert.True(properties[_pbr.Schema.MapMaskProperty].MapMask);
+        Assert.True(_pbr.Schema.MapMaskOffset >= 0);
     }
 
     [Fact]
@@ -754,7 +754,7 @@ public sealed class StandardShaderTests : IDisposable
         child.SetTexture("specular_roughness_map", texture);
         Assert.Equal(MathF.Sin(0.5f), BitConverter.UInt32BitsToSingle(Pack(child)[at + 6]));
 
-        int mask = (int)(_pbr.Properties[_pbr.Schema.MapMaskProperty].Offset / 4);
+        int mask = _pbr.Schema.MapMaskOffset / 4;
         Assert.Equal(1u << map.MapBit, record[mask]);
 
         child.SetTexture("specular_roughness_map", null);

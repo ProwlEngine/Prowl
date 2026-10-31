@@ -38,7 +38,7 @@
 #endif
 
 #ifdef PBR_TIER_LITE
-#define MAX_BLENDED_PROBES 1
+#define GRAPHITE_MAX_BLENDED_PROBES 1
 #else
 #ifdef PBR_COAT
 #define PBR_DIRECT_COAT
@@ -162,7 +162,6 @@ struct PBR_Indirect
 #endif
 };
 
-float PBR_Luminance(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
 // The closure of a surface seen from view. mapVariance is the normal map's own variance, Toksvig's, for specular antialiasing.
 PBR_Closure PBR_Prepare(PBR_Params p, vec3 relativePos, vec3 view, vec3 geomNormal, float mapVariance)
@@ -256,7 +255,7 @@ PBR_Closure PBR_Prepare(PBR_Params p, vec3 relativePos, vec3 view, vec3 geomNorm
     float rd = clamp(p.baseDiffuseRoughness, 0.0, 1.0);
     float average = PBR_FonAverage(rd);
     c.diffuseRoughness = rd;
-    c.diffuseWeight = (1.0 - M) * (1.0 - PBR_Luminance(dielectricE3));
+    c.diffuseWeight = (1.0 - M) * (1.0 - Graphite_Luminance(dielectricE3));
     float opaque = c.diffuseWeight;
 #ifdef PBR_TRANSMITS
     float T = clamp(p.transmissionWeight, 0.0, 1.0);
@@ -277,13 +276,13 @@ PBR_Closure PBR_Prepare(PBR_Params p, vec3 relativePos, vec3 view, vec3 geomNorm
     vec3 subsurface = S * opaque * clamp(p.subsurfaceColor, 0.0, 1.0);
 #endif
     float diffuse = (1.0 - S) * opaque;
-    float multipleShape = max(1e-7, 1.0 - PBR_FonAlbedo(c.NdotV, rd)) / (max(1e-7, 1.0 - average) * PI);
-    c.diffuseSingle = rho * (diffuse / ((1.0 + PBR_FON_C1 * rd) * PI));
+    float multipleShape = max(1e-7, 1.0 - PBR_FonAlbedo(c.NdotV, rd)) / (max(1e-7, 1.0 - average) * GRAPHITE_PI);
+    c.diffuseSingle = rho * (diffuse / ((1.0 + PBR_FON_C1 * rd) * GRAPHITE_PI));
     c.diffuseMultiple = PBR_EonMultipleAlbedo(rho, average) * (diffuse * multipleShape);
     c.diffuseAlbedo = PBR_EonAlbedo(rho, rd, c.NdotV) * diffuse;
 #ifdef PBR_SHEET
     float g = clamp(p.subsurfaceScatterAnisotropy, -1.0, 1.0);
-    c.sheetSingle = 1.0 / ((1.0 + PBR_FON_C1 * rd) * PI);
+    c.sheetSingle = 1.0 / ((1.0 + PBR_FON_C1 * rd) * GRAPHITE_PI);
     c.sheetMultiple = multipleShape;
     c.sheetReflection = subsurface * (0.5 * (1.0 - g));
     c.sheetTransmission = subsurface * (0.5 * (1.0 + g));
@@ -418,7 +417,7 @@ vec3 PBR_EvaluateWrap(PBR_Closure c, vec3 L, float irradiance, float attenuation
 {
     float behind = min(dot(c.normal, L), 0.0);
     vec3 w = c.subsurfaceWrap;
-    return c.subsurfaceAlbedo / PI * max(irradiance + attenuation * (w + behind), 0.0) / ((1.0 + w) * (1.0 + w));
+    return c.subsurfaceAlbedo / GRAPHITE_PI * max(irradiance + attenuation * (w + behind), 0.0) / ((1.0 + w) * (1.0 + w));
 }
 #endif
 
@@ -568,7 +567,7 @@ vec3 PBR_ShadeLights(PBR_Closure c)
     bool wraps = false;
 #endif
     Graphite_LightIterator it = Graphite_BeginLights(c.position);
-    LightSample L;
+    Graphite_LightSample L;
     while (Graphite_NextLight(it, L))
     {
         if (Graphite_ContributeLocal(L, f, wraps, l))
@@ -637,7 +636,7 @@ vec3 PBR_TopReflectance(PBR_Closure c, out vec3 normal, out float roughness)
 #ifdef PBR_COAT
     reflectance *= c.coatedBase;
     float coat = c.coatAlbedo * PBR_CoatSpecularOcclusion(c);
-    if (coat > PBR_Luminance(reflectance))
+    if (coat > Graphite_Luminance(reflectance))
     {
         reflectance = vec3(coat);
         normal = c.coatNormal;

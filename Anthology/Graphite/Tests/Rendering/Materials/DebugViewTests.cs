@@ -20,8 +20,7 @@ public sealed class DebugViewTests
     private ShaderDefinition Load(string name)
     {
         ShaderDefinition definition = ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{name}.shader")!);
-        _ = new Shader(definition, _compiler);
-        return definition;
+        return new Shader(definition, _compiler).Definition;
     }
 
     private static ShaderPass Pass(ShaderDefinition shader, string type)

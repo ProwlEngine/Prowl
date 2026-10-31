@@ -42,7 +42,7 @@ public sealed class RendererOptions
 
     /// <summary>
     /// When shader variants compile. Sync with Inline threading never draws a stand in, for golden images and tests.
-    /// Players with only baked shaders use BakedOnly.
+    /// Players shipping only baked shaders pass a <see cref="BakedVariants"/> without a compiler as the compiler and use BakedOnly.
     /// </summary>
     public CompilePolicy Compile = CompilePolicy.Async;
 
@@ -60,16 +60,14 @@ public sealed class RendererOptions
     /// a probe filters. The default fits one 128 probe with its filter. The first capture of a frame always runs.
     /// </summary>
     public long ProbeTexelsPerFrame = 256 * 1024;
-
-    /// <summary>Frames a view keeps its per view state after it was last drawn.</summary>
-    public int StaleViewFrames = 8;
 }
 
 /// <summary>
 /// The skies Graphite ships, loaded the first time they are asked for: the procedural sky lit by the world's sun
-/// (_SunSize, _SunGlow, _Exposure, _Tint, _GroundColor), a two colour gradient (_TopColor, _BottomColor, _Exponent), a
-/// cube texture (_Cubemap), an equirectangular panorama (_Panorama), both with _Tint, _Exposure and _Rotation in degrees,
-/// and a cube from six images (_CubeRight, _CubeLeft, _CubeTop, _CubeBottom, _CubeFront, _CubeBack, _Tint, _Exposure).
+/// (_SunSize, _SunGlow, intensity, _Tint, _GroundColor), a two colour gradient (_TopColor, _BottomColor, _Exponent), a
+/// cube texture (_Cubemap), an equirectangular panorama (_Panorama), both with _Tint, intensity and _Rotation in degrees,
+/// and a cube from six images (_CubeRight, _CubeLeft, _CubeTop, _CubeBottom, _CubeFront, _CubeBack, _Tint, intensity).
+/// Each is a Surface "Sky" shader, see Graphite/Standard/Sky.shader.
 /// </summary>
 public sealed class BuiltInSkies(Renderer renderer)
 {
@@ -122,117 +120,6 @@ public readonly record struct RendererError(string Code, string Message, Rendere
     public override int GetHashCode() => HashCode.Combine(Code, Message, Severity, Source);
 }
 
-/// <summary>One layer of a view: a camera relative view matrix (rotation only), a reversed Z projection and the camera's world position.</summary>
-public struct ViewLayer
-{
-    public Float4x4 View;
-    public Float4x4 Projection;
-    public Double3 Position;
-}
-
-[InlineArray(6)]
-public struct ViewLayers
-{
-    private ViewLayer _first;
-}
-
-public struct ViewDesc
-{
-    public RenderWorld World;
-
-    /// <summary>Unique per renderer, keys per view state.</summary>
-    public int ViewId;
-
-    /// <summary>Name debug tools show for the view's instance, or null.</summary>
-    public string? Name;
-    public ViewLayers Layers;
-
-    /// <summary>1 for mono. Stereo and cube layers draw through multiview.</summary>
-    public byte LayerCount;
-
-    /// <summary>What the view draws into. A swapchain framebuffer presents after the frame.</summary>
-    public Framebuffer Target;
-    public uint CullingMask;
-
-    /// <summary>Its alpha is ignored, views clear opaque.</summary>
-    public Float4 ClearColor;
-
-    /// <summary>Whether the world's sky draws behind what the view sees.</summary>
-    public bool Sky;
-
-    /// <summary>The projection's near plane, for linear depth.</summary>
-    public float Near;
-
-    /// <summary>The logical far distance, for effects that need one with an infinite projection.</summary>
-    public float FarDistance;
-
-    /// <summary>
-    /// The camera's exposure value at ISO 100, which every light the view draws is pre-exposed by through
-    /// <see cref="ExposureOf"/>. An <see cref="AutoExposure"/> on the view replaces it with its own from its second frame.
-    /// </summary>
-    public float EV100;
-
-    /// <summary>What the view is for, which decides the features that run on it.</summary>
-    public ViewKind Kind;
-
-    /// <summary>The part of the target the view draws into, as x, y, width and height from 0 to 1, y down from the top.</summary>
-    public Float4 Viewport;
-
-    /// <summary>Clears the whole target to the clear colour before drawing into the viewport, for a view letterboxed into its target.</summary>
-    public bool ClearTarget;
-
-    /// <summary>
-    /// Draws over what its target already holds, such as views of a lower <see cref="Order"/>: the view starts transparent
-    /// without sky or clear colour, and its colour, premultiplied by its alpha as blending over transparent leaves it, is
-    /// blended over the target: transparent and additive surfaces and glow reach the views under it. For stacked cameras
-    /// such as a first person weapon or world space UI.
-    /// </summary>
-    public bool Overlay;
-
-    /// <summary>Render resolution against the viewport's size in the target, presented scaled to fit.</summary>
-    public float RenderScale;
-
-    /// <summary>
-    /// Renders the scene into 8 bit sRGB colour instead of 16 bit float: half the bandwidth, and light above 1 clips. For
-    /// views with no tonemapper.
-    /// </summary>
-    public bool Ldr;
-
-    /// <summary>
-    /// The camera jumped, like a teleport or a scene switch: this frame has no previous one, so motion is none and every
-    /// feature's history starts over.
-    /// </summary>
-    public bool Cut;
-
-    /// <summary>Features of this view alone, over the world's.</summary>
-    public ExtensionSet<RenderFeature>? Features;
-
-    /// <summary>Values of global axes for this view alone, over the world's, such as GRAPHITE_DEBUG. Copied at SubmitFrame.</summary>
-    public Keyword[]? Keywords;
-
-    /// <summary>Views draw lowest Order first, each after the views it depends on.</summary>
-    public int Order;
-
-    /// <summary>ViewIds of views that draw before this one, such as ones whose targets it samples.</summary>
-    public int[]? DependsOn;
-
-    public ViewDesc()
-    {
-        World = null!;
-        Target = null!;
-        LayerCount = 1;
-        CullingMask = ~0u;
-        Sky = true;
-        Near = 0.1f;
-        FarDistance = 1000;
-        Viewport = new Float4(0, 0, 1, 1);
-        RenderScale = 1;
-    }
-
-    /// <summary>The scale an exposure value at ISO 100 gives light, 1 / (1.2 * 2^EV100), as a camera of ISO 100 and K 12.5 sees it.</summary>
-    public static float ExposureOf(float ev100) => 1f / (1.2f * MathF.Pow(2f, ev100));
-}
-
 public struct FrameTime
 {
     public double Time;
@@ -242,7 +129,7 @@ public struct FrameTime
 
 public struct FrameDesc
 {
-    public ReadOnlyMemory<ViewDesc> Views;
+    public ReadOnlyMemory<RenderView> Views;
     public FrameTime Time;
 
     /// <summary>Runs on the render thread before the frame is prepared, for host work its submission has to follow.</summary>
@@ -341,7 +228,7 @@ public sealed class Renderer : IDisposable
         _materials = new MaterialSystem(device, _store, Textures) { Reporter = Report };
         _globals = new GlobalRegistry(device, _store, Textures) { Reporter = Report };
         _programs.Reporter = Report;
-        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Resources, Report, _options.Compile) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
+        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Resources, Report, _options.Compile) { ShadowFormat = _options.ShadowFormat };
         FrameFeatures.Add(new DeformFeature());
         FrameFeatures.Add(new ReadbackFeature());
         _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
@@ -417,6 +304,24 @@ public sealed class Renderer : IDisposable
 
     internal void RemoveWorld(RenderWorld world) => _removedWorlds.Add(world);
 
+    /// <summary>A new view of a world, drawn in the frames it is submitted in until disposed. Host thread.</summary>
+    public RenderView CreateView(RenderWorld world, string? name = null)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(world);
+        return new RenderView(this, _nextViewId++, world, name);
+    }
+
+    internal void ReleaseView(RenderView view)
+    {
+        lock (_releasedViews)
+            _releasedViews.Add(view.Id);
+    }
+
+    private int _nextViewId;
+    private readonly List<int> _releasedViews = new();
+    private readonly List<int> _frameReleased = new();
+
     /// <summary>Creates a mesh. Any thread, resident on a later frame.</summary>
     public GpuMesh CreateMesh(MeshData data) => _geometry.Create(data);
 
@@ -462,7 +367,7 @@ public sealed class Renderer : IDisposable
     public Shader LoadShader(ShaderDefinition definition)
     {
         Shader shader = new(definition, _compiler);
-        if (string.IsNullOrEmpty(definition.Fallback) || definition.Fallback == FallbackShaderName)
+        if (string.IsNullOrEmpty(shader.Definition.Fallback) || shader.Definition.Fallback == FallbackShaderName)
             shader.Fallback = _fallbackShader;
         return shader;
     }
@@ -514,18 +419,30 @@ public sealed class Renderer : IDisposable
     public void SubmitFrame(in FrameDesc frame)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        ReadOnlySpan<ViewDesc> views = frame.Views.Span;
-        foreach (ViewDesc view in views)
+        ReadOnlySpan<RenderView> views = frame.Views.Span;
+        for (int i = 0; i < views.Length; i++)
         {
-            if (view.LayerCount < 1 || view.LayerCount > 6)
-                throw new ArgumentException($"View {view.ViewId} has {view.LayerCount} layers, a view has 1 to 6.");
-            if (Math.Max(view.Target.ViewCount, 1u) != view.LayerCount)
-                throw new ArgumentException($"View {view.ViewId} has {view.LayerCount} layers but its target has {Math.Max(view.Target.ViewCount, 1u)} views.");
+            RenderView view = views[i];
+            ArgumentNullException.ThrowIfNull(view);
+            ObjectDisposedException.ThrowIf(view.IsDisposed, view);
+            string name = view.Name ?? $"{i}";
+            if (view.Target == null)
+                throw new ArgumentException($"View {name} has no target.");
+            byte layers = view.Camera.LayerCount;
+            if (layers < 1 || layers > 6)
+                throw new ArgumentException($"View {name} has {layers} layers, a view has 1 to 6.");
+            if (Math.Max(view.Target.ViewCount, 1u) != layers)
+                throw new ArgumentException($"View {name} has {layers} layers but its target has {Math.Max(view.Target.ViewCount, 1u)} views.");
             if (!(view.RenderScale > 0) || !float.IsFinite(view.RenderScale))
-                throw new ArgumentException($"View {view.ViewId} has a render scale of {view.RenderScale}, it must be above 0.");
+                throw new ArgumentException($"View {name} has a render scale of {view.RenderScale}, it must be above 0.");
             Float4 rect = view.Viewport;
             if (!(rect.X >= 0 && rect.Y >= 0 && rect.Z > 0 && rect.W > 0 && rect.X + rect.Z <= 1.0001f && rect.Y + rect.W <= 1.0001f))
-                throw new ArgumentException($"View {view.ViewId} has the viewport {rect}, which must lie within 0 to 1 with a size above 0.");
+                throw new ArgumentException($"View {name} has the viewport {rect}, which must lie within 0 to 1 with a size above 0.");
+            for (int j = 0; j < i; j++)
+            {
+                if (views[j] == view)
+                    throw new ArgumentException($"View {name} is submitted twice in one frame.");
+            }
         }
 
         RaiseErrors();
@@ -565,14 +482,16 @@ public sealed class Renderer : IDisposable
                 _views = new ViewDesc[views.Length];
                 _viewFeatures = new RenderFeature[views.Length][];
             }
-            views.CopyTo(_views);
+            for (int v = 0; v < views.Length; v++)
+                _views[v] = views[v].Snapshot();
             _viewCount = views.Length;
-            for (int v = 0; v < _viewCount; v++)
+            _frameReleased.Clear();
+            lock (_releasedViews)
             {
-                if (_views[v].Keywords is { Length: > 0 } keywords)
-                    _views[v].Keywords = (Keyword[])keywords.Clone();
+                _frameReleased.AddRange(_releasedViews);
+                _releasedViews.Clear();
             }
-            ExtractFeatures(views);
+            ExtractFeatures(_views.AsSpan(0, _viewCount));
             _started = frame.Started;
             _submitted = frame.Submitted;
             _profilers = frame.Profilers ?? [];
@@ -777,6 +696,7 @@ public sealed class Renderer : IDisposable
             {
                 _globals.RemoveWorld(removed.GlobalRegion);
                 _frame.ForgetWorld(removed);
+                removed.World.Transients.Release(_geometry, _lastDispatched);
                 removed.World.DisposeRender();
                 removed.Dispose();
             }
@@ -944,6 +864,7 @@ public sealed class Renderer : IDisposable
         {
             world.World.Render.Update(_changedMeshes, _changedMaterials);
             world.World.Render.UpdateDeformation(_geometry, _lastDispatched);
+            world.World.Transients.Place(_geometry, _uploader, _lastDispatched);
             world.Buckets.Update(world.World.Render.DrawChanged, world.World.Render.BoundsChanged, _changedMaterials);
         }
         _geometry.FlushCopies(_uploader);
@@ -968,7 +889,7 @@ public sealed class Renderer : IDisposable
             world.World.Probes.Update(world.World.Render, _uploader);
         }
 
-        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _viewFeatures.AsSpan(0, _viewCount), _frameReadbacks, _worlds, _worlds.Values, _lastDispatched, _time, _profilers);
+        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _viewFeatures.AsSpan(0, _viewCount), _frameReleased, _frameReadbacks, _worlds, _worlds.Values, _lastDispatched, _time, _profilers);
         _lastDispatched = task.Id;
         LastExecution = task;
         foreach (ReadbackRequest request in _frameReadbacks)

@@ -15,12 +15,12 @@ public enum CompilePolicy
     /// <summary>On a worker, the request reporting it pending until done.</summary>
     Async,
 
-    /// <summary>Never: only variants seeded from a snapshot exist.</summary>
+    /// <summary>Never: only variants seeded from a snapshot or <see cref="BakedVariants"/> exist.</summary>
     BakedOnly,
 }
 
 
-public enum VariantState
+internal enum VariantState
 {
     Ready,
     Pending,
@@ -33,7 +33,7 @@ public enum VariantState
 /// the rest compile on request under a policy, and failures stay until the pass source or compiler session changes,
 /// which drops every variant. Only variants seeded or requested are held. Thread safe.
 /// </summary>
-public sealed class PassVariants
+internal sealed class PassVariants
 {
     private sealed class Slot
     {
@@ -90,8 +90,8 @@ public sealed class PassVariants
     public GraphicsBackend Backend { get; }
     public IReadOnlyList<VariantSpace> Axes => _axes;
 
-    /// <summary>The globals the pass reads, from the compiler or the baked pass.</summary>
-    public IReadOnlyList<ShaderGlobal> Globals => Compiler?.GetGlobals(_pass) ?? BakedVariants.Find(_pass)?.Globals ?? [];
+    /// <summary>The globals the pass reads, from the compiler.</summary>
+    public IReadOnlyList<ShaderGlobal> Globals => Compiler?.GetGlobals(_pass) ?? [];
 
     /// <summary>Moves whenever the pass source, material ABI or compiler session changed and every variant was dropped.</summary>
     public int Revision
@@ -108,9 +108,6 @@ public sealed class PassVariants
 
     /// <summary>Every combination of the axes, held or not.</summary>
     public int Count => _count;
-
-    /// <summary>Raised once per variant failure, outside the lock.</summary>
-    public event Action<Keyword[], Exception>? CompileFailed;
 
     /// <summary>The keywords of a key, every axis in slot order.</summary>
     public Keyword[] Combo(int key)
@@ -242,7 +239,6 @@ public sealed class PassVariants
         {
             description = default;
             error = null;
-            Exception? raised = null;
             CompileJob? run = null;
             Task? wait = null;
             VariantState state;
@@ -250,7 +246,7 @@ public sealed class PassVariants
             {
                 Refresh();
                 Slot slot = At(key);
-                state = Poll(key, slot, ref raised);
+                state = Poll(key, slot);
                 if (state == VariantState.Pending && slot.Job is { } job)
                 {
                     if (policy == CompilePolicy.Sync)
@@ -286,9 +282,6 @@ public sealed class PassVariants
                 else if (state == VariantState.Failed)
                     error ??= slot.Failure;
             }
-            if (raised != null)
-                CompileFailed?.Invoke(Combo(key), raised);
-
             run?.Run();
             wait ??= run?.Done;
             if (wait == null)
@@ -389,7 +382,7 @@ public sealed class PassVariants
     }
 
     // A finished compile is taken in
-    private VariantState Poll(int key, Slot slot, ref Exception? raised)
+    private VariantState Poll(int key, Slot slot)
     {
         if (slot.Variant is { } variant && variant.IsCompiledFor(Backend))
             return VariantState.Ready;
@@ -402,7 +395,7 @@ public sealed class PassVariants
             return VariantState.Pending;
         if (job.Done.IsFaulted)
         {
-            slot.Failure = raised = job.Done.Exception?.InnerException ?? job.Done.Exception;
+            slot.Failure = job.Done.Exception?.InnerException ?? job.Done.Exception;
             return VariantState.Failed;
         }
         Store(key, slot, slot.Compiled);
@@ -416,14 +409,11 @@ public sealed class PassVariants
         slot.Job = CompileQueue.Enqueue(work, priority);
         slot.Job.Done.ContinueWith(_ =>
         {
-            Exception? raised = null;
             lock (this)
             {
                 if (_slots.GetValueOrDefault(key) == slot)
-                    Poll(key, slot, ref raised);
+                    Poll(key, slot);
             }
-            if (raised != null)
-                CompileFailed?.Invoke(Combo(key), raised);
         }, TaskScheduler.Default);
     }
 
@@ -474,17 +464,17 @@ public sealed class PassVariants
 
     private void SeedBaked()
     {
-        if (BakedVariants.Find(_pass) is not { } baked)
+        if ((Compiler as BakedVariants)?.Find(_pass) is not { } baked)
             return;
         foreach (Variant variant in baked.Variants)
         {
             if (TryGetFullKey(variant.Keywords, out int key))
                 At(key).Variant = variant;
         }
-        foreach (((GraphicsBackend backend, int key), ComputeDescription description) in baked.Compute)
+        foreach (((GraphicsBackend backend, VariantKey key), ComputeDescription description) in baked.Compute)
         {
-            if (backend == Backend && (uint)key < (uint)_count)
-                At(key).Compute = description;
+            if (backend == Backend && (uint)key.Index < (uint)_count)
+                At(key.Index).Compute = description;
         }
     }
 

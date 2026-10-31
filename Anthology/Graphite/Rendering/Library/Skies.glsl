@@ -1,8 +1,9 @@
-// The built in skies' shared parts: the procedural sky's radiance and its sun, rotation and panorama mapping. Sky shaders include Graphite/Sky.glsl first.
-// Skies give radiance in nits, which the sky shaders pre-expose.
+// The built in skies' shared parts: the procedural sky's radiance and its sun, rotation and panorama mapping, for the
+// code of a Surface "Sky" shader. Skies give radiance in nits, which the Sky model pre-exposes.
 #pragma once
 
-#include "Graphite/Lighting.glsl"
+#include "Graphite/Core.glsl"
+#include "Graphite/Directional.glsl"
 
 // The procedural sky's luminance in nits per lux of sun. With the sun 60 degrees up the sky then lights a level surface
 // with a fifth of the sun's illuminance, a clear day's 20000 lux of sky under a 100000 lux sun.
@@ -68,20 +69,20 @@ vec3 Graphite_SkyRadiance(vec3 view, vec3 sun, float sunGlow)
 
 // The procedural sky in nits: the scattered light of a sun of sunLux, its colour times lux, times tint, the sun's disk
 // scaled by sunSize (0 hides it) shining that illuminance, the light at the horizon times ground below it, all times
-// intensity. Captures leave the disk out while a directional light is the sun, which lights everything already.
-vec3 Graphite_ProceduralSky(vec3 view, vec3 sun, vec3 sunLux, float sunSize, float sunGlow, float intensity, vec3 tint, vec3 ground)
+// brightness. Captures leave the disk out while a directional light is the sun, which lights everything already.
+vec3 Graphite_ProceduralSky(vec3 view, vec3 sun, vec3 sunLux, float sunSize, float sunGlow, float brightness, vec3 tint, vec3 ground)
 {
-    float lux = dot(sunLux, vec3(0.2126, 0.7152, 0.0722));
+    float lux = Graphite_Luminance(sunLux);
     vec3 color = Graphite_SkyRadiance(view, sun, sunGlow) * tint * (lux * GRAPHITE_SKY_NITS_PER_LUX);
     if (sunSize > 0.0 && !(Graphite_IsCapture() && Graphite_DirectionalCount() > 0u))
     {
         // The disk fades in over its rim, so its solid angle is 2 pi times its blend's mean width in cosine
         float size2 = sunSize * sunSize;
         float disk = smoothstep(1.0 - 1.5e-4 * size2, 1.0 - 1e-5 * size2, dot(view, sun)) * step(0.0, view.y);
-        color += disk * sunLux / (2.0 * PI * 8e-5 * size2);
+        color += disk * sunLux / (2.0 * GRAPHITE_PI * 8e-5 * size2);
     }
     color = mix(color, color * ground, smoothstep(0.0, -0.02, view.y));
-    return color * intensity;
+    return color * brightness;
 }
 
 // A direction turned about the up axis by degrees, for skies that rotate their image
@@ -95,5 +96,5 @@ vec3 Graphite_RotateSkyY(vec3 dir, float degrees)
 // The texture coordinate of a direction in an equirectangular panorama: +Z at the centre, up at the top row
 vec2 Graphite_PanoramaUV(vec3 dir)
 {
-    return vec2(atan(dir.x, dir.z) * 0.15915494309 + 0.5, asin(clamp(dir.y, -1.0, 1.0)) * 0.31830988618 + 0.5);
+    return vec2(atan(dir.x, dir.z) * GRAPHITE_INV_TWO_PI + 0.5, asin(clamp(dir.y, -1.0, 1.0)) * GRAPHITE_INV_PI + 0.5);
 }

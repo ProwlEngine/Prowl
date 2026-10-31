@@ -97,11 +97,48 @@ internal sealed class RendererHarness : IDisposable
         return Renderer.CreateMesh(new MeshData { VertexCount = 4, Streams = [.. streams], Indices = new uint[] { 0, 1, 2, 0, 2, 3 } });
     }
 
-    /// <summary>A view of the world into the target without sky, cleared to black, through the shared projection.</summary>
-    public ViewDesc View(int id = 1)
+    private readonly Dictionary<int, RenderView> _views = new();
+
+    /// <summary>The harness's view of an id, made the first time it is asked for. A view keeps its state across frames.</summary>
+    public RenderView ViewOf(int id)
     {
-        ViewDesc view = new() { World = World, ViewId = id, Target = Framebuffer, Sky = false, ClearColor = new Float4(0, 0, 0, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = Projection };
+        if (!_views.TryGetValue(id, out RenderView? view))
+            _views[id] = view = Renderer.CreateView(World);
+        return view;
+    }
+
+    /// <summary>The view of an id with every setting a new view of the world into the target has, and no camera.</summary>
+    public RenderView BareView(int id)
+    {
+        RenderView view = ViewOf(id);
+        view.World = World;
+        view.Name = null;
+        view.Camera = default;
+        view.Target = Framebuffer;
+        view.CullingMask = ~0u;
+        view.ClearColor = default;
+        view.Sky = true;
+        view.EV100 = 0;
+        view.Kind = ViewKind.Game;
+        view.Viewport = new Float4(0, 0, 1, 1);
+        view.ClearTarget = false;
+        view.Overlay = false;
+        view.RenderScale = 1;
+        view.Ldr = false;
+        view.Features = null;
+        view.Keywords = null;
+        view.Order = 0;
+        view.DependsOn.Clear();
+        return view;
+    }
+
+    /// <summary>The view of an id into the target without sky, cleared to black, through the shared projection.</summary>
+    public RenderView View(int id = 1)
+    {
+        RenderView view = BareView(id);
+        view.Sky = false;
+        view.ClearColor = new Float4(0, 0, 0, 1);
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = Projection });
         return view;
     }
 
@@ -121,7 +158,7 @@ internal sealed class RendererHarness : IDisposable
         return pixels;
     }
 
-    public Float4[] Frame(params ViewDesc[] views) => Frame(new FrameDesc { Views = views });
+    public Float4[] Frame(params RenderView[] views) => Frame(new FrameDesc { Views = views });
 
     public Float4[] ReadTarget() => ReadLayer(Target, 0);
 

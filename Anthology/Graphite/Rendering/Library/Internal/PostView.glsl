@@ -1,6 +1,7 @@
 // The view's layers for fullscreen effects, bound by FeatureContext on every fullscreen draw.
 #pragma once
 
+#include "Graphite/Math.glsl"
 #include "Graphite/ViewData.glsl"
 #include "Graphite/Octahedral.glsl"
 
@@ -18,15 +19,7 @@ bool Graphite_PostOrthographic(Graphite_ViewData view) { return abs(view.project
 // The view space position of a uv and reversed Z depth. View space is the view matrix's, rotation only, from the camera.
 vec3 Graphite_PostViewPosition(Graphite_ViewData view, vec2 uv, float depth)
 {
-    vec4 p = view.inverseViewProjection * vec4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0);
-    return mat3(view.view) * (p.xyz / p.w);
-}
-
-// The relative position of a uv and depth
-vec3 Graphite_PostRelativePosition(Graphite_ViewData view, vec2 uv, float depth)
-{
-    vec4 p = view.inverseViewProjection * vec4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0);
-    return p.xyz / p.w;
+    return mat3(view.view) * Graphite_RelativeFromDepth(view, uv, depth);
 }
 
 // Where a camera relative position was on screen last frame, in uv

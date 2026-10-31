@@ -16,13 +16,13 @@ Vertex
 Fragment
 {
     #extension GL_EXT_multiview : require
+    #include "Graphite/Math.glsl"
 
     uniform samplerCube Graphite_Source;
     layout(push_constant) uniform Push { float roughness; float sourceSize; uint sampleCount; uint pad; } push;
     layout(location = 0) in vec2 vUV;
     layout(location = 0) out vec4 outColor;
 
-    const float PI = 3.14159265359;
 
     // The direction of a face's texel. Drawn straight into the cube, the image's first row is at the top of clip space.
     vec3 FaceDirection(int face, vec2 uv)
@@ -44,7 +44,7 @@ Fragment
 
     vec3 ImportanceSampleGGX(vec2 xi, vec3 n, float a)
     {
-        float phi = 2.0 * PI * xi.x;
+        float phi = 2.0 * GRAPHITE_PI * xi.x;
         float cosTheta = sqrt((1.0 - xi.y) / (1.0 + (a * a - 1.0) * xi.y));
         float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
         vec3 h = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
@@ -66,7 +66,7 @@ Fragment
 
         float a = push.roughness * push.roughness;
         float a2 = a * a;
-        float texelSolidAngle = 4.0 * PI / (6.0 * push.sourceSize * push.sourceSize);
+        float texelSolidAngle = 4.0 * GRAPHITE_PI / (6.0 * push.sourceSize * push.sourceSize);
         uint count = push.sampleCount;
 
         vec3 sum = vec3(0.0);
@@ -82,7 +82,7 @@ Fragment
 
             // With the view along the normal the pdf of the reflected direction is D / 4
             float d = nDotH * nDotH * (a2 - 1.0) + 1.0;
-            float pdf = a2 / (PI * d * d) * 0.25;
+            float pdf = a2 / (GRAPHITE_PI * d * d) * 0.25;
             float sampleSolidAngle = 1.0 / (float(count) * pdf + 1e-4);
             float mip = max(0.5 * log2(sampleSolidAngle / texelSolidAngle) + 1.0, 0.0);
 

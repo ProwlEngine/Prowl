@@ -6,7 +6,9 @@
 //   UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY
 #pragma once
 
-#include "Graphite/Lighting.glsl"
+#include "Graphite/Shadows.glsl"
+#include "Graphite/Directional.glsl"
+#include "Graphite/Ambient.glsl"
 
 #ifdef GRAPHITE_FRAGMENT
 
@@ -47,7 +49,7 @@ int Graphite_DebugCascade(vec3 position)
 // A checker over the object's lightmap texels, blue where it has no lightmap and is lit by probes
 vec3 Graphite_DebugLightmapDensity(vec3 albedo, vec2 lightmapUV)
 {
-    vec3 grey = vec3(dot(albedo, vec3(0.2126, 0.7152, 0.0722)) * 0.5 + 0.25);
+    vec3 grey = vec3(Graphite_Luminance(albedo) * 0.5 + 0.25);
 #ifndef GRAPHITE_NO_OBJECT
     Graphite_ObjectData object = Graphite_Object();
     uint slot = object.lightmapTexture;
@@ -82,7 +84,7 @@ vec3 Graphite_DebugView(vec3 color, vec3 albedo, vec3 normal, float roughness, f
 #elif defined(GRAPHITE_DEBUG_CASCADES)
     const vec3 tints[4] = vec3[4](vec3(1.0, 0.3, 0.3), vec3(0.3, 1.0, 0.3), vec3(0.3, 0.5, 1.0), vec3(1.0, 1.0, 0.3));
     int cascade = Graphite_DebugCascade(position);
-    vec3 grey = vec3(dot(albedo, vec3(0.2126, 0.7152, 0.0722)) * 0.5 + 0.25);
+    vec3 grey = vec3(Graphite_Luminance(albedo) * 0.5 + 0.25);
     return cascade < 0 ? grey * 0.3 : grey * tints[min(cascade, 3)];
 #elif defined(GRAPHITE_DEBUG_LIGHTMAP_DENSITY)
     return Graphite_DebugLightmapDensity(albedo, lightmapUV);

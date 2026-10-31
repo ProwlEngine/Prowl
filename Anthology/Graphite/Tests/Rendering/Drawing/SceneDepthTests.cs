@@ -90,14 +90,14 @@ public sealed class SceneDepthTests : IDisposable
     public void ATransparentPass_FetchesTheOpaqueDepthBehindIt_AndOnlyViewsReadingItCopyIt()
     {
         Frame();
-        Assert.Null(_renderer.Frame.Camera(1)!.SceneDepth);
+        Assert.Null(_renderer.Frame.Camera(_harness.ViewOf(1))!.SceneDepth);
 
         Shader glass = _renderer.LoadShader(ShaderParser.Parse(GlassSource));
         Assert.True(glass.ReadsSceneDepth);
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 5)) }, [_renderer.CreateMaterial(glass)]);
 
         Float4[] seen = Frame();
-        Assert.True(_renderer.LastFrameStats.View(1)!.SceneDepthUsed);
+        Assert.True(_renderer.LastFrameStats.View(_harness.ViewOf(1))!.SceneDepthUsed);
         Assert.All(seen, p => Assert.InRange(p.X, 0.9f - 1e-3f, 0.9f + 1e-3f));
     }
 }

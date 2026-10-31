@@ -131,9 +131,9 @@ public sealed class SceneColorTests : IDisposable
         return _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 5)) }, [material]);
     }
 
-    private ViewDesc View(int id = 1) => _harness.View(id);
+    private RenderView View(int id = 1) => _harness.View(id);
 
-    private Float4[] Frame(ViewDesc? view = null) => _harness.Frame(view ?? View());
+    private Float4[] Frame(RenderView? view = null) => _harness.Frame(view ?? View());
 
     private static void AssertTinted(Float4[] behind, Float4[] seen, float tolerance = 2e-3f)
     {
@@ -145,9 +145,9 @@ public sealed class SceneColorTests : IDisposable
         }
     }
 
-    private CameraFrame Camera(int id = 1) => _renderer.Frame.Camera(id)!;
+    private CameraFrame Camera(int id = 1) => _renderer.Frame.Camera(_harness.ViewOf(id))!;
 
-    private ViewStats Drawn(int id = 1) => _renderer.LastFrameStats.View(id)!;
+    private ViewStats Drawn(int id = 1) => _renderer.LastFrameStats.View(_harness.ViewOf(id))!;
 
     [Theory]
     [InlineData(false)]
@@ -200,9 +200,14 @@ public sealed class SceneColorTests : IDisposable
         AddGlass(_glass, lod: 1);
         using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 2, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 2 });
-        ViewDesc stereo = new() { World = _world, ViewId = 5, Target = layered, LayerCount = 2, Sky = false, ClearColor = new Float4(0, 0, 0, 1) };
+        RenderView stereo = _harness.BareView(5);
+        stereo.Target = layered;
+        stereo.Sky = false;
+        stereo.ClearColor = new Float4(0, 0, 0, 1);
+        ViewLayer[] cameraLayers = new ViewLayer[2];
         for (int layer = 0; layer < 2; layer++)
-            stereo.Layers[layer] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = new Double3(layer * 2 - 1, layer, 0) };
+            cameraLayers[layer] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = new Double3(layer * 2 - 1, layer, 0) };
+        stereo.Camera = new ViewCamera(cameraLayers);
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { stereo } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
@@ -214,8 +219,8 @@ public sealed class SceneColorTests : IDisposable
             Float4[] got = _device.Map<Float4>(readback).ToArray();
             _device.Unmap(readback);
 
-            ViewDesc mono = View(10 + layer);
-            mono.Layers[0] = stereo.Layers[layer];
+            RenderView mono = View(10 + layer);
+            mono.Camera = new ViewCamera(stereo.Camera.Layers[layer]);
             Float4[] want = Frame(mono);
             Assert.True(want.Distinct().Count() > 16, $"layer {layer} shows too little");
             for (int i = 0; i < want.Length; i++)

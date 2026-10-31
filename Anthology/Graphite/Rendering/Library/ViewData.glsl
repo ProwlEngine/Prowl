@@ -19,3 +19,10 @@ struct Graphite_ViewData
     vec4 treeOffset;                // this layer's camera minus the first layer's, which the view's trees are built around
     vec4 exposure;                  // the exposure light is pre-exposed by, last frame's, 1 in a capture, unused
 };
+
+// The relative position of a screen uv, running down the image as texture rows do, and a reversed Z depth in a view
+vec3 Graphite_RelativeFromDepth(Graphite_ViewData view, vec2 uv, float depth)
+{
+    vec4 p = view.inverseViewProjection * vec4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0);
+    return p.xyz / p.w;
+}

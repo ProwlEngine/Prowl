@@ -1872,7 +1872,7 @@ internal sealed partial class FramePipeline
         for (int i = pages.Count - 1; i >= 0; i--)
         {
             ShadowPage page = pages[i];
-            if (!all && (page.Tiles.UsedTexels > 0 || _frame - page.LastUsed <= StaleViewFrames))
+            if (!all && (page.Tiles.UsedTexels > 0 || _frame - page.LastUsed <= IdleFrames))
                 continue;
             pages.RemoveAt(i);
             page.Persistent.Release(_store);

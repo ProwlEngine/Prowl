@@ -153,7 +153,7 @@ public sealed class Tonemapper : PostEffect
 /// Auto exposure with a histogram meter: the scene's log luminance measured at half resolution with its
 /// pre-exposure undone, box downsampled, binned and averaged between <see cref="LowPercent"/> and
 /// <see cref="HighPercent"/>, adapted over time, faster when brightening, then metered into the exposure its views take
-/// from the next frame on, in place of their <see cref="ViewDesc.EV100"/>. It changes no colour itself. A
+/// from the next frame on, in place of their <see cref="RenderView.EV100"/>. It changes no colour itself. A
 /// layered view measures its first layer and its layers share one exposure.
 /// </summary>
 public sealed class AutoExposure : PostEffect
@@ -163,7 +163,7 @@ public sealed class AutoExposure : PostEffect
         s_historyValid = "_HistoryValid", s_deltaTime = "_DeltaTime", s_exposureComp = "_ExposureComp", s_minEV100 = "_MinEV100",
         s_maxEV100 = "_MaxEV100";
 
-    private readonly FullscreenProgram _extract, _extractLayered, _downsample, _histogram, _adapt, _meter;
+    private readonly FullscreenProgram _extract, _downsample, _histogram, _adapt, _meter;
     private readonly PropertySet _properties = new();
     private (float Compensation, float Up, float Down, float Min, float Max, float Low, float High) _settings;
 
@@ -181,7 +181,6 @@ public sealed class AutoExposure : PostEffect
     public AutoExposure(Renderer renderer) : base(renderer, RenderSlot.HdrPost)
     {
         _extract = Program("AutoExposure", "#define AE_EXTRACT 1\n", source: false);
-        _extractLayered = Program("AutoExposure", "#define AE_EXTRACT 1\n#define AE_LAYERED_SOURCE 1\n", source: false);
         _downsample = Program("AutoExposure", "#define AE_DOWNSAMPLE 1\n", source: false);
         _histogram = Program("AutoExposure", "#define AE_HISTOGRAM 1\n", source: false);
         _adapt = Program("AutoExposure", "#define AE_ADAPT 1\n", source: false);
@@ -238,7 +237,7 @@ public sealed class AutoExposure : PostEffect
     {
         ViewState state = context.GetViewState<ViewState>();
         _properties.SetTexture(s_mainTex, context.Color!, LinearClamp);
-        context.Fullscreen(context.View.LayerCount > 1 ? _extractLayered : _extract, context.Get(state.Levels[0]), _properties, shared: true);
+        context.Fullscreen(_extract, context.Get(state.Levels[0]), _properties, shared: true);
         for (int i = 1; i < state.Levels.Count; i++)
         {
             _properties.SetTexture(s_mainTex, context.Get(state.Levels[i - 1]).ColorTextures[0], LinearClamp);
@@ -795,7 +794,7 @@ public sealed class DepthOfField : PostEffect
         s_resolution = "_Resolution", s_downscale = "_Downscale", s_maxCoc = "_MaxCoC", s_rings = "_Rings", s_cocTex = "_CoCTex",
         s_mainTex = "_MainTex", s_farTex = "_FarTex", s_nearTex = "_NearTex";
 
-    private readonly FullscreenProgram _coc, _prefilter, _bokeh, _postfilter, _combine, _focus, _focusLayered;
+    private readonly FullscreenProgram _coc, _prefilter, _bokeh, _postfilter, _combine, _focus;
     private readonly PropertySet _properties = new();
     private Settings _settings;
     private int _divisor = 2;
@@ -816,7 +815,6 @@ public sealed class DepthOfField : PostEffect
         _postfilter = Program("DepthOfField", "#define DOF_POSTFILTER 1\n", source: false, blend: two);
         _combine = Program("DepthOfField");
         _focus = Program("DepthOfField", "#define DOF_FOCUS 1\n", source: false);
-        _focusLayered = Program("DepthOfField", "#define DOF_FOCUS 1\n#define DOF_LAYERED_SOURCE 1\n", source: false);
         Order = 10;
     }
 
@@ -878,7 +876,7 @@ public sealed class DepthOfField : PostEffect
         _properties.SetFloat(s_manualFocusPoint, _settings.ManualFocus);
         _properties.SetFloat(s_focusBlend, _settings.Speed > 0 ? 1 - MathF.Exp(-_settings.Speed * context.Time.DeltaTime) : 1);
         _properties.SetFloat(s_focusHistoryValid, valid ? 1 : 0);
-        context.Fullscreen(context.View.LayerCount > 1 ? _focusLayered : _focus, focus, _properties, shared: true);
+        context.Fullscreen(_focus, focus, _properties, shared: true);
 
         _properties.SetTexture(s_focusTex, focus.ColorTextures[0], PointClamp);
         _properties.SetFloat(s_focusStrength, _settings.Strength);

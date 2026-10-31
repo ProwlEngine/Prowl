@@ -51,14 +51,14 @@ public class PassKeywordTests : IDisposable
     private static Keyword K(string name, string value) => new(name, value);
 
 
-    private string KeyedAxis(int key, string axis) => _pass.GetVariant(key).Keywords.First(k => k.Name == axis).Value;
+    private string KeyedAxis(VariantKey key, string axis) => _pass.GetVariant(key).Keywords.First(k => k.Name == axis).Value;
 
 
 
     [Fact]
     public void GetKey_SetsKnownAndSkipsUnknown()
     {
-        int key = _pass.GetKey([K("SKINNED", "true"), K("NOT_AN_AXIS", "true"), K("ALPHA_MODE", "Cutout")]);
+        VariantKey key = _pass.GetKey([K("SKINNED", "true"), K("NOT_AN_AXIS", "true"), K("ALPHA_MODE", "Cutout")]);
 
         Assert.Equal("true", KeyedAxis(key, "SKINNED"));
         Assert.Equal("Cutout", KeyedAxis(key, "ALPHA_MODE"));
@@ -66,19 +66,19 @@ public class PassKeywordTests : IDisposable
 
 
     [Fact]
-    public void GetKey_EmptyOrOnlyUnknown_IsZero()
+    public void GetKey_EmptyOrOnlyUnknown_IsDefault()
     {
-        Assert.Equal(0, _pass.GetKey(ReadOnlySpan<Keyword>.Empty));
-        Assert.Equal(0, _pass.GetKey([K("NOT_AN_AXIS", "true")]));
-        Assert.Equal("false", KeyedAxis(0, "SKINNED"));
-        Assert.Equal("Opaque", KeyedAxis(0, "ALPHA_MODE"));
+        Assert.Equal(default, _pass.GetKey(ReadOnlySpan<Keyword>.Empty));
+        Assert.Equal(default, _pass.GetKey([K("NOT_AN_AXIS", "true")]));
+        Assert.Equal("false", KeyedAxis(default, "SKINNED"));
+        Assert.Equal("Opaque", KeyedAxis(default, "ALPHA_MODE"));
     }
 
 
     [Fact]
     public void GetKey_CollapsedAxisKeyword_IsSkipped()
     {
-        int key = _pass.GetKey([K("ANISOTROPIC", "true"), K("SKINNED", "true")]);
+        VariantKey key = _pass.GetKey([K("ANISOTROPIC", "true"), K("SKINNED", "true")]);
 
         Assert.DoesNotContain(_pass.Axes, a => a.Name == "ANISOTROPIC");
         Assert.Equal("true", KeyedAxis(key, "SKINNED"));
@@ -90,7 +90,7 @@ public class PassKeywordTests : IDisposable
     [Fact]
     public void GetKey_LaterEntryWinsWithinSpan()
     {
-        int key = _pass.GetKey([K("ALPHA_MODE", "Cutout"), K("ALPHA_MODE", "Transparent")]);
+        VariantKey key = _pass.GetKey([K("ALPHA_MODE", "Cutout"), K("ALPHA_MODE", "Transparent")]);
 
         Assert.Equal("Transparent", KeyedAxis(key, "ALPHA_MODE"));
     }

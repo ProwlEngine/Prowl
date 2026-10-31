@@ -1,5 +1,4 @@
 #pragma variant AE EXPOSURE EXTRACT DOWNSAMPLE HISTOGRAM ADAPT
-#pragma variant AE_LAYERED_SOURCE
 // Auto exposure with a histogram meter: the log luminance of the scene at half resolution, its pre-exposure
 // undone, box downsampled to about 64 texels across, binned, averaged between a low and a high percentile so a dark sky
 // or a few highlights do not pull it, adapted over time with separate speeds up and down, then metered into the
@@ -8,24 +7,17 @@
 
 #define AE_BINS 64
 
-float Luminance(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
 #if defined(AE_EXTRACT)
-#ifdef AE_LAYERED_SOURCE
-uniform sampler2DArray _MainTex;
-vec3 SampleMain(vec2 uv) { return texture(_MainTex, vec3(uv, 0.0)).rgb; }
-vec2 MainSize() { return vec2(textureSize(_MainTex, 0).xy); }
-#else
-uniform sampler2D _MainTex;
-vec3 SampleMain(vec2 uv) { return texture(_MainTex, uv).rgb; }
-vec2 MainSize() { return vec2(textureSize(_MainTex, 0)); }
-#endif
+uniform GRAPHITE_SCREEN_TEXTURE _MainTex;
+vec3 SampleMain(vec2 uv) { return Graphite_Sample(_MainTex, uv).rgb; }
+vec2 MainSize() { return vec2(Graphite_Size(_MainTex, 0)); }
 
 // A texel's log luminance with the pre-exposure undone. A half float that overflowed reads as the largest one, a lower
 // bound on its light, and NaN as dark, so neither can poison the mean.
 float LogLuminance(vec2 uv, float scale)
 {
-    float l = Luminance(SampleMain(uv));
+    float l = Graphite_Luminance(SampleMain(uv));
     l = isnan(l) ? 0.0 : min(l, 65504.0);
     return log(max(l * scale, 0.0001));
 }

@@ -7,27 +7,17 @@ Shader "Graphite/Sky/Gradient"
         _Exponent("Exponent", Float) = 1.0
     }
 
-    Pass
+    Surface "Sky"
     {
-        Tags { "LightMode" = "Sky" }
         GLSLPROGRAM
-        Vertex
+        uniform vec4 _TopColor;
+        uniform vec4 _BottomColor;
+        uniform float _Exponent;
+
+        vec3 Sky(vec3 direction)
         {
-            #include "Graphite/Sky.glsl"
-            void main() { }
-        }
-        Fragment
-        {
-            #include "Graphite/Sky.glsl"
-            uniform vec4 _TopColor;
-            uniform vec4 _BottomColor;
-            uniform float _Exponent;
-            layout(location = 0) out vec4 outColor;
-            void main()
-            {
-                float t = pow(clamp(Graphite_SkyDirection().y * 0.5 + 0.5, 0.0, 1.0), _Exponent);
-                outColor = vec4(Graphite_SaturateHalf(mix(_BottomColor.rgb, _TopColor.rgb, t) * Graphite_Exposure()), 1.0);
-            }
+            float t = pow(clamp(direction.y * 0.5 + 0.5, 0.0, 1.0), _Exponent);
+            return mix(_BottomColor.rgb, _TopColor.rgb, t);
         }
         ENDGLSL
     }

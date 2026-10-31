@@ -242,15 +242,65 @@ public sealed class MaterialTests : IDisposable
     {
         Material parent = _system.Create(_shader);
         Material child = parent.CreateChild();
-        Assert.Equal("false", child.GetKeyword("_NORMALMAP"));
+        MaterialAxis normalMap = _shader.Axis("_NORMALMAP");
+        Assert.Equal("false", child.Get(normalMap));
 
-        parent.EnableKeyword("_NORMALMAP");
-        Assert.Equal("true", child.GetKeyword("_NORMALMAP"));
+        parent.Set(normalMap, true);
+        Assert.Equal("true", child.Get(normalMap));
 
-        child.SetKeyword("FOG", "LINEAR");
-        child.SetKeyword("FOG", "LINEAR");
+        child.Set(normalMap, false);
+        Assert.Equal("false", child.Get(normalMap));
+        child.Set(normalMap, null);
+        Assert.Equal("true", child.Get(normalMap));
+
+        Assert.Throws<ArgumentException>(() => _shader.Axis("FOG"));
+        Assert.Throws<ArgumentException>(() => _shader.Axis("NOT_AN_AXIS"));
+        Assert.Throws<ArgumentException>(() => child.Set(normalMap, "maybe"));
         Assert.Empty(child.LocalKeywords);
-        Assert.Single(_reports);
+        Assert.Empty(_reports);
+    }
+
+    [Fact]
+    public void Shaders_CopyTheirDefinition_AndLeaveItAsItWas()
+    {
+        ShaderDefinition plain = ShaderParser.Parse(Source);
+        Shader first = new(plain, _compiler);
+        Shader second = new(plain, _compiler);
+        Assert.Null(plain.Passes![0].Material);
+        Assert.NotSame(plain.Passes[0], first.Definition.Passes![0]);
+        Assert.NotSame(first.Definition.Passes[0], second.Definition.Passes![0]);
+        Assert.NotNull(first.Definition.Passes[0].Material);
+
+        InternalShaders.Register();
+        ShaderDefinition surface = ShaderParser.Parse("""
+            Shader "Tests/Copied"
+            {
+                Surface "Lit"
+                {
+                    GLSLPROGRAM
+                    void Surface(inout PBR_Params p, Graphite_SurfaceData i) { }
+                    ENDGLSL
+                }
+            }
+            """);
+        Shader expanded = new(surface, _compiler);
+        Assert.NotNull(surface.Surface);
+        Assert.Empty(surface.Passes ?? []);
+        Assert.True(string.IsNullOrEmpty(surface.Fallback));
+        Assert.Null(expanded.Definition.Surface);
+        Assert.NotEmpty(expanded.Definition.Passes!);
+        Assert.Equal(Renderer.FallbackShaderName, expanded.Definition.Fallback);
+    }
+
+    [Fact]
+    public void Axes_OfAnotherShader_Throw()
+    {
+        Shader other = new(ShaderParser.Parse(Source), _compiler);
+        Material material = _system.Create(_shader);
+
+        Assert.Throws<ArgumentException>(() => material.Set(other.Axis("_NORMALMAP"), true));
+        Assert.Throws<ArgumentException>(() => material.Get(other.Axis("_NORMALMAP")));
+        Assert.Empty(material.LocalKeywords);
     }
 
     [Fact]
@@ -266,7 +316,7 @@ public sealed class MaterialTests : IDisposable
         _system.Extract(drawChanged);
         Assert.Empty(drawChanged);
 
-        material.EnableKeyword("_NORMALMAP");
+        material.Set(_shader.Axis("_NORMALMAP"), true);
         material.RenderQueue = 3000;
         _system.Extract(drawChanged);
         Assert.Equal([material], drawChanged);

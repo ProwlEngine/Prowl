@@ -1,10 +1,10 @@
 #pragma variant CINEMATIC VIGNETTE PIXELATION CHROMATIC_ABERRATION SHARPEN EDGE_DETECTION COLOR_GRADING LUT FILM_GRAIN
 // Cinematic effects on display referred colour, one per define, each its own pass: pixelation, chromatic
 // aberration, CAS sharpening, Sobel edges, colour grading, a strip LUT, film grain and vignette.
+#include "Graphite/Math.glsl"
 
 uniform vec2 _Resolution;
 
-float Luminance(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
 #if defined(CINEMATIC_PIXELATION)
 uniform float _PixelSize;
@@ -56,7 +56,7 @@ uniform float _EdgeIntensity;
 uniform vec4 _EdgeColor;
 uniform float _EdgeBackgroundFade;
 
-float LumaAt(vec2 uv) { return Luminance(Graphite_SampleSource(uv).rgb); }
+float LumaAt(vec2 uv) { return Graphite_Luminance(Graphite_SampleSource(uv).rgb); }
 
 // Sobel edges drawn in the edge colour over the faded image
 void main()
@@ -92,7 +92,7 @@ void main()
     color = mix(vec3(0.18), color, 1.0 + _Contrast);
     color.r *= 1.0 + _Temperature * 0.1;
     color.b *= 1.0 - _Temperature * 0.1;
-    color = mix(vec3(Luminance(color)), color, 1.0 + _Saturation);
+    color = mix(vec3(Graphite_Luminance(color)), color, 1.0 + _Saturation);
 
     // Lift, gamma and gain, ASC CDL style
     color *= vec3(1.0) + _Gain.rgb;
@@ -138,7 +138,7 @@ void main()
 {
     vec4 source = Graphite_SampleSource(vUV);
     float noise = Hash12(vUV * _Resolution + fract(_Time) * 1000.0) * 2.0 - 1.0;
-    vec3 color = source.rgb + noise * _GrainIntensity * mix(1.0, Luminance(source.rgb), _GrainResponse);
+    vec3 color = source.rgb + noise * _GrainIntensity * mix(1.0, Graphite_Luminance(source.rgb), _GrainResponse);
     outColor = vec4(max(color, vec3(0.0)), source.a);
 }
 #else

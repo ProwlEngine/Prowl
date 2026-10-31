@@ -22,5 +22,5 @@ float Graphite_SceneLinearDepth(vec2 screenUV) { return Graphite_LinearDepth(Gra
 // The camera relative position of the opaque surface at a screen uv
 vec3 Graphite_SceneRelativePosition(vec2 screenUV)
 {
-    return Graphite_RelativeFromDepth(vec2(screenUV.x, 1.0 - screenUV.y), Graphite_FetchSceneDepth(screenUV));
+    return Graphite_RelativeFromDepth(Graphite_View(), screenUV, Graphite_FetchSceneDepth(screenUV));
 }

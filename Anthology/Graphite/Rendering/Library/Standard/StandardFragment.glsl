@@ -11,18 +11,18 @@
 Graphite_SurfaceData graphite_StandardInputs()
 {
     Graphite_SurfaceData i = Graphite_NewSurfaceData(vUV, vUV1);
-    i.VertexColor = vColor;
-    i.RelativePos = vRelativePos;
-    i.ViewDir = Graphite_ViewDir(vRelativePos);
+    i.vertexColor = vColor;
+    i.relativePos = vRelativePos;
+    i.viewDir = Graphite_ViewDir(vRelativePos);
 #ifdef GRAPHITE_STANDARD_LIT
-    i.GeometryNormal = normalize(vNormal);
-    i.Tangent = normalize(vTangent);
-    i.Bitangent = normalize(vBitangent);
+    i.geometryNormal = normalize(vNormal);
+    i.tangent = normalize(vTangent);
+    i.bitangent = normalize(vBitangent);
     if (!gl_FrontFacing)
     {
-        i.GeometryNormal = -i.GeometryNormal;
-        i.Tangent = -i.Tangent;
-        i.Bitangent = -i.Bitangent;
+        i.geometryNormal = -i.geometryNormal;
+        i.tangent = -i.tangent;
+        i.bitangent = -i.bitangent;
     }
 #endif
     return i;
@@ -43,16 +43,16 @@ void Graphite_StandardFragment()
     Surface(p, i);
 #endif
 #ifdef _SURFACE_CUTOUT
-    if (p.Alpha < _AlphaCutoff)
+    if (p.alpha < alpha_cutoff)
         discard;
 #endif
 
-    vec3 color = Graphite_SaturateHalf(Graphite_ApplyFog(p.BaseColor, vRelativePos));
+    vec3 color = Graphite_SaturateHalf(Graphite_ApplyFog(p.baseColor, vRelativePos));
 #ifdef GRAPHITE_STANDARD_DEBUG
-    color = Graphite_DebugView(color, p.BaseColor, vec3(0.0), 1.0, 0.0, 1.0, vec3(0.0), vRelativePos, vec2(0.0));
+    color = Graphite_DebugView(color, p.baseColor, vec3(0.0), 1.0, 0.0, 1.0, vec3(0.0), vRelativePos, vec2(0.0));
 #endif
 #ifdef _SURFACE_TRANSPARENT
-    fragColor = vec4(color, p.Alpha);
+    fragColor = vec4(color, p.alpha);
 #else
     Graphite_WriteGBuffer(vec3(0.0, 1.0, 0.0), vec3(0.0), 1.0);
     fragColor = vec4(color, 1.0);
@@ -71,7 +71,7 @@ void Graphite_StandardFragment()
     Graphite_SurfaceData i = graphite_StandardInputs();
     float mapVariance;
     PBR_Params p = PBR_MaterialParams(i, vHasTangents > 0.5, mapVariance);
-    Graphite_ApplyDecals(vRelativePos, i.GeometryNormal, p.baseColor, p.geometryNormal, p.specularRoughness, p.baseMetalness, p.occlusion);
+    Graphite_ApplyDecals(vRelativePos, i.geometryNormal, p.baseColor, p.geometryNormal, p.specularRoughness, p.baseMetalness, p.occlusion);
 #ifdef GRAPHITE_SURFACE_FUNCTION
     Surface(p, i);
 #endif
@@ -83,7 +83,7 @@ void Graphite_StandardFragment()
     Graphite_DebugInputs(p.baseColor, p.baseMetalness);
 #endif
 
-    PBR_Closure c = PBR_Prepare(p, vRelativePos, i.ViewDir, i.GeometryNormal, mapVariance);
+    PBR_Closure c = PBR_Prepare(p, vRelativePos, i.viewDir, i.geometryNormal, mapVariance);
     vec3 direct = PBR_ShadeLights(c);
     Graphite_ProbeSet probes = PBR_FindProbes(c);
     PBR_Indirect indirect = PBR_GatherIndirect(c, vLightmapUV, probes);
@@ -189,11 +189,11 @@ void Graphite_StandardFragment()
     Surface(p, i);
 #endif
 #ifdef _SURFACE_CUTOUT
-    if (p.Alpha < _AlphaCutoff)
+    if (p.alpha < alpha_cutoff)
         discard;
 #endif
 #ifdef GRAPHITE_STANDARD_SHADOW_DITHER
-    if (graphite_ShadowDiscards(1.0 - p.Alpha))
+    if (graphite_ShadowDiscards(1.0 - p.alpha))
         discard;
 #endif
 #else

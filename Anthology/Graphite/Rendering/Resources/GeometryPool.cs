@@ -376,7 +376,18 @@ internal sealed class GeometryPool(GraphicsDevice device, RenderStore store, uin
         return copy;
     }
 
-    /// <summary>Frees a copy's ranges once <paramref name="lastDispatched"/> retires. Render thread.</summary>
+    /// <summary>
+    /// Room for one frame's geometry drawn without a mesh, with chunk records of its own, its data written by whoever
+    /// asked. Freed through <see cref="ReleaseCopy"/>. Render thread.
+    /// </summary>
+    public MeshPlacement PlaceTransient(uint streamsPresent, uint vertexCount, uint indexCount, MeshChunk[] chunks, SubMesh[] subMeshes, AABB bounds)
+    {
+        MeshPlacement placement = Place(streamsPresent, vertexCount, indexCount, chunks, subMeshes, bounds, []);
+        WriteChunks(-1, placement);
+        return placement;
+    }
+
+    /// <summary>Frees a copy's or a transient placement's ranges once <paramref name="lastDispatched"/> retires. Render thread.</summary>
     public void ReleaseCopy(MeshPlacement copy, ulong lastDispatched) => _retiringRanges.Add((lastDispatched, copy));
 
     /// <summary>Queues the chunk records of copies placed since <see cref="Apply"/>, retiring the buffer the table moved off. Render thread.</summary>

@@ -150,10 +150,21 @@ public sealed class RendererTests : IDisposable
     private RenderableHandle Add(Material material, Double3 position, Float3? scale = null)
         => _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(position) * (Double4x4)Float4x4.CreateScale(scale ?? new Float3(2, 2, 2)) }, [material]);
 
+    private RenderView? _view;
+
+    // The test's one view into the target, cleared to black
+    private RenderView View()
+    {
+        _view ??= _renderer.CreateView(_world);
+        _view.Target = _framebuffer;
+        _view.ClearColor = new Float4(0, 0, 0, 1);
+        return _view;
+    }
+
     private Color32[] Frame(Double3 camera = default)
     {
-        ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer, ClearColor = new Float4(0, 0, 0, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = camera };
+        RenderView view = View();
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = camera });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _renderer.WaitForRenderThread();
         Assert.DoesNotContain(_errors, e => e.Message.StartsWith("The frame failed"));
@@ -173,8 +184,8 @@ public sealed class RendererTests : IDisposable
         material.Name = "Red";
         RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _quad, Name = "Quad", Transform = Double4x4.CreateScale(new Double3(2, 2, 2)) }, [material]);
         PayloadSink sink = new();
-        ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer, ClearColor = new Float4(0, 0, 0, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection };
+        RenderView view = View();
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection });
 
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view }, Profilers = [sink] });
         _renderer.WaitForRenderThread();

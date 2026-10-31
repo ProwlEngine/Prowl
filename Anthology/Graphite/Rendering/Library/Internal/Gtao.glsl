@@ -7,8 +7,6 @@
 
 #include "Graphite/Internal/PostView.glsl"
 
-#define GTAO_PI 3.14159265359
-#define GTAO_HALF_PI 1.57079632679
 
 float Gtao_FastAcos(float x)
 {
@@ -17,7 +15,7 @@ float Gtao_FastAcos(float x)
     p = p * y - 0.2121144;
     p = p * y + 1.5707288;
     p = p * sqrt(1.0 - y);
-    return x >= 0.0 ? p : GTAO_PI - p;
+    return x >= 0.0 ? p : GRAPHITE_PI - p;
 }
 
 #if defined(GTAO_DEPTH)
@@ -105,7 +103,7 @@ float CalculateGTAO(vec2 coord, vec3 viewPos, vec3 viewDir, vec3 normal, vec2 di
     float visibility = 0.0;
     for (int slice = 0; slice < _Slices; ++slice)
     {
-        float slicePhi = (float(slice) + dither.x) * (GTAO_PI * rSliceCount);
+        float slicePhi = (float(slice) + dither.x) * (GRAPHITE_PI * rSliceCount);
         vec3 directionV = vec3(cos(slicePhi), sin(slicePhi), 0.0);
         vec3 orthoDirectionV = directionV - dot(directionV, viewDir) * viewDir;
         vec3 axisV = cross(directionV, viewDir);
@@ -126,7 +124,7 @@ float CalculateGTAO(vec2 coord, vec3 viewPos, vec3 viewDir, vec3 normal, vec2 di
             SampleHorizonCos(coord, -offset, viewPos, viewDir, falloff, cHorizonCos.y);
         }
 
-        vec2 h = n + clamp(vec2(Gtao_FastAcos(cHorizonCos.x), -Gtao_FastAcos(cHorizonCos.y)) - n, -GTAO_HALF_PI, GTAO_HALF_PI);
+        vec2 h = n + clamp(vec2(Gtao_FastAcos(cHorizonCos.x), -Gtao_FastAcos(cHorizonCos.y)) - n, -GRAPHITE_HALF_PI, GRAPHITE_HALF_PI);
         h = cosN + 2.0 * h * sin(n) - cos(2.0 * h - n);
         visibility += lenV * (h.x + h.y);
     }
@@ -160,7 +158,7 @@ void main()
     float current = Graphite_Sample(_MainTex, vUV).r;
     float depth = Graphite_Sample(_CameraDepthTexture, vUV).r;
     Graphite_ViewData view = Graphite_PostView();
-    vec2 prevUV = depth <= 0.0 ? vUV : Graphite_PostPreviousUV(view, Graphite_PostRelativePosition(view, vUV, depth));
+    vec2 prevUV = depth <= 0.0 ? vUV : Graphite_PostPreviousUV(view, Graphite_RelativeFromDepth(view, vUV, depth));
 
     // Bound the history to the current 3x3 range so it cannot ghost where occlusion changed
     vec2 texel = 1.0 / vec2(Graphite_Size(_MainTex, 0));

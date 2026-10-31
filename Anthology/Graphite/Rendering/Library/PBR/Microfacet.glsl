@@ -2,13 +2,9 @@
 // filtering. Every lobe of the PBR model and Graphite's light loop share this roughness convention.
 #pragma once
 
-#ifndef MATH_PI
-#define MATH_PI
-const float PI = 3.14159265359;
-#endif
+#include "Graphite/Math.glsl"
 
-// The lowest GGX alpha a lobe takes, below which its peak would overflow
-#define PBR_MIN_ALPHA 0.002
+#define PBR_MIN_ALPHA GRAPHITE_MIN_ALPHA
 
 // Kaplanyan and Hill's kernel: screen space normal variance scale and the most it may widen alpha squared
 #define PBR_SPEC_AA_VARIANCE 0.5
@@ -19,7 +15,7 @@ float PBR_Alpha(float roughness) { return max(roughness * roughness, PBR_MIN_ALP
 float PBR_DistributionGGX(float NdotH, float alpha2)
 {
     float d = (NdotH * alpha2 - NdotH) * NdotH + 1.0;
-    return alpha2 / (PI * d * d);
+    return alpha2 / (GRAPHITE_PI * d * d);
 }
 
 // Height correlated Smith G2 over 4 NdotV NdotL
@@ -44,7 +40,7 @@ float PBR_DistributionAnisotropic(float TdotH, float BdotH, float NdotH, vec2 al
 {
     vec3 h = vec3(TdotH / alpha.x, BdotH / alpha.y, NdotH);
     float d = dot(h, h);
-    return 1.0 / (PI * alpha.x * alpha.y * d * d);
+    return 1.0 / (GRAPHITE_PI * alpha.x * alpha.y * d * d);
 }
 
 // Height correlated anisotropic Smith G2 over 4 NdotV NdotL

@@ -12,12 +12,12 @@
 // The film's interference over its optical path difference in metres, Gaussian fits to the XYZ sensitivities
 vec3 pbr_FilmSensitivity(float opd, vec3 shift)
 {
-    float phase = 2.0 * PI * opd;
+    float phase = 2.0 * GRAPHITE_PI * opd;
     vec3 val = vec3(5.4856e-13, 4.4201e-13, 5.2481e-13);
     vec3 pos = vec3(1.6810e+06, 1.7953e+06, 2.2084e+06);
     vec3 var = vec3(4.3278e+09, 9.3046e+09, 6.6121e+09);
-    vec3 xyz = val * sqrt(2.0 * PI * var) * cos(pos * phase + shift) * exp(-var * phase * phase);
-    xyz.x += 9.7470e-14 * sqrt(2.0 * PI * 4.5282e+09) * cos(2.2399e+06 * phase + shift.x) * exp(-4.5282e+09 * phase * phase);
+    vec3 xyz = val * sqrt(2.0 * GRAPHITE_PI * var) * cos(pos * phase + shift) * exp(-var * phase * phase);
+    xyz.x += 9.7470e-14 * sqrt(2.0 * GRAPHITE_PI * 4.5282e+09) * cos(2.2399e+06 * phase + shift.x) * exp(-4.5282e+09 * phase * phase);
     return xyz / 1.0685e-7;
 }
 
@@ -55,7 +55,7 @@ PBR_Film PBR_FilmTop(float cosTheta, float eta1, float filmIor, float thickness)
     f.cosThetaT = sqrt(max(1.0 - (1.0 - cosTheta * cosTheta) * ratio * ratio, 0.0));
     f.R12 = f.cosThetaT <= 0.0 ? vec2(1.0) : PBR_FresnelDielectricPolarized(cosTheta, f.eta2 / eta1);
     float cosB = cos(atan(f.eta2 / eta1));
-    f.phi21 = vec2(cosTheta < cosB ? 0.0 : PI, PI);
+    f.phi21 = vec2(cosTheta < cosB ? 0.0 : GRAPHITE_PI, GRAPHITE_PI);
     f.opd = 2.0 * f.eta2 * f.cosThetaT * thickness * 1.0e-6;
     return f;
 }
@@ -92,6 +92,6 @@ vec3 PBR_ThinFilmMetal(float cosTheta, float eta1, float filmIor, vec3 F0, vec3 
     vec3 R23 = PBR_FresnelF82(f.cosThetaT, F0, PBR_F82Tint(F0, tint));
     vec3 sqrtF0 = sqrt(clamp(F0, 0.01, 0.99));
     vec3 eta3 = eta1 * (1.0 + sqrtF0) / (1.0 - sqrtF0);
-    vec3 phi23 = mix(vec3(0.0), vec3(PI), lessThan(eta3, vec3(f.eta2)));
+    vec3 phi23 = mix(vec3(0.0), vec3(GRAPHITE_PI), lessThan(eta3, vec3(f.eta2)));
     return pbr_FilmResolve(f, R23, R23, phi23, phi23);
 }

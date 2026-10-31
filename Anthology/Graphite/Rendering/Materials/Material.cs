@@ -68,8 +68,8 @@ public sealed class Material : IDisposable
         Keyword[] keywords = new Keyword[axes.Count];
         for (int i = 0; i < axes.Count; i++)
         {
-            string value = GetKeyword(axes[i].Name);
-            keywords[i] = new Keyword(axes[i].Name, HasValue(axes[i], value) ? value : axes[i].Values[0]);
+            string value = ValueOf(axes[i].Name);
+            keywords[i] = new Keyword(axes[i].Name, HasValue(axes[i].Values, value) ? value : axes[i].Values[0]);
         }
 
         bool twoSided = AxisOn(_shader.TwoSidedAxis);
@@ -90,14 +90,14 @@ public sealed class Material : IDisposable
         => (state.Set & PassStateFields.CullMode) != 0 && state.Raster.CullMode == FaceCullMode.None
             && !((state.Set & PassStateFields.DepthWrite) != 0 && state.DepthStencil.DepthWriteEnabled);
 
-    private static PassState Culling(FaceCullMode mode)
+    internal static PassState Culling(FaceCullMode mode)
     {
         PassState state = new() { Set = PassStateFields.CullMode };
         state.Raster.CullMode = mode;
         return state;
     }
 
-    private bool AxisOn(string? axis) => axis != null && GetKeyword(axis) == VariantSpace.ToggleValues[1];
+    private bool AxisOn(string? axis) => axis != null && ValueOf(axis) == VariantSpace.ToggleValues[1];
 
     /// <summary>Swapping keeps every value whose name the new shader still has, and keeps the others for later.</summary>
     public Shader Shader
@@ -271,32 +271,38 @@ public sealed class Material : IDisposable
         return null;
     }
 
-    /// <summary>Picks a value of a material axis. Global axes are set by the renderer, a world or a view and are ignored here.</summary>
-    public void SetKeyword(string axis, string value)
+    /// <summary>
+    /// Picks the value of one of the shader's material axes, null taking it from the parent chain, the surface settings
+    /// or the property driving it again. Throws on an axis of another shader or a value the axis does not have.
+    /// </summary>
+    public void Set(MaterialAxis axis, string? value)
     {
-        int index = _shader.FindAxis(axis, out VariantScope scope);
-        if (index >= 0 && scope == VariantScope.Global)
+        CheckAxis(axis);
+        if (value == null)
         {
-            _system.Report(new RendererError("material.keyword.global", $"The axis {axis} is global in {_shader.Name}, materials cannot set it.", RendererErrorSeverity.Warning, this) { Key = $"{_shader.Name}.{axis}" });
+            if (_keywords.Remove(axis.Name))
+                Changed(Dirt.Draw);
             return;
         }
-        if (index >= 0 && !HasValue(_shader.MaterialAxes[index], value))
-        {
-            _system.Report(new RendererError("material.keyword.value", $"The axis {axis} of {_shader.Name} has no value {value}, only {string.Join(" ", _shader.MaterialAxes[index].Values)}.", RendererErrorSeverity.Warning, this) { Key = $"{_shader.Name}.{axis}.{value}" });
-            return;
-        }
+        if (!HasValue(axis.Values, value))
+            throw new ArgumentException($"The axis {axis.Name} of {_shader.Name} has no value {value}, only {string.Join(" ", axis.Values)}.", nameof(value));
 
-        if (_keywords.TryGetValue(axis, out string? existing) && existing == value)
+        if (_keywords.TryGetValue(axis.Name, out string? existing) && existing == value)
             return;
-        _keywords[axis] = value;
+        _keywords[axis.Name] = value;
         Changed(Dirt.Draw);
     }
 
-    public void EnableKeyword(string axis) => SetKeyword(axis, VariantSpace.ToggleValues[1]);
+    /// <summary>Turns a toggle axis on or off. Throws on an axis that is not a toggle.</summary>
+    public void Set(MaterialAxis axis, bool on)
+    {
+        ArgumentNullException.ThrowIfNull(axis);
+        if (!axis.IsToggle)
+            throw new ArgumentException($"The axis {axis.Name} of {axis.Shader.Name} is not a toggle, its values are {string.Join(" ", axis.Values)}.", nameof(axis));
+        Set(axis, VariantSpace.ToggleValues[on ? 1 : 0]);
+    }
 
-    public void DisableKeyword(string axis) => SetKeyword(axis, VariantSpace.ToggleValues[0]);
-
-    /// <summary>Removes a local value or keyword, falling back to the parent, then the default.</summary>
+    /// <summary>Removes a local value, falling back to the parent, then the default.</summary>
     public void ClearOverride(PropertyID name)
     {
         int index = _shader.FindProperty(name);
@@ -305,10 +311,6 @@ public sealed class Material : IDisposable
             _locals[index] = default;
         if (removed)
             Changed(index >= 0 && DrivesKeyword(index) ? Dirt.Record | Dirt.Draw : Dirt.Record);
-
-        string? axis = PropertyID.ToString(name);
-        if (axis != null && _keywords.Remove(axis))
-            Changed(Dirt.Draw);
     }
 
     /// <summary>The value this material draws with: local, then the parent chain, then the shader default.</summary>
@@ -336,10 +338,23 @@ public sealed class Material : IDisposable
     }
 
     /// <summary>
-    /// The keyword value this material draws with for an axis: set on it or up the parent chain, else from the surface
-    /// settings, else from the property that drives it, else the axis default.
+    /// The value this material draws with for an axis: set on it or up the parent chain, else from the surface settings,
+    /// else from the property that drives it, else the axis default.
     /// </summary>
-    public string GetKeyword(string axis)
+    public string Get(MaterialAxis axis)
+    {
+        CheckAxis(axis);
+        return ValueOf(axis.Name);
+    }
+
+    private void CheckAxis(MaterialAxis axis)
+    {
+        ArgumentNullException.ThrowIfNull(axis);
+        if (axis.Shader != _shader)
+            throw new ArgumentException($"The axis {axis.Name} is of the shader {axis.Shader.Name}, this material draws with {_shader.Name}.", nameof(axis));
+    }
+
+    private string ValueOf(string axis)
     {
         for (Material? material = this; material != null; material = material._parent)
         {
@@ -354,7 +369,7 @@ public sealed class Material : IDisposable
 
         if (Surface is { } surface)
         {
-            if (axis == SurfaceSettings.SurfaceAxis && HasValue(space, surface.SurfaceKeyword))
+            if (axis == SurfaceSettings.SurfaceAxis && HasValue(space.Values, surface.SurfaceKeyword))
                 return surface.SurfaceKeyword;
         }
 
@@ -452,9 +467,9 @@ public sealed class Material : IDisposable
         Changed(DrivesKeyword(index) ? Dirt.Record | Dirt.Draw : Dirt.Record);
     }
 
-    private static bool HasValue(VariantSpace space, string value)
+    private static bool HasValue(IReadOnlyList<string> values, string value)
     {
-        foreach (string candidate in space.Values)
+        foreach (string candidate in values)
         {
             if (candidate == value)
                 return true;

@@ -9,7 +9,6 @@
 #include "Graphite/PBR/Energy.glsl"
 #include "Graphite/PBR/Fresnel.glsl"
 
-float pbr_ShadowLuminance(vec3 c) { return dot(clamp(c, 0.0, 1.0), vec3(0.2126, 0.7152, 0.0722)); }
 
 float PBR_ShadowTransmittance(PBR_Params p, float alpha, float NdotL)
 {
@@ -29,13 +28,13 @@ float PBR_ShadowTransmittance(PBR_Params p, float alpha, float NdotL)
 #else
     vec3 tint = p.transmissionColor;
 #endif
-    dielectric += T * passes * pbr_ShadowLuminance(tint);
+    dielectric += T * passes * Graphite_Luminance(clamp(tint, 0.0, 1.0));
     opaque *= 1.0 - T;
 #endif
 #if defined(PBR_SUBSURFACE) && defined(PBR_THIN_WALLED)
     float S = clamp(p.subsurfaceWeight, 0.0, 1.0);
     float g = clamp(p.subsurfaceScatterAnisotropy, -1.0, 1.0);
-    dielectric += opaque * S * pbr_ShadowLuminance(p.subsurfaceColor) * 0.5 * (1.0 + g);
+    dielectric += opaque * S * Graphite_Luminance(clamp(p.subsurfaceColor, 0.0, 1.0)) * 0.5 * (1.0 + g);
 #endif
     float M = clamp(p.baseMetalness, 0.0, 1.0);
     return 1.0 - clamp(alpha, 0.0, 1.0) * (1.0 - (1.0 - M) * dielectric);

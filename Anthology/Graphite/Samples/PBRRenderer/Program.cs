@@ -25,7 +25,6 @@ internal sealed class DemoWindow
     private GraphicsDevice _device = null!;
     private Demo _demo = null!;
     private DemoScene _scene = null!;
-    private int _sceneIndex;
     private double _time;
     private ulong _frame;
     private bool _paused;
@@ -157,7 +156,6 @@ internal sealed class DemoWindow
         }
 
         _scene = scene;
-        _sceneIndex = index;
         _camera.Position = scene.StartPosition;
         _camera.Yaw = scene.StartYaw;
         _camera.Pitch = scene.StartPitch;
@@ -200,20 +198,11 @@ internal sealed class DemoWindow
 
         _scene.Update((float)_time, _paused ? 0f : dt);
 
-        Framebuffer target = _shotTarget ?? _device.MainSwapchain.Framebuffer;
-        ViewDesc view = new()
-        {
-            World = _scene.World,
-            ViewId = _sceneIndex,
-            EV100 = _scene.StartEV100,
-            Target = target,
-            ClearColor = new Float4(0.01f, 0.012f, 0.02f, 1),
-            Near = FlyCamera.Near,
-            Kind = ViewKind.Game,
-            Features = _demo.Post,
-            Keywords = _debugView < 0 ? null : [new Prowl.Graphite.ShaderDef.Keyword("GRAPHITE_DEBUG", DebugViews[_debugView])],
-        };
-        view.Layers[0] = _camera.Layer(target.Width / (float)Math.Max(target.Height, 1u));
+        RenderView view = _scene.View;
+        view.Target = _shotTarget ?? _device.MainSwapchain.Framebuffer;
+        view.EV100 = _scene.StartEV100;
+        view.Camera = _camera.Camera;
+        view.Keywords = _debugView < 0 ? null : [new Prowl.Graphite.ShaderDef.Keyword("GRAPHITE_DEBUG", DebugViews[_debugView])];
 
         _demo.Renderer.SubmitFrame(new FrameDesc
         {

@@ -30,7 +30,7 @@ void main()
         sampleUV -= deltaUV;
         vec2 clamped = clamp(sampleUV, 0.001, 0.999);
         float sky = Graphite_Sample(_CameraDepthTexture, clamped).r <= 0.0001 ? 1.0 : 0.0;
-        float brightness = dot(Graphite_SampleSource(clamped).rgb, vec3(0.2126, 0.7152, 0.0722));
+        float brightness = Graphite_Luminance(Graphite_SampleSource(clamped).rgb);
         illumination += sky * step(_GodRayThreshold, brightness) * decay * _GodRayWeight;
         decay *= _GodRayDecay;
     }

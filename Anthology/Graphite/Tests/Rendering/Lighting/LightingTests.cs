@@ -329,8 +329,9 @@ public sealed partial class LightingTests : IDisposable
 
     private Float4[] Frame(params IProfiler[] profilers)
     {
-        ViewDesc view = new() { World = _world, EV100 = _ev100, ViewId = 1, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin };
+        RenderView view = _harness.BareView(1);
+        view.EV100 = _ev100;
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
         return _harness.Frame(new FrameDesc { Views = new[] { view }, Profilers = profilers });
     }
 
@@ -491,8 +492,9 @@ public sealed partial class LightingTests : IDisposable
 
         Float4[] Perspective()
         {
-            ViewDesc view = new() { World = _world, EV100 = UnitEV100, ViewId = 9, Target = _framebuffer };
-            view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin };
+            RenderView view = _harness.BareView(9);
+            view.EV100 = UnitEV100;
+            view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin });
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
             _device.WaitForIdle();
             Assert.Empty(_errors);
@@ -555,9 +557,9 @@ public sealed partial class LightingTests : IDisposable
     [Fact]
     public void TheViewsEV100_ExposesEveryLight_ByOneOver1Point2TimesTwoToIt()
     {
-        Assert.Equal(1 / 1.2f, ViewDesc.ExposureOf(0), 6);
-        Assert.Equal(1 / (1.2f * 1024), ViewDesc.ExposureOf(10), 9);
-        Assert.Equal(1, ViewDesc.ExposureOf(UnitEV100), 5);
+        Assert.Equal(1 / 1.2f, RenderView.ExposureOf(0), 6);
+        Assert.Equal(1 / (1.2f * 1024), RenderView.ExposureOf(10), 9);
+        Assert.Equal(1, RenderView.ExposureOf(UnitEV100), 5);
 
         // A point of 4000 candela and a directional light of 2500 lux at EV100 9, about an evening's
         Vector3 albedo = new(0.6f, 0.5f, 0.4f);
@@ -567,7 +569,7 @@ public sealed partial class LightingTests : IDisposable
         _world.AddLight(point);
         _world.AddLight(sun);
         _ev100 = 9;
-        float exposure = ViewDesc.ExposureOf(9);
+        float exposure = RenderView.ExposureOf(9);
         AssertMatches(p => (Reference.Local(point, p, s_normal, albedo, 0, 0.5f) + Reference.Directional(sun, p, s_normal, albedo, 0, 0.5f)) * exposure, Frame());
     }
 
@@ -1420,7 +1422,7 @@ public sealed partial class LightingTests : IDisposable
                 GLSLPROGRAM
                 void Surface(inout Unlit_Params p, Graphite_SurfaceData i)
                 {
-                    p.Alpha = Graphite_RelativeToWorld(i.RelativePos).x < -1.0 ? 1.0 : 0.0;
+                    p.alpha = Graphite_RelativeToWorld(i.relativePos).x < -1.0 ? 1.0 : 0.0;
                 }
                 ENDGLSL
             }
@@ -2053,7 +2055,7 @@ public sealed partial class LightingTests : IDisposable
         AddReceiver(albedo);
         LightDesc light = ShadowSpot();
         _world.AddLight(light);
-        Material cutout = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/PBR", "Test/Cutout").Replace("vec3 n = normalize(vNormal);", "if (vWorld.x > 100.0) discard;\n                        vec3 n = normalize(vNormal);"))));
+        Material cutout = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/PBR", "Test/Cutout").Replace("\"LightMode\" = \"Forward\"", "\"LightMode\" = \"Forward\" \"Discards\" = \"On\"").Replace("vec3 n = normalize(vNormal);", "if (vWorld.x > 100.0) discard;\n                        vec3 n = normalize(vNormal);"))));
         Material faded = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/PBR", "Test/Faded").Replace("Cull Off", "Cull Off\n                ZWrite Off"))));
         AddSurfaceCaster(cutout, 1, 0.5, 6);
         AddSurfaceCaster(faded, -1.5, -1.5, 6);
@@ -2229,8 +2231,9 @@ public sealed partial class LightingTests : IDisposable
     // A frame whose errors are expected, cleared after
     private void FrameExpectingErrors()
     {
-        ViewDesc view = new() { World = _world, EV100 = UnitEV100, ViewId = 1, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin };
+        RenderView view = _harness.BareView(1);
+        view.EV100 = UnitEV100;
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         _errors.Clear();
@@ -2501,9 +2504,13 @@ public sealed partial class LightingTests : IDisposable
 
         using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 6, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 6 });
-        ViewDesc cube = new() { World = _world, EV100 = UnitEV100, ViewId = 7, Target = layered, LayerCount = 6 };
+        RenderView cube = _harness.BareView(7);
+        cube.EV100 = UnitEV100;
+        cube.Target = layered;
+        ViewLayer[] cameraLayers = new ViewLayer[6];
         for (int f = 0; f < 6; f++)
-            cube.Layers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin + new Double3(0.03 * f, -0.02 * f, 0.01 * f) };
+            cameraLayers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin + new Double3(0.03 * f, -0.02 * f, 0.01 * f) };
+        cube.Camera = new ViewCamera(cameraLayers);
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { cube } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
@@ -2511,8 +2518,9 @@ public sealed partial class LightingTests : IDisposable
         for (int f = 0; f < 6; f++)
         {
             Float4[] got = _harness.ReadLayer(layers, (uint)f);
-            ViewDesc mono = new() { World = _world, EV100 = UnitEV100, ViewId = 8, Target = _framebuffer };
-            mono.Layers[0] = cube.Layers[f];
+            RenderView mono = _harness.BareView(8);
+            mono.EV100 = UnitEV100;
+            mono.Camera = new ViewCamera(cube.Camera.Layers[f]);
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { mono } });
             _device.WaitForIdle();
             Float4[] want = _harness.ReadTarget();
@@ -2547,8 +2555,9 @@ public sealed partial class LightingTests : IDisposable
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = new Float4(1, 1, 1, 1), Fog = default, Sky = SkyMaterial(new Float3(1, 0.8f, 0.6f), 1) };
         AddQuad(Surface(new Float3(0.2f, 0.3f, 0.4f)));
 
-        ViewDesc view = new() { World = _world, EV100 = UnitEV100, ViewId = 10, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin };
+        RenderView view = _harness.BareView(10);
+        view.EV100 = UnitEV100;
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
@@ -2568,8 +2577,11 @@ public sealed partial class LightingTests : IDisposable
     public void ViewsLeavingTheSkyOut_ShowTheirClearColour()
     {
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 0) };
-        ViewDesc view = new() { World = _world, EV100 = UnitEV100, ViewId = 12, Target = _framebuffer, Sky = false, ClearColor = new Float4(0.25f, 0.5f, 0.75f, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin };
+        RenderView view = _harness.BareView(12);
+        view.EV100 = UnitEV100;
+        view.Sky = false;
+        view.ClearColor = new Float4(0.25f, 0.5f, 0.75f, 1);
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
@@ -2582,9 +2594,13 @@ public sealed partial class LightingTests : IDisposable
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 1) };
         using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 6, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 6 });
-        ViewDesc cube = new() { World = _world, EV100 = UnitEV100, ViewId = 11, Target = layered, LayerCount = 6 };
+        RenderView cube = _harness.BareView(11);
+        cube.EV100 = UnitEV100;
+        cube.Target = layered;
+        ViewLayer[] cameraLayers = new ViewLayer[6];
         for (int f = 0; f < 6; f++)
-            cube.Layers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+            cameraLayers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+        cube.Camera = new ViewCamera(cameraLayers);
 
         Float4[][] Capture()
         {
@@ -2706,7 +2722,7 @@ public sealed partial class LightingTests : IDisposable
         _world.AddReflectionProbe(RoomProbe(new Double3(-10, 0, 10), new Float3(20, 40, 40)));
         _world.Environment.Sky!.SetColor("_Tint", new Float4(300, 600, 900, 1));
         _ev100 = 8;
-        float exposure = ViewDesc.ExposureOf(8);
+        float exposure = RenderView.ExposureOf(8);
         Vector3 Expected(Vector3 p) => (p.X < 0 ? new Vector3(800, 500, 200) : new Vector3(300, 600, 900)) * exposure;
 
         foreach (float captureEV100 in new[] { UnitEV100, 6f, 14f })
@@ -2831,7 +2847,7 @@ public sealed partial class LightingTests : IDisposable
         Assert.Equal(6, baked.Mips);
         Assert.Equal(128 * 128 * 8, baked.Faces[0].Length);
         Assert.Equal(4 * 4 * 8, baked.Faces[6 * 6 - 1].Length);
-        Assert.Equal(ViewDesc.ExposureOf(UnitEV100), baked.Exposure);
+        Assert.Equal(RenderView.ExposureOf(UnitEV100), baked.Exposure);
 
         foreach (RenderableHandle wall in Enumerable.Range(0, 6).Select(i => new RenderableHandle(i, 1)))
             _world.Remove(wall);
@@ -2869,8 +2885,9 @@ public sealed partial class LightingTests : IDisposable
 
     private Float4[] PerspectiveFrame(int viewId)
     {
-        ViewDesc view = new() { World = _world, EV100 = UnitEV100, ViewId = viewId, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin };
+        RenderView view = _harness.BareView(viewId);
+        view.EV100 = UnitEV100;
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
@@ -2962,14 +2979,18 @@ public sealed partial class LightingTests : IDisposable
         Material cubemap = _renderer.CreateMaterial(_renderer.Skies.SixSided);
         for (int f = 0; f < 6; f++)
             cubemap.SetTexture(names[f], Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(colors[f].X, colors[f].Y, colors[f].Z, 1)]));
-        cubemap.SetFloat("_Exposure", 0.5f);
+        cubemap.SetFloat("intensity", 0.5f);
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = cubemap };
 
         using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 6, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 6 });
-        ViewDesc cube = new() { World = _world, EV100 = UnitEV100, ViewId = 15, Target = layered, LayerCount = 6 };
+        RenderView cube = _harness.BareView(15);
+        cube.EV100 = UnitEV100;
+        cube.Target = layered;
+        ViewLayer[] cameraLayers = new ViewLayer[6];
         for (int f = 0; f < 6; f++)
-            cube.Layers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+            cameraLayers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+        cube.Camera = new ViewCamera(cameraLayers);
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { cube } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
@@ -2995,7 +3016,7 @@ public sealed partial class LightingTests : IDisposable
         Material sky = _renderer.CreateMaterial(_renderer.Skies.Procedural);
         sky.SetFloat("_SunSize", 3);
         sky.SetFloat("_SunGlow", 0.5f);
-        sky.SetFloat("_Exposure", 0.7f);
+        sky.SetFloat("intensity", 0.7f);
         sky.SetColor("_Tint", new Float4(1, 0.8f, 0.6f, 1));
         sky.SetColor("_GroundColor", new Float4(0.1f, 0.3f, 0.2f, 1));
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = sky };
@@ -3006,7 +3027,7 @@ public sealed partial class LightingTests : IDisposable
             return Reference.ProceduralSky(Vector3.Normalize(new Vector3(x, y, 1)), sun, 50, 3, 0.5f, 0.7f, new Vector3(1, 0.8f, 0.6f), new Vector3(0.1f, 0.3f, 0.2f));
         }, PerspectiveFrame(16), 4e-3f);
 
-        sky.SetFloat("_Exposure", 0);
+        sky.SetFloat("intensity", 0);
         AssertPixels(_ => Vector3.Zero, PerspectiveFrame(16), 1e-4f);
     }
 
@@ -3015,9 +3036,13 @@ public sealed partial class LightingTests : IDisposable
     {
         using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 6, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 6 });
-        ViewDesc cube = new() { World = _world, EV100 = UnitEV100, ViewId = viewId, Target = layered, LayerCount = 6 };
+        RenderView cube = _harness.BareView(viewId);
+        cube.EV100 = UnitEV100;
+        cube.Target = layered;
+        ViewLayer[] cameraLayers = new ViewLayer[6];
         for (int f = 0; f < 6; f++)
-            cube.Layers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+            cameraLayers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+        cube.Camera = new ViewCamera(cameraLayers);
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { cube } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
@@ -3034,7 +3059,7 @@ public sealed partial class LightingTests : IDisposable
         _harness.Owned.Add(texture);
         Material sky = _renderer.CreateMaterial(_renderer.Skies.Cubemap);
         sky.SetTexture("_Cubemap", texture, SamplerDescription.Point);
-        sky.SetFloat("_Exposure", 0.5f);
+        sky.SetFloat("intensity", 0.5f);
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = sky };
 
         Float4[][] faces = CubeFrame(17);
@@ -3255,8 +3280,9 @@ public sealed partial class LightingTests : IDisposable
 
         Float4[] Draw()
         {
-            ViewDesc view = new() { World = _world, EV100 = UnitEV100, ViewId = 16, Target = _framebuffer };
-            view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin };
+            RenderView view = _harness.BareView(16);
+            view.EV100 = UnitEV100;
+            view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
             _device.WaitForIdle();
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
@@ -3325,8 +3351,9 @@ public sealed partial class LightingTests : IDisposable
         // An opaque forward pass that never writes it draws, leaving the targets at their clear
         Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Graphite_WriteGBuffer(c.normal, c.specularAlbedo, c.roughness);", ""))));
         AddQuad(material);
-        ViewDesc view = new() { World = _world, EV100 = UnitEV100, ViewId = 1, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin };
+        RenderView view = _harness.BareView(1);
+        view.EV100 = UnitEV100;
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
@@ -3540,7 +3567,7 @@ public sealed partial class LightingTests : IDisposable
         RenderableHandle quad = AddIndirect(IndirectQuad(secondUVs: true));
         _world.SetLightmap(quad, new LightmapBinding(lightmap, new Float4(1, 1, 0, 0), LightmapEncoding.Linear, scale: 1000));
         _ev100 = 10;
-        AssertMatches(_ => new Vector3(300, 600, 900) * ViewDesc.ExposureOf(10), Frame());
+        AssertMatches(_ => new Vector3(300, 600, 900) * RenderView.ExposureOf(10), Frame());
     }
 
     /// <summary>The light loop on the CPU, the same expressions the shaders use, every light shaded by PbrReference.</summary>

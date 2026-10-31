@@ -186,11 +186,8 @@ public readonly struct MaterialProperty
 
     public uint ScaleOffsetOffset { get; init; }
 
-    /// <summary>The bit a [Map] texture sets in the [MapMask] property while it holds a texture, -1 for any other property.</summary>
+    /// <summary>The bit a [Map] texture sets in the record's map mask while it holds a texture, -1 for any other property.</summary>
     public int MapBit { get; init; }
-
-    /// <summary>True for the [MapMask] integer, which holds a bit for every [Map] texture that holds a texture.</summary>
-    public bool MapMask { get; init; }
 
     /// <summary>True when the colour is entered in gamma space and converted to linear in the record.</summary>
     public bool Gamma { get; init; }
@@ -218,7 +215,7 @@ internal interface IMaterialResources
 
 /// <summary>
 /// The material record layout of a shader: its properties in declaration order, std430, shared by every pass and
-/// variant. Records are padded to 16 bytes.
+/// variant, then the map mask when it has [Map] textures. Records are padded to 16 bytes.
 /// </summary>
 public sealed class MaterialSchema
 {
@@ -236,15 +233,10 @@ public sealed class MaterialSchema
             MaterialPropertyType type = TypeOf(source.PropertyType);
             string[] attributes = source.Attributes ?? [];
             bool map = Array.IndexOf(attributes, "Map") >= 0;
-            bool mask = Array.IndexOf(attributes, "MapMask") >= 0;
             if (map && type != MaterialPropertyType.Texture2D)
                 throw new ArgumentException($"The property {source.Name} is a [Map] but not a Texture2D.");
             if (map && maps == 32)
                 throw new ArgumentException($"The property {source.Name} is a [Map] past the 32 a mask holds.");
-            if (mask && (type != MaterialPropertyType.Int || MapMaskProperty >= 0))
-                throw new ArgumentException($"The property {source.Name} is a [MapMask] but not the only Integer one.");
-            if (mask)
-                MapMaskProperty = i;
             (uint size, uint alignment) = map ? (MapSize, 4u) : Std430(type);
 
             offset = AlignUp(offset, alignment);
@@ -271,19 +263,26 @@ public sealed class MaterialSchema
                 Offset = propertyOffset,
                 ScaleOffsetOffset = scaleOffsetOffset,
                 MapBit = map ? maps++ : -1,
-                MapMask = mask,
                 Gamma = type == MaterialPropertyType.Color && Array.IndexOf(attributes, "Gamma") >= 0,
             };
         }
 
         _properties = result;
+        if (maps > 0)
+        {
+            MapMaskOffset = (int)offset;
+            offset += 4;
+        }
         StrideWords = Math.Max(AlignUp(offset, 16), 16u) / 4;
     }
 
     public IReadOnlyList<MaterialProperty> Properties => _properties;
 
-    /// <summary>The index of the [MapMask] property, -1 for none.</summary>
-    public int MapMaskProperty { get; } = -1;
+    /// <summary>
+    /// Byte offset of the map mask after the properties, a bit per [Map] texture in declaration order set while it holds
+    /// a texture, -1 for a schema without maps.
+    /// </summary>
+    public int MapMaskOffset { get; } = -1;
 
     /// <summary>Bytes a [Map] property takes in the record.</summary>
     public const uint MapSize = 28;
@@ -325,8 +324,8 @@ public sealed class MaterialSchema
                 WriteNumber(property.Type, value, record, word, property.Gamma);
             }
         }
-        if (MapMaskProperty >= 0)
-            record[(int)(_properties[MapMaskProperty].Offset / 4)] = present;
+        if (MapMaskOffset >= 0)
+            record[MapMaskOffset / 4] = present;
     }
 
     /// <summary>Writes a numeric value as std430 lays out a property of <paramref name="type"/>.</summary>
@@ -449,6 +448,30 @@ public enum KeywordBindingKind : byte
 /// <summary>A material axis a property drives, see <see cref="Shader.KeywordBindings"/>.</summary>
 public readonly record struct KeywordBinding(int Property, string Axis, KeywordBindingKind Kind);
 
+/// <summary>A material axis of one shader, from <see cref="Shader.Axis"/>, whose value its materials pick with <see cref="Material.Set(MaterialAxis, string?)"/>.</summary>
+public sealed class MaterialAxis
+{
+    internal MaterialAxis(Shader shader, VariantSpace space)
+    {
+        Shader = shader;
+        Name = space.Name;
+        Values = space.Values;
+        IsToggle = space.IsToggle;
+    }
+
+    public Shader Shader { get; }
+
+    public string Name { get; }
+
+    /// <summary>Every value the axis takes, the first being its default.</summary>
+    public IReadOnlyList<string> Values { get; }
+
+    /// <summary>True for an on or off axis, set with <see cref="Material.Set(MaterialAxis, bool)"/>.</summary>
+    public bool IsToggle { get; }
+
+    public override string ToString() => Name;
+}
+
 /// <summary>
 /// A shader the renderer can draw with: its definition, the material schema from its Properties block, and its
 /// variant axes split by scope.
@@ -481,6 +504,12 @@ public sealed class Shader
     /// </summary>
     public const string OutputTag = "Output";
 
+    /// <summary>
+    /// The pass tag of a Forward pass whose fragments discard, "Discards" = "On", so a material without a ShadowCaster
+    /// pass casts no shadow in place of one shaped by its whole depth.
+    /// </summary>
+    public const string DiscardsTag = "Discards";
+
     /// <summary>The global axis a view sets to show a debug view, which its draws take from their shaders' Debug passes.</summary>
     public const string DebugAxis = "GRAPHITE_DEBUG";
 
@@ -493,8 +522,10 @@ public sealed class Shader
     /// <summary>The shader drawing in this one's place while its variants compile or after they failed, from its Fallback declaration.</summary>
     public Shader? Fallback { get; set; }
 
+    /// <summary>A shader drawing a copy of the definition, which is left as it is.</summary>
     public Shader(ShaderDefinition definition, IShaderCompiler? compiler)
     {
+        definition = definition.Copy();
         ExpandSurface(definition);
         Definition = definition;
         Name = definition.Name ?? "";
@@ -548,6 +579,8 @@ public sealed class Shader
 
         MaterialAxes = material;
         GlobalAxes = global;
+        foreach (VariantSpace axis in material)
+            _materialAxes[axis.Name] = new MaterialAxis(this, axis);
         RenderQueue = queue;
         KeywordBindings = BindKeywords();
         TwoSidedAxis = FindAttributeAxis("TwoSided");
@@ -701,6 +734,18 @@ public sealed class Shader
     public IReadOnlyList<VariantSpace> MaterialAxes { get; }
 
     public IReadOnlyList<VariantSpace> GlobalAxes { get; }
+
+    private readonly Dictionary<string, MaterialAxis> _materialAxes = new(StringComparer.Ordinal);
+
+    /// <summary>The material axis of a name, for <see cref="Material.Set(MaterialAxis, string?)"/>. Throws when the shader has no such axis or it is global.</summary>
+    public MaterialAxis Axis(string name)
+    {
+        if (_materialAxes.TryGetValue(name, out MaterialAxis? axis))
+            return axis;
+        if (FindAxis(name, out _) >= 0)
+            throw new ArgumentException($"The axis {name} is global in {Name}, the renderer, a world or a view sets it, not a material.", nameof(name));
+        throw new ArgumentException($"The shader {Name} has no axis {name}.", nameof(name));
+    }
 
     /// <summary>Whether a pass declares an axis, so its selection can tell that pass's programs apart.</summary>
     internal bool PassHasAxis(int passIndex, string axis) => _passAxes[passIndex].Contains(axis);

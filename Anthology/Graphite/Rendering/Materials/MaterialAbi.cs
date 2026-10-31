@@ -165,7 +165,7 @@ internal static class MaterialLayout
             offset = at + size;
         }
 
-        string mask = schema.MapMaskProperty >= 0 ? $"{Record}.m{schema.Properties[schema.MapMaskProperty].Name.Text()}" : "";
+        string mask = schema.MapMaskOffset >= 0 ? $"{Record}.graphite_MapMask" : "";
         foreach (MaterialProperty property in schema.Properties)
         {
             string name = property.Name.Text();
@@ -178,7 +178,7 @@ internal static class MaterialLayout
                 string word = $"{Record}.{member}";
                 string image = $"Graphite_Textures2D[nonuniformEXT({word} & 0xFFFFu)]";
                 string samplerSlot = $"Graphite_Samplers[nonuniformEXT(({word} >> 16) & 63u)]";
-                string present = mask.Length > 0 ? $"(((uint({mask}) >> {property.MapBit}) & 1u) != 0u)" : "true";
+                string present = $"((({mask} >> {property.MapBit}) & 1u) != 0u)";
                 properties[name] = ("sampler2D", $"sampler2D({image}, {samplerSlot})",
                     $"#define {name}_Texture {image}\n#define {name}_Sampler {samplerSlot}\n"
                     + $"#define {name}_ST vec4({word}_T0, {word}_T1, {word}_T2, {word}_T3)\n#define {name}_Rotation vec2({word}_T4, {word}_T5)\n"
@@ -202,6 +202,8 @@ internal static class MaterialLayout
                 properties[name] = (type, $"({Record}.{member})", "");
             }
         }
+        if (schema.MapMaskOffset >= 0)
+            Member("uint", "graphite_MapMask", (uint)schema.MapMaskOffset, 4);
         for (; offset < schema.StrideWords * 4; offset += 4)
             record.Append("    uint pad").Append(padding++).Append(";\n");
         record.Append("};");

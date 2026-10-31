@@ -1,14 +1,13 @@
-// Graphite's standard unlit surface: a texture times a tint and the vertex colour, fogged.
+// Graphite's standard unlit surface: base_color times its map and the vertex colour, fogged.
 // Also the "Unlit" surface model: a shader with Surface "Unlit" takes these passes and properties, its code in place of each "#pragma surface".
 // A Surface block's Vertex code goes in place of each "#pragma surface_vertex".
 Shader "Graphite/Unlit"
 {
     Properties
     {
-        _MainTex("Texture", Texture2D) = "white" {}
-        _MainColor("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
-        _MainTexUV("UV Set", Integer) = 0 [Enum(UV0, UV1)]
-        _AlphaCutoff("Alpha Cutoff", Float) = 0.5 [Range(0, 1)] [ShowIf(_SURFACE, CUTOUT)]
+        base_color("Base Color", Color) = (1.0, 1.0, 1.0, 1.0)
+        base_color_map("Base Color Map", Texture2D) = "white" {} [Map]
+        alpha_cutoff("Alpha Cutoff", Float) = 0.5 [Range(0, 1)] [ShowIf(_SURFACE, CUTOUT)]
     }
 
     Pass
@@ -19,8 +18,7 @@ Shader "Graphite/Unlit"
         Shared
         {
             #define GRAPHITE_STANDARD_FORWARD
-            #define GRAPHITE_STANDARD_UNLIT
-            #include "Graphite/Standard/Standard.glsl"
+            #include "Graphite/Standard/UnlitSurface.glsl"
         }
         Vertex
         {
@@ -45,8 +43,7 @@ Shader "Graphite/Unlit"
         Shared
         {
             #define GRAPHITE_STANDARD_DEPTH
-            #define GRAPHITE_STANDARD_UNLIT
-            #include "Graphite/Standard/Standard.glsl"
+            #include "Graphite/Standard/UnlitSurface.glsl"
         }
         Vertex
         {
@@ -72,8 +69,7 @@ Shader "Graphite/Unlit"
         {
             #define GRAPHITE_STANDARD_DEPTH
             #define GRAPHITE_STANDARD_SHADOW
-            #define GRAPHITE_STANDARD_UNLIT
-            #include "Graphite/Standard/Standard.glsl"
+            #include "Graphite/Standard/UnlitSurface.glsl"
         }
         Vertex
         {
@@ -100,8 +96,7 @@ Shader "Graphite/Unlit"
             #define GRAPHITE_STANDARD_FORWARD
             #define GRAPHITE_STANDARD_DEBUG
             #pragma variant global GRAPHITE_DEBUG UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY
-            #define GRAPHITE_STANDARD_UNLIT
-            #include "Graphite/Standard/Standard.glsl"
+            #include "Graphite/Standard/UnlitSurface.glsl"
         }
         Vertex
         {

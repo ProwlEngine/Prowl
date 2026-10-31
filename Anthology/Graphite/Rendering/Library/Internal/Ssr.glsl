@@ -8,9 +8,7 @@
 
 #include "Graphite/Internal/PostView.glsl"
 
-#define SSR_PI 3.14159265359
 
-float Luminance(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
 vec3 SsrViewNormal(Graphite_ViewData view, vec2 encoded) { return normalize(mat3(view.view) * Graphite_OctDecode(encoded)); }
 
@@ -39,12 +37,12 @@ vec4 ImportanceSampleGGX(vec2 Xi, float roughness)
 {
     float m = roughness * roughness;
     float m2 = m * m;
-    float phi = 2.0 * SSR_PI * Xi.x;
+    float phi = 2.0 * GRAPHITE_PI * Xi.x;
     float cosT = sqrt((1.0 - Xi.y) / (1.0 + (m2 - 1.0) * Xi.y));
     float sinT = sqrt(max(1e-5, 1.0 - cosT * cosT));
     vec3 h = vec3(sinT * cos(phi), sinT * sin(phi), cosT);
     float d = (cosT * m2 - cosT) * cosT + 1.0;
-    float D = m2 / (SSR_PI * d * d);
+    float D = m2 / (GRAPHITE_PI * d * d);
     return vec4(h, D * cosT);
 }
 
@@ -191,11 +189,11 @@ float BrdfWeight(vec3 V, vec3 L, vec3 N, float roughness)
     float m = roughness * roughness;
     float m2 = m * m;
     float d = (NdotH * m2 - NdotH) * NdotH + 1.0;
-    float D = m2 / (SSR_PI * d * d);
+    float D = m2 / (GRAPHITE_PI * d * d);
     float visL = NdotV * sqrt((NdotL - NdotL * m2) * NdotL + m2);
     float visV = NdotL * sqrt((NdotV - NdotV * m2) * NdotV + m2);
     float Vis = 0.5 / max(1e-5, visL + visV);
-    return D * Vis * (SSR_PI / 4.0);
+    return D * Vis * (GRAPHITE_PI / 4.0);
 }
 
 float EdgeFade(vec2 pos, float value)
@@ -242,13 +240,13 @@ void main()
         s.rgb = SamplePyramid(hitUV, mip);
         s.a = EdgeFade(hitUV, _EdgeFactor) * mask;
         if (_Fireflies == 1)
-            s.rgb /= 1.0 + Luminance(s.rgb);
+            s.rgb /= 1.0 + Graphite_Luminance(s.rgb);
         result += s * weight;
         weightSum += weight;
     }
     result /= max(1e-5, weightSum);
     if (_Fireflies == 1)
-        result.rgb /= 1.0 - min(Luminance(result.rgb), 0.95);
+        result.rgb /= 1.0 - min(Graphite_Luminance(result.rgb), 0.95);
     outColor = max(vec4(1e-5), result);
 }
 #elif defined(SSR_TEMPORAL)
@@ -268,7 +266,7 @@ vec2 ReflectionVelocity(vec2 uv)
     Graphite_ViewData view = Graphite_PostView();
     vec4 rd = Graphite_Sample(_RayCast, uv);
     float hitDepth = max(Graphite_Sample(_CameraDepthTexture, rd.w > 0.0 ? rd.xy : uv).r, 1e-7);
-    return uv - Graphite_PostPreviousUV(view, Graphite_PostRelativePosition(view, uv, hitDepth));
+    return uv - Graphite_PostPreviousUV(view, Graphite_RelativeFromDepth(view, uv, hitDepth));
 }
 
 void main()
@@ -305,7 +303,7 @@ void main()
     outColor = vec4(previous.rgb * Graphite_PostExposureRatio(Graphite_PostView()), previous.a);
 }
 #elif defined(SSR_COMBINE)
-#include "Graphite/Lighting.glsl"
+#include "Graphite/Probes.glsl"
 
 uniform GRAPHITE_SCREEN_TEXTURE _ReflectionBuffer;
 uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
@@ -330,7 +328,7 @@ void main()
     if (Graphite_ReflectionProbesReady())
     {
         float depth = max(Graphite_Sample(_CameraDepthTexture, vUV).r, 1e-7);
-        vec3 relative = Graphite_PostRelativePosition(view, vUV, depth);
+        vec3 relative = Graphite_RelativeFromDepth(view, vUV, depth);
         vec3 N = Graphite_OctDecode(Graphite_Sample(_CameraNormalsTexture, vUV).xy);
         probes = Graphite_ProbeRadiance(Graphite_FindProbes(relative), N, Graphite_ViewDir(relative), material.a * material.a);
     }

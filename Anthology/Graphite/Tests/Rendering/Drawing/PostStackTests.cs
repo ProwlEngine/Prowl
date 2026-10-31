@@ -185,14 +185,14 @@ public sealed class PostStackTests : IDisposable
     private RenderableHandle AddBackdrop(Float3 color, double depth = 10, double scale = 1)
         => _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, depth)) * Double4x4.CreateScale(scale) }, [Unlit(color)]);
 
-    private ViewDesc View(int id = 1)
+    private RenderView View(int id = 1)
     {
-        ViewDesc view = _harness.View(id);
+        RenderView view = _harness.View(id);
         view.EV100 = UnitEV100;
         return view;
     }
 
-    private Float4[] Frame(float deltaTime = 1f / 60, ViewDesc? view = null)
+    private Float4[] Frame(float deltaTime = 1f / 60, RenderView? view = null)
         => _harness.Frame(new FrameDesc { Views = new[] { view ?? View() }, Time = new FrameTime { DeltaTime = deltaTime } });
 
     private static Float3 Map(Float3 c, Func<float, float> f) => new(f(c.X), f(c.Y), f(c.Z));
@@ -262,7 +262,7 @@ public sealed class PostStackTests : IDisposable
     {
         using Texture srgb = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm_SRgb, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer target = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, srgb));
-        ViewDesc view = View();
+        RenderView view = View();
         view.Target = target;
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
@@ -292,7 +292,7 @@ public sealed class PostStackTests : IDisposable
         Effect(new Tonemapper(_renderer));
         using Texture srgb = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm_SRgb, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer target = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, srgb));
-        ViewDesc view = View();
+        RenderView view = View();
         view.Target = target;
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
@@ -318,12 +318,12 @@ public sealed class PostStackTests : IDisposable
         float lum = Luminance(color);
 
         // A K 12.5 meter at ISO 100 over the scene's luminance, brightened by the compensation
-        float Metered(float luminance) => ViewDesc.ExposureOf(MathF.Log2(luminance * 100 / 12.5f) - 0.5f);
+        float Metered(float luminance) => RenderView.ExposureOf(MathF.Log2(luminance * 100 / 12.5f) - 0.5f);
 
         // The first frame takes the view's EV100, the next what was metered from it with its pre-exposure undone
-        ViewDesc view = View();
+        RenderView view = View();
         view.EV100 = 6;
-        AssertAll(color * ViewDesc.ExposureOf(6), Frame(view: view), 2e-3f);
+        AssertAll(color * RenderView.ExposureOf(6), Frame(view: view), 2e-3f);
         AssertAll(color * Metered(lum), Frame(view: view), 2e-3f);
 
         // Twice as bright, adapting up in stops at 3 a second for a tenth of a second, seen a frame later
@@ -341,12 +341,12 @@ public sealed class PostStackTests : IDisposable
         AddBackdrop(color);
         AddBackdrop(new Float3(float.PositiveInfinity), depth: 9, scale: 0.45);
         Effect(new AutoExposure(_renderer) { ExposureCompensation = 0 });
-        ViewDesc view = View();
+        RenderView view = View();
         view.EV100 = 0;
         Frame(view: view);
-        float saturated = 65504 / ViewDesc.ExposureOf(0);
+        float saturated = 65504 / RenderView.ExposureOf(0);
         float mean = MathF.Exp((0.05f * MathF.Log(2) + 0.23f * MathF.Log(saturated)) / 0.28f);
-        float expected = color.X * ViewDesc.ExposureOf(MathF.Log2(mean * 100 / 12.5f));
+        float expected = color.X * RenderView.ExposureOf(MathF.Log2(mean * 100 / 12.5f));
         AssertAll(new Float3(expected), Frame(view: view), expected * 0.05f, i => i % Size < 4 || i / Size < 4);
     }
 
@@ -358,9 +358,9 @@ public sealed class PostStackTests : IDisposable
         AddBackdrop(color);
         AddBackdrop(new Float3(1e-5f), depth: 9, scale: 0.45);
         Effect(new AutoExposure(_renderer) { ExposureCompensation = 0 });
-        ViewDesc view = View();
+        RenderView view = View();
         Frame(view: view);
-        float expected = color.X * ViewDesc.ExposureOf(MathF.Log2(Luminance(color) * 100 / 12.5f));
+        float expected = color.X * RenderView.ExposureOf(MathF.Log2(Luminance(color) * 100 / 12.5f));
         AssertAll(new Float3(expected), Frame(view: view), expected * 0.01f, i => i % Size < 4 || i / Size < 4);
     }
 
@@ -371,10 +371,10 @@ public sealed class PostStackTests : IDisposable
         AddBackdrop(color);
         AutoExposure auto = Effect(new AutoExposure(_renderer) { MinEV100 = 2 });
         Frame();
-        AssertAll(color * ViewDesc.ExposureOf(2), Frame(), 1e-5f);
+        AssertAll(color * RenderView.ExposureOf(2), Frame(), 1e-5f);
 
         _world.Features.Remove(auto);
-        AssertAll(color * ViewDesc.ExposureOf(UnitEV100), Frame(), 1e-5f);
+        AssertAll(color * RenderView.ExposureOf(UnitEV100), Frame(), 1e-5f);
     }
 
     [Fact]
@@ -385,7 +385,7 @@ public sealed class PostStackTests : IDisposable
         AddBackdrop(new Float3(0.05f, 0.05f, 0.05f), depth: 12);
         AddTurnedSquare();
         Effect(new TemporalAntiAliasing(_renderer));
-        ViewDesc changed = View(1), steady = View(2);
+        RenderView changed = View(1), steady = View(2);
         changed.EV100 = 4;
         steady.EV100 = 2;
         for (int frame = 0; frame < 4; frame++)
@@ -680,8 +680,8 @@ public sealed class PostStackTests : IDisposable
         AssertColumn(still, 8, r => r == 0, "is black");
 
         // A unit right moves the edge two pixels left, and its motion smears it a pixel either way
-        ViewDesc moved = View();
-        moved.Layers[0] = moved.Layers[0] with { Position = new Double3(1, 0, 0) };
+        RenderView moved = View();
+        moved.Camera = new ViewCamera(moved.Camera.Layers[0] with { Position = new Double3(1, 0, 0) });
         Float4[] smeared = Frame(view: moved);
         AssertColumn(smeared, 3, r => r == 1, "is red");
         AssertColumn(smeared, 5, r => r > 0.05f && r < 0.95f, "is smeared");
@@ -716,7 +716,7 @@ public sealed class PostStackTests : IDisposable
     {
         // A dark quad over the lower half, bright sky above it, the sun ahead three units up the view
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, -4, 10)) }, [Unlit(new Float3(0.05f, 0.05f, 0.05f))]);
-        ViewDesc view = View();
+        RenderView view = View();
         view.ClearColor = new Float4(2, 2, 2, 1);
         Effect(new GodRays(_renderer));
         Float4[] sunless = Frame(view: view);
@@ -826,9 +826,15 @@ public sealed class PostStackTests : IDisposable
 
         using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 2, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 2 });
-        ViewDesc stereo = new() { World = _world, EV100 = UnitEV100, ViewId = 5, Target = layered, LayerCount = 2, Sky = false, ClearColor = new Float4(0, 0, 0, 1) };
+        RenderView stereo = _harness.BareView(5);
+        stereo.EV100 = UnitEV100;
+        stereo.Target = layered;
+        stereo.Sky = false;
+        stereo.ClearColor = new Float4(0, 0, 0, 1);
+        ViewLayer[] cameraLayers = new ViewLayer[2];
         for (int layer = 0; layer < 2; layer++)
-            stereo.Layers[layer] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = new Double3(layer * 0.5 - 0.25, 0, 0) };
+            cameraLayers[layer] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = new Double3(layer * 0.5 - 0.25, 0, 0) };
+        stereo.Camera = new ViewCamera(cameraLayers);
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { stereo }, Time = new FrameTime { DeltaTime = 1f / 60 } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
@@ -840,8 +846,8 @@ public sealed class PostStackTests : IDisposable
             Float4[] got = _device.Map<Float4>(readback).ToArray();
             _device.Unmap(readback);
 
-            ViewDesc mono = View(10 + layer);
-            mono.Layers[0] = stereo.Layers[layer];
+            RenderView mono = View(10 + layer);
+            mono.Camera = new ViewCamera(stereo.Camera.Layers[layer]);
             Float4[] want = Frame(view: mono);
             Assert.True(want.Any(p => p.X > 0.05f) && want.Distinct().Count() > 4, $"layer {layer} shows too little");
             for (int i = 0; i < want.Length; i++)

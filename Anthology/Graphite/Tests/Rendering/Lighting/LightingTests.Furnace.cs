@@ -152,7 +152,7 @@ public sealed partial class LightingTests
             m.SetFloat("emission_luminance", 400);
         }));
         _ev100 = 8;
-        float exposure = ViewDesc.ExposureOf(8);
+        float exposure = RenderView.ExposureOf(8);
         Frame();
         AssertMatches(_ => new Vector3(400, 200, 100) * exposure, Frame());
     }
@@ -165,7 +165,7 @@ public sealed partial class LightingTests
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = default, Fog = default, Sky = SkyMaterial(new Float3(0, 0, 0), 0) };
         Texture ramp = Lightmap<Float4>(2, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0, 0, 0, 1), new Float4(1, 1, 1, 1)]);
         _ev100 = 8;
-        float exposure = ViewDesc.ExposureOf(8);
+        float exposure = RenderView.ExposureOf(8);
         const float offset = 1024.25f;
         _world.Add(new RenderableDesc { Mesh = IndirectQuad(secondUVs: false), Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)) }, [PBR(m =>
         {
@@ -214,7 +214,7 @@ public sealed partial class LightingTests
     {
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = default, Fog = default, Sky = SkyMaterial(new Float3(0, 0, 0), 0) };
         Material backdrop = _renderer.CreateMaterial(_renderer.Standard.Unlit);
-        backdrop.SetColor("_MainColor", new Float4(0.2f, 0.4f, 0.8f, 1));
+        backdrop.SetColor("base_color", new Float4(0.2f, 0.4f, 0.8f, 1));
         _world.Add(new RenderableDesc { Mesh = FacingQuad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, 20)) }, [backdrop]);
         AddFacingQuad(PBR(m =>
         {

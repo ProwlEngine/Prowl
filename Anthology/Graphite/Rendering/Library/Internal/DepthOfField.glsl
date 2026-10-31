@@ -1,5 +1,4 @@
 #pragma variant DOF COMBINE COC PREFILTER BOKEH POSTFILTER FOCUS
-#pragma variant DOF_LAYERED_SOURCE
 // Bokeh depth of field with separate near and far fields. CoC: a signed circle of confusion in full resolution
 // pixels, negative in front of focus. Prefilter: the colour of the taps sharing the block's strongest CoC, and that CoC,
 // at the blur resolution. Bokeh: the far field from a disk the size of the pixel's own blur, taking samples whose blur
@@ -100,7 +99,7 @@ void main()
             float radius = float(ring) / float(_Rings);
             for (int j = 0; j < points; j++)
             {
-                float angle = 6.28318530718 * float(j) / float(points);
+                float angle = GRAPHITE_TWO_PI * float(j) / float(points);
                 vec2 disp = vec2(cos(angle), sin(angle)) * radius * farRadius;
                 vec4 s = Graphite_Sample(_MainTex, vUV + disp * texel);
                 far += vec4(s.rgb, 1.0) * clamp((s.a - length(disp) + margin) / margin, 0.0, 1.0);
@@ -118,7 +117,7 @@ void main()
         float radius = float(ring) / float(max(_Rings, 1));
         for (int j = 0; j < points; j++)
         {
-            float angle = 6.28318530718 * float(j) / float(points);
+            float angle = GRAPHITE_TWO_PI * float(j) / float(points);
             vec2 disp = vec2(cos(angle), sin(angle)) * radius * _MaxCoC;
             vec4 s = Graphite_Sample(_MainTex, vUV + disp * texel);
             float c = -s.a;
@@ -146,15 +145,9 @@ void main()
         + Graphite_Sample(_NearTex, vUV + vec2(-h.x, h.y)) + Graphite_Sample(_NearTex, vUV + vec2(h.x, h.y))) * 0.25;
 }
 #elif defined(DOF_FOCUS)
-#ifdef DOF_LAYERED_SOURCE
-uniform sampler2DArray _CameraDepthTexture;
-float FetchDepth(ivec2 pixel) { return texelFetch(_CameraDepthTexture, ivec3(pixel, 0), 0).r; }
-ivec2 DepthSize() { return textureSize(_CameraDepthTexture, 0).xy; }
-#else
-uniform sampler2D _CameraDepthTexture;
-float FetchDepth(ivec2 pixel) { return texelFetch(_CameraDepthTexture, pixel, 0).r; }
-ivec2 DepthSize() { return textureSize(_CameraDepthTexture, 0); }
-#endif
+uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
+float FetchDepth(ivec2 pixel) { return Graphite_Fetch(_CameraDepthTexture, pixel, 0).r; }
+ivec2 DepthSize() { return Graphite_Size(_CameraDepthTexture, 0); }
 uniform sampler2D _PrevFocusTex;
 uniform float _UseAutoFocus;
 uniform float _ManualFocusPoint;

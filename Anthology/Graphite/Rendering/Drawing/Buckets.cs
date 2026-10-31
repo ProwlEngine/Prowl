@@ -301,8 +301,8 @@ internal sealed class DrawPrograms
         DrawProgram program;
         if (passIndex >= 0)
             program = new(draw.Shader, passIndex, draw.Shader.PassVariant(passIndex, draw.Keywords), draw.StateOverride, draw.Keywords);
-        else if (pass == PassType.ShadowCaster && DepthCasterPass(draw) is int depthPass)
-            program = new(DepthCaster!, depthPass, 0, null, []);
+        else if (pass == PassType.ShadowCaster && DepthCasterCulling(draw, out PassState? culling))
+            program = new(DepthCaster!, 0, 0, culling, []);
         else
             return false;
         if (_ids.TryGetValue(program, out id))
@@ -329,32 +329,31 @@ internal sealed class DrawPrograms
         return true;
     }
 
-    // Whether a pass's own code discards fragments outside comments, a cutout whose shape depth alone would not keep; a
-    // discard inside an included file is not seen, so such a pass needs a ShadowCaster pass of its own
-    private static bool Discards(ShaderPass pass)
-        => pass.Source != null && System.Text.RegularExpressions.Regex.IsMatch(System.Text.RegularExpressions.Regex.Replace(pass.Source, @"//[^\n]*|/\*.*?\*/", "", System.Text.RegularExpressions.RegexOptions.Singleline), @"\bdiscard\b");
+    private static readonly PassState s_cullFront = Material.Culling(FaceCullMode.Front), s_cullNone = Material.Culling(FaceCullMode.None);
 
-    // The depth only pass with the culling of the material's Forward pass, or null when it has none, opts out, blends,
-    // writes no depth or discards
-    private int? DepthCasterPass(MaterialDraw draw)
+    // Whether the depth only pass casts for a material, with the culling of its Forward pass: not when it has none, opts
+    // out, blends, writes no depth or is tagged as discarding
+    private bool DepthCasterCulling(MaterialDraw draw, out PassState? culling)
     {
+        culling = null;
         int forward = draw.Shader.PassIndex(PassType.Forward);
         if (DepthCaster == null || forward < 0)
-            return null;
+            return false;
         ShaderPass pass = draw.Shader.Definition.Passes![forward];
-        if (ShaderDefinition.PassHasTag(pass, "Shadows", "Off") || Discards(pass))
-            return null;
+        if (ShaderDefinition.PassHasTag(pass, "Shadows", "Off") || ShaderDefinition.PassHasTag(pass, Shader.DiscardsTag, "On"))
+            return false;
         PassState state = draw.StateOverride is { } over ? over.Apply(pass.State) : pass.State;
         BlendAttachmentDescription blend = state.ToBlendState(BlendStateDescription.SingleOverrideBlend).AttachmentStates[0];
         bool blended = blend.BlendEnabled && !(blend.SourceColorFactor == BlendFactor.One && blend.DestinationColorFactor == BlendFactor.Zero);
         if (blended || !state.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyGreaterEqual).DepthWriteEnabled)
-            return null;
-        return state.ToRasterizerState(RasterizerStateDescription.Default).CullMode switch
+            return false;
+        culling = state.ToRasterizerState(RasterizerStateDescription.Default).CullMode switch
         {
-            FaceCullMode.Front => 1,
-            FaceCullMode.None => 2,
-            _ => 0,
+            FaceCullMode.Front => s_cullFront,
+            FaceCullMode.None => s_cullNone,
+            _ => null,
         };
+        return true;
     }
 }
 
@@ -586,8 +585,8 @@ internal sealed class BucketSet
 
     internal readonly record struct ChunkRef(uint Chunk, int ChunkInMesh, uint FirstIndex, uint IndexCount);
 
-    /// <summary>One transparent submesh of one object, with the chunks it draws, or a provider's item for one view.</summary>
-    internal sealed class TransparentItem
+    /// <summary>One submesh of one object drawn on its own rather than through a bucket, with its chunks: a world transparent, or a provider's item for one view.</summary>
+    internal sealed class ItemDraw
     {
         public bool Provided;
         public float Depth;
@@ -652,9 +651,9 @@ internal sealed class BucketSet
     private bool _ranksDirty;
     private readonly HashSet<int> _rebuild = new();
     private readonly List<(ulong Key, int Bucket, int FirstInstance, int Count)> _prepass = new();
-    private readonly List<TransparentItem> _transparent = new();
-    private List<TransparentItem>?[] _transparentOf = [];
-    private readonly List<(ulong Key, TransparentItem Item)> _sorted = new();
+    private readonly List<ItemDraw> _transparent = new();
+    private List<ItemDraw>?[] _transparentOf = [];
+    private readonly List<(ulong Key, ItemDraw Item)> _sorted = new();
     private bool[] _visible = [];
     private readonly List<int> _visibleList = new();
     private readonly List<int> _candidates = new();
@@ -816,7 +815,7 @@ internal sealed class BucketSet
             foreach ((_, int b, int first, int count) in _prepass)
                 Emit(list, _touched[b], first, count);
         }
-        foreach (TransparentItem item in provided?.Opaque ?? [])
+        foreach (ItemDraw item in provided?.Opaque ?? [])
         {
             item.FirstCommand = list.CommandCount;
             EmitProvided(list, item);
@@ -829,31 +828,31 @@ internal sealed class BucketSet
     /// Fills the transparent draw list from the last <see cref="Cull"/>: every visible transparent item, sorted by queue,
     /// sort bias, then back to front. Adjacent items of the same program, page, topology, winding and chunk share a command.
     /// </summary>
-    public void BuildTransparent(in CullFrustum frustum, DrawList list, IReadOnlyList<TransparentItem>? provided = null)
+    public void BuildTransparent(in CullFrustum frustum, DrawList list, IReadOnlyList<ItemDraw>? provided = null)
     {
         list.Clear();
         AppendTransparent(frustum, list, 1, provided);
     }
 
     // The visible transparent items of a pass, back to front, after what the list holds, providers' items among them
-    private void AppendTransparent(in CullFrustum frustum, DrawList list, int pass, IReadOnlyList<TransparentItem>? provided = null)
+    private void AppendTransparent(in CullFrustum frustum, DrawList list, int pass, IReadOnlyList<ItemDraw>? provided = null)
     {
         _sorted.Clear();
         Dictionary<int, int> ranks = RanksWith(provided);
-        foreach (TransparentItem item in _transparent)
+        foreach (ItemDraw item in _transparent)
         {
             if (item.Pass == pass && _visible[item.Object])
                 _sorted.Add((TransparentKey(item, frustum, ranks), item));
         }
         if (provided != null)
         {
-            foreach (TransparentItem item in provided)
+            foreach (ItemDraw item in provided)
                 _sorted.Add((ProvidedKey(item, ranks), item));
         }
         _sorted.Sort((a, b) => a.Key.CompareTo(b.Key));
 
         DrawCommandRef previous = new(0, -1, default, false, 0, -1);
-        foreach ((_, TransparentItem item) in _sorted)
+        foreach ((_, ItemDraw item) in _sorted)
         {
             if (item.Provided)
             {
@@ -892,23 +891,23 @@ internal sealed class BucketSet
     private readonly record struct DrawCommandRef(ushort Program, int Page, PrimitiveTopology Topology, bool Mirrored, uint Chunk, int Command);
 
     // The world's queue ranks, or ranks over its queues and providers' when a provider draws in a queue the world does not use
-    private Dictionary<int, int> RanksWith(IReadOnlyList<TransparentItem>? provided)
+    private Dictionary<int, int> RanksWith(IReadOnlyList<ItemDraw>? provided)
     {
         bool missing = false;
-        foreach (TransparentItem item in provided ?? [])
+        foreach (ItemDraw item in provided ?? [])
             missing |= !_queueRanks.ContainsKey(item.Queue);
         if (!missing)
             return _queueRanks;
         _unionQueues.Clear();
         _unionQueues.UnionWith(_queueRanks.Keys);
-        foreach (TransparentItem item in provided!)
+        foreach (ItemDraw item in provided!)
             _unionQueues.Add(item.Queue);
         Rank(_unionQueues, _unionRanks);
         return _unionRanks;
     }
 
     // [queueRank 6][sortBias 8, the middle][depth 32 back to front][program 12][spare 6]
-    private static ulong ProvidedKey(TransparentItem item, Dictionary<int, int> ranks)
+    private static ulong ProvidedKey(ItemDraw item, Dictionary<int, int> ranks)
     {
         ulong rank = (ulong)ranks.GetValueOrDefault(item.Queue);
         ulong depth = ~BitConverter.SingleToUInt32Bits(MathF.Max(item.Depth, 0)) & 0xFFFFFFFFu;
@@ -916,7 +915,7 @@ internal sealed class BucketSet
     }
 
     /// <summary>A provider's item into a list: a command per chunk, through its own object or shared by its instances.</summary>
-    internal static void EmitProvided(DrawList list, TransparentItem item)
+    internal static void EmitProvided(DrawList list, ItemDraw item)
     {
         for (int side = item.BackProgram >= 0 ? 0 : 1; side < 2; side++)
         {
@@ -926,7 +925,7 @@ internal sealed class BucketSet
         }
     }
 
-    private static void EmitProvidedChunk(DrawList list, TransparentItem item, ChunkRef chunk, ushort program)
+    private static void EmitProvidedChunk(DrawList list, ItemDraw item, ChunkRef chunk, ushort program)
     {
         uint flags = DrawRecord.DirectSlot | (item.Shared ? DrawRecord.SharedObject : 0);
         if (!item.Shared)
@@ -944,10 +943,10 @@ internal sealed class BucketSet
     }
 
     /// <summary>The commands an item adds to a list, before culling of its chunks.</summary>
-    internal static int CommandsOf(TransparentItem item) => item.Chunks.Length * (item.BackProgram >= 0 ? 2 : 1);
+    internal static int CommandsOf(ItemDraw item) => item.Chunks.Length * (item.BackProgram >= 0 ? 2 : 1);
 
     // [queueRank 6][sortBias 8][depth 32 back to front][program 12][spare 6]
-    private ulong TransparentKey(TransparentItem item, in CullFrustum frustum, Dictionary<int, int> ranks)
+    private ulong TransparentKey(ItemDraw item, in CullFrustum frustum, Dictionary<int, int> ranks)
     {
         ulong rank = (ulong)ranks.GetValueOrDefault(item.Queue);
         ulong bias = (ulong)(_world.SortBias[item.Object] + 128);
@@ -1154,7 +1153,7 @@ internal sealed class BucketSet
                 continue;
 
             Track(material, index);
-            TransparentItem item = new()
+            ItemDraw item = new()
             {
                 Pass = pass,
                 Object = index,
@@ -1175,7 +1174,7 @@ internal sealed class BucketSet
             UseQueue(item.Queue, 1);
             if (index >= _transparentOf.Length)
                 Array.Resize(ref _transparentOf, Math.Max(index + 1, _transparentOf.Length * 2));
-            (_transparentOf[index] ??= new List<TransparentItem>()).Add(item);
+            (_transparentOf[index] ??= new List<ItemDraw>()).Add(item);
         }
     }
 
@@ -1192,9 +1191,9 @@ internal sealed class BucketSet
     {
         if (index < _transparentOf.Length && _transparentOf[index] is { } items)
         {
-            foreach (TransparentItem item in items)
+            foreach (ItemDraw item in items)
             {
-                TransparentItem last = _transparent[^1];
+                ItemDraw last = _transparent[^1];
                 _transparent[item.Position] = last;
                 last.Position = item.Position;
                 _transparent.RemoveAt(_transparent.Count - 1);

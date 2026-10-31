@@ -91,7 +91,7 @@ public class RendererBenchmarks
     private Framebuffer _framebuffer = null!;
     private RenderableHandle[] _handles = [];
     private Double3[] _positions = [];
-    private ViewDesc[] _views = [];
+    private RenderView[] _views = [];
     private int _frame;
 
     [GlobalSetup]
@@ -124,12 +124,14 @@ public class RendererBenchmarks
         }
 
         float f = 1.5f;
-        ViewDesc view = new() { World = _world, ViewId = 0, Target = _framebuffer, ClearColor = new Float4(0.1f, 0.1f, 0.1f, 1), Near = 0.1f };
-        view.Layers[0] = new ViewLayer
+        RenderView view = _renderer.CreateView(_world);
+        view.Target = _framebuffer;
+        view.ClearColor = new Float4(0.1f, 0.1f, 0.1f, 1);
+        view.Camera = new ViewCamera(new ViewLayer
         {
             View = Float4x4.Identity,
             Projection = new Float4x4(new Float4(f, 0, 0, 0), new Float4(0, f, 0, 0), new Float4(0, 0, 0, 1), new Float4(0, 0, 0.1f, 0)),
-        };
+        });
         _views = [view];
 
         for (int i = 0; i < 8; i++)

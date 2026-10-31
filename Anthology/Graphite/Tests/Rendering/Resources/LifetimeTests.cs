@@ -136,7 +136,7 @@ public sealed class LifetimeTests : IDisposable
         programs.Freed += freed.Add;
         Material plain = _materials.Create(_shader);
         Material tinted = _materials.Create(_shader);
-        tinted.EnableKeyword("_TINT");
+        tinted.Set(_shader.Axis("_TINT"), true);
         _materials.Extract(new List<Material>());
 
         Assert.True(programs.TryGet(plain.Draw, PassType.Forward, out ushort first));

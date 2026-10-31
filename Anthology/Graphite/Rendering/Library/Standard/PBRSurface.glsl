@@ -4,8 +4,23 @@
 // geometry_tangent in the tangent plane, the latter counter clockwise from the tangent toward the bitangent. See Standard.glsl.
 #pragma once
 
+#include "Graphite/Standard/Standard.glsl"
+
 #ifdef GRAPHITE_FRAGMENT
 
+#ifdef GRAPHITE_STANDARD_LIT
+    #include "Graphite/PBR/Closure.glsl"
+    #include "Graphite/Decals.glsl"
+    #ifdef PBR_TRANSMISSION
+        #include "Graphite/PBR/Transmission.glsl"
+    #endif
+    #ifdef GRAPHITE_STANDARD_DEBUG
+        #include "Graphite/PBR/Debug.glsl"
+    #endif
+#endif
+#ifdef GRAPHITE_STANDARD_SHADOW_DITHER
+    #include "Graphite/PBR/Shadow.glsl"
+#endif
 #include "Graphite/PBR/Params.glsl"
 #include "Graphite/PBR/Microfacet.glsl"
 
@@ -84,10 +99,11 @@ uniform sampler2D geometry_tangent_map;
 
 // The material's inputs at a point, the vertex colour multiplying the base colour and opacity. mapVariance is the
 // normal map's own variance, Toksvig's from a three channel texel, for specular antialiasing. Normal and tangent maps
-// need the mesh's tangents.
+// need the mesh's tangents. A lobe's maps are read only while its axis is on, the thin film's and anisotropy's only at
+// the FULL tier, as the closure reads nothing of a lobe that is off.
 PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out float mapVariance)
 {
-    PBR_Params p = PBR_DefaultParams(i.GeometryNormal, i.Tangent);
+    PBR_Params p = PBR_DefaultParams(i.geometryNormal, i.tangent);
     p.baseWeight = base_weight;
     p.baseColor = base_color.rgb;
     p.baseMetalness = base_metalness;
@@ -141,49 +157,63 @@ PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out floa
         p.specularColor *= texture(specular_color_map, Graphite_StandardUV(specular_color_map_UV, specular_color_map_ST, specular_color_map_Rotation, i)).rgb;
     if (specular_roughness_map_Present)
         p.specularRoughness *= texture(specular_roughness_map, Graphite_StandardUV(specular_roughness_map_UV, specular_roughness_map_ST, specular_roughness_map_Rotation, i))[specular_roughness_map_Channel];
+#if defined(PBR_ANISOTROPY) && !defined(PBR_TIER_LITE)
     if (specular_roughness_anisotropy_map_Present)
         p.specularRoughnessAnisotropy *= texture(specular_roughness_anisotropy_map, Graphite_StandardUV(specular_roughness_anisotropy_map_UV, specular_roughness_anisotropy_map_ST, specular_roughness_anisotropy_map_Rotation, i))[specular_roughness_anisotropy_map_Channel];
+#endif
+#ifdef PBR_TRANSMISSION
     if (transmission_weight_map_Present)
         p.transmissionWeight *= texture(transmission_weight_map, Graphite_StandardUV(transmission_weight_map_UV, transmission_weight_map_ST, transmission_weight_map_Rotation, i))[transmission_weight_map_Channel];
     if (transmission_color_map_Present)
         p.transmissionColor *= texture(transmission_color_map, Graphite_StandardUV(transmission_color_map_UV, transmission_color_map_ST, transmission_color_map_Rotation, i)).rgb;
+#endif
+#ifdef PBR_SUBSURFACE
     if (subsurface_weight_map_Present)
         p.subsurfaceWeight *= texture(subsurface_weight_map, Graphite_StandardUV(subsurface_weight_map_UV, subsurface_weight_map_ST, subsurface_weight_map_Rotation, i))[subsurface_weight_map_Channel];
     if (subsurface_color_map_Present)
         p.subsurfaceColor *= texture(subsurface_color_map, Graphite_StandardUV(subsurface_color_map_UV, subsurface_color_map_ST, subsurface_color_map_Rotation, i)).rgb;
     if (subsurface_radius_map_Present)
         p.subsurfaceRadius *= texture(subsurface_radius_map, Graphite_StandardUV(subsurface_radius_map_UV, subsurface_radius_map_ST, subsurface_radius_map_Rotation, i))[subsurface_radius_map_Channel];
+#endif
+#ifdef PBR_COAT
     if (coat_weight_map_Present)
         p.coatWeight *= texture(coat_weight_map, Graphite_StandardUV(coat_weight_map_UV, coat_weight_map_ST, coat_weight_map_Rotation, i))[coat_weight_map_Channel];
     if (coat_color_map_Present)
         p.coatColor *= texture(coat_color_map, Graphite_StandardUV(coat_color_map_UV, coat_color_map_ST, coat_color_map_Rotation, i)).rgb;
     if (coat_roughness_map_Present)
         p.coatRoughness *= texture(coat_roughness_map, Graphite_StandardUV(coat_roughness_map_UV, coat_roughness_map_ST, coat_roughness_map_Rotation, i))[coat_roughness_map_Channel];
-    if (coat_roughness_anisotropy_map_Present)
-        p.coatRoughnessAnisotropy *= texture(coat_roughness_anisotropy_map, Graphite_StandardUV(coat_roughness_anisotropy_map_UV, coat_roughness_anisotropy_map_ST, coat_roughness_anisotropy_map_Rotation, i))[coat_roughness_anisotropy_map_Channel];
     if (coat_darkening_map_Present)
         p.coatDarkening *= texture(coat_darkening_map, Graphite_StandardUV(coat_darkening_map_UV, coat_darkening_map_ST, coat_darkening_map_Rotation, i))[coat_darkening_map_Channel];
+#if defined(PBR_ANISOTROPY) && !defined(PBR_TIER_LITE)
+    if (coat_roughness_anisotropy_map_Present)
+        p.coatRoughnessAnisotropy *= texture(coat_roughness_anisotropy_map, Graphite_StandardUV(coat_roughness_anisotropy_map_UV, coat_roughness_anisotropy_map_ST, coat_roughness_anisotropy_map_Rotation, i))[coat_roughness_anisotropy_map_Channel];
+#endif
+#endif
+#ifdef PBR_FUZZ
     if (fuzz_weight_map_Present)
         p.fuzzWeight *= texture(fuzz_weight_map, Graphite_StandardUV(fuzz_weight_map_UV, fuzz_weight_map_ST, fuzz_weight_map_Rotation, i))[fuzz_weight_map_Channel];
     if (fuzz_color_map_Present)
         p.fuzzColor *= texture(fuzz_color_map, Graphite_StandardUV(fuzz_color_map_UV, fuzz_color_map_ST, fuzz_color_map_Rotation, i)).rgb;
     if (fuzz_roughness_map_Present)
         p.fuzzRoughness *= texture(fuzz_roughness_map, Graphite_StandardUV(fuzz_roughness_map_UV, fuzz_roughness_map_ST, fuzz_roughness_map_Rotation, i))[fuzz_roughness_map_Channel];
+#endif
     if (emission_luminance_map_Present)
         p.emissionLuminance *= texture(emission_luminance_map, Graphite_StandardUV(emission_luminance_map_UV, emission_luminance_map_ST, emission_luminance_map_Rotation, i))[emission_luminance_map_Channel];
     if (emission_color_map_Present)
         p.emissionColor *= texture(emission_color_map, Graphite_StandardUV(emission_color_map_UV, emission_color_map_ST, emission_color_map_Rotation, i)).rgb;
+#if defined(PBR_THIN_FILM) && !defined(PBR_TIER_LITE)
     if (thin_film_weight_map_Present)
         p.thinFilmWeight *= texture(thin_film_weight_map, Graphite_StandardUV(thin_film_weight_map_UV, thin_film_weight_map_ST, thin_film_weight_map_Rotation, i))[thin_film_weight_map_Channel];
     if (thin_film_thickness_map_Present)
         p.thinFilmThickness *= texture(thin_film_thickness_map, Graphite_StandardUV(thin_film_thickness_map_UV, thin_film_thickness_map_ST, thin_film_thickness_map_Rotation, i))[thin_film_thickness_map_Channel];
+#endif
     if (geometry_opacity_map_Present)
         p.geometryOpacity *= texture(geometry_opacity_map, Graphite_StandardUV(geometry_opacity_map_UV, geometry_opacity_map_ST, geometry_opacity_map_Rotation, i))[geometry_opacity_map_Channel];
     if (ambient_occlusion_map_Present)
         p.occlusion *= texture(ambient_occlusion_map, Graphite_StandardUV(ambient_occlusion_map_UV, ambient_occlusion_map_ST, ambient_occlusion_map_Rotation, i))[ambient_occlusion_map_Channel];
 
-    p.baseColor *= i.VertexColor.rgb;
-    p.geometryOpacity *= i.VertexColor.a;
+    p.baseColor *= i.vertexColor.rgb;
+    p.geometryOpacity *= i.vertexColor.a;
 
     mapVariance = 0.0;
     if (!hasTangents)
@@ -194,8 +224,11 @@ PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out floa
         mapVariance = PBR_ToksvigVariance(length(texel * 2.0 - 1.0));
         p.geometryNormal = Graphite_SurfaceNormalMap(i, texel, normal_scale);
     }
+#ifdef PBR_COAT
     if (geometry_coat_normal_map_Present)
         p.geometryCoatNormal = Graphite_SurfaceNormalMap(i, texture(geometry_coat_normal_map, Graphite_StandardUV(geometry_coat_normal_map_UV, geometry_coat_normal_map_ST, geometry_coat_normal_map_Rotation, i)).rgb, coat_normal_scale);
+#endif
+#if defined(PBR_ANISOTROPY) && !defined(PBR_TIER_LITE)
     vec2 direction = vec2(1.0, 0.0);
     if (geometry_tangent_map_Present)
     {
@@ -209,7 +242,8 @@ PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out floa
         direction = vec2(turn.x * direction.x - turn.y * direction.y, turn.y * direction.x + turn.x * direction.y);
     }
     if (geometry_tangent_map_Present || tangent_rotation != 0.0)
-        p.geometryTangent = normalize(i.Tangent * direction.x + i.Bitangent * direction.y);
+        p.geometryTangent = normalize(i.tangent * direction.x + i.bitangent * direction.y);
+#endif
     return p;
 }
 

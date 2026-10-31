@@ -126,7 +126,7 @@ public struct LightDesc
     /// <summary>How the cookie and profile are sampled.</summary>
     public SamplerDescription? CookieSampler;
 
-    /// <summary>Data for custom lighting, read by shaders as LightSample.HostData.</summary>
+    /// <summary>Data for custom lighting, read by shaders through Graphite_LightHostData.</summary>
     public Float4 HostData;
 
     /// <summary>Spot cone half angles from the axis, in degrees: full intensity inside the inner, none past the outer.</summary>

@@ -38,7 +38,7 @@ float PBR_DfgE1(vec3 dfg) { return dfg.x + dfg.y; }
 // The view's azimuth about the normal, 0 along the tangent to 1 along the bitangent, folded into one quadrant
 float PBR_Azimuth(vec3 tangent, vec3 bitangent, vec3 view)
 {
-    return atan(abs(dot(bitangent, view)), max(abs(dot(tangent, view)), 1e-6)) * (2.0 / PI);
+    return atan(abs(dot(bitangent, view)), max(abs(dot(tangent, view)), 1e-6)) * (2.0 / GRAPHITE_PI);
 }
 
 // PBR_Dfg for the spec's anisotropic GGX of roughness r and anisotropy a, the view at azimuth from PBR_Azimuth. Each

@@ -27,9 +27,7 @@ vec4 Graphite_FaceParams(uint face) { return graphite_ShadowFaces[face * 3u + 1u
 vec4 Graphite_FaceDepth(uint face) { return graphite_ShadowFaces[face * 3u + 2u]; }
 layout(set = 1, binding = 30, std430) readonly buffer Graphite_Cascades { Graphite_Cascade graphite_Cascades[]; };
 
-// Contact hardening is compiled in while a light of the world uses it
-#pragma variant global GRAPHITE_CONTACT_SHADOWS
-
+// GRAPHITE_CONTACT_SHADOWS, a global axis Graphite/Lights.glsl declares, compiles contact hardening in
 #define GRAPHITE_SHADOW_FACES 6u
 #define GRAPHITE_CASCADES 4u
 #define GRAPHITE_SHADOW_HARD 0.0
@@ -118,7 +116,7 @@ float Graphite_ShadowNoiseAngle()
 {
 #ifdef GRAPHITE_FRAGMENT
     vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
-    return 6.28318531 * fract(magic.z * fract(dot(gl_FragCoord.xy, magic.xy)));
+    return GRAPHITE_TWO_PI * fract(magic.z * fract(dot(gl_FragCoord.xy, magic.xy)));
 #else
     return 0.0;
 #endif

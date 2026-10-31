@@ -4,8 +4,8 @@
 
 #include "Graphite/PBR/Microfacet.glsl"
 
-#define PBR_FON_C1 (0.5 - 2.0 / (3.0 * PI))
-#define PBR_FON_C2 (2.0 / 3.0 - 28.0 / (15.0 * PI))
+#define PBR_FON_C1 (0.5 - 2.0 / (3.0 * GRAPHITE_PI))
+#define PBR_FON_C2 (2.0 / 3.0 - 28.0 / (15.0 * GRAPHITE_PI))
 
 // The directional albedo of the single scattering FON lobe of roughness r at cosine mu
 float PBR_FonAlbedo(float mu, float r)
@@ -37,8 +37,8 @@ vec3 PBR_Eon(vec3 rho, float r, vec3 N, vec3 L, vec3 V)
     float sOverT = s > 0.0 ? s / max(max(muI, muO), 1e-6) : s;
     float a = 1.0 / (1.0 + PBR_FON_C1 * r);
     float average = PBR_FonAverage(r);
-    vec3 single = rho * (a * (1.0 + r * sOverT) / PI);
-    vec3 multiple = PBR_EonMultipleAlbedo(rho, average) / PI
+    vec3 single = rho * (a * (1.0 + r * sOverT) / GRAPHITE_PI);
+    vec3 multiple = PBR_EonMultipleAlbedo(rho, average) / GRAPHITE_PI
         * (max(1e-7, 1.0 - PBR_FonAlbedo(muO, r)) * max(1e-7, 1.0 - PBR_FonAlbedo(muI, r)) / max(1e-7, 1.0 - average));
     return single + multiple;
 }

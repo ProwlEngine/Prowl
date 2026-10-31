@@ -101,7 +101,7 @@ public sealed partial class LightingTests
         float lit = LitInShadow(m =>
         {
             m.Surface = new SurfaceSettings(SurfaceType.Transparent, Cull: SurfaceCull.Off);
-            m.SetColor("_MainColor", new Float4(1, 1, 1, 0.5f));
+            m.SetColor("base_color", new Float4(1, 1, 1, 0.5f));
         }, shader: _renderer.Standard.Unlit);
         AssertNear(0.5f, lit, "half transparent unlit");
     }
@@ -176,8 +176,10 @@ public sealed partial class LightingTests
         };
         other.AddLight(sun);
 
-        ViewDesc view = new() { World = other, EV100 = _ev100, ViewId = 1, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin };
+        RenderView view = _harness.BareView(1);
+        view.World = other;
+        view.EV100 = _ev100;
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
         Float4[] pixels = _harness.Frame(view);
 
         for (int y = 0; y < Size; y++)

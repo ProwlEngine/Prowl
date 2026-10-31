@@ -183,7 +183,7 @@ internal sealed class CameraFrame : IDisposable
     {
         Counts.Clear();
         uint stride = (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>();
-        foreach ((BucketSet.TransparentItem item, DrawList list, RenderResourceID source, uint offset) in Sink.Counts)
+        foreach ((BucketSet.ItemDraw item, DrawList list, RenderResourceID source, uint offset) in Sink.Counts)
         {
             int at = Lists.IndexOf(list);
             if (at < 0 || item.FirstCommand < 0)

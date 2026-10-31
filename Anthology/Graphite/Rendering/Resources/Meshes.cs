@@ -243,7 +243,7 @@ internal sealed class MeshLayout
     private static AABB Empty => new() { Min = new Float3(float.MaxValue), Max = new Float3(float.MinValue) };
 
     // Strips continue across chunk edges, so they are not split.
-    private static uint ChunkIndexCount(PrimitiveTopology topology) => topology switch
+    internal static uint ChunkIndexCount(PrimitiveTopology topology) => topology switch
     {
         PrimitiveTopology.TriangleList => ChunkTriangles * 3,
         PrimitiveTopology.LineList => ChunkTriangles * 2,

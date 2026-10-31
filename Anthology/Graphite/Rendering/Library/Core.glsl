@@ -6,6 +6,7 @@
 #extension GL_EXT_multiview : require
 #extension GL_EXT_nonuniform_qualifier : require
 
+#include "Graphite/Math.glsl"
 #include "Graphite/ViewData.glsl"
 
 // flags: 1 every instance draws object, 2 subMesh holds the material slot itself
@@ -66,9 +67,6 @@ float Graphite_Exposure() { return Graphite_View().exposure.x; }
 // Whether the view is capturing the sky or a reflection probe
 bool Graphite_IsCapture() { return Graphite_View().exposure.z > 0.5; }
 
-// Colour clamped to the largest half float, so a pre-exposed light too bright for a half float target saturates
-vec3 Graphite_SaturateHalf(vec3 c) { return min(c, vec3(65504.0)); }
-
 vec3 Graphite_CameraOffset(vec3 high, vec3 low)
 {
     Graphite_ViewData view = Graphite_View();
@@ -122,13 +120,6 @@ float Graphite_LinearDepth(float deviceDepth)
 {
     // Reversed Z with an infinite far plane: depth is near / view distance.
     return Graphite_View().depth.x / max(deviceDepth, 1e-12);
-}
-
-vec3 Graphite_RelativeFromDepth(vec2 uv, float deviceDepth)
-{
-    vec4 clip = vec4(uv * 2.0 - 1.0, deviceDepth, 1.0);
-    vec4 relative = Graphite_View().inverseViewProjection * clip;
-    return relative.xyz / relative.w;
 }
 
 #if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_NO_OBJECT)

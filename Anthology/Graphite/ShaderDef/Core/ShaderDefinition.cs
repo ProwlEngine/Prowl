@@ -51,29 +51,32 @@ public sealed class ShaderDefinition
     public bool IsCreated => _created;
 
 
-    /// <summary>
-    /// Binds to a device with no compiler and no known variants. Passes only resolve once variants
-    /// come from elsewhere (e.g. a snapshot). Mostly for structural inspection pre-render.
-    /// </summary>
-    public void Create(GraphicsDevice device, CompileMode mode = CompileMode.OnDemand)
-        => BindAll(device, null, mode, null);
-
-
-    /// <summary>
-    /// Binds to a device, discovering each pass's variant axes via the compiler. OnDemand compiles
-    /// variants as requested; All compiles everything up front. If a requested variant isn't compiled
-    /// yet or failed, falls back to the fallback variant instead of throwing. Fallback must itself
-    /// have a compiled description for the active backend, or resolving throws anyway.
-    /// </summary>
-    public void Create(GraphicsDevice device, IShaderCompiler? compiler, Variant fallback, CompileMode mode = CompileMode.OnDemand)
+    /// <summary>A definition with the same fields and copies of the passes, not created for a device.</summary>
+    internal ShaderDefinition Copy()
     {
-        ArgumentNullException.ThrowIfNull(fallback);
-
-        BindAll(device, compiler, mode, fallback);
+        ShaderPass[]? passes = null;
+        if (Passes != null)
+        {
+            passes = new ShaderPass[Passes.Length];
+            for (int i = 0; i < passes.Length; i++)
+                passes[i] = Passes[i].Copy();
+        }
+        return new ShaderDefinition
+        {
+            Name = Name,
+            Fallback = Fallback,
+            Properties = Properties is null ? null : [.. Properties],
+            Passes = passes,
+            Surface = Surface,
+        };
     }
 
 
-    private void BindAll(GraphicsDevice device, IShaderCompiler? compiler, CompileMode mode, Variant? fallback)
+    /// <summary>
+    /// Binds to a device, each pass's variant axes from the compiler. Variants compile on the calling thread when first
+    /// asked for, and one that failed throws. Without a compiler a pass resolves only variants that come from elsewhere.
+    /// </summary>
+    public void Create(GraphicsDevice device, IShaderCompiler? compiler = null)
     {
         if (Passes == null)
             throw new InvalidOperationException("Shader has no passes.");
@@ -82,7 +85,7 @@ public sealed class ShaderDefinition
         {
             ShaderPass pass = Passes[i];
             VariantSpace[] axes = [.. pass.AxesWith(compiler)];
-            pass.Bind(device, Name ?? "", i, axes, [], compiler, mode, fallback);
+            pass.Bind(device, Name ?? "", i, axes, [], compiler);
         }
 
         _created = true;
@@ -90,28 +93,10 @@ public sealed class ShaderDefinition
 
 
     /// <summary>
-    /// Binds to a device from a captured snapshot, no compiler. Only variants already in the
-    /// snapshot resolve; anything else throws.
+    /// Binds to a device from a captured snapshot. Variants missing from it, or not compiled for the device backend,
+    /// compile through the compiler when there is one and throw when there is none.
     /// </summary>
-    public void Create(GraphicsDevice device, ShaderSnapshot snapshot)
-        => BindFromSnapshot(device, snapshot, null, null);
-
-
-    /// <summary>
-    /// Binds to a device from a captured snapshot, allowing missing or wrong-backend variants to
-    /// compile dynamically via the compiler. Fallback is required, same as the compiler-attached
-    /// Create overload.
-    /// </summary>
-    public void Create(GraphicsDevice device, ShaderSnapshot snapshot, IShaderCompiler compiler, Variant fallback)
-    {
-        ArgumentNullException.ThrowIfNull(compiler);
-        ArgumentNullException.ThrowIfNull(fallback);
-
-        BindFromSnapshot(device, snapshot, compiler, fallback);
-    }
-
-
-    private void BindFromSnapshot(GraphicsDevice device, ShaderSnapshot snapshot, IShaderCompiler? compiler, Variant? fallback)
+    public void Create(GraphicsDevice device, ShaderSnapshot snapshot, IShaderCompiler? compiler = null)
     {
         if (Passes == null)
             throw new InvalidOperationException("Shader has no passes.");
@@ -122,7 +107,7 @@ public sealed class ShaderDefinition
         for (int i = 0; i < Passes.Length; i++)
         {
             PassSnapshot pass = snapshot.Passes[i];
-            Passes[i].Bind(device, Name ?? "", i, pass.Axes ?? [], pass.Variants ?? [], compiler, CompileMode.OnDemand, fallback);
+            Passes[i].Bind(device, Name ?? "", i, pass.Axes ?? [], pass.Variants ?? [], compiler);
         }
 
         _created = true;
@@ -149,7 +134,7 @@ public sealed class ShaderDefinition
     /// <summary>
     /// Builds a set from properties that have a default and a target in the pass variant.
     /// </summary>
-    public PropertySet CreateDefaultProperties(ShaderPass pass, int variantKey = 0, DefaultTextureResolver? resolveTexture = null)
+    public PropertySet CreateDefaultProperties(ShaderPass pass, VariantKey variantKey = default, DefaultTextureResolver? resolveTexture = null)
     {
         ArgumentNullException.ThrowIfNull(pass);
 
@@ -158,7 +143,7 @@ public sealed class ShaderDefinition
             return set;
 
         HashSet<PropertyID> targets = new();
-        foreach (ResourceLayoutDescription layout in pass.GetDescription(variantKey).ResourceLayouts)
+        foreach (ResourceLayoutDescription layout in pass.GetDescription(variantKey.Index).ResourceLayouts)
         {
             foreach (ResourceLayoutElementDescription element in layout.Elements)
             {

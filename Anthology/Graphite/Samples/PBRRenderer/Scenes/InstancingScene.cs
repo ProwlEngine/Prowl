@@ -15,24 +15,20 @@ internal sealed class InstancingScene : DemoScene
     private const int PerRing = 400;
 
     private readonly GpuMesh _orbiterMesh;
-    private readonly InstanceBatchHandle _wave;
-    private readonly InstanceBatchHandle _orbiters;
-    private readonly InstanceData[] _waveData = new InstanceData[Side * Side];
-    private readonly InstanceData[] _orbiterData = new InstanceData[Rings * PerRing];
+    private readonly Material _instanced, _glossy;
+    private readonly RenderableHandle[] _wave = new RenderableHandle[Side * Side];
+    private readonly RenderableHandle[] _orbiters = new RenderableHandle[Rings * PerRing];
 
     public InstancingScene(Demo demo) : base(demo)
     {
-        Material instanced = Pbr(new Float3(1, 1, 1), 0.1f, 0.35f, instanceColor: true);
-        Material glossy = Pbr(new Float3(1, 1, 1), 0.9f, 0.2f, instanceColor: true);
+        _instanced = Pbr(new Float3(1, 1, 1), 0.1f, 0.35f, instanceColor: true);
+        _glossy = Pbr(new Float3(1, 1, 1), 0.9f, 0.2f, instanceColor: true);
 
         Add(Demo.Cube, Pbr(new Float3(0.45f, 0.45f, 0.48f), 0f, 0.8f, grid: 4f), new Double3(0, -0.25, 0), new Double3(900, 0.5, 900));
 
         FillWave(0f);
-        FillOrbiters(0f);
-
-        _wave = World.AddInstanceBatch(new InstanceBatchDesc { Mesh = Demo.Cube }, [instanced], _waveData);
         _orbiterMesh = demo.Renderer.CreateMesh(Geometry.Sphere(10, 20));
-        _orbiters = World.AddInstanceBatch(new InstanceBatchDesc { Mesh = _orbiterMesh }, [glossy], _orbiterData);
+        FillOrbiters(0f);
 
         LightHandle sun = World.AddLight(new LightDesc
         {
@@ -63,14 +59,12 @@ internal sealed class InstancingScene : DemoScene
 
     public override float StartPitch => -0.3f;
 
-    public override string Status => $"{_waveData.Length + _orbiterData.Length} instances in 2 batches, all shadowed";
+    public override string Status => $"{_wave.Length + _orbiters.Length} renderables, all shadowed";
 
     public override void Update(float time, float deltaTime)
     {
         FillWave(time);
         FillOrbiters(time);
-        World.SetInstances(_wave, _waveData);
-        World.SetInstances(_orbiters, _orbiterData);
     }
 
     public override void Dispose()
@@ -91,10 +85,7 @@ internal sealed class InstancingScene : DemoScene
                 float distance = MathF.Sqrt(px * px + pz * pz);
                 float height = 3f + MathF.Sin(distance * 0.12f - time * 2f) * 2.5f + MathF.Sin(px * 0.09f + time) * 1.5f;
                 float hue = distance * 0.004f + time * 0.03f;
-                InstanceData data = default;
-                data.Transform = Compose(new Float3(px, height * 0.5f, pz), new Float3(1f, height, 1f));
-                data.Color = new Float4(Hsv(hue, 0.65f, 0.95f), 1);
-                _waveData[z * Side + x] = data;
+                Set(_wave, z * Side + x, Demo.Cube, _instanced, Compose(new Float3(px, height * 0.5f, pz), new Float3(1f, height, 1f)), new Float4(Hsv(hue, 0.65f, 0.95f), 1));
             }
         }
     }
@@ -110,12 +101,21 @@ internal sealed class InstancingScene : DemoScene
             {
                 float angle = i / (float)PerRing * MathF.PI * 2f + time * speed;
                 float bob = MathF.Sin(angle * 6f + time * 2f) * 1.2f;
-                InstanceData data = default;
-                data.Transform = Compose(new Float3(MathF.Cos(angle) * radius, height + bob, MathF.Sin(angle) * radius), new Float3(0.7f, 0.7f, 0.7f));
-                data.Color = new Float4(Hsv(ring / (float)Rings + angle * 0.02f, 0.8f, 1f), 1);
-                _orbiterData[ring * PerRing + i] = data;
+                Set(_orbiters, ring * PerRing + i, _orbiterMesh, _glossy, Compose(new Float3(MathF.Cos(angle) * radius, height + bob, MathF.Sin(angle) * radius), new Float3(0.7f, 0.7f, 0.7f)), new Float4(Hsv(ring / (float)Rings + angle * 0.02f, 0.8f, 1f), 1));
             }
         }
+    }
+
+    // Adds the renderable the first time, then moves and recolours it
+    private void Set(RenderableHandle[] handles, int index, GpuMesh mesh, Material material, in Float4x4 transform, Float4 color)
+    {
+        if (!handles[index].IsValid)
+        {
+            handles[index] = World.Add(new RenderableDesc { Mesh = mesh, Transform = (Double4x4)transform, Custom0 = color }, [material]);
+            return;
+        }
+        World.SetTransform(handles[index], (Double4x4)transform);
+        World.SetCustomData(handles[index], color, default);
     }
 
     private static Float4x4 Compose(Float3 position, Float3 scale)

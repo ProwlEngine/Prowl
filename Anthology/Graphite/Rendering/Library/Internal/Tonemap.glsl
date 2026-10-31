@@ -1,5 +1,6 @@
 // Tonemapper: the operator _TonemapOperator picks, clamped to 0 to 1, then sRGB encoded. An unknown operator only
 // clamps.
+#include "Graphite/Math.glsl"
 
 // The operators in TonemapOperator's order
 #define TONEMAP_ACES 0
@@ -66,7 +67,7 @@ vec3 AgX(vec3 color, bool punchy)
     if (punchy)
     {
         // The reference Punchy look, an ASC CDL power and saturation
-        float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        float luma = Graphite_Luminance(color);
         color = pow(max(color, vec3(0.0)), vec3(1.35));
         color = luma + 1.4 * (color - luma);
     }
@@ -78,7 +79,7 @@ vec3 AgX(vec3 color, bool punchy)
 vec3 Reinhard(vec3 color)
 {
     float white = 2.0;
-    float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    float luma = Graphite_Luminance(color);
     float mapped = luma * (1.0 + luma / (white * white)) / (1.0 + luma);
     return color * (mapped / max(luma, 1e-5));
 }

@@ -77,7 +77,7 @@ public readonly struct FeatureView
     {
         World = desc.World;
         Kind = desc.Kind;
-        ViewId = desc.ViewId;
+        RenderView = desc.Owner;
         LayerCount = desc.LayerCount;
         Width = width;
         Height = height;
@@ -100,7 +100,9 @@ public readonly struct FeatureView
 
     public RenderWorld World { get; }
     public ViewKind Kind { get; }
-    public int ViewId { get; }
+
+    /// <summary>The host's view, null on the renderer's own capture and shadow views.</summary>
+    public RenderView? RenderView { get; }
 
     /// <summary>1 for mono, 2 for stereo, 6 for a cube capture. Textures of layered views are arrays drawn through multiview.</summary>
     public int LayerCount { get; }
@@ -977,7 +979,8 @@ public sealed class FeatureContext
     /// <summary>
     /// Draws a fullscreen program over a texture the feature declared, Temporary or History, the colour it reads bound as
     /// Graphite_Source, with any properties given. Clear first clears it to transparent black, for programs that discard.
-    /// Shared draws once over a texture of one layer, for state a layered view's layers share.
+    /// Shared draws once over a texture of one layer, for state a layered view's layers share, with the program's layered
+    /// form on a layered view so the view sized textures it reads give their first layer.
     /// </summary>
     public void Fullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties = null, bool clear = false, bool shared = false)
         => DrawFullscreen(program, target, properties, shared ? 1 : View.LayerCount, clear);
@@ -1012,7 +1015,7 @@ public sealed class FeatureContext
         AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store);
         Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
         Command.SetFullViewport();
-        Command.SetShader(program.For(layers));
+        Command.SetShader(program.For(View.LayerCount));
         Command.SetVertexSource(VertexSource.None);
         BindLighting(program);
         _properties.SetBuffer(s_postViews, _pass.Camera.ViewBlocks.Buffer);
@@ -1475,15 +1478,15 @@ public struct DrawItem
 /// <summary>A view list's provider items, opaque ones drawn after the list's buckets, sorted ones among its transparents.</summary>
 internal sealed class ProvidedItems
 {
-    public readonly List<BucketSet.TransparentItem> Opaque = new();
-    public readonly List<BucketSet.TransparentItem> Sorted = new();
+    public readonly List<BucketSet.ItemDraw> Opaque = new();
+    public readonly List<BucketSet.ItemDraw> Sorted = new();
 }
 
 /// <summary>Where a provider adds its items for a view. Valid during Cull only. Render thread.</summary>
 public sealed class DrawItemSink
 {
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MeshPlacement, BucketSet.ChunkRef[]?[]> s_chunks = new();
-    private readonly List<BucketSet.TransparentItem> _pool = new();
+    private readonly List<BucketSet.ItemDraw> _pool = new();
     private readonly Dictionary<DrawList, ProvidedItems> _lists = new();
     private int _used;
     private CameraFrame _camera = null!;
@@ -1493,7 +1496,7 @@ public sealed class DrawItemSink
     private bool _shadowView;
 
     /// <summary>Indirect items whose instance count is copied from the provider's buffer into the view's commands.</summary>
-    internal readonly List<(BucketSet.TransparentItem Item, DrawList List, RenderResourceID Source, uint Offset)> Counts = new();
+    internal readonly List<(BucketSet.ItemDraw Item, DrawList List, RenderResourceID Source, uint Offset)> Counts = new();
 
     internal void Begin(CameraFrame camera, WorldFrame world, in CullFrustum frustum, uint cullingMask, bool shadowView = false)
     {
@@ -1542,9 +1545,19 @@ public sealed class DrawItemSink
     {
         ArgumentNullException.ThrowIfNull(mesh);
         ArgumentNullException.ThrowIfNull(material);
+        if (mesh.Placement is { } placement)
+            Emit(placement, subMesh, material, item, count, shared, source, offset);
+    }
+
+    /// <summary>One submesh of geometry placed in the pool without a mesh, for one object.</summary>
+    internal void AddPlaced(MeshPlacement placement, int subMesh, Material material, in DrawItem item) => Emit(placement, subMesh, material, item, 1, false, default, 0);
+
+    private void Emit(MeshPlacement placement, int subMesh, Material material, in DrawItem item, uint count, bool shared, RenderResourceID source, uint offset)
+    {
+        ArgumentNullException.ThrowIfNull(material);
         if ((item.LayerMask & _cullingMask) == 0 || (item.Flags & RenderableFlags.Hidden) != 0)
             return;
-        if (mesh.Placement is not { } placement || material.IsDisposed || material.Draw is not { } draw || material.Table == null)
+        if (material.IsDisposed || material.Draw is not { } draw || material.Table == null)
             return;
         if ((uint)subMesh >= (uint)placement.SubMeshes.Length)
             throw new ArgumentOutOfRangeException(nameof(subMesh), $"The mesh has {placement.SubMeshes.Length} submeshes.");
@@ -1577,7 +1590,7 @@ public sealed class DrawItemSink
         {
             if (!_world.Programs.Hold(draw.Sides?.Front ?? draw, pass, out ushort program))
                 return;
-            BucketSet.TransparentItem entry = Next();
+            BucketSet.ItemDraw entry = Next();
             entry.BackProgram = draw.Sides is { } sides && _world.Programs.Hold(sides.Back, pass, out ushort back) ? back : -1;
             entry.Provided = true;
             entry.Object = (int)objectIndex;
@@ -1639,11 +1652,11 @@ public sealed class DrawItemSink
 
     private static float Length(Float3 v) => MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
 
-    private BucketSet.TransparentItem Next()
+    private BucketSet.ItemDraw Next()
     {
         if (_used == _pool.Count)
         {
-            _pool.Add(new BucketSet.TransparentItem
+            _pool.Add(new BucketSet.ItemDraw
             {
                 Pass = 1,
                 Object = 0,
@@ -1656,7 +1669,7 @@ public sealed class DrawItemSink
                 Chunks = [],
             });
         }
-        BucketSet.TransparentItem item = _pool[_used++];
+        BucketSet.ItemDraw item = _pool[_used++];
         item.FirstCommand = -1;
         return item;
     }

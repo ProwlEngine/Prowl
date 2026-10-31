@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 
 using Prowl.Graphite.ShaderDef;
@@ -103,7 +104,7 @@ public sealed class ProgramCacheTests : IDisposable
     {
         Material material = _materials.Create(_shader);
         foreach ((string axis, string value) in keywords)
-            material.SetKeyword(axis, value);
+            material.Set(_shader.Axis(axis), value);
         _materials.Extract(new List<Material>());
         Assert.True(_programs.TryGet(material.Draw, PassType.Forward, out ushort id));
         return id;
@@ -222,34 +223,50 @@ public sealed class ProgramCacheTests : IDisposable
         ShaderPass compiled = ShaderParser.Parse(Source).Passes![0];
         PassVariants source = compiled.Variants(_compiler, _device.BackendType);
         ShaderDescription description = source.Require();
-        BakedVariants.Add(compiled.SourceName, compiled.Source, new BakedVariants.Pass
+        BakedVariants shipped = new();
+        shipped.Add(compiled.SourceName, compiled.Source, new BakedVariants.Pass
         {
             Axes = [.. source.Axes],
             Globals = [.. source.Globals],
             Variants = [new Variant(source.Combo(0), [(_device.BackendType, description)])],
         });
-        try
-        {
-            using System.IO.MemoryStream file = new();
-            BakedVariants.Write(file);
-            BakedVariants.Clear();
-            file.Position = 0;
-            BakedVariants.Read(file);
+        using System.IO.MemoryStream file = new();
+        shipped.Write(file);
+        file.Position = 0;
+        BakedVariants read = new();
+        read.Read(file);
+        Assert.Equal(1, read.Count);
 
-            ShaderPass player = ShaderParser.Parse(Source).Passes![0];
-            PassVariants baked = player.Variants(null, _device.BackendType);
-            Assert.Equal(VariantState.Ready, baked.Request(0, CompilePolicy.BakedOnly, out ShaderDescription loaded, out _));
-            Assert.Equal(VariantState.Failed, baked.Request(1, CompilePolicy.BakedOnly, out _, out _));
-            Assert.Equal(source.Globals, baked.Globals);
-            loaded.BlendState = BlendStateDescription.SingleOverrideBlend;
-            loaded.DepthStencilState = DepthStencilStateDescription.Disabled;
-            loaded.RasterizerState = RasterizerStateDescription.CullNone;
-            using GraphicsProgram program = _device.ResourceFactory.CreateGraphicsProgram(loaded);
-        }
-        finally
-        {
-            BakedVariants.Clear();
-        }
+        ShaderPass player = ShaderParser.Parse(Source).Passes![0];
+        PassVariants baked = player.Variants(read, _device.BackendType);
+        Assert.Equal(VariantState.Ready, baked.Request(0, CompilePolicy.BakedOnly, out ShaderDescription loaded, out _));
+        Assert.Equal(VariantState.Failed, baked.Request(1, CompilePolicy.BakedOnly, out _, out _));
+        Assert.Equal(VariantState.Failed, baked.Request(1, CompilePolicy.Sync, out _, out Exception? notBaked));
+        Assert.Contains("not baked", notBaked!.Message);
+        Assert.Equal(source.Globals, baked.Globals);
+        Assert.Equal(0, new BakedVariants().Count);
+        loaded.BlendState = BlendStateDescription.SingleOverrideBlend;
+        loaded.DepthStencilState = DepthStencilStateDescription.Disabled;
+        loaded.RasterizerState = RasterizerStateDescription.CullNone;
+        using GraphicsProgram program = _device.ResourceFactory.CreateGraphicsProgram(loaded);
+    }
+
+    [Fact]
+    public void BakedVariants_Capture_CompilesThroughTheirCompiler()
+    {
+        ShaderPass pass = ShaderParser.Parse(Source).Passes![0];
+        BakedVariants baker = new(_glsl);
+        Keyword[] combo = [.. _glsl.GetAxes(pass).Select(axis => new Keyword(axis.Name, axis.Values[^1]))];
+        baker.Capture(pass, _device.BackendType, [combo]);
+
+        BakedVariants.Pass baked = baker.Find(pass)!;
+        Assert.Equal(_glsl.GetAxes(pass).Select(axis => axis.Name), baked.Axes.Select(axis => axis.Name));
+        Assert.True(Assert.Single(baked.Variants).IsCompiledFor(_device.BackendType));
+
+        PassVariants player = ShaderParser.Parse(Source).Passes![0].Variants(new BakedVariants(), _device.BackendType);
+        Assert.Equal(0, player.CompiledCount);
+        PassVariants shipped = ShaderParser.Parse(Source).Passes![0].Variants(baker, _device.BackendType);
+        Assert.Equal(1, shipped.CompiledCount);
     }
 
     [Fact]

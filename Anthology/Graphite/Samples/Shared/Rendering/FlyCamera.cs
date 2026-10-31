@@ -34,18 +34,6 @@ public sealed class FlyCamera
         Position += new Double3(delta.X, delta.Y, delta.Z);
     }
 
-    public ViewLayer Layer(float aspect)
-    {
-        Float3 f = Forward;
-        Float3 r = Right;
-        Float3 u = Float3.Cross(f, r);
-        float focal = 1f / MathF.Tan(FieldOfView * 0.5f);
-
-        return new ViewLayer
-        {
-            View = new Float4x4(new Float4(r.X, u.X, f.X, 0), new Float4(r.Y, u.Y, f.Y, 0), new Float4(r.Z, u.Z, f.Z, 0), new Float4(0, 0, 0, 1)),
-            Projection = new Float4x4(new Float4(focal / aspect, 0, 0, 0), new Float4(0, -focal, 0, 0), new Float4(0, 0, 0, 1), new Float4(0, 0, Near, 0)),
-            Position = Position,
-        };
-    }
+    /// <summary>The camera as views draw it, fitting the aspect of their viewport.</summary>
+    public ViewCamera Camera => ViewCamera.Perspective(Position, Forward, Float3.UnitY, FieldOfView, Near);
 }

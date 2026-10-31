@@ -14,7 +14,7 @@ float PBR_FuzzAlbedo(float NdotV, float r)
     float m = r * (-0.193854 + r * (-1.14885 + r * (1.7932 - 0.95943 * r * r))) / (0.046391 + r);
     float o = r * (0.000654023 + (-0.0207818 + 0.119681 * r) * r) / (1.26264 + r * (-1.92021 + r));
     float x = (NdotV - m) / s;
-    return clamp(exp(-0.5 * x * x) / (s * sqrt(2.0 * PI)) + o, 0.0, 1.0);
+    return clamp(exp(-0.5 * x * x) / (s * sqrt(2.0 * GRAPHITE_PI)) + o, 0.0, 1.0);
 }
 
 // The inverse LTC matrix's a and b, rational fits
@@ -39,5 +39,5 @@ float PBR_FuzzLobe(vec3 L, vec3 N, vec3 X, vec2 ltc)
     vec3 w = vec3(dot(L, X), dot(L, cross(N, X)), dot(L, N));
     vec3 wo = vec3(ltc.x * w.x + ltc.y * w.z, ltc.x * w.y, w.z);
     float k = ltc.x / dot(wo, wo);
-    return max(w.z, 0.0) / PI * k * k;
+    return max(w.z, 0.0) / GRAPHITE_PI * k * k;
 }

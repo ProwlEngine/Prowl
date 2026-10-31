@@ -20,7 +20,7 @@ Shader "PBRRenderer/Demo"
                 p.baseColor *= Graphite_Object().custom0.rgb;
             if (_Grid > 0.0)
             {
-                vec2 g2 = Graphite_RelativeToWorld(i.RelativePos).xz / _Grid;
+                vec2 g2 = Graphite_RelativeToWorld(i.relativePos).xz / _Grid;
                 vec2 g = abs(fract(g2 - 0.5) - 0.5) / max(fwidth(g2), vec2(1e-4));
                 p.baseColor *= mix(1.0, 0.5, 1.0 - min(min(g.x, g.y), 1.0));
             }

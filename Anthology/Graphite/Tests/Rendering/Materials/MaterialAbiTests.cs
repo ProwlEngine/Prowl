@@ -129,7 +129,7 @@ public sealed class MaterialAbiTests : IDisposable
     {
         ShaderDefinition definition = ShaderParser.Parse(source);
         shader = new Shader(definition, _compiler);
-        ShaderPass pass = definition.Passes![0];
+        ShaderPass pass = shader.Definition.Passes![0];
         ShaderDescription compiled = _compiler.Compile(pass, [], _device.BackendType);
         compiled.Specializations = MaterialLayout.GlobalOffsets(_compiler.GetGlobals(pass), _registry);
         compiled.ResourceLayouts = MaterialLayout.Layouts(shader.Name, compiled.ResourceLayouts, s_frameTable, s_viewTable);

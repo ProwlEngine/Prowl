@@ -1,8 +1,8 @@
 #pragma variant BLOOM COMPOSITE PREFILTER DOWNSAMPLE UPSAMPLE
 // Dual filter bloom: a soft knee threshold into half resolution, a chain of 4x4 downsamples, upsamples that mix
 // each level with the blurred one below by scatter, then the composite adding it to the colour.
+#include "Graphite/Math.glsl"
 
-float Luminance(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
 #if defined(BLOOM_PREFILTER)
 uniform float _Threshold;
@@ -30,7 +30,7 @@ void main()
     for (int i = 0; i < 4; i++)
     {
         vec3 s = Prefilter(Graphite_SampleSource(vUV + offsets[i] * texel).rgb);
-        float w = _AntiFlicker > 0.5 ? 1.0 / (1.0 + Luminance(s)) : 1.0;
+        float w = _AntiFlicker > 0.5 ? 1.0 / (1.0 + Graphite_Luminance(s)) : 1.0;
         sum += s * w;
         weightSum += w;
     }

@@ -120,8 +120,7 @@ inspectors built on it read.
 | `NoScaleOffset`        | textures           | No per texture scale and offset shown                                  |
 | `Normal`               | textures           | Expects a tangent space normal map                                     |
 | `HDR`                  | `Color`            | The colour may exceed 1                                                |
-| `Map`                  | `Texture2D`        | A packed map: 16 bytes holding the texture, sampler, channel, UV set and a half scale offset, read as `X`, `X_ST`, `X_Channel`, `X_UV` and `X_Present` |
-| `MapMask`              | `Integer`          | Filled with a bit per `Map` texture, in declaration order, set while it holds a texture |
+| `Map`                  | `Texture2D`        | A packed map: 28 bytes holding the texture, sampler, channel, UV set, scale offset and rotation, read as `X`, `X_ST`, `X_Rotation`, `X_Channel`, `X_UV` and `X_Present`. The record gets a mask word after the properties for `X_Present` |
 
 A material that sets an axis explicitly overrides what its properties drive.
 
@@ -147,7 +146,7 @@ Alpha and Premultiplied as One, InverseSourceAlpha, Additive as One, One.
 The coat, fuzz, thin film and anisotropy are material toggles of the Forward and Debug passes, `PBR_COAT`, `PBR_FUZZ`,
 `PBR_THIN_FILM` and `PBR_ANISOTROPY`, each on while `coat_weight`, `fuzz_weight`, `thin_film_weight` or either roughness
 anisotropy is not zero, so surfaces without them pay nothing. A Surface function that raises one of those from zero
-needs its material to enable the toggle with `Material.EnableKeyword`. The global `PBR_TIER` LITE drops the thin film
+needs its material to turn the toggle on with `Material.Set(axis, true)`. The global `PBR_TIER` LITE drops the thin film
 and anisotropy and lights the coat and fuzz from probes and ambient light only.
 
 `PBR_TRANSMISSION` follows `transmission_weight` (`[Transmissive]`). It is declared by the Debug pass, and the
@@ -156,19 +155,19 @@ far side the BackDepth pass draws, and is tagged `"ReadsWhen" = "PBR_TIER FULL"`
 refract the probes instead. See `Graphite/PBR/Transmission.glsl`.
 
 The optional GLSLPROGRAM block holds fragment code defining the model's Surface function, which may change the inputs
-before the surface is lit. Its second argument is read only: `UV`, `UV1`, `VertexColor`, `RelativePos`, `ViewDir` and
-`GeometryNormal`, `Tangent` and `Bitangent`.
+before the surface is lit. Its second argument is read only: `uv`, `uv1`, `vertexColor`, `relativePos`, `viewDir` and
+`geometryNormal`, `tangent` and `bitangent`.
 
 - PBR: `void Surface(inout PBR_Params p, Graphite_SurfaceData i)`. `PBR_Params` holds every spec parameter in camel
   case, `baseColor` for `base_color`, with `geometryNormal` in world space and `occlusion` for `ambient_occlusion`.
-- Unlit: `void Surface(inout Unlit_Params p, Graphite_SurfaceData i)` over `BaseColor` and `Alpha`.
+- Unlit: `void Surface(inout Unlit_Params p, Graphite_SurfaceData i)` over `baseColor` and `alpha`.
 
 The depth passes run it only for cutout surfaces, with the UVs, vertex colour and relative position filled in, so a
-cutout driven by any of them cuts shadows and depth the same. Their `ViewDir` points toward the depth pass's own camera,
+cutout driven by any of them cuts shadows and depth the same. Their `viewDir` points toward the depth pass's own camera,
 a light's for shadows, and their normals keep defaults.
 
 Positions in Graphite shaders are relative: world space moved so the camera sits at the origin, which keeps the
-precision of objects far from it. World means true world space. `Graphite_RelativeToWorld(i.RelativePos)` gives the
+precision of objects far from it. World means true world space. `Graphite_RelativeToWorld(i.relativePos)` gives the
 world position, for effects fixed to the world such as a dissolve. Directions and normals are world space, as moving the
 origin changes none of them.
 
@@ -185,7 +184,7 @@ Shader "MyGame/Rim"
         _RimPower("Rim Power", Float) = 3.0
     }
 
-    Surface "PBR"
+    Surface "Lit"
     {
         GLSLPROGRAM
         uniform vec4 _RimColor;
@@ -193,7 +192,7 @@ Shader "MyGame/Rim"
 
         void Surface(inout PBR_Params p, Graphite_SurfaceData i)
         {
-            float rim = 1.0 - max(dot(p.geometryNormal, i.ViewDir), 0.0);
+            float rim = 1.0 - max(dot(p.geometryNormal, i.viewDir), 0.0);
             p.emissionColor = _RimColor.rgb;
             p.emissionLuminance = 500.0 * pow(rim, _RimPower);
         }
@@ -203,13 +202,13 @@ Shader "MyGame/Rim"
 ```
 
 An optional `Vertex` block moves vertices for wind, waves and wobble. It defines
-`void SurfaceVertex(inout Graphite_SurfaceVertex v)` over the object space `Position`, `Normal`, `Tangent` (w the
-handedness), `Color`, `UV` and `UV1`, run before the vertex is transformed in every pass, so shadows and depth match.
-Animate with `v.Time` rather than the view's time: the forward pass runs the function again at last frame's time to find
+`void SurfaceVertex(inout Graphite_SurfaceVertex v)` over the object space `position`, `normal`, `tangent` (w the
+handedness), `color`, `uv` and `uv1`, run before the vertex is transformed in every pass, so shadows and depth match.
+Animate with `v.time` rather than the view's time: the forward pass runs the function again at last frame's time to find
 where the vertex was, which keeps motion vectors, TAA and motion blur right.
 
 ```
-Surface "PBR"
+Surface "Lit"
 {
     Vertex
     {
@@ -218,7 +217,7 @@ Surface "PBR"
 
         void SurfaceVertex(inout Graphite_SurfaceVertex v)
         {
-            v.Position += v.Normal * sin(v.Position.x * 2.0 + v.Time) * _WaveHeight;
+            v.position += v.normal * sin(v.position.x * 2.0 + v.time) * _WaveHeight;
         }
         ENDGLSL
     }
@@ -239,12 +238,12 @@ either function below or both, over the closure Graphite/PBR/Closure.glsl prepar
   `c.diffuseAlbedo * i.irradiance + c.specularAlbedo * i.specular`, and a toon surface can band or tint its shadow
   side here.
 
-Only the lit passes take it, Forward and Debug for `Surface "PBR"`, so decals and every surface type keep working.
+Only the lit passes take it, Forward and Debug for `Surface "Lit"`, so decals and every surface type keep working.
 `Surface "Unlit"` has no lights and refuses one. Its uniforms may repeat the surface code's, as every material uniform
 is a property.
 
 ```
-Surface "PBR"
+Surface "Lit"
 {
     Lighting
     {
@@ -260,7 +259,7 @@ Surface "PBR"
 ```
 
 A surface model marks where this goes with a `#pragma surface_lighting` line in a pass's Shared section, before
-Graphite/Standard/Standard.glsl is included.
+its model file, such as Graphite/Standard/PBRSurface.glsl, is included.
 
 Further `Pass` blocks may follow, such as a pass of a type a render feature draws.
 

@@ -4,7 +4,7 @@
 // counter clockwise in radians after its map, as KHR_materials_anisotropy's anisotropyRotation. See Graphite/PBR/Closure.glsl.
 // The coat, fuzz, thin film, subsurface and anisotropy are material axes on the forward and debug passes, each on while
 // its weight (either anisotropy for PBR_ANISOTROPY) is not zero. A Surface function raising one from zero needs its
-// material to enable the axis with Material.EnableKeyword. PBR_THIN_WALLED follows geometry_thin_walled, and while it is
+// material to turn the axis on with Material.Set(axis, true). PBR_THIN_WALLED follows geometry_thin_walled, and while it is
 // on the material draws both sides whatever its SurfaceCull, back faces shaded with the normal flipped.
 // PBR_TRANSMISSION follows transmission_weight. While it is on the material draws as transparent whatever its surface,
 // through the Transmission pass in place of Forward, which reads the opaque colour and depth behind it and, for volumes,
@@ -93,7 +93,6 @@ Shader "Graphite/Lit"
         geometry_normal_map("Geometry Normal Map", Texture2D) = "normal" {} [Map] [Normal]
         geometry_coat_normal_map("Geometry Coat Normal Map", Texture2D) = "normal" {} [Map] [Normal]
         geometry_tangent_map("Geometry Tangent Map", Texture2D) = "normal" {} [Map]
-        map_mask("Map Mask", Integer) = 0 [MapMask] [HideInInspector]
     }
 
     Pass
@@ -112,7 +111,7 @@ Shader "Graphite/Lit"
             #pragma variant PBR_SUBSURFACE
             #pragma variant PBR_THIN_WALLED
             #pragma surface_lighting
-            #include "Graphite/Standard/Standard.glsl"
+            #include "Graphite/Standard/PBRSurface.glsl"
         }
         Vertex
         {
@@ -146,7 +145,7 @@ Shader "Graphite/Lit"
             #pragma variant PBR_SUBSURFACE
             #pragma variant PBR_THIN_WALLED
             #pragma surface_lighting
-            #include "Graphite/Standard/Standard.glsl"
+            #include "Graphite/Standard/PBRSurface.glsl"
         }
         Vertex
         {
@@ -172,7 +171,7 @@ Shader "Graphite/Lit"
         {
             #define GRAPHITE_STANDARD_DEPTH
             #define GRAPHITE_STANDARD_BACK_DEPTH
-            #include "Graphite/Standard/Standard.glsl"
+            #include "Graphite/Standard/PBRSurface.glsl"
         }
         Vertex
         {
@@ -197,7 +196,7 @@ Shader "Graphite/Lit"
         Shared
         {
             #define GRAPHITE_STANDARD_DEPTH
-            #include "Graphite/Standard/Standard.glsl"
+            #include "Graphite/Standard/PBRSurface.glsl"
         }
         Vertex
         {
@@ -226,7 +225,7 @@ Shader "Graphite/Lit"
             #pragma variant PBR_SUBSURFACE
             #pragma variant PBR_THIN_WALLED
             #pragma variant PBR_TRANSMISSION
-            #include "Graphite/Standard/Standard.glsl"
+            #include "Graphite/Standard/PBRSurface.glsl"
         }
         Vertex
         {
@@ -262,7 +261,7 @@ Shader "Graphite/Lit"
             #pragma variant PBR_TRANSMISSION
             #pragma variant global GRAPHITE_DEBUG UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY DIFFUSE SPECULAR SPECULAR_ALBEDO THROUGHPUT DIRECT INDIRECT FURNACE COAT FUZZ THIN_FILM DARKENING SUBSURFACE BACK TRANSMISSION THICKNESS
             #pragma surface_lighting
-            #include "Graphite/Standard/Standard.glsl"
+            #include "Graphite/Standard/PBRSurface.glsl"
         }
         Vertex
         {

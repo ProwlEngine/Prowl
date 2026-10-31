@@ -3,12 +3,12 @@
 Compute
 {
     layout(local_size_x = 64) in;
+    #include "Graphite/Math.glsl"
 
     uniform samplerCube Graphite_Source;
     layout(std430) buffer Graphite_SkyAmbient { vec4 packed[7]; } result;
     layout(push_constant) uniform Push { float lod; uint size; } push;
 
-    const float PI = 3.14159265359;
     const float K0 = 0.2820947918;
     const float K1 = 0.4886025119;
     const float K2a = 1.0925484306;
@@ -78,7 +78,7 @@ Compute
             return;
 
         // The discrete weights cover the whole sphere, 4 pi steradians
-        float scale = 4.0 * PI / partialWeight[0];
+        float scale = 4.0 * GRAPHITE_PI / partialWeight[0];
         vec3 r[9];
         for (int i = 0; i < 9; i++)
             r[i] = partial[0][i] * scale;

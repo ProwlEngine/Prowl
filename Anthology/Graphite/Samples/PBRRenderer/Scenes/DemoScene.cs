@@ -19,11 +19,17 @@ internal abstract class DemoScene : IDisposable
         Demo = demo;
         World = demo.Renderer.CreateWorld();
         World.Name = Name;
+        View = demo.Renderer.CreateView(World, "Main camera");
+        View.ClearColor = new Float4(0.01f, 0.012f, 0.02f, 1);
+        View.Features = demo.Post;
     }
 
     protected Demo Demo { get; }
 
     public RenderWorld World { get; }
+
+    /// <summary>The camera into the world, keeping its history while other scenes show.</summary>
+    public RenderView View { get; }
 
     public abstract string Name { get; }
 
@@ -77,6 +83,7 @@ internal abstract class DemoScene : IDisposable
 
     public virtual void Dispose()
     {
+        View.Dispose();
         World.Dispose();
         foreach (Material material in _materials)
             material.Dispose();

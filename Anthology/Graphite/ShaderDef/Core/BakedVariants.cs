@@ -9,10 +9,11 @@ namespace Prowl.Graphite.ShaderDef;
 
 
 /// <summary>
-/// Compiled variants shipped with a build, for players without a compiler. A pass is found by its source name and a hash
-/// of its source and material ABI, so a pass made anywhere from the same source gets them, and an edited one gets none.
+/// Compiled variants shipped with a build, given wherever a compiler goes: passes take its variants in as compiled, and
+/// compile the rest through the compiler it wraps, failing without one. A pass is found by its source name and a hash of
+/// its source and material ABI, so a pass made anywhere from the same source gets them, and an edited one gets none.
 /// </summary>
-public static class BakedVariants
+public sealed class BakedVariants : IShaderCompiler
 {
     public sealed class Pass
     {
@@ -21,24 +22,50 @@ public static class BakedVariants
         public List<Variant> Variants = new();
 
         /// <summary>Compute variants by backend and variant key.</summary>
-        public Dictionary<(GraphicsBackend Backend, int Key), ComputeDescription> Compute = new();
+        public Dictionary<(GraphicsBackend Backend, VariantKey Key), ComputeDescription> Compute = new();
     }
 
     private const uint Magic = 0x56424750; // PGBV
     private const int Version = 2;
 
-    private static readonly ConcurrentDictionary<(string Name, ulong Hash), Pass> s_passes = new();
+    private readonly ConcurrentDictionary<(string Name, ulong Hash), Pass> _passes = new();
 
-    public static int Count => s_passes.Count;
+    /// <summary>A store compiling the variants it lacks with the compiler, or failing them without one.</summary>
+    public BakedVariants(IShaderCompiler? compiler = null) => Compiler = compiler;
 
-    public static void Add(string sourceName, string source, Pass pass) => s_passes[(sourceName, Hash(source))] = pass;
+    /// <summary>What compiles the variants the store lacks, null in players that ship only baked ones.</summary>
+    public IShaderCompiler? Compiler { get; }
 
-    public static Pass? Find(ShaderPass pass) => s_passes.TryGetValue((pass.SourceName, Hash(pass.Fingerprint)), out Pass? baked) ? baked : null;
+    /// <summary>Baked passes held.</summary>
+    public int Count => _passes.Count;
 
-    public static void Clear() => s_passes.Clear();
+    /// <summary>Holds a pass's variants under its source name and source, which is <see cref="ShaderPass.Fingerprint"/>.</summary>
+    public void Add(string sourceName, string source, Pass pass) => _passes[(sourceName, Hash(source))] = pass;
+
+    public Pass? Find(ShaderPass pass) => _passes.TryGetValue((pass.SourceName, Hash(pass.Fingerprint)), out Pass? baked) ? baked : null;
+
+    int IShaderCompiler.SessionVersion => Compiler?.SessionVersion ?? 0;
+
+    public IReadOnlyList<VariantSpace> GetAxes(ShaderPass pass) => Find(pass)?.Axes ?? Compiler?.GetAxes(pass) ?? [];
+
+    public IReadOnlyList<ShaderGlobal> GetGlobals(ShaderPass pass) => Find(pass)?.Globals ?? Compiler?.GetGlobals(pass) ?? [];
+
+    public ShaderDescription Compile(ShaderPass pass, Keyword[] combo, GraphicsBackend backend)
+        => Compiler?.Compile(pass, combo, backend) ?? throw NotBaked(pass, combo, backend);
+
+    public ComputeDescription CompileCompute(ShaderPass pass, Keyword[] combo, GraphicsBackend backend)
+        => Compiler?.CompileCompute(pass, combo, backend) ?? throw NotBaked(pass, combo, backend);
+
+    private static InvalidOperationException NotBaked(ShaderPass pass, Keyword[] combo, GraphicsBackend backend)
+    {
+        string[] keywords = new string[combo.Length];
+        for (int i = 0; i < combo.Length; i++)
+            keywords[i] = $"{combo[i].Name}={combo[i].Value}";
+        return new InvalidOperationException($"The variant [{string.Join(", ", keywords)}] of pass '{pass.SourceName}' is not baked for backend {backend} and there is no compiler.");
+    }
 
     /// <summary>FNV-1a over the source's characters, the same in every run.</summary>
-    public static ulong Hash(string source)
+    private static ulong Hash(string source)
     {
         ulong hash = 14695981039346656037ul;
         foreach (char c in source)
@@ -48,25 +75,22 @@ public static class BakedVariants
         return hash;
     }
 
-    /// <summary>Takes in the compiled variants of a pass at the given keys.</summary>
-    public static void Capture(PassVariants variants, IEnumerable<int> keys)
+    /// <summary>Compiles the variants of a pass with the given keywords through <see cref="Compiler"/> and holds them, in place of any it held for the pass.</summary>
+    public void Capture(ShaderPass pass, GraphicsBackend backend, IEnumerable<Keyword[]> combos)
     {
-        Pass baked = new() { Axes = [.. variants.Axes], Globals = [.. variants.Globals] };
-        foreach (int key in keys)
-        {
-            if (variants.Compiled(key) is { } variant)
-                baked.Variants.Add(variant);
-        }
-        if (baked.Variants.Count > 0)
-            Add(variants.Pass.SourceName, variants.Pass.Fingerprint, baked);
+        IShaderCompiler compiler = Compiler ?? throw new InvalidOperationException("Capturing variants needs a compiler.");
+        Pass baked = new() { Axes = [.. compiler.GetAxes(pass)], Globals = [.. compiler.GetGlobals(pass)] };
+        foreach (Keyword[] combo in combos)
+            baked.Variants.Add(new Variant(combo, [(backend, compiler.Compile(pass, combo, backend))]));
+        Add(pass.SourceName, pass.Fingerprint, baked);
     }
 
-    public static void Write(Stream stream)
+    public void Write(Stream stream)
     {
         using BinaryWriter writer = new(stream, Encoding.UTF8, leaveOpen: true);
         writer.Write(Magic);
         writer.Write(Version);
-        KeyValuePair<(string Name, ulong Hash), Pass>[] passes = s_passes.ToArray();
+        KeyValuePair<(string Name, ulong Hash), Pass>[] passes = _passes.ToArray();
         writer.Write(passes.Length);
         foreach (((string name, ulong hash), Pass pass) in passes)
         {
@@ -105,10 +129,10 @@ public static class BakedVariants
                 }
             }
             writer.Write(pass.Compute.Count);
-            foreach (((GraphicsBackend backend, int key), ComputeDescription compute) in pass.Compute)
+            foreach (((GraphicsBackend backend, VariantKey key), ComputeDescription compute) in pass.Compute)
             {
                 writer.Write((int)backend);
-                writer.Write(key);
+                writer.Write(key.Index);
                 WriteStage(writer, compute.Stage);
                 WriteLayouts(writer, compute.ResourceLayouts);
                 writer.Write(compute.ThreadGroupSizeX);
@@ -120,7 +144,8 @@ public static class BakedVariants
         }
     }
 
-    public static void Read(Stream stream)
+    /// <summary>Takes in the passes a stream written by <see cref="Write"/> holds.</summary>
+    public void Read(Stream stream)
     {
         using BinaryReader reader = new(stream, Encoding.UTF8, leaveOpen: true);
         if (reader.ReadUInt32() != Magic)
@@ -166,7 +191,7 @@ public static class BakedVariants
             for (int c = 0; c < computes; c++)
             {
                 GraphicsBackend backend = (GraphicsBackend)reader.ReadInt32();
-                int key = reader.ReadInt32();
+                VariantKey key = new(reader.ReadInt32());
                 ShaderStageDescription stage = ReadStage(reader);
                 ResourceLayoutDescription[] layouts = ReadLayouts(reader);
                 ComputeDescription compute = new(stage, layouts, reader.ReadUInt32(), reader.ReadUInt32(), reader.ReadUInt32())
@@ -175,7 +200,7 @@ public static class BakedVariants
                 };
                 pass.Compute[(backend, key)] = compute;
             }
-            s_passes[(name, hash)] = pass;
+            _passes[(name, hash)] = pass;
         }
     }
 

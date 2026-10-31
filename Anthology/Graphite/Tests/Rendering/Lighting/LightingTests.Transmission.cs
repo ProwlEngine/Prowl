@@ -124,7 +124,7 @@ public sealed partial class LightingTests
                     Assert.True(MathF.Abs(pixels[p][c] - 1) <= 2e-3f, $"{tier} volume {i} pixel {p} channel {c}: {pixels[p][c]}");
             }
             if (tier == "FULL")
-                Assert.True(_renderer.LastFrameStats.View(1)!.BackDepthUsed);
+                Assert.True(_renderer.LastFrameStats.View(_harness.ViewOf(1))!.BackDepthUsed);
         }
     }
 
@@ -150,7 +150,7 @@ public sealed partial class LightingTests
         DarkWorld();
         Vector3 backdrop = new(0.2f, 0.4f, 0.8f);
         Material flat = _renderer.CreateMaterial(_renderer.Standard.Unlit);
-        flat.SetColor("_MainColor", new Float4(backdrop.X, backdrop.Y, backdrop.Z, 1));
+        flat.SetColor("base_color", new Float4(backdrop.X, backdrop.Y, backdrop.Z, 1));
         AddBackdrop(flat);
 
         Vector3 color = new(0.9f, 0.6f, 0.3f);
@@ -204,7 +204,7 @@ public sealed partial class LightingTests
         DarkWorld();
         Vector3 backdrop = new(0.2f, 0.4f, 0.8f);
         Material flat = _renderer.CreateMaterial(_renderer.Standard.Unlit);
-        flat.SetColor("_MainColor", new Float4(backdrop.X, backdrop.Y, backdrop.Z, 1));
+        flat.SetColor("base_color", new Float4(backdrop.X, backdrop.Y, backdrop.Z, 1));
         AddBackdrop(flat);
 
         Vector3 color = new(0.9f, 0.6f, 0.3f);
@@ -281,8 +281,8 @@ public sealed partial class LightingTests
     public void ScreenCopies_RunOnlyForViewsDrawingTransmission()
     {
         DarkWorld();
-        CameraFrame Camera() => _renderer.Frame.Camera(1)!;
-        ViewStats Drawn() => _renderer.LastFrameStats.View(1)!;
+        CameraFrame Camera() => _renderer.Frame.Camera(_harness.ViewOf(1))!;
+        ViewStats Drawn() => _renderer.LastFrameStats.View(_harness.ViewOf(1))!;
         Material material = Glass(m => m.Surface = new SurfaceSettings(SurfaceType.Transparent));
         AddSlab(1, material);
         Frame();
@@ -360,15 +360,17 @@ public sealed partial class LightingTests
         }
     }
 
-    private Float4[] FrameOf(ViewDesc view) => _harness.Frame(view);
+    private Float4[] FrameOf(RenderView view) => _harness.Frame(view);
 
-    private ViewDesc ViewWith(int id, params RenderFeature[] features)
+    private RenderView ViewWith(int id, params RenderFeature[] features)
     {
         ExtensionSet<RenderFeature> set = new();
         foreach (RenderFeature feature in features)
             set.Add(feature);
-        ViewDesc view = new() { World = _world, EV100 = _ev100, ViewId = id, Target = _framebuffer, Features = set };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin };
+        RenderView view = _harness.BareView(id);
+        view.EV100 = _ev100;
+        view.Features = set;
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
         return view;
     }
 
@@ -378,8 +380,8 @@ public sealed partial class LightingTests
     {
         DarkWorld();
         AddBackdrop(_renderer.CreateMaterial(_renderer.Standard.Unlit));
-        int Targets(int id) => ViewGraph.SceneTargetCount(_renderer.Frame.Camera(id)!.ShapeKey.Targets);
-        ViewDesc taa = ViewWith(7, new TemporalAntiAliasing(_renderer));
+        int Targets(int id) => ViewGraph.SceneTargetCount(_renderer.Frame.Camera(_harness.ViewOf(id))!.ShapeKey.Targets);
+        RenderView taa = ViewWith(7, new TemporalAntiAliasing(_renderer));
         FrameOf(taa);
         Assert.Equal(2, Targets(7));
 
@@ -515,7 +517,7 @@ public sealed partial class LightingTests
         {
             if (withPane && pane == null)
                 pane = _world.Add(new RenderableDesc { Mesh = FacingQuad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)) * Double4x4.CreateScale(0.75) }, [glass]);
-            ViewDesc view = ViewWith(id, new TemporalAntiAliasing(_renderer) { ReactiveBlendFactor = reactiveBlend });
+            RenderView view = ViewWith(id, new TemporalAntiAliasing(_renderer) { ReactiveBlendFactor = reactiveBlend });
             Float4[] taa = [];
             for (int frame = 0; frame <= 12; frame++)
             {

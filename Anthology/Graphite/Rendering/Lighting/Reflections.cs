@@ -548,7 +548,7 @@ internal sealed class WorldReflections : IDisposable
         }
 
         EnvironmentDesc environment = lighting.Environment;
-        _captureExposure = ViewDesc.ExposureOf(environment.CaptureEV100);
+        _captureExposure = RenderView.ExposureOf(environment.CaptureEV100);
         uint skyResolution = Pow2(environment.SkyProbeResolution, "sky probe");
         if (Sky == null || Sky.Resolution != skyResolution)
         {

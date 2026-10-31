@@ -145,7 +145,7 @@ public sealed class BucketTests : IDisposable
         Add(_triangle, mapped, At(1));
         Assert.Single(Frame(Forward).Calls);
 
-        mapped.EnableKeyword("_NORMALMAP");
+        mapped.Set(mapped.Shader.Axis("_NORMALMAP"), true);
         DrawList list = Frame(Forward);
         Assert.Equal(2, list.Calls.Count);
         Assert.Equal(2, list.CommandCount);
@@ -360,7 +360,7 @@ public sealed class BucketTests : IDisposable
             reading += _lit.PassHasAxis(p, "_NORMALMAP") && p != _lit.PassIndex(PassType.Debug) ? 1 : 0;
         for (int i = 0; i < 4; i++)
         {
-            material.SetKeyword("_NORMALMAP", i % 2 == 0 ? "true" : "false");
+            material.Set(material.Shader.Axis("_NORMALMAP"), i % 2 == 0);
             _programs.Sweep();
             Frame(Forward);
         }

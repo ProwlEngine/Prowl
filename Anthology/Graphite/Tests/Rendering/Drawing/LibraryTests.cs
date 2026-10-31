@@ -141,7 +141,7 @@ public sealed class LibraryTests : IDisposable
 
         ResourceLayoutDescription frameLayout = GraphiteBindings.FrameTable(16, 4);
         ResourceLayoutDescription viewLayout = GraphiteBindings.ViewTable(4);
-        ShaderPass pass = definition.Passes![programs[call.Program].PassIndex];
+        ShaderPass pass = shader.Definition.Passes![programs[call.Program].PassIndex];
         ShaderDescription description = _compiler.Compile(pass, [], _device.BackendType);
         description.Specializations = MaterialLayout.GlobalOffsets(_compiler.GetGlobals(pass), globals);
         description.ResourceLayouts = MaterialLayout.Layouts(shader.Name, description.ResourceLayouts, frameLayout, viewLayout);

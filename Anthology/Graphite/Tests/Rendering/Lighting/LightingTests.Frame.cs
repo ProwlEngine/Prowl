@@ -80,7 +80,7 @@ public sealed partial class LightingTests
                                 total += Terms(c);
                         }
                         Graphite_LightIterator it = Graphite_BeginLights(vWorld);
-                        LightSample L;
+                        Graphite_LightSample L;
                         while (Graphite_NextLight(it, L))
                         {
                             if (Graphite_ContributeLocal(L, f, false, c))

@@ -95,12 +95,12 @@ public sealed partial class LightingTests
                 GLSLPROGRAM
                 void Surface(inout PBR_Params p, Graphite_SurfaceData i)
                 {
-                    vec3 w = i.RelativePos * 0.7;
+                    vec3 w = i.relativePos * 0.7;
                     vec2 tilt = vec2(sin(w.x), cos(w.y)) * 0.25;
-                    p.geometryNormal = normalize(i.GeometryNormal + i.Tangent * tilt.x + i.Bitangent * tilt.y);
-                    p.geometryCoatNormal = normalize(i.GeometryNormal - i.Tangent * tilt.y + i.Bitangent * tilt.x);
-                    p.geometryTangent = i.Tangent * cos(w.y) + i.Bitangent * sin(w.y);
-                    p.geometryCoatTangent = i.Tangent * sin(w.x) + i.Bitangent * cos(w.x);
+                    p.geometryNormal = normalize(i.geometryNormal + i.tangent * tilt.x + i.bitangent * tilt.y);
+                    p.geometryCoatNormal = normalize(i.geometryNormal - i.tangent * tilt.y + i.bitangent * tilt.x);
+                    p.geometryTangent = i.tangent * cos(w.y) + i.bitangent * sin(w.y);
+                    p.geometryCoatTangent = i.tangent * sin(w.x) + i.bitangent * cos(w.x);
                 }
                 ENDGLSL
             }

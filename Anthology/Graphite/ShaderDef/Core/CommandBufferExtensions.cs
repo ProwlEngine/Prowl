@@ -13,21 +13,14 @@ public static class CommandBufferExtensions
     /// Binds the pass variant for keywords over library-default base states, without mutating the pass. Compiles on demand if a compiler is attached.
     /// </summary>
     public static void SetShader(this CommandBuffer commandBuffer, ShaderPass pass, ReadOnlySpan<Keyword> keywords)
-        => SetShader(commandBuffer, pass, pass.GetKey(keywords));
+        => commandBuffer.SetShader(pass.ResolveDefaultProgram(pass.GetKey(keywords).Index));
 
 
     /// <summary>
-    /// Binds the pass variant for a key from ShaderPass.GetKey over library-default base states.
+    /// Binds the pass variant for a key from ShaderPass.GetKey over library-default base states, the default key when none is given.
     /// </summary>
-    public static void SetShader(this CommandBuffer commandBuffer, ShaderPass pass, int key)
-        => commandBuffer.SetShader(pass.ResolveDefaultProgram(key));
-
-
-    /// <summary>
-    /// Binds the default variant (key 0) over library-default base states. Compiles on demand if a compiler is attached.
-    /// </summary>
-    public static void SetShader(this CommandBuffer commandBuffer, ShaderPass pass)
-        => SetShader(commandBuffer, pass, 0);
+    public static void SetShader(this CommandBuffer commandBuffer, ShaderPass pass, VariantKey key = default)
+        => commandBuffer.SetShader(pass.ResolveDefaultProgram(key.Index));
 
 
     /// <summary>
@@ -40,10 +33,10 @@ public static class CommandBufferExtensions
     /// <summary>
     /// Binds the pass variant for a key over given base states. Compiles on demand if a compiler is attached.
     /// </summary>
-    public static void SetShader(this CommandBuffer commandBuffer, ShaderPass pass, int key,
+    public static void SetShader(this CommandBuffer commandBuffer, ShaderPass pass, VariantKey key,
         BlendStateDescription baseBlend, DepthStencilStateDescription baseDepth, RasterizerStateDescription baseRaster)
     {
-        GraphicsProgram program = pass.ResolveProgram(key, baseBlend, baseDepth, baseRaster);
+        GraphicsProgram program = pass.ResolveProgram(key.Index, baseBlend, baseDepth, baseRaster);
         commandBuffer.SetShader(program);
     }
 

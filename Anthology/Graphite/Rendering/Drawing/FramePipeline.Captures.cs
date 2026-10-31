@@ -60,7 +60,7 @@ internal sealed partial class FramePipeline
     {
         EnvironmentDesc environment = world.World.Lighting.Environment;
         Float4 sky = environment.SkyColor;
-        float exposure = ViewDesc.ExposureOf(environment.CaptureEV100);
+        float exposure = RenderView.ExposureOf(environment.CaptureEV100);
         return new Float4(sky.X * exposure, sky.Y * exposure, sky.Z * exposure, sky.W);
     }
 
@@ -148,7 +148,7 @@ internal sealed partial class FramePipeline
         {
             foreach (CameraFrame camera in world.Captures())
             {
-                if (_frame - camera.LastFrame > StaleViewFrames)
+                if (_frame - camera.LastFrame > IdleFrames)
                 {
                     camera.ReleaseSceneColor();
                     camera.ReleaseSceneDepth();

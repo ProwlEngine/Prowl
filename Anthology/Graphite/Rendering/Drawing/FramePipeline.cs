@@ -138,8 +138,8 @@ internal sealed partial class FramePipeline : IDisposable
     public Action<RendererError> Report { get; }
     private readonly PropertySet _exposureProperties = new();
 
-    /// <summary>Frames a view keeps its per view state after it was last drawn.</summary>
-    public int StaleViewFrames { get; init; } = 8;
+    /// <summary>Frames a capture view's scene copies and an empty shadow page are kept after their last use.</summary>
+    private const int IdleFrames = 8;
 
     /// <summary>Every persistent buffer the frame writes and its cameras read, in a stable order.</summary>
     public FrameBuffers Buffers { get; }
@@ -238,10 +238,11 @@ internal sealed partial class FramePipeline : IDisposable
     }
 
     /// <summary>Culls and compacts every view, then dispatches the frame. Returns the execution. Render thread.</summary>
-    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, List<ReadbackRequest> readbacks, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time, IProfiler[]? profilers = null)
+    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, List<int> released, List<ReadbackRequest> readbacks, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time, IProfiler[]? profilers = null)
     {
         _drawCalls = _drawCommands = _shadowDrawCalls = _shadowDrawCommands = 0;
         _frame++;
+        ReleaseViews(released, lastDispatched);
         _currentTime = time;
         _planned.Clear();
         _frameWorlds.Clear();
@@ -288,10 +289,6 @@ internal sealed partial class FramePipeline : IDisposable
                 camera = new CameraFrame(_device, this, view.ViewId);
                 _cameras[view.ViewId] = camera;
                 _textures.TrackView(camera.ViewTable);
-            }
-            else if (camera.LastFrame == _frame)
-            {
-                throw new InvalidOperationException($"Two views share the ViewId {view.ViewId} in one frame.");
             }
 
             Draw(camera, view, viewFeatures[index], world, time);
@@ -340,7 +337,7 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (IDisposable retired in _retired)
             task.Retire(retired);
         _retired.Clear();
-        ReleaseStaleCameras();
+        DisposeReleased();
         ReleaseIdleCaptures();
         return task;
     }
@@ -352,7 +349,7 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (int index in _viewOrder)
         {
             if (_cameras.TryGetValue(views[index].ViewId, out CameraFrame? camera) && camera.LastFrame == _frame)
-                drawn.Add(new ViewStats(camera.Desc.ViewId, camera.SceneColorUsed, camera.SceneDepthUsed, camera.BackDepthUsed, camera.Jitter));
+                drawn.Add(new ViewStats(camera.Desc.Owner!, camera.SceneColorUsed, camera.SceneDepthUsed, camera.BackDepthUsed, camera.Jitter));
         }
         return new FrameStats(views.Length, _drawCalls, _drawCommands, _shadowDrawCalls, _shadowDrawCommands, ShadowsAdded, ShadowsGrown, ShadowsShrunk, ShadowViewsDrawn, ShadowCopiesMade) { ViewStats = drawn };
     }
@@ -744,6 +741,7 @@ internal sealed partial class FramePipeline : IDisposable
         camera.Sink.Begin(camera, world, frustum, view.CullingMask, camera.IsShadowView);
         ViewKinds kind = (ViewKinds)(1 << (int)view.Kind);
         ProviderView providerView = new(camera.Info, frustum);
+        world.World.Transients.Cull(providerView, camera.Sink);
         foreach (RenderProvider provider in world.World.ProviderSnapshot)
         {
             if (!provider.EnabledSnapshot || (provider.RunsOn & kind) == 0)
@@ -816,11 +814,11 @@ internal sealed partial class FramePipeline : IDisposable
     {
         if (views[index].DependsOn is not { } dependencies)
             return true;
-        foreach (int id in dependencies)
+        foreach (RenderView dependency in dependencies)
         {
             for (int i = 0; i < views.Length; i++)
             {
-                if (i != index && views[i].ViewId == id && !placed[i])
+                if (i != index && views[i].Owner == dependency && !placed[i])
                     return false;
             }
         }
@@ -946,7 +944,7 @@ internal sealed partial class FramePipeline : IDisposable
             camera.Jitter = new Float2((Halton(phase, 2) - 0.5f) * 2f / width, (Halton(phase, 3) - 0.5f) * 2f / height);
         }
         _textures.SetViewBias(camera.ViewTable, phases > 0 ? mipBias : 0);
-        float exposure = ViewDesc.ExposureOf(view.EV100);
+        float exposure = RenderView.ExposureOf(view.EV100);
         bool capture = view.Kind is ViewKind.SkyCapture or ViewKind.ReflectionProbe;
 
         for (int l = 0; l < layers; l++)
@@ -980,7 +978,7 @@ internal sealed partial class FramePipeline : IDisposable
     }
 
     /// <summary>A host view's frame state, for tests.</summary>
-    internal CameraFrame? Camera(int viewId) => _cameras.GetValueOrDefault(viewId);
+    internal CameraFrame? Camera(RenderView view) => _cameras.GetValueOrDefault(view.Id);
 
     private static float Halton(int index, int radix)
     {
@@ -1012,29 +1010,40 @@ internal sealed partial class FramePipeline : IDisposable
          - m.c1.X * (m.c0.Y * m.c2.Z - m.c2.Y * m.c0.Z)
          + m.c2.X * (m.c0.Y * m.c1.Z - m.c1.Y * m.c0.Z);
 
-    private void ReleaseStaleCameras()
+    // Disposed views' state leaves the frame, freed once the executions that may still read it are done
+    private void ReleaseViews(List<int> released, ulong lastDispatched)
     {
-        List<int>? stale = null;
-        foreach ((int id, CameraFrame camera) in _cameras)
+        foreach (int id in released)
         {
-            if (_frame - camera.LastFrame > StaleViewFrames)
-                (stale ??= new()).Add(id);
-        }
-        if (stale == null)
-            return;
-        foreach (int id in stale)
-        {
-            Untrack(_cameras[id]);
-            _cameras[id].Dispose();
-            _cameras.Remove(id);
+            if (!_cameras.Remove(id, out CameraFrame? camera))
+                continue;
+            Untrack(camera);
+            _releasing.Add((lastDispatched, camera));
         }
     }
+
+    private void DisposeReleased()
+    {
+        ulong completed = _device.LastCompletedExecutionId;
+        for (int i = _releasing.Count - 1; i >= 0; i--)
+        {
+            if (_releasing[i].After > completed)
+                continue;
+            _releasing[i].Camera.Dispose();
+            _releasing.RemoveAt(i);
+        }
+    }
+
+    private readonly List<(ulong After, CameraFrame Camera)> _releasing = new();
 
     public void Dispose()
     {
         foreach (CameraFrame camera in _cameras.Values)
             camera.Dispose();
         _cameras.Clear();
+        foreach ((_, CameraFrame camera) in _releasing)
+            camera.Dispose();
+        _releasing.Clear();
         ReturnShadowCameras();
         foreach (CameraFrame camera in _shadowCameraPool)
             camera.Dispose();
@@ -1062,13 +1071,13 @@ public sealed record FrameStats(int Views, int DrawCalls, int DrawCommands, int 
     /// <summary>The host views drawn, in the order they drew.</summary>
     public IReadOnlyList<ViewStats> ViewStats { get; init; } = [];
 
-    /// <summary>The stats of the view with the given id, or null when it was not drawn.</summary>
-    public ViewStats? View(int viewId)
+    /// <summary>The stats of a view, or null when it was not drawn.</summary>
+    public ViewStats? View(RenderView view)
     {
-        foreach (ViewStats view in ViewStats)
+        foreach (ViewStats stats in ViewStats)
         {
-            if (view.ViewId == viewId)
-                return view;
+            if (stats.View == view)
+                return stats;
         }
         return null;
     }
@@ -1079,4 +1088,4 @@ public sealed record FrameStats(int Views, int DrawCalls, int DrawCommands, int 
 /// opaque colour or depth, whether a transmissive pass read the back depth, so the view drew its volumes' back faces,
 /// and the sub pixel offset its projection was shifted by in clip space, zero when no feature asks for one.
 /// </summary>
-public sealed record ViewStats(int ViewId, bool SceneColorUsed, bool SceneDepthUsed, bool BackDepthUsed, Float2 Jitter);
+public sealed record ViewStats(RenderView View, bool SceneColorUsed, bool SceneDepthUsed, bool BackDepthUsed, Float2 Jitter);
