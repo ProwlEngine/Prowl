@@ -42,16 +42,19 @@ void Graphite_StandardVertex()
 
 #ifdef GRAPHITE_STANDARD_VERTEX_DATA
     vRelativePos = relative;
-    vColor = v.color;
+    vColor = v.color * Graphite_Object().color;
 #endif
 
-#ifdef GRAPHITE_STANDARD_LIT
+#ifdef GRAPHITE_STANDARD_FRAME
     vNormal = Graphite_ObjectToWorldNormal(v.normal);
     vec4 tangent = v.tangent;
     bool hasTangents = Graphite_HasStream(2u);
     vec3 worldTangent = hasTangents ? normalize(Graphite_ObjectToWorldDirection(tangent.xyz)) : vec3(1.0, 0.0, 0.0);
     Graphite_StandardTangentFrame(vNormal, worldTangent, tangent.w, hasTangents, vTangent, vBitangent);
     vHasTangents = hasTangents ? 1.0 : 0.0;
+#endif
+
+#ifdef GRAPHITE_STANDARD_LIT
     vLightmapUV = Graphite_LightmapUV();
 #endif
 }

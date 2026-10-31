@@ -1573,6 +1573,9 @@ public readonly struct ProviderView
 public struct DrawItem
 {
     public Double4x4 Transform;
+
+    /// <summary>Multiplies the standard surfaces' vertex colour, so their base colour and coverage. White by default.</summary>
+    public Float4 Color;
     public Float4 Custom0, Custom1;
     public uint LayerMask;
     public uint ObjectId;
@@ -1590,6 +1593,7 @@ public struct DrawItem
         LayerMask = ~0u;
         Flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows;
         SortDepth = float.NaN;
+        Color = Float4.One;
     }
 }
 
@@ -1691,6 +1695,7 @@ public sealed class DrawItemSink
             LodFade = 1,
             LayerMask = item.LayerMask,
             LightmapScaleOffset = new Float4(1, 1, 0, 0),
+            Color = item.Color,
             Custom0 = item.Custom0,
             Custom1 = item.Custom1,
         };

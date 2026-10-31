@@ -2662,7 +2662,7 @@ public sealed partial class LightingTests : IDisposable
     private static readonly Vector3 s_skyColor = new(0.1f, 0.2f, 0.4f);
 
     // A room of single sided unlit walls, one colour per side, facing in on a centre; the camera's reflector sits on layer 2
-    private void Room(Double3 center, double half, Func<int, Float3> color)
+    private void Room(Double3 center, double half, Func<int, Float3> color, bool standardUnlit = false)
     {
         Shader unlit = _renderer.LoadShader(ShaderParser.Parse(UnlitSource));
         Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
@@ -2676,9 +2676,9 @@ public sealed partial class LightingTests : IDisposable
         {
             (Float3 right, Float3 up, Float3 forward) = s_faces[f];
             Double4x4 basis = new(new Double4(right.X, right.Y, right.Z, 0), new Double4(up.X, up.Y, up.Z, 0), new Double4(forward.X, forward.Y, forward.Z, 0), new Double4(0, 0, 0, 1));
-            Material wall = _renderer.CreateMaterial(unlit);
+            Material wall = _renderer.CreateMaterial(standardUnlit ? _renderer.Standard.Unlit : unlit);
             Float3 c = color(f);
-            wall.SetColor("_Color", new Float4(c.X, c.Y, c.Z, 1));
+            wall.SetColor(standardUnlit ? "base_color" : "_Color", new Float4(c.X, c.Y, c.Z, 1));
             Double3 at = _origin + center + new Double3(forward.X, forward.Y, forward.Z) * half;
             _world.Add(new RenderableDesc { Mesh = facing, Transform = Double4x4.CreateTranslation(at) * basis * Double4x4.CreateScale(half / 4), LayerMask = 1, Flags = RenderableFlags.ReceiveShadows }, [wall]);
         }
@@ -2731,6 +2731,28 @@ public sealed partial class LightingTests : IDisposable
             Frame();
             Frame();
             AssertMatches(Expected, Frame());
+        }
+    }
+
+    // A Graphite/Unlit wall reflects in a probe as it shows directly, whatever exposure the probe is captured at
+    [Fact]
+    public void UnlitSurfaces_ReflectAsTheyShowDirectly_AtAnyCaptureExposure()
+    {
+        Room(new Double3(0, 0, 10), 20, _ => new Float3(0.8f, 0.5f, 0.2f), standardUnlit: true);
+        _world.AddReflectionProbe(RoomProbe(new Double3(-10, 0, 10), new Float3(20, 40, 40)));
+        _ev100 = 8;
+        Frame();
+        Float4 wall = Frame()[Size * Size / 2 + Size / 2];
+        Vector3 direct = new(wall.X, wall.Y, wall.Z);
+        Vector3 sky = s_skyColor * RenderView.ExposureOf(8);
+
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        foreach (float captureEV100 in new[] { UnitEV100, 6f, 14f })
+        {
+            _world.Environment.CaptureEV100 = captureEV100;
+            Frame();
+            Frame();
+            AssertMatches(p => p.X < 0 ? direct : sky, Frame());
         }
     }
 

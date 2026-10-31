@@ -64,6 +64,7 @@ uniform int geometry_thin_walled;
 uniform float ambient_occlusion;
 uniform float normal_scale;
 uniform float coat_normal_scale;
+uniform float height_scale;
 uniform float alpha_cutoff;
 uniform float tangent_rotation;
 uniform sampler2D base_weight_map;
@@ -96,6 +97,104 @@ uniform sampler2D ambient_occlusion_map;
 uniform sampler2D geometry_normal_map;
 uniform sampler2D geometry_coat_normal_map;
 uniform sampler2D geometry_tangent_map;
+uniform sampler2D geometry_height_map;
+
+#ifdef PBR_PARALLAX
+
+#if defined(PBR_TIER_LITE) && !defined(_SURFACE_CUTOUT)
+    #define PBR_PARALLAX_OFFSET
+#endif
+
+// How UV1 changes with UV0 at this pixel, from their screen derivatives, zero where UV0 does not change
+mat2 pbr_UV0ToUV1(Graphite_SurfaceData i)
+{
+    mat2 uv0 = mat2(dFdx(i.uv), dFdy(i.uv));
+    mat2 uv1 = mat2(dFdx(i.uv1), dFdy(i.uv1));
+    float det = determinant(uv0);
+    return abs(det) > 1e-20 ? uv1 * inverse(uv0) : mat2(0.0);
+}
+
+float pbr_Height(vec2 uv, vec2 dx, vec2 dy)
+{
+    return textureGrad(geometry_height_map, uv, dx, dy)[geometry_height_map_Channel];
+}
+
+// Moves both UV sets to where the view ray, entering at the surface, meets the height field of geometry_height_map:
+// white at the surface, black height_scale below it in the map's own texture units, so the relief keeps its shape
+// however the map tiles. toViewer points back along the view ray. FULL views and every depth pass march the ray,
+// parallax occlusion mapping refined by the secant method. LITE views take one offset from the height under the pixel,
+// limited by the view's slope, except for cutouts, whose alpha test must match their depth passes. The caller checks
+// the mesh has tangents.
+void PBR_Parallax(inout Graphite_SurfaceData i, vec3 toViewer)
+{
+    mat2 toUV1 = pbr_UV0ToUV1(i);
+    vec2 uv = Graphite_StandardUV(geometry_height_map_UV, geometry_height_map_ST, geometry_height_map_Rotation, i);
+    vec2 dx = dFdx(uv);
+    vec2 dy = dFdy(uv);
+    vec3 v = vec3(dot(toViewer, i.tangent), dot(toViewer, i.bitangent), dot(toViewer, i.geometryNormal));
+    if (!geometry_height_map_Present || v.z < 1e-3)
+        return;
+
+    // The ray's drift over the tangent plane per unit of depth, as UV0, then into the map's texture space through its UV set, scale and rotation
+    vec2 drift = -v.xy / v.z;
+    vec2 scaled = (geometry_height_map_UV == 0 ? drift : toUV1 * drift) * geometry_height_map_ST.xy;
+    vec2 rotation = geometry_height_map_Rotation;
+    vec2 inMap = vec2(rotation.x * scaled.x - rotation.y * scaled.y, rotation.y * scaled.x + rotation.x * scaled.y);
+    float texels = length(inMap);
+    if (texels < 1e-8)
+        return;
+    float perDepth = height_scale * length(drift) / texels;
+    vec2 mapStep = inMap * perDepth;
+
+#ifdef PBR_PARALLAX_OFFSET
+    float depth = (1.0 - pbr_Height(uv, dx, dy)) * v.z;
+#else
+    // Depths along the ray bracketing where it passes below the surface, gap being the surface's depth minus the ray's
+    float above = 0.0;
+    float gapAbove = 1.0 - pbr_Height(uv, dx, dy);
+    float below = 0.0;
+    float gapBelow = gapAbove;
+    if (gapAbove > 0.0)
+    {
+        int steps = int(mix(32.0, 8.0, v.z));
+        float layer = 1.0 / float(steps);
+        for (int s = 1; s <= steps; s++)
+        {
+            below = float(s) * layer;
+            gapBelow = 1.0 - pbr_Height(uv + mapStep * below, dx, dy) - below;
+            if (gapBelow <= 0.0)
+                break;
+            above = below;
+            gapAbove = gapBelow;
+        }
+        for (int r = 0; r < 3; r++)
+        {
+            float across = gapAbove - gapBelow;
+            if (!(across > 1e-6))
+                break;
+            float middle = above + (below - above) * gapAbove / across;
+            float gap = 1.0 - pbr_Height(uv + mapStep * middle, dx, dy) - middle;
+            if (gap > 0.0)
+            {
+                above = middle;
+                gapAbove = gap;
+            }
+            else
+            {
+                below = middle;
+                gapBelow = gap;
+            }
+        }
+    }
+    float across = gapAbove - gapBelow;
+    float depth = across > 1e-6 ? above + (below - above) * gapAbove / across : below;
+#endif
+    vec2 uv0Step = drift * perDepth;
+    i.uv += uv0Step * depth;
+    i.uv1 += toUV1 * uv0Step * depth;
+}
+
+#endif
 
 // The material's inputs at a point, the vertex colour multiplying the base colour and opacity. mapVariance is the
 // normal map's own variance, Toksvig's from a three channel texel, for specular antialiasing. Normal and tangent maps

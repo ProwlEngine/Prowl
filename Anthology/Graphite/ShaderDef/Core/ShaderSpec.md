@@ -135,13 +135,18 @@ standard ones, replacing any of the same name.
 
 Graphite/Lit is OpenPBR Surface v1.1.1. Its properties are the spec's parameters under their spec names, such as
 `base_color`, `specular_roughness` and `coat_weight`, and engine extensions under plain names: `ambient_occlusion`,
-`normal_scale`, `coat_normal_scale`, `tangent_rotation` and `alpha_cutoff`. Every texturable input `X` has a map `X_map`,
-and `geometry_normal_map`, `geometry_coat_normal_map` and `geometry_tangent_map` feed the frame. The input is `X` times
+`normal_scale`, `coat_normal_scale`, `height_scale`, `tangent_rotation` and `alpha_cutoff`. Every texturable input `X` has a map
+`X_map`, and `geometry_normal_map`, `geometry_coat_normal_map` and `geometry_tangent_map` feed the frame. The input is `X` times
 its map wherever the map is set. A map's channel, UV set, scale and offset are part of its texture value, set with
 `Material.SetTextureChannel`, `SetTextureUVSet` and `SetTextureScaleOffset`. Transparent PBR surfaces write
 premultiplied colour with `geometry_opacity` as coverage. Its Forward, Transmission and Debug passes are tagged
 `"Output" = "Premultiplied"`, so `SurfaceSettings` blends them with premultiplied factors whichever `SurfaceBlend` is set:
 Alpha and Premultiplied as One, InverseSourceAlpha, Additive as One, One.
+
+Graphite/Unlit emits light like Lit's emission: `base_color` times its map and the vertex colour, at
+`emission_luminance` nits, 1 by default, times the view's exposure. It follows exposure as everything lit does, so a
+reflection probe captured at any EV100 shows it as the view does. Something that must keep its colour on screen
+whatever the exposure, such as a HUD drawn in the scene, sets `emission_luminance` to one over the view's exposure.
 
 The coat, fuzz, thin film and anisotropy are material toggles of the Forward and Debug passes, `PBR_COAT`, `PBR_FUZZ`,
 `PBR_THIN_FILM` and `PBR_ANISOTROPY`, each on while `coat_weight`, `fuzz_weight`, `thin_film_weight` or either roughness
@@ -149,22 +154,30 @@ anisotropy is not zero, so surfaces without them pay nothing. A Surface function
 needs its material to turn the toggle on with `Material.Set(axis, true)`. The global `PBR_TIER` LITE drops the thin film
 and anisotropy and lights the coat and fuzz from probes and ambient light only.
 
+`PBR_PARALLAX` follows `height_scale`, off at its default of zero. While it is on, `geometry_height_map` (white at the
+surface, black `height_scale` below it, in the map's own texture units) moves both UV sets of every pass before any map
+is read, by parallax occlusion mapping along the view ray, so every map, the Surface function's `uv` and `uv1`, and the
+cutout of the depth passes follow the relief. LITE views take a single offset instead, except for cutout surfaces, whose
+alpha test must match their depth passes. It needs the mesh's tangents.
+
 `PBR_TRANSMISSION` follows `transmission_weight` (`[Transmissive]`). It is declared by the Debug pass, and the
 Transmission pass defines it: that pass refracts the view's opaque colour behind the surface through the volume whose
 far side the BackDepth pass draws, and is tagged `"ReadsWhen" = "PBR_TIER FULL"`, so LITE views copy nothing and
 refract the probes instead. See `Graphite/PBR/Transmission.glsl`.
 
 The optional GLSLPROGRAM block holds fragment code defining the model's Surface function, which may change the inputs
-before the surface is lit. Its second argument is read only: `uv`, `uv1`, `vertexColor`, `relativePos`, `viewDir` and
-`geometryNormal`, `tangent` and `bitangent`.
+before the surface is lit. Decals land after it, over the inputs it made. Its second argument is read only: `uv`, `uv1`, `vertexColor`, `relativePos`, `viewDir` and
+`geometryNormal`, `tangent` and `bitangent`. `vertexColor` is the vertex colour times the object's colour,
+`RenderableDesc.Color` or `DrawItem.Color`, white unless the host sets one, so instances drawn with a colour each tint
+the standard surfaces' base colour and coverage. `Custom0` and `Custom1` stay free for the host's own shaders.
 
 - PBR: `void Surface(inout PBR_Params p, Graphite_SurfaceData i)`. `PBR_Params` holds every spec parameter in camel
   case, `baseColor` for `base_color`, with `geometryNormal` in world space and `occlusion` for `ambient_occlusion`.
-- Unlit: `void Surface(inout Unlit_Params p, Graphite_SurfaceData i)` over `baseColor` and `alpha`.
+- Unlit: `void Surface(inout Unlit_Params p, Graphite_SurfaceData i)` over `baseColor`, `emissionLuminance` and `alpha`.
 
 The depth passes run it only for cutout surfaces, with the UVs, vertex colour and relative position filled in, so a
 cutout driven by any of them cuts shadows and depth the same. Their `viewDir` points toward the depth pass's own camera,
-a light's for shadows, and their normals keep defaults.
+a light's for shadows, and their normals keep defaults, unless `PBR_PARALLAX` needs the frame.
 
 Positions in Graphite shaders are relative: world space moved so the camera sits at the origin, which keeps the
 precision of objects far from it. World means true world space. `Graphite_RelativeToWorld(i.relativePos)` gives the

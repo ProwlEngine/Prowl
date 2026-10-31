@@ -1,5 +1,5 @@
-// The Unlit model's inputs: base_color times its map and the vertex colour, the map's alpha included, fogged. See
-// Standard.glsl.
+// The Unlit model's inputs: base_color times its map and the vertex colour, the map's alpha included, emitted at
+// emission_luminance nits. See Standard.glsl.
 #pragma once
 
 #define GRAPHITE_STANDARD_UNLIT
@@ -14,6 +14,7 @@
 #if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA)
 uniform vec4 base_color;
 uniform sampler2D base_color_map;
+uniform float emission_luminance;
 #endif
 
 #ifdef _SURFACE_CUTOUT
@@ -24,6 +25,7 @@ uniform float alpha_cutoff;
 struct Unlit_Params
 {
     vec3 baseColor;
+    float emissionLuminance;
     float alpha;
 };
 
@@ -35,6 +37,7 @@ Unlit_Params Unlit_MaterialParams(Graphite_SurfaceData i)
         color *= texture(base_color_map, Graphite_StandardUV(base_color_map_UV, base_color_map_ST, base_color_map_Rotation, i));
     Unlit_Params p;
     p.baseColor = color.rgb;
+    p.emissionLuminance = emission_luminance;
     p.alpha = color.a;
     return p;
 }

@@ -329,6 +329,9 @@ public sealed class FeatureTests : IDisposable
         public override void Render(FeatureContext context) => context.Fullscreen(program, properties);
     }
 
+    // The luminance an Unlit surface needs to show its base colour as it is under the views' EV100 of 0
+    private static readonly float UnitNits = 1f / RenderView.ExposureOf(0);
+
     [Fact]
     public void SurfaceFunctions_ChangeTheStandardSurface_BeforeItDraws()
     {
@@ -348,6 +351,7 @@ public sealed class FeatureTests : IDisposable
         Material material = _renderer.CreateMaterial(shader);
         material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
         material.SetColor("base_color", new Float4(0, 1, 0, 1));
+        material.SetFloat("emission_luminance", UnitNits);
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [material]);
 
         Float4[] pixels = Frame(View());
@@ -374,6 +378,7 @@ public sealed class FeatureTests : IDisposable
         Material material = _renderer.CreateMaterial(shader);
         material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
         material.SetColor("base_color", new Float4(0, 1, 0, 1));
+        material.SetFloat("emission_luminance", UnitNits);
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [material]);
 
         RenderView view = View();
@@ -407,6 +412,7 @@ public sealed class FeatureTests : IDisposable
         Material glass = _renderer.CreateMaterial(_renderer.Standard.Unlit);
         glass.Surface = new SurfaceSettings(SurfaceType.Transparent, Cull: SurfaceCull.Off);
         glass.SetColor("base_color", new Float4(0, 0, 1, 0.5f));
+        glass.SetFloat("emission_luminance", UnitNits);
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5), LayerMask = 2u }, [glass]);
         RenderView under = View(1);
         under.ClearColor = new Float4(1, 0, 0, 1);

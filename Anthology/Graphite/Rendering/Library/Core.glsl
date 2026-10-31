@@ -29,6 +29,7 @@ struct Graphite_ObjectData
     uint previousPositions;
     float lightmapScale;            // what decoded lightmap texels are multiplied by
     vec4 lightmapScaleOffset;
+    vec4 color;                     // multiplies the standard surfaces' vertex colour
     vec4 custom0;
     vec4 custom1;
 };

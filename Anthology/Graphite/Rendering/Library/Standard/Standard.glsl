@@ -22,7 +22,8 @@
 // Back faces, drawn when the material culls none, shade with a flipped frame.
 //
 // Every texture samples its UV set through its own scale and offset, maps also through their rotation. Colour textures are sampled as sRGB textures
-// decode them, every factor is linear and applied after. The vertex colour multiplies the base colour and coverage.
+// decode them, every factor is linear and applied after. The vertex colour times the object's colour (RenderableDesc.Color,
+// white unless the host sets one) multiplies the base colour and coverage.
 #pragma once
 
 #pragma variant _SURFACE OPAQUE CUTOUT TRANSPARENT
@@ -42,6 +43,11 @@
 // Passes whose fragments read the vertex colour and relative position: forward, back depth, dithered shadow casters, and the depth passes of cutout surfaces
 #if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_BACK_DEPTH) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT)
     #define GRAPHITE_STANDARD_VERTEX_DATA
+#endif
+
+// Passes whose fragments read the tangent frame: lit ones, and under PBR parallax the depth passes reading the material
+#if defined(GRAPHITE_STANDARD_LIT) || (defined(PBR_PARALLAX) && !defined(GRAPHITE_STANDARD_UNLIT) && (defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)))
+    #define GRAPHITE_STANDARD_FRAME
 #endif
 
 #ifdef GRAPHITE_VERTEX
@@ -72,12 +78,15 @@ GRAPHITE_STANDARD_VARYING vec3 vRelativePos;
 GRAPHITE_STANDARD_VARYING vec4 vColor;
 #endif
 
-#ifdef GRAPHITE_STANDARD_LIT
+#ifdef GRAPHITE_STANDARD_FRAME
 GRAPHITE_STANDARD_VARYING vec3 vNormal;
 GRAPHITE_STANDARD_VARYING vec3 vTangent;
 GRAPHITE_STANDARD_VARYING vec3 vBitangent;
-GRAPHITE_STANDARD_VARYING vec2 vLightmapUV;
 flat GRAPHITE_STANDARD_VARYING float vHasTangents;
+#endif
+
+#ifdef GRAPHITE_STANDARD_LIT
+GRAPHITE_STANDARD_VARYING vec2 vLightmapUV;
 #endif
 
 // A tangent frame for a world normal, from the mesh's tangent when it has a usable one, else from an arbitrary axis
@@ -114,12 +123,12 @@ struct Graphite_SurfaceVertex
 #ifdef GRAPHITE_FRAGMENT
 
 // What a Surface function reads about the point it shades. Depth passes run it only for cutout surfaces, with the UVs,
-// vertex colour and relative position filled in and the rest at defaults.
+// vertex colour and relative position filled in, the frame too under PBR parallax, and the rest at defaults.
 struct Graphite_SurfaceData
 {
-    vec2 uv;                // UV0, before any texture's scale and offset
-    vec2 uv1;               // UV1, before any texture's scale and offset
-    vec4 vertexColor;
+    vec2 uv;                // UV0, moved by parallax, before any texture's scale and offset
+    vec2 uv1;               // UV1, moved by parallax, before any texture's scale and offset
+    vec4 vertexColor;       // the vertex colour times the object's colour
     vec3 relativePos;       // relative to the camera, Graphite_RelativeToWorld for world space
     vec3 viewDir;           // from the surface toward the camera
     vec3 geometryNormal;    // the mesh's, facing the camera on back faces

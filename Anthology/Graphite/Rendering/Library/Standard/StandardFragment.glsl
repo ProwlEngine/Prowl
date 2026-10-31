@@ -7,14 +7,15 @@
 #ifdef GRAPHITE_FRAGMENT
 
 #if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT)
-// The inputs from the varyings, the frame flipped on back faces. Depth passes keep the frame at its defaults.
+// The inputs from the varyings, the frame flipped on back faces, the UVs moved by PBR parallax. Depth passes keep the
+// frame at its defaults unless parallax needs it.
 Graphite_SurfaceData graphite_StandardInputs()
 {
     Graphite_SurfaceData i = Graphite_NewSurfaceData(vUV, vUV1);
     i.vertexColor = vColor;
     i.relativePos = vRelativePos;
     i.viewDir = Graphite_ViewDir(vRelativePos);
-#ifdef GRAPHITE_STANDARD_LIT
+#ifdef GRAPHITE_STANDARD_FRAME
     i.geometryNormal = normalize(vNormal);
     i.tangent = normalize(vTangent);
     i.bitangent = normalize(vBitangent);
@@ -24,6 +25,16 @@ Graphite_SurfaceData graphite_StandardInputs()
         i.tangent = -i.tangent;
         i.bitangent = -i.bitangent;
     }
+#endif
+#if defined(PBR_PARALLAX) && defined(GRAPHITE_STANDARD_FRAME)
+#ifdef GRAPHITE_STANDARD_SHADOW
+    vec4 clip = Graphite_View().viewProjection * vec4(vRelativePos, 1.0);
+    vec3 toViewer = -Graphite_ViewRay(clip.xy / clip.w);
+#else
+    vec3 toViewer = i.viewDir;
+#endif
+    if (vHasTangents > 0.5)
+        PBR_Parallax(i, toViewer);
 #endif
     return i;
 }
@@ -47,9 +58,10 @@ void Graphite_StandardFragment()
         discard;
 #endif
 
-    vec3 color = Graphite_SaturateHalf(Graphite_ApplyFog(p.baseColor, vRelativePos));
+    vec3 emission = p.baseColor * p.emissionLuminance;
+    vec3 color = Graphite_SaturateHalf(Graphite_ApplyFog(emission * Graphite_Exposure(), vRelativePos));
 #ifdef GRAPHITE_STANDARD_DEBUG
-    color = Graphite_DebugView(color, p.baseColor, vec3(0.0), 1.0, 0.0, 1.0, vec3(0.0), vRelativePos, vec2(0.0));
+    color = Graphite_DebugView(color, p.baseColor, vec3(0.0), 1.0, 0.0, 1.0, emission, vRelativePos, vec2(0.0));
 #endif
 #ifdef _SURFACE_TRANSPARENT
     fragColor = vec4(color, p.alpha);
@@ -61,7 +73,7 @@ void Graphite_StandardFragment()
 
 #else
 
-// The PBR model: material inputs, decals, the Surface function, then the closure lit by every light and its
+// The PBR model: material inputs, the Surface function, decals over what it made, then the closure lit by every light and its
 // surroundings. Transparent surfaces write premultiplied colour with geometry_opacity as coverage, which the
 // "Output" = "Premultiplied" tag of the model's passes has SurfaceSettings blend once. Transmissive ones always draw
 // so, adding what they let through from behind, and write their motion and their coverage as the reactive mask, see
@@ -71,10 +83,10 @@ void Graphite_StandardFragment()
     Graphite_SurfaceData i = graphite_StandardInputs();
     float mapVariance;
     PBR_Params p = PBR_MaterialParams(i, vHasTangents > 0.5, mapVariance);
-    Graphite_ApplyDecals(vRelativePos, i.geometryNormal, p.baseColor, p.geometryNormal, p.specularRoughness, p.baseMetalness, p.occlusion);
 #ifdef GRAPHITE_SURFACE_FUNCTION
     Surface(p, i);
 #endif
+    Graphite_ApplyDecals(vRelativePos, i.geometryNormal, p.baseColor, p.geometryNormal, p.specularRoughness, p.baseMetalness, p.occlusion);
 #ifdef _SURFACE_CUTOUT
     if (p.geometryOpacity < alpha_cutoff)
         discard;

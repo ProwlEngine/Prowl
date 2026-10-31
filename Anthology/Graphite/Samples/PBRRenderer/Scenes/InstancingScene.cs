@@ -21,8 +21,8 @@ internal sealed class InstancingScene : DemoScene
 
     public InstancingScene(Demo demo) : base(demo)
     {
-        _instanced = Pbr(new Float3(1, 1, 1), 0.1f, 0.35f, instanceColor: true);
-        _glossy = Pbr(new Float3(1, 1, 1), 0.9f, 0.2f, instanceColor: true);
+        _instanced = Pbr(new Float3(1, 1, 1), 0.1f, 0.35f);
+        _glossy = Pbr(new Float3(1, 1, 1), 0.9f, 0.2f);
 
         Add(Demo.Cube, Pbr(new Float3(0.45f, 0.45f, 0.48f), 0f, 0.8f, grid: 4f), new Double3(0, -0.25, 0), new Double3(900, 0.5, 900));
 
@@ -111,11 +111,11 @@ internal sealed class InstancingScene : DemoScene
     {
         if (!handles[index].IsValid)
         {
-            handles[index] = World.Add(new RenderableDesc { Mesh = mesh, Transform = (Double4x4)transform, Custom0 = color }, [material]);
+            handles[index] = World.Add(new RenderableDesc { Mesh = mesh, Transform = (Double4x4)transform, Color = color }, [material]);
             return;
         }
         World.SetTransform(handles[index], (Double4x4)transform);
-        World.SetCustomData(handles[index], color, default);
+        World.SetColor(handles[index], color);
     }
 
     private static Float4x4 Compose(Float3 position, Float3 scale)

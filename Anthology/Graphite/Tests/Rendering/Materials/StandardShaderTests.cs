@@ -428,7 +428,7 @@ public sealed class StandardShaderTests : IDisposable
     public void Unlit_DeclaresOnlyTheSurfaceAxis_AndPBRItsLobesBeside_MapsBeingBitsOfTheMaterial()
     {
         Assert.Equal(["_SURFACE"], _unlit.MaterialAxes.Select(a => a.Name));
-        Assert.Equal([.. s_lobes.Append("_SURFACE").Append("PBR_TRANSMISSION").Order(StringComparer.Ordinal)], _pbr.MaterialAxes.Select(a => a.Name).Order(StringComparer.Ordinal));
+        Assert.Equal([.. s_lobes.Append("_SURFACE").Append("PBR_TRANSMISSION").Append("PBR_PARALLAX").Order(StringComparer.Ordinal)], _pbr.MaterialAxes.Select(a => a.Name).Order(StringComparer.Ordinal));
         foreach (ShaderPass pass in _pbr.Definition.Passes!)
         {
             bool lit = pass.Name is "Forward" or "Debug" or "Transmission";
@@ -436,6 +436,7 @@ public sealed class StandardShaderTests : IDisposable
             foreach (string lobe in s_lobes)
                 Assert.Equal(lit || (shadow && s_shadowAxes.Contains(lobe)), _compiler.GetAxes(pass).Any(a => a.Name == lobe));
             Assert.Equal(pass.Name == "Debug" || shadow, _compiler.GetAxes(pass).Any(a => a.Name == "PBR_TRANSMISSION"));
+            Assert.Contains(_compiler.GetAxes(pass), a => a.Name == "PBR_PARALLAX");
         }
         Assert.Contains(_pbr.GlobalAxes, a => a.Name == "PBR_TIER" && a.Values.SequenceEqual(["FULL", "LITE"]));
         Assert.DoesNotContain(_unlit.GlobalAxes, a => a.Name == "PBR_TIER");
@@ -533,6 +534,53 @@ public sealed class StandardShaderTests : IDisposable
         ShaderPass backDepth = _pbr.Definition.Passes!.First(p => p.Name == "BackDepth");
         foreach (string surface in new[] { "OPAQUE", "CUTOUT", "TRANSPARENT" })
             variants.Add((backDepth, [new Keyword("_SURFACE", surface)]));
+        CompileAll(variants);
+    }
+
+    // Parallax is off until height_scale leaves zero, a height map alone turning nothing on, and off again at zero
+    [Fact]
+    public void Parallax_FollowsHeightScale_OffByDefault()
+    {
+        Material material = _system.Create(_pbr);
+        Assert.Equal("false", Keyword(material, "PBR_PARALLAX"));
+        Assert.Equal(0f, _pbr.Properties[_pbr.FindProperty("height_scale")].Default.Vector[0]);
+
+        using Texture texture = MakeTexture();
+        material.SetTexture("geometry_height_map", texture);
+        Assert.Equal("false", Keyword(material, "PBR_PARALLAX"));
+        material.SetFloat("height_scale", 0.05f);
+        Assert.Equal("true", Keyword(material, "PBR_PARALLAX"));
+        material.SetFloat("height_scale", 0);
+        Assert.Equal("false", Keyword(material, "PBR_PARALLAX"));
+    }
+
+    // Every pass with parallax on, at every surface and both tiers, with the lobes, the shadow axes and the Debug pass's views beside
+    [Fact]
+    public void EveryParallaxVariant_Compiles()
+    {
+        List<(ShaderPass, Keyword[])> variants = [];
+        foreach (ShaderPass pass in _pbr.Definition.Passes!)
+        {
+            foreach (string surface in new[] { "OPAQUE", "CUTOUT", "TRANSPARENT" })
+            {
+                foreach (string tier in new[] { "FULL", "LITE" })
+                {
+                    foreach (bool all in new[] { false, true })
+                    {
+                        List<Keyword> combo = [new Keyword("_SURFACE", surface), new Keyword("PBR_TIER", tier), new Keyword("PBR_PARALLAX", "true")];
+                        foreach (string axis in s_lobes.Append("PBR_TRANSMISSION"))
+                            combo.Add(new Keyword(axis, all ? "true" : "false"));
+                        if (pass.Name == "Debug")
+                        {
+                            foreach (string view in new[] { "ALBEDO", "NORMALS", "LIGHTING" })
+                                variants.Add((pass, [.. combo, new Keyword(GlobalAxis.Debug.Name, view)]));
+                        }
+                        else
+                            variants.Add((pass, [.. combo]));
+                    }
+                }
+            }
+        }
         CompileAll(variants);
     }
 
@@ -719,9 +767,9 @@ public sealed class StandardShaderTests : IDisposable
                 Assert.True(properties[index].MapBit >= 0, name);
         }
 
-        foreach (string geometry in new[] { "geometry_normal_map", "geometry_coat_normal_map", "geometry_tangent_map", "ambient_occlusion_map" })
+        foreach (string geometry in new[] { "geometry_normal_map", "geometry_coat_normal_map", "geometry_tangent_map", "geometry_height_map", "ambient_occlusion_map" })
             Assert.True(properties[_pbr.FindProperty(geometry)].MapBit >= 0, geometry);
-        Assert.Equal(30, properties.Count(p => p.MapBit >= 0));
+        Assert.Equal(31, properties.Count(p => p.MapBit >= 0));
         Assert.True(_pbr.Schema.MapMaskOffset >= 0);
     }
 

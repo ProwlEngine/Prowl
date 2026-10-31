@@ -107,6 +107,9 @@ public struct RenderableDesc
     public uint LayerMask;
     public RenderableFlags Flags;
 
+    /// <summary>Multiplies the standard surfaces' vertex colour, so their base colour and coverage. White by default.</summary>
+    public Float4 Color;
+
     /// <summary>Free per object shader data.</summary>
     public Float4 Custom0, Custom1;
 
@@ -124,6 +127,7 @@ public struct RenderableDesc
         LayerMask = ~0u;
         Flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows;
         Lightmap = LightmapBinding.None;
+        Color = Float4.One;
     }
 }
 
@@ -168,7 +172,7 @@ internal struct ObjectBounds
     public Float4 Extents;
 }
 
-/// <summary>Per object data shaders read as needed, 96 bytes, matching Graphite_ObjectData.</summary>
+/// <summary>Per object data shaders read as needed, 112 bytes, matching Graphite_ObjectData.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct ObjectAttributes
 {
@@ -192,6 +196,7 @@ internal struct ObjectAttributes
     public uint PreviousPositions;
     public float LightmapScale;
     public Float4 LightmapScaleOffset;
+    public Float4 Color;
     public Float4 Custom0;
     public Float4 Custom1;
 }
@@ -307,6 +312,7 @@ public sealed partial class RenderWorld : IDisposable
     private Double4x4[] _transform = [];
     private uint[] _layerMask = [];
     private RenderableFlags[] _flags = [];
+    private Float4[] _color = [];
     private Float4[] _custom0 = [];
     private Float4[] _custom1 = [];
     private uint[] _objectId = [];
@@ -379,6 +385,7 @@ public sealed partial class RenderWorld : IDisposable
         _transform[index] = desc.Transform;
         _layerMask[index] = desc.LayerMask;
         _flags[index] = desc.Flags;
+        _color[index] = desc.Color;
         _custom0[index] = desc.Custom0;
         _custom1[index] = desc.Custom1;
         _objectId[index] = desc.ObjectId;
@@ -459,6 +466,16 @@ public sealed partial class RenderWorld : IDisposable
         if (_layerMask[index] == mask)
             return;
         _layerMask[index] = mask;
+        MarkDirty(index, Dirt.Attributes);
+    }
+
+    /// <summary>Sets the colour multiplying the standard surfaces' vertex colour, see <see cref="RenderableDesc.Color"/>.</summary>
+    public void SetColor(RenderableHandle handle, Float4 color)
+    {
+        int index = Check(handle);
+        if (_color[index] == color)
+            return;
+        _color[index] = color;
         MarkDirty(index, Dirt.Attributes);
     }
 
@@ -712,6 +729,7 @@ public sealed partial class RenderWorld : IDisposable
         Array.Resize(ref _transform, capacity);
         Array.Resize(ref _layerMask, capacity);
         Array.Resize(ref _flags, capacity);
+        Array.Resize(ref _color, capacity);
         Array.Resize(ref _custom0, capacity);
         Array.Resize(ref _custom1, capacity);
         Array.Resize(ref _objectId, capacity);
@@ -964,6 +982,7 @@ public sealed partial class RenderWorld : IDisposable
             (attributes.LightmapTexture, attributes.LightmapSampler) = host.LightmapSlots(lightmap);
             attributes.LightmapScaleOffset = lightmap.Lightmapped ? lightmap.ScaleOffset : new Float4(1, 1, 0, 0);
             attributes.LightmapScale = lightmap.Scale;
+            attributes.Color = host._color[index];
             attributes.Custom0 = host._custom0[index];
             attributes.Custom1 = host._custom1[index];
             attributes.LodFade = 1;

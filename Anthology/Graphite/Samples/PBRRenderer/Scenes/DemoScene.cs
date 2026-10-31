@@ -52,9 +52,9 @@ internal abstract class DemoScene : IDisposable
     {
     }
 
-    protected Material Pbr(Float3 color, float metallic = 0f, float roughness = 0.6f, Float3 emission = default, float grid = 0f, bool instanceColor = false)
+    protected Material Pbr(Float3 color, float metallic = 0f, float roughness = 0.6f, Float3 emission = default, float grid = 0f)
     {
-        Material material = Demo.CreatePbr(color, metallic, roughness, emission, grid, instanceColor);
+        Material material = Demo.CreatePbr(color, metallic, roughness, emission, grid);
         material.Name = $"PBR {_materials.Count}";
         _materials.Add(material);
         return material;
