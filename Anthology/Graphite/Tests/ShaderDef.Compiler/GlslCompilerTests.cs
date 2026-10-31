@@ -325,6 +325,132 @@ public class GlslCompilerTests
     }
 
 
+    const string ScanVertex = "Vertex { void main() { gl_Position = vec4(0); } }\nFragment { out vec4 color; void main() { color = vec4(1); } }\n";
+
+    static readonly Dictionary<string, string> s_surface = new()
+    {
+        ["Lights.glsl"] = "#pragma variant global LIGHT_MASKS\n#pragma global vec4 _LightTint\n",
+        ["Surface.glsl"] = """
+            #pragma variant _SURFACE OPAQUE CUTOUT
+            #if defined(ROLE_FORWARD) && !defined(ROLE_UNLIT)
+                #define ROLE_LIT
+            #endif
+            #ifdef ROLE_LIT
+                #include "Lights.glsl"
+            #endif
+            """,
+    };
+
+
+    [Fact]
+    public void Axes_BehindAFalsePassDefine_AreLeftOut()
+    {
+        using GlslShaderCompiler compiler = Glsl.Compiler(s_surface);
+        ShaderPass depth = Glsl.Pass("Shared\n{\n#define ROLE_DEPTH\n#include \"Surface.glsl\"\n}\n" + ScanVertex);
+        ShaderPass unlit = Glsl.Pass("Shared\n{\n#define ROLE_FORWARD\n#define ROLE_UNLIT\n#include \"Surface.glsl\"\n}\n" + ScanVertex);
+        ShaderPass lit = Glsl.Pass("Shared\n{\n#define ROLE_FORWARD\n#include \"Surface.glsl\"\n}\n" + ScanVertex);
+
+        Assert.Equal(["_SURFACE"], compiler.GetAxes(depth).Select(a => a.Name));
+        Assert.Empty(compiler.GetGlobals(depth));
+        Assert.Equal(["_SURFACE"], compiler.GetAxes(unlit).Select(a => a.Name));
+        Assert.Equal(["_SURFACE", "LIGHT_MASKS"], compiler.GetAxes(lit).Select(a => a.Name));
+        Assert.Equal([new ShaderGlobal("_LightTint", "vec4")], compiler.GetGlobals(lit));
+    }
+
+
+    [Fact]
+    public void Axes_BehindAVariantAxis_AreKept()
+    {
+        Dictionary<string, string> files = new()
+        {
+            ["Clip.glsl"] = "#pragma variant CLIP_FADE\n",
+            ["Surface.glsl"] = """
+                #pragma variant _SURFACE OPAQUE CUTOUT
+                #ifdef _SURFACE_CUTOUT
+                    #define ALPHA
+                    #include "Clip.glsl"
+                #endif
+                #ifdef ALPHA
+                    #pragma variant DITHER
+                #elif defined(ROLE_DEPTH)
+                    #pragma variant DEPTH_BIAS
+                #else
+                    #pragma variant NEVER
+                #endif
+                """,
+        };
+        using GlslShaderCompiler compiler = Glsl.Compiler(files);
+        ShaderPass pass = Glsl.Pass("Shared\n{\n#define ROLE_DEPTH\n#include \"Surface.glsl\"\n}\n" + ScanVertex);
+
+        Assert.Equal(["_SURFACE", "CLIP_FADE", "DITHER", "DEPTH_BIAS"], compiler.GetAxes(pass).Select(a => a.Name));
+        compiler.CompileProgram(pass, [new Keyword("_SURFACE", "CUTOUT"), new Keyword("CLIP_FADE", "true"), new Keyword("DITHER", "true")]);
+    }
+
+
+    [Fact]
+    public void Axes_DeclaredAfterTheConditionOnThem_AreStillFollowed()
+    {
+        using GlslShaderCompiler compiler = Glsl.Compiler();
+        IReadOnlyList<VariantSpace> axes = compiler.GetAxes(Glsl.Pass("Shared\n{\n#ifdef LATE\n#pragma variant HIDDEN\n#endif\n#pragma variant LATE\n}\n" + ScanVertex));
+
+        Assert.Equal(["HIDDEN", "LATE"], axes.Select(a => a.Name));
+    }
+
+
+    [Fact]
+    public void Axes_FollowEachStageDefine()
+    {
+        using GlslShaderCompiler compiler = Glsl.Compiler();
+        const string shared = "Shared\n{\n#ifdef GRAPHITE_FRAGMENT\n#pragma variant FRAGMENT_ONLY\n#endif\n#ifndef GRAPHITE_COMPUTE\n#pragma variant NOT_COMPUTE\n#endif\n}\n";
+
+        Assert.Equal(["NOT_COMPUTE", "FRAGMENT_ONLY"], compiler.GetAxes(Glsl.Pass(shared + ScanVertex)).Select(a => a.Name));
+        Assert.Empty(compiler.GetAxes(Glsl.Pass(shared + "Compute { layout(local_size_x = 1) in; void main() {} }")));
+    }
+
+
+    [Fact]
+    public void Conditions_ItCannotRead_KeepEveryBranch()
+    {
+        using GlslShaderCompiler compiler = Glsl.Compiler();
+        IReadOnlyList<VariantSpace> axes = compiler.GetAxes(Glsl.Pass("""
+            Shared
+            {
+                #define LEVEL 2
+                #if LEVEL == 2
+                    #pragma variant EQUALS
+                #else
+                    #pragma variant OTHERWISE
+                #endif
+                #if FUNCTION(1)
+                    #pragma variant CALLED
+                #endif
+                #ifdef GL_EXT_null_initializer
+                    #pragma variant EXTENSION
+                #endif
+                #if 0
+                    #pragma variant ZERO
+                #elif LEVEL && !defined(MISSING)
+                    #pragma variant LEVEL_SET
+                #else
+                    #pragma variant ELSE
+                #endif
+            }
+            """ + ScanVertex));
+
+        Assert.Equal(["EQUALS", "OTHERWISE", "CALLED", "EXTENSION", "LEVEL_SET"], axes.Select(a => a.Name));
+    }
+
+
+    [Fact]
+    public void Axes_FollowTheCompilerDefines()
+    {
+        using GlslShaderCompiler compiler = new(new GlslCompilerOptions { Defines = { ["HOST_FLAG"] = "" } });
+        IReadOnlyList<VariantSpace> axes = compiler.GetAxes(Glsl.Pass("Shared\n{\n#ifdef HOST_FLAG\n#pragma variant ON_HOST\n#endif\n#ifndef HOST_FLAG\n#pragma variant OFF_HOST\n#endif\n}\n" + ScanVertex));
+
+        Assert.Equal(["ON_HOST"], axes.Select(a => a.Name));
+    }
+
+
     const string VariantShader = """
         Vertex { void main() { gl_Position = vec4(0); } }
         Fragment

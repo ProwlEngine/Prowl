@@ -9,7 +9,6 @@
     <ItemGroup>
         <ProjectReference Include="../Shared/Shared.csproj" />
         <ProjectReference Include="../../../Clay/Clay/Clay.csproj" />
-        <ProjectReference Include="../../../Photonic/Photonic/Photonic.csproj" />
     </ItemGroup>
 
     <ItemGroup>

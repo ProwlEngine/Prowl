@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
 
 using Xunit;
@@ -83,6 +85,30 @@ public sealed partial class LightingTests
 
     private static void AssertNear(float expected, float got, string what)
         => Assert.True(MathF.Abs(got - expected) <= DitherTolerance, $"{what}: expected {expected} of the light through, got {got}");
+
+    [Fact]
+    public void AKeywordOnlyLitPassesRead_LeavesCachedShadowsAlone()
+    {
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot());
+        _world.Add(new RenderableDesc
+        {
+            Mesh = FacingQuad,
+            Transform = Double4x4.CreateTranslation(_origin + new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.5),
+            Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly,
+        }, [PBR(_ => { })]);
+        Frame();
+        Frame();
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
+
+        // A light with an IES profile turns GRAPHITE_LIGHT_MASKS on, which the caster's lit passes read and its ShadowCaster pass does not
+        Texture profile = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        _harness.Owned.Add(profile);
+        _world.AddLight(new LightDesc { Type = LightType.Spot, Position = new Double3(0, 0, -50), Direction = new Float3(0, 0, -1), Range = 1, Intensity = 0.1f, InnerAngle = 10, OuterAngle = 20, IesProfile = profile });
+        Frame();
+        Assert.Equal(VariantSpace.ToggleValues[1], _world.Globals.KeywordSnapshot.GetValueOrDefault(GlobalAxis.LightMasks.Name));
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
+    }
 
     [Fact]
     public void AHalfOpaqueCaster_CastsHalfAShadow()

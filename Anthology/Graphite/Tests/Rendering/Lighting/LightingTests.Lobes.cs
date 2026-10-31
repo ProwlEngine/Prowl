@@ -160,7 +160,7 @@ public sealed partial class LightingTests
     [Fact]
     public void TheFurnace_AtTheLiteTier_IsOne()
     {
-        _world.Globals.SetKeyword("PBR_TIER", "LITE");
+        _world.Globals.Set(GlobalAxis.PbrTier, "LITE");
         AssertFurnace("lite", m =>
         {
             s_whiteBases[0](m);

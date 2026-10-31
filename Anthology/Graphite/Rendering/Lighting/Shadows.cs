@@ -1627,13 +1627,16 @@ internal sealed partial class FramePipeline
         light.StaticDirty = !staticComplete;
     }
 
-    // Whether a caster shader has a global keyword that changed
+    // Whether a caster shader's ShadowCaster pass has a global keyword that changed
     private static bool ReadsChangedKeyword(List<Shader> shaders, IReadOnlyDictionary<string, string>? before, IReadOnlyDictionary<string, string> after)
     {
         foreach (Shader shader in shaders)
         {
+            int caster = shader.PassIndex(PassType.ShadowCaster);
             foreach (VariantSpace axis in shader.GlobalAxes)
             {
+                if (caster >= 0 && !shader.PassHasAxis(caster, axis.Name))
+                    continue;
                 if (before == null || before.GetValueOrDefault(axis.Name) != after.GetValueOrDefault(axis.Name))
                     return true;
             }

@@ -99,7 +99,7 @@ public sealed partial class LightingTests
     [InlineData("LITE")]
     public void TheFurnace_WhiteTransmission_IsOne(string tier)
     {
-        _world.Globals.SetKeyword("PBR_TIER", tier);
+        _world.Globals.Set(GlobalAxis.PbrTier, tier);
         for (int i = 0; i < s_whiteTransmission.Length; i++)
             AssertFurnace($"{tier} transmission {i}", s_whiteTransmission[i]);
     }
@@ -110,7 +110,7 @@ public sealed partial class LightingTests
     [InlineData("LITE")]
     public void TheFurnace_WhiteScatteringVolumes_AreOne(string tier)
     {
-        _world.Globals.SetKeyword("PBR_TIER", tier);
+        _world.Globals.Set(GlobalAxis.PbrTier, tier);
         for (int i = 0; i < s_whiteVolumes.Length; i++)
         {
             _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Ambient = AmbientMode.Sky, AmbientIntensity = 1, Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 0) };
@@ -237,6 +237,58 @@ public sealed partial class LightingTests
         }
     }
 
+    // specular_weight lowers the IOR the dielectric's Fresnel sees, so the refracted light is what the weaker reflection
+    // leaves: brighter as the weight drops, all of the backdrop at 0, and the default output at 1
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Refraction_TakesWhatSpecularWeightLeaves(bool thinWalled)
+    {
+        DarkWorld();
+        Vector3 backdrop = new(0.2f, 0.4f, 0.8f);
+        Material flat = _renderer.CreateMaterial(_renderer.Standard.Unlit);
+        flat.SetColor("base_color", new Float4(backdrop.X, backdrop.Y, backdrop.Z, 1));
+        AddBackdrop(flat);
+
+        Float4[] Render(float? weight)
+        {
+            RenderableHandle glass = AddFacingQuad(Glass(m =>
+            {
+                m.SetFloat("transmission_weight", 1);
+                m.SetFloat("specular_roughness", 0.2f);
+                m.SetInt("geometry_thin_walled", thinWalled ? 1 : 0);
+                if (weight is { } w)
+                    m.SetFloat("specular_weight", w);
+            }));
+            Frame();
+            Float4[] pixels = Frame();
+            _world.Remove(glass);
+            return pixels;
+        }
+
+        Float4[] unset = Render(null);
+        float[] weights = [1, 0.5f, 0];
+        Float4[][] rendered = Array.ConvertAll(weights, w => Render(w));
+        Vector3 n = new(0, 0, -1);
+        for (int i = 0; i < Size * Size; i++)
+        {
+            Vector3 v = Vector3.Normalize(-PixelPosition(i % Size, i / Size));
+            for (int c = 0; c < 3; c++)
+            {
+                Assert.Equal(unset[i][c], rendered[0][i][c]);
+                for (int k = 0; k < weights.Length; k++)
+                {
+                    PbrInputs inputs = new(new Vector3(0.8f), Roughness: 0.2f, SpecularWeight: weights[k]) { TransmissionWeight = 1, ThinWalled = thinWalled };
+                    double want = backdrop[c] * new PbrReference(inputs, n, v).Transmittance[c];
+                    Assert.True(Math.Abs(rendered[k][i][c] - want) <= 2e-3 + 0.01 * want, $"weight {weights[k]} pixel {i} channel {c}: expected {want}, got {rendered[k][i][c]}");
+                    if (k > 0)
+                        Assert.True(rendered[k][i][c] > rendered[k - 1][i][c], $"weight {weights[k]} pixel {i} channel {c}: {rendered[k][i][c]} is not brighter than {rendered[k - 1][i][c]} at weight {weights[k - 1]}");
+                }
+                Assert.True(Math.Abs(rendered[2][i][c] - backdrop[c]) <= 2e-3, $"weight 0 pixel {i} channel {c}: {rendered[2][i][c]} is not the backdrop {backdrop[c]}");
+            }
+        }
+    }
+
     // Dispersion refracts blue most and red least: through a slab over a ramp, green reads where it does without
     // dispersion, and red and blue fall on either side of it, red toward the straight line and blue away
     [Fact]
@@ -302,7 +354,7 @@ public sealed partial class LightingTests
         Assert.False(Drawn().BackDepthUsed);
 
         material.SetInt("geometry_thin_walled", 0);
-        _world.Globals.SetKeyword("PBR_TIER", "LITE");
+        _world.Globals.Set(GlobalAxis.PbrTier, "LITE");
         Frame();
         Assert.False(Drawn().SceneColorUsed || Drawn().SceneDepthUsed || Drawn().BackDepthUsed);
     }

@@ -17,7 +17,7 @@ namespace Prowl.Graphite.Rendering;
 /// words. A copy deformed the frame it is made skips the streams the deform writes. After the upload and before the
 /// fence every view follows.
 /// </summary>
-internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) : IDisposable
+internal sealed class DeformPass(InternalCompute program, GeometryPool geometry) : IDisposable
 {
     private static readonly PropertyID s_deformSource = "Graphite_DeformSource", s_deformTarget = "Graphite_DeformTarget",
         s_skinMatrices = "Graphite_SkinMatrices";
@@ -66,7 +66,7 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
                 continue;
             if (!bound)
             {
-                cmd.SetComputeShader(program);
+                cmd.SetComputeShader(program.Program);
                 bound = true;
             }
 

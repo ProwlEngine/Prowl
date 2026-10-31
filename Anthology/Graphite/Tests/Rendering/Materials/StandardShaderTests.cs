@@ -68,12 +68,12 @@ public sealed class StandardShaderTests : IDisposable
         List<(ShaderPass, Keyword[])> variants = [];
         foreach (ShaderPass pass in loaded.Definition.Passes!)
         {
-            IReadOnlyList<string> views = _compiler.GetAxes(pass).Where(a => a.Name == Shader.DebugAxis).Select(a => a.Values).FirstOrDefault() ?? [""];
+            IReadOnlyList<string> views = _compiler.GetAxes(pass).Where(a => a.Name == GlobalAxis.Debug.Name).Select(a => a.Values).FirstOrDefault() ?? [""];
             foreach (string view in views)
             {
                 List<Keyword> combo = [new Keyword("_SURFACE", surface), new Keyword("PBR_TIER", tier)];
                 if (view.Length > 0)
-                    combo.Add(new Keyword(Shader.DebugAxis, view));
+                    combo.Add(new Keyword(GlobalAxis.Debug.Name, view));
                 variants.Add((pass, [.. combo]));
             }
         }
@@ -183,7 +183,7 @@ public sealed class StandardShaderTests : IDisposable
 
             List<Keyword> combo = [new Keyword("_SURFACE", surface)];
             if (pass.Name == "Debug")
-                combo.Add(new Keyword(Shader.DebugAxis, "DIFFUSE"));
+                combo.Add(new Keyword(GlobalAxis.Debug.Name, "DIFFUSE"));
             _compiler.CompileProgram(pass, [.. combo]);
         }
     }
@@ -358,7 +358,7 @@ public sealed class StandardShaderTests : IDisposable
         {
             List<Keyword> combo = [new Keyword("_SURFACE", "OPAQUE")];
             if (pass.Name == "Debug")
-                combo.Add(new Keyword(Shader.DebugAxis, "LIGHTING"));
+                combo.Add(new Keyword(GlobalAxis.Debug.Name, "LIGHTING"));
             _compiler.CompileProgram(pass, [.. combo]);
         }
     }
@@ -525,7 +525,7 @@ public sealed class StandardShaderTests : IDisposable
                     foreach (string transmits in new[] { "false", "true" })
                     {
                         foreach (string view in new[] { "DIFFUSE", "SPECULAR", "FURNACE", "COAT", "FUZZ", "THIN_FILM", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS" })
-                            variants.Add((debug, [.. combo, new Keyword("PBR_TRANSMISSION", transmits), new Keyword(Shader.DebugAxis, view)]));
+                            variants.Add((debug, [.. combo, new Keyword("PBR_TRANSMISSION", transmits), new Keyword(GlobalAxis.Debug.Name, view)]));
                     }
                 }
             }

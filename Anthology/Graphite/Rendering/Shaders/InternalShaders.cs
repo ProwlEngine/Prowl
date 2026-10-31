@@ -40,10 +40,42 @@ internal static class InternalShaders
         return new ShaderPass { State = new PassState(), Source = source, SourceName = name };
     }
 
-    public static ComputeProgram Compute(GraphicsDevice device, IShaderCompiler? compiler, string file)
+    /// <summary>A compute program of a library file, compiled under the policy.</summary>
+    public static InternalCompute Compute(GraphicsDevice device, IShaderCompiler? compiler, string file, CompilePolicy policy = CompilePolicy.Sync)
+        => new(device, FilePass(file).Variants(compiler, device.BackendType), ShaderLibrary.Prefix + file, policy);
+}
+
+/// <summary>
+/// A compute program of the renderer's library. Async compiles it on a worker at Fallback priority and its first use
+/// waits for that, the other policies compile it when made.
+/// </summary>
+internal sealed class InternalCompute : IDisposable
+{
+    private readonly GraphicsDevice _device;
+    private readonly PassVariants _variants;
+    private readonly string _name;
+    private ComputeProgram? _program;
+
+    public InternalCompute(GraphicsDevice device, PassVariants variants, string name, CompilePolicy policy)
     {
-        ComputeProgram program = device.ResourceFactory.CreateComputeProgram(FilePass(file).Variants(compiler, device.BackendType).RequireCompute());
-        program.Name = ShaderLibrary.Prefix + file;
+        _device = device;
+        _variants = variants;
+        _name = name;
+        if (policy == CompilePolicy.Async)
+            variants.QueueCompute(0, CompilePriority.Fallback);
+        else
+            _program = Create();
+    }
+
+    /// <summary>The program, waiting for its compile the first time. Render thread.</summary>
+    public ComputeProgram Program => _program ??= Create();
+
+    private ComputeProgram Create()
+    {
+        ComputeProgram program = _device.ResourceFactory.CreateComputeProgram(_variants.RequireCompute());
+        program.Name = _name;
         return program;
     }
+
+    public void Dispose() => _program?.Dispose();
 }

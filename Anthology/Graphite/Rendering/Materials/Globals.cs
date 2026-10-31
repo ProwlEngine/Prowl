@@ -17,7 +17,7 @@ public sealed class GlobalProperties
 {
     private readonly GlobalRegistry _registry;
     private readonly Dictionary<PropertyID, MaterialValue> _values = new();
-    private readonly Dictionary<string, string> _keywords = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, GlobalKeyword> _keywords = new(StringComparer.Ordinal);
 
     internal GlobalProperties(GlobalRegistry registry, GlobalProperties? fallback)
     {
@@ -47,9 +47,14 @@ public sealed class GlobalProperties
         if (versions == _snapshotVersions)
             return;
 
-        Dictionary<string, string> snapshot = Fallback != null ? new(Fallback._keywords, StringComparer.Ordinal) : new(StringComparer.Ordinal);
-        foreach (KeyValuePair<string, string> pair in _keywords)
-            snapshot[pair.Key] = pair.Value;
+        Dictionary<string, string> snapshot = new(StringComparer.Ordinal);
+        if (Fallback != null)
+        {
+            foreach (GlobalKeyword keyword in Fallback._keywords.Values)
+                snapshot[keyword.Axis.Name] = keyword.Value;
+        }
+        foreach (GlobalKeyword keyword in _keywords.Values)
+            snapshot[keyword.Axis.Name] = keyword.Value;
         KeywordSnapshot = snapshot;
         KeywordSet = KeywordSet.Intern(snapshot);
         _snapshotVersions = versions;
@@ -180,24 +185,39 @@ public sealed class GlobalProperties
             Changed();
     }
 
-    /// <summary>Picks a value of a global axis. Material axes are set by materials.</summary>
-    public void SetKeyword(string axis, string value)
+    /// <summary>
+    /// Picks the value of a global axis for every view of this set, null taking the fallback's again. Throws on a value
+    /// the axis does not have.
+    /// </summary>
+    public void Set(GlobalAxis axis, string? value)
     {
-        if (_keywords.TryGetValue(axis, out string? existing) && existing == value)
+        ArgumentNullException.ThrowIfNull(axis);
+        if (value == null)
+        {
+            if (_keywords.Remove(axis.Name))
+                KeywordChanged();
             return;
-        _keywords[axis] = value;
-        KeywordVersion++;
-        Version++;
+        }
+        Set(axis[value]);
     }
 
-    public void EnableKeyword(string axis) => SetKeyword(axis, VariantSpace.ToggleValues[1]);
-
-    public void DisableKeyword(string axis) => SetKeyword(axis, VariantSpace.ToggleValues[0]);
-
-    public void ClearKeyword(string axis)
+    /// <summary>Turns a toggle axis on or off. Throws on an axis that is not a toggle.</summary>
+    public void Set(GlobalAxis axis, bool on)
     {
-        if (!_keywords.Remove(axis))
+        ArgumentNullException.ThrowIfNull(axis);
+        Set(axis[on]);
+    }
+
+    private void Set(GlobalKeyword keyword)
+    {
+        if (_keywords.TryGetValue(keyword.Axis.Name, out GlobalKeyword existing) && existing == keyword)
             return;
+        _keywords[keyword.Axis.Name] = keyword;
+        KeywordChanged();
+    }
+
+    private void KeywordChanged()
+    {
         KeywordVersion++;
         Version++;
     }
@@ -212,12 +232,13 @@ public sealed class GlobalProperties
         return false;
     }
 
-    /// <summary>This set's keyword, then the fallback's, or null.</summary>
-    public string? GetKeyword(string axis)
+    /// <summary>The value this set picks for an axis, then the fallback's, or null when neither picks one.</summary>
+    public string? Get(GlobalAxis axis)
     {
-        if (_keywords.TryGetValue(axis, out string? value))
-            return value;
-        return Fallback?.GetKeyword(axis);
+        ArgumentNullException.ThrowIfNull(axis);
+        if (_keywords.TryGetValue(axis.Name, out GlobalKeyword keyword))
+            return keyword.Value;
+        return Fallback?.Get(axis);
     }
 
     public IEnumerable<(PropertyID Name, MaterialValue Value)> LocalValues
@@ -229,14 +250,7 @@ public sealed class GlobalProperties
         }
     }
 
-    public IEnumerable<Keyword> LocalKeywords
-    {
-        get
-        {
-            foreach (KeyValuePair<string, string> pair in _keywords)
-                yield return new Keyword(pair.Key, pair.Value);
-        }
-    }
+    public IEnumerable<GlobalKeyword> LocalKeywords => _keywords.Values;
 
     private void Set(PropertyID name, in MaterialValue value)
     {

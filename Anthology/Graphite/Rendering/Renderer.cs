@@ -217,12 +217,14 @@ public sealed class Renderer : IDisposable
         if (_options.SmallestProbeMip is < 1 or > 2048 || !uint.IsPow2(_options.SmallestProbeMip))
             throw new ArgumentException($"SmallestProbeMip is {_options.SmallestProbeMip}, it must be a power of two from 1 to 2048.", nameof(options));
         InternalShaders.Register();
-        _fallbackShader = CompileFallback();
+        _fallbackShader = new Shader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Fallback.shader")!), _compiler);
+        if (_options.Compile == CompilePolicy.Async)
+            CompileFallback(CompilePolicy.Async);
 
-        Resources = new RendererResources(device, compiler);
+        _uploader = new Uploader(device, InternalShaders.Compute(device, compiler, "Internal/Scatter.glsl", _options.Compile));
+        Resources = new RendererResources(device, compiler, _options.Compile);
         Textures = Resources.Textures;
         Textures.Reporter = Report;
-        _uploader = new Uploader(device, InternalShaders.Compute(device, compiler, "Internal/Scatter.glsl"));
         _store = new RenderStore();
         _geometry = new GeometryPool(device, _store, _options.PageVertexWords, _options.PageIndices);
         _materials = new MaterialSystem(device, _store, Textures) { Reporter = Report };
@@ -237,6 +239,7 @@ public sealed class Renderer : IDisposable
         Standard = new BuiltInStandard(this);
         _programs.DepthCaster = LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}DepthCaster.shader")!));
         _depthCasterMaterial = CreateMaterial(_programs.DepthCaster);
+        CompileFallback(CompilePolicy.Sync);
 
         if (_options.Threading == RenderThreading.RenderThread)
         {
@@ -376,21 +379,19 @@ public sealed class Renderer : IDisposable
     private readonly Shader _fallbackShader;
 
     // The grey stand in compiles before the first frame, so every frame has something to draw
-    private Shader CompileFallback()
+    private void CompileFallback(CompilePolicy policy)
     {
-        Shader fallback = new(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Fallback.shader")!), _compiler);
         if (_compiler == null || _options.Compile == CompilePolicy.BakedOnly)
-            return fallback;
-        foreach (ShaderPass pass in fallback.Definition.Passes ?? [])
-            pass.Variants(_compiler, Device.BackendType).Request(0, CompilePolicy.Sync, CompilePriority.Fallback, out _, out _);
-        return fallback;
+            return;
+        foreach (ShaderPass pass in _fallbackShader.Definition.Passes ?? [])
+            pass.Variants(_compiler, Device.BackendType).Request(0, policy, CompilePriority.Fallback, out _, out _);
     }
 
     /// <summary>
     /// Starts compiling the variants a material draws with at background priority, so they are ready before it first
     /// draws. Global axes take their value from the keywords, else their first value. Debug views compile on demand. Host thread.
     /// </summary>
-    public void Prewarm(Material material, IReadOnlyDictionary<string, string>? keywords = null)
+    public void Prewarm(Material material, params ReadOnlySpan<GlobalKeyword> keywords)
     {
         if (_compiler == null || _options.Compile == CompilePolicy.BakedOnly)
             return;
@@ -401,7 +402,7 @@ public sealed class Renderer : IDisposable
         for (int i = 0; i < shader.GlobalAxes.Count; i++)
         {
             VariantSpace axis = shader.GlobalAxes[i];
-            combo[draw.Keywords.Length + i] = new Keyword(axis.Name, keywords?.GetValueOrDefault(axis.Name) ?? axis.Values[0]);
+            combo[draw.Keywords.Length + i] = new Keyword(axis.Name, ValueIn(keywords, axis.Name) ?? axis.Values[0]);
         }
         foreach (ShaderPass pass in shader.Definition.Passes ?? [])
         {
@@ -410,6 +411,16 @@ public sealed class Renderer : IDisposable
             PassVariants variants = pass.Variants(_compiler, Device.BackendType);
             variants.Request(variants.KeyOf(combo), CompilePolicy.Async, CompilePriority.Background, out _, out _);
         }
+    }
+
+    private static string? ValueIn(ReadOnlySpan<GlobalKeyword> keywords, string axis)
+    {
+        foreach (GlobalKeyword keyword in keywords)
+        {
+            if (keyword.Axis?.Name == axis)
+                return keyword.Value;
+        }
+        return null;
     }
 
     /// <summary>
@@ -656,14 +667,16 @@ public sealed class Renderer : IDisposable
     /// A fullscreen program for features. The fragment code follows an include giving it vUV, outColor and
     /// Graphite_SampleSource(uv), which samples the colour the feature reads in mono and layered views alike, unless
     /// source is false. Textures the size of the view are declared GRAPHITE_SCREEN_TEXTURE and read through
-    /// Graphite_Sample, arrays on layered views. Blend is one override attachment unless given.
+    /// Graphite_Sample, arrays on layered views. Blend is one override attachment unless given. Under
+    /// <see cref="CompilePolicy.Async"/> it compiles on the compile queue, and a feature drawing it sits out of its views
+    /// until it is ready.
     /// </summary>
     /// <remarks>
     /// A lit program may include Graphite/Lighting.glsl and Graphite/Shadows.glsl and read the world's lights, shadows,
     /// probes and bindless textures as forward passes do; its feature declares <see cref="FeatureBuilder.DrawsRenderables"/>.
     /// </remarks>
     public FullscreenProgram CreateFullscreenProgram(string fragment, string name = "Fullscreen", bool source = true, BlendStateDescription? blend = null, bool lit = false, string variant = "")
-        => FullscreenProgram.Create(Device, _compiler, fragment, name, source, blend, lit, variant: variant);
+        => FullscreenProgram.Create(Device, _compiler, fragment, name, source, blend, lit, variant: variant, policy: _options.Compile, report: Report);
 
     /// <summary>
     /// Creates a program making its own geometry from gl_VertexIndex, drawn by features through
@@ -671,7 +684,7 @@ public sealed class Renderer : IDisposable
     /// reads the view through Graphite/Internal/PostView.glsl as fullscreen programs do.
     /// </summary>
     public FullscreenProgram CreateProceduralProgram(string code, string name = "Procedural", BlendStateDescription? blend = null, bool lit = false)
-        => FullscreenProgram.Create(Device, _compiler, code, name, false, blend, lit, procedural: true);
+        => FullscreenProgram.Create(Device, _compiler, code, name, false, blend, lit, procedural: true, policy: _options.Compile, report: Report);
 
     private int _frameCount;
     private readonly List<Double3> _cameras = new();

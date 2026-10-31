@@ -8,17 +8,36 @@ namespace Prowl.Graphite.Rendering;
 /// <summary>
 /// The GPU resources the renderer's frames, views and effects share, made once with the renderer: the bindless tables,
 /// the lookup tables, the textures a view without a producer reads, one sampler set, the scene formats and the
-/// renderer's own programs.
+/// renderer's own programs. Under <see cref="CompilePolicy.Async"/> the programs start compiling on the compile queue at
+/// Fallback priority when made and their first use waits for them, as no frame draws without them.
 /// </summary>
 internal sealed class RendererResources : IDisposable
 {
     private readonly FullscreenProgram _present, _presentOver;
+    private readonly PassVariants _prefilter;
+    private GraphicsProgram? _prefilterProgram;
+    private readonly GraphicsDevice _device;
     private readonly Texture _smaaArea, _smaaSearch;
     private readonly PixelFormat[]?[] _sceneTargets = new PixelFormat[12][];
 
-    public RendererResources(GraphicsDevice device, IShaderCompiler? compiler)
+    public RendererResources(GraphicsDevice device, IShaderCompiler? compiler, CompilePolicy policy = CompilePolicy.Sync)
     {
+        _device = device;
         ResourceFactory factory = device.ResourceFactory;
+        BlendStateDescription over = new(default, BlendAttachmentDescription.AlphaBlend with { SourceColorFactor = BlendFactor.One, SourceAlphaFactor = BlendFactor.One });
+        BlendAttachmentDescription untouched = BlendAttachmentDescription.OverrideBlend with { ColorWriteMask = ColorWriteMask.None };
+        _present = Essential(FullscreenProgram.Create(device, compiler, InternalShaders.Present, "Graphite/Present", policy: policy, priority: CompilePriority.Fallback));
+        _presentOver = Essential(FullscreenProgram.Create(device, compiler, InternalShaders.Present, "Graphite/PresentOver", blend: over, policy: policy, priority: CompilePriority.Fallback));
+        CopyBackProgram = Essential(FullscreenProgram.Create(device, compiler, InternalShaders.CopyBack, "Graphite/CopyBack",
+            blend: new BlendStateDescription(default, BlendAttachmentDescription.OverrideBlend, untouched, untouched), policy: policy, priority: CompilePriority.Fallback));
+        _prefilter = InternalShaders.FilePass("Internal/Prefilter.glsl").Variants(compiler, device.BackendType);
+        if (policy == CompilePolicy.Async)
+            _prefilter.Request(0, CompilePolicy.Async, CompilePriority.Fallback, out _, out _);
+        else
+            _prefilterProgram = Fullscreen(device, _prefilter);
+        SkyAmbientProgram = InternalShaders.Compute(device, compiler, "Internal/SkyAmbient.glsl", policy);
+        ExposureProgram = InternalShaders.Compute(device, compiler, "Internal/Exposure.glsl", policy);
+
         SamplerDescription clamp = SamplerDescription.Linear with
         {
             AddressModeU = SamplerAddressMode.Clamp,
@@ -58,16 +77,13 @@ internal sealed class RendererResources : IDisposable
         }
         NoExposure = factory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_Float, TextureUsage.Sampled));
         device.UpdateTexture<float>(NoExposure, [0f], TextureRegion.Whole(NoExposure, 0, 0));
+    }
 
-        BlendStateDescription over = new(default, BlendAttachmentDescription.AlphaBlend with { SourceColorFactor = BlendFactor.One, SourceAlphaFactor = BlendFactor.One });
-        _present = FullscreenProgram.Create(device, compiler, InternalShaders.Present, "Graphite/Present");
-        _presentOver = FullscreenProgram.Create(device, compiler, InternalShaders.Present, "Graphite/PresentOver", blend: over);
-        BlendAttachmentDescription untouched = BlendAttachmentDescription.OverrideBlend with { ColorWriteMask = ColorWriteMask.None };
-        CopyBackProgram = FullscreenProgram.Create(device, compiler, InternalShaders.CopyBack, "Graphite/CopyBack",
-            blend: new BlendStateDescription(default, BlendAttachmentDescription.OverrideBlend, untouched, untouched));
-        PrefilterProgram = Fullscreen(device, compiler, "Internal/Prefilter.glsl");
-        SkyAmbientProgram = InternalShaders.Compute(device, compiler, "Internal/SkyAmbient.glsl");
-        ExposureProgram = InternalShaders.Compute(device, compiler, "Internal/Exposure.glsl");
+    // Captures draw through the layered form on the first frame, so it compiles alongside the mono one
+    private static FullscreenProgram Essential(FullscreenProgram program)
+    {
+        program.Ready(6);
+        return program;
     }
 
     /// <summary>The bindless textures and samplers of materials and globals.</summary>
@@ -132,18 +148,20 @@ internal sealed class RendererResources : IDisposable
     /// <summary>Copies a colour features wrote back into the scene's colour, leaving its G-buffer.</summary>
     public FullscreenProgram CopyBackProgram { get; }
 
-    public GraphicsProgram PrefilterProgram { get; }
-    public ComputeProgram SkyAmbientProgram { get; }
-    public ComputeProgram ExposureProgram { get; }
+    /// <summary>Filters a captured cube into a roughness mip of a prefiltered one, waiting for its compile the first time. Render thread.</summary>
+    public GraphicsProgram PrefilterProgram => _prefilterProgram ??= Fullscreen(_device, _prefilter);
 
-    private static GraphicsProgram Fullscreen(GraphicsDevice device, IShaderCompiler? compiler, string file)
+    public InternalCompute SkyAmbientProgram { get; }
+    public InternalCompute ExposureProgram { get; }
+
+    private static GraphicsProgram Fullscreen(GraphicsDevice device, PassVariants variants)
     {
-        ShaderDescription description = InternalShaders.FilePass(file).Variants(compiler, device.BackendType).Require();
+        ShaderDescription description = variants.Require();
         description.BlendState = BlendStateDescription.SingleOverrideBlend;
         description.DepthStencilState = DepthStencilStateDescription.Disabled;
         description.RasterizerState = RasterizerStateDescription.CullNone;
         GraphicsProgram program = device.ResourceFactory.CreateGraphicsProgram(description);
-        program.Name = ShaderLibrary.Prefix + file;
+        program.Name = variants.Pass.SourceName;
         return program;
     }
 
@@ -186,7 +204,7 @@ internal sealed class RendererResources : IDisposable
         _present.Dispose();
         _presentOver.Dispose();
         CopyBackProgram.Dispose();
-        PrefilterProgram.Dispose();
+        _prefilterProgram?.Dispose();
         SkyAmbientProgram.Dispose();
         ExposureProgram.Dispose();
         Textures.Dispose();

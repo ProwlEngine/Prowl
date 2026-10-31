@@ -232,7 +232,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     // A Forward or Transmission pass draws through its shader's Debug pass while the view sets the debug axis
     private static bool DebugProgram(ref DrawProgram program, IReadOnlyDictionary<string, string> keywords)
     {
-        if (!keywords.ContainsKey(Shader.DebugAxis))
+        if (!keywords.ContainsKey(GlobalAxis.Debug.Name))
             return false;
         Shader shader = program.Shader;
         int debug = shader.PassIndex(PassType.Debug);

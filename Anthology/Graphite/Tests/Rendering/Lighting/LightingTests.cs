@@ -2083,7 +2083,7 @@ public sealed partial class LightingTests : IDisposable
         AddCaster(1, 0.5, 6);
         Frame();
         Frame();
-        _world.Globals.SetKeyword("UNUSED_BY_CASTERS", "On");
+        _world.Globals.Set(GlobalAxis.Toggle("UNUSED_BY_CASTERS"), true);
         Frame();
         Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
@@ -2101,7 +2101,7 @@ public sealed partial class LightingTests : IDisposable
         Frame();
         Assert.Equal(0, Stats.ShadowViewsDrawn);
 
-        _world.Globals.SetKeyword("CASTER_WIND", "On");
+        _world.Globals.Set(GlobalAxis.Toggle("CASTER_WIND"), true);
         Frame();
         Assert.Equal(1, Stats.ShadowViewsDrawn);
     }

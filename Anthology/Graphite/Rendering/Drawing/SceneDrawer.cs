@@ -13,6 +13,17 @@ namespace Prowl.Graphite.Rendering;
 /// <summary>Records a view's built in draws for the core features: its table, its draw lists and its sky.</summary>
 internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
 {
+    private static readonly PropertyID s_anisotropicDfg = "Graphite_AnisotropicDfg", s_backDepth = "Graphite_BackDepth",
+        s_cascades = "Graphite_Cascades", s_chunks = "Graphite_Chunks", s_dfg = "Graphite_Dfg", s_dielectricE = "Graphite_DielectricE",
+        s_directionals = "Graphite_Directionals", s_globals = "Graphite_Globals", s_materialSlots = "Graphite_MaterialSlots",
+        s_objectProbes = "Graphite_ObjectProbes", s_objects = "Graphite_Objects", s_previousTransforms = "Graphite_PreviousTransforms",
+        s_sceneColor = "Graphite_SceneColor", s_sceneColorSampler = "Graphite_SceneColorSampler", s_sceneDepth = "Graphite_SceneDepth",
+        s_screenIrradiance = "Graphite_ScreenIrradiance", s_screenSampler = "Graphite_ScreenSampler",
+        s_screenVisibility = "Graphite_ScreenVisibility", s_shadowFaces = "Graphite_ShadowFaces", s_shadowSampler = "Graphite_ShadowSampler",
+        s_skyAmbientSH = "Graphite_SkyAmbientSH", s_spatialNodes = "Graphite_SpatialNodes", s_spatialRecords = "Graphite_SpatialRecords",
+        s_spatialRegions = "Graphite_SpatialRegions", s_spatialRoots = "Graphite_SpatialRoots", s_tableSampler = "Graphite_TableSampler",
+        s_transforms = "Graphite_Transforms", s_views = "Graphite_Views", s_worldLighting = "Graphite_WorldLighting";
+
     private readonly PropertySet _properties = new();
     private (DeviceBuffer? Buffer, uint Offset, uint Size) _globals;
     private DescriptorTable _viewTable = null!;
@@ -25,34 +36,34 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         if (globals != _globals)
         {
             _globals = globals;
-            camera.ViewTable.Set("Graphite_Globals", 0, new DeviceBufferRange(globals.Buffer, globals.Offset, globals.Size));
+            camera.ViewTable.Set(s_globals, 0, new DeviceBufferRange(globals.Buffer, globals.Offset, globals.Size));
         }
-        camera.ViewTable.Set("Graphite_Views", 0, camera.ViewBlocks.Buffer);
-        camera.ViewTable.Set("Graphite_SpatialRoots", 0, camera.SpatialRoots.Buffer);
+        camera.ViewTable.Set(s_views, 0, camera.ViewBlocks.Buffer);
+        camera.ViewTable.Set(s_spatialRoots, 0, camera.SpatialRoots.Buffer);
         for (int slot = 0; slot < camera.Spatial.Length; slot++)
         {
             if (camera.Spatial[slot] is not { } view)
                 continue;
-            camera.ViewTable.Set("Graphite_SpatialRecords", (uint)(slot * 2 + 1), view.Records.Buffer);
-            camera.ViewTable.Set("Graphite_SpatialNodes", (uint)(slot * 3 + 1), view.Nodes.Buffer);
-            camera.ViewTable.Set("Graphite_SpatialNodes", (uint)(slot * 3 + 2), view.RegionNodes.Buffer);
-            camera.ViewTable.Set("Graphite_SpatialRegions", (uint)slot, view.RegionEntries.Buffer);
+            camera.ViewTable.Set(s_spatialRecords, (uint)(slot * 2 + 1), view.Records.Buffer);
+            camera.ViewTable.Set(s_spatialNodes, (uint)(slot * 3 + 1), view.Nodes.Buffer);
+            camera.ViewTable.Set(s_spatialNodes, (uint)(slot * 3 + 2), view.RegionNodes.Buffer);
+            camera.ViewTable.Set(s_spatialRegions, (uint)slot, view.RegionEntries.Buffer);
         }
         SetWorldBuffers(camera.ViewTable, camera.World.World);
-        camera.ViewTable.Set("Graphite_ShadowSampler", 0, frame.ShadowSampler);
-        camera.ViewTable.Set("Graphite_ShadowFaces", 0, camera.World.Shadows!.Faces.Buffer);
-        camera.ViewTable.Set("Graphite_Cascades", 0, camera.Cascades.Buffer);
-        camera.ViewTable.Set("Graphite_ScreenVisibility", 0, (object?)camera.ScreenVisibilityView() ?? frame.Resources.NoScreenVisibility);
-        camera.ViewTable.Set("Graphite_ScreenIrradiance", 0, (object?)camera.ScreenIrradianceView() ?? frame.Resources.NoScreenIrradiance);
-        camera.ViewTable.Set("Graphite_ScreenSampler", 0, frame.Resources.LinearClamp);
-        camera.ViewTable.Set("Graphite_SceneColor", 0, camera.SceneColor != null ? camera.SceneColorView() : frame.Resources.NoSceneColor);
-        camera.ViewTable.Set("Graphite_SceneColorSampler", 0, frame.Resources.LinearClamp);
-        camera.ViewTable.Set("Graphite_SceneDepth", 0, camera.SceneDepth != null ? camera.SceneDepthView() : frame.Resources.NoSceneDepth);
-        camera.ViewTable.Set("Graphite_Dfg", 0, frame.Resources.Dfg);
-        camera.ViewTable.Set("Graphite_DielectricE", 0, frame.Resources.DielectricE);
-        camera.ViewTable.Set("Graphite_AnisotropicDfg", 0, frame.Resources.AnisotropicDfg);
-        camera.ViewTable.Set("Graphite_BackDepth", 0, (object?)camera.BackDepthView() ?? frame.Resources.NoSceneDepth);
-        camera.ViewTable.Set("Graphite_TableSampler", 0, frame.Resources.LinearClamp);
+        camera.ViewTable.Set(s_shadowSampler, 0, frame.ShadowSampler);
+        camera.ViewTable.Set(s_shadowFaces, 0, camera.World.Shadows!.Faces.Buffer);
+        camera.ViewTable.Set(s_cascades, 0, camera.Cascades.Buffer);
+        camera.ViewTable.Set(s_screenVisibility, 0, (object?)camera.ScreenVisibilityView() ?? frame.Resources.NoScreenVisibility);
+        camera.ViewTable.Set(s_screenIrradiance, 0, (object?)camera.ScreenIrradianceView() ?? frame.Resources.NoScreenIrradiance);
+        camera.ViewTable.Set(s_screenSampler, 0, frame.Resources.LinearClamp);
+        camera.ViewTable.Set(s_sceneColor, 0, camera.SceneColor != null ? camera.SceneColorView() : frame.Resources.NoSceneColor);
+        camera.ViewTable.Set(s_sceneColorSampler, 0, frame.Resources.LinearClamp);
+        camera.ViewTable.Set(s_sceneDepth, 0, camera.SceneDepth != null ? camera.SceneDepthView() : frame.Resources.NoSceneDepth);
+        camera.ViewTable.Set(s_dfg, 0, frame.Resources.Dfg);
+        camera.ViewTable.Set(s_dielectricE, 0, frame.Resources.DielectricE);
+        camera.ViewTable.Set(s_anisotropicDfg, 0, frame.Resources.AnisotropicDfg);
+        camera.ViewTable.Set(s_backDepth, 0, (object?)camera.BackDepthView() ?? frame.Resources.NoSceneDepth);
+        camera.ViewTable.Set(s_tableSampler, 0, frame.Resources.LinearClamp);
         _viewTable = camera.ViewTable.Get(ring);
         _properties.SetBuffer(GraphiteBindings.InstancesName, camera.Instances.Buffer);
         _properties.SetBuffer(GraphiteBindings.DrawRecordsName, camera.Records.Buffer);
@@ -90,20 +101,20 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
     {
         RenderWorld.RenderSide render = world.Render;
         WorldLighting lighting = world.Lighting;
-        table.Set("Graphite_Chunks", 0, frame.Geometry.Chunks.Buffer);
-        table.Set("Graphite_Transforms", 0, render.Transforms.Buffer);
-        table.Set("Graphite_PreviousTransforms", 0, render.PreviousTransforms.Buffer);
-        table.Set("Graphite_Objects", 0, render.Attributes.Buffer);
-        table.Set("Graphite_MaterialSlots", 0, render.MaterialSlots.Buffer);
+        table.Set(s_chunks, 0, frame.Geometry.Chunks.Buffer);
+        table.Set(s_transforms, 0, render.Transforms.Buffer);
+        table.Set(s_previousTransforms, 0, render.PreviousTransforms.Buffer);
+        table.Set(s_objects, 0, render.Attributes.Buffer);
+        table.Set(s_materialSlots, 0, render.MaterialSlots.Buffer);
         foreach (SpatialIndex set in world.SpatialSets)
         {
-            table.Set("Graphite_SpatialRecords", (uint)(set.Slot * 2), set.StaticRecords.Buffer);
-            table.Set("Graphite_SpatialNodes", (uint)(set.Slot * 3), set.StaticNodes.Buffer);
+            table.Set(s_spatialRecords, (uint)(set.Slot * 2), set.StaticRecords.Buffer);
+            table.Set(s_spatialNodes, (uint)(set.Slot * 3), set.StaticNodes.Buffer);
         }
-        table.Set("Graphite_WorldLighting", 0, lighting.World.Buffer);
-        table.Set("Graphite_ObjectProbes", 0, world.Probes.ObjectSh);
-        table.Set("Graphite_SkyAmbientSH", 0, world.Reflections.SkyAmbient);
-        table.Set("Graphite_Directionals", 0, lighting.Directionals.Buffer);
+        table.Set(s_worldLighting, 0, lighting.World.Buffer);
+        table.Set(s_objectProbes, 0, world.Probes.ObjectSh);
+        table.Set(s_skyAmbientSH, 0, world.Reflections.SkyAmbient);
+        table.Set(s_directionals, 0, lighting.Directionals.Buffer);
     }
 
     // A fullscreen triangle at the far plane with the sky material's slot in the push constants

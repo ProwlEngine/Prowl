@@ -422,9 +422,9 @@ public sealed partial class RenderWorld
     {
         _lights.Extract(Lighting.ReceiveLight);
         _decals.Extract(Lighting.ReceiveDecal);
-        Globals?.SetKeyword("GRAPHITE_LIGHT_MASKS", VariantSpace.ToggleValues[Lighting.MaskedLights > 0 ? 1 : 0]);
-        Globals?.SetKeyword("GRAPHITE_CONTACT_SHADOWS", VariantSpace.ToggleValues[Lighting.ContactLights > 0 ? 1 : 0]);
-        Globals?.SetKeyword("GRAPHITE_DECALS", VariantSpace.ToggleValues[Lighting.LiveDecals > 0 ? 1 : 0]);
+        Globals?.Set(GlobalAxis.LightMasks, Lighting.MaskedLights > 0);
+        Globals?.Set(GlobalAxis.ContactShadows, Lighting.ContactLights > 0);
+        Globals?.Set(GlobalAxis.Decals, Lighting.LiveDecals > 0);
         Globals?.SnapshotKeywords();
         ExtractBakedLighting();
         ExtractReflections();

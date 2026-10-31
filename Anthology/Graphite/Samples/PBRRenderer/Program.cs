@@ -202,7 +202,7 @@ internal sealed class DemoWindow
         view.Target = _shotTarget ?? _device.MainSwapchain.Framebuffer;
         view.EV100 = _scene.StartEV100;
         view.Camera = _camera.Camera;
-        view.Keywords = _debugView < 0 ? null : [new Prowl.Graphite.ShaderDef.Keyword("GRAPHITE_DEBUG", DebugViews[_debugView])];
+        view.Keywords = _debugView < 0 ? null : [GlobalAxis.Debug[DebugViews[_debugView]]];
 
         _demo.Renderer.SubmitFrame(new FrameDesc
         {

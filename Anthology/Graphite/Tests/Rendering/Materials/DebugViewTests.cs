@@ -46,12 +46,20 @@ public sealed class DebugViewTests
         foreach (string name in new[] { "Lit", "Unlit" })
         {
             ShaderDefinition definition = Load(name);
-            VariantSpace axis = _compiler.GetAxes(Pass(definition, "Debug")).Single(a => a.Name == Shader.DebugAxis);
+            VariantSpace axis = _compiler.GetAxes(Pass(definition, "Debug")).Single(a => a.Name == GlobalAxis.Debug.Name);
             Assert.Equal(VariantScope.Global, axis.Scope);
             Assert.Equal(ModesOf(name), axis.Values);
             foreach (ShaderPass pass in definition.Passes!.Where(p => p.Name != "Debug"))
-                Assert.DoesNotContain(_compiler.GetAxes(pass), a => a.Name == Shader.DebugAxis);
+                Assert.DoesNotContain(_compiler.GetAxes(pass), a => a.Name == GlobalAxis.Debug.Name);
         }
+    }
+
+    [Fact]
+    public void TheDebugAxis_HoldsEveryModeInTheStandardShadersOrder()
+    {
+        Assert.Equal(s_pbrModes, GlobalAxis.Debug.Values);
+        foreach (string name in new[] { "Lit", "Unlit" })
+            Assert.Equal(ModesOf(name), new Shader(Load(name), _compiler).GlobalAxes.Single(a => a.Name == GlobalAxis.Debug.Name).Values);
     }
 
     // PBR's Debug pass also declares PBR_TRANSMISSION, standing in for its Transmission pass as well
@@ -64,7 +72,7 @@ public sealed class DebugViewTests
             IEnumerable<string> forward = _compiler.GetAxes(Pass(definition, "Forward")).Select(a => a.Name);
             Assert.Equal(
                 name == "Lit" ? forward.Append("PBR_TRANSMISSION").Order(StringComparer.Ordinal) : forward.Order(StringComparer.Ordinal),
-                _compiler.GetAxes(Pass(definition, "Debug")).Where(a => a.Name != Shader.DebugAxis).Select(a => a.Name).Order(StringComparer.Ordinal));
+                _compiler.GetAxes(Pass(definition, "Debug")).Where(a => a.Name != GlobalAxis.Debug.Name).Select(a => a.Name).Order(StringComparer.Ordinal));
         }
     }
 
@@ -73,7 +81,7 @@ public sealed class DebugViewTests
     public void EveryDebugMode_Compiles(string shader, string mode)
     {
         ShaderPass pass = Pass(Load(shader), "Debug");
-        List<Keyword> combo = [new Keyword("_SURFACE", "OPAQUE"), new Keyword(Shader.DebugAxis, mode)];
+        List<Keyword> combo = [new Keyword("_SURFACE", "OPAQUE"), new Keyword(GlobalAxis.Debug.Name, mode)];
         foreach (VariantSpace axis in _compiler.GetAxes(pass))
         {
             if (axis.IsToggle)

@@ -42,6 +42,7 @@ internal sealed class PassVariants
         public ShaderDescription Compiled;
         public Exception? Failure;
         public ComputeDescription? Compute;
+        public CompileJob? ComputeJob;
     }
 
     private readonly ShaderPass _pass;
@@ -304,23 +305,70 @@ internal sealed class PassVariants
         throw new InvalidOperationException($"The variant of pass '{_pass.SourceName}' failed to compile: {error?.Message}", error);
     }
 
-    /// <summary>The variant compiled as a compute program, now when it is not compiled yet. Throws when it failed.</summary>
+    /// <summary>
+    /// The variant compiled as a compute program, now when it is not compiled yet, waiting for a compile already queued.
+    /// Throws when it failed.
+    /// </summary>
     public ComputeDescription RequireCompute(int key = 0)
     {
-        IShaderCompiler compiler;
-        int revision;
+        while (true)
+        {
+            IShaderCompiler? compiler = null;
+            Task? queued = null;
+            int revision;
+            lock (this)
+            {
+                Refresh();
+                Slot slot = At(key);
+                if (slot.Compute is { } compiled)
+                    return compiled;
+                if (slot.Failure is { } failure)
+                    throw new InvalidOperationException($"The compute variant of pass '{_pass.SourceName}' failed to compile: {failure.Message}", failure);
+                if (slot.ComputeJob is { } job)
+                {
+                    job.Raise(CompilePriority.Fallback);
+                    queued = job.Done;
+                }
+                else
+                {
+                    compiler = Compiler ?? throw new InvalidOperationException($"The compute variant of pass '{_pass.SourceName}' is not compiled and cannot be compiled here.");
+                }
+                revision = _revision;
+            }
+            if (compiler != null)
+                return CompileCompute(compiler, key, revision);
+            try
+            {
+                queued!.Wait();
+            }
+            catch (AggregateException)
+            {
+            }
+        }
+    }
+
+    /// <summary>Starts compiling the variant as a compute program on a worker, unless it is compiled, failed, queued or cannot compile here.</summary>
+    public void QueueCompute(int key, CompilePriority priority)
+    {
         lock (this)
         {
             Refresh();
             Slot slot = At(key);
-            if (slot.Compute is { } compiled)
-                return compiled;
-            if (slot.Failure is { } failure)
-                throw new InvalidOperationException($"The compute variant of pass '{_pass.SourceName}' failed to compile: {failure.Message}", failure);
-            compiler = Compiler ?? throw new InvalidOperationException($"The compute variant of pass '{_pass.SourceName}' is not compiled and cannot be compiled here.");
-            revision = _revision;
+            if (slot.Compute != null || slot.Failure != null || Compiler is not { } compiler)
+                return;
+            if (slot.ComputeJob is { } queued)
+            {
+                queued.Raise(priority);
+                return;
+            }
+            int revision = _revision;
+            slot.ComputeJob = CompileQueue.Enqueue(() => CompileCompute(compiler, key, revision), priority);
         }
+    }
 
+    // Compiles a compute variant, kept unless the pass changed meanwhile
+    private ComputeDescription CompileCompute(IShaderCompiler compiler, int key, int revision)
+    {
         ComputeDescription description;
         try
         {
@@ -331,14 +379,20 @@ internal sealed class PassVariants
             lock (this)
             {
                 if (revision == _revision)
+                {
                     At(key).Failure = e;
+                    At(key).ComputeJob = null;
+                }
             }
             throw;
         }
         lock (this)
         {
             if (revision == _revision)
+            {
                 At(key).Compute = description;
+                At(key).ComputeJob = null;
+            }
         }
         return description;
     }
@@ -456,7 +510,10 @@ internal sealed class PassVariants
         _material = _pass.Material;
         _session = session;
         foreach (Slot slot in _slots.Values)
+        {
             slot.Job?.Cancel();
+            slot.ComputeJob?.Cancel();
+        }
         _slots.Clear();
         _revision++;
         SeedBaked();

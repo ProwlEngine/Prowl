@@ -325,19 +325,30 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
         string file = FileName(pass);
         return _pragmas.GetOrAdd((file, pass.Source), _ =>
         {
-            List<VariantSpace> axes = [];
-            List<ShaderGlobal> globals = [];
-            HashSet<string> visited = new(StringComparer.Ordinal);
+            Dictionary<(string, string), string?> resolved = [];
             StringBuilder included = new();
             string? Include(string name, string from)
             {
-                string? text = Resolve(name, from);
+                if (resolved.TryGetValue((name, from), out string? text))
+                    return text;
+                text = resolved[(name, from)] = Resolve(name, from);
                 included.Append(name).Append('|').Append(text).Append('|');
                 return text;
             }
-            foreach (GlslSection section in GlslSection.Split(pass.Source, file, pass.SourceLine))
-                GlslPragmas.Collect(section.Body, file, axes, globals, visited, Include);
-            return ([.. axes], [.. globals], Hash(included.ToString()));
+
+            List<GlslSection> sections = GlslSection.Split(pass.Source, file, pass.SourceLine);
+            string shared = sections.Find(s => s.Name == "Shared")?.Body ?? "";
+            List<(string?, string)> stages = [];
+            foreach (GlslSection section in sections)
+            {
+                if (section.Name != "Shared")
+                    stages.Add((StageDefine(section.Stage), shared + "\n" + section.Body));
+            }
+            if (stages.Count == 0)
+                stages.Add((null, shared));
+
+            (VariantSpace[] axes, ShaderGlobal[] globals) = GlslPragmaScan.Scan(file, stages, _options.Defines, Include);
+            return (axes, globals, Hash(included.ToString()));
         });
     }
 
@@ -620,86 +631,66 @@ internal static class GlslPragmas
 
 
     /// <summary>
-    /// Collects every variant and global pragma of a source and of everything it includes, whether or not the include
-    /// is active.
+    /// Adds the axis or globals of a variant or global pragma line, ignoring any other directive.
     /// </summary>
-    public static void Collect(string source, string file, List<VariantSpace> axes, List<ShaderGlobal> globals, HashSet<string> visited, Func<string, string, string?> resolve)
+    public static void Read(string directive, string file, List<VariantSpace> axes, List<ShaderGlobal> globals)
     {
-        foreach (string line in StripComments(source).Split('\n'))
+        string[] parts = Words(directive);
+        if (parts.Length >= 2 && parts[0] == "pragma" && parts[1] == "global")
         {
-            string trimmed = line.Trim();
-            if (!trimmed.StartsWith('#'))
-                continue;
-
-            string[] parts = Words(trimmed);
-            if (parts.Length >= 2 && parts[0] == "include")
+            if (parts.Length < 4)
+                throw new ShaderCompileException($"{file}: error: '#pragma global' needs a type and one or more names, like '#pragma global float _Wetness'");
+            if (!GlobalTypes.Contains(parts[2]))
+                throw new ShaderCompileException($"{file}: error: '{parts[2]}' in '{directive}' is not a global type, use one of {string.Join(" ", GlobalTypes)}");
+            foreach (string name in parts[3..])
             {
-                string name = trimmed[(trimmed.IndexOf("include", StringComparison.Ordinal) + 7)..].Trim().Trim('"', '<', '>');
-                if (!visited.Add(name))
-                    continue;
-
-                string? included = resolve(name, file);
-                if (included != null)
-                    Collect(included, name, axes, globals, visited, resolve);
-                continue;
+                if (!IsIdentifier(name))
+                    throw new ShaderCompileException($"{file}: error: '{name}' in '{directive}' is not a valid name");
+                int declared = globals.FindIndex(g => g.Name == name);
+                if (declared < 0)
+                    globals.Add(new ShaderGlobal(name, parts[2]));
+                else if (globals[declared].Type != parts[2])
+                    throw new ShaderCompileException($"{file}: error: global '{name}' is declared as both {globals[declared].Type} and {parts[2]}");
             }
-
-            if (parts.Length >= 2 && parts[0] == "pragma" && parts[1] == "global")
-            {
-                if (parts.Length < 4)
-                    throw new ShaderCompileException($"{file}: error: '#pragma global' needs a type and one or more names, like '#pragma global float _Wetness'");
-                if (!GlobalTypes.Contains(parts[2]))
-                    throw new ShaderCompileException($"{file}: error: '{parts[2]}' in '{trimmed}' is not a global type, use one of {string.Join(" ", GlobalTypes)}");
-                foreach (string name in parts[3..])
-                {
-                    if (!IsIdentifier(name))
-                        throw new ShaderCompileException($"{file}: error: '{name}' in '{trimmed}' is not a valid name");
-                    int declared = globals.FindIndex(g => g.Name == name);
-                    if (declared < 0)
-                        globals.Add(new ShaderGlobal(name, parts[2]));
-                    else if (globals[declared].Type != parts[2])
-                        throw new ShaderCompileException($"{file}: error: global '{name}' is declared as both {globals[declared].Type} and {parts[2]}");
-                }
-                continue;
-            }
-
-            if (parts.Length < 2 || parts[0] != "pragma" || parts[1] != "variant")
-                continue;
-
-            int at = 2;
-            VariantScope scope = VariantScope.Material;
-            if (parts.Length > at && parts[at] == "global")
-            {
-                scope = VariantScope.Global;
-                at++;
-            }
-
-            if (parts.Length <= at)
-                throw new ShaderCompileException($"{file}: error: '#pragma variant' needs a name");
-
-            string axis = parts[at];
-            string[] values = parts[(at + 1)..];
-            foreach (string word in (string[])[axis, .. values])
-            {
-                if (!IsIdentifier(word))
-                    throw new ShaderCompileException($"{file}: error: '{word}' in '{trimmed}' is not a valid name");
-            }
-
-            if (values.Length == 1)
-                throw new ShaderCompileException($"{file}: error: variant '{axis}' has a single value, give it two or more, or none for an on or off toggle");
-
-            VariantSpace space = values.Length == 0 ? VariantSpace.Toggle(axis, scope) : new VariantSpace(axis, values, scope);
-            int existing = axes.FindIndex(a => a.Name == axis);
-            if (existing < 0)
-            {
-                axes.Add(space);
-                continue;
-            }
-
-            VariantSpace other = axes[existing];
-            if (other.IsToggle != space.IsToggle || other.Scope != space.Scope || !SameValues(other.Values, space.Values))
-                throw new ShaderCompileException($"{file}: error: variant '{axis}' is declared twice with different values");
+            return;
         }
+
+        if (parts.Length < 2 || parts[0] != "pragma" || parts[1] != "variant")
+            return;
+
+        int at = 2;
+        VariantScope scope = VariantScope.Material;
+        if (parts.Length > at && parts[at] == "global")
+        {
+            scope = VariantScope.Global;
+            at++;
+        }
+
+        if (parts.Length <= at)
+            throw new ShaderCompileException($"{file}: error: '#pragma variant' needs a name");
+
+        string axis = parts[at];
+        string[] values = parts[(at + 1)..];
+        foreach (string word in (string[])[axis, .. values])
+        {
+            if (!IsIdentifier(word))
+                throw new ShaderCompileException($"{file}: error: '{word}' in '{directive}' is not a valid name");
+        }
+
+        if (values.Length == 1)
+            throw new ShaderCompileException($"{file}: error: variant '{axis}' has a single value, give it two or more, or none for an on or off toggle");
+
+        VariantSpace space = values.Length == 0 ? VariantSpace.Toggle(axis, scope) : new VariantSpace(axis, values, scope);
+        int existing = axes.FindIndex(a => a.Name == axis);
+        if (existing < 0)
+        {
+            axes.Add(space);
+            return;
+        }
+
+        VariantSpace other = axes[existing];
+        if (other.IsToggle != space.IsToggle || other.Scope != space.Scope || !SameValues(other.Values, space.Values))
+            throw new ShaderCompileException($"{file}: error: variant '{axis}' is declared twice with different values");
     }
 
 
@@ -733,7 +724,7 @@ internal static class GlslPragmas
         directive.Trim().TrimStart('#').Split([' ', '\t', '\r'], StringSplitOptions.RemoveEmptyEntries);
 
 
-    private static string StripComments(string source)
+    public static string StripComments(string source)
     {
         StringBuilder sb = new(source.Length);
         for (int i = 0; i < source.Length; i++)

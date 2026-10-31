@@ -163,8 +163,8 @@ public sealed class RenderView : IDisposable
     /// <summary>Features of this view alone, over the world's.</summary>
     public ExtensionSet<RenderFeature>? Features { get; set; }
 
-    /// <summary>Values of global axes for this view alone, over the world's, such as GRAPHITE_DEBUG. Copied at SubmitFrame.</summary>
-    public Keyword[]? Keywords { get; set; }
+    /// <summary>Values of global axes for this view alone, over the world's, such as GlobalAxis.Debug["ALBEDO"]. Copied at SubmitFrame.</summary>
+    public GlobalKeyword[]? Keywords { get; set; }
 
     /// <summary>Views draw lowest Order first, each after the views it depends on.</summary>
     public int Order { get; set; }
@@ -188,6 +188,9 @@ public sealed class RenderView : IDisposable
         IsDisposed = true;
         _renderer.ReleaseView(this);
     }
+
+    private static Keyword ToKeyword(GlobalKeyword keyword)
+        => keyword.Axis is { } axis ? new Keyword(axis.Name, keyword.Value) : throw new ArgumentException("A view keyword has no axis, make it with an axis's indexer.");
 
     /// <summary>The scale an exposure value at ISO 100 gives light, 1 / (1.2 * 2^EV100), as a camera of ISO 100 and K 12.5 sees it.</summary>
     public static float ExposureOf(float ev100) => 1f / (1.2f * MathF.Pow(2f, ev100));
@@ -225,7 +228,7 @@ public sealed class RenderView : IDisposable
             Ldr = Ldr,
             Cut = _cut,
             Features = Features,
-            Keywords = Keywords is { Length: > 0 } keywords ? (Keyword[])keywords.Clone() : null,
+            Keywords = Keywords is { Length: > 0 } keywords ? Array.ConvertAll(keywords, ToKeyword) : null,
             Order = Order,
             DependsOn = DependsOn.Count > 0 ? DependsOn.ToArray() : null,
         };

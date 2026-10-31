@@ -988,6 +988,8 @@ internal sealed class CaptureFill
 /// <summary>The passes of a capture fill: the prefilter, a bake's read back and the sky's harmonics.</summary>
 internal static class CaptureFillPasses
 {
+    private static readonly PropertyID s_source = "Graphite_Source", s_skyAmbient = "Graphite_SkyAmbient";
+
     public static void Add(FramePipeline frame, FrameGraph graph, CaptureFill fill)
     {
         TextureHandle source = default, target = default;
@@ -1037,7 +1039,7 @@ internal static class CaptureFillPasses
             cmd.SetFullViewport();
             cmd.SetShader(frame.Resources.PrefilterProgram);
             cmd.SetVertexSource(VertexSource.None);
-            frame.PrefilterProperties.SetTexture("Graphite_Source", source, frame.Resources.LinearClamp);
+            frame.PrefilterProperties.SetTexture(s_source, source, frame.Resources.LinearClamp);
             cmd.SetProperties(frame.PrefilterProperties);
             cmd.SetPushConstants(new PrefilterPush
             {
@@ -1072,9 +1074,9 @@ internal static class CaptureFillPasses
         const uint size = 16;
         CommandBuffer cmd = context.Command;
         Texture source = context.Get(sourceHandle).ColorTextures[0];
-        cmd.SetComputeShader(frame.Resources.SkyAmbientProgram);
-        frame.AmbientProperties.SetTexture("Graphite_Source", source, frame.Resources.LinearClamp);
-        frame.AmbientProperties.SetBuffer("Graphite_SkyAmbient", context.Get(output));
+        cmd.SetComputeShader(frame.Resources.SkyAmbientProgram.Program);
+        frame.AmbientProperties.SetTexture(s_source, source, frame.Resources.LinearClamp);
+        frame.AmbientProperties.SetBuffer(s_skyAmbient, context.Get(output));
         cmd.SetProperties(frame.AmbientProperties);
         cmd.SetPushConstants(new AmbientPush { Lod = MathF.Max(MathF.Log2(source.Width / (float)size), 0), Size = size });
         cmd.Dispatch(1, 1, 1);

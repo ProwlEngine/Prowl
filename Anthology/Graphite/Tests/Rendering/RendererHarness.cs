@@ -30,12 +30,13 @@ internal sealed class RendererHarness : IDisposable
 
     private readonly DeviceBuffer _readback;
 
-    public RendererHarness()
+    public RendererHarness(IShaderCompiler? compiler = null, CompilePolicy compile = CompilePolicy.Sync)
     {
+        Options.Compile = compile;
         Target = Device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         Framebuffer = Device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, Target));
         _readback = Device.ResourceFactory.CreateBuffer(new BufferDescription(Size * Size * 16, BufferUsage.Staging));
-        Renderer = new Renderer(Device, TestCompiler.Shared, Options);
+        Renderer = new Renderer(Device, compiler ?? TestCompiler.Shared, Options);
         Renderer.Error += Errors.Add;
         World = Renderer.CreateWorld();
         World.Environment = new EnvironmentDesc { AmbientColor = default, Fog = default };

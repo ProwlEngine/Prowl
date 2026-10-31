@@ -22,7 +22,7 @@ public readonly record struct PassType(string Name)
     public static readonly PassType ShadowCaster = new("ShadowCaster");
     public static readonly PassType ObjectId = new("ObjectId");
 
-    /// <summary>A surface's debug view, drawn in place of its Forward pass while the view sets <see cref="Shader.DebugAxis"/>. See Graphite/Debug.glsl.</summary>
+    /// <summary>A surface's debug view, drawn in place of its Forward pass while the view sets <see cref="GlobalAxis.Debug"/>. See Graphite/Debug.glsl.</summary>
     public static readonly PassType Debug = new("Debug");
 
     /// <summary>A world's sky, a fullscreen triangle drawn after the opaque surfaces where nothing was drawn. See Graphite/Sky.glsl.</summary>
@@ -510,9 +510,6 @@ public sealed class Shader
     /// </summary>
     public const string DiscardsTag = "Discards";
 
-    /// <summary>The global axis a view sets to show a debug view, which its draws take from their shaders' Debug passes.</summary>
-    public const string DebugAxis = "GRAPHITE_DEBUG";
-
     private readonly bool[] _readsSceneColor;
     private readonly bool[] _readsSceneDepth;
     private readonly bool[] _readsBackDepth;
@@ -577,6 +574,8 @@ public sealed class Shader
                 queue = parsed;
         }
 
+        foreach (VariantSpace axis in global)
+            GlobalAxis.Declare(Name, axis);
         MaterialAxes = material;
         GlobalAxes = global;
         foreach (VariantSpace axis in material)
@@ -743,7 +742,7 @@ public sealed class Shader
         if (_materialAxes.TryGetValue(name, out MaterialAxis? axis))
             return axis;
         if (FindAxis(name, out _) >= 0)
-            throw new ArgumentException($"The axis {name} is global in {Name}, the renderer, a world or a view sets it, not a material.", nameof(name));
+            throw new ArgumentException($"The axis {name} is global in {Name}, the renderer, a world or a view sets it through a GlobalAxis, not a material.", nameof(name));
         throw new ArgumentException($"The shader {Name} has no axis {name}.", nameof(name));
     }
 

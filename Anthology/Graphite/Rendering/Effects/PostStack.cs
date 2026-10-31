@@ -27,8 +27,11 @@ internal sealed class EffectResources : IDisposable
 
     public EffectResources(Renderer renderer) => _renderer = renderer;
 
-    /// <summary>The program of a library file under a set of defines, each line ending in a newline, made the first time. Host thread.</summary>
-    public FullscreenProgram Program(string file, string defines = "", bool source = true, BlendStateDescription? blend = null, bool lit = false)
+    /// <summary>
+    /// The program of a library file under a set of defines, each line ending in a newline, made the first time, which
+    /// the feature drawing with it waits on. Host thread.
+    /// </summary>
+    public FullscreenProgram Program(RenderFeature user, string file, string defines = "", bool source = true, BlendStateDescription? blend = null, bool lit = false)
     {
         string key = file + "\n" + defines + (source ? "\n1" : "\n0") + (lit ? "\n1" : "\n0");
         lock (_programs)
@@ -38,6 +41,7 @@ internal sealed class EffectResources : IDisposable
                 program = _renderer.CreateFullscreenProgram(InternalShaders.PostFragment(file), $"Graphite/{file}", source, blend, lit, defines);
                 _programs[key] = program;
             }
+            user.Uses(program);
             return program;
         }
     }
@@ -45,7 +49,8 @@ internal sealed class EffectResources : IDisposable
 
 /// <summary>
 /// A stock effect: its programs built from the library's Graphite/Internal files
-/// and its settings copied at Extract. Effects of one renderer share their programs, which the renderer owns.
+/// and its settings copied at Extract. Effects of one renderer share their programs, which the renderer owns. An effect
+/// sits out of its views until its programs are compiled, so the colour passes through unchanged meanwhile.
 /// </summary>
 public abstract class PostEffect(Renderer renderer, RenderSlot slot, FeatureGroup? group = null, SceneTargets sceneReads = SceneTargets.None)
     : RenderFeature(slot, group: group, sceneReads: sceneReads)
@@ -59,7 +64,7 @@ public abstract class PostEffect(Renderer renderer, RenderSlot slot, FeatureGrou
 
     /// <summary>The program of a library file under a set of defines, each line ending in a newline, made the first time. Host thread.</summary>
     protected FullscreenProgram Program(string file, string defines = "", bool source = true, BlendStateDescription? blend = null, bool lit = false)
-        => Resources.Program(file, defines, source, blend, lit);
+        => Resources.Program(this, file, defines, source, blend, lit);
 
     protected static PixelFormat Hdr => PixelFormat.R16_G16_B16_A16_Float;
 }
@@ -406,11 +411,11 @@ public sealed class Gtao : ScreenLightingFeature
     {
         _resources = renderer.Effects;
         _shared = renderer.Resources;
-        _depth = _resources.Program("Gtao", "#define GTAO_DEPTH 1\n", source: false);
-        _ao = _resources.Program("Gtao", "#define GTAO_AO 1\n", source: false);
-        _temporal = _resources.Program("Gtao", "#define GTAO_TEMPORAL 1\n", source: false);
-        _blur = _resources.Program("Gtao", "#define GTAO_BLUR 1\n", source: false);
-        _copy = _resources.Program("Gtao", "", source: false);
+        _depth = _resources.Program(this, "Gtao", "#define GTAO_DEPTH 1\n", source: false);
+        _ao = _resources.Program(this, "Gtao", "#define GTAO_AO 1\n", source: false);
+        _temporal = _resources.Program(this, "Gtao", "#define GTAO_TEMPORAL 1\n", source: false);
+        _blur = _resources.Program(this, "Gtao", "#define GTAO_BLUR 1\n", source: false);
+        _copy = _resources.Program(this, "Gtao", "", source: false);
     }
 
     /// <summary>Slices around each pixel.</summary>

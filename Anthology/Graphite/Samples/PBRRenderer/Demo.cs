@@ -24,11 +24,11 @@ internal sealed class Demo : IDisposable
 
         Taa = new TemporalAntiAliasing(Renderer);
         AutoExposure = new AutoExposure(Renderer);
-        Bloom = new Bloom(Renderer, ShaderLoader.Compiler);
+        Bloom = new Bloom(Renderer) { Threshold = 1.2f, SoftKnee = 0.42f, Clamp = 64, Iterations = 3, Scatter = 0.7f, Intensity = 0.6f };
         Tonemap = new Tonemapper(Renderer) { Operator = TonemapOperator.Aces };
         Post.Add(Taa);
         Post.Add(AutoExposure);
-        Bloom.AddTo(Post);
+        Post.Add(Bloom);
         Post.Add(Tonemap);
     }
 
@@ -68,6 +68,5 @@ internal sealed class Demo : IDisposable
         Sphere.Dispose();
         Cylinder.Dispose();
         Renderer.Dispose();
-        Bloom.Dispose();
     }
 }

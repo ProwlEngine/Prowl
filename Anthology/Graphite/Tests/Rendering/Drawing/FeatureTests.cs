@@ -378,7 +378,7 @@ public sealed class FeatureTests : IDisposable
 
         RenderView view = View();
         if (mode != null)
-            view.Keywords = [new Keyword(Shader.DebugAxis, mode)];
+            view.Keywords = [GlobalAxis.Debug[mode]];
         Float4[] pixels = Frame(view);
         AssertAll(new Float3(r, g, b), pixels, Centre);
     }

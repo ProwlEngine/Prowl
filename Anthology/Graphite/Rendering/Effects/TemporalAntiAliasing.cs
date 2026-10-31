@@ -35,9 +35,9 @@ public sealed class TemporalAntiAliasing : RenderFeature
     {
         _resources = renderer.Effects;
         _shared = renderer.Resources;
-        _resolve = _resources.Program("Taa");
-        _reactiveResolve = _resources.Program("Taa", "#define TAA_REACTIVE 1\n");
-        _sharpen = _resources.Program("Taa", "#define TAA_SHARPEN 1\n");
+        _resolve = _resources.Program(this, "Taa");
+        _reactiveResolve = _resources.Program(this, "Taa", "#define TAA_REACTIVE 1\n");
+        _sharpen = _resources.Program(this, "Taa", "#define TAA_SHARPEN 1\n");
     }
 
     /// <summary>How much history is kept, 0 to 0.99. Higher is smoother and ghosts more.</summary>

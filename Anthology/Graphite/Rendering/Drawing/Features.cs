@@ -367,6 +367,24 @@ public abstract class RenderFeature : RenderExtension
     internal int JitterPhasesSnapshot;
     internal float JitterMipBiasSnapshot;
 
+    private FullscreenProgram[] _programs = [];
+
+    /// <summary>Adds a fullscreen program the feature draws with, so it is left out of views until the program is ready.</summary>
+    internal void Uses(FullscreenProgram program)
+    {
+        if (Array.IndexOf(_programs, program) < 0)
+            _programs = [.. _programs, program];
+    }
+
+    /// <summary>Whether every fullscreen program the feature draws with is ready for a view of this many layers, asking for the ones that are not. Render thread.</summary>
+    internal bool ProgramsReady(int layers)
+    {
+        bool ready = true;
+        foreach (FullscreenProgram program in _programs)
+            ready &= program.Ready(layers);
+        return ready;
+    }
+
     internal override void Snapshot()
     {
         base.Snapshot();
@@ -406,17 +424,36 @@ public abstract class ScreenLightingFeature : RenderFeature
 
 /// <summary>
 /// A fullscreen effect made by <see cref="Renderer.CreateFullscreenProgram"/>, built for mono views and for layered views
-/// through multiview.
+/// through multiview. Under <see cref="CompilePolicy.Async"/> each form compiles on the compile queue the first time it is
+/// wanted and is built on the render thread once compiled. A feature drawing one that is not ready yet is left out of
+/// its views until it is, so their colour passes through it unchanged.
 /// </summary>
 public sealed class FullscreenProgram : IDisposable
 {
-    private FullscreenProgram(GraphicsProgram mono, GraphicsProgram layered, bool source, bool lit, bool procedural)
+    private readonly GraphicsDevice _device;
+    private readonly PassVariants _variants;
+    private readonly int[] _keys;
+    private readonly GraphicsProgram?[] _built = new GraphicsProgram?[2];
+    private readonly BlendStateDescription _blend;
+    private readonly string _name;
+    private readonly CompilePolicy _policy;
+    private readonly CompilePriority _priority;
+    private readonly Action<RendererError>? _report;
+    private bool _failed;
+
+    private FullscreenProgram(GraphicsDevice device, PassVariants variants, int[] keys, BlendStateDescription blend, string name, bool source, bool lit, bool procedural, CompilePolicy policy, CompilePriority priority, Action<RendererError>? report)
     {
-        Mono = mono;
-        Layered = layered;
+        _device = device;
+        _variants = variants;
+        _keys = keys;
+        _blend = blend;
+        _name = name;
         HasSource = source;
         Lit = lit;
         Procedural = procedural;
+        _policy = policy;
+        _priority = priority;
+        _report = report;
     }
 
     /// <summary>Whether the program reads Graphite_Source.</summary>
@@ -428,16 +465,59 @@ public sealed class FullscreenProgram : IDisposable
     /// <summary>Whether the program writes its own vertex stage, drawn through <see cref="FeatureContext.DrawProcedural"/>.</summary>
     public bool Procedural { get; }
 
-    internal GraphicsProgram Mono { get; }
-    internal GraphicsProgram Layered { get; }
+    /// <summary>The program to draw over a view of this many layers, for features that bind it themselves, compiled now when it is not ready. Render thread.</summary>
+    public GraphicsProgram For(int layers)
+    {
+        int form = layers > 1 ? 1 : 0;
+        return _built[form] ??= Build(_variants.Require(_keys[form]), form);
+    }
 
-    /// <summary>The program to draw over a view of this many layers, for features that bind it themselves.</summary>
-    public GraphicsProgram For(int layers) => layers > 1 ? Layered : Mono;
+    /// <summary>
+    /// Whether the form for a view of this many layers is built, asking for its compile at the program's priority when
+    /// it is not. A failed compile is reported once and never becomes ready. Render thread.
+    /// </summary>
+    internal bool Ready(int layers)
+    {
+        int form = layers > 1 ? 1 : 0;
+        if (_built[form] != null)
+            return true;
+        if (_failed)
+            return false;
+        VariantState state = _variants.Request(_keys[form], _policy, _priority, out ShaderDescription description, out Exception? error);
+        try
+        {
+            if (state == VariantState.Ready)
+                _built[form] = Build(description, form);
+        }
+        catch (Exception e)
+        {
+            error = e;
+        }
+        if (state == VariantState.Failed || error != null)
+        {
+            _failed = true;
+            _report?.Invoke(new RendererError("shader.compile", $"{_name}: {error?.Message}", RendererErrorSeverity.Error, this) { Key = $"fullscreen.{_name}" });
+        }
+        return _built[form] != null;
+    }
 
     public void Dispose()
     {
-        Mono.Dispose();
-        Layered.Dispose();
+        foreach (GraphicsProgram? program in _built)
+            program?.Dispose();
+        Array.Clear(_built);
+    }
+
+    private GraphicsProgram Build(ShaderDescription description, int form)
+    {
+        description.BlendState = _blend;
+        description.DepthStencilState = DepthStencilStateDescription.Disabled;
+        description.RasterizerState = RasterizerStateDescription.CullNone;
+        if (Lit)
+            description.ResourceLayouts = LitLayouts(description.ResourceLayouts ?? []);
+        GraphicsProgram program = _device.ResourceFactory.CreateGraphicsProgram(description);
+        program.Name = form == 1 ? _name + " layered" : _name;
+        return program;
     }
 
     // The renderer's frame and view tables whole, so the camera's bind as they are, and the program's own resources in the user set
@@ -489,37 +569,41 @@ public sealed class FullscreenProgram : IDisposable
         return keywords;
     }
 
-    internal static FullscreenProgram Create(GraphicsDevice device, IShaderCompiler? compiler, string fragment, string name, bool source = true, BlendStateDescription? blend = null, bool lit = false, bool procedural = false, string variant = "")
+    /// <summary>
+    /// A program whose forms compile under the policy: Async asks for the mono form now at the priority and the layered
+    /// one when a layered view first wants it, the other policies build both now.
+    /// </summary>
+    internal static FullscreenProgram Create(GraphicsDevice device, IShaderCompiler? compiler, string fragment, string name, bool source = true, BlendStateDescription? blend = null, bool lit = false, bool procedural = false, string variant = "",
+        CompilePolicy policy = CompilePolicy.Sync, CompilePriority priority = CompilePriority.Visible, Action<RendererError>? report = null)
     {
         source &= !procedural;
         PassVariants variants = Pass(fragment, name, lit, procedural).Variants(compiler, device.BackendType);
         List<Keyword> keywords = Keywords(variants.Axes, variant);
         keywords.Add(new Keyword("GRAPHITE_NO_SOURCE", source ? "false" : "true"));
-        GraphicsProgram Build(bool layered)
+        int[] keys = new int[2];
+        for (int form = 0; form < 2; form++)
         {
-            if (!variants.TryGetKey([.. keywords, new Keyword("GRAPHITE_LAYERED", layered ? "true" : "false")], out int key))
+            if (!variants.TryGetKey([.. keywords, new Keyword("GRAPHITE_LAYERED", form == 1 ? "true" : "false")], out keys[form]))
                 throw new ArgumentException($"{name} has no variant '{variant}'.", nameof(variant));
-            ShaderDescription description = variants.Require(key);
-            description.BlendState = blend ?? BlendStateDescription.SingleOverrideBlend;
-            description.DepthStencilState = DepthStencilStateDescription.Disabled;
-            description.RasterizerState = RasterizerStateDescription.CullNone;
-            if (lit)
-                description.ResourceLayouts = LitLayouts(description.ResourceLayouts ?? []);
-            GraphicsProgram program = device.ResourceFactory.CreateGraphicsProgram(description);
-            program.Name = layered ? name + " layered" : name;
-            return program;
         }
 
-        GraphicsProgram mono = Build(false);
+        FullscreenProgram program = new(device, variants, keys, blend ?? BlendStateDescription.SingleOverrideBlend, name, source, lit, procedural, compiler == null ? CompilePolicy.BakedOnly : policy, priority, report);
+        if (program._policy == CompilePolicy.Async)
+        {
+            program.Ready(1);
+            return program;
+        }
         try
         {
-            return new FullscreenProgram(mono, Build(true), source, lit, procedural);
+            program.For(1);
+            program.For(2);
         }
         catch
         {
-            mono.Dispose();
+            program.Dispose();
             throw;
         }
+        return program;
     }
 }
 
@@ -993,10 +1077,12 @@ public sealed class FeatureContext
     {
         if (!program.Procedural)
             throw new InvalidOperationException($"{_pass.Name} draws a fullscreen program procedurally; create it with CreateProceduralProgram.");
+        if (Program(program) is not { } shader)
+            return;
         AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : AttachmentOps.Loaded;
         Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
         Command.SetFullViewport();
-        Command.SetShader(program.For(View.LayerCount));
+        Command.SetShader(shader);
         Command.SetVertexSource(VertexSource.None);
         BindLighting(program);
         _properties.SetBuffer(s_postViews, _pass.Camera.ViewBlocks.Buffer);
@@ -1012,10 +1098,12 @@ public sealed class FeatureContext
             throw new InvalidOperationException($"{_pass.Name} draws a procedural program as a fullscreen one; draw it with DrawProcedural.");
         if (layers == 1 && View.LayerCount > 1 && program.HasSource)
             throw new InvalidOperationException($"{_pass.Name} draws a program reading the view's colour once for every layer; create it with source: false and bind what it reads.");
+        if (Program(program) is not { } shader)
+            return;
         AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store);
         Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
         Command.SetFullViewport();
-        Command.SetShader(program.For(View.LayerCount));
+        Command.SetShader(shader);
         Command.SetVertexSource(VertexSource.None);
         BindLighting(program);
         _properties.SetBuffer(s_postViews, _pass.Camera.ViewBlocks.Buffer);
@@ -1035,8 +1123,10 @@ public sealed class FeatureContext
     {
         if (Color is not { } source || _pass.OutputIsScene)
             throw new InvalidOperationException($"{_pass.Name} draws a fullscreen program without writing a new colour, declare WriteColor.");
+        if (Program(program) is not { } shader)
+            return;
         BeginOutput();
-        Command.SetShader(program.For(View.LayerCount));
+        Command.SetShader(shader);
         Command.SetVertexSource(VertexSource.None);
         BindLighting(program);
         _properties.SetBuffer(s_postViews, _pass.Camera.ViewBlocks.Buffer);
@@ -1047,6 +1137,32 @@ public sealed class FeatureContext
         Command.Draw(3);
     }
 
+    // A program the feature draws with, or null once a program it draws with first turned out not ready this frame
+    private GraphicsProgram? Program(FullscreenProgram program)
+    {
+        _pass.Feature.Uses(program);
+        if (!_pass.PassedThrough && program.Ready(View.LayerCount))
+            return program.For(View.LayerCount);
+        PassThrough();
+        return null;
+    }
+
+    // The new colour the pass writes is the colour it reads, unchanged, and the rest of its fullscreen draws are skipped
+    private void PassThrough()
+    {
+        if (_pass.PassedThrough)
+            return;
+        _pass.PassedThrough = true;
+        if (_pass.Output is not { } output || _pass.OutputIsScene || Color is not { } source)
+            return;
+        Command.SetFramebuffer(Graph.Get(output).Framebuffer, new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
+        Command.SetFullViewport();
+        Command.SetShader(_pass.Frame.Resources.CopyBackProgram.For(View.LayerCount));
+        Command.SetVertexSource(VertexSource.None);
+        _properties.SetTexture(s_source, source, _pass.Frame.Resources.LinearClamp);
+        Command.SetProperties(_properties);
+        Command.Draw(3);
+    }
 }
 
 /// <summary>Runs one feature as a pass of the views that selected it.</summary>
@@ -1077,6 +1193,7 @@ internal sealed class FeaturePass
     /// <summary>The cascades the feature declared this frame, with their textures.</summary>
     public readonly List<(ViewShadows.Cascade Cascade, TextureHandle Handle)> Cascades = new();
     public bool Draws;
+    public bool PassedThrough;
     public bool EncodesForDisplay;
     public bool Wrote;
     public bool OutputIsScene;
@@ -1111,6 +1228,7 @@ internal sealed class FeaturePass
         Output = null;
         EncodesForDisplay = false;
         Draws = false;
+        PassedThrough = false;
         Wrote = false;
         OutputIsScene = false;
         Cascades.Clear();
@@ -1408,7 +1526,7 @@ internal static class FeatureSelection
         {
             if (!feature.EnabledSnapshot || (feature.RunsOn & kind) == 0 || result.Contains(feature))
                 continue;
-            if (feature.IsActive(info))
+            if (feature.IsActive(info) && feature.ProgramsReady(info.LayerCount))
                 result.Add(feature);
         }
     }

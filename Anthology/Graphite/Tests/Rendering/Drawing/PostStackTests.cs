@@ -464,6 +464,77 @@ public sealed class PostStackTests : IDisposable
         public override void Render(FeatureContext context) => context.Fullscreen(program);
     }
 
+    // A view drawing nothing but its clear colour, so the frame is that colour unless an effect changes it
+    private static readonly Float3 s_cleared = new(0.25f, 0.5f, 0.75f);
+
+    private static RenderView Cleared(RendererHarness harness)
+    {
+        RenderView view = harness.View();
+        view.ClearColor = new Float4(s_cleared.X, s_cleared.Y, s_cleared.Z, 1);
+        return view;
+    }
+
+    // Frames until the image changes from the cleared colour, as a compile lands on a worker
+    private static Float4[] FrameUntilChanged(RendererHarness harness, RenderView view)
+    {
+        System.Diagnostics.Stopwatch waited = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            Float4[] pixels = harness.Frame(view);
+            if (MathF.Abs(pixels[0].X - s_cleared.X) > 1e-3f || waited.Elapsed.TotalSeconds > 30)
+                return pixels;
+        }
+    }
+
+    [Fact]
+    public void AStockEffectStillCompiling_PassesColourThrough_ThenApplies()
+    {
+        _world.Features.Add(new Tonemapper(_renderer));
+        Float4[] tonemapped = _harness.Frame(Cleared(_harness));
+
+        GatedCompiler compiler = new(TestCompiler.Shared) { GatedSource = "Graphite/Tonemap" };
+        RendererHarness harness = new(compiler, CompilePolicy.Async);
+        try
+        {
+            RenderView view = Cleared(harness);
+            harness.World.Features.Add(new Tonemapper(harness.Renderer));
+            AssertAll(s_cleared, harness.Frame(view));
+            AssertAll(s_cleared, harness.Frame(view));
+            compiler.Gate.Set();
+            Assert.Equal(tonemapped, FrameUntilChanged(harness, view));
+        }
+        finally
+        {
+            compiler.Gate.Set();
+            harness.Dispose();
+        }
+    }
+
+    [Fact]
+    public void AHostEffectStillCompiling_PassesColourThrough_ThenApplies()
+    {
+        GatedCompiler compiler = new(TestCompiler.Shared) { GatedAxis = "_GATE", GatedValue = "true" };
+        RendererHarness harness = new(compiler, CompilePolicy.Async);
+        try
+        {
+            RenderView view = Cleared(harness);
+            FullscreenProgram invert = harness.Renderer.CreateFullscreenProgram("#pragma variant _GATE\nvoid main() { outColor = vec4(1.0 - Graphite_SampleSource(vUV).rgb, 1.0); }", variant: "#define _GATE 1");
+            harness.Owned.Add(invert);
+            harness.World.Features.Add(new Copy(invert));
+
+            // The first frame finds the program not ready as it draws, later ones leave the effect out
+            AssertAll(s_cleared, harness.Frame(view));
+            AssertAll(s_cleared, harness.Frame(view));
+            compiler.Gate.Set();
+            AssertAll(new Float3(1 - s_cleared.X, 1 - s_cleared.Y, 1 - s_cleared.Z), FrameUntilChanged(harness, view));
+        }
+        finally
+        {
+            compiler.Gate.Set();
+            harness.Dispose();
+        }
+    }
+
     [Fact]
     public void FullscreenPasses_KeepTheImageTheRightWayUp()
     {

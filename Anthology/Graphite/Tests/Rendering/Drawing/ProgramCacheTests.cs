@@ -11,12 +11,16 @@ using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-/// <summary>Holds back compiles of variants with a gated keyword until released, and fails variants with a broken one.</summary>
+/// <summary>
+/// Holds back compiles of variants with a gated keyword, or of passes whose source name holds the gated source, until
+/// released, and fails variants with a broken one.
+/// </summary>
 internal sealed class GatedCompiler(GlslShaderCompiler inner) : IShaderCompiler
 {
     public readonly ManualResetEventSlim Gate = new(false);
     public string GatedAxis = "";
     public string GatedValue = "";
+    public string GatedSource = "";
     public int Compiles;
 
     public IReadOnlyList<VariantSpace> GetAxes(ShaderPass pass) => inner.GetAxes(pass);
@@ -26,6 +30,8 @@ internal sealed class GatedCompiler(GlslShaderCompiler inner) : IShaderCompiler
     public ShaderDescription Compile(ShaderPass pass, Keyword[] combo, GraphicsBackend backend)
     {
         Interlocked.Increment(ref Compiles);
+        if (GatedSource.Length > 0 && pass.SourceName.Contains(GatedSource, StringComparison.Ordinal))
+            Gate.Wait();
         foreach (Keyword keyword in combo)
         {
             if (keyword.Name == GatedAxis && keyword.Value == GatedValue)

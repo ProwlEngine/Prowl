@@ -44,7 +44,7 @@ public sealed partial class LightingTests
     [Fact]
     public void TheFurnace_WhiteSubsurfaceAndSheets_AreOneAtTheLiteTier()
     {
-        _world.Globals.SetKeyword("PBR_TIER", "LITE");
+        _world.Globals.Set(GlobalAxis.PbrTier, "LITE");
         for (int i = 0; i < s_whiteSubsurface.Length; i++)
             AssertFurnace($"lite subsurface {i}", s_whiteSubsurface[i], tilts: s_bothSides);
     }

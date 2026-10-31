@@ -28,6 +28,8 @@ public sealed class GlobalsTests : IDisposable
     private readonly Uploader _uploader;
     private readonly List<RendererError> _reports = new();
 
+    private static readonly GlobalAxis s_fog = GlobalAxis.Define("TEST_FOG", "OFF", "LINEAR", "EXP");
+
     public GlobalsTests()
     {
         InternalShaders.Register();
@@ -144,17 +146,17 @@ public sealed class GlobalsTests : IDisposable
     public void KeywordSnapshots_ChangeOnlyAtExtraction()
     {
         (GlobalProperties world, _) = _registry.AddWorld();
-        _registry.Renderer.SetKeyword("FOG", "LINEAR");
-        Assert.False(world.KeywordSnapshot.ContainsKey("FOG"));
+        _registry.Renderer.Set(s_fog, "LINEAR");
+        Assert.False(world.KeywordSnapshot.ContainsKey(s_fog.Name));
 
         _registry.Extract();
-        Assert.Equal("LINEAR", world.KeywordSnapshot["FOG"]);
+        Assert.Equal("LINEAR", world.KeywordSnapshot[s_fog.Name]);
 
-        world.SetKeyword("FOG", "EXP");
-        Assert.Equal("LINEAR", world.KeywordSnapshot["FOG"]);
+        world.Set(s_fog, "EXP");
+        Assert.Equal("LINEAR", world.KeywordSnapshot[s_fog.Name]);
         _registry.Extract();
-        Assert.Equal("EXP", world.KeywordSnapshot["FOG"]);
-        Assert.Equal("LINEAR", _registry.Renderer.KeywordSnapshot["FOG"]);
+        Assert.Equal("EXP", world.KeywordSnapshot[s_fog.Name]);
+        Assert.Equal("LINEAR", _registry.Renderer.KeywordSnapshot[s_fog.Name]);
     }
 
     [Fact]
@@ -178,20 +180,90 @@ public sealed class GlobalsTests : IDisposable
     public void Keywords_ResolveWorldThenRenderer()
     {
         (GlobalProperties world, _) = _registry.AddWorld();
-        Assert.Null(world.GetKeyword("FOG"));
+        Assert.Null(world.Get(s_fog));
 
-        _registry.Renderer.SetKeyword("FOG", "LINEAR");
-        Assert.Equal("LINEAR", world.GetKeyword("FOG"));
+        _registry.Renderer.Set(s_fog, "LINEAR");
+        Assert.Equal("LINEAR", world.Get(s_fog));
 
         uint version = world.KeywordVersion;
-        world.SetKeyword("FOG", "EXP");
-        world.SetKeyword("FOG", "EXP");
-        Assert.Equal("EXP", world.GetKeyword("FOG"));
+        world.Set(s_fog, "EXP");
+        world.Set(s_fog, "EXP");
+        Assert.Equal("EXP", world.Get(s_fog));
         Assert.Equal(version + 1, world.KeywordVersion);
 
-        world.ClearKeyword("FOG");
-        Assert.Equal("LINEAR", world.GetKeyword("FOG"));
+        world.Set(s_fog, null);
+        Assert.Equal("LINEAR", world.Get(s_fog));
     }
+
+    [Fact]
+    public void Keywords_RejectValuesTheirAxisLacks()
+    {
+        GlobalProperties globals = _registry.Renderer;
+        uint version = globals.KeywordVersion;
+
+        Assert.Throws<ArgumentException>(() => globals.Set(s_fog, "FAST"));
+        Assert.Throws<ArgumentException>(() => globals.Set(s_fog, true));
+        Assert.Throws<ArgumentException>(() => globals.Set(GlobalAxis.Decals, "maybe"));
+        Assert.Throws<ArgumentException>(() => s_fog["FAST"]);
+        Assert.Throws<ArgumentException>(() => GlobalAxis.PbrTier[false]);
+        Assert.Null(globals.Get(s_fog));
+        Assert.Equal(version, globals.KeywordVersion);
+
+        globals.Set(GlobalAxis.Decals, true);
+        Assert.Equal(VariantSpace.ToggleValues[1], globals.Get(GlobalAxis.Decals));
+        Assert.Equal(new GlobalKeyword[] { GlobalAxis.Decals[true] }, globals.LocalKeywords);
+    }
+
+    [Fact]
+    public void DefiningAnAxisAgain_GivesTheSameAxis_OnlyWithTheSameValues()
+    {
+        Assert.Same(s_fog, GlobalAxis.Define("TEST_FOG", "OFF", "LINEAR", "EXP"));
+        Assert.Same(s_fog, GlobalAxis.Find("TEST_FOG"));
+        Assert.Same(GlobalAxis.LightMasks, GlobalAxis.Toggle("GRAPHITE_LIGHT_MASKS"));
+        Assert.Throws<ArgumentException>(() => GlobalAxis.Define("TEST_FOG", "OFF", "LINEAR"));
+        Assert.Throws<ArgumentException>(() => GlobalAxis.Toggle("TEST_FOG"));
+        Assert.Throws<ArgumentException>(() => GlobalAxis.Define("PBR_TIER", "LITE", "FULL"));
+        Assert.Throws<ArgumentException>(() => GlobalAxis.Define("TEST_SINGLE", "ONLY"));
+    }
+
+    [Fact]
+    public void AShaderDeclaringAnAxisWithOtherValues_FailsToLoad()
+    {
+        GlobalAxis quality = GlobalAxis.Define("TEST_QUALITY", "HIGH", "MEDIUM", "LOW");
+
+        Assert.Equal(["HIGH", "LOW"], KeywordShader("Test/QualitySubset", "TEST_QUALITY HIGH LOW").GlobalAxes.Single().Values);
+        Assert.Throws<InvalidOperationException>(() => KeywordShader("Test/QualityExtra", "TEST_QUALITY HIGH ULTRA"));
+        Assert.Throws<InvalidOperationException>(() => KeywordShader("Test/QualityDefault", "TEST_QUALITY LOW HIGH"));
+        Assert.Throws<InvalidOperationException>(() => KeywordShader("Test/QualityToggle", "TEST_QUALITY"));
+        Assert.Same(quality, GlobalAxis.Find("TEST_QUALITY"));
+    }
+
+    [Fact]
+    public void DefiningAnAxisALoadedShaderDeclaresWithOtherValues_Throws()
+    {
+        KeywordShader("Test/Late", "TEST_LATE A B");
+
+        Assert.Throws<ArgumentException>(() => GlobalAxis.Define("TEST_LATE", "A", "C"));
+        Assert.Throws<ArgumentException>(() => GlobalAxis.Define("TEST_LATE", "B", "A"));
+        Assert.Null(GlobalAxis.Find("TEST_LATE"));
+        Assert.Equal(["A", "B", "C"], GlobalAxis.Define("TEST_LATE", "A", "B", "C").Values);
+    }
+
+    private Shader KeywordShader(string name, string axis) => new(ShaderParser.Parse($$"""
+        Shader "{{name}}"
+        {
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                GLSLPROGRAM
+                Shared
+                {
+                    #pragma variant global {{axis}}
+                }
+                ENDGLSL
+            }
+        }
+        """), _compiler);
 
     [Fact]
     public void RemovedWorldRegions_AreReusedAfterRetire()

@@ -112,8 +112,8 @@ internal sealed partial class FramePipeline : IDisposable
         Buffers = new FrameBuffers();
         _counts = new ProviderCountsPass(this);
         _upload = new UploadPass(uploader, store);
-        _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl"));
-        _deform = new DeformPass(InternalShaders.Compute(device, compiler, "Internal/Deform.glsl"), geometry);
+        _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl", policy));
+        _deform = new DeformPass(InternalShaders.Compute(device, compiler, "Internal/Deform.glsl", policy), geometry);
         _readback = new ReadbackStaging(device, report);
     }
 
@@ -467,7 +467,7 @@ internal sealed partial class FramePipeline : IDisposable
         }, context =>
         {
             CommandBuffer cmd = context.Command;
-            cmd.SetComputeShader(Resources.ExposureProgram);
+            cmd.SetComputeShader(Resources.ExposureProgram.Program);
             foreach ((CameraFrame camera, ExposurePush push, bool measured) in exposed)
             {
                 _exposureProperties.SetTexture(s_measured, measured ? camera.MeasuredExposure!.ColorTextures[0] : Resources.NoExposure, Resources.LinearClamp);
