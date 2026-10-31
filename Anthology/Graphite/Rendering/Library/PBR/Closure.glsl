@@ -64,6 +64,9 @@
 #include "Graphite/PBR/Fuzz.glsl"
 #include "Graphite/PBR/ThinFilm.glsl"
 
+// Reflection probe blending is compiled in while the world has a reflection probe, else the sky alone reflects
+#pragma variant global GRAPHITE_REFLECTION_PROBES
+
 struct PBR_Closure
 {
     vec3  position;          // camera relative
@@ -600,7 +603,13 @@ Graphite_ProbeSet PBR_FindProbes(PBR_Closure c)
     probes.count = 0;
     probes.sky = 0.0;
     if (Graphite_ReflectionProbesReady())
+    {
+#ifdef GRAPHITE_REFLECTION_PROBES
         probes = Graphite_FindProbes(c.position);
+#else
+        probes.sky = 1.0;
+#endif
+    }
     return probes;
 }
 
