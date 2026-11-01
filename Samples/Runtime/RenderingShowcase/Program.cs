@@ -445,8 +445,8 @@ public sealed class RenderingShowcaseGame : StationGame
         _spotLight.Color = new Color(0.4f, 0.65f, 1f, 1f);
         _spotLight.Range = 20f;
         _spotLight.Intensity = 6300000f;
-        _spotLight.OuterAngle = 35f;
-        _spotLight.InnerAngle = 25f;
+        _spotLight.SpotAngle = 70f;
+        _spotLight.SpotSoftness = 1f - 25f / 35f;
         _spotLight.ShadowResolution = ShadowResolution._1024;
         _spotLight.ShadowFilter = ShadowFilter.ContactHardening;
         _spotLight.SourceRadius = 0.2f;
@@ -471,7 +471,7 @@ public sealed class RenderingShowcaseGame : StationGame
         Toggle(paper, font, "Spot shadows", _spotLight.CastShadows, v => _spotLight.CastShadows = v);
         Cycle(paper, font, "Spot shadow filter", _spotLight.ShadowFilter, v => _spotLight.ShadowFilter = v);
         Slider(paper, font, "Spot light size", _spotLight.SourceRadius, 0.01f, 0.6f, v => _spotLight.SourceRadius = v, "0.00", 1);
-        Slider(paper, font, "Spot angle", _spotLight.OuterAngle, 10f, 80f, v => { _spotLight.OuterAngle = v; _spotLight.InnerAngle = v * 0.7f; }, "0");
+        Slider(paper, font, "Spot angle", _spotLight.SpotAngle, 20f, 160f, v => _spotLight.SpotAngle = v, "0");
     }
 
     // ----------------------------------------------------------------
@@ -617,8 +617,8 @@ public sealed class RenderingShowcaseGame : StationGame
             spot.Color = beams[i];
             spot.Range = 14f;
             spot.Intensity = 4700000f;
-            spot.OuterAngle = 25f;
-            spot.InnerAngle = 15f;
+            spot.SpotAngle = 50f;
+            spot.SpotSoftness = 1f - 15f / 25f;
             go.AddComponent<FogLight>().IntensityMultiplier = 4f;
             go.Transform.Position = c + new Float3((i - 1) * 5f, 8f, 1f);
             Sweep sweep = go.AddComponent<Sweep>();

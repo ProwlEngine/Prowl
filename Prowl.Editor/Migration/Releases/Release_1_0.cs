@@ -25,6 +25,7 @@ internal sealed partial class Release_1_0 : MigrationRelease
         new("Lit, Unlit, sky, grass and terrain materials moved onto Graphite's OpenPBR property names", ctx => ctx.RewriteEcho(echo => ConvertMaterials(echo, AdoptOpenPbr))),
         new("Light, particle light, ambient and fog intensities carried onto physical units", ctx => ctx.RewriteEchoAssets(PhysicalLightUnits)),
         new("Custom shaders using the old Lit property names are listed for hand edits", WarnOldShaderNames),
+        new("Light spot cones saved as an angle and softness, ranges made automatic, colours kept off colour temperature", LightConesAndTemperature),
     ];
 
     private const string CameraType = "Prowl.Runtime.Camera";
@@ -440,6 +441,117 @@ internal sealed partial class Release_1_0 : MigrationRelease
         visit(tag);
         foreach (string child in tag.GetNames().ToList())
             ForEachCompound(tag[child], visit);
+    }
+
+    // The inner and outer half angles a light had before they were saved
+    private const float OldInnerAngle = 30f, OldOuterAngle = 45f;
+
+    /// <summary>
+    /// Lights saved before colour temperature, which carry no useTemperature, have their inner and outer half angles
+    /// turned into a whole spotAngle and a spotSoftness, their range dropped so it is worked out from the intensity, and
+    /// useTemperature written off so their colour stays as it was. Prefab overrides of the old angles become overrides of
+    /// spotAngle and spotSoftness, worked out against the angles of the light they override. Range overrides are kept,
+    /// unused while the instance leaves overrideRange off.
+    /// </summary>
+    internal static void LightConesAndTemperature(MigrationContext ctx)
+    {
+        Dictionary<string, (float Inner, float Outer)> cones = [];
+        ctx.RewriteEchoAssets(echo => { ForEachCompound(echo, tag => CollectCone(tag, cones)); return null; });
+        ctx.RewriteEchoAssets(echo => ConvertLightCones(echo, cones));
+    }
+
+    // Every light's half angles by its identities, its own identifier winning over the prefab source it came from
+    private static void CollectCone(EchoObject tag, Dictionary<string, (float Inner, float Outer)> cones)
+    {
+        if (TypeName(tag) != LightType) return;
+        (float Inner, float Outer) cone = OldCone(tag);
+        if (tag.TryGet("_identifier", out EchoObject? id) && id!.TagType == EchoType.String) cones[id.StringValue] = cone;
+        if (tag.TryGet("_prefabTemplateIdentity", out EchoObject? source) && source!.TagType == EchoType.String) cones.TryAdd(source.StringValue, cone);
+    }
+
+    // The half angles of a light in either format, the old defaults filling what is missing
+    private static (float Inner, float Outer) OldCone(EchoObject light)
+    {
+        if (!light.Contains("innerAngle") && !light.Contains("outerAngle") && Number(light, "spotAngle") is float angle)
+        {
+            float half = angle * 0.5f;
+            return (half * (1f - Math.Clamp(Number(light, "spotSoftness") ?? 0f, 0f, 1f)), half);
+        }
+        return (Number(light, "innerAngle") ?? OldInnerAngle, Number(light, "outerAngle") ?? OldOuterAngle);
+    }
+
+    private static float? Number(EchoObject tag, string name)
+        => tag.TryGet(name, out EchoObject? value) && IsNumber(value!) ? value.FloatValue : null;
+
+    private static float Softness(float inner, float outer) => outer > 0f ? Math.Clamp(1f - inner / outer, 0f, 1f) : 0f;
+
+    private static EchoObject? ConvertLightCones(EchoObject echo, Dictionary<string, (float Inner, float Outer)> cones)
+    {
+        bool changed = false;
+        ForEachCompound(echo, tag =>
+        {
+            if (TypeName(tag) != LightType || tag.Contains("useTemperature")) return;
+            if (tag.Contains("innerAngle") || tag.Contains("outerAngle"))
+            {
+                (float inner, float outer) = OldCone(tag);
+                tag.Remove("innerAngle");
+                tag.Remove("outerAngle");
+                tag["spotAngle"] = new EchoObject(2f * outer);
+                tag["spotSoftness"] = new EchoObject(Softness(inner, outer));
+            }
+            tag.Remove("range");
+            tag["useTemperature"] = new EchoObject(false);
+            changed = true;
+        });
+        ConvertConeOverrides(echo, cones, ref changed);
+        return changed ? echo : null;
+    }
+
+    // Prefab override lists hold compounds with a Path of {object}/{component}/{member}
+    private static void ConvertConeOverrides(EchoObject tag, Dictionary<string, (float Inner, float Outer)> cones, ref bool changed)
+    {
+        if (tag.TagType == EchoType.List)
+        {
+            changed |= ConvertConeOverrideList(tag, cones);
+            foreach (EchoObject item in tag.List.ToList())
+                ConvertConeOverrides(item, cones, ref changed);
+            return;
+        }
+        if (tag.TagType != EchoType.Compound) return;
+        foreach (string child in tag.GetNames().ToList())
+            ConvertConeOverrides(tag[child], cones, ref changed);
+    }
+
+    private static bool ConvertConeOverrideList(EchoObject list, Dictionary<string, (float Inner, float Outer)> cones)
+    {
+        Dictionary<string, (EchoObject? Inner, EchoObject? Outer)> instances = [];
+        foreach (EchoObject item in list.List)
+        {
+            if (item.TagType != EchoType.Compound || !item.TryGet("Path", out EchoObject? path) || path!.TagType != EchoType.String) continue;
+            string[] parts = path.StringValue.Split('/', 3);
+            if (parts.Length != 3 || !cones.ContainsKey(parts[1]) || parts[2] is not ("innerAngle" or "outerAngle")) continue;
+
+            string prefix = $"{parts[0]}/{parts[1]}";
+            instances.TryGetValue(prefix, out (EchoObject? Inner, EchoObject? Outer) found);
+            instances[prefix] = parts[2] == "innerAngle" ? (item, found.Outer) : (found.Inner, item);
+        }
+
+        foreach ((string prefix, (EchoObject? innerItem, EchoObject? outerItem)) in instances)
+        {
+            (float inner, float outer) = cones[prefix[(prefix.IndexOf('/') + 1)..]];
+            if (innerItem != null && innerItem.TryGet("Value", out EchoObject? innerValue) && IsNumber(innerValue!)) inner = innerValue.FloatValue;
+            if (outerItem != null && outerItem.TryGet("Value", out EchoObject? outerValue) && IsNumber(outerValue!)) outer = outerValue.FloatValue;
+
+            EchoObject softnessItem = innerItem ?? outerItem!.Clone();
+            softnessItem["Path"] = new EchoObject($"{prefix}/spotSoftness");
+            softnessItem["Value"] = new EchoObject(Softness(inner, outer));
+            if (outerItem == null) continue;
+
+            outerItem["Path"] = new EchoObject($"{prefix}/spotAngle");
+            outerItem["Value"] = new EchoObject(2f * outer);
+            if (innerItem == null) list.ListInsert(list.List.IndexOf(outerItem) + 1, softnessItem);
+        }
+        return instances.Count > 0;
     }
 
     private static readonly (string Old, string New)[] s_oldShaderNames =

@@ -36,17 +36,11 @@ public sealed class QualityLevel
     /// <summary>The largest shadow tile any light takes, its own resolution capped to it.</summary>
     public ShadowResolution MaxShadowResolution = ShadowResolution._2048;
 
+    /// <summary>The illuminance in lux where a light's automatic range ends. Higher cuts lights shorter and cheaper.</summary>
+    [Header("Lights")] public float LightCutoff = 0.01f;
+
     /// <summary>The largest cube any reflection probe or the sky probe captures, its own size capped to it.</summary>
     [Header("Reflections")] public int MaxProbeResolution = 256;
-
-    /// <summary>Whether cameras run their Screen Space Reflections volume component.</summary>
-    public bool ScreenSpaceReflections = true;
-
-    /// <summary>Whether cameras run their Ambient Occlusion volume component.</summary>
-    [Header("Effects")] public bool AmbientOcclusion = true;
-
-    /// <summary>Downsampled levels bloom spreads over, fewer for a tighter and cheaper glow.</summary>
-    [Range(1, 8)] public int BloomIterations = 6;
 
     public QualityLevel Clone() => (QualityLevel)MemberwiseClone();
 }
@@ -63,8 +57,8 @@ public static class QualitySettings
     /// <summary>Low, Medium, High and Ultra.</summary>
     public static List<QualityLevel> CreateDefaults() =>
     [
-        new() { Name = "Low", PbrTier = PbrTier.Lite, RenderScale = 0.8f, ShadowDistance = 30f, ShadowCascades = ShadowCascades.One, MaxShadowResolution = ShadowResolution._512, MaxProbeResolution = 64, ScreenSpaceReflections = false, AmbientOcclusion = false, BloomIterations = 4 },
-        new() { Name = "Medium", PbrTier = PbrTier.Lite, ShadowDistance = 50f, ShadowCascades = ShadowCascades.Two, MaxShadowResolution = ShadowResolution._1024, MaxProbeResolution = 128, ScreenSpaceReflections = false, BloomIterations = 5 },
+        new() { Name = "Low", PbrTier = PbrTier.Lite, RenderScale = 0.8f, ShadowDistance = 30f, ShadowCascades = ShadowCascades.One, MaxShadowResolution = ShadowResolution._512, MaxProbeResolution = 64 },
+        new() { Name = "Medium", PbrTier = PbrTier.Lite, ShadowDistance = 50f, ShadowCascades = ShadowCascades.Two, MaxShadowResolution = ShadowResolution._1024, MaxProbeResolution = 128 },
         new() { Name = "High" },
         new() { Name = "Ultra", ShadowDistance = 150f, MaxShadowResolution = ShadowResolution._4096, MaxProbeResolution = 512 },
     ];

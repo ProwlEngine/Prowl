@@ -430,8 +430,8 @@ public sealed partial class VehicleShowcaseGame
             spot.Color = new Color(1f, 0.93f, 0.8f, 1f);
             spot.Intensity = 6300000f;
             spot.Range = 35f;
-            spot.OuterAngle = 50f;
-            spot.InnerAngle = 25f;
+            spot.SpotAngle = 100f;
+            spot.SpotSoftness = 0.5f;
             lamps.Add(spot);
         }
         return lamps;

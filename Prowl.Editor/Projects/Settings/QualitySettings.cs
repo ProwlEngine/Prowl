@@ -81,11 +81,10 @@ public class QualitySettings : ProjectSettingsBase
                 Origami.NumericField<float>(paper, $"{id}_sdist_v", level.ShadowDistance, v => { level.ShadowDistance = MathF.Max(0.01f, v); Changed(); }).Show());
             EditorGUI.SettingsEnumDropdown(paper, $"{id}_casc", "Shadow Cascades", level.ShadowCascades, v => { level.ShadowCascades = v; Apply(); });
             EditorGUI.SettingsEnumDropdown(paper, $"{id}_sres", "Max Shadow Resolution", level.MaxShadowResolution, v => { level.MaxShadowResolution = v; Apply(); });
+            EditorGUI.Row(paper, $"{id}_cutoff", "Light Cutoff (lux)", () =>
+                Origami.NumericField<float>(paper, $"{id}_cutoff_v", level.LightCutoff, v => { level.LightCutoff = MathF.Max(0.001f, v); Changed(); }).Show());
 
             EditorGUI.SettingsIntSlider(paper, $"{id}_probe", "Max Probe Resolution", level.MaxProbeResolution, 16, 2048, v => { level.MaxProbeResolution = v; Apply(); });
-            EditorGUI.SettingsCheckbox(paper, $"{id}_ssr", "Screen Space Reflections", level.ScreenSpaceReflections, v => { level.ScreenSpaceReflections = v; Apply(); });
-            EditorGUI.SettingsCheckbox(paper, $"{id}_ao", "Ambient Occlusion", level.AmbientOcclusion, v => { level.AmbientOcclusion = v; Apply(); });
-            EditorGUI.SettingsIntSlider(paper, $"{id}_bloom", "Bloom Iterations", level.BloomIterations, 1, 8, v => { level.BloomIterations = v; Apply(); });
 
             if (Levels.Count > 1)
             {

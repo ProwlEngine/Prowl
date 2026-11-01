@@ -483,18 +483,21 @@ internal static class ClayBackedImporter
             Clay.LightType.Spot => LightType.Spot,
             _ => LightType.Point,
         };
+        light.UseTemperature = false;
         light.Color = src.Color;
         light.Intensity = src.Intensity;
 
         // Range is optional in glTF and means unlimited when absent, which no real-time light can
-        // do, so an absent one keeps the component's own default.
+        // do, so an absent one stays automatic.
         if (src.Range is { } range) light.Range = range;
 
-        // Both measure cone angles from the axis
+        // glTF measures half angles from the axis
         if (light.Type == LightType.Spot)
         {
-            light.OuterAngle = src.OuterConeAngleRadians * (180f / MathF.PI);
-            light.InnerAngle = src.InnerConeAngleRadians * (180f / MathF.PI);
+            float outer = src.OuterConeAngleRadians * (180f / MathF.PI);
+            float inner = src.InnerConeAngleRadians * (180f / MathF.PI);
+            light.SpotAngle = 2f * outer;
+            light.SpotSoftness = outer > 0f ? Math.Clamp(1f - inner / outer, 0f, 1f) : 0f;
         }
     }
 

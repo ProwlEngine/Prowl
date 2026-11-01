@@ -479,7 +479,7 @@ public sealed class LightmapBakeService
 
     private static void AddLight(BakeScene bake, Light light)
     {
-        Color c = light.Color;
+        Color c = light.FinalColor;
         // Match the realtime shader's radiance convention (Lighting.glsl): radiance = Color * (Intensity * 8).
         Float3 color = new Float3((float)c.R, (float)c.G, (float)c.B) * (light.Intensity * 8.0f);
         Float4x4 xform = light.Transform.LocalToWorldMatrix;
@@ -494,9 +494,10 @@ public sealed class LightmapBakeService
                 break;
             case LightType.Spot:
                 {
-                    // Prowl's angles are half angles in degrees, Photonic's are full cone angles in radians
-                    Photonic.Scene.Lights.SpotLight spot = bake.CreateSpotLight(light.GameObject.Name, xform, color, light.Range, 2.0f * light.OuterAngle * Maths.Deg2Rad);
-                    spot.InnerConeAngle = 2.0f * light.InnerAngle * Maths.Deg2Rad;
+                    // Both take the whole cone angle, Prowl's in degrees and Photonic's in radians
+                    float cone = Maths.Clamp(light.SpotAngle, 1f, 179f);
+                    Photonic.Scene.Lights.SpotLight spot = bake.CreateSpotLight(light.GameObject.Name, xform, color, light.Range, cone * Maths.Deg2Rad);
+                    spot.InnerConeAngle = cone * (1f - Maths.Clamp(light.SpotSoftness, 0f, 1f)) * Maths.Deg2Rad;
                     bl = spot;
                     break;
                 }

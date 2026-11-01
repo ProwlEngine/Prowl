@@ -679,6 +679,84 @@ public class ProjectMigrationTests : IDisposable
     }
 
     [Fact]
+    public void LightCones_BecomeAnAngleAndSoftness_RangesGoAutomatic_AndColoursStayOffTemperature()
+    {
+        string scene = WriteAsset("Main.scene", Scene(
+            OldComponent("Light", Guid.NewGuid(), ("type", new EchoObject(2L)), ("innerAngle", new EchoObject(20f)), ("outerAngle", new EchoObject(40f)),
+                ("range", new EchoObject(7f)), ("color", Serializer.Serialize(new Color(1f, 0.5f, 0.25f, 1f)))),
+            OldComponent("Light", Guid.NewGuid(), ("outerAngle", new EchoObject(60f))),
+            OldComponent("Light", Guid.NewGuid(), ("innerAngle", new EchoObject(10f)), ("outerAngle", new EchoObject(0f))),
+            OldComponent("Light", Guid.NewGuid(), ("range", new EchoObject(3f)))), "SceneImporter");
+        WriteProwlFile("1.0", appliedSteps: 8);
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject items = Item(scene);
+        foreach (EchoObject item in items.List)
+        {
+            Assert.False(item.TryGet("innerAngle", out _));
+            Assert.False(item.TryGet("outerAngle", out _));
+            Assert.False(item.TryGet("range", out _));
+            Assert.False(item["useTemperature"].BoolValue);
+        }
+        Assert.Equal(80f, items[0]["spotAngle"].FloatValue);
+        Assert.Equal(0.5f, items[0]["spotSoftness"].FloatValue);
+        Assert.Equal(120f, items[1]["spotAngle"].FloatValue);
+        Assert.Equal(0.5f, items[1]["spotSoftness"].FloatValue);
+        Assert.Equal(0f, items[2]["spotAngle"].FloatValue);
+        Assert.Equal(0f, items[2]["spotSoftness"].FloatValue);
+        Assert.False(items[3].TryGet("spotAngle", out _));
+
+        var spot = (Light)Serializer.Deserialize<Component>(items[0])!;
+        Assert.Equal(LightType.Spot, spot.Type);
+        Assert.Equal(80f, spot.SpotAngle);
+        Assert.Equal(0.5f, spot.SpotSoftness);
+        Assert.False(spot.OverrideRange);
+        Assert.False(spot.UseTemperature);
+        Assert.Equal(new Color(1f, 0.5f, 0.25f, 1f), spot.FinalColor);
+
+        var untouched = (Light)Serializer.Deserialize<Component>(items[3])!;
+        Assert.Equal(90f, untouched.SpotAngle);
+        Assert.Equal(1f / 3f, untouched.SpotSoftness, 5);
+    }
+
+    [Fact]
+    public void LightConeOverrides_BecomeSpotAngleAndSoftnessOverrides_AndTheStepCanRunAgain()
+    {
+        Guid light = Guid.NewGuid();
+        WriteAsset("Lamp.prefab", Scene(OldComponent("Light", light, ("innerAngle", new EchoObject(20f)), ("outerAngle", new EchoObject(40f)))), "PrefabImporter");
+        string both = Guid.NewGuid().ToString(), outer = Guid.NewGuid().ToString(), inner = Guid.NewGuid().ToString();
+        string scene = WriteAsset("Main.scene", Scene(
+            Override($"{both}/{light}/innerAngle", new EchoObject(15f)),
+            Override($"{both}/{light}/outerAngle", new EchoObject(30f)),
+            Override($"{outer}/{light}/outerAngle", new EchoObject(60f)),
+            Override($"{inner}/{light}/innerAngle", new EchoObject(10f)),
+            Override($"{inner}/{light}/range", new EchoObject(5f)),
+            Override($"{inner}/{Guid.NewGuid()}/innerAngle", new EchoObject(10f))), "SceneImporter");
+        WriteProwlFile("1.0", appliedSteps: 8);
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        Dictionary<string, float> overrides = Item(scene).List.ToDictionary(o => o["Path"].StringValue, o => o["Value"].FloatValue);
+        Assert.Equal(7, overrides.Count);
+        Assert.Equal(0.5f, overrides[$"{both}/{light}/spotSoftness"]);
+        Assert.Equal(60f, overrides[$"{both}/{light}/spotAngle"]);
+        Assert.Equal(120f, overrides[$"{outer}/{light}/spotAngle"]);
+        Assert.Equal(1f - 20f / 60f, overrides[$"{outer}/{light}/spotSoftness"], 5);
+        Assert.Equal(0.75f, overrides[$"{inner}/{light}/spotSoftness"]);
+        Assert.False(overrides.ContainsKey($"{inner}/{light}/spotAngle"));
+        Assert.Equal(5f, overrides[$"{inner}/{light}/range"]);
+        Assert.Contains(overrides.Keys, k => k.EndsWith("/innerAngle", StringComparison.Ordinal) && !k.Contains(light.ToString()));
+
+        Dictionary<string, string> migrated = Directory.GetFiles(Path.Combine(_root, "Assets")).ToDictionary(f => f, File.ReadAllText);
+        var again = new MigrationContext(Project.Open(_root));
+        Release_1_0.LightConesAndTemperature(again);
+        Assert.Empty(again.ChangedFiles);
+        foreach ((string file, string text) in migrated)
+            Assert.Equal(text, File.ReadAllText(file));
+    }
+
+    [Fact]
     public void ShadersUsingOldLitNames_AreListed_AndLeftAlone()
     {
         const string source = """

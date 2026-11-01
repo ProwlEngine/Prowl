@@ -102,7 +102,7 @@ public sealed class Bloom : VolumeComponent<G.Bloom>
         feature.SoftKnee = SoftKnee;
         feature.Clamp = Clamp;
         feature.AntiFlicker = AntiFlicker;
-        feature.Iterations = System.Math.Min(Iterations.Value, QualitySettings.Active.BloomIterations);
+        feature.Iterations = Iterations.Value;
         feature.Scatter = Scatter;
     }
 }
@@ -120,7 +120,7 @@ public sealed class AmbientOcclusion : VolumeComponent<G.Gtao>
     [Range(0f, 1f)] public VolumeParameter<float> TemporalResponse = new(0.9f);
     public VolumeParameter<EffectResolution> Resolution = new(EffectResolution.Quarter);
 
-    public override bool IsActive => Intensity.Value > 0f && QualitySettings.Active.AmbientOcclusion;
+    public override bool IsActive => Intensity.Value > 0f;
 
     protected override G.Gtao CreateFeature(G.Renderer renderer) => new(renderer);
 
@@ -155,7 +155,7 @@ public sealed class ScreenSpaceReflections : VolumeComponent<G.ScreenSpaceReflec
     public VolumeParameter<bool> ReflectionVelocity = new(true);
     [Range(0f, 1f)] public VolumeParameter<float> ScreenFadeSize = new(0.25f);
 
-    public override bool IsActive => Enabled.Value && QualitySettings.Active.ScreenSpaceReflections;
+    public override bool IsActive => Enabled.Value;
 
     protected override G.ScreenSpaceReflections CreateFeature(G.Renderer renderer) => new(renderer);
 

@@ -148,8 +148,8 @@ public sealed partial class VRShowcaseGame
         Light light = lamp.AddComponent<Light>();
         light.Type = LightType.Spot;
         light.Range = 30f;
-        light.OuterAngle = 40f;
-        light.InnerAngle = 25f;
+        light.SpotAngle = 80f;
+        light.SpotSoftness = 1f - 25f / 40f;
         light.Intensity = 950000f;
         light.Color = new Color(1f, 0.95f, 0.85f, 1f);
         light.Enabled = false;
