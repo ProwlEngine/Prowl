@@ -81,7 +81,7 @@ public sealed class SceneEnvironment
         public float End = 100f;
 
         /// <summary>Colours the fog with the sky behind it, from the sky probe, instead of Color.</summary>
-        public bool UseSky = false;
+        public bool UseSky = true;
 
         public FogSettings() { }
     }

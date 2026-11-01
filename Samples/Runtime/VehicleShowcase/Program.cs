@@ -124,8 +124,7 @@ public sealed partial class VehicleShowcaseGame : StationGame
         CreateVehicleMaterials();
 
         var sun = new GameObject("Sun");
-        Light light = sun.AddComponent<Light>();
-        light.Type = LightType.Directional;
+        DirectionalLight light = sun.AddComponent<DirectionalLight>();
         light.Intensity = 100000f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         Add(sun);

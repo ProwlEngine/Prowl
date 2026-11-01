@@ -415,6 +415,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>The scene's sky, ambient light and fog.</summary>
     public SceneEnvironment Environment = new();
 
+    // Saved as 1 so the 1.0 migration knows the environment is in physical units
+    [SerializeField]
+    private int _lightUnits = 1;
+
     /// <summary>Where one renderer's surface sits in the baked atlas.</summary>
     public struct LightmapPlacement
     {
@@ -429,6 +433,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         /// <summary>Baked lightmap atlas pages (RGBM-encoded). A placement below selects one.</summary>
         public List<Texture2D> Lightmaps = [];
+
+        /// <summary>What the decoded RGBM texels of every page are multiplied by to give irradiance over pi, in nits.</summary>
+        public float LightmapScale = 1f;
 
         /// <summary>
         /// Where each baked renderer landed in the atlas, keyed by the identifier of the object it is on.

@@ -56,7 +56,7 @@ public sealed class RenderingShowcaseGame : StationGame
     // The time of day each station is shown at, in hours.
     private static readonly float[] StationHours = [14f, 15f, 13f, 13f, 22f, 22f, 22f, 23f, 11f, 14f, 16f];
 
-    private Light _sun = null!;
+    private DirectionalLight _sun = null!;
     private VolumetricFog _fog = null!;
     private VolumetricClouds _clouds = null!;
     private float _cloudFlightSpeed = 300f;
@@ -79,8 +79,7 @@ public sealed class RenderingShowcaseGame : StationGame
         _concrete = Lit(new Color(0.12f, 0.12f, 0.12f, 1f), 0f, 0.85f);
 
         var sun = new GameObject("Sun");
-        _sun = sun.AddComponent<Light>();
-        _sun.Type = LightType.Directional;
+        _sun = sun.AddComponent<DirectionalLight>();
         Add(sun);
 
         _fog = MainCamera.Profile!.Add<VolumetricFog>(overrideAll: true);
@@ -409,8 +408,8 @@ public sealed class RenderingShowcaseGame : StationGame
     //  5  Lights
     // ----------------------------------------------------------------
 
-    private Light _orbitLight = null!;
-    private Light _spotLight = null!;
+    private PointLight _orbitLight = null!;
+    private SpotLight _spotLight = null!;
     private GameObject _orbitBulb = null!;
 
     private void BuildLights(Float3 c)
@@ -426,8 +425,7 @@ public sealed class RenderingShowcaseGame : StationGame
 
         Color warm = new(1f, 0.6f, 0.25f, 1f);
         GameObject orbit = Add(Model("Orbit Light", Mesh.CreateSphere(0.12f, 8, 12), Unlit(new Color(4f, 2.4f, 1f, 1f)), c + new Float3(4.5f, 1.2f, 0f)));
-        _orbitLight = orbit.AddComponent<Light>();
-        _orbitLight.Type = LightType.Point;
+        _orbitLight = orbit.AddComponent<PointLight>();
         _orbitLight.Color = warm;
         _orbitLight.Range = 14f;
         _orbitLight.Intensity = 950000f;
@@ -440,8 +438,7 @@ public sealed class RenderingShowcaseGame : StationGame
         orbiter.Radius = 4.5f;
 
         var spot = new GameObject("Spot Light");
-        _spotLight = spot.AddComponent<Light>();
-        _spotLight.Type = LightType.Spot;
+        _spotLight = spot.AddComponent<SpotLight>();
         _spotLight.Color = new Color(0.4f, 0.65f, 1f, 1f);
         _spotLight.Range = 20f;
         _spotLight.Intensity = 6300000f;
@@ -478,7 +475,9 @@ public sealed class RenderingShowcaseGame : StationGame
     //  6  Area lights
     // ----------------------------------------------------------------
 
-    private Light _rectLight = null!, _diskLight = null!, _tubeLight = null!;
+    private RectLight _rectLight = null!;
+    private DiskLight _diskLight = null!;
+    private TubeLight _tubeLight = null!;
     private GameObject _rectPanel = null!, _diskPanel = null!, _tubePanel = null!;
 
     private void BuildAreaLights(Float3 c)
@@ -494,27 +493,27 @@ public sealed class RenderingShowcaseGame : StationGame
         }
 
         // The rectangle and the disk shine along Forward, the tube lies along it
-        (_rectLight, _rectPanel) = AddAreaLight(LightType.Rect, new Color(1f, 0.85f, 0.7f, 1f), c + new Float3(0f, 1.6f, 3.5f), Quaternion.LookRotation(-Float3.UnitZ, Float3.UnitY), Mesh.CreateCube(Float3.One));
+        (_rectLight, _rectPanel) = AddAreaLight<RectLight>(new Color(1f, 0.85f, 0.7f, 1f), c + new Float3(0f, 1.6f, 3.5f), Quaternion.LookRotation(-Float3.UnitZ, Float3.UnitY), Mesh.CreateCube(Float3.One));
         _rectLight.Width = 4f;
         _rectLight.Height = 1.6f;
 
-        (_diskLight, _diskPanel) = AddAreaLight(LightType.Disk, new Color(0.6f, 0.8f, 1f, 1f), c + new Float3(-3.5f, 3.2f, -0.2f), Quaternion.LookRotation(-Float3.UnitY, Float3.UnitZ), Mesh.CreateCylinder(0.5f, 1f, 48));
-        _diskLight.Width = 1.6f;
+        (_diskLight, _diskPanel) = AddAreaLight<DiskLight>(new Color(0.6f, 0.8f, 1f, 1f), c + new Float3(-3.5f, 3.2f, -0.2f), Quaternion.LookRotation(-Float3.UnitY, Float3.UnitZ), Mesh.CreateCylinder(0.5f, 1f, 48));
+        _diskLight.Diameter = 1.6f;
 
-        (_tubeLight, _tubePanel) = AddAreaLight(LightType.Tube, new Color(1f, 0.35f, 0.75f, 1f), c + new Float3(0.5f, 0.3f, -2.6f), Quaternion.LookRotation(Float3.UnitX, Float3.UnitY), Mesh.CreateCylinder(0.5f, 1f, 24));
+        (_tubeLight, _tubePanel) = AddAreaLight<TubeLight>(new Color(1f, 0.35f, 0.75f, 1f), c + new Float3(0.5f, 0.3f, -2.6f), Quaternion.LookRotation(Float3.UnitX, Float3.UnitY), Mesh.CreateCylinder(0.5f, 1f, 24));
         _tubeLight.Length = 5f;
-        _tubeLight.SourceRadius = 0.05f;
+        _tubeLight.Radius = 0.05f;
         UpdateAreaPanels();
     }
 
     // A light and the unlit shape that shows where it is, kept apart so the shape can be scaled to the light's size
-    private (Light, GameObject) AddAreaLight(LightType type, Color color, Float3 position, Quaternion rotation, Mesh shape)
+    private (T, GameObject) AddAreaLight<T>(Color color, Float3 position, Quaternion rotation, Mesh shape) where T : AreaLight, new()
     {
-        var go = new GameObject($"{type} Light");
+        string type = typeof(T).Name;
+        var go = new GameObject(type);
         go.Transform.Position = position;
         go.Transform.Rotation = rotation;
-        Light light = go.AddComponent<Light>();
-        light.Type = type;
+        T light = go.AddComponent<T>();
         light.Color = color;
         light.Intensity = 950000f;
         light.Range = 12f;
@@ -527,11 +526,11 @@ public sealed class RenderingShowcaseGame : StationGame
     {
         _rectPanel.Transform.Rotation = _rectLight.Transform.Rotation;
         _rectPanel.Transform.LocalScale = new Float3(_rectLight.Width, _rectLight.Height, 0.02f);
-        _diskPanel.Transform.LocalScale = new Float3(_diskLight.Width, 0.02f, _diskLight.Width);
+        _diskPanel.Transform.LocalScale = new Float3(_diskLight.Diameter, 0.02f, _diskLight.Diameter);
         _tubePanel.Transform.LocalEulerAngles = new Float3(0f, 0f, 90f);
-        float thickness = Maths.Max(_tubeLight.SourceRadius * 2f, 0.02f);
+        float thickness = Maths.Max(_tubeLight.Radius * 2f, 0.02f);
         _tubePanel.Transform.LocalScale = new Float3(thickness, _tubeLight.Length, thickness);
-        foreach ((Light light, GameObject panel) in new[] { (_rectLight, _rectPanel), (_diskLight, _diskPanel), (_tubeLight, _tubePanel) })
+        foreach ((Light light, GameObject panel) in new (Light, GameObject)[] { (_rectLight, _rectPanel), (_diskLight, _diskPanel), (_tubeLight, _tubePanel) })
             panel.Enabled = light.GameObject.Enabled;
     }
 
@@ -545,13 +544,13 @@ public sealed class RenderingShowcaseGame : StationGame
 
         Header(paper, font, "Disk", 1);
         Toggle(paper, font, "On", _diskLight.GameObject.Enabled, v => { _diskLight.GameObject.Enabled = v; UpdateAreaPanels(); }, 1);
-        Slider(paper, font, "Diameter", _diskLight.Width, 0.2f, 4f, v => { _diskLight.Width = v; UpdateAreaPanels(); }, "0.0", 1);
+        Slider(paper, font, "Diameter", _diskLight.Diameter, 0.2f, 4f, v => { _diskLight.Diameter = v; UpdateAreaPanels(); }, "0.0", 1);
         Slider(paper, font, "Intensity", _diskLight.Intensity, 0f, 3000000f, v => _diskLight.Intensity = v, "0", 1);
 
         Header(paper, font, "Tube", 2);
         Toggle(paper, font, "On", _tubeLight.GameObject.Enabled, v => { _tubeLight.GameObject.Enabled = v; UpdateAreaPanels(); }, 2);
         Slider(paper, font, "Length", _tubeLight.Length, 0.2f, 8f, v => { _tubeLight.Length = v; UpdateAreaPanels(); }, "0.0", 2);
-        Slider(paper, font, "Radius", _tubeLight.SourceRadius, 0f, 0.3f, v => { _tubeLight.SourceRadius = v; UpdateAreaPanels(); }, "0.00", 2);
+        Slider(paper, font, "Radius", _tubeLight.Radius, 0f, 0.3f, v => { _tubeLight.Radius = v; UpdateAreaPanels(); }, "0.00", 2);
         Slider(paper, font, "Intensity", _tubeLight.Intensity, 0f, 3000000f, v => _tubeLight.Intensity = v, "0", 2);
     }
 
@@ -574,8 +573,7 @@ public sealed class RenderingShowcaseGame : StationGame
         {
             Color color = Hsv(Sample.Rng.NextSingle(), 0.75f, 1f);
             GameObject go = Model("Wandering Light", bulb, Unlit(new Color(color.R * 4f, color.G * 4f, color.B * 4f, 1f)), c);
-            Light light = go.AddComponent<Light>();
-            light.Type = LightType.Point;
+            PointLight light = go.AddComponent<PointLight>();
             light.Color = color;
             light.Range = 1.25f;
             light.Intensity = 240000f;
@@ -612,8 +610,7 @@ public sealed class RenderingShowcaseGame : StationGame
         for (int i = 0; i < beams.Length; i++)
         {
             var go = new GameObject("Beam");
-            Light spot = go.AddComponent<Light>();
-            spot.Type = LightType.Spot;
+            SpotLight spot = go.AddComponent<SpotLight>();
             spot.Color = beams[i];
             spot.Range = 14f;
             spot.Intensity = 4700000f;

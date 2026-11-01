@@ -174,9 +174,7 @@ public static class PrefabEditingMode
         var lightGo = new GameObject("PrefabEdit Light");
         lightGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
-        Light light = lightGo.AddComponent<Light>();
-        light.Type = LightType.Directional;
-        light.Intensity = 100000f;
+        lightGo.AddComponent<DirectionalLight>();
         editScene.Add(lightGo);
 
         Scene.Load(editScene);

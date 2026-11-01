@@ -62,7 +62,7 @@ public sealed class SceneRendering : IDisposable
     internal static uint Epoch { get; private set; } = 1;
     private RenderWorld? _world;
     private ulong _syncedFrame = ulong.MaxValue;
-    private readonly List<Light> _directionals = [];
+    private readonly List<DirectionalLight> _directionals = [];
 
     // Instances drawn for one frame through Graphics.DrawMeshInstanced, a batch for each mesh, material and settings,
     // each instance a renderable kept from frame to frame with its colour as the renderable's
@@ -247,8 +247,8 @@ public sealed class SceneRendering : IDisposable
         _immediateGone.Clear();
     }
 
-    internal void AddDirectional(Light light) { if (!_directionals.Contains(light)) _directionals.Add(light); }
-    internal void RemoveDirectional(Light light) => _directionals.Remove(light);
+    internal void AddDirectional(DirectionalLight light) { if (!_directionals.Contains(light)) _directionals.Add(light); }
+    internal void RemoveDirectional(DirectionalLight light) => _directionals.Remove(light);
 
     /// <summary>
     /// Pushes this frame's changes into the world: every member's, then the environment. Once a frame however many
@@ -325,8 +325,8 @@ public sealed class SceneRendering : IDisposable
         EnvironmentDesc env = world.Environment;
         _scene.Environment.ApplyTo(env);
 
-        Light? sun = null;
-        foreach (Light light in _directionals)
+        DirectionalLight? sun = null;
+        foreach (DirectionalLight light in _directionals)
             if (light.Handle.IsValid && (sun.IsNotValid() || light.Intensity > sun.Intensity)) sun = light;
         env.Sun = sun.IsValid() ? sun.Handle : default;
     }

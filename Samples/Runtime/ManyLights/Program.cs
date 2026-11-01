@@ -159,8 +159,7 @@ public sealed class ManyLightsGame : StationGame
         (Float3 position, int color) = _slots[_lights.Count];
 
         GameObject go = Model("Light", _bulb, _bulbMaterials[color], position);
-        Light light = go.AddComponent<Light>();
-        light.Type = LightType.Point;
+        PointLight light = go.AddComponent<PointLight>();
         light.Color = Palette[color];
         light.Range = 6f;
         light.Intensity = 800000f;

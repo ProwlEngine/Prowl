@@ -26,6 +26,8 @@ internal sealed partial class Release_1_0 : MigrationRelease
         new("Light, particle light, ambient and fog intensities carried onto physical units", ctx => ctx.RewriteEchoAssets(PhysicalLightUnits)),
         new("Custom shaders using the old Lit property names are listed for hand edits", WarnOldShaderNames),
         new("Light spot cones saved as an angle and softness, ranges made automatic, colours kept off colour temperature", LightConesAndTemperature),
+        new("Scenes baked before baking used physical light units are listed for a rebake", WarnUnscaledBakes),
+        new("Lights split into a component for each kind: directional, point, spot, rect, disk and tube", SplitLights),
     ];
 
     private const string CameraType = "Prowl.Runtime.Camera";
@@ -336,7 +338,7 @@ internal sealed partial class Release_1_0 : MigrationRelease
     private const long AmbientSky = 2;
 
     /// <summary>
-    /// Lights, particle light modules and scene environments saved before light was physical, which carry no units
+    /// Lights, particle light modules and scene environments and bakes saved before light was physical, which carry no units
     /// marker, have their intensities scaled and get the marker, so the step can run again. Prefab overrides of a
     /// light's intensity are scaled when the instance's light in the same file was old, and a particle system's light
     /// module override converts by its own marker.
@@ -361,6 +363,7 @@ internal sealed partial class Release_1_0 : MigrationRelease
                     break;
                 case SceneType when IsOldUnits(tag, "_lightUnits"):
                     EnvironmentUnits(tag);
+                    BakeUnits(tag);
                     tag["_lightUnits"] = new EchoObject(1);
                     changed = true;
                     break;
@@ -398,6 +401,56 @@ internal sealed partial class Release_1_0 : MigrationRelease
             && ambient.TryGet("Mode", out EchoObject? mode) && IsNumber(mode!) && mode.LongValue != AmbientSky)
             Scale(ambient, "Intensity", LegacyLuminance);
         Child(environment, "Fog")["Intensity"] = new EchoObject(LegacyLuminance);
+    }
+
+    // A bake was drawn at an exposure of 1 too, so its lightmaps and probes are scaled onto nits the same way
+    private static void BakeUnits(EchoObject scene)
+    {
+        if (!scene.TryGet("BakedLighting", out EchoObject? baked) || baked!.TagType != EchoType.Compound) return;
+        baked["LightmapScale"] = new EchoObject((Number(baked, "LightmapScale") ?? 1f) * LegacyLuminance);
+        if (baked.TryGet("ProbeSH", out EchoObject? probes)) ScaleNumbers(probes!, LegacyLuminance);
+    }
+
+    private static void ScaleNumbers(EchoObject tag, float factor)
+    {
+        if (tag.TagType == EchoType.List)
+        {
+            for (int i = 0; i < tag.List.Count; i++)
+            {
+                if (IsNumber(tag.List[i])) tag.List[i] = new EchoObject(tag.List[i].FloatValue * factor);
+                else ScaleNumbers(tag.List[i], factor);
+            }
+            return;
+        }
+        if (tag.TagType != EchoType.Compound) return;
+        foreach (string name in tag.GetNames().Where(n => !n.StartsWith('$')).ToList())
+        {
+            if (!Scale(tag, name, factor)) ScaleNumbers(tag[name], factor);
+        }
+    }
+
+    /// <summary>Logs a warning for each scene holding a bake made while baking was not yet physical. Changes no files.</summary>
+    internal static void WarnUnscaledBakes(MigrationContext ctx)
+    {
+        foreach (string path in ctx.AssetFiles(".scene"))
+        {
+            bool unscaled = false;
+            ForEachCompound(EchoObject.ReadFromString(File.ReadAllText(path)), tag => unscaled |= TypeName(tag) == SceneType && NeedsRebake(tag));
+            if (unscaled)
+                Runtime.Debug.LogWarning($"{Path.GetRelativePath(ctx.Project.AssetsPath, path)} has baked lighting from before baking used physical light units, rebake it.");
+        }
+    }
+
+    /// <summary>A scene with lightmaps or probes but no lightmap scale, which every physical bake and converted old bake saves.</summary>
+    internal static bool NeedsRebake(EchoObject scene)
+        => scene.TryGet("BakedLighting", out EchoObject? baked) && baked!.TagType == EchoType.Compound && !baked.Contains("LightmapScale")
+            && (HasItems(baked, "Lightmaps") || HasItems(baked, "ProbeSH"));
+
+    private static bool HasItems(EchoObject parent, string name)
+    {
+        if (!parent.TryGet(name, out EchoObject? items)) return false;
+        if (items!.TagType == EchoType.Compound && (items.TryGet("$values", out EchoObject? values) || items.TryGet("array", out values))) items = values!;
+        return items.TagType == EchoType.List && items.List.Count > 0;
     }
 
     private static EchoObject Child(EchoObject parent, string name)
@@ -552,6 +605,117 @@ internal sealed partial class Release_1_0 : MigrationRelease
             if (innerItem == null) list.ListInsert(list.List.IndexOf(outerItem) + 1, softnessItem);
         }
         return instances.Count > 0;
+    }
+
+    // The old Light's type field: Directional, Point, Spot, Rect, Disk, Tube
+    private static readonly string[] s_lightKinds = ["Directional", "Point", "Spot", "Rect", "Disk", "Tube"];
+    private const long OldDefaultKind = 1;
+
+    // The old Light's defaults that the new components start differently, so a value left unsaved keeps its old meaning
+    private const float OldKelvin = 2700f, OldIntensity = 800f / (4f * MathF.PI);
+
+    // What each kind keeps of the old fields, as {old name, new name, old default}
+    private static readonly Dictionary<string, (string Old, string New, float? Default)[]> s_lightKindFields = new()
+    {
+        ["Directional"] = [("angularRadius", "angularRadius", null), ("cascadeBlend", "cascadeBlend", null)],
+        ["Point"] = [("overrideRange", "overrideRange", null), ("range", "range", null), ("sourceRadius", "sourceRadius", 0f), ("cookie", "cookie", null), ("iesProfile", "iesProfile", null)],
+        ["Spot"] = [("overrideRange", "overrideRange", null), ("range", "range", null), ("sourceRadius", "sourceRadius", 0f), ("cookie", "cookie", null), ("iesProfile", "iesProfile", null),
+            ("spotAngle", "spotAngle", 90f), ("spotSoftness", "spotSoftness", 1f / 3f)],
+        ["Rect"] = [("overrideRange", "overrideRange", null), ("range", "range", null), ("width", "width", 1f), ("height", "height", 1f)],
+        ["Disk"] = [("overrideRange", "overrideRange", null), ("range", "range", null), ("width", "diameter", 1f)],
+        ["Tube"] = [("overrideRange", "overrideRange", null), ("range", "range", null), ("length", "length", 1f), ("sourceRadius", "radius", 0f)],
+    };
+
+    // Fields of the old Light that only some kinds have, dropped from the kinds that do not
+    private static readonly string[] s_kindOnlyFields =
+        ["type", "units", "overrideRange", "range", "spotAngle", "spotSoftness", "width", "height", "length", "sourceRadius", "angularRadius", "cookie", "iesProfile", "cascadeBlend"];
+
+    /// <summary>
+    /// Each Light becomes the component of its type, DirectionalLight to TubeLight, keeping the fields that kind has under
+    /// its names and writing the old defaults the new component starts differently. Prefab overrides of a light follow the
+    /// same renames, overrides of fields its kind lacks are dropped, and an override of the type is dropped with a warning.
+    /// </summary>
+    internal static void SplitLights(MigrationContext ctx)
+    {
+        Dictionary<string, string> kinds = [];
+        ctx.RewriteEchoAssets(echo => { ForEachCompound(echo, tag => CollectLightKind(tag, kinds)); return null; });
+        ctx.RewriteEchoAssets(echo => SplitLights(echo, kinds));
+    }
+
+    private static void CollectLightKind(EchoObject tag, Dictionary<string, string> kinds)
+    {
+        if (TypeName(tag) != LightType) return;
+        string kind = LightKind(tag);
+        if (tag.TryGet("_identifier", out EchoObject? id) && id!.TagType == EchoType.String) kinds[id.StringValue] = kind;
+        if (tag.TryGet("_prefabTemplateIdentity", out EchoObject? source) && source!.TagType == EchoType.String) kinds.TryAdd(source.StringValue, kind);
+    }
+
+    private static string LightKind(EchoObject light)
+    {
+        long kind = light.TryGet("type", out EchoObject? type) && IsNumber(type!) ? type.LongValue : OldDefaultKind;
+        return s_lightKinds[kind is >= 0 and < 6 ? kind : OldDefaultKind];
+    }
+
+    internal static EchoObject? SplitLights(EchoObject echo, IReadOnlyDictionary<string, string> kinds)
+    {
+        bool changed = false;
+        ForEachCompound(echo, tag =>
+        {
+            if (TypeName(tag) != LightType) return;
+            string kind = LightKind(tag);
+            (string Old, string New, float? Default)[] fields = s_lightKindFields[kind];
+            Dictionary<string, EchoObject> kept = [];
+            foreach ((string old, string name, float? fallback) in fields)
+            {
+                if (tag.TryGet(old, out EchoObject? value)) kept[name] = value!;
+                else if (fallback is float f) kept[name] = new EchoObject(f);
+            }
+            foreach (string field in s_kindOnlyFields) tag.Remove(field);
+            foreach ((string name, EchoObject value) in kept) tag[name] = value;
+            if (!tag.Contains("temperature")) tag["temperature"] = new EchoObject(OldKelvin);
+            if (!tag.Contains("intensity")) tag["intensity"] = new EchoObject(OldIntensity);
+            tag["$type"] = new EchoObject($"Prowl.Runtime.{kind}Light, Prowl.Runtime");
+            changed = true;
+        });
+        SplitLightOverrides(echo, kinds, ref changed);
+        return changed ? echo : null;
+    }
+
+    // Prefab override lists hold compounds with a Path of {object}/{component}/{member.path}
+    private static void SplitLightOverrides(EchoObject tag, IReadOnlyDictionary<string, string> kinds, ref bool changed)
+    {
+        if (tag.TagType == EchoType.List)
+        {
+            for (int i = tag.List.Count - 1; i >= 0; i--)
+            {
+                EchoObject item = tag.List[i];
+                if (item.TagType != EchoType.Compound || !item.TryGet("Path", out EchoObject? path) || path!.TagType != EchoType.String) continue;
+                string[] parts = path.StringValue.Split('/', 3);
+                if (parts.Length != 3 || !kinds.TryGetValue(parts[1], out string? kind)) continue;
+
+                int dot = parts[2].IndexOf('.');
+                string field = dot < 0 ? parts[2] : parts[2][..dot];
+                if (!s_kindOnlyFields.Contains(field)) continue;
+
+                string? renamed = s_lightKindFields[kind].FirstOrDefault(f => f.Old == field).New;
+                if (renamed == field) continue;
+                changed = true;
+                if (renamed != null)
+                {
+                    item["Path"] = new EchoObject($"{parts[0]}/{parts[1]}/{renamed}{(dot < 0 ? "" : parts[2][dot..])}");
+                    continue;
+                }
+                if (field == "type" && item.TryGet("Value", out EchoObject? value) && IsNumber(value!) && s_lightKinds.ElementAtOrDefault((int)value.LongValue) != kind)
+                    Runtime.Debug.LogWarning($"A prefab instance changed light {parts[1]} from {kind} to {s_lightKinds.ElementAtOrDefault((int)value.LongValue)}. Lights are separate components now, so it stays {kind}: replace it by hand.");
+                tag.List.RemoveAt(i);
+            }
+            foreach (EchoObject item in tag.List.ToList())
+                SplitLightOverrides(item, kinds, ref changed);
+            return;
+        }
+        if (tag.TagType != EchoType.Compound) return;
+        foreach (string child in tag.GetNames().ToList())
+            SplitLightOverrides(tag[child], kinds, ref changed);
     }
 
     private static readonly (string Old, string New)[] s_oldShaderNames =

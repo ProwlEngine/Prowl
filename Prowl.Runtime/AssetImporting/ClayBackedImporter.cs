@@ -467,7 +467,7 @@ internal static class ClayBackedImporter
     }
 
     /// <summary>
-    /// Attaches a <see cref="Light"/> of the source's type.
+    /// Attaches the light component of the source's type.
     /// </summary>
     /// <remarks>
     /// glTF intensity is photometric (lux for directional, candela for point and spot) while Prowl's
@@ -476,12 +476,11 @@ internal static class ClayBackedImporter
     /// </remarks>
     private static void BuildLight(Clay.Light src, GameObject go)
     {
-        Light light = go.AddComponent<Light>();
-        light.Type = src.Type switch
+        Light light = src.Type switch
         {
-            Clay.LightType.Directional => LightType.Directional,
-            Clay.LightType.Spot => LightType.Spot,
-            _ => LightType.Point,
+            Clay.LightType.Directional => go.AddComponent<DirectionalLight>(),
+            Clay.LightType.Spot => go.AddComponent<SpotLight>(),
+            _ => go.AddComponent<PointLight>(),
         };
         light.UseTemperature = false;
         light.Color = src.Color;
@@ -489,15 +488,15 @@ internal static class ClayBackedImporter
 
         // Range is optional in glTF and means unlimited when absent, which no real-time light can
         // do, so an absent one stays automatic.
-        if (src.Range is { } range) light.Range = range;
+        if (src.Range is { } range && light is LocalLight local) local.Range = range;
 
         // glTF measures half angles from the axis
-        if (light.Type == LightType.Spot)
+        if (light is SpotLight spot)
         {
             float outer = src.OuterConeAngleRadians * (180f / MathF.PI);
             float inner = src.InnerConeAngleRadians * (180f / MathF.PI);
-            light.SpotAngle = 2f * outer;
-            light.SpotSoftness = outer > 0f ? Math.Clamp(1f - inner / outer, 0f, 1f) : 0f;
+            spot.SpotAngle = 2f * outer;
+            spot.SpotSoftness = outer > 0f ? Math.Clamp(1f - inner / outer, 0f, 1f) : 0f;
         }
     }
 

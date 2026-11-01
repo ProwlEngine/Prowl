@@ -81,30 +81,28 @@ internal static class DefaultGameObjectCreators
     }
 
     [MenuItem("GameObject/Light/Directional Light", priority: 30, Icon = EditorIcons.Sun)]
-    static void CreateDirectionalLight() => CreateLight("Directional Light", LightType.Directional, new Float3(50, 210, 0));
+    static void CreateDirectionalLight() => CreateLight<DirectionalLight>("Directional Light", new Float3(50, 210, 0));
 
     [MenuItem("GameObject/Light/Point Light", priority: 31, Icon = EditorIcons.Lightbulb)]
-    static void CreatePointLight() => CreateLight("Point Light", LightType.Point, Float3.Zero);
+    static void CreatePointLight() => CreateLight<PointLight>("Point Light", Float3.Zero);
 
     [MenuItem("GameObject/Light/Spot Light", priority: 32, Icon = EditorIcons.Bullseye)]
-    static void CreateSpotLight() => CreateLight("Spot Light", LightType.Spot, new Float3(90, 0, 0));
+    static void CreateSpotLight() => CreateLight<SpotLight>("Spot Light", new Float3(90, 0, 0));
 
     [MenuItem("GameObject/Light/Rect Light", priority: 33, Icon = EditorIcons.Lightbulb)]
-    static void CreateRectLight() => CreateLight("Rect Light", LightType.Rect, new Float3(90, 0, 0));
+    static void CreateRectLight() => CreateLight<RectLight>("Rect Light", new Float3(90, 0, 0));
 
     [MenuItem("GameObject/Light/Disk Light", priority: 34, Icon = EditorIcons.Lightbulb)]
-    static void CreateDiskLight() => CreateLight("Disk Light", LightType.Disk, new Float3(90, 0, 0));
+    static void CreateDiskLight() => CreateLight<DiskLight>("Disk Light", new Float3(90, 0, 0));
 
     [MenuItem("GameObject/Light/Tube Light", priority: 35, Icon = EditorIcons.Lightbulb)]
-    static void CreateTubeLight() => CreateLight("Tube Light", LightType.Tube, Float3.Zero);
+    static void CreateTubeLight() => CreateLight<TubeLight>("Tube Light", Float3.Zero);
 
-    static void CreateLight(string name, LightType type, Float3 euler)
+    static void CreateLight<T>(string name, Float3 euler) where T : Light, new()
     {
         GameObject go = HierarchyPanel.CreateGameObject(name, MenuContext.ActiveGameObject);
         go.Transform.Rotation = Quaternion.FromEuler(euler);
-        Light light = go.AddComponent<Light>();
-        light.Type = type;
-        light.ApplyPreset(Light.DefaultPreset(type));
+        go.AddComponent<T>();
     }
 
     [MenuItem("GameObject/Effects/Fog/Global", priority: 40, Icon = EditorIcons.Cloud)]

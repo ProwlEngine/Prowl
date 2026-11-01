@@ -90,10 +90,7 @@ public class PreviewRenderer : IDisposable
         _lightGo = new GameObject("PreviewLight");
         _lightGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         _lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
-        Light light = _lightGo.AddComponent<Light>();
-        light.Type = LightType.Directional;
-        light.Intensity = 100000f;
-        light.CastShadows = false;
+        _lightGo.AddComponent<DirectionalLight>().CastShadows = false;
         _scene.Add(_lightGo);
 
         _scene.Enable();

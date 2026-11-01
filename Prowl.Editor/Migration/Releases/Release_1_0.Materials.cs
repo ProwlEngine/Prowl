@@ -19,12 +19,15 @@ internal sealed partial class Release_1_0
     internal static readonly Guid GrassShader = new("a95b73d2-d6fb-b25b-8918-a1ad5616656c");
     internal static readonly Guid TerrainShader = new("96a4f4ef-53bf-7a5e-a12c-fec5060898f7");
 
-    // Procedural, Cubemap, Panorama and SixSided skies
-    internal static readonly Guid[] ExposedSkyShaders =
+    internal static readonly Guid ProceduralSkyShader = new("73295c5c-0e55-4550-ae74-f13cd62796d2");
+
+    // Cubemap, Panorama and SixSided skies, which draw their texels as nits
+    internal static readonly Guid[] TextureSkyShaders =
     [
-        new("73295c5c-0e55-4550-ae74-f13cd62796d2"), new("297b078c-ab54-2f59-b3ab-028c50f8653b"),
-        new("e9e47399-dfb7-885c-b3db-0810c196199f"), new("71c042a1-257c-e154-9ca7-ef454643498e"),
+        new("297b078c-ab54-2f59-b3ab-028c50f8653b"), new("e9e47399-dfb7-885c-b3db-0810c196199f"), new("71c042a1-257c-e154-9ca7-ef454643498e"),
     ];
+
+    internal static readonly Guid[] ExposedSkyShaders = [ProceduralSkyShader, .. TextureSkyShaders];
 
     // White, Gray18, Normal, Surface and Emission
     internal static readonly Guid[] PlaceholderTextures =
@@ -104,14 +107,15 @@ internal sealed partial class Release_1_0
             && Guid.TryParse(asset.StringValue, out Guid guid) && PlaceholderTextures.Contains(guid);
 
     /// <summary>
-    /// Lit and Unlit materials move onto Graphite's OpenPBR names, sky exposure becomes intensity, grass takes Lit's
-    /// alpha cutoff and drops its old translucency, terrain drops the holes toggle.
+    /// Lit and Unlit materials move onto Graphite's OpenPBR names, sky exposure becomes intensity, in nits for the
+    /// texture skies, grass takes Lit's alpha cutoff and drops its old translucency, terrain drops the holes toggle.
     /// </summary>
     internal static bool AdoptOpenPbr(RawMaterial m)
     {
         Guid? shader = m.Shader;
         if (shader == LitShader || shader == UnlitShader) AdoptOpenPbr(m, shader == LitShader);
-        else if (shader is { } sky && ExposedSkyShaders.Contains(sky)) m.Move("_Exposure", "intensity");
+        else if (shader == ProceduralSkyShader) m.Move("_Exposure", "intensity");
+        else if (shader is { } sky && TextureSkyShaders.Contains(sky)) TextureSkyIntensity(m);
         else if (shader == GrassShader)
         {
             m.Move("_AlphaCutoff", "alpha_cutoff");
@@ -124,7 +128,7 @@ internal sealed partial class Release_1_0
 
     /// <summary>
     /// The tint and texture become base_color and its map, the surface texture's G and B the roughness and metalness
-    /// maps, then the normal, occlusion and height maps, and emission when it was on with its intensity in nits.
+    /// maps, then the normal, occlusion and height maps, anisotropy, and emission when it was on with its intensity in nits.
     /// Transparent and cutout Lit materials take their opacity from the tint's alpha. An Unlit material without a
     /// luminance glows at the one that keeps its old look.
     /// </summary>
@@ -132,6 +136,7 @@ internal sealed partial class Release_1_0
     {
         if (!lit && !m.HasNumber("emission_luminance"))
             m.SetOwn("_floats", "emission_luminance", new EchoObject(LegacyLuminance));
+        if (lit) AdoptAnisotropy(m);
 
         if (!m.Has("_colors", "_MainColor") && !m.Has("_textures", "_MainTex") && !m.Has("_floats", "_Roughness") && !m.Has("_floats", "_Metallic"))
             return;
@@ -169,6 +174,34 @@ internal sealed partial class Release_1_0
         }
         foreach (string name in (string[])["_Emission", "_EmissiveColor", "_EmissionIntensity", "_EmissionTex", "_EmissionTex_ST", "_EmissionTexUV"])
             m.Forget(name);
+    }
+
+    /// <summary>
+    /// The old anisotropy a made the tangent's roughness 1 + |a| and the bitangent's 1 - |a| times the roughness, so
+    /// specular_roughness_anisotropy takes the same ratio of the two alphas. A negative one stretched along the
+    /// bitangent, which a quarter turn of tangent_rotation keeps. The direction map reads RG the same way as
+    /// geometry_tangent_map.
+    /// </summary>
+    private static void AdoptAnisotropy(RawMaterial m)
+    {
+        if (m.HasNumber("_Anisotropy"))
+        {
+            float old = Math.Clamp(m.Number("_Anisotropy"), -1f, 1f);
+            float ratio = (1f - Math.Abs(old)) / (1f + Math.Abs(old));
+            if (old != 0f) m.SetOwn("_floats", "specular_roughness_anisotropy", new EchoObject(1f - ratio * ratio));
+            if (old < 0f) m.SetOwn("_floats", "tangent_rotation", new EchoObject(MathF.PI * 0.5f));
+            m.Forget("_Anisotropy");
+        }
+        m.MoveMap("_AnisoDirectionMap", "geometry_tangent_map", -1);
+    }
+
+    // Texture skies drew their texels at an exposure of 1, their intensity becomes the nits that keep that look
+    private static void TextureSkyIntensity(RawMaterial m)
+    {
+        if (!m.HasNumber("_Exposure") && m.HasNumber("intensity")) return;
+        float exposure = m.HasNumber("_Exposure") ? m.Number("_Exposure") : 1f;
+        m.Forget("_Exposure");
+        m.SetOwn("_floats", "intensity", new EchoObject(exposure * LegacyLuminance));
     }
 
     /// <summary>

@@ -36,8 +36,7 @@ public sealed class VRBasicsGame : Game
         var scene = new Scene();
 
         var sun = new GameObject("Sun");
-        Light sunLight = sun.AddComponent<Light>();
-        sunLight.Type = LightType.Directional;
+        DirectionalLight sunLight = sun.AddComponent<DirectionalLight>();
         sunLight.Intensity = 100000f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         scene.Add(sun);

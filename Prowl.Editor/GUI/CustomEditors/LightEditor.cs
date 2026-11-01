@@ -23,34 +23,22 @@ using DColor = System.Drawing.Color;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>
-/// Inspector for <see cref="Light"/>: intensity in the unit of choice with an exposure readout against the camera, colour
-/// as a temperature or RGB, the shape rows of the light's type, its reach and its shadows, help in the tooltips.
+/// Inspector for every <see cref="Light"/>: a preset, intensity in the unit of choice with an exposure readout against the
+/// camera, colour as a temperature or RGB, the shape rows of the light's kind, its reach and its shadows, help in the tooltips.
 /// </summary>
 [CustomEditor(typeof(Light))]
 public class LightEditor : CustomEditor
 {
-    private static readonly LightType[] s_types = Enum.GetValues<LightType>();
-    private static readonly string[] s_typeNames = Enum.GetNames<LightType>();
     private static readonly string[] s_filterNames = ["Hard", "Soft", "Contact"];
     private static readonly ShadowResolution[] s_resolutions = Enum.GetValues<ShadowResolution>();
-
-    private static readonly Dictionary<LightType, string> s_typeHelp = new()
-    {
-        [LightType.Directional] = "Parallel light from far away, like the sun. Only rotation matters.",
-        [LightType.Point] = "Light in every direction, like a bare bulb.",
-        [LightType.Spot] = "A cone along Forward, like a flashlight.",
-        [LightType.Rect] = "A one sided glowing rectangle facing Forward, like a panel.",
-        [LightType.Disk] = "A one sided glowing disk facing Forward.",
-        [LightType.Tube] = "A glowing capsule along Forward, like a fluorescent tube.",
-    };
 
     private const string KelvinHelp = "Candle 1900, bulb 2700, halogen 3200, daylight 5600, overcast 6500";
     private const string BakeHelp = "Realtime lights every frame. Mixed bakes bounced light only. Baked lives only in lightmaps and probes.";
     private const string BiasHelp = "In shadow map texels. Raise if surfaces stripe, lower if shadows lift off contact points.";
     private const float MinKelvin = 1000f, MaxKelvin = 12000f;
 
-    // The unit each type of light is edited in, kept for the session
-    private readonly Dictionary<LightType, LightUnit> _units = [];
+    // The unit each kind of light is edited in, kept for the session
+    private readonly Dictionary<Type, LightUnit> _units = [];
     private bool _shadowSettings;
 
     public override void OnGUI(Paper paper, string id, object target)
@@ -60,13 +48,13 @@ public class LightEditor : CustomEditor
 
         Undo.Snapshot(light);
 
-        TypeRow(paper, id, light);
+        PresetRow(paper, id, light);
         IntensityRow(paper, id, light);
         ReadoutRow(paper, id, light);
         ColorRow(paper, id, light);
-        if (light.Type == LightType.Spot) ConeRow(paper, id, light);
+        if (light is SpotLight spot) ConeRow(paper, id, spot);
         ShapeRows(paper, id, light);
-        if (light.Type != LightType.Directional) ReachRow(paper, id, light);
+        if (light is LocalLight local) ReachRow(paper, id, local);
 
         Row(paper, $"{id}_bake", "Bake", BakeHelp, () =>
             Origami.EnumDropdown(paper, $"{id}_bake_v", light.BakeMode, v => Edit(light, () => light.BakeMode = v)).Show(), "bakeMode");
@@ -75,31 +63,23 @@ public class LightEditor : CustomEditor
         LayerAndProfileRows(paper, id, light);
     }
 
-    private void TypeRow(Paper paper, string id, Light light)
+    private static void PresetRow(Paper paper, string id, Light light)
     {
-        IReadOnlyList<LightPreset> presets = Light.Presets(light.Type);
+        IReadOnlyList<LightPreset> presets = light.Presets;
         int current = -1;
         for (int i = 0; i < presets.Count && current < 0; i++)
-            if (Matches(light, presets[i])) current = i;
-        Row(paper, $"{id}_type", "Type", s_typeHelp[light.Type], () =>
-        {
-            Origami.Dropdown(paper, $"{id}_type_v", Array.IndexOf(s_types, light.Type), i => Edit(light, () =>
-            {
-                light.Type = s_types[i];
-                light.ApplyPreset(Light.DefaultPreset(light.Type));
-            }), s_typeNames).Show();
-
-            string[] names = new string[presets.Count];
-            for (int i = 0; i < names.Length; i++) names[i] = presets[i].Name;
+            if (light.IsPreset(presets[i])) current = i;
+        string[] names = new string[presets.Count];
+        for (int i = 0; i < names.Length; i++) names[i] = presets[i].Name;
+        Row(paper, $"{id}_preset", "Preset", "Sets the colour temperature, shape and brightness of a real light", () =>
             Origami.Dropdown(paper, $"{id}_preset_v", current, i => Edit(light, () => light.ApplyPreset(presets[i])), names)
-                .Placeholder("Preset...").Show();
-        }, "type");
+                .Placeholder("Custom").Show());
     }
 
     private void IntensityRow(Paper paper, string id, Light light)
     {
-        LightUnit unit = UnitOf(light.Type);
-        IReadOnlyList<LightUnit> units = Light.Units(light.Type);
+        LightUnit unit = UnitOf(light);
+        IReadOnlyList<LightUnit> units = light.Units;
         Row(paper, $"{id}_int", "Intensity", UnitHelp(unit), () =>
         {
             Origami.NumericField<float>(paper, $"{id}_int_v", light.FromStored(unit, light.Intensity),
@@ -110,18 +90,18 @@ public class LightEditor : CustomEditor
             int selected = 0;
             for (int i = 0; i < units.Count; i++)
                 if (units[i] == unit) selected = i;
-            Origami.Dropdown(paper, $"{id}_unit_v", selected, i => _units[light.Type] = units[i], names).Width(80).Show();
+            Origami.Dropdown(paper, $"{id}_unit_v", selected, i => _units[light.GetType()] = units[i], names).Width(80).Show();
         }, "intensity");
     }
 
     private void ReadoutRow(Paper paper, string id, Light light)
     {
-        LightUnit unit = UnitOf(light.Type);
+        LightUnit unit = UnitOf(light);
         LightUnit other = unit;
-        foreach (LightUnit u in Light.Units(light.Type))
+        foreach (LightUnit u in light.Units)
             if (u != unit) other = u;
-        bool local = light.Type != LightType.Directional;
-        float lux = local ? light.AxisCandela : light.Intensity;
+        bool local = light is LocalLight;
+        float lux = light is LocalLight localLight ? localLight.AxisCandela : light.Intensity;
         float ev = MathF.Log2(MathF.Max(lux, 1e-6f) / 2.5f);
         Camera? camera = Camera.Main;
         float cameraEv = camera.IsValid() ? camera.EV100 : 14f;
@@ -197,7 +177,7 @@ public class LightEditor : CustomEditor
         }
     }
 
-    private void ConeRow(Paper paper, string id, Light light)
+    private void ConeRow(Paper paper, string id, SpotLight light)
     {
         Row(paper, $"{id}_cone", "Cone", "The whole cone angle in degrees, then how much of the cone fades out at the edge", () =>
         {
@@ -210,28 +190,27 @@ public class LightEditor : CustomEditor
 
     private void ShapeRows(Paper paper, string id, Light light)
     {
-        string keep = UnitOf(light.Type) == LightUnit.Lumen ? "Keeps lumens, so bigger spreads the same light thinner." : "Keeps nits, so bigger puts out more light.";
+        string keep = UnitOf(light) == LightUnit.Lumen ? "Keeps lumens, so bigger spreads the same light thinner." : "Keeps nits, so bigger puts out more light.";
         const string radiusHelp = "Bulb radius in metres. Softens highlights and contact shadows.";
-        switch (light.Type)
+        switch (light)
         {
-            case LightType.Directional:
+            case DirectionalLight sun:
                 ShapeSlider(paper, $"{id}_sun", "Sun size", "Angular radius of the sun disk in degrees, about 0.27 for the real sun. Softens highlights and contact shadows.",
-                    "angularRadius", light.AngularRadius, 0f, 5f, v => Edit(light, () => light.AngularRadius = v));
+                    "angularRadius", sun.AngularRadius, 0f, 5f, v => Edit(sun, () => sun.AngularRadius = v));
                 break;
-            case LightType.Point:
-            case LightType.Spot:
-                ShapeSlider(paper, $"{id}_rad", "Radius", radiusHelp, "sourceRadius", light.SourceRadius, 0f, 0.5f, v => Edit(light, () => light.SourceRadius = v));
+            case PunctualLight punctual:
+                ShapeSlider(paper, $"{id}_rad", "Radius", radiusHelp, "sourceRadius", punctual.SourceRadius, 0f, 0.5f, v => Edit(punctual, () => punctual.SourceRadius = v));
                 break;
-            case LightType.Rect:
-                ShapeSlider(paper, $"{id}_w", "Width", keep, "width", light.Width, 0.05f, 5f, v => KeepLumens(light, () => light.Width = v));
-                ShapeSlider(paper, $"{id}_h", "Height", keep, "height", light.Height, 0.05f, 5f, v => KeepLumens(light, () => light.Height = v));
+            case RectLight rect:
+                ShapeSlider(paper, $"{id}_w", "Width", keep, "width", rect.Width, 0.05f, 5f, v => KeepLumens(rect, () => rect.Width = v));
+                ShapeSlider(paper, $"{id}_h", "Height", keep, "height", rect.Height, 0.05f, 5f, v => KeepLumens(rect, () => rect.Height = v));
                 break;
-            case LightType.Disk:
-                ShapeSlider(paper, $"{id}_w", "Diameter", keep, "width", light.Width, 0.05f, 5f, v => KeepLumens(light, () => light.Width = v));
+            case DiskLight disk:
+                ShapeSlider(paper, $"{id}_w", "Diameter", keep, "diameter", disk.Diameter, 0.05f, 5f, v => KeepLumens(disk, () => disk.Diameter = v));
                 break;
-            case LightType.Tube:
-                ShapeSlider(paper, $"{id}_len", "Length", keep, "length", light.Length, 0.05f, 5f, v => KeepLumens(light, () => light.Length = v));
-                ShapeSlider(paper, $"{id}_rad", "Radius", keep, "sourceRadius", light.SourceRadius, 0.001f, 0.2f, v => KeepLumens(light, () => light.SourceRadius = v));
+            case TubeLight tube:
+                ShapeSlider(paper, $"{id}_len", "Length", keep, "length", tube.Length, 0.05f, 5f, v => KeepLumens(tube, () => tube.Length = v));
+                ShapeSlider(paper, $"{id}_rad", "Radius", keep, "radius", tube.Radius, 0.001f, 0.2f, v => KeepLumens(tube, () => tube.Radius = v));
                 break;
         }
     }
@@ -239,7 +218,7 @@ public class LightEditor : CustomEditor
     private static void ShapeSlider(Paper paper, string id, string label, string help, string field, float value, float min, float max, Action<float> set)
         => Row(paper, id, label, help, () => Origami.Slider(paper, $"{id}_v", value, set, min, max).Format("0.###").ValueWidth(64).Show(), field);
 
-    private static void ReachRow(Paper paper, string id, Light light)
+    private static void ReachRow(Paper paper, string id, LocalLight light)
     {
         string cutoff = QualitySettings.Active.LightCutoff.ToString("0.###", CultureInfo.InvariantCulture);
         string help = light.OverrideRange
@@ -282,7 +261,7 @@ public class LightEditor : CustomEditor
 
         if (!light.CastShadows || !_shadowSettings) return;
 
-        string resHelp = light.Type == LightType.Directional
+        string resHelp = light is DirectionalLight
             ? "Largest shadow tile, capped by the quality level"
             : "Largest shadow tile. Local lights size theirs from screen size up to this.";
         Row(paper, $"{id}_map", "Map", resHelp, () =>
@@ -300,9 +279,9 @@ public class LightEditor : CustomEditor
                 .Format("0.###").Prefix("normal", EditorTheme.InkDim).Show();
         }, "depthBias", "normalBias");
 
-        if (light.Type == LightType.Directional)
+        if (light is DirectionalLight sun)
             Row(paper, $"{id}_blend", "Blend", "How much of each cascade blends into the next. Cascade count and distance come from Quality settings.", () =>
-                Origami.Slider(paper, $"{id}_blend_v", light.CascadeBlend, v => Edit(light, () => light.CascadeBlend = v), 0f, 1f)
+                Origami.Slider(paper, $"{id}_blend_v", sun.CascadeBlend, v => Edit(sun, () => sun.CascadeBlend = v), 0f, 1f)
                     .Format("0.00").ValueWidth(44).Show(), "cascadeBlend");
     }
 
@@ -310,11 +289,11 @@ public class LightEditor : CustomEditor
     {
         PropertyGridUtils.DrawField(paper, $"{id}_layers", "Layers", typeof(LayerMask), light.LayerMask,
             v => Edit(light, () => light.LayerMask = (LayerMask)v!));
-        if (light.Type is not (LightType.Point or LightType.Spot)) return;
-        PropertyGridUtils.DrawField(paper, $"{id}_cookie", "Cookie", typeof(Texture), light.Cookie,
-            v => Edit(light, () => light.Cookie = v as Texture));
-        PropertyGridUtils.DrawField(paper, $"{id}_ies", "IES Profile", typeof(Texture2D), light.IesProfile,
-            v => Edit(light, () => light.IesProfile = v as Texture2D));
+        if (light is not PunctualLight punctual) return;
+        PropertyGridUtils.DrawField(paper, $"{id}_cookie", "Cookie", typeof(Texture), punctual.Cookie,
+            v => Edit(punctual, () => punctual.Cookie = v as Texture));
+        PropertyGridUtils.DrawField(paper, $"{id}_ies", "IES Profile", typeof(Texture2D), punctual.IesProfile,
+            v => Edit(punctual, () => punctual.IesProfile = v as Texture2D));
     }
 
     // A labelled row with its help on the label, marked like the property grid when one of its fields is a prefab override
@@ -359,7 +338,7 @@ public class LightEditor : CustomEditor
     // A change to the cone or the size that keeps the light's lumens while it is edited in lumens
     private void KeepLumens(Light light, Action change)
     {
-        bool lumens = UnitOf(light.Type) == LightUnit.Lumen;
+        bool lumens = UnitOf(light) == LightUnit.Lumen;
         float amount = light.FromStored(LightUnit.Lumen, light.Intensity);
         Edit(light, () =>
         {
@@ -368,19 +347,7 @@ public class LightEditor : CustomEditor
         });
     }
 
-    private static bool Matches(Light light, LightPreset preset)
-    {
-        if (!light.UseTemperature || light.Temperature != preset.Kelvin) return false;
-        if (preset.SpotAngle is float angle && light.SpotAngle != angle) return false;
-        if (preset.Width is float width && light.Width != width) return false;
-        if (preset.Height is float height && light.Height != height) return false;
-        if (preset.Length is float length && light.Length != length) return false;
-        if (preset.Radius is float radius && light.SourceRadius != radius) return false;
-        float stored = light.ToStored(preset.Unit, preset.Amount);
-        return MathF.Abs(light.Intensity - stored) <= stored * 1e-4f;
-    }
-
-    private LightUnit UnitOf(LightType type) => _units.TryGetValue(type, out LightUnit unit) ? unit : Light.Units(type)[0];
+    private LightUnit UnitOf(Light light) => _units.TryGetValue(light.GetType(), out LightUnit unit) ? unit : light.Units[0];
 
     private static string UnitName(LightUnit unit) => unit switch
     {

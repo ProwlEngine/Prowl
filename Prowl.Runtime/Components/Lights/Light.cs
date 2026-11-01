@@ -11,32 +11,9 @@ using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
-using GLightType = Prowl.Graphite.Rendering.LightType;
 using GShadowFilter = Prowl.Graphite.Rendering.ShadowFilter;
 
 namespace Prowl.Runtime;
-
-/// <summary>The shape a light shines from.</summary>
-public enum LightType
-{
-    /// <summary>Parallel rays from infinitely far away, like the sun.</summary>
-    Directional = 0,
-
-    /// <summary>Every direction from a point, or a sphere of <see cref="Light.SourceRadius"/>.</summary>
-    Point = 1,
-
-    /// <summary>A cone along Forward.</summary>
-    Spot = 2,
-
-    /// <summary>A one sided rectangle facing Forward, <see cref="Light.Width"/> along Right and <see cref="Light.Height"/> along Up.</summary>
-    Rect = 3,
-
-    /// <summary>A one sided disk facing Forward, <see cref="Light.Width"/> across.</summary>
-    Disk = 4,
-
-    /// <summary>A capsule along Forward, <see cref="Light.Length"/> long and <see cref="Light.SourceRadius"/> thick.</summary>
-    Tube = 5,
-}
 
 /// <summary>How a light's shadow edges are filtered.</summary>
 public enum ShadowFilter
@@ -82,18 +59,12 @@ public enum LightBakeMode
     Baked = 2,
 }
 
-/// <summary>A light in the scene's world, kept up to date from its settings and transform. It shines along Forward.</summary>
-[AddComponentMenu("Rendering/Light")]
-[ComponentIcon("")] // Sun
-public class Light : Component, IRenderSync
+/// <summary>
+/// A light in the scene's world, kept up to date from its settings and transform. It shines along Forward. A new light
+/// starts as its <see cref="DefaultPreset"/>.
+/// </summary>
+public abstract class Light : Component, IRenderSync
 {
-    // The 60 W bulb, the default preset of the default Point type, which a new light starts as
-    private const float BulbLumens = 800f, BulbKelvin = 2700f;
-
-    /// <summary>The shape the light shines from. Setting it keeps every other setting, it applies no preset.</summary>
-    public LightType Type { get => type; set { type = value; Wake(); } }
-    [SerializeField] private LightType type = LightType.Point;
-
     /// <summary>Linear colour. With <see cref="UseTemperature"/> on it tints the temperature's colour, like a filter in front of the light.</summary>
     public Color Color { get => color; set { color = value; Wake(); } }
     [SerializeField] private Color color = Color.White;
@@ -104,65 +75,11 @@ public class Light : Component, IRenderSync
 
     /// <summary>The colour temperature in Kelvin: a candle about 1900, a bulb 2700, daylight 5600, overcast sky 6500.</summary>
     public float Temperature { get => temperature; set { temperature = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(UseTemperature)), Range(1000f, 12000f)] private float temperature = BulbKelvin;
+    [SerializeField, ShowIf(nameof(UseTemperature)), Range(ColorTemperature.Min, ColorTemperature.Max)] private float temperature;
 
-    /// <summary>
-    /// Illuminance in lux for a directional light, a clear day's sun about 100000. Luminous intensity in candela for a
-    /// point or spot, a 60 W bulb about 70. Luminance in nits for a rect, disk or tube.
-    /// </summary>
+    /// <summary>The brightness in the unit the light keeps, the first of its <see cref="Units"/> other than EV100.</summary>
     public float Intensity { get => intensity; set { intensity = value; Wake(); } }
-    [SerializeField] private float intensity = BulbLumens / (4f * Maths.PI);
-
-    /// <summary>Whether <see cref="Range"/> is set by hand instead of worked out by <see cref="AutomaticRange"/>.</summary>
-    public bool OverrideRange { get => overrideRange; set { overrideRange = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(IsLocal))] private bool overrideRange;
-
-    /// <summary>
-    /// Distance from the light at which it reaches zero: the one set by hand while <see cref="OverrideRange"/> is on,
-    /// else <see cref="AutomaticRange"/>. Setting it turns <see cref="OverrideRange"/> on.
-    /// </summary>
-    public float Range
-    {
-        get => overrideRange ? range : AutomaticRange;
-        set { range = value; overrideRange = true; Wake(); }
-    }
-    [SerializeField, ShowIf(nameof(ShowsRangeOverride))] private float range = 10.0f;
-
-    /// <summary>The whole angle of a spot's cone, in degrees.</summary>
-    public float SpotAngle { get => spotAngle; set { spotAngle = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(IsSpot)), Range(1f, 179f)] private float spotAngle = 90.0f;
-
-    /// <summary>How much of a spot's cone fades out toward its edge, 0 for a hard edge and 1 for a fade all the way from the axis.</summary>
-    public float SpotSoftness { get => spotSoftness; set { spotSoftness = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(IsSpot)), Range(0f, 1f)] private float spotSoftness = 1f / 3f;
-
-    /// <summary>A rect's width or a disk's diameter.</summary>
-    public float Width { get => width; set { width = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(HasWidth))] private float width = 1.0f;
-
-    /// <summary>A rect's height.</summary>
-    public float Height { get => height; set { height = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(IsRect))] private float height = 1.0f;
-
-    /// <summary>A tube's length along Forward.</summary>
-    public float Length { get => length; set { length = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(IsTube))] private float length = 1.0f;
-
-    /// <summary>The radius of a point or spot light's sphere, or of a tube, which softens highlights and contact hardening shadows.</summary>
-    public float SourceRadius { get => sourceRadius; set { sourceRadius = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(HasSourceRadius))] private float sourceRadius = 0f;
-
-    /// <summary>The angular radius of the light's disk in degrees, the sun's about 0.27, which softens contact hardening shadows.</summary>
-    public float AngularRadius { get => angularRadius; set { angularRadius = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(IsDirectional))] private float angularRadius = 0.27f;
-
-    /// <summary>A texture the light shines through: a 2D texture across a spot's cone, a cubemap around a point.</summary>
-    public Texture? Cookie { get => cookie; set { cookie = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(HasProfile))] private Texture? cookie;
-
-    /// <summary>A photometric profile as a 2D texture: the angle from the axis across U, around it across V, intensity in R.</summary>
-    public Texture2D? IesProfile { get => iesProfile; set { iesProfile = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(HasProfile))] private Texture2D? iesProfile;
+    [SerializeField] private float intensity;
 
     /// <summary>Which layers the light reaches.</summary>
     public LayerMask LayerMask { get => layerMask; set { layerMask = value; Wake(); } }
@@ -189,10 +106,6 @@ public class Light : Component, IRenderSync
     public float NormalBias { get => normalBias; set { normalBias = value; Wake(); } }
     [SerializeField, ShowIf(nameof(ShowsShadows))] private float normalBias = 1.0f;
 
-    /// <summary>The fraction of each cascade blended into the next, 0 for a hard switch. The cascades and how far they reach are the quality level's.</summary>
-    public float CascadeBlend { get => cascadeBlend; set { cascadeBlend = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(ShowsCascades)), Range(0f, 1f)] private float cascadeBlend = 0.1f;
-
     /// <summary>Baked lights live only in the lightmaps and probes, Mixed and Realtime ones light in realtime.</summary>
     public LightBakeMode BakeMode { get => bakeMode; set { bakeMode = value; Wake(); } }
     [SerializeField] private LightBakeMode bakeMode = LightBakeMode.Realtime;
@@ -205,136 +118,65 @@ public class Light : Component, IRenderSync
     // The FogLight beside this light, which registers itself when it joins the scene
     [System.NonSerialized, NotHeld] internal FogLight? Fog;
     [System.NonSerialized, NotHeld] private RenderWorld? _world;
-    [System.NonSerialized, NotHeld] private Scene? _sunScene;
 
-    private bool IsDirectional => Type == LightType.Directional;
-    private bool IsLocal => Type != LightType.Directional;
-    private bool ShowsRangeOverride => IsLocal && OverrideRange;
-    private bool IsSpot => Type == LightType.Spot;
-    private bool IsRect => Type == LightType.Rect;
-    private bool IsTube => Type == LightType.Tube;
-    private bool HasWidth => Type is LightType.Rect or LightType.Disk;
-    private bool HasSourceRadius => Type is LightType.Point or LightType.Spot or LightType.Tube;
-    private bool HasProfile => Type is LightType.Point or LightType.Spot;
     private bool ShowsShadows => CanCastShadows && CastShadows;
-    private bool ShowsCascades => ShowsShadows && IsDirectional;
 
-    private static readonly LightPreset[] s_directionalPresets =
-    [
-        new("Midday sun", LightUnit.Lux, 100000f, 5600f),
-        new("Low sun", LightUnit.Lux, 20000f, 3500f),
-        new("Sunset", LightUnit.Lux, 2000f, 2500f),
-        new("Full moon", LightUnit.Lux, 0.25f, 4100f),
-    ];
+    protected Light() => ApplyPreset(DefaultPreset);
 
-    private static readonly LightPreset[] s_pointPresets =
-    [
-        new("Candle", LightUnit.Lumen, 12f, 1900f),
-        new("40 W bulb", LightUnit.Lumen, 450f, BulbKelvin),
-        new("60 W bulb", LightUnit.Lumen, BulbLumens, BulbKelvin),
-        new("100 W bulb", LightUnit.Lumen, 1600f, BulbKelvin),
-        new("Street lamp", LightUnit.Lumen, 15000f, 2000f),
-    ];
+    /// <summary>The real lights this kind of light can start from.</summary>
+    public abstract IReadOnlyList<LightPreset> Presets { get; }
 
-    private static readonly LightPreset[] s_spotPresets =
-    [
-        new("Flashlight", LightUnit.Lumen, 300f, 6000f, SpotAngle: 20f),
-        new("Downlight", LightUnit.Lumen, 800f, 3000f, SpotAngle: 60f),
-        new("Car headlight", LightUnit.Lumen, 1500f, 4300f, SpotAngle: 40f),
-        new("Stage spot", LightUnit.Lumen, 10000f, 3200f, SpotAngle: 25f),
-    ];
+    /// <summary>The preset a new light of this kind starts as.</summary>
+    public virtual LightPreset DefaultPreset => Presets[0];
 
-    private static readonly LightPreset[] s_rectPresets =
-    [
-        new("Monitor", LightUnit.Nit, 250f, 6500f, Width: 0.6f, Height: 0.34f),
-        new("Ceiling panel", LightUnit.Lumen, 3600f, 4000f, Width: 0.6f, Height: 0.6f),
-        new("Softbox", LightUnit.Nit, 5000f, 5600f, Width: 1f, Height: 1f),
-    ];
+    /// <summary>The units this kind of light can be given in, the one it keeps first.</summary>
+    public abstract IReadOnlyList<LightUnit> Units { get; }
 
-    private static readonly LightPreset[] s_diskPresets =
-    [
-        new("Ceiling disk", LightUnit.Lumen, 1000f, 3000f, Width: 0.3f),
-        new("Round panel", LightUnit.Lumen, 2000f, 4000f, Width: 0.45f),
-    ];
-
-    private static readonly LightPreset[] s_tubePresets =
-    [
-        new("Fluorescent tube", LightUnit.Lumen, 2800f, 4000f, Length: 1.2f, Radius: 0.0125f),
-        new("LED strip, 1 m", LightUnit.Lumen, 1000f, 3000f, Length: 1f, Radius: 0.005f),
-    ];
-
-    /// <summary>The real lights a type of light can start from.</summary>
-    public static IReadOnlyList<LightPreset> Presets(LightType type) => type switch
-    {
-        LightType.Directional => s_directionalPresets,
-        LightType.Point => s_pointPresets,
-        LightType.Spot => s_spotPresets,
-        LightType.Rect => s_rectPresets,
-        LightType.Disk => s_diskPresets,
-        _ => s_tubePresets,
-    };
-
-    /// <summary>The preset a new light of a type starts as: the midday sun, a 60 W bulb, a downlight, a ceiling panel, a ceiling disk or a fluorescent tube.</summary>
-    public static LightPreset DefaultPreset(LightType type) => Presets(type)[type switch
-    {
-        LightType.Point => 2,
-        LightType.Spot or LightType.Rect => 1,
-        _ => 0,
-    }];
-
-    /// <summary>The units a type of light can be given in, the one it keeps last: lux and EV100, lumens and candela, or lumens and nits.</summary>
-    public static IReadOnlyList<LightUnit> Units(LightType type) => type switch
-    {
-        LightType.Directional => [LightUnit.Lux, LightUnit.Ev100],
-        LightType.Point or LightType.Spot => [LightUnit.Lumen, LightUnit.Candela],
-        _ => [LightUnit.Lumen, LightUnit.Nit],
-    };
+    /// <summary>Whether this kind of light can cast shadows.</summary>
+    public virtual bool CanCastShadows => false;
 
     /// <summary>Sets the preset's shape, its colour temperature with <see cref="UseTemperature"/> on, then its intensity for that shape.</summary>
     public void ApplyPreset(LightPreset preset)
     {
-        if (preset.SpotAngle is float angle) SpotAngle = angle;
-        if (preset.Width is float presetWidth) Width = presetWidth;
-        if (preset.Height is float presetHeight) Height = presetHeight;
-        if (preset.Length is float presetLength) Length = presetLength;
-        if (preset.Radius is float radius) SourceRadius = radius;
-        UseTemperature = true;
-        Temperature = preset.Kelvin;
-        Intensity = ToStored(preset.Unit, preset.Amount);
+        ApplyShape(preset);
+        useTemperature = true;
+        temperature = preset.Kelvin;
+        intensity = ToStored(preset.Unit, preset.Amount);
+        Wake();
     }
 
-    /// <summary>A brightness in a unit as the light keeps it, for its type and shape: lux for a directional light, candela for a point or spot, nits for an area light.</summary>
+    /// <summary>Whether the light is set as the preset: its colour temperature, shape and brightness.</summary>
+    public bool IsPreset(LightPreset preset)
+    {
+        if (!UseTemperature || Temperature != preset.Kelvin || !HasShape(preset)) return false;
+        float stored = ToStored(preset.Unit, preset.Amount);
+        return MathF.Abs(Intensity - stored) <= stored * 1e-4f;
+    }
+
+    /// <summary>Sets the shape fields the preset gives, without waking the light.</summary>
+    protected virtual void ApplyShape(LightPreset preset) { }
+
+    /// <summary>Whether every shape field the preset gives matches the light's.</summary>
+    protected virtual bool HasShape(LightPreset preset) => true;
+
+    /// <summary>A brightness in a unit as the light keeps it, for its shape.</summary>
     public float ToStored(LightUnit unit, float amount) => unit switch
     {
         LightUnit.Ev100 => 2.5f * Maths.Pow(2f, amount),
-        LightUnit.Lumen => amount / Maths.Max(LumensPerStored(), 1e-6f),
+        LightUnit.Lumen => amount / Maths.Max(LumensPerStored, 1e-6f),
         _ => amount,
     };
 
-    /// <summary>A brightness as the light keeps it, in another unit for its type and shape.</summary>
+    /// <summary>A brightness as the light keeps it, in another unit for its shape.</summary>
     public float FromStored(LightUnit unit, float stored) => unit switch
     {
         LightUnit.Ev100 => MathF.Log2(Maths.Max(stored, 1e-6f) / 2.5f),
-        LightUnit.Lumen => stored * LumensPerStored(),
+        LightUnit.Lumen => stored * LumensPerStored,
         _ => stored,
     };
 
-    // Lumens put out for each candela of a point or spot, or each nit of an area light
-    private float LumensPerStored() => Type switch
-    {
-        LightType.Point => 4f * Maths.PI,
-        LightType.Spot => 2f * Maths.PI * (1f - Maths.Cos(Maths.Clamp(SpotAngle, 1f, 179f) * 0.5f * Maths.Deg2Rad)),
-        _ => Maths.PI * SurfaceArea(),
-    };
-
-    // The surface a rect, disk or tube shines from, in square metres
-    private float SurfaceArea() => Type switch
-    {
-        LightType.Rect => Width * Height,
-        LightType.Disk => Maths.PI * 0.25f * Width * Width,
-        LightType.Tube => 2f * Maths.PI * SourceRadius * Length + 4f * Maths.PI * SourceRadius * SourceRadius,
-        _ => 1f,
-    };
+    /// <summary>Lumens put out for each unit of <see cref="Intensity"/>.</summary>
+    protected virtual float LumensPerStored => 1f;
 
     /// <summary>The linear colour the light shines: <see cref="Color"/>, times the temperature's colour while <see cref="UseTemperature"/> is on.</summary>
     public Color FinalColor
@@ -348,38 +190,6 @@ public class Light : Component, IRenderSync
         }
     }
 
-    /// <summary>The luminous intensity in candela along the light's brightest direction, a far field estimate for area lights. Zero for a directional light.</summary>
-    public float AxisCandela
-    {
-        get
-        {
-            float width = Maths.Max(Width, 0f), radius = Maths.Max(SourceRadius, 0f);
-            return Type switch
-            {
-                LightType.Point or LightType.Spot => Intensity,
-                LightType.Rect => Intensity * width * Maths.Max(Height, 0f),
-                LightType.Disk => Intensity * Maths.PI * 0.25f * width * width,
-                LightType.Tube => Intensity * (2f * radius * Maths.Max(Length, 0f) + Maths.PI * radius * radius),
-                _ => 0f,
-            };
-        }
-    }
-
-    /// <summary>Where the light's brightest channel falls below the quality level's <see cref="QualityLevel.LightCutoff"/>. Zero for a directional light.</summary>
-    public float AutomaticRange
-    {
-        get
-        {
-            if (Type == LightType.Directional) return 0f;
-            Color color = FinalColor;
-            float peak = Maths.Max(color.R, Maths.Max(color.G, color.B));
-            return Maths.Sqrt(Maths.Max(AxisCandela * peak, 0f) / Maths.Max(QualitySettings.Active.LightCutoff, 1e-4f));
-        }
-    }
-
-    /// <summary>Whether this type of light can cast shadows. Area lights do not yet.</summary>
-    public bool CanCastShadows => Type is LightType.Directional or LightType.Point or LightType.Spot;
-
     /// <summary>The light in the scene's world, invalid while it is not there.</summary>
     public LightHandle Handle => _handle;
 
@@ -390,13 +200,11 @@ public class Light : Component, IRenderSync
         Color color = FinalColor;
         var desc = new LightDesc
         {
-            Type = (GLightType)Type,
             Position = position,
             Direction = forward,
             Up = up,
             Color = new Float3(color.R, color.G, color.B),
             Intensity = Intensity,
-            Range = Maths.Max(Range, 0.01f),
             LayerMask = LayerMask.Mask,
             Static = GameObject.IsStatic,
             HostData = FogData(color),
@@ -410,53 +218,12 @@ public class Light : Component, IRenderSync
                 Filter = (GShadowFilter)ShadowFilter,
             },
         };
-
-        switch (Type)
-        {
-            case LightType.Directional:
-                desc.Range = 0;
-                desc.AngularRadius = AngularRadius;
-                desc.Shadow.Cascades = (byte)Maths.Clamp((int)QualitySettings.Active.ShadowCascades, 1, 4);
-                desc.Shadow.Distance = Maths.Max(QualitySettings.Active.ShadowDistance, 0.01f);
-                desc.Shadow.CascadeBlend = CascadeBlend;
-                break;
-            case LightType.Point:
-                desc.SourceRadius = SourceRadius;
-                break;
-            case LightType.Spot:
-                desc.SourceRadius = SourceRadius;
-                desc.OuterAngle = Maths.Clamp(SpotAngle, 1f, 179f) * 0.5f;
-                desc.InnerAngle = desc.OuterAngle * (1f - Maths.Clamp(SpotSoftness, 0f, 1f));
-                break;
-            case LightType.Rect:
-                desc.Size = new Float2(Maths.Max(Width, 0f), Maths.Max(Height, 0f));
-                break;
-            case LightType.Disk:
-                desc.Size = new Float2(Maths.Max(Width, 0f) * 0.5f, 0f);
-                break;
-            case LightType.Tube:
-                desc.Size = new Float2(Maths.Max(Length, 0f), 0f);
-                desc.SourceRadius = SourceRadius;
-                break;
-        }
-
-        if (HasProfile)
-        {
-            Texture? cookie = Cookie;
-            if (cookie.IsValid() && cookie.IsLoaded)
-            {
-                desc.Cookie = cookie.GpuIfLoaded;
-                desc.CookieSampler = cookie.SamplerUnchecked;
-            }
-            Texture2D? ies = IesProfile;
-            if (ies.IsValid() && ies.IsLoaded)
-            {
-                desc.IesProfile = ies.GpuIfLoaded;
-                if (desc.CookieSampler == null) desc.CookieSampler = ies.SamplerUnchecked;
-            }
-        }
+        DescribeShape(ref desc);
         return desc;
     }
+
+    /// <summary>Sets the Graphite type and the shape fields of the light's kind.</summary>
+    protected abstract void DescribeShape(ref LightDesc desc);
 
     // The transform's world position and axes, read again only when its world matrix changed
     private (Double3 Position, Float3 Forward, Float3 Up) Pose()
@@ -515,37 +282,31 @@ public class Light : Component, IRenderSync
             _last = desc;
         }
 
-        if (IsDirectional && _sunScene.IsNotValid() && GameObject.Scene.IsValid())
-        {
-            _sunScene = GameObject.Scene;
-            _sunScene.Rendering.AddDirectional(this);
-        }
-        else if (!IsDirectional) LeaveSuns();
-        return !HasProfile || (Ready(Cookie) && Ready(IesProfile));
+        OnSynced();
+        return IsReady;
     }
 
+    /// <summary>Runs after the light was added to or updated in the world.</summary>
+    private protected virtual void OnSynced() { }
+
+    /// <summary>Runs when the light leaves the world.</summary>
+    private protected virtual void OnRemoved() { }
+
+    /// <summary>Whether every texture the light was given is in the world, so it draws as set.</summary>
+    private protected virtual bool IsReady => true;
+
     // Syncs it again next frame, for a setting that changed
-    private void Wake() => SceneRendering.Wake(this, GameObject);
-
-
-    // A texture the light was given is in the world, none or loaded
-    private static bool Ready(Texture? texture) => texture.IsNotValid() || texture.IsLoaded;
+    protected void Wake() => SceneRendering.Wake(this, GameObject);
 
     void IRenderSync.Detach(RenderWorld world) => Remove();
 
     private void Remove()
     {
-        LeaveSuns();
+        OnRemoved();
         if (_world != null && _handle.IsValid && _world.IsAlive(_handle))
             _world.RemoveLight(_handle);
         _handle = default;
         _world = null;
-    }
-
-    private void LeaveSuns()
-    {
-        if (_sunScene.IsValid() && !_sunScene.IsDisposed) _sunScene.Rendering.RemoveDirectional(this);
-        _sunScene = null;
     }
 
     private static bool Same(in LightDesc a, in LightDesc b)
@@ -564,47 +325,5 @@ public class Light : Component, IRenderSync
     {
         Texture2D? icon = Texture2D.LoadDefault(DefaultTexture.IconLight);
         if (icon.IsValid()) Debug.DrawIcon(icon, Transform.Position, 0.5f, Color.White);
-
-        Float3 position = Transform.Position, forward = Transform.Forward, right = Transform.Right, up = Transform.Up;
-        switch (Type)
-        {
-            case LightType.Directional:
-                Debug.DrawArrow(position, forward, Color.Yellow);
-                Debug.DrawWireCircle(position, forward, 0.5f, Color.Yellow);
-                break;
-            case LightType.Rect:
-                Float3 x = right * (Width * 0.5f), y = up * (Height * 0.5f);
-                Debug.DrawLine(position - x - y, position + x - y, Color.Yellow);
-                Debug.DrawLine(position + x - y, position + x + y, Color.Yellow);
-                Debug.DrawLine(position + x + y, position - x + y, Color.Yellow);
-                Debug.DrawLine(position - x + y, position - x - y, Color.Yellow);
-                Debug.DrawArrow(position, forward * 0.5f, Color.Yellow);
-                break;
-            case LightType.Disk:
-                Debug.DrawWireCircle(position, forward, Width * 0.5f, Color.Yellow);
-                Debug.DrawArrow(position, forward * 0.5f, Color.Yellow);
-                break;
-            case LightType.Tube:
-                Float3 half = forward * (Length * 0.5f);
-                Debug.DrawWireCapsule(position - half, position + half, Maths.Max(SourceRadius, 0.02f), Color.Yellow);
-                break;
-        }
-    }
-
-    public override void DrawGizmosSelected()
-    {
-        Float3 position = Transform.Position, forward = Transform.Forward;
-        switch (Type)
-        {
-            case LightType.Directional:
-                break;
-            case LightType.Spot:
-                Debug.DrawArrow(position, forward, Color.Yellow);
-                Debug.DrawWireConeAngle(position, forward, Maths.Clamp(SpotAngle, 1f, 179f) * 0.5f, Range, Color.Yellow);
-                break;
-            default:
-                Debug.DrawWireSphere(position, Range, Color.Yellow);
-                break;
-        }
     }
 }

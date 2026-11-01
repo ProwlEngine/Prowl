@@ -106,8 +106,7 @@ public sealed class ParticleShowcaseGame : StationGame
     private void CreateEnvironment()
     {
         GameObject light = new("Moon Light");
-        Light directional = light.AddComponent<Light>();
-        directional.Type = LightType.Directional;
+        DirectionalLight directional = light.AddComponent<DirectionalLight>();
         directional.Color = new Color(0.65f, 0.72f, 1f, 1f);
         directional.Intensity = 55000f;
         light.Transform.LocalEulerAngles = new Float3(50f, 210f, 0f);

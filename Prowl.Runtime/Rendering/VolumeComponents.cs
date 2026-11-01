@@ -54,8 +54,8 @@ public sealed class AutoExposure : VolumeComponent<G.AutoExposure>
 {
     public VolumeParameter<bool> Enabled = new(false);
 
-    /// <summary>Stops brighter than the meter reads. The default puts the metered scene at the 0.18 mid grey tonemappers expect.</summary>
-    [Range(-5f, 5f)] public VolumeParameter<float> ExposureCompensation = new(1.5f);
+    /// <summary>Stops brighter than the meter reads. The default puts the metered scene a stop over the 0.18 mid grey, so a bright sky does not pull the ground dark.</summary>
+    [Range(-5f, 5f)] public VolumeParameter<float> ExposureCompensation = new(2.5f);
     public VolumeParameter<float> AdaptSpeedUp = new(3f);
     public VolumeParameter<float> AdaptSpeedDown = new(1.5f);
 

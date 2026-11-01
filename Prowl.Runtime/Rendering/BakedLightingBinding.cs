@@ -28,6 +28,6 @@ internal static class BakedLightingBinding
         Texture2D? lightmap = scene.BakedLighting.Lightmaps[p.Index];
         if (lightmap.IsNotValid()) return GLightmapBinding.None;
         if (lightmap.State == AssetState.Unloaded) _ = lightmap.LoadAsync();
-        return new GLightmapBinding(lightmap.IsLoaded ? lightmap.GpuIfLoaded : null, p.ScaleOffset);
+        return new GLightmapBinding(lightmap.IsLoaded ? lightmap.GpuIfLoaded : null, p.ScaleOffset, scale: scene.BakedLighting.LightmapScale);
     }
 }

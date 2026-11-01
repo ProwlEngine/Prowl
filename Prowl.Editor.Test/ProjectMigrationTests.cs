@@ -512,12 +512,38 @@ public class ProjectMigrationTests : IDisposable
         Assert.Equal(grid, material.GetTexture("emission_color_map")!.AssetID.ToString());
         Assert.Equal(LegacyLightUnits.Luminance, material.GetFloat("emission_luminance"));
         Assert.False(material._properties.HasFloat("base_metalness"));
-        Assert.Equal(0.3f, material.GetFloat("_Anisotropy"));
+        float ratio = 0.7f / 1.3f;
+        Assert.Equal(1f - ratio * ratio, material.GetFloat("specular_roughness_anisotropy"), 5);
+        Assert.False(material._properties.HasFloat("_Anisotropy"));
+        Assert.False(material._properties.HasFloat("tangent_rotation"));
 
         Material standard = ReadMaterial(plain);
         Assert.False(standard._properties.HasFloat("_Anisotropy"));
+        Assert.False(standard._properties.HasFloat("specular_roughness_anisotropy"));
         Assert.False(standard._properties.HasFloat("base_metalness"));
         Assert.False(standard._properties.HasFloat("emission_luminance"));
+    }
+
+    [Fact]
+    public void LitAnisotropy_KeepsItsStretch_DirectionMapAndBitangentAxis()
+    {
+        Texture2D grid = Texture2D.LoadDefault(DefaultTexture.Grid)!;
+        string path = WriteMaterial("Brushed.mat", OldMaterial(DefaultShader.Lit, m =>
+        {
+            m.SetFloat("_Anisotropy", -0.5f);
+            m.SetTexture("_AnisoDirectionMap", grid);
+            m.SetVector("_AnisoDirectionMap_ST", new Float4(2, 2, 0, 0));
+        }));
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        Material material = ReadMaterial(path);
+        Assert.Equal(8f / 9f, material.GetFloat("specular_roughness_anisotropy"), 5);
+        Assert.Equal(MathF.PI * 0.5f, material.GetFloat("tangent_rotation"), 5);
+        Assert.Equal(grid.AssetID, material.GetTexture("geometry_tangent_map")!.AssetID);
+        Assert.Equal(new Float4(2, 2, 0, 0), material.GetTextureScaleOffset("geometry_tangent_map"));
+        Assert.False(material._properties.HasFloat("_Anisotropy"));
+        Assert.Null(material._properties.GetTexture("_AnisoDirectionMap"));
     }
 
     [Fact]
@@ -530,6 +556,8 @@ public class ProjectMigrationTests : IDisposable
             m.SetFloat("_WindStrength", 0.2f);
         }));
         string sky = WriteMaterial("Sky.mat", OldMaterial(DefaultShader.PanoramaSky, m => m.SetFloat("_Exposure", 2f)));
+        string cubemap = WriteMaterial("Cubemap.mat", OldMaterial(DefaultShader.CubemapSky, m => m.SetFloat("_Rotation", 90f)));
+        string procedural = WriteMaterial("Procedural.mat", OldMaterial(DefaultShader.ProceduralSky, m => m.SetFloat("_Exposure", 3f)));
         string terrain = WriteMaterial("Terrain.mat", OldMaterial(DefaultShader.Terrain, m => { m.SetInt("_HasHoles", 1); m.SetFloat("_TerrainSize", 512f); }));
 
         ProjectMigration.Migrate(Project.Open(_root));
@@ -539,8 +567,10 @@ public class ProjectMigrationTests : IDisposable
         Assert.False(grassMaterial._properties.HasFloat("_Translucency"));
         Assert.Equal(0.2f, grassMaterial.GetFloat("_WindStrength"));
         Material skyMaterial = ReadMaterial(sky);
-        Assert.Equal(2f, skyMaterial.GetFloat("intensity"));
+        Assert.Equal(2f * LegacyLightUnits.Luminance, skyMaterial.GetFloat("intensity"));
         Assert.False(skyMaterial._properties.HasFloat("_Exposure"));
+        Assert.Equal(LegacyLightUnits.Luminance, ReadMaterial(cubemap).GetFloat("intensity"));
+        Assert.Equal(3f, ReadMaterial(procedural).GetFloat("intensity"));
         Material terrainMaterial = ReadMaterial(terrain);
         Assert.False(terrainMaterial._properties.HasInt("_HasHoles"));
         Assert.Equal(512f, terrainMaterial.GetFloat("_TerrainSize"));
@@ -631,6 +661,7 @@ public class ProjectMigrationTests : IDisposable
             module["Intensity"]["MinValue"] = new EchoObject(0.25f);
             module["Intensity"]["MaxValue"] = new EchoObject(0.5f);
             module["Intensity"]["CurveMultiplier"] = new EchoObject(2f);
+            module.Remove("units");
             return module;
         }
 
@@ -652,6 +683,123 @@ public class ProjectMigrationTests : IDisposable
         Assert.Equal(0.5f * LegacyLightUnits.Light, particles.Light.Intensity.MaxValue);
         Assert.Equal(2f * LegacyLightUnits.Light, particles.Light.Intensity.CurveMultiplier);
         Assert.Equal(3f * LegacyLightUnits.Light, items[1]["Value"]["Intensity"]["ConstantValue"].FloatValue);
+    }
+
+    private static void RemoveUnitMarkers(EchoObject tag)
+    {
+        if (tag.TagType == EchoType.List)
+        {
+            foreach (EchoObject item in tag.List) RemoveUnitMarkers(item);
+            return;
+        }
+        if (tag.TagType != EchoType.Compound) return;
+        tag.Remove("units");
+        tag.Remove("_lightUnits");
+        foreach (string name in tag.GetNames().ToList()) RemoveUnitMarkers(tag[name]);
+    }
+
+    // Point lights saved back as the single Light component they were before the split
+    private static void AsOldLights(EchoObject tag)
+    {
+        if (tag.TagType == EchoType.List)
+        {
+            foreach (EchoObject item in tag.List) AsOldLights(item);
+            return;
+        }
+        if (tag.TagType != EchoType.Compound) return;
+        if (tag.TryGet("$type", out EchoObject? type) && type!.StringValue.StartsWith("Prowl.Runtime.PointLight,", StringComparison.Ordinal))
+        {
+            tag["$type"] = new EchoObject("Prowl.Runtime.Light, Prowl.Runtime");
+            tag["type"] = new EchoObject(1L);
+        }
+        foreach (string name in tag.GetNames().ToList()) AsOldLights(tag[name]);
+    }
+
+    private static (float Light, float Particles, float Ambient) Intensities(string path)
+    {
+        Scene scene = Serializer.Deserialize<Scene>(EchoObject.ReadFromString(File.ReadAllText(path)))!;
+        try
+        {
+            GameObject lit = scene.RootObjects.First(o => o.Name == "Lit");
+            return (lit.GetComponent<Light>()!.Intensity, lit.GetComponent<ParticleSystemComponent>()!.Light.Intensity.ConstantValue, scene.Environment.Ambient.Intensity);
+        }
+        finally { scene.Dispose(); }
+    }
+
+    [Fact]
+    public void LightUnitMarkers_SurviveAResave_SoMigratingAgainKeepsTheIntensities()
+    {
+        var lit = new GameObject("Lit");
+        lit.AddComponent<PointLight>().Intensity = 2f;
+        lit.AddComponent<ParticleSystemComponent>().Light.Intensity.ConstantValue = 3f;
+        var scene = new Scene();
+        scene.Environment.Ambient.Mode = AmbientMode.Uniform;
+        scene.Environment.Ambient.Intensity = 0.5f;
+        scene.Add(lit);
+        EchoObject old = Serializer.Serialize(typeof(object), scene)!;
+        scene.Dispose();
+        RemoveUnitMarkers(old);
+        AsOldLights(old);
+        string path = WriteAsset("Main.scene", old.WriteToString(), "SceneImporter");
+        WriteProwlFile("1.0", appliedSteps: 6);
+
+        ProjectMigration.Migrate(Project.Open(_root));
+        (float Light, float Particles, float Ambient) migrated = Intensities(path);
+        Assert.Equal(2f * LegacyLightUnits.Light, migrated.Light);
+        Assert.Equal(3f * LegacyLightUnits.Light, migrated.Particles);
+        Assert.Equal(0.5f * LegacyLightUnits.Luminance, migrated.Ambient);
+
+        Scene loaded = Serializer.Deserialize<Scene>(EchoObject.ReadFromString(File.ReadAllText(path)))!;
+        File.WriteAllText(path, Serializer.Serialize(typeof(object), loaded)!.WriteToString());
+        loaded.Dispose();
+
+        var again = new MigrationContext(Project.Open(_root));
+        ProjectMigration.Releases.Single(r => r.Name == "1.0").Steps[6].Run(again);
+
+        Assert.Empty(again.ChangedFiles);
+        Assert.Equal(migrated, Intensities(path));
+    }
+
+    private static EchoObject BakedScene(float lightmapScale)
+    {
+        var scene = new Scene();
+        scene.BakedLighting.ProbePositions = [Float3.Zero];
+        scene.BakedLighting.ProbeSH = [new SphericalHarmonicsL2 { C0 = new Float3(1f, 2f, 3f), C8 = new Float3(0.5f, 0.5f, 0.5f) }];
+        scene.BakedLighting.LightmapScale = lightmapScale;
+        EchoObject echo = Serializer.Serialize(typeof(object), scene)!;
+        scene.Dispose();
+        return echo;
+    }
+
+    [Fact]
+    public void BakesFromBeforePhysicalLight_KeepTheirLook_AndOnlyUnscaledPhysicalOnesNeedARebake()
+    {
+        EchoObject old = BakedScene(1f);
+        RemoveUnitMarkers(old);
+        old["BakedLighting"].Remove("LightmapScale");
+        string oldPath = WriteAsset("Old.scene", old.WriteToString(), "SceneImporter");
+
+        EchoObject unscaled = BakedScene(1f);
+        unscaled["BakedLighting"].Remove("LightmapScale");
+        Assert.True(Release_1_0.NeedsRebake(unscaled));
+        WriteAsset("Unscaled.scene", unscaled.WriteToString(), "SceneImporter");
+        WriteProwlFile("1.0", appliedSteps: 6);
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject migrated = EchoObject.ReadFromString(File.ReadAllText(oldPath));
+        Assert.False(Release_1_0.NeedsRebake(migrated));
+        Scene scene = Serializer.Deserialize<Scene>(migrated)!;
+        Assert.Equal(LegacyLightUnits.Luminance, scene.BakedLighting.LightmapScale);
+        Assert.Equal(new Float3(1f, 2f, 3f) * LegacyLightUnits.Luminance, scene.BakedLighting.ProbeSH[0].C0);
+        Assert.Equal(new Float3(0.5f, 0.5f, 0.5f) * LegacyLightUnits.Luminance, scene.BakedLighting.ProbeSH[0].C8);
+        Assert.Equal(Float3.Zero, scene.BakedLighting.ProbePositions[0]);
+        scene.Dispose();
+
+        Assert.False(Release_1_0.NeedsRebake(BakedScene(3f)));
+        var empty = new Scene();
+        Assert.False(Release_1_0.NeedsRebake(Serializer.Serialize(typeof(object), empty)!));
+        empty.Dispose();
     }
 
     [Fact]
@@ -684,8 +832,8 @@ public class ProjectMigrationTests : IDisposable
         string scene = WriteAsset("Main.scene", Scene(
             OldComponent("Light", Guid.NewGuid(), ("type", new EchoObject(2L)), ("innerAngle", new EchoObject(20f)), ("outerAngle", new EchoObject(40f)),
                 ("range", new EchoObject(7f)), ("color", Serializer.Serialize(new Color(1f, 0.5f, 0.25f, 1f)))),
-            OldComponent("Light", Guid.NewGuid(), ("outerAngle", new EchoObject(60f))),
-            OldComponent("Light", Guid.NewGuid(), ("innerAngle", new EchoObject(10f)), ("outerAngle", new EchoObject(0f))),
+            OldComponent("Light", Guid.NewGuid(), ("type", new EchoObject(2L)), ("outerAngle", new EchoObject(60f))),
+            OldComponent("Light", Guid.NewGuid(), ("type", new EchoObject(2L)), ("innerAngle", new EchoObject(10f)), ("outerAngle", new EchoObject(0f))),
             OldComponent("Light", Guid.NewGuid(), ("range", new EchoObject(3f)))), "SceneImporter");
         WriteProwlFile("1.0", appliedSteps: 8);
 
@@ -707,24 +855,23 @@ public class ProjectMigrationTests : IDisposable
         Assert.Equal(0f, items[2]["spotSoftness"].FloatValue);
         Assert.False(items[3].TryGet("spotAngle", out _));
 
-        var spot = (Light)Serializer.Deserialize<Component>(items[0])!;
-        Assert.Equal(LightType.Spot, spot.Type);
+        var spot = Assert.IsType<SpotLight>(Serializer.Deserialize<Component>(items[0]));
         Assert.Equal(80f, spot.SpotAngle);
         Assert.Equal(0.5f, spot.SpotSoftness);
         Assert.False(spot.OverrideRange);
         Assert.False(spot.UseTemperature);
         Assert.Equal(new Color(1f, 0.5f, 0.25f, 1f), spot.FinalColor);
 
-        var untouched = (Light)Serializer.Deserialize<Component>(items[3])!;
-        Assert.Equal(90f, untouched.SpotAngle);
-        Assert.Equal(1f / 3f, untouched.SpotSoftness, 5);
+        var untouched = Assert.IsType<PointLight>(Serializer.Deserialize<Component>(items[3]));
+        Assert.False(untouched.OverrideRange);
+        Assert.Equal(2700f, untouched.Temperature);
     }
 
     [Fact]
     public void LightConeOverrides_BecomeSpotAngleAndSoftnessOverrides_AndTheStepCanRunAgain()
     {
         Guid light = Guid.NewGuid();
-        WriteAsset("Lamp.prefab", Scene(OldComponent("Light", light, ("innerAngle", new EchoObject(20f)), ("outerAngle", new EchoObject(40f)))), "PrefabImporter");
+        WriteAsset("Lamp.prefab", Scene(OldComponent("Light", light, ("type", new EchoObject(2L)), ("innerAngle", new EchoObject(20f)), ("outerAngle", new EchoObject(40f)))), "PrefabImporter");
         string both = Guid.NewGuid().ToString(), outer = Guid.NewGuid().ToString(), inner = Guid.NewGuid().ToString();
         string scene = WriteAsset("Main.scene", Scene(
             Override($"{both}/{light}/innerAngle", new EchoObject(15f)),
@@ -754,6 +901,83 @@ public class ProjectMigrationTests : IDisposable
         Assert.Empty(again.ChangedFiles);
         foreach ((string file, string text) in migrated)
             Assert.Equal(text, File.ReadAllText(file));
+    }
+
+    [Fact]
+    public void Lights_SplitIntoAComponentForEachKind_KeepingTheirFields_AndTheStepCanRunAgain()
+    {
+        string scene = WriteAsset("Main.scene", Scene(
+            OldComponent("Light", Guid.NewGuid(), ("type", new EchoObject(0L)), ("useTemperature", new EchoObject(true)), ("angularRadius", new EchoObject(0.5f)),
+                ("spotAngle", new EchoObject(30f)), ("range", new EchoObject(4f)), ("units", new EchoObject(1))),
+            OldComponent("Light", Guid.NewGuid(), ("useTemperature", new EchoObject(true)), ("sourceRadius", new EchoObject(0.1f)), ("width", new EchoObject(3f))),
+            OldComponent("Light", Guid.NewGuid(), ("type", new EchoObject(2L)), ("useTemperature", new EchoObject(true)), ("spotAngle", new EchoObject(30f))),
+            OldComponent("Light", Guid.NewGuid(), ("type", new EchoObject(3L)), ("useTemperature", new EchoObject(true)), ("height", new EchoObject(2f))),
+            OldComponent("Light", Guid.NewGuid(), ("type", new EchoObject(4L)), ("useTemperature", new EchoObject(true)), ("width", new EchoObject(0.4f))),
+            OldComponent("Light", Guid.NewGuid(), ("type", new EchoObject(5L)), ("useTemperature", new EchoObject(true)), ("sourceRadius", new EchoObject(0.05f)), ("length", new EchoObject(2f)))),
+            "SceneImporter");
+        WriteProwlFile("1.0", appliedSteps: 10);
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject items = Item(scene);
+        Component Load(int i) => Serializer.Deserialize<Component>(items[i])!;
+
+        var sun = Assert.IsType<DirectionalLight>(Load(0));
+        Assert.Equal(0.5f, sun.AngularRadius);
+        Assert.Equal(2700f, sun.Temperature);
+        Assert.Equal(800f / (4f * MathF.PI), sun.Intensity, 4);
+        foreach (string gone in new[] { "type", "units", "spotAngle", "range" })
+            Assert.False(items[0].TryGet(gone, out _), gone);
+
+        var point = Assert.IsType<PointLight>(Load(1));
+        Assert.Equal(0.1f, point.SourceRadius);
+        Assert.False(items[1].TryGet("width", out _));
+
+        var spot = Assert.IsType<SpotLight>(Load(2));
+        Assert.Equal(30f, spot.SpotAngle);
+        Assert.Equal(1f / 3f, spot.SpotSoftness, 5);
+
+        var rect = Assert.IsType<RectLight>(Load(3));
+        Assert.Equal(1f, rect.Width);
+        Assert.Equal(2f, rect.Height);
+
+        var disk = Assert.IsType<DiskLight>(Load(4));
+        Assert.Equal(0.4f, disk.Diameter);
+
+        var tube = Assert.IsType<TubeLight>(Load(5));
+        Assert.Equal(0.05f, tube.Radius);
+        Assert.Equal(2f, tube.Length);
+
+        string migrated = File.ReadAllText(scene);
+        var again = new MigrationContext(Project.Open(_root));
+        Release_1_0.SplitLights(again);
+        Assert.Empty(again.ChangedFiles);
+        Assert.Equal(migrated, File.ReadAllText(scene));
+    }
+
+    [Fact]
+    public void LightOverrides_FollowTheSplit_AndThoseOfFieldsTheKindLacksAreDropped()
+    {
+        Guid disk = Guid.NewGuid(), point = Guid.NewGuid();
+        WriteAsset("Lamp.prefab", Scene(
+            OldComponent("Light", disk, ("type", new EchoObject(4L)), ("useTemperature", new EchoObject(true))),
+            OldComponent("Light", point, ("useTemperature", new EchoObject(true)))), "PrefabImporter");
+        string target = Guid.NewGuid().ToString();
+        string scene = WriteAsset("Main.scene", Scene(
+            Override($"{target}/{disk}/width", new EchoObject(2f)),
+            Override($"{target}/{disk}/range", new EchoObject(6f)),
+            Override($"{target}/{point}/spotAngle", new EchoObject(20f)),
+            Override($"{target}/{point}/type", new EchoObject(2L)),
+            Override($"{target}/{point}/color.R", new EchoObject(0.5f))), "SceneImporter");
+        WriteProwlFile("1.0", appliedSteps: 10);
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        Dictionary<string, float> overrides = Item(scene).List.ToDictionary(o => o["Path"].StringValue, o => o["Value"].FloatValue);
+        Assert.Equal(3, overrides.Count);
+        Assert.Equal(2f, overrides[$"{target}/{disk}/diameter"]);
+        Assert.Equal(6f, overrides[$"{target}/{disk}/range"]);
+        Assert.Equal(0.5f, overrides[$"{target}/{point}/color.R"]);
     }
 
     [Fact]

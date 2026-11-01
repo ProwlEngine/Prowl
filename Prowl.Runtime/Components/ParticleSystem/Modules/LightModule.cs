@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.Echo;
 using Prowl.Graphite.Rendering;
 using Prowl.Vector;
 
@@ -30,6 +31,9 @@ public class LightModule : ParticleSystemModule
 
     [Tooltip("Candela, sampled over each particle's life.")]
     public MinMaxCurve Intensity = new(new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f)), 1000f);
+
+    // Saved as 1 so the 1.0 migration knows the intensity is in physical units
+    [SerializeField, HideInInspector] private int units = 1;
 
     [Tooltip("World units, sampled over each particle's life.")]
     public MinMaxCurve Range = new(2f);

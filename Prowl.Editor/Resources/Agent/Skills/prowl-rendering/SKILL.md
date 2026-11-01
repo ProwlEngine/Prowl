@@ -84,7 +84,7 @@ The viewmodel camera is a child of the world camera, and the arms and gun object
 
 ## Lights and lightmaps
 
-- One `Light` component, its `Type` one of `LightType.Directional`, `Point`, `Spot`, `Rect`, `Disk`, `Tube`. It shines along Forward. Spot angles are half angles (`InnerAngle`, `OuterAngle`), rects use `Width` and `Height`, disks `Width` as the diameter, tubes `Length` and `SourceRadius`. `Cookie` (2D for a spot, cubemap for a point) and `IesProfile` work on points and spots. Directional, point and spot lights cast shadows (`CastShadows`, `ShadowResolution`, `ShadowFilter`, directional `Cascades` and `ShadowDistance`). The brightest directional light is the sun.
+- A component for each kind of light, all deriving from `Light`: `DirectionalLight` (lux), `PointLight` and `SpotLight` (candela), `RectLight`, `DiskLight` and `TubeLight` (nits). Each starts as a real light preset, the sun at 100000 lux and 5600 K. They shine along Forward. Spots take a whole cone `SpotAngle` and a `SpotSoftness`, rects `Width` and `Height`, disks `Diameter`, tubes `Length` and `Radius`. Local lights reach an automatic `Range` unless one is set. `Cookie` (2D for a spot, cubemap for a point) and `IesProfile` work on points and spots. Directional, point and spot lights cast shadows (`CastShadows`, `ShadowResolution`, `ShadowFilter`), cascades and shadow distance come from the quality level. The brightest directional light is the sun.
 - Renderers take `ShadowCasting` (`Off`, `On`, `ShadowsOnly`) and `ReceiveShadows`.
 - Only objects with `IsStatic` set get lightmaps. The bake runs from the Environment panel and only progresses while that panel is open.
 

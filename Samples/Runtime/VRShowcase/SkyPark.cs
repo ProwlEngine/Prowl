@@ -145,8 +145,7 @@ public sealed partial class VRShowcaseGame
         lamp.SetParent(torch.GameObject);
         lamp.Transform.LocalPosition = new Float3(0f, 0f, 0.17f);
         lamp.Transform.LocalRotation = Quaternion.Identity;
-        Light light = lamp.AddComponent<Light>();
-        light.Type = LightType.Spot;
+        SpotLight light = lamp.AddComponent<SpotLight>();
         light.Range = 30f;
         light.SpotAngle = 80f;
         light.SpotSoftness = 1f - 25f / 40f;

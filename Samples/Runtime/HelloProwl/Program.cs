@@ -41,7 +41,7 @@ public sealed class HelloProwlGame : Game
 
         // A light, angled down like an afternoon sun.
         var sun = new GameObject("Sun");
-        sun.AddComponent<Light>().Type = LightType.Directional;
+        sun.AddComponent<DirectionalLight>();
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         scene.Add(sun);
 

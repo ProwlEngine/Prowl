@@ -109,9 +109,7 @@ public static class EditorSceneManager
 
         var lightGo = new GameObject("Directional Light");
         lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
-        Light light = lightGo.AddComponent<Light>();
-        light.Type = LightType.Directional;
-        light.Intensity = 100000f;
+        lightGo.AddComponent<DirectionalLight>();
         scene.Add(lightGo);
 
         var floorGo = new GameObject("Floor");

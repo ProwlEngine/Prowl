@@ -266,14 +266,14 @@ public sealed class LightmapBakeService
         Directory.CreateDirectory(lmFolderAbs);
 
         // Write + import each atlas page (RGBM PNG).
+        (byte[][] pages, float scale) = EncodePages(atlas.Targets);
         var lightmaps = new List<Texture2D>();
         for (int i = 0; i < atlas.Targets.Length; i++)
         {
             LightmapTarget t = atlas.Targets[i];
-            byte[] rgba = t.ReadRGBM(8f);
             string rel = $"{lmFolderRel}/Lightmap-{i}.png";
             string pageAbs = Path.Combine(lmFolderAbs, $"Lightmap-{i}.png");
-            WritePng(pageAbs, rgba, t.Width, t.Height);
+            WritePng(pageAbs, pages[i], t.Width, t.Height);
             WriteLightmapMeta(pageAbs);
             Guid guid = db.ImportFile(rel);
             if (AssetDatabase.Get<Texture2D>(guid) is not { } lightmap)
@@ -286,6 +286,7 @@ public sealed class LightmapBakeService
             lightmaps.Add(lightmap);
         }
         scene.BakedLighting.Lightmaps = lightmaps;
+        scene.BakedLighting.LightmapScale = scale;
 
         // Record where each baked surface landed, against the object it is on. A rebake replaces the
         // whole set, so a renderer that is no longer baked simply has no placement.
@@ -477,36 +478,72 @@ public sealed class LightmapBakeService
         return bake.CreateTextureRGBA(name, w, h, rgba, tex.Srgb ? 2.2f : 1f);
     }
 
-    private static void AddLight(BakeScene bake, Light light)
+    // Graphite decodes an RGBM texel as rgb times alpha times this, before the binding's scale
+    private const float RgbmRange = 8f;
+
+    /// <summary>
+    /// Encodes each page as RGBM over the brightest texel of the whole bake, so physical light of any brightness fits,
+    /// with the scale Graphite multiplies the decoded texels by to get that light back.
+    /// </summary>
+    internal static (byte[][] Pages, float Scale) EncodePages(IReadOnlyList<LightmapTarget> targets)
+    {
+        float peak = 0f;
+        foreach (LightmapTarget target in targets)
+        {
+            foreach (float value in target.Pixels)
+            {
+                if (float.IsFinite(value)) peak = MathF.Max(peak, value);
+            }
+        }
+        float range = peak > 0f ? peak : RgbmRange;
+
+        var pages = new byte[targets.Count][];
+        for (int i = 0; i < pages.Length; i++)
+            pages[i] = targets[i].ReadRGBM(range);
+        return (pages, range / RgbmRange);
+    }
+
+    /// <summary>
+    /// The colour a light bakes with, from lux for a directional light and candela for the rest. Photonic lights a
+    /// white surface with it times the cosine, which is what Graphite reads from a lightmap: irradiance over pi.
+    /// </summary>
+    internal static Float3 BakeColor(Light light)
     {
         Color c = light.FinalColor;
-        // Match the realtime shader's radiance convention (Lighting.glsl): radiance = Color * (Intensity * 8).
-        Float3 color = new Float3((float)c.R, (float)c.G, (float)c.B) * (light.Intensity * 8.0f);
+        float intensity = light is LocalLight local ? local.AxisCandela : light.Intensity;
+        return new Float3((float)c.R, (float)c.G, (float)c.B) * (intensity / Maths.PI);
+    }
+
+    internal static void AddLight(BakeScene bake, Light light)
+    {
+        Float3 color = BakeColor(light);
         Float4x4 xform = light.Transform.LocalToWorldMatrix;
         bool bakeDirect = light.BakeMode == LightBakeMode.Baked; // Mixed bakes indirect only
 
         Photonic.Scene.Lights.Light bl;
-        switch (light.Type)
+        switch (light)
         {
-            case LightType.Directional:
+            case DirectionalLight:
                 // Both treat the transform's +Z as the direction the light travels.
                 bl = bake.CreateDirectionalLight(light.GameObject.Name, xform, color);
                 break;
-            case LightType.Spot:
+            case SpotLight spotLight:
                 {
                     // Both take the whole cone angle, Prowl's in degrees and Photonic's in radians
-                    float cone = Maths.Clamp(light.SpotAngle, 1f, 179f);
-                    Photonic.Scene.Lights.SpotLight spot = bake.CreateSpotLight(light.GameObject.Name, xform, color, light.Range, cone * Maths.Deg2Rad);
-                    spot.InnerConeAngle = cone * (1f - Maths.Clamp(light.SpotSoftness, 0f, 1f)) * Maths.Deg2Rad;
+                    float cone = Maths.Clamp(spotLight.SpotAngle, 1f, 179f);
+                    Photonic.Scene.Lights.SpotLight spot = bake.CreateSpotLight(light.GameObject.Name, xform, color, spotLight.Range, cone * Maths.Deg2Rad);
+                    spot.InnerConeAngle = cone * (1f - Maths.Clamp(spotLight.SpotSoftness, 0f, 1f)) * Maths.Deg2Rad;
                     bl = spot;
                     break;
                 }
-            default:
-                // Photonic has no area lights, so rect, disk and tube lights bake as a point at their centre
-                if (light.Type != LightType.Point)
-                    Runtime.Debug.LogWarningOnce($"lightmap.arealight.{light.InstanceID}", $"[Lightmap] {light.GameObject.Name}: {light.Type} lights bake as point lights.");
-                bl = bake.CreatePointLight(light.GameObject.Name, xform, color, light.Range);
+            case LocalLight local:
+                // Photonic has no area lights, so rect, disk and tube lights bake as a point at their centre with their axis candela
+                if (local is AreaLight)
+                    Runtime.Debug.LogWarningOnce($"lightmap.arealight.{light.InstanceID}", $"[Lightmap] {light.GameObject.Name}: {light.GetType().Name}s bake as point lights.");
+                bl = bake.CreatePointLight(light.GameObject.Name, xform, color, local.Range);
                 break;
+            default:
+                return;
         }
         bl.BakeDirect = bakeDirect;
     }
