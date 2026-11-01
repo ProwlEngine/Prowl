@@ -41,7 +41,7 @@ public sealed class SceneAnimation
             try { animator.Tick(deltaTime); }
             catch (Exception ex)
             {
-                Debug.LogError($"[Animator] '{animator.GameObject.Name}' threw while animating: {ex.Message}\n{ex.StackTrace}");
+                Debug.LogException($"[Animator] '{animator.GameObject.Name}' threw while animating", ex);
             }
         }
     }

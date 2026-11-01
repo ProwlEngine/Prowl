@@ -429,7 +429,7 @@ public static class AudioContext
         }
         catch (Exception ex)
         {
-            Debug.LogError($"A handler threw while the audio device was closing: {ex}");
+            Debug.LogException($"A handler threw while the audio device was closing", ex);
         }
 
         MiniAudioExNative.ma_ex_context_uninit(audioContext);
@@ -659,7 +659,7 @@ public static class AudioContext
             if (!deviceProcessFailed)
             {
                 deviceProcessFailed = true;
-                Debug.LogError($"An audio device data handler threw, further failures are not reported: {ex}");
+                Debug.LogException($"An audio device data handler threw, further failures are not reported", ex);
             }
         }
     }

@@ -61,7 +61,7 @@ public class UIToggle : Selectable, IPointerClickHandler, ISubmitHandler
         if (changed && notify)
         {
             try { OnValueChanged?.Invoke(_isOn); }
-            catch (Exception ex) { Debug.LogError($"[UIToggle] OnValueChanged on '{Name}' threw: {ex.Message}\n{ex.StackTrace}"); }
+            catch (Exception ex) { Debug.LogException($"[UIToggle] OnValueChanged on '{Name}' threw", ex); }
             _onValueChanged.Invoke();
         }
     }

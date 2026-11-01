@@ -75,7 +75,7 @@ public static class AnimationNodeRegistry
             try { node = (AnimationGraphNode)Activator.CreateInstance(type)!; }
             catch (Exception ex)
             {
-                Debug.LogError($"[AnimationGraph] Could not create the node type {type.FullName}: {ex.InnerException?.Message ?? ex.Message}");
+                Debug.LogException($"[AnimationGraph] Could not create the node type {type.FullName}", ex);
                 continue;
             }
 

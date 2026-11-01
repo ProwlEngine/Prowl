@@ -246,7 +246,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
         if (_content.AnchoredPosition == pos) return;
         _content.AnchoredPosition = pos;
         try { OnValueChanged?.Invoke(); }
-        catch (Exception ex) { Debug.LogError($"[UIScrollRect] OnValueChanged on '{Name}' threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[UIScrollRect] OnValueChanged on '{Name}' threw", ex); }
     }
 
     /// <summary>

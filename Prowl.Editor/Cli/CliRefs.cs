@@ -365,7 +365,7 @@ public static class CliRefs
         if (target is EngineObject eo && eo.IsValid())
         {
             try { eo.OnValidate(); }
-            catch (Exception ex) { Debug.LogError($"OnValidate threw on {type.Name}: {ex}"); }
+            catch (Exception ex) { Debug.LogException($"OnValidate threw on {type.Name}", ex); }
             PrefabUtility.NotifyEdited(target);
         }
     }

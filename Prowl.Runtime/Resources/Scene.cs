@@ -268,7 +268,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         // Everything the incoming scene uses is loaded before any of it enables, so OnEnable never sees an asset still loading.
         try { AssetDatabase.LoadEverythingReached(); }
-        catch (Exception e) { Debug.LogError($"[Scene] Loading what '{next.Name}' uses threw: {e.Message}\n{e.StackTrace}"); }
+        catch (Exception e) { Debug.LogException($"[Scene] Loading what '{next.Name}' uses threw", e); }
 
         if (!ReferenceEquals(_current, null) && !_current.IsDisposed)
         {
@@ -278,7 +278,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                     _current.Disable();
                 _current.Dispose();
             }
-            catch (Exception e) { Debug.LogError($"[Scene] Tearing down '{_current.Name}' threw: {e.Message}\n{e.StackTrace}"); }
+            catch (Exception e) { Debug.LogException($"[Scene] Tearing down '{_current.Name}' threw", e); }
         }
 
         // Between the two scenes, so the outgoing one's teardown belongs to its own session and the incoming
@@ -780,7 +780,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             {
                 if (component.IsDisposed) continue;
                 try { component.OnAddedToScene(); }
-                catch (Exception ex) { Debug.LogError($"[{obj.Name}/{component.GetType().Name}] OnAddedToScene() threw: {ex.Message}\n{ex.StackTrace}"); }
+                catch (Exception ex) { Debug.LogException($"[{obj.Name}/{component.GetType().Name}] OnAddedToScene() threw", ex); }
             }
 
             // Call OnEnable for enabled components, but only if the scene is active
@@ -829,7 +829,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             {
                 if (component.IsDisposed) continue;
                 try { component.OnRemovedFromScene(); }
-                catch (Exception ex) { Debug.LogError($"[{component.Name}/{component.GetType().Name}] OnRemovedFromScene() threw: {ex.Message}\n{ex.StackTrace}"); }
+                catch (Exception ex) { Debug.LogException($"[{component.Name}/{component.GetType().Name}] OnRemovedFromScene() threw", ex); }
             }
 
             obj.Scene = null;
@@ -1146,7 +1146,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[Render] Camera '{(cam.GameObject.IsValid() ? cam.GameObject.Name : null)}' render threw and was skipped: {ex.Message}\n{ex.StackTrace}");
+                Debug.LogException($"[Render] Camera '{(cam.GameObject.IsValid() ? cam.GameObject.Name : null)}' render threw and was skipped", ex);
             }
         }
 
