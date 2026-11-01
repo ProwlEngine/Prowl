@@ -497,10 +497,6 @@ public class EditorApplication : Game
         return new Float2(p.X * csFbWin / (cs * us), p.Y * csFbWin / (cs * us));
     }
 
-    // When a lock pins the pointer (fly mode, play mode), the cursor sits at the lock center
-    // rather than where the user is aiming, so editor UI must not react to it.
-    protected override bool PaperReceivesPointerInput => !Input.CursorLocked;
-
     private void ApplyDarkTitleBar()
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
