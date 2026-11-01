@@ -385,11 +385,11 @@ public sealed class LightmapBakeService
             Material? pm = s < materials.Count ? materials[s] : materials.Count > 0 ? materials[^1] : default;
             if (pm.IsValid())
             {
-                Color c = pm._properties.GetColor("_MainColor");
+                Color c = pm._properties.GetColor(pm._properties.HasColor("base_color") ? "base_color" : "_MainColor");
                 bmat.DiffuseColor = new Float3((float)c.R, (float)c.G, (float)c.B);
 
                 // Feed the diffuse albedo texture so bounced light picks up its colour.
-                Texture2D? tex = pm._properties.GetTexture("_MainTex");
+                Texture2D? tex = pm._properties.GetTexture(pm._properties.HasTexture("base_color_map") ? "base_color_map" : "_MainTex");
                 if (tex.IsValid()) tex.Load();
                 if (tex is { IsLoaded: true })
                 {

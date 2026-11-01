@@ -40,7 +40,7 @@ Shader "Default/Sprite"
         {
             #include "Prowl/Common.glsl"
             #include "Graphite/Lighting.glsl"
-            #pragma variant global GRAPHITE_DEBUG OFF UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY
+            #pragma variant global GRAPHITE_DEBUG UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY
             #include "Graphite/Debug.glsl"
 
             uniform sampler2D _MainTex;
@@ -57,7 +57,7 @@ Shader "Default/Sprite"
                 vec4 texel = texture(_MainTex, vUV);
                 vec4 tint = vColor * _MainColor;
                 vec4 albedo = vec4(texel.rgb * gammaToLinearSpace(tint.rgb), texel.a * tint.a);
-                vec3 color = ApplyFog(albedo.rgb, vRelativePos);
+                vec3 color = Graphite_ApplyFog(albedo.rgb, vRelativePos);
                 fragColor = vec4(Graphite_DebugView(color, albedo.rgb, vec3(0.0), 1.0, 0.0, 1.0, vec3(0.0), vRelativePos, vec2(0.0)), albedo.a);
             }
         }

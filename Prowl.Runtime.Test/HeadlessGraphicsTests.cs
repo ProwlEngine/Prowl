@@ -102,13 +102,15 @@ public class HeadlessGraphicsTests
         // The model importer sets these factors, so every glTF material without textures depends on them
         HashSet<string> names = PropertyNames(Shader.LoadDefault(DefaultShader.Lit));
 
-        Assert.Contains("_Metallic", names);
-        Assert.Contains("_Roughness", names);
-        Assert.Contains("_OcclusionTex", names);
-        Assert.Contains("_OcclusionStrength", names);
-        Assert.Contains("_NormalScale", names);
-        Assert.Contains("_EmissiveColor", names);
-        Assert.Contains("_AlphaCutoff", names);
+        Assert.Contains("base_color", names);
+        Assert.Contains("base_metalness", names);
+        Assert.Contains("specular_roughness", names);
+        Assert.Contains("ambient_occlusion_map", names);
+        Assert.Contains("normal_scale", names);
+        Assert.Contains("emission_color", names);
+        Assert.Contains("emission_luminance", names);
+        Assert.Contains("alpha_cutoff", names);
+        Assert.Contains("geometry_opacity", names);
     }
 
     [Theory]

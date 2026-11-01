@@ -90,8 +90,16 @@ public class Light : Component, IRenderSync
     /// <summary>Linear colour.</summary>
     public Color Color { get => color; set { color = value; Wake(); } }
     [SerializeField] private Color color = Color.White;
+
+    /// <summary>
+    /// Illuminance in lux for a directional light, a clear day's sun about 100000. Luminous intensity in candela for a
+    /// point or spot, a 60 W bulb about 70. Luminance in nits for a rect, disk or tube.
+    /// </summary>
     public float Intensity { get => intensity; set { intensity = value; Wake(); } }
-    [SerializeField] private float intensity = 1.0f;
+    [SerializeField] private float intensity = 1000f;
+
+    // 1 once saved with physical units, 0 for lights saved before
+    [SerializeField, HideInInspector] private int units;
 
     /// <summary>Distance from the light at which it reaches zero.</summary>
     public float Range { get => range; set { range = value; Wake(); } }
@@ -143,6 +151,7 @@ public class Light : Component, IRenderSync
     public float ShadowStrength { get => shadowStrength; set { shadowStrength = value; Wake(); } }
     [SerializeField, ShowIf(nameof(ShowsShadows)), Range(0f, 1f)] private float shadowStrength = 1.0f;
 
+    /// <summary>The light's largest shadow tile, capped to the quality level's.</summary>
     public ShadowResolution ShadowResolution { get => shadowResolution; set { shadowResolution = value; Wake(); } }
     [SerializeField, ShowIf(nameof(ShowsShadows))] private ShadowResolution shadowResolution = ShadowResolution._1024;
 
@@ -157,14 +166,7 @@ public class Light : Component, IRenderSync
     public float NormalBias { get => normalBias; set { normalBias = value; Wake(); } }
     [SerializeField, ShowIf(nameof(ShowsShadows))] private float normalBias = 1.0f;
 
-    public ShadowCascades Cascades { get => cascades; set { cascades = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(ShowsCascades))] private ShadowCascades cascades = ShadowCascades.Two;
-
-    /// <summary>How far along the view shadows reach, in world units. They fade out over the last tenth.</summary>
-    public float ShadowDistance { get => shadowDistance; set { shadowDistance = value; Wake(); } }
-    [SerializeField, ShowIf(nameof(ShowsCascades))] private float shadowDistance = 50f;
-
-    /// <summary>The fraction of each cascade blended into the next, 0 for a hard switch.</summary>
+    /// <summary>The fraction of each cascade blended into the next, 0 for a hard switch. The cascades and how far they reach are the quality level's.</summary>
     public float CascadeBlend { get => cascadeBlend; set { cascadeBlend = value; Wake(); } }
     [SerializeField, ShowIf(nameof(ShowsCascades)), Range(0f, 1f)] private float cascadeBlend = 0.1f;
 
@@ -193,6 +195,14 @@ public class Light : Component, IRenderSync
     private bool ShowsShadows => CanCastShadows && CastShadows;
     private bool ShowsCascades => ShowsShadows && IsDirectional;
 
+    /// <summary>A typical intensity for a type of light: a clear day's sun, a bright lamp, a lit panel.</summary>
+    public static float TypicalIntensity(LightType type) => type switch
+    {
+        LightType.Directional => 100000f,
+        LightType.Point or LightType.Spot => 1000f,
+        _ => 10000f,
+    };
+
     /// <summary>Whether this type of light can cast shadows. Area lights do not yet.</summary>
     public bool CanCastShadows => Type is LightType.Directional or LightType.Point or LightType.Spot;
 
@@ -218,7 +228,7 @@ public class Light : Component, IRenderSync
             Shadow = new ShadowDesc
             {
                 Enabled = CanCastShadows && CastShadows && ShadowStrength > 0,
-                Resolution = (uint)ShadowResolution,
+                Resolution = (uint)Maths.Min((int)ShadowResolution, (int)QualitySettings.Active.MaxShadowResolution),
                 DepthBias = DepthBias,
                 NormalBias = NormalBias,
                 Strength = ShadowStrength,
@@ -231,8 +241,8 @@ public class Light : Component, IRenderSync
             case LightType.Directional:
                 desc.Range = 0;
                 desc.AngularRadius = AngularRadius;
-                desc.Shadow.Cascades = (byte)Maths.Clamp((int)Cascades, 1, 4);
-                desc.Shadow.Distance = Maths.Max(ShadowDistance, 0.01f);
+                desc.Shadow.Cascades = (byte)Maths.Clamp((int)QualitySettings.Active.ShadowCascades, 1, 4);
+                desc.Shadow.Distance = Maths.Max(QualitySettings.Active.ShadowDistance, 0.01f);
                 desc.Shadow.CascadeBlend = CascadeBlend;
                 break;
             case LightType.Point:
@@ -375,6 +385,16 @@ public class Light : Component, IRenderSync
         && a.Shadow.CascadeBlend == b.Shadow.CascadeBlend && a.Shadow.Strength == b.Shadow.Strength && a.Shadow.Filter == b.Shadow.Filter;
 
     public override void OnAddedToScene() => Fog = GetComponent<FogLight>();
+
+    public override void OnBeforeSerialize() => units = 1;
+
+    // A light saved before its units were physical keeps its look, see LegacyLightUnits
+    public override void OnAfterDeserialize()
+    {
+        if (units != 0) return;
+        intensity *= LegacyLightUnits.Light;
+        units = 1;
+    }
 
     public override void DrawGizmos()
     {

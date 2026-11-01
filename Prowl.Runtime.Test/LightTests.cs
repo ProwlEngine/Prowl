@@ -61,15 +61,16 @@ public class LightTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Directional_CarriesItsCascades()
+    public void Directional_TakesItsCascadesFromTheActiveQualityLevel()
     {
+        QualityLevel quality = QualitySettings.Active;
         Light sun = Make(LightType.Directional);
-        sun.Cascades = ShadowCascades.Four;
-        sun.ShadowDistance = 80f;
+        sun.ShadowResolution = ShadowResolution._4096;
         sun.AngularRadius = 0.5f;
         LightDesc desc = sun.Describe();
-        Assert.Equal(4, desc.Shadow.Cascades);
-        Assert.Equal(80f, desc.Shadow.Distance);
+        Assert.Equal((int)quality.ShadowCascades, desc.Shadow.Cascades);
+        Assert.Equal(quality.ShadowDistance, desc.Shadow.Distance);
+        Assert.Equal((uint)quality.MaxShadowResolution, desc.Shadow.Resolution);
         Assert.Equal(0.5f, desc.AngularRadius);
     }
 

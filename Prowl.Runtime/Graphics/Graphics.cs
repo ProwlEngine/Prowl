@@ -31,12 +31,14 @@ namespace Prowl.Runtime;
 public static class Graphics
 {
     private static GlslShaderCompiler? s_compiler;
-    private static readonly List<ViewDesc> s_views = [];
+    private static IShaderCompiler? s_shaderCompiler;
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<RenderView, object> s_viewIds = new();
+    private static int s_nextViewId;
+    private static readonly List<RenderView> s_views = [];
     private static readonly List<Action<FrameGraph>> s_hostPasses = [];
     private static FrameGraph? s_hostGraph;
     private static readonly Dictionary<SamplerDescription, Sampler> s_samplers = [];
     private static readonly List<IDisposable> s_deferred = [];
-    private static int s_nextViewId = 1;
     private static double s_time;
 
     /// <summary>The Vulkan device, null when headless.</summary>
@@ -79,9 +81,14 @@ public static class Graphics
     /// <summary>Raised on the main thread just before each frame is submitted, for work that pushes state into worlds.</summary>
     public static event Action? BeforeSubmit;
 
-    /// <summary>The shader compiler, which exists headless too so shaders parse and declare their variants.</summary>
     /// <summary>The shader compiler. Players have it too, compiling what their build did not bake on demand.</summary>
     public static GlslShaderCompiler Compiler => s_compiler ??= CreateCompiler();
+
+    /// <summary>
+    /// What shaders get their variants from: the variants a player's build baked, compiling the rest through
+    /// <see cref="Compiler"/>, or the compiler alone.
+    /// </summary>
+    public static IShaderCompiler ShaderCompiler => s_shaderCompiler ??= LoadBakedShaders();
 
     /// <summary>
     /// Where compiled shader stages are kept between runs, keyed by their source, so each variant compiles once per
@@ -124,25 +131,26 @@ public static class Graphics
 
     private static string BakedShadersPath => System.IO.Path.Combine(AppContext.BaseDirectory, BakedShadersFile);
 
-    private static void LoadBakedShaders()
+    private static IShaderCompiler LoadBakedShaders()
     {
-        if (Application.IsEditor || !System.IO.File.Exists(BakedShadersPath)) return;
+        if (Application.IsEditor || !System.IO.File.Exists(BakedShadersPath)) return Compiler;
         try
         {
+            BakedVariants baked = new(Compiler);
             using System.IO.FileStream file = System.IO.File.OpenRead(BakedShadersPath);
-            BakedVariants.Read(file);
+            baked.Read(file);
+            return baked;
         }
         catch (Exception e) when (e is System.IO.IOException or System.IO.InvalidDataException or ArgumentException)
         {
-            BakedVariants.Clear();
             Debug.LogWarning($"{BakedShadersFile} could not be read, so shaders compile as they are first drawn: {e.Message}");
+            return Compiler;
         }
     }
 
     /// <summary>Opens the device on the window's Vulkan surface and starts the renderer.</summary>
     internal static void Initialize(IWindow window, bool vsync)
     {
-        LoadBakedShaders();
         if (window.VkSurface == null)
             throw new InvalidOperationException("The window has no Vulkan surface.");
 
@@ -171,7 +179,7 @@ public static class Graphics
 
     private static void CreateRenderer()
     {
-        Renderer = new Renderer(Device!, Compiler);
+        Renderer = new Renderer(Device!, ShaderCompiler);
         Renderer.Error += error =>
         {
             if (error.Severity == RendererErrorSeverity.Warning) Debug.LogWarning($"[Graphite] {error.Message}");
@@ -179,6 +187,7 @@ public static class Graphics
         };
         BuiltInShaders.RegisterDefaults(Renderer);
         RegisterFallbackBuffers();
+        QualitySettings.ApplyGlobals();
     }
 
     private static readonly List<DeviceBuffer> s_fallbackBuffers = [];
@@ -205,17 +214,16 @@ public static class Graphics
     internal static void Resize(int width, int height)
     {
         if (Device == null || width <= 0 || height <= 0) return;
-        Renderer!.WaitForRenderThread();
-        Device.ResizeMainWindow((uint)width, (uint)height);
+        Renderer!.Resize((uint)width, (uint)height);
     }
 
-    /// <summary>A view id unique for the application, for state Graphite keeps per view such as history.</summary>
-    public static int NewViewId() => s_nextViewId++;
+    /// <summary>A number for a view, the same while it lives, for state kept per view. 0 for the renderer's own views. Any thread.</summary>
+    public static int ViewId(RenderView? view) => view == null ? 0 : (int)s_viewIds.GetValue(view, _ => System.Threading.Interlocked.Increment(ref s_nextViewId));
 
-    /// <summary>Adds a view to this frame. Main thread.</summary>
-    public static void AddView(in ViewDesc view)
+    /// <summary>Adds a view to this frame, once. Main thread.</summary>
+    public static void AddView(RenderView view)
     {
-        if (Renderer == null) return;
+        if (Renderer == null || s_views.Contains(view)) return;
         s_views.Add(view);
     }
 
@@ -281,7 +289,7 @@ public static class Graphics
     }
 
     /// <summary>The views added to this frame so far.</summary>
-    public static IReadOnlyList<ViewDesc> FrameViews => s_views;
+    public static IReadOnlyList<RenderView> FrameViews => s_views;
 
     /// <summary>Hands this frame to the renderer. Main thread, once per frame.</summary>
     internal static void SubmitFrame(float deltaTime)
@@ -384,9 +392,9 @@ public static class Graphics
 
     /// <summary>
     /// Draws a mesh once per transform, in world space, for this frame only, so call it every frame the instances should
-    /// show, from Update or anywhere before the scene renders. Each colour tints its instance where the material's shader
-    /// reads it, as Lit and Unlit do with Instance Tint on, and is white where missing. Draws into the current scene
-    /// unless given one, and draws nothing while the mesh or material is still loading.
+    /// show, from Update or anywhere before the scene renders. Each instance is a renderable with its colour, white where
+    /// missing, as its RenderableDesc.Color, which Lit, Unlit and Surface shaders multiply into the base colour and coverage. Draws into
+    /// the current scene unless given one, and draws nothing while the mesh or material is still loading.
     /// </summary>
     public static void DrawMeshInstanced(Mesh mesh, Material material, ReadOnlySpan<Float4x4> transforms, ReadOnlySpan<Color> colors = default,
         ShadowCasting shadowCasting = ShadowCasting.On, int layer = 0, Scene? scene = null)
@@ -456,6 +464,7 @@ public static class Graphics
         foreach (DeviceBuffer buffer in s_fallbackBuffers) buffer.Dispose();
         s_fallbackBuffers.Clear();
         lock (s_libraryShaders) s_libraryShaders.Clear();
+        s_views.Clear();
         Renderer.Dispose();
         Renderer = null;
         Device.Dispose();

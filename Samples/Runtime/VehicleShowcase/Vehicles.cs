@@ -30,7 +30,7 @@ public sealed partial class VehicleShowcaseGame
         _chrome = Lit(new Color(0.6f, 0.6f, 0.62f, 1f), 1f, 0.3f);
         _glass = Lit(new Color(0.01f, 0.015f, 0.025f, 1f), 0.9f, 0.05f);
         _tyre = Lit(new Color(0.02f, 0.02f, 0.02f, 1f), 0f, 0.9f);
-        _headlight = Lit(Color.White).Emissive(new Color(1f, 0.95f, 0.85f, 1f), 3f);
+        _headlight = Lit(Color.White).Emissive(new Color(1f, 0.95f, 0.85f, 1f), 60000f);
         _helmet = Lit(new Color(0.8f, 0.8f, 0.82f, 1f), 0.3f, 0.3f);
     }
 
@@ -358,7 +358,7 @@ public sealed partial class VehicleShowcaseGame
     //  Building blocks
     // ----------------------------------------------------------------
 
-    private Material Taillight() => Lit(new Color(0.3f, 0f, 0f, 1f)).Emissive(new Color(1f, 0.02f, 0.02f, 1f), 1f);
+    private Material Taillight() => Lit(new Color(0.3f, 0f, 0f, 1f)).Emissive(new Color(1f, 0.02f, 0.02f, 1f), 20000f);
 
     /// <summary>A body with box colliders, each a size and a centre in the body's space.</summary>
     private static GameObject Chassis(string name, Float3 position, float mass, out Rigidbody3D body, params (Float3 Size, Float3 Center)[] boxes)
@@ -428,7 +428,7 @@ public sealed partial class VehicleShowcaseGame
             Light spot = lamp.AddComponent<Light>();
             spot.Type = LightType.Spot;
             spot.Color = new Color(1f, 0.93f, 0.8f, 1f);
-            spot.Intensity = 40f;
+            spot.Intensity = 6300000f;
             spot.Range = 35f;
             spot.OuterAngle = 50f;
             spot.InnerAngle = 25f;

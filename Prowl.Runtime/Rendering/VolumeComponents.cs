@@ -48,16 +48,22 @@ public sealed class Tonemapping : VolumeComponent<G.Tonemapper>
     protected override void Apply(G.Tonemapper feature, Camera camera) => feature.Operator = (G.TonemapOperator)((int)Mode.Value - 1);
 }
 
-/// <summary>Adapts exposure to the scene's brightness over time.</summary>
+/// <summary>Adapts exposure to the scene's brightness over time, in place of the camera's EV100.</summary>
 [VolumeComponentMenu("Camera/Auto Exposure")]
 public sealed class AutoExposure : VolumeComponent<G.AutoExposure>
 {
     public VolumeParameter<bool> Enabled = new(false);
-    [Range(-5f, 5f)] public VolumeParameter<float> ExposureCompensation = new(0f);
+
+    /// <summary>Stops brighter than the meter reads. The default puts the metered scene at the 0.18 mid grey tonemappers expect.</summary>
+    [Range(-5f, 5f)] public VolumeParameter<float> ExposureCompensation = new(1.5f);
     public VolumeParameter<float> AdaptSpeedUp = new(3f);
     public VolumeParameter<float> AdaptSpeedDown = new(1.5f);
-    public VolumeParameter<float> MinExposure = new(0.1f);
-    public VolumeParameter<float> MaxExposure = new(10f);
+
+    /// <summary>The darkest scene metered, as the lowest EV100 the camera takes.</summary>
+    public VolumeParameter<float> MinEV100 = new(-6f);
+
+    /// <summary>The brightest scene metered, as the highest EV100 the camera takes.</summary>
+    public VolumeParameter<float> MaxEV100 = new(20f);
 
     public override bool IsActive => Enabled.Value;
 
@@ -68,8 +74,8 @@ public sealed class AutoExposure : VolumeComponent<G.AutoExposure>
         feature.ExposureCompensation = ExposureCompensation;
         feature.AdaptSpeedUp = AdaptSpeedUp;
         feature.AdaptSpeedDown = AdaptSpeedDown;
-        feature.MinExposure = MinExposure;
-        feature.MaxExposure = MaxExposure;
+        feature.MinEV100 = MinEV100;
+        feature.MaxEV100 = MaxEV100;
     }
 }
 
@@ -96,7 +102,7 @@ public sealed class Bloom : VolumeComponent<G.Bloom>
         feature.SoftKnee = SoftKnee;
         feature.Clamp = Clamp;
         feature.AntiFlicker = AntiFlicker;
-        feature.Iterations = Iterations;
+        feature.Iterations = System.Math.Min(Iterations.Value, QualitySettings.Active.BloomIterations);
         feature.Scatter = Scatter;
     }
 }
@@ -114,7 +120,7 @@ public sealed class AmbientOcclusion : VolumeComponent<G.Gtao>
     [Range(0f, 1f)] public VolumeParameter<float> TemporalResponse = new(0.9f);
     public VolumeParameter<EffectResolution> Resolution = new(EffectResolution.Quarter);
 
-    public override bool IsActive => Intensity.Value > 0f;
+    public override bool IsActive => Intensity.Value > 0f && QualitySettings.Active.AmbientOcclusion;
 
     protected override G.Gtao CreateFeature(G.Renderer renderer) => new(renderer);
 
@@ -147,10 +153,9 @@ public sealed class ScreenSpaceReflections : VolumeComponent<G.ScreenSpaceReflec
     public VolumeParameter<float> TemporalScale = new(2f);
     [Range(0f, 1f)] public VolumeParameter<float> TemporalResponse = new(0.85f);
     public VolumeParameter<bool> ReflectionVelocity = new(true);
-    public VolumeParameter<bool> UseFresnel = new(true);
     [Range(0f, 1f)] public VolumeParameter<float> ScreenFadeSize = new(0.25f);
 
-    public override bool IsActive => Enabled.Value;
+    public override bool IsActive => Enabled.Value && QualitySettings.Active.ScreenSpaceReflections;
 
     protected override G.ScreenSpaceReflections CreateFeature(G.Renderer renderer) => new(renderer);
 
@@ -167,7 +172,6 @@ public sealed class ScreenSpaceReflections : VolumeComponent<G.ScreenSpaceReflec
         feature.TemporalScale = TemporalScale;
         feature.TemporalResponse = TemporalResponse;
         feature.ReflectionVelocity = ReflectionVelocity;
-        feature.UseFresnel = UseFresnel;
         feature.ScreenFadeSize = ScreenFadeSize;
     }
 }

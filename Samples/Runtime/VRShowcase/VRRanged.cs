@@ -367,7 +367,7 @@ public sealed class Gun : Component
         _cooldown -= dt;
 
         _flashTime -= dt;
-        _flash.Intensity = _flashTime > 0f ? 3f : 0f;
+        _flash.Intensity = _flashTime > 0f ? 470000f : 0f;
         _tracerTime -= dt;
         if (_tracerTime <= 0f) _tracer.Points.Clear();
 
@@ -515,10 +515,9 @@ public sealed class Gun : Component
     private static Material SampleMaterial(Color color)
     {
         var material = new Material(Shader.LoadDefault(DefaultShader.Lit));
-        material.SetColor("_MainColor", color);
-        material.SetTexture("_SurfaceTex", Texture2D.LoadDefault(DefaultTexture.White));
-        material.SetFloat("_Metallic", 0.9f);
-        material.SetFloat("_Roughness", 0.35f);
+        material.SetColor("base_color", color);
+        material.SetFloat("base_metalness", 0.9f);
+        material.SetFloat("specular_roughness", 0.35f);
         return material;
     }
 }

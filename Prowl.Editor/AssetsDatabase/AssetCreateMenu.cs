@@ -180,8 +180,9 @@ public static class AssetCreateMenu
     public static string? CreateComputeShader(string relativeFolder) => CreateNow(relativeFolder, "New Compute Shader", ".compute", WriteComputeShader);
 
     private const string ShaderTemplate = @"// A lit surface with every feature of the standard Lit shader: shadows, lightmaps, probes, decals, fog, surface
-// types and the Lit material inputs. Surface runs before lighting and may change BaseColor, Alpha, Normal, Metallic,
-// Roughness, Occlusion and Emission, reading UV, UV1, VertexColor, RelativePos, ViewDir, GeometryNormal, Tangent and Bitangent.
+// types and the Lit material inputs. Surface runs before lighting and may change any OpenPBR input of p, such as
+// baseColor, specularRoughness, baseMetalness, geometryNormal, geometryOpacity, emissionColor and emissionLuminance in
+// nits, reading uv, uv1, vertexColor, relativePos, viewDir, geometryNormal, tangent and bitangent of s.
 // Surface ""Unlit"" gives the Unlit shader's passes instead.
 Shader ""Custom/New Shader""
 {
@@ -189,6 +190,7 @@ Shader ""Custom/New Shader""
     {
         _RimColor(""Rim Color"", Color) = (0.3, 0.6, 1.0, 1.0)
         _RimPower(""Rim Power"", Float) = 3.0 [Range(0.5, 8)]
+        _RimLuminance(""Rim Luminance"", Float) = 1.0
     }
 
     Surface ""Lit""
@@ -196,11 +198,13 @@ Shader ""Custom/New Shader""
         GLSLPROGRAM
         uniform vec4 _RimColor;
         uniform float _RimPower;
+        uniform float _RimLuminance;
 
-        void Surface(inout Graphite_SurfaceData s)
+        void Surface(inout PBR_Params p, Graphite_SurfaceData s)
         {
-            float rim = 1.0 - max(dot(s.Normal, s.ViewDir), 0.0);
-            s.Emission += _RimColor.rgb * pow(rim, _RimPower);
+            float rim = pow(1.0 - max(dot(p.geometryNormal, s.viewDir), 0.0), _RimPower);
+            p.emissionColor = _RimColor.rgb;
+            p.emissionLuminance += _RimLuminance * rim;
         }
         ENDGLSL
     }

@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
@@ -54,6 +53,7 @@ public sealed class SceneRendering : IDisposable
     private readonly System.Collections.Concurrent.ConcurrentQueue<Mesh> _changedMeshes = new();
     private readonly Action<Mesh> _onMeshChanged;
     private int _lightingVersion = -1;
+    private int _qualityVersion = -1;
 
     /// <summary>
     /// Moves once every scene sync. A Transform pushes its move to its renderers and its children's at most once a sync,
@@ -64,11 +64,12 @@ public sealed class SceneRendering : IDisposable
     private ulong _syncedFrame = ulong.MaxValue;
     private readonly List<Light> _directionals = [];
 
-    // Instances drawn for one frame through Graphics.DrawMeshInstanced, a batch for each mesh, material and settings
+    // Instances drawn for one frame through Graphics.DrawMeshInstanced, a batch for each mesh, material and settings,
+    // each instance a renderable kept from frame to frame with its colour as the renderable's
     private sealed class ImmediateBatch
     {
-        public readonly List<InstanceData> Instances = [];
-        public InstanceBatchHandle Handle;
+        public readonly List<(Float4x4 Transform, Float4 Color)> Instances = [];
+        public readonly List<RenderableHandle> Handles = [];
         public ulong Frame;
     }
 
@@ -178,12 +179,13 @@ public sealed class SceneRendering : IDisposable
         _parkedMeshes.Clear();
     }
 
-    // Wakes the members drawing a mesh edited since the last sync, and every member after a lightmap rebake
+    // Wakes the members drawing a mesh edited since the last sync, and every member after a lightmap rebake or a quality change
     internal void WakeChanged()
     {
-        if (_scene.BakedLightingVersion != _lightingVersion)
+        if (_scene.BakedLightingVersion != _lightingVersion || QualitySettings.Version != _qualityVersion)
         {
             _lightingVersion = _scene.BakedLightingVersion;
+            _qualityVersion = QualitySettings.Version;
             UnparkAll();
         }
         while (_changedMeshes.TryDequeue(out Mesh? mesh))
@@ -207,7 +209,7 @@ public sealed class SceneRendering : IDisposable
         for (int i = 0; i < transforms.Length; i++)
         {
             Color c = i < colors.Length ? colors[i] : Color.White;
-            batch.Instances.Add(new InstanceData { Transform = transforms[i], Color = new Float4(c.R, c.G, c.B, c.A) });
+            batch.Instances.Add((transforms[i], new Float4(c.R, c.G, c.B, c.A)));
         }
     }
 
@@ -218,15 +220,26 @@ public sealed class SceneRendering : IDisposable
         {
             if (batch.Instances.Count == 0 || batch.Frame != Graphics.FrameIndex || key.mesh.IsDisposed || key.material.IsDisposed)
             {
-                if (batch.Handle.IsValid) world.RemoveInstanceBatch(batch.Handle);
+                foreach (RenderableHandle handle in batch.Handles) world.Remove(handle);
                 _immediateGone.Add(key);
                 continue;
             }
-            ReadOnlySpan<InstanceData> instances = CollectionsMarshal.AsSpan(batch.Instances);
-            if (batch.Handle.IsValid)
-                world.SetInstances(batch.Handle, instances);
-            else
-                batch.Handle = world.AddInstanceBatch(new InstanceBatchDesc { Mesh = key.mesh, Transform = Double4x4.Identity, LayerMask = key.layerMask, Flags = key.flags }, [key.material], instances);
+            for (int i = 0; i < batch.Instances.Count; i++)
+            {
+                (Float4x4 transform, Float4 color) = batch.Instances[i];
+                if (i == batch.Handles.Count)
+                {
+                    batch.Handles.Add(world.Add(new RenderableDesc { Mesh = key.mesh, Transform = (Double4x4)transform, LayerMask = key.layerMask, Flags = key.flags, Color = color }, [key.material]));
+                    continue;
+                }
+                world.SetTransform(batch.Handles[i], transform);
+                world.SetColor(batch.Handles[i], color);
+            }
+            for (int i = batch.Handles.Count - 1; i >= batch.Instances.Count; i--)
+            {
+                world.Remove(batch.Handles[i]);
+                batch.Handles.RemoveAt(i);
+            }
             batch.Instances.Clear();
         }
         foreach ((GpuMesh, GMaterial, RenderableFlags, uint) key in _immediateGone)

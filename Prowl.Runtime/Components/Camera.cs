@@ -51,18 +51,16 @@ public struct CameraRenderOptions
     public IReadOnlyList<RenderFeature>? Features;
 
     /// <summary>Views that must draw before this one, such as ones whose targets it samples.</summary>
-    public int[]? DependsOn;
+    public RenderView[]? DependsOn;
 
     /// <summary>Global axis values for this render alone, such as a debug view's GRAPHITE_DEBUG.</summary>
-    public Graphite.ShaderDef.Keyword[]? Keywords;
+    public GlobalKeyword[]? Keywords;
 }
 
 /// <summary>
 /// How cameras become views of a frame. Prowl's own, <see cref="ForwardCameraPipeline"/>, draws each camera as a Graphite
-/// view running the world's features and the camera's effects. A pipeline of another design, such as deferred, adds
-/// each camera as an external view (<see cref="Camera.BuildView"/> with ViewDesc.External set), which Graphite culls and
-/// prepares draws for, and records it in passes of its own added with <see cref="Graphics.AddPipeline"/>, drawing through
-/// Renderer.Draws. Set it on <see cref="Graphics.CameraPipeline"/>.
+/// view running the world's features and the camera's effects. A pipeline of another design builds each camera's view
+/// with <see cref="Camera.BuildView"/> and adds it with features of its own. Set it on <see cref="Graphics.CameraPipeline"/>.
 /// </summary>
 public abstract class CameraPipeline
 {
@@ -161,11 +159,25 @@ public class Camera : Component
     /// <summary>
     /// The render texture asset this camera draws into. None means it draws wherever the render it takes part in is
     /// going: the window in a player, the Game View or scene view texture in the editor.
+    /// <para>
+    /// A texture shown in the world by an Unlit material is light that the viewing camera exposes and tonemaps again. For a
+    /// feed that should match the view around it, draw into a float target with no tonemapping or auto exposure at a fixed
+    /// <see cref="EV100"/>, and set the material's emission_luminance to 1.2 times 2 to that EV100, which gives back the
+    /// nits the camera saw. For a screen that shows a finished picture, draw into an sRGB target with tonemapping and set
+    /// emission_luminance to the screen's brightness, about 200 to 1000 nits, which reads dim in daylight as a real one does.
+    /// </para>
     /// </summary>
     public RenderTexture? Target;
 
-    /// <summary>Resolution the camera renders at against its target, presented scaled to fit.</summary>
+    /// <summary>Resolution the camera renders at against its target, presented scaled to fit, times the quality level's.</summary>
     public float RenderScale = 1.0f;
+
+    /// <summary>
+    /// The exposure value at ISO 100 the camera sees light at, which lux, candela and nits are scaled by before they are
+    /// drawn: about 15 for a sunny day, 12 for an overcast one, 7 indoors and 0 or lower at night. An Auto Exposure volume
+    /// component takes over from it after the first frame.
+    /// </summary>
+    public float EV100 = 14f;
 
     /// <summary>
     /// The headset eyes this camera renders while XR is running. A perspective camera with no <see cref="Target"/>
@@ -180,17 +192,15 @@ public class Camera : Component
     private Float4x4 _projectionMatrix;
     private bool _customProjectionMatrix;
 
-    [SerializeIgnore, NonSerialized, NotHeld] private int _viewId;
-    [SerializeIgnore, NonSerialized, NotHeld] private int _stereoViewId;
-    [SerializeIgnore, NonSerialized, NotHeld] private bool _cut;
-    [SerializeIgnore, NonSerialized, NotHeld] private readonly FeatureSet _features = new();
+    [SerializeIgnore, NonSerialized, NotHeld] private readonly List<RenderView> _views = [];
+    [SerializeIgnore, NonSerialized, NotHeld] private RenderView? _stereoView;
+    [SerializeIgnore, NonSerialized, NotHeld] private ulong _viewsFrame = ulong.MaxValue;
+    [SerializeIgnore, NonSerialized, NotHeld] private int _viewsUsed;
+    [SerializeIgnore, NonSerialized, NotHeld] private readonly ExtensionSet<RenderFeature> _features = new();
     [SerializeIgnore, NonSerialized, NotHeld] private readonly List<RenderFeature> _activeFeatures = [];
     [SerializeIgnore, NonSerialized, NotHeld] private VolumeStack? _volumes;
     [SerializeIgnore, NonSerialized, NotHeld] private AntiAliasingFeatures? _antiAliasing;
     [NonSerialized, NotHeld] private readonly Dictionary<Type, object> _renderData = [];
-
-    /// <summary>The id of this camera's view, which keys Graphite's state for it such as temporal history.</summary>
-    public int ViewId => _viewId == 0 ? _viewId = Graphics.NewViewId() : _viewId;
 
     /// <summary>
     /// Data kept for this camera from one render to the next. One value per type, made by <paramref name="create"/>
@@ -220,6 +230,7 @@ public class Camera : Component
         }
         _renderData.Clear();
         ReleaseVolumes();
+        ReleaseViews();
         base.OnDispose();
     }
 
@@ -323,7 +334,20 @@ public class Camera : Component
     /// Tells the next frame the camera jumped, like a teleport or a scene switch, so motion and every effect's history
     /// start over instead of smearing the old view into the new one.
     /// </summary>
-    public void Cut() => _cut = true;
+    public void Cut()
+    {
+        foreach (RenderView view in _views) view.Cut();
+        _stereoView?.Cut();
+    }
+
+    /// <summary>Frees the camera's Graphite views, which keep its history, made again on its next render.</summary>
+    public void ReleaseViews()
+    {
+        foreach (RenderView view in _views) view.Dispose();
+        _views.Clear();
+        _stereoView?.Dispose();
+        _stereoView = null;
+    }
 
     internal void RenderForward(in CameraRenderOptions options)
     {
@@ -341,11 +365,10 @@ public class Camera : Component
         {
             if (XR.ClaimEyes(this, out Graphite.Framebuffer eyes))
             {
-                ViewDesc stereo = BuildView(world, eyes, options.Kind);
+                RenderView stereo = BuildView(world, eyes, options.Kind);
                 stereo.Features = BuildFeatures(options.Features);
                 stereo.Keywords = options.Keywords;
                 Graphics.AddView(stereo);
-                _cut = false;
             }
             if (framebuffer != null) XR.MirrorEyes(this, framebuffer);
             return;
@@ -353,9 +376,9 @@ public class Camera : Component
 
         if (framebuffer == null) return;
 
-        ViewDesc view = BuildView(world, framebuffer, options.Kind);
+        RenderView view = BuildView(world, framebuffer, options.Kind);
         XR.CoverMirror(framebuffer, view.Viewport);
-        view.DependsOn = options.DependsOn;
+        if (options.DependsOn != null) view.DependsOn.AddRange(options.DependsOn);
         view.Features = BuildFeatures(options.Features);
         view.Keywords = options.Keywords;
         if (options.DisplayGizmos)
@@ -364,52 +387,58 @@ public class Camera : Component
             view.CullingMask |= Debug.GizmoLayerMask;
         }
         Graphics.AddView(view);
-        _cut = false;
     }
 
     /// <summary>
-    /// The view this camera would draw into <paramref name="framebuffer"/>, without effects. For hosts that draw a
-    /// camera their own way, such as XR or a preview.
+    /// The camera's view drawing into <paramref name="framebuffer"/>, set up without effects, for hosts that draw a camera
+    /// their own way, such as XR or a preview. The camera owns it. Each render of the camera in one frame gets a view of
+    /// its own, in the order it renders, so each keeps its own history.
     /// </summary>
-    public ViewDesc BuildView(RenderWorld world, Graphite.Framebuffer framebuffer, ViewKind kind = ViewKind.Game)
+    public RenderView BuildView(RenderWorld world, Graphite.Framebuffer framebuffer, ViewKind kind = ViewKind.Game)
     {
+        bool stereo = framebuffer.ViewCount == 2;
+        RenderView view = stereo ? _stereoView ??= Graphics.Renderer!.CreateView(world, Name) : NextView(world);
         Float3 position = Transform.Position;
-        ViewDesc view = new()
+        view.World = world;
+        view.Target = framebuffer;
+        view.CullingMask = (uint)CullingMask.Mask & ~Debug.GizmoLayerMask;
+        view.ClearColor = Background == CameraBackground.Skybox ? GameObject.Scene.Environment.SkyColor.ToFloat4() : BackgroundColor.ToFloat4();
+        view.Sky = Background == CameraBackground.Skybox && GameObject.Scene.Rendering.HasSky;
+        view.Overlay = Background == CameraBackground.None;
+        view.Kind = kind;
+        view.Viewport = stereo ? new Float4(0, 0, 1, 1) : ClampViewport(ViewportRect);
+        view.RenderScale = Maths.Clamp(RenderScale * QualitySettings.Active.RenderScale, 0.1f, 2.0f);
+        view.EV100 = EV100;
+        view.Ldr = !HDR;
+        view.Order = Depth;
+        view.Features = null;
+        view.Keywords = null;
+        view.DependsOn.Clear();
+
+        // A two layer target is the headset's eyes, each layer drawn from its eye with the camera as the head
+        if (stereo)
         {
-            World = world,
-            ViewId = ViewId,
-            LayerCount = 1,
-            Target = framebuffer,
-            CullingMask = (uint)CullingMask.Mask & ~Debug.GizmoLayerMask,
-            ClearColor = Background == CameraBackground.Skybox ? GameObject.Scene.Environment.SkyColor.ToFloat4() : BackgroundColor.ToFloat4(),
-            Sky = Background == CameraBackground.Skybox && GameObject.Scene.Rendering.HasSky,
-            Overlay = Background == CameraBackground.None,
-            Near = NearClipPlane,
-            FarDistance = FarClipPlane,
-            Kind = kind,
-            Viewport = ClampViewport(ViewportRect),
-            RenderScale = Maths.Clamp(RenderScale, 0.1f, 2.0f),
-            Ldr = !HDR,
-            Order = Depth,
-            Cut = _cut,
-        };
-        view.Layers[0] = new ViewLayer
+            view.Camera = new ViewCamera([EyeLayer(XR.GetEyeView(XR.EyeDrawnInLayer(this, 0))), EyeLayer(XR.GetEyeView(XR.EyeDrawnInLayer(this, 1)))], NearClipPlane, FarClipPlane);
+            return view;
+        }
+        view.Camera = new ViewCamera(new ViewLayer
         {
             View = Float4x4.CreateLookTo(Float3.Zero, Transform.Forward, Transform.Up),
             Projection = GraphiteProjection(),
             Position = new Double3(position.X, position.Y, position.Z),
-        };
-
-        // A two layer target is the headset's eyes, each layer drawn from its eye with the camera as the head
-        if (framebuffer.ViewCount == 2)
-        {
-            view.ViewId = _stereoViewId == 0 ? _stereoViewId = Graphics.NewViewId() : _stereoViewId;
-            view.LayerCount = 2;
-            view.Viewport = new Float4(0, 0, 1, 1);
-            for (int layer = 0; layer < 2; layer++)
-                view.Layers[layer] = EyeLayer(XR.GetEyeView(XR.EyeDrawnInLayer(this, layer)));
-        }
+        }, NearClipPlane, FarClipPlane);
         return view;
+    }
+
+    private RenderView NextView(RenderWorld world)
+    {
+        if (_viewsFrame != Graphics.FrameIndex)
+        {
+            _viewsFrame = Graphics.FrameIndex;
+            _viewsUsed = 0;
+        }
+        if (_viewsUsed == _views.Count) _views.Add(Graphics.Renderer!.CreateView(world, Name));
+        return _views[_viewsUsed++];
     }
 
     private ViewLayer EyeLayer(in XRView eye)
@@ -478,7 +507,7 @@ public class Camera : Component
     }
 
     // The features of the blended volumes and the anti aliasing, then the render's own
-    private FeatureSet BuildFeatures(IReadOnlyList<RenderFeature>? extra)
+    private ExtensionSet<RenderFeature> BuildFeatures(IReadOnlyList<RenderFeature>? extra)
     {
         Renderer renderer = Graphics.Renderer!;
         _activeFeatures.Clear();

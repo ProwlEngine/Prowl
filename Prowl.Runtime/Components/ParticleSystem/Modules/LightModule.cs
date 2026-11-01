@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.Echo;
 using Prowl.Graphite.Rendering;
 using Prowl.Vector;
 
@@ -15,7 +16,7 @@ namespace Prowl.Runtime.ParticleSystem.Modules;
 /// Keep <see cref="MaxLights"/> tight, every light costs shading time on every surface it reaches.
 /// </summary>
 [Serializable]
-public class LightModule : ParticleSystemModule
+public class LightModule : ParticleSystemModule, ISerializationCallbackReceiver
 {
     [Range(0f, 1f), Tooltip("Share of particles that get a light.")]
     public float Ratio = 1f;
@@ -28,8 +29,11 @@ public class LightModule : ParticleSystemModule
 
     public Color Color = Color.White;
 
-    [Tooltip("Sampled over each particle's life.")]
-    public MinMaxCurve Intensity = new(new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f)));
+    [Tooltip("Candela, sampled over each particle's life.")]
+    public MinMaxCurve Intensity = new(new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f)), 1000f);
+
+    // 1 once saved with physical units, 0 for modules saved before
+    [SerializeField, HideInInspector] private int units;
 
     [Tooltip("World units, sampled over each particle's life.")]
     public MinMaxCurve Range = new(2f);
@@ -39,6 +43,19 @@ public class LightModule : ParticleSystemModule
 
     [Tooltip("Scale the intensity by the particle's alpha.")]
     public bool AlphaAffectsIntensity = true;
+
+    void ISerializationCallbackReceiver.OnBeforeSerialize() => units = 1;
+
+    // A module saved before its units were physical keeps its look, see LegacyLightUnits
+    void ISerializationCallbackReceiver.OnAfterDeserialize()
+    {
+        if (units != 0) return;
+        Intensity.ConstantValue *= Rendering.LegacyLightUnits.Light;
+        Intensity.MinValue *= Rendering.LegacyLightUnits.Light;
+        Intensity.MaxValue *= Rendering.LegacyLightUnits.Light;
+        Intensity.CurveMultiplier *= Rendering.LegacyLightUnits.Light;
+        units = 1;
+    }
 
     // One light per slot, kept while the slot is in use so a moving light is updated rather than added again
     [NonSerialized] private LightHandle[] _lights = [];

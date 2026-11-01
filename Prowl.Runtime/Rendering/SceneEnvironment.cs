@@ -56,7 +56,9 @@ public sealed class SceneEnvironment
     public struct AmbientSettings
     {
         /// <summary>Uniform lights every surface with Color, Hemisphere blends GroundColor up to SkyColor, Sky takes the sky's own light.</summary>
-        public AmbientMode Mode = AmbientMode.Uniform;
+        public AmbientMode Mode = AmbientMode.Sky;
+
+        /// <summary>Nits the colours are scaled to for Uniform and Hemisphere, a multiplier of the sky's own light for Sky.</summary>
         public float Intensity = 1f;
         public Color Color = new(0.43f, 0.55f, 0.65f, 1f);
         public Color SkyColor = new(0.3f, 0.3f, 0.4f, 1f);
@@ -69,6 +71,9 @@ public sealed class SceneEnvironment
     {
         public FogMode Mode = FogMode.ExponentialSquared;
         public Color Color = new(0.5f, 0.5f, 0.5f, 1f);
+
+        /// <summary>Nits the colour is scaled to.</summary>
+        public float Intensity = 10000f;
         public float Density = 0.01f;
 
         /// <summary>Where linear fog starts and where it is full.</summary>
@@ -146,7 +151,7 @@ public sealed class SceneEnvironment
         env.Fog = new FogDesc
         {
             Mode = (Graphite.Rendering.FogMode)Fog.Mode,
-            Color = Fog.Color.ToFloat4(),
+            Color = new Float4(Fog.Color.R * Fog.Intensity, Fog.Color.G * Fog.Intensity, Fog.Color.B * Fog.Intensity, Fog.Color.A),
             Density = Fog.Density,
             Start = Fog.Start,
             End = Fog.End,
@@ -155,9 +160,19 @@ public sealed class SceneEnvironment
         env.SkyColor = SkyColor.ToFloat4();
         env.Sky = SkyMaterial.IsValid() ? SkyMaterial.GpuMaterial : null;
         env.SkyCapture = (Graphite.Rendering.SkyCaptureMode)SkyCapture.Mode;
-        env.SkyProbeResolution = BitOperations.RoundUpToPowerOf2((uint)Math.Clamp(SkyCapture.Resolution, 16, 2048));
+        env.SkyProbeResolution = BitOperations.RoundUpToPowerOf2((uint)Math.Clamp(Math.Min(SkyCapture.Resolution, QualitySettings.Active.MaxProbeResolution), 16, 2048));
         env.SkyCaptureInterval = Math.Max(SkyCapture.Interval, 1);
     }
 
     private static Float3 Rgb(Color c) => new(c.R, c.G, c.B);
+
+    /// <summary>
+    /// Carries a scene saved before light was physical onto nits, see <see cref="LegacyLightUnits"/>: its uniform or
+    /// hemisphere ambient and its fog colour. Sky ambient follows the sky, which follows the sun.
+    /// </summary>
+    internal void AdoptPhysicalUnits()
+    {
+        if (Ambient.Mode != AmbientMode.Sky) Ambient.Intensity *= LegacyLightUnits.Luminance;
+        Fog.Intensity = LegacyLightUnits.Luminance;
+    }
 }

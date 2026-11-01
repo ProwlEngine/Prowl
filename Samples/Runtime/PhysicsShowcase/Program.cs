@@ -82,8 +82,7 @@ public sealed class PhysicsShowcaseGame : StationGame
         var sun = new GameObject("Sun");
         Light light = sun.AddComponent<Light>();
         light.Type = LightType.Directional;
-        light.ShadowDistance = 70f;
-        light.Intensity = 0.6f;
+        light.Intensity = 100000f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         Add(sun);
 
@@ -425,7 +424,7 @@ public sealed class PhysicsShowcaseGame : StationGame
         _bowlCenter = c;
 
         Mesh bowl = BowlMesh(8f, 3.5f, 40);
-        GameObject go = Model("Bowl", bowl, Lit(Color.White, 0f, 0.8f).With("_MainTex", Load<Texture2D>("Textures/Bowl Grid")).Tiled(6f, 6f), c + new Float3(0f, 0.01f, 0f));
+        GameObject go = Model("Bowl", bowl, Lit(Color.White, 0f, 0.8f).With("base_color_map", Load<Texture2D>("Textures/Bowl Grid")).Tiled(6f, 6f), c + new Float3(0f, 0.01f, 0f));
         go.AddComponent<MeshCollider>().Mesh = bowl;
         Add(go);
 
@@ -742,7 +741,7 @@ public sealed class PhysicsShowcaseGame : StationGame
         _queries.Zone = c + new Float3(7f, 1f, 0f);
         Add(probes);
 
-        Add(Model("Turret", Mesh.CreateCylinder(0.35f, 1f, 16), Lit(Orange).Emissive(Orange, 2f), c + new Float3(-7f, 0.5f, 0f)));
+        Add(Model("Turret", Mesh.CreateCylinder(0.35f, 1f, 16), Lit(Orange).Emissive(Orange, 40000f), c + new Float3(-7f, 0.5f, 0f)));
         for (int i = 0; i < 7; i++)
         {
             float angle = i * MathF.PI * 2f / 7f;
@@ -806,7 +805,7 @@ public sealed class PhysicsShowcaseGame : StationGame
         volume.Size = new Float3(2f, 1.2f, 4f);
         pit.AddComponent<Recycler>().Target = () => _releasePoint + new Float3(0f, 0f, Range(-0.8f, 0.8f));
         Add(pit);
-        Add(Model("Pit", Plane(2f, 4f), Lit(new Color(0.02f, 0.02f, 0.03f, 1f)).Emissive(Orange, 1.5f), pit.Transform.Position - new Float3(0f, 0.59f, 0f)));
+        Add(Model("Pit", Plane(2f, 4f), Lit(new Color(0.02f, 0.02f, 0.03f, 1f)).Emissive(Orange, 30000f), pit.Transform.Position - new Float3(0f, 0.59f, 0f)));
         Static("Backstop", new Float3(0.3f, 1.5f, 4f), pit.Transform.Position + new Float3(direction * 1.3f, 0.15f, 0f));
 
         for (int i = 0; i < 6; i++) ReleaseBall();
@@ -880,7 +879,7 @@ public sealed class ImpactFlash : Component
     {
         if (_material == null || _glow <= 0f) return;
         _glow = MathF.Max(0f, _glow - Time.DeltaTime * 2.5f);
-        _material.SetFloat("_EmissionIntensity", _glow * 6f);
+        _material.SetFloat("emission_luminance", _glow * 120000f);
     }
 }
 
@@ -901,7 +900,7 @@ public sealed class ContactCounter : Component
 
     public override void Update()
     {
-        if (_material != null) _material.SetFloat("_EmissionIntensity", MathF.Min(Touching * 0.05f, 1f));
+        if (_material != null) _material.SetFloat("emission_luminance", MathF.Min(Touching * 1000f, 20000f));
     }
 }
 
@@ -1039,9 +1038,9 @@ public sealed class TriggerGate : Component
 
     public override void Update()
     {
-        float target = Inside > 0 ? 4f : 0.2f;
+        float target = Inside > 0 ? 80000f : 4000f;
         _glow += (target - _glow) * MathF.Min(1f, Time.DeltaTime * 12f);
-        Glow.SetFloat("_EmissionIntensity", _glow);
+        Glow.SetFloat("emission_luminance", _glow);
     }
 }
 

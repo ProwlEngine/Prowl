@@ -38,7 +38,7 @@ public sealed class VRBasicsGame : Game
         var sun = new GameObject("Sun");
         Light sunLight = sun.AddComponent<Light>();
         sunLight.Type = LightType.Directional;
-        sunLight.Intensity = 0.6f;
+        sunLight.Intensity = 100000f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         scene.Add(sun);
 
@@ -99,7 +99,7 @@ public sealed class VRBasicsGame : Game
     public static Material Lit(Color color)
     {
         var material = new Material(Shader.LoadDefault(DefaultShader.Lit));
-        material.SetColor("_MainColor", color);
+        material.SetColor("base_color", color);
         return material;
     }
 }
@@ -149,7 +149,7 @@ public sealed class SimpleHand : Component
     public override void Update()
     {
         float trigger = XRInput.GetTrigger(Hand);
-        _material.SetColor("_MainColor", new Color(0.5f + trigger * 0.5f, 0.35f + trigger * 0.4f, 0.25f, 1f));
+        _material.SetColor("base_color", new Color(0.5f + trigger * 0.5f, 0.35f + trigger * 0.4f, 0.25f, 1f));
 
         // Without a running headset the grip can never be seen letting go, so the block is let go here.
         if (!XR.IsRunning || !XRInput.IsTracked(Hand)) Release();

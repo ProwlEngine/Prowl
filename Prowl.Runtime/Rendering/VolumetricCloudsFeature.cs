@@ -94,7 +94,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
     /// <summary>The settings copied at the next Extract. Host thread.</summary>
     internal readonly CloudSettings Pending = new();
 
-    public VolumetricCloudsFeature(Renderer renderer)
+    public VolumetricCloudsFeature(Renderer renderer) : base(RenderSlot.Atmosphere, runsOn: ViewKinds.Cameras | ViewKinds.ReflectionProbe)
     {
         BlendStateDescription two = new(default, BlendAttachmentDescription.OverrideBlend, BlendAttachmentDescription.OverrideBlend);
         _coverage = Program(renderer, "CLOUD_COVERAGE", "Coverage");
@@ -119,9 +119,6 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
 
     private static FullscreenProgram Program(Renderer renderer, string define, string name, BlendStateDescription? blend = null)
         => renderer.CreateFullscreenProgram(Clouds, $"Prowl/VolumetricClouds{name}", source: false, blend, variant: $"#define {define} 1\n");
-
-    public override RenderSlot Slot => RenderSlot.Atmosphere;
-    public override ViewKinds RunsOn => ViewKinds.Cameras | ViewKinds.ReflectionProbe;
 
     /// <summary>Copies a component's settings, the world's sun and the scene's sky light into <see cref="Pending"/>. Main thread.</summary>
     internal bool Capture(VolumetricClouds clouds, RenderWorld world, Scene scene)

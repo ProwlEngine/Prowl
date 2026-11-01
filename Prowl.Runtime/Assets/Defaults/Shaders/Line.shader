@@ -64,7 +64,7 @@ Shader "Default/Line"
             void main()
             {
                 vec4 texel = texture(_MainTex, vUV);
-                vec3 color = ApplyFog(texel.rgb * vColor.rgb, vRelativePos);
+                vec3 color = Graphite_ApplyFog(texel.rgb * vColor.rgb, vRelativePos);
                 fragColor = vec4(color, texel.a * vColor.a);
             }
         }

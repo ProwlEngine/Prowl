@@ -6,6 +6,7 @@
 // value from last frame. FOG_MARCH finds where each pixel's ray enters and leaves every fog volume, integrates their
 // density per pixel against the cells' light at a reduced resolution, and the default composites it over the colour
 // with a depth aware upsample.
+// Light is pre-exposed from the cells on, so the half float targets hold it in the range the colour does.
 // Positions are camera relative. The host's fog volumes are relative to the view's first layer.
 
 #include "Graphite/Internal/PostView.glsl"
@@ -115,11 +116,11 @@ float Fog_LinearDepth(Graphite_ViewData view, vec2 uv)
 // near plane along the shared view direction under orthographic
 void Fog_Ray(Graphite_ViewData view, vec2 uv, out vec3 origin, out vec3 dir)
 {
-    vec3 near = Graphite_PostRelativePosition(view, uv, 1.0);
+    vec3 near = Graphite_RelativeFromDepth(view, uv, 1.0);
     if (Graphite_PostOrthographic(view))
     {
         origin = near;
-        dir = normalize(Graphite_PostRelativePosition(view, uv, 0.5) - near);
+        dir = normalize(Graphite_RelativeFromDepth(view, uv, 0.5) - near);
         return;
     }
     origin = vec3(0.0);
@@ -175,16 +176,16 @@ vec3 Fog_SampleScattering(vec3 p, vec3 viewDir, float radius2)
     }
 
     Graphite_LightIterator it = Graphite_BeginLights(p);
-    LightSample L;
+    Graphite_LightSample L;
     while (Graphite_NextLight(it, L))
     {
-        bool spot = L.Type == GRAPHITE_LIGHT_SPOT;
-        if ((L.Type != GRAPHITE_LIGHT_POINT && !spot) || (spot ? _FogLightTypes.z : _FogLightTypes.y) < 0.5)
+        bool spot = L.type == GRAPHITE_LIGHT_SPOT;
+        if ((L.type != GRAPHITE_LIGHT_POINT && !spot) || (spot ? _FogLightTypes.z : _FogLightTypes.y) < 0.5)
             continue;
-        vec3 d = L.Position - p;
+        vec3 d = L.position - p;
         float dist2 = dot(d, d);
         vec3 toLight = d * inversesqrt(max(dist2, 1e-8));
-        float attenuation = Graphite_Window(dist2, L.Range) / max(dist2 + radius2, 0.01);
+        float attenuation = Graphite_Window(dist2, L.range) / max(dist2 + radius2, 0.01);
         if (spot)
         {
             vec2 spotCos = Graphite_LightSpotCos(L);
@@ -243,7 +244,7 @@ bool Fog_Reproject(Graphite_ViewData view, vec3 p, vec3 origin, vec3 viewDir, ou
     return all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0))) && slice <= _FroxelGrid.z;
 }
 
-// One cell: the light it scatters toward the eye per unit of fog, ambient included as a stand in for sky bounce
+// One cell: the light it scatters toward the eye per unit of fog, pre-exposed, ambient included as a stand in for sky bounce
 void main()
 {
     Graphite_ViewData view = Graphite_PostView();
@@ -283,7 +284,7 @@ void main()
     Fog_Ray(view, (cell + 0.5 + offset) / _FroxelGrid.xy, sampleOrigin, sampleDir);
     vec3 p = sampleOrigin + sampleDir * Fog_SliceDistance(slice + noise);
     vec3 ambient = _FogAmbientColor.rgb * _FogAmbientIntensity;
-    vec4 current = vec4(Fog_SampleScattering(p, sampleDir, radius * radius) + ambient, 0.0);
+    vec4 current = vec4((Fog_SampleScattering(p, sampleDir, radius * radius) + ambient) * view.exposure.x, 0.0);
 
     vec2 previousUV;
     float previousSlice;
@@ -292,7 +293,7 @@ void main()
         outColor = current;
         return;
     }
-    outColor = mix(current, Fog_History(previousUV, previousSlice), _FogTemporalBlend);
+    outColor = mix(current, Fog_History(previousUV, previousSlice) * Graphite_PostExposureRatio(view), _FogTemporalBlend);
 }
 
 #elif defined(FOG_MARCH)
@@ -395,7 +396,7 @@ void main()
     Fog_Ray(view, uv, origin, viewDir);
 
     // Distance along the ray to the geometry, not its view depth, so off axis pixels stop on the surface
-    float sceneDist = depth <= 1e-7 ? _FogMaxDistance : distance(Graphite_PostRelativePosition(view, uv, depth), origin);
+    float sceneDist = depth <= 1e-7 ? _FogMaxDistance : distance(Graphite_RelativeFromDepth(view, uv, depth), origin);
     float end = min(sceneDist, _FogMaxDistance);
 
     // Where the ray meets each volume. The host's volumes are relative to the first layer's camera

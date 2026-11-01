@@ -984,7 +984,7 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
             if (_shader == null)
             {
                 ShaderDefinition definition = ShaderParser.Parse(EmbeddedResources.ReadAllText("Assets/Defaults/Shaders/XREyes.shader"));
-                definition.Create(Graphics.Device!, Graphics.Compiler, new Variant(), CompileMode.All);
+                definition.Create(Graphics.Device!, Graphics.ShaderCompiler);
                 _shader = definition.Passes![0];
             }
 
@@ -1026,7 +1026,7 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
             if (_shader == null)
             {
                 ShaderDefinition definition = ShaderParser.Parse(EmbeddedResources.ReadAllText("Assets/Defaults/Shaders/XRMirror.shader"));
-                definition.Create(Graphics.Device!, Graphics.Compiler, new Variant(), CompileMode.All);
+                definition.Create(Graphics.Device!, Graphics.ShaderCompiler);
                 _shader = definition.Passes![0];
             }
 
