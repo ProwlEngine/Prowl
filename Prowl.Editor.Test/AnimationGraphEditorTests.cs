@@ -42,6 +42,21 @@ public class AnimationGraphEditorTests
     private static List<GraphNodeRecord> Copy(AnimationGraphView view, GraphNodeRecord[] records, Float2 offset)
         => view.Animation!.Paste(view.Animation.Capture(records), offset, view.Scope);
 
+    // A node is named after what it plays, so a clip node reads as its clip.
+    [Fact]
+    public void ANodeIsTitledByItsName()
+    {
+        var graph = new AnimationGraph();
+        GraphNodeRecord clip = graph.AddNode(AnimationNodeIds.Clip);
+        clip.Properties["Clip"] = NodeValue.FromClip(new AnimationClip { Name = "Breathing" });
+        GraphNodeRecord empty = graph.AddNode(AnimationNodeIds.Clip);
+
+        AnimationGraphView view = ViewOver(graph);
+
+        Assert.Equal("Breathing", view.Nodes.First(n => n.Id == clip.Id).Title);
+        Assert.Equal(AnimationNodeRegistry.Get(AnimationNodeIds.Clip)!.DisplayName, view.Nodes.First(n => n.Id == empty.Id).Title);
+    }
+
     // ---- pins -------------------------------------------------------------------------------
 
     [Fact]

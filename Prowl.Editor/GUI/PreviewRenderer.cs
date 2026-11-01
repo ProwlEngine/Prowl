@@ -25,6 +25,7 @@ public class PreviewRenderer : IDisposable
     private Scene _scene;
     private GameObject _cameraGo;
     private Camera _camera;
+    private ulong _renderedFrame = ulong.MaxValue;
     private GameObject _lightGo;
     private GameObject? _subjectGo;
     private RenderTexture? _rt;
@@ -285,8 +286,13 @@ public class PreviewRenderer : IDisposable
     public void DrawPreview(Paper paper, string id, float width, float height,
         Action<Canvas, Rect>? overlay = null, Action<Float2>? onClick = null)
     {
-        Resize((int)width, (int)height);
-        Render();
+        // Inspectors showing the same asset share this preview, and its camera may only render once a frame
+        if (_renderedFrame != Graphics.FrameIndex)
+        {
+            _renderedFrame = Graphics.FrameIndex;
+            Resize((int)width, (int)height);
+            Render();
+        }
 
         if (_rt.IsNotValid() || _rt.MainTexture.IsNotValid()) return;
         float round = Prowl.OrigamiUI.Origami.Current.Metrics.ContainerRounding;

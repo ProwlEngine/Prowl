@@ -322,7 +322,7 @@ internal sealed class AnimatorRagdoll
             part.ModelAim.Push(model.position, model.rotation, dt);
         }
 
-        UpdateSelfCollisions();
+        UpdateSelfCollisions(driven: muscle > 0f || pin > 0f);
         ComputeLoads(dt, _physics.Gravity);
 
         // Pinned by the hips alone the body hangs from them, so the muscles and hips supply the motion's load.
@@ -333,7 +333,7 @@ internal sealed class AnimatorRagdoll
         {
             ref Part part = ref _parts[i];
             if (!IsLive(part.Body)) continue;
-            part.Body.SetActive(true);
+            if (muscle > 0f || pin > 0f) part.Body.SetActive(true);
 
             if (part.Parent >= 0 && IsLive(_parts[part.Parent].Body)) Flex(world, ref part, ref _parts[part.Parent], muscle, hanging, dt, substep);
             bool pinned = part.Parent < 0 || pinning == RagdollPinning.All;
@@ -519,8 +519,9 @@ internal sealed class AnimatorRagdoll
         return [.. beyond];
     }
 
-    // Two parts collide only while they are apart both in the animation and in the simulation.
-    private void UpdateSelfCollisions()
+    // Two parts start colliding once they are apart, and while driven only if the animation keeps them apart too, or the
+    // springs would pull them into each other. Touching never stops them colliding, since contacts always sink in a little
+    private void UpdateSelfCollisions(bool driven)
     {
         List<(Rigidbody3D, Rigidbody3D)>? enable = null, ignore = null;
         for (int a = 0; a < _parts.Length; a++)
@@ -532,12 +533,14 @@ internal sealed class AnimatorRagdoll
                 if (!IsLive(first.Body) || !IsLive(second.Body) || first.Parent == b || second.Parent == a) continue;
 
                 RigidBody one = first.Body.Native!, two = second.Body.Native!;
-                bool apart = !Overlaps(one, two, first.Aim.Rotation.ToJitter(), second.Aim.Rotation.ToJitter(), first.Aim.Position.ToJitter(), second.Aim.Position.ToJitter())
-                    && !Overlaps(one, two, one.Orientation, two.Orientation, one.Position, two.Position);
-                if (_pairCollides[a, b] == apart) continue;
+                bool aimedInside = driven && Overlaps(one, two, first.Aim.Rotation.ToJitter(), second.Aim.Rotation.ToJitter(), first.Aim.Position.ToJitter(), second.Aim.Position.ToJitter());
+                bool collides = _pairCollides[a, b]
+                    ? !aimedInside
+                    : !aimedInside && !Overlaps(one, two, one.Orientation, two.Orientation, one.Position, two.Position);
+                if (_pairCollides[a, b] == collides) continue;
 
-                _pairCollides[a, b] = apart;
-                (apart ? enable ??= [] : ignore ??= []).Add((first.Body, second.Body));
+                _pairCollides[a, b] = collides;
+                (collides ? enable ??= [] : ignore ??= []).Add((first.Body, second.Body));
             }
         }
         if (enable != null) _physics!.EnableCollisionsBetween(enable);
