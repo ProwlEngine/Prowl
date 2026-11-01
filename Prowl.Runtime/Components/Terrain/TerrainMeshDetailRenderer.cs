@@ -110,7 +110,7 @@ internal class TerrainMeshDetailRenderer
                     var item = new DrawItem
                     {
                         Transform = build.Transforms[i],
-                        Custom0 = build.Tints[i],
+                        Color = build.Tints[i],
                         Custom1 = build.Wind[i],
                         LayerMask = LayerMask,
                         ObjectId = ObjectId,
@@ -333,7 +333,8 @@ internal class TerrainMeshDetailRenderer
                     * Float4x4.FromAxisAngle(new Float3(0, 1, 0), rotY)
                     * Float4x4.CreateScale(new Float3(sw, sh, sw)));
 
-                Color tint = Color.Lerp(proto.HealthyColor, proto.DryColor, 1f - noise);
+                // Detail colours are sRGB, as the grass shader reads them
+                Color tint = Color.GammaToLinear(Color.Lerp(proto.HealthyColor, proto.DryColor, 1f - noise));
                 tints.Add(new Float4(tint.R, tint.G, tint.B, tint.A));
                 wind.Add(new Float4(windPhase, proto.BendFactor, 0, 0));
             }

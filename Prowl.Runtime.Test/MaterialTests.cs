@@ -20,13 +20,13 @@ public class MaterialTests
     {
         Material material = Standard();
 
-        Assert.Equal(0f, material.GetFloat("_Metallic"));
-        Assert.Equal(0.5f, material.GetFloat("_ScatteringDistortion"));
-        Assert.Equal(16, material.GetInt("_ParallaxSteps"));
-        Assert.Equal(Color.White, material.GetColor("_MainColor"));
-        Assert.Equal(new Float4(1, 1, 0, 0), material.GetTextureScaleOffset("_MainTex"));
-        Assert.False(material.IsOverridden("_Metallic"));
-        Assert.True(material.HasProperty("_Metallic"));
+        Assert.Equal(0f, material.GetFloat("base_metalness"));
+        Assert.Equal(1.5f, material.GetFloat("specular_ior"));
+        Assert.Equal(0, material.GetInt("geometry_thin_walled"));
+        Assert.Equal(new Color(0.8f, 0.8f, 0.8f, 1f), material.GetColor("base_color"));
+        Assert.Equal(new Float4(1, 1, 0, 0), material.GetTextureScaleOffset("base_color_map"));
+        Assert.False(material.IsOverridden("base_metalness"));
+        Assert.True(material.HasProperty("base_metalness"));
         Assert.False(material.HasProperty("_NotAProperty"));
     }
 
@@ -141,7 +141,8 @@ public class MaterialTests
     {
         Material source = new(Shader.LoadDefault(DefaultShader.Unlit));
         source.SetFloat("_Metallic", 0.4f);
-        source.SetColor("_MainColor", new Color(0.1f, 0.2f, 0.3f, 1f));
+        source.SetColor("base_color", new Color(0.1f, 0.2f, 0.3f, 1f));
+        source.SetFloat("emission_luminance", 2f);
         source.SetKeyword("SOME_FEATURE", true);
         source.SetKeyword("MODE", "COPY");
         source.RenderQueue = 2200;
@@ -152,7 +153,7 @@ public class MaterialTests
 
         Assert.Same(Shader.LoadDefault(DefaultShader.Unlit), loaded.Shader);
         Assert.Equal(0.4f, loaded.GetFloat("_Metallic"));
-        Assert.Equal(new Color(0.1f, 0.2f, 0.3f, 1f), loaded.GetColor("_MainColor"));
+        Assert.Equal(new Color(0.1f, 0.2f, 0.3f, 1f), loaded.GetColor("base_color"));
         Assert.True(loaded.IsKeywordEnabled("SOME_FEATURE"));
         Assert.Equal("COPY", loaded.GetKeyword("MODE"));
         Assert.Equal(2200, loaded.RenderQueue);
@@ -166,13 +167,13 @@ public class MaterialTests
     public void LoadingAMaterialWithoutOverrides_TreatsEveryStoredValueAsSet()
     {
         Material material = Standard();
-        material._properties.SetFloat("_Roughness", 0.2f);
+        material._properties.SetFloat("specular_roughness", 0.2f);
         material._overrides.Clear();
 
         material.OnAfterDeserialize();
 
-        Assert.True(material.IsOverridden("_Roughness"));
-        Assert.Equal(0.2f, material.GetFloat("_Roughness"));
+        Assert.True(material.IsOverridden("specular_roughness"));
+        Assert.Equal(0.2f, material.GetFloat("specular_roughness"));
     }
 
     [Fact]
@@ -201,21 +202,6 @@ public class MaterialTests
         parent.SetFloat("_Roughness", 0.8f);
         Assert.Equal(0.8f, variant.GetFloat("_Roughness"));
         Assert.Throws<System.InvalidOperationException>(() => parent.Parent = variant);
-    }
-
-    [Theory]
-    [InlineData("StandardCutoutDoubleSided", DefaultShader.Lit, SurfaceType.Cutout, SurfaceCull.Off)]
-    [InlineData("StandardTransparent", DefaultShader.Lit, SurfaceType.Transparent, SurfaceCull.Back)]
-    [InlineData("UnlitDoubleSided", DefaultShader.Unlit, SurfaceType.Opaque, SurfaceCull.Off)]
-    public void AMaterialOfAShaderFromBeforeGraphite_LoadsOntoLitOrUnlit(string oldShader, DefaultShader expected, SurfaceType type, SurfaceCull cull)
-    {
-        EchoObject saved = Serializer.Serialize(Standard());
-        saved["_shader"]["$asset"] = new EchoObject(BuiltInAssets.DeterministicGuid($"$Default:Shader/{oldShader}").ToString());
-
-        Material loaded = Serializer.Deserialize<Material>(saved)!;
-
-        Assert.Same(Shader.LoadDefault(expected), loaded.Shader);
-        Assert.Equal(new SurfaceSettings(type, SurfaceBlend.Alpha, cull), loaded.Surface);
     }
 
     [Fact]

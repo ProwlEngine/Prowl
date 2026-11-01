@@ -150,7 +150,7 @@ public class ReflectionProbe : Component, IRenderSync
             _bakedShown = _baked;
             if (_baked != null && Graphics.Renderer != null && _baked.Faces.Length > 0)
             {
-                try { _bakedCube = Graphics.Renderer.CreateReflectionCubemap(new BakedReflectionProbe { Size = _baked.Size, Mips = _baked.Mips, Faces = _baked.Faces }); }
+                try { _bakedCube = Graphics.Renderer.CreateReflectionCubemap(new BakedReflectionProbe { Size = _baked.Size, Mips = _baked.Mips, Faces = _baked.Faces, Exposure = _baked.Exposure }); }
                 catch (Exception e) { Debug.LogError($"Reflection probe '{Name}' could not show its bake: {e.Message}"); }
             }
         }
@@ -171,8 +171,9 @@ public class ReflectionProbe : Component, IRenderSync
             NearClip = NearClip,
             FarClip = FarClip,
             CullingMask = (uint)CullingMask.Mask & ~Debug.GizmoLayerMask,
-            Resolution = (uint)Math.Clamp((int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)Math.Max(Resolution, 16)), 16, 2048),
+            Resolution = (uint)Math.Clamp((int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)Math.Max(Math.Min(Resolution, QualitySettings.Active.MaxProbeResolution), 16)), 16, 2048),
             Cubemap = _bakedCube,
+            CubemapExposure = _baked?.Exposure ?? 1f,
         };
 
         if (!_handle.IsValid || !world.IsAlive(_handle))
@@ -195,7 +196,7 @@ public class ReflectionProbe : Component, IRenderSync
         if (_bakeRequested)
         {
             _bakeRequested = false;
-            world.BakeReflectionProbe(_handle, baked => SetBaked(new BakedCubemap { Size = baked.Size, Mips = baked.Mips, Faces = baked.Faces }));
+            world.BakeReflectionProbe(_handle, baked => SetBaked(new BakedCubemap { Size = baked.Size, Mips = baked.Mips, Faces = baked.Faces, Exposure = baked.Exposure }));
         }
         return true;
     }
@@ -204,7 +205,7 @@ public class ReflectionProbe : Component, IRenderSync
         => a.Position.Equals(b.Position) && a.Rotation == b.Rotation && a.BoxSize == b.BoxSize && a.BlendDistance == b.BlendDistance
         && a.BoxProjection == b.BoxProjection && a.Importance == b.Importance && a.Intensity == b.Intensity && a.Mode == b.Mode
         && a.Refresh == b.Refresh && a.TimeSlicing == b.TimeSlicing && a.NearClip == b.NearClip && a.FarClip == b.FarClip
-        && a.CullingMask == b.CullingMask && a.Resolution == b.Resolution && a.Cubemap == b.Cubemap;
+        && a.CullingMask == b.CullingMask && a.Resolution == b.Resolution && a.Cubemap == b.Cubemap && a.CubemapExposure == b.CubemapExposure;
 
     void IRenderSync.Detach(RenderWorld world) => Remove();
 
@@ -262,6 +263,9 @@ public class ReflectionProbe : Component, IRenderSync
         public int Mips;
         public byte[][] Faces = [];
 
+        /// <summary>The exposure the texels were captured at, so they hold radiance times this.</summary>
+        public float Exposure = 1f;
+
         public void Serialize(ref EchoObject compound, SerializationContext ctx)
         {
             compound.Add("Size", new(Size));
@@ -269,6 +273,7 @@ public class ReflectionProbe : Component, IRenderSync
             EchoObject faces = EchoObject.NewList();
             foreach (byte[] face in Faces) faces.ListAdd(new(face));
             compound.Add("Faces", faces);
+            compound.Add("Exposure", new(Exposure));
         }
 
         public void Deserialize(EchoObject value, SerializationContext ctx)
@@ -279,6 +284,7 @@ public class ReflectionProbe : Component, IRenderSync
             var list = new List<byte[]>(faces.Count);
             for (int i = 0; i < faces.Count; i++) list.Add(faces[i].ByteArrayValue);
             Faces = [.. list];
+            Exposure = value.TryGet("Exposure", out EchoObject? exposure) ? exposure!.FloatValue : 1f;
         }
     }
 }

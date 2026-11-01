@@ -180,7 +180,7 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
     /// <summary>The volumes copied at the next Extract, positions absolute. Host thread.</summary>
     internal readonly List<Volume> PendingVolumes = [];
 
-    public VolumetricFogFeature(Renderer renderer)
+    public VolumetricFogFeature(Renderer renderer) : base(RenderSlot.AfterTransparents)
     {
         _programs = SharedPrograms.Acquire(renderer);
         (_froxel, _march, _composite) = (_programs.Froxel, _programs.March, _programs.Composite);
@@ -193,8 +193,6 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
         _linearClamp = Graphics.GetSampler(clamp);
         _pointClamp = Graphics.GetSampler(clamp with { MinFilter = Graphite.FilterMode.Point, MagFilter = Graphite.FilterMode.Point, MipFilter = Graphite.FilterMode.Point });
     }
-
-    public override RenderSlot Slot => RenderSlot.AfterTransparents;
 
     public override void Extract()
     {

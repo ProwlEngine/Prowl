@@ -83,6 +83,7 @@ public class PreviewRenderer : IDisposable
         _camera.Background = CameraBackground.Skybox;
         _camera.StereoTargetEye = StereoTargetEyeMask.None;
         _camera.Profile = VolumeProfile.CreateCameraDefault("Preview Profile");
+        _camera.Profile.Get<AutoExposure>()!.Enabled.Set(false);
         _scene.Add(_cameraGo);
 
         // Light
@@ -91,7 +92,7 @@ public class PreviewRenderer : IDisposable
         _lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
         Light light = _lightGo.AddComponent<Light>();
         light.Type = LightType.Directional;
-        light.Intensity = 1f;
+        light.Intensity = 100000f;
         light.CastShadows = false;
         _scene.Add(_lightGo);
 

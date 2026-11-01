@@ -131,7 +131,7 @@ public sealed class MotorcycleController : Component
         Front.BrakeTorque = braking ? Brake * _frontBrake * leanShare : 0f;
         Rear.BrakeTorque = braking ? Brake * RearBrakeShare * _rearBrake * leanShare : 0f;
 
-        if (BrakeLights.IsValid()) BrakeLights!.SetFloat("_EmissionIntensity", braking ? 6f : 1f);
+        if (BrakeLights.IsValid()) BrakeLights!.SetFloat("emission_luminance", braking ? 120000f : 20000f);
     }
 
     // The share of the drive the rear tyre can take. Leaned over, the tyre already holds the turn, and its contact

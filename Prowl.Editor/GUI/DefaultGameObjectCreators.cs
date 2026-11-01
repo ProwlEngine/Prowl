@@ -102,7 +102,9 @@ internal static class DefaultGameObjectCreators
     {
         GameObject go = HierarchyPanel.CreateGameObject(name, MenuContext.ActiveGameObject);
         go.Transform.Rotation = Quaternion.FromEuler(euler);
-        go.AddComponent<Light>().Type = type;
+        Light light = go.AddComponent<Light>();
+        light.Type = type;
+        light.ApplyPreset(Light.DefaultPreset(type));
     }
 
     [MenuItem("GameObject/Effects/Fog/Global", priority: 40, Icon = EditorIcons.Cloud)]

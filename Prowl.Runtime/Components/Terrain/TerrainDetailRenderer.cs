@@ -233,9 +233,13 @@ internal class TerrainDetailRenderer
         DetailPrototype proto, Texture2D detailTexture, int protoIdx, Frame frame)
     {
         TerrainComponent.ApplyHeightfield(material, data);
+        material.SetInt("_HasHoles", data.GetHolesTexture().IsValid() ? 1 : 0);
         terrain.ApplyWindZones(material);
 
-        material.SetTexture("_MainTex", proto.Texture);
+        material.SetSurface(new SurfaceSettings(SurfaceType.Cutout, SurfaceBlend.Alpha, SurfaceCull.Off));
+        material.SetTexture("base_color_map", proto.Texture);
+        material.SetTexture("geometry_opacity_map", proto.Texture);
+        material.SetTextureChannel("geometry_opacity_map", 3);
         material.SetFloat("_Billboard", proto.RenderMode == DetailRenderMode.TextureBillboard ? 1f : 0f);
         material.SetFloat("_AlignToNormal", proto.AlignToNormal ? 1f : 0f);
 

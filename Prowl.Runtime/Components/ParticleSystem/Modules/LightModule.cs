@@ -28,8 +28,8 @@ public class LightModule : ParticleSystemModule
 
     public Color Color = Color.White;
 
-    [Tooltip("Sampled over each particle's life.")]
-    public MinMaxCurve Intensity = new(new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f)));
+    [Tooltip("Candela, sampled over each particle's life.")]
+    public MinMaxCurve Intensity = new(new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f)), 1000f);
 
     [Tooltip("World units, sampled over each particle's life.")]
     public MinMaxCurve Range = new(2f);

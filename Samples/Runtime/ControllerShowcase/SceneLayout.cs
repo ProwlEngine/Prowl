@@ -800,7 +800,7 @@ public static class SceneLayout
         scene.Add(Box("Pad Tower", new Float3(3f, 2f, 3f), travel, new Float3(-17f, 1f, 50f), new Quaternion(0f, 0f, 0f, 1f)));
 
         {
-            GameObject go = Pose(Model("Jump Pad", Mesh.CreateCylinder(1.2f, 0.08f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.2f, 1f, 0.5f, 1f), 2f), Float3.Zero), new Float3(-17f, 0.04f, 45f), new Quaternion(0f, 0f, 0f, 1f));
+            GameObject go = Pose(Model("Jump Pad", Mesh.CreateCylinder(1.2f, 0.08f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.2f, 1f, 0.5f, 1f), 40000f), Float3.Zero), new Float3(-17f, 0.04f, 45f), new Quaternion(0f, 0f, 0f, 1f));
             go.AddComponent<JumpPad>().Launch = new Float3(0f, 12f, 6.339746f);
             scene.Add(go);
         }
@@ -808,7 +808,7 @@ public static class SceneLayout
         scene.Add(Box("Pad Tower", new Float3(3f, 4f, 3f), travel, new Float3(-12f, 2f, 50f), new Quaternion(0f, 0f, 0f, 1f)));
 
         {
-            GameObject go = Pose(Model("Jump Pad", Mesh.CreateCylinder(1.2f, 0.08f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.2f, 1f, 0.5f, 1f), 2f), Float3.Zero), new Float3(-12f, 0.04f, 45f), new Quaternion(0f, 0f, 0f, 1f));
+            GameObject go = Pose(Model("Jump Pad", Mesh.CreateCylinder(1.2f, 0.08f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.2f, 1f, 0.5f, 1f), 40000f), Float3.Zero), new Float3(-12f, 0.04f, 45f), new Quaternion(0f, 0f, 0f, 1f));
             go.AddComponent<JumpPad>().Launch = new Float3(0f, 15.491934f, 5.352331f);
             scene.Add(go);
         }
@@ -816,7 +816,7 @@ public static class SceneLayout
         scene.Add(Box("Pad Tower", new Float3(3f, 7f, 3f), travel, new Float3(-7f, 3.5f, 50f), new Quaternion(0f, 0f, 0f, 1f)));
 
         {
-            GameObject go = Pose(Model("Jump Pad", Mesh.CreateCylinder(1.2f, 0.08f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.2f, 1f, 0.5f, 1f), 2f), Float3.Zero), new Float3(-7f, 0.04f, 45f), new Quaternion(0f, 0f, 0f, 1f));
+            GameObject go = Pose(Model("Jump Pad", Mesh.CreateCylinder(1.2f, 0.08f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.2f, 1f, 0.5f, 1f), 40000f), Float3.Zero), new Float3(-7f, 0.04f, 45f), new Quaternion(0f, 0f, 0f, 1f));
             go.AddComponent<JumpPad>().Launch = new Float3(0f, 19.595919f, 4.5241838f);
             scene.Add(go);
         }
@@ -824,13 +824,13 @@ public static class SceneLayout
         scene.Add(Box("Gate Column", new Float3(2.6f, 9f, 2.6f), travel, new Float3(2f, 4.5f, 50f), new Quaternion(0f, 0f, 0f, 1f)));
 
         {
-            GameObject go = Pose(Model("Teleporter", Mesh.CreateCylinder(1f, 0.06f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.55f, 0.2f, 1f, 1f), 2f), Float3.Zero), new Float3(2f, 0.03f, 44f), new Quaternion(0f, 0f, 0f, 1f));
+            GameObject go = Pose(Model("Teleporter", Mesh.CreateCylinder(1f, 0.06f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.55f, 0.2f, 1f, 1f), 40000f), Float3.Zero), new Float3(2f, 0.03f, 44f), new Quaternion(0f, 0f, 0f, 1f));
             gate0 = go.AddComponent<Teleporter>();
             scene.Add(go);
         }
 
         {
-            GameObject go = Pose(Model("Teleporter", Mesh.CreateCylinder(1f, 0.06f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.55f, 0.2f, 1f, 1f), 2f), Float3.Zero), new Float3(2f, 9.03f, 50f), new Quaternion(0f, 0f, 0f, 1f));
+            GameObject go = Pose(Model("Teleporter", Mesh.CreateCylinder(1f, 0.06f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.55f, 0.2f, 1f, 1f), 40000f), Float3.Zero), new Float3(2f, 9.03f, 50f), new Quaternion(0f, 0f, 0f, 1f));
             gate1 = go.AddComponent<Teleporter>();
             scene.Add(go);
         }
@@ -865,19 +865,19 @@ public static class SceneLayout
         scene.Add(Box("Planet Block", new Float3(1.4f, 1.0158253f, 1.4f), edge, new Float3(18.024294f, 22.230988f, 58.45972f), new Quaternion(0.42384297f, 0f, -0.382461f, 0.8210242f)));
 
         {
-            GameObject go = Pose(Model("Jump Pad", Mesh.CreateCylinder(1.2f, 0.08f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(1f, 0.6f, 0.1f, 1f), 2f), Float3.Zero), new Float3(14f, 0.04f, 54f), new Quaternion(0f, 0f, 0f, 1f));
+            GameObject go = Pose(Model("Jump Pad", Mesh.CreateCylinder(1.2f, 0.08f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(1f, 0.6f, 0.1f, 1f), 40000f), Float3.Zero), new Float3(14f, 0.04f, 54f), new Quaternion(0f, 0f, 0f, 1f));
             go.AddComponent<JumpPad>().Launch = new Float3(0f, 23f, 0f);
             scene.Add(go);
         }
 
         {
-            GameObject go = Pose(Model("Teleporter", Mesh.CreateCylinder(1f, 0.06f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.55f, 0.2f, 1f, 1f), 2f), Float3.Zero), new Float3(14f, 26.02f, 54f), new Quaternion(0f, 0f, 0f, 1f));
+            GameObject go = Pose(Model("Teleporter", Mesh.CreateCylinder(1f, 0.06f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.55f, 0.2f, 1f, 1f), 40000f), Float3.Zero), new Float3(14f, 26.02f, 54f), new Quaternion(0f, 0f, 0f, 1f));
             gate2 = go.AddComponent<Teleporter>();
             scene.Add(go);
         }
 
         {
-            GameObject go = Pose(Model("Teleporter", Mesh.CreateCylinder(1f, 0.06f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.55f, 0.2f, 1f, 1f), 2f), Float3.Zero), new Float3(17.5f, 0.03f, 50.5f), new Quaternion(0f, 0f, 0f, 1f));
+            GameObject go = Pose(Model("Teleporter", Mesh.CreateCylinder(1f, 0.06f, 32), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.55f, 0.2f, 1f, 1f), 40000f), Float3.Zero), new Float3(17.5f, 0.03f, 50.5f), new Quaternion(0f, 0f, 0f, 1f));
             gate3 = go.AddComponent<Teleporter>();
             scene.Add(go);
         }
@@ -916,7 +916,7 @@ public static class SceneLayout
         }
 
         {
-            GameObject go = Pose(Model("Zone Edge", Mesh.CreateCube(new Float3(0.1f, 0.02f, 14f)), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.3f, 0.6f, 1f, 1f), 2f), Float3.Zero), new Float3(-26f, 0.01f, 56f), new Quaternion(0f, 0f, 0f, 1f));
+            GameObject go = Pose(Model("Zone Edge", Mesh.CreateCube(new Float3(0.1f, 0.02f, 14f)), Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(new Color(0.3f, 0.6f, 1f, 1f), 40000f), Float3.Zero), new Float3(-26f, 0.01f, 56f), new Quaternion(0f, 0f, 0f, 1f));
             scene.Add(go);
         }
 
@@ -1002,7 +1002,7 @@ public static class SceneLayout
         body.AffectedByGravity = false;
     }
 
-    private static Material GridMaterial(Color tint) => Lit(tint, 0f, 0.85f).With("_MainTex", Texture2D.LoadDefault(DefaultTexture.Grid)).Tiled(2f, 2f);
+    private static Material GridMaterial(Color tint) => Lit(tint, 0f, 0.85f).With("base_color_map", Texture2D.LoadDefault(DefaultTexture.Grid)).Tiled(2f, 2f);
 
     /// <summary>A floor that curves up into a wall, the inside of a quarter cylinder, facing its centre.</summary>
     private static Mesh QuarterPipe(float radius, float width, int segments)

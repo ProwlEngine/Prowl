@@ -67,7 +67,7 @@ internal class TerrainTreeRenderer
                     var item = new DrawItem
                     {
                         Transform = trees.Transforms[i],
-                        Custom0 = trees.Tints[i],
+                        Color = trees.Tints[i],
                         LayerMask = LayerMask,
                         ObjectId = ObjectId,
                         Flags = Flags,

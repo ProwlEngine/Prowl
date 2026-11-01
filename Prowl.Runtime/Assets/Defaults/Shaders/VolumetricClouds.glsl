@@ -147,7 +147,7 @@ float CloudSceneDistance(Graphite_ViewData view, GRAPHITE_SCREEN_TEXTURE depthTe
     float depth = Graphite_Fetch(depthTexture, pixel, 0).r;
     if (depth <= 1e-7)
         return 1e8;
-    return length(Graphite_PostRelativePosition(view, (vec2(pixel) + 0.5) / resolution, depth));
+    return length(Graphite_RelativeFromDepth(view, (vec2(pixel) + 0.5) / resolution, depth));
 }
 
 #if defined(CLOUD_COVERAGE)
@@ -344,7 +344,7 @@ void main()
         return;
 
     vec2 uv = (gl_FragCoord.xy + _CloudJitter) / _CloudLowResolution;
-    vec3 dir = normalize(Graphite_PostRelativePosition(view, uv, 1.0));
+    vec3 dir = normalize(Graphite_RelativeFromDepth(view, uv, 1.0));
     vec3 cam = _CloudCamera + view.treeOffset.xyz;
     float sceneDist = Graphite_Fetch(_CloudSceneDepth, ivec2(gl_FragCoord.xy), 0).r;
     vec3 sun = CloudSun();
@@ -579,7 +579,7 @@ void main()
 
     // Where this pixel's cloud was last frame, found from how far away it is and moved back against the wind
     vec2 uv = gl_FragCoord.xy / _CloudHistoryResolution;
-    vec3 now = normalize(Graphite_PostRelativePosition(view, uv, 1.0)) * distance;
+    vec3 now = normalize(Graphite_RelativeFromDepth(view, uv, 1.0)) * distance;
     vec3 then = now;
     if (cloudy)
         then.xz -= _CloudWindStep;
@@ -639,7 +639,7 @@ void main()
     Graphite_ViewData view = Graphite_PostView();
     vec4 scene = Graphite_SampleSource(vUV);
     float depth = Graphite_Sample(_CameraDepthTexture, vUV).r;
-    float own = depth <= 1e-7 ? 1e8 : length(Graphite_PostRelativePosition(view, vUV, depth));
+    float own = depth <= 1e-7 ? 1e8 : length(Graphite_RelativeFromDepth(view, vUV, depth));
 
     vec2 position = vUV * _CloudLowResolution - 0.5;
     ivec2 first = ivec2(floor(position));
@@ -665,7 +665,7 @@ void main()
     float cloud = sumDistance / total / max(color.a, 1e-4) * 1000.0;
     float visible = color.a > 1e-3 ? clamp((own - cloud) / 50.0, 0.0, 1.0) : 1.0;
     color *= visible;
-    outColor = vec4(scene.rgb * (1.0 - color.a) + color.rgb, scene.a);
+    outColor = vec4(scene.rgb * (1.0 - color.a) + color.rgb * view.exposure.x, scene.a);
 }
 
 #endif

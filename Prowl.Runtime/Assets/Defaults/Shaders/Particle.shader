@@ -8,6 +8,9 @@ Shader "Default/Particle"
 
     // Particles and trail segments are instances of one shared object. Each instance reads its record from
     // ProwlParticleRecords and is turned to face the view here, so every view sees it square on.
+    // Not a Surface shader: the blend mode, lighting and fades are per particle system, read from its header record by
+    // one shared material, soft particles read the scene depth, and frame blending needs more varyings than a surface
+    // vertex carries. Lit particles go through Graphite's PBR closure like every lit surface.
     // Custom1.x is the draw's header record, custom1.y its view's sort order plus one (0 draws in record order).
     // Premultiplied output serves every blend mode from one state: additive writes zero alpha.
     Pass
@@ -244,9 +247,9 @@ Shader "Default/Particle"
         }
         Fragment
         {
-            #include "Graphite/Lighting.glsl"
+            #pragma variant global PBR_TIER FULL LITE
+            #include "Graphite/PBR/Closure.glsl"
             #include "Graphite/SceneDepth.glsl"
-            #include "Prowl/Common.glsl"
 
             layout(location = 0) out vec4 fragColor;
 
@@ -307,7 +310,7 @@ Shader "Default/Particle"
                     {
                         Graphite_ViewData view = Graphite_View();
                         vec3 forward = vec3(view.view[0][2], view.view[1][2], view.view[2][2]);
-                        vec3 scene = Graphite_RelativeFromDepth(vec2(screenUV.x, 1.0 - screenUV.y), sceneDepth);
+                        vec3 scene = Graphite_RelativeFromDepth(view, screenUV, sceneDepth);
                         fade *= clamp(dot(scene - vRelativePos, forward) / vSoftDistance, 0.0, 1.0);
                     }
                 }
@@ -318,8 +321,11 @@ Shader "Default/Particle"
                     vec3 normal = normalize(vNormal);
                     if (dot(normal, viewDir) < 0.0)
                         normal = -normal;
-                    vec3 lighting = CalculateForwardLighting(vRelativePos, normal, viewDir, rgb, 0.0, 1.0, 1.0);
-                    rgb = rgb * CalculateAmbient(normal) + lighting;
+                    PBR_Params p = PBR_DefaultParams(normal, PBR_TangentFor(normal, vec3(1.0, 0.0, 0.0)));
+                    p.baseColor = rgb;
+                    p.specularRoughness = 1.0;
+                    PBR_Closure c = PBR_Prepare(p, vRelativePos, viewDir, normal, 0.0);
+                    rgb = PBR_ShadeLights(c) + Graphite_AmbientBRDF(c, PBR_GatherIndirect(c, vec2(0.0), PBR_FindProbes(c)));
                 }
 
                 float visibility = FogVisibility(vRelativePos);
@@ -340,14 +346,14 @@ Shader "Default/Particle"
                     // Zero alpha texels can still add light, so only drop the ones that add nothing
                     if (coverage < 0.002 && max(premultiplied.r, max(premultiplied.g, premultiplied.b)) < 0.002)
                         discard;
-                    fragColor = vec4(mix(FogColor(vRelativePos) * coverage, premultiplied, visibility), coverage);
+                    fragColor = vec4(mix(Graphite_FogColor(vRelativePos) * coverage, premultiplied, visibility), coverage);
                 }
                 else
                 {
                     alpha *= fade;
                     if (alpha < 0.002)
                         discard;
-                    fragColor = vec4(mix(FogColor(vRelativePos), rgb, visibility) * alpha, alpha);
+                    fragColor = vec4(mix(Graphite_FogColor(vRelativePos), rgb, visibility) * alpha, alpha);
                 }
             }
         }

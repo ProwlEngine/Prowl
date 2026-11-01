@@ -5,12 +5,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 using Prowl.Echo;
 
 namespace Prowl.Editor.Migration.Releases;
 
-internal sealed class Release_1_0 : MigrationRelease
+internal sealed partial class Release_1_0 : MigrationRelease
 {
     public override string Name => "1.0";
 
@@ -20,6 +21,11 @@ internal sealed class Release_1_0 : MigrationRelease
         new("Light, fog light, decal and reflection probe settings saved behind properties", ctx => RenameSettings(ctx, s_lightRenames)),
         new("Texture import types: masks become linear Default textures, sprites need the Sprite type, sizes kept", ctx => ctx.RewriteImporterSettings("TextureImporter", TextureImportTypes)),
         new("Camera tonemapping moved into the camera's base profile as a Tonemapping volume component", CameraTonemappingToProfile),
+        new("Materials of the standard shaders from before Graphite moved onto Lit and Unlit", ctx => ctx.RewriteEcho(echo => ConvertMaterials(echo, AdoptLegacyShader))),
+        new("Lit, Unlit, sky, grass and terrain materials moved onto Graphite's OpenPBR property names", ctx => ctx.RewriteEcho(echo => ConvertMaterials(echo, AdoptOpenPbr))),
+        new("Light, particle light, ambient and fog intensities carried onto physical units", ctx => ctx.RewriteEchoAssets(PhysicalLightUnits)),
+        new("Custom shaders using the old Lit property names are listed for hand edits", WarnOldShaderNames),
+        new("Light spot cones saved as an angle and softness, ranges made automatic, colours kept off colour temperature", LightConesAndTemperature),
     ];
 
     private const string CameraType = "Prowl.Runtime.Camera";
@@ -316,5 +322,268 @@ internal sealed class Release_1_0 : MigrationRelease
             if (field == from) return $"{parts[0]}/{parts[1]}/{to}{rest}";
         }
         return null;
+    }
+
+    private const string LightType = "Prowl.Runtime.Light";
+    private const string ParticleSystemType = "Prowl.Runtime.ParticleSystem.ParticleSystemComponent";
+    private const string SceneType = "Prowl.Runtime.Resources.Scene";
+
+    // LegacyLightUnits: old emission, ambient and fog brightness to nits, and old light intensities to lux, candela or nits
+    private const float LegacyLuminance = 1.2f * 16384f;
+    private const float LegacyLight = 8f * LegacyLuminance;
+
+    // AmbientMode.Sky
+    private const long AmbientSky = 2;
+
+    /// <summary>
+    /// Lights, particle light modules and scene environments saved before light was physical, which carry no units
+    /// marker, have their intensities scaled and get the marker, so the step can run again. Prefab overrides of a
+    /// light's intensity are scaled when the instance's light in the same file was old, and a particle system's light
+    /// module override converts by its own marker.
+    /// </summary>
+    internal static EchoObject? PhysicalLightUnits(EchoObject echo)
+    {
+        bool changed = false;
+        HashSet<string> oldLights = [], systems = [];
+        ForEachCompound(echo, tag =>
+        {
+            switch (TypeName(tag))
+            {
+                case LightType when IsOldUnits(tag, "units"):
+                    Scale(tag, "intensity", LegacyLight);
+                    tag["units"] = new EchoObject(1);
+                    AddIdentities(tag, oldLights);
+                    changed = true;
+                    break;
+                case ParticleSystemType:
+                    AddIdentities(tag, systems);
+                    if (tag.TryGet("Light", out EchoObject? module)) changed |= LightModuleUnits(module!);
+                    break;
+                case SceneType when IsOldUnits(tag, "_lightUnits"):
+                    EnvironmentUnits(tag);
+                    tag["_lightUnits"] = new EchoObject(1);
+                    changed = true;
+                    break;
+            }
+        });
+
+        ForEachCompound(echo, tag =>
+        {
+            if (!tag.TryGet("Path", out EchoObject? path) || path!.TagType != EchoType.String || !tag.TryGet("Value", out EchoObject? value)) return;
+            string[] parts = path.StringValue.Split('/', 3);
+            if (parts.Length != 3) return;
+            if (parts[2] == "intensity" && oldLights.Contains(parts[1]) && Scale(tag, "Value", LegacyLight)) changed = true;
+            else if (parts[2] == "Light" && systems.Contains(parts[1])) changed |= LightModuleUnits(value!);
+        });
+        return changed ? echo : null;
+    }
+
+    private static bool LightModuleUnits(EchoObject module)
+    {
+        if (module.TagType != EchoType.Compound || !IsOldUnits(module, "units")) return false;
+        if (module.TryGet("Intensity", out EchoObject? intensity) && intensity!.TagType == EchoType.Compound)
+        {
+            foreach (string field in new[] { "ConstantValue", "MinValue", "MaxValue", "CurveMultiplier" })
+                Scale(intensity, field, LegacyLight);
+        }
+        module["units"] = new EchoObject(1);
+        return true;
+    }
+
+    // Uniform and hemisphere ambient scaled onto nits, sky ambient follows the sky, fog set to the luminance of its old look
+    private static void EnvironmentUnits(EchoObject scene)
+    {
+        EchoObject environment = Child(scene, "Environment");
+        if (environment.TryGet("Ambient", out EchoObject? ambient) && ambient!.TagType == EchoType.Compound
+            && ambient.TryGet("Mode", out EchoObject? mode) && IsNumber(mode!) && mode.LongValue != AmbientSky)
+            Scale(ambient, "Intensity", LegacyLuminance);
+        Child(environment, "Fog")["Intensity"] = new EchoObject(LegacyLuminance);
+    }
+
+    private static EchoObject Child(EchoObject parent, string name)
+    {
+        if (parent.TryGet(name, out EchoObject? child) && child!.TagType == EchoType.Compound) return child;
+        return parent[name] = EchoObject.NewCompound();
+    }
+
+    // A units marker of 1 says the values are physical already, anything else that they are from before
+    private static bool IsOldUnits(EchoObject tag, string marker)
+        => !tag.TryGet(marker, out EchoObject? units) || !IsNumber(units!) || units.LongValue == 0;
+
+    private static bool IsNumber(EchoObject tag) => tag.TagType is >= EchoType.Byte and <= EchoType.Decimal;
+
+    private static bool Scale(EchoObject tag, string name, float factor)
+    {
+        if (!tag.TryGet(name, out EchoObject? value) || !IsNumber(value!)) return false;
+        tag[name] = new EchoObject(value.FloatValue * factor);
+        return true;
+    }
+
+    private static void AddIdentities(EchoObject component, HashSet<string> ids)
+    {
+        foreach (string id in new[] { "_identifier", "_prefabTemplateIdentity" })
+        {
+            if (component.TryGet(id, out EchoObject? guid) && guid!.TagType == EchoType.String)
+                ids.Add(guid.StringValue);
+        }
+    }
+
+    /// <summary>Visits every compound in a tree, each before its children.</summary>
+    private static void ForEachCompound(EchoObject tag, Action<EchoObject> visit)
+    {
+        if (tag.TagType == EchoType.List)
+        {
+            foreach (EchoObject item in tag.List.ToList())
+                ForEachCompound(item, visit);
+            return;
+        }
+        if (tag.TagType != EchoType.Compound) return;
+        visit(tag);
+        foreach (string child in tag.GetNames().ToList())
+            ForEachCompound(tag[child], visit);
+    }
+
+    // The inner and outer half angles a light had before they were saved
+    private const float OldInnerAngle = 30f, OldOuterAngle = 45f;
+
+    /// <summary>
+    /// Lights saved before colour temperature, which carry no useTemperature, have their inner and outer half angles
+    /// turned into a whole spotAngle and a spotSoftness, their range dropped so it is worked out from the intensity, and
+    /// useTemperature written off so their colour stays as it was. Prefab overrides of the old angles become overrides of
+    /// spotAngle and spotSoftness, worked out against the angles of the light they override. Range overrides are kept,
+    /// unused while the instance leaves overrideRange off.
+    /// </summary>
+    internal static void LightConesAndTemperature(MigrationContext ctx)
+    {
+        Dictionary<string, (float Inner, float Outer)> cones = [];
+        ctx.RewriteEchoAssets(echo => { ForEachCompound(echo, tag => CollectCone(tag, cones)); return null; });
+        ctx.RewriteEchoAssets(echo => ConvertLightCones(echo, cones));
+    }
+
+    // Every light's half angles by its identities, its own identifier winning over the prefab source it came from
+    private static void CollectCone(EchoObject tag, Dictionary<string, (float Inner, float Outer)> cones)
+    {
+        if (TypeName(tag) != LightType) return;
+        (float Inner, float Outer) cone = OldCone(tag);
+        if (tag.TryGet("_identifier", out EchoObject? id) && id!.TagType == EchoType.String) cones[id.StringValue] = cone;
+        if (tag.TryGet("_prefabTemplateIdentity", out EchoObject? source) && source!.TagType == EchoType.String) cones.TryAdd(source.StringValue, cone);
+    }
+
+    // The half angles of a light in either format, the old defaults filling what is missing
+    private static (float Inner, float Outer) OldCone(EchoObject light)
+    {
+        if (!light.Contains("innerAngle") && !light.Contains("outerAngle") && Number(light, "spotAngle") is float angle)
+        {
+            float half = angle * 0.5f;
+            return (half * (1f - Math.Clamp(Number(light, "spotSoftness") ?? 0f, 0f, 1f)), half);
+        }
+        return (Number(light, "innerAngle") ?? OldInnerAngle, Number(light, "outerAngle") ?? OldOuterAngle);
+    }
+
+    private static float? Number(EchoObject tag, string name)
+        => tag.TryGet(name, out EchoObject? value) && IsNumber(value!) ? value.FloatValue : null;
+
+    private static float Softness(float inner, float outer) => outer > 0f ? Math.Clamp(1f - inner / outer, 0f, 1f) : 0f;
+
+    private static EchoObject? ConvertLightCones(EchoObject echo, Dictionary<string, (float Inner, float Outer)> cones)
+    {
+        bool changed = false;
+        ForEachCompound(echo, tag =>
+        {
+            if (TypeName(tag) != LightType || tag.Contains("useTemperature")) return;
+            if (tag.Contains("innerAngle") || tag.Contains("outerAngle"))
+            {
+                (float inner, float outer) = OldCone(tag);
+                tag.Remove("innerAngle");
+                tag.Remove("outerAngle");
+                tag["spotAngle"] = new EchoObject(2f * outer);
+                tag["spotSoftness"] = new EchoObject(Softness(inner, outer));
+            }
+            tag.Remove("range");
+            tag["useTemperature"] = new EchoObject(false);
+            changed = true;
+        });
+        ConvertConeOverrides(echo, cones, ref changed);
+        return changed ? echo : null;
+    }
+
+    // Prefab override lists hold compounds with a Path of {object}/{component}/{member}
+    private static void ConvertConeOverrides(EchoObject tag, Dictionary<string, (float Inner, float Outer)> cones, ref bool changed)
+    {
+        if (tag.TagType == EchoType.List)
+        {
+            changed |= ConvertConeOverrideList(tag, cones);
+            foreach (EchoObject item in tag.List.ToList())
+                ConvertConeOverrides(item, cones, ref changed);
+            return;
+        }
+        if (tag.TagType != EchoType.Compound) return;
+        foreach (string child in tag.GetNames().ToList())
+            ConvertConeOverrides(tag[child], cones, ref changed);
+    }
+
+    private static bool ConvertConeOverrideList(EchoObject list, Dictionary<string, (float Inner, float Outer)> cones)
+    {
+        Dictionary<string, (EchoObject? Inner, EchoObject? Outer)> instances = [];
+        foreach (EchoObject item in list.List)
+        {
+            if (item.TagType != EchoType.Compound || !item.TryGet("Path", out EchoObject? path) || path!.TagType != EchoType.String) continue;
+            string[] parts = path.StringValue.Split('/', 3);
+            if (parts.Length != 3 || !cones.ContainsKey(parts[1]) || parts[2] is not ("innerAngle" or "outerAngle")) continue;
+
+            string prefix = $"{parts[0]}/{parts[1]}";
+            instances.TryGetValue(prefix, out (EchoObject? Inner, EchoObject? Outer) found);
+            instances[prefix] = parts[2] == "innerAngle" ? (item, found.Outer) : (found.Inner, item);
+        }
+
+        foreach ((string prefix, (EchoObject? innerItem, EchoObject? outerItem)) in instances)
+        {
+            (float inner, float outer) = cones[prefix[(prefix.IndexOf('/') + 1)..]];
+            if (innerItem != null && innerItem.TryGet("Value", out EchoObject? innerValue) && IsNumber(innerValue!)) inner = innerValue.FloatValue;
+            if (outerItem != null && outerItem.TryGet("Value", out EchoObject? outerValue) && IsNumber(outerValue!)) outer = outerValue.FloatValue;
+
+            EchoObject softnessItem = innerItem ?? outerItem!.Clone();
+            softnessItem["Path"] = new EchoObject($"{prefix}/spotSoftness");
+            softnessItem["Value"] = new EchoObject(Softness(inner, outer));
+            if (outerItem == null) continue;
+
+            outerItem["Path"] = new EchoObject($"{prefix}/spotAngle");
+            outerItem["Value"] = new EchoObject(2f * outer);
+            if (innerItem == null) list.ListInsert(list.List.IndexOf(outerItem) + 1, softnessItem);
+        }
+        return instances.Count > 0;
+    }
+
+    private static readonly (string Old, string New)[] s_oldShaderNames =
+    [
+        ("_MainColor", "base_color"), ("_MainTex", "base_color_map"), ("_AlphaCutoff", "alpha_cutoff"),
+        ("_Metallic", "base_metalness"), ("_Roughness", "specular_roughness"),
+        ("_SurfaceTex", "specular_roughness_map from G and base_metalness_map from B"), ("_NormalTex", "geometry_normal_map"),
+        ("_NormalScale", "normal_scale"), ("_OcclusionTex", "ambient_occlusion_map"), ("_ParallaxMap", "geometry_height_map from G"),
+        ("_Parallax", "height_scale"), ("_Emission", "emission_luminance"), ("_EmissiveColor", "emission_color"),
+        ("_EmissionIntensity", "emission_luminance"), ("_EmissionTex", "emission_color_map"), ("_Exposure", "intensity on the skies"),
+    ];
+
+    /// <summary>Logs a warning for each .shader and .glsl asset using the old Lit include or property names. Changes no files.</summary>
+    internal static void WarnOldShaderNames(MigrationContext ctx)
+    {
+        foreach (string path in ctx.AssetFiles(".shader", ".glsl"))
+        {
+            List<string> found = OldShaderNames(File.ReadAllText(path));
+            if (found.Count > 0)
+                Runtime.Debug.LogWarning($"{Path.GetRelativePath(ctx.Project.AssetsPath, path)} may read Lit's properties by their names from before OpenPBR, change by hand where it does: {string.Join(", ", found)}");
+        }
+    }
+
+    internal static List<string> OldShaderNames(string source)
+    {
+        List<string> found = [];
+        if (source.Contains("Prowl/Lit.glsl", StringComparison.Ordinal)) found.Add("the Prowl/Lit.glsl include");
+        foreach ((string old, string now) in s_oldShaderNames)
+        {
+            if (Regex.IsMatch(source, $@"(?<![A-Za-z0-9_]){old}(?:_ST|UV)?(?![A-Za-z0-9_])"))
+                found.Add($"{old} is now {now}");
+        }
+        return found;
     }
 }

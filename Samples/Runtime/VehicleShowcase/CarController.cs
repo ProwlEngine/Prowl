@@ -146,7 +146,7 @@ public sealed class CarController : Component
             }
         }
 
-        if (BrakeLights.IsValid()) BrakeLights!.SetFloat("_EmissionIntensity", braking || (handbrake && Controlled) ? 6f : 1f);
+        if (BrakeLights.IsValid()) BrakeLights!.SetFloat("emission_luminance", braking || (handbrake && Controlled) ? 120000f : 20000f);
     }
 
     // The steering angle, in degrees, that turns the car as tightly as its least grippy axle can hold at this speed.

@@ -177,7 +177,7 @@ public class AssetSourceTests : RuntimeTestBase
               "$type": "Prowl.Runtime.Resources.Material, Prowl.Runtime",
               "_shader": { "$asset": "{{StandardShader}}" },
               "_properties": {
-                "_textures": { "_MainTex": { "$asset": "Textures/Paint" } }
+                "_textures": { "base_color_map": { "$asset": "Textures/Paint" } }
               },
               "Name": "Painted"
             }
@@ -188,7 +188,7 @@ public class AssetSourceTests : RuntimeTestBase
         Texture2D paint = AssetDatabase.FindResource<Texture2D>("Textures/Paint")!;
 
         Assert.NotNull(material);
-        Assert.Same(paint, material._properties.GetTexture("_MainTex"));
+        Assert.Same(paint, material._properties.GetTexture("base_color_map"));
     }
 
     [Fact]

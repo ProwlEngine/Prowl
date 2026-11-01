@@ -483,18 +483,21 @@ internal static class ClayBackedImporter
             Clay.LightType.Spot => LightType.Spot,
             _ => LightType.Point,
         };
+        light.UseTemperature = false;
         light.Color = src.Color;
         light.Intensity = src.Intensity;
 
         // Range is optional in glTF and means unlimited when absent, which no real-time light can
-        // do, so an absent one keeps the component's own default.
+        // do, so an absent one stays automatic.
         if (src.Range is { } range) light.Range = range;
 
-        // Both measure cone angles from the axis
+        // glTF measures half angles from the axis
         if (light.Type == LightType.Spot)
         {
-            light.OuterAngle = src.OuterConeAngleRadians * (180f / MathF.PI);
-            light.InnerAngle = src.InnerConeAngleRadians * (180f / MathF.PI);
+            float outer = src.OuterConeAngleRadians * (180f / MathF.PI);
+            float inner = src.InnerConeAngleRadians * (180f / MathF.PI);
+            light.SpotAngle = 2f * outer;
+            light.SpotSoftness = outer > 0f ? Math.Clamp(1f - inner / outer, 0f, 1f) : 0f;
         }
     }
 
@@ -524,52 +527,67 @@ internal static class ClayBackedImporter
         };
 
         // BaseColor is linear (glTF baseColorFactor) and multiplies the decoded albedo, so it crosses over untouched
-        mat.SetColor("_MainColor", src.BaseColor);
+        mat.SetColor("base_color", src.BaseColor);
+
+        // glTF unlit colours are display values, so they glow at the luminance that shows them as they are at EV100 14
+        if (src.Unlit)
+            mat.SetFloat("emission_luminance", Rendering.LegacyLightUnits.Luminance);
 
         // Slots without a texture stay unset: the shader then leaves their input out
-        SetTextureIfAny(mat, "_MainTex", ResolveTexture(src.BaseColorTexture, textureCache));
-        mat.SetInt("_MainTexUV", UVSetFor(src.BaseColorTexture, src));
-
-        ApplyTextureTransform(mat, src);
+        Texture2D? baseColor = ResolveTexture(src.BaseColorTexture, textureCache);
+        SetMap(mat, "base_color_map", baseColor, src.BaseColorTexture, src);
 
         if (src.AlphaMode == MaterialAlphaMode.Mask)
-            mat.SetFloat("_AlphaCutoff", src.AlphaCutoff);
+            mat.SetFloat("alpha_cutoff", src.AlphaCutoff);
 
         if (src.Unlit)
             return mat;
 
-        SetTextureIfAny(mat, "_NormalTex", ResolveTexture(src.NormalTexture, textureCache));
-        mat.SetFloat("_NormalScale", src.NormalScale);
-        mat.SetInt("_NormalTexUV", UVSetFor(src.NormalTexture, src));
+        // Lit takes coverage from geometry_opacity, which glTF keeps in the base colour's alpha
+        if (src.AlphaMode != MaterialAlphaMode.Opaque)
+        {
+            mat.SetFloat("geometry_opacity", src.BaseColor.A);
+            SetMap(mat, "geometry_opacity_map", baseColor, src.BaseColorTexture, src, channel: 3);
+        }
 
-        // Factors multiply the texture channels, matching glTF
-        SetTextureIfAny(mat, "_SurfaceTex", ResolveTexture(src.MetallicRoughnessTexture, textureCache));
-        mat.SetFloat("_Metallic", src.Metallic);
-        mat.SetFloat("_Roughness", src.Roughness);
-        mat.SetInt("_SurfaceTexUV", UVSetFor(src.MetallicRoughnessTexture, src));
+        SetMap(mat, "geometry_normal_map", ResolveTexture(src.NormalTexture, textureCache), src.NormalTexture, src);
+        mat.SetFloat("normal_scale", src.NormalScale);
+
+        // Factors multiply the texture channels, matching glTF: roughness in G, metalness in B
+        Texture2D? metallicRoughness = ResolveTexture(src.MetallicRoughnessTexture, textureCache);
+        mat.SetFloat("base_metalness", src.Metallic);
+        mat.SetFloat("specular_roughness", src.Roughness);
+        SetMap(mat, "base_metalness_map", metallicRoughness, src.MetallicRoughnessTexture, src, channel: 2);
+        SetMap(mat, "specular_roughness_map", metallicRoughness, src.MetallicRoughnessTexture, src, channel: 1);
 
         // When a model packs ORM into one image both occlusion and metallic roughness point at it
-        SetTextureIfAny(mat, "_OcclusionTex", ResolveTexture(src.OcclusionTexture, textureCache));
-        mat.SetFloat("_OcclusionStrength", src.OcclusionStrength);
-        mat.SetInt("_OcclusionTexUV", UVSetFor(src.OcclusionTexture, src));
+        if (src.OcclusionStrength > 0)
+            SetMap(mat, "ambient_occlusion_map", ResolveTexture(src.OcclusionTexture, textureCache), src.OcclusionTexture, src, channel: 0);
 
-        Texture2D? emission = ResolveTexture(src.EmissiveTexture, textureCache);
         bool emits = src.EmissiveStrength > 0 && (src.EmissiveFactor.R > 0 || src.EmissiveFactor.G > 0 || src.EmissiveFactor.B > 0);
         if (emits)
         {
-            mat.SetInt("_Emission", 1);
-            SetTextureIfAny(mat, "_EmissionTex", emission);
-            mat.SetColor("_EmissiveColor", src.EmissiveFactor);
-            mat.SetFloat("_EmissionIntensity", src.EmissiveStrength);
-            mat.SetInt("_EmissionTexUV", UVSetFor(src.EmissiveTexture, src));
+            mat.SetColor("emission_color", src.EmissiveFactor);
+            mat.SetFloat("emission_luminance", src.EmissiveStrength);
+            SetMap(mat, "emission_color_map", ResolveTexture(src.EmissiveTexture, textureCache), src.EmissiveTexture, src);
         }
 
         return mat;
     }
 
-    private static void SetTextureIfAny(PMaterial mat, string name, Texture2D? texture)
+    // A map with its UV set, KHR_texture_transform scale and offset, and the channel a scalar input reads
+    private static void SetMap(PMaterial mat, string name, Texture2D? texture, MaterialTextureSlot? slot, ClayMaterial src, int channel = 0)
     {
-        if (texture.IsValid()) mat.SetTexture(name, texture);
+        if (texture.IsNotValid() || slot is null) return;
+        mat.SetTexture(name, texture);
+        if (channel != 0) mat.SetTextureChannel(name, channel);
+        int uvSet = UVSetFor(slot, src);
+        if (uvSet != 0) mat.SetTextureUVSet(name, uvSet);
+        if (slot.Scale != Float2.One || slot.Offset != Float2.Zero)
+            mat.SetTextureScaleOffset(name, new Float4(slot.Scale.X, slot.Scale.Y, slot.Offset.X, slot.Offset.Y));
+        if (slot.Rotation != 0f)
+            Debug.LogWarning($"[Clay] Material '{src.Name}' uses a rotated UV transform ({slot.Rotation:0.###} rad) on {name}; " +
+                "materials keep only scale and offset, so the rotation was dropped.");
     }
 
     private static int UVSetFor(MaterialTextureSlot? slot, ClayMaterial src)
@@ -582,26 +600,6 @@ internal static class ClayBackedImporter
         return 0;
     }
 
-    /// <summary>Carries KHR_texture_transform across as each slot's texture scale and offset.</summary>
-    private static void ApplyTextureTransform(PMaterial mat, ClayMaterial src)
-    {
-        ApplyTextureTransform(mat, src, "_MainTex", src.BaseColorTexture);
-        ApplyTextureTransform(mat, src, "_SurfaceTex", src.MetallicRoughnessTexture);
-        ApplyTextureTransform(mat, src, "_NormalTex", src.NormalTexture);
-        ApplyTextureTransform(mat, src, "_OcclusionTex", src.OcclusionTexture);
-        ApplyTextureTransform(mat, src, "_EmissionTex", src.EmissiveTexture);
-    }
-
-    private static void ApplyTextureTransform(PMaterial mat, ClayMaterial src, string name, MaterialTextureSlot? slot)
-    {
-        if (slot is null) return;
-        if (slot.Scale != Float2.One || slot.Offset != Float2.Zero)
-            mat.SetTextureScaleOffset(name, new Float4(slot.Scale.X, slot.Scale.Y, slot.Offset.X, slot.Offset.Y));
-
-        if (slot.Rotation != 0f)
-            Debug.LogWarning($"[Clay] Material '{src.Name}' uses a rotated UV transform ({slot.Rotation:0.###} rad) on {name}; " +
-                "the Standard shaders only support scale and offset, so the rotation was dropped.");
-    }
 
     private static IEnumerable<MaterialTextureSlot?> EnumerateSlots(ClayMaterial src)
     {
