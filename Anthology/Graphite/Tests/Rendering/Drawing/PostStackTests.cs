@@ -303,7 +303,7 @@ public sealed class PostStackTests : IDisposable
         _device.Unmap(readback);
 
         // The stored bytes are the tonemapper's display values, clamped by the target, its encode undone and the target's applied
-        Float3 display = Map(CpuTonemap(TonemapOperator.AgXPunchy, color), x => Math.Clamp(x, 0, 1));
+        Float3 display = Map(CpuTonemap(TonemapOperator.Aces, color), x => Math.Clamp(x, 0, 1));
         Assert.InRange(bytes[0], display.X * 255 - 2, display.X * 255 + 2);
         Assert.InRange(bytes[1], display.Y * 255 - 2, display.Y * 255 + 2);
         Assert.InRange(bytes[2], display.Z * 255 - 2, display.Z * 255 + 2);

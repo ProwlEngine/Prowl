@@ -137,7 +137,7 @@ public sealed class Tonemapper : PostEffect
 
     public Tonemapper(Renderer renderer) : base(renderer, RenderSlot.Tonemap, FeatureGroup.Tonemap) => _program = Program("Tonemap");
 
-    public TonemapOperator Operator { get; set; } = TonemapOperator.AgXPunchy;
+    public TonemapOperator Operator { get; set; } = TonemapOperator.Aces;
 
     public override void Extract() => _operator = Operator;
 
