@@ -196,9 +196,9 @@ public sealed class AutoExposure : PostEffect
     /// <summary>
     /// Exposure compensation in stops, brighter when above 0. A K 12.5 meter alone puts the metered average at 0.104,
     /// 0.79 stops under the 0.18 mid grey the tonemappers expect, and metering the brighter share between the
-    /// percentiles reads a daylight scene about 0.7 stops brighter than its whole average, so the default adds both.
+    /// percentiles reads a daylight scene about 0.7 stops brighter than its whole average. The default adds both and a stop more, so a bright sky does not pull the ground dark.
     /// </summary>
-    public float ExposureCompensation { get; set; } = 1.5f;
+    public float ExposureCompensation { get; set; } = 2.5f;
 
     /// <summary>How fast exposure follows the scene getting brighter, the gap in stops shrinking by exp(-speed * seconds).</summary>
     public float AdaptSpeedUp { get; set; } = 3;
