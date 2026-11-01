@@ -162,20 +162,6 @@ public class MaterialTests
         Assert.Equal(source._overrides.OrderBy(n => n), loaded._overrides.OrderBy(n => n));
     }
 
-    // Unlit colour became light in nits: an old Unlit material glows at the luminance that keeps its look, a newer one keeps its own
-    [Fact]
-    public void LoadingAnUnlitMaterial_WithoutALuminance_TakesTheLegacyOne()
-    {
-        Material old = new(Shader.LoadDefault(DefaultShader.Unlit));
-        old.SetColor("base_color", new Color(0.1f, 0.2f, 0.3f, 1f));
-        Material loaded = Serializer.Deserialize<Material>(Serializer.Serialize(old))!;
-        Assert.Equal(Prowl.Runtime.Rendering.LegacyLightUnits.Luminance, loaded.GetFloat("emission_luminance"));
-
-        Material set = new(Shader.LoadDefault(DefaultShader.Unlit));
-        set.SetFloat("emission_luminance", 500f);
-        Assert.Equal(500f, Serializer.Deserialize<Material>(Serializer.Serialize(set))!.GetFloat("emission_luminance"));
-    }
-
     // Materials saved before overrides were tracked count every stored value as set
     [Fact]
     public void LoadingAMaterialWithoutOverrides_TreatsEveryStoredValueAsSet()
@@ -188,29 +174,6 @@ public class MaterialTests
 
         Assert.True(material.IsOverridden("specular_roughness"));
         Assert.Equal(0.2f, material.GetFloat("specular_roughness"));
-    }
-
-    [Fact]
-    public void LoadingALitMaterialFromBeforeOpenPbr_MovesItsValuesOntoTheNewNames()
-    {
-        Material material = Standard();
-        material.Surface = new SurfaceSettings(SurfaceType.Cutout);
-        material._properties.SetColor("_MainColor", new Color(0.5f, 0.4f, 0.3f, 0.6f));
-        material._properties.SetFloat("_Roughness", 0.2f);
-        material._properties.SetFloat("_Metallic", 0.7f);
-        material._properties.SetInt("_Emission", 1);
-        material._properties.SetFloat("_EmissionIntensity", 3f);
-        material._overrides.Clear();
-
-        material.OnAfterDeserialize();
-
-        Assert.Equal(new Color(0.5f, 0.4f, 0.3f, 0.6f), material.GetColor("base_color"));
-        Assert.Equal(0.2f, material.GetFloat("specular_roughness"));
-        Assert.Equal(0.7f, material.GetFloat("base_metalness"));
-        Assert.Equal(0.6f, material.GetFloat("geometry_opacity"));
-        Assert.Equal(3f * Prowl.Runtime.Rendering.LegacyLightUnits.Luminance, material.GetFloat("emission_luminance"));
-        Assert.False(material.IsOverridden("_Roughness"));
-        Assert.False(material.IsOverridden("_Emission"));
     }
 
     [Fact]
@@ -239,21 +202,6 @@ public class MaterialTests
         parent.SetFloat("_Roughness", 0.8f);
         Assert.Equal(0.8f, variant.GetFloat("_Roughness"));
         Assert.Throws<System.InvalidOperationException>(() => parent.Parent = variant);
-    }
-
-    [Theory]
-    [InlineData("StandardCutoutDoubleSided", DefaultShader.Lit, SurfaceType.Cutout, SurfaceCull.Off)]
-    [InlineData("StandardTransparent", DefaultShader.Lit, SurfaceType.Transparent, SurfaceCull.Back)]
-    [InlineData("UnlitDoubleSided", DefaultShader.Unlit, SurfaceType.Opaque, SurfaceCull.Off)]
-    public void AMaterialOfAShaderFromBeforeGraphite_LoadsOntoLitOrUnlit(string oldShader, DefaultShader expected, SurfaceType type, SurfaceCull cull)
-    {
-        EchoObject saved = Serializer.Serialize(Standard());
-        saved["_shader"]["$asset"] = new EchoObject(BuiltInAssets.DeterministicGuid($"$Default:Shader/{oldShader}").ToString());
-
-        Material loaded = Serializer.Deserialize<Material>(saved)!;
-
-        Assert.Same(Shader.LoadDefault(expected), loaded.Shader);
-        Assert.Equal(new SurfaceSettings(type, SurfaceBlend.Alpha, cull), loaded.Surface);
     }
 
     [Fact]

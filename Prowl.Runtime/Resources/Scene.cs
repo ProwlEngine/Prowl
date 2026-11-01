@@ -415,10 +415,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>The scene's sky, ambient light and fog.</summary>
     public SceneEnvironment Environment = new();
 
-    // 1 once saved with physical light units, 0 for scenes saved before
-    [SerializeField]
-    private int _lightUnits;
-
     /// <summary>Where one renderer's surface sits in the baked atlas.</summary>
     public struct LightmapPlacement
     {
@@ -958,16 +954,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void OnBeforeSerialize()
     {
         serializeObj = [.. SaveableObjects];
-        _lightUnits = 1;
     }
 
     public void OnAfterDeserialize()
     {
-        if (_lightUnits == 0)
-        {
-            Environment.AdoptPhysicalUnits();
-            _lightUnits = 1;
-        }
         if (serializeObj == null) return;
 
         // GameObjects and components got fresh identifiers while loading, a scene keeps the stored ones.

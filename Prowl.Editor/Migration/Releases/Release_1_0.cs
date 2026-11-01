@@ -5,12 +5,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 using Prowl.Echo;
 
 namespace Prowl.Editor.Migration.Releases;
 
-internal sealed class Release_1_0 : MigrationRelease
+internal sealed partial class Release_1_0 : MigrationRelease
 {
     public override string Name => "1.0";
 
@@ -20,6 +21,10 @@ internal sealed class Release_1_0 : MigrationRelease
         new("Light, fog light, decal and reflection probe settings saved behind properties", ctx => RenameSettings(ctx, s_lightRenames)),
         new("Texture import types: masks become linear Default textures, sprites need the Sprite type, sizes kept", ctx => ctx.RewriteImporterSettings("TextureImporter", TextureImportTypes)),
         new("Camera tonemapping moved into the camera's base profile as a Tonemapping volume component", CameraTonemappingToProfile),
+        new("Materials of the standard shaders from before Graphite moved onto Lit and Unlit", ctx => ctx.RewriteEcho(echo => ConvertMaterials(echo, AdoptLegacyShader))),
+        new("Lit, Unlit, sky, grass and terrain materials moved onto Graphite's OpenPBR property names", ctx => ctx.RewriteEcho(echo => ConvertMaterials(echo, AdoptOpenPbr))),
+        new("Light, particle light, ambient and fog intensities carried onto physical units", ctx => ctx.RewriteEchoAssets(PhysicalLightUnits)),
+        new("Custom shaders using the old Lit property names are listed for hand edits", WarnOldShaderNames),
     ];
 
     private const string CameraType = "Prowl.Runtime.Camera";
@@ -316,5 +321,157 @@ internal sealed class Release_1_0 : MigrationRelease
             if (field == from) return $"{parts[0]}/{parts[1]}/{to}{rest}";
         }
         return null;
+    }
+
+    private const string LightType = "Prowl.Runtime.Light";
+    private const string ParticleSystemType = "Prowl.Runtime.ParticleSystem.ParticleSystemComponent";
+    private const string SceneType = "Prowl.Runtime.Resources.Scene";
+
+    // LegacyLightUnits: old emission, ambient and fog brightness to nits, and old light intensities to lux, candela or nits
+    private const float LegacyLuminance = 1.2f * 16384f;
+    private const float LegacyLight = 8f * LegacyLuminance;
+
+    // AmbientMode.Sky
+    private const long AmbientSky = 2;
+
+    /// <summary>
+    /// Lights, particle light modules and scene environments saved before light was physical, which carry no units
+    /// marker, have their intensities scaled and get the marker, so the step can run again. Prefab overrides of a
+    /// light's intensity are scaled when the instance's light in the same file was old, and a particle system's light
+    /// module override converts by its own marker.
+    /// </summary>
+    internal static EchoObject? PhysicalLightUnits(EchoObject echo)
+    {
+        bool changed = false;
+        HashSet<string> oldLights = [], systems = [];
+        ForEachCompound(echo, tag =>
+        {
+            switch (TypeName(tag))
+            {
+                case LightType when IsOldUnits(tag, "units"):
+                    Scale(tag, "intensity", LegacyLight);
+                    tag["units"] = new EchoObject(1);
+                    AddIdentities(tag, oldLights);
+                    changed = true;
+                    break;
+                case ParticleSystemType:
+                    AddIdentities(tag, systems);
+                    if (tag.TryGet("Light", out EchoObject? module)) changed |= LightModuleUnits(module!);
+                    break;
+                case SceneType when IsOldUnits(tag, "_lightUnits"):
+                    EnvironmentUnits(tag);
+                    tag["_lightUnits"] = new EchoObject(1);
+                    changed = true;
+                    break;
+            }
+        });
+
+        ForEachCompound(echo, tag =>
+        {
+            if (!tag.TryGet("Path", out EchoObject? path) || path!.TagType != EchoType.String || !tag.TryGet("Value", out EchoObject? value)) return;
+            string[] parts = path.StringValue.Split('/', 3);
+            if (parts.Length != 3) return;
+            if (parts[2] == "intensity" && oldLights.Contains(parts[1]) && Scale(tag, "Value", LegacyLight)) changed = true;
+            else if (parts[2] == "Light" && systems.Contains(parts[1])) changed |= LightModuleUnits(value!);
+        });
+        return changed ? echo : null;
+    }
+
+    private static bool LightModuleUnits(EchoObject module)
+    {
+        if (module.TagType != EchoType.Compound || !IsOldUnits(module, "units")) return false;
+        if (module.TryGet("Intensity", out EchoObject? intensity) && intensity!.TagType == EchoType.Compound)
+        {
+            foreach (string field in new[] { "ConstantValue", "MinValue", "MaxValue", "CurveMultiplier" })
+                Scale(intensity, field, LegacyLight);
+        }
+        module["units"] = new EchoObject(1);
+        return true;
+    }
+
+    // Uniform and hemisphere ambient scaled onto nits, sky ambient follows the sky, fog set to the luminance of its old look
+    private static void EnvironmentUnits(EchoObject scene)
+    {
+        EchoObject environment = Child(scene, "Environment");
+        if (environment.TryGet("Ambient", out EchoObject? ambient) && ambient!.TagType == EchoType.Compound
+            && ambient.TryGet("Mode", out EchoObject? mode) && IsNumber(mode!) && mode.LongValue != AmbientSky)
+            Scale(ambient, "Intensity", LegacyLuminance);
+        Child(environment, "Fog")["Intensity"] = new EchoObject(LegacyLuminance);
+    }
+
+    private static EchoObject Child(EchoObject parent, string name)
+    {
+        if (parent.TryGet(name, out EchoObject? child) && child!.TagType == EchoType.Compound) return child;
+        return parent[name] = EchoObject.NewCompound();
+    }
+
+    // A units marker of 1 says the values are physical already, anything else that they are from before
+    private static bool IsOldUnits(EchoObject tag, string marker)
+        => !tag.TryGet(marker, out EchoObject? units) || !IsNumber(units!) || units.LongValue == 0;
+
+    private static bool IsNumber(EchoObject tag) => tag.TagType is >= EchoType.Byte and <= EchoType.Decimal;
+
+    private static bool Scale(EchoObject tag, string name, float factor)
+    {
+        if (!tag.TryGet(name, out EchoObject? value) || !IsNumber(value!)) return false;
+        tag[name] = new EchoObject(value.FloatValue * factor);
+        return true;
+    }
+
+    private static void AddIdentities(EchoObject component, HashSet<string> ids)
+    {
+        foreach (string id in new[] { "_identifier", "_prefabTemplateIdentity" })
+        {
+            if (component.TryGet(id, out EchoObject? guid) && guid!.TagType == EchoType.String)
+                ids.Add(guid.StringValue);
+        }
+    }
+
+    /// <summary>Visits every compound in a tree, each before its children.</summary>
+    private static void ForEachCompound(EchoObject tag, Action<EchoObject> visit)
+    {
+        if (tag.TagType == EchoType.List)
+        {
+            foreach (EchoObject item in tag.List.ToList())
+                ForEachCompound(item, visit);
+            return;
+        }
+        if (tag.TagType != EchoType.Compound) return;
+        visit(tag);
+        foreach (string child in tag.GetNames().ToList())
+            ForEachCompound(tag[child], visit);
+    }
+
+    private static readonly (string Old, string New)[] s_oldShaderNames =
+    [
+        ("_MainColor", "base_color"), ("_MainTex", "base_color_map"), ("_AlphaCutoff", "alpha_cutoff"),
+        ("_Metallic", "base_metalness"), ("_Roughness", "specular_roughness"),
+        ("_SurfaceTex", "specular_roughness_map from G and base_metalness_map from B"), ("_NormalTex", "geometry_normal_map"),
+        ("_NormalScale", "normal_scale"), ("_OcclusionTex", "ambient_occlusion_map"), ("_ParallaxMap", "geometry_height_map from G"),
+        ("_Parallax", "height_scale"), ("_Emission", "emission_luminance"), ("_EmissiveColor", "emission_color"),
+        ("_EmissionIntensity", "emission_luminance"), ("_EmissionTex", "emission_color_map"), ("_Exposure", "intensity on the skies"),
+    ];
+
+    /// <summary>Logs a warning for each .shader and .glsl asset using the old Lit include or property names. Changes no files.</summary>
+    internal static void WarnOldShaderNames(MigrationContext ctx)
+    {
+        foreach (string path in ctx.AssetFiles(".shader", ".glsl"))
+        {
+            List<string> found = OldShaderNames(File.ReadAllText(path));
+            if (found.Count > 0)
+                Runtime.Debug.LogWarning($"{Path.GetRelativePath(ctx.Project.AssetsPath, path)} may read Lit's properties by their names from before OpenPBR, change by hand where it does: {string.Join(", ", found)}");
+        }
+    }
+
+    internal static List<string> OldShaderNames(string source)
+    {
+        List<string> found = [];
+        if (source.Contains("Prowl/Lit.glsl", StringComparison.Ordinal)) found.Add("the Prowl/Lit.glsl include");
+        foreach ((string old, string now) in s_oldShaderNames)
+        {
+            if (Regex.IsMatch(source, $@"(?<![A-Za-z0-9_]){old}(?:_ST|UV)?(?![A-Za-z0-9_])"))
+                found.Add($"{old} is now {now}");
+        }
+        return found;
     }
 }

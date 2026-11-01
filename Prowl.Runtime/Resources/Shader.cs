@@ -177,31 +177,6 @@ public sealed class Shader : Asset, ISerializable
     };
 
     /// <summary>
-    /// The shaders of the standard family before Graphite, by the GUID materials stored, and what replaces each: Lit or
-    /// Unlit with the surface the old file stood for.
-    /// </summary>
-    internal static readonly IReadOnlyDictionary<Guid, (DefaultShader Shader, SurfaceSettings Surface, bool Anisotropic)> Legacy = BuildLegacy();
-
-    private static Dictionary<Guid, (DefaultShader, SurfaceSettings, bool)> BuildLegacy()
-    {
-        Dictionary<Guid, (DefaultShader, SurfaceSettings, bool)> legacy = [];
-        foreach (string family in new[] { "Standard", "StandardAnisotropic", "Unlit" })
-        {
-            foreach ((string mode, SurfaceType type) in new[] { ("", SurfaceType.Opaque), ("Cutout", SurfaceType.Cutout), ("Transparent", SurfaceType.Transparent) })
-            {
-                foreach ((string sides, SurfaceCull cull) in new[] { ("", SurfaceCull.Back), ("DoubleSided", SurfaceCull.Off) })
-                {
-                    string name = family + mode + sides;
-                    if (name == "Unlit") continue;
-                    legacy[BuiltInAssets.DeterministicGuid($"$Default:Shader/{name}")] =
-                        (family == "Unlit" ? DefaultShader.Unlit : DefaultShader.Lit, new SurfaceSettings(type, SurfaceBlend.Alpha, cull), family == "StandardAnisotropic");
-                }
-            }
-        }
-        return legacy;
-    }
-
-    /// <summary>
     /// Pulls the declared name out of the <c>Shader "Some/Path"</c> line at the top of a shader source, without parsing
     /// it. Leading comments and blank lines are skipped. Null when no declaration is found.
     /// </summary>

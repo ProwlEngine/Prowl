@@ -165,14 +165,4 @@ public sealed class SceneEnvironment
     }
 
     private static Float3 Rgb(Color c) => new(c.R, c.G, c.B);
-
-    /// <summary>
-    /// Carries a scene saved before light was physical onto nits, see <see cref="LegacyLightUnits"/>: its uniform or
-    /// hemisphere ambient and its fog colour. Sky ambient follows the sky, which follows the sun.
-    /// </summary>
-    internal void AdoptPhysicalUnits()
-    {
-        if (Ambient.Mode != AmbientMode.Sky) Ambient.Intensity *= LegacyLightUnits.Luminance;
-        Fog.Intensity = LegacyLightUnits.Luminance;
-    }
 }

@@ -98,9 +98,6 @@ public class Light : Component, IRenderSync
     public float Intensity { get => intensity; set { intensity = value; Wake(); } }
     [SerializeField] private float intensity = 1000f;
 
-    // 1 once saved with physical units, 0 for lights saved before
-    [SerializeField, HideInInspector] private int units;
-
     /// <summary>Distance from the light at which it reaches zero.</summary>
     public float Range { get => range; set { range = value; Wake(); } }
     [SerializeField, ShowIf(nameof(IsLocal))] private float range = 10.0f;
@@ -385,16 +382,6 @@ public class Light : Component, IRenderSync
         && a.Shadow.CascadeBlend == b.Shadow.CascadeBlend && a.Shadow.Strength == b.Shadow.Strength && a.Shadow.Filter == b.Shadow.Filter;
 
     public override void OnAddedToScene() => Fog = GetComponent<FogLight>();
-
-    public override void OnBeforeSerialize() => units = 1;
-
-    // A light saved before its units were physical keeps its look, see LegacyLightUnits
-    public override void OnAfterDeserialize()
-    {
-        if (units != 0) return;
-        intensity *= LegacyLightUnits.Light;
-        units = 1;
-    }
 
     public override void DrawGizmos()
     {
