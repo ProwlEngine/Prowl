@@ -319,6 +319,9 @@ public static class Graphics
             finally { external?.Invoke(succeeded); }
         };
 
+        // A camera disposed after it queued its view this frame, as when entering play mode swaps the scene, leaves a dead view
+        s_views.RemoveAll(static view => view.IsDisposed);
+
         s_time += deltaTime;
         long start = Stopwatch.GetTimestamp();
         using (Diagnostics.FrameStats.RenderWait.Scope())
