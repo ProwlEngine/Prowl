@@ -43,7 +43,7 @@ Graphite_ReflectionProbe Graphite_ProbeAt(uint array, uint index)
 }
 
 #ifndef GRAPHITE_MAX_BLENDED_PROBES
-#define GRAPHITE_MAX_BLENDED_PROBES 4
+#define GRAPHITE_MAX_BLENDED_PROBES 2
 #endif
 
 bool Graphite_ReflectionProbesReady() { return graphite_World.reflections.w != 0u; }
@@ -125,23 +125,38 @@ bool Graphite_NextProbe(inout Graphite_ProbeIterator it, out Graphite_Reflection
     return false;
 }
 
-// The most important probes around a point, each kept as its record's place, the point in its box space and its share of
-// the blend, the sky taking what is left. Found once, then sampled by every lobe.
+// The most important probes around a point, each kept as its record's index with the moving tree in the top bit and the
+// region entry it was found through, and its share of the blend, the sky taking what is left. Found once, then sampled by
+// every lobe. Slots are only indexed by unrolled loops, so they stay in registers.
 struct Graphite_ProbeSet
 {
     uvec2 probe[GRAPHITE_MAX_BLENDED_PROBES];
-    vec3  local[GRAPHITE_MAX_BLENDED_PROBES];
     float weight[GRAPHITE_MAX_BLENDED_PROBES];
-    int   count;
+    vec3  position;          // camera relative
     float sky;
 };
+
+// A set of no probes, the sky taking sky of the blend
+Graphite_ProbeSet Graphite_SkyProbeSet(vec3 relativePos, float sky)
+{
+    Graphite_ProbeSet set;
+    for (int i = 0; i < GRAPHITE_MAX_BLENDED_PROBES; i++)
+    {
+        set.probe[i] = uvec2(0u, GRAPHITE_TREE_INVALID);
+        set.weight[i] = 0.0;
+    }
+    set.position = relativePos;
+    set.sky = sky;
+    return set;
+}
 
 // Keeps the highest priority probes holding the point, weighted by how far inside their boxes it is
 Graphite_ProbeSet Graphite_FindProbes(vec3 relativePos)
 {
-    Graphite_ProbeSet set;
+    Graphite_ProbeSet set = Graphite_SkyProbeSet(relativePos, 0.0);
     float priority[GRAPHITE_MAX_BLENDED_PROBES];
-    int count = 0;
+    for (int i = 0; i < GRAPHITE_MAX_BLENDED_PROBES; i++)
+        priority[i] = -3.0e38;
 
     Graphite_ProbeIterator it = Graphite_BeginProbes(relativePos);
     Graphite_ReflectionProbe probe;
@@ -152,35 +167,26 @@ Graphite_ProbeSet Graphite_FindProbes(vec3 relativePos)
         float inside = min(inside3.x, min(inside3.y, inside3.z));
         float w = probe.box.w > 0.0 ? clamp(inside / probe.box.w, 0.0, 1.0) : 1.0;
         float pr = probe.params.z;
-        int at;
-        if (count < GRAPHITE_MAX_BLENDED_PROBES)
-            at = count++;
-        else if (pr > priority[GRAPHITE_MAX_BLENDED_PROBES - 1])
-            at = GRAPHITE_MAX_BLENDED_PROBES - 1;
-        else
-            continue;
+        uvec2 id = uvec2((it.k - 1u) | ((it.tree & 1u) << 31), it.query.region);
 
-        set.probe[at] = uvec2(it.tree, it.k - 1u);
-        set.local[at] = p;
-        set.weight[at] = w;
-        priority[at] = pr;
-        for (int j = at; j > 0 && priority[j] > priority[j - 1]; j--)
+        // The candidate sinks through the slots, swapping with each it outranks, so the slots stay ordered
+        for (int j = 0; j < GRAPHITE_MAX_BLENDED_PROBES; j++)
         {
-            uvec2 tk = set.probe[j]; set.probe[j] = set.probe[j - 1]; set.probe[j - 1] = tk;
-            vec3 tl = set.local[j]; set.local[j] = set.local[j - 1]; set.local[j - 1] = tl;
-            float tw = set.weight[j]; set.weight[j] = set.weight[j - 1]; set.weight[j - 1] = tw;
-            float tp = priority[j]; priority[j] = priority[j - 1]; priority[j - 1] = tp;
+            if (pr > priority[j])
+            {
+                float tp = priority[j]; priority[j] = pr; pr = tp;
+                float tw = set.weight[j]; set.weight[j] = w; w = tw;
+                uvec2 ti = set.probe[j]; set.probe[j] = id; id = ti;
+            }
         }
     }
 
     // Each probe's share of what the ones above it left
     float total = 0.0;
-    set.count = 0;
-    for (int i = 0; i < count && total < 0.999; i++)
+    for (int i = 0; i < GRAPHITE_MAX_BLENDED_PROBES; i++)
     {
-        set.weight[i] *= 1.0 - total;
+        set.weight[i] = total < 0.999 ? set.weight[i] * (1.0 - total) : 0.0;
         total += set.weight[i];
-        set.count++;
     }
     set.sky = total < 0.999 ? 1.0 - total : 0.0;
     return set;
@@ -197,8 +203,16 @@ vec3 Graphite_SampleProbes(Graphite_ProbeSet set, vec3 dir, float alpha)
 {
     float roughness = sqrt(alpha);
     vec3 color = vec3(0.0);
-    for (int i = 0; i < set.count; i++)
-        color += Graphite_SampleReflectionProbe(Graphite_ProbeAt(set.probe[i].x, set.probe[i].y), set.local[i], dir, roughness) * set.weight[i];
+    for (int i = 0; i < GRAPHITE_MAX_BLENDED_PROBES; i++)
+    {
+        if (set.weight[i] <= 0.0)
+            continue;
+        Graphite_ReflectionProbe probe = Graphite_ProbeAt(GRAPHITE_SET_PROBES * 2u + (set.probe[i].x >> 31), set.probe[i].x & 0x7FFFFFFFu);
+        vec3 offset, offsetLow;
+        Graphite_HitOffsets(GRAPHITE_SET_PROBES, set.probe[i].y, offset, offsetLow);
+        vec3 local = Graphite_ProbeLocal(probe, set.position, offset, offsetLow);
+        color += Graphite_SampleReflectionProbe(probe, local, dir, roughness) * set.weight[i];
+    }
     if (set.sky > 0.0)
         color += Graphite_SampleSkyProbe(dir, roughness) * set.sky;
     return color;

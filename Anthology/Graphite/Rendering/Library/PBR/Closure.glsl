@@ -64,9 +64,6 @@
 #include "Graphite/PBR/Fuzz.glsl"
 #include "Graphite/PBR/ThinFilm.glsl"
 
-// Reflection probe blending is compiled in while the world has a reflection probe, else the sky alone reflects
-#pragma variant global GRAPHITE_REFLECTION_PROBES
-
 struct PBR_Closure
 {
     vec3  position;          // camera relative
@@ -599,18 +596,9 @@ float PBR_CoatSpecularOcclusion(PBR_Closure c)
 // The probes around the closure, found once per pixel for every lobe sampling them, none before the sky is captured
 Graphite_ProbeSet PBR_FindProbes(PBR_Closure c)
 {
-    Graphite_ProbeSet probes;
-    probes.count = 0;
-    probes.sky = 0.0;
-    if (Graphite_ReflectionProbesReady())
-    {
-#ifdef GRAPHITE_REFLECTION_PROBES
-        probes = Graphite_FindProbes(c.position);
-#else
-        probes.sky = 1.0;
-#endif
-    }
-    return probes;
+    if (!Graphite_ReflectionProbesReady())
+        return Graphite_SkyProbeSet(c.position, 0.0);
+    return Graphite_FindProbes(c.position);
 }
 
 // The surroundings' light on the closure, diffuse from Graphite_IndirectDiffuse with screen occlusion applied

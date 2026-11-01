@@ -422,13 +422,12 @@ public sealed partial class RenderWorld
     {
         _lights.Extract(Lighting.ReceiveLight);
         _decals.Extract(Lighting.ReceiveDecal);
-        ExtractReflections();
         Globals?.Set(GlobalAxis.LightMasks, Lighting.MaskedLights > 0);
         Globals?.Set(GlobalAxis.ContactShadows, Lighting.ContactLights > 0);
         Globals?.Set(GlobalAxis.Decals, Lighting.LiveDecals > 0);
-        Globals?.Set(GlobalAxis.ReflectionProbes, Reflections.LiveProbes > 0);
         Globals?.SnapshotKeywords();
         ExtractBakedLighting();
+        ExtractReflections();
         if (_extractedEnvironment == null || !_environment.Same(_extractedEnvironment))
         {
             _extractedEnvironment = _environment.Copy();

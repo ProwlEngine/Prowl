@@ -32,9 +32,6 @@ public sealed class GlobalAxis
     /// <summary>On while the world has decals, set by the renderer.</summary>
     public static readonly GlobalAxis Decals = Toggle("GRAPHITE_DECALS");
 
-    /// <summary>On while the world has reflection probes, set by the renderer.</summary>
-    public static readonly GlobalAxis ReflectionProbes = Toggle("GRAPHITE_REFLECTION_PROBES");
-
     private GlobalAxis(string name, IReadOnlyList<string> values, bool isToggle)
     {
         Name = name;

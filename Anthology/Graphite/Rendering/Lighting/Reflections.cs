@@ -358,9 +358,6 @@ internal sealed class WorldReflections : IDisposable
     /// <summary>The captured probes, in regions with a tree each.</summary>
     public SpatialIndex<ReflectionProbeRecord> Regions { get; }
 
-    /// <summary>How many probes the world has, captured or not.</summary>
-    public int LiveProbes { get; private set; }
-
     /// <summary>The prefiltered sky. Null until the first capture.</summary>
     public Target? Sky { get; private set; }
 
@@ -444,7 +441,6 @@ internal sealed class WorldReflections : IDisposable
         {
             if (_alive[index])
             {
-                LiveProbes--;
                 StopJob(index);
                 Uncapture(index);
                 ReleaseTarget(index);
@@ -454,8 +450,6 @@ internal sealed class WorldReflections : IDisposable
             return;
         }
 
-        if (!_alive[index])
-            LiveProbes++;
         _probes[index] = desc;
         _alive[index] = true;
         if (desc.Mode == ReflectionProbeMode.Baked)
