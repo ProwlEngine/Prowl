@@ -321,7 +321,8 @@ public class GameViewPanel : DockPanel
             _gameStats = RenderStats.Last; // snapshot for stats overlay (persists when paused/stepped)
 
             bool hovered = paper.IsParentHovered;
-            GameViewInputHandler.IsGameViewFocused = hovered;
+            // A lock pins the pointer at the lock center, so overlapping windows steal hover without the user aiming at them.
+            GameViewInputHandler.IsGameViewFocused = hovered || (_lockContextPushed && Input.CursorLocked && Input.IsTopLockContext(_lockContext));
 
             Float2 pointerInRT = Float2.Zero;
             bool pointerInside = false;
