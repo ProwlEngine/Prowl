@@ -121,7 +121,7 @@ public class ConsolePanel : DockPanel
         public override void WriteLine(string? value)
         {
             if (!string.IsNullOrEmpty(value))
-                Debug.LogWithSeverity(value, severity);
+                Debug.Log(value, severity);
         }
     }
 
