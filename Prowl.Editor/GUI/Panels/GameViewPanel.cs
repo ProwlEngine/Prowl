@@ -38,6 +38,12 @@ public sealed class PlayModePreferences : EditorPreferences
     [Tooltip("What the Game view does when play starts.")]
     public GameViewOnPlay GameViewOnPlay = GameViewOnPlay.Focus;
 
+    [Tooltip("Dims the editor around the Game view and rings it while the game runs.")]
+    public bool SpotlightGameView = true;
+
+    [Tooltip("How dark the editor around the Game view gets while playing.")]
+    [Range(0, 1)] public float SpotlightDim = 0.3f;
+
     public bool ClearConsoleOnPlay;
     public bool ClearConsoleOnBuild;
 
@@ -111,6 +117,8 @@ public class GameViewPanel : DockPanel
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
+
+        PlayModeSpotlight.MarkGameViewDrawn();
 
         using (paper.Column("gv_root").Size(width, height).Enter())
         {
@@ -321,7 +329,8 @@ public class GameViewPanel : DockPanel
             _gameStats = RenderStats.Last; // snapshot for stats overlay (persists when paused/stepped)
 
             bool hovered = paper.IsParentHovered;
-            GameViewInputHandler.IsGameViewFocused = hovered;
+            // A lock pins the pointer at the lock center, so overlapping windows steal hover without the user aiming at them.
+            GameViewInputHandler.IsGameViewFocused = hovered || (_lockContextPushed && Input.CursorLocked && Input.IsTopLockContext(_lockContext));
 
             Float2 pointerInRT = Float2.Zero;
             bool pointerInside = false;

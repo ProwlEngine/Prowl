@@ -53,8 +53,11 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     /// <summary>Font family or font file for code. Empty follows the editor's mono font. Picked above the other settings.</summary>
     [HideInInspector] public string Font = "";
 
+    /// <summary>The size the status bar's zoom reads as 100%.</summary>
+    public const float DefaultFontSize = 15f;
+
     [Header("Text")]
-    [Range(6, 48)] public float FontSize = 15f;
+    [Range(6, 48)] public float FontSize = DefaultFontSize;
     [Range(1, 2.5f), Tooltip("Row height as a multiple of the font size.")] public float LineHeight = 1.5f;
     [Range(1, 8)] public int TabSize = 4;
     [Tooltip("Tab and auto indent insert spaces instead of tab characters.")] public bool InsertSpaces = true;
@@ -245,6 +248,12 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     public void ApplyTo(OrigamiUI.CodeEditor editor)
     {
         ApplyTo(editor.Options);
+        // Font Size is a zoom from the default size, so the status bar's percentage reads against that rather than always 100%.
+        if (editor.FontSize != FontSize)
+        {
+            editor.ResetZoom();
+            editor.Zoom(FontSize - DefaultFontSize);
+        }
         editor.FindCaseSensitive = FindMatchCase;
         editor.FindWholeWord = FindWholeWord;
         editor.FindRegex = FindRegex;
@@ -274,7 +283,7 @@ public sealed class ScriptEditorPreferences : EditorPreferences
     public void ApplyTo(CodeEditorOptions options)
     {
         ApplyFonts(options);
-        options.FontSize = FontSize;
+        options.FontSize = DefaultFontSize;
         options.LineHeight = LineHeight;
         options.TabSize = TabSize;
         options.InsertSpaces = InsertSpaces;
@@ -481,14 +490,7 @@ public class ScriptEditorWindow : DockPanel
     internal static void ApplyPreferences()
     {
         if (s_window == null) return;
-        ScriptEditorPreferences prefs = Preferences.Get<ScriptEditorPreferences>();
-        foreach (var tab in s_window._tabs)
-        {
-            float oldSize = tab.Editor.Options.FontSize;
-            ApplyOptions(tab.Editor, tab.ReadOnly);
-            // A new font size replaces any Ctrl+wheel zoom.
-            if (oldSize != prefs.FontSize) tab.Editor.ResetZoom();
-        }
+        foreach (var tab in s_window._tabs) ApplyOptions(tab.Editor, tab.ReadOnly);
     }
 
     // Code shown outside the project it builds in would light up with errors that are not real, so it gets no diagnostics or reference counts.

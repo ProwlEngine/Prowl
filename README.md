@@ -311,17 +311,17 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
+                <a href="https://github.com/paulbartrum">
+                    <img src="https://avatars.githubusercontent.com/u/1572571?v=4" width="100;" alt="paulbartrum"/>
+                    <br />
+                    <sub><b>paulbartrum</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/IsaacMarovitz">
                     <img src="https://avatars.githubusercontent.com/u/42140194?v=4" width="100;" alt="IsaacMarovitz"/>
                     <br />
                     <sub><b>Isaac Marovitz</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/ZeppelinGames">
-                    <img src="https://avatars.githubusercontent.com/u/31507417?v=4" width="100;" alt="ZeppelinGames"/>
-                    <br />
-                    <sub><b>Mark Saba</b></sub>
                 </a>
             </td>
 		</tr>
@@ -331,6 +331,13 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                     <img src="https://avatars.githubusercontent.com/u/55113224?v=4" width="100;" alt="10xJosh"/>
                     <br />
                     <sub><b>Josh Davis</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/ZeppelinGames">
+                    <img src="https://avatars.githubusercontent.com/u/31507417?v=4" width="100;" alt="ZeppelinGames"/>
+                    <br />
+                    <sub><b>Mark Saba</b></sub>
                 </a>
             </td>
             <td align="center">
@@ -361,6 +368,8 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                     <sub><b>Erdoğan Başer</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/jihadkhawaja">
                     <img src="https://avatars.githubusercontent.com/u/47315122?v=4" width="100;" alt="jihadkhawaja"/>
@@ -368,20 +377,11 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                     <sub><b>Jay Khawaja</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/JaggerJo">
                     <img src="https://avatars.githubusercontent.com/u/13090415?v=4" width="100;" alt="JaggerJo"/>
                     <br />
                     <sub><b>Josua Jäger</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/paulbartrum">
-                    <img src="https://avatars.githubusercontent.com/u/1572571?v=4" width="100;" alt="paulbartrum"/>
-                    <br />
-                    <sub><b>paulbartrum</b></sub>
                 </a>
             </td>
             <td align="center">

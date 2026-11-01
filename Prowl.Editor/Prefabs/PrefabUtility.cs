@@ -9,6 +9,7 @@ using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
+using Prowl.Ember;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -2128,8 +2129,9 @@ public static partial class PrefabUtility
         "AssetID", "AssetPath"  // asset identity, meaningless on a scene component
     ];
 
-    // Keyed by concrete type; the field set never changes for a type within a session.
-    private static readonly Dictionary<Type, FieldInfo[]> s_overridableFields = [];
+    // Keyed by concrete type. Emptied on hot reload: a recompile changes the field set, and carried over
+    // the old list would miss added fields and hold null for removed or renamed ones.
+    private static readonly ReloadCache<Type, FieldInfo[]> s_overridableFields = new();
 
     /// <summary>
     /// The fields an override may address: exactly what Echo persists, minus engine bookkeeping.
@@ -2141,7 +2143,7 @@ public static partial class PrefabUtility
 
         FieldInfo[] fields = [.. instance.GetSerializableFields().Where(f => !s_skipFields.Contains(f.Name))];
 
-        s_overridableFields[type] = fields;
+        s_overridableFields.Set(type, fields);
         return fields;
     }
 
