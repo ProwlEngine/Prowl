@@ -15,9 +15,9 @@
 #define GRAPHITE_TREE_LEAF 0x80000000u
 #define GRAPHITE_TREE_INVALID 0xFFFFFFFFu
 
-// Each level visited defers at most three siblings, so this covers sixteen levels of a tree. Above it sit the runs of region
+// Each level visited defers at most three siblings, so this covers ten levels of a tree. Above it sit the runs of region
 // entries a query found, as first and end pairs
-#define GRAPHITE_TREE_STACK 48
+#define GRAPHITE_TREE_STACK 32
 #define GRAPHITE_REGION_RUNS 8
 
 #define GRAPHITE_SPATIAL_SETS 16
