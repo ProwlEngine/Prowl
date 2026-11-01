@@ -4,7 +4,7 @@ Shader "Graphite/Sky/Panorama"
     {
         _Panorama("Panorama", Texture2D) = "gray" {} [NoScaleOffset]
         _Tint("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
-        intensity("Intensity", Float) = 1.0 [Range(0, 8)]
+        intensity("Intensity", Float) = 20000.0
         _Rotation("Rotation", Float) = 0.0 [Range(0, 360)]
     }
 

@@ -9,7 +9,7 @@ Shader "Graphite/Sky/SixSided"
         _CubeFront("Front (+Z)", Texture2D) = "white" {}
         _CubeBack("Back (-Z)", Texture2D) = "white" {}
         _Tint("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
-        intensity("Intensity", Float) = 1.0
+        intensity("Intensity", Float) = 20000.0
     }
 
     Surface "Sky"
