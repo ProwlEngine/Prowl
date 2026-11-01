@@ -253,11 +253,11 @@ public sealed class VolumeProfile : Asset
         return existing != null && Components.Remove(existing);
     }
 
-    /// <summary>The base profile new cameras get: AgX Punchy tonemapping and auto exposure.</summary>
+    /// <summary>The base profile new cameras get: ACES tonemapping and auto exposure.</summary>
     public static VolumeProfile CreateCameraDefault(string name)
     {
         var profile = new VolumeProfile { Name = name };
-        profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgXPunchy);
+        profile.Add<Tonemapping>().Mode.Set(TonemappingMode.ACES);
         profile.Add<AutoExposure>().Enabled.Set(true);
         return profile;
     }

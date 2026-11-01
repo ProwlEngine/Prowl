@@ -598,7 +598,7 @@ public class CliEditorCommandTests : EditorTestHarness
         static void AssertTonemaps(Camera camera)
         {
             var tonemapping = camera.Profile!.Get<Prowl.Runtime.Rendering.Tonemapping>()!;
-            Assert.Equal(Prowl.Runtime.Rendering.TonemappingMode.AgXPunchy, tonemapping.Mode.Value);
+            Assert.Equal(Prowl.Runtime.Rendering.TonemappingMode.ACES, tonemapping.Mode.Value);
             Assert.True(tonemapping.Mode.Override);
         }
 
