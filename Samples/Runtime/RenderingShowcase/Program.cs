@@ -734,7 +734,7 @@ public sealed class RenderingShowcaseGame : StationGame
         Camera security = head.AddComponent<Camera>();
         // No tonemapping or auto exposure, so the texture holds scene light times a known exposure
         security.Profile = new VolumeProfile { Name = "Security Camera Profile" };
-        security.EV100 = LegacyLightUnits.EV100;
+        security.EV100 = 14f;
         security.Target = target;
         security.Depth = -2;
         security.FieldOfView = 70f;

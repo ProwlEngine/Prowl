@@ -415,10 +415,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>The scene's sky, ambient light and fog.</summary>
     public SceneEnvironment Environment = new();
 
-    // Saved as 1 so the 1.0 migration knows the environment is in physical units
-    [SerializeField]
-    private int _lightUnits = 1;
-
     /// <summary>Where one renderer's surface sits in the baked atlas.</summary>
     public struct LightmapPlacement
     {

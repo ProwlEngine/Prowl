@@ -23,7 +23,7 @@ internal sealed partial class Release_1_0 : MigrationRelease
         new("Camera tonemapping moved into the camera's base profile as a Tonemapping volume component", CameraTonemappingToProfile),
         new("Materials of the standard shaders from before Graphite moved onto Lit and Unlit", ctx => ctx.RewriteEcho(echo => ConvertMaterials(echo, AdoptLegacyShader))),
         new("Lit, Unlit, sky, grass and terrain materials moved onto Graphite's OpenPBR property names", ctx => ctx.RewriteEcho(echo => ConvertMaterials(echo, AdoptOpenPbr))),
-        new("Light, particle light, ambient and fog intensities carried onto physical units", ctx => ctx.RewriteEchoAssets(PhysicalLightUnits)),
+        new("Light, ambient and fog intensities carried onto physical units", ctx => ctx.RewriteEchoAssets(PhysicalLightUnits)),
         new("Custom shaders using the old Lit property names are listed for hand edits", WarnOldShaderNames),
         new("Light spot cones saved as an angle and softness, ranges made automatic, colours kept off colour temperature", LightConesAndTemperature),
         new("Scenes baked before baking used physical light units are listed for a rebake", WarnUnscaledBakes),
@@ -327,44 +327,37 @@ internal sealed partial class Release_1_0 : MigrationRelease
     }
 
     private const string LightType = "Prowl.Runtime.Light";
-    private const string ParticleSystemType = "Prowl.Runtime.ParticleSystem.ParticleSystemComponent";
     private const string SceneType = "Prowl.Runtime.Resources.Scene";
 
-    // LegacyLightUnits: old emission, ambient and fog brightness to nits, and old light intensities to lux, candela or nits
-    private const float LegacyLuminance = 1.2f * 16384f;
-    private const float LegacyLight = 8f * LegacyLuminance;
+    /// <summary>Old emission, ambient and fog brightness to nits: what an exposure of 1 showed, kept at EV100 14.</summary>
+    internal const float LegacyLuminance = 1.2f * 16384f;
+
+    /// <summary>Old light intensities to lux, candela or nits, as lights were drawn at 8 times their intensity.</summary>
+    internal const float LegacyLight = 8f * LegacyLuminance;
 
     // AmbientMode.Sky
     private const long AmbientSky = 2;
 
     /// <summary>
-    /// Lights, particle light modules and scene environments and bakes saved before light was physical, which carry no units
-    /// marker, have their intensities scaled and get the marker, so the step can run again. Prefab overrides of a
-    /// light's intensity are scaled when the instance's light in the same file was old, and a particle system's light
-    /// module override converts by its own marker.
+    /// Lights and scene environments and bakes have their intensities scaled from before light was physical, with prefab
+    /// overrides of a light's intensity. Particle light modules are left as they were.
     /// </summary>
     internal static EchoObject? PhysicalLightUnits(EchoObject echo)
     {
         bool changed = false;
-        HashSet<string> oldLights = [], systems = [];
+        HashSet<string> lights = [];
         ForEachCompound(echo, tag =>
         {
             switch (TypeName(tag))
             {
-                case LightType when IsOldUnits(tag, "units"):
+                case LightType:
                     Scale(tag, "intensity", LegacyLight);
-                    tag["units"] = new EchoObject(1);
-                    AddIdentities(tag, oldLights);
+                    AddIdentities(tag, lights);
                     changed = true;
                     break;
-                case ParticleSystemType:
-                    AddIdentities(tag, systems);
-                    if (tag.TryGet("Light", out EchoObject? module)) changed |= LightModuleUnits(module!);
-                    break;
-                case SceneType when IsOldUnits(tag, "_lightUnits"):
+                case SceneType:
                     EnvironmentUnits(tag);
                     BakeUnits(tag);
-                    tag["_lightUnits"] = new EchoObject(1);
                     changed = true;
                     break;
             }
@@ -372,25 +365,11 @@ internal sealed partial class Release_1_0 : MigrationRelease
 
         ForEachCompound(echo, tag =>
         {
-            if (!tag.TryGet("Path", out EchoObject? path) || path!.TagType != EchoType.String || !tag.TryGet("Value", out EchoObject? value)) return;
+            if (!tag.TryGet("Path", out EchoObject? path) || path!.TagType != EchoType.String) return;
             string[] parts = path.StringValue.Split('/', 3);
-            if (parts.Length != 3) return;
-            if (parts[2] == "intensity" && oldLights.Contains(parts[1]) && Scale(tag, "Value", LegacyLight)) changed = true;
-            else if (parts[2] == "Light" && systems.Contains(parts[1])) changed |= LightModuleUnits(value!);
+            if (parts.Length == 3 && parts[2] == "intensity" && lights.Contains(parts[1]) && Scale(tag, "Value", LegacyLight)) changed = true;
         });
         return changed ? echo : null;
-    }
-
-    private static bool LightModuleUnits(EchoObject module)
-    {
-        if (module.TagType != EchoType.Compound || !IsOldUnits(module, "units")) return false;
-        if (module.TryGet("Intensity", out EchoObject? intensity) && intensity!.TagType == EchoType.Compound)
-        {
-            foreach (string field in new[] { "ConstantValue", "MinValue", "MaxValue", "CurveMultiplier" })
-                Scale(intensity, field, LegacyLight);
-        }
-        module["units"] = new EchoObject(1);
-        return true;
     }
 
     // Uniform and hemisphere ambient scaled onto nits, sky ambient follows the sky, fog set to the luminance of its old look
@@ -458,10 +437,6 @@ internal sealed partial class Release_1_0 : MigrationRelease
         if (parent.TryGet(name, out EchoObject? child) && child!.TagType == EchoType.Compound) return child;
         return parent[name] = EchoObject.NewCompound();
     }
-
-    // A units marker of 1 says the values are physical already, anything else that they are from before
-    private static bool IsOldUnits(EchoObject tag, string marker)
-        => !tag.TryGet(marker, out EchoObject? units) || !IsNumber(units!) || units.LongValue == 0;
 
     private static bool IsNumber(EchoObject tag) => tag.TagType is >= EchoType.Byte and <= EchoType.Decimal;
 

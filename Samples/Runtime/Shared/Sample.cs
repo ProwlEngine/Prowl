@@ -947,6 +947,9 @@ public sealed class SampleHud : Component
 /// <summary>Small helpers every sample uses: materials, meshes, curves, procedural textures and Paper widgets.</summary>
 public static class Sample
 {
+    /// <summary>The luminance in nits that shows a colour as it is under a camera at EV100 14.</summary>
+    public const float DisplayLuminance = 1.2f * 16384f;
+
     /// <summary>Randomness for sample content, seeded so every run builds the same scene.</summary>
     public static readonly Random Rng = new(1);
 
@@ -989,7 +992,7 @@ public static class Sample
     {
         var material = new Material(Shader.LoadDefault(DefaultShader.Unlit));
         material.SetColor("base_color", color);
-        material.SetFloat("emission_luminance", LegacyLightUnits.Luminance);
+        material.SetFloat("emission_luminance", DisplayLuminance);
         return material;
     }
 

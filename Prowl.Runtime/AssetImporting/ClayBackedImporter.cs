@@ -504,6 +504,9 @@ internal static class ClayBackedImporter
     // Material bake
     // ----------------------------------------------------------------------------------------
 
+    /// <summary>The luminance in nits that shows a display value as it is under a camera at EV100 14.</summary>
+    private const float DisplayLuminance = 1.2f * 16384f;
+
     /// <summary>The surface matching the source material's alpha mode and sidedness.</summary>
     private static SurfaceSettings SurfaceFor(ClayMaterial src)
     {
@@ -530,7 +533,7 @@ internal static class ClayBackedImporter
 
         // glTF unlit colours are display values, so they glow at the luminance that shows them as they are at EV100 14
         if (src.Unlit)
-            mat.SetFloat("emission_luminance", Rendering.LegacyLightUnits.Luminance);
+            mat.SetFloat("emission_luminance", DisplayLuminance);
 
         // Slots without a texture stay unset: the shader then leaves their input out
         Texture2D? baseColor = ResolveTexture(src.BaseColorTexture, textureCache);

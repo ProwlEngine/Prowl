@@ -169,7 +169,7 @@ public class ProjectMigrationTests : IDisposable
 
         EchoObject items = Item(scene);
         Assert.True(items[0].TryGet("ShadowCasting", out _));
-        Assert.Equal(3f * LegacyLightUnits.Light, items[1]["intensity"].FloatValue);
+        Assert.Equal(3f * Release_1_0.LegacyLight, items[1]["intensity"].FloatValue);
     }
 
     [Fact]
@@ -440,7 +440,7 @@ public class ProjectMigrationTests : IDisposable
         Assert.Equal(0.2f, material.GetFloat("specular_roughness"));
         Assert.Equal(0.7f, material.GetFloat("base_metalness"));
         Assert.Equal(0.6f, material.GetFloat("geometry_opacity"));
-        Assert.Equal(3f * LegacyLightUnits.Luminance, material.GetFloat("emission_luminance"));
+        Assert.Equal(3f * Release_1_0.LegacyLuminance, material.GetFloat("emission_luminance"));
         Assert.Equal(Color.White, material.GetColor("emission_color"));
         Assert.False(material.IsOverridden("_Roughness"));
         Assert.False(material.IsOverridden("_Emission"));
@@ -473,7 +473,7 @@ public class ProjectMigrationTests : IDisposable
         ProjectMigration.Migrate(Project.Open(_root));
 
         Material oldMaterial = ReadMaterial(old);
-        Assert.Equal(LegacyLightUnits.Luminance, oldMaterial.GetFloat("emission_luminance"));
+        Assert.Equal(Release_1_0.LegacyLuminance, oldMaterial.GetFloat("emission_luminance"));
         Assert.Equal(new Color(0.1f, 0.2f, 0.3f, 1f), oldMaterial.GetColor("base_color"));
         Assert.False(oldMaterial._properties.HasFloat("geometry_opacity"));
         Assert.Equal(500f, ReadMaterial(set).GetFloat("emission_luminance"));
@@ -510,7 +510,7 @@ public class ProjectMigrationTests : IDisposable
         Assert.Null(material._properties.GetTexture("base_color_map"));
         Assert.Null(material._properties.GetTexture("_MainTex"));
         Assert.Equal(grid, material.GetTexture("emission_color_map")!.AssetID.ToString());
-        Assert.Equal(LegacyLightUnits.Luminance, material.GetFloat("emission_luminance"));
+        Assert.Equal(Release_1_0.LegacyLuminance, material.GetFloat("emission_luminance"));
         Assert.False(material._properties.HasFloat("base_metalness"));
         float ratio = 0.7f / 1.3f;
         Assert.Equal(1f - ratio * ratio, material.GetFloat("specular_roughness_anisotropy"), 5);
@@ -567,9 +567,9 @@ public class ProjectMigrationTests : IDisposable
         Assert.False(grassMaterial._properties.HasFloat("_Translucency"));
         Assert.Equal(0.2f, grassMaterial.GetFloat("_WindStrength"));
         Material skyMaterial = ReadMaterial(sky);
-        Assert.Equal(2f * LegacyLightUnits.Luminance, skyMaterial.GetFloat("intensity"));
+        Assert.Equal(2f * Release_1_0.LegacyLuminance, skyMaterial.GetFloat("intensity"));
         Assert.False(skyMaterial._properties.HasFloat("_Exposure"));
-        Assert.Equal(LegacyLightUnits.Luminance, ReadMaterial(cubemap).GetFloat("intensity"));
+        Assert.Equal(Release_1_0.LegacyLuminance, ReadMaterial(cubemap).GetFloat("intensity"));
         Assert.Equal(3f, ReadMaterial(procedural).GetFloat("intensity"));
         Material terrainMaterial = ReadMaterial(terrain);
         Assert.False(terrainMaterial._properties.HasInt("_HasHoles"));
@@ -605,14 +605,14 @@ public class ProjectMigrationTests : IDisposable
         ProjectMigration.Migrate(Project.Open(_root));
 
         SceneEnvironment migrated = ReadEnvironment(uniformScene);
-        Assert.Equal(2f * LegacyLightUnits.Luminance, migrated.Ambient.Intensity);
-        Assert.Equal(LegacyLightUnits.Luminance, migrated.Fog.Intensity);
+        Assert.Equal(2f * Release_1_0.LegacyLuminance, migrated.Ambient.Intensity);
+        Assert.Equal(Release_1_0.LegacyLuminance, migrated.Fog.Intensity);
         Assert.Equal(1.5f, migrated.SkyMaterial!.GetFloat("intensity"));
         Assert.False(migrated.SkyMaterial._properties.HasFloat("_Exposure"));
 
         SceneEnvironment skyLit = ReadEnvironment(skyScene);
         Assert.Equal(2f, skyLit.Ambient.Intensity);
-        Assert.Equal(LegacyLightUnits.Luminance, skyLit.Fog.Intensity);
+        Assert.Equal(Release_1_0.LegacyLuminance, skyLit.Fog.Intensity);
         Assert.Equal(new SceneEnvironment().Fog.Density, skyLit.Fog.Density);
     }
 
@@ -633,7 +633,6 @@ public class ProjectMigrationTests : IDisposable
         string target = Guid.NewGuid().ToString();
         string scene = WriteAsset("Main.scene", Scene(
             instance,
-            OldComponent("Light", Guid.NewGuid(), ("intensity", new EchoObject(0.5f)), ("units", new EchoObject(1))),
             Override($"{target}/{source}/intensity", new EchoObject(4f)),
             Override($"{target}/{source}/range", new EchoObject(4f)),
             Override($"{target}/{other}/intensity", new EchoObject(4f))), "SceneImporter");
@@ -642,122 +641,13 @@ public class ProjectMigrationTests : IDisposable
         ProjectMigration.Migrate(Project.Open(_root));
 
         EchoObject items = Item(scene);
-        Assert.Equal(2f * LegacyLightUnits.Light, items[0]["intensity"].FloatValue);
-        Assert.Equal(0.5f, items[1]["intensity"].FloatValue);
-        Assert.Equal(4f * LegacyLightUnits.Light, items[2]["Value"].FloatValue);
+        Assert.Equal(2f * Release_1_0.LegacyLight, items[0]["intensity"].FloatValue);
+        Assert.Equal(4f * Release_1_0.LegacyLight, items[1]["Value"].FloatValue);
+        Assert.Equal(4f, items[2]["Value"].FloatValue);
         Assert.Equal(4f, items[3]["Value"].FloatValue);
-        Assert.Equal(4f, items[4]["Value"].FloatValue);
 
         var light = (Light)Serializer.Deserialize<Component>(items[0])!;
-        Assert.Equal(2f * LegacyLightUnits.Light, light.Intensity);
-    }
-
-    [Fact]
-    public void ParticleLightModules_AndTheirPrefabOverrides_CarryOntoPhysicalUnits()
-    {
-        static EchoObject OldModule(EchoObject module, float constant)
-        {
-            module["Intensity"]["ConstantValue"] = new EchoObject(constant);
-            module["Intensity"]["MinValue"] = new EchoObject(0.25f);
-            module["Intensity"]["MaxValue"] = new EchoObject(0.5f);
-            module["Intensity"]["CurveMultiplier"] = new EchoObject(2f);
-            module.Remove("units");
-            return module;
-        }
-
-        Guid system = Guid.NewGuid();
-        EchoObject component = Serializer.Serialize(typeof(Component), new ParticleSystemComponent());
-        component["_identifier"] = new EchoObject(system.ToString());
-        OldModule(component["Light"], 1f);
-        string target = Guid.NewGuid().ToString();
-        EchoObject moduleOverride = Override($"{target}/{system}/Light", OldModule(Serializer.Serialize(new LightModule()), 3f));
-        string scene = WriteAsset("Main.scene", Scene(component, moduleOverride), "SceneImporter");
-        WriteProwlFile("1.0", appliedSteps: 4);
-
-        ProjectMigration.Migrate(Project.Open(_root));
-
-        EchoObject items = Item(scene);
-        var particles = (ParticleSystemComponent)Serializer.Deserialize<Component>(items[0])!;
-        Assert.Equal(1f * LegacyLightUnits.Light, particles.Light.Intensity.ConstantValue);
-        Assert.Equal(0.25f * LegacyLightUnits.Light, particles.Light.Intensity.MinValue);
-        Assert.Equal(0.5f * LegacyLightUnits.Light, particles.Light.Intensity.MaxValue);
-        Assert.Equal(2f * LegacyLightUnits.Light, particles.Light.Intensity.CurveMultiplier);
-        Assert.Equal(3f * LegacyLightUnits.Light, items[1]["Value"]["Intensity"]["ConstantValue"].FloatValue);
-    }
-
-    private static void RemoveUnitMarkers(EchoObject tag)
-    {
-        if (tag.TagType == EchoType.List)
-        {
-            foreach (EchoObject item in tag.List) RemoveUnitMarkers(item);
-            return;
-        }
-        if (tag.TagType != EchoType.Compound) return;
-        tag.Remove("units");
-        tag.Remove("_lightUnits");
-        foreach (string name in tag.GetNames().ToList()) RemoveUnitMarkers(tag[name]);
-    }
-
-    // Point lights saved back as the single Light component they were before the split
-    private static void AsOldLights(EchoObject tag)
-    {
-        if (tag.TagType == EchoType.List)
-        {
-            foreach (EchoObject item in tag.List) AsOldLights(item);
-            return;
-        }
-        if (tag.TagType != EchoType.Compound) return;
-        if (tag.TryGet("$type", out EchoObject? type) && type!.StringValue.StartsWith("Prowl.Runtime.PointLight,", StringComparison.Ordinal))
-        {
-            tag["$type"] = new EchoObject("Prowl.Runtime.Light, Prowl.Runtime");
-            tag["type"] = new EchoObject(1L);
-        }
-        foreach (string name in tag.GetNames().ToList()) AsOldLights(tag[name]);
-    }
-
-    private static (float Light, float Particles, float Ambient) Intensities(string path)
-    {
-        Scene scene = Serializer.Deserialize<Scene>(EchoObject.ReadFromString(File.ReadAllText(path)))!;
-        try
-        {
-            GameObject lit = scene.RootObjects.First(o => o.Name == "Lit");
-            return (lit.GetComponent<Light>()!.Intensity, lit.GetComponent<ParticleSystemComponent>()!.Light.Intensity.ConstantValue, scene.Environment.Ambient.Intensity);
-        }
-        finally { scene.Dispose(); }
-    }
-
-    [Fact]
-    public void LightUnitMarkers_SurviveAResave_SoMigratingAgainKeepsTheIntensities()
-    {
-        var lit = new GameObject("Lit");
-        lit.AddComponent<PointLight>().Intensity = 2f;
-        lit.AddComponent<ParticleSystemComponent>().Light.Intensity.ConstantValue = 3f;
-        var scene = new Scene();
-        scene.Environment.Ambient.Mode = AmbientMode.Uniform;
-        scene.Environment.Ambient.Intensity = 0.5f;
-        scene.Add(lit);
-        EchoObject old = Serializer.Serialize(typeof(object), scene)!;
-        scene.Dispose();
-        RemoveUnitMarkers(old);
-        AsOldLights(old);
-        string path = WriteAsset("Main.scene", old.WriteToString(), "SceneImporter");
-        WriteProwlFile("1.0", appliedSteps: 6);
-
-        ProjectMigration.Migrate(Project.Open(_root));
-        (float Light, float Particles, float Ambient) migrated = Intensities(path);
-        Assert.Equal(2f * LegacyLightUnits.Light, migrated.Light);
-        Assert.Equal(3f * LegacyLightUnits.Light, migrated.Particles);
-        Assert.Equal(0.5f * LegacyLightUnits.Luminance, migrated.Ambient);
-
-        Scene loaded = Serializer.Deserialize<Scene>(EchoObject.ReadFromString(File.ReadAllText(path)))!;
-        File.WriteAllText(path, Serializer.Serialize(typeof(object), loaded)!.WriteToString());
-        loaded.Dispose();
-
-        var again = new MigrationContext(Project.Open(_root));
-        ProjectMigration.Releases.Single(r => r.Name == "1.0").Steps[6].Run(again);
-
-        Assert.Empty(again.ChangedFiles);
-        Assert.Equal(migrated, Intensities(path));
+        Assert.Equal(2f * Release_1_0.LegacyLight, light.Intensity);
     }
 
     private static EchoObject BakedScene(float lightmapScale)
@@ -775,7 +665,6 @@ public class ProjectMigrationTests : IDisposable
     public void BakesFromBeforePhysicalLight_KeepTheirLook_AndOnlyUnscaledPhysicalOnesNeedARebake()
     {
         EchoObject old = BakedScene(1f);
-        RemoveUnitMarkers(old);
         old["BakedLighting"].Remove("LightmapScale");
         string oldPath = WriteAsset("Old.scene", old.WriteToString(), "SceneImporter");
 
@@ -790,9 +679,9 @@ public class ProjectMigrationTests : IDisposable
         EchoObject migrated = EchoObject.ReadFromString(File.ReadAllText(oldPath));
         Assert.False(Release_1_0.NeedsRebake(migrated));
         Scene scene = Serializer.Deserialize<Scene>(migrated)!;
-        Assert.Equal(LegacyLightUnits.Luminance, scene.BakedLighting.LightmapScale);
-        Assert.Equal(new Float3(1f, 2f, 3f) * LegacyLightUnits.Luminance, scene.BakedLighting.ProbeSH[0].C0);
-        Assert.Equal(new Float3(0.5f, 0.5f, 0.5f) * LegacyLightUnits.Luminance, scene.BakedLighting.ProbeSH[0].C8);
+        Assert.Equal(Release_1_0.LegacyLuminance, scene.BakedLighting.LightmapScale);
+        Assert.Equal(new Float3(1f, 2f, 3f) * Release_1_0.LegacyLuminance, scene.BakedLighting.ProbeSH[0].C0);
+        Assert.Equal(new Float3(0.5f, 0.5f, 0.5f) * Release_1_0.LegacyLuminance, scene.BakedLighting.ProbeSH[0].C8);
         Assert.Equal(Float3.Zero, scene.BakedLighting.ProbePositions[0]);
         scene.Dispose();
 
@@ -803,7 +692,7 @@ public class ProjectMigrationTests : IDisposable
     }
 
     [Fact]
-    public void MaterialAndLightSteps_RunAgain_ChangeNothing()
+    public void StepsBesidesPhysicalUnits_RunAgain_ChangeNothing()
     {
         WriteMaterial("Lit.mat", OldMaterial(DefaultShader.Lit, m => { m.SetColor("_MainColor", Color.White); m.SetInt("_Emission", 1); }));
         WriteMaterial("Unlit.mat", OldMaterial(DefaultShader.Unlit, m => m.SetColor("_MainColor", Color.White)));
@@ -819,7 +708,9 @@ public class ProjectMigrationTests : IDisposable
 
         var again = new MigrationContext(Project.Open(_root));
         foreach (MigrationStep step in ProjectMigration.Releases.Single(r => r.Name == "1.0").Steps)
-            step.Run(again);
+        {
+            if (!step.Name.StartsWith("Light, ambient and fog intensities", StringComparison.Ordinal)) step.Run(again);
+        }
 
         Assert.Empty(again.ChangedFiles);
         foreach ((string file, string text) in migrated)
