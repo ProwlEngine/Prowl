@@ -297,6 +297,13 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
+                <a href="https://github.com/paulbartrum">
+                    <img src="https://avatars.githubusercontent.com/u/1572571?v=4" width="100;" alt="paulbartrum"/>
+                    <br />
+                    <sub><b>paulbartrum</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/Tryibion">
                     <img src="https://avatars.githubusercontent.com/u/71274967?v=4" width="100;" alt="Tryibion"/>
                     <br />
@@ -308,13 +315,6 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                     <img src="https://avatars.githubusercontent.com/u/23508114?v=4" width="100;" alt="Kuvrot"/>
                     <br />
                     <sub><b>Jaime Arturo</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/paulbartrum">
-                    <img src="https://avatars.githubusercontent.com/u/1572571?v=4" width="100;" alt="paulbartrum"/>
-                    <br />
-                    <sub><b>paulbartrum</b></sub>
                 </a>
             </td>
             <td align="center">
