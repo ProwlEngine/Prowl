@@ -191,8 +191,9 @@ internal sealed class PathIntegrator
     /// Project the radiance arriving at a probe <paramref name="position"/> from every direction
     /// into 9-coefficient RGB spherical harmonics. <paramref name="samples"/> uniform-sphere rays
     /// are traced; each ray's radiance is the hit surface's outgoing radiance (emissive +
-    /// albedo·(baked-direct + indirect bounces)), matching the lightmap's shading convention, or the
-    /// environment on a miss. Used by <see cref="LightmapBaker.BakeProbes"/> to light dynamic objects.
+    /// albedo·(direct from every baked light + indirect bounces)), or the environment on a miss.
+    /// Lights that bake their direct light add it as a delta from their direction, since the probes
+    /// are all a dynamic object gets from them. Used by <see cref="LightmapBaker.BakeProbes"/>.
     /// </summary>
     public Sh9Rgb IntegrateProbe(Float3 position, int samples, int bounces, ref Sampler rng)
     {
@@ -212,7 +213,24 @@ internal sealed class PathIntegrator
             Float3 li = ProbeIncomingRadiance(position, dir, bounces, ref rng);
             sh.Accumulate(dir, li, FourPi);
         }
-        return sh.Scaled(1f / samples);
+        sh = sh.Scaled(1f / samples);
+        AccumulateBakedDirect(position, ref sh);
+        return sh;
+    }
+
+    // Each unshadowed light that bakes its direct light, as a delta from its direction. Li is irradiance over pi, so pi turns it back
+    private void AccumulateBakedDirect(Float3 position, ref Sh9Rgb sh)
+    {
+        for (int i = 0; i < _scene.Lights.Count; i++)
+        {
+            var l = _scene.Lights[i];
+            if (!l.BakeDirect) continue;
+            if (!l.Sample(position, out var toLight, out var Li, out float maxDist, _scene.DefaultAttenuation)) continue;
+            if (Li.X + Li.Y + Li.Z <= 0) continue;
+            if (l.CastsShadows && _blas.AnyHit(position, toLight, _bias, maxDist - 2 * _bias, _cullEnabled, ProwlKeepPositiveDet))
+                continue;
+            sh.Accumulate(toLight, Li, (float)System.Math.PI);
+        }
     }
 
     /// <summary>Radiance arriving at a probe along <paramref name="dir"/>: environment on a miss,
@@ -225,7 +243,7 @@ internal sealed class PathIntegrator
         ResolveHitSurface(hit, out Float3 albedo, out Float3 emissive);
         Float3 lo = emissive;
         if (_scene.Lights.Count > 0)
-            lo += albedo * SampleAllLights(hit.Position, hit.Normal, bakedDirectOnly: true);
+            lo += albedo * SampleAllLights(hit.Position, hit.Normal);
         if (bounces > 0)
             lo += albedo * TracePath(hit.Position, hit.Normal, Float3.One, bounces, ref rng);
         return lo;
