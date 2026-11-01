@@ -84,9 +84,9 @@ public sealed partial class VehicleShowcaseGame
     }
 
     private Material Textured(string texture, Color tint, float roughness, float tiling)
-        => Lit(tint, 0f, roughness).With("_MainTex", Load<Texture2D>(texture)).Tiled(tiling, tiling);
+        => Lit(tint, 0f, roughness).With("base_color_map", Load<Texture2D>(texture)).Tiled(tiling, tiling);
 
-    private static Material Grid(Color tint) => Lit(tint, 0f, 0.85f).With("_MainTex", Texture2D.LoadDefault(DefaultTexture.Grid));
+    private static Material Grid(Color tint) => Lit(tint, 0f, 0.85f).With("base_color_map", Texture2D.LoadDefault(DefaultTexture.Grid));
 
     // ----------------------------------------------------------------
     //  Car park
@@ -203,7 +203,7 @@ public sealed partial class VehicleShowcaseGame
         const float LineT = 0.02f;
         Float3 start = path(LineT) + new Float3(0f, Bump(0f), 0f);
         Quaternion lineRotation = Quaternion.LookRotation(Float3.Normalize(path(LineT + 0.01f) - path(LineT)), Float3.UnitY);
-        GameObject line = Model("Start Line", Plane(width, 1.5f), Lit(Color.White, 0f, 0.7f).With("_MainTex", Load<Texture2D>("Textures/Checker")).Tiled(width * 0.5f, 1f), start + new Float3(0f, 0.03f, 0f));
+        GameObject line = Model("Start Line", Plane(width, 1.5f), Lit(Color.White, 0f, 0.7f).With("base_color_map", Load<Texture2D>("Textures/Checker")).Tiled(width * 0.5f, 1f), start + new Float3(0f, 0.03f, 0f));
         line.Transform.Rotation = lineRotation;
         Add(line);
 
@@ -218,7 +218,7 @@ public sealed partial class VehicleShowcaseGame
 
         foreach (float side in new[] { -1f, 1f })
             Static("Gantry Post", new Float3(0.4f, 5f, 0.4f), start + Side(LineT) * (width * 0.5f + 0.6f) * side + new Float3(0f, 2.5f, 0f));
-        GameObject banner = Model("Gantry", Mesh.CreateCube(new Float3(width + 1.6f, 0.8f, 0.4f)), Lit(new Color(0.02f, 0.02f, 0.03f, 1f)).Emissive(Orange, 1.2f), start + new Float3(0f, 5.2f, 0f));
+        GameObject banner = Model("Gantry", Mesh.CreateCube(new Float3(width + 1.6f, 0.8f, 0.4f)), Lit(new Color(0.02f, 0.02f, 0.03f, 1f)).Emissive(Orange, 24000f), start + new Float3(0f, 5.2f, 0f));
         banner.Transform.Rotation = lineRotation;
         Add(banner);
         return track;
@@ -327,7 +327,7 @@ public sealed partial class VehicleShowcaseGame
     private void BuildIceRink(Float3 c)
     {
         const float Width = 60f, Length = 90f;
-        Material ice = Lit(Color.White, 0.1f, 0.08f).With("_MainTex", Load<Texture2D>("Textures/Ice")).Tiled(6f, 9f);
+        Material ice = Lit(Color.White, 0.1f, 0.08f).With("base_color_map", Load<Texture2D>("Textures/Ice")).Tiled(6f, 9f);
         GameObject rink = Static("Ice", new Float3(Width, 0.1f, Length), c + new Float3(0f, 0.05f, 0f), material: ice);
         rink.AddComponent<WheelSurface>().Grip = 0.12f;
         rink.AddComponent<TyreSurface>().Spray = TyreSprayKind.Chips;
@@ -389,7 +389,7 @@ public sealed partial class VehicleShowcaseGame
         collider.Radius = 10f;
         collider.Height = 0.3f;
         table.AddComponent<Spinner>().DegreesPerSecond = 25f;
-        Part(table, Model("Turntable Stripe", Mesh.CreateCube(new Float3(1f, 0.02f, 19f)), Lit(Orange).Emissive(Orange, 0.8f), Float3.Zero), new Float3(0f, 0.16f, 0f));
+        Part(table, Model("Turntable Stripe", Mesh.CreateCube(new Float3(1f, 0.02f, 19f)), Lit(Orange).Emissive(Orange, 16000f), Float3.Zero), new Float3(0f, 0.16f, 0f));
         Add(table);
     }
 

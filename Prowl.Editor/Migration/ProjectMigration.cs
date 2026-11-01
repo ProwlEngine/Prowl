@@ -216,9 +216,8 @@ public sealed class MigrationContext
     /// <summary> Runs convert on the text of every asset with one of the extensions, like ".shader". </summary>
     public void RewriteText(Func<string, string> convert, params string[] extensions)
     {
-        foreach (string path in Directory.EnumerateFiles(Project.AssetsPath, "*.*", SearchOption.AllDirectories))
+        foreach (string path in AssetFiles(extensions))
         {
-            if (!extensions.Any(e => path.EndsWith(e, StringComparison.OrdinalIgnoreCase))) continue;
             string source = File.ReadAllText(path);
             string result = convert(source);
             if (result == source) continue;
@@ -226,6 +225,11 @@ public sealed class MigrationContext
             ChangedFiles.Add(path);
         }
     }
+
+    /// <summary> Every asset with one of the extensions, like ".shader". </summary>
+    public IEnumerable<string> AssetFiles(params string[] extensions)
+        => Directory.EnumerateFiles(Project.AssetsPath, "*.*", SearchOption.AllDirectories)
+            .Where(path => extensions.Any(e => path.EndsWith(e, StringComparison.OrdinalIgnoreCase)));
 
     private IEnumerable<string> MetaFiles() => Directory.EnumerateFiles(Project.AssetsPath, "*.meta", SearchOption.AllDirectories);
 

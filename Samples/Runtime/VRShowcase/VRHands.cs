@@ -208,7 +208,8 @@ public sealed class PhysicsHand : Component
         hand._model = hand.BuildModel(go, Lit(skin, 0.7f), out hand._modelAnimator);
         hand._ghost = new GameObject(side + " Ghost Hand");
         var ghostMaterial = new Material(Shader.LoadDefault(DefaultShader.Lit)) { Surface = new SurfaceSettings(SurfaceType.Transparent) };
-        ghostMaterial.SetColor("_MainColor", new Color(0.6f, 0.8f, 1f, 0.3f));
+        ghostMaterial.SetColor("base_color", new Color(0.6f, 0.8f, 1f, 1f));
+        ghostMaterial.SetFloat("geometry_opacity", 0.3f);
         hand.BuildModel(hand._ghost, ghostMaterial, out hand._ghostAnimator);
         go.Transform.Position = new Float3(0f, -100f, 0f);
         return hand;
@@ -220,9 +221,8 @@ public sealed class PhysicsHand : Component
     private static Material Lit(Color color, float roughness)
     {
         var material = new Material(Shader.LoadDefault(DefaultShader.Lit));
-        material.SetColor("_MainColor", color);
-        material.SetTexture("_SurfaceTex", Texture2D.LoadDefault(DefaultTexture.White));
-        material.SetFloat("_Roughness", roughness);
+        material.SetColor("base_color", color);
+        material.SetFloat("specular_roughness", roughness);
         return material;
     }
 

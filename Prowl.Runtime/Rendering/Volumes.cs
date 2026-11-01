@@ -253,11 +253,12 @@ public sealed class VolumeProfile : Asset
         return existing != null && Components.Remove(existing);
     }
 
-    /// <summary>The base profile new cameras get: AgX Punchy tonemapping.</summary>
+    /// <summary>The base profile new cameras get: ACES tonemapping and auto exposure.</summary>
     public static VolumeProfile CreateCameraDefault(string name)
     {
         var profile = new VolumeProfile { Name = name };
-        profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgXPunchy);
+        profile.Add<Tonemapping>().Mode.Set(TonemappingMode.ACES);
+        profile.Add<AutoExposure>().Enabled.Set(true);
         return profile;
     }
 
@@ -667,8 +668,6 @@ public abstract class PostEffect : VolumeComponent<PostEffectFeature>
 public sealed class PostEffectFeature : RenderFeature, IDisposable
 {
     private readonly FullscreenProgram _program;
-    private readonly RenderSlot _slot;
-    private readonly int _order;
     private readonly bool _depth, _tonemap;
     private readonly FieldInfo[] _fields;
     private readonly PropertyID[] _names;
@@ -676,16 +675,14 @@ public sealed class PostEffectFeature : RenderFeature, IDisposable
     private readonly PropertySet _properties = new();
 
     internal PostEffectFeature(FullscreenProgram program, RenderSlot slot, int order, bool depth, FieldInfo[] fields, bool tonemap)
+        : base(slot, order, tonemap ? FeatureGroup.Tonemap : null)
     {
-        (_program, _slot, _order, _depth, _fields, _tonemap) = (program, slot, order, depth, fields, tonemap);
+        (_program, _depth, _fields, _tonemap) = (program, depth, fields, tonemap);
         _names = [.. fields.Select(f => (PropertyID)("_" + f.Name))];
         _pending = new object?[fields.Length];
         _values = new object?[fields.Length];
     }
 
-    public override RenderSlot Slot => _slot;
-    public override int Order => _order;
-    public override string? ExclusiveGroup => _tonemap ? "Tonemap" : null;
 
     internal void Capture(PostEffect effect)
     {

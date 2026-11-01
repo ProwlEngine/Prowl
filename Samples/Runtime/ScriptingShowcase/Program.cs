@@ -59,8 +59,7 @@ public sealed class ScriptingShowcaseGame : StationGame
         var sun = new GameObject("Sun");
         Light light = sun.AddComponent<Light>();
         light.Type = LightType.Directional;
-        light.ShadowDistance = 60f;
-        light.Intensity = 0.6f;
+        light.Intensity = 100000f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         Add(sun);
 
@@ -137,7 +136,7 @@ public sealed class ScriptingShowcaseGame : StationGame
     private void SpawnLamp()
     {
         Color orange = new(1f, 0.35f, 0.05f, 1f);
-        _lamp = Model("Lamp", Mesh.CreateCube(new Float3(0.8f, 0.8f, 0.8f)), Lit(orange).Emissive(orange, 3f), _lifecycleCenter + new Float3(0f, 1.8f, 0f));
+        _lamp = Model("Lamp", Mesh.CreateCube(new Float3(0.8f, 0.8f, 0.8f)), Lit(orange).Emissive(orange, 60000f), _lifecycleCenter + new Float3(0f, 1.8f, 0f));
         _lamp.AddComponent<LifecycleProbe>();
         _lamp.SetParent(_lifecycleParent);
     }
@@ -177,7 +176,7 @@ public sealed class ScriptingShowcaseGame : StationGame
         AddStation("Hierarchy", "The planet is a child of the spinning sun and the moon is a child of the planet, so each one only spins in place and the parents carry it around. Detach the moon and it stops where it is. Reattach it with or without keeping its world position.", c, new Float3(0f, 7f, -11f), 1.5f);
 
         Color yellow = new(1f, 0.7f, 0.2f, 1f);
-        GameObject sun = Add(Model("Sun", Mesh.CreateSphere(0.9f, 16, 24), Lit(yellow).Emissive(yellow, 4f), c + new Float3(0f, 2f, 0f)));
+        GameObject sun = Add(Model("Sun", Mesh.CreateSphere(0.9f, 16, 24), Lit(yellow).Emissive(yellow, 80000f), c + new Float3(0f, 2f, 0f)));
         sun.AddComponent<Spin>().DegreesPerSecond = new Float3(0f, 30f, 0f);
 
         _planet = Model("Planet", Mesh.CreateSphere(0.45f, 12, 18), Lit(new Color(0.01f, 0.08f, 0.5f, 1f), 0f, 0.4f), Float3.Zero);
@@ -237,7 +236,7 @@ public sealed class ScriptingShowcaseGame : StationGame
 
         // Every copy shares the template's materials, so give each head its own to tint it.
         Color color = Hsv(Sample.Rng.NextSingle(), 0.8f, 1f);
-        copy.GetComponentInChildren<Bob>()!.GetComponent<MeshRenderer>()!.Material = Lit(color).Emissive(color, 2.5f);
+        copy.GetComponentInChildren<Bob>()!.GetComponent<MeshRenderer>()!.Material = Lit(color).Emissive(color, 50000f);
         _clones.Add(copy);
     }
 
@@ -276,7 +275,7 @@ public sealed class ScriptingShowcaseGame : StationGame
         _courier.Stops = pads;
         _courier.Colors = colors;
 
-        _canvas = Lit(new Color(0.4f, 0.4f, 0.4f, 1f), 0f, 0.9f).With("_MainTex", Load<Texture2D>("Textures/Checker"));
+        _canvas = Lit(new Color(0.4f, 0.4f, 0.4f, 1f), 0f, 0.9f).With("base_color_map", Load<Texture2D>("Textures/Checker"));
         Add(Model("Canvas", Mesh.CreateCube(new Float3(3f, 3f, 0.1f)), _canvas, c + new Float3(0f, 2.5f, 6f)));
     }
 
@@ -307,7 +306,7 @@ public sealed class ScriptingShowcaseGame : StationGame
         texture.SetData(new Memory<Color32>(pixels));
         texture.GenerateMipmaps();
         texture.Filter = FilterMode.Trilinear;
-        _canvas.SetTexture("_MainTex", texture);
+        _canvas.SetTexture("base_color_map", texture);
         _paintStatus = $"painted in {timer.ElapsedMilliseconds} ms without stalling a frame";
     }
 
@@ -568,7 +567,7 @@ public sealed class Courier : Component
                     await GameTask.Delay(1f, token);
 
                     Step = "changing color";
-                    GetComponent<MeshRenderer>()!.Material!.SetColor("_MainColor", Colors[i]);
+                    GetComponent<MeshRenderer>()!.Material!.SetColor("base_color", Colors[i]);
                     await GameTask.Frames(30, token);
                 }
             }

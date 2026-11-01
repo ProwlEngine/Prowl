@@ -176,7 +176,7 @@ public static class PrefabEditingMode
         lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
         Light light = lightGo.AddComponent<Light>();
         light.Type = LightType.Directional;
-        light.Intensity = 1f;
+        light.Intensity = 100000f;
         editScene.Add(lightGo);
 
         Scene.Load(editScene);

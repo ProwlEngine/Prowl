@@ -258,6 +258,7 @@ public class TerrainComponent : Component, IRenderSync
     {
         material.SetKeyword("TERRAIN_8_LAYERS", data.LayerCount > 4);
         ApplyHeightfield(material, data);
+        material.SetSurface(data.GetHolesTexture().IsValid() ? new SurfaceSettings(SurfaceType.Cutout) : null);
 
         IReadOnlyList<Texture2D> splatmaps = data.GetSplatmapTextures();
         for (int i = 0; i < splatmaps.Count && i < s_splatNames.Length; i++)
@@ -286,9 +287,7 @@ public class TerrainComponent : Component, IRenderSync
     {
         material.SetKeyword("TERRAIN_BICUBIC", data.Interpolation == TerrainInterpolation.Bicubic);
         material.SetTexture("_Heightmap", data.GetHeightmapTexture());
-        Texture2D? holes = data.GetHolesTexture();
-        material.SetTexture("_HolesMap", holes);
-        material.SetInt("_HasHoles", holes.IsValid() ? 1 : 0);
+        material.SetTexture("_HolesMap", data.GetHolesTexture());
         material.SetFloat("_TerrainSize", data.Size);
         material.SetFloat("_TerrainHeight", data.Height);
     }
@@ -596,18 +595,19 @@ internal sealed class TerrainProvider : RenderProvider
         bool shadow = info.Kind == ViewKind.Shadow;
         bool camera = ((ViewKinds)(1 << (int)info.Kind) & ViewKinds.Cameras) != 0;
 
+        int viewId = Graphics.ViewId(info.RenderView);
         _positions.Clear();
         lock (_cameraLock)
         {
-            if (camera) _cameras[info.ViewId] = (view.Camera, frame.Frame);
+            if (camera) _cameras[viewId] = (view.Camera, frame.Frame);
             if (shadow)
                 foreach ((Double3 position, ulong _) in _cameras.Values) _positions.Add(frame.ToLocal(position));
         }
         if (_positions.Count == 0) _positions.Add(frame.ToLocal(view.Camera));
 
-        CullChunks(frame, info.ViewId, view, sink);
+        CullChunks(frame, viewId, view, sink);
         frame.Grass?.Cull(frame, _positions, view, sink);
-        frame.MeshDetails?.Cull(shadow ? -1 : info.ViewId, view, sink);
+        frame.MeshDetails?.Cull(shadow ? -1 : viewId, view, sink);
         frame.Trees?.Cull(_positions, view, sink);
     }
 
@@ -669,6 +669,9 @@ internal sealed class TerrainMaterial
     private readonly Dictionary<string, int> _ints = [];
     private readonly Dictionary<string, (GTexture? Texture, SamplerDescription Sampler)> _textures = [];
     private readonly Dictionary<string, bool> _keywords = [];
+    private readonly Dictionary<string, int> _channels = [];
+    private SurfaceSettings? _surface;
+    private bool _surfaceSet;
 
     public GMaterial? Gpu { get; private set; }
 
@@ -702,6 +705,9 @@ internal sealed class TerrainMaterial
         _ints.Clear();
         _textures.Clear();
         _keywords.Clear();
+        _channels.Clear();
+        _surface = null;
+        _surfaceSet = false;
     }
 
     public void SetFloat(string name, float value)
@@ -758,10 +764,27 @@ internal sealed class TerrainMaterial
         Gpu.SetTexture(name, gpu, sampler);
     }
 
+    /// <summary>Picks the channel a scalar map reads.</summary>
+    public void SetTextureChannel(string name, int channel)
+    {
+        if (Gpu == null || (_channels.TryGetValue(name, out int old) && old == channel)) return;
+        _channels[name] = channel;
+        Gpu.SetTextureChannel(name, channel);
+    }
+
+    /// <summary>Sets the surface over the source material's, null to take the source's.</summary>
+    public void SetSurface(SurfaceSettings? surface)
+    {
+        if (Gpu == null || (_surfaceSet && _surface == surface)) return;
+        _surfaceSet = true;
+        _surface = surface;
+        Gpu.Surface = surface?.ToGraphite();
+    }
+
     public void SetKeyword(string axis, bool value)
     {
         if (Gpu == null || (_keywords.TryGetValue(axis, out bool old) && old == value)) return;
         _keywords[axis] = value;
-        Gpu.SetKeyword(axis, value ? VariantSpace.ToggleValues[1] : VariantSpace.ToggleValues[0]);
+        if (Material.FindAxis(Gpu.Shader, axis) is { } gpuAxis) Gpu.Set(gpuAxis, value);
     }
 }

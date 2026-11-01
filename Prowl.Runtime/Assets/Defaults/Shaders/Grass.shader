@@ -1,17 +1,21 @@
+// Terrain grass: Graphite's Lit surface on blades the vertex stage scatters across the terrain, see Prowl/TerrainScatter.glsl.
+// Blades are thin walled, so the light through them is OpenPBR's thin walled subsurface, tinted by the blade's colour.
+// The detail renderer draws it cut out against the texture's alpha.
 Shader "Default/Grass"
 {
     Properties
     {
-        _MainTex("Grass Texture", Texture2D) = "white"
-        _AlphaCutoff("Alpha Cutoff", Float) = 0.5
-        _WindStrength("Wind Strength", Float) = 0.3
+        base_color("Base Color", Color) = (1.0, 1.0, 1.0, 1.0)
+        specular_roughness("Specular Roughness", Float) = 0.9 [Range(0, 1)]
+        subsurface_weight("Subsurface Weight", Float) = 0.5 [Range(0, 1)] [Header("Subsurface")] [Toggle(PBR_SUBSURFACE)]
+        subsurface_color("Subsurface Color", Color) = (1.0, 1.0, 1.0, 1.0)
+        subsurface_scatter_anisotropy("Subsurface Scatter Anisotropy", Float) = 0.3 [Range(-1, 1)]
+        geometry_thin_walled("Geometry Thin Walled", Integer) = 1 [Enum(Off, On)] [Toggle(PBR_THIN_WALLED)] [TwoSided]
+
+        _WindStrength("Wind Strength", Float) = 0.3 [Header("Grass")]
         _WindSpeed("Wind Speed", Float) = 1.5
         _Billboard("Billboard", Float) = 1.0
         _AlignToNormal("Align To Normal", Float) = 0.0
-        _Translucency("Translucency", Float) = 15.0
-        _ScatterPower("Scattering Power", Float) = 0.0
-        _ScatterDistortion("Scattering Distortion", Float) = 0.5
-        _ScatterScale("Scattering Scale", Float) = 1.0
 
         _Heightmap("Heightmap", Texture2D) = "black"
         _TerrainSize("Terrain Size", Float) = 1024.0
@@ -40,151 +44,25 @@ Shader "Default/Grass"
         _WindZoneParams3("Wind Zone 3 Params", Vector) = (0.0, 0.0, 0.0, 0.0)
     }
 
-    Pass
+    Surface "Lit"
     {
-        Name "Forward"
-        Tags { "LightMode" = "Forward" }
-        Cull Off
         GLSLPROGRAM
-        Vertex
+        void Surface(inout PBR_Params p, Graphite_SurfaceData i)
         {
-            #include "Prowl/TerrainScatter.glsl"
-
-            out vec2 vUV;
-            out vec4 vColor;
-            out vec3 vRelativePos;
-            out vec3 vNormal;
-
-            void main()
-            {
-                vUV = vertexUV0;
-                if (!grassVertex(vRelativePos, vNormal, vColor))
-                {
-                    // Every vertex of an absent blade lands on one point, so it rasterizes nothing
-                    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
-                    return;
-                }
-                gl_Position = Graphite_RelativeToClip(vRelativePos);
-            }
-        }
-        Fragment
-        {
-            #include "Prowl/Common.glsl"
-            #include "Graphite/Lighting.glsl"
-            #include "Graphite/Passes.glsl"
-            #pragma variant global GRAPHITE_DEBUG OFF UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY
-            #include "Graphite/Debug.glsl"
-
-            layout(location = 0) out vec4 fragColor;
-
-            in vec2 vUV;
-            in vec4 vColor;
-            in vec3 vRelativePos;
-            in vec3 vNormal;
-
-            uniform sampler2D _MainTex;
-            uniform float _AlphaCutoff;
-            uniform float _Translucency;
-            uniform float _ScatterPower;
-            uniform float _ScatterDistortion;
-            uniform float _ScatterScale;
-
-            void main()
-            {
-                vec4 finalColor = texture(_MainTex, vUV) * vColor;
-                if (finalColor.a < _AlphaCutoff)
-                    discard;
-
-                vec3 baseColor = texture(_MainTex, vUV).rgb * gammaToLinearSpace(vColor.rgb);
-                // Grass is double sided, back faces shade with the flipped normal
-                vec3 normal = normalize(vNormal) * (gl_FrontFacing ? 1.0 : -1.0);
-                float metallic = 0.0;
-                Graphite_DebugInputs(baseColor, metallic);
-
-                vec3 viewDir = Graphite_ViewDir(vRelativePos);
-                vec3 lighting = CalculateForwardLighting(vRelativePos, normal, viewDir, baseColor, 0.0, 0.9, 1.0,
-                                                         _Translucency, _ScatterPower, _ScatterDistortion, _ScatterScale);
-                vec3 ambient = Graphite_IndirectDiffuse(normal, vec2(0.0)) * baseColor;
-
-                vec3 color = ApplyFog(ambient + lighting, vRelativePos);
-                fragColor = vec4(Graphite_DebugView(color, baseColor, normal, 0.9, 0.0, 1.0, vec3(0.0), vRelativePos, vec2(0.0)), 1.0);
-                Graphite_WriteGBuffer(normal, 0.9, 0.0);
-            }
+            p.subsurfaceColor *= p.baseColor;
         }
         ENDGLSL
-    }
 
-    Pass
-    {
-        Name "Prepass"
-        Tags { "LightMode" = "Prepass" }
-        Cull Off
-        GLSLPROGRAM
         Vertex
         {
+            GLSLPROGRAM
             #include "Prowl/TerrainScatter.glsl"
 
-            out vec2 vUV;
-
-            void main()
+            void SurfaceVertex(inout Graphite_SurfaceVertex v)
             {
-                vUV = vertexUV0;
-                vec3 relative, normal;
-                vec4 color;
-                gl_Position = grassVertex(relative, normal, color) ? Graphite_RelativeToClip(relative) : vec4(2.0, 2.0, 2.0, 1.0);
+                grassVertex(v);
             }
+            ENDGLSL
         }
-        Fragment
-        {
-            in vec2 vUV;
-
-            uniform sampler2D _MainTex;
-            uniform float _AlphaCutoff;
-
-            void main()
-            {
-                if (texture(_MainTex, vUV).a < _AlphaCutoff)
-                    discard;
-            }
-        }
-        ENDGLSL
     }
-
-    Pass
-    {
-        Name "ShadowCaster"
-        Tags { "LightMode" = "ShadowCaster" }
-        Cull Off
-        GLSLPROGRAM
-        Vertex
-        {
-            #include "Prowl/TerrainScatter.glsl"
-
-            out vec2 vUV;
-
-            void main()
-            {
-                vUV = vertexUV0;
-                vec3 relative, normal;
-                vec4 color;
-                gl_Position = grassVertex(relative, normal, color) ? Graphite_RelativeToClip(relative) : vec4(2.0, 2.0, 2.0, 1.0);
-            }
-        }
-        Fragment
-        {
-            in vec2 vUV;
-
-            uniform sampler2D _MainTex;
-            uniform float _AlphaCutoff;
-
-            void main()
-            {
-                if (texture(_MainTex, vUV).a < _AlphaCutoff)
-                    discard;
-            }
-        }
-        ENDGLSL
-    }
-
-    Fallback "Graphite/Fallback"
 }

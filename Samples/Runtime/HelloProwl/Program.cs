@@ -82,7 +82,7 @@ public sealed class HelloProwlGame : Game
     public static Material MakeMaterial(Color color)
     {
         var material = new Material(Shader.LoadDefault(DefaultShader.Lit));
-        material.SetColor("_MainColor", color);
+        material.SetColor("base_color", color);
         return material;
     }
 }
@@ -120,7 +120,7 @@ public sealed class Spinner : Component
         if (Input.GetKeyDown(KeyCode.Space))
         {
             _colorIndex = (_colorIndex + 1) % Palette.Length;
-            _renderer.Material!.SetColor("_MainColor", Palette[_colorIndex]);
+            _renderer.Material!.SetColor("base_color", Palette[_colorIndex]);
             Debug.Log($"Switched to color {_colorIndex}");
         }
     }

@@ -19,7 +19,7 @@
 
     },
     "_floats": {
-      "_AlphaCutoff": 0.5F,
+      "alpha_cutoff": 0.5F,
       "_WindStrength": 0.3F,
       "_WindSpeed": 1.5F
     },

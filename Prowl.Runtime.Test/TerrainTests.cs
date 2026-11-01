@@ -896,6 +896,20 @@ public class TerrainTests
         Assert.Equal(Color.White, clone.Trees[0].Tint);
     }
 
+    [Fact]
+    public void TreesSavedWithAZeroTint_LoadWhite_AndNewTreesStartWhite()
+    {
+        using var data = new TerrainData();
+        data.TreePrototypes.Add(new TreePrototype());
+        data.Trees.Add(new TreeInstance { Tint = default });
+
+        using TerrainData clone = Serializer.Deserialize<TerrainData>(Serializer.Serialize(data))!;
+
+        Assert.Equal(Color.White, clone.Trees[0].Tint);
+        Assert.Equal(Color.White, new TreeInstance().Tint);
+        Assert.Equal(1f, new TreeInstance().WidthScale);
+    }
+
     #endregion
 }
 

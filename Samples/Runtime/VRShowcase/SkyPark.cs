@@ -148,9 +148,9 @@ public sealed partial class VRShowcaseGame
         Light light = lamp.AddComponent<Light>();
         light.Type = LightType.Spot;
         light.Range = 30f;
-        light.OuterAngle = 40f;
-        light.InnerAngle = 25f;
-        light.Intensity = 6f;
+        light.SpotAngle = 80f;
+        light.SpotSoftness = 1f - 25f / 40f;
+        light.Intensity = 950000f;
         light.Color = new Color(1f, 0.95f, 0.85f, 1f);
         light.Enabled = false;
         torch.AddComponent<Flashlight>().Lamp = light;
@@ -260,7 +260,7 @@ public sealed partial class VRShowcaseGame
     private Action<bool> Lamp(Float3 at, Color color)
     {
         Material off = Lit(new Color(color.R * 0.15f, color.G * 0.15f, color.B * 0.15f, 1f), 0f, 0.3f);
-        Material on = Lit(color, 0f, 0.3f).Emissive(color, 3f);
+        Material on = Lit(color, 0f, 0.3f).Emissive(color, 60000f);
         GameObject lamp = Model("Lamp", Mesh.CreateSphere(0.05f, 10, 14), off, at);
         Add(lamp);
         MeshRenderer renderer = lamp.GetComponent<MeshRenderer>()!;
@@ -315,7 +315,7 @@ public sealed partial class VRShowcaseGame
         float elevation = -25f + 75f * value;
         _sunLight.Transform.LocalEulerAngles = new Float3(elevation, 30f, 0f);
         float day = Saturate((elevation + 2f) / 20f);
-        _sunLight.Intensity = 0.6f * day;
+        _sunLight.Intensity = 100000f * day;
         _sunLight.Color = Lerp(new Color(1f, 0.45f, 0.2f, 1f), Color.White, Saturate(elevation / 30f));
         Scene? scene = _sunLight.GameObject.Scene;
         if (scene.IsNotValid()) return;

@@ -111,8 +111,7 @@ public sealed partial class VRShowcaseGame : StationGame
         var sun = new GameObject("Sun");
         Light light = sun.AddComponent<Light>();
         light.Type = LightType.Directional;
-        light.ShadowDistance = 40f;
-        light.Intensity = 0.6f;
+        light.Intensity = 100000f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         Add(sun);
         _sunLight = light;
