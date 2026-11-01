@@ -64,7 +64,7 @@ public sealed class NavMeshBakeService
         if (task.IsFaulted)
         {
             Status = "Failed";
-            Runtime.Debug.LogError($"[Navigation] Bake failed: {task.Exception!.GetBaseException()}");
+            Runtime.Debug.LogException($"[Navigation] Bake failed", task.Exception!.GetBaseException());
             return;
         }
         if (surface.IsNotValid())
@@ -137,7 +137,7 @@ public sealed class NavMeshBakeService
         }
         catch (Exception e)
         {
-            Runtime.Debug.LogError($"[Navigation] Saving the baked navmesh failed: {e}");
+            Runtime.Debug.LogException($"[Navigation] Saving the baked navmesh failed", e);
             return false;
         }
     }

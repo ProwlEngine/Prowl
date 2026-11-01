@@ -200,7 +200,7 @@ public class UIInputField : Selectable,
     {
         if (!IsInteractable()) return;
         try { OnSubmitted?.Invoke(_text); }
-        catch (Exception ex) { Debug.LogError($"[UIInputField] OnSubmitted on '{Name}' threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[UIInputField] OnSubmitted on '{Name}' threw", ex); }
         EventSystem? es = EventSystem.Current;
         if (es.IsValid()) es.SetSelected(null); // ends editing (fires OnDeselect -> EndEdit)
     }
@@ -462,14 +462,14 @@ public class UIInputField : Selectable,
         UpdateDisplay();
         ResetBlink();
         try { OnValueChanged?.Invoke(_text); }
-        catch (Exception ex) { Debug.LogError($"[UIInputField] OnValueChanged on '{Name}' threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[UIInputField] OnValueChanged on '{Name}' threw", ex); }
         _onValueChanged.Invoke();
     }
 
     private void EndEdit()
     {
         try { OnEndEdit?.Invoke(_text); }
-        catch (Exception ex) { Debug.LogError($"[UIInputField] OnEndEdit on '{Name}' threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[UIInputField] OnEndEdit on '{Name}' threw", ex); }
         _onEndEdit.Invoke();
     }
 

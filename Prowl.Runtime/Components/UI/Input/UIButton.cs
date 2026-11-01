@@ -42,7 +42,7 @@ public class UIButton : Selectable, IPointerClickHandler, ISubmitHandler
         try { OnClick?.Invoke(); }
         catch (Exception ex)
         {
-            Debug.LogError($"[UIButton] OnClick handler on '{Name}' threw: {ex.Message}\n{ex.StackTrace}");
+            Debug.LogException($"[UIButton] OnClick handler on '{Name}' threw", ex);
         }
     }
 }

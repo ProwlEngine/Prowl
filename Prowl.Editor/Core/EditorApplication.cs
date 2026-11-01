@@ -229,7 +229,7 @@ public class EditorApplication : Game
             if (eo.IsValid())
             {
                 try { eo.OnValidate(); }
-                catch (Exception ex) { Runtime.Debug.LogError($"OnValidate threw on {eo.GetType().Name}: {ex}"); }
+                catch (Exception ex) { Debug.LogException($"OnValidate threw on {eo.GetType().Name}", ex); }
             }
 
             // Record the edit against the prefab it belongs to as it happens, rather than relying on
@@ -1863,7 +1863,7 @@ public class EditorApplication : Game
             // A handler that throws must not leave the play button dead. Letting the transition
             // through is the safer failure: the alternative is an editor that cannot be played in
             // and does not say why.
-            Runtime.Debug.LogError($"A play mode handler threw, so the transition went ahead anyway: {ex}");
+            Runtime.Debug.LogException($"A play mode handler threw, so the transition went ahead anyway", ex);
             return false;
         }
 

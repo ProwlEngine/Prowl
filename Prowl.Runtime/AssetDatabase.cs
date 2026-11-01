@@ -378,13 +378,13 @@ public static class AssetDatabase
     private static void Raise(Action<Asset>? handler, Asset asset)
     {
         try { handler?.Invoke(asset); }
-        catch (Exception ex) { Debug.LogError($"An asset event handler threw for '{asset.Name}': {ex}"); }
+        catch (Exception ex) { Debug.LogException($"An asset event handler threw for '{asset.Name}'", ex); }
     }
 
     private static void RaiseReloaded(Asset asset, ReloadReason reason)
     {
         try { Reloaded?.Invoke(asset, reason); }
-        catch (Exception ex) { Debug.LogError($"An asset event handler threw for '{asset.Name}': {ex}"); }
+        catch (Exception ex) { Debug.LogException($"An asset event handler threw for '{asset.Name}'", ex); }
     }
 
     /// <summary>Loads a set of assets, and by default everything they depend on, holding them all until the group is disposed.</summary>
@@ -780,7 +780,7 @@ public static class AssetDatabase
         }
 
         try { WalkingRoots?.Invoke(s_walker); }
-        catch (Exception ex) { Debug.LogError($"Walking extra asset roots threw: {ex}"); }
+        catch (Exception ex) { Debug.LogException($"Walking extra asset roots threw", ex); }
 
         s_walker.VisitHeldStatics();
     }

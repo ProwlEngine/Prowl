@@ -2,10 +2,10 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
 
 using Prowl.Editor.Core;
-using Prowl.Editor.GUI;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
@@ -113,6 +113,18 @@ public class ConsolePanel : DockPanel
         lock (s_messagesLock) _messages.Clear();
     }
 
+    // Helper class to redirect Console.WriteLine and Console.Error.WriteLine to the console panel.
+    private sealed class LoggingTextWriter(LogSeverity severity) : TextWriter
+    {
+        public override Encoding Encoding => Encoding.UTF8;
+
+        public override void WriteLine(string? value)
+        {
+            if (!string.IsNullOrEmpty(value))
+                Debug.Log(value, severity);
+        }
+    }
+
     /// <summary>Subscribe the shared log store to Debug.OnLog if not already. Safe to call before any
     /// ConsolePanel is opened - the status-bar footer relies on this to show logs regardless.</summary>
     public static void EnsureSubscribed()
@@ -120,6 +132,14 @@ public class ConsolePanel : DockPanel
         if (_subscribed) return;
         _subscribed = true;
         Debug.OnLog += OnLogMessage;
+
+        // Anthology libraries don't have access to Debug.Log, so they use Console.WriteLine or Console.Error.WriteLine.
+        // When running the editor, redirect these to the console panel.
+        Console.SetOut(new LoggingTextWriter(LogSeverity.Warning));
+        Console.SetError(new LoggingTextWriter(LogSeverity.Error));
+
+        // Turn off the default console output to prevent duplication.
+        Debug.LogToConsole = false;
     }
 
     // ---- Status-bar footer accessors (read-only view of the shared log store) ----

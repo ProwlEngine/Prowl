@@ -217,7 +217,7 @@ public sealed class MainThreadContext : SynchronizationContext
         }
 
         try { _session.Cancel(); }
-        catch (AggregateException e) { Debug.LogError($"[Tasks] A session cancellation callback threw: {e.InnerException?.Message}\n{e.InnerException?.StackTrace}"); }
+        catch (AggregateException e) { Debug.LogException($"[Tasks] A session cancellation callback threw", e.GetBaseException()); }
 
         while (_frameWaiters.TryDequeue(out FrameWaiter waiter))
         {
@@ -276,7 +276,7 @@ public sealed class MainThreadContext : SynchronizationContext
 
         // An async void method that failed after its session ended still says so, even though it does not resume.
         if (state is ExceptionDispatchInfo failure)
-            Debug.LogError($"[Tasks] An async method from an ended session threw: {failure.SourceException.Message}\n{failure.SourceException.StackTrace}");
+            Debug.LogException($"[Tasks] An async method from an ended session threw", failure.SourceException);
     }
 
     public override void Send(SendOrPostCallback d, object? state)
@@ -384,7 +384,7 @@ public sealed class MainThreadContext : SynchronizationContext
         {
             try { entry.Callback(entry.State); }
             catch (OperationCanceledException e) when (IsDeliberateCancellation(e)) { }
-            catch (Exception e) { Debug.LogError($"[Tasks] A queued continuation threw: {e.Message}\n{e.StackTrace}"); }
+            catch (Exception e) { Debug.LogException($"[Tasks] A queued continuation threw", e); }
 
             // The callback ended this session, and whatever it restarted into owns the thread from here.
             if (IsEnded)

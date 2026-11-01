@@ -1581,7 +1581,7 @@ public sealed class AudioSource : Component
             if (!_effectProcessFailed)
             {
                 _effectProcessFailed = true;
-                Debug.LogError($"[{Name}] Audio effect processing threw and is now producing silence: {ex}");
+                Debug.LogException($"[{Name}] Audio effect processing threw and is now producing silence", ex);
             }
 
             if (framesOut != null && framesOut[0] != null)
@@ -1603,7 +1603,7 @@ public sealed class AudioSource : Component
             if (!_proceduralProcessFailed)
             {
                 _proceduralProcessFailed = true;
-                Debug.LogError($"[{Name}] Procedural audio generation threw and is now producing silence: {ex}");
+                Debug.LogException($"[{Name}] Procedural audio generation threw and is now producing silence", ex);
             }
 
             if (pFramesOut != IntPtr.Zero)

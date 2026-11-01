@@ -461,7 +461,7 @@ public sealed class AudioMixerGroup : Asset
             if (!_effectProcessFailed)
             {
                 _effectProcessFailed = true;
-                Debug.LogError($"Audio mixer group '{_groupName}' effect processing threw and is now producing silence: {ex}");
+                Debug.LogException($"Audio mixer group '{_groupName}' effect processing threw and is now producing silence", ex);
             }
 
             if (framesOut != null && framesOut[0] != null)

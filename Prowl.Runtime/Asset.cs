@@ -174,7 +174,7 @@ public abstract class Asset : EngineObject
     private void FreeNative()
     {
         try { OnUnload(); }
-        catch (Exception ex) { Debug.LogError($"Unloading {GetType().Name} '{Name}' threw: {ex}"); }
+        catch (Exception ex) { Debug.LogException($"Unloading {GetType().Name} '{Name}' threw", ex); }
     }
 
     /// <summary>Frees the payload and gives the asset a fresh shell's values, which is what a missing asset reads as.</summary>

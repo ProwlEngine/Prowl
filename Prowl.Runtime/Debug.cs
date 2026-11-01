@@ -11,6 +11,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
@@ -88,28 +89,31 @@ public static class Debug
     public static event OnLog? OnLog;
 
     public static void Log(object? message)
-        => Log(message?.ToString() ?? "null", LogSeverity.Normal);
+        => LogCore(message?.ToString() ?? "null", LogSeverity.Normal);
 
     public static void Log(string message)
-        => Log(message, LogSeverity.Normal);
+        => LogCore(message, LogSeverity.Normal);
+
+    public static void Log(string message, LogSeverity logSeverity)
+        => LogCore(message, logSeverity);
 
     public static void LogWarning(object? message)
-        => Log(message?.ToString() ?? "null", LogSeverity.Warning);
+        => LogCore(message?.ToString() ?? "null", LogSeverity.Warning);
 
     public static void LogWarning(string message)
-        => Log(message, LogSeverity.Warning);
+        => LogCore(message, LogSeverity.Warning);
 
     public static void LogError(object? message)
-        => Log(message?.ToString() ?? "null", LogSeverity.Error);
+        => LogCore(message?.ToString() ?? "null", LogSeverity.Error);
 
     public static void LogError(string message)
-        => Log(message, LogSeverity.Error);
+        => LogCore(message, LogSeverity.Error);
 
     public static void LogSuccess(object? message)
-        => Log(message?.ToString() ?? "null", LogSeverity.Success);
+        => LogCore(message?.ToString() ?? "null", LogSeverity.Success);
 
     public static void LogSuccess(string message)
-        => Log(message, LogSeverity.Success);
+        => LogCore(message, LogSeverity.Success);
 
     #region Deduplicated logging
 
@@ -128,19 +132,19 @@ public static class Debug
     /// </summary>
     public static void LogOnce(string id, string message)
     {
-        if (ShouldReport(id)) Log(Tag(id, message), LogSeverity.Normal);
+        if (ShouldReport(id)) LogCore(Tag(id, message), LogSeverity.Normal);
     }
 
     /// <inheritdoc cref="LogOnce"/>
     public static void LogWarningOnce(string id, string message)
     {
-        if (ShouldReport(id)) Log(Tag(id, message), LogSeverity.Warning);
+        if (ShouldReport(id)) LogCore(Tag(id, message), LogSeverity.Warning);
     }
 
     /// <inheritdoc cref="LogOnce"/>
     public static void LogErrorOnce(string id, string message)
     {
-        if (ShouldReport(id)) Log(Tag(id, message), LogSeverity.Error);
+        if (ShouldReport(id)) LogCore(Tag(id, message), LogSeverity.Error);
     }
 
     /// <summary>
@@ -189,69 +193,100 @@ public static class Debug
 
     #endregion
 
-    /// <summary>Logs an exception with what was happening when it was thrown, as <see cref="LogSeverity.Exception"/>.</summary>
+    /// <summary>
+    /// Indicates whether the logging methods should output to the console. Defaults to <see langword="true"/>.
+    /// </summary>
+    public static bool LogToConsole { get; set; } = true;
+
+    /// <summary>
+    /// Logs an exception with context.
+    /// </summary>
+    /// <param name="context"> A short line of context that preceeds the exception message in logs. </param>
+    /// <param name="exception"> The exception to log. </param>
+    /// <remarks>
+    /// Exceptions are logged with severity <see cref="LogSeverity.Exception"/>.
+    /// </remarks>
     public static void LogException(string context, Exception exception)
     {
-        DebugStackTrace trace = (DebugStackTrace)new StackTrace(exception, true);
-        string message = $"{context}: {exception.Message}";
+        var builder = new StringBuilder();
 
-        lock (s_consoleLock)
+        // Append context.
+        if (!string.IsNullOrEmpty(context))
         {
-            ConsoleColor prevColor = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.DarkRed;
-            Console.WriteLine(message);
-            Console.WriteLine(trace.ToString());
-            Console.ForegroundColor = prevColor;
+            builder.Append(context);
+            builder.Append(": ");
         }
 
-        OnLog?.Invoke(message, trace, LogSeverity.Exception);
+        // Append the outer exception message.
+        builder.Append(exception.GetType().FullName);
+        builder.Append(": ");
+        builder.Append(exception.Message);
+
+        // Append any inner exception messages, separated by " --> ".
+        while (exception.InnerException != null)
+        {
+            exception = exception.InnerException;
+            builder.Append(" --> ");
+            builder.Append(exception.GetType().FullName);
+            builder.Append(": ");
+            builder.Append(exception.Message);
+        }
+
+        // Use the innermost exception's stack trace.
+        var trace = (DebugStackTrace)new StackTrace(exception, fNeedFileInfo: true);
+        LogCore(builder.ToString(), LogSeverity.Exception, trace);
     }
 
+    /// <summary>
+    /// Logs an exception without context.
+    /// </summary>
+    /// <param name="exception"> The exception to log. </param>
+    /// <remarks>
+    /// Exceptions are logged with severity <see cref="LogSeverity.Exception"/>.
+    /// </remarks>
     public static void LogException(Exception exception)
     {
-        ConsoleColor prevColor = Console.ForegroundColor;
-
-        Console.ForegroundColor = ConsoleColor.DarkRed;
-        Console.WriteLine(exception.Message);
-
-        if (exception.InnerException != null)
-            Console.WriteLine(exception.InnerException.Message);
-
-        DebugStackTrace trace = (DebugStackTrace)new StackTrace(exception.InnerException ?? exception, true);
-
-        Console.WriteLine(trace.ToString());
-
-        Console.ForegroundColor = prevColor;
-
-        OnLog?.Invoke(exception.Message + "\n" + (exception.InnerException?.Message ?? ""), trace, LogSeverity.Exception);
+        LogException(string.Empty, exception);
     }
 
     // Color and text are two console calls, so logs from different threads would otherwise swap colors.
-    private static readonly object s_consoleLock = new();
+    private static readonly Lock s_consoleLock = new();
 
-    // NOTE : StackTrace is pretty fast on modern .NET, so it's nice to keep it on by default, since it gives useful line numbers for debugging purposes.
-    // For reference, getting a stack trace on a modern machine takes around 15 μs at a depth of 15.
-    public static void Log(string message, LogSeverity logSeverity, DebugStackTrace? customTrace = null)
+    /// <summary>
+    /// Writes a message with the specified severity and triggers the <see cref="OnLog"/> event.
+    /// </summary>
+    /// <param name="message"> The message to log. </param>
+    /// <param name="logSeverity"> The severity of the message. </param>
+    /// <param name="customTrace"> An optional stack trace to use and display with the message. If omitted, a stack
+    /// trace is captured automatically.</param>
+    /// <remarks>
+    /// The message is written to the console when console logging is enabled. The log event receives the message,
+    /// stack trace, and severity.
+    /// </remarks>
+    private static void LogCore(string message, LogSeverity logSeverity, DebugStackTrace? customTrace = null)
     {
-        DebugStackTrace trace = customTrace ?? (DebugStackTrace)new StackTrace(2, true);
+        // NOTE : StackTrace is pretty fast on modern .NET, so it's nice to keep it on by default, since it gives useful line numbers for debugging purposes.
+        // For reference, getting a stack trace on a modern machine takes around 15 μs at a depth of 15.
+        // NOTE 2 : Assumes that the first two frames are this method and the public logging method, so the caller is at frame 2.
+        DebugStackTrace trace = customTrace ?? (DebugStackTrace)new StackTrace(skipFrames: 2, fNeedFileInfo: true);
 
-        lock (s_consoleLock)
+        if (LogToConsole)
         {
-            ConsoleColor prevColor = Console.ForegroundColor;
-
-            Console.ForegroundColor = logSeverity switch
+            lock (s_consoleLock)
             {
-                LogSeverity.Success => ConsoleColor.Green,
-                LogSeverity.Warning => ConsoleColor.Yellow,
-                LogSeverity.Error => ConsoleColor.Red,
-                LogSeverity.Exception => ConsoleColor.DarkRed,
-                _ => ConsoleColor.White
-            };
-
-            Console.WriteLine(message);
-            if (customTrace != null) Console.WriteLine(customTrace.ToString());
-
-            Console.ForegroundColor = prevColor;
+                ConsoleColor prevColor = Console.ForegroundColor;
+                Console.ForegroundColor = logSeverity switch
+                {
+                    LogSeverity.Success => ConsoleColor.Green,
+                    LogSeverity.Warning => ConsoleColor.Yellow,
+                    LogSeverity.Error => ConsoleColor.Red,
+                    LogSeverity.Exception => ConsoleColor.DarkRed,
+                    _ => ConsoleColor.White
+                };
+                Console.WriteLine(message);
+                if (customTrace != null) Console.WriteLine(customTrace.ToString());
+                Console.ForegroundColor = prevColor;
+            }
         }
 
         OnLog?.Invoke(message, trace, logSeverity);
@@ -290,13 +325,13 @@ public static class Debug
     /// <summary>Logs an error when <paramref name="condition"/> is false, in every build, and carries on.</summary>
     public static void Assert(bool condition, string? message)
     {
-        if (!condition) Log(message == null ? "Assertion failed" : $"Assertion failed: {message}", LogSeverity.Error);
+        if (!condition) LogCore(message == null ? "Assertion failed" : $"Assertion failed: {message}", LogSeverity.Error);
     }
 
     /// <inheritdoc cref="Assert(bool, string?)"/>
     public static void Assert(bool condition)
     {
-        if (!condition) Log("Assertion failed", LogSeverity.Error);
+        if (!condition) LogCore("Assertion failed", LogSeverity.Error);
     }
 
     #region Gizmos
