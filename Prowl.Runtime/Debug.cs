@@ -94,7 +94,7 @@ public static class Debug
     public static void Log(string message)
         => LogCore(message, LogSeverity.Normal);
 
-    public static void LogWithSeverity(string message, LogSeverity logSeverity)
+    public static void Log(string message, LogSeverity logSeverity)
         => LogCore(message, logSeverity);
 
     public static void LogWarning(object? message)
