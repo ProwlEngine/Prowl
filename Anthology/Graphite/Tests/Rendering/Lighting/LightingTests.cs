@@ -1026,7 +1026,7 @@ public sealed partial class LightingTests : IDisposable
         {
             CaptureEV100 = UnitEV100,
             AmbientColor = new Float4(0.5f, 0.5f, 0.5f, 1),
-            Fog = new FogDesc { Mode = FogMode.Linear, Color = new Float4(1, 0, 0, 1), Start = 0, End = 20 },
+            Fog = new FogDesc { Mode = FogMode.Linear, Color = new Float4(1, 0, 0, 1), Start = 0, End = 20, UseSky = false },
         };
 
         AssertMatches(p =>
@@ -3102,6 +3102,7 @@ public sealed partial class LightingTests : IDisposable
         Float4[] columns = [new(1, 0, 0, 1), new(0, 1, 0, 1), new(0, 0, 1, 1), new(1, 1, 0, 1)];
         Material sky = _renderer.CreateMaterial(_renderer.Skies.Panorama);
         sky.SetTexture("_Panorama", Lightmap<Float4>(4, PixelFormat.R32_G32_B32_A32_Float, columns), SamplerDescription.Point);
+        sky.SetFloat("intensity", 1);
         sky.SetColor("_Tint", new Float4(1, 0.5f, 1, 1));
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = sky };
 

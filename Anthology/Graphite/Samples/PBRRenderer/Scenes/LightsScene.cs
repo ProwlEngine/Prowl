@@ -146,7 +146,7 @@ internal sealed class LightsScene : DemoScene
             AmbientColor = new Float4(0.03f, 0.04f, 0.07f, 1),
             SkyColor = new Float4(0.01f, 0.015f, 0.03f, 1),
             Sun = moon,
-            Fog = new FogDesc { Mode = FogMode.ExponentialSquared, Color = new Float4(0.02f, 0.03f, 0.05f, 1), Density = 0.012f },
+            Fog = new FogDesc { Mode = FogMode.ExponentialSquared, Color = new Float4(0.02f, 0.03f, 0.05f, 1), Density = 0.012f, UseSky = false },
         };
     }
 

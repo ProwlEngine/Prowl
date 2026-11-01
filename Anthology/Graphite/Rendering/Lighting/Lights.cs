@@ -248,6 +248,7 @@ public struct FogDesc : IEquatable<FogDesc>
         Density = 0.01f;
         Start = 20;
         End = 100;
+        UseSky = true;
     }
 
     public readonly bool Equals(FogDesc other)
