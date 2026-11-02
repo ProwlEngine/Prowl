@@ -415,6 +415,7 @@ public sealed class NetSession : IDisposable
             return;
         }
 
+        _batcher.FlushAll();
         if (IsHost)
         {
             WriteGoodbye(SessionEndReason.HostShutdown, message ?? "The host closed the session.");

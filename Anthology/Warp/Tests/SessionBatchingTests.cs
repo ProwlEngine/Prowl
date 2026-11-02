@@ -110,6 +110,27 @@ public class SessionBatchingTests
     }
 
     [Theory]
+    [InlineData(false, Delivery.Reliable)]
+    [InlineData(true, Delivery.Reliable)]
+    [InlineData(false, Delivery.Unreliable)]
+    [InlineData(true, Delivery.Unreliable)]
+    public void ShutdownSendsMessagesStillInTheBatch(bool toClient, Delivery delivery)
+    {
+        using Pair pair = new();
+        NetSession sender = toClient ? pair.Host : pair.Client;
+        NetSession receiver = toClient ? pair.Client : pair.Host;
+        NetPeer destination = toClient ? pair.Remote : pair.Client.HostPeer!;
+        List<byte> received = new();
+        receiver.OnRaw(42, (_, ref reader, _, _) => received.Add(reader.ReadByte()));
+        sender.SendRaw(destination, 42, new byte[] { 1 }, delivery);
+        sender.SendRaw(destination, 42, new byte[] { 2 }, delivery);
+        sender.Shutdown();
+
+        pair.Receive(receiver);
+        Assert.Equal(new byte[] { 1, 2 }, received);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void HandlerShutdownStopsRemainingBatchMessages(bool toClient)
