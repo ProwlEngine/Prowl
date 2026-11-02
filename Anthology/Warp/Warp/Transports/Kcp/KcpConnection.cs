@@ -24,6 +24,7 @@ public sealed class KcpConnection : Connection
 
     // One KCP conversation per channel, created when the channel is first used.
     private Protocol.Kcp?[]? _reliable;
+    private long _releasedRetransmits;
     private double _smoothedRttMs;
 
     internal KcpConnection(KcpTransport transport, int id, string address, bool isOutgoing, SocketAddress? remote,
@@ -56,6 +57,8 @@ public sealed class KcpConnection : Connection
 
     /// <summary>What one queued reliable segment costs against the send limit.</summary>
     private long SegmentBytes => Math.Max(_options.Mtu, Protocol.Kcp.MTU_DEF);
+
+    public override ConnectionStats Stats => base.Stats with { Retransmits = Retransmits() };
 
     public override TimeSpan RoundTripTime => TimeSpan.FromMilliseconds(_smoothedRttMs);
 
@@ -146,6 +149,22 @@ public sealed class KcpConnection : Connection
     /// <summary>Header bytes in front of a reliable channel's KCP segments: channel 0's is implied by its packet type.</summary>
     private static int HeaderSize(byte channel) =>
         channel == 0 ? KcpPacket.SessionHeaderSize : KcpPacket.ChannelHeaderSize;
+
+    private long Retransmits()
+    {
+        if (_reliable == null)
+        {
+            return _releasedRetransmits;
+        }
+
+        long total = 0;
+        foreach (Protocol.Kcp? kcp in _reliable)
+        {
+            total += kcp?.retransmits ?? 0;
+        }
+
+        return total;
+    }
 
     /// <summary>Queued and unacknowledged reliable segments, across every channel.</summary>
     private long PendingReliableSegments()
@@ -350,6 +369,7 @@ public sealed class KcpConnection : Connection
 
     internal void ReleaseBuffers()
     {
+        _releasedRetransmits = Retransmits();
         _reliable = null;
     }
 

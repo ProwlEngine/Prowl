@@ -7,13 +7,15 @@ namespace Prowl.Warp;
 
 /// <summary>
 ///     Traffic counters for a <see cref="Connection" />, counted at the packet level (including protocol
-///     overhead, retransmissions and keepalives).
+///     overhead, retransmissions and keepalives). <see cref="Retransmits" /> counts reliable packets sent again
+///     because they were lost or late; divided by <see cref="PacketsSent" /> it estimates the loss rate.
 /// </summary>
 public readonly record struct ConnectionStats(
     long PacketsSent,
     long PacketsReceived,
     long BytesSent,
-    long BytesReceived);
+    long BytesReceived,
+    long Retransmits = 0);
 
 /// <summary>
 ///     One end of a link between this <see cref="Transport" /> and a remote peer. Connections are created

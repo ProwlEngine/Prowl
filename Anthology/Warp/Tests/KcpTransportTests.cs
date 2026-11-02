@@ -171,6 +171,26 @@ public class KcpTransportTests
     }
 
     [Fact]
+    public void StatsCountRetransmitsOnALossyLink()
+    {
+        LinkSimulation lossy = new() { PacketLoss = 0.3, Seed = 7 };
+        (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) =
+            Connect(clientOptions: FastOptions(lossy));
+        using (host)
+        using (client)
+        {
+            Assert.Equal(0, toHost.Stats.Retransmits);
+            for (int i = 0; i < 50; i++)
+            {
+                toHost.Send(new byte[100], Delivery.Reliable);
+            }
+
+            pump.Until(() => toHost.PendingSendBytes == 0, what: "acknowledgements");
+            Assert.True(toHost.Stats.Retransmits > 0);
+        }
+    }
+
+    [Fact]
     public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
     {
         KcpTransportOptions options = FastOptions();

@@ -111,6 +111,9 @@ public sealed class Kcp
     internal bool updated;
     internal uint xmit;
 
+    // not part of the original C code. every resend, timed out or fast, for statistics.
+    internal long retransmits;
+
     // ikcp_create
     // create a new kcp control object, 'conv' must equal in two endpoint
     // from the same connection.
@@ -990,6 +993,7 @@ public sealed class Kcp
 
                 segment.resendts = current + (uint)segment.rto;
                 lost = true;
+                retransmits++;
             }
             // fast retransmit
             else if (segment.fastack >= resent)
@@ -1001,6 +1005,7 @@ public sealed class Kcp
                     segment.fastack = 0;
                     segment.resendts = current + (uint)segment.rto;
                     change++;
+                    retransmits++;
                 }
             }
 
