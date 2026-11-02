@@ -37,6 +37,7 @@ internal sealed class KcpCipher : IDisposable
     private static readonly BigInteger CurveB = Unsigned(Convert.FromHexString(
         "5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B"));
     private static readonly byte[] Label = Encoding.ASCII.GetBytes("Prowl.Warp.Kcp.5");
+    private static readonly byte[] SignatureLabel = Encoding.ASCII.GetBytes("Prowl.Warp.Kcp.5 host signature");
 
     private readonly AesGcm _receive;
     private readonly uint _receiveSalt;
@@ -76,15 +77,19 @@ internal sealed class KcpCipher : IDisposable
         return exchange;
     }
 
-    /// <summary>What the host signs: both public keys and the ids of this handshake.</summary>
+    /// <summary>What the host signs: a label, the protocol id, both public keys and the ids of this handshake.</summary>
     public static byte[] Transcript(ReadOnlySpan<byte> clientPublic, ReadOnlySpan<byte> hostPublic, uint nonce,
-        uint sessionId)
+        uint sessionId, uint protocolId)
     {
-        byte[] transcript = new byte[PublicKeySize * 2 + 8];
-        clientPublic.CopyTo(transcript);
-        hostPublic.CopyTo(transcript.AsSpan(PublicKeySize));
-        BinaryPrimitives.WriteUInt32LittleEndian(transcript.AsSpan(PublicKeySize * 2), nonce);
-        BinaryPrimitives.WriteUInt32LittleEndian(transcript.AsSpan(PublicKeySize * 2 + 4), sessionId);
+        byte[] transcript = new byte[SignatureLabel.Length + 4 + PublicKeySize * 2 + 8];
+        Span<byte> rest = transcript;
+        SignatureLabel.CopyTo(rest);
+        rest = rest[SignatureLabel.Length..];
+        BinaryPrimitives.WriteUInt32LittleEndian(rest, protocolId);
+        clientPublic.CopyTo(rest[4..]);
+        hostPublic.CopyTo(rest[(4 + PublicKeySize)..]);
+        BinaryPrimitives.WriteUInt32LittleEndian(rest[(4 + PublicKeySize * 2)..], nonce);
+        BinaryPrimitives.WriteUInt32LittleEndian(rest[(8 + PublicKeySize * 2)..], sessionId);
         return transcript;
     }
 

@@ -558,7 +558,7 @@ public sealed class KcpTransport : Transport
         hostPublic.CopyTo(accept, KcpPacket.AcceptSize);
         if (Settings.Encryption!.SigningKey is { } signer)
         {
-            signer.SignData(KcpCipher.Transcript(clientPublic, hostPublic, nonce, sessionId),
+            signer.SignData(KcpCipher.Transcript(clientPublic, hostPublic, nonce, sessionId, Settings.ProtocolId),
                 accept.AsSpan(KcpPacket.AcceptSize + KcpCipher.PublicKeySize), HashAlgorithmName.SHA256);
         }
 

@@ -348,6 +348,17 @@ public class KcpEncryptionTests
     }
 
     [Fact]
+    public void TheSignedTranscriptIsLabelledAndBoundToTheProtocol()
+    {
+        byte[] client = new byte[KcpCipher.PublicKeySize], host = new byte[KcpCipher.PublicKeySize];
+        byte[] first = KcpCipher.Transcript(client, host, 1, 2, 0x50524157);
+        byte[] other = KcpCipher.Transcript(client, host, 1, 2, 0x12345678);
+
+        Assert.NotEqual(first, other);
+        Assert.StartsWith("Prowl.Warp.Kcp", Encoding.ASCII.GetString(first));
+    }
+
+    [Fact]
     public void DeeplyReorderedPacketsStillOpenButReplaysDoNot()
     {
         (KcpCipher client, KcpCipher host) = CipherPair();

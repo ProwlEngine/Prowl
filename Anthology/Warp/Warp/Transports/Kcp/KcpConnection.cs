@@ -644,7 +644,7 @@ public sealed class KcpConnection : Connection
         ReadOnlySpan<byte> hostPublic = accept.Slice(KcpPacket.AcceptSize, KcpCipher.PublicKeySize);
         ReadOnlySpan<byte> signature = accept.Slice(KcpPacket.AcceptSize + KcpCipher.PublicKeySize);
         if (_transport.TrustedHostKey is { } trusted && !trusted.VerifyData(
-                KcpCipher.Transcript(PublicKey, hostPublic, ClientNonce, SessionId), signature,
+                KcpCipher.Transcript(PublicKey, hostPublic, ClientNonce, SessionId, _options.ProtocolId), signature,
                 HashAlgorithmName.SHA256))
         {
             return false;
