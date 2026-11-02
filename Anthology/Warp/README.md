@@ -29,7 +29,7 @@ while (transport.Poll(out TransportEvent ev))
 {
     // Handle Connected, Data and Disconnected events.
 }
-// Send with connection.Send(data, Delivery.Reliable / Delivery.Unreliable).
+// Send with connection.Send(data, Delivery.Reliable / Unreliable / UnreliableSequenced).
 transport.Flush();
 ```
 
@@ -41,15 +41,39 @@ transport.Flush();
 - Options are copied at construction. Queue budgets and timeouts bound stalled peers;
   exhausted transport budgets disconnect with `ResourceLimit`.
 - Transport `Shutdown` permits reuse; `Dispose` is terminal. Wrappers own their inner transport.
+- `Connection.PendingSendBytes` and `MaxPendingSendBytes` show how full a peer's send queue is, so a sender can
+  back off before a slow peer is disconnected. `Connection.Stats` counts packets, bytes and retransmits.
+
+## Delivery
+
+| Delivery              | Guarantees                                                                  |
+|-----------------------|-----------------------------------------------------------------------------|
+| `Reliable`            | Every message, in order within its channel                                  |
+| `Unreliable`          | None. Channel 0 only                                                        |
+| `UnreliableSequenced` | None, but an older message than one already delivered on its channel is dropped |
+
+On KCP, unreliable messages larger than one datagram are split into up to 32 pieces and are lost whole if any piece
+is lost. Keep frequent ones small.
+
+## KCP options
+
+- `Encryption`: off by default. Each connection agrees on keys with an ephemeral P-256 exchange, then every session
+  packet is sealed with AES-256-GCM and replays are dropped. Give the host a `SigningKey` and clients its public key
+  as `TrustedHostKey` to stop a man in the middle. Encrypted clients keep their session when their address
+  changes, such as a phone moving between Wi-Fi and mobile data. Both ends must agree.
+- `MaxSendRate`: caps the bytes per second each connection sends. Lower channels get the bandwidth first.
+- `UseIoThreads`: reads and writes the socket on background threads. Everything else still runs when you pump.
+- `Reliability.MaxRetransmitTimeout`: the longest a lost segment waits before it is resent, 1 second by default.
 
 `NetWriter` and `NetReader` serialize primitives, strings, GUIDs and varints.
 
 ## Channels
 
-Reliable messages take an optional channel, `0` to `Capabilities.Channels - 1` (KCP and Local default to 4). Each
-channel is its own ordered stream; on KCP, its own conversation, so a lost packet on one never holds up another.
-Unreliable messages have no order to keep, so they always use channel 0. Channel 0 costs nothing on the wire;
-other channels add one byte per reliable packet.
+Reliable and sequenced messages take an optional channel, `0` to `Capabilities.Channels - 1` (KCP and Local default
+to 4). Each channel is its own ordered stream; on KCP, its own conversation, so a lost packet on one never holds up
+another. Plain unreliable messages have no order to keep, so they always use channel 0. Channel 0 costs nothing on
+the wire; other channels add one byte per reliable packet. Keep bulk transfers off channel 0, which also carries
+session messages.
 
 ```csharp
 session.SendRaw(peer, ChatId, payload, Delivery.Reliable, channel: 1);  // doesn't wait behind channel 0
@@ -64,6 +88,8 @@ session.SendRaw(peer, ChatId, payload, Delivery.Reliable, channel: 1);  // doesn
 
 `NetSession` adds admission, peer lists, typed/raw messages and fragmentation. Clients connect to
 one host; there is no host migration. Match `AppVersion` and transport settings between peers.
+`MaxPeers` cannot exceed the transport's connection limit. Each side announces its `MaxMessageSize` when joining,
+and sending a larger message throws `ArgumentException`.
 
 `NetSessionOptions.BatchMessages` defaults to true. When both peers enable it, sessions combine
 small messages per connection and delivery mode until `Flush`. Full batches and
