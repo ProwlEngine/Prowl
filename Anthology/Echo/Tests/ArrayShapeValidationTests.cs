@@ -25,6 +25,8 @@ public class ArrayShapeValidationTests
     [InlineData(new[] { 2, 2 }, 3)]
     [InlineData(new[] { 1, 1 }, 2)]
     [InlineData(new[] { 0, 2 }, 1)]
+    [InlineData(new[] { int.MaxValue, 0 }, 0)]
+    [InlineData(new[] { 0, int.MaxValue }, 0)]
     public void InvalidShapeIsRejectedBeforeArrayAllocation(int[] dimensions, int count)
     {
         EchoObject value = Shape(dimensions, count);
@@ -49,6 +51,7 @@ public class ArrayShapeValidationTests
     [Theory]
     [InlineData(1_000_000, 0)]
     [InlineData(0, 1_000_000)]
+    [InlineData(0x7FFFFFC7, 0)]
     public void EmptyArraysWithLargeAxesRoundTripWithoutWalkingEmptyDimensions(int first, int second)
     {
         int[,] source = new int[first, second];

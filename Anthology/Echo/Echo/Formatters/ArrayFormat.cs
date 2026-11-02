@@ -8,6 +8,9 @@ namespace Prowl.Echo.Formatters;
 
 internal sealed class ArrayFormat : ISerializationFormat
 {
+    // Array.MaxLength, which netstandard2.1 lacks.
+    private const int MaxArrayLength = 0x7FFFFFC7;
+
     public bool CanHandle(Type type) => type.IsArray;
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
@@ -130,6 +133,7 @@ internal sealed class ArrayFormat : ISerializationFormat
                 foreach (int length in dimensions)
                 {
                     if (length < 0) throw new InvalidDataException("Array dimensions cannot be negative.");
+                    if (length > MaxArrayLength) throw new InvalidDataException("Array dimension exceeds the largest supported length.");
                     empty |= length == 0;
                 }
 
