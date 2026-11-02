@@ -42,6 +42,9 @@ public sealed class NetPeer
     /// </summary>
     public Connection? Connection { get; }
 
+    /// <summary>The largest message this peer accepts, as it announced when joining.</summary>
+    internal int MaxMessageSize { get; set; } = int.MaxValue;
+
     /// <summary>Round trip time to this peer, or zero when there is no direct connection.</summary>
     public TimeSpan RoundTripTime => Connection?.RoundTripTime ?? TimeSpan.Zero;
 

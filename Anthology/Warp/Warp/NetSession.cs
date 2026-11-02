@@ -329,6 +329,7 @@ public sealed class NetSession : IDisposable
     ///     The session is not <see cref="SessionState.Active" />, or a client targets
     ///     another client.
     /// </exception>
+    /// <exception cref="ArgumentException">The message is larger than the receiver accepts.</exception>
     public void Send<T>(NetPeer to, T message, Delivery delivery = Delivery.Reliable, SendFlags flags = SendFlags.None,
         byte channel = 0)
         where T : INetMessage
@@ -722,6 +723,7 @@ public sealed class NetSession : IDisposable
         string name = reader.ReadString(MaxNameBytes);
         byte[] token = reader.ReadBytesWithLength(MaxJoinTokenBytes).ToArray();
         remote.BatchMessages = reader.ReadBool() && _options.BatchMessages;
+        remote.MaxMessageSize = ReadMessageLimit(ref reader);
 
         if (version != _options.AppVersion)
         {
@@ -782,7 +784,10 @@ public sealed class NetSession : IDisposable
             return;
         }
 
-        NetPeer peer = new(_nextPeerId++, pending.Request.Name, false, connection);
+        NetPeer peer = new(_nextPeerId++, pending.Request.Name, false, connection)
+        {
+            MaxMessageSize = remote.MaxMessageSize
+        };
         remote.Stage = RemoteStage.Joined;
         remote.Peer = peer;
         _peers.Add(peer.Id, peer);
@@ -799,6 +804,7 @@ public sealed class NetSession : IDisposable
         }
 
         _writer.WriteBool(remote.BatchMessages);
+        _writer.WriteVarUInt32((uint)_options.MaxMessageSize);
         SendToConnection(connection, _writer.WrittenSpan, Delivery.Reliable);
 
         _writer.Reset();
@@ -875,6 +881,7 @@ public sealed class NetSession : IDisposable
                 _writer.WriteString(_joinName);
                 _writer.WriteBytesWithLength(_joinToken);
                 _writer.WriteBool(_options.BatchMessages);
+                _writer.WriteVarUInt32((uint)_options.MaxMessageSize);
                 SendToConnection(HostConnection, _writer.WrittenSpan, Delivery.Reliable);
                 _joinDeadlineMs = NowMs + (long)_options.JoinTimeout.TotalMilliseconds;
                 break;
@@ -1060,6 +1067,7 @@ public sealed class NetSession : IDisposable
         LocalPeer = local;
         HostPeer = host;
         _batchWithHost = reader.ReadBool() && _options.BatchMessages;
+        host.MaxMessageSize = ReadMessageLimit(ref reader);
         State = SessionState.Active;
         _joinDeadlineMs = long.MaxValue;
         try
@@ -1116,6 +1124,17 @@ public sealed class NetSession : IDisposable
         }
 
         return (int)id;
+    }
+
+    private static int ReadMessageLimit(ref NetReader reader)
+    {
+        uint limit = reader.ReadVarUInt32();
+        if (limit < 64 || limit > 1024 * 1024 * 1024)
+        {
+            throw new InvalidDataException("Invalid message size limit.");
+        }
+
+        return (int)limit;
     }
 
     private static SessionEndReason ReadReason(ref NetReader reader)
@@ -1195,6 +1214,7 @@ public sealed class NetSession : IDisposable
     private void SendWritten(NetPeer to, Delivery delivery, SendFlags flags, byte channel)
     {
         ValidateSend(delivery, flags, channel);
+        ValidateSize(to);
 
         if (to.IsLocal)
         {
@@ -1503,12 +1523,30 @@ public sealed class NetSession : IDisposable
 
         foreach (NetPeer peer in _peers.Values)
         {
+            if (peer != except)
+            {
+                ValidateSize(peer);
+            }
+        }
+
+        foreach (NetPeer peer in _peers.Values)
+        {
             if (peer == except || (peer.IsLocal && !includeLocal))
             {
                 continue;
             }
 
             SendWritten(peer, delivery, flags, channel);
+        }
+    }
+
+    /// <summary>Throws if the written message is larger than <paramref name="to" /> accepts.</summary>
+    private void ValidateSize(NetPeer to)
+    {
+        if (_writer.Length > to.MaxMessageSize)
+        {
+            throw new ArgumentException(
+                $"{to} accepts messages of at most {to.MaxMessageSize} bytes, but this one is {_writer.Length}.");
         }
     }
 
@@ -1667,6 +1705,7 @@ public sealed class NetSession : IDisposable
     {
         public bool BatchMessages;
         public long DeadlineMs;
+        public int MaxMessageSize = int.MaxValue;
 
         // A lingering client whose goodbye is still unacknowledged is closed here at the latest.
         public long GiveUpMs;

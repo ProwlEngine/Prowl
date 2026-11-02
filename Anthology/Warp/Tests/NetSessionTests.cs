@@ -222,6 +222,31 @@ public abstract class NetSessionTests : IDisposable
             host.Session.SendRaw(host.Session.LocalPeer!, 30, new byte[] { 1 }, Delivery.Unreliable, channel: 1));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MessagesLargerThanTheReceiverAcceptsThrowAtTheSender(bool toClient)
+    {
+        SessionProbe host = Host(new NetSessionOptions { BatchMessages = BatchMessages, MaxMessageSize = 4096 });
+        SessionProbe alice = Join("alice",
+            new NetSessionOptions { BatchMessages = BatchMessages, MaxMessageSize = toClient ? 1024 : 1 << 20 });
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        NetSession sender = toClient ? host.Session : alice.Session;
+        NetPeer to = toClient ? host.Session.Peers.Single(p => !p.IsLocal) : alice.Session.HostPeer!;
+        int limit = toClient ? 1024 : 4096;
+
+        Assert.Throws<ArgumentException>(() => sender.SendRaw(to, 30, new byte[limit]));
+        if (toClient)
+        {
+            Assert.Throws<ArgumentException>(() => host.Session.BroadcastRaw(30, new byte[limit]));
+        }
+
+        sender.SendRaw(to, 30, new byte[limit - 2]);
+        SessionProbe.PumpFor(100, host, alice);
+        Assert.Equal(SessionState.Active, alice.Session.State);
+        Assert.Equal(2, host.Session.Peers.Count);
+    }
+
     [Fact]
     public void ClientsJoinAndEveryoneAgreesOnThePeerList()
     {
@@ -768,7 +793,13 @@ public abstract class NetSessionTests : IDisposable
         SessionProbe alice = Join("alice");
         SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
 
-        alice.Session.SendRaw(alice.Session.HostPeer!, 20, new byte[500_000]);
+        // Senders refuse to send this, so announce it by hand, as a misbehaving client would.
+        using NetWriter fragment = new();
+        fragment.WriteUInt16(NetSession.ReservedMessageIds + 5);
+        fragment.WriteBool(true);
+        fragment.WriteVarUInt32(500_000);
+        fragment.WriteBytes(new byte[100]);
+        alice.Session.HostPeer!.Connection!.Send(fragment.WrittenSpan, Delivery.Reliable);
         SessionProbe.PumpUntil(() => alice.EndedWith != null, host, alice);
 
         Assert.Equal(SessionEndReason.ProtocolError, alice.EndedWith!.Value.Reason);

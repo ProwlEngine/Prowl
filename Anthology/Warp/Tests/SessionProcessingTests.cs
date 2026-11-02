@@ -143,6 +143,7 @@ public class SessionProcessingTests
         accepted.WriteVarUInt32(1);
         accepted.WriteString("client");
         accepted.WriteBool(false);
+        accepted.WriteVarUInt32(1 << 20);
         client.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, accepted.WrittenMemory));
 
         Assert.Equal(new[] { "joined", "Reliable 1 7" }, log);
@@ -175,6 +176,7 @@ public class SessionProcessingTests
         accepted.WriteVarUInt32(1);
         accepted.WriteString("client");
         accepted.WriteBool(false);
+        accepted.WriteVarUInt32(1 << 20);
         Assert.Throws<InvalidOperationException>(() =>
             client.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, accepted.WrittenMemory)));
 
@@ -259,6 +261,7 @@ public class SessionProcessingTests
         request.WriteString("client");
         request.WriteBytesWithLength(ReadOnlySpan<byte>.Empty);
         request.WriteBool(true);
+        request.WriteVarUInt32(1 << 20);
         host.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, request.WrittenMemory));
     }
 
