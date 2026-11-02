@@ -86,32 +86,72 @@ public record DebugStackTrace(params DebugStackFrame[] StackFrames)
 
 public static class Debug
 {
+    /// <summary>
+    /// Triggered when a message is logged.
+    /// </summary>
     public static event OnLog? OnLog;
 
+    /// <summary>
+    /// Logs a message at normal severity.
+    /// </summary>
+    /// <param name="message"> The message to log. Can be <see langword="null"/>. </param>
     public static void Log(object? message)
         => LogCore(message?.ToString() ?? "null", LogSeverity.Normal);
 
+    /// <summary>
+    /// Logs a message at normal severity.
+    /// </summary>
+    /// <param name="message"> The message to log. </param>
     public static void Log(string message)
         => LogCore(message, LogSeverity.Normal);
 
+    /// <summary>
+    /// Logs a message with a custom severity.
+    /// </summary>
+    /// <param name="message"> The message to log. </param>
+    /// <param name="logSeverity"> The severity of the log entry. </param>
     public static void Log(string message, LogSeverity logSeverity)
         => LogCore(message, logSeverity);
 
+    /// <summary>
+    /// Logs a warning.
+    /// </summary>
+    /// <param name="message"> The warning message to log. Can be <see langword="null"/>. </param>
     public static void LogWarning(object? message)
         => LogCore(message?.ToString() ?? "null", LogSeverity.Warning);
 
+    /// <summary>
+    /// Logs an warning.
+    /// </summary>
+    /// <param name="message"> The warning message to log. </param>
     public static void LogWarning(string message)
         => LogCore(message, LogSeverity.Warning);
 
+    /// <summary>
+    /// Logs an error.
+    /// </summary>
+    /// <param name="message"> The error message to log. Can be <see langword="null"/>. </param>
     public static void LogError(object? message)
         => LogCore(message?.ToString() ?? "null", LogSeverity.Error);
 
+    /// <summary>
+    /// Logs an error.
+    /// </summary>
+    /// <param name="message"> The error message to log. </param>
     public static void LogError(string message)
         => LogCore(message, LogSeverity.Error);
 
+    /// <summary>
+    /// Logs a success message.
+    /// </summary>
+    /// <param name="message"> The message to log. Can be <see langword="null"/>. </param>
     public static void LogSuccess(object? message)
         => LogCore(message?.ToString() ?? "null", LogSeverity.Success);
 
+    /// <summary>
+    /// Logs a success message.
+    /// </summary>
+    /// <param name="message"> The message to log. </param>
     public static void LogSuccess(string message)
         => LogCore(message, LogSeverity.Success);
 
