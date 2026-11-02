@@ -32,7 +32,8 @@ public struct NetSessionOptions
 
     /// <summary>
     ///     After the host kicks or refuses a client, how long it waits for the client to hang up before
-    ///     closing the connection itself. Gives the reason time to arrive over a lossy link.
+    ///     closing the connection itself. Gives the reason time to arrive over a lossy link. While the goodbye
+    ///     is still unacknowledged the host keeps waiting, up to five times this long.
     /// </summary>
     public TimeSpan GoodbyeLinger { get; set; } = TimeSpan.FromSeconds(1);
 

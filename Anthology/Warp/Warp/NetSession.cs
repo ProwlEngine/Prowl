@@ -535,6 +535,9 @@ public sealed class NetSession : IDisposable
 
                 switch (remote.Stage)
                 {
+                    case RemoteStage.Lingering when connection.PendingSendBytes > 0 && now < remote.GiveUpMs:
+                        break;
+
                     case RemoteStage.AwaitingRequest:
                     case RemoteStage.Lingering:
                         connection.Disconnect();
@@ -830,6 +833,7 @@ public sealed class NetSession : IDisposable
         remote.Peer = null;
         remote.Stage = RemoteStage.Lingering;
         remote.DeadlineMs = NowMs + (long)_options.GoodbyeLinger.TotalMilliseconds;
+        remote.GiveUpMs = NowMs + 5 * (long)_options.GoodbyeLinger.TotalMilliseconds;
 
         if (peer != null)
         {
@@ -1663,6 +1667,9 @@ public sealed class NetSession : IDisposable
     {
         public bool BatchMessages;
         public long DeadlineMs;
+
+        // A lingering client whose goodbye is still unacknowledged is closed here at the latest.
+        public long GiveUpMs;
 
         // Fragmented messages being reassembled, one per channel.
         public Reassembly?[]? Incoming;

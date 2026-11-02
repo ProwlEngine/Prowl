@@ -183,6 +183,40 @@ public class SessionProcessingTests
     }
 
     [Fact]
+    public void LingeringWaitsForTheGoodbyeToBeAcknowledged()
+    {
+        using ProbeTransport transport = new();
+        using NetSession host = NetSession.CreateHost(transport,
+            options: new NetSessionOptions { GoodbyeLinger = TimeSpan.FromMilliseconds(20) });
+        ProbeConnection connection = JoinPeer(transport, host);
+        host.Kick(host.Peers.Single(p => !p.IsLocal), "bye");
+        connection.Pending = 100;
+
+        Thread.Sleep(30);
+        host.Flush();
+        Assert.Equal(0, connection.DisconnectCalls);
+
+        connection.Pending = 0;
+        host.Flush();
+        Assert.Equal(1, connection.DisconnectCalls);
+    }
+
+    [Fact]
+    public void LingeringGivesUpOnAGoodbyeThatIsNeverAcknowledged()
+    {
+        using ProbeTransport transport = new();
+        using NetSession host = NetSession.CreateHost(transport,
+            options: new NetSessionOptions { GoodbyeLinger = TimeSpan.FromMilliseconds(20) });
+        ProbeConnection connection = JoinPeer(transport, host);
+        host.Kick(host.Peers.Single(p => !p.IsLocal), "bye");
+        connection.Pending = 100;
+
+        Thread.Sleep(150);
+        host.Flush();
+        Assert.Equal(1, connection.DisconnectCalls);
+    }
+
+    [Fact]
     public void HostRefusesMessagesOnOtherChannelsBeforeJoining()
     {
         using ProbeTransport transport = new();
@@ -264,7 +298,9 @@ public class SessionProcessingTests
     private sealed class ProbeConnection(Transport transport, int id) : Connection(transport, id, "host", true)
     {
         public int FlushCalls, DisconnectCalls;
+        public long Pending;
         public override TimeSpan RoundTripTime => TimeSpan.Zero;
+        public override long PendingSendBytes => Pending;
         public override int GetMaxMessageSize(Delivery delivery) => 128;
 
         protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
