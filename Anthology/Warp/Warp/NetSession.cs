@@ -58,6 +58,7 @@ public sealed class NetSession : IDisposable
     public const int MaxNameBytes = 256;
     public const int MaxJoinTokenBytes = 4096;
     private readonly SessionBatcher _batcher;
+    private readonly int _channels;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly NetWriter _fragmentWriter = new();
 
@@ -75,6 +76,7 @@ public sealed class NetSession : IDisposable
     private readonly List<KeyValuePair<Connection, Remote>> _scratch = new();
     private readonly NetWriter _writer = new();
     private bool _batchWithHost;
+    private bool _runningTimers;
     private string? _goodbyeMessage;
     private SessionEndReason? _goodbyeReason;
 
@@ -102,6 +104,7 @@ public sealed class NetSession : IDisposable
         }
 
         Transport = transport;
+        _channels = capabilities.Channels;
         Peers = new NetPeerCollection(_peers.Values);
         _options = (options ?? new NetSessionOptions()).CopyValidated();
         _batcher = new SessionBatcher(_options.MaxMessageSize);
@@ -479,45 +482,7 @@ public sealed class NetSession : IDisposable
         long now = NowMs;
         if (IsHost)
         {
-            _scratch.AddRange(_remotes);
-            try
-            {
-                foreach ((Connection connection, Remote remote) in _scratch)
-                {
-                    if (State == SessionState.Ended)
-                    {
-                        break;
-                    }
-
-                    if (Expired(remote.Incoming, now))
-                    {
-                        Goodbye(connection, remote, SessionEndReason.Timeout, "Fragmented message timed out.");
-                        continue;
-                    }
-
-                    if (now < remote.DeadlineMs)
-                    {
-                        continue;
-                    }
-
-                    switch (remote.Stage)
-                    {
-                        case RemoteStage.AwaitingRequest:
-                        case RemoteStage.Lingering:
-                            connection.Disconnect();
-                            break;
-
-                        case RemoteStage.Pending:
-                            Goodbye(connection, remote, SessionEndReason.Timeout,
-                                "The host took too long to let you in.");
-                            break;
-                    }
-                }
-            }
-            finally
-            {
-                _scratch.Clear();
-            }
+            RunHostTimers(now);
         }
         else if (Expired(_incomingFromHost, now))
         {
@@ -535,6 +500,57 @@ public sealed class NetSession : IDisposable
 
         _batcher.FlushAll();
         _pump?.Flush();
+    }
+
+    /// <summary>Times out joins, lingering clients and stalled fragments. A nested call from a handler does nothing.</summary>
+    private void RunHostTimers(long now)
+    {
+        if (_runningTimers)
+        {
+            return;
+        }
+
+        _runningTimers = true;
+        _scratch.AddRange(_remotes);
+        try
+        {
+            foreach ((Connection connection, Remote remote) in _scratch)
+            {
+                if (State == SessionState.Ended)
+                {
+                    break;
+                }
+
+                if (Expired(remote.Incoming, now))
+                {
+                    Goodbye(connection, remote, SessionEndReason.Timeout, "Fragmented message timed out.");
+                    continue;
+                }
+
+                if (now < remote.DeadlineMs)
+                {
+                    continue;
+                }
+
+                switch (remote.Stage)
+                {
+                    case RemoteStage.AwaitingRequest:
+                    case RemoteStage.Lingering:
+                        connection.Disconnect();
+                        break;
+
+                    case RemoteStage.Pending:
+                        Goodbye(connection, remote, SessionEndReason.Timeout,
+                            "The host took too long to let you in.");
+                        break;
+                }
+            }
+        }
+        finally
+        {
+            _scratch.Clear();
+            _runningTimers = false;
+        }
     }
 
     /// <summary><see cref="Receive" /> followed by <see cref="Flush" />.</summary>
@@ -600,6 +616,11 @@ public sealed class NetSession : IDisposable
         NetReader reader = new(data);
         try
         {
+            if (channel >= _channels)
+            {
+                throw new InvalidDataException($"A message arrived on channel {channel}, which does not exist.");
+            }
+
             ushort id = reader.ReadUInt16();
             if (id != (ushort)InternalMessage.Batch && data.Length > _options.MaxMessageSize)
             {
@@ -633,7 +654,7 @@ public sealed class NetSession : IDisposable
 
                 if (delivery == Delivery.Reliable && remote.Stage is RemoteStage.AwaitingRequest or RemoteStage.Joined
                                                   && Reassemble(ref Incoming(ref remote.Incoming, channel),
-                                                      ref reader, out int length,
+                                                      ref reader, out int length, remote,
                                                       remote.Stage == RemoteStage.Joined
                                                           ? _options.MaxMessageSize
                                                           : 8192) is { } whole)
@@ -675,8 +696,12 @@ public sealed class NetSession : IDisposable
         }
         catch (Exception e) when (e is ResourceLimitException or ReassemblyTimeoutException)
         {
-            Goodbye(connection, remote,
-                e is ResourceLimitException ? SessionEndReason.ResourceLimit : SessionEndReason.Timeout, e.Message);
+            if (remote.Stage != RemoteStage.Lingering)
+            {
+                Goodbye(connection, remote,
+                    e is ResourceLimitException ? SessionEndReason.ResourceLimit : SessionEndReason.Timeout,
+                    e.Message);
+            }
         }
         catch (Exception e) when (e is EndOfStreamException or InvalidDataException)
         {
@@ -875,6 +900,11 @@ public sealed class NetSession : IDisposable
         NetReader reader = new(data);
         try
         {
+            if (channel >= _channels)
+            {
+                throw new InvalidDataException($"A message arrived on channel {channel}, which does not exist.");
+            }
+
             // Another channel can overtake JoinAccepted. Keep reliable messages for after joining; the rest is
             // dropped, like any other unreliable message before joining.
             if (channel != 0 && State == SessionState.Joining && !reassembled)
@@ -1271,7 +1301,8 @@ public sealed class NetSession : IDisposable
     ///     Adds a fragment to <paramref name="state" />. Returns the whole message, rented from
     ///     <see cref="ArrayPool{T}.Shared" />, once its last fragment arrives; null until then.
     /// </summary>
-    private byte[]? Reassemble(ref Reassembly? state, ref NetReader reader, out int length, int? maximum = null)
+    private byte[]? Reassemble(ref Reassembly? state, ref NetReader reader, out int length, Remote? owner = null,
+        int? maximum = null)
     {
         length = 0;
         if (reader.ReadBool())
@@ -1288,22 +1319,9 @@ public sealed class NetSession : IDisposable
                     $"A {total} byte message exceeds the {_options.MaxMessageSize} byte limit.");
             }
 
-            if (total > _options.MaxReassemblyBytes - PendingReassemblyBytes)
-            {
-                throw new ResourceLimitException("Session reassembly budget exceeded.");
-            }
-
-            byte[] buffer = ArrayPool<byte>.Shared.Rent((int)total);
-            if (buffer.Length > _options.MaxReassemblyBytes - PendingReassemblyBytes)
-            {
-                ArrayPool<byte>.Shared.Return(buffer);
-                throw new ResourceLimitException("Session reassembly budget exceeded.");
-            }
-
-            PendingReassemblyBytes += buffer.Length;
             state = new Reassembly
             {
-                Buffer = buffer,
+                Buffer = Array.Empty<byte>(),
                 Total = (int)total,
                 DeadlineMs = NowMs + (long)_options.ReassemblyTimeout.TotalMilliseconds
             };
@@ -1325,6 +1343,32 @@ public sealed class NetSession : IDisposable
             throw new InvalidDataException("Message fragments add up to more than their announced length.");
         }
 
+        // The buffer grows as fragments arrive, so a sender only holds memory for data it has actually sent.
+        int filled = current.Filled + chunk.Length;
+        if (filled > current.Buffer.Length)
+        {
+            int size = (int)Math.Min(current.Total, Math.Max(filled, current.Buffer.Length * 2L));
+            byte[] grown = ArrayPool<byte>.Shared.Rent(size);
+            long added = grown.Length - current.Buffer.Length;
+
+            // Making room can remove other remotes, whose handlers may remove this one too.
+            if (!ReserveReassembly(added, owner) || state?.Buffer != current.Buffer)
+            {
+                ArrayPool<byte>.Shared.Return(grown);
+                throw new ResourceLimitException("Session reassembly budget exceeded.");
+            }
+
+            current.Buffer.AsSpan(0, current.Filled).CopyTo(grown);
+            if (current.Buffer.Length > 0)
+            {
+                ArrayPool<byte>.Shared.Return(current.Buffer);
+            }
+
+            PendingReassemblyBytes += added;
+            current.Buffer = grown;
+            state = current;
+        }
+
         chunk.CopyTo(current.Buffer.AsSpan(current.Filled));
         current.Filled += chunk.Length;
         if (current.Filled < current.Total)
@@ -1340,10 +1384,60 @@ public sealed class NetSession : IDisposable
         return whole;
     }
 
+    /// <summary>
+    ///     Makes room for <paramref name="bytes" /> more reassembly memory. On the host, remotes holding more than
+    ///     <paramref name="owner" /> would are removed first, so one sender can't crowd out the rest.
+    /// </summary>
+    private bool ReserveReassembly(long bytes, Remote? owner)
+    {
+        while (bytes > _options.MaxReassemblyBytes - PendingReassemblyBytes)
+        {
+            if (owner == null)
+            {
+                return false;
+            }
+
+            long most = Held(owner.Incoming) + bytes;
+            Connection? largest = null;
+            foreach ((Connection connection, Remote remote) in _remotes)
+            {
+                long held = Held(remote.Incoming);
+                if (remote != owner && held > most)
+                {
+                    largest = connection;
+                    most = held;
+                }
+            }
+
+            if (largest == null)
+            {
+                return false;
+            }
+
+            Goodbye(largest, _remotes[largest], SessionEndReason.ResourceLimit, "Session reassembly budget exceeded.");
+        }
+
+        return true;
+    }
+
+    private static long Held(Reassembly?[]? states)
+    {
+        long held = 0;
+        if (states != null)
+        {
+            foreach (Reassembly? state in states)
+            {
+                held += state?.Buffer.Length ?? 0;
+            }
+        }
+
+        return held;
+    }
+
     /// <summary>The reassembly state for one channel, allocating the per-channel slots on first use.</summary>
     private ref Reassembly? Incoming(ref Reassembly?[]? states, byte channel)
     {
-        states ??= new Reassembly?[Transport.Capabilities.Channels];
+        states ??= new Reassembly?[_channels];
         return ref states[channel];
     }
 
@@ -1377,7 +1471,11 @@ public sealed class NetSession : IDisposable
             if (states[i] is { } state)
             {
                 PendingReassemblyBytes -= state.Buffer.Length;
-                ArrayPool<byte>.Shared.Return(state.Buffer);
+                if (state.Buffer.Length > 0)
+                {
+                    ArrayPool<byte>.Shared.Return(state.Buffer);
+                }
+
                 states[i] = null;
             }
         }

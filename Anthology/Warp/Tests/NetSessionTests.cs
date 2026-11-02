@@ -530,7 +530,7 @@ public abstract class NetSessionTests : IDisposable
         }
 
         Assert.NotNull(incoming);
-        Assert.True(receiver.PendingReassemblyBytes >= 100_000);
+        Assert.True(receiver.PendingReassemblyBytes > 0);
         receiver.Shutdown();
         Assert.Equal(0, receiver.PendingReassemblyBytes);
         object? released = toClient
@@ -567,13 +567,13 @@ public abstract class NetSessionTests : IDisposable
         Assert.Equal("ResourceLimit", reason);
     }
 
-    private static void SendPartial(Connection connection, int total)
+    private static void SendPartial(Connection connection, int total, int sent = 1)
     {
         using NetWriter fragment = new();
         fragment.WriteUInt16(NetSession.ReservedMessageIds + 5);
         fragment.WriteBool(true);
         fragment.WriteVarUInt32((uint)total);
-        fragment.WriteByte(1);
+        fragment.WriteBytes(new byte[sent]);
         connection.Send(fragment.WrittenSpan, Delivery.Reliable);
     }
 
@@ -600,18 +600,62 @@ public abstract class NetSessionTests : IDisposable
     public void ReassemblyHasAnAggregateMemoryBudget()
     {
         NetSessionOptions options = new();
-        options.MaxReassemblyBytes = 131072;
+        options.MaxReassemblyBytes = 262144;
         SessionProbe host = Host(options);
         SessionProbe alice = Join("alice");
         SessionProbe bob = Join("bob");
         SessionProbe.PumpUntil(
             () => alice.Session.State == SessionState.Active && bob.Session.State == SessionState.Active, host, alice,
             bob);
-        SendPartial(alice.Session.HostPeer!.Connection!, 100_000);
-        SendPartial(bob.Session.HostPeer!.Connection!, 100_000);
+        SendPartial(alice.Session.HostPeer!.Connection!, 200_000, 150_000);
         SessionProbe.PumpFor(100, host, alice, bob);
-        Assert.Equal(2, host.Session.Peers.Count);
-        Assert.Equal(SessionEndReason.ResourceLimit, host.PeersLeft.Single().Reason);
+        SendPartial(bob.Session.HostPeer!.Connection!, 1000);
+        SessionProbe.PumpFor(100, host, alice, bob);
+
+        // The sender holding the most goes, not whoever happens to ask next.
+        (NetPeer left, SessionEndReason reason) = host.PeersLeft.Single();
+        Assert.Equal("alice", left.Name);
+        Assert.Equal(SessionEndReason.ResourceLimit, reason);
+        Assert.Equal(SessionState.Active, bob.Session.State);
+    }
+
+    [Fact]
+    public void AnnouncedLengthAloneHoldsNoReassemblyMemory()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        SendPartial(alice.Session.HostPeer!.Connection!, 16 * 1024 * 1024);
+        SessionProbe.PumpFor(50, host, alice);
+        Assert.InRange(host.Session.PendingReassemblyBytes, 1, 1024);
+    }
+
+    [Fact]
+    public void MessagesOnChannelsTheSessionLacksAreRejected()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        Connection fromAlice = host.Session.Peers.Single(p => !p.IsLocal).Connection!;
+
+        host.Session.ProcessEvent(new TransportEvent(TransportEventType.Data, fromAlice, new byte[] { 0, 0 },
+            Delivery.Reliable, default, 200));
+
+        Assert.Equal(SessionEndReason.ProtocolError, host.PeersLeft.Single().Reason);
+    }
+
+    [Fact]
+    public void FlushingFromATimerHandlerDoesNotBreakTheTimers()
+    {
+        NetSessionOptions options = new();
+        options.ReassemblyTimeout = TimeSpan.FromMilliseconds(30);
+        SessionProbe host = Host(options);
+        host.Session.PeerLeft += (_, _) => host.Session.Flush();
+        SessionProbe alice = Join("alice", options);
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        SendPartial(alice.Session.HostPeer!.Connection!, 100_000);
+        SessionProbe.PumpFor(150, host, alice);
+        Assert.Equal(SessionEndReason.Timeout, host.PeersLeft.Single().Reason);
     }
 
     [Fact]
