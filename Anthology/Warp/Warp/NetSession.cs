@@ -197,6 +197,16 @@ public sealed class NetSession : IDisposable
             throw new ArgumentException("Peer name is too long.", nameof(name));
         }
 
+        ArgumentNullException.ThrowIfNull(transport);
+        int maxPeers = (options ?? new NetSessionOptions()).MaxPeers;
+        int capacity = transport.Capabilities.MaxIncomingConnections;
+        if (maxPeers > capacity)
+        {
+            throw new ArgumentException(
+                $"MaxPeers is {maxPeers}, but the transport accepts only {capacity} connections. " +
+                "Raise the transport's connection limit as well.", nameof(options));
+        }
+
         NetSession session = new(transport, options, true, pumpTransport);
         session._pump?.Listen();
 

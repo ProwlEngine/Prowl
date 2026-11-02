@@ -74,7 +74,7 @@ public sealed class KcpTransport : Transport
     public override bool IsListening => _listening;
 
     public override TransportCapabilities Capabilities =>
-        new(true, DeliverySupport.All, TransportExecution.WorkerPreferred, Settings.Channels);
+        new(true, DeliverySupport.All, TransportExecution.WorkerPreferred, Settings.Channels, Settings.MaxConnections);
 
     /// <summary>The port the socket is bound to, or 0 if it isn't bound yet.</summary>
     public override int LocalPort => (_socket?.LocalEndPoint as IPEndPoint)?.Port ?? 0;

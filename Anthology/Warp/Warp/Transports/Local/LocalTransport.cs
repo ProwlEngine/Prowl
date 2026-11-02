@@ -74,7 +74,7 @@ public sealed class LocalTransport : Transport
     public string Address { get; }
 
     public override TransportCapabilities Capabilities =>
-        new(true, DeliverySupport.All, TransportExecution.InlinePreferred, Channels);
+        new(true, DeliverySupport.All, TransportExecution.InlinePreferred, Channels, MaxConnections);
 
     public override bool IsListening => _listening;
 

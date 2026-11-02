@@ -27,6 +27,21 @@ public class OptionsTests
     }
 
     [Fact]
+    public void HostsCannotAdmitMorePeersThanTheTransportAccepts()
+    {
+        using KcpTransport kcp = new(new KcpTransportOptions { Port = 0, MaxConnections = 10 });
+        Assert.Throws<ArgumentException>(() =>
+            NetSession.Host(kcp, options: new NetSessionOptions { MaxPeers = 20 }));
+        Assert.False(kcp.IsListening);
+
+        using LocalTransport local = new(new LocalNetwork(), "host") { MaxConnections = 10 };
+        Assert.Throws<ArgumentException>(() =>
+            NetSession.CreateHost(local, options: new NetSessionOptions { MaxPeers = 20 }));
+
+        using NetSession fits = NetSession.Host(kcp, options: new NetSessionOptions { MaxPeers = 10 });
+    }
+
+    [Fact]
     public void ReadingSessionOptionsDoesNotAllocate()
     {
         using LocalTransport transport = new(new LocalNetwork(), "host");

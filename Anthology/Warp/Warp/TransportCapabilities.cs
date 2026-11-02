@@ -25,12 +25,14 @@ public enum TransportExecution
 /// <remarks>
 ///     <see cref="Channels" /> counts the independent channels per delivery mode, numbered from zero. Reliable
 ///     messages are ordered within a channel only, so a stalled channel never holds up another.
+///     <see cref="MaxIncomingConnections" /> is how many remote peers can be connected at once.
 /// </remarks>
 public readonly record struct TransportCapabilities(
     bool IsAvailable,
     DeliverySupport Deliveries,
     TransportExecution Execution,
-    int Channels = 1)
+    int Channels = 1,
+    int MaxIncomingConnections = int.MaxValue)
 {
     public bool Supports(Delivery delivery) => delivery switch
     {

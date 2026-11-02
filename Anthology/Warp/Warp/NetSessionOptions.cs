@@ -21,7 +21,10 @@ public struct NetSessionOptions
     /// <summary>Combine small outgoing messages until Flush. Negotiated with each peer during joining.</summary>
     public bool BatchMessages { get; set; } = true;
 
-    /// <summary>The most clients that may be joined at once, not counting the host.</summary>
+    /// <summary>
+    ///     The most clients that may be joined at once, not counting the host. Cannot exceed the transport's
+    ///     <see cref="TransportCapabilities.MaxIncomingConnections" />.
+    /// </summary>
     public int MaxPeers { get; set; } = 64;
 
     /// <summary>
