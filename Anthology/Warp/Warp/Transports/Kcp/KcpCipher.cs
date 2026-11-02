@@ -138,7 +138,9 @@ internal sealed class KcpCipher : IDisposable
     ///     Checks and decrypts a sealed packet whose header is <paramref name="headerSize" /> bytes. False for
     ///     anything forged, damaged or already seen.
     /// </summary>
-    public bool Open(ReadOnlySpan<byte> packet, int headerSize, Span<byte> plain, out int length)
+    /// <param name="newestOnly">Also refuses packets older than the newest one seen, even unseen ones.</param>
+    public bool Open(ReadOnlySpan<byte> packet, int headerSize, Span<byte> plain, out int length,
+        bool newestOnly = false)
     {
         length = packet.Length - headerSize - Overhead;
         int aad = headerSize + CounterSize;
@@ -148,7 +150,7 @@ internal sealed class KcpCipher : IDisposable
         }
 
         ulong counter = BinaryPrimitives.ReadUInt64LittleEndian(packet[headerSize..]);
-        if (!IsFresh(counter))
+        if (!IsFresh(counter) || (newestOnly && _received && counter <= _highest))
         {
             return false;
         }

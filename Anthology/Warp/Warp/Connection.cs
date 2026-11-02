@@ -45,8 +45,11 @@ public abstract class Connection
     /// <summary>Identifies this connection within its transport. Never reused by that transport.</summary>
     public int Id { get; }
 
-    /// <summary>The remote address, in the transport's own format (for UDP, <c>host:port</c>).</summary>
-    public string Address { get; }
+    /// <summary>
+    ///     The remote address, in the transport's own format (for UDP, <c>host:port</c>). An encrypted connection
+    ///     follows its peer when the peer's address changes, so this can change too.
+    /// </summary>
+    public string Address { get; protected set; }
 
     /// <summary>True if this side initiated the connection with <see cref="Transport.Connect" />.</summary>
     public bool IsOutgoing { get; }

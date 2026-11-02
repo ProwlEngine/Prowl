@@ -38,6 +38,9 @@ public sealed class KcpTransport : Transport
     private const int DisconnectRepeats = 3;
 
     private readonly Dictionary<SocketAddress, KcpConnection> _byAddress = new();
+
+    // Encrypted incoming connections, so an authenticated packet from a new address can find its session.
+    private readonly Dictionary<uint, KcpConnection> _bySession = new();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly byte[] _cookieKey = RandomNumberGenerator.GetBytes(32);
 
@@ -325,7 +328,33 @@ public sealed class KcpTransport : Transport
             case KcpPacketType.ChallengeResponse:
                 HandleChallengeResponse(from, packet, now);
                 break;
+
+            default:
+                FollowToNewAddress(from, length, now);
+                break;
         }
+    }
+
+    /// <summary>Moves an encrypted session to the address a genuine, newest packet of it came from.</summary>
+    private void FollowToNewAddress(SocketAddress from, int length, long now)
+    {
+        if (length < KcpPacket.SessionHeaderSize || !_bySession.TryGetValue(
+                BinaryPrimitives.ReadUInt32LittleEndian(_receiveBuffer.AsSpan(1)), out KcpConnection? connection))
+        {
+            return;
+        }
+
+        byte[] buffer = _receiveBuffer;
+        if (!connection.Authenticate(ref buffer, ref length, true))
+        {
+            return;
+        }
+
+        SocketAddress moved = Clone(from);
+        _byAddress.Remove(connection.RemoteAddress!);
+        _byAddress.Add(moved, connection);
+        connection.MoveTo(moved, Format(moved));
+        connection.Process(buffer, length, now);
     }
 
     private void HandleConnectRequest(SocketAddress from, ReadOnlySpan<byte> packet)
@@ -365,7 +394,12 @@ public sealed class KcpTransport : Transport
             return;
         }
 
-        uint sessionId = RandomUInt32();
+        uint sessionId;
+        do
+        {
+            sessionId = RandomUInt32();
+        } while (_bySession.ContainsKey(sessionId));
+
         byte[]? accept = null;
         KcpCipher? cipher = null;
         if (Settings.Encryption != null && !TryAgreeKeys(packet, nonce, sessionId, out cipher, out accept))
@@ -382,6 +416,11 @@ public sealed class KcpTransport : Transport
 
         AddConnection(connection);
         _byAddress.Add(remote, connection);
+        if (cipher != null)
+        {
+            _bySession.Add(sessionId, connection);
+        }
+
         _incomingCount++;
 
         SendAccept(connection);
@@ -628,12 +667,13 @@ public sealed class KcpTransport : Transport
     }
 
     /// <summary>Decrypts a sealed session packet into <c>[type][sessionId][body]</c> in a scratch buffer.</summary>
-    internal bool Open(KcpConnection connection, ReadOnlySpan<byte> packet, out byte[] plain, out int length)
+    internal bool Open(KcpConnection connection, ReadOnlySpan<byte> packet, bool newestOnly, out byte[] plain,
+        out int length)
     {
         plain = _openBuffer;
         packet[..KcpPacket.SessionHeaderSize].CopyTo(plain);
         bool opened = connection.Cipher!.Open(packet, KcpPacket.SessionHeaderSize,
-            plain.AsSpan(KcpPacket.SessionHeaderSize), out int body);
+            plain.AsSpan(KcpPacket.SessionHeaderSize), out int body, newestOnly);
         length = KcpPacket.SessionHeaderSize + body;
         return opened;
     }
@@ -668,6 +708,11 @@ public sealed class KcpTransport : Transport
         }
 
         _unreachable.Remove(connection);
+        if (_bySession.TryGetValue(connection.SessionId, out KcpConnection? listed) && listed == connection)
+        {
+            _bySession.Remove(connection.SessionId);
+        }
+
         if (connection.RemoteAddress != null && _byAddress.Remove(connection.RemoteAddress) && !connection.IsOutgoing)
         {
             _incomingCount--;

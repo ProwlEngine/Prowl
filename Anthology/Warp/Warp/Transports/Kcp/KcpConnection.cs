@@ -308,22 +308,40 @@ public sealed class KcpConnection : Connection
         }
 
         // Everything else belongs to an established session.
-        if (State != ConnectionState.Connected || length < KcpPacket.SessionHeaderSize
-                                               || BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != SessionId)
+        if (Authenticate(ref buffer, ref length, false))
         {
-            return;
+            Process(buffer, length, now);
+        }
+    }
+
+    /// <summary>
+    ///     Checks that a packet belongs to this session and, when encrypted, decrypts it. On success
+    ///     <paramref name="buffer" /> and <paramref name="length" /> describe the plain packet.
+    /// </summary>
+    /// <param name="newestOnly">Accept only a packet newer than any seen, as a move to a new address requires.</param>
+    internal bool Authenticate(ref byte[] buffer, ref int length, bool newestOnly)
+    {
+        if (State != ConnectionState.Connected || length < KcpPacket.SessionHeaderSize ||
+            BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(1)) != SessionId)
+        {
+            return false;
         }
 
-        if (Cipher != null)
-        {
-            if (!_transport.Open(this, packet, out buffer, out length))
-            {
-                return;
-            }
+        return Cipher == null || _transport.Open(this, buffer.AsSpan(0, length), newestOnly, out buffer, out length);
+    }
 
-            packet = buffer.AsSpan(0, length);
-        }
+    /// <summary>Follows the peer to a new address.</summary>
+    internal void MoveTo(SocketAddress remote, string address)
+    {
+        RemoteAddress = remote;
+        Address = address;
+    }
 
+    /// <summary>Handles a session packet that <see cref="Authenticate" /> accepted.</summary>
+    internal void Process(byte[] buffer, int length, long now)
+    {
+        ReadOnlySpan<byte> packet = buffer.AsSpan(0, length);
+        KcpPacketType type = (KcpPacketType)packet[0];
         RecordPacketReceived(length);
         _lastReceiveMs = now;
         ReadOnlySpan<byte> body = packet[KcpPacket.SessionHeaderSize..];

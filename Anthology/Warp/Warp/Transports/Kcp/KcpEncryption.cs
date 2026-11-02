@@ -13,7 +13,8 @@ namespace Prowl.Warp.Transports.Kcp;
 /// <remarks>
 ///     Without <see cref="TrustedHostKey" /> traffic is private from anyone who only listens, but a man in the
 ///     middle can still pose as the host. Give the host a <see cref="SigningKey" /> and clients its public key to
-///     rule that out.
+///     rule that out. Because every packet is authenticated, a host also follows an encrypted client whose address
+///     changes, such as a phone moving from Wi-Fi to mobile data, instead of timing it out.
 /// </remarks>
 public sealed class KcpEncryption
 {

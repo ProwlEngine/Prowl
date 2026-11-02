@@ -193,6 +193,65 @@ public class KcpEncryptionTests
         Assert.Empty(host.Connections);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OnlyEncryptedSessionsFollowAClientToANewAddress(bool encrypted)
+    {
+        using KcpTransport host = new(Options(encrypted ? new KcpEncryption() : null));
+        host.Listen();
+        using KcpTransport client = new(Options(encrypted ? new KcpEncryption() : null));
+        using Relay relay = new(host);
+        Pump pump = new(host, client);
+        Connection toHost = client.Connect(relay.Address);
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+        Connection toClient = host.Connections.Single();
+
+        relay.MoveToNewAddress();
+        toHost.Send(new byte[] { 1 }, Delivery.Reliable);
+        for (int i = 0; i < 300; i++)
+        {
+            relay.Step();
+            pump.Step();
+        }
+
+        if (!encrypted)
+        {
+            Assert.DoesNotContain(pump.EventsOf(host), ev => ev.Type == TransportEventType.Data);
+            return;
+        }
+
+        Assert.Same(toClient, Assert.Single(host.Connections));
+        Assert.Equal(relay.HostSideAddress, toClient.Address);
+        Assert.Contains(pump.EventsOf(host), ev => ev.Type == TransportEventType.Data);
+        toClient.Send(new byte[] { 2 }, Delivery.Reliable);
+        pump.Until(() => { relay.Step(); return pump.EventsOf(client).Any(ev => ev.Type == TransportEventType.Data); },
+            what: "the reply at the new address");
+    }
+
+    [Fact]
+    public void ForgedPacketsFromANewAddressDoNotMoveTheSession()
+    {
+        using KcpTransport host = new(Options(new KcpEncryption()));
+        host.Listen();
+        using KcpTransport client = new(Options(new KcpEncryption()));
+        using Relay relay = new(host);
+        Pump pump = new(host, client);
+        Connection toHost = client.Connect(relay.Address);
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+        string address = host.Connections.Single().Address;
+
+        byte[] forged = new byte[100];
+        forged[0] = 16;
+        BinaryPrimitives.WriteUInt32LittleEndian(forged.AsSpan(1), relay.SessionId);
+        BinaryPrimitives.WriteUInt64LittleEndian(forged.AsSpan(5), 1000);
+        relay.MoveToNewAddress();
+        relay.SendToHost(forged);
+        pump.For(100);
+
+        Assert.Equal(address, host.Connections.Single().Address);
+    }
+
     [Fact]
     public void OnlyP256KeysAreAccepted()
     {
@@ -217,59 +276,82 @@ public class KcpEncryptionTests
         return false;
     }
 
-    /// <summary>Sits between a client and a host on loopback, forwarding datagrams and recording them.</summary>
+    /// <summary>
+    ///     Sits between a client and a host on loopback, forwarding datagrams and recording them. It reaches the
+    ///     host from a socket of its own, which <see cref="MoveToNewAddress" /> swaps, like a NAT rebinding.
+    /// </summary>
     private sealed class Relay : IDisposable
     {
         private readonly IPEndPoint _host;
-        private readonly Socket _socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        private readonly Socket _clientSide = Bound();
         private EndPoint? _client;
+        private Socket _hostSide = Bound();
 
-        public Relay(KcpTransport host)
-        {
-            _host = new IPEndPoint(IPAddress.Loopback, host.LocalPort);
-            _socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-        }
+        public Relay(KcpTransport host) => _host = new IPEndPoint(IPAddress.Loopback, host.LocalPort);
 
-        public string Address => $"127.0.0.1:{((IPEndPoint)_socket.LocalEndPoint!).Port}";
+        public string Address => $"127.0.0.1:{((IPEndPoint)_clientSide.LocalEndPoint!).Port}";
+
+        /// <summary>The address the host sees this client at.</summary>
+        public string HostSideAddress => $"127.0.0.1:{((IPEndPoint)_hostSide.LocalEndPoint!).Port}";
+
         public List<byte[]> Seen { get; } = new();
         public Func<byte[], byte[]?>? ToHost { get; set; }
         public uint SessionId { get; private set; }
 
-        public void Dispose() => _socket.Dispose();
+        public void Dispose()
+        {
+            _clientSide.Dispose();
+            _hostSide.Dispose();
+        }
 
-        public void SendToHost(byte[] datagram) => _socket.SendTo(datagram, _host);
+        public void MoveToNewAddress()
+        {
+            _hostSide.Dispose();
+            _hostSide = Bound();
+        }
+
+        public void SendToHost(byte[] datagram) => _hostSide.SendTo(datagram, _host);
 
         public void Step()
         {
             byte[] buffer = new byte[2048];
-            while (_socket.Available > 0)
+            while (_clientSide.Available > 0)
             {
                 EndPoint from = new IPEndPoint(IPAddress.Any, 0);
-                int length = _socket.ReceiveFrom(buffer, ref from);
+                int length = _clientSide.ReceiveFrom(buffer, ref from);
                 byte[] datagram = buffer[..length];
                 Seen.Add(datagram);
-                if (from.Equals(_host))
+                _client = from;
+                byte[]? forwarded = ToHost == null ? datagram : ToHost(datagram);
+                if (forwarded != null)
                 {
-                    if (datagram[0] == 4)
-                    {
-                        SessionId = BinaryPrimitives.ReadUInt32LittleEndian(datagram.AsSpan(5));
-                    }
-
-                    if (_client != null)
-                    {
-                        _socket.SendTo(datagram, _client);
-                    }
-                }
-                else
-                {
-                    _client = from;
-                    byte[]? forwarded = ToHost == null ? datagram : ToHost(datagram);
-                    if (forwarded != null)
-                    {
-                        _socket.SendTo(forwarded, _host);
-                    }
+                    _hostSide.SendTo(forwarded, _host);
                 }
             }
+
+            while (_hostSide.Available > 0)
+            {
+                EndPoint from = new IPEndPoint(IPAddress.Any, 0);
+                int length = _hostSide.ReceiveFrom(buffer, ref from);
+                byte[] datagram = buffer[..length];
+                Seen.Add(datagram);
+                if (datagram[0] == 4)
+                {
+                    SessionId = BinaryPrimitives.ReadUInt32LittleEndian(datagram.AsSpan(5));
+                }
+
+                if (_client != null)
+                {
+                    _clientSide.SendTo(datagram, _client);
+                }
+            }
+        }
+
+        private static Socket Bound()
+        {
+            Socket socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+            return socket;
         }
     }
 }
