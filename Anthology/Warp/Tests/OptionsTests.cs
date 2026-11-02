@@ -74,6 +74,7 @@ public class OptionsTests
         transport.Options.Mtu = 600;
         Assert.Equal(1200, transport.Options.Mtu);
         Assert.Equal(256u, transport.Options.Reliability.ReceiveWindow);
+        Assert.Equal(1000u, transport.Options.Reliability.MaxRetransmitTimeout);
         Assert.Equal(0.1, transport.Options.Simulation!.PacketLoss);
     }
 
@@ -84,6 +85,8 @@ public class OptionsTests
     [InlineData(3)]
     [InlineData(4)]
     [InlineData(5)]
+    [InlineData(6)]
+    [InlineData(7)]
     public void KcpRejectsInvalidNestedSettings(int invalid)
     {
         KcpTransportOptions options = new();
@@ -95,6 +98,8 @@ public class OptionsTests
             case 3: options.Simulation = new LinkSimulation { PacketLoss = double.NaN }; break;
             case 4: options.Channels = 0; break;
             case 5: options.Channels = KcpTransportOptions.MaxChannels + 1; break;
+            case 6: options.Reliability.MaxRetransmitTimeout = 10; break;
+            case 7: options.Reliability.MaxRetransmitTimeout = 70_000; break;
         }
 
         Assert.Throws<ArgumentOutOfRangeException>(() => new KcpTransport(options));

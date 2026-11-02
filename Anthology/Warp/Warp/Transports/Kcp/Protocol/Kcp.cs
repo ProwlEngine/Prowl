@@ -94,6 +94,7 @@ public sealed class Kcp
     internal uint rcv_nxt; // forever growing receive counter for sequence numbers
     internal uint rcv_wnd; // receive window
     internal uint rmt_wnd; // remote window
+    internal int rx_maxrto = RTO_MAX;
     internal int rx_minrto;
     internal int rx_rto;
     internal int rx_rttval; // average deviation of rtt, used to measure the jitter of rtt
@@ -416,7 +417,7 @@ public sealed class Kcp
         }
 
         int rto = rx_srtt + Math.Max((int)interval, 4 * rx_rttval);
-        rx_rto = Utils.Clamp(rto, rx_minrto, RTO_MAX);
+        rx_rto = Utils.Clamp(rto, rx_minrto, Math.Max(rx_minrto, rx_maxrto));
     }
 
     // ikcp_shrink_buf
@@ -985,6 +986,8 @@ public sealed class Kcp
                     segment.rto += step / 2;
                 }
 
+                segment.rto = Math.Min(segment.rto, Math.Max(rx_maxrto, rx_rto));
+
                 segment.resendts = current + (uint)segment.rto;
                 lost = true;
             }
@@ -1204,6 +1207,10 @@ public sealed class Kcp
 
         this.interval = interval;
     }
+
+    // not part of the original C code. caps how far the retransmit timeout backs off,
+    // so a link that comes back after an outage is retried within this many milliseconds.
+    public void SetMaxRetransmitTimeout(int milliseconds) => rx_maxrto = Math.Clamp(milliseconds, RTO_NDL, RTO_MAX);
 
     // ikcp_nodelay
     // configuration: https://github.com/skywind3000/kcp/blob/master/README.en.md#protocol-configuration

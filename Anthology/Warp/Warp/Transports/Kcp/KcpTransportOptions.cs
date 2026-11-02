@@ -168,6 +168,12 @@ public sealed class KcpReliabilityOptions
     /// <summary>How many times one segment may be resent without being acknowledged before the connection is considered dead.</summary>
     public uint MaxRetransmits { get; set; } = 40;
 
+    /// <summary>
+    ///     The longest a lost segment waits before being resent, in milliseconds (30 to 60000). Keeps reliable
+    ///     traffic from stalling for seconds after a link comes back from an outage.
+    /// </summary>
+    public uint MaxRetransmitTimeout { get; set; } = 1000;
+
     internal KcpReliabilityOptions Copy() => (KcpReliabilityOptions)MemberwiseClone();
 
     internal void Validate()
@@ -195,6 +201,11 @@ public sealed class KcpReliabilityOptions
         if (MaxRetransmits == 0)
         {
             throw new ArgumentOutOfRangeException(nameof(MaxRetransmits));
+        }
+
+        if (MaxRetransmitTimeout < Protocol.Kcp.RTO_NDL || MaxRetransmitTimeout > Protocol.Kcp.RTO_MAX)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MaxRetransmitTimeout));
         }
     }
 }

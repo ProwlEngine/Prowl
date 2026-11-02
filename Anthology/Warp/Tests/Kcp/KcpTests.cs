@@ -1,6 +1,8 @@
 // From kcp2k (MIT, see Warp/Transports/Kcp/Protocol/LICENSE.txt).
 // test some of the internal Kcp.cs functions to guarantee stability.
 
+using System.Collections.Generic;
+
 using Prowl.Warp.Transports.Kcp.Protocol;
 
 using Xunit;
@@ -679,6 +681,31 @@ public class KcpTests
         // check returns 'ts_flush + interval', or in other words,
         // 'interval' seconds after UPDATE was called. so 1+100 = 101.
         Assert.Equal(1 + kcp.interval, next);
+    }
+
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(1u)]
+    public void RetransmitTimeoutStopsGrowingAtTheCap(uint nodelay)
+    {
+        List<uint> sends = new();
+        uint now = 0;
+        Transports.Kcp.Protocol.Kcp kcp = new(1, (_, _) => sends.Add(now));
+        kcp.SetNoDelay(nodelay, 10, 0, true);
+        kcp.SetMaxRetransmitTimeout(1000);
+        kcp.dead_link = 1000;
+        kcp.Send(new byte[] { 1 }, 0, 1);
+
+        for (now = 0; now < 20_000; now += 10)
+        {
+            kcp.Update(now);
+        }
+
+        Assert.True(sends.Count > 15);
+        for (int i = 1; i < sends.Count; i++)
+        {
+            Assert.InRange(sends[i] - sends[i - 1], 0u, 1000u + 10u);
+        }
     }
 
     [Fact]

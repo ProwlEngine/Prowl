@@ -139,6 +139,7 @@ public sealed class KcpConnection : Connection
         kcp.SetWindowSize(reliability.SendWindow, reliability.ReceiveWindow);
         kcp.SetMtu((uint)(_options.Mtu - HeaderSize(channel)));
         kcp.dead_link = reliability.MaxRetransmits;
+        kcp.SetMaxRetransmitTimeout((int)reliability.MaxRetransmitTimeout);
         return kcp;
     }
 
