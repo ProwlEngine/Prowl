@@ -210,6 +210,34 @@ public class LocalTransportTests
     }
 
     [Fact]
+    public void SendersCanSeeTheReceiversInboxAndBackOff()
+    {
+        LocalNetwork network = new();
+        using LocalTransport host = new(network, "host");
+        using LocalTransport client = new(network, "client");
+        host.MaxInboxBytes = 16 * 1024;
+        host.Listen();
+        Connection connection = client.Connect("host");
+        Pump pump = new(host, client);
+        pump.Until(() => connection.IsConnected, what: "connect");
+        Assert.Equal(16 * 1024, connection.MaxPendingSendBytes);
+
+        for (int i = 0; i < 100 && connection.PendingSendBytes + 2048 <= connection.MaxPendingSendBytes; i++)
+        {
+            connection.Send(new byte[1000], Delivery.Reliable);
+        }
+
+        Assert.True(connection.IsConnected);
+        Assert.True(connection.PendingSendBytes > 0);
+        host.Receive();
+        while (host.Poll(out _))
+        {
+        }
+
+        Assert.Equal(0, connection.PendingSendBytes);
+    }
+
+    [Fact]
     public void TwoListenersCannotShareAnAddress()
     {
         LocalNetwork network = new();

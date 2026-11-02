@@ -112,6 +112,33 @@ public class KcpTransportTests
     }
 
     [Fact]
+    public void SendersCanSeeTheirQueueAndBackOffBeforeTheLimit()
+    {
+        KcpTransportOptions options = FastOptions();
+        options.MaxPendingReliableBytes = 64 * 1024;
+        (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) = Connect(clientOptions: options);
+        using (host)
+        using (client)
+        {
+            Assert.Equal(0, toHost.PendingSendBytes);
+            Assert.Equal(64 * 1024, toHost.MaxPendingSendBytes);
+
+            // No receiver pumps or acknowledges these sends, so a sender that checks never trips the limit.
+            byte[] message = new byte[1000];
+            int sent = 0;
+            while (toHost.PendingSendBytes + 2 * options.Mtu <= toHost.MaxPendingSendBytes)
+            {
+                toHost.Send(message, Delivery.Reliable);
+                sent++;
+            }
+
+            Assert.True(toHost.IsConnected);
+            Assert.True(sent > 10);
+            pump.Until(() => toHost.PendingSendBytes == 0, what: "acknowledgements");
+        }
+    }
+
+    [Fact]
     public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
     {
         KcpTransportOptions options = FastOptions();

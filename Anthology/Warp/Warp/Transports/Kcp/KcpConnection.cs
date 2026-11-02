@@ -50,6 +50,13 @@ public sealed class KcpConnection : Connection
     /// <summary>Picked by the host on Accept. Tags every session packet, and doubles as the KCP conversation id.</summary>
     internal uint SessionId { get; set; }
 
+    public override long PendingSendBytes => _reliable == null ? 0 : PendingReliableSegments() * SegmentBytes;
+
+    public override long MaxPendingSendBytes => _options.MaxPendingReliableBytes;
+
+    /// <summary>What one queued reliable segment costs against the send limit.</summary>
+    private long SegmentBytes => Math.Max(_options.Mtu, Protocol.Kcp.MTU_DEF);
+
     public override TimeSpan RoundTripTime => TimeSpan.FromMilliseconds(_smoothedRttMs);
 
     public override int GetMaxMessageSize(Delivery delivery)
@@ -82,8 +89,7 @@ public sealed class KcpConnection : Connection
 
         int segmentSize = _options.Mtu - HeaderSize(channel) - Protocol.Kcp.OVERHEAD;
         long segments = Math.Max(1L, ((long)data.Length + segmentSize - 1) / segmentSize);
-        long segmentBytes = Math.Max(_options.Mtu, Protocol.Kcp.MTU_DEF);
-        if ((PendingReliableSegments() + segments) * segmentBytes > _options.MaxPendingReliableBytes)
+        if (PendingSendBytes + segments * SegmentBytes > MaxPendingSendBytes)
         {
             _transport.Close(this, DisconnectReason.ResourceLimit, true);
             return;

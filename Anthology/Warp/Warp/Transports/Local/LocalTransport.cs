@@ -417,6 +417,12 @@ public sealed class LocalConnection : Connection
 
     public override TimeSpan RoundTripTime => TimeSpan.Zero;
 
+    /// <summary>Bytes waiting in the receiving transport's inbox, from every sender. Overflowing it closes this connection.</summary>
+    public override long PendingSendBytes => Peer is { } peer ? ((LocalTransport)peer.Transport).PendingInboxBytes : 0;
+
+    public override long MaxPendingSendBytes =>
+        Peer is { } peer ? ((LocalTransport)peer.Transport).MaxInboxBytes : long.MaxValue;
+
     internal void DeferClose(long afterPacket, DisconnectReason reason) =>
         Interlocked.CompareExchange(ref _pendingClose, new DeferredClose(afterPacket, reason), null);
 
