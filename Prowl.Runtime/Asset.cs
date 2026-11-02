@@ -117,7 +117,7 @@ public abstract class Asset : EngineObject
 
         if (WasEvicted && LoadCount > 0)
             Debug.LogWarningOnce($"Asset.Reload.{_assetId}",
-                $"{GetType().Name} '{Name}' was read by '{member}' after it was unloaded. Keep it in a field or hold it.\n{Environment.StackTrace}");
+                $"{GetType().Name} '{Name}' was read by '{member}' after it was unloaded. Keep it in a field or hold it.");
 
         AssetLoader.LoadBlocking(this);
     }
