@@ -54,4 +54,13 @@ public sealed class Pool<T>
 
     // clear the pool
     public void Clear() => objects.Clear();
+
+    // drop pooled objects until at most 'keep' remain
+    public void Trim(int keep)
+    {
+        while (objects.Count > keep)
+        {
+            objects.Pop();
+        }
+    }
 }

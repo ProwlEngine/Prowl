@@ -51,10 +51,16 @@ public sealed class Kcp
         // reset segment before reuse
         segment => segment.Reset(),
         // initial capacity. filled on demand, so idle conversations stay small.
-        0,
-        // max capacity
-        32
+        0
     );
+
+    // not part of the original C code. the pool is trimmed every second to what the busiest moment of that
+    // second needed, so steady traffic reuses segments and a burst doesn't pin memory.
+    private const int POOL_KEEP_MIN = 32;
+    private const int POOL_TRIM_INTERVAL = 1000;
+    private int pool_peak;
+    private int segments_out;
+    private uint ts_pool_trim;
 
     internal readonly List<AckItem> acklist = new(16);
     private readonly uint conv; // conversation
@@ -145,12 +151,32 @@ public sealed class Kcp
     // ikcp_segment_new
     // we keep the original function and add our pooling to it.
     // this way we'll never miss it anywhere.
-    private Segment SegmentNew() => SegmentPool.Take();
+    private Segment SegmentNew()
+    {
+        pool_peak = Math.Max(pool_peak, ++segments_out);
+        return SegmentPool.Take();
+    }
 
     // ikcp_segment_delete
     // we keep the original function and add our pooling to it.
     // this way we'll never miss it anywhere.
-    private void SegmentDelete(Segment seg) => SegmentPool.Return(seg);
+    private void SegmentDelete(Segment seg)
+    {
+        segments_out--;
+        SegmentPool.Return(seg);
+    }
+
+    private void TrimPool()
+    {
+        if (Utils.TimeDiff(current, ts_pool_trim) < POOL_TRIM_INTERVAL)
+        {
+            return;
+        }
+
+        SegmentPool.Trim(Math.Max(0, Math.Max(POOL_KEEP_MIN, pool_peak) - segments_out));
+        pool_peak = segments_out;
+        ts_pool_trim = current;
+    }
 
     // ikcp_wnd_unused
     // returns the remaining space in receive window (rcv_wnd - rcv_queue)
@@ -1105,7 +1131,10 @@ public sealed class Kcp
         {
             updated = true;
             ts_flush = current;
+            ts_pool_trim = current;
         }
+
+        TrimPool();
 
         // slap is time since last flush in milliseconds
         int slap = Utils.TimeDiff(current, ts_flush);

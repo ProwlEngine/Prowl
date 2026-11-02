@@ -722,6 +722,49 @@ public class KcpTests
     }
 
     [Fact]
+    public void SteadyTrafficDoesNotAllocateOnceWarm()
+    {
+        Transports.Kcp.Protocol.Kcp? receiver = null;
+        Transports.Kcp.Protocol.Kcp sender = new(1, (data, length) => receiver!.Input(data, 0, length));
+        receiver = new Transports.Kcp.Protocol.Kcp(1, (data, length) => sender.Input(data, 0, length));
+        sender.SetNoDelay(1, 10, 2, true);
+        receiver.SetNoDelay(1, 10, 2, true);
+        sender.SetWindowSize(4096, 256);
+        receiver.SetWindowSize(4096, 256);
+        byte[] message = new byte[1100];
+        byte[] received = new byte[2000];
+        uint time = 0;
+
+        void Tick()
+        {
+            for (int i = 0; i < 60; i++)
+            {
+                sender.Send(message, 0, message.Length);
+            }
+
+            time += 16;
+            sender.Update(time);
+            receiver.Update(time);
+            while (receiver.Receive(received, received.Length) > 0)
+            {
+            }
+        }
+
+        for (int i = 0; i < 200; i++)
+        {
+            Tick();
+        }
+
+        long before = System.GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 100; i++)
+        {
+            Tick();
+        }
+
+        Assert.InRange(System.GC.GetAllocatedBytesForCurrentThread() - before, 0, 1024);
+    }
+
+    [Fact]
     public void LargeMessagesDoNotGrowTheSegmentPoolForever()
     {
         Transports.Kcp.Protocol.Kcp? receiver = null;
@@ -749,6 +792,14 @@ public class KcpTests
 
         Assert.Equal(message.Length, got);
         Assert.Equal(0, sender.WaitSnd);
+
+        // The pool shrinks back within a couple of trims once the burst is over.
+        for (uint time = 10_000; time < 13_000; time += 10)
+        {
+            sender.Update(time);
+            receiver.Update(time);
+        }
+
         Assert.InRange(sender.SegmentPool.Count, 0, 64);
         Assert.InRange(receiver.SegmentPool.Count, 0, 64);
     }
