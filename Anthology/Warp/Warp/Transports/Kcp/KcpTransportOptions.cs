@@ -69,6 +69,13 @@ public sealed class KcpTransportOptions
     /// <summary>Maximum UDP datagrams processed by one Receive call, including invalid packets.</summary>
     public int MaxDatagramsPerReceive { get; set; } = 1024;
 
+    /// <summary>
+    ///     Most bytes per second each connection sends, counting every packet, or 0 for no limit. Reliable
+    ///     messages beyond it wait in the send queue, and lower channels get the bandwidth first, so keep
+    ///     bulk transfers on higher channels. Unreliable messages are never held back.
+    /// </summary>
+    public int MaxSendRate { get; set; }
+
     /// <summary>Conservative memory budget for queued and unacknowledged reliable segments per peer.</summary>
     public long MaxPendingReliableBytes { get; set; } = 32 * 1024 * 1024;
 
@@ -112,6 +119,12 @@ public sealed class KcpTransportOptions
         if (MaxDatagramsPerReceive <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(MaxDatagramsPerReceive));
+        }
+
+        if (MaxSendRate < 0 || (MaxSendRate > 0 && MaxSendRate < Mtu))
+        {
+            throw new ArgumentOutOfRangeException(nameof(MaxSendRate), MaxSendRate,
+                "MaxSendRate must be 0 or at least one Mtu per second.");
         }
 
         if (MaxPendingReliableBytes <= 0)

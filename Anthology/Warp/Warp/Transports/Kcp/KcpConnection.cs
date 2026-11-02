@@ -25,6 +25,12 @@ public sealed class KcpConnection : Connection
     // One KCP conversation per channel, created when the channel is first used.
     private Protocol.Kcp?[]? _reliable;
     private long _releasedRetransmits;
+
+    // Send rate budget in bytes, refilled over time and spent by every packet sent.
+    private double _sendTokens;
+    private bool _tokensStarted;
+    private long _tokensUpdatedMs;
+    private long _tokensCountedBytes;
     private double _smoothedRttMs;
 
     internal KcpConnection(KcpTransport transport, int id, string address, bool isOutgoing, SocketAddress? remote,
@@ -360,11 +366,50 @@ public sealed class KcpConnection : Connection
 
         // Update only flushes once per KCP interval. Flushing on every call as well sends new messages
         // and acks on this tick instead of up to an interval later; retransmits are still timer driven.
+        if (_options.MaxSendRate == 0)
+        {
+            foreach (Protocol.Kcp? kcp in _reliable)
+            {
+                kcp?.Update((uint)now);
+                kcp?.Flush();
+            }
+
+            return;
+        }
+
+        // Channels in order, so lower channels spend the budget first.
+        RefillSendTokens(now);
         foreach (Protocol.Kcp? kcp in _reliable)
         {
-            kcp?.Update((uint)now);
-            kcp?.Flush();
+            if (kcp == null)
+            {
+                continue;
+            }
+
+            kcp.send_budget = _sendTokens > 0 ? (int)Math.Ceiling(_sendTokens / SegmentBytes) : 0;
+            kcp.Update((uint)now);
+            kcp.Flush();
+            RefillSendTokens(now);
         }
+    }
+
+    /// <summary>Adds the budget earned since the last call and spends what has been sent since.</summary>
+    private void RefillSendTokens(long now)
+    {
+        if (!_tokensStarted)
+        {
+            _tokensStarted = true;
+            _tokensUpdatedMs = now;
+            _sendTokens = _options.MaxSendRate / 10.0;
+        }
+
+        double burst = Math.Max(_options.MaxSendRate / 10.0, 2.0 * _options.Mtu);
+        _sendTokens = Math.Min(burst, _sendTokens + _options.MaxSendRate * (now - _tokensUpdatedMs) / 1000.0);
+        _tokensUpdatedMs = now;
+
+        long sent = base.Stats.BytesSent;
+        _sendTokens -= sent - _tokensCountedBytes;
+        _tokensCountedBytes = sent;
     }
 
     internal void ReleaseBuffers()

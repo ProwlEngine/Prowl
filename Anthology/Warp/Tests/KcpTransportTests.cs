@@ -191,6 +191,34 @@ public class KcpTransportTests
     }
 
     [Fact]
+    public void SendRateCapSpreadsTrafficAndServesLowerChannelsFirst()
+    {
+        KcpTransportOptions options = FastOptions();
+        options.MaxSendRate = 50_000;
+        (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) = Connect(clientOptions: options);
+        using (host)
+        using (client)
+        {
+            for (int i = 0; i < 100; i++)
+            {
+                toHost.Send(new byte[1000], Delivery.Reliable, channel: 1);
+            }
+
+            pump.For(500);
+            int Bulk() => pump.EventsOf(host).Count(ev => ev.Type == TransportEventType.Data && ev.Channel == 1);
+            Assert.InRange(Bulk(), 1, 40);
+
+            toHost.Send(new byte[] { 7 }, Delivery.Reliable);
+            pump.Until(() => pump.EventsOf(host).Any(ev => ev.Type == TransportEventType.Data && ev.Channel == 0),
+                timeoutMs: 300, what: "the channel 0 message");
+            Assert.True(Bulk() < 100);
+
+            pump.Until(() => Bulk() == 100, what: "the rest of the bulk transfer");
+            Assert.True(toHost.IsConnected);
+        }
+    }
+
+    [Fact]
     public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
     {
         KcpTransportOptions options = FastOptions();

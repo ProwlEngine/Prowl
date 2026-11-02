@@ -114,6 +114,9 @@ public sealed class Kcp
     // not part of the original C code. every resend, timed out or fast, for statistics.
     internal long retransmits;
 
+    // not part of the original C code. how many new segments the next flushes may start sending.
+    internal int send_budget = int.MaxValue;
+
     // ikcp_create
     // create a new kcp control object, 'conv' must equal in two endpoint
     // from the same connection.
@@ -934,9 +937,14 @@ public sealed class Kcp
         //   copy up to 'cwnd_' difference between them (sliding window)
         while (Utils.TimeDiff(snd_nxt, snd_una + cwnd_) < 0)
         {
-            if (snd_queue.Count == 0)
+            if (snd_queue.Count == 0 || send_budget <= 0)
             {
                 break;
+            }
+
+            if (send_budget != int.MaxValue)
+            {
+                send_budget--;
             }
 
             Segment newseg = snd_queue.Dequeue();
