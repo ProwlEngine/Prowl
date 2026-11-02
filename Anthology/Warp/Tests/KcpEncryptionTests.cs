@@ -304,6 +304,38 @@ public class KcpEncryptionTests
         Assert.Equal(address, host.Connections.Single().Address);
     }
 
+    [Fact]
+    public void DeeplyReorderedPacketsStillOpenButReplaysDoNot()
+    {
+        (KcpCipher client, KcpCipher host) = CipherPair();
+        byte[] header = { 16, 1, 2, 3, 4 };
+        byte[][] sealedPackets = new byte[500][];
+        for (int i = 0; i < sealedPackets.Length; i++)
+        {
+            byte[] packet = new byte[header.Length + 1 + KcpCipher.Overhead];
+            client.Seal(header, new[] { (byte)i }, packet);
+            sealedPackets[i] = packet;
+        }
+
+        byte[] plain = new byte[16];
+        Assert.True(host.Open(sealedPackets[^1], header.Length, plain, out _));
+        for (int i = 0; i < sealedPackets.Length - 1; i++)
+        {
+            Assert.True(host.Open(sealedPackets[i], header.Length, plain, out _), $"packet {i}");
+        }
+
+        Assert.False(host.Open(sealedPackets[3], header.Length, plain, out _));
+        Assert.False(host.Open(sealedPackets[^1], header.Length, plain, out _));
+    }
+
+    private static (KcpCipher Client, KcpCipher Host) CipherPair()
+    {
+        using ECDiffieHellman clientExchange = KcpCipher.CreateKeyExchange(out byte[] clientPublic);
+        using ECDiffieHellman hostExchange = KcpCipher.CreateKeyExchange(out byte[] hostPublic);
+        return (KcpCipher.Create(clientExchange, clientPublic, hostPublic, 1, 2, true)!,
+            KcpCipher.Create(hostExchange, clientPublic, hostPublic, 1, 2, false)!);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]

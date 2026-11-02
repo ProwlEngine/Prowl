@@ -27,7 +27,8 @@ internal sealed class KcpCipher : IDisposable
     /// <summary>An ECDSA P-256 signature in IEEE P1363 form.</summary>
     public const int SignatureSize = 64;
 
-    private const int ReplayWindow = 64;
+    // How far behind the newest packet a late one may still arrive. Kept as a ring of bits.
+    private const int ReplayWindow = 1024;
 
     // The P-256 field prime and curve constant b, big-endian. The curve is y^2 = x^3 - 3x + b.
     private static readonly BigInteger FieldPrime = Unsigned(Convert.FromHexString(
@@ -44,7 +45,7 @@ internal sealed class KcpCipher : IDisposable
     private ulong _highest;
     private bool _received;
     private ulong _nextCounter;
-    private ulong _window;
+    private readonly ulong[] _window = new ulong[ReplayWindow / 64];
 
     private KcpCipher(ReadOnlySpan<byte> keys, bool isClient)
     {
@@ -216,27 +217,32 @@ internal sealed class KcpCipher : IDisposable
             return true;
         }
 
-        ulong back = _highest - counter;
-        return back < ReplayWindow && (_window & (1UL << (int)back)) == 0;
+        return _highest - counter < ReplayWindow && !IsMarked(counter);
     }
 
     private void MarkSeen(ulong counter)
     {
-        if (!_received)
+        if (!_received || counter - _highest >= ReplayWindow && counter > _highest)
         {
-            _received = true;
-            _highest = counter;
-            _window = 1;
-        }
-        else if (counter > _highest)
-        {
-            ulong shift = counter - _highest;
-            _window = shift >= ReplayWindow ? 1 : (_window << (int)shift) | 1;
-            _highest = counter;
+            Array.Clear(_window);
         }
         else
         {
-            _window |= 1UL << (int)(_highest - counter);
+            for (ulong skipped = _highest + 1; skipped < counter; skipped++)
+            {
+                _window[skipped / 64 % (ReplayWindow / 64)] &= ~(1UL << (int)(skipped % 64));
+            }
         }
+
+        if (!_received || counter > _highest)
+        {
+            _received = true;
+            _highest = counter;
+        }
+
+        _window[counter / 64 % (ReplayWindow / 64)] |= 1UL << (int)(counter % 64);
     }
+
+    private bool IsMarked(ulong counter) =>
+        (_window[counter / 64 % (ReplayWindow / 64)] & (1UL << (int)(counter % 64))) != 0;
 }
