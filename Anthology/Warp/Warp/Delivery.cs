@@ -15,8 +15,16 @@ public enum Delivery : byte
     Reliable = 0,
 
     /// <summary>
-    ///     Fire and forget. The message may be lost, duplicated or arrive out of order, and it must fit
-    ///     in a single packet (see <see cref="Connection.GetMaxMessageSize" />). Cheapest and lowest latency.
+    ///     Fire and forget. The message may be lost, duplicated or arrive out of order. Messages larger than
+    ///     one packet are split and are lost whole if any piece is lost, so keep them small where you can
+    ///     (see <see cref="Connection.GetMaxMessageSize" />). Cheapest and lowest latency.
     /// </summary>
-    Unreliable = 1
+    Unreliable = 1,
+
+    /// <summary>
+    ///     Like <see cref="Unreliable" />, but a message older than one already delivered on its channel is
+    ///     dropped, so the receiver only ever moves forward. Suits state that the next message replaces,
+    ///     such as positions. Each channel keeps its own sequence.
+    /// </summary>
+    UnreliableSequenced = 2
 }

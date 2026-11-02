@@ -87,8 +87,9 @@ public abstract class Connection
     /// <param name="delivery">How the message travels.</param>
     /// <param name="flags">Timing policy. Immediate preserves ordering with earlier queued messages.</param>
     /// <param name="channel">
-    ///     Which of the transport's <see cref="TransportCapabilities.Channels" /> a reliable message goes on; messages
-    ///     are ordered within a channel only. Unreliable messages have no order to keep, so they always use channel 0.
+    ///     Which of the transport's <see cref="TransportCapabilities.Channels" /> the message goes on. Reliable messages
+    ///     are ordered within a channel only, and sequenced ones are sequenced per channel. Plain unreliable messages
+    ///     have no order to keep, so they always use channel 0.
     /// </param>
     /// <exception cref="InvalidOperationException">The connection is not <see cref="ConnectionState.Connected" />.</exception>
     /// <exception cref="ArgumentException">The message is larger than <see cref="GetMaxMessageSize" />.</exception>
@@ -137,10 +138,10 @@ public abstract class Connection
             throw new NotSupportedException($"Transport does not support {delivery} delivery.");
         }
 
-        if (channel >= Transport.Capabilities.Channels || (channel != 0 && delivery != Delivery.Reliable))
+        if (channel >= Transport.Capabilities.Channels || (channel != 0 && delivery == Delivery.Unreliable))
         {
             throw new ArgumentOutOfRangeException(nameof(channel), channel,
-                $"Transport has {Transport.Capabilities.Channels} channels, and only reliable messages use any but 0.");
+                $"Transport has {Transport.Capabilities.Channels} channels, and plain unreliable messages use only 0.");
         }
 
         int max = GetMaxMessageSize(delivery);

@@ -37,7 +37,7 @@ public readonly record struct TransportCapabilities(
     public bool Supports(Delivery delivery) => delivery switch
     {
         Delivery.Reliable => (Deliveries & DeliverySupport.Reliable) != 0,
-        Delivery.Unreliable => (Deliveries & DeliverySupport.Unreliable) != 0,
+        Delivery.Unreliable or Delivery.UnreliableSequenced => (Deliveries & DeliverySupport.Unreliable) != 0,
         _ => false
     };
 }

@@ -332,7 +332,8 @@ public sealed class NetSession : IDisposable
     /// </summary>
     /// <remarks>
     ///     Reliable messages can be any size up to the receiver's <see cref="NetSessionOptions.MaxMessageSize" />:
-    ///     ones the transport can't carry whole are split and reassembled. Unreliable ones must fit the transport.
+    ///     ones the transport can't carry whole are split and reassembled. Unreliable ones must fit the transport's
+    ///     <see cref="Connection.GetMaxMessageSize" />.
     ///     <paramref name="channel" /> picks one of the transport's channels; messages are ordered within a channel only.
     /// </remarks>
     /// <exception cref="InvalidOperationException">
@@ -951,7 +952,7 @@ public sealed class NetSession : IDisposable
                 case (ushort)InternalMessage.Batch:
                     // Unreliable batches skip the reliable queue, so one sent right after the host admitted
                     // us can beat JoinAccepted here. Drop it, like any other unreliable message before joining.
-                    if (!reassembled && State == SessionState.Joining && delivery == Delivery.Unreliable)
+                    if (!reassembled && State == SessionState.Joining && delivery != Delivery.Reliable)
                     {
                         break;
                     }
@@ -1308,7 +1309,7 @@ public sealed class NetSession : IDisposable
         }
 
         int max = connection.GetMaxMessageSize(delivery);
-        if (delivery == Delivery.Unreliable || message.Length <= max)
+        if (delivery != Delivery.Reliable || message.Length <= max)
         {
             connection.Send(message, delivery, flags, channel);
             return;
@@ -1572,10 +1573,10 @@ public sealed class NetSession : IDisposable
             throw new ArgumentOutOfRangeException(nameof(flags));
         }
 
-        if (channel >= Transport.Capabilities.Channels || (channel != 0 && delivery != Delivery.Reliable))
+        if (channel >= Transport.Capabilities.Channels || (channel != 0 && delivery == Delivery.Unreliable))
         {
             throw new ArgumentOutOfRangeException(nameof(channel), channel,
-                $"The transport has {Transport.Capabilities.Channels} channels, and only reliable messages use any but 0.");
+                $"The transport has {Transport.Capabilities.Channels} channels, and plain unreliable messages use only 0.");
         }
     }
 

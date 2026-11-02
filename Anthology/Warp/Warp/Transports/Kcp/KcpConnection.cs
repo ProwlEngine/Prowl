@@ -24,6 +24,13 @@ public sealed class KcpConnection : Connection
 
     // One KCP conversation per channel, created when the channel is first used.
     private Protocol.Kcp?[]? _reliable;
+
+    // Unreliable messages in pieces: what this side sends next, the newest sequenced message delivered per
+    // channel (-1 before the first), and a few messages part way through arriving.
+    private ushort _piecedOut;
+    private ushort[]? _sequencesOut;
+    private int[]? _sequencesIn;
+    private readonly PartialMessage?[] _partials = new PartialMessage?[4];
     private long _releasedRetransmits;
 
     // Send rate budget in bytes, refilled over time and spent by every packet sent.
@@ -70,9 +77,9 @@ public sealed class KcpConnection : Connection
 
     public override int GetMaxMessageSize(Delivery delivery)
     {
-        if (delivery == Delivery.Unreliable)
+        if (delivery != Delivery.Reliable)
         {
-            return _options.Mtu - KcpPacket.SessionHeaderSize;
+            return KcpPacket.MaxUnreliablePieces * PieceSize;
         }
 
         // KCP numbers a message's fragments in one byte, and the receiver must be able to hold them all
@@ -84,15 +91,23 @@ public sealed class KcpConnection : Connection
         return segmentSize * fragments;
     }
 
-    public override int GetBatchThreshold(Delivery delivery) => delivery == Delivery.Reliable
-        ? Math.Min(GetMaxMessageSize(delivery), _options.Mtu - KcpPacket.ChannelHeaderSize - Protocol.Kcp.OVERHEAD)
-        : GetMaxMessageSize(delivery);
+    // Unreliable batches stay within one datagram, so one lost packet loses one batch only.
+    public override int GetBatchThreshold(Delivery delivery) => delivery switch
+    {
+        Delivery.Reliable => Math.Min(GetMaxMessageSize(delivery),
+            _options.Mtu - KcpPacket.ChannelHeaderSize - Protocol.Kcp.OVERHEAD),
+        Delivery.Unreliable => _options.Mtu - KcpPacket.SessionHeaderSize,
+        _ => PieceSize
+    };
+
+    /// <summary>Largest piece of an unreliable message that one UnreliableFramed packet carries.</summary>
+    private int PieceSize => _options.Mtu - KcpPacket.FramedHeaderSize;
 
     protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
     {
-        if (delivery == Delivery.Unreliable)
+        if (delivery != Delivery.Reliable)
         {
-            _transport.SendSession(this, KcpPacketType.Unreliable, data);
+            SendUnreliable(data, delivery, channel);
             return;
         }
 
@@ -118,6 +133,31 @@ public sealed class KcpConnection : Connection
     /// <summary>Sends this connection's queued reliable messages without ticking the rest of the transport.</summary>
     public override void Flush() => FlushReliable(_transport.NowMs);
 
+    /// <summary>Sends small plain messages as they are, and everything else as numbered pieces.</summary>
+    private void SendUnreliable(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
+    {
+        if (delivery == Delivery.Unreliable && data.Length <= _options.Mtu - KcpPacket.SessionHeaderSize)
+        {
+            _transport.SendSession(this, KcpPacketType.Unreliable, data);
+            return;
+        }
+
+        bool sequenced = delivery == Delivery.UnreliableSequenced;
+        ushort sequence = sequenced ? _sequencesOut![channel]++ : _piecedOut++;
+        int count = Math.Max(1, (data.Length + PieceSize - 1) / PieceSize);
+        Span<byte> header = stackalloc byte[KcpPacket.FramedHeaderSize - KcpPacket.SessionHeaderSize];
+        header[0] = (byte)(channel | (sequenced ? KcpPacket.SequencedFlag : 0));
+        BinaryPrimitives.WriteUInt16LittleEndian(header[1..], sequence);
+        header[4] = (byte)count;
+        for (int i = 0; i < count; i++)
+        {
+            header[3] = (byte)i;
+            int offset = i * PieceSize;
+            _transport.SendSession(this, KcpPacketType.UnreliableFramed, header,
+                data.Slice(offset, Math.Min(PieceSize, data.Length - offset)));
+        }
+    }
+
     public override void Disconnect() => _transport.Close(this, DisconnectReason.Requested, true);
 
     /// <summary>Sets up the channels once the session id is known.</summary>
@@ -125,6 +165,9 @@ public sealed class KcpConnection : Connection
     {
         _reliable = new Protocol.Kcp?[_options.Channels];
         Reliable(0);
+        _sequencesOut = new ushort[_options.Channels];
+        _sequencesIn = new int[_options.Channels];
+        Array.Fill(_sequencesIn, -1);
 
         SessionStartMs = now;
         _lastReceiveMs = now;
@@ -273,6 +316,10 @@ public sealed class KcpConnection : Connection
                 _transport.OnData(this, body, Delivery.Unreliable, 0);
                 break;
 
+            case KcpPacketType.UnreliableFramed:
+                ReceivePiece(body, now);
+                break;
+
             case KcpPacketType.Ping:
                 if (body.Length >= 4)
                 {
@@ -345,6 +392,14 @@ public sealed class KcpConnection : Connection
 
         FlushReliable(now);
 
+        foreach (PartialMessage? partial in _partials)
+        {
+            if (partial is { Buffer: not null } && now - partial.StartedMs > PartialLifetimeMs)
+            {
+                partial.Release();
+            }
+        }
+
         // kcp2k flags the link as dead once a segment has been resent dead_link times without an ack.
         foreach (Protocol.Kcp? kcp in _reliable!)
         {
@@ -414,6 +469,11 @@ public sealed class KcpConnection : Connection
 
     internal void ReleaseBuffers()
     {
+        foreach (PartialMessage? partial in _partials)
+        {
+            partial?.Release();
+        }
+
         _releasedRetransmits = Retransmits();
         _reliable = null;
     }
@@ -457,6 +517,133 @@ public sealed class KcpConnection : Connection
         else
         {
             _smoothedRttMs += (sampleMs - _smoothedRttMs) * 0.125;
+        }
+    }
+
+    private const long PartialLifetimeMs = 1000;
+
+    /// <summary>Takes one piece of an unreliable message, delivering the message once every piece is in.</summary>
+    private void ReceivePiece(ReadOnlySpan<byte> body, long now)
+    {
+        if (body.Length <= KcpPacket.FramedHeaderSize - KcpPacket.SessionHeaderSize)
+        {
+            return;
+        }
+
+        bool sequenced = (body[0] & KcpPacket.SequencedFlag) != 0;
+        byte channel = (byte)(body[0] & ~KcpPacket.SequencedFlag);
+        ushort sequence = BinaryPrimitives.ReadUInt16LittleEndian(body[1..]);
+        int index = body[3], count = body[4];
+        ReadOnlySpan<byte> piece = body[5..];
+        bool last = index == count - 1;
+        if (channel >= _options.Channels || (!sequenced && channel != 0) || count == 0 ||
+            count > KcpPacket.MaxUnreliablePieces || index >= count || piece.Length > PieceSize ||
+            (!last && piece.Length != PieceSize) || (sequenced && !IsNewer(channel, sequence)))
+        {
+            return;
+        }
+
+        Delivery delivery = sequenced ? Delivery.UnreliableSequenced : Delivery.Unreliable;
+        if (count == 1)
+        {
+            Deliver(piece, delivery, channel, sequence);
+            return;
+        }
+
+        PartialMessage partial = FindPartial(sequenced, channel, sequence, count, now);
+        uint bit = 1u << index;
+        if (partial.Count != count || (partial.Received & bit) != 0)
+        {
+            return;
+        }
+
+        piece.CopyTo(partial.Buffer.AsSpan(index * PieceSize));
+        partial.Received |= bit;
+        if (last)
+        {
+            partial.LastLength = piece.Length;
+        }
+
+        if (partial.Received == (count == 32 ? uint.MaxValue : (1u << count) - 1))
+        {
+            int length = (count - 1) * PieceSize + partial.LastLength;
+            if (!sequenced || IsNewer(channel, sequence))
+            {
+                Deliver(partial.Buffer.AsSpan(0, length), delivery, channel, sequence);
+            }
+
+            partial.Release();
+        }
+    }
+
+    private void Deliver(ReadOnlySpan<byte> message, Delivery delivery, byte channel, ushort sequence)
+    {
+        if (delivery == Delivery.UnreliableSequenced)
+        {
+            _sequencesIn![channel] = sequence;
+        }
+
+        _transport.OnData(this, message, delivery, channel);
+    }
+
+    private bool IsNewer(byte channel, ushort sequence) =>
+        _sequencesIn![channel] < 0 || (short)(sequence - (ushort)_sequencesIn[channel]) > 0;
+
+    /// <summary>The partial message with this key, or a fresh one in a free slot or in place of the oldest.</summary>
+    private PartialMessage FindPartial(bool sequenced, byte channel, ushort sequence, int count, long now)
+    {
+        PartialMessage? victim = null;
+        for (int i = 0; i < _partials.Length; i++)
+        {
+            PartialMessage partial = _partials[i] ??= new PartialMessage();
+            if (partial.Buffer != null && partial.Sequenced == sequenced && partial.Channel == channel &&
+                partial.Sequence == sequence)
+            {
+                return partial;
+            }
+
+            if (victim == null ||
+                (victim.Buffer != null && (partial.Buffer == null || partial.StartedMs < victim.StartedMs)))
+            {
+                victim = partial;
+            }
+        }
+
+        victim!.Release();
+        victim.Start(sequenced, channel, sequence, count, count * PieceSize, now);
+        return victim;
+    }
+
+    private sealed class PartialMessage
+    {
+        public byte[]? Buffer;
+        public byte Channel;
+        public int Count;
+        public int LastLength;
+        public uint Received;
+        public bool Sequenced;
+        public ushort Sequence;
+        public long StartedMs;
+
+        public void Start(bool sequenced, byte channel, ushort sequence, int count, int size, long now)
+        {
+            Buffer = ArrayPool<byte>.Shared.Rent(size);
+            Sequenced = sequenced;
+            Channel = channel;
+            Sequence = sequence;
+            Count = count;
+            Received = 0;
+            LastLength = 0;
+            StartedMs = now;
+        }
+
+        public void Release()
+        {
+            if (Buffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(Buffer);
+                Buffer = null;
+            }
         }
     }
 

@@ -191,6 +191,27 @@ public abstract class NetSessionTests : IDisposable
     }
 
     [Fact]
+    public void SequencedMessagesTravelOnTheirOwnChannels()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        List<(Delivery, byte, int)> atAlice = new();
+        alice.Session.OnRaw(30,
+            (_, ref reader, delivery, channel) => atAlice.Add((delivery, channel, reader.Remaining)));
+
+        NetPeer aliceAtHost = host.Session.Peers.Single(p => !p.IsLocal);
+        host.Session.SendRaw(aliceAtHost, 30, new byte[10], Delivery.UnreliableSequenced, channel: 1);
+        host.Session.SendRaw(aliceAtHost, 30, new byte[5000], Delivery.UnreliableSequenced, channel: 2);
+        SessionProbe.PumpUntil(() => atAlice.Count == 2, host, alice);
+
+        Assert.Equal(new (Delivery, byte, int)[]
+        {
+            (Delivery.UnreliableSequenced, 1, 10), (Delivery.UnreliableSequenced, 2, 5000)
+        }, atAlice.OrderBy(m => m.Item2));
+    }
+
+    [Fact]
     public void FragmentedMessagesOnDifferentChannelsAreReassembledIndependently()
     {
         SessionProbe host = Host();

@@ -24,6 +24,8 @@ namespace Prowl.Warp.Transports.Kcp;
 ///   Reliable           body = KCP segments of channel 0
 ///   ReliableChannel    body = [u8 channel, 1 or more] KCP segments of that channel
 ///   Unreliable         body = one message
+///   UnreliableFramed   body = [u8 flags][u16 sequence][u8 index][u8 count] piece of one message
+///                      flags = channel, plus 0x80 if sequenced. Pieces of one message share a sequence.
 ///   Ping               body = u32 sender time in ms
 ///   Pong               body = u32 time echoed from the Ping
 ///   Disconnect         no body
@@ -55,7 +57,8 @@ internal enum KcpPacketType : byte
     Ping = 18,
     Pong = 19,
     Disconnect = 20,
-    ReliableChannel = 21
+    ReliableChannel = 21,
+    UnreliableFramed = 22
 }
 
 internal static class KcpPacket
@@ -70,7 +73,7 @@ internal static class KcpPacket
     public const int ChannelHeaderSize = SessionHeaderSize + 1;
 
     /// <summary>Bumped whenever the datagram format changes, so mismatched builds refuse each other.</summary>
-    public const byte WireVersion = 4;
+    public const byte WireVersion = 5;
 
     /// <summary>Where a handshake request carries <see cref="WireVersion" />, then the rest of its settings.</summary>
     public const int HandshakeVersionOffset = 9 + CookieSize;
@@ -91,4 +94,12 @@ internal static class KcpPacket
     public const int AcceptSize = 1 + 4 + 4;
     public const int RejectSize = 1 + 4 + 1;
     public const int PingSize = SessionHeaderSize + 4;
+
+    /// <summary>Session header plus flags, sequence, index and count, in front of each UnreliableFramed piece.</summary>
+    public const int FramedHeaderSize = SessionHeaderSize + 5;
+
+    /// <summary>The most pieces one unreliable message is split into.</summary>
+    public const int MaxUnreliablePieces = 32;
+
+    public const byte SequencedFlag = 0x80;
 }

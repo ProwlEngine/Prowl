@@ -218,6 +218,69 @@ public class KcpTransportTests
         }
     }
 
+    [Theory]
+    [InlineData(Delivery.Unreliable)]
+    [InlineData(Delivery.UnreliableSequenced)]
+    public void LargeUnreliableMessagesArriveWholeOrNotAtAll(Delivery delivery)
+    {
+        LinkSimulation lossy = new() { PacketLoss = 0.2, Seed = 3 };
+        (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) =
+            Connect(clientOptions: FastOptions(lossy));
+        using (host)
+        using (client)
+        {
+            Assert.True(toHost.GetMaxMessageSize(delivery) >= 32 * 1024);
+            byte[] message = TestData.Pattern(20_000, 1);
+            for (int i = 0; i < 30; i++)
+            {
+                toHost.Send(message, delivery);
+                pump.For(5);
+            }
+
+            pump.For(100);
+            Received[] arrived = pump.EventsOf(host).Where(ev => ev.Type == TransportEventType.Data).ToArray();
+            Assert.NotEmpty(arrived);
+            Assert.True(arrived.Length < 30);
+            Assert.All(arrived, ev =>
+            {
+                Assert.Equal(message, ev.Data);
+                Assert.Equal(delivery, ev.Delivery);
+            });
+        }
+    }
+
+    [Fact]
+    public void SequencedMessagesNeverGoBackwards()
+    {
+        LinkSimulation jittery = new() { Latency = TimeSpan.FromMilliseconds(5), Jitter = TimeSpan.FromMilliseconds(40), Seed = 5 };
+        (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) =
+            Connect(clientOptions: FastOptions(jittery));
+        using (host)
+        using (client)
+        {
+            for (int i = 0; i < 200; i++)
+            {
+                toHost.Send(BitConverter.GetBytes(i), Delivery.UnreliableSequenced, channel: 2);
+                toHost.Send(BitConverter.GetBytes(-i), Delivery.UnreliableSequenced, channel: 3);
+                pump.Step();
+            }
+
+            pump.For(200);
+            foreach (byte channel in new byte[] { 2, 3 })
+            {
+                int[] values = pump.EventsOf(host)
+                    .Where(ev => ev.Type == TransportEventType.Data && ev.Channel == channel)
+                    .Select(ev => Math.Abs(BitConverter.ToInt32(ev.Data))).ToArray();
+                Assert.True(values.Length > 20);
+                Assert.True(values.Length < 200);
+                for (int i = 1; i < values.Length; i++)
+                {
+                    Assert.True(values[i] > values[i - 1], $"{values[i]} arrived after {values[i - 1]}");
+                }
+            }
+        }
+    }
+
     [Fact]
     public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
     {
@@ -311,14 +374,14 @@ public class KcpTransportTests
     }
 
     [Fact]
-    public void UnreliableMessagesAreLimitedToOnePacket()
+    public void UnreliableMessagesAreLimitedToThirtyTwoPieces()
     {
         (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) = Connect();
         using (host)
         using (client)
         {
             int max = toHost.GetMaxMessageSize(Delivery.Unreliable);
-            Assert.Equal(1200 - KcpPacket.SessionHeaderSize, max);
+            Assert.Equal(KcpPacket.MaxUnreliablePieces * (1200 - KcpPacket.FramedHeaderSize), max);
             toHost.Send(new byte[max], Delivery.Unreliable);
             Assert.Throws<ArgumentException>(() => toHost.Send(new byte[max + 1], Delivery.Unreliable));
         }
