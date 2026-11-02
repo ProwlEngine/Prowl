@@ -383,6 +383,25 @@ public class KcpTransportTests
     }
 
     [Fact]
+    public void AFloodOfTinyDatagramsCannotGrowTheIoQueuePastItsBudget()
+    {
+        KcpTransportOptions options = FastOptions();
+        options.UseIoThreads = true;
+        options.SocketBufferSize = 64 * 1024;
+        using KcpTransport host = new(options);
+        host.Listen();
+        using Socket raw = RawSocket(host);
+        byte[] tiny = { 99 };
+        for (int i = 0; i < 3000; i++)
+        {
+            raw.Send(tiny);
+        }
+
+        Thread.Sleep(300);
+        Assert.InRange(host.QueuedDatagrams, 1, 64 * 1024 / 256);
+    }
+
+    [Fact]
     public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
     {
         KcpTransportOptions options = FastOptions();

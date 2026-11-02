@@ -18,6 +18,9 @@ internal sealed class KcpIoThreads : IDisposable
 {
     private const int MaxPooledAddresses = 4096;
 
+    // What one queued datagram costs against the budget at least: its buffer, address and queue slot.
+    private const int MinDatagramCost = 256;
+
     private readonly ConcurrentQueue<SocketAddress> _addresses = new();
     private readonly long _maxQueuedBytes;
     private readonly int _mtu;
@@ -28,12 +31,16 @@ internal sealed class KcpIoThreads : IDisposable
     private readonly AutoResetEvent _sendSignal = new(false);
     private readonly Socket _socket;
     private long _queuedBytes;
+    private long _outgoingBytes;
     private int _sendPending;
     private volatile bool _stopping;
 
     /// <param name="socket">A bound socket. It is switched to blocking mode for the receive thread.</param>
     /// <param name="mtu">Larger datagrams are dropped, as the inline path does.</param>
-    /// <param name="maxQueuedBytes">Received bytes waiting for Receive; beyond it datagrams are dropped like a full OS buffer.</param>
+    /// <param name="maxQueuedBytes">
+    ///     Budget for each direction's queue. A datagram costs its length, and at least 256 bytes. Beyond it
+    ///     datagrams are dropped, like a full OS buffer.
+    /// </param>
     public KcpIoThreads(Socket socket, int mtu, long maxQueuedBytes)
     {
         _socket = socket;
@@ -87,7 +94,7 @@ internal sealed class KcpIoThreads : IDisposable
             return false;
         }
 
-        Interlocked.Add(ref _queuedBytes, -datagram.Length);
+        Interlocked.Add(ref _queuedBytes, -Cost(datagram.Length));
         datagram.Buffer.AsSpan(0, datagram.Length).CopyTo(destination);
         ArrayPool<byte>.Shared.Return(datagram.Buffer);
         if (from != null)
@@ -103,6 +110,12 @@ internal sealed class KcpIoThreads : IDisposable
     /// <summary>Queues a datagram for the send thread. The data and address are copied.</summary>
     public void Send(SocketAddress to, ReadOnlySpan<byte> datagram)
     {
+        if (Interlocked.Read(ref _outgoingBytes) + Cost(datagram.Length) > _maxQueuedBytes)
+        {
+            return;
+        }
+
+        Interlocked.Add(ref _outgoingBytes, Cost(datagram.Length));
         byte[] buffer = ArrayPool<byte>.Shared.Rent(datagram.Length);
         datagram.CopyTo(buffer);
         _outgoing.Enqueue(new Datagram(buffer, datagram.Length, CopyAddress(to)));
@@ -140,14 +153,14 @@ internal sealed class KcpIoThreads : IDisposable
                 continue;
             }
 
-            if (length == 0 || length > _mtu || Interlocked.Read(ref _queuedBytes) + length > _maxQueuedBytes)
+            if (length == 0 || length > _mtu || Interlocked.Read(ref _queuedBytes) + Cost(length) > _maxQueuedBytes)
             {
                 continue;
             }
 
             byte[] copy = ArrayPool<byte>.Shared.Rent(length);
             buffer.AsSpan(0, length).CopyTo(copy);
-            Interlocked.Add(ref _queuedBytes, length);
+            Interlocked.Add(ref _queuedBytes, Cost(length));
             _received.Enqueue(new Datagram(copy, length, CopyAddress(address)));
         }
     }
@@ -170,6 +183,7 @@ internal sealed class KcpIoThreads : IDisposable
                     // UDP makes no promises; a failed send is just a lost packet.
                 }
 
+                Interlocked.Add(ref _outgoingBytes, -Cost(datagram.Length));
                 ArrayPool<byte>.Shared.Return(datagram.Buffer);
                 ReturnAddress(datagram.Address);
             }
@@ -180,6 +194,8 @@ internal sealed class KcpIoThreads : IDisposable
             }
         }
     }
+
+    private static int Cost(int length) => Math.Max(length, MinDatagramCost);
 
     private SocketAddress CopyAddress(SocketAddress source)
     {

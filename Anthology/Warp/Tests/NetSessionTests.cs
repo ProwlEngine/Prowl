@@ -630,6 +630,8 @@ public abstract class NetSessionTests : IDisposable
             alice.Session.SendRaw(alice.Session.HostPeer!, 20, new byte[] { 2 }, flags: SendFlags.Immediate);
         }
 
+        // Both must be waiting at once, which socket threads only guarantee once they have arrived.
+        Thread.Sleep(50);
         SessionProbe.PumpFor(100, host, alice);
         string reason = atClient ? alice.EndedWith!.Value.Reason.ToString() : host.PeersLeft.Single().Reason.ToString();
         Assert.Equal("ResourceLimit", reason);
