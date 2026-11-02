@@ -17,10 +17,14 @@ public sealed class Pool<T>
     // Mirror is single threaded, no need for concurrent collections
     private readonly Stack<T> objects = new();
 
-    public Pool(Func<T> objectGenerator, Action<T> objectResetter, int initialCapacity)
+    // Returned objects beyond this are dropped, so a burst can't pin memory forever.
+    private readonly int maxCapacity;
+
+    public Pool(Func<T> objectGenerator, Action<T> objectResetter, int initialCapacity, int maxCapacity = int.MaxValue)
     {
         this.objectGenerator = objectGenerator;
         this.objectResetter = objectResetter;
+        this.maxCapacity = maxCapacity;
 
         // allocate an initial pool so we have fewer (if any)
         // allocations in the first few frames (or seconds).
@@ -39,6 +43,11 @@ public sealed class Pool<T>
     // return an element to the pool
     public void Return(T item)
     {
+        if (objects.Count >= maxCapacity)
+        {
+            return;
+        }
+
         objectResetter(item);
         objects.Push(item);
     }

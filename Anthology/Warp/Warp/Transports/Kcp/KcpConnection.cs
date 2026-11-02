@@ -24,7 +24,6 @@ public sealed class KcpConnection : Connection
 
     // One KCP conversation per channel, created when the channel is first used.
     private Protocol.Kcp?[]? _reliable;
-    private byte[] _sendScratch = Array.Empty<byte>();
     private double _smoothedRttMs;
 
     internal KcpConnection(KcpTransport transport, int id, string address, bool isOutgoing, SocketAddress? remote,
@@ -90,15 +89,11 @@ public sealed class KcpConnection : Connection
             return;
         }
 
-        // kcp2k takes arrays, not spans.
-        if (_sendScratch.Length < data.Length)
-        {
-            _sendScratch = new byte[Math.Max(data.Length, _sendScratch.Length * 2)];
-        }
-
-        data.CopyTo(_sendScratch);
-
-        int result = Reliable(channel).Send(_sendScratch, 0, data.Length);
+        // kcp2k takes arrays, not spans. It copies into its segments, so the array goes straight back.
+        byte[] scratch = ArrayPool<byte>.Shared.Rent(data.Length);
+        data.CopyTo(scratch);
+        int result = Reliable(channel).Send(scratch, 0, data.Length);
+        ArrayPool<byte>.Shared.Return(scratch);
         if (result < 0)
         {
             throw new InvalidOperationException($"KCP refused a {data.Length} byte message (error {result}).");
@@ -349,7 +344,6 @@ public sealed class KcpConnection : Connection
     internal void ReleaseBuffers()
     {
         _reliable = null;
-        _sendScratch = Array.Empty<byte>();
     }
 
     internal void RecordSent(int bytes) => RecordPacketSent(bytes);

@@ -680,4 +680,36 @@ public class KcpTests
         // 'interval' seconds after UPDATE was called. so 1+100 = 101.
         Assert.Equal(1 + kcp.interval, next);
     }
+
+    [Fact]
+    public void LargeMessagesDoNotGrowTheSegmentPoolForever()
+    {
+        Transports.Kcp.Protocol.Kcp? receiver = null;
+        Transports.Kcp.Protocol.Kcp? sender = null;
+        sender = new Transports.Kcp.Protocol.Kcp(1, (data, length) => receiver!.Input(data, 0, length));
+        receiver = new Transports.Kcp.Protocol.Kcp(1, (data, length) => sender.Input(data, 0, length));
+        sender.SetNoDelay(1, 10, 2, true);
+        receiver.SetNoDelay(1, 10, 2, true);
+        sender.SetWindowSize(256, 256);
+        receiver.SetWindowSize(256, 256);
+
+        byte[] message = new byte[200 * 1000];
+        Assert.Equal(0, sender.Send(message, 0, message.Length));
+        byte[] received = new byte[message.Length];
+        int got = -1;
+        for (uint time = 0; time < 10_000 && (got < 0 || sender.WaitSnd > 0); time += 10)
+        {
+            sender.Update(time);
+            receiver.Update(time);
+            if (got < 0)
+            {
+                got = receiver.Receive(received, received.Length);
+            }
+        }
+
+        Assert.Equal(message.Length, got);
+        Assert.Equal(0, sender.WaitSnd);
+        Assert.InRange(sender.SegmentPool.Count, 0, 64);
+        Assert.InRange(receiver.SegmentPool.Count, 0, 64);
+    }
 }

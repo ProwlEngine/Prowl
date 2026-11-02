@@ -45,12 +45,14 @@ public sealed class Kcp
 
     // segment pool to avoid allocations in C#.
     // this is not part of the original C code.
-    private readonly Pool<Segment> SegmentPool = new(
+    internal readonly Pool<Segment> SegmentPool = new(
         // create new segment
         () => new Segment(),
         // reset segment before reuse
         segment => segment.Reset(),
         // initial capacity
+        32,
+        // max capacity
         32
     );
 
