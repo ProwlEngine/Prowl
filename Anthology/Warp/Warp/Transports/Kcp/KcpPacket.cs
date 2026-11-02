@@ -11,12 +11,13 @@ namespace Prowl.Warp.Transports.Kcp;
 ///     <code>
 /// Handshake (before a session exists)
 ///   ConnectRequest     [type][u32 protocolId][u32 nonce][16 zero bytes][settings][4 zero bytes]
-///                                                                         padded to 64 bytes
+///                                                                         padded to 160 bytes
 ///   Challenge          [type][u32 nonce][u32 issued][16 byte cookie]     25 bytes
-///   ChallengeResponse  [type][u32 protocolId][u32 nonce][16 byte cookie][settings][u32 issued]
-///                                                                         padded to 64 bytes
-///   settings           [u8 wireVersion][u8 channels][u16 mtu][u16 receiveWindow]
+///   ChallengeResponse  [type][u32 protocolId][u32 nonce][16 byte cookie][settings][u32 issued][65 byte key]
+///                                                                         padded to 160 bytes
+///   settings           [u8 wireVersion][u8 channels][u16 mtu][u16 receiveWindow][u8 flags, 1 = encrypted]
 ///   Accept             [type][u32 nonce][u32 sessionId]                  9 bytes
+///                      encrypted: then [65 byte host key][64 byte signature, or zeros]
 ///   Reject             [type][u32 nonce][u8 DisconnectReason]            6 bytes
 /// 
 /// Session (after Accept)
@@ -29,6 +30,7 @@ namespace Prowl.Warp.Transports.Kcp;
 ///   Ping               body = u32 sender time in ms
 ///   Pong               body = u32 time echoed from the Ping
 ///   Disconnect         no body
+///   Encrypted, every session packet is [type][u32 sessionId][u64 counter][sealed body][16 byte tag].
 /// </code>
 ///     <para>
 ///         The handshake is a stateless cookie exchange, so a host allocates nothing for a client until the
@@ -81,17 +83,24 @@ internal static class KcpPacket
     public const int HandshakeChannelsOffset = HandshakeVersionOffset + 1;
     public const int HandshakeMtuOffset = HandshakeVersionOffset + 2;
     public const int HandshakeWindowOffset = HandshakeVersionOffset + 4;
+    public const int HandshakeFlagsOffset = HandshakeVersionOffset + 6;
 
     /// <summary>Where a ChallengeResponse echoes the time its cookie was issued.</summary>
-    public const int HandshakeIssuedOffset = HandshakeVersionOffset + 6;
+    public const int HandshakeIssuedOffset = HandshakeVersionOffset + 7;
+
+    /// <summary>Where an encrypted ChallengeResponse carries the client's public key.</summary>
+    public const int HandshakeKeyOffset = HandshakeIssuedOffset + 4;
+
+    public const byte EncryptedFlag = 1;
 
     public const int CookieSize = 16;
 
     /// <summary>Size of ConnectRequest and ChallengeResponse, which must exceed every reply.</summary>
-    public const int HandshakeRequestSize = 64;
+    public const int HandshakeRequestSize = 160;
 
     public const int ChallengeSize = 1 + 4 + 4 + CookieSize;
     public const int AcceptSize = 1 + 4 + 4;
+    public const int EncryptedAcceptSize = AcceptSize + KcpCipher.PublicKeySize + KcpCipher.SignatureSize;
     public const int RejectSize = 1 + 4 + 1;
     public const int PingSize = SessionHeaderSize + 4;
 

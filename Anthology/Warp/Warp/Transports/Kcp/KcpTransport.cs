@@ -44,6 +44,8 @@ public sealed class KcpTransport : Transport
     private readonly List<DelayedPacket> _delayed = new();
 
     private readonly byte[] _receiveBuffer = new byte[KcpPacket.MaxDatagramSize];
+    private readonly byte[] _openBuffer = new byte[KcpPacket.MaxDatagramSize];
+    private readonly byte[] _plainBuffer = new byte[KcpPacket.MaxDatagramSize];
     private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolver;
     private readonly Dictionary<KcpConnection, Resolution> _resolving = new();
     private readonly List<KcpConnection> _scratch = new();
@@ -64,7 +66,14 @@ public sealed class KcpTransport : Transport
     {
         Settings = (options ?? new KcpTransportOptions()).CopyValidated();
         _resolver = resolver;
+        if (Settings.Encryption?.TrustedHostKey != null)
+        {
+            TrustedHostKey = Settings.Encryption.ImportTrustedHostKey();
+        }
     }
+
+    /// <summary>The host key a client insists on, imported once.</summary>
+    internal ECDsa? TrustedHostKey { get; }
 
     internal KcpTransportOptions Settings { get; }
 
@@ -123,9 +132,16 @@ public sealed class KcpTransport : Transport
             remote = null;
         }
 
+        ECDiffieHellman? exchange = null;
+        byte[]? publicKey = null;
+        if (Settings.Encryption != null)
+        {
+            exchange = KcpCipher.CreateKeyExchange(out publicKey);
+        }
+
         KcpConnection connection = new(this, NextConnectionId(), address, true, remote, NowMs)
         {
-            ClientNonce = RandomUInt32()
+            ClientNonce = RandomUInt32(), KeyExchange = exchange, PublicKey = publicKey
         };
         AddConnection(connection);
         if (!resolution.IsCompletedSuccessfully)
@@ -349,10 +365,18 @@ public sealed class KcpTransport : Transport
             return;
         }
 
+        uint sessionId = RandomUInt32();
+        byte[]? accept = null;
+        KcpCipher? cipher = null;
+        if (Settings.Encryption != null && !TryAgreeKeys(packet, nonce, sessionId, out cipher, out accept))
+        {
+            return;
+        }
+
         SocketAddress remote = Clone(from);
         KcpConnection connection = new(this, NextConnectionId(), Format(remote), false, remote, now)
         {
-            ClientNonce = nonce, SessionId = RandomUInt32()
+            ClientNonce = nonce, SessionId = sessionId, Cipher = cipher, AcceptPacket = accept
         };
         connection.StartSession(now);
 
@@ -362,6 +386,33 @@ public sealed class KcpTransport : Transport
 
         SendAccept(connection);
         RaiseConnected(connection);
+    }
+
+    /// <summary>Host: answers the client's public key with its own, signed if it has a key, and derives the session keys.</summary>
+    private bool TryAgreeKeys(ReadOnlySpan<byte> response, uint nonce, uint sessionId, out KcpCipher? cipher,
+        out byte[]? accept)
+    {
+        accept = null;
+        ReadOnlySpan<byte> clientPublic = response.Slice(KcpPacket.HandshakeKeyOffset, KcpCipher.PublicKeySize);
+        using ECDiffieHellman exchange = KcpCipher.CreateKeyExchange(out byte[] hostPublic);
+        cipher = KcpCipher.Create(exchange, clientPublic, hostPublic, nonce, sessionId, false);
+        if (cipher == null)
+        {
+            return false;
+        }
+
+        accept = new byte[KcpPacket.EncryptedAcceptSize];
+        accept[0] = (byte)KcpPacketType.Accept;
+        BinaryPrimitives.WriteUInt32LittleEndian(accept.AsSpan(1), nonce);
+        BinaryPrimitives.WriteUInt32LittleEndian(accept.AsSpan(5), sessionId);
+        hostPublic.CopyTo(accept, KcpPacket.AcceptSize);
+        if (Settings.Encryption!.SigningKey is { } signer)
+        {
+            signer.SignData(KcpCipher.Transcript(clientPublic, hostPublic, nonce, sessionId),
+                accept.AsSpan(KcpPacket.AcceptSize + KcpCipher.PublicKeySize), HashAlgorithmName.SHA256);
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -436,7 +487,10 @@ public sealed class KcpTransport : Transport
         packet[KcpPacket.HandshakeChannelsOffset] == Settings.Channels &&
         BinaryPrimitives.ReadUInt16LittleEndian(packet[KcpPacket.HandshakeMtuOffset..]) == Settings.Mtu &&
         BinaryPrimitives.ReadUInt16LittleEndian(packet[KcpPacket.HandshakeWindowOffset..]) ==
-        Settings.Reliability.ReceiveWindow;
+        Settings.Reliability.ReceiveWindow &&
+        packet[KcpPacket.HandshakeFlagsOffset] == Flags;
+
+    private byte Flags => Settings.Encryption != null ? KcpPacket.EncryptedFlag : (byte)0;
 
     private void WriteSettings(Span<byte> packet)
     {
@@ -445,6 +499,7 @@ public sealed class KcpTransport : Transport
         BinaryPrimitives.WriteUInt16LittleEndian(packet[KcpPacket.HandshakeMtuOffset..], (ushort)Settings.Mtu);
         BinaryPrimitives.WriteUInt16LittleEndian(packet[KcpPacket.HandshakeWindowOffset..],
             (ushort)Settings.Reliability.ReceiveWindow);
+        packet[KcpPacket.HandshakeFlagsOffset] = Flags;
     }
 
     private void SendReject(SocketAddress to, uint nonce, DisconnectReason reason)
@@ -491,11 +546,18 @@ public sealed class KcpTransport : Transport
         cookie.CopyTo(packet[9..]);
         WriteSettings(packet);
         BinaryPrimitives.WriteUInt32LittleEndian(packet[KcpPacket.HandshakeIssuedOffset..], issued);
+        connection.PublicKey?.CopyTo(packet[KcpPacket.HandshakeKeyOffset..]);
         SendRaw(connection, connection.RemoteAddress!, packet);
     }
 
     private void SendAccept(KcpConnection connection)
     {
+        if (connection.AcceptPacket != null)
+        {
+            SendRaw(connection, connection.RemoteAddress!, connection.AcceptPacket);
+            return;
+        }
+
         Span<byte> packet = stackalloc byte[KcpPacket.AcceptSize];
         packet[0] = (byte)KcpPacketType.Accept;
         BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], connection.ClientNonce);
@@ -512,14 +574,25 @@ public sealed class KcpTransport : Transport
         ReadOnlySpan<byte> body)
     {
         int length = KcpPacket.SessionHeaderSize + prefix.Length + body.Length;
-        if (_sendBuffer.Length < length)
+        int sealedLength = length + (connection.Cipher != null ? KcpCipher.Overhead : 0);
+        if (_sendBuffer.Length < sealedLength)
         {
-            _sendBuffer = new byte[Math.Max(length, Settings.Mtu)];
+            _sendBuffer = new byte[Math.Max(sealedLength, Settings.Mtu)];
         }
 
         Span<byte> packet = _sendBuffer.AsSpan(0, length);
         packet[0] = (byte)type;
         BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], connection.SessionId);
+        if (connection.Cipher is { } cipher)
+        {
+            Span<byte> plain = _plainBuffer.AsSpan(0, prefix.Length + body.Length);
+            prefix.CopyTo(plain);
+            body.CopyTo(plain[prefix.Length..]);
+            int written = cipher.Seal(packet[..KcpPacket.SessionHeaderSize], plain, _sendBuffer);
+            SendRaw(connection, connection.RemoteAddress!, _sendBuffer.AsSpan(0, written));
+            return;
+        }
+
         prefix.CopyTo(packet[KcpPacket.SessionHeaderSize..]);
         body.CopyTo(packet[(KcpPacket.SessionHeaderSize + prefix.Length)..]);
         SendRaw(connection, connection.RemoteAddress!, packet);
@@ -552,6 +625,17 @@ public sealed class KcpTransport : Transport
         {
             // UDP makes no promises; a failed send is just a lost packet.
         }
+    }
+
+    /// <summary>Decrypts a sealed session packet into <c>[type][sessionId][body]</c> in a scratch buffer.</summary>
+    internal bool Open(KcpConnection connection, ReadOnlySpan<byte> packet, out byte[] plain, out int length)
+    {
+        plain = _openBuffer;
+        packet[..KcpPacket.SessionHeaderSize].CopyTo(plain);
+        bool opened = connection.Cipher!.Open(packet, KcpPacket.SessionHeaderSize,
+            plain.AsSpan(KcpPacket.SessionHeaderSize), out int body);
+        length = KcpPacket.SessionHeaderSize + body;
+        return opened;
     }
 
     // --- Connection lifecycle -----------------------------------------------------------------
@@ -592,6 +676,8 @@ public sealed class KcpTransport : Transport
         RaiseDisconnected(connection, reason);
         connection.ReleaseBuffers();
     }
+
+    protected override void DisposeCore() => TrustedHostKey?.Dispose();
 
     protected override void OnReceiveQueueOverflow(Connection connection) =>
         Close((KcpConnection)connection, DisconnectReason.ResourceLimit, true);
@@ -684,7 +770,7 @@ public sealed class KcpTransport : Transport
         _socket = socket;
         _receiveAddress =
             new SocketAddress(socket.AddressFamily, SocketAddress.GetMaximumAddressSize(socket.AddressFamily));
-        _sendBuffer = new byte[Settings.Mtu];
+        _sendBuffer = new byte[Settings.Mtu + KcpCipher.Overhead];
     }
 
     private static Socket? CreateDualModeSocket()

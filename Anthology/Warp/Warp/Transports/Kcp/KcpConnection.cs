@@ -5,6 +5,7 @@ using System;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Net;
+using System.Security.Cryptography;
 
 namespace Prowl.Warp.Transports.Kcp;
 
@@ -61,6 +62,17 @@ public sealed class KcpConnection : Connection
     /// <summary>When the session started, on the transport's clock. Handshakes issued before it cannot replace it.</summary>
     internal long SessionStartMs { get; private set; }
 
+    /// <summary>Seals and opens session packets once keys are agreed. Null on a plain connection.</summary>
+    internal KcpCipher? Cipher { get; set; }
+
+    /// <summary>Client: this attempt's key pair, and its public half as sent in the ChallengeResponse.</summary>
+    internal ECDiffieHellman? KeyExchange { get; init; }
+
+    internal byte[]? PublicKey { get; init; }
+
+    /// <summary>Host: the Accept sent for this session, resent as is if the client asks again.</summary>
+    internal byte[]? AcceptPacket { get; set; }
+
     /// <summary>Picked by the host on Accept. Tags every session packet, and doubles as the KCP conversation id.</summary>
     internal uint SessionId { get; set; }
 
@@ -70,6 +82,9 @@ public sealed class KcpConnection : Connection
 
     /// <summary>What one queued reliable segment costs against the send limit.</summary>
     private long SegmentBytes => Math.Max(_options.Mtu, Protocol.Kcp.MTU_DEF);
+
+    /// <summary>The datagram size left for a plain packet once encryption takes its share.</summary>
+    private int Mtu => _options.Mtu - (_options.Encryption != null ? KcpCipher.Overhead : 0);
 
     public override ConnectionStats Stats => base.Stats with { Retransmits = Retransmits() };
 
@@ -85,7 +100,7 @@ public sealed class KcpConnection : Connection
         // KCP numbers a message's fragments in one byte, and the receiver must be able to hold them all
         // in its window. kcp2k raises any window below its default up to that default. Sized for the smaller
         // segments of channels other than 0, so the limit holds on every channel.
-        int segmentSize = _options.Mtu - KcpPacket.ChannelHeaderSize - Protocol.Kcp.OVERHEAD;
+        int segmentSize = Mtu - KcpPacket.ChannelHeaderSize - Protocol.Kcp.OVERHEAD;
         int window = (int)Math.Max(_options.Reliability.ReceiveWindow, Protocol.Kcp.WND_RCV);
         int fragments = Math.Min(Protocol.Kcp.FRG_MAX, window - 1);
         return segmentSize * fragments;
@@ -95,13 +110,13 @@ public sealed class KcpConnection : Connection
     public override int GetBatchThreshold(Delivery delivery) => delivery switch
     {
         Delivery.Reliable => Math.Min(GetMaxMessageSize(delivery),
-            _options.Mtu - KcpPacket.ChannelHeaderSize - Protocol.Kcp.OVERHEAD),
-        Delivery.Unreliable => _options.Mtu - KcpPacket.SessionHeaderSize,
+            Mtu - KcpPacket.ChannelHeaderSize - Protocol.Kcp.OVERHEAD),
+        Delivery.Unreliable => Mtu - KcpPacket.SessionHeaderSize,
         _ => PieceSize
     };
 
     /// <summary>Largest piece of an unreliable message that one UnreliableFramed packet carries.</summary>
-    private int PieceSize => _options.Mtu - KcpPacket.FramedHeaderSize;
+    private int PieceSize => Mtu - KcpPacket.FramedHeaderSize;
 
     protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
     {
@@ -111,7 +126,7 @@ public sealed class KcpConnection : Connection
             return;
         }
 
-        int segmentSize = _options.Mtu - HeaderSize(channel) - Protocol.Kcp.OVERHEAD;
+        int segmentSize = Mtu - HeaderSize(channel) - Protocol.Kcp.OVERHEAD;
         long segments = Math.Max(1L, ((long)data.Length + segmentSize - 1) / segmentSize);
         if (PendingSendBytes + segments * SegmentBytes > MaxPendingSendBytes)
         {
@@ -136,7 +151,7 @@ public sealed class KcpConnection : Connection
     /// <summary>Sends small plain messages as they are, and everything else as numbered pieces.</summary>
     private void SendUnreliable(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
     {
-        if (delivery == Delivery.Unreliable && data.Length <= _options.Mtu - KcpPacket.SessionHeaderSize)
+        if (delivery == Delivery.Unreliable && data.Length <= Mtu - KcpPacket.SessionHeaderSize)
         {
             _transport.SendSession(this, KcpPacketType.Unreliable, data);
             return;
@@ -189,7 +204,7 @@ public sealed class KcpConnection : Connection
         kcp.SetNoDelay(reliability.NoDelay ? 1u : 0u, reliability.Interval, reliability.FastResend,
             !reliability.CongestionControl);
         kcp.SetWindowSize(reliability.SendWindow, reliability.ReceiveWindow);
-        kcp.SetMtu((uint)(_options.Mtu - HeaderSize(channel)));
+        kcp.SetMtu((uint)(Mtu - HeaderSize(channel)));
         kcp.dead_link = reliability.MaxRetransmits;
         kcp.SetMaxRetransmitTimeout((int)reliability.MaxRetransmitTimeout);
         return kcp;
@@ -258,11 +273,17 @@ public sealed class KcpConnection : Connection
                 return;
 
             case KcpPacketType.Accept:
-                if (IsOutgoing && State == ConnectionState.Connecting && length == KcpPacket.AcceptSize &&
-                    ReadNonce(packet) == ClientNonce)
+                if (IsOutgoing && State == ConnectionState.Connecting && ReadNonce(packet) == ClientNonce &&
+                    length == (KeyExchange != null ? KcpPacket.EncryptedAcceptSize : KcpPacket.AcceptSize))
                 {
                     RecordPacketReceived(length);
                     SessionId = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
+                    if (KeyExchange != null && !AgreeKeys(packet))
+                    {
+                        _transport.Close(this, DisconnectReason.AuthenticationFailed, false);
+                        return;
+                    }
+
                     StartSession(now);
                     _transport.OnConnected(this);
                 }
@@ -291,6 +312,16 @@ public sealed class KcpConnection : Connection
                                                || BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != SessionId)
         {
             return;
+        }
+
+        if (Cipher != null)
+        {
+            if (!_transport.Open(this, packet, out buffer, out length))
+            {
+                return;
+            }
+
+            packet = buffer.AsSpan(0, length);
         }
 
         RecordPacketReceived(length);
@@ -469,6 +500,10 @@ public sealed class KcpConnection : Connection
 
     internal void ReleaseBuffers()
     {
+        Cipher?.Dispose();
+        Cipher = null;
+        KeyExchange?.Dispose();
+
         foreach (PartialMessage? partial in _partials)
         {
             partial?.Release();
@@ -518,6 +553,23 @@ public sealed class KcpConnection : Connection
         {
             _smoothedRttMs += (sampleMs - _smoothedRttMs) * 0.125;
         }
+    }
+
+    /// <summary>Client: checks the host's signature if a host key is trusted, then derives this session's keys.</summary>
+    private bool AgreeKeys(ReadOnlySpan<byte> accept)
+    {
+        ReadOnlySpan<byte> hostPublic = accept.Slice(KcpPacket.AcceptSize, KcpCipher.PublicKeySize);
+        ReadOnlySpan<byte> signature = accept.Slice(KcpPacket.AcceptSize + KcpCipher.PublicKeySize);
+        if (_transport.TrustedHostKey is { } trusted && !trusted.VerifyData(
+                KcpCipher.Transcript(PublicKey, hostPublic, ClientNonce, SessionId), signature,
+                HashAlgorithmName.SHA256))
+        {
+            return false;
+        }
+
+        Cipher = KcpCipher.Create(KeyExchange!, PublicKey, hostPublic, ClientNonce, SessionId, true);
+        KeyExchange!.Dispose();
+        return Cipher != null;
     }
 
     private const long PartialLifetimeMs = 1000;

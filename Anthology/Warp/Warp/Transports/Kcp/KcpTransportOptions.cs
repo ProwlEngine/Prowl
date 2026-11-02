@@ -76,6 +76,12 @@ public sealed class KcpTransportOptions
     /// </summary>
     public int MaxSendRate { get; set; }
 
+    /// <summary>
+    ///     Encrypts and authenticates every session packet when set. Off by default. Both ends must agree: an
+    ///     encrypted end refuses a plain one with <see cref="DisconnectReason.ProtocolError" />.
+    /// </summary>
+    public KcpEncryption? Encryption { get; set; }
+
     /// <summary>Conservative memory budget for queued and unacknowledged reliable segments per peer.</summary>
     public long MaxPendingReliableBytes { get; set; } = 32 * 1024 * 1024;
 
@@ -88,6 +94,7 @@ public sealed class KcpTransportOptions
         KcpTransportOptions copy = (KcpTransportOptions)MemberwiseClone();
         copy.Reliability = Reliability.Copy();
         copy.Simulation = Simulation?.Copy();
+        copy.Encryption = Encryption?.Copy();
         return copy;
     }
 
@@ -133,6 +140,7 @@ public sealed class KcpTransportOptions
         }
 
         ArgumentNullException.ThrowIfNull(Reliability);
+        Encryption?.Validate();
         NetSessionOptions.ValidateDuration(ConnectTimeout, nameof(ConnectTimeout));
         NetSessionOptions.ValidateDuration(Timeout, nameof(Timeout));
         NetSessionOptions.ValidateDuration(PingInterval, nameof(PingInterval));
