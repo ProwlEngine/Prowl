@@ -3,6 +3,7 @@
 
 using System;
 using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -72,6 +73,42 @@ public class KcpTransportTests
             pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 20 - count,
                 what: "remaining budgeted packets");
         }
+    }
+
+    [Fact]
+    public void ImmediateSendFlushesOnlyItsOwnConnection()
+    {
+        using KcpTransport host = new(FastOptions());
+        host.Listen();
+        using KcpTransport alice = new(FastOptions());
+        using KcpTransport bob = new(FastOptions());
+        Pump pump = new(host, alice, bob);
+        alice.Connect($"127.0.0.1:{host.LocalPort}");
+        bob.Connect($"127.0.0.1:{host.LocalPort}");
+        pump.Until(() => host.Connections.Count == 2, what: "connect");
+        pump.For(50);
+        Connection toAlice = host.Connections.First(c => c.Address.EndsWith($":{alice.LocalPort}"));
+        Connection toBob = host.Connections.First(c => c != toAlice);
+
+        toBob.Send(new byte[] { 1 }, Delivery.Reliable);
+        toAlice.Send(new byte[] { 2 }, Delivery.Reliable, SendFlags.Immediate);
+        Thread.Sleep(50);
+        alice.Receive();
+        bob.Receive();
+
+        Assert.Contains(TransportEventType.Data, Drain(alice));
+        Assert.DoesNotContain(TransportEventType.Data, Drain(bob));
+    }
+
+    private static TransportEventType[] Drain(Transport transport)
+    {
+        List<TransportEventType> events = new();
+        while (transport.Poll(out TransportEvent ev))
+        {
+            events.Add(ev.Type);
+        }
+
+        return events.ToArray();
     }
 
     [Fact]

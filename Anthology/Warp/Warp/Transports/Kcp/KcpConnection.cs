@@ -105,6 +105,9 @@ public sealed class KcpConnection : Connection
         }
     }
 
+    /// <summary>Sends this connection's queued reliable messages without ticking the rest of the transport.</summary>
+    public override void Flush() => FlushReliable(_transport.NowMs);
+
     public override void Disconnect() => _transport.Close(this, DisconnectReason.Requested, true);
 
     /// <summary>Sets up the channels once the session id is known.</summary>
