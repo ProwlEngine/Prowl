@@ -402,6 +402,38 @@ public class KcpTransportTests
     }
 
     [Fact]
+    public void UnreliableTrafficOverTheRateCapIsDroppedAndDoesNotStallReliable()
+    {
+        KcpTransportOptions options = FastOptions();
+        options.MaxSendRate = 50_000;
+        (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) = Connect(clientOptions: options);
+        using (host)
+        using (client)
+        {
+            System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+            int sent = 0;
+            while (watch.ElapsedMilliseconds < 2000)
+            {
+                toHost.Send(new byte[1000], Delivery.Unreliable);
+                toHost.Send(new byte[1000], Delivery.Unreliable);
+                sent += 2;
+                pump.Step();
+                Thread.Sleep(10);
+            }
+
+            pump.For(100);
+            int arrived = pump.EventsOf(host).Count(ev => ev.Type == TransportEventType.Data);
+            Assert.InRange(arrived, 1, sent * 3 / 4);
+            Assert.Equal(sent - arrived, toHost.Stats.UnreliableDropped);
+
+            toHost.Send(new byte[] { 7, 7 }, Delivery.Reliable);
+            watch.Restart();
+            pump.Until(() => pump.EventsOf(host).Any(ev => ev.Type == TransportEventType.Data && ev.Delivery == Delivery.Reliable),
+                timeoutMs: 1000, what: "the reliable message");
+        }
+    }
+
+    [Fact]
     public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
     {
         KcpTransportOptions options = FastOptions();

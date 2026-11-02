@@ -36,6 +36,7 @@ public sealed class KcpConnection : Connection
 
     // Send rate budget in bytes, refilled over time and spent by every packet sent.
     private double _sendTokens;
+    private long _unreliableDropped;
     private bool _tokensStarted;
     private long _tokensUpdatedMs;
     private long _tokensCountedBytes;
@@ -89,7 +90,8 @@ public sealed class KcpConnection : Connection
     /// <summary>The datagram size left for a plain packet once encryption takes its share.</summary>
     private int Mtu => _options.Mtu - (_options.Encryption != null ? KcpCipher.Overhead : 0);
 
-    public override ConnectionStats Stats => base.Stats with { Retransmits = Retransmits() };
+    public override ConnectionStats Stats =>
+        base.Stats with { Retransmits = Retransmits(), UnreliableDropped = _unreliableDropped };
 
     public override TimeSpan RoundTripTime => TimeSpan.FromMilliseconds(_smoothedRttMs);
 
@@ -154,6 +156,17 @@ public sealed class KcpConnection : Connection
     /// <summary>Sends small plain messages as they are, and everything else as numbered pieces.</summary>
     private void SendUnreliable(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
     {
+        // Over the send rate cap, unreliable messages are dropped whole rather than queued.
+        if (_options.MaxSendRate > 0)
+        {
+            RefillSendTokens(_transport.NowMs);
+            if (_sendTokens < 0)
+            {
+                _unreliableDropped++;
+                return;
+            }
+        }
+
         if (delivery == Delivery.Unreliable && data.Length <= Mtu - KcpPacket.SessionHeaderSize)
         {
             _transport.SendSession(this, KcpPacketType.Unreliable, data);
@@ -515,7 +528,7 @@ public sealed class KcpConnection : Connection
         _tokensUpdatedMs = now;
 
         long sent = base.Stats.BytesSent;
-        _sendTokens -= sent - _tokensCountedBytes;
+        _sendTokens = Math.Max(-burst, _sendTokens - (sent - _tokensCountedBytes));
         _tokensCountedBytes = sent;
     }
 

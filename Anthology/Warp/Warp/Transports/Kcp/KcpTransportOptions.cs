@@ -85,7 +85,8 @@ public sealed class KcpTransportOptions
     /// <summary>
     ///     Most bytes per second each connection sends, counting every packet, or 0 for no limit. Reliable
     ///     messages beyond it wait in the send queue, and lower channels get the bandwidth first, so keep
-    ///     bulk transfers on higher channels. Unreliable messages are never held back.
+    ///     bulk transfers on higher channels. Unreliable messages are never queued: once the budget is spent they are
+    ///     dropped and counted in <see cref="ConnectionStats.UnreliableDropped" />.
     /// </summary>
     public int MaxSendRate { get; set; }
 
