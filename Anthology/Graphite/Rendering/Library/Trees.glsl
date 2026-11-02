@@ -15,9 +15,9 @@
 #define GRAPHITE_TREE_LEAF 0x80000000u
 #define GRAPHITE_TREE_INVALID 0xFFFFFFFFu
 
-// Each level visited defers at most three siblings, so this covers sixteen levels of a tree. Above it sit the runs of region
+// Each level visited defers at most three siblings, so this covers ten levels of a tree. Above it sit the runs of region
 // entries a query found, as first and end pairs
-#define GRAPHITE_TREE_STACK 48
+#define GRAPHITE_TREE_STACK 32
 #define GRAPHITE_REGION_RUNS 8
 
 #define GRAPHITE_SPATIAL_SETS 16
@@ -267,10 +267,10 @@ struct Graphite_ItemIterator
     uint stride;             // 16 byte words per record, the centre and radius included
 };
 
-Graphite_ItemIterator Graphite_BeginItems(uint set, uint stride, vec3 worldPos)
+Graphite_ItemIterator Graphite_BeginItems(uint set, uint stride, vec3 relativePos)
 {
     Graphite_ItemIterator it;
-    Graphite_BeginQuery(it.query, worldPos, set);
+    Graphite_BeginQuery(it.query, relativePos, set);
     it.array = 0u;
     it.k = 0u;
     it.last = 0u;

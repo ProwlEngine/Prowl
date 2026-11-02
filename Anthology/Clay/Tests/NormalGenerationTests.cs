@@ -167,6 +167,45 @@ public sealed class NormalGenerationTests
         }
     }
 
+    // An OBJ splits a vertex wherever its UV changes. A UV seam is not a hard edge, so both sides
+    // must still smooth into one normal, or the seam shows as a line and a pole fan turns flat.
+    [Fact]
+    public void GenerateSmoothNormals_SmoothsAcrossUVSeams()
+    {
+        const string obj = """
+        v 0 0 0
+        v 1 0 0
+        v 0 0 1
+        v 1 0.3 1
+        vt 0 0
+        vt 1 0
+        vt 0 1
+        vt 0.5 0
+        vt 1 1
+        vt 0.5 1
+        f 1/1 2/2 3/3
+        f 2/4 4/5 3/6
+        """;
+        var settings = new ModelImporterSettings
+        {
+            PostProcess = PostProcessFlags.Triangulate | PostProcessFlags.GenerateSmoothNormals,
+            SmoothNormalsAngleDeg = 80f,
+        };
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(obj));
+        var mesh = Assert.Single(ModelImporter.Load(stream, "obj", settings).Meshes);
+
+        foreach (Float3 shared in new[] { new Float3(1f, 0f, 0f), new Float3(0f, 0f, 1f) })
+        {
+            var normals = Enumerable.Range(0, mesh.VertexCount)
+                .Where(v => Float3.Length(mesh.Vertices[v] - shared) < 1e-6f)
+                .Select(v => mesh.Normals![v]).ToList();
+
+            Assert.Equal(2, normals.Count);
+            Assert.True(Float3.Dot(normals[0], normals[1]) > 0.99999f,
+                $"seam vertices at {shared} have different normals {normals[0]} and {normals[1]}");
+        }
+    }
+
     private static void AssertEveryCornerMatchesItsFaceNormal(Mesh mesh, float tolerance)
     {
         foreach (var sub in mesh.SubMeshes)

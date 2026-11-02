@@ -1,4 +1,4 @@
-// Prowl's god rays, out of its cinematic pass into an HDR effect of its own: bright sky pixels sampled along the line to
+// God rays as an HDR effect of their own: bright sky pixels sampled along the line to
 // the sun's place on screen, decaying with each step, added as warm light shafts. The sun is the world's, a far point
 // against the light's direction from the camera.
 
@@ -30,7 +30,7 @@ void main()
         sampleUV -= deltaUV;
         vec2 clamped = clamp(sampleUV, 0.001, 0.999);
         float sky = Graphite_Sample(_CameraDepthTexture, clamped).r <= 0.0001 ? 1.0 : 0.0;
-        float brightness = dot(Graphite_SampleSource(clamped).rgb, vec3(0.2126, 0.7152, 0.0722));
+        float brightness = Graphite_Luminance(Graphite_SampleSource(clamped).rgb);
         illumination += sky * step(_GodRayThreshold, brightness) * decay * _GodRayWeight;
         decay *= _GodRayDecay;
     }

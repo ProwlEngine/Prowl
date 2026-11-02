@@ -14,13 +14,14 @@ public sealed class RenderProfilerWindows
     private readonly DockSpace _dock;
     private readonly ProfilerView _snapshotView;
     private PopoutRequest? _pendingPopout;
+    private bool _pendingShow;
 
     public RenderProfilerWindows(IRenderProfilerSource source, DockSpace dock)
     {
         _dock = dock;
-        Live = new LiveProfilerPanel(new ProfilerView(source, false, "rp_live", ShowSnapshots));
+        Live = new LiveProfilerPanel(new ProfilerView(source, false, "rp_live", ShowSnapshots), FlushShow);
         _snapshotView = new ProfilerView(source, true, "rp_snapshots", ShowSnapshots);
-        Snapshots = new SnapshotViewerPanel(_snapshotView, FlushPopout);
+        Snapshots = new SnapshotViewerPanel(_snapshotView, FlushPopoutAndShow);
         _snapshotView.PopOut = request => _pendingPopout = request;
     }
 
@@ -32,10 +33,24 @@ public sealed class RenderProfilerWindows
     public void ShowLive() => Show(Live);
 
     /// <summary>Brings the snapshot viewer to front, opening it as a floating window when it is closed.</summary>
-    public void ShowSnapshots() => Show(Snapshots);
+    public void ShowSnapshots() => _pendingShow = true;
 
     /// <summary>Asks for a saved snapshot file, opens it, and shows the snapshot viewer.</summary>
     public void LoadSnapshot() => _snapshotView.LoadSnapshot();
+
+    private void FlushPopoutAndShow()
+    {
+        FlushPopout();
+        FlushShow();
+    }
+
+    private void FlushShow()
+    {
+        if (!_pendingShow)
+            return;
+        _pendingShow = false;
+        Show(Snapshots);
+    }
 
     private void FlushPopout()
     {
@@ -102,17 +117,23 @@ public sealed class RenderProfilerWindows
 public sealed class LiveProfilerPanel : DockPanel
 {
     private readonly ProfilerView _view;
+    private readonly Action? _beforeDraw;
 
-    internal LiveProfilerPanel(ProfilerView view)
+    internal LiveProfilerPanel(ProfilerView view, Action? beforeDraw = null)
     {
         _view = view;
+        _beforeDraw = beforeDraw;
     }
 
     public override string Title => "Render Profiler";
 
     public override string Icon => Glyph.ChartLine;
 
-    public override void OnGUI(Paper paper, float width, float height) => _view.Draw(paper, width, height);
+    public override void OnGUI(Paper paper, float width, float height)
+    {
+        _beforeDraw?.Invoke();
+        _view.Draw(paper, width, height);
+    }
 }
 
 /// <summary>Dockable snapshot viewer with save and load.</summary>

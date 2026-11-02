@@ -17,6 +17,8 @@ internal sealed class Uploader : IDisposable
 
     private const uint MaxGroupsPerDispatch = 65535;
 
+    private static readonly PropertyID s_items = "Items", s_source = "Source", s_destination = "Destination";
+
     [StructLayout(LayoutKind.Sequential, Size = 16)]
     private struct Item
     {
@@ -39,7 +41,7 @@ internal sealed class Uploader : IDisposable
     }
 
     private readonly GraphicsDevice _device;
-    private readonly ComputeProgram _scatter;
+    private readonly InternalCompute _scatter;
     private readonly Dictionary<DeviceBuffer, Destination> _destinations = new();
     private readonly List<Destination> _order = new();
     private readonly Stack<Destination> _spare = new();
@@ -50,7 +52,7 @@ internal sealed class Uploader : IDisposable
     private int _itemCount;
     private int _epoch;
 
-    public Uploader(GraphicsDevice device, ComputeProgram scatter)
+    public Uploader(GraphicsDevice device, InternalCompute scatter)
     {
         _device = device;
         _scatter = scatter;
@@ -131,9 +133,9 @@ internal sealed class Uploader : IDisposable
         }
         _device.Unmap(slot.Items!);
 
-        cmd.SetComputeShader(_scatter);
-        _properties.SetBuffer("Items", slot.Items!);
-        _properties.SetBuffer("Source", slot.Source!);
+        cmd.SetComputeShader(_scatter.Program);
+        _properties.SetBuffer(s_items, slot.Items!);
+        _properties.SetBuffer(s_source, slot.Source!);
 
         uint first = 0;
         int epoch = _order[0].Epoch;
@@ -150,7 +152,7 @@ internal sealed class Uploader : IDisposable
                 destination.Items.Clear();
                 continue;
             }
-            _properties.SetBuffer("Destination", destination.Buffer);
+            _properties.SetBuffer(s_destination, destination.Buffer);
             cmd.SetProperties(_properties);
             uint remaining = (uint)destination.Items.Count;
             while (remaining > 0)

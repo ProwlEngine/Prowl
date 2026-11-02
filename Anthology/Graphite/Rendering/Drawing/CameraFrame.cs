@@ -51,6 +51,44 @@ internal sealed class CameraFrame : IDisposable
     public bool SceneDepthUsed;
     private TextureView? _sceneDepthView;
 
+    /// <summary>
+    /// The far side of the view's transmissive volumes, made the first time its transparent list holds a pass tagged
+    /// "BackDepth" = "Read": their back faces' distance along the view ray in R32 float, 0 where there is none, over a
+    /// depth target of its own. Used says whether this frame's list holds one.
+    /// </summary>
+    public RenderTexture? BackDepth;
+    public bool BackDepthUsed;
+    private (RenderTexture? Texture, TextureView? View) _backDepthView;
+
+    /// <summary>Makes the back depth for the view's size. Render thread.</summary>
+    public void EnsureBackDepth(uint width, uint height, uint layers, PixelFormat depthFormat)
+    {
+        layers = layers > 1 ? layers : 0;
+        if (BackDepth is { } existing && existing.Desc.Width == width && existing.Desc.Height == height && existing.Desc.ArrayLayers == layers && existing.Desc.DepthFormat == depthFormat)
+            return;
+        ReleaseBackDepth();
+        GraphTextureDesc desc = new()
+        {
+            Width = (int)width,
+            Height = (int)height,
+            ColorFormats = [PixelFormat.R32_Float],
+            EnableDepth = true,
+            DepthFormat = depthFormat,
+            ArrayLayers = layers,
+        };
+        BackDepth = new RenderTexture(_device, PersistentTexture.Describe(desc));
+        BackDepth.Name = $"Graphite.BackDepth {View.ViewId}";
+    }
+
+    public void ReleaseBackDepth()
+    {
+        if (BackDepth != null)
+            _frame.Store.Retire(BackDepth);
+        BackDepth = null;
+    }
+
+    public TextureView? BackDepthView() => ArrayView(ref _backDepthView, BackDepth);
+
     /// <summary>The cube a capture view presents into.</summary>
     public RenderTexture? CaptureCube;
 
@@ -76,6 +114,29 @@ internal sealed class CameraFrame : IDisposable
         RenderTexture created = new(_device, PersistentTexture.Describe(GraphTextureDesc.Sized((int)width, (int)height, format) with { ArrayLayers = layers > 1 ? layers : 0 }));
         created.Name = $"{name} {View.ViewId}";
         return created;
+    }
+
+    /// <summary>The exposure an AutoExposure measured for the view's next frame, one R32 texel, made the first time one runs on it.</summary>
+    public RenderTexture? MeasuredExposure;
+
+    /// <summary>The exposure the GPU gave the view last, kept while an AutoExposure drives it.</summary>
+    public DeviceBuffer? ExposureState;
+
+    /// <summary>Whether an AutoExposure measures the view this frame, and did the last frame it drew.</summary>
+    public bool AutoExposed, WasAutoExposed;
+
+    /// <summary>The exposure the host's EV100 gave the view last frame.</summary>
+    public float HostExposure;
+
+    /// <summary>Makes what an AutoExposure needs to drive the view's exposure. Render thread.</summary>
+    public void EnsureExposure()
+    {
+        if (MeasuredExposure != null)
+            return;
+        MeasuredExposure = new RenderTexture(_device, PersistentTexture.Describe(GraphTextureDesc.Sized(1, 1, PixelFormat.R32_Float)));
+        MeasuredExposure.Name = $"Graphite.MeasuredExposure {View.ViewId}";
+        ExposureState = _device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        ExposureState.Name = $"Graphite.Exposure {View.ViewId}";
     }
 
     public TextureView? ScreenVisibilityView() => ArrayView(ref _visibilityView, ScreenVisibility);
@@ -122,12 +183,12 @@ internal sealed class CameraFrame : IDisposable
     {
         Counts.Clear();
         uint stride = (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>();
-        foreach ((BucketSet.TransparentItem item, DrawList list, RenderResourceID source, uint offset) in Sink.Counts)
+        foreach ((BucketSet.ItemDraw item, DrawList list, RenderResourceID source, uint offset) in Sink.Counts)
         {
             int at = Lists.IndexOf(list);
             if (at < 0 || item.FirstCommand < 0)
                 continue;
-            for (int c = 0; c < item.Chunks.Length; c++)
+            for (int c = 0; c < BucketSet.CommandsOf(item); c++)
                 Counts.Add((source, offset, (uint)(CommandBases[at] + item.FirstCommand + c) * stride + 4));
         }
     }
@@ -135,10 +196,7 @@ internal sealed class CameraFrame : IDisposable
     public FeatureView Info;
 
     /// <summary>Adds the view's passes to the frame graph.</summary>
-    public readonly ViewGraph Build, Probe;
-
-    /// <summary>The pass types each selected feature asked for, learned by a probe the first time the view selects it.</summary>
-    public readonly Dictionary<RenderFeature, PassType[]> KnownTypes = new();
+    public readonly ViewGraph Build;
 
     /// <summary>What the features selected this frame ask of the view, as a shape.</summary>
     public CameraShape ShapeKey;
@@ -169,6 +227,9 @@ internal sealed class CameraFrame : IDisposable
 
     /// <summary>The world's global keywords with the view's own over them, what its draws pick their variants by.</summary>
     public IReadOnlyDictionary<string, string> Keywords = new Dictionary<string, string>();
+
+    /// <summary><see cref="Keywords"/> interned, what the view's draws look their programs up by.</summary>
+    public KeywordSet KeywordSet = KeywordSet.Empty;
     private IReadOnlyDictionary<string, string>? _worldKeywords;
     private Keyword[] _viewKeywords = [];
 
@@ -184,12 +245,14 @@ internal sealed class CameraFrame : IDisposable
         if (view.Length == 0)
         {
             Keywords = world;
+            KeywordSet = World.World.Globals.KeywordSet;
             return;
         }
         Dictionary<string, string> merged = new(world, StringComparer.Ordinal);
         foreach (Keyword keyword in view)
             merged[keyword.Name] = keyword.Value;
         Keywords = merged;
+        KeywordSet = KeywordSet.Intern(merged);
     }
     public int LastFrame;
     public readonly CameraView View = new();
@@ -217,12 +280,16 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>The view's buffers for a set's trees.</summary>
     public SpatialView SpatialFor(int slot) => Spatial[slot] ??= new SpatialView(_tables.Scope($"Set{slot}"));
 
+    private string? _defaultName;
+
+    /// <summary>The name the view records under when the host gave it none.</summary>
+    public string DefaultName(bool capture) => _defaultName ??= capture ? $"Capture {View.ViewId}" : $"Camera {View.ViewId}";
+
     public CameraFrame(GraphicsDevice device, FramePipeline frame, int viewId)
     {
         _frame = frame;
         Drawer = new SceneDrawer(frame, this);
-        Build = new ViewGraph(frame, this, frame.Graph, probing: false);
-        Probe = new ViewGraph(frame, this, frame.ProbeGraph, probing: true);
+        Build = new ViewGraph(frame, this, frame.Graph);
         View.ViewId = viewId;
         Lists = [Prepass, Forward, Transparent];
         ViewTable = new TableRing(device, ProgramCache.ViewLayout, $"View table {viewId}");
@@ -239,7 +306,18 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>Picks this frame's features.</summary>
     public void SelectFeatures(RenderFeature[] world, RenderFeature[] view)
     {
-        FeatureSelection.Select(Selected, world, view, Info);
+        FeatureSelection.Select(Selected, _frame.BuiltIns, world, view, Info);
+    }
+
+    /// <summary>Makes the lists of the pass types the selected features draw, the built in lists kept.</summary>
+    public void ListSelectedPasses()
+    {
+        ResetPassLists();
+        foreach (RenderFeature feature in Selected)
+        {
+            foreach (PassType type in feature.PassArray)
+                ListFor(type);
+        }
     }
 
     /// <summary>The scene targets the selected features read.</summary>
@@ -249,7 +327,7 @@ internal sealed class CameraFrame : IDisposable
         {
             SceneTargets targets = SceneTargets.None;
             foreach (RenderFeature feature in Selected)
-                targets |= feature.SceneReadsSnapshot;
+                targets |= feature.SceneReads;
             return targets;
         }
     }
@@ -308,12 +386,7 @@ internal sealed class CameraFrame : IDisposable
     // States are kept while their feature is in the world's or view's set, so history survives toggles
     public void PruneStates(RenderFeature[] world, RenderFeature[] view)
     {
-        bool Known(RenderFeature feature) => Array.IndexOf(world, feature) >= 0 || Array.IndexOf(view, feature) >= 0 || Array.IndexOf(FeatureSelection.BuiltIn, feature) >= 0;
-        foreach (RenderFeature feature in new List<RenderFeature>(KnownTypes.Keys))
-        {
-            if (!Known(feature))
-                KnownTypes.Remove(feature);
-        }
+        bool Known(RenderFeature feature) => Array.IndexOf(world, feature) >= 0 || Array.IndexOf(view, feature) >= 0 || Array.IndexOf(_frame.BuiltIns, feature) >= 0;
         List<(RenderFeature, Type)>? stale = null;
         foreach ((RenderFeature feature, Type type) in States.Keys)
         {
@@ -351,7 +424,7 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>The frame's draw lists: prepass, opaque, transparent, then one per pass type a feature draws.</summary>
     public List<DrawList> Lists { get; }
 
-    /// <summary>The pass types features of the view draw, each with its list, as of the last graph build.</summary>
+    /// <summary>The pass types the view's selected features draw, each with its list.</summary>
     public readonly List<(PassType Type, DrawList List)> PassLists = new();
     private readonly Dictionary<PassType, DrawList> _passListPool = new();
 
@@ -361,7 +434,7 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>State features keep for this view, made the first time each asks.</summary>
     public readonly Dictionary<(RenderFeature Feature, Type Type), object> States = new();
 
-    /// <summary>The list of a pass type a feature draws, made when the view's graph is built.</summary>
+    /// <summary>The list of a pass type the view draws, made the first time it is asked for.</summary>
     public DrawList ListFor(PassType type)
     {
         if (type == PassType.Prepass)
@@ -395,7 +468,7 @@ internal sealed class CameraFrame : IDisposable
         return null;
     }
 
-    /// <summary>Forgets which pass lists the view draws before a graph build asks for them again, keeping what they hold.</summary>
+    /// <summary>Forgets which pass lists the view draws, keeping what they hold for when it asks for them again.</summary>
     public void ResetPassLists()
     {
         PassLists.Clear();
@@ -453,6 +526,8 @@ internal sealed class CameraFrame : IDisposable
         SceneColor?.Dispose();
         _sceneDepthView?.Dispose();
         SceneDepth?.Dispose();
+        _backDepthView.View?.Dispose();
+        BackDepth?.Dispose();
         foreach (object state in States.Values)
             (state as IDisposable)?.Dispose();
         ViewTable.Dispose();
@@ -465,5 +540,7 @@ internal sealed class CameraFrame : IDisposable
         _irradianceView.View?.Dispose();
         ScreenVisibility?.Dispose();
         ScreenIrradiance?.Dispose();
+        MeasuredExposure?.Dispose();
+        ExposureState?.Dispose();
     }
 }

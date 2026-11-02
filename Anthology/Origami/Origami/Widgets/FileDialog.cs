@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Enumeration;
 using System.Linq;
 
 using Prowl.PaperUI;
@@ -896,7 +897,7 @@ public static class FileDialog
             foreach (var file in di.EnumerateFiles())
             {
                 if (!showHidden && (file.Attributes & FileAttributes.Hidden) != 0) continue;
-                if (filters is { Length: > 0 } && !filters.Any(x => file.Name.EndsWith(x, StringComparison.OrdinalIgnoreCase))) continue;
+                if (filters is { Length: > 0 } && !MatchesFilter(file.Name, filters)) continue;
                 list.Add(new FileEntry { Name = file.Name, FullPath = file.FullName, IsDirectory = false, Size = file.Length, LastModified = file.LastWriteTime });
             }
         }
@@ -912,6 +913,11 @@ public static class FileDialog
         };
         return Sort(dirs).Concat(Sort(files)).ToList();
     }
+
+    // Callers pass globs ("*.png;*.jpg") and bare extensions (".gsn")
+    private static bool MatchesFilter(string fileName, string[] filters) =>
+        filters.SelectMany(f => f.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Any(p => FileSystemName.MatchesSimpleExpression(p.StartsWith('.') ? "*" + p : p, fileName, ignoreCase: true));
 
     private static string FormatSize(long bytes)
     {

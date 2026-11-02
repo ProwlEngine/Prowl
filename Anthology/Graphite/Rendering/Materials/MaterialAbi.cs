@@ -53,6 +53,12 @@ internal static class GraphiteBindings
     public const int SceneColor = 34;
     public const int SceneColorSampler = 35;
     public const int SceneDepth = 36;
+    public const int Dfg = 37;
+    public const int DielectricE = 38;
+    public const int TableSampler = 39;
+    public const int AnisotropicDfg = 40;
+    public const int BackDepth = 41;
+    public const int Ltc = 42;
 
     public const int Materials = 0;
     public const int Instances = 1;
@@ -116,7 +122,13 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_ScreenSampler", ResourceKind.Sampler, Graphics, ScreenSampler),
         new ResourceLayoutElementDescription("Graphite_SceneColor", ResourceKind.TextureReadOnly, Graphics, SceneColor),
         new ResourceLayoutElementDescription("Graphite_SceneColorSampler", ResourceKind.Sampler, Graphics, SceneColorSampler),
-        new ResourceLayoutElementDescription("Graphite_SceneDepth", ResourceKind.TextureReadOnly, Graphics, SceneDepth))
+        new ResourceLayoutElementDescription("Graphite_SceneDepth", ResourceKind.TextureReadOnly, Graphics, SceneDepth),
+        new ResourceLayoutElementDescription("Graphite_Dfg", ResourceKind.TextureReadOnly, Graphics, Dfg),
+        new ResourceLayoutElementDescription("Graphite_DielectricE", ResourceKind.TextureReadOnly, Graphics, DielectricE),
+        new ResourceLayoutElementDescription("Graphite_TableSampler", ResourceKind.Sampler, Graphics, TableSampler),
+        new ResourceLayoutElementDescription("Graphite_AnisotropicDfg", ResourceKind.TextureReadOnly, Graphics, AnisotropicDfg),
+        new ResourceLayoutElementDescription("Graphite_BackDepth", ResourceKind.TextureReadOnly, Graphics, BackDepth),
+        new ResourceLayoutElementDescription("Graphite_Ltc", ResourceKind.TextureReadOnly, Graphics, Ltc))
     {
         Table = true,
     };
@@ -155,11 +167,26 @@ internal static class MaterialLayout
             offset = at + size;
         }
 
+        string mask = schema.MapMaskOffset >= 0 ? $"{Record}.graphite_MapMask" : "";
         foreach (MaterialProperty property in schema.Properties)
         {
             string name = property.Name.Text();
             string member = "m" + name;
-            if (property.Type >= MaterialPropertyType.Texture2D)
+            if (property.MapBit >= 0)
+            {
+                Member("uint", member, property.Offset, 4);
+                for (uint f = 0; f < 6; f++)
+                    Member("float", $"{member}_T{f}", property.Offset + 4 + f * 4, 4);
+                string word = $"{Record}.{member}";
+                string image = $"Graphite_Textures2D[nonuniformEXT({word} & 0xFFFFu)]";
+                string samplerSlot = $"Graphite_Samplers[nonuniformEXT(({word} >> 16) & 63u)]";
+                string present = $"((({mask} >> {property.MapBit}) & 1u) != 0u)";
+                properties[name] = ("sampler2D", $"sampler2D({image}, {samplerSlot})",
+                    $"#define {name}_Texture {image}\n#define {name}_Sampler {samplerSlot}\n"
+                    + $"#define {name}_ST vec4({word}_T0, {word}_T1, {word}_T2, {word}_T3)\n#define {name}_Rotation vec2({word}_T4, {word}_T5)\n"
+                    + $"#define {name}_Channel int(({word} >> 22) & 3u)\n#define {name}_UV int(({word} >> 24) & 1u)\n#define {name}_Present {present}\n");
+            }
+            else if (property.Type >= MaterialPropertyType.Texture2D)
             {
                 Member("uint", member, property.Offset, 4);
                 Member("uint", member + "_Sampler", property.Offset + 4, 4);
@@ -177,6 +204,8 @@ internal static class MaterialLayout
                 properties[name] = (type, $"({Record}.{member})", "");
             }
         }
+        if (schema.MapMaskOffset >= 0)
+            Member("uint", "graphite_MapMask", (uint)schema.MapMaskOffset, 4);
         for (; offset < schema.StrideWords * 4; offset += 4)
             record.Append("    uint pad").Append(padding++).Append(";\n");
         record.Append("};");

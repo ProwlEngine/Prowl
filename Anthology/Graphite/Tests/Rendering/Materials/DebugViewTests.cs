@@ -10,20 +10,17 @@ using Xunit;
 namespace Prowl.Graphite.Rendering.Tests;
 
 [Collection("GPU Tests")]
-public sealed class DebugViewTests : IDisposable
+public sealed class DebugViewTests
 {
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
 
     public DebugViewTests() => ShaderLibrary.Register(typeof(Renderer).Assembly);
-
-    public void Dispose() => _compiler.Dispose();
 
     // Made into a renderer shader, so its passes compile with the material ABI
     private ShaderDefinition Load(string name)
     {
         ShaderDefinition definition = ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{name}.shader")!);
-        _ = new Shader(definition, _compiler);
-        return definition;
+        return new Shader(definition, _compiler).Definition;
     }
 
     private static ShaderPass Pass(ShaderDefinition shader, string type)
@@ -31,10 +28,15 @@ public sealed class DebugViewTests : IDisposable
 
     private static readonly string[] s_modes = ["UNLIT", "ALBEDO", "NORMALS", "ROUGHNESS", "METALLIC", "AO", "EMISSION", "LIGHTING", "CASCADES", "LIGHTMAP_DENSITY"];
 
+    // The PBR model's own views follow the shared ones
+    private static readonly string[] s_pbrModes = [.. s_modes, "DIFFUSE", "SPECULAR", "SPECULAR_ALBEDO", "THROUGHPUT", "DIRECT", "INDIRECT", "FURNACE", "COAT", "FUZZ", "THIN_FILM", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS"];
+
+    private static string[] ModesOf(string shader) => shader == "Lit" ? s_pbrModes : s_modes;
+
     public static IEnumerable<object[]> Modes()
     {
         foreach (string shader in new[] { "Lit", "Unlit" })
-            foreach (string mode in s_modes)
+            foreach (string mode in ModesOf(shader))
                 yield return [shader, mode];
     }
 
@@ -44,23 +46,33 @@ public sealed class DebugViewTests : IDisposable
         foreach (string name in new[] { "Lit", "Unlit" })
         {
             ShaderDefinition definition = Load(name);
-            VariantSpace axis = _compiler.GetAxes(Pass(definition, "Debug")).Single(a => a.Name == Shader.DebugAxis);
+            VariantSpace axis = _compiler.GetAxes(Pass(definition, "Debug")).Single(a => a.Name == GlobalAxis.Debug.Name);
             Assert.Equal(VariantScope.Global, axis.Scope);
-            Assert.Equal(s_modes, axis.Values);
+            Assert.Equal(ModesOf(name), axis.Values);
             foreach (ShaderPass pass in definition.Passes!.Where(p => p.Name != "Debug"))
-                Assert.DoesNotContain(_compiler.GetAxes(pass), a => a.Name == Shader.DebugAxis);
+                Assert.DoesNotContain(_compiler.GetAxes(pass), a => a.Name == GlobalAxis.Debug.Name);
         }
     }
 
+    [Fact]
+    public void TheDebugAxis_HoldsEveryModeInTheStandardShadersOrder()
+    {
+        Assert.Equal(s_pbrModes, GlobalAxis.Debug.Values);
+        foreach (string name in new[] { "Lit", "Unlit" })
+            Assert.Equal(ModesOf(name), new Shader(Load(name), _compiler).GlobalAxes.Single(a => a.Name == GlobalAxis.Debug.Name).Values);
+    }
+
+    // PBR's Debug pass also declares PBR_TRANSMISSION, standing in for its Transmission pass as well
     [Fact]
     public void TheDebugPass_HasTheForwardPassesMaterialAxes()
     {
         foreach (string name in new[] { "Lit", "Unlit" })
         {
             ShaderDefinition definition = Load(name);
+            IEnumerable<string> forward = _compiler.GetAxes(Pass(definition, "Forward")).Select(a => a.Name);
             Assert.Equal(
-                _compiler.GetAxes(Pass(definition, "Forward")).Select(a => a.Name),
-                _compiler.GetAxes(Pass(definition, "Debug")).Where(a => a.Name != Shader.DebugAxis).Select(a => a.Name));
+                name == "Lit" ? forward.Append("PBR_TRANSMISSION").Order(StringComparer.Ordinal) : forward.Order(StringComparer.Ordinal),
+                _compiler.GetAxes(Pass(definition, "Debug")).Where(a => a.Name != GlobalAxis.Debug.Name).Select(a => a.Name).Order(StringComparer.Ordinal));
         }
     }
 
@@ -69,7 +81,7 @@ public sealed class DebugViewTests : IDisposable
     public void EveryDebugMode_Compiles(string shader, string mode)
     {
         ShaderPass pass = Pass(Load(shader), "Debug");
-        List<Keyword> combo = [new Keyword("_SURFACE", "OPAQUE"), new Keyword(Shader.DebugAxis, mode)];
+        List<Keyword> combo = [new Keyword("_SURFACE", "OPAQUE"), new Keyword(GlobalAxis.Debug.Name, mode)];
         foreach (VariantSpace axis in _compiler.GetAxes(pass))
         {
             if (axis.IsToggle)

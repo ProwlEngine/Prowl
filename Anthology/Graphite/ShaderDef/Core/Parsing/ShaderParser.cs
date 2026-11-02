@@ -67,8 +67,19 @@ public static class ShaderParser
             string model = ParserUtility.QuotedString(ref t);
             ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
             string code = t.Peek().Kind == ShaderToken.GlslProgram ? ParserUtility.Program(ref t) : "";
+            string lighting = "";
+            string vertex = "";
+            while (true)
+            {
+                if (lighting.Length == 0 && ParserUtility.PeekKeyword(ref t, "Lighting"))
+                    lighting = ParseSubProgram(ref t);
+                else if (vertex.Length == 0 && ParserUtility.PeekKeyword(ref t, "Vertex"))
+                    vertex = ParseSubProgram(ref t);
+                else
+                    break;
+            }
             ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
-            surface = new ShaderSurface(model, code, surfaceToken.Line);
+            surface = new ShaderSurface(model, code, surfaceToken.Line, lighting, vertex);
         }
 
         while (ParserUtility.PeekKeyword(ref t, "Pass"))
@@ -110,6 +121,17 @@ public static class ShaderParser
             Fallback = fallback,
             Surface = surface,
         };
+    }
+
+
+    // A named block of a Surface block holding one program, such as Lighting { GLSLPROGRAM ... ENDGLSL }
+    static string ParseSubProgram(ref Tokenizer<ShaderToken> t)
+    {
+        t.Next();
+        ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
+        string code = ParserUtility.Program(ref t);
+        ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+        return code;
     }
 
 
@@ -355,6 +377,8 @@ public static class ShaderParser
 
         ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
         states.Add(new() { Set = PassStateFields.StencilTest, DepthStencil = new() { StencilTestEnabled = true } });
+        // Earlier entries win, so these only fill masks the block left unset
+        states.Add(new() { Set = PassStateFields.StencilReadMask | PassStateFields.StencilWriteMask, DepthStencil = new() { StencilReadMask = 255, StencilWriteMask = 255 } });
         return FromSeveral(states);
     }
 

@@ -32,13 +32,11 @@ public static class RendererOutputs
     public const string Cascades = "Graphite.Cascades";
 }
 
-/// <summary>Fills the new deformed copies and deforms the ones whose bones or blend shape weights changed. Group "Deform".</summary>
+/// <summary>Fills the new deformed copies and deforms the ones whose bones or blend shape weights changed. Group <see cref="FeatureGroup.Deform"/>.</summary>
 public sealed class DeformFeature : FrameFeature
 {
-    internal DeformFeature() { }
+    internal DeformFeature() : base(FrameSlot.Deform, group: FeatureGroup.Deform) { }
 
-    public override FrameSlot Slot => FrameSlot.Deform;
-    public override string? ExclusiveGroup => "Deform";
     internal override bool IsBuiltIn => true;
 
     public override void Setup(FrameBuilder builder) => throw new NotSupportedException();
@@ -52,13 +50,11 @@ public sealed class DeformFeature : FrameFeature
     }
 }
 
-/// <summary>Samples a world's light probes for its objects' requests. Group "LightProbes".</summary>
+/// <summary>Samples a world's light probes for its objects' requests. Group <see cref="FeatureGroup.LightProbes"/>.</summary>
 public sealed class LightProbeFeature : FrameFeature
 {
-    internal LightProbeFeature() { }
+    internal LightProbeFeature() : base(FrameSlot.LightProbes, group: FeatureGroup.LightProbes) { }
 
-    public override FrameSlot Slot => FrameSlot.LightProbes;
-    public override string? ExclusiveGroup => "LightProbes";
     internal override bool IsBuiltIn => true;
 
     public override void Setup(FrameBuilder builder) => throw new NotSupportedException();
@@ -72,13 +68,11 @@ public sealed class LightProbeFeature : FrameFeature
     }
 }
 
-/// <summary>Draws a world's local light shadow pages. Group "LocalShadows".</summary>
+/// <summary>Draws a world's local light shadow pages. Group <see cref="FeatureGroup.LocalShadows"/>.</summary>
 public sealed class LocalShadowFeature : FrameFeature
 {
-    internal LocalShadowFeature() { }
+    internal LocalShadowFeature() : base(FrameSlot.Shadows, group: FeatureGroup.LocalShadows) { }
 
-    public override FrameSlot Slot => FrameSlot.Shadows;
-    public override string? ExclusiveGroup => "LocalShadows";
     internal override bool IsBuiltIn => true;
 
     public override void Setup(FrameBuilder builder) => throw new NotSupportedException();
@@ -93,13 +87,11 @@ public sealed class LocalShadowFeature : FrameFeature
     }
 }
 
-/// <summary>Prefilters a world's captured cubes and projects its sky capture onto harmonics. Group "CaptureFill".</summary>
+/// <summary>Prefilters a world's captured cubes and projects its sky capture onto harmonics. Group <see cref="FeatureGroup.CaptureFill"/>.</summary>
 public sealed class CaptureFillFeature : FrameFeature
 {
-    internal CaptureFillFeature() { }
+    internal CaptureFillFeature() : base(FrameSlot.Captures, group: FeatureGroup.CaptureFill) { }
 
-    public override FrameSlot Slot => FrameSlot.Captures;
-    public override string? ExclusiveGroup => "CaptureFill";
     internal override bool IsBuiltIn => true;
 
     public override void Setup(FrameBuilder builder) => throw new NotSupportedException();
@@ -114,13 +106,11 @@ public sealed class CaptureFillFeature : FrameFeature
     }
 }
 
-/// <summary>Copies the host's requested textures and buffers into staging buffers. Group "Readback".</summary>
+/// <summary>Copies the host's requested textures and buffers into staging buffers. Group <see cref="FeatureGroup.Readback"/>.</summary>
 public sealed class ReadbackFeature : FrameFeature
 {
-    internal ReadbackFeature() { }
+    internal ReadbackFeature() : base(FrameSlot.Readback, group: FeatureGroup.Readback) { }
 
-    public override FrameSlot Slot => FrameSlot.Readback;
-    public override string? ExclusiveGroup => "Readback";
     internal override bool IsBuiltIn => true;
 
     public override void Setup(FrameBuilder builder) => throw new NotSupportedException();

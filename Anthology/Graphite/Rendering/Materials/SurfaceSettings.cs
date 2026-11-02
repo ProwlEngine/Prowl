@@ -61,42 +61,48 @@ public readonly record struct SurfaceSettings(SurfaceType Type = SurfaceType.Opa
         _ => "OPAQUE",
     };
 
-    /// <summary>The render state over every pass of the shader: culling, and blending without depth writes when transparent.</summary>
-    public PassState State
-    {
-        get
-        {
-            PassState state = new() { Set = PassStateFields.CullMode };
-            state.Raster.CullMode = Cull switch
-            {
-                SurfaceCull.Front => FaceCullMode.Front,
-                SurfaceCull.Off => FaceCullMode.None,
-                _ => FaceCullMode.Back,
-            };
-            if (Type != SurfaceType.Transparent)
-                return state;
+    /// <summary>The render state over every pass of a shader writing straight colour: culling, and blending without depth writes when transparent.</summary>
+    public PassState State => StateFor(false);
 
-            state.Set |= PassStateFields.BlendEnabled | PassStateFields.SourceColorFactor | PassStateFields.DestinationColorFactor
-                | PassStateFields.ColorFunction | PassStateFields.SourceAlphaFactor | PassStateFields.DestinationAlphaFactor
-                | PassStateFields.AlphaFunction | PassStateFields.DepthWrite;
-            state.DepthStencil.DepthWriteEnabled = false;
-            state.Blend.BlendEnabled = true;
-            state.Blend.ColorFunction = BlendFunction.Add;
-            state.Blend.AlphaFunction = BlendFunction.Add;
-            (state.Blend.SourceColorFactor, state.Blend.DestinationColorFactor) = Blend switch
-            {
-                SurfaceBlend.Premultiplied => (BlendFactor.One, BlendFactor.InverseSourceAlpha),
-                SurfaceBlend.Additive => (BlendFactor.SourceAlpha, BlendFactor.One),
-                SurfaceBlend.Multiply => (BlendFactor.DestinationColor, BlendFactor.Zero),
-                _ => (BlendFactor.SourceAlpha, BlendFactor.InverseSourceAlpha),
-            };
-            (state.Blend.SourceAlphaFactor, state.Blend.DestinationAlphaFactor) = Blend switch
-            {
-                SurfaceBlend.Additive => (BlendFactor.Zero, BlendFactor.One),
-                SurfaceBlend.Multiply => (BlendFactor.Zero, BlendFactor.One),
-                _ => (BlendFactor.One, BlendFactor.InverseSourceAlpha),
-            };
+    /// <summary>
+    /// The render state over every pass of a shader, premultiplied for one whose colour is already multiplied by its
+    /// coverage (<see cref="Shader.PremultipliedOutput"/>): Alpha and Premultiplied both blend One, InverseSourceAlpha and
+    /// Additive One, One, so coverage applies once.
+    /// </summary>
+    public PassState StateFor(bool premultipliedOutput)
+    {
+        PassState state = new() { Set = PassStateFields.CullMode };
+        state.Raster.CullMode = Cull switch
+        {
+            SurfaceCull.Front => FaceCullMode.Front,
+            SurfaceCull.Off => FaceCullMode.None,
+            _ => FaceCullMode.Back,
+        };
+        if (Type != SurfaceType.Transparent)
             return state;
-        }
+
+        state.Set |= PassStateFields.BlendEnabled | PassStateFields.SourceColorFactor | PassStateFields.DestinationColorFactor
+            | PassStateFields.ColorFunction | PassStateFields.SourceAlphaFactor | PassStateFields.DestinationAlphaFactor
+            | PassStateFields.AlphaFunction | PassStateFields.DepthWrite;
+        state.DepthStencil.DepthWriteEnabled = false;
+        state.Blend.BlendEnabled = true;
+        state.Blend.ColorFunction = BlendFunction.Add;
+        state.Blend.AlphaFunction = BlendFunction.Add;
+        (state.Blend.SourceColorFactor, state.Blend.DestinationColorFactor) = Blend switch
+        {
+            SurfaceBlend.Premultiplied => (BlendFactor.One, BlendFactor.InverseSourceAlpha),
+            SurfaceBlend.Alpha when premultipliedOutput => (BlendFactor.One, BlendFactor.InverseSourceAlpha),
+            SurfaceBlend.Additive when premultipliedOutput => (BlendFactor.One, BlendFactor.One),
+            SurfaceBlend.Additive => (BlendFactor.SourceAlpha, BlendFactor.One),
+            SurfaceBlend.Multiply => (BlendFactor.DestinationColor, BlendFactor.Zero),
+            _ => (BlendFactor.SourceAlpha, BlendFactor.InverseSourceAlpha),
+        };
+        (state.Blend.SourceAlphaFactor, state.Blend.DestinationAlphaFactor) = Blend switch
+        {
+            SurfaceBlend.Additive => (BlendFactor.Zero, BlendFactor.One),
+            SurfaceBlend.Multiply => (BlendFactor.Zero, BlendFactor.One),
+            _ => (BlendFactor.One, BlendFactor.InverseSourceAlpha),
+        };
+        return state;
     }
 }

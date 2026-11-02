@@ -22,11 +22,23 @@ public readonly record struct PassType(string Name)
     public static readonly PassType ShadowCaster = new("ShadowCaster");
     public static readonly PassType ObjectId = new("ObjectId");
 
-    /// <summary>A surface's debug view, drawn in place of its Forward pass while the view sets <see cref="Shader.DebugAxis"/>. See Graphite/Debug.glsl.</summary>
+    /// <summary>A surface's debug view, drawn in place of its Forward pass while the view sets <see cref="GlobalAxis.Debug"/>. See Graphite/Debug.glsl.</summary>
     public static readonly PassType Debug = new("Debug");
 
     /// <summary>A world's sky, a fullscreen triangle drawn after the opaque surfaces where nothing was drawn. See Graphite/Sky.glsl.</summary>
     public static readonly PassType Sky = new("Sky");
+
+    /// <summary>
+    /// A transmissive surface's pass, drawn in place of its Forward pass while the shader's <see cref="Shader.TransmissiveAxis"/>
+    /// is on, in the transparent list.
+    /// </summary>
+    public static readonly PassType Transmission = new("Transmission");
+
+    /// <summary>
+    /// The back faces of a transmissive volume, their distance along the view ray into the view's back depth before the
+    /// transparent surfaces draw. Drawn with front faces culled, depth tested and written, unblended.
+    /// </summary>
+    public static readonly PassType BackDepth = new("BackDepth");
 
     public override string ToString() => Name;
 }
@@ -53,7 +65,7 @@ public enum MaterialPropertyType : byte
 
 /// <summary>
 /// A material property value. Numbers live in <see cref="Vector"/>, ints also in <see cref="Int"/>, and a texture keeps
-/// its scale offset in <see cref="Vector"/>.
+/// its scale offset in <see cref="Vector"/> and the channel and UV set a map reads in <see cref="Int"/>.
 /// </summary>
 public readonly struct MaterialValue
 {
@@ -62,10 +74,11 @@ public readonly struct MaterialValue
         public readonly Float4x4 Value = value;
     }
 
-    private sealed class TextureBox(Texture? texture, SamplerDescription? sampler)
+    private sealed class TextureBox(Texture? texture, SamplerDescription? sampler, float rotation)
     {
         public readonly Texture? Texture = texture;
         public readonly SamplerDescription? Sampler = sampler;
+        public readonly float Rotation = rotation;
     }
 
     private readonly object? _data;
@@ -97,7 +110,16 @@ public readonly struct MaterialValue
 
     public Float4 ScaleOffset => Vector;
 
+    /// <summary>The radians a map property turns its UVs counter clockwise by, after its scale and before its offset.</summary>
+    public float Rotation => (_data as TextureBox)?.Rotation ?? 0;
+
     public bool IsTexture => Type >= MaterialPropertyType.Texture2D;
+
+    /// <summary>The channel a map property reads for a scalar input, 0 to 3 for R to A.</summary>
+    public int MapChannel => Int & 3;
+
+    /// <summary>The UV set a map property samples, 0 or 1.</summary>
+    public int MapUVSet => (Int >> 2) & 1;
 
     public static readonly Float4 IdentityScaleOffset = new(1, 1, 0, 0);
 
@@ -124,15 +146,21 @@ public readonly struct MaterialValue
 
     public static MaterialValue FromMatrix(Float4x4 value) => new(MaterialPropertyType.Matrix, Float4.Zero, 0, new MatrixBox(value));
 
-    /// <summary>A texture value. A null texture means the schema default.</summary>
-    public static MaterialValue FromTexture(MaterialPropertyType type, Texture? texture, SamplerDescription? sampler, Float4 scaleOffset)
+    /// <summary>A texture value. A null texture means the schema default. Channel and UV set only matter to map properties.</summary>
+    public static MaterialValue FromTexture(MaterialPropertyType type, Texture? texture, SamplerDescription? sampler, Float4 scaleOffset, int channel = 0, int uvSet = 0, float rotation = 0)
     {
         if (type < MaterialPropertyType.Texture2D)
             throw new ArgumentException($"{type} is not a texture type.", nameof(type));
-        return new(type, scaleOffset, 0, new TextureBox(texture, sampler));
+        return new(type, scaleOffset, Mapping(channel, uvSet), new TextureBox(texture, sampler, rotation));
     }
 
     internal MaterialValue WithScaleOffset(Float4 scaleOffset) => new(Type, scaleOffset, Int, _data);
+
+    internal MaterialValue WithMapping(int channel, int uvSet) => new(Type, Vector, Mapping(channel, uvSet), _data);
+
+    internal MaterialValue WithRotation(float rotation) => new(Type, Vector, Int, new TextureBox(Texture, Sampler, rotation));
+
+    private static int Mapping(int channel, int uvSet) => (channel & 3) | ((uvSet & 1) << 2);
 }
 
 /// <summary>One property of a shader's schema, with where it sits in the material record.</summary>
@@ -148,10 +176,18 @@ public readonly struct MaterialProperty
 
     public IReadOnlyList<string> Attributes { get; init; }
 
-    /// <summary>Byte offset in the material record. A texture holds its texture index here, its sampler index 4 bytes on and its scale offset at <see cref="ScaleOffsetOffset"/>.</summary>
+    /// <summary>
+    /// Byte offset in the material record. A texture holds its texture index here, its sampler index 4 bytes on and its
+    /// scale offset at <see cref="ScaleOffsetOffset"/>. A map holds <see cref="MaterialSchema.MapSize"/> bytes here: its texture
+    /// slot in bits 0 to 15, its sampler slot in 16 to 21, its channel in 22 and 23 and its UV set in 24, then as floats its
+    /// scale, its offset and its rotation's cosine and sine.
+    /// </summary>
     public uint Offset { get; init; }
 
     public uint ScaleOffsetOffset { get; init; }
+
+    /// <summary>The bit a [Map] texture sets in the record's map mask while it holds a texture, -1 for any other property.</summary>
+    public int MapBit { get; init; }
 
     /// <summary>True when the colour is entered in gamma space and converted to linear in the record.</summary>
     public bool Gamma { get; init; }
@@ -179,7 +215,7 @@ internal interface IMaterialResources
 
 /// <summary>
 /// The material record layout of a shader: its properties in declaration order, std430, shared by every pass and
-/// variant. Records are padded to 16 bytes.
+/// variant, then the map mask when it has [Map] textures. Records are padded to 16 bytes.
 /// </summary>
 public sealed class MaterialSchema
 {
@@ -190,18 +226,24 @@ public sealed class MaterialSchema
     {
         MaterialProperty[] result = new MaterialProperty[properties.Count];
         uint offset = 0;
+        int maps = 0;
         for (int i = 0; i < properties.Count; i++)
         {
             ShaderProperty source = properties[i];
             MaterialPropertyType type = TypeOf(source.PropertyType);
             string[] attributes = source.Attributes ?? [];
-            (uint size, uint alignment) = Std430(type);
+            bool map = Array.IndexOf(attributes, "Map") >= 0;
+            if (map && type != MaterialPropertyType.Texture2D)
+                throw new ArgumentException($"The property {source.Name} is a [Map] but not a Texture2D.");
+            if (map && maps == 32)
+                throw new ArgumentException($"The property {source.Name} is a [Map] past the 32 a mask holds.");
+            (uint size, uint alignment) = map ? (MapSize, 4u) : Std430(type);
 
             offset = AlignUp(offset, alignment);
             uint propertyOffset = offset;
             offset += size;
             uint scaleOffsetOffset = 0;
-            if (type >= MaterialPropertyType.Texture2D)
+            if (type >= MaterialPropertyType.Texture2D && !map)
             {
                 scaleOffsetOffset = AlignUp(offset, 16);
                 offset = scaleOffsetOffset + 16;
@@ -220,15 +262,30 @@ public sealed class MaterialSchema
                 Attributes = attributes,
                 Offset = propertyOffset,
                 ScaleOffsetOffset = scaleOffsetOffset,
+                MapBit = map ? maps++ : -1,
                 Gamma = type == MaterialPropertyType.Color && Array.IndexOf(attributes, "Gamma") >= 0,
             };
         }
 
         _properties = result;
+        if (maps > 0)
+        {
+            MapMaskOffset = (int)offset;
+            offset += 4;
+        }
         StrideWords = Math.Max(AlignUp(offset, 16), 16u) / 4;
     }
 
     public IReadOnlyList<MaterialProperty> Properties => _properties;
+
+    /// <summary>
+    /// Byte offset of the map mask after the properties, a bit per [Map] texture in declaration order set while it holds
+    /// a texture, -1 for a schema without maps.
+    /// </summary>
+    public int MapMaskOffset { get; } = -1;
+
+    /// <summary>Bytes a [Map] property takes in the record.</summary>
+    public const uint MapSize = 28;
 
     /// <summary>Words per record, a multiple of 4.</summary>
     public uint StrideWords { get; }
@@ -239,12 +296,24 @@ public sealed class MaterialSchema
     internal void Pack(ReadOnlySpan<MaterialValue> values, Span<uint> record, IMaterialResources resources)
     {
         record.Clear();
+        uint present = 0;
         for (int i = 0; i < _properties.Length; i++)
         {
             ref readonly MaterialProperty property = ref _properties[i];
             MaterialValue value = values[i];
             int word = (int)(property.Offset / 4);
-            if (property.Type >= MaterialPropertyType.Texture2D)
+            if (property.MapBit >= 0)
+            {
+                uint slot = resources.TextureSlot(value.Texture, property.Type, property.DefaultTexture);
+                uint sampler = resources.SamplerSlot(value.Sampler);
+                record[word] = (slot & 0xFFFFu) | ((sampler & 63u) << 16) | ((uint)value.MapChannel << 22) | ((uint)value.MapUVSet << 24);
+                WriteFloats(record, word + 1, value.ScaleOffset, 4);
+                record[word + 5] = BitConverter.SingleToUInt32Bits(MathF.Cos(value.Rotation));
+                record[word + 6] = BitConverter.SingleToUInt32Bits(MathF.Sin(value.Rotation));
+                if (value.Texture != null)
+                    present |= 1u << property.MapBit;
+            }
+            else if (property.Type >= MaterialPropertyType.Texture2D)
             {
                 record[word] = resources.TextureSlot(value.Texture, property.Type, property.DefaultTexture);
                 record[word + 1] = resources.SamplerSlot(value.Sampler);
@@ -255,6 +324,8 @@ public sealed class MaterialSchema
                 WriteNumber(property.Type, value, record, word, property.Gamma);
             }
         }
+        if (MapMaskOffset >= 0)
+            record[MapMaskOffset / 4] = present;
     }
 
     /// <summary>Writes a numeric value as std430 lays out a property of <paramref name="type"/>.</summary>
@@ -377,6 +448,30 @@ public enum KeywordBindingKind : byte
 /// <summary>A material axis a property drives, see <see cref="Shader.KeywordBindings"/>.</summary>
 public readonly record struct KeywordBinding(int Property, string Axis, KeywordBindingKind Kind);
 
+/// <summary>A material axis of one shader, from <see cref="Shader.Axis"/>, whose value its materials pick with <see cref="Material.Set(MaterialAxis, string?)"/>.</summary>
+public sealed class MaterialAxis
+{
+    internal MaterialAxis(Shader shader, VariantSpace space)
+    {
+        Shader = shader;
+        Name = space.Name;
+        Values = space.Values;
+        IsToggle = space.IsToggle;
+    }
+
+    public Shader Shader { get; }
+
+    public string Name { get; }
+
+    /// <summary>Every value the axis takes, the first being its default.</summary>
+    public IReadOnlyList<string> Values { get; }
+
+    /// <summary>True for an on or off axis, set with <see cref="Material.Set(MaterialAxis, bool)"/>.</summary>
+    public bool IsToggle { get; }
+
+    public override string ToString() => Name;
+}
+
 /// <summary>
 /// A shader the renderer can draw with: its definition, the material schema from its Properties block, and its
 /// variant axes split by scope.
@@ -394,18 +489,40 @@ public sealed class Shader
     /// <summary>The pass tag of a pass reading the view's opaque depth, "SceneDepth" = "Read". See Graphite/SceneDepth.glsl.</summary>
     public const string SceneDepthTag = "SceneDepth";
 
-    /// <summary>The global axis a view sets to show a debug view, which its draws take from their shaders' Debug passes.</summary>
-    public const string DebugAxis = "GRAPHITE_DEBUG";
+    /// <summary>The pass tag of a pass reading the view's back depth, "BackDepth" = "Read". See Graphite/PBR/Transmission.glsl.</summary>
+    public const string BackDepthTag = "BackDepth";
+
+    /// <summary>
+    /// The pass tag limiting a pass's SceneColor, SceneDepth and BackDepth reads to views whose global axis has a value,
+    /// "ReadsWhen" = "AXIS VALUE", so views at other values pay for no copy. A view without the axis set takes its first value.
+    /// </summary>
+    public const string ReadsWhenTag = "ReadsWhen";
+
+    /// <summary>
+    /// The pass tag of a shader whose colour leaves already multiplied by its coverage, "Output" = "Premultiplied", so
+    /// <see cref="SurfaceSettings"/> blends it with premultiplied factors. Graphite/PBR declares it.
+    /// </summary>
+    public const string OutputTag = "Output";
+
+    /// <summary>
+    /// The pass tag of a Forward pass whose fragments discard, "Discards" = "On", so a material without a ShadowCaster
+    /// pass casts no shadow in place of one shaped by its whole depth.
+    /// </summary>
+    public const string DiscardsTag = "Discards";
 
     private readonly bool[] _readsSceneColor;
     private readonly bool[] _readsSceneDepth;
+    private readonly bool[] _readsBackDepth;
+    private readonly (string Axis, string Value)?[] _readsWhen;
     private readonly HashSet<string>[] _passAxes;
 
     /// <summary>The shader drawing in this one's place while its variants compile or after they failed, from its Fallback declaration.</summary>
     public Shader? Fallback { get; set; }
 
+    /// <summary>A shader drawing a copy of the definition, which is left as it is.</summary>
     public Shader(ShaderDefinition definition, IShaderCompiler? compiler)
     {
+        definition = definition.Copy();
         ExpandSurface(definition);
         Definition = definition;
         Name = definition.Name ?? "";
@@ -416,10 +533,16 @@ public sealed class Shader
             pass.Material = abi;
         _readsSceneColor = new bool[passes.Length];
         _readsSceneDepth = new bool[passes.Length];
+        _readsBackDepth = new bool[passes.Length];
+        _readsWhen = new (string, string)?[passes.Length];
         for (int i = 0; i < passes.Length; i++)
         {
             _readsSceneColor[i] = ShaderDefinition.PassHasTag(passes[i], SceneColorTag, "Read");
             _readsSceneDepth[i] = ShaderDefinition.PassHasTag(passes[i], SceneDepthTag, "Read");
+            _readsBackDepth[i] = ShaderDefinition.PassHasTag(passes[i], BackDepthTag, "Read");
+            if (passes[i].Tags != null && passes[i].Tags!.TryGetValue(ReadsWhenTag, out string? when) && when.Split(' ', StringSplitOptions.RemoveEmptyEntries) is [string axis, string value])
+                _readsWhen[i] = (axis, value);
+            PremultipliedOutput |= ShaderDefinition.PassHasTag(passes[i], OutputTag, "Premultiplied");
         }
 
         Dictionary<string, VariantSpace> axes = new(StringComparer.Ordinal);
@@ -451,20 +574,34 @@ public sealed class Shader
                 queue = parsed;
         }
 
+        foreach (VariantSpace axis in global)
+            GlobalAxis.Declare(Name, axis);
         MaterialAxes = material;
         GlobalAxes = global;
+        foreach (VariantSpace axis in material)
+            _materialAxes[axis.Name] = new MaterialAxis(this, axis);
         RenderQueue = queue;
         KeywordBindings = BindKeywords();
+        TwoSidedAxis = FindAttributeAxis("TwoSided");
+        TransmissiveAxis = FindAttributeAxis("Transmissive");
     }
 
     private static readonly System.Text.RegularExpressions.Regex s_surfaceMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
+    private static readonly System.Text.RegularExpressions.Regex s_vertexMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface_vertex[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
+    private static readonly System.Text.RegularExpressions.Regex s_brdfDefinition = new(@"\bvec3\s+Graphite_BRDF\s*\(");
+    private static readonly System.Text.RegularExpressions.Regex s_ambientDefinition = new(@"\bvec3\s+Graphite_AmbientBRDF\s*\(");
+    private static readonly System.Text.RegularExpressions.Regex s_lightingMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface_lighting[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
 
     /// <summary>
     /// Expands a Surface block into the passes of its model, the library shader Graphite/Standard/{Model}.shader: each
-    /// "#pragma surface" line of the model's passes becomes the block's code, which defines
-    /// void Surface(inout Graphite_SurfaceData s) over the standard surface before it is lit, with
-    /// GRAPHITE_SURFACE_FUNCTION defined. The model's properties come before the shader's own, which replace any of the
-    /// same name.
+    /// "#pragma surface" line of the model's passes becomes the block's code, which defines the model's Surface function,
+    /// void Surface(inout PBR_Params p, Graphite_SurfaceData i) for PBR, before the surface is lit, with
+    /// GRAPHITE_SURFACE_FUNCTION defined. A Lighting block's code defines Graphite_BRDF, Graphite_AmbientBRDF or both
+    /// for the passes with a "#pragma surface_lighting" line, which becomes GRAPHITE_CUSTOM_BRDF and
+    /// GRAPHITE_CUSTOM_AMBIENT_BRDF for the ones it defines, the code following the block's at their "#pragma surface". A Vertex block's code, defining void SurfaceVertex(inout Graphite_SurfaceVertex v), goes
+    /// in place of each "#pragma surface_vertex" line with GRAPHITE_SURFACE_VERTEX_FUNCTION defined. The model's
+    /// properties come before the shader's own, which replace any of the same name. A shader naming no Fallback takes the
+    /// model's.
     /// </summary>
     private static void ExpandSurface(ShaderDefinition definition)
     {
@@ -478,16 +615,39 @@ public sealed class Shader
         ShaderDefinition model = ShaderParser.Parse(source);
 
         string code = surface.Code.Length > 0 ? "#define GRAPHITE_SURFACE_FUNCTION\n" + surface.Code : "";
+        string lighting = surface.Lighting;
+        string lightingDefines = (s_brdfDefinition.IsMatch(lighting) ? "#define GRAPHITE_CUSTOM_BRDF\n" : "")
+            + (s_ambientDefinition.IsMatch(lighting) ? "#define GRAPHITE_CUSTOM_AMBIENT_BRDF\n" : "");
+        if (lighting.Length > 0 && lightingDefines.Length == 0)
+            throw new ShaderLoadException($"{name}:{surface.Line}: the Lighting block defines neither Graphite_BRDF nor Graphite_AmbientBRDF.");
+        string vertex = surface.Vertex.Length > 0 ? "#define GRAPHITE_SURFACE_VERTEX_FUNCTION\n" + surface.Vertex : "";
         ShaderPass[] standard = model.Passes ?? [];
         bool spliced = false;
+        bool lit = false;
+        bool moved = false;
         foreach (ShaderPass pass in standard)
         {
+            moved |= s_vertexMarker.IsMatch(pass.Source);
+            pass.Source = s_vertexMarker.Replace(pass.Source, _ => vertex);
+
+            string passCode = code;
+            if (s_lightingMarker.IsMatch(pass.Source))
+            {
+                lit = true;
+                pass.Source = s_lightingMarker.Replace(pass.Source, _ => lightingDefines);
+                if (lighting.Length > 0)
+                    passCode = code + "\n" + lighting;
+            }
             spliced |= s_surfaceMarker.IsMatch(pass.Source);
-            pass.Source = s_surfaceMarker.Replace(pass.Source, _ => code);
+            pass.Source = s_surfaceMarker.Replace(pass.Source, _ => passCode);
             pass.SourceName = name;
         }
         if (code.Length > 0 && !spliced)
             throw new ShaderLoadException($"{name}:{surface.Line}: the surface model {path} has no \"#pragma surface\" line for the Surface block's code.");
+        if (vertex.Length > 0 && !moved)
+            throw new ShaderLoadException($"{name}:{surface.Line}: the surface model {path} has no \"#pragma surface_vertex\" line for the Vertex block's code.");
+        if (lighting.Length > 0 && !lit)
+            throw new ShaderLoadException($"{name}:{surface.Line}: the surface model {path} has no \"#pragma surface_lighting\" line for the Lighting block's code.");
 
         foreach (ShaderPass own in definition.Passes ?? [])
         {
@@ -495,6 +655,8 @@ public sealed class Shader
                 throw new ShaderLoadException($"{name}: the pass name {own.Name} is taken by the Surface block's passes.");
         }
         definition.Passes = [.. standard, .. definition.Passes ?? []];
+        if (string.IsNullOrEmpty(definition.Fallback))
+            definition.Fallback = model.Fallback;
 
         List<ShaderProperty> properties = new(model.Properties ?? []);
         foreach (ShaderProperty property in definition.Properties ?? [])
@@ -512,6 +674,7 @@ public sealed class Shader
     /// <summary>
     /// Material axes that properties drive: a texture with [Keyword(AXIS)] turns its toggle on while a texture is set, a
     /// number with [Toggle(AXIS)] while it is not zero, and an integer with [KeywordEnum(AXIS)] picks the value at its index.
+    /// A toggle several properties drive is on while any of them is.
     /// </summary>
     public IReadOnlyList<KeywordBinding> KeywordBindings { get; }
 
@@ -536,6 +699,29 @@ public sealed class Shader
         return [.. bindings];
     }
 
+    /// <summary>
+    /// The toggle axis of the property marked [TwoSided], or null: while it is on, a material draws both sides whatever its
+    /// <see cref="SurfaceCull"/>, so back faces shade with a flipped normal.
+    /// </summary>
+    public string? TwoSidedAxis { get; }
+
+    /// <summary>
+    /// The toggle axis of the property marked [Transmissive], or null: while it is on, a material draws as transparent
+    /// whatever its <see cref="SurfaceSettings"/>, through its <see cref="PassType.Transmission"/> pass in place of Forward,
+    /// and volumes, those not two sided, draw their <see cref="PassType.BackDepth"/> pass.
+    /// </summary>
+    public string? TransmissiveAxis { get; }
+
+    private string? FindAttributeAxis(string attribute)
+    {
+        foreach (KeywordBinding binding in KeywordBindings)
+        {
+            if (binding.Kind == KeywordBindingKind.Toggle && Properties[binding.Property].HasAttribute(attribute))
+                return binding.Axis;
+        }
+        return null;
+    }
+
     public string Name { get; }
 
     public ShaderDefinition Definition { get; }
@@ -547,6 +733,18 @@ public sealed class Shader
     public IReadOnlyList<VariantSpace> MaterialAxes { get; }
 
     public IReadOnlyList<VariantSpace> GlobalAxes { get; }
+
+    private readonly Dictionary<string, MaterialAxis> _materialAxes = new(StringComparer.Ordinal);
+
+    /// <summary>The material axis of a name, for <see cref="Material.Set(MaterialAxis, string?)"/>. Throws when the shader has no such axis or it is global.</summary>
+    public MaterialAxis Axis(string name)
+    {
+        if (_materialAxes.TryGetValue(name, out MaterialAxis? axis))
+            return axis;
+        if (FindAxis(name, out _) >= 0)
+            throw new ArgumentException($"The axis {name} is global in {Name}, the renderer, a world or a view sets it through a GlobalAxis, not a material.", nameof(name));
+        throw new ArgumentException($"The shader {Name} has no axis {name}.", nameof(name));
+    }
 
     /// <summary>Whether a pass declares an axis, so its selection can tell that pass's programs apart.</summary>
     internal bool PassHasAxis(int passIndex, string axis) => _passAxes[passIndex].Contains(axis);
@@ -573,6 +771,9 @@ public sealed class Shader
     /// <summary>Default render queue of the shader's materials, from a RenderQueue pass tag.</summary>
     public int RenderQueue { get; }
 
+    /// <summary>Whether a pass declares "Output" = "Premultiplied", see <see cref="OutputTag"/>.</summary>
+    public bool PremultipliedOutput { get; }
+
     public bool HasPass(PassType type)
     {
         foreach (ShaderPass pass in Definition.Passes ?? [])
@@ -594,6 +795,31 @@ public sealed class Shader
     public bool ReadsSceneDepth => Array.IndexOf(_readsSceneDepth, true) >= 0;
 
     internal bool PassReadsSceneDepth(int passIndex) => passIndex >= 0 && passIndex < _readsSceneDepth.Length && _readsSceneDepth[passIndex];
+
+    /// <summary>Whether any pass of the shader reads the view's back depth through its BackDepth tag.</summary>
+    public bool ReadsBackDepth => Array.IndexOf(_readsBackDepth, true) >= 0;
+
+    internal bool PassReadsBackDepth(int passIndex) => passIndex >= 0 && passIndex < _readsBackDepth.Length && _readsBackDepth[passIndex];
+
+    /// <summary>Whether a pass's screen reads count in a view with these global keywords, see <see cref="ReadsWhenTag"/>.</summary>
+    internal bool PassReadsIn(int passIndex, IReadOnlyDictionary<string, string> keywords)
+    {
+        if (passIndex < 0 || passIndex >= _readsWhen.Length || _readsWhen[passIndex] is not (string axis, string value))
+            return true;
+        if (keywords.TryGetValue(axis, out string? set))
+            return set == value;
+        return GlobalAxisDefault(axis) is not { } first || first == value;
+    }
+
+    private string? GlobalAxisDefault(string axis)
+    {
+        foreach (VariantSpace space in GlobalAxes)
+        {
+            if (space.Name == axis)
+                return space.Values[0];
+        }
+        return null;
+    }
 
     private readonly Dictionary<string, int> _passIndices = new(StringComparer.Ordinal);
 

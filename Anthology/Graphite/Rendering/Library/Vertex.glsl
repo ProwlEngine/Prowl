@@ -63,8 +63,8 @@ vec4 Graphite_LoadCustom(uint index) { uint stream = 10u + index; return Graphit
 #define vertexCustom0 Graphite_LoadCustom(0u)
 #define vertexCustom1 Graphite_LoadCustom(1u)
 
-// The camera relative world position of an object space point.
-vec3 Graphite_ObjectToWorld(vec3 p)
+// The relative position of an object space point.
+vec3 Graphite_ObjectToRelative(vec3 p)
 {
     Graphite_ViewData view = Graphite_View();
     return Graphite_TransformPoint(Graphite_ObjectTransform(), p, view.cameraHigh.xyz, view.cameraLow.xyz);
@@ -82,7 +82,7 @@ vec2 Graphite_LightmapUV()
     return uv * scaleOffset.xy + scaleOffset.zw;
 }
 
-vec4 Graphite_ObjectToClip(vec3 p) { return Graphite_RelativeToClip(Graphite_ObjectToWorld(p)); }
+vec4 Graphite_ObjectToClip(vec3 p) { return Graphite_RelativeToClip(Graphite_ObjectToRelative(p)); }
 
 // Where the point was last frame in last frame's clip space, for motion vectors. Objects without a previous transform did not move.
 vec4 Graphite_PreviousObjectToClip(vec3 p)
@@ -98,7 +98,9 @@ void Graphite_BeginVertex()
     // A draw's command carries its record's index as its first instance, as gl_DrawID has no Metal equivalent
     graphite_Draw = graphite_DrawRecords[uint(gl_BaseInstance)];
     graphite_Chunk = graphite_Chunks[graphite_Draw.chunk];
-    graphite_Object = (graphite_Draw.flags & 1u) != 0u ? graphite_Draw.object : graphite_Instances[graphite_Push.instanceBase + graphite_Draw.firstInstance + uint(gl_InstanceIndex - gl_BaseInstance)];
+    graphite_Object = (graphite_Draw.flags & 1u) != 0u
+        ? graphite_Draw.object + ((graphite_Draw.flags & 4u) != 0u ? Graphite_InstanceIndex() : 0u)
+        : graphite_Instances[graphite_Push.instanceBase + graphite_Draw.firstInstance + Graphite_InstanceIndex()];
     uint currentPositions = graphite_Objects[graphite_Object].currentPositions;
     if (currentPositions != 0u)
         graphite_Chunk.streamOffsets[0] = currentPositions - 1u;
@@ -118,26 +120,21 @@ void Graphite_SetPreviousPosition(vec3 p)
     graphite_PreviousPosition = p;
 }
 
-// The vertex's clip position now and last frame, for the forward pass's motion vectors, from last frame's pose when skinned
+// The vertex's object space position last frame: last frame's pose when skinned, else where it is now
+vec3 Graphite_PreviousVertexPosition()
+{
+    uint previous = Graphite_Object().previousPositions;
+    if (previous == 0u)
+        return vertexPosition;
+    uint at = previous - 1u + uint(gl_VertexIndex) * 3u;
+    return uintBitsToFloat(uvec3(graphite_Words[at], graphite_Words[at + 1u], graphite_Words[at + 2u]));
+}
+
+// The vertex's clip position now and last frame, for the forward pass's motion vectors
 void Graphite_EndVertex()
 {
     graphite_MotionCurrent = gl_Position;
-    uint previous = Graphite_Object().previousPositions;
-    vec3 position;
-    if (graphite_PreviousSet)
-    {
-        position = graphite_PreviousPosition;
-    }
-    else if (previous == 0u)
-    {
-        position = vertexPosition;
-    }
-    else
-    {
-        uint at = previous - 1u + uint(gl_VertexIndex) * 3u;
-        position = uintBitsToFloat(uvec3(graphite_Words[at], graphite_Words[at + 1u], graphite_Words[at + 2u]));
-    }
-    graphite_MotionPrevious = Graphite_PreviousObjectToClip(position);
+    graphite_MotionPrevious = Graphite_PreviousObjectToClip(graphite_PreviousSet ? graphite_PreviousPosition : Graphite_PreviousVertexPosition());
 }
 
 void main()

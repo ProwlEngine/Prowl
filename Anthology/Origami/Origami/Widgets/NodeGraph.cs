@@ -907,6 +907,7 @@ public sealed class NodeGraphBuilder
                 float vx = -st.PanX / zoom, vy = -st.PanY / zoom;
                 float vw = _width / zoom, vh = _height / zoom;
                 canvas.SaveState();
+                canvas.IntersectScissor((float)rr.Min.X, (float)rr.Min.Y, (float)rr.Size.X, (float)rr.Size.Y);
                 canvas.SetStrokeColor(viewCol); canvas.SetStrokeWidth(1.2f);
                 canvas.BeginPath();
                 canvas.Rect(bx + (vx - min.X) * scale, by + (vy - min.Y) * scale, vw * scale, vh * scale);

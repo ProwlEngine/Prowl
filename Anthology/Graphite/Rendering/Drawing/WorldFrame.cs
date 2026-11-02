@@ -13,8 +13,8 @@ namespace Prowl.Graphite.Rendering;
 /// <summary>A world as the frame pipeline draws it: its buckets, its globals region and its frame table.</summary>
 internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globalRegion, DrawPrograms programs) : IDisposable
 {
-    /// <summary>The draw programs of the materials the world's providers draw with.</summary>
-    public ProviderPrograms Programs { get; } = new(programs);
+    /// <summary>The renderer's draw program ids, which the world's providers hold theirs in.</summary>
+    public DrawPrograms Programs { get; } = programs;
 
     private static int s_nextCapture;
 
@@ -34,6 +34,19 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     public readonly List<CameraFrame> ProbeCameras = new();
     public readonly List<CameraFrame> ProbeFaceCameras = new();
     public int ProbeCamerasUsed, ProbeFaceCamerasUsed;
+
+    private string? _shadowsName, _shadowsGroup;
+
+    /// <summary>The debug group the world's shadow passes record in, made again when the world is renamed.</summary>
+    public string ShadowsGroup(string name)
+    {
+        if (_shadowsGroup == null || !ReferenceEquals(_shadowsName, name))
+        {
+            _shadowsName = name;
+            _shadowsGroup = $"{name} shadows";
+        }
+        return _shadowsGroup;
+    }
 
     /// <summary>A new capture view id, below any a host may use.</summary>
     public static int NextCaptureViewId() => int.MinValue + Interlocked.Increment(ref s_nextCapture);

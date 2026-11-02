@@ -14,6 +14,8 @@ internal sealed class PbrScenes : IDisposable
     public static readonly string[] Names = ["Helmet", "Lights", "Shadows"];
 
     private readonly Demo _demo;
+
+    public Renderer Renderer => _demo.Renderer;
     private readonly DemoScene?[] _scenes = new DemoScene?[Names.Length];
     private readonly FlyCamera _camera = new();
     private DemoScene _scene = null!;
@@ -57,18 +59,9 @@ internal sealed class PbrScenes : IDisposable
 
     public void Render(float deltaTime, params IProfiler[] profilers)
     {
-        ViewDesc view = new()
-        {
-            World = _scene.World,
-            ViewId = 0,
-            Name = "Main camera",
-            Target = Target.Framebuffer,
-            ClearColor = new Float4(0.01f, 0.012f, 0.02f, 1),
-            Near = FlyCamera.Near,
-            Kind = ViewKind.Game,
-            Features = _demo.Post,
-        };
-        view.Layers[0] = _camera.Layer(Width / (float)Height);
+        RenderView view = _scene.View;
+        view.Target = Target.Framebuffer;
+        view.Camera = _camera.Camera;
 
         _demo.Renderer.SubmitFrame(new FrameDesc
         {

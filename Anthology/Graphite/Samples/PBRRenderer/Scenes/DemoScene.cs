@@ -19,11 +19,17 @@ internal abstract class DemoScene : IDisposable
         Demo = demo;
         World = demo.Renderer.CreateWorld();
         World.Name = Name;
+        View = demo.Renderer.CreateView(World, "Main camera");
+        View.ClearColor = new Float4(0.01f, 0.012f, 0.02f, 1);
+        View.Features = demo.Post;
     }
 
     protected Demo Demo { get; }
 
     public RenderWorld World { get; }
+
+    /// <summary>The camera into the world, keeping its history while other scenes show.</summary>
+    public RenderView View { get; }
 
     public abstract string Name { get; }
 
@@ -32,6 +38,9 @@ internal abstract class DemoScene : IDisposable
     public abstract float StartYaw { get; }
 
     public abstract float StartPitch { get; }
+
+    /// <summary>The exposure the camera starts from before auto exposure has measured the scene.</summary>
+    public virtual float StartEV100 => 14f;
 
     public virtual string Status => "";
 
@@ -43,10 +52,10 @@ internal abstract class DemoScene : IDisposable
     {
     }
 
-    protected Material Lit(Float3 color, float metallic = 0f, float roughness = 0.6f, Float3 emission = default, float grid = 0f)
+    protected Material Pbr(Float3 color, float metallic = 0f, float roughness = 0.6f, Float3 emission = default, float grid = 0f)
     {
-        Material material = Demo.CreateLit(color, metallic, roughness, emission, grid);
-        material.Name = $"Lit {_materials.Count}";
+        Material material = Demo.CreatePbr(color, metallic, roughness, emission, grid);
+        material.Name = $"PBR {_materials.Count}";
         _materials.Add(material);
         return material;
     }
@@ -74,6 +83,7 @@ internal abstract class DemoScene : IDisposable
 
     public virtual void Dispose()
     {
+        View.Dispose();
         World.Dispose();
         foreach (Material material in _materials)
             material.Dispose();

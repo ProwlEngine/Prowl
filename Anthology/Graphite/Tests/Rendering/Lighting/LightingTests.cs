@@ -14,19 +14,20 @@ using Vector3 = System.Numerics.Vector3;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-// Draws a lit quad filling the view and checks every pixel against Prowl's lighting math done on the CPU, so Graphite's
-// port stays exact: point and spot lights from both trees, directional lights, ambient, fog and decals.
+// Draws a quad shaded by the PBR closure filling the view and checks every pixel against the same math on the CPU,
+// PbrReference: point and spot lights from both trees, directional lights, ambient, fog and decals.
 [Collection("GPU Tests")]
-public sealed class LightingTests : IDisposable
+public sealed partial class LightingTests : IDisposable
 {
     private const string Source = """
-        Shader "Test/Lit"
+        Shader "Test/PBR"
         {
             Properties
             {
                 _Color("Albedo", Color) = (0.8, 0.8, 0.8, 1)
                 _Roughness("Roughness", Float) = 0.5
                 _Metallic("Metallic", Float) = 0
+                _Occlusion("Occlusion", Float) = 1
             }
 
             Pass
@@ -41,31 +42,36 @@ public sealed class LightingTests : IDisposable
                     layout(location = 1) out vec3 vNormal;
                     void main()
                     {
-                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        vWorld = Graphite_ObjectToRelative(vertexPosition);
                         vNormal = Graphite_ObjectToWorldNormal(vertexNormal);
                         gl_Position = Graphite_RelativeToClip(vWorld);
                     }
                 }
                 Fragment
                 {
-                    #include "Graphite/Lighting.glsl"
+                    #include "Graphite/PBR/Closure.glsl"
                     #include "Graphite/Decals.glsl"
                     #include "Graphite/Passes.glsl"
                     uniform vec4 _Color;
                     uniform float _Roughness;
                     uniform float _Metallic;
+                    uniform float _Occlusion;
                     layout(location = 0) in vec3 vWorld;
                     layout(location = 1) in vec3 vNormal;
                     layout(location = 0) out vec4 outColor;
                     void main()
                     {
                         vec3 n = normalize(vNormal);
-                        vec3 albedo = _Color.rgb;
-                        float roughness = _Roughness, metallic = _Metallic, ao = 1.0;
-                        Graphite_ApplyDecals(vWorld, n, albedo, n, roughness, metallic, ao);
-                        vec3 color = CalculateForwardLighting(vWorld, n, GetWorldViewDir(vWorld), albedo, metallic, roughness, ao) + CalculateAmbient(n) * albedo;
-                        outColor = vec4(ApplyFog(color, vWorld), 1.0);
-                        Graphite_WriteGBuffer(n, roughness, metallic);
+                        PBR_Params p = PBR_DefaultParams(n, vec3(1.0, 0.0, 0.0));
+                        p.baseColor = _Color.rgb;
+                        p.specularRoughness = _Roughness;
+                        p.baseMetalness = _Metallic;
+                        p.occlusion = _Occlusion;
+                        Graphite_ApplyDecals(vWorld, n, p.baseColor, p.geometryNormal, p.specularRoughness, p.baseMetalness, p.occlusion);
+                        PBR_Closure c = PBR_Prepare(p, vWorld, Graphite_ViewDir(vWorld), n, 0.0);
+                        vec3 color = PBR_ShadeLights(c) + Graphite_AmbientLight(c.normal) * p.baseColor;
+                        outColor = vec4(Graphite_ApplyFog(color, vWorld), 1.0);
+                        Graphite_WriteGBuffer(c.normal, c.specularAlbedo, c.roughness);
                     }
                 }
                 ENDGLSL
@@ -101,7 +107,7 @@ public sealed class LightingTests : IDisposable
                     layout(location = 1) in vec2 vLightmapUV;
                     layout(location = 0) out vec4 outColor;
                     void main()
-                    { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                    { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
                         outColor = vec4(Graphite_IndirectDiffuse(normalize(vNormal), vLightmapUV), 1.0);
                     }
                 }
@@ -137,7 +143,7 @@ public sealed class LightingTests : IDisposable
                     void main()
                     {
                         vec3 d = Graphite_SkyDirection();
-                        outColor = vec4(mix(vec3(1.0), d * 0.5 + 0.5, _Gradient) * _Tint.rgb, 1.0);
+                        outColor = vec4(mix(vec3(1.0), d * 0.5 + 0.5, _Gradient) * _Tint.rgb * Graphite_Exposure(), 1.0);
                     }
                 }
                 ENDGLSL
@@ -160,7 +166,7 @@ public sealed class LightingTests : IDisposable
                     layout(location = 0) out vec3 vWorld;
                     void main()
                     {
-                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        vWorld = Graphite_ObjectToRelative(vertexPosition);
                         gl_Position = Graphite_RelativeToClip(vWorld);
                     }
                 }
@@ -171,8 +177,8 @@ public sealed class LightingTests : IDisposable
                     layout(location = 0) in vec3 vWorld;
                     layout(location = 0) out vec4 outColor;
                     void main()
-                    { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
-                        outColor = vec4(SampleSkyProbe(normalize(vWorld), 0.0), 1.0);
+                    { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
+                        outColor = vec4(Graphite_SampleSkyProbe(normalize(vWorld), 0.0), 1.0);
                     }
                 }
                 ENDGLSL
@@ -185,7 +191,7 @@ public sealed class LightingTests : IDisposable
         {
             Properties
             {
-                _Color("Color", Color) = (1, 1, 1, 1)
+                _Color("Radiance", Color) = (1, 1, 1, 1)
             }
 
             Pass
@@ -203,7 +209,7 @@ public sealed class LightingTests : IDisposable
                     #include "Graphite/Core.glsl"
                     uniform vec4 _Color;
                     layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(_Color.rgb, 1.0); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0); outColor = vec4(_Color.rgb * Graphite_Exposure(), 1.0); }
                 }
                 ENDGLSL
             }
@@ -231,7 +237,7 @@ public sealed class LightingTests : IDisposable
                     layout(location = 1) out vec3 vNormal;
                     void main()
                     {
-                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        vWorld = Graphite_ObjectToRelative(vertexPosition);
                         vNormal = Graphite_ObjectToWorldNormal(vertexNormal);
                         gl_Position = Graphite_RelativeToClip(vWorld);
                     }
@@ -245,8 +251,8 @@ public sealed class LightingTests : IDisposable
                     layout(location = 1) in vec3 vNormal;
                     layout(location = 0) out vec4 outColor;
                     void main()
-                    { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
-                        outColor = vec4(EvaluateReflectionProbes(vWorld, normalize(vNormal), GetWorldViewDir(vWorld), _Roughness), 1.0);
+                    { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
+                        outColor = vec4(Graphite_ProbeRadiance(Graphite_FindProbes(vWorld), normalize(vNormal), Graphite_ViewDir(vWorld), _Roughness * _Roughness), 1.0);
                     }
                 }
                 ENDGLSL
@@ -274,67 +280,38 @@ public sealed class LightingTests : IDisposable
                     #include "Graphite/Core.glsl"
                     layout(std430) readonly buffer WindField { vec4 wind[]; };
                     layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(wind[1].rgb, 1.0); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0); outColor = vec4(wind[1].rgb, 1.0); }
                 }
                 ENDGLSL
             }
         }
         """;
 
-    private const int Size = 16;
+    private const int Size = RendererHarness.Size;
     private const float QuadDepth = 10;
 
-    // Orthographic and reversed Z: sees x and y from -4 to 4, and z from 0 (depth 1) to 100 (depth 0).
-    private static readonly Float4x4 s_projection = new(new Float4(0.25f, 0, 0, 0), new Float4(0, 0.25f, 0, 0), new Float4(0, 0, -0.01f, 0), new Float4(0, 0, 1, 1));
+    // Views and captures expose by 1, so pixels hold radiance as it is
+    private static readonly float UnitEV100 = -MathF.Log2(1.2f);
 
-    private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GlslShaderCompiler _compiler = new();
-    private readonly Texture _target;
+    private readonly RendererHarness _harness = new();
+    private readonly GraphicsDevice _device;
     private readonly Framebuffer _framebuffer;
-    private readonly DeviceBuffer _readback;
     private readonly Renderer _renderer;
     private readonly RenderWorld _world;
     private readonly Shader _shader;
     private readonly GpuMesh _quad;
-    private readonly List<RendererError> _errors = new();
+    private readonly List<RendererError> _errors;
     private Double3 _origin;
 
     public LightingTests()
     {
-        _target = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
-        _framebuffer = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _target));
-        _readback = _device.ResourceFactory.CreateBuffer(new BufferDescription(Size * Size * 16, BufferUsage.Staging));
-        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = RenderThreading.Inline, Deterministic = true, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
-        _renderer.Error += _errors.Add;
-        _world = _renderer.CreateWorld();
-        _world.Environment = new EnvironmentDesc { AmbientColor = default, Fog = default };
+        (_device, _framebuffer, _renderer, _world, _errors) = (_harness.Device, _harness.Framebuffer, _harness.Renderer, _harness.World, _harness.Errors);
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = default, Fog = default };
         _shader = _renderer.LoadShader(ShaderParser.Parse(Source));
-
-        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
-        Float3[] normals = [new(0, 0, -1), new(0, 0, -1), new(0, 0, -1), new(0, 0, -1)];
-        _quad = _renderer.CreateMesh(new MeshData
-        {
-            VertexCount = 4,
-            Streams =
-            [
-                new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() },
-                new VertexStream { Semantic = VertexSemantic.Normal, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(normals.AsSpan()).ToArray() },
-            ],
-            Indices = new uint[] { 0, 1, 2, 0, 2, 3 },
-        });
+        _quad = _harness.CreateQuad(normals: true);
     }
 
-    public void Dispose()
-    {
-        _renderer.Dispose();
-        foreach (Texture texture in _textures)
-            texture.Dispose();
-        _readback.Dispose();
-        _framebuffer.Dispose();
-        _target.Dispose();
-        _compiler.Dispose();
-        _device.Dispose();
-    }
+    public void Dispose() => _harness.Dispose();
 
     private Material Surface(Float3 albedo, float roughness = 0.5f, float metallic = 0)
     {
@@ -348,17 +325,14 @@ public sealed class LightingTests : IDisposable
     private RenderableHandle AddQuad(Material material, uint layer = ~0u)
         => _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = layer }, [material]);
 
+    private float _ev100 = UnitEV100;
+
     private Float4[] Frame(params IProfiler[] profilers)
     {
-        ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view }, Profilers = profilers });
-        _device.WaitForIdle();
-        _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
-        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
-        _device.Unmap(_readback);
-        Assert.Empty(_errors);
-        return pixels;
+        RenderView view = _harness.BareView(1);
+        view.EV100 = _ev100;
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
+        return _harness.Frame(new FrameDesc { Views = new[] { view }, Profilers = profilers });
     }
 
     // Camera relative position of a pixel's centre on the quad
@@ -513,17 +487,18 @@ public sealed class LightingTests : IDisposable
     public void AViewSeeingThousandsOfRegions_StillFindsTheLightsNearIt()
     {
         AddQuad(Surface(new Float3(0.7f, 0.7f, 0.7f), 0.5f));
-        _world.AddLight(Point(new Double3(0.5, -0.5, 8), 6, 0.05f, new Float3(1, 1, 1)));
-        _world.AddLight(Point(new Double3(-1, 1, 9), 3, 0.02f, new Float3(1, 0.5f, 0.2f), isStatic: false));
+        _world.AddLight(Point(new Double3(0.5, -0.5, 8), 6, 0.4f, new Float3(1, 1, 1)));
+        _world.AddLight(Point(new Double3(-1, 1, 9), 3, 0.16f, new Float3(1, 0.5f, 0.2f), isStatic: false));
 
         Float4[] Perspective()
         {
-            ViewDesc view = new() { World = _world, ViewId = 9, Target = _framebuffer };
-            view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin };
+            RenderView view = _harness.BareView(9);
+            view.EV100 = UnitEV100;
+            view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin });
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
             _device.WaitForIdle();
             Assert.Empty(_errors);
-            return ReadLayer(_target, 0);
+            return _harness.ReadTarget();
         }
 
         Float4[] alone = Perspective();
@@ -580,6 +555,58 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
+    public void TheViewsEV100_ExposesEveryLight_ByOneOver1Point2TimesTwoToIt()
+    {
+        Assert.Equal(1 / 1.2f, RenderView.ExposureOf(0), 6);
+        Assert.Equal(1 / (1.2f * 1024), RenderView.ExposureOf(10), 9);
+        Assert.Equal(1, RenderView.ExposureOf(UnitEV100), 5);
+
+        // A point of 4000 candela and a directional light of 2500 lux at EV100 9, about an evening's
+        Vector3 albedo = new(0.6f, 0.5f, 0.4f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.5f));
+        LightDesc point = Point(new Double3(1, -0.5f, 6), 12, 4000, new Float3(1, 0.9f, 0.8f));
+        LightDesc sun = new() { Type = LightType.Directional, Direction = new Float3(0.2f, -0.3f, 1), Intensity = 2500 };
+        _world.AddLight(point);
+        _world.AddLight(sun);
+        _ev100 = 9;
+        float exposure = RenderView.ExposureOf(9);
+        AssertMatches(p => (Reference.Local(point, p, s_normal, albedo, 0, 0.5f) + Reference.Directional(sun, p, s_normal, albedo, 0, 0.5f)) * exposure, Frame());
+    }
+
+    [Fact]
+    public void Occlusion_DarkensIndirectLightAlone()
+    {
+        Vector3 albedo = new(0.7f, 0.7f, 0.7f);
+        Material material = Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.5f);
+        material.SetFloat("_Occlusion", 0.25f);
+        AddQuad(material);
+        LightDesc light = Point(new Double3(0, 0, 5), 10, 0.3f, new Float3(1, 1, 1));
+        LightDesc sun = new() { Type = LightType.Directional, Direction = new Float3(0.1f, 0.2f, 1), Intensity = 0.2f };
+        _world.AddLight(light);
+        _world.AddLight(sun);
+        AssertMatches(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f) + Reference.Directional(sun, p, s_normal, albedo, 0, 0.5f), Frame());
+    }
+
+    [Fact]
+    public void NormalizedSpotCones_FocusThePointLightsFlux_IntoTheCone()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.4f));
+        LightDesc spot = new() { Type = LightType.Spot, Position = new Double3(0, 0, 5), Direction = new Float3(0, 0, 1), Range = 10, Intensity = 2, InnerAngle = 20, OuterAngle = 30, Static = true };
+        LightHandle handle = _world.AddLight(spot);
+        Float4[] plain = Frame();
+
+        // A cone of half angle 30 holds 2 pi (1 - cos 30) of the sphere's 4 pi
+        spot.NormalizeSpotCone = true;
+        _world.SetLight(handle, spot);
+        Float4[] focused = Frame();
+        float gain = 2 / (1 - MathF.Cos(30 * MathF.PI / 180));
+        Assert.Contains(plain, p => p.X > 0.01f);
+        for (int i = 0; i < plain.Length; i++)
+            Assert.True(MathF.Abs(focused[i].X - plain[i].X * gain) <= 1e-4f + 0.01f * plain[i].X * gain, $"pixel {i}: {focused[i].X} against {plain[i].X * gain}");
+    }
+
+    [Fact]
     public void SpotLights_LightOnlyInsideTheirCone()
     {
         Vector3 albedo = new(0.9f, 0.9f, 0.9f);
@@ -590,7 +617,7 @@ public sealed class LightingTests : IDisposable
             Position = new Double3(0.5, 0, 5),
             Direction = new Float3(0, 0, 1),
             Range = 8,
-            Intensity = 0.2f,
+            Intensity = 1.6f,
             Color = new Float3(1, 1, 1),
             InnerAngle = 10,
             OuterAngle = 20,
@@ -618,17 +645,18 @@ public sealed class LightingTests : IDisposable
     }
 
     // Brute force cosine weighted solid angle of a shape, sampled over its area: sum of cos at the point times cos at the light over d^2
-    private static float Integrate(Func<float, float, Vector3> point, Vector3 lightNormal, float area, Vector3 n, int steps, bool twoSided = false)
+    private static float Integrate(Func<float, float, Vector3> point, Vector3 lightNormal, float area, Vector3 n, int steps, bool twoSided = false, Func<float, float, Vector3>? outward = null)
     {
         double sum = 0;
         for (int i = 0; i < steps; i++)
         {
             for (int j = 0; j < steps; j++)
             {
-                Vector3 q = point((i + 0.5f) / steps, (j + 0.5f) / steps);
+                (float u, float v) = ((i + 0.5f) / steps, (j + 0.5f) / steps);
+                Vector3 q = point(u, v);
                 float d2 = q.LengthSquared();
                 Vector3 l = q / MathF.Sqrt(d2);
-                float atLight = twoSided ? 1 : MathF.Max(Vector3.Dot(-l, lightNormal), 0);
+                float atLight = twoSided ? 1 : MathF.Max(Vector3.Dot(-l, outward?.Invoke(u, v) ?? lightNormal), 0);
                 sum += MathF.Max(Vector3.Dot(n, l), 0) * atLight / d2;
             }
         }
@@ -663,27 +691,27 @@ public sealed class LightingTests : IDisposable
             float formula = Reference.SphereIrradiance(Vector3.Dot(n, Vector3.Normalize(center)), radius * radius / (radius * radius + d2));
             Assert.True(MathF.Abs(formula - disk) <= 1e-3f + 0.01f * disk, $"disk {k}: {formula} against {disk}");
 
-            // A line of unit intensity spread along it, against summing points along it
+            // A thin tube, against summing its side as seen from the point, its caps left out
             Vector3 a = center - right * w, b = center + up * h;
-            double line = 0;
-            for (int i = 0; i < 20000; i++)
+            const float tubeRadius = 0.01f;
+            Vector3 axis = Vector3.Normalize(b - a);
+            Vector3 side = Vector3.Normalize(Vector3.Cross(axis, MathF.Abs(axis.Y) < 0.9f ? Vector3.UnitY : Vector3.UnitX)), other = Vector3.Cross(axis, side);
+            float tube = Integrate((u, v) =>
             {
-                Vector3 q = Vector3.Lerp(a, b, (i + 0.5f) / 20000);
-                float q2 = q.LengthSquared();
-                line += MathF.Max(Vector3.Dot(n, q), 0) / (q2 * MathF.Sqrt(q2));
-            }
-            line /= 20000;
-            Assert.True(MathF.Abs(Reference.LineIrradiance(a, b, n) - (float)line) <= 1e-3f + 0.01f * (float)line, $"line {k}: {Reference.LineIrradiance(a, b, n)} against {line}");
+                float angle = 2 * MathF.PI * v;
+                return Vector3.Lerp(a, b, u) + (side * MathF.Cos(angle) + other * MathF.Sin(angle)) * tubeRadius;
+            }, Vector3.Zero, 2 * MathF.PI * tubeRadius * (b - a).Length(), n, 1000, outward: (u, v) => side * MathF.Cos(2 * MathF.PI * v) + other * MathF.Sin(2 * MathF.PI * v));
+            float tubeFormula = Reference.TubeIrradiance(a, b, tubeRadius, n);
+            Assert.True(MathF.Abs(tubeFormula - tube) <= 1e-4f + 0.03f * tube, $"tube {k}: {tubeFormula} against {tube}");
         }
     }
 
     [Fact]
-    public void LineIrradiance_StaysExactOnItsOwnAxis()
+    public void TubeIrradiance_OfALongTubeFacingThePoint_IsPiTimesItsRadiusOverItsDistance()
     {
-        // Along the line's axis only its end on the normal's side lights: the integral of 1 / s^2 from 1 to 3, over its length
+        // An endless cylinder of radius R at distance d seen square on subtends a cosine weighted solid angle of pi R / d
         Vector3 n = new(0, 0, 1);
-        Assert.Equal(1f / 3, Reference.LineIrradiance(new Vector3(0, 0, 1), new Vector3(0, 0, 3), n), 1e-4f);
-        Assert.Equal(1f / 3, Reference.LineIrradiance(new Vector3(1e-4f, 0, 1), new Vector3(1e-4f, 0, 3), n), 1e-3f);
+        Assert.Equal(MathF.PI * 0.05f / 2, Reference.TubeIrradiance(new Vector3(-2000, 0, 2), new Vector3(2000, 0, 2), 0.05f, n), 1e-5f);
     }
 
     [Fact]
@@ -710,7 +738,7 @@ public sealed class LightingTests : IDisposable
         byte[] texels = [.. Enumerable.Repeat((byte)255, 8), .. Enumerable.Repeat((byte)0, 8)];
         Texture profile = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(2, 2, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
         _device.UpdateTexture<byte>(profile, texels, new TextureRegion(0, 0, 0, 2, 2, 1, 0, 0));
-        _textures.Add(profile);
+        _harness.Owned.Add(profile);
         spot.IesProfile = profile;
         spot.CookieSampler = SamplerDescription.Point;
         _world.SetLight(handle, spot);
@@ -748,7 +776,7 @@ public sealed class LightingTests : IDisposable
     {
         Vector3 albedo = new(0.7f, 0.6f, 0.5f);
         AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.35f, 0.2f));
-        LightDesc light = Shaped(type, new Float3(1, 0.85f, 0.7f), 0.08f);
+        LightDesc light = Shaped(type, new Float3(1, 0.85f, 0.7f), 0.64f);
         light.SourceRadius = sourceRadius;
         light.Size = new Float2(sizeX, sizeY);
         _world.AddLight(light);
@@ -764,8 +792,10 @@ public sealed class LightingTests : IDisposable
         Vector3 n = new(0, 0, -1);
         List<string> report = new();
         float worst = 0;
-        foreach (float roughness in new[] { 0.15f, 0.3f, 0.6f })
+        // The lobe widths as GGX alphas, roughness their square roots
+        foreach (float alpha in new[] { 0.15f, 0.3f, 0.6f })
         {
+            float roughness = MathF.Sqrt(alpha);
             foreach ((float tilt, float distance) in new[] { (0f, 3f), (0.4f, 3f), (0.8f, 3f), (0f, 1.5f), (0.6f, 1.5f) })
             {
                 // The light sits along the mirror direction of a view tilted off the normal, so the highlight is on it
@@ -787,7 +817,45 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
-    public void SmallAreaLights_LightLikePoints_AndFarOnesLikeThem()
+    public void AreaSpecular_FollowsTheShapeAcrossItsHighlight_IntoItsEdgesCornersAndGrazingViews()
+    {
+        Vector3 n = new(0, 1, 0);
+        Vector3 Facing(Vector3 center) => Vector3.Normalize(-center);
+        Vector3 Up(Vector3 axis) => Vector3.Normalize(Vector3.Cross(axis, Vector3.UnitX));
+        Vector3 ahead = new(0, 1.5f, 3), wall = new(0, 1, 4);
+        // A light, then the views a sweep takes from 0 to 1, the mirror direction crossing the light
+        var sweeps = new (string Name, LightType Type, Vector3 Center, Vector3 Axis, Vector3 Up, float Radius, Vector2 Size, Func<float, Vector3> View)[]
+        {
+            ("rect ahead", LightType.Rect, ahead, Facing(ahead), Up(Facing(ahead)), 0, new(1.2f, 0.6f), t => new(0, 0.1f + 1.4f * t, -1)),
+            ("rect corner", LightType.Rect, ahead, Facing(ahead), Up(Facing(ahead)), 0, new(1.2f, 0.6f), t => new(-0.8f + t, 0.5f + 0.4f * t, -1)),
+            ("wall grazing", LightType.Rect, wall, new(0, 0, -1), Vector3.UnitY, 0, new(2, 2), t => new(-0.9f + 1.8f * t, 0.15f, -1)),
+            ("disk ahead", LightType.Disk, ahead, Facing(ahead), Up(Facing(ahead)), 0, new(0.5f, 0), t => new(0.3f * t, 0.1f + 1.4f * t, -1)),
+            ("disk grazing", LightType.Disk, wall, new(0, 0, -1), Vector3.UnitY, 0, new(1, 0), t => new(-0.9f + 1.8f * t, 0.15f, -1)),
+            ("tube across", LightType.Tube, wall, Vector3.UnitX, Vector3.UnitY, 0.03f, new(2.5f, 0), t => new(-1.2f + 2.4f * t, 0.25f, -1)),
+        };
+
+        List<string> report = new();
+        bool failed = false;
+        foreach (float roughness in new[] { 0.2f, 0.4f, 0.6f })
+        {
+            foreach ((string name, LightType type, Vector3 center, Vector3 axis, Vector3 up, float radius, Vector2 size, Func<float, Vector3> view) in sweeps)
+            {
+                const int samples = 13;
+                var pairs = new (float Truth, float Estimate)[samples];
+                for (int s = 0; s < samples; s++)
+                    pairs[s] = Reference.Specular(type, center, axis, up, radius, size, Vector3.Normalize(view(s / (samples - 1f))), n, roughness);
+                float peak = pairs.Max(p => p.Truth);
+                float worst = pairs.Max(p => MathF.Abs(p.Estimate - p.Truth)) / peak;
+                float mean = pairs.Average(p => MathF.Abs(p.Estimate - p.Truth)) / peak;
+                failed |= worst > 0.25f || mean > 0.1f;
+                report.Add($"{name} roughness {roughness}: worst {worst:F3}, mean {mean:F3} of the peak");
+            }
+        }
+        Assert.False(failed, string.Join(Environment.NewLine, report));
+    }
+
+    [Fact]
+    public void SmallShapesInNits_LightLikePointsOfTheirLuminanceTimesTheirArea()
     {
         Vector3 albedo = new(0.7f, 0.7f, 0.7f);
         AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.5f));
@@ -795,19 +863,21 @@ public sealed class LightingTests : IDisposable
         LightHandle handle = _world.AddLight(point);
         Float4[] want = Frame();
 
-        // Facing the surface a rect and a disk emit like a point there, a sphere and a tube of no length are one
-        foreach ((LightType type, float radius, Float2 size, float tolerance) in new[]
+        // A small sphere in candela, and a rect, a disk and a tube of no length in nits, shine like a point of their
+        // intensity: a shape's luminance times the area it shows
+        foreach ((LightType type, float radius, Float2 size, float area, float tolerance) in new[]
         {
-            (LightType.Point, 0.01f, new Float2(0, 0), 0.01f),
-            (LightType.Tube, 0.01f, new Float2(0.001f, 0), 0.01f),
-            (LightType.Rect, 0f, new Float2(0.05f, 0.05f), 0.02f),
-            (LightType.Disk, 0f, new Float2(0.03f, 0), 0.02f),
+            (LightType.Point, 0.01f, new Float2(0, 0), 1f, 0.01f),
+            (LightType.Tube, 0.01f, new Float2(0.001f, 0), MathF.PI * 0.01f * 0.01f, 0.01f),
+            (LightType.Rect, 0f, new Float2(0.05f, 0.05f), 0.05f * 0.05f, 0.02f),
+            (LightType.Disk, 0f, new Float2(0.03f, 0), MathF.PI * 0.03f * 0.03f, 0.02f),
         })
         {
             LightDesc shaped = point;
             shaped.Type = type;
             shaped.SourceRadius = radius;
             shaped.Size = size;
+            shaped.Intensity = point.Intensity / area;
             shaped.Direction = new Float3(0, 0, 1);
             _world.SetLight(handle, shaped);
             Float4[] got = Frame();
@@ -904,28 +974,29 @@ public sealed class LightingTests : IDisposable
                     layout(location = 0) out vec3 vWorld;
                     void main()
                     {
-                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        vWorld = Graphite_ObjectToRelative(vertexPosition);
                         gl_Position = Graphite_RelativeToClip(vWorld);
                     }
                 }
                 Fragment
                 {
                     #define GRAPHITE_CUSTOM_BRDF
-                    #include "Graphite/Lighting.glsl"
+                    #include "Graphite/PBR/Closure.glsl"
                     #include "Graphite/Passes.glsl"
                     layout(location = 0) in vec3 vWorld;
                     layout(location = 0) out vec4 outColor;
 
-                    vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c)
+                    vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l)
                     {
-                        return vec3(c.diffuse, 0.0, 0.0) + vec3(0.0, 0.25, 0.0);
+                        return vec3(l.diffuse, 0.0, 0.0) + vec3(0.0, 0.25, 0.0);
                     }
 
                     void main()
                     {
-                        Graphite_Surface s = Graphite_MakeSurface(vWorld, vec3(0.0, 0.0, -1.0), vec3(0.0, 0.0, -1.0), GetWorldViewDir(vWorld), vec3(1.0), 0.0, 0.5, 1.0);
-                        outColor = vec4(Graphite_ShadeLights(s), 1.0);
-                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                        vec3 n = vec3(0.0, 0.0, -1.0);
+                        PBR_Closure c = PBR_Prepare(PBR_DefaultParams(n, vec3(1.0, 0.0, 0.0)), vWorld, Graphite_ViewDir(vWorld), n, 0.0);
+                        outColor = vec4(PBR_ShadeLights(c), 1.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
                     }
                 }
                 ENDGLSL
@@ -978,10 +1049,10 @@ public sealed class LightingTests : IDisposable
     public void Ambient_UniformAndHemisphere()
     {
         AddQuad(Surface(new Float3(0.5f, 1, 0.25f)));
-        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Uniform, AmbientColor = new Float4(0.2f, 0.4f, 0.8f, 1), Fog = default };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Ambient = AmbientMode.Uniform, AmbientColor = new Float4(0.2f, 0.4f, 0.8f, 1), Fog = default };
         AssertMatches(_ => new Vector3(0.1f, 0.4f, 0.2f), Frame());
 
-        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Hemisphere, AmbientSky = new Float4(1, 0, 0, 1), AmbientGround = new Float4(0, 0, 1, 1), Fog = default };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Ambient = AmbientMode.Hemisphere, AmbientSky = new Float4(1, 0, 0, 1), AmbientGround = new Float4(0, 0, 1, 1), Fog = default };
         AssertMatches(_ => new Vector3(0.25f, 0, 0.125f), Frame());
     }
 
@@ -991,8 +1062,9 @@ public sealed class LightingTests : IDisposable
         AddQuad(Surface(new Float3(1, 1, 1)));
         _world.Environment = new EnvironmentDesc
         {
+            CaptureEV100 = UnitEV100,
             AmbientColor = new Float4(0.5f, 0.5f, 0.5f, 1),
-            Fog = new FogDesc { Mode = FogMode.Linear, Color = new Float4(1, 0, 0, 1), Start = 0, End = 20 },
+            Fog = new FogDesc { Mode = FogMode.Linear, Color = new Float4(1, 0, 0, 1), Start = 0, End = 20, UseSky = false },
         };
 
         AssertMatches(p =>
@@ -1011,7 +1083,7 @@ public sealed class LightingTests : IDisposable
         LayerMask = layer,
     };
 
-    private void LitByAmbient() => _world.Environment = new EnvironmentDesc { AmbientColor = new Float4(1, 1, 1, 1), Fog = default };
+    private void LitByAmbient() => _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = new Float4(1, 1, 1, 1), Fog = default };
 
     [Fact]
     public void Decals_ColourTheSurfaceInsideTheirBox()
@@ -1073,7 +1145,7 @@ public sealed class LightingTests : IDisposable
                     layout(location = 0) out vec3 vWorld;
                     void main()
                     {
-                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        vWorld = Graphite_ObjectToRelative(vertexPosition);
                         gl_Position = Graphite_RelativeToClip(vWorld);
                     }
                 }
@@ -1093,11 +1165,11 @@ public sealed class LightingTests : IDisposable
 
                     void main()
                     {
-                        vec3 n = vec3(0.0, 0.0, -1.0), albedo = vec3(1.0);
-                        float roughness = 0.5, metallic = 0.0, ao = 1.0;
-                        Graphite_ApplyDecals(vWorld, n, albedo, n, roughness, metallic, ao);
+                        vec3 n = vec3(0.0, 0.0, -1.0), baseColor = vec3(1.0);
+                        float roughness = 0.5, metalness = 0.0, ao = 1.0;
+                        Graphite_ApplyDecals(vWorld, n, baseColor, n, roughness, metalness, ao);
                         outColor = vec4(extraColor, 1.0);
-                        Graphite_WriteGBuffer(n, roughness, metallic);
+                        Graphite_WriteGBuffer(n, vec3(0.0), roughness);
                     }
                 }
                 ENDGLSL
@@ -1139,7 +1211,7 @@ public sealed class LightingTests : IDisposable
                     layout(location = 0) out vec3 vWorld;
                     void main()
                     {
-                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        vWorld = Graphite_ObjectToRelative(vertexPosition);
                         gl_Position = Graphite_RelativeToClip(vWorld);
                     }
                 }
@@ -1161,7 +1233,7 @@ public sealed class LightingTests : IDisposable
                         while (Graphite_NextItem(it, array, index, center, radius))
                             sum += Graphite_SpatialVec4(array, index * uint(_Stride) + 1u).rgb;
                         outColor = vec4(sum, 1.0);
-                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
                     }
                 }
                 ENDGLSL
@@ -1247,7 +1319,7 @@ public sealed class LightingTests : IDisposable
     private const string CasterSource = "Shader \"Test/Caster\"\n{\n" + CasterPass + "\n}";
 
     // The lit surface casting too, so it can only shadow itself through acne
-    private static readonly string LitCasterSource = WithPass(Source.Replace("Test/Lit", "Test/LitCaster"), CasterPass);
+    private static readonly string LitCasterSource = WithPass(Source.Replace("Test/PBR", "Test/LitCaster"), CasterPass);
 
     private static string WithPass(string shader, string pass) => shader.Insert(shader.LastIndexOf('}'), pass + "\n");
 
@@ -1347,6 +1419,82 @@ public sealed class LightingTests : IDisposable
             Assert.True(MathF.Abs(near[i].X - far[i].X) < 2e-3f + 0.01f * near[i].X, $"pixel {i}: {near[i].X} near, {far[i].X} far");
     }
 
+    // Ambient light shown as red alone: the blue of the irradiance reaching it
+    private const string AmbientHookSource = """
+        Shader "Test/AmbientHook"
+        {
+            Surface "Lit"
+            {
+                Lighting
+                {
+                    GLSLPROGRAM
+                    vec3 Graphite_AmbientBRDF(PBR_Closure c, PBR_Indirect i)
+                    {
+                        return vec3(i.irradiance.b, 0.0, 0.0);
+                    }
+                    ENDGLSL
+                }
+            }
+        }
+        """;
+
+    [Fact]
+    public void SurfaceLighting_ShadesAmbientLightThroughTheAmbientHook()
+    {
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Ambient = AmbientMode.Uniform, AmbientColor = new Float4(0.2f, 0.4f, 0.8f, 1), Fog = default };
+        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(AmbientHookSource)));
+        material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
+        AddQuad(material);
+
+        Float4 centre = Frame()[Size / 2 * Size + Size / 2];
+        Assert.True(centre.X > 0.1f, $"red {centre.X}");
+        Assert.True(centre.Y < 1e-3f && centre.Z < 1e-3f, $"green {centre.Y}, blue {centre.Z}");
+    }
+
+    // Kept only where its absolute world x is below -1, the same in every pass
+    private const string WorldCutoutSource = """
+        Shader "Test/WorldCutout"
+        {
+            Surface "Unlit"
+            {
+                GLSLPROGRAM
+                void Surface(inout Unlit_Params p, Graphite_SurfaceData i)
+                {
+                    p.alpha = Graphite_RelativeToWorld(i.relativePos).x < -1.0 ? 1.0 : 0.0;
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    [Fact]
+    public void CutoutSurfaceFunctions_CutShadowsByTheirWorldPosition()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z)));
+        LightDesc sun = new()
+        {
+            Type = LightType.Directional,
+            Direction = Normalize(new Float3(0.5f, 0.25f, 1)),
+            Intensity = 0.1f,
+            Shadow = new ShadowDesc { Enabled = true },
+        };
+        _world.AddLight(sun);
+
+        Material cutout = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(WorldCutoutSource)));
+        cutout.Surface = new SurfaceSettings(SurfaceType.Cutout, Cull: SurfaceCull.Off);
+        _world.Add(new RenderableDesc
+        {
+            Mesh = _quad,
+            Transform = Double4x4.CreateTranslation(_origin + new Double3(-1, -1, 8)) * Double4x4.CreateScale(0.5),
+            Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly,
+        }, [cutout]);
+
+        // The caster's left half, x from -3 to -1, shadows x from -2 to 0 on the quad, moved along the light
+        AssertShadowed(p => Reference.Directional(sun, p, s_normal, albedo, 0, 0.5f),
+            p => MathF.Max(MathF.Abs(p.X + 1) - 1, MathF.Abs(p.Y + 0.5f) - 2), Frame(), 0.6f);
+    }
+
     private static Float3 Normalize(Float3 v) => v / MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
 
     [Fact]
@@ -1399,7 +1547,7 @@ public sealed class LightingTests : IDisposable
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, -9.9)) * Double4x4.CreateScale(new Double3(-5, 5, -5)), LayerMask = 1 }, [wall]);
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2, Flags = RenderableFlags.ReceiveShadows }, [Reflector()]);
         ReflectionProbeHandle probe = _world.AddReflectionProbe(RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40)));
-        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0, 0, -1), Intensity = 0.1f, Shadow = new ShadowDesc { Enabled = true } });
+        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0, 0, -1), Intensity = 0.8f, Shadow = new ShadowDesc { Enabled = true } });
         RenderableHandle caster = AddCaster(0, 0, 0, half: 30);
 
         Frame();
@@ -1419,14 +1567,14 @@ public sealed class LightingTests : IDisposable
         Position = new Double3(0, 0, 2),
         Direction = new Float3(0, 0, 1),
         Range = 20,
-        Intensity = 0.2f,
+        Intensity = 1.6f,
         InnerAngle = 35,
         OuterAngle = 40,
         Static = true,
         Shadow = new ShadowDesc { Enabled = true },
     };
 
-    private FramePipeline Pipeline => _renderer.Frame;
+    private FrameStats Stats => _renderer.LastFrameStats;
 
     [Fact]
     public void CachedShadows_DrawAgainOnlyWhenTheirLightOrACasterNearItChanges()
@@ -1437,25 +1585,25 @@ public sealed class LightingTests : IDisposable
         LightHandle handle = _world.AddLight(light);
         RenderableHandle caster = AddCaster(1, 0.5, 6);
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
 
         // A caster far outside the light's reach changes nothing, the one in it draws the light again
         AddCaster(200, 0, 6);
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
         _world.SetTransform(caster, Double4x4.CreateTranslation(new Double3(-1, -0.5, 6)) * Double4x4.CreateScale(0.25));
         Float4[] pixels = Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, -2, -1, 2), pixels, 0.6f);
 
         _world.SetLight(handle, light with { Intensity = 0.3f });
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
         _world.SetLight(handle, light with { Direction = Normalize(new Float3(0.05f, 0, 1)) });
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1486,15 +1634,15 @@ public sealed class LightingTests : IDisposable
         Float4x4 identity = Float4x4.Identity;
         _world.SetBones(caster, [identity]);
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
         _world.SetBones(caster, [identity]);
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
 
         // Eight object units left and four down at a quarter scale puts the caster where the moved caster test does
         _world.SetBones(caster, [new Float4x4(new Float4(1, 0, 0, 0), new Float4(0, 1, 0, 0), new Float4(0, 0, 1, 0), new Float4(-8, -4, 0, 1))]);
         Float4[] pixels = Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, -2, -1, 2), pixels, 0.6f);
     }
 
@@ -1508,7 +1656,7 @@ public sealed class LightingTests : IDisposable
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly }, [animated]);
         Frame();
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1522,19 +1670,19 @@ public sealed class LightingTests : IDisposable
         RenderableHandle moving = AddCaster(-1.5, -1.5, 6, half: 0.5);
 
         Float4[] pixels = Frame();
-        Assert.Equal(2, Pipeline.ShadowViewsDrawn);
-        Assert.Equal(1, Pipeline.ShadowCopiesMade);
+        Assert.Equal(2, Stats.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowCopiesMade);
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => MathF.Min(SquareEdge(p, 2, 1, 2), SquareEdge(p, -3, -3, 1)), pixels, 0.6f);
 
         // From 2 through 6 to 10 the square doubles, the moving one's shadow goes from -3, -3 to -3, 3
         _world.SetTransform(moving, Double4x4.CreateTranslation(new Double3(-1.5, 1.5, 6)) * Double4x4.CreateScale(0.5 / 4));
         pixels = Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
-        Assert.Equal(1, Pipeline.ShadowCopiesMade);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowCopiesMade);
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => MathF.Min(SquareEdge(p, 2, 1, 2), SquareEdge(p, -3, 3, 1)), pixels, 0.6f);
 
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1546,7 +1694,7 @@ public sealed class LightingTests : IDisposable
         _world.AddLight(light);
         AddCaster(1, 0.5, 6);
         Float4[] pixels = Frame();
-        Assert.Equal(6, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(6, Stats.ShadowViewsDrawn);
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, 2, 1, 2), pixels, 0.6f);
     }
 
@@ -1557,11 +1705,9 @@ public sealed class LightingTests : IDisposable
             => sink.AddIndirect(mesh, 0, material, new DrawItem { Transform = Double4x4.CreateTranslation(new Double3(0, 0, 30)) }, "Test.IndirectCount", 4);
     }
 
-    private sealed class IndirectCount : FrameFeature
+    private sealed class IndirectCount() : FrameFeature(FrameSlot.BeforeViews)
     {
         private BufferHandle _count;
-
-        public override FrameSlot Slot => FrameSlot.BeforeViews;
 
         public override void Setup(FrameBuilder builder)
         {
@@ -1609,7 +1755,7 @@ public sealed class LightingTests : IDisposable
         AddSurfaceCaster(Surface(new Float3(0, 1, 0)), -1.5, -1.5, 6);
         AddSurfaceCaster(Surface(new Float3(0, 0, 1)), -1.5, 1.5, 6);
         Float4[] pixels = Frame();
-        Assert.Equal(1, Pipeline.ShadowCallsDrawn);
+        Assert.Equal(1, Stats.ShadowDrawCalls);
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f),
             p => MathF.Min(SquareEdge(p, 2, 1, 2), MathF.Min(SquareEdge(p, -3, -3, 2), SquareEdge(p, -3, 3, 2))), pixels, 0.6f);
     }
@@ -1622,7 +1768,7 @@ public sealed class LightingTests : IDisposable
         LightDesc light = ShadowSpot();
         _world.AddLight(light);
 
-        Material off = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/Lit", "Test/NoShadows").Replace("\"LightMode\" = \"Forward\"", "\"LightMode\" = \"Forward\" \"Shadows\" = \"Off\""))));
+        Material off = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/PBR", "Test/NoShadows").Replace("\"LightMode\" = \"Forward\"", "\"LightMode\" = \"Forward\" \"Shadows\" = \"Off\""))));
         Material uncast = Surface(new Float3(1, 1, 1));
         uncast.CastShadows = false;
         AddSurfaceCaster(off, 1, 0.5, 6);
@@ -1637,7 +1783,7 @@ public sealed class LightingTests : IDisposable
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, QuadDepth)), Flags = RenderableFlags.ReceiveShadows }, [Surface(new Float3(albedo.X, albedo.Y, albedo.Z))]);
         _world.AddLight(ShadowSpot());
         Material Culled(string cull)
-            => _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/Lit", "Test/Cull" + cull).Replace("Cull Off", "Cull " + cull))));
+            => _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/PBR", "Test/Cull" + cull).Replace("Cull Off", "Cull " + cull))));
 
         // The test quad winds counter clockwise toward the light, its back face to a clockwise front, so front culling casts and
         // back does not, and mirrored it culls the same faces
@@ -1700,9 +1846,9 @@ public sealed class LightingTests : IDisposable
         AddCaster(-1.5, -1.5, 6, half: 0.5);
         Frame();
         Frame();
-        Assert.Equal(2, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(2, Stats.ShadowViewsDrawn);
         Frame();
-        Assert.Equal(2, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(2, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1713,14 +1859,14 @@ public sealed class LightingTests : IDisposable
         AddCaster(1, 0.5, 6, isStatic: true);
         Frame();
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
 
         RenderableHandle moving = AddCaster(-1.5, -1.5, 6, half: 0.5);
         Frame();
         _world.SetTransform(moving, Double4x4.CreateTranslation(new Double3(-1.5, 1.5, 6)) * Double4x4.CreateScale(0.5 / 4));
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
-        Assert.Equal(1, Pipeline.ShadowCopiesMade);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowCopiesMade);
     }
 
     [Fact]
@@ -1736,7 +1882,7 @@ public sealed class LightingTests : IDisposable
         Frame();
         Frame();
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1751,7 +1897,7 @@ public sealed class LightingTests : IDisposable
         Frame();
         _origin = at;
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1862,7 +2008,7 @@ public sealed class LightingTests : IDisposable
         WorldShadows shadows = _renderer.ShadowsOf(_world)!;
         Assert.All(shadows.Lights.Values, light => Assert.Equal(128, light.Size));
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1876,11 +2022,11 @@ public sealed class LightingTests : IDisposable
         _world.Shadows.MaxResizesPerFrame = 1;
         _world.Shadows.TexelsPerPixel = 8;
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1916,7 +2062,7 @@ public sealed class LightingTests : IDisposable
         AddCaster(1, 0.5, 6, isStatic: true);
         AddCaster(-1.5, -1.5, 6, half: 0.5);
         Frame();
-        Assert.Equal(1, Pipeline.ShadowCopiesMade);
+        Assert.Equal(1, Stats.ShadowCopiesMade);
 
         LightHandle added = _world.AddLight(ShadowSpot() with { Position = new Double3(0.5, 0, 2), Shadow = new ShadowDesc { Enabled = true, Resolution = 128 } });
         Frame();
@@ -1947,8 +2093,8 @@ public sealed class LightingTests : IDisposable
         AddReceiver(albedo);
         LightDesc light = ShadowSpot();
         _world.AddLight(light);
-        Material cutout = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/Lit", "Test/Cutout").Replace("vec3 n = normalize(vNormal);", "if (vWorld.x > 100.0) discard;\n                        vec3 n = normalize(vNormal);"))));
-        Material faded = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/Lit", "Test/Faded").Replace("Cull Off", "Cull Off\n                ZWrite Off"))));
+        Material cutout = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/PBR", "Test/Cutout").Replace("\"LightMode\" = \"Forward\"", "\"LightMode\" = \"Forward\" \"Discards\" = \"On\"").Replace("vec3 n = normalize(vNormal);", "if (vWorld.x > 100.0) discard;\n                        vec3 n = normalize(vNormal);"))));
+        Material faded = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/PBR", "Test/Faded").Replace("Cull Off", "Cull Off\n                ZWrite Off"))));
         AddSurfaceCaster(cutout, 1, 0.5, 6);
         AddSurfaceCaster(faded, -1.5, -1.5, 6);
         AssertMatches(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), Frame());
@@ -1964,7 +2110,7 @@ public sealed class LightingTests : IDisposable
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly | RenderableFlags.Static }, [uncast]);
         AddCaster(-1.5, -1.5, 6, half: 0.5);
         Frame();
-        Assert.Equal(0, Pipeline.ShadowCopiesMade);
+        Assert.Equal(0, Stats.ShadowCopiesMade);
     }
 
     [Fact]
@@ -1975,9 +2121,9 @@ public sealed class LightingTests : IDisposable
         AddCaster(1, 0.5, 6);
         Frame();
         Frame();
-        _world.Globals.SetKeyword("UNUSED_BY_CASTERS", "On");
+        _world.Globals.Set(GlobalAxis.Toggle("UNUSED_BY_CASTERS"), true);
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1991,11 +2137,11 @@ public sealed class LightingTests : IDisposable
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly }, [caster]);
         Frame();
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
 
-        _world.Globals.SetKeyword("CASTER_WIND", "On");
+        _world.Globals.Set(GlobalAxis.Toggle("CASTER_WIND"), true);
         Frame();
-        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -2006,11 +2152,11 @@ public sealed class LightingTests : IDisposable
         AddCaster(-1.5, -1.5, 6, half: 0.5);
         Frame();
         Frame();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
 
         _world.Providers.Add(new ShadowItem(_quad, Surface(new Float3(1, 1, 1))));
         Frame();
-        Assert.True(Pipeline.ShadowViewsDrawn > 0);
+        Assert.True(Stats.ShadowViewsDrawn > 0);
     }
 
     [Fact]
@@ -2123,8 +2269,9 @@ public sealed class LightingTests : IDisposable
     // A frame whose errors are expected, cleared after
     private void FrameExpectingErrors()
     {
-        ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
+        RenderView view = _harness.BareView(1);
+        view.EV100 = UnitEV100;
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         _errors.Clear();
@@ -2141,7 +2288,7 @@ public sealed class LightingTests : IDisposable
         FrameExpectingErrors();
         FrameExpectingErrors();
         FrameExpectingErrors();
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -2163,7 +2310,7 @@ public sealed class LightingTests : IDisposable
         AddReceiver(albedo);
         LightDesc light = ShadowSpot();
         _world.AddLight(light);
-        Material commented = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/Lit", "Test/Commented").Replace("vec3 n = normalize(vNormal);", "// no discard here\n                        vec3 n = normalize(vNormal);"))));
+        Material commented = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/PBR", "Test/Commented").Replace("vec3 n = normalize(vNormal);", "// no discard here\n                        vec3 n = normalize(vNormal);"))));
         AddSurfaceCaster(commented, 1, 0.5, 6);
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, 2, 1, 2), Frame(), 0.6f);
     }
@@ -2376,18 +2523,10 @@ public sealed class LightingTests : IDisposable
         (new(-1, 0, 0), new(0, 1, 0), new(0, 0, -1)),
     ];
 
-    private Float4[] ReadLayer(Texture texture, uint layer)
-    {
-        _device.Record(cmd => cmd.CopyTextureToBuffer(texture, _readback, 0, TextureRegion.Whole(texture, 0, layer))).Wait();
-        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
-        _device.Unmap(_readback);
-        return pixels;
-    }
-
     [Fact]
     public void LayeredViews_DrawEachLayerExactlyLikeAViewOfItsOwn()
     {
-        _world.Environment = new EnvironmentDesc { AmbientColor = new Float4(0.3f, 0.3f, 0.3f, 1), Fog = default };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = new Float4(0.3f, 0.3f, 0.3f, 1), Fog = default };
         _origin = new Double3(40_000_000.5, -12.25, 9_000_000);
         for (int f = 0; f < 6; f++)
         {
@@ -2403,21 +2542,26 @@ public sealed class LightingTests : IDisposable
 
         using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 6, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 6 });
-        ViewDesc cube = new() { World = _world, ViewId = 7, Target = layered, LayerCount = 6 };
+        RenderView cube = _harness.BareView(7);
+        cube.EV100 = UnitEV100;
+        cube.Target = layered;
+        ViewLayer[] cameraLayers = new ViewLayer[6];
         for (int f = 0; f < 6; f++)
-            cube.Layers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin + new Double3(0.03 * f, -0.02 * f, 0.01 * f) };
+            cameraLayers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin + new Double3(0.03 * f, -0.02 * f, 0.01 * f) };
+        cube.Camera = new ViewCamera(cameraLayers);
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { cube } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
 
         for (int f = 0; f < 6; f++)
         {
-            Float4[] got = ReadLayer(layers, (uint)f);
-            ViewDesc mono = new() { World = _world, ViewId = 8, Target = _framebuffer };
-            mono.Layers[0] = cube.Layers[f];
+            Float4[] got = _harness.ReadLayer(layers, (uint)f);
+            RenderView mono = _harness.BareView(8);
+            mono.EV100 = UnitEV100;
+            mono.Camera = new ViewCamera(cube.Camera.Layers[f]);
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { mono } });
             _device.WaitForIdle();
-            Float4[] want = ReadLayer(_target, 0);
+            Float4[] want = _harness.ReadTarget();
 
             Assert.True(want.Any(p => p.X > 0.01f), $"layer {f} sees nothing");
             for (int i = 0; i < want.Length; i++)
@@ -2446,15 +2590,16 @@ public sealed class LightingTests : IDisposable
     [Fact]
     public void Sky_FillsWhatNothingCovers_LookingAlongEachPixel()
     {
-        _world.Environment = new EnvironmentDesc { AmbientColor = new Float4(1, 1, 1, 1), Fog = default, Sky = SkyMaterial(new Float3(1, 0.8f, 0.6f), 1) };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = new Float4(1, 1, 1, 1), Fog = default, Sky = SkyMaterial(new Float3(1, 0.8f, 0.6f), 1) };
         AddQuad(Surface(new Float3(0.2f, 0.3f, 0.4f)));
 
-        ViewDesc view = new() { World = _world, ViewId = 10, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin };
+        RenderView view = _harness.BareView(10);
+        view.EV100 = UnitEV100;
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
-        Float4[] pixels = ReadLayer(_target, 0);
+        Float4[] pixels = _harness.ReadTarget();
 
         for (int i = 0; i < pixels.Length; i++)
         {
@@ -2469,31 +2614,38 @@ public sealed class LightingTests : IDisposable
     [Fact]
     public void ViewsLeavingTheSkyOut_ShowTheirClearColour()
     {
-        _world.Environment = new EnvironmentDesc { Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 0) };
-        ViewDesc view = new() { World = _world, ViewId = 12, Target = _framebuffer, Sky = false, ClearColor = new Float4(0.25f, 0.5f, 0.75f, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 0) };
+        RenderView view = _harness.BareView(12);
+        view.EV100 = UnitEV100;
+        view.Sky = false;
+        view.ClearColor = new Float4(0.25f, 0.5f, 0.75f, 1);
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
-        Assert.All(ReadLayer(_target, 0), p => Assert.True(Vector3.Distance(new Vector3(p.X, p.Y, p.Z), new Vector3(0.25f, 0.5f, 0.75f)) < 1e-3f));
+        Assert.All(_harness.ReadTarget(), p => Assert.True(Vector3.Distance(new Vector3(p.X, p.Y, p.Z), new Vector3(0.25f, 0.5f, 0.75f)) < 1e-3f));
     }
 
     [Fact]
     public void SkyProbe_HoldsTheSkyInEveryDirection()
     {
-        _world.Environment = new EnvironmentDesc { Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 1) };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 1) };
         using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 6, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 6 });
-        ViewDesc cube = new() { World = _world, ViewId = 11, Target = layered, LayerCount = 6 };
+        RenderView cube = _harness.BareView(11);
+        cube.EV100 = UnitEV100;
+        cube.Target = layered;
+        ViewLayer[] cameraLayers = new ViewLayer[6];
         for (int f = 0; f < 6; f++)
-            cube.Layers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+            cameraLayers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+        cube.Camera = new ViewCamera(cameraLayers);
 
         Float4[][] Capture()
         {
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { cube } });
             _device.WaitForIdle();
             Assert.Empty(_errors);
-            return Enumerable.Range(0, 6).Select(f => ReadLayer(layers, (uint)f)).ToArray();
+            return Enumerable.Range(0, 6).Select(f => _harness.ReadLayer(layers, (uint)f)).ToArray();
         }
 
         Float4[][] sky = Capture();
@@ -2525,6 +2677,7 @@ public sealed class LightingTests : IDisposable
         AddQuad(Surface(new Float3(1, 1, 1)));
         _world.Environment = new EnvironmentDesc
         {
+            CaptureEV100 = UnitEV100,
             AmbientColor = new Float4(0.5f, 0.5f, 0.5f, 1),
             Fog = new FogDesc { Mode = FogMode.Linear, Color = new Float4(0, 1, 0, 1), Start = 0, End = 20, UseSky = true },
             Sky = sky,
@@ -2547,7 +2700,7 @@ public sealed class LightingTests : IDisposable
     private static readonly Vector3 s_skyColor = new(0.1f, 0.2f, 0.4f);
 
     // A room of single sided unlit walls, one colour per side, facing in on a centre; the camera's reflector sits on layer 2
-    private void Room(Double3 center, double half, Func<int, Float3> color)
+    private void Room(Double3 center, double half, Func<int, Float3> color, bool standardUnlit = false)
     {
         Shader unlit = _renderer.LoadShader(ShaderParser.Parse(UnlitSource));
         Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
@@ -2561,13 +2714,13 @@ public sealed class LightingTests : IDisposable
         {
             (Float3 right, Float3 up, Float3 forward) = s_faces[f];
             Double4x4 basis = new(new Double4(right.X, right.Y, right.Z, 0), new Double4(up.X, up.Y, up.Z, 0), new Double4(forward.X, forward.Y, forward.Z, 0), new Double4(0, 0, 0, 1));
-            Material wall = _renderer.CreateMaterial(unlit);
+            Material wall = _renderer.CreateMaterial(standardUnlit ? _renderer.Standard.Unlit : unlit);
             Float3 c = color(f);
-            wall.SetColor("_Color", new Float4(c.X, c.Y, c.Z, 1));
+            wall.SetColor(standardUnlit ? "base_color" : "_Color", new Float4(c.X, c.Y, c.Z, 1));
             Double3 at = _origin + center + new Double3(forward.X, forward.Y, forward.Z) * half;
             _world.Add(new RenderableDesc { Mesh = facing, Transform = Double4x4.CreateTranslation(at) * basis * Double4x4.CreateScale(half / 4), LayerMask = 1, Flags = RenderableFlags.ReceiveShadows }, [wall]);
         }
-        _world.Environment = new EnvironmentDesc { Fog = default, AmbientColor = default, Sky = SkyMaterial(new Float3(s_skyColor.X, s_skyColor.Y, s_skyColor.Z), 0) };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, AmbientColor = default, Sky = SkyMaterial(new Float3(s_skyColor.X, s_skyColor.Y, s_skyColor.Z), 0) };
     }
 
     private Material Reflector(float roughness = 0)
@@ -2597,6 +2750,48 @@ public sealed class LightingTests : IDisposable
 
         Frame();
         AssertMatches(p => p.X < 0 ? new Vector3(0.8f, 0.5f, 0.2f) : s_skyColor, Frame());
+    }
+
+    [Fact]
+    public void ProbesAndTheSky_CapturedAtAnyExposure_LightAlike_RescaledToTheView()
+    {
+        Room(new Double3(0, 0, 10), 20, _ => new Float3(800, 500, 200));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        _world.AddReflectionProbe(RoomProbe(new Double3(-10, 0, 10), new Float3(20, 40, 40)));
+        _world.Environment.Sky!.SetColor("_Tint", new Float4(300, 600, 900, 1));
+        _ev100 = 8;
+        float exposure = RenderView.ExposureOf(8);
+        Vector3 Expected(Vector3 p) => (p.X < 0 ? new Vector3(800, 500, 200) : new Vector3(300, 600, 900)) * exposure;
+
+        foreach (float captureEV100 in new[] { UnitEV100, 6f, 14f })
+        {
+            _world.Environment.CaptureEV100 = captureEV100;
+            Frame();
+            Frame();
+            AssertMatches(Expected, Frame());
+        }
+    }
+
+    // A Graphite/Unlit wall reflects in a probe as it shows directly, whatever exposure the probe is captured at
+    [Fact]
+    public void UnlitSurfaces_ReflectAsTheyShowDirectly_AtAnyCaptureExposure()
+    {
+        Room(new Double3(0, 0, 10), 20, _ => new Float3(0.8f, 0.5f, 0.2f), standardUnlit: true);
+        _world.AddReflectionProbe(RoomProbe(new Double3(-10, 0, 10), new Float3(20, 40, 40)));
+        _ev100 = 8;
+        Frame();
+        Float4 wall = Frame()[Size * Size / 2 + Size / 2];
+        Vector3 direct = new(wall.X, wall.Y, wall.Z);
+        Vector3 sky = s_skyColor * RenderView.ExposureOf(8);
+
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        foreach (float captureEV100 in new[] { UnitEV100, 6f, 14f })
+        {
+            _world.Environment.CaptureEV100 = captureEV100;
+            Frame();
+            Frame();
+            AssertMatches(p => p.X < 0 ? direct : sky, Frame());
+        }
     }
 
     [Fact]
@@ -2712,12 +2907,14 @@ public sealed class LightingTests : IDisposable
         Assert.Equal(6, baked.Mips);
         Assert.Equal(128 * 128 * 8, baked.Faces[0].Length);
         Assert.Equal(4 * 4 * 8, baked.Faces[6 * 6 - 1].Length);
+        Assert.Equal(RenderView.ExposureOf(UnitEV100), baked.Exposure);
 
         foreach (RenderableHandle wall in Enumerable.Range(0, 6).Select(i => new RenderableHandle(i, 1)))
             _world.Remove(wall);
         desc.Mode = ReflectionProbeMode.Baked;
         desc.Cubemap = _renderer.CreateReflectionCubemap(baked);
-        _textures.Add(desc.Cubemap);
+        desc.CubemapExposure = baked.Exposure;
+        _harness.Owned.Add(desc.Cubemap);
         _world.SetReflectionProbe(probe, desc);
         Frame();
         Float4[] shown = Frame();
@@ -2748,12 +2945,13 @@ public sealed class LightingTests : IDisposable
 
     private Float4[] PerspectiveFrame(int viewId)
     {
-        ViewDesc view = new() { World = _world, ViewId = viewId, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin };
+        RenderView view = _harness.BareView(viewId);
+        view.EV100 = UnitEV100;
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
-        return ReadLayer(_target, 0);
+        return _harness.ReadTarget();
     }
 
     private static void AssertPixels(Func<int, Vector3> expected, Float4[] pixels, float tolerance)
@@ -2767,18 +2965,43 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
-    public void ProceduralSky_IsProwlsSky_LitByTheWorldsSun()
+    public void ProceduralSky_IsProwlsSky_InNitsFromTheLuxOfTheWorldsSun()
     {
         Vector3 sun = Vector3.Normalize(new Vector3(0.3f, 0.25f, 1));
-        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(-sun.X, -sun.Y, -sun.Z), Intensity = 1 });
-        _world.Environment = new EnvironmentDesc { Fog = default, Sky = _renderer.CreateMaterial(_renderer.Skies.Procedural) };
+        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(-sun.X, -sun.Y, -sun.Z), Intensity = 50 });
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = _renderer.CreateMaterial(_renderer.Skies.Procedural) };
 
         AssertPixels(i =>
         {
             (float x, float y) = PixelClip(i);
-            return Reference.ProceduralSky(Vector3.Normalize(new Vector3(x, y, 1)), sun);
+            return Reference.ProceduralSky(Vector3.Normalize(new Vector3(x, y, 1)), sun, 50);
         }, PerspectiveFrame(13), 4e-3f);
     }
+
+    [Fact]
+    public void ProceduralSky_LeavesItsDiskOutOfCaptures_WhileADirectionalLightIsTheSun()
+    {
+        // The default sun's disk lights the sky's harmonics, a directional light standing in its place leaves it out
+        Material sky = _renderer.CreateMaterial(_renderer.Skies.Procedural);
+        sky.SetFloat("_SunSize", 10);
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = 12, Ambient = AmbientMode.Sky, Fog = default, Sky = sky };
+        Float3 up = new(0, 1, 0);
+        for (int frame = 0; frame < 3; frame++)
+            Frame();
+        float withDisk = _world.SkyAmbient.Evaluate(up).Y;
+
+        Float3 toSun = Float3.Normalize(new Float3(-0.5f, 0.7f, -0.5f));
+        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = -toSun, Intensity = DefaultSunLux });
+        for (int frame = 0; frame < 3; frame++)
+            Frame();
+        float withoutDisk = _world.SkyAmbient.Evaluate(up).Y;
+
+        // The disk shines the sun's illuminance, irradiance over pi of lux times its cosine to up
+        float disk = DefaultSunLux * toSun.Y / MathF.PI;
+        Assert.InRange(withDisk - withoutDisk, disk * 0.8f, disk * 1.2f);
+    }
+
+    private const float DefaultSunLux = 100000;
 
     [Fact]
     public void GradientSky_BlendsItsColours_AndOrthographicViewsSeeItThroughAPerspective()
@@ -2787,7 +3010,7 @@ public sealed class LightingTests : IDisposable
         gradient.SetColor("_TopColor", new Float4(0.1f, 0.3f, 0.9f, 1));
         gradient.SetColor("_BottomColor", new Float4(0.9f, 0.6f, 0.2f, 1));
         gradient.SetFloat("_Exponent", 2);
-        _world.Environment = new EnvironmentDesc { Fog = default, Sky = gradient };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = gradient };
 
         Vector3 Gradient(Vector3 dir)
         {
@@ -2816,51 +3039,55 @@ public sealed class LightingTests : IDisposable
         Material cubemap = _renderer.CreateMaterial(_renderer.Skies.SixSided);
         for (int f = 0; f < 6; f++)
             cubemap.SetTexture(names[f], Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(colors[f].X, colors[f].Y, colors[f].Z, 1)]));
-        cubemap.SetFloat("_Exposure", 0.5f);
-        _world.Environment = new EnvironmentDesc { Fog = default, Sky = cubemap };
+        cubemap.SetFloat("intensity", 0.5f);
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = cubemap };
 
         using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 6, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 6 });
-        ViewDesc cube = new() { World = _world, ViewId = 15, Target = layered, LayerCount = 6 };
+        RenderView cube = _harness.BareView(15);
+        cube.EV100 = UnitEV100;
+        cube.Target = layered;
+        ViewLayer[] cameraLayers = new ViewLayer[6];
         for (int f = 0; f < 6; f++)
-            cube.Layers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+            cameraLayers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+        cube.Camera = new ViewCamera(cameraLayers);
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { cube } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
 
         for (int f = 0; f < 6; f++)
-            AssertPixels(_ => new Vector3(colors[f].X, colors[f].Y, colors[f].Z) * 0.5f, ReadLayer(layers, (uint)f), 1e-3f);
+            AssertPixels(_ => new Vector3(colors[f].X, colors[f].Y, colors[f].Z) * 0.5f, _harness.ReadLayer(layers, (uint)f), 1e-3f);
     }
 
     [Fact]
     public void SkyAmbient_LightsWithTheSkysColour()
     {
         AddQuad(Surface(new Float3(0.5f, 0.8f, 1)));
-        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Sky, AmbientIntensity = 1, Fog = default, Sky = SkyMaterial(new Float3(0.4f, 0.3f, 0.2f), 0) };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Ambient = AmbientMode.Sky, AmbientIntensity = 1, Fog = default, Sky = SkyMaterial(new Float3(0.4f, 0.3f, 0.2f), 0) };
         Frame();
         AssertMatches(_ => new Vector3(0.2f, 0.24f, 0.2f), Frame());
     }
 
     [Fact]
-    public void ProceduralSky_TakesItsSunExposureTintAndGround()
+    public void ProceduralSky_TakesItsSunIntensityTintAndGround()
     {
         Vector3 sun = Vector3.Normalize(new Vector3(0.3f, 0.25f, 1));
-        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(-sun.X, -sun.Y, -sun.Z), Intensity = 1 });
+        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(-sun.X, -sun.Y, -sun.Z), Intensity = 50 });
         Material sky = _renderer.CreateMaterial(_renderer.Skies.Procedural);
         sky.SetFloat("_SunSize", 3);
         sky.SetFloat("_SunGlow", 0.5f);
-        sky.SetFloat("_Exposure", 0.7f);
+        sky.SetFloat("intensity", 0.7f);
         sky.SetColor("_Tint", new Float4(1, 0.8f, 0.6f, 1));
         sky.SetColor("_GroundColor", new Float4(0.1f, 0.3f, 0.2f, 1));
-        _world.Environment = new EnvironmentDesc { Fog = default, Sky = sky };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = sky };
 
         AssertPixels(i =>
         {
             (float x, float y) = PixelClip(i);
-            return Reference.ProceduralSky(Vector3.Normalize(new Vector3(x, y, 1)), sun, 3, 0.5f, 0.7f, new Vector3(1, 0.8f, 0.6f), new Vector3(0.1f, 0.3f, 0.2f));
+            return Reference.ProceduralSky(Vector3.Normalize(new Vector3(x, y, 1)), sun, 50, 3, 0.5f, 0.7f, new Vector3(1, 0.8f, 0.6f), new Vector3(0.1f, 0.3f, 0.2f));
         }, PerspectiveFrame(16), 4e-3f);
 
-        sky.SetFloat("_Exposure", 0);
+        sky.SetFloat("intensity", 0);
         AssertPixels(_ => Vector3.Zero, PerspectiveFrame(16), 1e-4f);
     }
 
@@ -2869,13 +3096,17 @@ public sealed class LightingTests : IDisposable
     {
         using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 6, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 6 });
-        ViewDesc cube = new() { World = _world, ViewId = viewId, Target = layered, LayerCount = 6 };
+        RenderView cube = _harness.BareView(viewId);
+        cube.EV100 = UnitEV100;
+        cube.Target = layered;
+        ViewLayer[] cameraLayers = new ViewLayer[6];
         for (int f = 0; f < 6; f++)
-            cube.Layers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+            cameraLayers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+        cube.Camera = new ViewCamera(cameraLayers);
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { cube } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
-        return Enumerable.Range(0, 6).Select(f => ReadLayer(layers, (uint)f)).ToArray();
+        return Enumerable.Range(0, 6).Select(f => _harness.ReadLayer(layers, (uint)f)).ToArray();
     }
 
     [Fact]
@@ -2885,11 +3116,11 @@ public sealed class LightingTests : IDisposable
         Texture texture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled) with { Type = TextureType.TextureCube });
         for (uint f = 0; f < 6; f++)
             _device.UpdateTexture<Float4>(texture, [colors[f]], new TextureRegion(0, 0, 0, 1, 1, 1, 0, f));
-        _textures.Add(texture);
+        _harness.Owned.Add(texture);
         Material sky = _renderer.CreateMaterial(_renderer.Skies.Cubemap);
         sky.SetTexture("_Cubemap", texture, SamplerDescription.Point);
-        sky.SetFloat("_Exposure", 0.5f);
-        _world.Environment = new EnvironmentDesc { Fog = default, Sky = sky };
+        sky.SetFloat("intensity", 0.5f);
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = sky };
 
         Float4[][] faces = CubeFrame(17);
         for (int f = 0; f < 6; f++)
@@ -2909,8 +3140,9 @@ public sealed class LightingTests : IDisposable
         Float4[] columns = [new(1, 0, 0, 1), new(0, 1, 0, 1), new(0, 0, 1, 1), new(1, 1, 0, 1)];
         Material sky = _renderer.CreateMaterial(_renderer.Skies.Panorama);
         sky.SetTexture("_Panorama", Lightmap<Float4>(4, PixelFormat.R32_G32_B32_A32_Float, columns), SamplerDescription.Point);
+        sky.SetFloat("intensity", 1);
         sky.SetColor("_Tint", new Float4(1, 0.5f, 1, 1));
-        _world.Environment = new EnvironmentDesc { Fog = default, Sky = sky };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = sky };
 
         Vector3 Column(int c) => new(columns[c].X, columns[c].Y * 0.5f, columns[c].Z);
         AssertPixels(i => PixelClip(i).X < 0 ? Column(1) : Column(2), PerspectiveFrame(18), 1e-3f);
@@ -2922,7 +3154,7 @@ public sealed class LightingTests : IDisposable
     [Fact]
     public void SkyAmbient_IsReadBackToTheHost_AfterTheSkyIsCaptured()
     {
-        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Sky, AmbientIntensity = 2, Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 1) };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Ambient = AmbientMode.Sky, AmbientIntensity = 2, Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 1) };
         Assert.Equal(0, _world.SkyAmbientVersion);
         for (int frame = 0; frame < 3; frame++)
             Frame();
@@ -2941,10 +3173,10 @@ public sealed class LightingTests : IDisposable
     [Fact]
     public void EvaluateAmbient_GivesTheUniformAndHemisphereLight_TheShadersUse()
     {
-        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Uniform, AmbientColor = new Float4(0.2f, 0.4f, 0.8f, 1), AmbientIntensity = 0.5f };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Ambient = AmbientMode.Uniform, AmbientColor = new Float4(0.2f, 0.4f, 0.8f, 1), AmbientIntensity = 0.5f };
         Assert.Equal(new Float3(0.1f, 0.2f, 0.4f), _world.EvaluateAmbient(new Float3(0, 1, 0)));
 
-        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Hemisphere, AmbientSky = new Float4(1, 0, 0, 1), AmbientGround = new Float4(0, 0, 1, 1), AmbientIntensity = 1 };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Ambient = AmbientMode.Hemisphere, AmbientSky = new Float4(1, 0, 0, 1), AmbientGround = new Float4(0, 0, 1, 1), AmbientIntensity = 1 };
         Assert.Equal(new Float3(1, 0, 0), _world.EvaluateAmbient(new Float3(0, 1, 0)));
         Assert.Equal(new Float3(0.5f, 0, 0.5f), _world.EvaluateAmbient(new Float3(1, 0, 0)));
     }
@@ -2967,7 +3199,7 @@ public sealed class LightingTests : IDisposable
     {
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
         Material sky = SkyMaterial(new Float3(0.1f, 0.2f, 0.4f), 0);
-        _world.Environment = new EnvironmentDesc { Fog = default, AmbientColor = default, Sky = sky };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, AmbientColor = default, Sky = sky };
         ReflectionProbeDesc desc = RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40));
         desc.Intensity = 0.5f;
         ReflectionProbeHandle probe = _world.AddReflectionProbe(desc);
@@ -3033,7 +3265,7 @@ public sealed class LightingTests : IDisposable
     [Fact]
     public void SkyCapturedEveryFrame_ReusesItsScratchCube()
     {
-        _world.Environment = new EnvironmentDesc { Fog = default, AmbientColor = default, Sky = SkyMaterial(new Float3(0.1f, 0.2f, 0.4f), 0), SkyCapture = SkyCaptureMode.EveryFrame };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, AmbientColor = default, Sky = SkyMaterial(new Float3(0.1f, 0.2f, 0.4f), 0), SkyCapture = SkyCaptureMode.EveryFrame };
         for (int frame = 0; frame < 8; frame++)
             Frame();
         Assert.Equal(1, _world.Reflections.ScratchCount);
@@ -3109,12 +3341,13 @@ public sealed class LightingTests : IDisposable
 
         Float4[] Draw()
         {
-            ViewDesc view = new() { World = _world, ViewId = 16, Target = _framebuffer };
-            view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
+            RenderView view = _harness.BareView(16);
+            view.EV100 = UnitEV100;
+            view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
             _device.WaitForIdle();
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
-            return ReadLayer(_target, 0);
+            return _harness.ReadTarget();
         }
 
         Float4[] missing = Draw();
@@ -3137,10 +3370,8 @@ public sealed class LightingTests : IDisposable
         AssertMatches(_ => new Vector3(0.25f, 0.5f, 0.75f), Frame());
     }
 
-    private sealed class WriteHostBuffer(DeviceBuffer buffer, Float4 second) : FrameFeature
+    private sealed class WriteHostBuffer(DeviceBuffer buffer, Float4 second) : FrameFeature(FrameSlot.BeforeViews)
     {
-        public override FrameSlot Slot => FrameSlot.BeforeViews;
-
         public override void Setup(FrameBuilder builder) => builder.Write(buffer, BufferAccess.TransferWrite);
 
         public override void Render(FrameContext context) => context.Command.UpdateBuffer<Float4>(buffer, 0, [new Float4(9, 9, 9, 1), second]);
@@ -3162,25 +3393,28 @@ public sealed class LightingTests : IDisposable
     public void OpaqueForwardPasses_WriteTheGBufferTargetsTheyStore()
     {
         ShaderPass pass = ShaderParser.Parse(Source).Passes![0];
-        ShaderDescription lit = _compiler.Compile(pass, [], _device.BackendType);
-        ShaderDescription unlit = _compiler.Compile(ShaderParser.Parse(Source.Replace("Graphite_WriteGBuffer(n, roughness, metallic);", "")).Passes![0], [], _device.BackendType);
+        ShaderDescription lit = TestCompiler.Shared.Compile(pass, [], _device.BackendType);
+        ShaderDescription unlit = TestCompiler.Shared.Compile(ShaderParser.Parse(Source.Replace("Graphite_WriteGBuffer(c.normal, c.specularAlbedo, c.roughness);", "")).Passes![0], [], _device.BackendType);
         PassState opaque = new();
         PassState blended = ShaderParser.ParsePassState("Blend SourceAlpha InverseSourceAlpha");
 
         static ColorWriteMask[] Masks(BlendStateDescription blend) => blend.AttachmentStates.Select(a => a.ColorWriteMask).ToArray();
-        Assert.Equal([ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.All], Masks(ProgramCache.SceneBlend(opaque, forward: true, prepass: false, _ => true)));
-        Assert.Equal([ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: true, prepass: false, location => location == 1)));
-        Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(blended, forward: true, prepass: false, _ => true)));
-        Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: false, _ => true)));
-        Assert.Equal([ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: true, _ => true)));
-        Assert.True(MaterialLayout.Stores(lit, 1) && MaterialLayout.Stores(lit, 2) && MaterialLayout.Stores(lit, 3));
-        Assert.False(MaterialLayout.Stores(unlit, 1) || MaterialLayout.Stores(unlit, 2) || MaterialLayout.Stores(unlit, 3));
+        Assert.Equal([ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.All, ColorWriteMask.All], Masks(ProgramCache.SceneBlend(opaque, forward: true, prepass: false, _ => true)));
+        Assert.Equal([ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: true, prepass: false, location => location == 1)));
+        Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(blended, forward: true, prepass: false, _ => true)));
+        Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: false, _ => true)));
+        Assert.Equal([ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: true, _ => true)));
+        Assert.Equal([ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(blended, forward: false, prepass: false, _ => true, transmission: true)));
+        Assert.True(MaterialLayout.Stores(lit, 1) && MaterialLayout.Stores(lit, 3) && MaterialLayout.Stores(lit, 4));
+        Assert.False(MaterialLayout.Stores(lit, 2));
+        Assert.False(MaterialLayout.Stores(unlit, 1) || MaterialLayout.Stores(unlit, 3) || MaterialLayout.Stores(unlit, 4));
 
         // An opaque forward pass that never writes it draws, leaving the targets at their clear
-        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Graphite_WriteGBuffer(n, roughness, metallic);", ""))));
+        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Graphite_WriteGBuffer(c.normal, c.specularAlbedo, c.roughness);", ""))));
         AddQuad(material);
-        ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
+        RenderView view = _harness.BareView(1);
+        view.EV100 = UnitEV100;
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
@@ -3215,13 +3449,11 @@ public sealed class LightingTests : IDisposable
             Lightmap = lightmap ?? LightmapBinding.None,
         }, [_renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(IndirectSource)))]);
 
-    private readonly List<Texture> _textures = new();
-
     private Texture Lightmap<T>(uint width, PixelFormat format, T[] texels) where T : unmanaged
     {
         Texture texture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(width, 1, 1, 1, format, TextureUsage.Sampled));
         _device.UpdateTexture<T>(texture, texels, new TextureRegion(0, 0, 0, width, 1, 1, 0, 0));
-        _textures.Add(texture);
+        _harness.Owned.Add(texture);
         return texture;
     }
 
@@ -3252,7 +3484,7 @@ public sealed class LightingTests : IDisposable
     [Fact]
     public void WithoutBakedLight_AmbientLightsTheSurface_AtItsIntensity()
     {
-        _world.Environment = new EnvironmentDesc { AmbientColor = new Float4(0.2f, 0.4f, 0.6f, 1), AmbientIntensity = 0.5f, Fog = default };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = new Float4(0.2f, 0.4f, 0.6f, 1), AmbientIntensity = 0.5f, Fog = default };
         AddIndirect(IndirectQuad(secondUVs: false));
         AssertMatches(_ => new Vector3(0.1f, 0.2f, 0.3f), Frame());
     }
@@ -3346,7 +3578,7 @@ public sealed class LightingTests : IDisposable
     [Fact]
     public void Lightmaps_StillLoadingLightWithAmbient_EachCarryTheirEncoding_AndNoneUsesTheProbes()
     {
-        _world.Environment = new EnvironmentDesc { AmbientColor = new Float4(0.2f, 0.4f, 0.6f, 1), Fog = default };
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = new Float4(0.2f, 0.4f, 0.6f, 1), Fog = default };
         LightProbeData probes = BoxProbes(s_boxMin, s_boxMax, 13);
         _world.SetLightProbes(probes);
         RenderableHandle quad = AddIndirect(IndirectQuad(secondUVs: true), lightmap: new LightmapBinding(null, new Float4(1, 1, 0, 0)));
@@ -3389,49 +3621,22 @@ public sealed class LightingTests : IDisposable
         AssertMatches(_ => new Vector3(0.3f, 0.6f, 0.9f), Frame());
     }
 
-    /// <summary>Prowl's lighting math on the CPU, the same expressions the shaders use.</summary>
-    private static class Reference
+    [Fact]
+    public void LightmapScales_UndoTheExposureTheyWereBakedAt()
     {
-        private const float MinRoughness = 0.045f;
+        Texture lightmap = Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0.3f, 0.6f, 0.9f, 1)]);
+        RenderableHandle quad = AddIndirect(IndirectQuad(secondUVs: true));
+        _world.SetLightmap(quad, new LightmapBinding(lightmap, new Float4(1, 1, 0, 0), LightmapEncoding.Linear, scale: 1000));
+        _ev100 = 10;
+        AssertMatches(_ => new Vector3(300, 600, 900) * RenderView.ExposureOf(10), Frame());
+    }
 
-        private static float Ggx(Vector3 n, Vector3 h, float roughness)
-        {
-            roughness = MathF.Max(roughness, MinRoughness);
-            float a2 = roughness * roughness;
-            float nh = MathF.Max(Vector3.Dot(n, h), 0);
-            float d = nh * nh * (a2 - 1) + 1;
-            return a2 / (MathF.PI * d * d);
-        }
-
-        private static float SchlickGgx(float nv, float roughness)
-        {
-            float r = roughness + 1;
-            float k = r * r / 8;
-            return nv / (nv * (1 - k) + k);
-        }
-
-        private static float Smith(Vector3 n, Vector3 v, Vector3 l, float roughness)
-            => SchlickGgx(MathF.Max(Vector3.Dot(n, l), 0), roughness) * SchlickGgx(MathF.Abs(Vector3.Dot(n, v)), roughness);
-
-        private static Vector3 Fresnel(float cos, Vector3 f0) => f0 + (Vector3.One - f0) * MathF.Pow(2, -9.28f * cos);
-
-        private static float Disney(float nv, float nl, float lh, float roughness)
-        {
-            float fd90 = 0.5f + 2 * lh * lh * roughness;
-            return (1 + (fd90 - 1) * MathF.Pow(2, -8.35f * nl)) * (1 + (fd90 - 1) * MathF.Pow(2, -8.35f * nv)) / MathF.PI;
-        }
-
-        private static Vector3 Brdf(Vector3 l, Vector3 v, Vector3 n, Vector3 albedo, float metallic, float roughness, float nl)
-        {
-            Vector3 f0 = Vector3.Lerp(new Vector3(0.04f), albedo, metallic);
-            Vector3 h = Vector3.Normalize(l + v);
-            float nv = MathF.Abs(Vector3.Dot(n, v));
-            float lh = MathF.Max(Vector3.Dot(l, h), 0);
-            Vector3 f = Fresnel(lh, f0);
-            Vector3 kd = (Vector3.One - f) * (1 - metallic);
-            Vector3 specular = Ggx(n, h, roughness) * Smith(n, v, l, roughness) * f / (4 * nv * nl + 0.0001f);
-            return kd * albedo * Disney(nv, nl, lh, roughness) + specular;
-        }
+    /// <summary>The light loop on the CPU, the same expressions the shaders use, every light shaded by PbrReference.</summary>
+    private static partial class Reference
+    {
+        // The PBR closure of a surface of this base colour, metalness and roughness, the rest at the spec's defaults
+        private static PbrReference Closure(Vector3 n, Vector3 v, Vector3 albedo, float metallic, float roughness)
+            => new(new PbrInputs(albedo, metallic, roughness), n, v);
 
         public static Vector3 Local(in LightDesc light, Vector3 p, Vector3 n, Vector3 albedo, float metallic, float roughness)
         {
@@ -3467,12 +3672,12 @@ public sealed class LightingTests : IDisposable
             if (attenuation <= 0.0001f)
                 return Vector3.Zero;
 
-            Vector3 radiance = new Vector3(light.Color.X, light.Color.Y, light.Color.Z) * (light.Intensity * 8) * attenuation;
-            return Brdf(l, Vector3.Normalize(-p), n, albedo, metallic, roughness, nl) * radiance * nl;
+            Vector3 radiance = new Vector3(light.Color.X, light.Color.Y, light.Color.Z) * light.Intensity * attenuation;
+            return Closure(n, Vector3.Normalize(-p), albedo, metallic, roughness).Evaluate(l) * radiance * nl;
         }
 
-        // Graphite's procedural sky as drawn, at its defaults unless given
-        public static Vector3 ProceduralSky(Vector3 view, Vector3 sun, float sunSize = 1, float sunGlow = 1, float exposure = 1, Vector3? tint = null, Vector3? ground = null)
+        // Graphite's procedural sky in nits under a white sun of sunLux, at its defaults unless given
+        public static Vector3 ProceduralSky(Vector3 view, Vector3 sun, float sunLux, float sunSize = 1, float sunGlow = 1, float intensity = 1, Vector3? tint = null, Vector3? ground = null, bool disk = true)
         {
             static Vector3 Exp(Vector3 v) => new(MathF.Exp(v.X), MathF.Exp(v.Y), MathF.Exp(v.Z));
             static float Smooth(float a, float b, float x) { float t = Math.Clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
@@ -3491,18 +3696,16 @@ public sealed class LightingTests : IDisposable
             float glow = 0.00010368f * sunGlow * spread * spread * spread;
             Vector3 single = ozone * lit * viewAir * (new Vector3(0.001631f, 0.0038803f, 0.010984f) * (1 + nu * nu) + new Vector3(glow));
             Vector3 bounce = new Vector3(0.031648f, 0.033978f, 0.03542f) * (up + 0.022059f) * Exp(-(new Vector3(1.8692f) + new Vector3(-0.0023863f, 0.020262f, 0.05909f)) * dep);
-            Vector3 color = (single + bounce * (Vector3.One - viewT)) * 1.7557f * (tint ?? Vector3.One);
+            Vector3 color = (single + bounce * (Vector3.One - viewT)) * 1.7557f * (tint ?? Vector3.One) * (sunLux * SkyNitsPerLux);
 
-            float sunTransmittance = MathF.Exp(-Vector3.Dot(new Vector3(0.33f), new Vector3(5.802e-6f, 13.558e-6f, 33.1e-6f)) * 8000 / MathF.Max(view.Y, 0.02f));
-            float disk = sunSize > 0 ? Smooth(1 - 1.5e-4f * sunSize * sunSize, 1 - 1e-5f * sunSize * sunSize, Vector3.Dot(view, sun)) * (view.Y >= 0 ? 1 : 0) : 0;
-            color += disk * 2000 * sunTransmittance * new Vector3(1, 0.9f, 0.8f);
+            // The disk's solid angle is 2 pi times its rim blend's mean width in cosine, so it shines the sun's illuminance
+            if (disk && sunSize > 0)
+                color += new Vector3(Smooth(1 - 1.5e-4f * sunSize * sunSize, 1 - 1e-5f * sunSize * sunSize, Vector3.Dot(view, sun)) * (view.Y >= 0 ? 1 : 0) * sunLux / (2 * MathF.PI * 8e-5f * sunSize * sunSize));
             color = Vector3.Lerp(color, color * (ground ?? new Vector3(0.25f)), Smooth(0, -0.02f, view.Y));
-
-            Vector3 c = color * (40 * exposure);
-            float l = Vector3.Dot(c, new Vector3(0.2126f, 0.7152f, 0.0722f));
-            Vector3 tc = c / (c + Vector3.One);
-            return Vector3.Lerp(c / (l + 1), tc, tc);
+            return color * intensity;
         }
+
+        public const float SkyNitsPerLux = 2.8f;
 
         // Prowl's light probe sampler: the tetrahedron holding the point by barycentrics, else the nearest four by inverse squared distance
         public static SphericalHarmonicsL2 SampleSH(LightProbeData data, Double3 point)
@@ -3579,22 +3782,20 @@ public sealed class LightingTests : IDisposable
         }
 
         // The specular a light of unit intensity reflects toward v, its shape integrated by brute force, against the most
-        // representative point's estimate. Fresnel is left at one. Returns (true, estimate).
+        // representative point's estimate, on a white metal. Returns (true, estimate).
         public static (float Truth, float Estimate) Specular(LightType type, Vector3 center, Vector3 axis, Vector3 up, float radius, Vector2 size, Vector3 v, Vector3 n, float roughness)
         {
-            static float Lobe(Vector3 l, Vector3 v, Vector3 n, float roughness)
+            PbrReference metal = Closure(n, v, Vector3.One, 1, roughness);
+            float Lobe(Vector3 l, Vector3 v, Vector3 n, float roughness)
             {
                 float nl = Vector3.Dot(n, l);
-                if (nl <= 0)
-                    return 0;
-                Vector3 h = Vector3.Normalize(l + v);
-                return Ggx(n, h, roughness) * Smith(n, v, l, roughness) / (4 * MathF.Abs(Vector3.Dot(n, v)) * nl + 0.0001f) * nl;
+                return nl <= 0 ? 0 : metal.Specular(l).X * nl;
             }
 
             Vector3 surface = -v * 5;
             Vector3 at = surface + center;
             LightDesc light = new() { Type = type, Position = new Double3(at.X, at.Y, at.Z), Direction = new Float3(axis.X, axis.Y, axis.Z), Up = new Float3(up.X, up.Y, up.Z),
-                SourceRadius = radius, Size = new Float2(size.X, size.Y), Range = 1e6f, Intensity = 1 / 8f, Color = new Float3(1, 1, 1) };
+                SourceRadius = radius, Size = new Float2(size.X, size.Y), Range = 1e6f, Intensity = 1, Color = new Float3(1, 1, 1) };
             float estimate = Area(light, surface, n, Vector3.One, 1, roughness).X;
 
             const int steps = 300;
@@ -3607,7 +3808,7 @@ public sealed class LightingTests : IDisposable
                     float u = (i + 0.5f) / steps, w = (j + 0.5f) / steps;
                     if (type == LightType.Point)
                     {
-                        // Uniform over the cone the sphere fills, radiance 1 over its projected area
+                        // Uniform over the cone the sphere fills, one candela, so radiance 1 over its projected area
                         float d = center.Length();
                         float cosMax = MathF.Sqrt(MathF.Max(1 - radius * radius / (d * d), 0));
                         float cos = 1 - u * (1 - cosMax), sin = MathF.Sqrt(1 - cos * cos), a = 2 * MathF.PI * w;
@@ -3616,9 +3817,20 @@ public sealed class LightingTests : IDisposable
                         Vector3 l = c * cos + t * (sin * MathF.Cos(a)) + b * (sin * MathF.Sin(a));
                         truth += Lobe(l, v, n, roughness) * 2 * MathF.PI * (1 - cosMax) / (steps * steps) / (MathF.PI * radius * radius);
                     }
+                    else if (type == LightType.Tube)
+                    {
+                        // Along its length, one nit, a thin tube as wide as it looks
+                        if (j > 0)
+                            continue;
+                        Vector3 q = center + axis * ((u - 0.5f) * size.X);
+                        float d2 = q.LengthSquared();
+                        Vector3 l = q / MathF.Sqrt(d2);
+                        float along = Vector3.Dot(l, axis);
+                        truth += Lobe(l, v, n, roughness) * 2 * radius * MathF.Sqrt(MathF.Max(1 - along * along, 0)) / d2 * size.X / steps;
+                    }
                     else
                     {
-                        // Over the surface, radiance 1 over its area, seen with its cosine
+                        // Over the surface, one nit, seen with its cosine
                         Vector3 q;
                         float area;
                         if (type == LightType.Rect)
@@ -3634,7 +3846,7 @@ public sealed class LightingTests : IDisposable
                         }
                         float d2 = q.LengthSquared();
                         Vector3 l = q / MathF.Sqrt(d2);
-                        truth += Lobe(l, v, n, roughness) * MathF.Max(Vector3.Dot(-l, axis), 0) / d2 * area / (steps * steps) / area;
+                        truth += Lobe(l, v, n, roughness) * MathF.Max(Vector3.Dot(-l, axis), 0) / d2 * area / (steps * steps);
                     }
                 }
             }
@@ -3645,9 +3857,9 @@ public sealed class LightingTests : IDisposable
         {
             Vector3 l = Vector3.Normalize(-new Vector3(light.Direction.X, light.Direction.Y, light.Direction.Z));
             float nl = MathF.Max(Vector3.Dot(n, l), 0);
-            Vector3 radiance = new Vector3(light.Color.X, light.Color.Y, light.Color.Z) * light.Intensity * 8;
+            Vector3 radiance = new Vector3(light.Color.X, light.Color.Y, light.Color.Z) * light.Intensity;
             if (light.AngularRadius <= 0)
-                return Brdf(l, Vector3.Normalize(-p), n, albedo, metallic, roughness, nl) * radiance * nl;
+                return Closure(n, Vector3.Normalize(-p), albedo, metallic, roughness).Evaluate(l) * radiance * nl;
 
             // The sun's disk: specular from the nearest direction inside it, its lobe widened by the disk
             float radius = light.AngularRadius * MathF.PI / 180;
@@ -3657,23 +3869,53 @@ public sealed class LightingTests : IDisposable
             float rl = Vector3.Dot(r, l);
             Vector3 across = r - l * rl;
             Vector3 ls = rl >= cos ? r : across.LengthSquared() > 1e-8f ? Vector3.Normalize(l * cos + Vector3.Normalize(across) * sin) : l;
-            float specular = MathF.Max(Vector3.Dot(n, ls), 0) * AreaEnergy(roughness, 0.5f * sin, 0.5f * sin);
+            float specular = MathF.Max(Vector3.Dot(n, ls), 0) * AreaEnergy(PbrReference.Alpha(roughness), 0.5f * sin, 0.5f * sin);
             return Shade(l, nl, ls, specular, v, n, albedo, metallic, roughness) * radiance;
         }
 
-        // Prowl's BRDF with the diffuse and specular lobes each from their own direction
-        private static Vector3 Shade(Vector3 ld, float diffuse, Vector3 ls, float specular, Vector3 v, Vector3 n, Vector3 albedo, float metallic, float roughness)
+        // The closure with the diffuse and specular lobes each from their own direction
+        private static readonly ushort[] s_ltc = LtcTables.Embedded();
+
+        private static LtcTables.D3 D(Vector3 w) => new(w.X, w.Y, w.Z);
+
+        // The share of a lobe of normal n and alpha a tube, rect or disk covers, as Graphite/Ltc.glsl and Lights.glsl give it.
+        // A rect or disk takes its half axes, a tube its ends and radius.
+        public static float LtcShare(LightType type, Vector3 center, Vector3 h1, Vector3 h2, float radius, Vector3 n, Vector3 v, float alpha)
         {
-            Vector3 f0 = Vector3.Lerp(new Vector3(0.04f), albedo, metallic);
-            float nv = MathF.Abs(Vector3.Dot(n, v));
-            Vector3 hs = Vector3.Normalize(ls + v);
-            float nls = MathF.Max(Vector3.Dot(n, ls), 0);
-            Vector3 f = Fresnel(MathF.Max(Vector3.Dot(ls, hs), 0), f0);
-            Vector3 spec = Ggx(n, hs, roughness) * Smith(n, v, ls, roughness) * f / (4 * nv * nls + 0.0001f);
-            Vector3 hd = Vector3.Normalize(ld + v);
-            Vector3 kd = (Vector3.One - f) * (1 - metallic);
-            Vector3 diff = kd * albedo * Disney(nv, MathF.Max(Vector3.Dot(n, ld), 0), MathF.Max(Vector3.Dot(ld, hd), 0), roughness);
-            return diff * diffuse + spec * specular;
+            float mu = Math.Clamp(Vector3.Dot(n, v), 1e-4f, 1);
+            Vector3 t1 = v - n * Vector3.Dot(n, v);
+            t1 = t1.Length() > 1e-5f ? Vector3.Normalize(t1) : Vector3.Normalize(Vector3.Cross(n, MathF.Abs(n.Y) < 0.99f ? Vector3.UnitY : Vector3.UnitX));
+            Vector3 t2 = Vector3.Cross(n, t1);
+            LtcTables.M3 inverse = LtcTables.Lookup(s_ltc, mu, MathF.Sqrt(MathF.Max(alpha, 0)));
+            LtcTables.D3 Space(Vector3 w) => inverse * new LtcTables.D3(Vector3.Dot(w, t1), Vector3.Dot(w, t2), Vector3.Dot(w, n));
+            if (type == LightType.Tube)
+            {
+                // h1 and h2 the tube's ends, each cap a small half sphere there
+                Vector3 direction = Vector3.Normalize(h2 - h1);
+                Vector3 across = Vector3.Cross(direction, h1 + h2);
+                across = across.LengthSquared() > 1e-12f ? Vector3.Normalize(across) : Vector3.Normalize(Vector3.Cross(direction, MathF.Abs(direction.Y) < 0.99f ? Vector3.UnitY : Vector3.UnitX));
+                double Cap(Vector3 end)
+                {
+                    float end2 = MathF.Max(end.LengthSquared(), 1e-8f);
+                    LtcTables.D3 o = Space(end / MathF.Sqrt(end2));
+                    double o2 = LtcTables.D3.Dot(o, o);
+                    return Math.Max(o.Z, 0) * Math.Abs(inverse.Determinant) / (Math.PI * o2 * o2) * 0.5 * Math.PI * radius * radius / end2;
+                }
+                return (float)(LtcTables.Strip(Space(h1), Space(h2), Space(across * (2 * radius))) + Cap(h1) + Cap(h2));
+            }
+            LtcTables.D3 c = Space(center), x = Space(h1), y = Space(h2);
+            return (float)(type == LightType.Disk ? LtcTables.Disk(c, x, y) : LtcTables.Polygon([c - x - y, c + x - y, c + x + y, c - x + y]));
+        }
+
+        private static Vector3 Shade(Vector3 ld, float diffuse, Vector3 ls, float specular, Vector3 v, Vector3 n, Vector3 albedo, float metallic, float roughness, bool share = false)
+        {
+            if (share)
+            {
+                PbrReference lit = Closure(n, v, albedo, metallic, roughness);
+                return lit.Diffuse(ld) * diffuse + lit.SpecularAlbedo * specular;
+            }
+            PbrReference c = Closure(n, v, albedo, metallic, roughness);
+            return c.Diffuse(ld) * diffuse + c.Specular(ls) * specular;
         }
 
         private static float Window(float dist2, float range)
@@ -3683,9 +3925,9 @@ public sealed class LightingTests : IDisposable
             return window * window;
         }
 
-        public static float AreaEnergy(float roughness, float ex, float ey)
+        public static float AreaEnergy(float alpha, float ex, float ey)
         {
-            float a = MathF.Max(roughness, MinRoughness);
+            float a = MathF.Max(alpha, PbrReference.MinAlpha);
             return a * a / (MathF.Min(MathF.Sqrt(a * a + ex * ex), 1) * MathF.Min(MathF.Sqrt(a * a + ey * ey), 1));
         }
 
@@ -3730,17 +3972,13 @@ public sealed class LightingTests : IDisposable
             return 0.5f * MathF.Abs(sum);
         }
 
-        // The irradiance per unit intensity of a line from a to b relative to the point, its intensity spread along it
-        public static float LineIrradiance(Vector3 a, Vector3 b, Vector3 n)
+        // The cosine weighted solid angle of the side of a thin tube of radius from a to b relative to the point, clipped by the horizon
+        public static float TubeIrradiance(Vector3 a, Vector3 b, float radius, Vector3 n)
         {
             Vector3 d = b - a;
             float len = d.Length();
-            if (len < 1e-3f)
-            {
-                Vector3 m = 0.5f * (a + b);
-                float m2 = MathF.Max(m.LengthSquared(), 1e-4f);
-                return MathF.Max(Vector3.Dot(n, m), 0) / (m2 * MathF.Sqrt(m2));
-            }
+            if (len < 1e-4f)
+                return 0;
             Vector3 u = d / len;
             float na = Vector3.Dot(n, a), nu = Vector3.Dot(n, u);
             float s0 = 0, s1 = len;
@@ -3760,14 +3998,13 @@ public sealed class LightingTests : IDisposable
                 return 0;
             float bu = Vector3.Dot(a, u);
             Vector3 perp = a - u * bu;
-            float dd = MathF.Max(perp.LengthSquared(), 1e-20f);
-            float np = Vector3.Dot(n, perp);
-            float q0 = MathF.Max((a + u * s0).Length(), 1e-6f), q1 = MathF.Max((a + u * s1).Length(), 1e-6f);
-            float t0 = s0 + bu, t1 = s1 + bu;
-            float spread = t0 * t1 > 0
-                ? (t1 * t1 - t0 * t0) / (q0 * q1 * (t1 * q0 + t0 * q1))
-                : (t1 / q1 - t0 / q0) / dd;
-            return MathF.Max(np * spread - nu / q1 + nu / q0, 0) / len;
+            float perpLength = perp.Length();
+            float h = MathF.Max(perpLength, radius);
+            float np = Vector3.Dot(n, perp) / MathF.Max(perpLength, 1e-6f);
+            float t0 = MathF.Atan((s0 + bu) / h), t1 = MathF.Atan((s1 + bu) / h);
+            float across = 0.5f * (t1 - t0) + 0.25f * (MathF.Sin(2 * t1) - MathF.Sin(2 * t0));
+            float along = 0.5f * (MathF.Sin(t1) * MathF.Sin(t1) - MathF.Sin(t0) * MathF.Sin(t0));
+            return MathF.Max(2 * radius * (np * across + nu * along) / h, 0);
         }
 
         private static Vector3 SpherePoint(Vector3 center, float radius, Vector3 r)
@@ -3776,22 +4013,10 @@ public sealed class LightingTests : IDisposable
             return center + toRay * Math.Clamp(radius / MathF.Max(toRay.Length(), 1e-6f), 0, 1);
         }
 
-        private static Vector3 PlanePoint(Vector3 center, Vector3 n, Vector3 right, Vector3 up, Vector2 half, bool disk, Vector3 r)
-        {
-            float facing = Vector3.Dot(r, n);
-            Vector3 hit = facing < -1e-4f ? r * (Vector3.Dot(center, n) / facing) : center + (r - n * facing) * 1e4f;
-            Vector3 local = hit - center;
-            Vector2 p = new(Vector3.Dot(local, right), Vector3.Dot(local, up));
-            if (disk)
-                p *= MathF.Min(1, half.X / MathF.Max(p.Length(), 1e-6f));
-            else
-                p = Vector2.Clamp(p, -half, half);
-            return center + right * p.X + up * p.Y;
-        }
-
         private static Vector3 V(Float3 f) => new(f.X, f.Y, f.Z);
 
-        // Spheres, tubes, rects and disks: diffuse from their irradiance, specular from the most representative point
+        // Spheres, tubes, rects and disks: diffuse from their luminance times their cosine weighted solid angle, a sphere's
+        // luminance its intensity over its disk's area, specular from the most representative point
         public static Vector3 Area(in LightDesc light, Vector3 p, Vector3 n, Vector3 albedo, float metallic, float roughness)
         {
             Vector3 toLight = new Vector3((float)light.Position.X, (float)light.Position.Y, (float)light.Position.Z) - p;
@@ -3807,6 +4032,7 @@ public sealed class LightingTests : IDisposable
             Vector3 up = Vector3.Normalize(V(light.Up) - dir * Vector3.Dot(V(light.Up), dir));
             Vector3 ld = lc, ls = lc;
             float diffuse, specular;
+            bool share = false;
 
             if (light.Type is LightType.Point or LightType.Spot)
             {
@@ -3824,7 +4050,7 @@ public sealed class LightingTests : IDisposable
                 float attenuation = window / MathF.Max(dist2, 0.01f) * cone;
                 diffuse = SphereIrradiance(Vector3.Dot(n, lc), MathF.Min(rad * rad / dist2, 1)) / (MathF.PI * rad * rad) * window * cone;
                 ls = Vector3.Normalize(SpherePoint(toLight, rad, r));
-                specular = MathF.Max(Vector3.Dot(n, ls), 0) * attenuation * AreaEnergy(roughness, rad / (2 * dist), rad / (2 * dist));
+                specular = MathF.Max(Vector3.Dot(n, ls), 0) * attenuation * AreaEnergy(PbrReference.Alpha(roughness), rad / (2 * dist), rad / (2 * dist));
             }
             else if (light.Type == LightType.Tube)
             {
@@ -3832,14 +4058,10 @@ public sealed class LightingTests : IDisposable
                 Vector3 a = toLight - axis, b = toLight + axis, ab = b - a;
                 float t = Math.Clamp(-Vector3.Dot(a, ab) / MathF.Max(ab.LengthSquared(), 1e-8f), 0, 1);
                 ld = Vector3.Normalize(a + ab * t);
-                diffuse = LineIrradiance(a, b, n) * window;
-                float rab = Vector3.Dot(r, ab);
-                float tr = Math.Clamp((Vector3.Dot(r, a) * rab - Vector3.Dot(a, ab)) / MathF.Max(ab.LengthSquared() - rab * rab, 1e-8f), 0, 1);
-                Vector3 onLine = a + ab * tr;
-                ls = Vector3.Normalize(SpherePoint(onLine, light.SourceRadius, r));
-                float lineDist = MathF.Max(onLine.Length(), 1e-4f);
-                specular = MathF.Max(Vector3.Dot(n, ls), 0) * window / MathF.Max(onLine.LengthSquared(), 0.01f)
-                    * AreaEnergy(roughness, light.SourceRadius / (2 * lineDist), light.Size.X / (MathF.PI * lineDist));
+                float caps = SphereIrradiance(Vector3.Dot(n, lc), MathF.Min(light.SourceRadius * light.SourceRadius / dist2, 1));
+                diffuse = (TubeIrradiance(a, b, light.SourceRadius, n) + caps) * window;
+                specular = LtcShare(LightType.Tube, toLight, a, b, light.SourceRadius, n, v, PbrReference.Alpha(roughness)) * window;
+                share = true;
             }
             else
             {
@@ -3849,27 +4071,21 @@ public sealed class LightingTests : IDisposable
                 Vector3 right = Vector3.Cross(up, dir);
                 bool disk = light.Type == LightType.Disk;
                 Vector2 half = disk ? new Vector2(light.Size.X) : 0.5f * new Vector2(light.Size.X, light.Size.Y);
-                float area = disk ? MathF.PI * half.X * half.X : light.Size.X * light.Size.Y;
                 if (disk)
                 {
                     float r2 = half.X * half.X;
-                    diffuse = SphereIrradiance(Vector3.Dot(n, lc), r2 / (r2 + dist2)) * front / area * window;
+                    diffuse = SphereIrradiance(Vector3.Dot(n, lc), r2 / (r2 + dist2)) * front * window;
                 }
                 else
                 {
                     Vector3 hx = right * half.X, hy = up * half.Y;
-                    diffuse = QuadIrradiance([toLight - hx - hy, toLight + hx - hy, toLight + hx + hy, toLight - hx + hy], n) / area * window;
+                    diffuse = QuadIrradiance([toLight - hx - hy, toLight + hx - hy, toLight + hx + hy, toLight - hx + hy], n) * window;
                 }
-                Vector3 q = PlanePoint(toLight, dir, right, up, half, disk, r);
-                float qDist2 = MathF.Max(q.LengthSquared(), 1e-8f), qDist = MathF.Sqrt(qDist2);
-                ls = q / qDist;
-                float qFront = MathF.Max(Vector3.Dot(-ls, dir), 0);
-                Vector2 extent = disk ? new Vector2(half.X / (2 * qDist)) : new Vector2(light.Size.X, light.Size.Y) / (2 * MathF.Sqrt(MathF.PI) * qDist);
-                specular = MathF.Max(Vector3.Dot(n, ls), 0) * qFront * window / MathF.Max(qDist2, 0.01f) * AreaEnergy(roughness, extent.X, extent.Y);
+                specular = LtcShare(light.Type, toLight, right * half.X, up * half.Y, 0, n, v, PbrReference.Alpha(roughness)) * window;
+                share = true;
             }
 
-            Vector3 radiance = V(light.Color) * (light.Intensity * 8);
-            return Shade(ld, diffuse, ls, specular, v, n, albedo, metallic, roughness) * radiance;
+            return Shade(ld, diffuse, ls, specular, v, n, albedo, metallic, roughness, share) * (V(light.Color) * light.Intensity);
         }
     }
 }

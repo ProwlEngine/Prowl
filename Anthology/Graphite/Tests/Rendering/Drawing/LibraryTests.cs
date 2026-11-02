@@ -11,13 +11,6 @@ using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-file sealed class NoResources : IMaterialResources
-{
-    public uint TextureSlot(Texture? texture, MaterialPropertyType type, string defaultName) => 0;
-
-    public uint SamplerSlot(SamplerDescription? sampler) => 0;
-}
-
 [StructLayout(LayoutKind.Sequential)]
 file struct Push
 {
@@ -65,7 +58,7 @@ public sealed class LibraryTests : IDisposable
                     layout(location = 0) out vec4 outColor;
 
                     void main()
-                    { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                    { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
                         outColor = _Color * vColor + Graphite_Object().custom0 + vec4(vUV, 0.0, 0.0);
                     }
                 }
@@ -76,7 +69,7 @@ public sealed class LibraryTests : IDisposable
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
     private readonly List<IDisposable> _owned = new();
 
     public void Dispose()
@@ -84,7 +77,6 @@ public sealed class LibraryTests : IDisposable
         _device.WaitForIdle();
         for (int i = _owned.Count - 1; i >= 0; i--)
             _owned[i].Dispose();
-        _compiler.Dispose();
         _store.Dispose();
         _device.Dispose();
     }
@@ -149,7 +141,7 @@ public sealed class LibraryTests : IDisposable
 
         ResourceLayoutDescription frameLayout = GraphiteBindings.FrameTable(16, 4);
         ResourceLayoutDescription viewLayout = GraphiteBindings.ViewTable(4);
-        ShaderPass pass = definition.Passes![programs[call.Program].PassIndex];
+        ShaderPass pass = shader.Definition.Passes![programs[call.Program].PassIndex];
         ShaderDescription description = _compiler.Compile(pass, [], _device.BackendType);
         description.Specializations = MaterialLayout.GlobalOffsets(_compiler.GetGlobals(pass), globals);
         description.ResourceLayouts = MaterialLayout.Layouts(shader.Name, description.ResourceLayouts, frameLayout, viewLayout);

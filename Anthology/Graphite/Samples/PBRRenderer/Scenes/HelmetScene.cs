@@ -12,12 +12,12 @@ namespace Prowl.Graphite.Samples.PBRRenderer;
 
 internal sealed class HelmetScene : DemoScene
 {
-    private readonly ModelAsset _model;
-    private readonly GpuMesh _mesh;
-    private readonly RenderableHandle _helmet;
+    private const double HelmetSize = 2.4;
+
+    private readonly PbrModel _model;
+    private readonly RenderableHandle[] _helmet;
     private readonly RenderableHandle _bulb;
-    private readonly Float3 _center;
-    private readonly float _scale;
+    private readonly Double3 _helmetBase;
     private readonly LightHandle _spot;
     private readonly LightHandle _orbit;
     private LightDesc _spotDesc;
@@ -32,39 +32,19 @@ internal sealed class HelmetScene : DemoScene
 
     public HelmetScene(Demo demo) : base(demo)
     {
-        _model = ModelAsset.Load(demo.Device, Path.Combine(AppContext.BaseDirectory, "Assets", "Models", "DamagedHelmet.glb"), unwrapLightmapUVs: false);
-        _mesh = demo.Renderer.CreateMesh(ModelGeometry.FromModel(_model));
+        _model = PbrModel.Load(demo, Path.Combine(AppContext.BaseDirectory, "Assets", "Models", "DamagedHelmet.glb"), emissionNits: 111112f);
+        // The helmet's centre sits 1.75 above the plinth's origin
+        _helmetBase = new Double3(0, 1.75 - _model.Bounds.Extents.Y * _model.Scale(HelmetSize), 0);
+        _helmet = _model.AddTo(World, _helmetBase, HelmetSize);
 
-        MaterialInfo info = _model.Materials.Length > 0 ? _model.Materials[0] : default;
-        Material helmetMaterial = Track(demo.Renderer.CreateMaterial(demo.Lit));
-        helmetMaterial.Name = "Damaged helmet";
-        helmetMaterial.SetFloat("_Metallic", 1f);
-        helmetMaterial.SetFloat("_Roughness", 1f);
-        if (info.AlbedoTexture != null)
-            helmetMaterial.SetTexture("_BaseMap", info.AlbedoTexture, SamplerDescription.Linear);
-        if (info.NormalTexture != null)
-            helmetMaterial.SetTexture("_NormalMap", info.NormalTexture, SamplerDescription.Linear);
-        if (info.MetallicRoughnessTexture != null)
-            helmetMaterial.SetTexture("_MetalRoughMap", info.MetallicRoughnessTexture, SamplerDescription.Linear);
-        if (info.EmissiveTexture != null)
-        {
-            helmetMaterial.SetTexture("_EmissionMap", info.EmissiveTexture, SamplerDescription.Linear);
-            helmetMaterial.SetColor("_Emission", new Float4(4, 4, 4, 1));
-        }
-
-        Float3 extents = _model.Bounds.Extents;
-        _center = _model.Bounds.Center;
-        _scale = 2.4f / (MathF.Max(extents.X, MathF.Max(extents.Y, extents.Z)) * 2f);
-        _helmet = World.Add(new RenderableDesc { Mesh = _mesh, Name = "Damaged helmet", Transform = HelmetTransform(0f) }, [helmetMaterial]);
-
-        Add(Demo.Cube, Lit(new Float3(0.5f, 0.5f, 0.52f), 0f, 0.85f, grid: 1f), new Double3(0, -0.2, 0), new Double3(80, 0.4, 80));
-        Add(Demo.Cylinder, Lit(new Float3(0.12f, 0.12f, 0.14f), 0.9f, 0.35f), new Double3(0, 0.15, 0), new Double3(3.4, 0.3, 3.4));
+        Add(Demo.Cube, Pbr(new Float3(0.5f, 0.5f, 0.52f), 0f, 0.85f, grid: 1f), new Double3(0, -0.2, 0), new Double3(80, 0.4, 80));
+        Add(Demo.Cylinder, Pbr(new Float3(0.12f, 0.12f, 0.14f), 0.9f, 0.35f), new Double3(0, 0.15, 0), new Double3(3.4, 0.3, 3.4));
 
         Float3[] gold = [new(1.0f, 0.78f, 0.34f), new(1.0f, 0.78f, 0.34f), new(1.0f, 0.78f, 0.34f), new(0.95f, 0.64f, 0.54f), new(0.85f, 0.1f, 0.1f), new(0.1f, 0.35f, 0.85f)];
         float[] metal = [1f, 1f, 1f, 1f, 0f, 0f];
         float[] rough = [0.05f, 0.25f, 0.5f, 0.8f, 0.1f, 0.6f];
         for (int i = 0; i < gold.Length; i++)
-            Add(Demo.Sphere, Lit(gold[i], metal[i], rough[i]), new Double3(-6.25 + i * 2.5, 0.8, -4), new Double3(1.6, 1.6, 1.6));
+            Add(Demo.Sphere, Pbr(gold[i], metal[i], rough[i]), new Double3(-6.25 + i * 2.5, 0.8, -4), new Double3(1.6, 1.6, 1.6));
 
         LightHandle sun = World.AddLight(new LightDesc
         {
@@ -72,7 +52,7 @@ internal sealed class HelmetScene : DemoScene
             Type = LightType.Directional,
             Direction = Float3.Normalize(new Float3(0.55f, -0.65f, 0.35f)),
             Color = new Float3(1f, 0.93f, 0.82f),
-            Intensity = 0.45f,
+            Intensity = 100000f,
             AngularRadius = 0.5f,
             Shadow = new ShadowDesc { Enabled = true, Resolution = 2048, Cascades = 4, Distance = 40 },
         });
@@ -84,7 +64,7 @@ internal sealed class HelmetScene : DemoScene
             Position = new Double3(-4, 4.5, -4.5),
             Direction = Float3.Normalize(new Float3(4, -2.9f, 4.5f)),
             Color = new Float3(1f, 0.5f, 0.2f),
-            Intensity = 9f,
+            Intensity = 2000000f,
             Range = 18f,
             SourceRadius = 0.05f,
             InnerAngle = 14f,
@@ -98,12 +78,12 @@ internal sealed class HelmetScene : DemoScene
             Name = "Orbiting point",
             Type = LightType.Point,
             Color = new Float3(0.25f, 0.65f, 1f),
-            Intensity = 0.6f,
+            Intensity = 133000f,
             Range = 7f,
             SourceRadius = 0.12f,
         };
         _orbit = World.AddLight(_orbitDesc);
-        _bulb = Add(Demo.Sphere, Lit(new Float3(0, 0, 0), 0f, 1f, new Float3(1.5f, 4f, 8f)), new Double3(0, 2, 3), new Double3(0.24, 0.24, 0.24), flags: RenderableFlags.None);
+        _bulb = Add(Demo.Sphere, Pbr(new Float3(0, 0, 0), 0f, 1f, new Float3(41667f, 111111f, 222222f)), new Double3(0, 2, 3), new Double3(0.24, 0.24, 0.24), flags: RenderableFlags.None);
 
         World.Environment = new EnvironmentDesc
         {
@@ -129,14 +109,16 @@ internal sealed class HelmetScene : DemoScene
 
     public override void Update(float time, float deltaTime)
     {
-        World.SetTransform(_helmet, HelmetTransform(time * 0.35f));
+        Double4x4 helmet = _model.Placement(_helmetBase, HelmetSize, time * 0.35f);
+        foreach (RenderableHandle part in _helmet)
+            World.SetTransform(part, helmet);
 
         Double3 orbit = new(MathF.Cos(time * 0.9f) * 2.8, 1.5 + MathF.Sin(time * 1.7f) * 0.5, MathF.Sin(time * 0.9f) * 2.8);
         _orbitDesc.Position = orbit;
         World.SetLight(_orbit, _orbitDesc);
         World.SetTransform(_bulb, Double4x4.CreateTRS(orbit, Quaternion.Identity, new Double3(0.24, 0.24, 0.24)));
 
-        _spotDesc.Intensity = _spotOn ? 9f : 0f;
+        _spotDesc.Intensity = _spotOn ? 2000000f : 0f;
         World.SetLight(_spot, _spotDesc);
     }
 
@@ -149,16 +131,6 @@ internal sealed class HelmetScene : DemoScene
     public override void Dispose()
     {
         base.Dispose();
-        _mesh.Dispose();
         _model.Dispose();
-    }
-
-    private Double4x4 HelmetTransform(float angle)
-    {
-        Quaternion spin = Quaternion.AxisAngle(Float3.UnitY, angle);
-        return Double4x4.CreateTranslation(new Double3(0, 1.75, 0))
-            * Double4x4.CreateFromQuaternion(spin)
-            * Double4x4.CreateScale(_scale)
-            * Double4x4.CreateTranslation(new Double3(-_center.X, -_center.Y, -_center.Z));
     }
 }

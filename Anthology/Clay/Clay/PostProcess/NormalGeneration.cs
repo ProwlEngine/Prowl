@@ -54,97 +54,130 @@ internal static class NormalGeneration
             faceValid[f] = true;
         }
 
-        var adjacency = BuildAdjacency(mesh, vertexCount, faceValid);
+        // Vertices split only by their UVs or colours still sit on one continuous surface, so faces
+        // are gathered per position rather than per vertex index.
+        int[] positionOf = WeldPositions(mesh, out int positionCount);
+        var adjacency = BuildAdjacency(mesh, positionOf, positionCount, faceValid);
+        var smoothing = new PositionSmoothing?[positionCount];
 
         var normals = new Float3[vertexCount];
-        var assigned = new bool[vertexCount];
 
         // Corner -> vertex index it ends up on. Only entries that had to be split are written.
         var cornerRemap = new Dictionary<(int Face, int Corner), int>();
         var extraPositions = new List<Float3>();
         var extraNormals = new List<Float3>();
         var extraSourceVertex = new List<int>();
-
-        var groupOf = new Dictionary<int, int>();
-        var groupNormals = new List<Float3>();
+        var vertexOfGroup = new Dictionary<int, int>();
 
         for (int v = 0; v < vertexCount; v++)
         {
-            var faces = adjacency[v];
+            int p = positionOf[v];
+            var faces = adjacency[p];
             if (faces is null || faces.Count == 0)
             {
                 // Referenced only by lines or points, or by nothing at all. Nothing to derive a
                 // normal from, so it gets an arbitrary but finite one.
                 normals[v] = new Float3(0f, 1f, 0f);
-                assigned[v] = true;
                 continue;
             }
 
-            PartitionIntoSmoothingGroups(mesh, faces, faceNormals, cosThreshold, groupOf, out int groupCount);
+            PositionSmoothing groups = smoothing[p] ??= Smooth(mesh, faces, p, positionOf, faceNormals, cosThreshold);
 
-            // One angle-weighted normal per group. Weighting by the interior angle at this corner is
-            // what keeps a vertex shared by one large and several small faces from being dragged
-            // toward the small ones.
-            groupNormals.Clear();
-            for (int g = 0; g < groupCount; g++)
-                groupNormals.Add(Float3.Zero);
-
+            // The first group among this vertex's own faces keeps the vertex, the rest become duplicates.
+            vertexOfGroup.Clear();
+            bool used = false;
             foreach (int f in faces)
             {
-                int group = groupOf[f];
-                groupNormals[group] += faceNormals[f] * CornerAngle(mesh, f, v);
-            }
-
-            for (int g = 0; g < groupCount; g++)
-                groupNormals[g] = SafeNormalize(groupNormals[g], faceNormals[faces[0]]);
-
-            // The first group keeps the original vertex; the rest become duplicates.
-            normals[v] = groupNormals[0];
-            assigned[v] = true;
-
-            if (groupCount > 1)
-            {
-                var groupVertex = new int[groupCount];
-                groupVertex[0] = v;
-                for (int g = 1; g < groupCount; g++)
+                var idx = mesh.Faces.IndicesOf(f);
+                for (int c = 0; c < idx.Length; c++)
                 {
-                    groupVertex[g] = vertexCount + extraPositions.Count;
-                    extraPositions.Add(mesh.Positions[v]);
-                    extraNormals.Add(groupNormals[g]);
-                    extraSourceVertex.Add(v);
-                }
+                    if (idx[c] != v) continue;
 
-                foreach (int f in faces)
-                {
-                    int group = groupOf[f];
-                    if (group == 0) continue;
+                    int group = groups.GroupOf[f];
+                    if (!vertexOfGroup.TryGetValue(group, out int target))
+                    {
+                        if (!used)
+                        {
+                            target = v;
+                            normals[v] = groups.Normals[group];
+                            used = true;
+                        }
+                        else
+                        {
+                            target = vertexCount + extraPositions.Count;
+                            extraPositions.Add(mesh.Positions[v]);
+                            extraNormals.Add(groups.Normals[group]);
+                            extraSourceVertex.Add(v);
+                        }
+                        vertexOfGroup[group] = target;
+                    }
 
-                    var idx = mesh.Faces.IndicesOf(f);
-                    for (int c = 0; c < idx.Length; c++)
-                        if (idx[c] == v)
-                            cornerRemap[(f, c)] = groupVertex[group];
+                    if (target != v)
+                        cornerRemap[(f, c)] = target;
                 }
             }
-        }
 
-        for (int v = 0; v < vertexCount; v++)
-            if (!assigned[v])
+            if (!used)
                 normals[v] = new Float3(0f, 1f, 0f);
+        }
 
         ApplySplit(mesh, normals, extraPositions, extraNormals, extraSourceVertex, cornerRemap);
         return extraPositions.Count;
     }
 
-    private static List<int>?[] BuildAdjacency(IntermediateMesh mesh, int vertexCount, bool[] faceValid)
+    private sealed record PositionSmoothing(Dictionary<int, int> GroupOf, Float3[] Normals);
+
+    /// <summary>
+    /// Partitions every face around one position into smoothing groups, each with one angle weighted
+    /// normal. Weighting by the interior angle keeps a position shared by one large and several small
+    /// faces from being dragged toward the small ones.
+    /// </summary>
+    private static PositionSmoothing Smooth(IntermediateMesh mesh, List<int> faces, int position, int[] positionOf, Float3[] faceNormals, float cosThreshold)
     {
-        var adjacency = new List<int>?[vertexCount];
+        var groupOf = new Dictionary<int, int>();
+        PartitionIntoSmoothingGroups(mesh, faces, faceNormals, cosThreshold, groupOf, out int groupCount);
+
+        var groupNormals = new Float3[groupCount];
+        foreach (int f in faces)
+            groupNormals[groupOf[f]] += faceNormals[f] * CornerAngle(mesh, f, position, positionOf);
+
+        for (int g = 0; g < groupCount; g++)
+            groupNormals[g] = SafeNormalize(groupNormals[g], faceNormals[faces[0]]);
+
+        return new PositionSmoothing(groupOf, groupNormals);
+    }
+
+    private static int[] WeldPositions(IntermediateMesh mesh, out int positionCount)
+    {
+        var positionOf = new int[mesh.Positions.Count];
+        var byPosition = new Dictionary<(float, float, float), int>();
+        for (int v = 0; v < positionOf.Length; v++)
+        {
+            Float3 p = mesh.Positions[v];
+            var key = (p.X, p.Y, p.Z);
+            if (!byPosition.TryGetValue(key, out int id))
+            {
+                id = byPosition.Count;
+                byPosition[key] = id;
+            }
+            positionOf[v] = id;
+        }
+        positionCount = byPosition.Count;
+        return positionOf;
+    }
+
+    private static List<int>?[] BuildAdjacency(IntermediateMesh mesh, int[] positionOf, int positionCount, bool[] faceValid)
+    {
+        var adjacency = new List<int>?[positionCount];
         for (int f = 0; f < mesh.Faces.Count; f++)
         {
             if (!faceValid[f]) continue;
             foreach (int v in mesh.Faces.IndicesOf(f))
             {
-                if ((uint)v >= (uint)vertexCount) continue;
-                (adjacency[v] ??= new List<int>(4)).Add(f);
+                if ((uint)v >= (uint)positionOf.Length) continue;
+                var faces = adjacency[positionOf[v]] ??= new List<int>(4);
+                if (faces.Count == 0 || faces[^1] != f)
+                    faces.Add(f);
             }
         }
         return adjacency;
@@ -212,16 +245,16 @@ internal static class NormalGeneration
         }
     }
 
-    /// <summary>Interior angle of face <paramref name="face"/> at vertex <paramref name="vertex"/>.</summary>
-    private static float CornerAngle(IntermediateMesh mesh, int face, int vertex)
+    /// <summary>Interior angle of face <paramref name="face"/> at its corner on <paramref name="position"/>.</summary>
+    private static float CornerAngle(IntermediateMesh mesh, int face, int position, int[] positionOf)
     {
         var idx = mesh.Faces.IndicesOf(face);
         int corner = -1;
         for (int c = 0; c < idx.Length; c++)
-            if (idx[c] == vertex) { corner = c; break; }
+            if (positionOf[idx[c]] == position) { corner = c; break; }
         if (corner < 0) return 0f;
 
-        Float3 p = mesh.Positions[vertex];
+        Float3 p = mesh.Positions[idx[corner]];
         Float3 e0 = mesh.Positions[idx[(corner + 1) % idx.Length]] - p;
         Float3 e1 = mesh.Positions[idx[(corner + 2) % idx.Length]] - p;
 

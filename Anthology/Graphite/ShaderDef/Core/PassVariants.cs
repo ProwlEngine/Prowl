@@ -15,12 +15,12 @@ public enum CompilePolicy
     /// <summary>On a worker, the request reporting it pending until done.</summary>
     Async,
 
-    /// <summary>Never: only variants seeded from a snapshot exist.</summary>
+    /// <summary>Never: only variants seeded from a snapshot or <see cref="BakedVariants"/> exist.</summary>
     BakedOnly,
 }
 
 
-public enum VariantState
+internal enum VariantState
 {
     Ready,
     Pending,
@@ -33,14 +33,16 @@ public enum VariantState
 /// the rest compile on request under a policy, and failures stay until the pass source or compiler session changes,
 /// which drops every variant. Only variants seeded or requested are held. Thread safe.
 /// </summary>
-public sealed class PassVariants
+internal sealed class PassVariants
 {
     private sealed class Slot
     {
         public Variant? Variant;
-        public Task<ShaderDescription>? Pending;
+        public CompileJob? Job;
+        public ShaderDescription Compiled;
         public Exception? Failure;
         public ComputeDescription? Compute;
+        public CompileJob? ComputeJob;
     }
 
     private readonly ShaderPass _pass;
@@ -89,8 +91,8 @@ public sealed class PassVariants
     public GraphicsBackend Backend { get; }
     public IReadOnlyList<VariantSpace> Axes => _axes;
 
-    /// <summary>The globals the pass reads, from the compiler or the baked pass.</summary>
-    public IReadOnlyList<ShaderGlobal> Globals => Compiler?.GetGlobals(_pass) ?? BakedVariants.Find(_pass)?.Globals ?? [];
+    /// <summary>The globals the pass reads, from the compiler.</summary>
+    public IReadOnlyList<ShaderGlobal> Globals => Compiler?.GetGlobals(_pass) ?? [];
 
     /// <summary>Moves whenever the pass source, material ABI or compiler session changed and every variant was dropped.</summary>
     public int Revision
@@ -107,9 +109,6 @@ public sealed class PassVariants
 
     /// <summary>Every combination of the axes, held or not.</summary>
     public int Count => _count;
-
-    /// <summary>Raised once per variant failure, outside the lock.</summary>
-    public event Action<Keyword[], Exception>? CompileFailed;
 
     /// <summary>The keywords of a key, every axis in slot order.</summary>
     public Keyword[] Combo(int key)
@@ -138,6 +137,18 @@ public sealed class PassVariants
         for (int i = 0; i < selection.Length; i++)
             key += selection[i] * _strides[i];
         return true;
+    }
+
+    /// <summary>The key of keywords, unlisted axes and unknown values at their axis's first value, unknown names skipped.</summary>
+    public int KeyOf(ReadOnlySpan<Keyword> keywords)
+    {
+        int key = 0;
+        for (int i = 0; i < keywords.Length; i++)
+        {
+            if (_axisByName.TryGetValue(keywords[i].Name, out int slot) && _valueIndices[slot].TryGetValue(keywords[i].Value, out int value))
+                key += value * _strides[slot];
+        }
+        return key;
     }
 
     /// <summary>Adds baked variants. Ones not naming every axis of the pass are ignored.</summary>
@@ -215,32 +226,43 @@ public sealed class PassVariants
     }
 
     /// <summary>
-    /// The variant's description when ready, compiling it under the policy when it is neither ready nor failed. Compiles
-    /// run outside the lock. A Sync request waits for a compile already running, an Async one reports it pending, and a
-    /// variant that cannot compile here, BakedOnly or without a compiler, fails this request without being remembered.
+    /// The variant's description when ready, compiling it under the policy when it is neither ready nor failed. An Async
+    /// request queues the compile at its priority, raising one already queued lower.
+    /// A Sync request compiles on the calling thread, or waits for a compile already running. A variant that cannot compile here, BakedOnly or without a compiler, fails this request without
+    /// being remembered.
     /// </summary>
-    public VariantState Request(int key, CompilePolicy policy, out ShaderDescription description, out Exception? error)
+    public VariantState Request(int key, CompilePolicy policy, out ShaderDescription description, out Exception? error) => Request(key, policy, CompilePriority.Visible, out description, out error);
+
+    /// <inheritdoc cref="Request(int, CompilePolicy, out ShaderDescription, out Exception?)"/>
+    public VariantState Request(int key, CompilePolicy policy, CompilePriority priority, out ShaderDescription description, out Exception? error)
     {
         while (true)
         {
             description = default;
             error = null;
-            Exception? raised = null;
-            Task<ShaderDescription>? run = null, wait = null;
+            CompileJob? run = null;
+            Task? wait = null;
             VariantState state;
             lock (this)
             {
                 Refresh();
                 Slot slot = At(key);
-                state = Poll(key, slot, ref raised);
-                if (state == VariantState.Pending)
+                state = Poll(key, slot);
+                if (state == VariantState.Pending && slot.Job is { } job)
                 {
-                    if (slot.Pending is { } pending)
+                    if (policy == CompilePolicy.Sync)
                     {
-                        if (policy == CompilePolicy.Sync)
-                            wait = pending;
+                        job.Raise(CompilePriority.Fallback);
+                        wait = job.Done;
                     }
-                    else if (policy == CompilePolicy.BakedOnly || Compiler == null)
+                    else
+                    {
+                        job.Raise(priority);
+                    }
+                }
+                else if (state == VariantState.Pending)
+                {
+                    if (policy == CompilePolicy.BakedOnly || Compiler == null)
                     {
                         error = new InvalidOperationException($"The variant of pass '{_pass.Name}' is not compiled for backend {Backend} and cannot be compiled here.");
                         state = VariantState.Failed;
@@ -249,12 +271,11 @@ public sealed class PassVariants
                     {
                         IShaderCompiler compiler = Compiler;
                         Keyword[] combo = Combo(key);
-                        Task<ShaderDescription> task = new(() => compiler.Compile(_pass, combo, Backend));
-                        slot.Pending = task;
+                        void Work() => slot.Compiled = compiler.Compile(_pass, combo, Backend);
                         if (policy == CompilePolicy.Sync)
-                            run = task;
+                            slot.Job = run = new CompileJob(Work, priority);
                         else
-                            task.Start();
+                            Queue(key, slot, Work, priority);
                     }
                 }
                 if (state == VariantState.Ready)
@@ -262,11 +283,8 @@ public sealed class PassVariants
                 else if (state == VariantState.Failed)
                     error ??= slot.Failure;
             }
-            if (raised != null)
-                CompileFailed?.Invoke(Combo(key), raised);
-
-            run?.RunSynchronously();
-            wait ??= run;
+            run?.Run();
+            wait ??= run?.Done;
             if (wait == null)
                 return state;
             try
@@ -287,23 +305,70 @@ public sealed class PassVariants
         throw new InvalidOperationException($"The variant of pass '{_pass.SourceName}' failed to compile: {error?.Message}", error);
     }
 
-    /// <summary>The variant compiled as a compute program, now when it is not compiled yet. Throws when it failed.</summary>
+    /// <summary>
+    /// The variant compiled as a compute program, now when it is not compiled yet, waiting for a compile already queued.
+    /// Throws when it failed.
+    /// </summary>
     public ComputeDescription RequireCompute(int key = 0)
     {
-        IShaderCompiler compiler;
-        int revision;
+        while (true)
+        {
+            IShaderCompiler? compiler = null;
+            Task? queued = null;
+            int revision;
+            lock (this)
+            {
+                Refresh();
+                Slot slot = At(key);
+                if (slot.Compute is { } compiled)
+                    return compiled;
+                if (slot.Failure is { } failure)
+                    throw new InvalidOperationException($"The compute variant of pass '{_pass.SourceName}' failed to compile: {failure.Message}", failure);
+                if (slot.ComputeJob is { } job)
+                {
+                    job.Raise(CompilePriority.Fallback);
+                    queued = job.Done;
+                }
+                else
+                {
+                    compiler = Compiler ?? throw new InvalidOperationException($"The compute variant of pass '{_pass.SourceName}' is not compiled and cannot be compiled here.");
+                }
+                revision = _revision;
+            }
+            if (compiler != null)
+                return CompileCompute(compiler, key, revision);
+            try
+            {
+                queued!.Wait();
+            }
+            catch (AggregateException)
+            {
+            }
+        }
+    }
+
+    /// <summary>Starts compiling the variant as a compute program on a worker, unless it is compiled, failed, queued or cannot compile here.</summary>
+    public void QueueCompute(int key, CompilePriority priority)
+    {
         lock (this)
         {
             Refresh();
             Slot slot = At(key);
-            if (slot.Compute is { } compiled)
-                return compiled;
-            if (slot.Failure is { } failure)
-                throw new InvalidOperationException($"The compute variant of pass '{_pass.SourceName}' failed to compile: {failure.Message}", failure);
-            compiler = Compiler ?? throw new InvalidOperationException($"The compute variant of pass '{_pass.SourceName}' is not compiled and cannot be compiled here.");
-            revision = _revision;
+            if (slot.Compute != null || slot.Failure != null || Compiler is not { } compiler)
+                return;
+            if (slot.ComputeJob is { } queued)
+            {
+                queued.Raise(priority);
+                return;
+            }
+            int revision = _revision;
+            slot.ComputeJob = CompileQueue.Enqueue(() => CompileCompute(compiler, key, revision), priority);
         }
+    }
 
+    // Compiles a compute variant, kept unless the pass changed meanwhile
+    private ComputeDescription CompileCompute(IShaderCompiler compiler, int key, int revision)
+    {
         ComputeDescription description;
         try
         {
@@ -314,14 +379,20 @@ public sealed class PassVariants
             lock (this)
             {
                 if (revision == _revision)
+                {
                     At(key).Failure = e;
+                    At(key).ComputeJob = null;
+                }
             }
             throw;
         }
         lock (this)
         {
             if (revision == _revision)
+            {
                 At(key).Compute = description;
+                At(key).ComputeJob = null;
+            }
         }
         return description;
     }
@@ -334,8 +405,8 @@ public sealed class PassVariants
         {
             foreach (Slot slot in _slots.Values)
             {
-                if (slot.Pending != null)
-                    pending.Add(slot.Pending);
+                if (slot.Job != null)
+                    pending.Add(slot.Job.Done);
             }
         }
         foreach (Task task in pending)
@@ -364,25 +435,40 @@ public sealed class PassVariants
         }
     }
 
-    // A worker's finished compile is taken in, an unfinished one leaves the variant pending
-    private VariantState Poll(int key, Slot slot, ref Exception? raised)
+    // A finished compile is taken in
+    private VariantState Poll(int key, Slot slot)
     {
         if (slot.Variant is { } variant && variant.IsCompiledFor(Backend))
             return VariantState.Ready;
         if (slot.Failure != null)
             return VariantState.Failed;
-        if (slot.Pending is not { } task)
+        if (slot.Job is not { } job || !job.IsCompleted)
             return VariantState.Pending;
-        if (!task.IsCompleted)
+        slot.Job = null;
+        if (job.Done.IsCanceled)
             return VariantState.Pending;
-        slot.Pending = null;
-        if (task.IsCompletedSuccessfully)
+        if (job.Done.IsFaulted)
         {
-            Store(key, slot, task.Result);
-            return VariantState.Ready;
+            slot.Failure = job.Done.Exception?.InnerException ?? job.Done.Exception;
+            return VariantState.Failed;
         }
-        slot.Failure = raised = task.Exception?.InnerException ?? task.Exception;
-        return VariantState.Failed;
+        Store(key, slot, slot.Compiled);
+        slot.Compiled = default;
+        return VariantState.Ready;
+    }
+
+    // A queued compile takes its result in as soon as it is done, unasked
+    private void Queue(int key, Slot slot, Action work, CompilePriority priority)
+    {
+        slot.Job = CompileQueue.Enqueue(work, priority);
+        slot.Job.Done.ContinueWith(_ =>
+        {
+            lock (this)
+            {
+                if (_slots.GetValueOrDefault(key) == slot)
+                    Poll(key, slot);
+            }
+        }, TaskScheduler.Default);
     }
 
     // A new variant every time, so a baked one seeded in is never changed and seeds again as it shipped
@@ -423,6 +509,11 @@ public sealed class PassVariants
         _source = _pass.Source;
         _material = _pass.Material;
         _session = session;
+        foreach (Slot slot in _slots.Values)
+        {
+            slot.Job?.Cancel();
+            slot.ComputeJob?.Cancel();
+        }
         _slots.Clear();
         _revision++;
         SeedBaked();
@@ -430,17 +521,17 @@ public sealed class PassVariants
 
     private void SeedBaked()
     {
-        if (BakedVariants.Find(_pass) is not { } baked)
+        if ((Compiler as BakedVariants)?.Find(_pass) is not { } baked)
             return;
         foreach (Variant variant in baked.Variants)
         {
             if (TryGetFullKey(variant.Keywords, out int key))
                 At(key).Variant = variant;
         }
-        foreach (((GraphicsBackend backend, int key), ComputeDescription description) in baked.Compute)
+        foreach (((GraphicsBackend backend, VariantKey key), ComputeDescription description) in baked.Compute)
         {
-            if (backend == Backend && (uint)key < (uint)_count)
-                At(key).Compute = description;
+            if (backend == Backend && (uint)key.Index < (uint)_count)
+                At(key.Index).Compute = description;
         }
     }
 

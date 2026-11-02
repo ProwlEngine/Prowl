@@ -287,6 +287,9 @@ public abstract class PoseNodeInstance : GraphNodeInstance
     /// <summary>The node's sync track, used to phase-lock synchronized blends (default: single event).</summary>
     public virtual SyncTrack SyncTrack => Prowl.Motion.SyncTrack.Default;
 
+    /// <summary>Average linear root speed (units/second) the node's content travels at, 0 when it does not travel or cannot tell.</summary>
+    public virtual float AverageLinearSpeed => 0f;
+
     /// <summary>
     /// Initializes the node to start playing at <paramref name="initialTime"/> on its sync track, or
     /// at the very start when null.
@@ -357,6 +360,8 @@ public abstract class PassthroughPoseNodeInstance : PoseNodeInstance
     protected PoseNodeInstance Child { get; private set; } = null!;
 
     public override SyncTrack SyncTrack => Child.SyncTrack;
+
+    public override float AverageLinearSpeed => Child.AverageLinearSpeed;
 
     /// <summary>Resolves the child and allocates the pose buffer. Call from <see cref="GraphNodeInstance.Bind"/>.</summary>
     protected void BindChild(GraphBindContext context, int childIndex)

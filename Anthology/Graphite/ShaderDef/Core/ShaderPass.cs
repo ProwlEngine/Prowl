@@ -97,10 +97,17 @@ public sealed class ShaderPass : IDisposable
     public string Fingerprint => Material is { } material ? Source + "\n" + material.Signature : Source;
 
 
-    /// <summary>
-    /// Raised once per variant when its compile fails. Not raised again until the source or compiler session changes.
-    /// </summary>
-    public event Action<ShaderPass, Keyword[], Exception>? CompileFailed;
+    /// <summary>A pass with the same fields, not created for a device.</summary>
+    internal ShaderPass Copy() => new()
+    {
+        Name = Name,
+        Tags = Tags is null ? null : new Dictionary<string, string>(Tags),
+        State = State.Clone(),
+        Source = Source,
+        SourceName = SourceName,
+        SourceLine = SourceLine,
+        Material = Material,
+    };
 
 
     private GraphicsDevice? _device;
@@ -108,10 +115,8 @@ public sealed class ShaderPass : IDisposable
     private int _passIndex;
     private GraphicsBackend _backend;
     private PassVariants? _variants;
-    private Variant? _fallback;
 
     private Dictionary<ProgramKey, GraphicsProgram> _programCache = new();
-    private Dictionary<ProgramKey, GraphicsProgram> _fallbackProgramCache = new();
     private bool _created;
 
     private int _lastKey = -1;
@@ -124,64 +129,62 @@ public sealed class ShaderPass : IDisposable
     /// The pass's compiled variants for a backend, shared by every user of the pass. Made on first use, and again when
     /// asked for with another compiler or backend.
     /// </summary>
-    public PassVariants Variants(IShaderCompiler? compiler, GraphicsBackend backend)
+    internal PassVariants Variants(IShaderCompiler? compiler, GraphicsBackend backend)
     {
         lock (this)
         {
             if (_variants == null || _variants.Compiler != compiler || _variants.Backend != backend)
-            {
-                VariantSpace[] axes = [.. AxesWith(compiler)];
-                Adopt(new PassVariants(this, axes, compiler, backend));
-            }
-            return _variants!;
+                _variants = new PassVariants(this, [.. AxesWith(compiler)], compiler, backend);
+            return _variants;
         }
     }
 
 
-    /// <summary>The pass's variant axes, from the compiler or, without one, the baked pass.</summary>
+    /// <summary>The pass's variant axes from the compiler, or without one those it was created with.</summary>
     public IReadOnlyList<VariantSpace> AxesWith(IShaderCompiler? compiler)
-        => compiler?.GetAxes(this) ?? BakedVariants.Find(this)?.Axes ?? (IReadOnlyList<VariantSpace>?)_variants?.Axes ?? [];
+        => compiler?.GetAxes(this) ?? (IReadOnlyList<VariantSpace>?)_variants?.Axes ?? [];
 
 
     /// <summary>
-    /// Binds this pass to a device. A variant not ready falls back to the pass's default variant, every axis at its
-    /// first value, then to fallback.
+    /// Binds this pass to a device. Variants compile on the calling thread when first asked for, and one that failed
+    /// throws its error each time it is asked for until the source or compiler session changes.
     /// </summary>
-    internal void Bind(GraphicsDevice device, string shaderName, int passIndex, VariantSpace[] axes, Variant[] known, IShaderCompiler? compiler, CompileMode mode, Variant? fallback = null)
+    internal void Bind(GraphicsDevice device, string shaderName, int passIndex, VariantSpace[] axes, Variant[] known, IShaderCompiler? compiler)
     {
         _device = device;
         _shaderName = shaderName;
         _passIndex = passIndex;
         _backend = device.BackendType;
-        _fallback = fallback;
         ReleasePrograms();
+        PassVariants variants = new(this, axes, compiler, _backend);
+        variants.Seed(known);
         lock (this)
-            Adopt(new PassVariants(this, axes, compiler, _backend));
-        _variants!.Seed(known);
+            _variants = variants;
         _created = true;
-
-        if (mode == CompileMode.All && compiler != null)
-            CompileAll();
-    }
-
-
-    private void Adopt(PassVariants variants)
-    {
-        _variants = variants;
-        variants.CompileFailed += (combo, exception) => CompileFailed?.Invoke(this, combo, exception);
     }
 
 
     /// <summary>
-    /// Variant for a key from GetKey, compiled on demand if a compiler is attached. Key 0 is every axis at its first value.
+    /// Variant for a key from GetKey, compiled now if it is not yet and a compiler is attached. The default key is every
+    /// axis at its first value. Throws when the variant failed to compile.
     /// </summary>
-    public Variant GetVariant(int key)
+    public Variant GetVariant(VariantKey key = default)
     {
         EnsureCreated();
-        if ((uint)key >= (uint)_variants!.Count)
+        if ((uint)key.Index >= (uint)_variants!.Count)
             throw new ArgumentOutOfRangeException(nameof(key));
 
-        return Resolve(key).Variant;
+        return Resolve(key.Index);
+    }
+
+
+    /// <summary>
+    /// The variant compiled as a compute program, compiled now when it is not yet. Throws when it failed.
+    /// </summary>
+    public ComputeDescription CompileCompute(VariantKey key = default)
+    {
+        EnsureCreated();
+        return _variants!.RequireCompute(key.Index);
     }
 
 
@@ -223,33 +226,19 @@ public sealed class ShaderPass : IDisposable
 
 
     /// <summary>
-    /// Mixed-radix variant key for keywords, unlisted axes at their first value. Skips unknown names, throws on an unknown value for a known axis. Does not touch the pass.
+    /// The variant of keywords, unlisted axes at their first value. Skips unknown names, throws on an unknown value for a known axis. Does not touch the pass.
     /// </summary>
-    public int GetKey(ReadOnlySpan<Keyword> keywords)
+    public VariantKey GetKey(ReadOnlySpan<Keyword> keywords)
     {
         EnsureCreated();
         if (_variants!.TryGetKey(keywords, out int key))
-            return key;
+            return new VariantKey(key);
         foreach (Keyword keyword in keywords)
         {
             if (!_variants.TryGetKey([keyword], out _))
                 throw new ArgumentException($"Keyword '{keyword.Name}={keyword.Value}' is not a known axis or value of pass '{Name}'.");
         }
-        return key;
-    }
-
-
-    /// <summary>
-    /// Compiles every variant for the device backend. Needs a compiler attached.
-    /// </summary>
-    public void CompileAll()
-    {
-        EnsureCreated();
-        if (_variants!.Compiler == null)
-            throw new InvalidOperationException($"CompileAll on pass '{Name}' requires an attached compiler.");
-
-        for (int i = 0; i < _variants.Count; i++)
-            _variants.Request(i, CompilePolicy.Sync, out _, out _);
+        return new VariantKey(key);
     }
 
 
@@ -263,11 +252,8 @@ public sealed class ShaderPass : IDisposable
     {
         foreach (GraphicsProgram program in _programCache.Values)
             program.Dispose();
-        foreach (GraphicsProgram program in _fallbackProgramCache.Values)
-            program.Dispose();
 
         _programCache = new();
-        _fallbackProgramCache = new();
         _lastKey = -1;
         _lastProgram = null;
     }
@@ -286,7 +272,7 @@ public sealed class ShaderPass : IDisposable
         if ((uint)key >= (uint)_variants!.Count)
             throw new ArgumentOutOfRangeException(nameof(key));
 
-        if (!Resolve(key).Variant.TryGetDescription(_backend, out ShaderDescription description))
+        if (!Resolve(key).TryGetDescription(_backend, out ShaderDescription description))
             throw new InvalidOperationException($"The variant of pass '{Name}' is not compiled for backend {_backend} and no compiler is attached.");
 
         return description;
@@ -319,14 +305,10 @@ public sealed class ShaderPass : IDisposable
             effective.ToDepthStencilState(CommandBufferExtensions.DefaultDepth),
             effective.ToRasterizerState(CommandBufferExtensions.DefaultRaster));
 
-        if (_variants!.Compiled(key) != null)
-        {
-            _lastKey = key;
-            _lastPassState = State.Clone();
-            _lastOverride = overrideState?.Clone();
-            _lastProgram = program;
-        }
-
+        _lastKey = key;
+        _lastPassState = State.Clone();
+        _lastOverride = overrideState?.Clone();
+        _lastProgram = program;
         return program;
     }
 
@@ -338,11 +320,7 @@ public sealed class ShaderPass : IDisposable
         if (_programCache.TryGetValue(programKey, out GraphicsProgram? cached))
             return cached;
 
-        (Variant variant, bool isFallback) = Resolve(key);
-
-        if (isFallback && _fallbackProgramCache.TryGetValue(programKey, out GraphicsProgram? cachedFallback))
-            return cachedFallback;
-
+        Variant variant = Resolve(key);
         if (!variant.TryGetDescription(_backend, out ShaderDescription description))
             throw new InvalidOperationException($"The variant of pass '{Name}' is not compiled for backend {_backend} and no compiler is attached.");
 
@@ -352,7 +330,7 @@ public sealed class ShaderPass : IDisposable
 
         GraphicsProgram program = _device!.ResourceFactory.CreateGraphicsProgram(description);
         program.Name = ProgramName(variant.Keywords);
-        (isFallback ? _fallbackProgramCache : _programCache)[programKey] = program;
+        _programCache[programKey] = program;
         return program;
     }
 
@@ -372,21 +350,18 @@ public sealed class ShaderPass : IDisposable
 
 
     /// <summary>
-    /// The variant at key, compiled now when it can be, else the pass's default variant, else the fallback variant.
+    /// The variant at key, compiled now when it can be. Without a compiler, a known variant even when it is not compiled
+    /// for the backend. Throws with the compile error when it failed.
     /// </summary>
-    private (Variant Variant, bool Fallback) Resolve(int key)
+    private Variant Resolve(int key)
     {
         PassVariants variants = _variants!;
         if (variants.Request(key, CompilePolicy.Sync, out _, out Exception? error) == VariantState.Ready)
-            return (variants.Compiled(key)!, false);
+            return variants.Compiled(key)!;
         if (variants.Compiler == null && variants.Available(key) is { } uncompiled)
-            return (uncompiled, false);
-        if (key != 0 && variants.Request(0, CompilePolicy.Sync, out _, out _) == VariantState.Ready)
-            return (variants.Compiled(0)!, true);
-        if (_fallback != null && _fallback.IsCompiledFor(_backend))
-            return (_fallback, true);
+            return uncompiled;
 
-        throw new InvalidOperationException($"The variant of pass '{Name}' is not compiled for backend {_backend} and no fallback variant is available.", error);
+        throw new InvalidOperationException($"The variant of pass '{Name}' is not compiled for backend {_backend}: {error?.Message ?? "no compiler is attached"}", error);
     }
 
 

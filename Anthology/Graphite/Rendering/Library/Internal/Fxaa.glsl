@@ -1,4 +1,4 @@
-// Prowl's FXAA 3.11 on display referred colour: luma edges, a search along the edge for its ends, the pixel moved
+// FXAA 3.11 on display referred colour: luma edges, a search along the edge for its ends, the pixel moved
 // toward the edge by its place along it, and subpixel smoothing.
 
 uniform vec2 _Resolution;

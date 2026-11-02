@@ -117,6 +117,18 @@ public sealed class Blend2DDefinition : PoseNodeDefinition
 
         public override SyncTrack SyncTrack => _blendedTrack;
 
+        public override float AverageLinearSpeed
+        {
+            get
+            {
+                if (_children == null) return 0f;
+                float speed = 0f;
+                for (int i = 0; i < _activeCount; i++)
+                    speed += _children[_active[i].Index].AverageLinearSpeed * _active[i].Weight;
+                return speed;
+            }
+        }
+
         public float WeightOf(int childNodeIndex)
         {
             if (!IsInitialized || _children == null) return 0f;
@@ -221,7 +233,10 @@ public sealed class SpeedScaleDefinition : PoseNodeDefinition
     {
         private readonly SpeedScaleDefinition _def;
         private BoundFloat _speed;
+        private float _lastSpeed = 1f;
         public Instance(SpeedScaleDefinition def) => _def = def;
+
+        public override float AverageLinearSpeed => Child.AverageLinearSpeed * MathF.Max(_lastSpeed, 0f);
 
         public override void Bind(GraphBindContext context)
         {
@@ -238,6 +253,7 @@ public sealed class SpeedScaleDefinition : PoseNodeDefinition
         protected override void OnUpdate(GraphContext context)
         {
             float speed = Speed(context);
+            _lastSpeed = speed;
             if (context.SyncRange.HasValue)
             {
                 Child.Update(context);

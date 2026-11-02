@@ -28,10 +28,10 @@ internal sealed class ShadowsScene : DemoScene
     {
         Random random = new(11);
 
-        Add(Demo.Cube, Lit(new Float3(0.42f, 0.4f, 0.36f), 0f, 0.9f, grid: 4f), new Double3(0, -0.25, 0), new Double3(700, 0.5, 700));
+        Add(Demo.Cube, Pbr(new Float3(0.42f, 0.4f, 0.36f), 0f, 0.9f, grid: 4f), new Double3(0, -0.25, 0), new Double3(700, 0.5, 700));
 
-        Material stone = Lit(new Float3(0.72f, 0.69f, 0.62f), 0f, 0.8f);
-        Material capital = Lit(new Float3(0.6f, 0.57f, 0.5f), 0f, 0.75f);
+        Material stone = Pbr(new Float3(0.72f, 0.69f, 0.62f), 0f, 0.8f);
+        Material capital = Pbr(new Float3(0.6f, 0.57f, 0.5f), 0f, 0.75f);
         for (int x = -4; x <= 4; x++)
         {
             for (int z = -4; z <= 4; z++)
@@ -45,18 +45,18 @@ internal sealed class ShadowsScene : DemoScene
             }
         }
 
-        Add(Demo.Cube, Lit(new Float3(0.12f, 0.12f, 0.13f), 0.7f, 0.2f), new Double3(0, 9, 0), new Double3(2.4, 18, 2.4), Quaternion.AxisAngle(Float3.UnitY, MathF.PI * 0.25f));
+        Add(Demo.Cube, Pbr(new Float3(0.12f, 0.12f, 0.13f), 0.7f, 0.2f), new Double3(0, 9, 0), new Double3(2.4, 18, 2.4), Quaternion.AxisAngle(Float3.UnitY, MathF.PI * 0.25f));
 
         Float3[] colors = [new(0.95f, 0.95f, 0.97f), new(1f, 0.78f, 0.34f), new(0.95f, 0.64f, 0.54f), new(0.95f, 0.95f, 0.97f), new(0.8f, 0.1f, 0.1f), new(0.1f, 0.5f, 0.9f), new(0.1f, 0.7f, 0.3f)];
         for (int i = 0; i < colors.Length; i++)
         {
             float t = i / (float)(colors.Length - 1);
             bool metal = i < 4;
-            Add(Demo.Sphere, Lit(colors[i], metal ? 1f : 0f, metal ? 0.02f + t * 0.5f : 0.12f), new Double3(-9 + i * 3, 1.3, 80), new Double3(2.6, 2.6, 2.6));
+            Add(Demo.Sphere, Pbr(colors[i], metal ? 1f : 0f, metal ? 0.02f + t * 0.5f : 0.12f), new Double3(-9 + i * 3, 1.3, 80), new Double3(2.6, 2.6, 2.6));
         }
 
-        _bulbMaterial = Lit(new Float3(0, 0, 0), 0f, 1f, new Float3(9f, 6.5f, 3.5f));
-        Material pole = Lit(new Float3(0.08f, 0.08f, 0.09f), 0.5f, 0.4f);
+        _bulbMaterial = Pbr(new Float3(0, 0, 0), 0f, 1f, new Float3(187500f, 135400f, 72900f));
+        Material pole = Pbr(new Float3(0.08f, 0.08f, 0.09f), 0.5f, 0.4f);
         for (int i = 0; i < Lanterns; i++)
         {
             double side = i % 2 == 0 ? -1 : 1;
@@ -87,7 +87,7 @@ internal sealed class ShadowsScene : DemoScene
             Name = "Sun",
             Type = LightType.Directional,
             Color = new Float3(1f, 0.95f, 0.85f),
-            Intensity = 0.6f,
+            Intensity = 100000f,
             AngularRadius = 0.5f,
             Shadow = new ShadowDesc { Enabled = true, Resolution = 4096, Cascades = 4, Distance = 260, CascadeBlend = 0.15f },
         };
@@ -136,10 +136,10 @@ internal sealed class ShadowsScene : DemoScene
             _lastNight = night;
             for (int i = 0; i < Lanterns; i++)
             {
-                _lanternDescs[i].Intensity = 5f * night;
+                _lanternDescs[i].Intensity = 2500f * night;
                 World.SetLight(_lanternLights[i], _lanternDescs[i]);
             }
-            _bulbMaterial.SetColor("_Emission", new Float4(9f * night, 6.5f * night, 3.5f * night, 1));
+            _bulbMaterial.SetColor("emission_color", new Float4(12700f * night, 9170f * night, 4940f * night, 1));
         }
     }
 
@@ -159,7 +159,7 @@ internal sealed class ShadowsScene : DemoScene
         Float3 toSun = Float3.Normalize(new Float3(MathF.Cos(angle) * 0.8f, MathF.Sin(angle), MathF.Cos(angle) * 0.6f + 0.15f));
         float elevation = toSun.Y;
         _sunDesc.Direction = -toSun;
-        _sunDesc.Intensity = 0.6f * Math.Clamp((elevation + 0.02f) * 6f, 0f, 1f);
+        _sunDesc.Intensity = 100000f * Math.Clamp((elevation + 0.02f) * 6f, 0f, 1f);
         float warm = Math.Clamp(elevation * 3f, 0f, 1f);
         _sunDesc.Color = new Float3(1f, 0.45f + 0.5f * warm, 0.2f + 0.65f * warm);
     }

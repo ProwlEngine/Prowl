@@ -4,7 +4,7 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Rendering;
 
-/// <summary>One layer of a view as shaders read it through Graphite_View(), 464 bytes, matching Graphite_ViewData in Core.glsl.</summary>
+/// <summary>One layer of a view as shaders read it through Graphite_View(), 480 bytes, matching Graphite_ViewData in Core.glsl.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct ViewBlock
 {
@@ -24,6 +24,9 @@ public struct ViewBlock
 
     /// <summary>This layer's camera minus the view's first layer's, whose position the view's light and decal trees are built around.</summary>
     public Float4 TreeOffset;
+
+    /// <summary>The exposure shaders pre-expose light by, last frame's, 1 in a capture view, unused.</summary>
+    public Float4 Exposure;
 
     /// <summary>
     /// A view block from a camera relative view matrix (rotation only) and a projection, with the camera's world position.

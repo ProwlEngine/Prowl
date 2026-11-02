@@ -1,16 +1,14 @@
 #pragma variant SSR COPY RAYCAST BLUR RESOLVE TEMPORAL REPROJECT COMBINE
-// Prowl's stochastic screen space reflections. RayCast traces a GGX importance sampled ray per pixel against the depth,
+// Stochastic screen space reflections. RayCast traces a GGX importance sampled ray per pixel against the depth,
 // SceneBlur builds the convolved scene pyramid, Resolve gathers neighbouring rays weighted by BRDF over pdf and picks a
 // pyramid level by a roughness cone, Temporal reprojects and clamps against history, Reproject moves last frame's
-// result by motion for one bounce of feedback, and Combine adds the reflection over the scene by Fresnel. Depth is
-// reversed, normals are the G-buffer's world normals turned into the view matrix's space, and roughness and metallic
-// come from the material target.
+// result by motion for one bounce of feedback, and Combine swaps the probes' share of the top specular lobe for the
+// trace. Depth is reversed, normals are the G-buffer's world normals turned into the view matrix's space, and the top
+// lobe's reflectance and roughness come from the material target.
 
 #include "Graphite/Internal/PostView.glsl"
 
-#define SSR_PI 3.14159265359
 
-float Luminance(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
 vec3 SsrViewNormal(Graphite_ViewData view, vec2 encoded) { return normalize(mat3(view.view) * Graphite_OctDecode(encoded)); }
 
@@ -39,12 +37,12 @@ vec4 ImportanceSampleGGX(vec2 Xi, float roughness)
 {
     float m = roughness * roughness;
     float m2 = m * m;
-    float phi = 2.0 * SSR_PI * Xi.x;
+    float phi = 2.0 * GRAPHITE_PI * Xi.x;
     float cosT = sqrt((1.0 - Xi.y) / (1.0 + (m2 - 1.0) * Xi.y));
     float sinT = sqrt(max(1e-5, 1.0 - cosT * cosT));
     vec3 h = vec3(sinT * cos(phi), sinT * sin(phi), cosT);
     float d = (cosT * m2 - cosT) * cosT + 1.0;
-    float D = m2 / (SSR_PI * d * d);
+    float D = m2 / (GRAPHITE_PI * d * d);
     return vec4(h, D * cosT);
 }
 
@@ -114,7 +112,7 @@ void main()
         return;
     }
     vec3 viewNormal = SsrViewNormal(ssr_View, Graphite_Sample(_CameraNormalsTexture, vUV).xy);
-    float roughness = Graphite_Sample(_MaterialTexture, vUV).r;
+    float roughness = Graphite_Sample(_MaterialTexture, vUV).a;
     vec3 viewPos = Graphite_PostViewPosition(ssr_View, vUV, depth);
     vec3 V = SsrCameraToSurface(ssr_View, vUV, viewPos);
 
@@ -191,11 +189,11 @@ float BrdfWeight(vec3 V, vec3 L, vec3 N, float roughness)
     float m = roughness * roughness;
     float m2 = m * m;
     float d = (NdotH * m2 - NdotH) * NdotH + 1.0;
-    float D = m2 / (SSR_PI * d * d);
+    float D = m2 / (GRAPHITE_PI * d * d);
     float visL = NdotV * sqrt((NdotL - NdotL * m2) * NdotL + m2);
     float visV = NdotL * sqrt((NdotV - NdotV * m2) * NdotV + m2);
     float Vis = 0.5 / max(1e-5, visL + visV);
-    return D * Vis * (SSR_PI / 4.0);
+    return D * Vis * (GRAPHITE_PI / 4.0);
 }
 
 float EdgeFade(vec2 pos, float value)
@@ -208,7 +206,7 @@ void main()
 {
     Graphite_ViewData view = Graphite_PostView();
     vec3 viewNormal = SsrViewNormal(view, Graphite_Sample(_CameraNormalsTexture, vUV).xy);
-    float roughness = Graphite_Sample(_MaterialTexture, vUV).r;
+    float roughness = Graphite_Sample(_MaterialTexture, vUV).a;
     float depth = max(Graphite_Sample(_CameraDepthTexture, vUV).r, 1e-7);
     vec3 viewPos = Graphite_PostViewPosition(view, vUV, depth);
     vec3 V = -SsrCameraToSurface(view, vUV, viewPos);
@@ -242,13 +240,13 @@ void main()
         s.rgb = SamplePyramid(hitUV, mip);
         s.a = EdgeFade(hitUV, _EdgeFactor) * mask;
         if (_Fireflies == 1)
-            s.rgb /= 1.0 + Luminance(s.rgb);
+            s.rgb /= 1.0 + Graphite_Luminance(s.rgb);
         result += s * weight;
         weightSum += weight;
     }
     result /= max(1e-5, weightSum);
     if (_Fireflies == 1)
-        result.rgb /= 1.0 - min(Luminance(result.rgb), 0.95);
+        result.rgb /= 1.0 - min(Graphite_Luminance(result.rgb), 0.95);
     outColor = max(vec4(1e-5), result);
 }
 #elif defined(SSR_TEMPORAL)
@@ -268,7 +266,7 @@ vec2 ReflectionVelocity(vec2 uv)
     Graphite_ViewData view = Graphite_PostView();
     vec4 rd = Graphite_Sample(_RayCast, uv);
     float hitDepth = max(Graphite_Sample(_CameraDepthTexture, rd.w > 0.0 ? rd.xy : uv).r, 1e-7);
-    return uv - Graphite_PostPreviousUV(view, Graphite_PostRelativePosition(view, uv, hitDepth));
+    return uv - Graphite_PostPreviousUV(view, Graphite_RelativeFromDepth(view, uv, hitDepth));
 }
 
 void main()
@@ -276,6 +274,7 @@ void main()
     vec2 velocity = _ReflectionVelocity == 1 ? ReflectionVelocity(vUV) : Graphite_Sample(_CameraMotionVectorsTexture, vUV).rg;
     vec4 current = Graphite_Sample(_MainTex, vUV);
     vec4 previous = Graphite_Sample(_PreviousBuffer, vUV - velocity);
+    previous.rgb *= Graphite_PostExposureRatio(Graphite_PostView());
     vec2 du = vec2(1.0 / _ScreenSize.x, 0.0);
     vec2 dv = vec2(0.0, 1.0 / _ScreenSize.y);
     vec4 mn = current, mx = current;
@@ -298,39 +297,42 @@ void main()
 uniform GRAPHITE_SCREEN_TEXTURE _MainTex;
 uniform GRAPHITE_SCREEN_TEXTURE _CameraMotionVectorsTexture;
 
-void main() { outColor = Graphite_Sample(_MainTex, vUV - Graphite_Sample(_CameraMotionVectorsTexture, vUV).rg); }
+void main()
+{
+    vec4 previous = Graphite_Sample(_MainTex, vUV - Graphite_Sample(_CameraMotionVectorsTexture, vUV).rg);
+    outColor = vec4(previous.rgb * Graphite_PostExposureRatio(Graphite_PostView()), previous.a);
+}
 #elif defined(SSR_COMBINE)
-#include "Graphite/PBR.glsl"
+#include "Graphite/Probes.glsl"
 
 uniform GRAPHITE_SCREEN_TEXTURE _ReflectionBuffer;
 uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
 uniform GRAPHITE_SCREEN_TEXTURE _CameraNormalsTexture;
 uniform GRAPHITE_SCREEN_TEXTURE _MaterialTexture;
-uniform int _UseFresnel;
 
+// The scene shaded the top lobe with reflectance times the probes, so the trace takes the probes' place by its confidence
 void main()
 {
     Graphite_ViewData view = Graphite_PostView();
     vec4 scene = Graphite_SampleSource(vUV);
-    vec3 sceneColor = scene.rgb;
     vec4 reflection = Graphite_Sample(_ReflectionBuffer, vUV);
-    vec2 material = Graphite_Sample(_MaterialTexture, vUV).rg;
-    vec3 viewNormal = SsrViewNormal(view, Graphite_Sample(_CameraNormalsTexture, vUV).xy);
-    float depth = max(Graphite_Sample(_CameraDepthTexture, vUV).r, 1e-7);
-    vec3 V = -SsrCameraToSurface(view, vUV, Graphite_PostViewPosition(view, vUV, depth));
-    float NdotV = clamp(dot(viewNormal, V), 0.0, 1.0);
+    vec4 material = Graphite_Sample(_MaterialTexture, vUV);
+    float confidence = reflection.a * reflection.a;
+    if (confidence <= 0.0 || all(equal(material.rgb, vec3(0.0))))
+    {
+        outColor = scene;
+        return;
+    }
 
-    // Forward rendering has no albedo target, so it is approximated from the tonemapped scene colour
-    vec3 approxAlbedo = sceneColor / (1.0 + sceneColor);
-    vec3 F0 = mix(vec3(0.04), approxAlbedo, material.g);
-    float mask = reflection.a * reflection.a;
-    vec3 refl = reflection.rgb;
-    if (_UseFresnel == 1)
-        refl *= EnvBRDF(F0, material.r, NdotV);
-
-    // Bounds runaway HDR and the one bounce feedback diverging without Fresnel
-    refl = min(refl, vec3(8.0));
-    outColor = vec4(sceneColor + refl * mask, scene.a);
+    vec3 probes = vec3(0.0);
+    if (Graphite_ReflectionProbesReady())
+    {
+        float depth = max(Graphite_Sample(_CameraDepthTexture, vUV).r, 1e-7);
+        vec3 relative = Graphite_RelativeFromDepth(view, vUV, depth);
+        vec3 N = Graphite_OctDecode(Graphite_Sample(_CameraNormalsTexture, vUV).xy);
+        probes = Graphite_ProbeRadiance(Graphite_FindProbes(relative), N, Graphite_ViewDir(relative), material.a * material.a);
+    }
+    outColor = vec4(max(scene.rgb + material.rgb * (reflection.rgb - probes) * confidence, vec3(0.0)), scene.a);
 }
 #else
 uniform GRAPHITE_SCREEN_TEXTURE _MainTex;

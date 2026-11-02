@@ -7,37 +7,35 @@ namespace Prowl.Graphite.Rendering;
 internal sealed class ViewGraph
 {
     internal static PixelFormat[] SceneFormats(Func<PixelFormat, bool> drawable)
-        => [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_Float, drawable(PixelFormat.R16_G16_SNorm) ? PixelFormat.R16_G16_SNorm : PixelFormat.R16_G16_Float, PixelFormat.R8_G8_UNorm];
+        => [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_Float, PixelFormat.R8_UNorm, drawable(PixelFormat.R16_G16_SNorm) ? PixelFormat.R16_G16_SNorm : PixelFormat.R16_G16_Float, PixelFormat.R8_G8_B8_A8_UNorm];
 
+    // Stencil bits when the device has them, keeping float depth for reversed Z
     internal static PixelFormat SceneDepth(Func<PixelFormat, bool> drawable)
-        => drawable(PixelFormat.D32_Float) ? PixelFormat.D32_Float : PixelFormat.D16_UNorm;
+        => drawable(PixelFormat.D32_Float_S8_UInt) ? PixelFormat.D32_Float_S8_UInt
+        : drawable(PixelFormat.D32_Float) ? PixelFormat.D32_Float : PixelFormat.D16_UNorm;
 
     public const PixelFormat LdrColorFormat = PixelFormat.R8_G8_B8_A8_UNorm_SRgb;
 
     public static int SceneTargetCount(SceneTargets targets)
-        => (targets & (SceneTargets.Normals | SceneTargets.Material)) != 0 ? 4 : (targets & SceneTargets.Motion) != 0 ? 2 : 1;
+        => (targets & (SceneTargets.Normals | SceneTargets.Material)) != 0 ? 5 : (targets & SceneTargets.Reactive) != 0 ? 3 : (targets & SceneTargets.Motion) != 0 ? 2 : 1;
 
-    private static readonly RenderResourceID s_sceneId = RenderResourceID.Intern("Graphite.Scene");
+    public static readonly RenderResourceID SceneId = RenderResourceID.Intern(RendererOutputs.Scene);
 
     private readonly Dictionary<RenderFeature, FeaturePass> _passes = new();
     private readonly Dictionary<RenderFeature, int> _used = new();
     private int _frame;
     private bool _begun;
 
-    public ViewGraph(FramePipeline frame, CameraFrame camera, FrameGraph graph, bool probing)
+    public ViewGraph(FramePipeline frame, CameraFrame camera, FrameGraph graph)
     {
         Frame = frame;
         Camera = camera;
         Graph = graph;
-        Probing = probing;
     }
 
     public FramePipeline Frame { get; }
     public CameraFrame Camera { get; }
     public FrameGraph Graph { get; }
-
-    /// <summary>Whether this builds into a graph nobody runs, to learn what the features ask for before the view is prepared.</summary>
-    public bool Probing { get; }
     public CameraShape Shape { get; private set; }
 
     public readonly Dictionary<string, TextureHandle> Published = new(StringComparer.Ordinal);
@@ -54,15 +52,11 @@ internal sealed class ViewGraph
 
     public bool Captures => Camera.Desc.Kind is ViewKind.SkyCapture or ViewKind.ReflectionProbe;
 
-    private bool ColorDrawable(PixelFormat format) => Frame.Device.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.RenderTarget | TextureUsage.Sampled);
-
-    private bool DepthDrawable(PixelFormat format) => Frame.Device.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.DepthStencil | TextureUsage.Sampled);
-
-    public PixelFormat SceneDepthFormat => SceneDepth(DepthDrawable);
+    public PixelFormat SceneDepthFormat => Frame.Resources.SceneDepthFormat;
 
     public PixelFormat ColorFormat => ColorFormatOf(Shape);
 
-    public PixelFormat ColorFormatOf(in CameraShape shape) => shape.Ldr ? LdrColorFormat : SceneFormats(ColorDrawable)[0];
+    public PixelFormat ColorFormatOf(in CameraShape shape) => shape.Ldr ? LdrColorFormat : Frame.Resources.SceneFormats[0];
 
     private uint Layers => Shape.Layers > 1 ? (uint)Shape.Layers : 0;
 
@@ -73,15 +67,13 @@ internal sealed class ViewGraph
 
     public GraphTextureDesc SceneDesc()
     {
-        PixelFormat[] formats = SceneFormats(ColorDrawable)[..SceneTargetCount(Shape.Targets)];
-        formats[0] = ColorFormat;
         return new GraphTextureDesc
         {
             Width = (int)Camera.Info.Width,
             Height = (int)Camera.Info.Height,
-            ColorFormats = formats,
+            ColorFormats = Frame.Resources.SceneTargetFormats(SceneTargetCount(Shape.Targets), Shape.Ldr),
             EnableDepth = true,
-            DepthFormat = SceneDepth(DepthDrawable),
+            DepthFormat = SceneDepthFormat,
             ArrayLayers = Layers,
         };
     }
@@ -125,12 +117,13 @@ internal sealed class ViewGraph
         Current = Scene = default;
         CurrentIsScene = true;
         CurrentWritten = SceneWritten = ScreenVisibilityWritten = ScreenIrradianceWritten = Upscaled = false;
+        Camera.Info = Camera.Info.Culled(Camera.SceneColorUsed, Camera.SceneDepthUsed, Camera.BackDepthUsed, Camera.Shadows.FirstCascade() != null);
         View = Camera.Info;
 
         bool adopted = false;
         foreach (RenderFeature feature in Camera.Selected)
         {
-            if (!adopted && feature.SlotSnapshot > RenderSlot.Clear)
+            if (!adopted && feature.Slot > RenderSlot.Clear)
             {
                 AdoptScene();
                 adopted = true;

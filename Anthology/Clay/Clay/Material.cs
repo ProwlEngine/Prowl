@@ -103,6 +103,18 @@ public sealed class Material
     /// <summary>Legacy specular-glossiness workflow (KHR_materials_pbrSpecularGlossiness).</summary>
     public SpecularGlossinessExtension? SpecularGlossiness { get; init; }
 
+    /// <summary>Thin film interference (KHR_materials_iridescence).</summary>
+    public IridescenceExtension? Iridescence { get; init; }
+
+    /// <summary>Anisotropic specular roughness (KHR_materials_anisotropy).</summary>
+    public AnisotropyExtension? Anisotropy { get; init; }
+
+    /// <summary>Chromatic dispersion (KHR_materials_dispersion); only meaningful with transmission and volume.</summary>
+    public DispersionExtension? Dispersion { get; init; }
+
+    /// <summary>Diffuse transmission through thin surfaces (KHR_materials_diffuse_transmission).</summary>
+    public DiffuseTransmissionExtension? DiffuseTransmission { get; init; }
+
     /// <summary>
     /// Extension data we do not model with typed surfaces (including VRMC_*).
     /// Keys are extension names; values are the raw JSON elements as parsed.

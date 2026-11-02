@@ -321,8 +321,17 @@ public static class Modal
     /// <summary>Push a confirmation dialog with Yes/No buttons.</summary>
     public static void Confirm(string title, string message, Action onYes, Action? onNo = null)
     {
+        var theme = Origami.Current;
+        if (theme.Font == null) return;
+
         var entry = new DialogModal { Title = title, Width = 380, CloseOnEscape = true };
-        entry.DrawContent = paper => Origami.Label(paper, "modal_msg", message).Show();
+        entry.DrawContent = paper =>
+        {
+            paper.Box("modal_msg")
+                .Size(UnitValue.Auto)
+                .Wrap(Scribe.TextWrapMode.Wrap)
+                .Text(message, theme.Font);
+        };
         entry.Button("Yes", () => { onYes(); Pop(); }, OrigamiVariant.Primary);
         entry.Button("No", () => { onNo?.Invoke(); Pop(); });
         Push(entry);
@@ -331,8 +340,17 @@ public static class Modal
     /// <summary>Push a message dialog with an OK button.</summary>
     public static void Message(string title, string message)
     {
+        var theme = Origami.Current;
+        if (theme.Font == null) return;
+
         var entry = new DialogModal { Title = title, Width = 380, CloseOnEscape = true };
-        entry.DrawContent = paper => Origami.Label(paper, "modal_msg", message).Show();
+        entry.DrawContent = paper =>
+        {
+            paper.Box("modal_msg")
+                .Size(UnitValue.Auto)
+                .Wrap(Scribe.TextWrapMode.Wrap)
+                .Text(message, theme.Font);
+        };
         entry.Button("OK", Pop, OrigamiVariant.Primary);
         Push(entry);
     }

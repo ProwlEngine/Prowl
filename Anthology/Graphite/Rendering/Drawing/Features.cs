@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using System.Threading;
 
 using Prowl.Graphite.ShaderDef;
@@ -78,7 +77,7 @@ public readonly struct FeatureView
     {
         World = desc.World;
         Kind = desc.Kind;
-        ViewId = desc.ViewId;
+        RenderView = desc.Owner;
         LayerCount = desc.LayerCount;
         Width = width;
         Height = height;
@@ -86,14 +85,24 @@ public readonly struct FeatureView
         Position = desc.Layers[0].Position;
         OutputWidth = desc.Target is { } target ? Math.Max(1u, (uint)MathF.Round(target.Width * desc.Viewport.Z)) : width;
         OutputHeight = desc.Target is { } output ? Math.Max(1u, (uint)MathF.Round(output.Height * desc.Viewport.W)) : height;
+        Viewport = desc.Viewport;
+        ClearColor = desc.ClearColor;
+        ClearTarget = desc.ClearTarget;
+        Overlay = desc.Overlay;
     }
 
     /// <summary>The view as features after an upscale see it, its colour at the output resolution.</summary>
     internal FeatureView AtOutput() => this with { Width = OutputWidth, Height = OutputHeight, RenderScale = 1, Upscaled = true };
 
+    /// <summary>The view once it is culled, with what its draws read this frame.</summary>
+    internal FeatureView Culled(bool sceneColor, bool sceneDepth, bool backDepth, bool cascades)
+        => this with { ReadsSceneColor = sceneColor, ReadsSceneDepth = sceneDepth, ReadsBackDepth = backDepth, HasCascades = cascades };
+
     public RenderWorld World { get; }
     public ViewKind Kind { get; }
-    public int ViewId { get; }
+
+    /// <summary>The host's view, null on the renderer's own capture and shadow views.</summary>
+    public RenderView? RenderView { get; }
 
     /// <summary>1 for mono, 2 for stereo, 6 for a cube capture. Textures of layered views are arrays drawn through multiview.</summary>
     public int LayerCount { get; }
@@ -116,6 +125,30 @@ public readonly struct FeatureView
     /// <summary>The first layer's camera position.</summary>
     public Double3 Position { get; }
 
+    /// <summary>The part of the target the view presents into, as x, y, width and height from 0 to 1.</summary>
+    public Float4 Viewport { get; }
+
+    /// <summary>The colour the view clears its scene and, when <see cref="ClearTarget"/>, its target to.</summary>
+    public Float4 ClearColor { get; }
+
+    /// <summary>Whether the present clears the whole target before it draws the viewport.</summary>
+    public bool ClearTarget { get; }
+
+    /// <summary>Whether the view blends over what its target holds, its scene cleared to transparent black.</summary>
+    public bool Overlay { get; }
+
+    /// <summary>Whether the view's transparent renderables sample its scene colour this frame. Known from HasWork on, not in IsActive.</summary>
+    public bool ReadsSceneColor { get; private init; }
+
+    /// <summary>Whether the view's transparent renderables fetch its scene depth this frame. Known from HasWork on, not in IsActive.</summary>
+    public bool ReadsSceneDepth { get; private init; }
+
+    /// <summary>Whether the view's transmissive renderables read its back depth this frame. Known from HasWork on, not in IsActive.</summary>
+    public bool ReadsBackDepth { get; private init; }
+
+    /// <summary>Whether the view has directional cascades this frame. Known from HasWork on, not in IsActive.</summary>
+    public bool HasCascades { get; private init; }
+
     /// <summary>A texture sized as a part of the colour's resolution, an array on layered views.</summary>
     public GraphTextureDesc Texture(PixelFormat format, float scale = 1)
         => SharedTexture(format, scale) with { ArrayLayers = LayerCount > 1 ? (uint)LayerCount : 0 };
@@ -128,60 +161,9 @@ public readonly struct FeatureView
     public static GraphTextureDesc Shared(int width, int height, PixelFormat format) => GraphTextureDesc.Sized(width, height, false, format);
 }
 
-/// <summary>Features added to a world or a view. Host thread.</summary>
-public sealed class FeatureSet : IEnumerable<RenderFeature>
-{
-    private readonly List<RenderFeature> _features = new();
-    private RenderFeature[] _snapshot = [];
-    private int _version, _snapshotVersion = -1;
-
-    public int Count => _features.Count;
-
-    public void Add(RenderFeature feature)
-    {
-        ArgumentNullException.ThrowIfNull(feature);
-        if (_features.Contains(feature))
-            return;
-        _features.Add(feature);
-        _version++;
-    }
-
-    public bool Remove(RenderFeature feature)
-    {
-        if (!_features.Remove(feature))
-            return false;
-        _version++;
-        return true;
-    }
-
-    public bool Contains(RenderFeature feature) => _features.Contains(feature);
-
-    public IEnumerator<RenderFeature> GetEnumerator() => _features.GetEnumerator();
-
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-    /// <summary>The features as of this call, the same array while the set does not change. Host thread.</summary>
-    internal RenderFeature[] Snapshot()
-    {
-        if (_snapshotVersion != _version)
-        {
-            _snapshot = [.. _features];
-            _snapshotVersion = _version;
-        }
-        return _snapshot;
-    }
-}
-
-/// <summary>
-/// Work a host adds to views: a pass in a slot of every view of a world, or of one view. Its slot, order, kinds, group
-/// and Enabled are read at SubmitFrame along with <see cref="Extract"/> on the host thread, everything else runs on the
-/// render thread. Of features sharing an <see cref="ExclusiveGroup"/> the view's wins over the world's, which wins over
-/// the built in one, so a feature replaces a built in one by taking its group: SceneClear, Cascades, Prepass, Opaque,
-/// Sky, SceneColor, Transparent or Present. A feature that throws fails the frame.
-/// </summary>
 /// <summary>
 /// Scene targets past colour and depth that a feature reads. A view allocates the ones its features read: motion as the
-/// second target, then normals and material together, each also bringing the ones before it.
+/// second target, then the reactive mask, then normals and material together, each also bringing the ones before it.
 /// </summary>
 [Flags]
 public enum SceneTargets
@@ -190,26 +172,166 @@ public enum SceneTargets
     Motion = 1,
     Normals = 2,
     Material = 4,
+
+    /// <summary>
+    /// How much of each pixel transmissive surfaces drew from what is behind them, 0 to 1, see
+    /// <see cref="FeatureContext.Reactive"/>. A view has it only on frames it draws a transmissive surface, else null.
+    /// </summary>
+    Reactive = 8,
 }
 
-public abstract class RenderFeature
+/// <summary>
+/// A group of features of which one runs. Of view features sharing a group the view's wins over the world's, which wins
+/// over the built in one, so a feature replaces a built in one by taking its group. Of frame features sharing a group in
+/// one set the last added runs, and any replaces the built in one.
+/// </summary>
+public sealed class FeatureGroup(string name)
+{
+    public string Name { get; } = name;
+
+    public override string ToString() => Name;
+
+    /// <summary>The built in view features' groups.</summary>
+    public static readonly FeatureGroup SceneClear = new("SceneClear"), Cascades = new("Cascades"), Prepass = new("Prepass"),
+        Opaque = new("Opaque"), Sky = new("Sky"), SceneColor = new("SceneColor"), SceneDepth = new("SceneDepth"),
+        BackDepth = new("BackDepth"), Transparent = new("Transparent"), Present = new("Present");
+
+    /// <summary>The stock effects' groups, of which a view runs one each.</summary>
+    public static readonly FeatureGroup ScreenLighting = new("ScreenLighting"), Tonemap = new("Tonemap"), AntiAliasing = new("AntiAliasing");
+
+    /// <summary>The built in frame features' groups.</summary>
+    public static readonly FeatureGroup Deform = new("Deform"), LightProbes = new("LightProbes"), LocalShadows = new("LocalShadows"),
+        CaptureFill = new("CaptureFill"), Readback = new("Readback");
+}
+
+/// <summary>
+/// What a host adds to a world, a view or the renderer: a <see cref="RenderFeature"/>, a <see cref="FrameFeature"/> or a
+/// <see cref="RenderProvider"/>. What it is is fixed when it is made, Enabled and its settings are copied every SubmitFrame.
+/// </summary>
+public abstract class RenderExtension
+{
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Copies settings the render thread reads. Host thread, at SubmitFrame, while enabled.</summary>
+    public virtual void Extract() { }
+
+    internal bool EnabledSnapshot;
+
+    /// <summary>Copies what the render thread reads of the extension itself. Host thread, at SubmitFrame.</summary>
+    internal virtual void Snapshot() => EnabledSnapshot = Enabled;
+
+    /// <summary>Called as the extension joins or leaves a set, for extensions that belong to one.</summary>
+    internal virtual void Attach(object set) { }
+
+    internal virtual void Detach(object set) { }
+}
+
+/// <summary>Extensions added to a world, a view or the renderer. Host thread.</summary>
+public sealed class ExtensionSet<T> : IEnumerable<T> where T : RenderExtension
+{
+    private readonly List<T> _items = new();
+    private T[] _snapshot = [];
+    private int _version, _snapshotVersion = -1;
+
+    public ExtensionSet() { }
+
+    internal ExtensionSet(RenderWorld? world) => World = world;
+
+    /// <summary>The world the set belongs to, null for a view's or the renderer's.</summary>
+    internal RenderWorld? World { get; }
+
+    public int Count => _items.Count;
+
+    public void Add(T item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (_items.Contains(item))
+            return;
+        item.Attach(this);
+        _items.Add(item);
+        _version++;
+    }
+
+    public bool Remove(T item)
+    {
+        if (!_items.Remove(item))
+            return false;
+        item.Detach(this);
+        _version++;
+        return true;
+    }
+
+    public bool Contains(T item) => _items.Contains(item);
+
+    public IEnumerator<T> GetEnumerator() => _items.GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    /// <summary>The extensions as of this call, each snapshot, the same array while the set does not change. Host thread.</summary>
+    internal T[] Snapshot()
+    {
+        if (_snapshotVersion != _version)
+        {
+            _snapshot = [.. _items];
+            _snapshotVersion = _version;
+        }
+        foreach (T item in _snapshot)
+            item.Snapshot();
+        return _snapshot;
+    }
+}
+
+/// <summary>
+/// Work a host adds to views: a pass in a slot of every view of a world, or of one view. Its slot, group, view kinds,
+/// scene reads and drawn pass types are fixed when it is made. Enabled, Order and the jitter it asks for are read at
+/// SubmitFrame along with <see cref="RenderExtension.Extract"/> on the host thread, everything else runs on the render
+/// thread. A feature that throws fails the frame.
+/// </summary>
+public abstract class RenderFeature : RenderExtension
 {
     private static int s_nextId;
+    private readonly PassType[] _passes;
+
+    /// <summary>What its pass is called in the frame graph, the debugger and the profiler, its class name by default.</summary>
+    public virtual string Name => GetType().Name;
+
+    /// <param name="slot">Where in the view's frame it runs.</param>
+    /// <param name="order">Its order inside the slot, built in features at 0.</param>
+    /// <param name="group">The group it replaces the other features of, see <see cref="FeatureGroup"/>.</param>
+    /// <param name="runsOn">The kinds of view it runs on.</param>
+    /// <param name="sceneReads">The scene targets past colour and depth it reads, so its views have them.</param>
+    /// <param name="passes">The pass types it draws through <see cref="FeatureContext.DrawPass"/>.</param>
+    protected RenderFeature(RenderSlot slot, int order = 0, FeatureGroup? group = null, ViewKinds runsOn = ViewKinds.Cameras, SceneTargets sceneReads = SceneTargets.None, PassType[]? passes = null)
+    {
+        Slot = slot;
+        Order = order;
+        Group = group;
+        RunsOn = runsOn;
+        SceneReads = sceneReads;
+        _passes = passes is { Length: > 0 } ? [.. passes] : [];
+    }
 
     internal int Id { get; } = Interlocked.Increment(ref s_nextId);
 
-    public abstract RenderSlot Slot { get; }
+    public RenderSlot Slot { get; }
 
     /// <summary>Order inside the slot, built in features at 0.</summary>
-    public virtual int Order { get; set; }
+    public int Order { get; set; }
 
-    public virtual ViewKinds RunsOn => ViewKinds.Cameras;
-    public virtual string? ExclusiveGroup => null;
+    public FeatureGroup? Group { get; }
 
-    public bool Enabled { get; set; } = true;
+    public ViewKinds RunsOn { get; }
 
-    /// <summary>Whether the view adds no pass for the feature this frame.</summary>
-    internal virtual bool Skips(ViewGraph view) => false;
+    /// <summary>The scene targets past colour and depth the feature reads, so its views have them.</summary>
+    public SceneTargets SceneReads { get; }
+
+    /// <summary>
+    /// The pass types the feature draws through <see cref="FeatureContext.DrawPass"/>, the shader passes tagged
+    /// "LightMode" = type. Every view it runs on buckets the visible renderables of each before it is culled.
+    /// </summary>
+    public IReadOnlyList<PassType> Passes => _passes;
+
+    internal PassType[] PassArray => _passes;
 
     /// <summary>
     /// Halton phases the view's projection jitters through while the feature runs, for temporal effects, 0 for none. The
@@ -220,14 +342,17 @@ public abstract class RenderFeature
     /// <summary>The texture LOD bias the view's samplers take while it jitters for this feature.</summary>
     public virtual float JitterMipBias => 0;
 
-    /// <summary>The scene targets past colour and depth the feature reads, so its views have them.</summary>
-    public virtual SceneTargets SceneReads => SceneTargets.None;
+    /// <summary>Whether the feature measures the exposure its views take next frame, through <see cref="FeatureBuilder.WriteExposure"/>.</summary>
+    internal virtual bool MeasuresExposure => false;
 
-    /// <summary>Copies settings the render thread reads. Host thread, at SubmitFrame.</summary>
-    public virtual void Extract() { }
-
-    /// <summary>Whether the feature runs on a view this frame. Render thread.</summary>
+    /// <summary>Whether the feature runs on a view this frame, asked before the view is culled. Render thread.</summary>
     public virtual bool IsActive(in FeatureView view) => true;
+
+    /// <summary>
+    /// Whether the feature adds its pass to a view it runs on this frame, asked once the view is culled, so it can answer
+    /// from what the view draws. Render thread.
+    /// </summary>
+    public virtual bool HasWork(in FeatureView view) => true;
 
     /// <summary>Once a frame before any view, for per frame work. Render thread.</summary>
     public virtual void PrepareFrame() { }
@@ -238,28 +363,34 @@ public abstract class RenderFeature
     /// <summary>Records the feature's work for a view. Render thread.</summary>
     public abstract void Render(FeatureContext context);
 
-    internal bool EnabledSnapshot;
-    internal RenderSlot SlotSnapshot;
     internal int OrderSnapshot;
-    internal ViewKinds RunsOnSnapshot;
-    internal string? GroupSnapshot;
     internal int JitterPhasesSnapshot;
     internal float JitterMipBiasSnapshot;
-    internal SceneTargets SceneReadsSnapshot;
 
-    // Host thread, at SubmitFrame
-    internal void TakeSnapshot()
+    private FullscreenProgram[] _programs = [];
+
+    /// <summary>Adds a fullscreen program the feature draws with, so it is left out of views until the program is ready.</summary>
+    internal void Uses(FullscreenProgram program)
     {
-        EnabledSnapshot = Enabled;
-        SlotSnapshot = Slot;
+        if (Array.IndexOf(_programs, program) < 0)
+            _programs = [.. _programs, program];
+    }
+
+    /// <summary>Whether every fullscreen program the feature draws with is ready for a view of this many layers, asking for the ones that are not. Render thread.</summary>
+    internal bool ProgramsReady(int layers)
+    {
+        bool ready = true;
+        foreach (FullscreenProgram program in _programs)
+            ready &= program.Ready(layers);
+        return ready;
+    }
+
+    internal override void Snapshot()
+    {
+        base.Snapshot();
         OrderSnapshot = Order;
-        RunsOnSnapshot = RunsOn;
-        GroupSnapshot = ExclusiveGroup;
         JitterPhasesSnapshot = Math.Max(JitterPhases, 0);
         JitterMipBiasSnapshot = JitterMipBias;
-        SceneReadsSnapshot = SceneReads;
-        if (this is ScreenLightingFeature lighting)
-            (lighting.ScaleSnapshot, lighting.IrradianceSnapshot) = (Math.Clamp(lighting.Scale, 0.0625f, 1f), lighting.WritesIrradiance);
     }
 }
 
@@ -271,8 +402,8 @@ public abstract class RenderFeature
 /// </summary>
 public abstract class ScreenLightingFeature : RenderFeature
 {
-    public override RenderSlot Slot => RenderSlot.AfterPrepass;
-    public override string? ExclusiveGroup => "ScreenLighting";
+    protected ScreenLightingFeature(int order = 0, ViewKinds runsOn = ViewKinds.Cameras)
+        : base(RenderSlot.AfterPrepass, order, FeatureGroup.ScreenLighting, runsOn) { }
 
     /// <summary>The part of the view's render resolution the screen lighting takes, 1/16 to 1.</summary>
     public abstract float Scale { get; }
@@ -282,21 +413,47 @@ public abstract class ScreenLightingFeature : RenderFeature
 
     internal float ScaleSnapshot = 1;
     internal bool IrradianceSnapshot;
+
+    internal override void Snapshot()
+    {
+        base.Snapshot();
+        ScaleSnapshot = Math.Clamp(Scale, 0.0625f, 1f);
+        IrradianceSnapshot = WritesIrradiance;
+    }
 }
 
 /// <summary>
 /// A fullscreen effect made by <see cref="Renderer.CreateFullscreenProgram"/>, built for mono views and for layered views
-/// through multiview.
+/// through multiview. Under <see cref="CompilePolicy.Async"/> each form compiles on the compile queue the first time it is
+/// wanted and is built on the render thread once compiled. A feature drawing one that is not ready yet is left out of
+/// its views until it is, so their colour passes through it unchanged.
 /// </summary>
 public sealed class FullscreenProgram : IDisposable
 {
-    private FullscreenProgram(GraphicsProgram mono, GraphicsProgram layered, bool source, bool lit, bool procedural)
+    private readonly GraphicsDevice _device;
+    private readonly PassVariants _variants;
+    private readonly int[] _keys;
+    private readonly GraphicsProgram?[] _built = new GraphicsProgram?[2];
+    private readonly BlendStateDescription _blend;
+    private readonly string _name;
+    private readonly CompilePolicy _policy;
+    private readonly CompilePriority _priority;
+    private readonly Action<RendererError>? _report;
+    private bool _failed;
+
+    private FullscreenProgram(GraphicsDevice device, PassVariants variants, int[] keys, BlendStateDescription blend, string name, bool source, bool lit, bool procedural, CompilePolicy policy, CompilePriority priority, Action<RendererError>? report)
     {
-        Mono = mono;
-        Layered = layered;
+        _device = device;
+        _variants = variants;
+        _keys = keys;
+        _blend = blend;
+        _name = name;
         HasSource = source;
         Lit = lit;
         Procedural = procedural;
+        _policy = policy;
+        _priority = priority;
+        _report = report;
     }
 
     /// <summary>Whether the program reads Graphite_Source.</summary>
@@ -308,15 +465,59 @@ public sealed class FullscreenProgram : IDisposable
     /// <summary>Whether the program writes its own vertex stage, drawn through <see cref="FeatureContext.DrawProcedural"/>.</summary>
     public bool Procedural { get; }
 
-    internal GraphicsProgram Mono { get; }
-    internal GraphicsProgram Layered { get; }
+    /// <summary>The program to draw over a view of this many layers, for features that bind it themselves, compiled now when it is not ready. Render thread.</summary>
+    public GraphicsProgram For(int layers)
+    {
+        int form = layers > 1 ? 1 : 0;
+        return _built[form] ??= Build(_variants.Require(_keys[form]), form);
+    }
 
-    internal GraphicsProgram For(int layers) => layers > 1 ? Layered : Mono;
+    /// <summary>
+    /// Whether the form for a view of this many layers is built, asking for its compile at the program's priority when
+    /// it is not. A failed compile is reported once and never becomes ready. Render thread.
+    /// </summary>
+    internal bool Ready(int layers)
+    {
+        int form = layers > 1 ? 1 : 0;
+        if (_built[form] != null)
+            return true;
+        if (_failed)
+            return false;
+        VariantState state = _variants.Request(_keys[form], _policy, _priority, out ShaderDescription description, out Exception? error);
+        try
+        {
+            if (state == VariantState.Ready)
+                _built[form] = Build(description, form);
+        }
+        catch (Exception e)
+        {
+            error = e;
+        }
+        if (state == VariantState.Failed || error != null)
+        {
+            _failed = true;
+            _report?.Invoke(new RendererError("shader.compile", $"{_name}: {error?.Message}", RendererErrorSeverity.Error, this) { Key = $"fullscreen.{_name}" });
+        }
+        return _built[form] != null;
+    }
 
     public void Dispose()
     {
-        Mono.Dispose();
-        Layered.Dispose();
+        foreach (GraphicsProgram? program in _built)
+            program?.Dispose();
+        Array.Clear(_built);
+    }
+
+    private GraphicsProgram Build(ShaderDescription description, int form)
+    {
+        description.BlendState = _blend;
+        description.DepthStencilState = DepthStencilStateDescription.Disabled;
+        description.RasterizerState = RasterizerStateDescription.CullNone;
+        if (Lit)
+            description.ResourceLayouts = LitLayouts(description.ResourceLayouts ?? []);
+        GraphicsProgram program = _device.ResourceFactory.CreateGraphicsProgram(description);
+        program.Name = form == 1 ? _name + " layered" : _name;
+        return program;
     }
 
     // The renderer's frame and view tables whole, so the camera's bind as they are, and the program's own resources in the user set
@@ -368,37 +569,41 @@ public sealed class FullscreenProgram : IDisposable
         return keywords;
     }
 
-    internal static FullscreenProgram Create(GraphicsDevice device, IShaderCompiler? compiler, string fragment, string name, bool source = true, BlendStateDescription? blend = null, bool lit = false, bool procedural = false, string variant = "")
+    /// <summary>
+    /// A program whose forms compile under the policy: Async asks for the mono form now at the priority and the layered
+    /// one when a layered view first wants it, the other policies build both now.
+    /// </summary>
+    internal static FullscreenProgram Create(GraphicsDevice device, IShaderCompiler? compiler, string fragment, string name, bool source = true, BlendStateDescription? blend = null, bool lit = false, bool procedural = false, string variant = "",
+        CompilePolicy policy = CompilePolicy.Sync, CompilePriority priority = CompilePriority.Visible, Action<RendererError>? report = null)
     {
         source &= !procedural;
         PassVariants variants = Pass(fragment, name, lit, procedural).Variants(compiler, device.BackendType);
         List<Keyword> keywords = Keywords(variants.Axes, variant);
         keywords.Add(new Keyword("GRAPHITE_NO_SOURCE", source ? "false" : "true"));
-        GraphicsProgram Build(bool layered)
+        int[] keys = new int[2];
+        for (int form = 0; form < 2; form++)
         {
-            if (!variants.TryGetKey([.. keywords, new Keyword("GRAPHITE_LAYERED", layered ? "true" : "false")], out int key))
+            if (!variants.TryGetKey([.. keywords, new Keyword("GRAPHITE_LAYERED", form == 1 ? "true" : "false")], out keys[form]))
                 throw new ArgumentException($"{name} has no variant '{variant}'.", nameof(variant));
-            ShaderDescription description = variants.Require(key);
-            description.BlendState = blend ?? BlendStateDescription.SingleOverrideBlend;
-            description.DepthStencilState = DepthStencilStateDescription.Disabled;
-            description.RasterizerState = RasterizerStateDescription.CullNone;
-            if (lit)
-                description.ResourceLayouts = LitLayouts(description.ResourceLayouts ?? []);
-            GraphicsProgram program = device.ResourceFactory.CreateGraphicsProgram(description);
-            program.Name = layered ? name + " layered" : name;
-            return program;
         }
 
-        GraphicsProgram mono = Build(false);
+        FullscreenProgram program = new(device, variants, keys, blend ?? BlendStateDescription.SingleOverrideBlend, name, source, lit, procedural, compiler == null ? CompilePolicy.BakedOnly : policy, priority, report);
+        if (program._policy == CompilePolicy.Async)
+        {
+            program.Ready(1);
+            return program;
+        }
         try
         {
-            return new FullscreenProgram(mono, Build(true), source, lit, procedural);
+            program.For(1);
+            program.For(2);
         }
         catch
         {
-            mono.Dispose();
+            program.Dispose();
             throw;
         }
+        return program;
     }
 }
 
@@ -416,8 +621,6 @@ public sealed class FeatureBuilder
 
     private ViewGraph View => _pass.View;
 
-    internal ViewGraph ViewGraph => View;
-
     private FrameGraph FrameGraph => View.Graph;
 
     private int Scope => View.Camera.View.ViewId;
@@ -428,8 +631,6 @@ public sealed class FeatureBuilder
     /// <summary>Reads a buffer a frame feature exported.</summary>
     public BufferHandle ReadFrame(BufferHandle handle, BufferAccess usage = BufferAccess.AllReads)
     {
-        if (View.Probing)
-            return handle;
         if (!View.Frame.Exports.Buffers.TryGetValue(handle.Id, out BufferHandle exported))
             throw new InvalidOperationException($"{_pass.Name} reads a frame buffer that no active frame feature exported.");
         _graph.Read(exported, usage);
@@ -439,8 +640,6 @@ public sealed class FeatureBuilder
     /// <summary>Reads a texture a frame feature exported.</summary>
     public TextureHandle ReadFrame(TextureHandle handle, TextureState usage = TextureState.Sampled)
     {
-        if (View.Probing)
-            return handle;
         if (!View.Frame.Exports.Textures.TryGetValue(handle.Id, out TextureHandle exported))
             throw new InvalidOperationException($"{_pass.Name} reads a frame texture that no active frame feature exported.");
         _graph.Read(exported, usage);
@@ -523,27 +722,18 @@ public sealed class FeatureBuilder
 
     /// <summary>A texture for this feature alone this frame, drawn and then read back in its pass by default.</summary>
     public TextureHandle Temporary(string name, GraphTextureDesc desc, TextureState usage = TextureState.Attachment | TextureState.Sampled)
-        => _graph.Write(FrameGraph.Create(View.IdOf(_pass.Feature, "Temporary." + name), desc, Lifetime.Transient, Scope), usage);
+        => Temporary(name, -1, desc, usage);
+
+    /// <summary>One of a numbered run of textures for this feature alone this frame, such as the levels of a chain.</summary>
+    public TextureHandle Temporary(string name, int index, GraphTextureDesc desc, TextureState usage = TextureState.Attachment | TextureState.Sampled)
+        => _graph.Write(FrameGraph.Create(_pass.IdOf("Temporary", name, index), desc, Lifetime.Transient, Scope), usage);
 
     /// <summary>
     /// A texture for this feature that keeps its last frames, read through <see cref="FeatureContext.History"/>. It is kept
     /// for each view. Usage adds Sampled for a feature that reads it back in the same pass it draws it.
     /// </summary>
     public TextureHandle History(string name, GraphTextureDesc desc, int frames = 1, TextureState usage = TextureState.Attachment)
-        => _graph.Write(FrameGraph.Create(View.IdOf(_pass.Feature, "History." + name), desc, Lifetime.History(frames), Scope), usage);
-
-    /// <summary>
-    /// Asks for the visible renderables whose materials have a pass of this type, the shader pass tagged
-    /// "LightMode" = type, for <see cref="FeatureContext.DrawPass"/> to draw: opaque ones in bucket order, then transparent
-    /// ones back to front. Any pass type works; the first time one is asked for, every renderable of the world is bucketed
-    /// for it. Prepass and Forward are the built in opaque lists.
-    /// </summary>
-    public void DrawsPass(PassType type)
-    {
-        DrawsRenderables();
-        if (!_pass.Types.Contains(type))
-            _pass.Types.Add(type);
-    }
+        => _graph.Write(FrameGraph.Create(_pass.IdOf("History", name, -1), desc, Lifetime.History(frames), Scope), usage);
 
     /// <summary>
     /// Declares the feature records the view's renderables or sky through the context's Draw methods, or draws lit
@@ -580,6 +770,90 @@ public sealed class FeatureBuilder
     /// <summary>State this feature keeps for this view, made the first time it is asked for and disposed with the view.</summary>
     public T GetViewState<T>() where T : class, new() => View.Camera.State<T>(_pass.Feature);
 
+    /// <summary>The texel a feature that measures exposure writes the view's next exposure into, as R32 float.</summary>
+    internal TextureHandle WriteExposure()
+    {
+        if (!_pass.Feature.MeasuresExposure || View.Camera.MeasuredExposure is not { } measured)
+            throw new InvalidOperationException($"{_pass.Name} writes the view's exposure without measuring it.");
+        return _graph.Write(FrameGraph.Import(measured), TextureState.Attachment);
+    }
+
+    /// <summary>
+    /// The view's back depth, which passes tagged "BackDepth" = "Read" read, for the BackDepth pass to be drawn into on
+    /// frames <see cref="FeatureView.ReadsBackDepth"/>, as <see cref="TransmissionDepthFeature"/> does.
+    /// </summary>
+    public TextureHandle WriteBackDepth()
+    {
+        if (!View.Camera.BackDepthUsed || View.Camera.BackDepth is not { } target)
+            throw new InvalidOperationException($"{_pass.Name} draws the view's back depth, which the view does not read this frame.");
+        return _graph.Write(FrameGraph.Import(target), TextureState.Attachment);
+    }
+
+    /// <summary>
+    /// Makes the view's scene, its colour, depth and G-buffer in one texture, first written with the given ops, the
+    /// colour the features after this one draw onto, as <see cref="SceneClearFeature"/> does in the Clear slot. Publish it
+    /// as <see cref="RendererOutputs.Scene"/> for features that read it by name.
+    /// </summary>
+    public TextureHandle WriteScene(TargetLoadStoreOps firstWrite)
+    {
+        if (View.SceneWritten)
+            throw new InvalidOperationException($"{_pass.Name} makes the view's scene, which an earlier feature made.");
+        TextureHandle scene = FrameGraph.Create(ViewGraph.SceneId, View.SceneDesc(), Lifetime.Transient, Scope);
+        TextureHandle written = _graph.Write(scene, TextureState.Attachment, firstWrite: firstWrite);
+        View.Scene = View.Current = written;
+        View.CurrentIsScene = View.SceneWritten = View.CurrentWritten = true;
+        return written;
+    }
+
+    /// <summary>
+    /// Writes the view's target, the host's framebuffer or a capture's cube, its colour first written with the given ops,
+    /// as <see cref="PresentFeature"/> does.
+    /// </summary>
+    public TextureHandle WriteTarget(AttachmentOps color)
+    {
+        CameraFrame camera = View.Camera;
+        TextureHandle target = View.Captures ? FrameGraph.Import(camera.CaptureCube!) : FrameGraph.ImportTarget(camera.Desc.Target!);
+        return _graph.Write(target, TextureState.Attachment, firstWrite: new TargetLoadStoreOps(color, AttachmentOps.Loaded));
+    }
+
+    /// <summary>
+    /// Declares the view's directional cascades that draw this frame, for <see cref="FeatureContext.DrawCascades"/> to
+    /// draw, as <see cref="CascadeFeature"/> does. Returns a texture of them to publish as <see cref="RendererOutputs.Cascades"/>,
+    /// which the view's draws read. The view has cascades when <see cref="FeatureView.HasCascades"/>.
+    /// </summary>
+    public TextureHandle WriteCascades()
+    {
+        CameraFrame camera = View.Camera;
+        if (camera.Shadows.FirstCascade() is not { } first)
+            throw new InvalidOperationException($"{_pass.Name} draws the view's cascades, which it has none of.");
+        List<(ViewShadows.Cascade Cascade, TextureHandle Handle)> targets = _pass.Cascades;
+        targets.Clear();
+        View.Frame.Buffers.ReadWorld(FrameGraph, _graph, camera.World);
+        List<RenderTexture> written = new();
+        foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
+        {
+            for (int c = 0; c < light.Count; c++)
+            {
+                if (light.Cascades[c].Draws.Count > 0)
+                    written.Add(light.Cascades[c].Texture!.Texture!);
+            }
+        }
+        View.Frame.DeclareShadowReads(FrameGraph, _graph, alsoWritten: written);
+        foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
+        {
+            for (int c = 0; c < light.Count; c++)
+            {
+                ViewShadows.Cascade cascade = light.Cascades[c];
+                if (cascade.Draws.Count == 0)
+                    continue;
+                foreach (ShadowDraw draw in cascade.Draws)
+                    draw.Camera.Buffers.Read(FrameGraph, _graph, BufferAccess.AllReads);
+                targets.Add((cascade, _graph.Write(FrameGraph.Import(cascade.Texture!.Texture!), TextureState.Attachment)));
+            }
+        }
+        return targets.Count > 0 ? targets[0].Handle : FrameGraph.Import(first.Texture!.Texture!);
+    }
+
     /// <summary>Hands a texture to later features of the view by name.</summary>
     public void Publish(string name, TextureHandle texture) => View.Published[name] = texture;
 
@@ -595,7 +869,7 @@ public sealed class FeatureBuilder
     private void ReadPostViews() => _graph.Read(FrameGraph.Import(View.Camera.ViewBlocks.Buffer), BufferAccess.AllReads);
 
     private TextureHandle ColorFor(in FeatureView view)
-        => FrameGraph.Create(View.IdOf(_pass.Feature, "Color"), View.ColorDesc(view), Lifetime.Transient, Scope);
+        => FrameGraph.Create(_pass.ColorId, View.ColorDesc(view), Lifetime.Transient, Scope);
 
     private void Write(TextureHandle target)
     {
@@ -628,14 +902,12 @@ public sealed class FeatureBuilder
 /// <summary>What a feature records with.</summary>
 public sealed class FeatureContext
 {
+    private static readonly PropertyID s_source = "Graphite_Source", s_postViews = "Graphite_PostViews";
+
     private readonly FeaturePass _pass;
     private readonly PropertySet _properties = new();
 
     internal FeatureContext(FeaturePass pass) => _pass = pass;
-
-    internal CameraFrame Camera => _pass.Camera;
-
-    internal FramePipeline Frame => _pass.Frame;
 
     /// <summary>The underlying pass context, for resources the feature declared through <see cref="FeatureBuilder.Graph"/>.</summary>
     public PassContext Graph { get; internal set; } = null!;
@@ -649,11 +921,18 @@ public sealed class FeatureContext
     /// <summary>How far each opaque surface moved across the screen since last frame, in uv, when the feature reads the scene and declares it in SceneReads.</summary>
     public Texture? Motion => SceneTarget(1);
 
-    /// <summary>The scene's octahedral world normals, when the feature reads the scene and declares them in SceneReads.</summary>
-    public Texture? Normals => SceneTarget(2);
+    /// <summary>
+    /// How much of each pixel shows what transmissive surfaces refract from behind them, 0 to 1 in R8, when the feature
+    /// reads the scene, declares it in SceneReads and the view draws a transmissive surface this frame. Their motion does
+    /// not move that, so temporal effects trust history less there.
+    /// </summary>
+    public Texture? Reactive => SceneTarget(2);
 
-    /// <summary>The scene's roughness and metallic, when the feature reads the scene and declares them in SceneReads.</summary>
-    public Texture? Material => SceneTarget(3);
+    /// <summary>The scene's octahedral world normals, when the feature reads the scene and declares them in SceneReads.</summary>
+    public Texture? Normals => SceneTarget(3);
+
+    /// <summary>The scene's top layer specular reflectance in rgb and perceptual roughness in a, when the feature reads the scene and declares them in SceneReads.</summary>
+    public Texture? Material => SceneTarget(4);
 
     private Texture? SceneTarget(int index) => Scene is { } scene && index < scene.ColorTextures.Length ? scene.ColorTextures[index] : null;
 
@@ -681,10 +960,11 @@ public sealed class FeatureContext
     public bool DisplayEncoded => _pass.Camera.DisplayEncoded;
 
     /// <summary>The renderer's noise: blue noise in red, white noise in green, voronoi in blue, 256 square, mipmapped.</summary>
-    public Texture Noise => _pass.Frame.Noise;
+    public Texture Noise => _pass.Frame.Resources.Noise;
 
     /// <summary>The SMAA reference's area and search tables, arrays of as many layers as the view has.</summary>
-    internal (Texture Area, Texture Search) SmaaTables => View.LayerCount > 1 ? (_pass.Frame.SmaaAreaLayered, _pass.Frame.SmaaSearchLayered) : (_pass.Frame.SmaaArea, _pass.Frame.SmaaSearch);
+    internal (TextureView Area, TextureView Search) SmaaTables => View.LayerCount > 1
+        ? (_pass.Frame.Resources.SmaaAreaLayered, _pass.Frame.Resources.SmaaSearchLayered) : (_pass.Frame.Resources.SmaaArea, _pass.Frame.Resources.SmaaSearch);
 
     /// <summary>The direction the world's sun shines, its chosen sun or else its brightest directional light, or null without one.</summary>
     public Float3? SunDirection
@@ -718,13 +998,35 @@ public sealed class FeatureContext
     /// <summary>Draws the world's sky material onto the current output.</summary>
     public void DrawSky() => Drawer.DrawSky(Command);
 
-    /// <summary>Draws the visible renderables with a pass of a type asked for in Setup through <see cref="FeatureBuilder.DrawsPass"/>.</summary>
+    /// <summary>
+    /// Draws the visible renderables with a pass of a type the feature declared in <see cref="RenderFeature.Passes"/>:
+    /// opaque ones in bucket order, then transparent ones back to front. Prepass and Forward are the opaque lists.
+    /// </summary>
     public void DrawPass(PassType type)
     {
-        if (!_pass.Types.Contains(type) || _pass.Camera.FindList(type) is not { } list)
-            throw new InvalidOperationException($"{_pass.Name} draws the {type.Name} pass without asking for it in Setup through DrawsPass.");
+        if (Array.IndexOf(_pass.Feature.PassArray, type) < 0 || _pass.Camera.FindList(type) is not { } list)
+            throw new InvalidOperationException($"{_pass.Name} draws the {type.Name} pass without declaring it in its Passes.");
         Drawer.DrawList(Command, list);
     }
+
+    /// <summary>Draws the cascades <see cref="FeatureBuilder.WriteCascades"/> declared into their depth textures.</summary>
+    public void DrawCascades()
+    {
+        foreach ((ViewShadows.Cascade cascade, TextureHandle handle) in _pass.Cascades)
+            ShadowRecorder.Record(Command, Get(handle), cascade.Draws, _pass.Frame.TileClearProgram, Graph.Task.RingSlot);
+    }
+
+    /// <summary>
+    /// The view's scene colour, which passes tagged "SceneColor" = "Read" sample, on frames <see cref="FeatureView.ReadsSceneColor"/>,
+    /// for a feature in the OpaqueColor slot to copy the colour into and fill the mips of, as <see cref="SceneColorFeature"/> does.
+    /// </summary>
+    public Texture? SceneColorCopy => _pass.Camera.SceneColorUsed ? _pass.Camera.SceneColor : null;
+
+    /// <summary>
+    /// The view's scene depth, which passes tagged "SceneDepth" = "Read" fetch, on frames <see cref="FeatureView.ReadsSceneDepth"/>,
+    /// for a feature in the OpaqueColor slot to copy the depth into, as <see cref="SceneDepthFeature"/> does.
+    /// </summary>
+    public Texture? SceneDepthCopy => _pass.Camera.SceneDepthUsed ? _pass.Camera.SceneDepth : null;
 
     private void BindLighting(FullscreenProgram program)
     {
@@ -736,7 +1038,7 @@ public sealed class FeatureContext
     }
 
     private SceneDrawer Drawer => _pass.Draws ? _pass.Camera.Drawer
-        : throw new InvalidOperationException($"{_pass.Name} draws renderables without declaring DrawsRenderables or DrawsPass in Setup.");
+        : throw new InvalidOperationException($"{_pass.Name} draws renderables without declaring DrawsRenderables in Setup.");
 
     /// <summary>
     /// Binds the colour the feature draws onto or writes, as the graph's first write clears or loads it, and copies a
@@ -750,9 +1052,9 @@ public sealed class FeatureContext
         Command.SetFullViewport();
         if (_pass.CopyBack is { } copy)
         {
-            Command.SetShader(_pass.Frame.CopyBackProgram.For(View.LayerCount));
+            Command.SetShader(_pass.Frame.Resources.CopyBackProgram.For(View.LayerCount));
             Command.SetVertexSource(VertexSource.None);
-            _properties.SetTexture("Graphite_Source", Graph.Get(copy).ColorTextures[0], _pass.Frame.LinearSampler);
+            _properties.SetTexture(s_source, Graph.Get(copy).ColorTextures[0], _pass.Frame.Resources.LinearRepeat);
             Command.SetProperties(_properties);
             Command.Draw(3);
         }
@@ -761,7 +1063,8 @@ public sealed class FeatureContext
     /// <summary>
     /// Draws a fullscreen program over a texture the feature declared, Temporary or History, the colour it reads bound as
     /// Graphite_Source, with any properties given. Clear first clears it to transparent black, for programs that discard.
-    /// Shared draws once over a texture of one layer, for state a layered view's layers share.
+    /// Shared draws once over a texture of one layer, for state a layered view's layers share, with the program's layered
+    /// form on a layered view so the view sized textures it reads give their first layer.
     /// </summary>
     public void Fullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties = null, bool clear = false, bool shared = false)
         => DrawFullscreen(program, target, properties, shared ? 1 : View.LayerCount, clear);
@@ -774,13 +1077,15 @@ public sealed class FeatureContext
     {
         if (!program.Procedural)
             throw new InvalidOperationException($"{_pass.Name} draws a fullscreen program procedurally; create it with CreateProceduralProgram.");
+        if (Program(program) is not { } shader)
+            return;
         AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : AttachmentOps.Loaded;
         Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
         Command.SetFullViewport();
-        Command.SetShader(program.For(View.LayerCount));
+        Command.SetShader(shader);
         Command.SetVertexSource(VertexSource.None);
         BindLighting(program);
-        _properties.SetBuffer("Graphite_PostViews", _pass.Camera.ViewBlocks.Buffer);
+        _properties.SetBuffer(s_postViews, _pass.Camera.ViewBlocks.Buffer);
         Command.SetProperties(_properties);
         if (properties != null)
             Command.SetProperties(properties);
@@ -793,15 +1098,17 @@ public sealed class FeatureContext
             throw new InvalidOperationException($"{_pass.Name} draws a procedural program as a fullscreen one; draw it with DrawProcedural.");
         if (layers == 1 && View.LayerCount > 1 && program.HasSource)
             throw new InvalidOperationException($"{_pass.Name} draws a program reading the view's colour once for every layer; create it with source: false and bind what it reads.");
+        if (Program(program) is not { } shader)
+            return;
         AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store);
         Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
         Command.SetFullViewport();
-        Command.SetShader(program.For(layers));
+        Command.SetShader(shader);
         Command.SetVertexSource(VertexSource.None);
         BindLighting(program);
-        _properties.SetBuffer("Graphite_PostViews", _pass.Camera.ViewBlocks.Buffer);
+        _properties.SetBuffer(s_postViews, _pass.Camera.ViewBlocks.Buffer);
         if (program.HasSource && Color is { } source)
-            _properties.SetTexture("Graphite_Source", source, _pass.Frame.TrilinearClamp);
+            _properties.SetTexture(s_source, source, _pass.Frame.Resources.LinearClamp);
         Command.SetProperties(_properties);
         if (properties != null)
             Command.SetProperties(properties);
@@ -816,18 +1123,46 @@ public sealed class FeatureContext
     {
         if (Color is not { } source || _pass.OutputIsScene)
             throw new InvalidOperationException($"{_pass.Name} draws a fullscreen program without writing a new colour, declare WriteColor.");
+        if (Program(program) is not { } shader)
+            return;
         BeginOutput();
-        Command.SetShader(program.For(View.LayerCount));
+        Command.SetShader(shader);
         Command.SetVertexSource(VertexSource.None);
         BindLighting(program);
-        _properties.SetBuffer("Graphite_PostViews", _pass.Camera.ViewBlocks.Buffer);
-        _properties.SetTexture("Graphite_Source", source, _pass.Frame.TrilinearClamp);
+        _properties.SetBuffer(s_postViews, _pass.Camera.ViewBlocks.Buffer);
+        _properties.SetTexture(s_source, source, _pass.Frame.Resources.LinearClamp);
         Command.SetProperties(_properties);
         if (properties != null)
             Command.SetProperties(properties);
         Command.Draw(3);
     }
 
+    // A program the feature draws with, or null once a program it draws with first turned out not ready this frame
+    private GraphicsProgram? Program(FullscreenProgram program)
+    {
+        _pass.Feature.Uses(program);
+        if (!_pass.PassedThrough && program.Ready(View.LayerCount))
+            return program.For(View.LayerCount);
+        PassThrough();
+        return null;
+    }
+
+    // The new colour the pass writes is the colour it reads, unchanged, and the rest of its fullscreen draws are skipped
+    private void PassThrough()
+    {
+        if (_pass.PassedThrough)
+            return;
+        _pass.PassedThrough = true;
+        if (_pass.Output is not { } output || _pass.OutputIsScene || Color is not { } source)
+            return;
+        Command.SetFramebuffer(Graph.Get(output).Framebuffer, new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
+        Command.SetFullViewport();
+        Command.SetShader(_pass.Frame.Resources.CopyBackProgram.For(View.LayerCount));
+        Command.SetVertexSource(VertexSource.None);
+        _properties.SetTexture(s_source, source, _pass.Frame.Resources.LinearClamp);
+        Command.SetProperties(_properties);
+        Command.Draw(3);
+    }
 }
 
 /// <summary>Runs one feature as a pass of the views that selected it.</summary>
@@ -835,12 +1170,14 @@ internal sealed class FeaturePass
 {
     private readonly FeatureContext _context;
     private readonly Func<PassBuilder, FeaturePass> _setup;
+    private readonly Dictionary<(string Kind, string Name, int Index), RenderResourceID> _ids = new();
+    private RenderResourceID _colorId;
 
     public FeaturePass(RenderFeature feature, ViewGraph view)
     {
         Feature = feature;
         View = view;
-        Name = feature.GetType().Name;
+        Name = feature.Name;
         _context = new FeatureContext(this);
         _setup = Setup;
     }
@@ -853,8 +1190,10 @@ internal sealed class FeaturePass
 
     public bool AfterUpscale;
 
-    public readonly List<PassType> Types = new();
+    /// <summary>The cascades the feature declared this frame, with their textures.</summary>
+    public readonly List<(ViewShadows.Cascade Cascade, TextureHandle Handle)> Cascades = new();
     public bool Draws;
+    public bool PassedThrough;
     public bool EncodesForDisplay;
     public bool Wrote;
     public bool OutputIsScene;
@@ -863,9 +1202,20 @@ internal sealed class FeaturePass
     public TextureHandle? CopyBack;
     public TextureHandle? Output;
 
+    /// <summary>The id of the colour this feature writes in the view.</summary>
+    public RenderResourceID ColorId => _colorId.IsValid ? _colorId : _colorId = View.IdOf(Feature, "Color");
+
+    /// <summary>The id of a texture this feature declares in the view, interned the first time it is asked for.</summary>
+    public RenderResourceID IdOf(string kind, string name, int index)
+    {
+        if (!_ids.TryGetValue((kind, name, index), out RenderResourceID id))
+            _ids[(kind, name, index)] = id = View.IdOf(Feature, index < 0 ? $"{kind}.{name}" : $"{kind}.{name}{index}");
+        return id;
+    }
+
     public void Add()
     {
-        if (Feature.Skips(View))
+        if (!Feature.HasWork(View.View))
             return;
         View.Graph.AddPass(Name, _setup, static (context, pass) => pass.Render(context));
     }
@@ -878,17 +1228,12 @@ internal sealed class FeaturePass
         Output = null;
         EncodesForDisplay = false;
         Draws = false;
+        PassedThrough = false;
         Wrote = false;
         OutputIsScene = false;
-        Types.Clear();
+        Cascades.Clear();
         AfterUpscale = View.Upscaled;
         Feature.Setup(new FeatureBuilder(this, builder), View.View);
-        if (!View.Probing && (!Camera.KnownTypes.TryGetValue(Feature, out PassType[]? known) || !known.AsSpan().SequenceEqual(CollectionsMarshal.AsSpan(Types))))
-        {
-            Camera.KnownTypes[Feature] = [.. Types];
-            foreach (PassType type in Types)
-                Camera.ListFor(type);
-        }
         return this;
     }
 
@@ -906,35 +1251,23 @@ internal sealed class FeaturePass
 
 /// <summary>
 /// Clears the scene's colour, depth and G-buffer first, so a view whose features draw nothing still presents its clear
-/// colour. Publishes the scene as <see cref="RendererOutputs.Scene"/>. Exclusive group "SceneClear".
+/// colour. Publishes the scene as <see cref="RendererOutputs.Scene"/>. Group <see cref="FeatureGroup.SceneClear"/>.
 /// </summary>
 public sealed class SceneClearFeature : RenderFeature
 {
-    internal SceneClearFeature() { }
+    internal SceneClearFeature() : base(RenderSlot.Clear, group: FeatureGroup.SceneClear, runsOn: ViewKinds.All) { }
 
     private sealed class State
     {
         public TextureHandle Scene;
     }
 
-    public override RenderSlot Slot => RenderSlot.Clear;
-    public override string? ExclusiveGroup => "SceneClear";
-    public override ViewKinds RunsOn => ViewKinds.All;
-
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        ViewGraph graph = builder.ViewGraph;
-        CameraFrame camera = graph.Camera;
-        TextureHandle scene = graph.Graph.Create(RenderResourceID.Intern(RendererOutputs.Scene), graph.SceneDesc(), Lifetime.Transient, camera.View.ViewId);
-        Float4 clear = camera.Desc.Overlay ? default : camera.Desc.ClearColor with { W = 1 };
-        TargetLoadStoreOps ops = new(AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W)), AttachmentOps.Clear(0f));
-        TextureHandle written = builder.Graph.Write(scene, TextureState.Attachment, firstWrite: ops);
-        graph.Scene = graph.Current = written;
-        graph.CurrentIsScene = true;
-        graph.SceneWritten = true;
-        graph.CurrentWritten = true;
-        builder.GetViewState<State>().Scene = written;
-        builder.Publish(RendererOutputs.Scene, written);
+        Float4 clear = view.Overlay ? default : view.ClearColor with { W = 1 };
+        TextureHandle scene = builder.WriteScene(new TargetLoadStoreOps(AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W)), AttachmentOps.Clear(0f)));
+        builder.GetViewState<State>().Scene = scene;
+        builder.Publish(RendererOutputs.Scene, scene);
     }
 
     public override void Render(FeatureContext context)
@@ -945,10 +1278,19 @@ public sealed class SceneClearFeature : RenderFeature
     }
 }
 
-/// <summary>A view's last pass: the colour the features left, copied into the view's viewport of its target. Exclusive group "Present".</summary>
+/// <summary>
+/// A view's last pass: the colour the features left, copied into the view's viewport of its target. Group
+/// <see cref="FeatureGroup.Present"/>.
+/// </summary>
 public sealed class PresentFeature : RenderFeature
 {
-    internal PresentFeature() { }
+    private static readonly PropertyID s_source = "Graphite_Source", s_mode = "Graphite_PresentMode";
+
+    private readonly FullscreenProgram _present, _presentOver;
+    private readonly Sampler _sampler;
+
+    internal PresentFeature(RendererResources resources) : base(RenderSlot.Present, group: FeatureGroup.Present, runsOn: ViewKinds.All)
+        => (_present, _presentOver, _sampler) = (resources.Present(false), resources.Present(true), resources.LinearRepeat);
 
     // sRGB targets encode what they are given and float targets hold linear light, so display encoded colour is decoded
     // for both. Other formats store display values, so linear colour is encoded for them.
@@ -959,58 +1301,64 @@ public sealed class PresentFeature : RenderFeature
     private sealed class State
     {
         public readonly PropertySet Properties = new();
-        public TextureHandle Source, Target;
+        public TextureHandle Target;
     }
-
-    public override RenderSlot Slot => RenderSlot.Present;
-    public override string? ExclusiveGroup => "Present";
-    public override ViewKinds RunsOn => ViewKinds.All;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        ViewGraph graph = builder.ViewGraph;
-        if (graph.Probing)
-            return;
-        CameraFrame camera = graph.Camera;
-        State state = builder.GetViewState<State>();
-        state.Source = builder.Graph.Read(graph.Current);
-        Float4 clear = camera.Desc.ClearColor with { W = 1 };
-        bool whole = camera.Desc.Viewport == new Float4(0, 0, 1, 1);
-        AttachmentOps color = camera.Desc.Overlay ? AttachmentOps.Loaded
-            : camera.Desc.ClearTarget ? AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W))
+        builder.ReadColor();
+        Float4 clear = view.ClearColor with { W = 1 };
+        bool whole = view.Viewport == new Float4(0, 0, 1, 1);
+        AttachmentOps color = view.Overlay ? AttachmentOps.Loaded
+            : view.ClearTarget ? AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W))
             : whole ? new AttachmentOps(LoadAction.DontCare, StoreAction.Store) : AttachmentOps.Loaded;
-        TextureHandle target = graph.Captures ? graph.Graph.Import(camera.CaptureCube!) : graph.Graph.ImportTarget(camera.Desc.Target!);
-        state.Target = builder.Graph.Write(target, TextureState.Attachment, firstWrite: new TargetLoadStoreOps(color, AttachmentOps.Loaded));
+        builder.GetViewState<State>().Target = builder.WriteTarget(color);
     }
 
     public override void Render(FeatureContext context)
     {
-        CameraFrame camera = context.Camera;
-        FramePipeline frame = context.Frame;
         State state = context.GetViewState<State>();
         CommandBuffer cmd = context.Command;
         Framebuffer target = context.Get(state.Target).Framebuffer;
-        Float4 rect = camera.Desc.Viewport;
+        Float4 rect = context.View.Viewport;
         cmd.SetViewport(new Viewport(rect.X * target.Width, rect.Y * target.Height, rect.Z * target.Width, rect.W * target.Height, 0, 1));
         cmd.SetVertexSource(VertexSource.None);
         bool linearTarget = TakesLinear(target.ColorTargets[0].Target.Format);
-        bool decode = camera.DisplayEncoded && linearTarget;
-        bool encode = !camera.DisplayEncoded && !linearTarget;
-        cmd.SetShader(frame.Present(decode, encode, camera.Desc.Overlay).For(camera.LayerCount));
-        state.Properties.SetTexture("Graphite_Source", context.Get(state.Source).ColorTextures[0], frame.LinearSampler);
+        bool decode = context.DisplayEncoded && linearTarget;
+        bool encode = !context.DisplayEncoded && !linearTarget;
+        cmd.SetShader((context.View.Overlay ? _presentOver : _present).For(context.View.LayerCount));
+        state.Properties.SetInt(s_mode, decode ? 1 : encode ? 2 : 0);
+        state.Properties.SetTexture(s_source, context.Color!, _sampler);
         cmd.SetProperties(state.Properties);
         cmd.Draw(3);
     }
 }
 
-/// <summary>The depth prepass: the visible opaque renderables' depth before the opaque pass.</summary>
-public sealed class PrepassFeature : RenderFeature
+/// <summary>
+/// Draws the visible renderables' pass of one type, the shader pass tagged "LightMode" = type, onto the scene in a slot,
+/// such as "Outline" after the opaques. Each pass draws with its own render state, so outlines, silhouettes seen through
+/// walls and similar effects need only the pass in their shaders. The built in depth prepass, opaque pass, sky and
+/// transparent pass are draw features of the Prepass, Forward and Sky passes in their groups. The Sky pass draws the
+/// world's sky material. Transparent draws the Forward pass's transparent renderables back to front, as the transparent
+/// pass does, rather than its opaque ones.
+/// </summary>
+public sealed class DrawPassFeature : RenderFeature
 {
-    internal PrepassFeature() { }
+    public DrawPassFeature(PassType type, RenderSlot slot, int order = 0, FeatureGroup? group = null, ViewKinds runsOn = ViewKinds.Cameras, bool transparent = false)
+        : base(slot, order, group, runsOn, passes: type == PassType.Sky ? null : [type])
+    {
+        if (transparent && type != PassType.Forward)
+            throw new ArgumentException($"Only the Forward pass draws its transparent renderables apart, not {type.Name}.", nameof(transparent));
+        Type = type;
+        Transparent = transparent;
+    }
 
-    public override RenderSlot Slot => RenderSlot.Prepass;
-    public override string? ExclusiveGroup => "Prepass";
-    public override ViewKinds RunsOn => ViewKinds.All;
+    public PassType Type { get; }
+
+    public override string Name => Group is { } group ? group.Name + "Feature" : Type.Name + "Feature";
+
+    /// <summary>Whether it draws the Forward pass's transparent renderables back to front rather than its opaque ones.</summary>
+    public bool Transparent { get; }
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
@@ -1021,97 +1369,31 @@ public sealed class PrepassFeature : RenderFeature
     public override void Render(FeatureContext context)
     {
         context.BeginOutput();
-        context.DrawPrepass();
-    }
-}
-
-/// <summary>The visible opaque renderables' forward pass, writing colour and the thin G-buffer.</summary>
-public sealed class OpaqueFeature : RenderFeature
-{
-    internal OpaqueFeature() { }
-
-    public override RenderSlot Slot => RenderSlot.Opaque;
-    public override string? ExclusiveGroup => "Opaque";
-    public override ViewKinds RunsOn => ViewKinds.All;
-
-    public override void Setup(FeatureBuilder builder, in FeatureView view)
-    {
-        builder.DrawsRenderables();
-        builder.DrawToScene();
-    }
-
-    public override void Render(FeatureContext context)
-    {
-        context.BeginOutput();
-        context.DrawOpaque();
-    }
-}
-
-/// <summary>The world's sky material behind everything the view sees. Exclusive group "Sky".</summary>
-public sealed class SkyFeature : RenderFeature
-{
-    internal SkyFeature() { }
-
-    public override RenderSlot Slot => RenderSlot.Sky;
-    public override ViewKinds RunsOn => ViewKinds.All;
-    public override string? ExclusiveGroup => "Sky";
-
-    public override void Setup(FeatureBuilder builder, in FeatureView view)
-    {
-        builder.DrawsRenderables();
-        builder.DrawToScene();
-    }
-
-    public override void Render(FeatureContext context)
-    {
-        context.BeginOutput();
-        context.DrawSky();
-    }
-}
-
-/// <summary>The visible transparent renderables, back to front.</summary>
-public sealed class TransparentFeature : RenderFeature
-{
-    internal TransparentFeature() { }
-
-    public override RenderSlot Slot => RenderSlot.Transparent;
-    public override string? ExclusiveGroup => "Transparent";
-    public override ViewKinds RunsOn => ViewKinds.All;
-
-    public override void Setup(FeatureBuilder builder, in FeatureView view)
-    {
-        builder.DrawsRenderables();
-        builder.DrawToScene();
-    }
-
-    public override void Render(FeatureContext context)
-    {
-        context.BeginOutput();
-        context.DrawTransparent();
+        if (Type == PassType.Sky)
+            context.DrawSky();
+        else if (Transparent)
+            context.DrawTransparent();
+        else
+            context.DrawPass(Type);
     }
 }
 
 /// <summary>
 /// Copies the view's colour after the opaque surfaces and the sky into its scene colour and fills the mips, for passes
-/// tagged "SceneColor" = "Read" to sample through Graphite/SceneColor.glsl. Active once such a pass was in the view's
-/// transparent list, recording nothing on frames without one.
+/// tagged "SceneColor" = "Read" to sample through Graphite/SceneColor.glsl. Adds its pass on frames such a pass is in
+/// the view's transparent list. Group <see cref="FeatureGroup.SceneColor"/>.
 /// </summary>
 public sealed class SceneColorFeature : RenderFeature
 {
-    internal SceneColorFeature() { }
+    internal SceneColorFeature() : base(RenderSlot.OpaqueColor, group: FeatureGroup.SceneColor, runsOn: ViewKinds.All) { }
 
-    public override RenderSlot Slot => RenderSlot.OpaqueColor;
-    public override string? ExclusiveGroup => "SceneColor";
-    public override ViewKinds RunsOn => ViewKinds.All;
-
-    internal override bool Skips(ViewGraph view) => !view.Camera.SceneColorUsed;
+    public override bool HasWork(in FeatureView view) => view.ReadsSceneColor;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.ReadColor();
 
     public override void Render(FeatureContext context)
     {
-        CameraFrame camera = context.Camera;
-        if (!camera.SceneColorUsed || camera.SceneColor is not { } target || context.Color is not { } source)
+        if (context.SceneColorCopy is not { } target || context.Color is not { } source)
             return;
         context.Command.CopyTexture(source, 0, 0, 0, 0, 0, target, 0, 0, 0, 0, 0, target.Width, target.Height, 1, target.ArrayLayers);
         context.Command.GenerateMipmaps(target);
@@ -1120,56 +1402,96 @@ public sealed class SceneColorFeature : RenderFeature
 
 /// <summary>
 /// Copies the view's depth after the opaque surfaces into its scene depth, for passes tagged "SceneDepth" = "Read" to
-/// fetch through Graphite/SceneDepth.glsl. Active once such a pass was in the view's transparent list, recording nothing
-/// on frames without one.
+/// fetch through Graphite/SceneDepth.glsl. Adds its pass on frames such a pass is in the view's transparent list. Group
+/// <see cref="FeatureGroup.SceneDepth"/>.
 /// </summary>
 public sealed class SceneDepthFeature : RenderFeature
 {
-    internal SceneDepthFeature() { }
+    internal SceneDepthFeature() : base(RenderSlot.OpaqueColor, group: FeatureGroup.SceneDepth, runsOn: ViewKinds.All) { }
 
-    public override RenderSlot Slot => RenderSlot.OpaqueColor;
-    public override string? ExclusiveGroup => "SceneDepth";
-    public override ViewKinds RunsOn => ViewKinds.All;
-
-    internal override bool Skips(ViewGraph view) => !view.Camera.SceneDepthUsed;
+    public override bool HasWork(in FeatureView view) => view.ReadsSceneDepth;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.ReadScene();
 
     public override void Render(FeatureContext context)
     {
-        CameraFrame camera = context.Camera;
-        if (!camera.SceneDepthUsed || camera.SceneDepth is not { } target || context.Depth is not { } source)
+        if (context.SceneDepthCopy is not { } target || context.Depth is not { } source)
             return;
         context.Command.CopyTexture(source, 0, 0, 0, 0, 0, target, 0, 0, 0, 0, 0, target.Width, target.Height, 1, target.ArrayLayers);
+    }
+}
+
+/// <summary>
+/// Draws the back faces of the view's transmissive volumes, their <see cref="PassType.BackDepth"/> pass, into its back
+/// depth after the opaque surfaces, for Transmission passes tagged "BackDepth" = "Read" to measure the path through
+/// them. Like <see cref="DrawPassFeature"/> it draws one pass of the visible renderables, onto a target of its own.
+/// Adds its pass on frames such a pass is in the view's transparent list. Group <see cref="FeatureGroup.BackDepth"/>.
+/// </summary>
+public sealed class TransmissionDepthFeature : RenderFeature
+{
+    private sealed class State
+    {
+        public TextureHandle Target;
+    }
+
+    internal TransmissionDepthFeature() : base(RenderSlot.OpaqueColor, 1, FeatureGroup.BackDepth, ViewKinds.All, passes: [PassType.BackDepth]) { }
+
+    public override bool HasWork(in FeatureView view) => view.ReadsBackDepth;
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
+    {
+        builder.DrawsRenderables();
+        builder.GetViewState<State>().Target = builder.WriteBackDepth();
+    }
+
+    public override void Render(FeatureContext context)
+    {
+        RenderTexture target = context.Get(context.GetViewState<State>().Target);
+        context.Command.SetFramebuffer(target.Framebuffer, TargetLoadStoreOps.Clear(new Color(0f, 0f, 0f, 0f), 0f));
+        context.Command.SetFullViewport();
+        context.DrawPass(PassType.BackDepth);
     }
 }
 
 /// <summary>Picks a view's features each frame: built in, world and view features, filtered and ordered.</summary>
 internal static class FeatureSelection
 {
-    public static readonly RenderFeature[] BuiltIn = [new SceneClearFeature(), new CascadeFeature(), new PrepassFeature(), new OpaqueFeature(), new SkyFeature(), new SceneColorFeature(), new SceneDepthFeature(), new TransparentFeature(), new PresentFeature()];
-
-    static FeatureSelection()
+    /// <summary>A renderer's own built in features, in the order they run.</summary>
+    public static RenderFeature[] BuiltIns(RendererResources resources)
     {
-        foreach (RenderFeature feature in BuiltIn)
-            feature.TakeSnapshot();
+        RenderFeature[] features =
+        [
+            new SceneClearFeature(),
+            new CascadeFeature(),
+            new DrawPassFeature(PassType.Prepass, RenderSlot.Prepass, group: FeatureGroup.Prepass, runsOn: ViewKinds.All),
+            new DrawPassFeature(PassType.Forward, RenderSlot.Opaque, group: FeatureGroup.Opaque, runsOn: ViewKinds.All),
+            new DrawPassFeature(PassType.Sky, RenderSlot.Sky, group: FeatureGroup.Sky, runsOn: ViewKinds.All),
+            new SceneColorFeature(),
+            new SceneDepthFeature(),
+            new TransmissionDepthFeature(),
+            new DrawPassFeature(PassType.Forward, RenderSlot.Transparent, group: FeatureGroup.Transparent, runsOn: ViewKinds.All, transparent: true),
+            new PresentFeature(resources),
+        ];
+        foreach (RenderFeature feature in features)
+            feature.Snapshot();
+        return features;
     }
 
-    public static void Select(List<RenderFeature> result, RenderFeature[] world, RenderFeature[] view, in FeatureView info)
+    public static void Select(List<RenderFeature> result, RenderFeature[] builtIns, RenderFeature[] world, RenderFeature[] view, in FeatureView info)
     {
         result.Clear();
-        Add(result, BuiltIn, info);
+        Add(result, builtIns, info);
         Add(result, world, info);
         Add(result, view, info);
 
         // Later entries win: the view's over the world's over the built in ones
         for (int i = result.Count - 1; i > 0; i--)
         {
-            if (i >= result.Count || result[i].GroupSnapshot is not { } group)
+            if (i >= result.Count || result[i].Group is not { } group)
                 continue;
             for (int j = i - 1; j >= 0; j--)
             {
-                if (result[j].GroupSnapshot == group)
+                if (result[j].Group == group)
                 {
                     result.RemoveAt(j);
                     i--;
@@ -1193,7 +1515,7 @@ internal static class FeatureSelection
 
     public static int Compare(RenderFeature a, RenderFeature b)
     {
-        int slot = a.SlotSnapshot.CompareTo(b.SlotSnapshot);
+        int slot = a.Slot.CompareTo(b.Slot);
         return slot != 0 ? slot : a.OrderSnapshot.CompareTo(b.OrderSnapshot);
     }
 
@@ -1202,76 +1524,29 @@ internal static class FeatureSelection
         ViewKinds kind = (ViewKinds)(1 << (int)info.Kind);
         foreach (RenderFeature feature in features)
         {
-            if (!feature.EnabledSnapshot || (feature.RunsOnSnapshot & kind) == 0 || result.Contains(feature))
+            if (!feature.EnabledSnapshot || (feature.RunsOn & kind) == 0 || result.Contains(feature))
                 continue;
-            if (feature.IsActive(info))
+            if (feature.IsActive(info) && feature.ProgramsReady(info.LayerCount))
                 result.Add(feature);
         }
-    }
-}
-
-/// <summary>Providers added to a world. Host thread.</summary>
-public sealed class ProviderSet : IEnumerable<RenderProvider>
-{
-    private readonly List<RenderProvider> _providers = new();
-    private RenderProvider[] _snapshot = [];
-    private int _version, _snapshotVersion = -1;
-
-    public int Count => _providers.Count;
-
-    public void Add(RenderProvider provider)
-    {
-        ArgumentNullException.ThrowIfNull(provider);
-        if (_providers.Contains(provider))
-            return;
-        _providers.Add(provider);
-        _version++;
-    }
-
-    public bool Remove(RenderProvider provider)
-    {
-        if (!_providers.Remove(provider))
-            return false;
-        _version++;
-        return true;
-    }
-
-    public IEnumerator<RenderProvider> GetEnumerator() => _providers.GetEnumerator();
-
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-    internal RenderProvider[] Snapshot()
-    {
-        if (_snapshotVersion != _version)
-        {
-            _snapshot = [.. _providers];
-            _snapshotVersion = _version;
-        }
-        return _snapshot;
     }
 }
 
 /// <summary>
 /// Geometry a host draws into each view without making renderables: particles, terrain patches, GPU generated draws. Its
 /// items join the view's passes like renderables, opaque ones in the prepass and opaque pass, transparent ones sorted
-/// with the world's, and any pass type a feature draws. <see cref="Extract"/> runs on the host thread at SubmitFrame,
-/// <see cref="Cull"/> on the render thread once per view.
+/// with the world's, and any pass type a feature draws. <see cref="RenderExtension.Extract"/> copies what Cull reads on
+/// the host thread at SubmitFrame, <see cref="Cull"/> runs on the render thread once per view.
 /// </summary>
-public abstract class RenderProvider
+public abstract class RenderProvider : RenderExtension
 {
-    public bool Enabled { get; set; } = true;
+    /// <param name="runsOn">The kinds of view it draws into.</param>
+    protected RenderProvider(ViewKinds runsOn = ViewKinds.All) => RunsOn = runsOn;
 
-    /// <summary>The kinds of view it draws into, read at SubmitFrame.</summary>
-    public virtual ViewKinds RunsOn => ViewKinds.All;
-
-    /// <summary>Copies what Cull reads. Host thread, at SubmitFrame.</summary>
-    public virtual void Extract() { }
+    public ViewKinds RunsOn { get; }
 
     /// <summary>Adds this view's items to the sink. Render thread.</summary>
     public abstract void Cull(in ProviderView view, DrawItemSink sink);
-
-    internal bool EnabledSnapshot;
-    internal ViewKinds RunsOnSnapshot;
 }
 
 /// <summary>The view a provider culls for.</summary>
@@ -1298,6 +1573,9 @@ public readonly struct ProviderView
 public struct DrawItem
 {
     public Double4x4 Transform;
+
+    /// <summary>Multiplies the standard surfaces' vertex colour, so their base colour and coverage. White by default.</summary>
+    public Float4 Color;
     public Float4 Custom0, Custom1;
     public uint LayerMask;
     public uint ObjectId;
@@ -1315,21 +1593,22 @@ public struct DrawItem
         LayerMask = ~0u;
         Flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows;
         SortDepth = float.NaN;
+        Color = Float4.One;
     }
 }
 
 /// <summary>A view list's provider items, opaque ones drawn after the list's buckets, sorted ones among its transparents.</summary>
 internal sealed class ProvidedItems
 {
-    public readonly List<BucketSet.TransparentItem> Opaque = new();
-    public readonly List<BucketSet.TransparentItem> Sorted = new();
+    public readonly List<BucketSet.ItemDraw> Opaque = new();
+    public readonly List<BucketSet.ItemDraw> Sorted = new();
 }
 
 /// <summary>Where a provider adds its items for a view. Valid during Cull only. Render thread.</summary>
 public sealed class DrawItemSink
 {
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MeshPlacement, BucketSet.ChunkRef[]?[]> s_chunks = new();
-    private readonly List<BucketSet.TransparentItem> _pool = new();
+    private readonly List<BucketSet.ItemDraw> _pool = new();
     private readonly Dictionary<DrawList, ProvidedItems> _lists = new();
     private int _used;
     private CameraFrame _camera = null!;
@@ -1339,7 +1618,7 @@ public sealed class DrawItemSink
     private bool _shadowView;
 
     /// <summary>Indirect items whose instance count is copied from the provider's buffer into the view's commands.</summary>
-    internal readonly List<(BucketSet.TransparentItem Item, DrawList List, RenderResourceID Source, uint Offset)> Counts = new();
+    internal readonly List<(BucketSet.ItemDraw Item, DrawList List, RenderResourceID Source, uint Offset)> Counts = new();
 
     internal void Begin(CameraFrame camera, WorldFrame world, in CullFrustum frustum, uint cullingMask, bool shadowView = false)
     {
@@ -1388,28 +1667,73 @@ public sealed class DrawItemSink
     {
         ArgumentNullException.ThrowIfNull(mesh);
         ArgumentNullException.ThrowIfNull(material);
+        if (mesh.Placement is { } placement)
+            Emit(placement, subMesh, material, item, count, shared, source, offset);
+    }
+
+    /// <summary>One submesh of geometry placed in the pool without a mesh, for one object.</summary>
+    internal void AddPlaced(MeshPlacement placement, int subMesh, Material material, in DrawItem item) => Emit(placement, subMesh, material, item, 1, false, default, 0);
+
+    /// <summary>Where a frame's instance objects start, made by the first view that adds them and reused by the rest.</summary>
+    internal struct InstanceObjects
+    {
+        public ulong Frame;
+        public uint First;
+    }
+
+    /// <summary>
+    /// Instances of one submesh, each its own object at the item's transform times its own, coloured by the item's colour
+    /// times its own, in one instanced draw.
+    /// </summary>
+    internal void AddPlacedInstances(MeshPlacement placement, int subMesh, Material material, in DrawItem item, ref InstanceObjects objects,
+        ReadOnlySpan<Float4x4> transforms, ReadOnlySpan<Float4> colors)
+    {
+        if (transforms.IsEmpty)
+            return;
+        RenderWorld.RenderSide render = _world.World.Render;
+        if (objects.Frame != render.TransientFrame)
+        {
+            ObjectAttributes attributes = Attributes(item);
+            for (int i = 0; i < transforms.Length; i++)
+            {
+                attributes.Color = colors.IsEmpty ? item.Color : item.Color * colors[i];
+                uint index = render.AddTransientObject(item.Transform * (Double4x4)transforms[i], attributes);
+                if (i == 0)
+                    objects.First = index;
+            }
+            objects.Frame = render.TransientFrame;
+        }
+        Emit(placement, subMesh, material, item, (uint)transforms.Length, true, default, 0, objects.First);
+    }
+
+    private ObjectAttributes Attributes(in DrawItem item) => new()
+    {
+        Flags = (uint)item.Flags,
+        ObjectId = item.ObjectId,
+        PreviousTransform = ObjectAttributes.NoPrevious,
+        LightmapTexture = ObjectAttributes.NoLightmap,
+        ProbeIndex = item.Probe.IsValid ? _world.World.Probes.AnchorSlotOf(item.Probe.Index) : uint.MaxValue,
+        LodFade = 1,
+        LayerMask = item.LayerMask,
+        LightmapScaleOffset = new Float4(1, 1, 0, 0),
+        Color = item.Color,
+        Custom0 = item.Custom0,
+        Custom1 = item.Custom1,
+    };
+
+    // A first object makes each instance draw the object that many after it, else one object is made for the item
+    private void Emit(MeshPlacement placement, int subMesh, Material material, in DrawItem item, uint count, bool shared, RenderResourceID source, uint offset,
+        uint? firstObject = null)
+    {
+        ArgumentNullException.ThrowIfNull(material);
         if ((item.LayerMask & _cullingMask) == 0 || (item.Flags & RenderableFlags.Hidden) != 0)
             return;
-        if (mesh.Placement is not { } placement || material.IsDisposed || material.Draw is not { } draw || material.Table == null)
+        if (material.IsDisposed || material.Draw is not { } draw || material.Table == null)
             return;
         if ((uint)subMesh >= (uint)placement.SubMeshes.Length)
             throw new ArgumentOutOfRangeException(nameof(subMesh), $"The mesh has {placement.SubMeshes.Length} submeshes.");
 
-        RenderWorld.RenderSide render = _world.World.Render;
-        ObjectAttributes attributes = new()
-        {
-            Flags = (uint)item.Flags,
-            ObjectId = item.ObjectId,
-            PreviousTransform = ObjectAttributes.NoPrevious,
-            LightmapTexture = ObjectAttributes.NoLightmap,
-            ProbeIndex = item.Probe.IsValid ? _world.World.Probes.AnchorSlotOf(item.Probe.Index) : uint.MaxValue,
-            LodFade = 1,
-            LayerMask = item.LayerMask,
-            LightmapScaleOffset = new Float4(1, 1, 0, 0),
-            Custom0 = item.Custom0,
-            Custom1 = item.Custom1,
-        };
-        uint objectIndex = render.AddTransientObject(item.Transform, attributes);
+        uint objectIndex = firstObject ?? _world.World.Render.AddTransientObject(item.Transform, Attributes(item));
         bool mirrored = RenderWorld.RenderSide.Determinant3(item.Transform) < 0;
         Double4x4 m = item.Transform;
         float depth = float.IsNaN(item.SortDepth) ? Length(_frustum.Relative(new Double3(m.c3.X, m.c3.Y, m.c3.Z))) : item.SortDepth;
@@ -1421,9 +1745,10 @@ public sealed class DrawItemSink
 
         void Into(DrawList list, PassType pass, bool sorted)
         {
-            if (!_world.Programs.TryGet(material, draw, pass, out ushort program))
+            if (!_world.Programs.Hold(draw.Sides?.Front ?? draw, pass, out ushort program))
                 return;
-            BucketSet.TransparentItem entry = Next();
+            BucketSet.ItemDraw entry = Next();
+            entry.BackProgram = draw.Sides is { } sides && _world.Programs.Hold(sides.Back, pass, out ushort back) ? back : -1;
             entry.Provided = true;
             entry.Object = (int)objectIndex;
             entry.Program = program;
@@ -1436,6 +1761,7 @@ public sealed class DrawItemSink
             entry.Depth = depth;
             entry.MaterialSlot = material.Slot;
             entry.Shared = shared;
+            entry.Consecutive = firstObject.HasValue;
             entry.InstanceCount = count;
             if (!_lists.TryGetValue(list, out ProvidedItems? items))
                 _lists[list] = items = new ProvidedItems();
@@ -1444,7 +1770,7 @@ public sealed class DrawItemSink
                 Counts.Add((entry, list, source, offset));
         }
 
-        // The rules renderables' buckets follow: built in passes and feature passes skip shadow only items, the shadow pass draws only opaque casters
+        // The rules renderables' buckets follow: built in passes and feature passes skip shadow only items, the shadow pass draws every caster unsorted
         if (!shadowsOnly && !_shadowView)
         {
             if (draw.Transparent)
@@ -1459,11 +1785,10 @@ public sealed class DrawItemSink
         }
         foreach ((PassType type, DrawList list) in _camera.PassLists)
         {
-            bool skip = type == PassType.ShadowCaster
-                ? (flags & RenderableFlags.CastShadows) == 0 || !draw.CastShadows || draw.Transparent
-                : shadowsOnly;
+            bool shadows = type == PassType.ShadowCaster;
+            bool skip = shadows ? (flags & RenderableFlags.CastShadows) == 0 || !draw.CastShadows : shadowsOnly;
             if (!skip)
-                Into(list, type, sorted: draw.Transparent);
+                Into(list, type, sorted: draw.Transparent && !shadows);
         }
     }
 
@@ -1485,11 +1810,11 @@ public sealed class DrawItemSink
 
     private static float Length(Float3 v) => MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
 
-    private BucketSet.TransparentItem Next()
+    private BucketSet.ItemDraw Next()
     {
         if (_used == _pool.Count)
         {
-            _pool.Add(new BucketSet.TransparentItem
+            _pool.Add(new BucketSet.ItemDraw
             {
                 Pass = 1,
                 Object = 0,
@@ -1502,60 +1827,8 @@ public sealed class DrawItemSink
                 Chunks = [],
             });
         }
-        BucketSet.TransparentItem item = _pool[_used++];
+        BucketSet.ItemDraw item = _pool[_used++];
         item.FirstCommand = -1;
         return item;
-    }
-}
-
-/// <summary>The draw programs of providers' materials, held while the material lives and draws the same. Render thread.</summary>
-internal sealed class ProviderPrograms(DrawPrograms programs)
-{
-    private readonly Dictionary<(Material Material, string Pass), (MaterialDraw Draw, ushort Program, bool Has)> _entries = new();
-    private readonly List<(Material, string)> _stale = new();
-
-    public bool TryGet(Material material, MaterialDraw draw, PassType pass, out ushort program)
-    {
-        (Material, string) key = (material, pass.Name);
-        if (_entries.TryGetValue(key, out (MaterialDraw Draw, ushort Program, bool Has) entry))
-        {
-            if (ReferenceEquals(entry.Draw, draw))
-            {
-                program = entry.Program;
-                return entry.Has;
-            }
-            if (entry.Has)
-                programs.Release(entry.Program);
-        }
-        bool has = programs.TryGet(draw, pass, out program);
-        if (has)
-            programs.Acquire(program);
-        _entries[key] = (draw, program, has);
-        return has;
-    }
-
-    /// <summary>Lets the programs of disposed materials go.</summary>
-    public void Sweep()
-    {
-        _stale.Clear();
-        foreach (KeyValuePair<(Material Material, string Pass), (MaterialDraw Draw, ushort Program, bool Has)> pair in _entries)
-        {
-            if (pair.Key.Material.IsDisposed)
-                _stale.Add(pair.Key);
-        }
-        foreach ((Material, string) key in _stale)
-            Remove(key);
-    }
-
-    public void Clear()
-    {
-        foreach ((Material, string) key in new List<(Material, string)>(_entries.Keys))
-            Remove(key);
-    }
-
-    private void Remove((Material, string) key)
-    {
-        if (_entries.Remove(key, out (MaterialDraw Draw, ushort Program, bool Has) entry) && entry.Has)
-            programs.Release(entry.Program);
     }
 }

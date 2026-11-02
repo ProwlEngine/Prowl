@@ -38,12 +38,13 @@ public readonly record struct LightmapBinding
 {
     public static readonly LightmapBinding None = default;
 
-    public LightmapBinding(Texture? texture, Float4 scaleOffset, LightmapEncoding encoding = LightmapEncoding.RGBM, SamplerDescription? sampler = null)
+    public LightmapBinding(Texture? texture, Float4 scaleOffset, LightmapEncoding encoding = LightmapEncoding.RGBM, SamplerDescription? sampler = null, float scale = 1)
     {
         Texture = texture;
         ScaleOffset = scaleOffset;
         Encoding = encoding;
         Sampler = sampler;
+        Scale = scale;
         Lightmapped = true;
     }
 
@@ -56,48 +57,15 @@ public readonly record struct LightmapBinding
     /// <summary>Linear and clamped when null.</summary>
     public SamplerDescription? Sampler { get; }
 
+    /// <summary>What the decoded texels are multiplied by to give irradiance over pi, one over the exposure a bake stored them at.</summary>
+    public float Scale { get; }
+
     public bool Lightmapped { get; }
 }
 
-/// <summary>One instance of a batch: its transform relative to the batch's, and data its shaders read as Custom0 and Custom1.</summary>
-public struct InstanceData
-{
-    public Float4x4 Transform;
-    public Float4 Color;
-    public Float4 Custom;
-}
-
-/// <summary>What every instance of a batch shares.</summary>
-public struct InstanceBatchDesc
-{
-    public GpuMesh Mesh;
-
-    /// <summary>Where the batch sits, double so batches far from the origin keep their place. Instances are relative to it.</summary>
-    public Double4x4 Transform;
-    public uint LayerMask;
-    public RenderableFlags Flags;
-
-    /// <summary>The object id of the first instance, the rest following on.</summary>
-    public uint ObjectIdBase;
-    public sbyte SortBias;
-
-    public InstanceBatchDesc()
-    {
-        Mesh = null!;
-        Transform = Double4x4.Identity;
-        LayerMask = ~0u;
-        Flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows;
-    }
-}
-
-public readonly record struct InstanceBatchHandle(int Index, int Generation)
-{
-    public bool IsValid => Generation > 0;
-}
-
 /// <summary>
-/// Geometry drawn for one frame, a mesh or inline positions with optional colours and indices. Inline geometry becomes a
-/// mesh the world owns and disposes after the frame.
+/// Geometry drawn for one frame, a mesh with every submesh drawn with the material, or inline positions with optional
+/// colours and indices, copied when drawn.
 /// </summary>
 public struct TransientDraw
 {
@@ -114,6 +82,9 @@ public struct TransientDraw
     public Double4x4 Transform;
     public uint LayerMask;
     public RenderableFlags Flags;
+
+    /// <summary>What every instance covers relative to <see cref="Transform"/>, worked out from the instances when null.</summary>
+    public AABB? InstanceBounds;
 
     public TransientDraw()
     {
@@ -139,6 +110,9 @@ public struct RenderableDesc
     public uint LayerMask;
     public RenderableFlags Flags;
 
+    /// <summary>Multiplies the standard surfaces' vertex colour, so their base colour and coverage. White by default.</summary>
+    public Float4 Color;
+
     /// <summary>Free per object shader data.</summary>
     public Float4 Custom0, Custom1;
 
@@ -156,6 +130,7 @@ public struct RenderableDesc
         LayerMask = ~0u;
         Flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows;
         Lightmap = LightmapBinding.None;
+        Color = Float4.One;
     }
 }
 
@@ -200,7 +175,7 @@ internal struct ObjectBounds
     public Float4 Extents;
 }
 
-/// <summary>Per object data shaders read as needed, 96 bytes, matching Graphite_ObjectData.</summary>
+/// <summary>Per object data shaders read as needed, 112 bytes, matching Graphite_ObjectData.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct ObjectAttributes
 {
@@ -222,8 +197,9 @@ internal struct ObjectAttributes
     /// <summary>The first word plus one of a skinned copy's current and last frame's positions, 0 for the chunk's own and none.</summary>
     public uint CurrentPositions;
     public uint PreviousPositions;
-    private uint _pad0;
+    public float LightmapScale;
     public Float4 LightmapScaleOffset;
+    public Float4 Color;
     public Float4 Custom0;
     public Float4 Custom1;
 }
@@ -291,198 +267,28 @@ public sealed partial class RenderWorld : IDisposable
     internal ShadowSettings ShadowSnapshot = new();
 
     /// <summary>Features every view of the world runs. Host thread.</summary>
-    public FeatureSet Features { get; } = new();
+    public ExtensionSet<RenderFeature> Features { get; } = new();
 
     /// <summary>GPU work run once a frame outside any view, with the world's built in LightProbes, LocalShadows and CaptureFill. Host thread.</summary>
-    public FrameFeatureSet FrameFeatures { get; }
+    public ExtensionSet<FrameFeature> FrameFeatures { get; }
 
     /// <summary>Host geometry drawn into each view through its passes without being renderables. Host thread.</summary>
-    public ProviderSet Providers { get; } = new();
+    public ExtensionSet<RenderProvider> Providers { get; } = new();
 
     /// <summary>The providers as of the last SubmitFrame. The render thread reads only this.</summary>
     internal RenderProvider[] ProviderSnapshot = [];
 
-    private sealed class InstanceBatch
-    {
-        public InstanceBatchDesc Desc;
-        public Material[] Materials = [];
-        public readonly List<RenderableHandle> Instances = new();
-        public readonly List<Float4x4> Relative = new();
-        public int Generation;
-        public bool Alive;
-    }
-
-    private readonly List<InstanceBatch> _batches = new();
-    private readonly Stack<int> _freeBatches = new();
+    /// <summary>The world's transient draws, a provider culled before the host's.</summary>
+    internal TransientDraws Transients { get; } = new();
 
     /// <summary>
-    /// Adds many instances of one mesh and material set, each an object of its own for culling, lighting and object ids.
-    /// Host thread.
+    /// Draws geometry in the next frame only, through every pass its material has. Given instances, it draws once per
+    /// transform relative to the draw's, each its own object with its colour multiplying the standard surfaces' vertex
+    /// colour, all in one instanced draw culled as a whole. Mirrored instances keep the winding of the draw's transform.
+    /// The instances are copied. Host thread.
     /// </summary>
-    public InstanceBatchHandle AddInstanceBatch(in InstanceBatchDesc desc, ReadOnlySpan<Material> materials, ReadOnlySpan<InstanceData> instances)
-    {
-        ArgumentNullException.ThrowIfNull(desc.Mesh);
-        if (materials.IsEmpty)
-            throw new ArgumentException("An instance batch needs at least one material.", nameof(materials));
-        int index;
-        if (_freeBatches.Count > 0)
-        {
-            index = _freeBatches.Pop();
-        }
-        else
-        {
-            index = _batches.Count;
-            _batches.Add(new InstanceBatch());
-        }
-        InstanceBatch batch = _batches[index];
-        batch.Generation++;
-        batch.Alive = true;
-        batch.Desc = desc;
-        batch.Materials = materials.ToArray();
-        SetInstances(batch, instances);
-        return new InstanceBatchHandle(index, batch.Generation);
-    }
-
-    /// <summary>Replaces a batch's instances, adding and removing at the end when the count changes. Host thread.</summary>
-    public void SetInstances(InstanceBatchHandle handle, ReadOnlySpan<InstanceData> instances) => SetInstances(Batch(handle), instances);
-
-    /// <summary>Moves a batch or changes what its instances share, keeping their own data. Host thread.</summary>
-    public void SetInstanceBatch(InstanceBatchHandle handle, in InstanceBatchDesc desc)
-    {
-        ArgumentNullException.ThrowIfNull(desc.Mesh);
-        InstanceBatch batch = Batch(handle);
-        InstanceBatchDesc old = batch.Desc;
-        batch.Desc = desc;
-        for (int i = 0; i < batch.Instances.Count; i++)
-        {
-            RenderableHandle instance = batch.Instances[i];
-            SetTransform(instance, desc.Transform * (Double4x4)batch.Relative[i]);
-            if (desc.Mesh != old.Mesh)
-                SetMesh(instance, desc.Mesh);
-            if (desc.LayerMask != old.LayerMask)
-                SetLayerMask(instance, desc.LayerMask);
-            if (desc.Flags != old.Flags)
-                SetFlags(instance, desc.Flags);
-            if (desc.ObjectIdBase != old.ObjectIdBase)
-                SetObjectId(instance, desc.ObjectIdBase + (uint)i);
-            if (desc.SortBias != old.SortBias)
-                SetSortBias(instance, desc.SortBias);
-        }
-    }
-
-    public void RemoveInstanceBatch(InstanceBatchHandle handle)
-    {
-        InstanceBatch batch = Batch(handle);
-        foreach (RenderableHandle instance in batch.Instances)
-            Remove(instance);
-        batch.Instances.Clear();
-        batch.Relative.Clear();
-        batch.Alive = false;
-        batch.Generation++;
-        _freeBatches.Push(handle.Index);
-    }
-
-    public bool IsAlive(InstanceBatchHandle handle)
-        => (uint)handle.Index < (uint)_batches.Count && _batches[handle.Index].Alive && _batches[handle.Index].Generation == handle.Generation;
-
-    public int InstanceCount(InstanceBatchHandle handle) => Batch(handle).Instances.Count;
-
-    private InstanceBatch Batch(InstanceBatchHandle handle)
-    {
-        if (!IsAlive(handle))
-            throw new ArgumentException("The instance batch was removed, or is not from this world.", nameof(handle));
-        return _batches[handle.Index];
-    }
-
-    private void SetInstances(InstanceBatch batch, ReadOnlySpan<InstanceData> instances)
-    {
-        InstanceBatchDesc desc = batch.Desc;
-        while (batch.Instances.Count > instances.Length)
-        {
-            Remove(batch.Instances[^1]);
-            batch.Instances.RemoveAt(batch.Instances.Count - 1);
-            batch.Relative.RemoveAt(batch.Relative.Count - 1);
-        }
-        for (int i = 0; i < instances.Length; i++)
-        {
-            InstanceData data = instances[i];
-            Double4x4 transform = desc.Transform * (Double4x4)data.Transform;
-            if (i < batch.Instances.Count)
-            {
-                batch.Relative[i] = data.Transform;
-                RenderableHandle instance = batch.Instances[i];
-                SetTransform(instance, transform);
-                SetCustomData(instance, data.Color, data.Custom);
-                continue;
-            }
-            batch.Relative.Add(data.Transform);
-            batch.Instances.Add(Add(new RenderableDesc
-            {
-                Mesh = desc.Mesh,
-                Transform = transform,
-                LayerMask = desc.LayerMask,
-                Flags = desc.Flags,
-                Custom0 = data.Color,
-                Custom1 = data.Custom,
-                ObjectId = desc.ObjectIdBase + (uint)i,
-                SortBias = desc.SortBias,
-            }, batch.Materials));
-        }
-    }
-
-    private readonly List<(RenderableHandle Handle, GpuMesh Mesh, bool Owned)> _transients = new();
-    private readonly List<(RenderableHandle Handle, GpuMesh Mesh, bool Owned)> _drawnTransients = new();
-
-    /// <summary>Draws geometry in the next frame only, through every pass its material has. Host thread.</summary>
-    public void DrawTransient(in TransientDraw draw)
-    {
-        ArgumentNullException.ThrowIfNull(draw.Material);
-        GpuMesh mesh;
-        if (draw.Mesh != null)
-        {
-            mesh = draw.Mesh;
-        }
-        else
-        {
-            if (_owner == null)
-                throw new InvalidOperationException("Inline transient geometry needs a world made by a renderer.");
-            if (draw.Positions.IsEmpty)
-                throw new ArgumentException("A transient draw needs a mesh or positions.", nameof(draw));
-            uint count = (uint)draw.Positions.Length;
-            uint[] indices = draw.Indices.IsEmpty ? [.. System.Linq.Enumerable.Range(0, (int)count).Select(i => (uint)i)] : draw.Indices.ToArray();
-            List<VertexStream> streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = System.Runtime.InteropServices.MemoryMarshal.AsBytes(draw.Positions.Span).ToArray() }];
-            if (!draw.Colors.IsEmpty)
-                streams.Add(new VertexStream { Semantic = VertexSemantic.Color, Format = VertexElementFormat.Byte4_Norm, Data = System.Runtime.InteropServices.MemoryMarshal.AsBytes(draw.Colors.Span).ToArray() });
-            mesh = _owner.CreateMesh(new MeshData
-            {
-                VertexCount = count,
-                Streams = [.. streams],
-                Indices = indices,
-                SubMeshes = [new SubMesh { IndexStart = 0, IndexCount = (uint)indices.Length, Topology = draw.Topology }],
-            });
-        }
-        RenderableHandle handle = Add(new RenderableDesc { Mesh = mesh, Transform = draw.Transform, LayerMask = draw.LayerMask, Flags = draw.Flags }, [draw.Material]);
-        _transients.Add((handle, mesh, draw.Mesh == null));
-    }
-
-    // Last frame's transients go with the meshes made for them, except those whose mesh was not placed in time to draw
-    private void RetireTransients()
-    {
-        foreach ((RenderableHandle handle, GpuMesh mesh, bool owned) in _drawnTransients)
-        {
-            if (mesh.Placement == null && !mesh.IsDisposed)
-            {
-                _transients.Add((handle, mesh, owned));
-                continue;
-            }
-            Remove(handle);
-            if (owned)
-                mesh.Dispose();
-        }
-        _drawnTransients.Clear();
-        _drawnTransients.AddRange(_transients);
-        _transients.Clear();
-    }
+    public void DrawTransient(in TransientDraw draw, ReadOnlySpan<Float4x4> instances = default, ReadOnlySpan<Float4> instanceColors = default)
+        => Transients.Add(draw, instances, instanceColors);
 
     /// <summary>The features as of the last SubmitFrame. The render thread reads only this.</summary>
     internal RenderFeature[] FeatureSnapshot = [];
@@ -515,6 +321,7 @@ public sealed partial class RenderWorld : IDisposable
     private Double4x4[] _transform = [];
     private uint[] _layerMask = [];
     private RenderableFlags[] _flags = [];
+    private Float4[] _color = [];
     private Float4[] _custom0 = [];
     private Float4[] _custom1 = [];
     private uint[] _objectId = [];
@@ -545,7 +352,7 @@ public sealed partial class RenderWorld : IDisposable
     {
         _owner = owner;
         _device = device;
-        FrameFeatures = new FrameFeatureSet(this) { new LightProbeFeature(), new LocalShadowFeature(), new CaptureFillFeature() };
+        FrameFeatures = new ExtensionSet<FrameFeature>(this) { new LightProbeFeature(), new LocalShadowFeature(), new CaptureFillFeature() };
         int id = System.Threading.Interlocked.Increment(ref s_nextId);
         Id = id;
         Name = $"World {id}";
@@ -587,6 +394,7 @@ public sealed partial class RenderWorld : IDisposable
         _transform[index] = desc.Transform;
         _layerMask[index] = desc.LayerMask;
         _flags[index] = desc.Flags;
+        _color[index] = desc.Color;
         _custom0[index] = desc.Custom0;
         _custom1[index] = desc.Custom1;
         _objectId[index] = desc.ObjectId;
@@ -667,6 +475,16 @@ public sealed partial class RenderWorld : IDisposable
         if (_layerMask[index] == mask)
             return;
         _layerMask[index] = mask;
+        MarkDirty(index, Dirt.Attributes);
+    }
+
+    /// <summary>Sets the colour multiplying the standard surfaces' vertex colour, see <see cref="RenderableDesc.Color"/>.</summary>
+    public void SetColor(RenderableHandle handle, Float4 color)
+    {
+        int index = Check(handle);
+        if (_color[index] == color)
+            return;
+        _color[index] = color;
         MarkDirty(index, Dirt.Attributes);
     }
 
@@ -783,7 +601,7 @@ public sealed partial class RenderWorld : IDisposable
     }
 
     /// <summary>
-    /// Weights the mesh's blend shapes, one per shape from 0 to 100 like Prowl, past either end to over or undershoot.
+    /// Weights the mesh's blend shapes, one per shape from 0 to 100, past either end to over or undershoot.
     /// Shapes past the span weigh 0, and an empty span rests every shape. Nothing changes when the weights equal the
     /// stored ones. A renderable whose mesh has blend shapes culls by its bounds override, which should hold every shape.
     /// </summary>
@@ -815,9 +633,7 @@ public sealed partial class RenderWorld : IDisposable
         ProviderSnapshot = Providers.Snapshot();
         foreach (RenderProvider provider in ProviderSnapshot)
         {
-            provider.EnabledSnapshot = provider.Enabled;
-            provider.RunsOnSnapshot = provider.RunsOn;
-            if (!provider.Enabled)
+            if (!provider.EnabledSnapshot)
                 continue;
             try
             {
@@ -829,7 +645,7 @@ public sealed partial class RenderWorld : IDisposable
                 _report(new RendererError("provider.extract", $"{provider.GetType().Name}.Extract threw, so it draws nothing this frame: {e}", RendererErrorSeverity.Error, provider) { Key = $"provider.extract.{provider.GetType().FullName}" });
             }
         }
-        RetireTransients();
+        Transients.Swap();
         _render.BeginExtract();
         foreach (int index in _dirty)
         {
@@ -860,18 +676,6 @@ public sealed partial class RenderWorld : IDisposable
     /// <summary>Removes the world from its renderer at the next frame. Host thread.</summary>
     public void Dispose()
     {
-        foreach ((_, GpuMesh mesh, bool owned) in _transients)
-        {
-            if (owned)
-                mesh.Dispose();
-        }
-        foreach ((_, GpuMesh mesh, bool owned) in _drawnTransients)
-        {
-            if (owned)
-                mesh.Dispose();
-        }
-        _transients.Clear();
-        _drawnTransients.Clear();
         if (_owner != null)
             _owner.RemoveWorld(this);
         else
@@ -934,6 +738,7 @@ public sealed partial class RenderWorld : IDisposable
         Array.Resize(ref _transform, capacity);
         Array.Resize(ref _layerMask, capacity);
         Array.Resize(ref _flags, capacity);
+        Array.Resize(ref _color, capacity);
         Array.Resize(ref _custom0, capacity);
         Array.Resize(ref _custom1, capacity);
         Array.Resize(ref _objectId, capacity);
@@ -1077,10 +882,14 @@ public sealed partial class RenderWorld : IDisposable
 
         private uint _transientObjects;
 
+        /// <summary>Moves each frame, so provider objects made in an earlier one are known to be gone.</summary>
+        public ulong TransientFrame { get; private set; } = 1;
+
         /// <summary>Forgets last frame's provider objects and starts a frame of culls. Render thread, before any view.</summary>
         public void BeginFrame()
         {
             _transientObjects = 0;
+            TransientFrame++;
             foreach (int index in Deforming)
                 _seenLastFrame[index] = DeformSeen[index] == DeformStamp;
             DeformStamp++;
@@ -1185,6 +994,8 @@ public sealed partial class RenderWorld : IDisposable
             LightmapBinding lightmap = host._lightmap[index];
             (attributes.LightmapTexture, attributes.LightmapSampler) = host.LightmapSlots(lightmap);
             attributes.LightmapScaleOffset = lightmap.Lightmapped ? lightmap.ScaleOffset : new Float4(1, 1, 0, 0);
+            attributes.LightmapScale = lightmap.Scale;
+            attributes.Color = host._color[index];
             attributes.Custom0 = host._custom0[index];
             attributes.Custom1 = host._custom1[index];
             attributes.LodFade = 1;
@@ -1328,7 +1139,7 @@ public sealed partial class RenderWorld : IDisposable
             return _boneRange[index].Size > 0 && (mesh.StreamsPresent & boneStreams) == boneStreams;
         }
 
-        // Prowl's frame pick: a lone frame scales by weight over its weight, several interpolate between the two around
+        // The frame pick: a lone frame scales by weight over its weight, several interpolate between the two around
         // the weight, clamped to the last; near zero weights and picks are left out
         private static (int Frame, float Weight)[] PickFrames(MeshPlacement mesh, float[]? weights)
         {

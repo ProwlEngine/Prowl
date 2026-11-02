@@ -17,8 +17,11 @@ namespace Prowl.Graphite.Rendering;
 /// words. A copy deformed the frame it is made skips the streams the deform writes. After the upload and before the
 /// fence every view follows.
 /// </summary>
-internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) : IDisposable
+internal sealed class DeformPass(InternalCompute program, GeometryPool geometry) : IDisposable
 {
+    private static readonly PropertyID s_deformSource = "Graphite_DeformSource", s_deformTarget = "Graphite_DeformTarget",
+        s_skinMatrices = "Graphite_SkinMatrices";
+
     [StructLayout(LayoutKind.Sequential)]
     private struct Push
     {
@@ -63,7 +66,7 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
                 continue;
             if (!bound)
             {
-                cmd.SetComputeShader(program);
+                cmd.SetComputeShader(program.Program);
                 bound = true;
             }
 
@@ -175,9 +178,9 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
 
     private void Bind(CommandBuffer cmd, RenderWorld.RenderSide world, DeviceBuffer source, DeviceBuffer target)
     {
-        _properties.SetBuffer("Graphite_DeformSource", source);
-        _properties.SetBuffer("Graphite_DeformTarget", target);
-        _properties.SetBuffer("Graphite_SkinMatrices", world.SkinMatrices.Buffer);
+        _properties.SetBuffer(s_deformSource, source);
+        _properties.SetBuffer(s_deformTarget, target);
+        _properties.SetBuffer(s_skinMatrices, world.SkinMatrices.Buffer);
         cmd.SetProperties(_properties);
     }
 

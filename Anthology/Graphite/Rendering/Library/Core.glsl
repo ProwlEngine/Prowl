@@ -1,10 +1,12 @@
 // The renderer's data for every material pass: the view block, the draw and object records, and camera relative transforms.
-// World positions in shaders are relative to the camera, so objects far from the origin keep their precision.
+// Positions in shaders are relative: world space moved so the camera sits at the origin, which keeps the precision of
+// objects far from it. World means true world space, which directions and normals are in as moving changes none of them.
 #pragma once
 
 #extension GL_EXT_multiview : require
 #extension GL_EXT_nonuniform_qualifier : require
 
+#include "Graphite/Math.glsl"
 #include "Graphite/ViewData.glsl"
 
 // flags: 1 every instance draws object, 2 subMesh holds the material slot itself
@@ -25,8 +27,9 @@ struct Graphite_ObjectData
     uint lightmapSampler;           // the lightmap's sampler slot, its encoding in the high 16 bits (0 linear, 1 RGBM)
     uint currentPositions;          // a skinned copy's current and last frame's positions, first word plus one, 0 for none
     uint previousPositions;
-    uint pad0;
+    float lightmapScale;            // what decoded lightmap texels are multiplied by
     vec4 lightmapScaleOffset;
+    vec4 color;                     // multiplies the standard surfaces' vertex colour
     vec4 custom0;
     vec4 custom1;
 };
@@ -59,6 +62,12 @@ layout(push_constant) uniform Graphite_Push { uint drawRecordBase; uint instance
 
 Graphite_ViewData Graphite_View() { return graphite_Views[graphite_Push.viewBase + gl_ViewIndex]; }
 
+// The scale every light the view draws is pre-exposed by, 1 / (1.2 * 2^EV100)
+float Graphite_Exposure() { return Graphite_View().exposure.x; }
+
+// Whether the view is capturing the sky or a reflection probe
+bool Graphite_IsCapture() { return Graphite_View().exposure.z > 0.5; }
+
 vec3 Graphite_CameraOffset(vec3 high, vec3 low)
 {
     Graphite_ViewData view = Graphite_View();
@@ -66,11 +75,17 @@ vec3 Graphite_CameraOffset(vec3 high, vec3 low)
     return offset;
 }
 
-// An absolute world position, as a float. Fine near the origin, for noise and other effects that need world space.
-vec3 Graphite_AbsoluteFromRelative(vec3 relative)
+// The world position of a relative one, as a float. Fine near the origin, for noise and other effects that need world space.
+vec3 Graphite_RelativeToWorld(vec3 relative)
 {
     Graphite_ViewData view = Graphite_View();
     return relative + view.cameraHigh.xyz + view.cameraLow.xyz;
+}
+
+// Unit direction from a relative position to the camera
+vec3 Graphite_ViewDir(vec3 relativePos)
+{
+    return normalize(-relativePos);
 }
 
 mat3 Graphite_Linear(Graphite_Transform t) { return transpose(mat3(t.row0.xyz, t.row1.xyz, t.row2.xyz)); }
@@ -106,13 +121,6 @@ float Graphite_LinearDepth(float deviceDepth)
 {
     // Reversed Z with an infinite far plane: depth is near / view distance.
     return Graphite_View().depth.x / max(deviceDepth, 1e-12);
-}
-
-vec3 Graphite_RelativeFromDepth(vec2 uv, float deviceDepth)
-{
-    vec4 clip = vec4(uv * 2.0 - 1.0, deviceDepth, 1.0);
-    vec4 relative = Graphite_View().inverseViewProjection * clip;
-    return relative.xyz / relative.w;
 }
 
 #if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_NO_OBJECT)

@@ -1,5 +1,6 @@
 // Sky passes, tagged "LightMode" = "Sky": a fullscreen triangle at the far plane, drawn after the opaque surfaces where
-// nothing was drawn and into the sky probe. Both stages include this. The vertex stage's main runs after the library's
+// nothing was drawn and into the sky probe. Surface "Sky" shaders get one from Graphite/Standard/Sky.shader, a hand
+// written sky pass includes this in both stages. The vertex stage's main runs after the library's
 // and has nothing left to do, the fragment stage reads Graphite_SkyDirection(). Include it before any other library
 // file: a sky has no object, so object data is left out and surfaces count as on every layer.
 #pragma once

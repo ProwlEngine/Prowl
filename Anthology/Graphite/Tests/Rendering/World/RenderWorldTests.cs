@@ -11,19 +11,12 @@ using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-file sealed class NoResources : IMaterialResources
-{
-    public uint TextureSlot(Texture? texture, MaterialPropertyType type, string defaultName) => 0;
-
-    public uint SamplerSlot(SamplerDescription? sampler) => 0;
-}
-
 [Collection("GPU Tests")]
 public sealed class RenderWorldTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
     private readonly Uploader _uploader;
     private readonly GeometryPool _geometry;
     private readonly MaterialSystem _materials;
@@ -46,7 +39,6 @@ public sealed class RenderWorldTests : IDisposable
     {
         _world.Dispose();
         _uploader.Dispose();
-        _compiler.Dispose();
         _store.Dispose();
         _device.Dispose();
     }

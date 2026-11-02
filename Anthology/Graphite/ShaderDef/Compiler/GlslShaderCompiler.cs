@@ -55,8 +55,8 @@ public sealed class GlslCompilerOptions
     public Dictionary<string, string> Defines = [];
 
     /// <summary>
-    /// A folder compiled SPIR-V is kept in across runs, keyed by the stage's full source and settings, so a variant
-    /// compiles once per machine. Null keeps compiled stages in memory only.
+    /// A folder finished variants are kept in across runs, keyed by the pass, the variant, the included files and the
+    /// settings, so a variant compiles once per machine and a cached one skips the compiler entirely. Null keeps nothing.
     /// </summary>
     public string? CacheDirectory;
 }
@@ -98,7 +98,10 @@ public sealed class GlslProgram
 public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
 {
     private readonly GlslCompilerOptions _options;
-    private readonly ConcurrentDictionary<(string File, string Source), (VariantSpace[] Axes, ShaderGlobal[] Globals)> _pragmas = new();
+    private readonly ConcurrentDictionary<(string File, string Source), (VariantSpace[] Axes, ShaderGlobal[] Globals, string Includes)> _pragmas = new();
+
+    // Variants whose preprocessed stages match compile once
+    private readonly ConcurrentDictionary<string, Lazy<GlslProgram>> _aliases = new(StringComparer.Ordinal);
     private int _sessionVersion;
     private bool _disposed;
 
@@ -123,6 +126,7 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
     public void Invalidate()
     {
         _pragmas.Clear();
+        _aliases.Clear();
         Interlocked.Increment(ref _sessionVersion);
     }
 
@@ -138,9 +142,7 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
     /// <inheritdoc/>
     public ShaderDescription Compile(ShaderPass pass, Keyword[] combo, GraphicsBackend backend)
     {
-        if (backend != GraphicsBackend.Vulkan)
-            throw new NotSupportedException($"The GLSL compiler targets Vulkan only, not {backend}.");
-
+        RequireVulkan(backend);
         return CompileProgram(pass, combo).Description;
     }
 
@@ -148,29 +150,48 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
     /// <inheritdoc/>
     public ComputeDescription CompileCompute(ShaderPass pass, Keyword[] combo, GraphicsBackend backend)
     {
-        if (backend != GraphicsBackend.Vulkan)
-            throw new NotSupportedException($"The GLSL compiler targets Vulkan only, not {backend}.");
-
+        RequireVulkan(backend);
         return CompileProgram(pass, combo).ToCompute();
     }
 
 
     /// <summary>
-    /// Compiles one variant of a pass, keeping the compute thread group size and the warnings.
+    /// Compiles one variant of a pass, keeping the compute thread group size and the warnings. Variants whose preprocessed
+    /// stages match compile once.
     /// </summary>
     public GlslProgram CompileProgram(ShaderPass pass, ReadOnlySpan<Keyword> combo)
     {
+        string key = CacheKey(pass, combo);
+        if (Load(key) is { } cached)
+            return cached;
+
         StringBuilder warnings = new();
         (List<GlslStageSource> stages, GlslProgramLayout layout) = Prepare(pass, combo, warnings);
-
-        string file = FileName(pass);
-        Dictionary<string, string> defines = Defines(pass, combo);
-        List<(GlslStage, byte[])> compiled = [];
+        List<(GlslStage Stage, string Source)> sources = [];
+        StringBuilder text = new();
         foreach (GlslStageSource stage in stages)
-            compiled.Add((stage.Stage, Run(stage.Rewrite(layout), stage.Stage, file, defines, preprocess: false, warnings)));
+        {
+            string source = stage.Rewrite(layout);
+            sources.Add((stage.Stage, source));
+            text.Append(stage.Stage).Append('|').Append(source).Append('|');
+        }
+        string file = FileName(pass);
+        Lazy<GlslProgram> program = _aliases.GetOrAdd(Hash(text.ToString()), _ => new Lazy<GlslProgram>(() =>
+        {
+            List<(GlslStage, byte[])> compiled = [];
+            foreach ((GlslStage stage, string source) in sources)
+                compiled.Add((stage, Invoke(source, stage, file, [], preprocess: false, warnings)));
+            (ShaderDescription description, uint x, uint y, uint z) = SpirvReflector.Reflect(compiled, layout);
+            return new GlslProgram { Description = description, ThreadGroupSize = (x, y, z), Warnings = warnings.ToString() };
+        }));
+        return Store(key, program.Value);
+    }
 
-        (ShaderDescription description, uint x, uint y, uint z) = SpirvReflector.Reflect(compiled, layout);
-        return new GlslProgram { Description = description, ThreadGroupSize = (x, y, z), Warnings = warnings.ToString() };
+
+    private static void RequireVulkan(GraphicsBackend backend)
+    {
+        if (backend != GraphicsBackend.Vulkan)
+            throw new NotSupportedException($"The GLSL compiler targets Vulkan only, not {backend}.");
     }
 
 
@@ -201,7 +222,7 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
         {
             string source = StageSource(file, shared, section);
             Dictionary<string, string> stageDefines = new(defines) { [StageDefine(stage)] = "1" };
-            string preprocessed = Encoding.UTF8.GetString(Run(source, stage, file, stageDefines, preprocess: true, warnings));
+            string preprocessed = Encoding.UTF8.GetString(Invoke(source, stage, file, stageDefines, preprocess: true, warnings));
             stages.Add(new GlslStageSource(stage, preprocessed));
         }
 
@@ -298,17 +319,36 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
     private VariantSpace[] Axes(ShaderPass pass) => Pragmas(pass).Axes;
 
 
-    private (VariantSpace[] Axes, ShaderGlobal[] Globals) Pragmas(ShaderPass pass)
+    // The pass's axes and globals, and a hash of every file it can include
+    private (VariantSpace[] Axes, ShaderGlobal[] Globals, string Includes) Pragmas(ShaderPass pass)
     {
         string file = FileName(pass);
         return _pragmas.GetOrAdd((file, pass.Source), _ =>
         {
-            List<VariantSpace> axes = [];
-            List<ShaderGlobal> globals = [];
-            HashSet<string> visited = new(StringComparer.Ordinal);
-            foreach (GlslSection section in GlslSection.Split(pass.Source, file, pass.SourceLine))
-                GlslPragmas.Collect(section.Body, file, axes, globals, visited, (name, from) => Resolve(name, from));
-            return ([.. axes], [.. globals]);
+            Dictionary<(string, string), string?> resolved = [];
+            StringBuilder included = new();
+            string? Include(string name, string from)
+            {
+                if (resolved.TryGetValue((name, from), out string? text))
+                    return text;
+                text = resolved[(name, from)] = Resolve(name, from);
+                included.Append(name).Append('|').Append(text).Append('|');
+                return text;
+            }
+
+            List<GlslSection> sections = GlslSection.Split(pass.Source, file, pass.SourceLine);
+            string shared = sections.Find(s => s.Name == "Shared")?.Body ?? "";
+            List<(string?, string)> stages = [];
+            foreach (GlslSection section in sections)
+            {
+                if (section.Name != "Shared")
+                    stages.Add((StageDefine(section.Stage), shared + "\n" + section.Body));
+            }
+            if (stages.Count == 0)
+                stages.Add((null, shared));
+
+            (VariantSpace[] axes, ShaderGlobal[] globals) = GlslPragmaScan.Scan(file, stages, _options.Defines, Include);
+            return (axes, globals, Hash(included.ToString()));
         });
     }
 
@@ -324,59 +364,69 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
 
     private static readonly System.Text.RegularExpressions.Regex s_resourceSet = new(@"#\s*pragma\s+resource_set\s+(\d+)");
 
-    private readonly ConcurrentDictionary<string, byte[]> _spirv = new(StringComparer.Ordinal);
+    // Bump when the compile settings below change in a way the key does not show
+    private const string CacheSalt = "graphite-prism-3";
 
-    // Bump when the compile settings below change in a way the source does not show
-    private const string CacheSalt = "graphite-prism-2";
+    private const uint CacheMagic = 0x47505643;
 
-    private byte[] Run(string source, GlslStage stage, string file, Dictionary<string, string> defines, bool preprocess, StringBuilder warnings)
+    private string CacheKey(ShaderPass pass, ReadOnlySpan<Keyword> combo)
     {
-        if (preprocess)
-            return Invoke(source, stage, file, defines, preprocess, warnings);
-
-        string key = CacheKey(source, stage, defines);
-        if (_spirv.TryGetValue(key, out byte[]? cached))
-            return cached;
-
-        string? path = _options.CacheDirectory is { Length: > 0 } directory ? Path.Combine(directory, key + ".spv") : null;
-        if (path != null && File.Exists(path))
-        {
-            try
-            {
-                byte[] stored = File.ReadAllBytes(path);
-                if (stored.Length > 0 && stored.Length % 4 == 0)
-                    return _spirv[key] = stored;
-            }
-            catch (IOException) { }
-        }
-
-        byte[] bytes = Invoke(source, stage, file, defines, preprocess, warnings);
-        _spirv[key] = bytes;
-        if (path != null)
-        {
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                string temporary = $"{path}.{Environment.CurrentManagedThreadId}.tmp";
-                File.WriteAllBytes(temporary, bytes);
-                File.Move(temporary, path, overwrite: true);
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
-        return bytes;
-    }
-
-    private string CacheKey(string source, GlslStage stage, Dictionary<string, string> defines)
-    {
-        StringBuilder text = new(source.Length + 128);
-        text.Append(CacheSalt).Append('|').Append(stage).Append('|').Append(_options.Optimize);
+        StringBuilder text = new(pass.Source.Length + 256);
+        text.Append(CacheSalt).Append('|').Append(_options.Optimize).Append('|').Append(FileName(pass)).Append('|').Append(pass.SourceLine).Append('|').Append(Pragmas(pass).Includes);
+        Dictionary<string, string> defines = Defines(pass, combo);
         List<string> names = [.. defines.Keys];
         names.Sort(StringComparer.Ordinal);
         foreach (string name in names)
             text.Append('|').Append(name).Append('=').Append(defines[name]);
-        text.Append('|').Append(source);
-        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
+        text.Append('|').Append(pass.Fingerprint);
+        return Hash(text.ToString());
+    }
+
+    private static string Hash(string text) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+
+    private string? CachePath(string key) => _options.CacheDirectory is { Length: > 0 } directory ? Path.Combine(directory, key + ".variant") : null;
+
+    private GlslProgram? Load(string key)
+    {
+        if (CachePath(key) is not { } path || !File.Exists(path))
+            return null;
+        try
+        {
+            using FileStream stream = File.OpenRead(path);
+            using BinaryReader reader = new(stream, Encoding.UTF8);
+            if (reader.ReadUInt32() != CacheMagic)
+                return null;
+            ShaderDescription description = BakedVariants.ReadDescription(reader);
+            return new GlslProgram { Description = description, ThreadGroupSize = (reader.ReadUInt32(), reader.ReadUInt32(), reader.ReadUInt32()) };
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private GlslProgram Store(string key, GlslProgram program)
+    {
+        if (CachePath(key) is not { } path)
+            return program;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            string temporary = $"{path}.{Environment.CurrentManagedThreadId}.tmp";
+            using (FileStream stream = File.Create(temporary))
+            using (BinaryWriter writer = new(stream, Encoding.UTF8))
+            {
+                writer.Write(CacheMagic);
+                BakedVariants.WriteDescription(writer, program.Description);
+                writer.Write(program.ThreadGroupSize.X);
+                writer.Write(program.ThreadGroupSize.Y);
+                writer.Write(program.ThreadGroupSize.Z);
+            }
+            File.Move(temporary, path, overwrite: true);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return program;
     }
 
     private byte[] Invoke(string source, GlslStage stage, string file, Dictionary<string, string> defines, bool preprocess, StringBuilder warnings)
@@ -581,86 +631,66 @@ internal static class GlslPragmas
 
 
     /// <summary>
-    /// Collects every variant and global pragma of a source and of everything it includes, whether or not the include
-    /// is active.
+    /// Adds the axis or globals of a variant or global pragma line, ignoring any other directive.
     /// </summary>
-    public static void Collect(string source, string file, List<VariantSpace> axes, List<ShaderGlobal> globals, HashSet<string> visited, Func<string, string, string?> resolve)
+    public static void Read(string directive, string file, List<VariantSpace> axes, List<ShaderGlobal> globals)
     {
-        foreach (string line in StripComments(source).Split('\n'))
+        string[] parts = Words(directive);
+        if (parts.Length >= 2 && parts[0] == "pragma" && parts[1] == "global")
         {
-            string trimmed = line.Trim();
-            if (!trimmed.StartsWith('#'))
-                continue;
-
-            string[] parts = Words(trimmed);
-            if (parts.Length >= 2 && parts[0] == "include")
+            if (parts.Length < 4)
+                throw new ShaderCompileException($"{file}: error: '#pragma global' needs a type and one or more names, like '#pragma global float _Wetness'");
+            if (!GlobalTypes.Contains(parts[2]))
+                throw new ShaderCompileException($"{file}: error: '{parts[2]}' in '{directive}' is not a global type, use one of {string.Join(" ", GlobalTypes)}");
+            foreach (string name in parts[3..])
             {
-                string name = trimmed[(trimmed.IndexOf("include", StringComparison.Ordinal) + 7)..].Trim().Trim('"', '<', '>');
-                if (!visited.Add(name))
-                    continue;
-
-                string? included = resolve(name, file);
-                if (included != null)
-                    Collect(included, name, axes, globals, visited, resolve);
-                continue;
+                if (!IsIdentifier(name))
+                    throw new ShaderCompileException($"{file}: error: '{name}' in '{directive}' is not a valid name");
+                int declared = globals.FindIndex(g => g.Name == name);
+                if (declared < 0)
+                    globals.Add(new ShaderGlobal(name, parts[2]));
+                else if (globals[declared].Type != parts[2])
+                    throw new ShaderCompileException($"{file}: error: global '{name}' is declared as both {globals[declared].Type} and {parts[2]}");
             }
-
-            if (parts.Length >= 2 && parts[0] == "pragma" && parts[1] == "global")
-            {
-                if (parts.Length < 4)
-                    throw new ShaderCompileException($"{file}: error: '#pragma global' needs a type and one or more names, like '#pragma global float _Wetness'");
-                if (!GlobalTypes.Contains(parts[2]))
-                    throw new ShaderCompileException($"{file}: error: '{parts[2]}' in '{trimmed}' is not a global type, use one of {string.Join(" ", GlobalTypes)}");
-                foreach (string name in parts[3..])
-                {
-                    if (!IsIdentifier(name))
-                        throw new ShaderCompileException($"{file}: error: '{name}' in '{trimmed}' is not a valid name");
-                    int declared = globals.FindIndex(g => g.Name == name);
-                    if (declared < 0)
-                        globals.Add(new ShaderGlobal(name, parts[2]));
-                    else if (globals[declared].Type != parts[2])
-                        throw new ShaderCompileException($"{file}: error: global '{name}' is declared as both {globals[declared].Type} and {parts[2]}");
-                }
-                continue;
-            }
-
-            if (parts.Length < 2 || parts[0] != "pragma" || parts[1] != "variant")
-                continue;
-
-            int at = 2;
-            VariantScope scope = VariantScope.Material;
-            if (parts.Length > at && parts[at] == "global")
-            {
-                scope = VariantScope.Global;
-                at++;
-            }
-
-            if (parts.Length <= at)
-                throw new ShaderCompileException($"{file}: error: '#pragma variant' needs a name");
-
-            string axis = parts[at];
-            string[] values = parts[(at + 1)..];
-            foreach (string word in (string[])[axis, .. values])
-            {
-                if (!IsIdentifier(word))
-                    throw new ShaderCompileException($"{file}: error: '{word}' in '{trimmed}' is not a valid name");
-            }
-
-            if (values.Length == 1)
-                throw new ShaderCompileException($"{file}: error: variant '{axis}' has a single value, give it two or more, or none for an on or off toggle");
-
-            VariantSpace space = values.Length == 0 ? VariantSpace.Toggle(axis, scope) : new VariantSpace(axis, values, scope);
-            int existing = axes.FindIndex(a => a.Name == axis);
-            if (existing < 0)
-            {
-                axes.Add(space);
-                continue;
-            }
-
-            VariantSpace other = axes[existing];
-            if (other.IsToggle != space.IsToggle || other.Scope != space.Scope || !SameValues(other.Values, space.Values))
-                throw new ShaderCompileException($"{file}: error: variant '{axis}' is declared twice with different values");
+            return;
         }
+
+        if (parts.Length < 2 || parts[0] != "pragma" || parts[1] != "variant")
+            return;
+
+        int at = 2;
+        VariantScope scope = VariantScope.Material;
+        if (parts.Length > at && parts[at] == "global")
+        {
+            scope = VariantScope.Global;
+            at++;
+        }
+
+        if (parts.Length <= at)
+            throw new ShaderCompileException($"{file}: error: '#pragma variant' needs a name");
+
+        string axis = parts[at];
+        string[] values = parts[(at + 1)..];
+        foreach (string word in (string[])[axis, .. values])
+        {
+            if (!IsIdentifier(word))
+                throw new ShaderCompileException($"{file}: error: '{word}' in '{directive}' is not a valid name");
+        }
+
+        if (values.Length == 1)
+            throw new ShaderCompileException($"{file}: error: variant '{axis}' has a single value, give it two or more, or none for an on or off toggle");
+
+        VariantSpace space = values.Length == 0 ? VariantSpace.Toggle(axis, scope) : new VariantSpace(axis, values, scope);
+        int existing = axes.FindIndex(a => a.Name == axis);
+        if (existing < 0)
+        {
+            axes.Add(space);
+            return;
+        }
+
+        VariantSpace other = axes[existing];
+        if (other.IsToggle != space.IsToggle || other.Scope != space.Scope || !SameValues(other.Values, space.Values))
+            throw new ShaderCompileException($"{file}: error: variant '{axis}' is declared twice with different values");
     }
 
 
@@ -694,7 +724,7 @@ internal static class GlslPragmas
         directive.Trim().TrimStart('#').Split([' ', '\t', '\r'], StringSplitOptions.RemoveEmptyEntries);
 
 
-    private static string StripComments(string source)
+    public static string StripComments(string source)
     {
         StringBuilder sb = new(source.Length);
         for (int i = 0; i < source.Length; i++)

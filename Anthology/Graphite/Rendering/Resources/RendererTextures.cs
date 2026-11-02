@@ -135,10 +135,11 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     private readonly HashSet<uint> _shadowSlots = new();
     private static readonly MaterialPropertyType[] s_tableTypes = [MaterialPropertyType.Texture2D, MaterialPropertyType.Texture2DArray, MaterialPropertyType.Texture3D, MaterialPropertyType.TextureCube, MaterialPropertyType.TextureCubeArray];
 
-    internal RendererTextures(GraphicsDevice device)
+    // The default sampler fills slot 0 and stays its owner's
+    internal RendererTextures(GraphicsDevice device, Sampler defaultSampler)
     {
         _device = device;
-        _samplers.Add((null, device.ResourceFactory.CreateSampler(SamplerDescription.Linear)));
+        _samplers.Add((null, defaultSampler));
         Table = device.ResourceFactory.CreateDescriptorTable(ProgramCache.FrameLayout);
         Table.Name = "Bindless textures";
     }
@@ -305,8 +306,8 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
         Table.Dispose();
         foreach (Texture texture in _owned)
             texture.Dispose();
-        foreach ((_, Sampler sampler) in _samplers)
-            sampler.Dispose();
+        for (int i = 1; i < _samplers.Count; i++)
+            _samplers[i].Sampler.Dispose();
         foreach (Sampler sampler in _biased.Values)
             sampler.Dispose();
     }

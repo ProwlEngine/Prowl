@@ -38,6 +38,13 @@ public struct SphericalHarmonicsL2
     /// <summary>Harmonics that light every normal with the same radiance.</summary>
     public static SphericalHarmonicsL2 FromConstant(Float3 color) => new() { C0 = color / (A0 * K0) };
 
+    public static SphericalHarmonicsL2 operator *(in SphericalHarmonicsL2 sh, float scale) => new()
+    {
+        C0 = sh.C0 * scale, C1 = sh.C1 * scale, C2 = sh.C2 * scale,
+        C3 = sh.C3 * scale, C4 = sh.C4 * scale, C5 = sh.C5 * scale,
+        C6 = sh.C6 * scale, C7 = sh.C7 * scale, C8 = sh.C8 * scale,
+    };
+
     /// <summary>The seven vectors the shaders evaluate with one dot each per band, so a normal gives irradiance over pi.</summary>
     internal readonly ProbeShRecord Pack()
     {
@@ -480,8 +487,11 @@ internal sealed class WorldProbes
 }
 
 /// <summary>Samples a world's light probes for its requests, after the upload and before any camera reads them.</summary>
-internal sealed class ProbePass(ComputeProgram program) : IDisposable
+internal sealed class ProbePass(InternalCompute program) : IDisposable
 {
+    private static readonly PropertyID s_probes = "Graphite_Probes", s_probeTets = "Graphite_ProbeTets", s_probeRequests = "Graphite_ProbeRequests",
+        s_probeOutput = "Graphite_ProbeOutput";
+
     [StructLayout(LayoutKind.Sequential)]
     private struct Push
     {
@@ -510,11 +520,11 @@ internal sealed class ProbePass(ComputeProgram program) : IDisposable
     private void Render(PassContext context, WorldProbes probes)
     {
         CommandBuffer cmd = context.Command;
-        cmd.SetComputeShader(program);
-        _properties.SetBuffer("Graphite_Probes", probes.ProbeRecords.Buffer);
-        _properties.SetBuffer("Graphite_ProbeTets", probes.TetRecords.Buffer);
-        _properties.SetBuffer("Graphite_ProbeRequests", probes.Requests.Buffer);
-        _properties.SetBuffer("Graphite_ProbeOutput", probes.ObjectSh);
+        cmd.SetComputeShader(program.Program);
+        _properties.SetBuffer(s_probes, probes.ProbeRecords.Buffer);
+        _properties.SetBuffer(s_probeTets, probes.TetRecords.Buffer);
+        _properties.SetBuffer(s_probeRequests, probes.Requests.Buffer);
+        _properties.SetBuffer(s_probeOutput, probes.ObjectSh);
         cmd.SetProperties(_properties);
         cmd.SetPushConstants(new Push { ProbeCount = probes.ProbeCount, TetCount = probes.TetCount, RequestCount = probes.RequestCount });
         cmd.Dispatch((probes.RequestCount + 63) / 64, 1, 1);

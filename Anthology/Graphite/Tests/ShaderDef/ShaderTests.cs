@@ -53,7 +53,7 @@ public class ShaderTests
                 Surface "Lit"
                 {
                     GLSLPROGRAM
-                    void Surface(inout Graphite_SurfaceData s) { }
+                    void Surface(inout PBR_Params p, Graphite_SurfaceData i) { }
                     ENDGLSL
                 }
             }

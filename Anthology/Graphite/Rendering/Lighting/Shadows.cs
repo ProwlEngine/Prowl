@@ -493,73 +493,17 @@ internal static class ShadowPasses
 
 /// <summary>
 /// Draws a view's refit cascades into their depth textures and publishes them as <see cref="RendererOutputs.Cascades"/>.
-/// Exclusive group "Cascades".
+/// Group <see cref="FeatureGroup.Cascades"/>.
 /// </summary>
 public sealed class CascadeFeature : RenderFeature
 {
-    internal CascadeFeature() { }
+    internal CascadeFeature() : base(RenderSlot.Shadows, group: FeatureGroup.Cascades, runsOn: ViewKinds.All) { }
 
-    private sealed class State
-    {
-        public readonly List<(ViewShadows.Cascade Cascade, TextureHandle Handle)> Targets = new();
-    }
+    public override bool HasWork(in FeatureView view) => view.HasCascades;
 
-    public override RenderSlot Slot => RenderSlot.Shadows;
-    public override string? ExclusiveGroup => "Cascades";
-    public override ViewKinds RunsOn => ViewKinds.All;
+    public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.Publish(RendererOutputs.Cascades, builder.WriteCascades());
 
-    private static ViewShadows.Cascade? First(CameraFrame camera)
-    {
-        foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
-        {
-            for (int c = 0; c < light.Count; c++)
-            {
-                if (light.Cascades[c].Texture?.Texture != null)
-                    return light.Cascades[c];
-            }
-        }
-        return null;
-    }
-
-    internal override bool Skips(ViewGraph view) => view.Probing || First(view.Camera) == null;
-
-    public override void Setup(FeatureBuilder builder, in FeatureView view)
-    {
-        ViewGraph graph = builder.ViewGraph;
-        CameraFrame camera = graph.Camera;
-        State state = builder.GetViewState<State>();
-        state.Targets.Clear();
-        graph.Frame.Buffers.ReadWorld(graph.Graph, builder.Graph, camera.World);
-        List<RenderTexture> written = new();
-        foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
-        {
-            for (int c = 0; c < light.Count; c++)
-            {
-                if (light.Cascades[c].Draws.Count > 0)
-                    written.Add(light.Cascades[c].Texture!.Texture!);
-            }
-        }
-        graph.Frame.DeclareShadowReads(graph.Graph, builder.Graph, alsoWritten: written);
-        foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
-        {
-            for (int c = 0; c < light.Count; c++)
-            {
-                ViewShadows.Cascade cascade = light.Cascades[c];
-                if (cascade.Draws.Count == 0)
-                    continue;
-                foreach (ShadowDraw draw in cascade.Draws)
-                    draw.Camera.Buffers.Read(graph.Graph, builder.Graph, BufferAccess.AllReads);
-                state.Targets.Add((cascade, builder.Graph.Write(graph.Graph.Import(cascade.Texture!.Texture!), TextureState.Attachment)));
-            }
-        }
-        builder.Publish(RendererOutputs.Cascades, state.Targets.Count > 0 ? state.Targets[0].Handle : graph.Graph.Import(First(camera)!.Texture!.Texture!));
-    }
-
-    public override void Render(FeatureContext context)
-    {
-        foreach ((ViewShadows.Cascade cascade, TextureHandle handle) in context.GetViewState<State>().Targets)
-            ShadowRecorder.Record(context.Command, context.Get(handle), cascade.Draws, context.Frame.TileClearProgram, context.Graph.Task.RingSlot);
-    }
+    public override void Render(FeatureContext context) => context.DrawCascades();
 }
 
 /// <summary>
@@ -768,7 +712,7 @@ internal sealed class ShadowPlan
 }
 
 /// <summary>
-/// How a world's local light tiles are sized, Prowl's rules: a tile per light from its size on screen, kept until the
+/// How a world's local light tiles are sized: a tile per light from its size on screen, kept until the
 /// wish moves three quarters of an octave from it, every light scaling down together on a square root of two ladder
 /// when they do not fit in four fifths of the budget, and back up one step after fitting a step higher for 30 frames.
 /// </summary>
@@ -998,6 +942,20 @@ internal sealed class ViewShadows : IDisposable
         public Cascade[] Cascades { get; } = new Cascade[MaxCascades];
     }
 
+    /// <summary>The first cascade with a texture, or null when the view has none to draw or read.</summary>
+    public Cascade? FirstCascade()
+    {
+        foreach (CascadeLight light in Lights)
+        {
+            for (int c = 0; c < light.Count; c++)
+            {
+                if (light.Cascades[c].Texture?.Texture != null)
+                    return light.Cascades[c];
+            }
+        }
+        return null;
+    }
+
     public readonly List<CascadeLight> Lights = new();
     public readonly List<CascadeRecord> Records = new();
 
@@ -1110,11 +1068,8 @@ internal static class ShadowMath
 /// </summary>
 internal sealed partial class FramePipeline
 {
-    /// <summary>Shadow views drawn and static copies made in the last frame, for tests.</summary>
+    /// <summary>Shadow views drawn and static copies made in the last frame.</summary>
     internal int ShadowViewsDrawn { get; private set; }
-
-    /// <summary>Multi draw calls the shadow views drawn in the last frame made, for tests.</summary>
-    internal int ShadowCallsDrawn { get; private set; }
 
     /// <summary>Lights given tiles this frame that held none, and lights whose tiles grew or shrank.</summary>
     internal int ShadowsAdded { get; private set; }
@@ -1170,7 +1125,6 @@ internal sealed partial class FramePipeline
     private void PrepareShadows()
     {
         ShadowViewsDrawn = 0;
-        ShadowCallsDrawn = 0;
         ShadowsAdded = ShadowsGrown = ShadowsShrunk = 0;
         ShadowCopiesMade = 0;
         foreach (WorldFrame world in _frameWorlds)
@@ -1522,10 +1476,19 @@ internal sealed partial class FramePipeline
         if (render.ShadowChanges.Count == 0 && ChangedMaterials.Count == 0)
             return;
         shadows.Grid.Clear();
+        int tiled = 0;
         foreach ((int index, LightShadow light) in shadows.Lights)
         {
             if (light.HasTiles && lighting.IsAlive(index))
+            {
                 shadows.Grid.Add(index, lighting.Light(index).Position, Math.Max(lighting.Light(index).Range, 1e-3f));
+                tiled++;
+            }
+        }
+        if (tiled == 0)
+        {
+            render.ShadowChanges.Clear();
+            return;
         }
 
         void Touch(Double3 center, float radius, bool isStatic)
@@ -1664,13 +1627,16 @@ internal sealed partial class FramePipeline
         light.StaticDirty = !staticComplete;
     }
 
-    // Whether a caster shader has a global keyword that changed
+    // Whether a caster shader's ShadowCaster pass has a global keyword that changed
     private static bool ReadsChangedKeyword(List<Shader> shaders, IReadOnlyDictionary<string, string>? before, IReadOnlyDictionary<string, string> after)
     {
         foreach (Shader shader in shaders)
         {
+            int caster = shader.PassIndex(PassType.ShadowCaster);
             foreach (VariantSpace axis in shader.GlobalAxes)
             {
+                if (caster >= 0 && !shader.PassHasAxis(caster, axis.Name))
+                    continue;
                 if (before == null || before.GetValueOrDefault(axis.Name) != after.GetValueOrDefault(axis.Name))
                     return true;
             }
@@ -1726,7 +1692,7 @@ internal sealed partial class FramePipeline
     {
         if (camera.FindList(PassType.ShadowCaster) is not { } list)
             return true;
-        IReadOnlyDictionary<string, string> keywords = camera.World.World.Globals.KeywordSnapshot;
+        KeywordSet keywords = camera.KeywordSet;
         foreach (DrawCall call in list.Calls)
         {
             bool mirrored = call.Mirrored != camera.Mirrored;
@@ -1909,7 +1875,7 @@ internal sealed partial class FramePipeline
         for (int i = pages.Count - 1; i >= 0; i--)
         {
             ShadowPage page = pages[i];
-            if (!all && (page.Tiles.UsedTexels > 0 || _frame - page.LastUsed <= StaleViewFrames))
+            if (!all && (page.Tiles.UsedTexels > 0 || _frame - page.LastUsed <= IdleFrames))
                 continue;
             pages.RemoveAt(i);
             page.Persistent.Release(_store);
@@ -1973,7 +1939,7 @@ internal sealed partial class FramePipeline
     {
         foreach (RenderProvider provider in world.World.ProviderSnapshot)
         {
-            if (provider.EnabledSnapshot && (provider.RunsOnSnapshot & ViewKinds.Shadow) != 0)
+            if (provider.EnabledSnapshot && (provider.RunsOn & ViewKinds.Shadow) != 0)
                 return true;
         }
         return false;
@@ -2053,13 +2019,14 @@ internal sealed partial class FramePipeline
     }
 
     // A shadow view's casters culled against the given frustum for a tile of the given size, its draw lists ready to record
-    private void DrawShadowView(CameraFrame camera, WorldFrame world, int tile, in ViewLayer layer, in CullFrustum cull, float near, float far, CasterFilter filter)
+    private void DrawShadowView(CameraFrame camera, WorldFrame world, int tile, in ViewLayer layer, in CullFrustum cull, float near, float far, CasterFilter filter, Keyword[]? keywords = null)
     {
         ViewDesc view = new()
         {
             World = world.World,
             Kind = ViewKind.Shadow,
             ViewId = camera.View.ViewId,
+            Keywords = keywords,
             Sky = false,
             Near = near,
             FarDistance = far,
@@ -2069,7 +2036,6 @@ internal sealed partial class FramePipeline
         camera.ShadowFilter = filter;
         ShadowViewsDrawn++;
         PrepareShadowView(camera, view, world, (uint)tile);
-        ShadowCallsDrawn += camera.FindList(PassType.ShadowCaster)?.Calls.Count ?? 0;
     }
 
     private void PrepareShadowView(CameraFrame camera, in ViewDesc view, WorldFrame world, uint size)
@@ -2148,7 +2114,7 @@ internal sealed partial class FramePipeline
         int count = CascadeCount(light);
         uint resolution = CascadeResolution(light);
         int at = state.Lights.FindIndex(l => l.Slot == slot);
-        if (at >= 0 && state.Lights[at].Light != index)
+        if (at >= 0 && (state.Lights[at].Light != index || state.Lights[at].Resolution != resolution || state.Lights[at].Count != count))
         {
             ReleaseCascades(state, at);
             at = -1;
@@ -2229,7 +2195,7 @@ internal sealed partial class FramePipeline
                 cascade.DepthRange = radius + reach;
                 ShadowTile whole = new(0, 0, (int)resolution);
                 ViewLayer layer = new() { View = rotation, Projection = projection, Position = cascade.Center };
-                DrawShadowView(cascade.Camera!, camera.World, (int)resolution, layer, new CullFrustum(cascade.Shape, cascade.Center, nearPlane: false), -reach, radius, CasterFilter.All);
+                DrawShadowView(cascade.Camera!, camera.World, (int)resolution, layer, new CullFrustum(cascade.Shape, cascade.Center, nearPlane: false), -reach, radius, CasterFilter.All, camera.Desc.Keywords);
                 cascade.Draws.Add(new ShadowDraw(cascade.Camera!, whole, Clear: true, cascadeLight.Light, c, Cascade: true));
             }
 

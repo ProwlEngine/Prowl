@@ -38,7 +38,7 @@ public sealed class LifetimeTests : IDisposable
                     #include "Graphite/Core.glsl"
                     uniform sampler2D _MainTex;
                     layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = texture(_MainTex, vec2(0.5)); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0); outColor = texture(_MainTex, vec2(0.5)); }
                 }
                 ENDGLSL
             }
@@ -47,7 +47,8 @@ public sealed class LifetimeTests : IDisposable
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
+    private readonly Sampler _sampler;
     private readonly RendererTextures _textures;
     private readonly MaterialSystem _materials;
     private readonly Shader _shader;
@@ -55,7 +56,8 @@ public sealed class LifetimeTests : IDisposable
     public LifetimeTests()
     {
         InternalShaders.Register();
-        _textures = new RendererTextures(_device);
+        _sampler = _device.ResourceFactory.CreateSampler(SamplerDescription.Linear);
+        _textures = new RendererTextures(_device, _sampler);
         _materials = new MaterialSystem(_device, _store, _textures);
         _shader = new Shader(ShaderParser.Parse(Source), _compiler);
     }
@@ -63,7 +65,7 @@ public sealed class LifetimeTests : IDisposable
     public void Dispose()
     {
         _textures.Dispose();
-        _compiler.Dispose();
+        _sampler.Dispose();
         _store.Dispose();
         _device.Dispose();
     }
@@ -129,12 +131,12 @@ public sealed class LifetimeTests : IDisposable
     [Fact]
     public void DrawProgramIds_AreFreedWhenUnreferenced_AndReusedForTheNextProgram()
     {
-        DrawPrograms programs = new() { IdleFrames = 0 };
+        DrawPrograms programs = new();
         List<ushort> freed = new();
         programs.Freed += freed.Add;
         Material plain = _materials.Create(_shader);
         Material tinted = _materials.Create(_shader);
-        tinted.EnableKeyword("_TINT");
+        tinted.Set(_shader.Axis("_TINT"), true);
         _materials.Extract(new List<Material>());
 
         Assert.True(programs.TryGet(plain.Draw, PassType.Forward, out ushort first));

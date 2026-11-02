@@ -1,5 +1,6 @@
-// Box projected decals, applied in the forward pass before lighting so their albedo, normals, roughness and metallic
-// reach both the lighting and the thin G-buffer. Decals live in H-Forward trees like lights: a point query finds the
+// Box projected decals, applied in the forward pass before lighting so their base colour, normal, specular roughness,
+// metalness and occlusion reach both the lighting and the thin G-buffer. A mask texture holds occlusion, specular
+// roughness and metalness in R, G and B. Decals live in H-Forward trees like lights: a point query finds the
 // ones whose box holds the surface, and up to eight are applied, lowest priority first. A custom surface shader adds its
 // own channels by defining GRAPHITE_DECAL_EXTRA and a Graphite_ApplyDecalExtra function, called after each decal with its
 // extra textures and host data.
@@ -48,10 +49,10 @@ Graphite_DecalRecord Graphite_DecalAt(uint array, uint index)
 }
 
 // The unit box position of a camera relative point. offset and offsetLow move camera relative positions into the decal's tree.
-vec3 Graphite_DecalLocal(Graphite_DecalRecord d, vec3 worldPos, vec3 offset, vec3 offsetLow)
+vec3 Graphite_DecalLocal(Graphite_DecalRecord d, vec3 relativePos, vec3 offset, vec3 offsetLow)
 {
     precise vec3 center = (vec3(d.row0.w, d.row1.w, d.row2.w) - offset) - offsetLow;
-    precise vec3 q = worldPos - center;
+    precise vec3 q = relativePos - center;
     return vec3(dot(d.row0.xyz, q), dot(d.row1.xyz, q), dot(d.row2.xyz, q));
 }
 
@@ -72,7 +73,7 @@ float Graphite_DecalCoverage(Graphite_DecalRecord d, vec3 local, vec3 geomNormal
 }
 
 void Graphite_ApplyDecal(Graphite_DecalRecord d, vec3 local, float coverage,
-                         inout vec3 albedo, inout vec3 normal, inout float roughness, inout float metallic, inout float occlusion)
+                         inout vec3 baseColor, inout vec3 normal, inout float specularRoughness, inout float metalness, inout float occlusion)
 {
     vec2 uv = local.xy + 0.5;
     uint flags = floatBitsToUint(d.axis.w);
@@ -81,7 +82,7 @@ void Graphite_ApplyDecal(Graphite_DecalRecord d, vec3 local, float coverage,
     if ((flags & 1u) != 0u)
         color *= GRAPHITE_DECAL_TEXTURE(d, d.textures.x, uv);
     float alpha = coverage * color.a / max(d.color.a, 1e-4);
-    albedo = mix(albedo, color.rgb, alpha);
+    baseColor = mix(baseColor, color.rgb, alpha);
 
     if ((flags & 2u) != 0u)
     {
@@ -96,8 +97,8 @@ void Graphite_ApplyDecal(Graphite_DecalRecord d, vec3 local, float coverage,
     {
         vec3 mask = GRAPHITE_DECAL_TEXTURE(d, d.textures.z, uv).rgb;
         occlusion = mix(occlusion, mask.r, alpha);
-        roughness = mix(roughness, mask.g, alpha);
-        metallic = mix(metallic, mask.b, alpha);
+        specularRoughness = mix(specularRoughness, mask.g, alpha);
+        metalness = mix(metalness, mask.b, alpha);
     }
 }
 
@@ -112,10 +113,11 @@ bool Graphite_DecalBefore(float priority, uint sequence, float otherPriority, ui
     return priority < otherPriority || (priority == otherPriority && sequence < otherSequence);
 }
 
-// Applies every decal whose box holds worldPos, camera relative, to the surface. geomNormal is the normal before
-// normal mapping, used to fade decals on surfaces turned away from them.
-void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
-                          inout vec3 albedo, inout vec3 normal, inout float roughness, inout float metallic, inout float occlusion)
+// Applies every decal whose box holds relativePos, camera relative, to the surface. geomNormal is the normal before
+// normal mapping, used to fade decals on surfaces turned away from them. The PBR model passes base_color,
+// geometry_normal, specular_roughness, base_metalness and occlusion.
+void Graphite_ApplyDecals(vec3 relativePos, vec3 geomNormal,
+                          inout vec3 baseColor, inout vec3 normal, inout float specularRoughness, inout float metalness, inout float occlusion)
 {
 #ifndef GRAPHITE_DECALS
     return;
@@ -130,14 +132,14 @@ void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
     int hits = 0;
 
     Graphite_TreeQuery query;
-    Graphite_BeginQuery(query, worldPos, GRAPHITE_SET_DECALS);
+    Graphite_BeginQuery(query, relativePos, GRAPHITE_SET_DECALS);
     uint tree, first, last;
     while (Graphite_NextRun(query, tree, first, last))
     {
         for (uint i = first; i < last; i++)
         {
             Graphite_DecalRecord d = Graphite_DecalAt(tree, i);
-            vec3 local = Graphite_DecalLocal(d, worldPos, query.offset, query.offsetLow);
+            vec3 local = Graphite_DecalLocal(d, relativePos, query.offset, query.offsetLow);
             float coverage = Graphite_DecalCoverage(d, local, geomNormal, layers);
             if (coverage <= 0.0)
                 continue;
@@ -187,7 +189,7 @@ void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
     for (int h = 0; h < hits; h++)
     {
         Graphite_DecalRecord d = Graphite_DecalAt(hitTree[h], hitIndex[h]);
-        Graphite_ApplyDecal(d, hitLocal[h], hitCoverage[h], albedo, normal, roughness, metallic, occlusion);
+        Graphite_ApplyDecal(d, hitLocal[h], hitCoverage[h], baseColor, normal, specularRoughness, metalness, occlusion);
 #ifdef GRAPHITE_DECAL_EXTRA
         Graphite_ApplyDecalExtra(d, hitLocal[h].xy + 0.5, hitCoverage[h]);
 #endif

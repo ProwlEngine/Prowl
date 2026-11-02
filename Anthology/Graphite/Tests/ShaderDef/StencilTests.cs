@@ -20,6 +20,26 @@ public class StencilTests
 
 
     [Fact]
+    public void Block_MasksDefaultToAllBits()
+    {
+        DepthStencilStateDescription s = Parse.State("""Stencil { Ref 1 Comp Equal }""").ToDepthStencilState(DepthStencilStateDescription.DepthOnlyGreaterEqual);
+
+        Assert.Equal(255, s.StencilReadMask);
+        Assert.Equal(255, s.StencilWriteMask);
+    }
+
+
+    [Fact]
+    public void Block_KeepsTheMasksItSets()
+    {
+        DepthStencilStateDescription s = Parse.State("""Stencil { ReadMask 3 WriteMask 12 }""").ToDepthStencilState(DepthStencilStateDescription.DepthOnlyGreaterEqual);
+
+        Assert.Equal(3, s.StencilReadMask);
+        Assert.Equal(12, s.StencilWriteMask);
+    }
+
+
+    [Fact]
     public void Comp_SetsBothFaces()
     {
         PassState s = Parse.State("""Stencil { Comp Equal }""");

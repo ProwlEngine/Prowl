@@ -118,7 +118,7 @@ public class DefaultPropertiesTests : IDisposable
     {
         List<(string Name, ShaderPropertyType Type)> calls = new();
 
-        _definition.CreateDefaultProperties(Pass, 0, (name, type) =>
+        _definition.CreateDefaultProperties(Pass, default, (name, type) =>
         {
             calls.Add((name, type));
             return null;
@@ -131,12 +131,12 @@ public class DefaultPropertiesTests : IDisposable
     [Fact]
     public void TextureResolver_NullSkipsAndViewIsSet()
     {
-        Assert.DoesNotContain((PropertyID)"Albedo", _definition.CreateDefaultProperties(Pass, 0, (_, _) => null).Entries.Keys);
+        Assert.DoesNotContain((PropertyID)"Albedo", _definition.CreateDefaultProperties(Pass, default, (_, _) => null).Entries.Keys);
 
         Texture texture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
         TextureView view = _device.ResourceFactory.CreateTextureView(texture);
 
-        PropertySet set = _definition.CreateDefaultProperties(Pass, 0, (_, _) => view);
+        PropertySet set = _definition.CreateDefaultProperties(Pass, default, (_, _) => view);
 
         Assert.Same(view, set.Entries["Albedo"].TextureView);
     }

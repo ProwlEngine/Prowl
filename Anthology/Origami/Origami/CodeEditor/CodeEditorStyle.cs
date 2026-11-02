@@ -187,6 +187,9 @@ public sealed class CodeEditorOptions
     /// <summary>Shows notes such as reference counts after declarations, when the language provides them.</summary>
     public bool ShowCodeLens = true;
 
+    /// <summary>Asks the language for errors and warnings. Off for code shown outside the project it builds in.</summary>
+    public bool ShowDiagnostics = true;
+
     /// <summary>Marks other occurrences of the word under the caret.</summary>
     public bool HighlightOccurrences = true;
     public bool AutoClosePairs = true;

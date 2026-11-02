@@ -55,7 +55,7 @@ public sealed class RendererTests : IDisposable
                     #include "Graphite/Core.glsl"
                     uniform vec4 _Color;
                     layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = _Color; }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0); outColor = _Color; }
                 }
                 ENDGLSL
             }
@@ -97,7 +97,7 @@ public sealed class RendererTests : IDisposable
     private const uint Size = 16;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
     private readonly Texture _target;
     private readonly Framebuffer _framebuffer;
     private readonly DeviceBuffer _readback;
@@ -106,9 +106,6 @@ public sealed class RendererTests : IDisposable
     private Shader _shader = null!;
     private GpuMesh _quad = null!;
     private readonly List<RendererError> _errors = new();
-
-    // Orthographic and reversed Z: sees x and y from -4 to 4, and z from 0 (depth 1) to 100 (depth 0).
-    private static readonly Float4x4 s_projection = new(new Float4(0.25f, 0, 0, 0), new Float4(0, 0.25f, 0, 0), new Float4(0, 0, -0.01f, 0), new Float4(0, 0, 1, 1));
 
     public RendererTests()
     {
@@ -120,7 +117,7 @@ public sealed class RendererTests : IDisposable
 
     private void Start(RenderThreading threading)
     {
-        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = threading, Deterministic = threading == RenderThreading.Inline, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
+        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = threading, Compile = threading == RenderThreading.Inline ? CompilePolicy.Sync : CompilePolicy.Async, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
         _renderer.Error += _errors.Add;
         _world = _renderer.CreateWorld();
         _shader = _renderer.LoadShader(ShaderParser.Parse(Source));
@@ -140,7 +137,6 @@ public sealed class RendererTests : IDisposable
         _readback.Dispose();
         _framebuffer.Dispose();
         _target.Dispose();
-        _compiler.Dispose();
         _device.Dispose();
     }
 
@@ -154,10 +150,21 @@ public sealed class RendererTests : IDisposable
     private RenderableHandle Add(Material material, Double3 position, Float3? scale = null)
         => _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(position) * (Double4x4)Float4x4.CreateScale(scale ?? new Float3(2, 2, 2)) }, [material]);
 
+    private RenderView? _view;
+
+    // The test's one view into the target, cleared to black
+    private RenderView View()
+    {
+        _view ??= _renderer.CreateView(_world);
+        _view.Target = _framebuffer;
+        _view.ClearColor = new Float4(0, 0, 0, 1);
+        return _view;
+    }
+
     private Color32[] Frame(Double3 camera = default)
     {
-        ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer, ClearColor = new Float4(0, 0, 0, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = camera };
+        RenderView view = View();
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = camera });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _renderer.WaitForRenderThread();
         Assert.DoesNotContain(_errors, e => e.Message.StartsWith("The frame failed"));
@@ -177,8 +184,8 @@ public sealed class RendererTests : IDisposable
         material.Name = "Red";
         RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _quad, Name = "Quad", Transform = Double4x4.CreateScale(new Double3(2, 2, 2)) }, [material]);
         PayloadSink sink = new();
-        ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer, ClearColor = new Float4(0, 0, 0, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection };
+        RenderView view = View();
+        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection });
 
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view }, Profilers = [sink] });
         _renderer.WaitForRenderThread();
@@ -247,12 +254,12 @@ public sealed class RendererTests : IDisposable
     }
 
     [Fact]
-    public void ShadersThatFailToLoad_AreReportedOnce_AndDrawNothing()
+    public void ShadersThatFailToLoad_AreReportedOnce_AndDrawTheGreyFallback()
     {
         Shader broken = _renderer.LoadShader(ShaderParser.Parse(Source.Replace("uniform vec4 _Color;", "uniform vec4 _Color; uniform float _Undeclared;").Replace("outColor = _Color;", "outColor = _Color * _Undeclared;")));
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * (Double4x4)Float4x4.CreateScale(2) }, [_renderer.CreateMaterial(broken)]);
 
-        Assert.Equal(new Color32(0, 0, 0, 255), At(Frame(), 8, 8));
+        Assert.Equal(new Color32(188, 188, 188, 255), At(Frame(), 8, 8));
         Frame();
         Assert.Single(_errors, e => e.Message.Contains("_Undeclared"));
     }

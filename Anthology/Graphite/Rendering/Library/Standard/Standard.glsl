@@ -1,25 +1,32 @@
 // The standard surface shared by Graphite/Lit, Graphite/Unlit and every shader with a Surface block, whose passes are
-// the surface model's: each defines its pass and model in its Shared section and includes this in both stages. The
-// vertex stage calls Graphite_StandardVertex from main, the fragment stage includes Graphite/Standard/StandardFragment.glsl
-// after the model's "#pragma surface" line and calls Graphite_StandardFragment from main.
+// the surface model's: each defines its pass in its Shared section and includes its model's file there, which includes
+// this, Graphite/Standard/PBRSurface.glsl or Graphite/Standard/UnlitSurface.glsl. The vertex stage includes
+// Graphite/Standard/StandardVertex.glsl after the model's "#pragma surface_vertex" line and calls Graphite_StandardVertex
+// from main, the fragment stage includes Graphite/Standard/StandardFragment.glsl after the model's "#pragma surface"
+// line and calls Graphite_StandardFragment from main.
 //
 // Pass defines, exactly one: GRAPHITE_STANDARD_FORWARD, GRAPHITE_STANDARD_DEPTH (prepass and shadow caster).
+// GRAPHITE_STANDARD_BACK_DEPTH: with the depth define, the back depth pass, writing the distance along the view ray.
+// GRAPHITE_STANDARD_SHADOW: with the depth define, the shadow caster. Transparent casters, and PBR ones letting light
+// through by transmission or thin walled subsurface, dither their coverage by what they let through.
 // GRAPHITE_STANDARD_DEBUG: with the forward define, the Debug pass, showing the view's GRAPHITE_DEBUG value. See Graphite/Debug.glsl.
-// Model define: GRAPHITE_STANDARD_UNLIT for no lighting, ambient or PBR inputs.
-// GRAPHITE_SURFACE_FUNCTION: the shader defines void Surface(inout Graphite_SurfaceData s), run before lighting.
+// Model define: GRAPHITE_STANDARD_UNLIT for no lighting, which Graphite/Standard/UnlitSurface.glsl defines, else the PBR
+// model, Graphite/PBR/Closure.glsl.
+// GRAPHITE_SURFACE_FUNCTION: the shader defines the model's Surface function, run before lighting over the read only
+// inputs i: void Surface(inout PBR_Params p, Graphite_SurfaceData i), or void Surface(inout Unlit_Params p, Graphite_SurfaceData i).
+// GRAPHITE_SURFACE_VERTEX_FUNCTION: the shader defines void SurfaceVertex(inout Graphite_SurfaceVertex v), run in every
+// pass before the vertex is transformed, so shadows and depth match. It animates with v.time for motion vectors to follow.
 //
-// Material axes, set by SurfaceSettings and by the properties that drive them:
-//   _SURFACE        OPAQUE, CUTOUT (alpha test against _AlphaCutoff) or TRANSPARENT (alpha reaches the target)
-//   _INSTANCE_TINT  the object's custom0, an instance batch's per instance colour, multiplies the vertex colour
+// Material axis, set by SurfaceSettings:
+//   _SURFACE  OPAQUE, CUTOUT (alpha test against the model's cutoff) or TRANSPARENT (coverage reaches the target)
 // Back faces, drawn when the material culls none, shade with a flipped frame.
-//   _NORMALMAP _SURFACEMAP _OCCLUSIONMAP _EMISSION _PARALLAXMAP _TRANSLUCENCY _ANISOTROPIC   optional lit inputs, declared by Lit
 //
-// Every texture samples its UV set through its own scale and offset, <name>_ST.
-// Colour textures are sampled as sRGB textures decode them, every factor is linear and applied after.
+// Every texture samples its UV set through its own scale and offset, maps also through their rotation. Colour textures are sampled as sRGB textures
+// decode them, every factor is linear and applied after. The vertex colour times the object's colour (RenderableDesc.Color,
+// white unless the host sets one) multiplies the base colour and coverage.
 #pragma once
 
 #pragma variant _SURFACE OPAQUE CUTOUT TRANSPARENT
-#pragma variant _INSTANCE_TINT
 
 #if defined(_SURFACE_CUTOUT) || defined(_SURFACE_TRANSPARENT)
     #define GRAPHITE_STANDARD_ALPHA
@@ -29,14 +36,30 @@
     #define GRAPHITE_STANDARD_LIT
 #endif
 
+#if defined(GRAPHITE_STANDARD_SHADOW) && (defined(_SURFACE_TRANSPARENT) || (!defined(GRAPHITE_STANDARD_UNLIT) && (defined(PBR_TRANSMISSION) || (defined(PBR_SUBSURFACE) && defined(PBR_THIN_WALLED)))))
+    #define GRAPHITE_STANDARD_SHADOW_DITHER
+#endif
+
+// Passes whose fragments read the vertex colour and relative position: forward, back depth, dithered shadow casters, and the depth passes of cutout surfaces
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_BACK_DEPTH) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT)
+    #define GRAPHITE_STANDARD_VERTEX_DATA
+#endif
+
+// Passes whose fragments read the tangent frame: lit ones, and under PBR parallax the depth passes reading the material
+#if defined(GRAPHITE_STANDARD_LIT) || (defined(PBR_PARALLAX) && !defined(GRAPHITE_STANDARD_UNLIT) && (defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)))
+    #define GRAPHITE_STANDARD_FRAME
+#endif
+
 #ifdef GRAPHITE_VERTEX
     #define GRAPHITE_STANDARD_VARYING out
     #include "Graphite/Vertex.glsl"
 #else
     #define GRAPHITE_STANDARD_VARYING in
+    #include "Graphite/Core.glsl"
+    #ifdef GRAPHITE_STANDARD_BACK_DEPTH
+        #include "Graphite/SceneColor.glsl"
+    #endif
     #ifdef GRAPHITE_STANDARD_FORWARD
-        #include "Graphite/Lighting.glsl"
-        #include "Graphite/Decals.glsl"
         #include "Graphite/Passes.glsl"
     #endif
     #ifdef GRAPHITE_STANDARD_DEBUG
@@ -44,81 +67,26 @@
     #endif
 #endif
 
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA)
-uniform sampler2D _MainTex;
-uniform vec4 _MainTex_ST;
-uniform vec4 _MainColor;
-uniform int _MainTexUV;
-#endif
-
-#ifdef _SURFACE_CUTOUT
-uniform float _AlphaCutoff;
-#endif
-
-#ifdef GRAPHITE_STANDARD_LIT
-uniform float _Metallic;
-uniform float _Roughness;
-#ifdef _NORMALMAP
-uniform sampler2D _NormalTex;
-uniform vec4 _NormalTex_ST;
-uniform float _NormalScale;
-uniform int _NormalTexUV;
-#endif
-#ifdef _SURFACEMAP
-uniform sampler2D _SurfaceTex;
-uniform vec4 _SurfaceTex_ST;
-uniform int _SurfaceTexUV;
-#endif
-#ifdef _OCCLUSIONMAP
-uniform sampler2D _OcclusionTex;
-uniform vec4 _OcclusionTex_ST;
-uniform float _OcclusionStrength;
-uniform int _OcclusionTexUV;
-#endif
-#ifdef _EMISSION
-uniform sampler2D _EmissionTex;
-uniform vec4 _EmissionTex_ST;
-uniform vec4 _EmissiveColor;
-uniform float _EmissionIntensity;
-uniform int _EmissionTexUV;
-#endif
-#ifdef _PARALLAXMAP
-uniform sampler2D _ParallaxMap;
-uniform vec4 _ParallaxMap_ST;
-uniform float _Parallax;
-uniform int _ParallaxSteps;
-#endif
-#ifdef _TRANSLUCENCY
-uniform sampler2D _TranslucencyMap;
-uniform vec4 _TranslucencyMap_ST;
-uniform float _TranslucencyStrength;
-uniform float _ScatteringPower;
-uniform float _ScatteringDistortion;
-uniform float _ScatteringScale;
-#endif
-#ifdef _ANISOTROPIC
-uniform float _Anisotropy;
-uniform sampler2D _AnisoDirectionMap;
-uniform vec4 _AnisoDirectionMap_ST;
-#endif
-#endif
-
 // vUV and vUV1 are the mesh's two UV sets as they are, vLightmapUV the lightmap UV placed
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA)
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)
 GRAPHITE_STANDARD_VARYING vec2 vUV;
 GRAPHITE_STANDARD_VARYING vec2 vUV1;
 #endif
 
-#ifdef GRAPHITE_STANDARD_FORWARD
-GRAPHITE_STANDARD_VARYING vec3 vWorldPos;
+#ifdef GRAPHITE_STANDARD_VERTEX_DATA
+GRAPHITE_STANDARD_VARYING vec3 vRelativePos;
 GRAPHITE_STANDARD_VARYING vec4 vColor;
-#ifdef GRAPHITE_STANDARD_LIT
+#endif
+
+#ifdef GRAPHITE_STANDARD_FRAME
 GRAPHITE_STANDARD_VARYING vec3 vNormal;
 GRAPHITE_STANDARD_VARYING vec3 vTangent;
 GRAPHITE_STANDARD_VARYING vec3 vBitangent;
-GRAPHITE_STANDARD_VARYING vec2 vLightmapUV;
 flat GRAPHITE_STANDARD_VARYING float vHasTangents;
 #endif
+
+#ifdef GRAPHITE_STANDARD_LIT
+GRAPHITE_STANDARD_VARYING vec2 vLightmapUV;
 #endif
 
 // A tangent frame for a world normal, from the mesh's tangent when it has a usable one, else from an arbitrary axis
@@ -138,80 +106,81 @@ void Graphite_StandardTangentFrame(vec3 worldNormal, vec3 worldTangent, float ha
 
 #ifdef GRAPHITE_VERTEX
 
-void Graphite_StandardVertex()
+// The vertex a SurfaceVertex function may move before it is transformed, in object space
+struct Graphite_SurfaceVertex
 {
-    vec3 world = Graphite_ObjectToWorld(vertexPosition);
-    gl_Position = Graphite_RelativeToClip(world);
-
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA)
-    vUV = vertexUV0;
-    vUV1 = vertexUV1;
-#endif
-
-#ifdef GRAPHITE_STANDARD_FORWARD
-    vWorldPos = world;
-    vColor = vertexColor;
-#ifdef _INSTANCE_TINT
-    vColor *= Graphite_Object().custom0;
-#endif
-#ifdef GRAPHITE_STANDARD_LIT
-    vNormal = Graphite_ObjectToWorldNormal(vertexNormal);
-    vec4 tangent = vertexTangent;
-    bool hasTangents = Graphite_HasStream(2u);
-    vec3 worldTangent = hasTangents ? normalize(Graphite_ObjectToWorldDirection(tangent.xyz)) : vec3(1.0, 0.0, 0.0);
-    Graphite_StandardTangentFrame(vNormal, worldTangent, tangent.w, hasTangents, vTangent, vBitangent);
-    vHasTangents = hasTangents ? 1.0 : 0.0;
-    vLightmapUV = Graphite_LightmapUV();
-#endif
-#endif
-}
+    vec3 position;
+    vec3 normal;
+    vec4 tangent;           // w is the handedness
+    vec4 color;
+    vec2 uv;
+    vec2 uv1;
+    float time;             // seconds, last frame's while the forward pass finds where the vertex was for motion vectors
+};
 
 #endif
 
 #ifdef GRAPHITE_FRAGMENT
 
-// A texture's UV: set 0 picks UV0, anything else UV1, then the texture's scale and offset
-vec2 Graphite_StandardUV(int set, vec4 scaleOffset, vec2 uv0, vec2 uv1)
-{
-    return (set == 0 ? uv0 : uv1) * scaleOffset.xy + scaleOffset.zw;
-}
-
-// The standard surface a Surface function may change before it is lit. Depth passes call it only for cutout surfaces,
-// with the UVs, base colour and alpha filled in and the rest at defaults.
+// What a Surface function reads about the point it shades. Depth passes run it only for cutout surfaces, with the UVs,
+// vertex colour and relative position filled in, the frame too under PBR parallax, and the rest at defaults.
 struct Graphite_SurfaceData
 {
-    vec2 UV;                // UV0, moved by parallax, before any texture's scale and offset
-    vec2 UV1;               // UV1, before any texture's scale and offset
-    vec4 VertexColor;
-    vec3 WorldPos;          // camera relative
-    vec3 ViewDir;           // from the surface toward the camera
-    vec3 GeometryNormal;    // the mesh's, facing the camera on back faces
-    vec3 BaseColor;
-    float Alpha;
-    vec3 Normal;            // world space, after the normal map
-    float Metallic;
-    float Roughness;
-    float Occlusion;
-    vec3 Emission;
+    vec2 uv;                // UV0, moved by parallax, before any texture's scale and offset
+    vec2 uv1;               // UV1, moved by parallax, before any texture's scale and offset
+    vec4 vertexColor;       // the vertex colour times the object's colour
+    vec3 relativePos;       // relative to the camera, Graphite_RelativeToWorld for world space
+    vec3 viewDir;           // from the surface toward the camera
+    vec3 geometryNormal;    // the mesh's, facing the camera on back faces
+    vec3 tangent;           // world space, with bitangent and geometryNormal the frame tangent space normal maps use,
+    vec3 bitangent;         // arbitrary when the mesh has no tangents
 };
 
-Graphite_SurfaceData Graphite_NewSurfaceData(vec2 uv, vec2 uv1, vec3 baseColor, float alpha)
+// A texture's UV: set 0 picks UV0, anything else UV1, scaled, turned by rotation's cosine and sine and offset, the
+// order of KHR_texture_transform
+vec2 Graphite_StandardUV(int set, vec4 scaleOffset, vec2 rotation, Graphite_SurfaceData i)
 {
-    Graphite_SurfaceData s;
-    s.UV = uv;
-    s.UV1 = uv1;
-    s.VertexColor = vec4(1.0);
-    s.WorldPos = vec3(0.0);
-    s.ViewDir = vec3(0.0, 0.0, 1.0);
-    s.GeometryNormal = vec3(0.0, 1.0, 0.0);
-    s.BaseColor = baseColor;
-    s.Alpha = alpha;
-    s.Normal = vec3(0.0, 1.0, 0.0);
-    s.Metallic = 0.0;
-    s.Roughness = 1.0;
-    s.Occlusion = 1.0;
-    s.Emission = vec3(0.0);
-    return s;
+    vec2 uv = (set == 0 ? i.uv : i.uv1) * scaleOffset.xy;
+    return scaleOffset.zw + vec2(rotation.x * uv.x - rotation.y * uv.y, rotation.y * uv.x + rotation.x * uv.y);
+}
+
+vec2 Graphite_StandardUV(int set, vec4 scaleOffset, Graphite_SurfaceData i)
+{
+    return (set == 0 ? i.uv : i.uv1) * scaleOffset.xy + scaleOffset.zw;
+}
+
+Graphite_SurfaceData Graphite_NewSurfaceData(vec2 uv, vec2 uv1)
+{
+    Graphite_SurfaceData i;
+    i.uv = uv;
+    i.uv1 = uv1;
+    i.vertexColor = vec4(1.0);
+    i.relativePos = vec3(0.0);
+    i.viewDir = vec3(0.0, 0.0, 1.0);
+    i.geometryNormal = vec3(0.0, 1.0, 0.0);
+    i.tangent = vec3(1.0, 0.0, 0.0);
+    i.bitangent = vec3(0.0, 0.0, -1.0);
+    return i;
+}
+
+// A tangent space normal map texel, scaled, into world space, the surface normal when the result is degenerate.
+// Z is rebuilt from X and Y, so two channel maps such as BC5 read the same as three channel ones.
+vec3 Graphite_StandardNormalMap(vec3 texel, vec3 normal, vec3 tangent, vec3 bitangent, float scale)
+{
+    vec3 normalTS;
+    normalTS.xy = texel.xy * 2.0 - 1.0;
+    normalTS.z = sqrt(max(0.0, 1.0 - dot(normalTS.xy, normalTS.xy)));
+    normalTS.xy *= scale;
+    vec3 n = mat3(normalize(tangent), normalize(bitangent), normalize(normal)) * normalTS;
+    float len2 = dot(n, n);
+    return len2 > 1e-8 ? n * inversesqrt(len2) : normalize(normal);
+}
+
+// A tangent space normal map texel on the mesh frame of the inputs, scaled, into a world space normal
+vec3 Graphite_SurfaceNormalMap(Graphite_SurfaceData i, vec3 texel, float scale)
+{
+    return Graphite_StandardNormalMap(texel, i.geometryNormal, i.tangent, i.bitangent, scale);
 }
 
 #endif
+

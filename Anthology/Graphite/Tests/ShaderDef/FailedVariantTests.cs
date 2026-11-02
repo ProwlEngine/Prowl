@@ -31,16 +31,13 @@ public class FailedVariantTests : IDisposable
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(false));
     private readonly FailingCompiler _compiler = new();
-    private readonly Variant _fallback = new([], [(GraphicsBackend.Vulkan, new ShaderDescription())]);
     private readonly ShaderPass _pass;
-    private int _reports;
 
 
     public FailedVariantTests()
     {
         _pass = new ShaderPass { State = new PassState(), Source = "a" };
-        _pass.CompileFailed += (_, _, _) => _reports++;
-        _pass.Bind(_device, "Test", 0, [], [], _compiler, CompileMode.OnDemand, _fallback);
+        _pass.Bind(_device, "Test", 0, [], [], _compiler);
     }
 
 
@@ -51,55 +48,37 @@ public class FailedVariantTests : IDisposable
 
 
     [Fact]
-    public void FailedCompile_FallsBackAndRetriesOnce()
+    public void FailedCompile_ThrowsEveryTime_AndCompilesOnce()
     {
         for (int i = 0; i < 5; i++)
-            Assert.Same(_fallback, _pass.GetVariant(0));
+            Assert.Equal("broken", Assert.Throws<InvalidOperationException>(() => _pass.GetVariant()).InnerException!.Message);
 
         Assert.Equal(1, _compiler.Calls);
-        Assert.Equal(1, _reports);
     }
 
 
     [Fact]
     public void SourceChange_Retries()
     {
-        _pass.GetVariant(0);
+        Assert.Throws<InvalidOperationException>(() => _pass.GetVariant());
         _pass.Source = "b";
-        _pass.GetVariant(0);
-        _pass.GetVariant(0);
+        Assert.Throws<InvalidOperationException>(() => _pass.GetVariant());
+        Assert.Throws<InvalidOperationException>(() => _pass.GetVariant());
 
         Assert.Equal(2, _compiler.Calls);
-        Assert.Equal(2, _reports);
     }
 
 
     [Fact]
     public void SessionChange_RetriesAndRecovers()
     {
-        _pass.GetVariant(0);
+        Assert.Throws<InvalidOperationException>(() => _pass.GetVariant());
         _compiler.SessionVersion++;
         _compiler.Fail = false;
 
-        Variant recovered = _pass.GetVariant(0);
+        Variant recovered = _pass.GetVariant();
 
-        Assert.NotSame(_fallback, recovered);
+        Assert.True(recovered.IsCompiledFor(GraphicsBackend.Vulkan));
         Assert.Equal(2, _compiler.Calls);
-        Assert.Equal(1, _reports);
-    }
-
-
-    [Fact]
-    public void NoFallback_ThrowsWithInnerException()
-    {
-        ShaderPass pass = new() { State = new PassState(), Source = "a" };
-        pass.Bind(_device, "Test", 0, [], [], _compiler, CompileMode.OnDemand);
-
-        InvalidOperationException first = Assert.Throws<InvalidOperationException>(() => pass.GetVariant(0));
-        InvalidOperationException second = Assert.Throws<InvalidOperationException>(() => pass.GetVariant(0));
-
-        Assert.Equal("broken", first.InnerException!.Message);
-        Assert.Equal("broken", second.InnerException!.Message);
-        Assert.Equal(1, _compiler.Calls);
     }
 }

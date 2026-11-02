@@ -9,43 +9,14 @@ using Prowl.Vector;
 
 using Xunit;
 
+using static Prowl.Graphite.Rendering.Tests.RendererHarness;
+
 namespace Prowl.Graphite.Rendering.Tests;
 
 // Host features in a view's slots: which run, in what order, and what they draw onto
 [Collection("GPU Tests")]
 public sealed class FeatureTests : IDisposable
 {
-    private const string UnlitSource = """
-        Shader "Test/Unlit"
-        {
-            Properties
-            {
-                _Color("Color", Color) = (1, 1, 1, 1)
-            }
-
-            Pass
-            {
-                Tags { "LightMode" = "Forward" }
-                Cull Off
-                GLSLPROGRAM
-                Vertex
-                {
-                    #include "Graphite/Vertex.glsl"
-                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
-                }
-                Fragment
-                {
-                    #include "Graphite/Passes.glsl"
-                    #include "Graphite/Core.glsl"
-                    uniform vec4 _Color;
-                    layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(_Color.rgb, 1.0); }
-                }
-                ENDGLSL
-            }
-        }
-        """;
-
     // Unlit, plus an Outline pass drawing green over everything wherever the renderable is
     private const string OutlinedSource = """
         Shader "Test/Outlined"
@@ -65,7 +36,7 @@ public sealed class FeatureTests : IDisposable
                     #include "Graphite/Passes.glsl"
                     #include "Graphite/Core.glsl"
                     layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(1.0, 0.0, 0.0, 1.0); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0); outColor = vec4(1.0, 0.0, 0.0, 1.0); }
                 }
                 ENDGLSL
             }
@@ -180,7 +151,7 @@ public sealed class FeatureTests : IDisposable
                     void main()
                     {
                         outColor = vec4(Graphite_Object().custom0.rgb, 1.0);
-                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
                     }
                 }
                 ENDGLSL
@@ -216,7 +187,7 @@ public sealed class FeatureTests : IDisposable
                     void main()
                     {
                         outColor = vec4(vColor.rgb, 1.0);
-                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
                     }
                 }
                 ENDGLSL
@@ -251,55 +222,24 @@ public sealed class FeatureTests : IDisposable
         }
         """;
 
-    private const int Size = 16;
-
-    // Orthographic and reversed Z: sees x and y from -4 to 4, and z from 0 (depth 1) to 100 (depth 0).
-    private static readonly Float4x4 s_projection = new(new Float4(0.25f, 0, 0, 0), new Float4(0, 0.25f, 0, 0), new Float4(0, 0, -0.01f, 0), new Float4(0, 0, 1, 1));
-
-    private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GlslShaderCompiler _compiler = new();
-    private readonly Texture _target;
-    private readonly Framebuffer _framebuffer;
-    private readonly DeviceBuffer _readback;
-    private readonly RendererOptions _options = new() { Threading = RenderThreading.Inline, Deterministic = true, PageVertexWords = 1 << 16, PageIndices = 1 << 16 };
+    private readonly RendererHarness _harness = new();
+    private readonly GraphicsDevice _device;
+    private readonly RendererOptions _options;
     private readonly Renderer _renderer;
     private readonly RenderWorld _world;
     private readonly Shader _unlit;
     private readonly GpuMesh _quad;
-    private readonly List<RendererError> _errors = new();
-    private readonly List<IDisposable> _owned = new();
+    private readonly List<RendererError> _errors;
+    private readonly List<IDisposable> _owned;
 
     public FeatureTests()
     {
-        _target = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
-        _framebuffer = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _target));
-        _readback = _device.ResourceFactory.CreateBuffer(new BufferDescription(Size * Size * 16, BufferUsage.Staging));
-        _renderer = new Renderer(_device, _compiler, _options);
-        _renderer.Error += _errors.Add;
-        _world = _renderer.CreateWorld();
-        _world.Environment = new EnvironmentDesc { AmbientColor = default, Fog = default };
-        _unlit = _renderer.LoadShader(ShaderParser.Parse(UnlitSource));
-
-        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
-        _quad = _renderer.CreateMesh(new MeshData
-        {
-            VertexCount = 4,
-            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
-            Indices = new uint[] { 0, 1, 2, 0, 2, 3 },
-        });
+        (_device, _options, _renderer, _world, _errors, _owned) = (_harness.Device, _harness.Options, _harness.Renderer, _harness.World, _harness.Errors, _harness.Owned);
+        _unlit = _renderer.LoadShader(ShaderParser.Parse(UnlitSource(exposed: false)));
+        _quad = _harness.CreateQuad();
     }
 
-    public void Dispose()
-    {
-        _renderer.Dispose();
-        foreach (IDisposable owned in _owned)
-            owned.Dispose();
-        _readback.Dispose();
-        _framebuffer.Dispose();
-        _target.Dispose();
-        _compiler.Dispose();
-        _device.Dispose();
-    }
+    public void Dispose() => _harness.Dispose();
 
     private void AddQuad(Float3 color, uint layer = ~0u, double scale = 1)
     {
@@ -310,34 +250,9 @@ public sealed class FeatureTests : IDisposable
 
     private static bool Centre(int i) => i % Size is >= 4 and < 12 && i / Size is >= 4 and < 12;
 
-    private ViewDesc View(int id = 1)
-    {
-        ViewDesc view = new() { World = _world, ViewId = id, Target = _framebuffer, Sky = false, ClearColor = new Float4(0, 0, 0, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection };
-        return view;
-    }
+    private RenderView View(int id = 1) => _harness.View(id);
 
-    private Float4[] Frame(params ViewDesc[] views)
-    {
-        _renderer.SubmitFrame(new FrameDesc { Views = views });
-        _device.WaitForIdle();
-        _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
-        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
-        _device.Unmap(_readback);
-        Assert.Empty(_errors);
-        return pixels;
-    }
-
-    private static void AssertAll(Float3 expected, Float4[] pixels, Func<int, bool>? where = null)
-    {
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            if (where != null && !where(i))
-                continue;
-            Float4 p = pixels[i];
-            Assert.True(MathF.Abs(p.X - expected.X) < 1e-3f && MathF.Abs(p.Y - expected.Y) < 1e-3f && MathF.Abs(p.Z - expected.Z) < 1e-3f, $"pixel {i}: expected {expected}, got {p}");
-        }
-    }
+    private Float4[] Frame(params RenderView[] views) => _harness.Frame(views);
 
     private FullscreenProgram Program(string fragment)
     {
@@ -347,19 +262,15 @@ public sealed class FeatureTests : IDisposable
     }
 
     // A fullscreen program writing the next colour, with the order and slot given
-    private sealed class Effect(FullscreenProgram program, RenderSlot slot, int order = 0, PropertySet? properties = null) : RenderFeature
+    private sealed class Effect(FullscreenProgram program, RenderSlot slot, int order = 0, PropertySet? properties = null) : RenderFeature(slot, order: order)
     {
-        public override RenderSlot Slot => slot;
-        public override int Order => order;
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
         public override void Render(FeatureContext context) => context.Fullscreen(program, properties);
     }
 
     // Draws nothing onto the scene in place of a built in feature
-    private sealed class Nothing(string group, RenderSlot slot) : RenderFeature
+    private sealed class Nothing(FeatureGroup group, RenderSlot slot) : RenderFeature(slot, group: group)
     {
-        public override RenderSlot Slot => slot;
-        public override string? ExclusiveGroup => group;
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.DrawToColor();
         public override void Render(FeatureContext context) => context.BeginOutput();
     }
@@ -408,9 +319,8 @@ public sealed class FeatureTests : IDisposable
     }
 
     // A lit fullscreen program reading the world's lights through the library, as forward passes do
-    private sealed class LitEffectWith(FullscreenProgram program, PropertySet properties) : RenderFeature
+    private sealed class LitEffectWith(FullscreenProgram program, PropertySet properties) : RenderFeature(RenderSlot.HdrPost)
     {
-        public override RenderSlot Slot => RenderSlot.HdrPost;
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
             builder.DrawsRenderables();
@@ -418,6 +328,9 @@ public sealed class FeatureTests : IDisposable
         }
         public override void Render(FeatureContext context) => context.Fullscreen(program, properties);
     }
+
+    // The luminance an Unlit surface needs to show its base colour as it is under the views' EV100 of 0
+    private static readonly float UnitNits = 1f / RenderView.ExposureOf(0);
 
     [Fact]
     public void SurfaceFunctions_ChangeTheStandardSurface_BeforeItDraws()
@@ -430,14 +343,15 @@ public sealed class FeatureTests : IDisposable
                 {
                     GLSLPROGRAM
                     uniform float _Blue;
-                    void Surface(inout Graphite_SurfaceData s) { s.BaseColor = vec3(0.0, s.BaseColor.g * 0.5, _Blue); }
+                    void Surface(inout Unlit_Params p, Graphite_SurfaceData i) { p.baseColor = vec3(0.0, p.baseColor.g * 0.5, _Blue); }
                     ENDGLSL
                 }
             }
             """));
         Material material = _renderer.CreateMaterial(shader);
         material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
-        material.SetColor("_MainColor", new Float4(0, 1, 0, 1));
+        material.SetColor("base_color", new Float4(0, 1, 0, 1));
+        material.SetFloat("emission_luminance", UnitNits);
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [material]);
 
         Float4[] pixels = Frame(View());
@@ -456,19 +370,20 @@ public sealed class FeatureTests : IDisposable
                 Surface "Unlit"
                 {
                     GLSLPROGRAM
-                    void Surface(inout Graphite_SurfaceData s) { s.BaseColor = vec3(0.0, s.BaseColor.g * 0.5, 1.0); }
+                    void Surface(inout Unlit_Params p, Graphite_SurfaceData i) { p.baseColor = vec3(0.0, p.baseColor.g * 0.5, 1.0); }
                     ENDGLSL
                 }
             }
             """));
         Material material = _renderer.CreateMaterial(shader);
         material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
-        material.SetColor("_MainColor", new Float4(0, 1, 0, 1));
+        material.SetColor("base_color", new Float4(0, 1, 0, 1));
+        material.SetFloat("emission_luminance", UnitNits);
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [material]);
 
-        ViewDesc view = View();
+        RenderView view = View();
         if (mode != null)
-            view.Keywords = [new Keyword(Shader.DebugAxis, mode)];
+            view.Keywords = [GlobalAxis.Debug[mode]];
         Float4[] pixels = Frame(view);
         AssertAll(new Float3(r, g, b), pixels, Centre);
     }
@@ -477,10 +392,10 @@ public sealed class FeatureTests : IDisposable
     public void OverlayViews_DrawOverTheViewsBefore_LeavingTheRestShowing()
     {
         AddQuad(new Float3(0, 1, 0), layer: 2u, scale: 0.5);
-        ViewDesc under = View(1);
+        RenderView under = View(1);
         under.ClearColor = new Float4(1, 0, 0, 1);
         under.CullingMask = 1u;
-        ViewDesc over = View(2);
+        RenderView over = View(2);
         over.ClearColor = new Float4(0, 0, 1, 1);
         over.CullingMask = 2u;
         over.Overlay = true;
@@ -496,12 +411,13 @@ public sealed class FeatureTests : IDisposable
     {
         Material glass = _renderer.CreateMaterial(_renderer.Standard.Unlit);
         glass.Surface = new SurfaceSettings(SurfaceType.Transparent, Cull: SurfaceCull.Off);
-        glass.SetColor("_MainColor", new Float4(0, 0, 1, 0.5f));
+        glass.SetColor("base_color", new Float4(0, 0, 1, 0.5f));
+        glass.SetFloat("emission_luminance", UnitNits);
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5), LayerMask = 2u }, [glass]);
-        ViewDesc under = View(1);
+        RenderView under = View(1);
         under.ClearColor = new Float4(1, 0, 0, 1);
         under.CullingMask = 1u;
-        ViewDesc over = View(2);
+        RenderView over = View(2);
         over.CullingMask = 2u;
         over.Overlay = true;
         over.Order = 1;
@@ -553,12 +469,11 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Draws a procedural program twice into a texture of its own, once cleared and once blended over, then shows it
-    private sealed class ProceduralEffect(FullscreenProgram quad, FullscreenProgram copy, Sampler sampler) : RenderFeature
+    private sealed class ProceduralEffect(FullscreenProgram quad, FullscreenProgram copy, Sampler sampler) : RenderFeature(RenderSlot.HdrPost)
     {
         private readonly PropertySet _properties = new();
         private TextureHandle _drawn;
 
-        public override RenderSlot Slot => RenderSlot.HdrPost;
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
             builder.WriteColor();
@@ -581,8 +496,8 @@ public sealed class FeatureTests : IDisposable
     {
         AddQuad(new Float3(0.25f, 0.5f, 1));
         Effect invert = new(Program("void main() { outColor = vec4(1.0 - Graphite_SampleSource(vUV).rgb, 1.0); }"), RenderSlot.HdrPost);
-        ViewDesc inverted = View(2);
-        inverted.Features = new FeatureSet { invert };
+        RenderView inverted = View(2);
+        inverted.Features = new ExtensionSet<RenderFeature> { invert };
 
         AssertAll(new Float3(0.75f, 0.5f, 0), Frame(inverted));
         AssertAll(new Float3(0.25f, 0.5f, 1), Frame(View(3)));
@@ -595,18 +510,16 @@ public sealed class FeatureTests : IDisposable
     public void ReplacingTheOpaqueFeature_LeavesTheClearColour()
     {
         AddQuad(new Float3(1, 1, 1));
-        ViewDesc view = View();
+        RenderView view = View();
         view.ClearColor = new Float4(0.1f, 0.2f, 0.3f, 1);
-        _world.Features.Add(new Nothing("Opaque", RenderSlot.Opaque));
+        _world.Features.Add(new Nothing(FeatureGroup.Opaque, RenderSlot.Opaque));
         AssertAll(new Float3(0.1f, 0.2f, 0.3f), Frame(view));
     }
 
     // Shows the scene's depth, read after the opaque pass
-    private sealed class ShowDepth(FullscreenProgram program, Sampler sampler) : RenderFeature
+    private sealed class ShowDepth(FullscreenProgram program, Sampler sampler) : RenderFeature(RenderSlot.AfterOpaques)
     {
         private readonly PropertySet _properties = new();
-
-        public override RenderSlot Slot => RenderSlot.AfterOpaques;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -634,12 +547,9 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Shows the scene's motion in red and green, read after the opaque pass
-    private sealed class ShowMotion(FullscreenProgram program, Sampler sampler) : RenderFeature
+    private sealed class ShowMotion(FullscreenProgram program, Sampler sampler) : RenderFeature(RenderSlot.AfterOpaques, sceneReads: SceneTargets.Motion)
     {
         private readonly PropertySet _properties = new();
-
-        public override RenderSlot Slot => RenderSlot.AfterOpaques;
-        public override SceneTargets SceneReads => SceneTargets.Motion;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -676,15 +586,14 @@ public sealed class FeatureTests : IDisposable
         Frame(View());
 
         // The camera a unit right moves the plane a quarter of the view left in clip space, an eighth of it in uv
-        ViewDesc moved = View();
-        moved.Layers[0] = moved.Layers[0] with { Position = new Double3(1, 0, 0) };
+        RenderView moved = View();
+        moved.Camera = new ViewCamera(moved.Camera.Layers[0] with { Position = new Double3(1, 0, 0) });
         AssertAll(new Float3(-0.125f, 0, 0), Frame(moved), i => i % Size < Size - 2);
     }
 
-    private sealed class ViewPosition(FullscreenProgram program) : RenderFeature
+    private sealed class ViewPosition(FullscreenProgram program) : RenderFeature(RenderSlot.HdrPost)
     {
         public Double3 Seen;
-        public override RenderSlot Slot => RenderSlot.HdrPost;
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
         public override void Render(FeatureContext context)
         {
@@ -700,8 +609,8 @@ public sealed class FeatureTests : IDisposable
         _world.Features.Add(feature);
         Frame(View());
 
-        ViewDesc moved = View();
-        moved.Layers[0] = moved.Layers[0] with { Position = new Double3(5, 2, -3) };
+        RenderView moved = View();
+        moved.Camera = new ViewCamera(moved.Camera.Layers[0] with { Position = new Double3(5, 2, -3) });
         Frame(moved);
         Assert.Equal(new Double3(5, 2, -3), feature.Seen);
     }
@@ -882,7 +791,7 @@ public sealed class FeatureTests : IDisposable
         RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = SkinnedQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)), LayerMask = 2 }, [Unlit(new Float3(1, 1, 1))]);
         _world.SetBounds(handle, new AABB(new Float3(-8), new Float3(8)));
         _world.SetBones(handle, [Translation(1, 0, 0)]);
-        ViewDesc view = View();
+        RenderView view = View();
         view.CullingMask = 1;
         Frame(view);
         Assert.Equal(-4f, DeformedStream(handle, VertexSemantic.Position)[0]);
@@ -1111,7 +1020,7 @@ public sealed class FeatureTests : IDisposable
     {
         ShowingMotion();
         RenderableHandle handle = AddSkinned(motionVectors: true);
-        ViewDesc view = View();
+        RenderView view = View();
         view.CullingMask = 1;
         Frame(view);
         _world.SetLayerMask(handle, 2);
@@ -1144,10 +1053,19 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0, 0, 0), Frame(View()));
     }
 
-    // A frame that fails, two views sharing an id, after its resources were applied
+    private sealed class Failing() : RenderFeature(RenderSlot.Overlay)
+    {
+        public override void Setup(FeatureBuilder builder, in FeatureView view) => throw new InvalidOperationException("failing on purpose");
+
+        public override void Render(FeatureContext context) { }
+    }
+
+    // A frame that fails, a feature of its view throwing as it is built, after its resources were applied
     private void FailedFrame()
     {
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View(), View() } });
+        RenderView view = View();
+        view.Features = new ExtensionSet<RenderFeature> { new Failing() };
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         Assert.Contains(_errors, e => e.Code == "frame.failed");
         _errors.Clear();
@@ -1210,7 +1128,7 @@ public sealed class FeatureTests : IDisposable
     public void TheScene_HasOnlyTheTargetsItsFeaturesRead()
     {
         AddQuad(new Float3(1, 1, 1));
-        int Targets() => ViewGraph.SceneTargetCount(_renderer.Frame.Camera(1)!.ShapeKey.Targets);
+        int Targets() => ViewGraph.SceneTargetCount(_renderer.Frame.Camera(_harness.ViewOf(1))!.ShapeKey.Targets);
         Frame(View());
         Assert.Equal(1, Targets());
 
@@ -1222,7 +1140,7 @@ public sealed class FeatureTests : IDisposable
         ScreenSpaceReflections ssr = new(_renderer);
         _world.Features.Add(ssr);
         Frame(View());
-        Assert.Equal(4, Targets());
+        Assert.Equal(5, Targets());
 
         _world.Features.Remove(ssr);
         _world.Features.Remove(taa);
@@ -1235,7 +1153,7 @@ public sealed class FeatureTests : IDisposable
     {
         AddQuad(new Float3(1, 1, 1));
         Frame(View());
-        Assert.Equal(default, _renderer.Frame.Camera(1)!.Jitter);
+        Assert.Equal(default, _renderer.LastFrameStats.View(_harness.ViewOf(1))!.Jitter);
 
         TemporalAntiAliasing taa = new(_renderer) { JitterSpread = 4 };
         _world.Features.Add(taa);
@@ -1243,7 +1161,7 @@ public sealed class FeatureTests : IDisposable
         for (int frame = 0; frame < 5; frame++)
         {
             Frame(View());
-            jitters.Add(_renderer.Frame.Camera(1)!.Jitter);
+            jitters.Add(_renderer.LastFrameStats.View(_harness.ViewOf(1))!.Jitter);
         }
 
         // Within half a pixel, four different offsets, then the first again
@@ -1291,10 +1209,10 @@ public sealed class FeatureTests : IDisposable
     {
         AddQuad(new Float3(1, 0, 0), layer: 1);
         AddQuad(new Float3(0, 1, 0), layer: 2);
-        ViewDesc left = View(1);
+        RenderView left = View(1);
         left.CullingMask = 1;
         left.Viewport = new Float4(0, 0, 0.5f, 1);
-        ViewDesc right = View(2);
+        RenderView right = View(2);
         right.CullingMask = 2;
         right.Viewport = new Float4(0.5f, 0, 0.5f, 1);
 
@@ -1304,11 +1222,9 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Remembers the render size of the views it runs on
-    private sealed class Probe : RenderFeature
+    private sealed class Probe() : RenderFeature(RenderSlot.Overlay)
     {
         public uint Width, Height;
-
-        public override RenderSlot Slot => RenderSlot.Overlay;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view) { }
 
@@ -1321,7 +1237,7 @@ public sealed class FeatureTests : IDisposable
         AddQuad(new Float3(0.5f, 0.25f, 1));
         Probe probe = new();
         _world.Features.Add(probe);
-        ViewDesc view = View();
+        RenderView view = View();
         view.RenderScale = 0.5f;
         view.Viewport = new Float4(0, 0, 1, 0.5f);
 
@@ -1331,11 +1247,9 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Writes the output colour from the render resolution one, keeping what it was given to check
-    private sealed class Upscaler(FullscreenProgram program) : RenderFeature
+    private sealed class Upscaler(FullscreenProgram program) : RenderFeature(RenderSlot.Upscale)
     {
         public (uint, uint) Input, Output;
-
-        public override RenderSlot Slot => RenderSlot.Upscale;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteOutputColor();
 
@@ -1347,12 +1261,10 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Records the size of the colour it writes and the view it was given
-    private sealed class SizeProbe(FullscreenProgram program) : RenderFeature
+    private sealed class SizeProbe(FullscreenProgram program) : RenderFeature(RenderSlot.HdrPost)
     {
         public (uint, uint) View, Written;
         public bool Upscaled;
-
-        public override RenderSlot Slot => RenderSlot.HdrPost;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
 
@@ -1365,12 +1277,10 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Keeps a history of the colour, noting each frame whether it had one and a previous frame
-    private sealed class Remembers(FullscreenProgram program) : RenderFeature
+    private sealed class Remembers(FullscreenProgram program) : RenderFeature(RenderSlot.HdrPost)
     {
         private TextureHandle _history;
         public readonly List<(bool History, bool Previous)> Seen = new();
-
-        public override RenderSlot Slot => RenderSlot.HdrPost;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -1393,8 +1303,8 @@ public sealed class FeatureTests : IDisposable
         _world.Features.Add(remembers);
         Frame(View());
         Frame(View());
-        ViewDesc cut = View();
-        cut.Cut = true;
+        RenderView cut = View();
+        cut.Cut();
         Frame(cut);
         Frame(View());
 
@@ -1410,7 +1320,7 @@ public sealed class FeatureTests : IDisposable
         SizeProbe after = new(copy);
         _world.Features.Add(upscaler);
         _world.Features.Add(after);
-        ViewDesc view = View();
+        RenderView view = View();
         view.RenderScale = 0.5f;
 
         AssertAll(new Float3(0.5f, 0.25f, 1), Frame(view));
@@ -1425,16 +1335,16 @@ public sealed class FeatureTests : IDisposable
     {
         AddQuad(new Float3(1, 0, 0), layer: 1);
         AddQuad(new Float3(0, 1, 0), layer: 2);
-        ViewDesc red = View(1);
+        RenderView red = View(1);
         red.CullingMask = 1;
-        ViewDesc green = View(2);
+        RenderView green = View(2);
         green.CullingMask = 2;
 
         // The last view drawn covers the target
         AssertAll(new Float3(0, 1, 0), Frame(red, green));
         red.Order = 1;
         AssertAll(new Float3(1, 0, 0), Frame(red, green));
-        green.DependsOn = [1];
+        green.DependsOn.Add(_harness.ViewOf(1));
         AssertAll(new Float3(0, 1, 0), Frame(red, green));
     }
 
@@ -1442,37 +1352,85 @@ public sealed class FeatureTests : IDisposable
     public void ViewsDependingOnEachOther_AreReported_AndDrawInOrder()
     {
         AddQuad(new Float3(1, 0, 0), layer: 1);
-        ViewDesc a = View(1);
-        a.DependsOn = [2];
-        ViewDesc b = View(2);
+        RenderView a = View(1);
+        a.DependsOn.Add(_harness.ViewOf(2));
+        RenderView b = View(2);
         b.CullingMask = 0;
-        b.DependsOn = [1];
+        b.DependsOn.Add(_harness.ViewOf(1));
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { a, b } });
         _device.WaitForIdle();
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { a, b } });
         Assert.Equal("view.dependency.cycle", Assert.Single(_errors).Code);
     }
 
-    private sealed class Named(string name, RenderSlot slot, int order = 0, ViewKinds runsOn = ViewKinds.Cameras, string? group = null) : RenderFeature
+    [Fact]
+    public void DisposedViews_FreeTheirState_AndCannotBeSubmitted()
     {
-        public override RenderSlot Slot => slot;
-        public override int Order => order;
-        public override ViewKinds RunsOn => runsOn;
-        public override string? ExclusiveGroup => group;
+        AddQuad(new Float3(1, 0, 0));
+        RenderView view = _renderer.CreateView(_world);
+        view.Target = _harness.Framebuffer;
+        view.Camera = _harness.View().Camera;
+        Frame(view);
+        Assert.NotNull(_renderer.Frame.Camera(view));
+
+        view.Dispose();
+        AssertAll(new Float3(1, 0, 0), Frame(View()), Centre);
+        Assert.Null(_renderer.Frame.Camera(view));
+        Assert.Throws<ObjectDisposedException>(() => _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } }));
+    }
+
+    [Fact]
+    public void AViewSubmittedTwiceInAFrame_IsRefused()
+    {
+        RenderView view = View();
+        Assert.Throws<ArgumentException>(() => _renderer.SubmitFrame(new FrameDesc { Views = new[] { view, view } }));
+    }
+
+    [Fact]
+    public void CameraHelpers_FitTheViewportsAspect_UnlessGivenOne()
+    {
+        RenderView view = View();
+        view.Viewport = new Float4(0, 0, 0.5f, 1);
+        float focal = 1 / MathF.Tan(0.5f);
+        view.Camera = ViewCamera.Perspective(new Double3(1, 2, 3), Float3.UnitZ, Float3.UnitY, 1, near: 0.25f);
+        ViewDesc fitted = view.Snapshot();
+        Assert.Equal(focal / 0.5f, fitted.Layers[0].Projection.c0.X, 5);
+        Assert.Equal(-focal, fitted.Layers[0].Projection.c1.Y, 5);
+        Assert.Equal(0.25f, fitted.Layers[0].Projection.c3.Z);
+        Assert.Equal(0.25f, fitted.Near);
+        Assert.Equal(new Double3(1, 2, 3), fitted.Layers[0].Position);
+        Assert.Equal(Float4x4.Identity, fitted.Layers[0].View);
+
+        view.Camera = ViewCamera.Perspective(default, Float3.UnitZ, Float3.UnitY, 1, aspect: 2);
+        Assert.Equal(focal / 2, view.Snapshot().Layers[0].Projection.c0.X, 5);
+
+        // Reversed Z from depth 1 at near to 0 at far
+        view.Camera = ViewCamera.Orthographic(default, Float3.UnitZ, Float3.UnitY, 8, 0, 100);
+        ViewDesc ortho = view.Snapshot();
+        Float4x4 p = ortho.Layers[0].Projection;
+        Assert.Equal((0.5f, -0.25f, -0.01f, 1f, 1f), (p.c0.X, p.c1.Y, p.c2.Z, p.c3.Z, p.c3.W));
+        Assert.Equal(100, ortho.FarDistance);
+    }
+
+    private sealed class Named(string name, RenderSlot slot, int order = 0, ViewKinds runsOn = ViewKinds.Cameras, FeatureGroup? group = null) : RenderFeature(slot, order: order, group: group, runsOn: runsOn)
+    {
         public override void Setup(FeatureBuilder builder, in FeatureView view) { }
         public override void Render(FeatureContext context) { }
         public override string ToString() => name;
     }
 
-    private static List<string> Select(RenderFeature[] world, RenderFeature[] view, ViewKind kind = ViewKind.Game)
+    // Names the built in draw features by their group, as PrepassFeature, OpaqueFeature, SkyFeature and TransparentFeature
+    private List<string> Select(RenderFeature[] world, RenderFeature[] view, ViewKind kind = ViewKind.Game)
     {
         foreach (RenderFeature feature in world.Concat(view))
-            feature.TakeSnapshot();
+            feature.Snapshot();
         ViewDesc desc = new() { Kind = kind };
         List<RenderFeature> result = new();
-        FeatureSelection.Select(result, world, view, new FeatureView(desc, 1, 1));
-        return result.Select(f => f is Named ? f.ToString()! : f.GetType().Name).ToList();
+        FeatureSelection.Select(result, _renderer.Frame.BuiltIns, world, view, new FeatureView(desc, 1, 1));
+        return result.Select(f => f is Named ? f.ToString()! : f.Name).ToList();
     }
+
+    private static FeatureGroup Group(string name) => (FeatureGroup)typeof(FeatureGroup).GetField(name)!.GetValue(null)!;
 
     [Fact]
     public void AColourWrittenBeforeTheOpaques_IsCopiedIntoTheScene_ThatTheyDrawOnto()
@@ -1486,10 +1444,8 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(1, 1, 1), pixels, i => !Centre(i));
     }
 
-    private sealed class Throws(bool inSetup) : RenderFeature
+    private sealed class Throws(bool inSetup) : RenderFeature(RenderSlot.HdrPost)
     {
-        public override RenderSlot Slot => RenderSlot.HdrPost;
-
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
             if (inSetup)
@@ -1522,11 +1478,9 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Inverts the colour once told to, which changes what it declares
-    private sealed class Toggle(FullscreenProgram program) : RenderFeature
+    private sealed class Toggle(FullscreenProgram program) : RenderFeature(RenderSlot.HdrPost)
     {
         public bool On;
-
-        public override RenderSlot Slot => RenderSlot.HdrPost;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -1558,22 +1512,22 @@ public sealed class FeatureTests : IDisposable
         AddQuad(new Float3(1, 0, 0));
         Frame(View());
 
-        ViewDesc empty = View(2);
+        RenderView empty = View(2);
         empty.Viewport = new Float4(0, 0, 0.5f, 1);
         empty.ClearColor = new Float4(0, 0, 1, 1);
-        empty.Features = new FeatureSet
+        empty.Features = new ExtensionSet<RenderFeature>
         {
-            new Named("no prepass", RenderSlot.Prepass, group: "Prepass"),
-            new Named("no opaque", RenderSlot.Opaque, group: "Opaque"),
-            new Named("no sky", RenderSlot.Sky, group: "Sky"),
-            new Named("no transparent", RenderSlot.Transparent, group: "Transparent"),
+            new Named("no prepass", RenderSlot.Prepass, group: FeatureGroup.Prepass),
+            new Named("no opaque", RenderSlot.Opaque, group: FeatureGroup.Opaque),
+            new Named("no sky", RenderSlot.Sky, group: FeatureGroup.Sky),
+            new Named("no transparent", RenderSlot.Transparent, group: FeatureGroup.Transparent),
         };
         Float4[] pixels = Frame(empty);
         AssertAll(new Float3(0, 0, 1), pixels, i => i % Size < Size / 2);
         AssertAll(new Float3(1, 0, 0), pixels, i => i % Size >= Size / 2);
 
         // Letterboxed, the rest of the target takes the clear colour too
-        ViewDesc letterboxed = View(3);
+        RenderView letterboxed = View(3);
         letterboxed.Viewport = new Float4(0, 0, 0.5f, 1);
         letterboxed.ClearColor = new Float4(0, 1, 0, 1);
         letterboxed.ClearTarget = true;
@@ -1582,32 +1536,13 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0, 1, 0), pixels, i => i % Size >= Size / 2);
     }
 
-    private sealed class Outlines : RenderFeature
-    {
-        public static readonly PassType Outline = new("Outline");
-
-        public override RenderSlot Slot => RenderSlot.AfterOpaques;
-
-        public override void Setup(FeatureBuilder builder, in FeatureView view)
-        {
-            builder.DrawsPass(Outline);
-            builder.DrawToScene();
-        }
-
-        public override void Render(FeatureContext context)
-        {
-            context.BeginOutput();
-            context.DrawPass(Outline);
-        }
-    }
-
     [Fact]
     public void FeaturesDrawAnyPassType_IncludingRenderablesAddedLater()
     {
         Shader outlined = _renderer.LoadShader(ShaderParser.Parse(OutlinedSource));
         Material material = _renderer.CreateMaterial(outlined);
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [material]);
-        _world.Features.Add(new Outlines());
+        _world.Features.Add(new DrawPassFeature(new PassType("Outline"), RenderSlot.AfterOpaques));
 
         Float4[] pixels = Frame(View());
         AssertAll(new Float3(0, 1, 0), pixels, Centre);
@@ -1625,13 +1560,29 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0, 1, 0), Frame(View()));
     }
 
+    [Theory]
+    [InlineData(RenderSlot.AfterPrepass, false)]
+    [InlineData(RenderSlot.AfterOpaques, true)]
+    [InlineData(RenderSlot.AfterTransparents, true)]
+    public void DrawPassFeature_DrawsItsPassInItsSlot(RenderSlot slot, bool overOpaques)
+    {
+        Shader outlined = _renderer.LoadShader(ShaderParser.Parse(OutlinedSource));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [_renderer.CreateMaterial(outlined)]);
+        DrawPassFeature feature = new(new PassType("Outline"), slot);
+        _world.Features.Add(feature);
+
+        // Before the opaques, the object's own forward pass draws over its outline
+        AssertAll(overOpaques ? new Float3(0, 1, 0) : new Float3(1, 0, 0), Frame(View()), Centre);
+
+        feature.Enabled = false;
+        AssertAll(new Float3(1, 0, 0), Frame(View()), Centre);
+    }
+
     // Adds a quarter to what it held last frame, and publishes it
-    private sealed class Accumulate(FullscreenProgram program) : RenderFeature
+    private sealed class Accumulate(FullscreenProgram program) : RenderFeature(RenderSlot.HdrPost)
     {
         private readonly PropertySet _properties = new();
         private TextureHandle _total;
-
-        public override RenderSlot Slot => RenderSlot.HdrPost;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -1656,12 +1607,10 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Shows what an earlier feature published
-    private sealed class Show(FullscreenProgram program) : RenderFeature
+    private sealed class Show(FullscreenProgram program) : RenderFeature(RenderSlot.Tonemap)
     {
         private readonly PropertySet _properties = new();
         private TextureHandle _shown;
-
-        public override RenderSlot Slot => RenderSlot.Tonemap;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -1691,13 +1640,12 @@ public sealed class FeatureTests : IDisposable
         public int Frames;
     }
 
-    private sealed class Counts : RenderFeature
+    private sealed class Counts() : RenderFeature(RenderSlot.Overlay)
     {
-        public readonly Dictionary<int, int> Seen = new();
+        public readonly Dictionary<RenderView, int> Seen = new();
 
-        public override RenderSlot Slot => RenderSlot.Overlay;
         public override void Setup(FeatureBuilder builder, in FeatureView view) { }
-        public override void Render(FeatureContext context) => Seen[context.View.ViewId] = ++context.GetViewState<Counter>().Frames;
+        public override void Render(FeatureContext context) => Seen[context.View.RenderView!] = ++context.GetViewState<Counter>().Frames;
     }
 
     [Fact]
@@ -1708,8 +1656,8 @@ public sealed class FeatureTests : IDisposable
         Frame(View(1), View(2));
         Frame(View(1));
         Frame(View(1));
-        Assert.Equal(3, counts.Seen[1]);
-        Assert.Equal(1, counts.Seen[2]);
+        Assert.Equal(3, counts.Seen[_harness.ViewOf(1)]);
+        Assert.Equal(1, counts.Seen[_harness.ViewOf(2)]);
     }
 
     [Fact]
@@ -1721,7 +1669,7 @@ public sealed class FeatureTests : IDisposable
 
         TextureReadback? texture = null;
         byte[]? bytes = null;
-        _renderer.Readback(_target, data => texture = data);
+        _renderer.Readback(_harness.Target, data => texture = data);
         _renderer.Readback(buffer, data => bytes = data.Data, offset: 4, size: 8);
         Frame(View());
         Assert.Null(texture);
@@ -1758,23 +1706,13 @@ public sealed class FeatureTests : IDisposable
         Assert.Throws<ArgumentOutOfRangeException>(() => _renderer.Readback(buffer, _ => { }, offset: 8, size: uint.MaxValue - 4));
     }
 
-    private Float4[] ReadTarget()
-    {
-        _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
-        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
-        _device.Unmap(_readback);
-        return pixels;
-    }
-
-    private sealed class Glows : RenderFeature
+    private sealed class Glows() : RenderFeature(RenderSlot.AfterTransparents, passes: [Glow])
     {
         public static readonly PassType Glow = new("Glow");
 
-        public override RenderSlot Slot => RenderSlot.AfterTransparents;
-
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
-            builder.DrawsPass(Glow);
+            builder.DrawsRenderables();
             builder.DrawToScene();
         }
 
@@ -1804,9 +1742,8 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Declares a read of a texture that is not in the frame, which the graph refuses
-    private sealed class BreaksTheGraph : RenderFeature
+    private sealed class BreaksTheGraph() : RenderFeature(RenderSlot.HdrPost)
     {
-        public override RenderSlot Slot => RenderSlot.HdrPost;
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.Graph.Read(default(TextureHandle));
         public override void Render(FeatureContext context) { }
     }
@@ -1827,11 +1764,10 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Publishes the colour when on
-    private sealed class Publisher : RenderFeature
+    private sealed class Publisher() : RenderFeature(RenderSlot.HdrPost)
     {
         public bool On = true;
 
-        public override RenderSlot Slot => RenderSlot.HdrPost;
         public override bool IsActive(in FeatureView view) => On;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
@@ -1841,10 +1777,8 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Reads what the publisher published, and inverts the colour
-    private sealed class Reader(FullscreenProgram program) : RenderFeature
+    private sealed class Reader(FullscreenProgram program) : RenderFeature(RenderSlot.Tonemap)
     {
-        public override RenderSlot Slot => RenderSlot.Tonemap;
-
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
             builder.Read("Inverted");
@@ -1878,49 +1812,12 @@ public sealed class FeatureTests : IDisposable
         return material;
     }
 
-    // A quarter size quad, two units across, at x and y in the view's -4 to 4
-    private static Float4x4 Small(float x, float y) => Float4x4.CreateTranslation(new Float3(x, y, 0)) * Float4x4.CreateScale(0.25f);
-
     // Pixels whose centre lies inside a two unit square centred at x, y
     private static Func<int, bool> Inside(float x, float y) => i =>
     {
         float px = 4 * ((i % Size + 0.5f) / Size * 2 - 1), py = 4 * ((i / Size + 0.5f) / Size * 2 - 1);
         return MathF.Abs(px - x) < 1 && MathF.Abs(py - y) < 1;
     };
-
-    [Fact]
-    public void InstanceBatches_DrawEveryInstance_AndFollowTheirEdits()
-    {
-        Material material = ObjectColor();
-        InstanceBatchDesc desc = new() { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) };
-        InstanceData[] instances =
-        [
-            new InstanceData { Transform = Small(-2, -2), Color = new Float4(1, 0, 0, 1) },
-            new InstanceData { Transform = Small(2, 2), Color = new Float4(0, 1, 0, 1) },
-        ];
-        InstanceBatchHandle batch = _world.AddInstanceBatch(desc, [material], instances);
-        Float4[] pixels = Frame(View());
-        AssertAll(new Float3(1, 0, 0), pixels, Inside(-2, -2));
-        AssertAll(new Float3(0, 1, 0), pixels, Inside(2, 2));
-        AssertAll(new Float3(0, 0, 0), pixels, i => !Inside(-2, -2)(i) && !Inside(2, 2)(i));
-
-        // One instance, recoloured, then the whole batch moved
-        _world.SetInstances(batch, [new InstanceData { Transform = Small(-2, -2), Color = new Float4(0, 0, 1, 1) }]);
-        Assert.Equal(1, _world.InstanceCount(batch));
-        pixels = Frame(View());
-        AssertAll(new Float3(0, 0, 1), pixels, Inside(-2, -2));
-        AssertAll(new Float3(0, 0, 0), pixels, Inside(2, 2));
-
-        desc.Transform = Double4x4.CreateTranslation(new Double3(4, 4, 10));
-        _world.SetInstanceBatch(batch, desc);
-        pixels = Frame(View());
-        AssertAll(new Float3(0, 0, 1), pixels, Inside(2, 2));
-        AssertAll(new Float3(0, 0, 0), pixels, Inside(-2, -2));
-
-        _world.RemoveInstanceBatch(batch);
-        Assert.False(_world.IsAlive(batch));
-        AssertAll(new Float3(0, 0, 0), Frame(View()));
-    }
 
     [Fact]
     public void TransientDraws_ShowForOneFrameOnly()
@@ -1936,6 +1833,73 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(1, 1, 1), pixels, Inside(2, 2));
 
         // Gone the frame after
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+    }
+
+    // The object's colour, which a transient draw's instances each carry
+    private const string ObjectTintSource = """
+        Shader "Test/ObjectTint"
+        {
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                Cull Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
+                }
+                Fragment
+                {
+                    #include "Graphite/Core.glsl"
+                    #include "Graphite/Passes.glsl"
+                    layout(location = 0) out vec4 outColor;
+                    void main()
+                    {
+                        outColor = vec4(Graphite_Object().color.rgb, 1.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
+                    }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    private TransientDraw Instanced(Material material) => new()
+    {
+        Mesh = _quad,
+        Material = material,
+        Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)),
+    };
+
+    private static readonly Float4[] s_instanceColors = [new(1, 0, 0, 1), new(0, 1, 0, 1), new(0, 0, 1, 1)];
+
+    // The eight unit quad shrunk to two units, centred at x, y
+    private static Float4x4 At(float x, float y) => Float4x4.CreateTranslation(new Float3(x, y, 0)) * Float4x4.CreateScale(0.25f);
+
+    [Fact]
+    public void TransientInstances_EachDrawAtTheirTransformAndColour_ForOneFrame()
+    {
+        Material tint = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(ObjectTintSource)));
+        _world.DrawTransient(Instanced(tint), [At(-2, -2), At(2, 2), At(2, -2)], s_instanceColors);
+
+        Float4[] pixels = Frame(View());
+        AssertAll(new Float3(1, 0, 0), pixels, Inside(-2, -2));
+        AssertAll(new Float3(0, 1, 0), pixels, Inside(2, 2));
+        AssertAll(new Float3(0, 0, 1), pixels, Inside(2, -2));
+        AssertAll(new Float3(0, 0, 0), pixels, Inside(-2, 2));
+
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+    }
+
+    [Fact]
+    public void TransientInstances_AreCulledAsOne_ByTheBoundsGiven()
+    {
+        Material tint = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(ObjectTintSource)));
+        TransientDraw offscreen = Instanced(tint);
+        offscreen.InstanceBounds = new AABB(new Float3(100, 100, 0), new Float3(101, 101, 1));
+        _world.DrawTransient(offscreen, [At(-2, -2), At(2, 2), At(2, -2)], s_instanceColors);
         AssertAll(new Float3(0, 0, 0), Frame(View()));
     }
 
@@ -2004,13 +1968,11 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Writes its count on the GPU each frame through a compute dispatch of its own
-    private sealed class ComputedCount(ComputeProgram program) : FrameFeature
+    private sealed class ComputedCount(ComputeProgram program) : FrameFeature(FrameSlot.BeforeViews)
     {
         private readonly PropertySet _properties = new();
         private BufferHandle _count;
         public uint Instances;
-
-        public override FrameSlot Slot => FrameSlot.BeforeViews;
 
         public override void Setup(FrameBuilder builder)
         {
@@ -2040,7 +2002,7 @@ public sealed class FeatureTests : IDisposable
                 void main() { words[1] = push.count; }
             }
             """;
-        ComputeProgram program = _device.ResourceFactory.CreateComputeProgram(_compiler.CompileCompute(new ShaderPass { State = new PassState(), Source = source }, [], _device.BackendType));
+        ComputeProgram program = _device.ResourceFactory.CreateComputeProgram(TestCompiler.Shared.CompileCompute(new ShaderPass { State = new PassState(), Source = source }, [], _device.BackendType));
         _owned.Add(program);
 
         // A world object draws first, so the provider's commands are not the view's first
@@ -2122,16 +2084,16 @@ public sealed class FeatureTests : IDisposable
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
         _device.WaitForIdle();
         _errors.Clear();
-        AssertAll(new Float3(0, 0, 1), ReadTarget(), Centre);
+        AssertAll(new Float3(0, 0, 1), _harness.ReadTarget(), Centre);
     }
 
     [Fact]
-    public void TransientDraws_WaitingForTheirUpload_DrawOnceUploaded()
+    public void InlineTransientDraws_DrawInTheFrameTheyAreGiven_WhateverTheUploadBudget()
     {
         Material color = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(VertexColorSource)));
         AssertAll(new Float3(0, 0, 0), Frame(View()));
 
-        // One mesh per frame: the one queued first takes this frame, the transient's geometry the next
+        // One mesh per frame: the one queued takes this frame's budget, which inline geometry does not wait on
         _options.UploadBudgetPerFrame = 1;
         _owned.Add(_renderer.CreateMesh(new MeshData
         {
@@ -2142,22 +2104,8 @@ public sealed class FeatureTests : IDisposable
         uint red = 0xFF0000FFu;
         Float3[] square = [new(-3, -3, 10), new(-1, -3, 10), new(-1, -1, 10), new(-3, -1, 10)];
         _world.DrawTransient(new TransientDraw { Positions = square, Colors = new uint[] { red, red, red, red }, Indices = new uint[] { 0, 1, 2, 0, 2, 3 }, Material = color });
-        AssertAll(new Float3(0, 0, 0), Frame(View()));
         AssertAll(new Float3(1, 0, 0), Frame(View()), Inside(-2, -2));
         AssertAll(new Float3(0, 0, 0), Frame(View()));
-    }
-
-    [Fact]
-    public void InstanceBatches_ScaledToNothingAndBack_KeepTheirInstances()
-    {
-        InstanceBatchDesc desc = new() { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) };
-        InstanceBatchHandle batch = _world.AddInstanceBatch(desc, [ObjectColor()], [new InstanceData { Transform = Small(-2, -2), Color = new Float4(1, 0, 0, 1) }]);
-        desc.Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0);
-        _world.SetInstanceBatch(batch, desc);
-        AssertAll(new Float3(0, 0, 0), Frame(View()));
-        desc.Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10));
-        _world.SetInstanceBatch(batch, desc);
-        AssertAll(new Float3(1, 0, 0), Frame(View()), Inside(-2, -2));
     }
 
     [Fact]
@@ -2176,7 +2124,7 @@ public sealed class FeatureTests : IDisposable
     public void HostViewsOfTheShadowKind_DrawLikeAnyView()
     {
         AddQuad(new Float3(0, 1, 0));
-        ViewDesc view = View();
+        RenderView view = View();
         view.Kind = ViewKind.Shadow;
         AssertAll(new Float3(0, 1, 0), Frame(view));
     }
@@ -2188,21 +2136,21 @@ public sealed class FeatureTests : IDisposable
         Named world = new("world", RenderSlot.Opaque);
         Named early = new("early", RenderSlot.Opaque, -1);
         Named post = new("post", RenderSlot.HdrPost);
-        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "early", "OpaqueFeature", "world", "view", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransparentFeature", "post", "PresentFeature"], Select([post, world, early], [view]));
+        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "early", "OpaqueFeature", "world", "view", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransmissionDepthFeature", "TransparentFeature", "post", "PresentFeature"], Select([post, world, early], [view]));
     }
 
     [Fact]
     public void Selection_ViewBeatsWorldBeatsBuiltIn_ForGroupsAndReplacements()
     {
-        Named worldSky = new("world sky", RenderSlot.Sky, group: "Sky");
-        Named viewSky = new("view sky", RenderSlot.Sky, group: "Sky");
+        Named worldSky = new("world sky", RenderSlot.Sky, group: FeatureGroup.Sky);
+        Named viewSky = new("view sky", RenderSlot.Sky, group: FeatureGroup.Sky);
         Assert.DoesNotContain("SkyFeature", Select([worldSky], []));
         Assert.Contains("world sky", Select([worldSky], []));
         List<string> both = Select([worldSky], [viewSky]);
         Assert.Contains("view sky", both);
         Assert.DoesNotContain("world sky", both);
 
-        Named opaque = new("opaque", RenderSlot.Opaque, group: "Opaque");
+        Named opaque = new("opaque", RenderSlot.Opaque, group: FeatureGroup.Opaque);
         Assert.DoesNotContain("OpaqueFeature", Select([opaque], []));
         Assert.Contains("opaque", Select([opaque], []));
     }
@@ -2214,8 +2162,8 @@ public sealed class FeatureTests : IDisposable
         Named probes = new("probes", RenderSlot.HdrPost, runsOn: ViewKinds.ReflectionProbe);
         Named off = new("off", RenderSlot.HdrPost, runsOn: ViewKinds.All) { Enabled = false };
 
-        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransparentFeature", "cameras", "PresentFeature"], Select([cameras, probes, off], []));
-        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransparentFeature", "probes", "PresentFeature"], Select([cameras, probes, off], [], ViewKind.ReflectionProbe));
+        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransmissionDepthFeature", "TransparentFeature", "cameras", "PresentFeature"], Select([cameras, probes, off], []));
+        Assert.Equal(["SceneClearFeature", "CascadeFeature", "PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "SceneDepthFeature", "TransmissionDepthFeature", "TransparentFeature", "probes", "PresentFeature"], Select([cameras, probes, off], [], ViewKind.ReflectionProbe));
     }
 
     // Takes a built in frame feature's group and provides what its consumers read
@@ -2228,11 +2176,9 @@ public sealed class FeatureTests : IDisposable
         _ => RendererOutputs.ReadbackStaging,
     };
 
-    private sealed class FrameStand(FrameSlot slot, string group, RenderResourceID? provides) : FrameFeature
+    private sealed class FrameStand(FrameSlot slot, string group, RenderResourceID? provides) : FrameFeature(slot, group: Group(group))
     {
         public int Runs;
-        public override FrameSlot Slot => slot;
-        public override string? ExclusiveGroup => group;
         public override void Setup(FrameBuilder builder)
         {
             if (provides is { } id)
@@ -2259,7 +2205,7 @@ public sealed class FeatureTests : IDisposable
 
         FrameFeature[] active = [.. _renderer.Frame.ActiveFrameFeatures];
         Assert.Contains(stand, active);
-        Assert.DoesNotContain(active, f => f.IsBuiltIn && f.ExclusiveGroup == group);
+        Assert.DoesNotContain(active, f => f.IsBuiltIn && f.Group == Group(group));
         Assert.Equal(1, stand.Runs);
     }
 
@@ -2274,12 +2220,9 @@ public sealed class FeatureTests : IDisposable
         _errors.Clear();
     }
 
-    private sealed class ViewStand(RenderSlot slot, string group, bool scene = false) : RenderFeature
+    private sealed class ViewStand(RenderSlot slot, string group, bool scene = false) : RenderFeature(slot, group: Group(group), runsOn: ViewKinds.All)
     {
         public int Setups;
-        public override RenderSlot Slot => slot;
-        public override string? ExclusiveGroup => group;
-        public override ViewKinds RunsOn => ViewKinds.All;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -2310,9 +2253,9 @@ public sealed class FeatureTests : IDisposable
         Float4[] pixels = Frame(View());
 
         Assert.True(stand.Setups > 0);
-        List<RenderFeature> selected = _renderer.Frame.Camera(1)!.Selected;
+        List<RenderFeature> selected = _renderer.Frame.Camera(_harness.ViewOf(1))!.Selected;
         Assert.Contains(stand, selected);
-        Assert.DoesNotContain(selected, f => f.ExclusiveGroup == group && f != stand);
+        Assert.DoesNotContain(selected, f => f.Group == Group(group) && f != stand);
         if (slot == RenderSlot.Present)
             AssertAll(new Float3(0, 0, 0), pixels);
         else if (slot != RenderSlot.Clear)

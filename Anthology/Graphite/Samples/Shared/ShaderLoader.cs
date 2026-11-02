@@ -12,6 +12,7 @@ public static class ShaderLoader
     public static GlslShaderCompiler Compiler { get; } = new(new GlslCompilerOptions
     {
         ResolveInclude = (name, _) => FileLoader.Load(name) is { } bytes ? Encoding.UTF8.GetString(bytes.Span) : null,
+        CacheDirectory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "GraphiteSamples", "Shaders"),
     });
 
 

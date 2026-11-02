@@ -11,13 +11,6 @@ using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-file sealed class NoResources : IMaterialResources
-{
-    public uint TextureSlot(Texture? texture, MaterialPropertyType type, string defaultName) => 0;
-
-    public uint SamplerSlot(SamplerDescription? sampler) => 0;
-}
-
 [Collection("GPU Tests")]
 public sealed class BucketTests : IDisposable
 {
@@ -34,7 +27,7 @@ public sealed class BucketTests : IDisposable
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
     private readonly Uploader _uploader;
     private readonly GeometryPool _geometry;
     private readonly MaterialSystem _materials;
@@ -68,7 +61,6 @@ public sealed class BucketTests : IDisposable
     {
         _world.Dispose();
         _uploader.Dispose();
-        _compiler.Dispose();
         _store.Dispose();
         _device.Dispose();
     }
@@ -153,7 +145,7 @@ public sealed class BucketTests : IDisposable
         Add(_triangle, mapped, At(1));
         Assert.Single(Frame(Forward).Calls);
 
-        mapped.EnableKeyword("_NORMALMAP");
+        mapped.Set(mapped.Shader.Axis("_NORMALMAP"), true);
         DrawList list = Frame(Forward);
         Assert.Equal(2, list.Calls.Count);
         Assert.Equal(2, list.CommandCount);
@@ -231,15 +223,19 @@ public sealed class BucketTests : IDisposable
         Assert.Equal(4, forward.InstanceCount);
     }
 
+    // A transparent material only casts from the buckets, its one bucket the shadow pass's
     [Fact]
     public void TransparentMaterials_StayOutOfTheOpaqueBuckets()
     {
         Material glass = Material();
         glass.RenderQueue = 3000;
-        Add(_triangle, glass);
+        RenderableHandle handle = Add(_triangle, glass);
 
         Assert.Equal(0, Frame(Forward).CommandCount);
-        Assert.Equal(0, _buckets.BucketCount);
+        Assert.Equal(0, Frame(Prepass).CommandCount);
+        DrawList shadows = Frame(Shadows);
+        Assert.Equal(new uint[] { (uint)handle.Index }, shadows.Instances[..shadows.InstanceCount]);
+        Assert.Equal(1, _buckets.BucketCount);
     }
 
     [Fact]
@@ -269,6 +265,26 @@ public sealed class BucketTests : IDisposable
         list = Frame(Transparent);
         Assert.Equal(3, list.CommandCount);
         Assert.Single(list.Calls);
+    }
+
+    // A transparent surface drawn on both sides without depth writes draws its back faces, then its front faces, so the
+    // far side of a closed mesh never blends over its near side
+    [Fact]
+    public void TwoSidedTransparentItems_DrawBackFacesFirst()
+    {
+        Material glass = Material();
+        glass.Surface = new SurfaceSettings(SurfaceType.Transparent, Cull: SurfaceCull.Off);
+        RenderableHandle handle = Add(_triangle, glass);
+
+        DrawList list = Frame(Transparent);
+        Assert.Equal(2, list.CommandCount);
+        Assert.Equal(new uint[] { (uint)handle.Index, (uint)handle.Index }, Instances(list));
+        Assert.Equal(2, list.Calls.Count);
+        Assert.Equal(FaceCullMode.Front, _programs[list.Calls[0].Program].StateOverride!.Raster.CullMode);
+        Assert.Equal(FaceCullMode.Back, _programs[list.Calls[1].Program].StateOverride!.Raster.CullMode);
+
+        glass.Surface = new SurfaceSettings(SurfaceType.Transparent);
+        Assert.Equal(1, Frame(Transparent).CommandCount);
     }
 
     [Fact]
@@ -330,30 +346,28 @@ public sealed class BucketTests : IDisposable
     }
 
     [Fact]
-    public void ProgramIds_OfEmptiedBuckets_StayParked_ThenAreFreed()
+    public void ProgramIds_OfEmptiedBuckets_AreFreedAtTheNextSweep()
     {
-        _programs.IdleFrames = 2;
         Material material = Material();
         Add(_triangle, material);
         Frame(Forward);
         int ids = _programs.Count;
 
-        // Switching back and forth keeps both variants' ids, no more, and passes without the axis keep one id. The Debug
-        // pass draws through its Forward pass's id.
+        // Each switch takes the new variant's ids and frees the old ones at the next sweep, and passes without the axis
+        // keep one id. The Debug pass draws through its Forward pass's id.
         int reading = 0;
         for (int p = 0; p < _lit.Definition.Passes!.Length; p++)
             reading += _lit.PassHasAxis(p, "_NORMALMAP") && p != _lit.PassIndex(PassType.Debug) ? 1 : 0;
         for (int i = 0; i < 4; i++)
         {
-            material.SetKeyword("_NORMALMAP", i % 2 == 0 ? "true" : "false");
+            material.Set(material.Shader.Axis("_NORMALMAP"), i % 2 == 0);
             _programs.Sweep();
             Frame(Forward);
         }
         Assert.True(reading < ids);
         Assert.Equal(ids + reading, _programs.Count);
 
-        for (int i = 0; i < 3; i++)
-            _programs.Sweep();
+        _programs.Sweep();
         Assert.Equal(ids, _programs.Count);
     }
 

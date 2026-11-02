@@ -2,23 +2,6 @@ namespace Prowl.Graphite.ShaderDef;
 
 
 /// <summary>
-/// Lazy per-request compile vs compile-all-upfront.
-/// </summary>
-public enum CompileMode
-{
-    /// <summary>
-    /// Compile a variant on first request.
-    /// </summary>
-    OnDemand,
-
-    /// <summary>
-    /// Compile all variants upfront.
-    /// </summary>
-    All
-}
-
-
-/// <summary>
 /// Serializable snapshot of a shader: per-pass axes plus whatever variants are cached. Partial capture ok, only populated variants kept.
 /// </summary>
 public struct ShaderSnapshot

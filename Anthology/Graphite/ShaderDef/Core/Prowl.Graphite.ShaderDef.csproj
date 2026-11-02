@@ -24,5 +24,7 @@
         <InternalsVisibleTo Include="Prowl.Graphite.ShaderDef.Tests" />
         <InternalsVisibleTo Include="Prowl.Graphite.ShaderDef.Compiler" />
         <InternalsVisibleTo Include="Prowl.Graphite.ShaderDef.Compiler.Tests" />
+        <InternalsVisibleTo Include="Prowl.Graphite.Rendering" />
+        <InternalsVisibleTo Include="Prowl.Graphite.Rendering.Tests" />
     </ItemGroup>
 </Project>

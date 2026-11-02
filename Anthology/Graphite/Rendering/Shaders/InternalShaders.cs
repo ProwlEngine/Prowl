@@ -13,27 +13,21 @@ internal static class InternalShaders
     /// <summary>Makes sure includes can reach the renderer's library files.</summary>
     public static void Register() { }
 
-    public const string Present = "void main() { outColor = Graphite_SampleSource(vec2(vUV.x, 1.0 - vUV.y)); }";
-
-    public const string Decode = """
+    // Graphite_PresentMode 0 copies, 1 decodes sRGB to linear, 2 encodes linear to sRGB
+    public const string Present = """
+        uniform int Graphite_PresentMode;
         void main()
         {
             vec4 c = Graphite_SampleSource(vec2(vUV.x, 1.0 - vUV.y));
-            vec3 e = max(c.rgb, vec3(0.0));
-            outColor = vec4(mix(e / 12.92, pow((e + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), e)), c.a);
+            vec3 v = max(c.rgb, vec3(0.0));
+            if (Graphite_PresentMode == 1)
+                c.rgb = mix(v / 12.92, pow((v + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), v));
+            else if (Graphite_PresentMode == 2)
+                c.rgb = mix(v * 12.92, 1.055 * pow(v, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), v));
+            outColor = c;
         }
         """;
 
-    public const string Encode = """
-        void main()
-        {
-            vec4 c = Graphite_SampleSource(vec2(vUV.x, 1.0 - vUV.y));
-            vec3 l = max(c.rgb, vec3(0.0));
-            outColor = vec4(mix(l * 12.92, 1.055 * pow(l, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), l)), c.a);
-        }
-        """;
-
-    public const string Clear ="uniform vec4 Graphite_ClearColor; void main() { outColor = Graphite_ClearColor; }";
     public const string CopyBack = "void main() { outColor = Graphite_SampleSource(vUV); }";
 
     public static string PostFragment(string file) => $"#include \"Graphite/Internal/{file}.glsl\"\n";
@@ -46,10 +40,42 @@ internal static class InternalShaders
         return new ShaderPass { State = new PassState(), Source = source, SourceName = name };
     }
 
-    public static ComputeProgram Compute(GraphicsDevice device, IShaderCompiler? compiler, string file)
+    /// <summary>A compute program of a library file, compiled under the policy.</summary>
+    public static InternalCompute Compute(GraphicsDevice device, IShaderCompiler? compiler, string file, CompilePolicy policy = CompilePolicy.Sync)
+        => new(device, FilePass(file).Variants(compiler, device.BackendType), ShaderLibrary.Prefix + file, policy);
+}
+
+/// <summary>
+/// A compute program of the renderer's library. Async compiles it on a worker at Fallback priority and its first use
+/// waits for that, the other policies compile it when made.
+/// </summary>
+internal sealed class InternalCompute : IDisposable
+{
+    private readonly GraphicsDevice _device;
+    private readonly PassVariants _variants;
+    private readonly string _name;
+    private ComputeProgram? _program;
+
+    public InternalCompute(GraphicsDevice device, PassVariants variants, string name, CompilePolicy policy)
     {
-        ComputeProgram program = device.ResourceFactory.CreateComputeProgram(FilePass(file).Variants(compiler, device.BackendType).RequireCompute());
-        program.Name = ShaderLibrary.Prefix + file;
+        _device = device;
+        _variants = variants;
+        _name = name;
+        if (policy == CompilePolicy.Async)
+            variants.QueueCompute(0, CompilePriority.Fallback);
+        else
+            _program = Create();
+    }
+
+    /// <summary>The program, waiting for its compile the first time. Render thread.</summary>
+    public ComputeProgram Program => _program ??= Create();
+
+    private ComputeProgram Create()
+    {
+        ComputeProgram program = _device.ResourceFactory.CreateComputeProgram(_variants.RequireCompute());
+        program.Name = _name;
         return program;
     }
+
+    public void Dispose() => _program?.Dispose();
 }

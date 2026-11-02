@@ -15,7 +15,7 @@ public sealed class UploadTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _compiler = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
     private readonly Uploader _uploader;
 
     public UploadTests()
@@ -27,7 +27,6 @@ public sealed class UploadTests : IDisposable
     public void Dispose()
     {
         _uploader.Dispose();
-        _compiler.Dispose();
         _store.Dispose();
         _device.Dispose();
     }
@@ -155,6 +154,39 @@ public sealed class UploadTests : IDisposable
         pool.Reclaim(5);
         Assert.True(pool.Pages[0].VertexWords.Used < used);
         Assert.Equal(first.Id, pool.Create(data).Id);
+    }
+
+    [Fact]
+    public void SetStream_OverwritesOneStreamInPlace_AndWaitsForNewData()
+    {
+        GeometryPool pool = new(_device, _store, 1024, 1024);
+        Float3[] positions = [new(1, 2, 3), new(4, 5, 6), new(7, 8, 9)];
+        Float2[] uvs = [new(1, 1), new(2, 2), new(3, 3)];
+        VertexStream Uv(Float2[] values) => new() { Semantic = VertexSemantic.UV2, Format = VertexElementFormat.Float2, Data = MemoryMarshal.AsBytes(values.AsSpan()).ToArray() };
+        MeshData data = new()
+        {
+            VertexCount = 3,
+            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }, Uv(uvs)],
+            Indices = new uint[] { 0, 1, 2 },
+        };
+        GpuMesh mesh = pool.Create(data);
+        List<GpuMesh> changed = new();
+        pool.Apply(_uploader, 0, long.MaxValue, changed);
+        Flush(pool.Pages[0].Vertices, pool.Pages[0].Indices);
+        MeshPlacement placement = mesh.Placement!;
+
+        mesh.SetStream(Uv([new(7, 7), new(8, 8), new(9, 9)]), 3);
+        mesh.SetStream(Uv([new(5, 5)]), 1);
+        changed.Clear();
+        pool.Apply(_uploader, 1, long.MaxValue, changed);
+        Flush(pool.Pages[0].Vertices);
+
+        Assert.Empty(changed);
+        Assert.Same(placement, mesh.Placement);
+        uint offset = placement.StreamOffsets[(int)VertexSemantic.UV2];
+        Assert.Equal(new[] { 7f, 7f, 8f, 8f, 9f, 9f }, Read(pool.Pages[0].Vertices)[(int)offset..(int)(offset + 6)].Select(BitConverter.UInt32BitsToSingle));
+        uint positionOffset = placement.StreamOffsets[(int)VertexSemantic.Position];
+        Assert.Equal(1f, BitConverter.UInt32BitsToSingle(Read(pool.Pages[0].Vertices)[(int)positionOffset]));
     }
 
     [Fact]

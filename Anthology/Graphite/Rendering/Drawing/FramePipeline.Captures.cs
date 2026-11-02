@@ -32,7 +32,7 @@ internal sealed partial class FramePipeline
         WorldReflections reflections = world.World.Reflections;
         world.SkyCamera ??= Capturing();
         WorldReflections.Scratch scratch = reflections.SkyScratch!;
-        if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSnapshot))
+        if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSet))
             reflections.SkyIncomplete();
 
         ViewDesc capture = new()
@@ -44,14 +44,24 @@ internal sealed partial class FramePipeline
             LayerCount = 6,
             Target = scratch.All,
             CullingMask = 0,
-            ClearColor = world.World.Lighting.Environment.SkyColor,
+            ClearColor = CaptureClear(world),
             Near = 0.05f,
+            EV100 = world.World.Lighting.Environment.CaptureEV100,
         };
         for (int face = 0; face < 6; face++)
             capture.Layers[face] = new ViewLayer { View = WorldReflections.FaceView(face), Projection = WorldReflections.FaceProjection };
         world.SkyCamera.CaptureCube = scratch.AllTexture;
         Draw(world.SkyCamera, capture, [], world, time);
         Fill(world, reflections.Sky!, scratch, null, reflections.SkyAmbient);
+    }
+
+    // The environment's sky colour in nits, pre-exposed as the capture draws everything
+    private static Float4 CaptureClear(WorldFrame world)
+    {
+        EnvironmentDesc environment = world.World.Lighting.Environment;
+        Float4 sky = environment.SkyColor;
+        float exposure = RenderView.ExposureOf(environment.CaptureEV100);
+        return new Float4(sky.X * exposure, sky.Y * exposure, sky.Z * exposure, sky.W);
     }
 
     private void Fill(WorldFrame world, WorldReflections.Target target, WorldReflections.Scratch scratch, DeviceBuffer? readback, DeviceBuffer? ambient)
@@ -67,7 +77,7 @@ internal sealed partial class FramePipeline
         WorldReflections.Target target = reflections.ProbeTarget(work.Index);
         WorldReflections.Scratch scratch = work.Scratch;
         Float4x4 projection = WorldReflections.FaceProjectionBetween(probe.NearClip, probe.FarClip);
-        if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSnapshot) && !Programs.Failed(sky, false, world.World.Globals.KeywordSnapshot))
+        if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSet) && !Programs.Failed(sky, false, world.World.Globals.KeywordSet))
             reflections.Request(work.Index);
         int faces = work.EndFace - work.FirstFace;
         if (faces == 6)
@@ -82,9 +92,10 @@ internal sealed partial class FramePipeline
                 LayerCount = 6,
                 Target = scratch.All,
                 CullingMask = probe.CullingMask,
-                ClearColor = world.World.Lighting.Environment.SkyColor,
+                ClearColor = CaptureClear(world),
                 Near = probe.NearClip,
                 FarDistance = probe.FarClip,
+                EV100 = world.World.Lighting.Environment.CaptureEV100,
             };
             for (int face = 0; face < 6; face++)
                 capture.Layers[face] = new ViewLayer { View = WorldReflections.FaceView(face), Projection = projection, Position = probe.Position };
@@ -102,9 +113,10 @@ internal sealed partial class FramePipeline
                 ViewId = camera.View.ViewId,
                 Target = scratch.Faces[work.FirstFace],
                 CullingMask = probe.CullingMask,
-                ClearColor = world.World.Lighting.Environment.SkyColor,
+                ClearColor = CaptureClear(world),
                 Near = probe.NearClip,
                 FarDistance = probe.FarClip,
+                EV100 = world.World.Lighting.Environment.CaptureEV100,
             };
             capture.Layers[0] = new ViewLayer { View = WorldReflections.FaceView(work.FirstFace), Projection = projection, Position = probe.Position };
             camera.CaptureCube = scratch.FaceTextures[work.FirstFace];
@@ -136,10 +148,11 @@ internal sealed partial class FramePipeline
         {
             foreach (CameraFrame camera in world.Captures())
             {
-                if (_frame - camera.LastFrame > StaleViewFrames)
+                if (_frame - camera.LastFrame > IdleFrames)
                 {
                     camera.ReleaseSceneColor();
                     camera.ReleaseSceneDepth();
+                    camera.ReleaseBackDepth();
                 }
             }
         }

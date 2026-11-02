@@ -634,6 +634,10 @@ internal static class SceneBaker
         Ior = src.Ior,
         Specular = src.Specular,
         SpecularGlossiness = src.SpecularGlossiness,
+        Iridescence = src.Iridescence,
+        Anisotropy = src.Anisotropy,
+        Dispersion = src.Dispersion,
+        DiffuseTransmission = src.DiffuseTransmission,
         RawExtensions = src.RawExtensions.Count == 0
             ? new Dictionary<string, System.Text.Json.JsonElement>()
             : new Dictionary<string, System.Text.Json.JsonElement>(src.RawExtensions),

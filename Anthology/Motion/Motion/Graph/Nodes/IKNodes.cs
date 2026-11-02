@@ -24,6 +24,23 @@ internal static class IKGoalResolver
         }
         return float.IsFinite(position.X) && float.IsFinite(position.Y) && float.IsFinite(position.Z);
     }
+
+    /// <summary>The knuckle bone of the humanoid hand <paramref name="end"/> is, or -1 when it is not a hand with fingers.</summary>
+    public static int Knuckle(GraphContext context, int end)
+    {
+        if (end < 0 || context.Avatar is not { IsHuman: true } avatar) return Skeleton.InvalidIndex;
+        HumanoidRig rig = avatar.Humanoid!;
+        if (rig.GetSkeletonBoneIndex(HumanBodyBone.LeftHand) == end) return Finger(rig, HumanBodyBone.LeftMiddleProximal, HumanBodyBone.LeftIndexProximal);
+        if (rig.GetSkeletonBoneIndex(HumanBodyBone.RightHand) == end) return Finger(rig, HumanBodyBone.RightMiddleProximal, HumanBodyBone.RightIndexProximal);
+        return Skeleton.InvalidIndex;
+
+        static int Finger(HumanoidRig rig, HumanBodyBone middle, HumanBodyBone index)
+            => rig.HasBone(middle) ? rig.GetSkeletonBoneIndex(middle) : rig.HasBone(index) ? rig.GetSkeletonBoneIndex(index) : Skeleton.InvalidIndex;
+    }
+
+    /// <summary>From the wrist to the palm, midway to the knuckles, in model space.</summary>
+    public static Float3 PalmOffset(Pose pose, int end, int knuckle)
+        => (pose.GetModelSpaceTransform(knuckle).position - pose.GetModelSpaceTransform(end).position) * 0.5f;
 }
 
 /// <summary>
@@ -47,6 +64,7 @@ public sealed class TwoBoneIKDefinition : PoseNodeDefinition
         private readonly TwoBoneIKDefinition _def;
         private ValueNodeInstance _target = null!;
         private BoundFloat _weight;
+        private Pose? _scratch;
         public Instance(TwoBoneIKDefinition def) => _def = def;
 
         public override void Bind(GraphBindContext context)
@@ -60,8 +78,19 @@ public sealed class TwoBoneIKDefinition : PoseNodeDefinition
         {
             base.OnUpdate(context);
             float w = _weight.Get(context);
-            if (w > 0f && IKGoalResolver.TryResolve(_target.GetValue(context), Pose, context, out Float3 goal))
-                TwoBoneIK.Solve(Pose, _def.Upper, _def.Mid, _def.End, goal, w);
+            if (!(w > 0f) || !IKGoalResolver.TryResolve(_target.GetValue(context), Pose, context, out Float3 goal))
+                return;
+
+            // A hand reaches with its palm. Where the palm sits on the wrist depends on how the solve turns the arm, so solve once to find it
+            int knuckle = IKGoalResolver.Knuckle(context, _def.End);
+            if (knuckle >= 0)
+            {
+                _scratch ??= new Pose(Pose.Skeleton);
+                _scratch.CopyFrom(Pose);
+                TwoBoneIK.Solve(_scratch, _def.Upper, _def.Mid, _def.End, goal - IKGoalResolver.PalmOffset(Pose, _def.End, knuckle), 1f);
+                goal -= IKGoalResolver.PalmOffset(_scratch, _def.End, knuckle);
+            }
+            TwoBoneIK.Solve(Pose, _def.Upper, _def.Mid, _def.End, goal, w);
         }
     }
 }
@@ -280,6 +309,8 @@ public sealed class IKRigDefinition : PoseNodeDefinition
         private IKEffector[] _effectors = null!;
         private ValueNodeInstance[] _targets = null!;
         private BoundFloat[] _weights = null!;
+        private Float3[] _goals = null!;
+        private Pose? _scratch;
 
         public Instance(IKRigDefinition def) => _def = def;
 
@@ -299,17 +330,37 @@ public sealed class IKRigDefinition : PoseNodeDefinition
                 _targets[i] = context.ValueNode(info.TargetNodeIndex, ValueInputKind.Vector | ValueInputKind.Target);
                 _weights[i] = BoundFloat.Bind(context, info.Weight);
             }
+            _goals = new Float3[n];
         }
+
+        private int End(int effector) => _def.Effectors[effector].Chain is { Length: > 0 } chain ? chain[^1] : Skeleton.InvalidIndex;
 
         protected override void OnUpdate(GraphContext context)
         {
             base.OnUpdate(context);
 
+            bool hands = false;
             for (int i = 0; i < _effectors.Length; i++)
             {
                 bool resolved = IKGoalResolver.TryResolve(_targets[i].GetValue(context), Pose, context, out Float3 goal);
+                _goals[i] = goal;
                 _effectors[i].Target = goal;
                 _effectors[i].Weight = resolved ? _weights[i].Get(context) : 0f;
+                hands |= resolved && IKGoalResolver.Knuckle(context, End(i)) >= 0;
+            }
+
+            // Hands reach with their palms, found by solving once with the palms where the wrists are now
+            if (hands)
+            {
+                _scratch ??= new Pose(Pose.Skeleton);
+                _scratch.CopyFrom(Pose);
+                for (int i = 0; i < _effectors.Length; i++)
+                    if (IKGoalResolver.Knuckle(context, End(i)) is int knuckle and >= 0)
+                        _effectors[i].Target = _goals[i] - IKGoalResolver.PalmOffset(Pose, End(i), knuckle);
+                _rig.Solve(_scratch);
+                for (int i = 0; i < _effectors.Length; i++)
+                    if (IKGoalResolver.Knuckle(context, End(i)) is int knuckle and >= 0)
+                        _effectors[i].Target = _goals[i] - IKGoalResolver.PalmOffset(_scratch, End(i), knuckle);
             }
             _rig.Solve(Pose);
         }

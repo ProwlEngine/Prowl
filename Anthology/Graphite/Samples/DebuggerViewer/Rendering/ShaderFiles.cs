@@ -25,7 +25,7 @@ internal static class ShaderFiles
         for (int i = 0; i < files.Length; i++)
         {
             ShaderDefinition definition = ShaderParser.Parse(File.ReadAllText(Path.Combine(Directory, files[i]), Encoding.UTF8));
-            definition.Create(device, s_compiler, new Variant(), CompileMode.All);
+            definition.Create(device, s_compiler);
             passes[i] = definition.Passes![0];
         }
 
@@ -35,7 +35,7 @@ internal static class ShaderFiles
     public static GraphicsProgram Interleaved(GraphicsDevice device, ShaderPass pass, string name, VertexLayoutDescription layout,
         BlendStateDescription blend, DepthStencilStateDescription depth, RasterizerStateDescription raster)
     {
-        if (!pass.GetVariant(0).TryGetDescription(device.BackendType, out ShaderDescription description))
+        if (!pass.GetVariant().TryGetDescription(device.BackendType, out ShaderDescription description))
             throw new InvalidOperationException($"{name} was not compiled for backend {device.BackendType}.");
 
         description.VertexLayouts = [layout];

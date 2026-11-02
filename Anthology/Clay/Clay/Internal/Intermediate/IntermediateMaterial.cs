@@ -42,6 +42,10 @@ internal sealed class IntermediateMaterial
     public IorExtension? Ior { get; set; }
     public SpecularExtension? Specular { get; set; }
     public SpecularGlossinessExtension? SpecularGlossiness { get; set; }
+    public IridescenceExtension? Iridescence { get; set; }
+    public AnisotropyExtension? Anisotropy { get; set; }
+    public DispersionExtension? Dispersion { get; set; }
+    public DiffuseTransmissionExtension? DiffuseTransmission { get; set; }
 }
 
 internal sealed class IntermediateTextureSlot

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 
 using Prowl.Graphite.ShaderDef;
@@ -10,19 +11,16 @@ using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-file sealed class NoResources : IMaterialResources
-{
-    public uint TextureSlot(Texture? texture, MaterialPropertyType type, string defaultName) => 0;
-
-    public uint SamplerSlot(SamplerDescription? sampler) => 0;
-}
-
-/// <summary>Holds back compiles of variants with a gated keyword until released, and fails variants with a broken one.</summary>
+/// <summary>
+/// Holds back compiles of variants with a gated keyword, or of passes whose source name holds the gated source, until
+/// released, and fails variants with a broken one.
+/// </summary>
 internal sealed class GatedCompiler(GlslShaderCompiler inner) : IShaderCompiler
 {
     public readonly ManualResetEventSlim Gate = new(false);
     public string GatedAxis = "";
     public string GatedValue = "";
+    public string GatedSource = "";
     public int Compiles;
 
     public IReadOnlyList<VariantSpace> GetAxes(ShaderPass pass) => inner.GetAxes(pass);
@@ -32,6 +30,8 @@ internal sealed class GatedCompiler(GlslShaderCompiler inner) : IShaderCompiler
     public ShaderDescription Compile(ShaderPass pass, Keyword[] combo, GraphicsBackend backend)
     {
         Interlocked.Increment(ref Compiles);
+        if (GatedSource.Length > 0 && pass.SourceName.Contains(GatedSource, StringComparison.Ordinal))
+            Gate.Wait();
         foreach (Keyword keyword in combo)
         {
             if (keyword.Name == GatedAxis && keyword.Value == GatedValue)
@@ -70,7 +70,7 @@ public sealed class ProgramCacheTests : IDisposable
                 {
                     #include "Graphite/Passes.glsl"
                     layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(1.0); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0); outColor = vec4(1.0); }
                 }
                 ENDGLSL
             }
@@ -79,7 +79,7 @@ public sealed class ProgramCacheTests : IDisposable
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly RenderStore _store = new();
-    private readonly GlslShaderCompiler _glsl = new();
+    private readonly GlslShaderCompiler _glsl = TestCompiler.Shared;
     private readonly GatedCompiler _compiler;
     private readonly MaterialSystem _materials;
     private readonly GlobalRegistry _globals;
@@ -94,7 +94,7 @@ public sealed class ProgramCacheTests : IDisposable
         _compiler = new GatedCompiler(_glsl);
         _materials = new MaterialSystem(_device, _store, new NoResources());
         _globals = new GlobalRegistry(_device, _store, new NoResources());
-        _cache = new ProgramCache(_device, _compiler, _globals, _programs, deterministic: false, error => _reports.Add(error.Message));
+        _cache = new ProgramCache(_device, _compiler, _globals, _programs, error => _reports.Add(error.Message));
         _shader = new Shader(ShaderParser.Parse(Source), _compiler);
     }
 
@@ -102,7 +102,6 @@ public sealed class ProgramCacheTests : IDisposable
     {
         _compiler.Gate.Set();
         _cache.Dispose();
-        _glsl.Dispose();
         _store.Dispose();
         _device.Dispose();
     }
@@ -111,24 +110,28 @@ public sealed class ProgramCacheTests : IDisposable
     {
         Material material = _materials.Create(_shader);
         foreach ((string axis, string value) in keywords)
-            material.SetKeyword(axis, value);
+            material.Set(_shader.Axis(axis), value);
         _materials.Extract(new List<Material>());
         Assert.True(_programs.TryGet(material.Draw, PassType.Forward, out ushort id));
         return id;
     }
 
-    private GraphicsProgram? Get(ushort id) => _cache.Get(id, false, _globals.Renderer.KeywordSnapshot);
+    private KeywordSet Keywords => KeywordSet.Intern(_globals.Renderer.KeywordSnapshot);
+
+    private GraphicsProgram? Get(ushort id) => _cache.Get(id, false, Keywords);
+
+    // Takes compiles in as frames do until the condition holds, failing after 20 seconds
+    private void Until(Func<bool> condition) => Assert.True(SpinWait.SpinUntil(() =>
+    {
+        _cache.Advance();
+        return condition();
+    }, TimeSpan.FromSeconds(20)), "Timed out waiting on a compile.");
 
     private GraphicsProgram WaitFor(ushort id)
     {
-        Stopwatch watch = Stopwatch.StartNew();
-        while (watch.Elapsed < TimeSpan.FromSeconds(20))
-        {
-            if (Get(id) is { } program && _cache.Pending == 0)
-                return program;
-            Thread.Sleep(1);
-        }
-        throw new TimeoutException("The variant never compiled.");
+        GraphicsProgram? program = null;
+        Until(() => (program = Get(id)) != null && _cache.Pending == 0);
+        return program!;
     }
 
     [Fact]
@@ -148,22 +151,31 @@ public sealed class ProgramCacheTests : IDisposable
     }
 
     [Fact]
+    public void AVariantAskedForOnce_FinishesThroughAdvance()
+    {
+        _compiler.GatedAxis = "_TINT";
+        _compiler.GatedValue = "false";
+        ushort plain = Program();
+        Assert.Null(Get(plain));
+        Assert.Equal(1, _cache.Compiling);
+
+        _compiler.Gate.Set();
+        Until(() => _cache.Compiling == 0);
+        Assert.True(_cache.Ready(plain, false, Keywords));
+    }
+
+    [Fact]
     public void VariantsNotReadyYet_DrawWithThePassDefault_ThenTheirOwn()
     {
         _compiler.GatedAxis = "_TINT";
         _compiler.GatedValue = "true";
         ushort tinted = Program(("_TINT", "true"));
-        Stopwatch watch = Stopwatch.StartNew();
-        GraphicsProgram? fallback;
-        while ((fallback = Get(tinted)) == null && watch.Elapsed < TimeSpan.FromSeconds(20))
-            Thread.Sleep(5);
-        Assert.NotNull(fallback);
-        Assert.False(_cache.Ready(tinted, false, _globals.Renderer.KeywordSnapshot));
+        GraphicsProgram? fallback = null;
+        Until(() => (fallback = Get(tinted)) != null);
+        Assert.False(_cache.Ready(tinted, false, Keywords));
 
         _compiler.Gate.Set();
-        watch.Restart();
-        while (!_cache.Ready(tinted, false, _globals.Renderer.KeywordSnapshot) && watch.Elapsed < TimeSpan.FromSeconds(20))
-            Thread.Sleep(5);
+        Until(() => _cache.Ready(tinted, false, Keywords));
         Assert.NotSame(fallback, Get(tinted));
     }
 
@@ -174,13 +186,10 @@ public sealed class ProgramCacheTests : IDisposable
         _compiler.GatedAxis = "_TINT";
         _compiler.GatedValue = "false";
         ushort plain = Program();
-        Stopwatch watch = Stopwatch.StartNew();
-        GraphicsProgram? fallback;
-        while ((fallback = Get(plain)) == null && watch.Elapsed < TimeSpan.FromSeconds(20))
-            Thread.Sleep(5);
-        Assert.NotNull(fallback);
+        GraphicsProgram? fallback = null;
+        Until(() => (fallback = Get(plain)) != null);
         Assert.StartsWith("Graphite/Fallback", fallback!.Name);
-        Assert.False(_cache.Ready(plain, false, _globals.Renderer.KeywordSnapshot));
+        Assert.False(_cache.Ready(plain, false, Keywords));
     }
 
     [Fact]
@@ -189,20 +198,15 @@ public sealed class ProgramCacheTests : IDisposable
         ushort plain = Program();
         ushort broken = Program(("_BROKEN", "true"));
         WaitFor(plain);
-        Stopwatch first = Stopwatch.StartNew();
-        while (!_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot) && first.Elapsed < TimeSpan.FromSeconds(20))
-            Thread.Sleep(5);
-        Assert.True(_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot));
+        Until(() => _cache.Failed(broken, false, Keywords));
         int compiles = _compiler.Compiles;
 
         _shader.Definition.Passes![0].Source += Environment.NewLine;
-        Assert.False(_cache.Ready(plain, false, _globals.Renderer.KeywordSnapshot));
+        _cache.Advance();
+        Assert.False(_cache.Ready(plain, false, Keywords));
+        Assert.False(_cache.Failed(broken, false, Keywords));
         WaitFor(plain);
-        Assert.False(_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot));
-        Stopwatch watch = Stopwatch.StartNew();
-        while (!_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot) && watch.Elapsed < TimeSpan.FromSeconds(20))
-            Thread.Sleep(5);
-        Assert.True(_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot));
+        Until(() => _cache.Failed(broken, false, Keywords));
         Assert.True(_compiler.Compiles >= compiles + 2);
     }
 
@@ -225,34 +229,50 @@ public sealed class ProgramCacheTests : IDisposable
         ShaderPass compiled = ShaderParser.Parse(Source).Passes![0];
         PassVariants source = compiled.Variants(_compiler, _device.BackendType);
         ShaderDescription description = source.Require();
-        BakedVariants.Add(compiled.SourceName, compiled.Source, new BakedVariants.Pass
+        BakedVariants shipped = new();
+        shipped.Add(compiled.SourceName, compiled.Source, new BakedVariants.Pass
         {
             Axes = [.. source.Axes],
             Globals = [.. source.Globals],
             Variants = [new Variant(source.Combo(0), [(_device.BackendType, description)])],
         });
-        try
-        {
-            using System.IO.MemoryStream file = new();
-            BakedVariants.Write(file);
-            BakedVariants.Clear();
-            file.Position = 0;
-            BakedVariants.Read(file);
+        using System.IO.MemoryStream file = new();
+        shipped.Write(file);
+        file.Position = 0;
+        BakedVariants read = new();
+        read.Read(file);
+        Assert.Equal(1, read.Count);
 
-            ShaderPass player = ShaderParser.Parse(Source).Passes![0];
-            PassVariants baked = player.Variants(null, _device.BackendType);
-            Assert.Equal(VariantState.Ready, baked.Request(0, CompilePolicy.BakedOnly, out ShaderDescription loaded, out _));
-            Assert.Equal(VariantState.Failed, baked.Request(1, CompilePolicy.BakedOnly, out _, out _));
-            Assert.Equal(source.Globals, baked.Globals);
-            loaded.BlendState = BlendStateDescription.SingleOverrideBlend;
-            loaded.DepthStencilState = DepthStencilStateDescription.Disabled;
-            loaded.RasterizerState = RasterizerStateDescription.CullNone;
-            using GraphicsProgram program = _device.ResourceFactory.CreateGraphicsProgram(loaded);
-        }
-        finally
-        {
-            BakedVariants.Clear();
-        }
+        ShaderPass player = ShaderParser.Parse(Source).Passes![0];
+        PassVariants baked = player.Variants(read, _device.BackendType);
+        Assert.Equal(VariantState.Ready, baked.Request(0, CompilePolicy.BakedOnly, out ShaderDescription loaded, out _));
+        Assert.Equal(VariantState.Failed, baked.Request(1, CompilePolicy.BakedOnly, out _, out _));
+        Assert.Equal(VariantState.Failed, baked.Request(1, CompilePolicy.Sync, out _, out Exception? notBaked));
+        Assert.Contains("not baked", notBaked!.Message);
+        Assert.Equal(source.Globals, baked.Globals);
+        Assert.Equal(0, new BakedVariants().Count);
+        loaded.BlendState = BlendStateDescription.SingleOverrideBlend;
+        loaded.DepthStencilState = DepthStencilStateDescription.Disabled;
+        loaded.RasterizerState = RasterizerStateDescription.CullNone;
+        using GraphicsProgram program = _device.ResourceFactory.CreateGraphicsProgram(loaded);
+    }
+
+    [Fact]
+    public void BakedVariants_Capture_CompilesThroughTheirCompiler()
+    {
+        ShaderPass pass = ShaderParser.Parse(Source).Passes![0];
+        BakedVariants baker = new(_glsl);
+        Keyword[] combo = [.. _glsl.GetAxes(pass).Select(axis => new Keyword(axis.Name, axis.Values[^1]))];
+        baker.Capture(pass, _device.BackendType, [combo]);
+
+        BakedVariants.Pass baked = baker.Find(pass)!;
+        Assert.Equal(_glsl.GetAxes(pass).Select(axis => axis.Name), baked.Axes.Select(axis => axis.Name));
+        Assert.True(Assert.Single(baked.Variants).IsCompiledFor(_device.BackendType));
+
+        PassVariants player = ShaderParser.Parse(Source).Passes![0].Variants(new BakedVariants(), _device.BackendType);
+        Assert.Equal(0, player.CompiledCount);
+        PassVariants shipped = ShaderParser.Parse(Source).Passes![0].Variants(baker, _device.BackendType);
+        Assert.Equal(1, shipped.CompiledCount);
     }
 
     [Fact]
@@ -260,24 +280,22 @@ public sealed class ProgramCacheTests : IDisposable
     {
         ushort broken = Program(("_BROKEN", "true"));
         GraphicsProgram fallback = WaitFor(broken);
-        Assert.True(_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot));
+        Assert.True(_cache.Failed(broken, false, Keywords));
         Assert.Same(fallback, Get(broken));
     }
 
     [Fact]
-    public void FreedProgramIds_DropTheirCompiledVariants_OnceIdleLongEnough()
+    public void FreedProgramIds_DropTheirCompiledVariants_AtTheNextSweep()
     {
         _programs.Freed += _cache.Drop;
-        _programs.IdleFrames = 2;
         ushort plain = Program();
         _programs.Acquire(plain);
         WaitFor(plain);
         Assert.Equal(1, _cache.EntryCount);
 
-        _programs.Release(plain);
-        _programs.Sweep();
         _programs.Sweep();
         Assert.Equal(1, _cache.EntryCount);
+        _programs.Release(plain);
         _programs.Sweep();
         Assert.Equal(0, _cache.EntryCount);
     }
@@ -309,12 +327,11 @@ public sealed class ProgramCacheTests : IDisposable
     public void BrokenVariants_AreReportedOnce_AndDrawNothing()
     {
         ushort broken = Program(("_BROKEN", "true"));
-        Stopwatch watch = Stopwatch.StartNew();
-        while (_reports.Count == 0 && watch.Elapsed < TimeSpan.FromSeconds(20))
+        Until(() =>
         {
             Assert.Null(Get(broken));
-            Thread.Sleep(1);
-        }
+            return _reports.Count > 0;
+        });
 
         Assert.Null(Get(broken));
         Assert.Single(_reports);

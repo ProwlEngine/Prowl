@@ -4,10 +4,11 @@ using System.Linq;
 using System.Runtime.InteropServices;
 
 using Prowl.Graphite.ShaderDef;
-using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
 
 using Xunit;
+
+using static Prowl.Graphite.Rendering.Tests.RendererHarness;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
@@ -15,37 +16,6 @@ namespace Prowl.Graphite.Rendering.Tests;
 [Collection("GPU Tests")]
 public sealed class PostStackTests : IDisposable
 {
-    private const string UnlitSource = """
-        Shader "Test/Unlit"
-        {
-            Properties
-            {
-                _Color("Color", Color) = (1, 1, 1, 1)
-            }
-
-            Pass
-            {
-                Tags { "LightMode" = "Forward" }
-                Cull Off
-                GLSLPROGRAM
-                Vertex
-                {
-                    #include "Graphite/Vertex.glsl"
-                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
-                }
-                Fragment
-                {
-                    #include "Graphite/Passes.glsl"
-                    #include "Graphite/Core.glsl"
-                    uniform vec4 _Color;
-                    layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(_Color.rgb, 1.0); }
-                }
-                ENDGLSL
-            }
-        }
-        """;
-
     // Indirect diffuse along -z plus a constant standing in for direct light, with a depth prepass for screen lighting to read
     private const string IndirectSource = """
         Shader "Test/Indirect"
@@ -90,7 +60,7 @@ public sealed class PostStackTests : IDisposable
                     layout(location = 0) out vec4 outColor;
                     void main()
                     {
-                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
                         outColor = vec4(Graphite_IndirectDiffuse(vec3(0.0, 0.0, -1.0), vec2(0.0)) + vec3(_Direct), 1.0);
                     }
                 }
@@ -99,10 +69,16 @@ public sealed class PostStackTests : IDisposable
         }
         """;
 
-    // A grey surface writing its turned normal into the G-buffer, nearly smooth and metallic
+    // A nearly smooth surface writing its turned normal and _Reflectance into the G-buffer, shaded grey plus _Reflectance
+    // times the probes, as a lit surface's top lobe is
     private const string MirrorSource = """
         Shader "Test/Mirror"
         {
+            Properties
+            {
+                _Reflectance("Reflectance", Color) = (1, 1, 1, 1)
+            }
+
             Pass
             {
                 Tags { "LightMode" = "Forward" }
@@ -112,72 +88,85 @@ public sealed class PostStackTests : IDisposable
                 {
                     #include "Graphite/Vertex.glsl"
                     layout(location = 0) out vec3 vNormal;
+                    layout(location = 1) out vec3 vRelative;
                     void main()
                     {
                         vNormal = Graphite_ObjectToWorldNormal(vec3(0.0, 0.0, -1.0));
-                        gl_Position = Graphite_ObjectToClip(vertexPosition);
+                        vRelative = Graphite_ObjectToRelative(vertexPosition);
+                        gl_Position = Graphite_RelativeToClip(vRelative);
                     }
                 }
                 Fragment
                 {
                     #include "Graphite/Passes.glsl"
+                    #include "Graphite/Lighting.glsl"
+                    uniform vec4 _Reflectance;
                     layout(location = 0) in vec3 vNormal;
+                    layout(location = 1) in vec3 vRelative;
                     layout(location = 0) out vec4 outColor;
-                    void main() { Graphite_WriteGBuffer(normalize(vNormal), 0.1, 1.0); outColor = vec4(0.1, 0.1, 0.1, 1.0); }
+                    void main()
+                    {
+                        vec3 n = normalize(vNormal);
+                        vec3 probes = Graphite_ReflectionProbesReady() ? Graphite_ProbeRadiance(Graphite_FindProbes(vRelative), n, Graphite_ViewDir(vRelative), 0.01) : vec3(0.0);
+                        Graphite_WriteGBuffer(n, _Reflectance.rgb, 0.1);
+                        outColor = vec4(vec3(0.1) + _Reflectance.rgb * probes, 1.0);
+                    }
                 }
                 ENDGLSL
             }
         }
         """;
 
-    private const int Size = 16;
+    // The same colour in every direction
+    private const string SkySource = """
+        Shader "Test/Sky"
+        {
+            Properties
+            {
+                _Tint("Tint", Color) = (1, 1, 1, 1)
+            }
 
-    // Orthographic and reversed Z: sees x and y from -4 to 4, and z from 0 (depth 1) to 100 (depth 0).
-    private static readonly Float4x4 s_projection = new(new Float4(0.25f, 0, 0, 0), new Float4(0, 0.25f, 0, 0), new Float4(0, 0, -0.01f, 0), new Float4(0, 0, 1, 1));
+            Pass
+            {
+                Tags { "LightMode" = "Sky" }
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Sky.glsl"
+                    void main() { }
+                }
+                Fragment
+                {
+                    #include "Graphite/Sky.glsl"
+                    uniform vec4 _Tint;
+                    layout(location = 0) out vec4 outColor;
+                    void main() { outColor = vec4(_Tint.rgb * Graphite_Exposure(), 1.0); }
+                }
+                ENDGLSL
+            }
+        }
+        """;
 
-    private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    private readonly GlslShaderCompiler _compiler = new();
-    private readonly Texture _target;
-    private readonly Framebuffer _framebuffer;
-    private readonly DeviceBuffer _readback;
+    // Views expose by 1, so the unlit surfaces' radiance reaches the effects as it is
+    private static readonly float UnitEV100 = -MathF.Log2(1.2f);
+
+    private readonly RendererHarness _harness = new();
+    private readonly GraphicsDevice _device;
     private readonly Renderer _renderer;
     private readonly RenderWorld _world;
     private readonly Shader _unlit;
     private readonly GpuMesh _quad;
-    private readonly List<RendererError> _errors = new();
-    private readonly List<IDisposable> _owned = new();
+    private readonly List<RendererError> _errors;
+    private readonly List<IDisposable> _owned;
 
     public PostStackTests()
     {
-        _target = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
-        _framebuffer = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _target));
-        _readback = _device.ResourceFactory.CreateBuffer(new BufferDescription(Size * Size * 16, BufferUsage.Staging));
-        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = RenderThreading.Inline, Deterministic = true, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
-        _renderer.Error += _errors.Add;
-        _world = _renderer.CreateWorld();
-        _world.Environment = new EnvironmentDesc { AmbientColor = default, Fog = default };
-        _unlit = _renderer.LoadShader(ShaderParser.Parse(UnlitSource));
-
-        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
-        _quad = _renderer.CreateMesh(new MeshData
-        {
-            VertexCount = 4,
-            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
-            Indices = new uint[] { 0, 1, 2, 0, 2, 3 },
-        });
+        (_device, _renderer, _world, _errors, _owned) = (_harness.Device, _harness.Renderer, _harness.World, _harness.Errors, _harness.Owned);
+        _unlit = _renderer.LoadShader(ShaderParser.Parse(UnlitSource(exposed: true)));
+        _quad = _harness.CreateQuad();
     }
 
-    public void Dispose()
-    {
-        _renderer.Dispose();
-        foreach (IDisposable owned in _owned)
-            owned.Dispose();
-        _readback.Dispose();
-        _framebuffer.Dispose();
-        _target.Dispose();
-        _compiler.Dispose();
-        _device.Dispose();
-    }
+    public void Dispose() => _harness.Dispose();
 
     private T Effect<T>(T effect) where T : RenderFeature
     {
@@ -196,34 +185,15 @@ public sealed class PostStackTests : IDisposable
     private RenderableHandle AddBackdrop(Float3 color, double depth = 10, double scale = 1)
         => _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, depth)) * Double4x4.CreateScale(scale) }, [Unlit(color)]);
 
-    private ViewDesc View(int id = 1)
+    private RenderView View(int id = 1)
     {
-        ViewDesc view = new() { World = _world, ViewId = id, Target = _framebuffer, Sky = false, ClearColor = new Float4(0, 0, 0, 1) };
-        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection };
+        RenderView view = _harness.View(id);
+        view.EV100 = UnitEV100;
         return view;
     }
 
-    private Float4[] Frame(float deltaTime = 1f / 60, ViewDesc? view = null)
-    {
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view ?? View() }, Time = new FrameTime { DeltaTime = deltaTime } });
-        _device.WaitForIdle();
-        _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
-        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
-        _device.Unmap(_readback);
-        Assert.Empty(_errors);
-        return pixels;
-    }
-
-    private static void AssertAll(Float3 expected, Float4[] pixels, float tolerance = 2e-3f, Func<int, bool>? where = null)
-    {
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            if (where != null && !where(i))
-                continue;
-            Float4 p = pixels[i];
-            Assert.True(MathF.Abs(p.X - expected.X) < tolerance && MathF.Abs(p.Y - expected.Y) < tolerance && MathF.Abs(p.Z - expected.Z) < tolerance, $"pixel {i}: expected {expected}, got {p}");
-        }
-    }
+    private Float4[] Frame(float deltaTime = 1f / 60, RenderView? view = null)
+        => _harness.Frame(new FrameDesc { Views = new[] { view ?? View() }, Time = new FrameTime { DeltaTime = deltaTime } });
 
     private static Float3 Map(Float3 c, Func<float, float> f) => new(f(c.X), f(c.Y), f(c.Z));
 
@@ -292,7 +262,7 @@ public sealed class PostStackTests : IDisposable
     {
         using Texture srgb = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm_SRgb, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer target = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, srgb));
-        ViewDesc view = View();
+        RenderView view = View();
         view.Target = target;
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
@@ -322,7 +292,7 @@ public sealed class PostStackTests : IDisposable
         Effect(new Tonemapper(_renderer));
         using Texture srgb = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm_SRgb, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer target = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, srgb));
-        ViewDesc view = View();
+        RenderView view = View();
         view.Target = target;
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
@@ -333,26 +303,104 @@ public sealed class PostStackTests : IDisposable
         _device.Unmap(readback);
 
         // The stored bytes are the tonemapper's display values, clamped by the target, its encode undone and the target's applied
-        Float3 display = Map(CpuTonemap(TonemapOperator.AgXPunchy, color), x => Math.Clamp(x, 0, 1));
+        Float3 display = Map(CpuTonemap(TonemapOperator.Aces, color), x => Math.Clamp(x, 0, 1));
         Assert.InRange(bytes[0], display.X * 255 - 2, display.X * 255 + 2);
         Assert.InRange(bytes[1], display.Y * 255 - 2, display.Y * 255 + 2);
         Assert.InRange(bytes[2], display.Z * 255 - 2, display.Z * 255 + 2);
     }
 
     [Fact]
-    public void AutoExposure_SnapsOnItsFirstFrame_ThenAdaptsAtItsSpeeds()
+    public void AutoExposure_MetersTheNextFramesExposure_SnappingFirst_ThenAdaptingAtItsSpeeds()
     {
-        Float3 color = new(0.5f, 1, 0.25f);
+        Float3 color = new(50, 100, 25);
         RenderableHandle backdrop = AddBackdrop(color);
         Effect(new AutoExposure(_renderer) { ExposureCompensation = 0.5f });
         float lum = Luminance(color);
-        float Exposure(float adapted) => Math.Clamp(0.18f / adapted * MathF.Pow(2, 0.5f), 0.1f, 10);
-        AssertAll(color * Exposure(lum), Frame(), 1e-3f);
 
-        // Twice as bright, adapting up at 3 a second for a tenth of a second
+        // A K 12.5 meter at ISO 100 over the scene's luminance, brightened by the compensation
+        float Metered(float luminance) => RenderView.ExposureOf(MathF.Log2(luminance * 100 / 12.5f) - 0.5f);
+
+        // The first frame takes the view's EV100, the next what was metered from it with its pre-exposure undone
+        RenderView view = View();
+        view.EV100 = 6;
+        AssertAll(color * RenderView.ExposureOf(6), Frame(view: view), 2e-3f);
+        AssertAll(color * Metered(lum), Frame(view: view), 2e-3f);
+
+        // Twice as bright, adapting up in stops at 3 a second for a tenth of a second, seen a frame later
         _world.SetMaterials(backdrop, [Unlit(color * 2)]);
-        float adapted = lum + (lum * 2 - lum) * (1 - MathF.Exp(-0.1f * 3));
-        AssertAll(color * 2 * Exposure(adapted), Frame(0.1f), 1e-3f);
+        AssertAll(color * 2 * Metered(lum), Frame(0.1f, view), 2e-3f);
+        float adapted = lum * MathF.Pow(2, 1 - MathF.Exp(-0.1f * 3));
+        AssertAll(color * 2 * Metered(adapted), Frame(view: view), 2e-3f);
+    }
+
+    [Fact]
+    public void AutoExposure_MetersAnOverflowedFrame_AsTheLargestHalfFloat()
+    {
+        // An infinite quarter of the view meters as the largest half float, pre-exposure undone, beside the rest
+        Float3 color = new(2, 2, 2);
+        AddBackdrop(color);
+        AddBackdrop(new Float3(float.PositiveInfinity), depth: 9, scale: 0.45);
+        Effect(new AutoExposure(_renderer) { ExposureCompensation = 0 });
+        RenderView view = View();
+        view.EV100 = 0;
+        Frame(view: view);
+        float saturated = 65504 / RenderView.ExposureOf(0);
+        float mean = MathF.Exp((0.05f * MathF.Log(2) + 0.23f * MathF.Log(saturated)) / 0.28f);
+        float expected = color.X * RenderView.ExposureOf(MathF.Log2(mean * 100 / 12.5f));
+        AssertAll(new Float3(expected), Frame(view: view), expected * 0.05f, i => i % Size < 4 || i / Size < 4);
+    }
+
+    [Fact]
+    public void AutoExposure_MetersAboveItsLowPercentile_LeavingOutADarkQuarter()
+    {
+        // A near black quarter, as a night sky, sits below the low percentile, so the lit rest alone is metered
+        Float3 color = new(20, 20, 20);
+        AddBackdrop(color);
+        AddBackdrop(new Float3(1e-5f), depth: 9, scale: 0.45);
+        Effect(new AutoExposure(_renderer) { ExposureCompensation = 0 });
+        RenderView view = View();
+        Frame(view: view);
+        float expected = color.X * RenderView.ExposureOf(MathF.Log2(Luminance(color) * 100 / 12.5f));
+        AssertAll(new Float3(expected), Frame(view: view), expected * 0.01f, i => i % Size < 4 || i / Size < 4);
+    }
+
+    [Fact]
+    public void AutoExposure_KeepsWithinItsEV100Range_AndAfterItGoes_TheViewsOwnReturns()
+    {
+        Float3 color = new(0.01f, 0.01f, 0.01f);
+        AddBackdrop(color);
+        AutoExposure auto = Effect(new AutoExposure(_renderer) { MinEV100 = 2 });
+        Frame();
+        AssertAll(color * RenderView.ExposureOf(2), Frame(), 1e-5f);
+
+        _world.Features.Remove(auto);
+        AssertAll(color * RenderView.ExposureOf(UnitEV100), Frame(), 1e-5f);
+    }
+
+    [Fact]
+    public void TemporalAntiAliasing_RescalesItsHistory_WhenTheExposureChanges()
+    {
+        // A history built at EV100 4 then shown at 2 matches one built at 2 all along, but for edges TAA blended in its
+        // tonemapped space, about 15 percent off at worst against 75 percent without the rescale
+        AddBackdrop(new Float3(0.05f, 0.05f, 0.05f), depth: 12);
+        AddTurnedSquare();
+        Effect(new TemporalAntiAliasing(_renderer));
+        RenderView changed = View(1), steady = View(2);
+        changed.EV100 = 4;
+        steady.EV100 = 2;
+        for (int frame = 0; frame < 4; frame++)
+        {
+            Frame(view: changed);
+            Frame(view: steady);
+        }
+        changed.EV100 = 2;
+        Float4[] after = Frame(view: changed);
+        Float4[] want = Frame(view: steady);
+        Assert.Contains(want, p => p.X > 0.1f);
+        float worst = 0;
+        for (int i = 0; i < want.Length; i++)
+            worst = MathF.Max(worst, MathF.Abs(after[i].X - want[i].X) / (want[i].X + 2e-3f));
+        Assert.True(worst < 0.25f, $"worst pixel {worst} off");
     }
 
     private RenderableHandle AddIndirect(float direct, double x = 0, double depth = 10)
@@ -395,24 +443,96 @@ public sealed class PostStackTests : IDisposable
 
         // Without ambient light only the direct light is left, and GTAO takes none of it
         _world.Environment = new EnvironmentDesc { AmbientColor = default, Fog = default };
-        AssertAll(new Float3(0.25f), Frame());
+        AssertAll(new Float3(0.25f), Frame(), 2e-3f);
     }
 
     // A mirror over the lower half turned 45 degrees about x, so it faces the camera and up, and reflects up the view.
     // The test projection does not flip y, so the view's bottom is the image's first rows.
-    private void AddMirror()
+    private void AddMirror(Float3? reflectance = null)
     {
         double c = Math.Cos(Math.PI / 4), s = Math.Sin(Math.PI / 4);
         Double4x4 turn = new(new Double4(1, 0, 0, 0), new Double4(0, c, s, 0), new Double4(0, -s, c, 0), new Double4(0, -2, 10, 1));
         Material mirror = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(MirrorSource)));
+        Float3 r = reflectance ?? new Float3(1, 1, 1);
+        mirror.SetColor("_Reflectance", new Float4(r.X, r.Y, r.Z, 1));
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = turn * Double4x4.CreateScale(new Double3(1, 0.5, 1)) }, [mirror]);
     }
 
-    private sealed class Copy(FullscreenProgram program) : RenderFeature
+    private sealed class Copy(FullscreenProgram program) : RenderFeature(RenderSlot.HdrPost)
     {
-        public override RenderSlot Slot => RenderSlot.HdrPost;
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
         public override void Render(FeatureContext context) => context.Fullscreen(program);
+    }
+
+    // A view drawing nothing but its clear colour, so the frame is that colour unless an effect changes it
+    private static readonly Float3 s_cleared = new(0.25f, 0.5f, 0.75f);
+
+    private static RenderView Cleared(RendererHarness harness)
+    {
+        RenderView view = harness.View();
+        view.ClearColor = new Float4(s_cleared.X, s_cleared.Y, s_cleared.Z, 1);
+        return view;
+    }
+
+    // Frames until the image changes from the cleared colour, as a compile lands on a worker
+    private static Float4[] FrameUntilChanged(RendererHarness harness, RenderView view)
+    {
+        System.Diagnostics.Stopwatch waited = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            Float4[] pixels = harness.Frame(view);
+            if (MathF.Abs(pixels[0].X - s_cleared.X) > 1e-3f || waited.Elapsed.TotalSeconds > 30)
+                return pixels;
+        }
+    }
+
+    [Fact]
+    public void AStockEffectStillCompiling_PassesColourThrough_ThenApplies()
+    {
+        _world.Features.Add(new Tonemapper(_renderer));
+        Float4[] tonemapped = _harness.Frame(Cleared(_harness));
+
+        GatedCompiler compiler = new(TestCompiler.Shared) { GatedSource = "Graphite/Tonemap" };
+        RendererHarness harness = new(compiler, CompilePolicy.Async);
+        try
+        {
+            RenderView view = Cleared(harness);
+            harness.World.Features.Add(new Tonemapper(harness.Renderer));
+            AssertAll(s_cleared, harness.Frame(view));
+            AssertAll(s_cleared, harness.Frame(view));
+            compiler.Gate.Set();
+            Assert.Equal(tonemapped, FrameUntilChanged(harness, view));
+        }
+        finally
+        {
+            compiler.Gate.Set();
+            harness.Dispose();
+        }
+    }
+
+    [Fact]
+    public void AHostEffectStillCompiling_PassesColourThrough_ThenApplies()
+    {
+        GatedCompiler compiler = new(TestCompiler.Shared) { GatedAxis = "_GATE", GatedValue = "true" };
+        RendererHarness harness = new(compiler, CompilePolicy.Async);
+        try
+        {
+            RenderView view = Cleared(harness);
+            FullscreenProgram invert = harness.Renderer.CreateFullscreenProgram("#pragma variant _GATE\nvoid main() { outColor = vec4(1.0 - Graphite_SampleSource(vUV).rgb, 1.0); }", variant: "#define _GATE 1");
+            harness.Owned.Add(invert);
+            harness.World.Features.Add(new Copy(invert));
+
+            // The first frame finds the program not ready as it draws, later ones leave the effect out
+            AssertAll(s_cleared, harness.Frame(view));
+            AssertAll(s_cleared, harness.Frame(view));
+            compiler.Gate.Set();
+            AssertAll(new Float3(1 - s_cleared.X, 1 - s_cleared.Y, 1 - s_cleared.Z), FrameUntilChanged(harness, view));
+        }
+        finally
+        {
+            compiler.Gate.Set();
+            harness.Dispose();
+        }
     }
 
     [Fact]
@@ -434,16 +554,17 @@ public sealed class PostStackTests : IDisposable
         AddBackdrop(new Float3(0.2f, 0.4f, 0.6f));
         Effect(new ScreenSpaceReflections(_renderer));
         Frame();
-        AssertAll(new Float3(0.2f, 0.4f, 0.6f), Frame());
+        AssertAll(new Float3(0.2f, 0.4f, 0.6f), Frame(), 2e-3f);
     }
 
     [Fact]
     public void Ssr_ReflectsWhatIsAboveAMirror()
     {
+        SkyOf(new Float3(0, 0, 0));
         AddMirror();
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 4, 9)) * Double4x4.CreateScale(new Double3(1, 0.5, 1)) }, [Unlit(new Float3(1, 0, 0))]);
         Float4[] plain = Frame();
-        Effect(new ScreenSpaceReflections(_renderer) { UseTemporal = false, UseFresnel = false, Normalization = false });
+        Effect(new ScreenSpaceReflections(_renderer) { UseTemporal = false, Normalization = false });
         Float4[] reflected = Frame();
         for (int y = 2; y < 6; y++)
         {
@@ -454,6 +575,157 @@ public sealed class PostStackTests : IDisposable
                 Assert.True(after.X > 0.35f && MathF.Abs(after.Y - 0.1f) < 0.02f, $"pixel {x}, {y} reflects {after}");
             }
         }
+    }
+
+    // A sky of one colour, captured at the views' exposure so the probes hold it as it is
+    private void SkyOf(Float3 color)
+    {
+        Material sky = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(SkySource)));
+        sky.SetColor("_Tint", new Float4(color.X, color.Y, color.Z, 1));
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = default, Fog = default, Sky = sky };
+    }
+
+    private static readonly Float3 s_mirrorReflectance = new(0.5f, 0.25f, 1);
+    private static readonly Float3 s_sky = new(0, 0.5f, 1);
+
+    private static bool OnMirror(int i) => i / Size is >= 2 and < 6 && i % Size is >= 4 and < 12;
+
+    private static float Distance(Float4 a, Float4 b) => MathF.Max(MathF.Max(MathF.Abs(a.X - b.X), MathF.Abs(a.Y - b.Y)), MathF.Max(MathF.Abs(a.Z - b.Z), MathF.Abs(a.W - b.W)));
+
+    [Fact]
+    public void Ssr_WithNoHits_LeavesTheProbeShading()
+    {
+        SkyOf(s_sky);
+        AddMirror(s_mirrorReflectance);
+        Frame();
+        Float4[] plain = Frame();
+        for (int i = 0; i < plain.Length; i++)
+        {
+            if (OnMirror(i))
+                Assert.True(plain[i].Z > 0.6f, $"pixel {i} shows no probes: {plain[i]}");
+        }
+
+        Effect(new ScreenSpaceReflections(_renderer));
+        Frame();
+        Frame();
+        Float4[] reflected = Frame();
+        for (int i = 0; i < plain.Length; i++)
+            Assert.True(Distance(plain[i], reflected[i]) < 2e-3f, $"pixel {i}: {plain[i]} became {reflected[i]}");
+    }
+
+    [Fact]
+    public void Ssr_SwapsTheProbesForTheTrace_ByTheStoredReflectance()
+    {
+        SkyOf(s_sky);
+        AddMirror(s_mirrorReflectance);
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 4, 9)) * Double4x4.CreateScale(new Double3(1, 0.5, 1)) }, [Unlit(new Float3(1, 0, 0))]);
+        Frame();
+        Float4[] plain = Frame();
+        Effect(new ScreenSpaceReflections(_renderer) { UseTemporal = false, Normalization = false });
+        Float4[] reflected = Frame();
+        Float3 R = s_mirrorReflectance;
+        for (int i = 0; i < plain.Length; i++)
+        {
+            if (!OnMirror(i))
+                continue;
+            Float4 before = plain[i], after = reflected[i];
+            Float3 probes = new(0, (before.Y - 0.1f) / R.Y, (before.Z - 0.1f) / R.Z);
+            Assert.True(MathF.Abs(before.X - 0.1f) < 1e-3f && probes.Z > 0.5f, $"pixel {i} is not the probe lit mirror: {before}");
+
+            // The trace holds only red, so green and blue keep the probes' share the trace left, the same in both, and red
+            // gains at most the reflectance times that confidence
+            float keptGreen = (after.Y - 0.1f) / (R.Y * probes.Y), keptBlue = (after.Z - 0.1f) / (R.Z * probes.Z);
+            float confidence = 1 - keptBlue;
+            Assert.True(confidence > 0.25f && confidence < 1.01f, $"pixel {i} reflects {after}");
+            Assert.True(MathF.Abs(keptGreen - keptBlue) < 0.05f, $"pixel {i}: green keeps {keptGreen}, blue {keptBlue}");
+            Assert.True(after.X > 0.1f + 0.1f * R.X && after.X < 0.1f + R.X * confidence + 0.01f, $"pixel {i}: red {after.X} at confidence {confidence}");
+        }
+    }
+
+    // Shows the scene's material target
+    private sealed class MaterialView(FullscreenProgram program, Sampler sampler) : RenderFeature(RenderSlot.HdrPost, sceneReads: SceneTargets.Material)
+    {
+        private readonly PropertySet _properties = new();
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.ReadScene();
+            builder.WriteColor();
+        }
+        public override void Render(FeatureContext context)
+        {
+            _properties.SetTexture("_Material", context.Material!, sampler);
+            context.Fullscreen(program, _properties);
+        }
+    }
+
+    private void ShowMaterialTarget()
+    {
+        FullscreenProgram program = _renderer.CreateFullscreenProgram("""
+            uniform sampler2D _Material;
+            void main() { outColor = texture(_Material, vUV); }
+            """, source: false);
+        _owned.Add(program);
+        _world.Features.Add(new MaterialView(program, _renderer.Resources.PointClamp));
+    }
+
+    // The test quad wound to face the camera, its normal toward it
+    private GpuMesh FacingQuad()
+    {
+        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
+        Float3[] normals = [new(0, 0, -1), new(0, 0, -1), new(0, 0, -1), new(0, 0, -1)];
+        return _renderer.CreateMesh(new MeshData
+        {
+            VertexCount = 4,
+            Streams =
+            [
+                new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() },
+                new VertexStream { Semantic = VertexSemantic.Normal, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(normals.AsSpan()).ToArray() },
+            ],
+            Indices = new uint[] { 0, 2, 1, 0, 3, 2 },
+        });
+    }
+
+    [Fact]
+    public void GBuffer_HoldsThePBRReflectanceAndRoughness()
+    {
+        Float3 albedo = new(0.8f, 0.5f, 0.2f);
+        const float metallic = 0.5f, roughness = 0.6f;
+        Material pbr = _renderer.CreateMaterial(_renderer.Standard.Lit);
+        pbr.SetColor("base_color", new Float4(albedo.X, albedo.Y, albedo.Z, 1));
+        pbr.SetFloat("base_metalness", metallic);
+        pbr.SetFloat("specular_roughness", roughness);
+        _world.Add(new RenderableDesc { Mesh = FacingQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) }, [pbr]);
+        ShowMaterialTarget();
+        Float4[] pixels = Frame();
+
+        // The view looks from the origin, so a pixel's NdotV is its depth over its distance. A dielectric at IOR 1.5
+        // beside a white edged metal, each weighted by the metalness.
+        ushort[] dfg = EnergyTables.EmbeddedDfg();
+        ushort[] dielectric = EnergyTables.EmbeddedDielectric();
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            System.Numerics.Vector3 p = new((i % Size + 0.5f) / Size * 8 - 4, (i / Size + 0.5f) / Size * 8 - 4, 10);
+            float mu = 10 / p.Length();
+            System.Numerics.Vector3 table = EnergyTables.LookupDfg(dfg, mu, roughness);
+            double dielectricE = EnergyTables.TurquinDielectric(table, EnergyTables.LookupDielectric(dielectric, mu, roughness, 1.5), 1.5);
+            float Expected(float c) => (float)((1 - metallic) * dielectricE + metallic * EnergyTables.TurquinMetal(table, c, 1, 1));
+            Float4 want = new(Expected(albedo.X), Expected(albedo.Y), Expected(albedo.Z), roughness);
+            Assert.True(Distance(want, pixels[i]) < 4e-3f, $"pixel {i}: want {want}, got {pixels[i]}");
+        }
+    }
+
+    [Fact]
+    public void GBuffer_HoldsNoReflectance_ForUnlitAndTheFallback()
+    {
+        Material unlit = _renderer.CreateMaterial(_renderer.Standard.Unlit);
+        Material fallback = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Fallback.shader")!)));
+        GpuMesh facing = FacingQuad();
+        _world.Add(new RenderableDesc { Mesh = facing, Transform = Double4x4.CreateTranslation(new Double3(-4, 0, 10)) }, [unlit]);
+        _world.Add(new RenderableDesc { Mesh = facing, Transform = Double4x4.CreateTranslation(new Double3(4, 0, 10)) }, [fallback]);
+        ShowMaterialTarget();
+        Float4[] pixels = Frame();
+        AssertAll(new Float3(0, 0, 0), pixels, 2e-3f);
+        Assert.All(pixels, p => Assert.Equal(1f, p.W));
     }
 
     // Red over the left half of the view at depth 10, black over the right half
@@ -479,8 +751,8 @@ public sealed class PostStackTests : IDisposable
         AssertColumn(still, 8, r => r == 0, "is black");
 
         // A unit right moves the edge two pixels left, and its motion smears it a pixel either way
-        ViewDesc moved = View();
-        moved.Layers[0] = moved.Layers[0] with { Position = new Double3(1, 0, 0) };
+        RenderView moved = View();
+        moved.Camera = new ViewCamera(moved.Camera.Layers[0] with { Position = new Double3(1, 0, 0) });
         Float4[] smeared = Frame(view: moved);
         AssertColumn(smeared, 3, r => r == 1, "is red");
         AssertColumn(smeared, 5, r => r > 0.05f && r < 0.95f, "is smeared");
@@ -515,7 +787,7 @@ public sealed class PostStackTests : IDisposable
     {
         // A dark quad over the lower half, bright sky above it, the sun ahead three units up the view
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, -4, 10)) }, [Unlit(new Float3(0.05f, 0.05f, 0.05f))]);
-        ViewDesc view = View();
+        RenderView view = View();
         view.ClearColor = new Float4(2, 2, 2, 1);
         Effect(new GodRays(_renderer));
         Float4[] sunless = Frame(view: view);
@@ -532,7 +804,7 @@ public sealed class PostStackTests : IDisposable
     {
         AddBackdrop(new Float3(0.2f, 0.3f, 0.1f));
         ColorGrading grading = Effect(new ColorGrading(_renderer) { PostExposure = 1 });
-        AssertAll(new Float3(0.4f, 0.6f, 0.2f), Frame());
+        AssertAll(new Float3(0.4f, 0.6f, 0.2f), Frame(), 2e-3f);
 
         _world.Features.Remove(grading);
         Effect(new Vignette(_renderer));
@@ -625,9 +897,15 @@ public sealed class PostStackTests : IDisposable
 
         using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 2, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 2 });
-        ViewDesc stereo = new() { World = _world, ViewId = 5, Target = layered, LayerCount = 2, Sky = false, ClearColor = new Float4(0, 0, 0, 1) };
+        RenderView stereo = _harness.BareView(5);
+        stereo.EV100 = UnitEV100;
+        stereo.Target = layered;
+        stereo.Sky = false;
+        stereo.ClearColor = new Float4(0, 0, 0, 1);
+        ViewLayer[] cameraLayers = new ViewLayer[2];
         for (int layer = 0; layer < 2; layer++)
-            stereo.Layers[layer] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = new Double3(layer * 0.5 - 0.25, 0, 0) };
+            cameraLayers[layer] = new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = new Double3(layer * 0.5 - 0.25, 0, 0) };
+        stereo.Camera = new ViewCamera(cameraLayers);
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { stereo }, Time = new FrameTime { DeltaTime = 1f / 60 } });
         _device.WaitForIdle();
         Assert.Empty(_errors);
@@ -639,8 +917,8 @@ public sealed class PostStackTests : IDisposable
             Float4[] got = _device.Map<Float4>(readback).ToArray();
             _device.Unmap(readback);
 
-            ViewDesc mono = View(10 + layer);
-            mono.Layers[0] = stereo.Layers[layer];
+            RenderView mono = View(10 + layer);
+            mono.Camera = new ViewCamera(stereo.Camera.Layers[layer]);
             Float4[] want = Frame(view: mono);
             Assert.True(want.Any(p => p.X > 0.05f) && want.Distinct().Count() > 4, $"layer {layer} shows too little");
             for (int i = 0; i < want.Length; i++)
@@ -654,7 +932,7 @@ public sealed class PostStackTests : IDisposable
         Float3 dim = new(0.4f, 0.5f, 0.3f);
         RenderableHandle backdrop = AddBackdrop(dim);
         Effect(new Bloom(_renderer) { Threshold = 1, SoftKnee = 0.5f, Intensity = 0.75f, Iterations = 3 });
-        AssertAll(dim, Frame());
+        AssertAll(dim, Frame(), 2e-3f);
 
         // A uniform colour blooms into itself: every level of the chain holds the prefiltered colour
         Float3 bright = new(1.2f, 2, 0.6f);
