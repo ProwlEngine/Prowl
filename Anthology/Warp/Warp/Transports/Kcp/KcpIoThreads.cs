@@ -75,8 +75,10 @@ internal sealed class KcpIoThreads : IDisposable
         _sender.Join();
     }
 
-    /// <summary>Takes the next received datagram, copying it into <paramref name="destination" />.</summary>
-    /// <param name="from">Where it came from, valid until the next call.</param>
+    /// <summary>
+    ///     Takes the next received datagram, copying it into <paramref name="destination" />. <paramref name="from" />
+    ///     is where it came from, valid until the next call.
+    /// </summary>
     public bool TryTake(Span<byte> destination, ref SocketAddress? from, out int length)
     {
         length = 0;

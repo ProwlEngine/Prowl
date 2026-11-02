@@ -136,9 +136,8 @@ internal sealed class KcpCipher : IDisposable
 
     /// <summary>
     ///     Checks and decrypts a sealed packet whose header is <paramref name="headerSize" /> bytes. False for
-    ///     anything forged, damaged or already seen.
+    ///     anything forged, damaged or already seen, and with <c>newestOnly</c> for anything older than the newest seen.
     /// </summary>
-    /// <param name="newestOnly">Also refuses packets older than the newest one seen, even unseen ones.</param>
     public bool Open(ReadOnlySpan<byte> packet, int headerSize, Span<byte> plain, out int length,
         bool newestOnly = false)
     {

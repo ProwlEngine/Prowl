@@ -316,9 +316,9 @@ public sealed class KcpConnection : Connection
 
     /// <summary>
     ///     Checks that a packet belongs to this session and, when encrypted, decrypts it. On success
-    ///     <paramref name="buffer" /> and <paramref name="length" /> describe the plain packet.
+    ///     <paramref name="buffer" /> and <paramref name="length" /> describe the plain packet. With
+    ///     <paramref name="newestOnly" />, only a packet newer than any seen passes, as a move to a new address requires.
     /// </summary>
-    /// <param name="newestOnly">Accept only a packet newer than any seen, as a move to a new address requires.</param>
     internal bool Authenticate(ref byte[] buffer, ref int length, bool newestOnly)
     {
         if (State != ConnectionState.Connected || length < KcpPacket.SessionHeaderSize ||
