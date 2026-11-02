@@ -724,6 +724,12 @@ public sealed class KcpTransport : Transport
     internal void SendSession(KcpConnection connection, KcpPacketType type, ReadOnlySpan<byte> prefix,
         ReadOnlySpan<byte> body, SocketAddress? to = null)
     {
+        // An encrypted session without its keys, such as one already closed, sends nothing rather than plaintext.
+        if (Settings.Encryption != null && connection.Cipher == null)
+        {
+            return;
+        }
+
         int length = KcpPacket.SessionHeaderSize + prefix.Length + body.Length;
         int sealedLength = length + (connection.Cipher != null ? KcpCipher.Overhead : 0);
         if (_sendBuffer.Length < sealedLength)

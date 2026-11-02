@@ -158,6 +158,23 @@ public class KcpEncryptionTests
     }
 
     [Fact]
+    public void AnEncryptedConnectionNeverSendsPlaintextOnceItsKeysAreGone()
+    {
+        using KcpTransport host = new(Options(new KcpEncryption()));
+        host.Listen();
+        using KcpTransport client = new(Options(new KcpEncryption()));
+        Pump pump = new(host, client);
+        Connection toHost = client.Connect($"127.0.0.1:{host.LocalPort}");
+        pump.Until(() => toHost.IsConnected, what: "connect");
+
+        KcpConnection closed = (KcpConnection)toHost;
+        closed.Disconnect();
+        long sent = closed.Stats.PacketsSent;
+        client.SendSession(closed, KcpPacketType.Ping, new byte[] { 1, 2, 3, 4 });
+        Assert.Equal(sent, closed.Stats.PacketsSent);
+    }
+
+    [Fact]
     public void AForgedAcceptDoesNotStopTheGenuineOne()
     {
         using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
