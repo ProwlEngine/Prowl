@@ -224,29 +224,29 @@ public abstract class Transport : IDisposable
         byte channel = 0)
     {
         (int count, long bytes) = _queuedData.GetValueOrDefault(connection);
-        if (!connection.IsConnected || count >= MaxQueuedDataEventsPerConnection ||
-            rentedBuffer.Length > MaxQueuedDataBytesPerConnection - bytes ||
-            rentedBuffer.Length > MaxQueuedDataBytes - _queuedDataBytes)
+        bool fits = connection.IsConnected && count < MaxQueuedDataEventsPerConnection &&
+                    rentedBuffer.Length <= MaxQueuedDataBytesPerConnection - bytes;
+
+        // When the transport as a whole is full, the connection holding the most pays for it.
+        while (fits && rentedBuffer.Length > MaxQueuedDataBytes - _queuedDataBytes)
+        {
+            Connection? largest = LargestQueue(connection, bytes + rentedBuffer.Length);
+            if (largest == null)
+            {
+                fits = false;
+            }
+            else
+            {
+                Overflow(largest);
+            }
+        }
+
+        if (!fits || !connection.IsConnected)
         {
             ArrayPool<byte>.Shared.Return(rentedBuffer);
             if (connection.IsConnected)
             {
-                OnReceiveQueueOverflow(connection);
-                // Release the offending peer's queued buffers immediately, preserving other peers' events.
-                int pendingCount = _events.Count;
-                for (int i = 0; i < pendingCount; i++)
-                {
-                    PendingEvent pending = _events.Dequeue();
-                    if (pending.Connection == connection && pending.Buffer != null)
-                    {
-                        RemoveQueuedData(pending);
-                        ArrayPool<byte>.Shared.Return(pending.Buffer);
-                    }
-                    else
-                    {
-                        _events.Enqueue(pending);
-                    }
-                }
+                Overflow(connection);
             }
 
             return;
@@ -260,6 +260,43 @@ public abstract class Transport : IDisposable
 
     /// <summary>Closes a peer that exhausted the receive queue budget.</summary>
     protected virtual void OnReceiveQueueOverflow(Connection connection) => connection.Disconnect();
+
+    /// <summary>The connection, other than <paramref name="except" />, queuing more than <paramref name="than" /> bytes the most.</summary>
+    private Connection? LargestQueue(Connection except, long than)
+    {
+        Connection? largest = null;
+        long most = than;
+        foreach ((Connection other, (int _, long queued)) in _queuedData)
+        {
+            if (other != except && queued > most)
+            {
+                largest = other;
+                most = queued;
+            }
+        }
+
+        return largest;
+    }
+
+    /// <summary>Closes a connection over its budget and releases its queued buffers, keeping other peers' events.</summary>
+    private void Overflow(Connection connection)
+    {
+        OnReceiveQueueOverflow(connection);
+        int pendingCount = _events.Count;
+        for (int i = 0; i < pendingCount; i++)
+        {
+            PendingEvent pending = _events.Dequeue();
+            if (pending.Connection == connection && pending.Buffer != null)
+            {
+                RemoveQueuedData(pending);
+                ArrayPool<byte>.Shared.Return(pending.Buffer);
+            }
+            else
+            {
+                _events.Enqueue(pending);
+            }
+        }
+    }
 
     private void RemoveQueuedData(PendingEvent pending)
     {

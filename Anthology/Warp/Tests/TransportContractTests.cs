@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 using Prowl.Warp.Transports.Kcp;
 using Prowl.Warp.Transports.Local;
@@ -132,6 +133,43 @@ public abstract class TransportContractTests : IDisposable
         pump.Until(() => pump.EventsOf(host).Any(e => e.Type == TransportEventType.Data),
             what: "reclaimed queue capacity");
         Assert.True(second.IsConnected);
+    }
+
+    [Fact]
+    public void GlobalQueueOverflowClosesTheConnectionHoldingTheMost()
+    {
+        (Transport host, _, _, Connection hog) = Connect();
+        Transport other = CreateClient();
+        Pump otherPump = new(host, other);
+        Connection small = other.Connect(AddressOf(host));
+        otherPump.Until(() => small.IsConnected && host.Connections.Count == 2, what: "second connect");
+        host.MaxQueuedDataBytes = 1024;
+
+        hog.Send(new byte[400], Delivery.Unreliable);
+        hog.Send(new byte[400], Delivery.Unreliable);
+        small.Send(new byte[100], Delivery.Unreliable);
+        Thread.Sleep(20);
+        host.Receive();
+
+        List<TransportEvent> events = new();
+        Connection? dataFrom = null;
+        int dataLength = 0;
+        while (host.Poll(out TransportEvent ev))
+        {
+            events.Add(ev);
+            if (ev.Type == TransportEventType.Data)
+            {
+                dataFrom = ev.Connection;
+                dataLength = ev.Data.Length;
+            }
+        }
+
+        Assert.Single(events, e => e.Type == TransportEventType.Data);
+        Assert.Equal(100, dataLength);
+        TransportEvent closed = Assert.Single(events, e => e.Type == TransportEventType.Disconnected);
+        Assert.Equal(DisconnectReason.ResourceLimit, closed.Reason);
+        Assert.NotSame(dataFrom, closed.Connection);
+        Assert.True(dataFrom!.IsConnected);
     }
 
     [Fact]
