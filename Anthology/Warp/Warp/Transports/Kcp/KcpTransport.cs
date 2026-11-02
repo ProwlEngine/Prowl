@@ -55,6 +55,8 @@ public sealed class KcpTransport : Transport
     private readonly List<KcpConnection> _unreachable = new();
     private int _incomingCount;
     private bool _listening;
+    private KcpIoThreads? _io;
+    private SocketAddress? _ioAddress;
     private SocketAddress? _receiveAddress;
     private byte[] _sendBuffer = Array.Empty<byte>();
     private Random? _simulationRandom;
@@ -92,6 +94,9 @@ public sealed class KcpTransport : Transport
     public override int LocalPort => (_socket?.LocalEndPoint as IPEndPoint)?.Port ?? 0;
 
     internal long NowMs => _clock.ElapsedMilliseconds;
+
+    /// <summary>Datagrams the receive thread has read that Receive has not handled yet.</summary>
+    internal int QueuedDatagrams => _io?.Count ?? 0;
 
     /// <exception cref="InvalidOperationException">The socket is already bound to a random port for outgoing connections.</exception>
     /// <exception cref="SocketException">The port is in use.</exception>
@@ -184,6 +189,18 @@ public sealed class KcpTransport : Transport
         }
 
         long now = NowMs;
+        if (_io != null)
+        {
+            for (int processed = 0;
+                 processed < Settings.MaxDatagramsPerReceive && _io.TryTake(_receiveBuffer, ref _ioAddress, out int length);
+                 processed++)
+            {
+                HandleDatagram(_ioAddress!, length, now);
+            }
+
+            return;
+        }
+
         for (int processed = 0; processed < Settings.MaxDatagramsPerReceive; processed++)
         {
             int length;
@@ -296,7 +313,11 @@ public sealed class KcpTransport : Transport
         // Simulated latency would otherwise swallow the disconnect packets just queued.
         SendDelayed(NowMs, true);
 
+        _io?.StopSending();
         _socket?.Dispose();
+        _io?.Dispose();
+        _io = null;
+        _ioAddress = null;
         _socket = null;
         _receiveAddress = null;
         _listening = false;
@@ -656,6 +677,12 @@ public sealed class KcpTransport : Transport
 
     private void SendNow(SocketAddress to, ReadOnlySpan<byte> datagram)
     {
+        if (_io != null)
+        {
+            _io.Send(to, datagram);
+            return;
+        }
+
         try
         {
             _socket?.SendTo(datagram, SocketFlags.None, to);
@@ -813,6 +840,11 @@ public sealed class KcpTransport : Transport
         }
 
         _socket = socket;
+        if (Settings.UseIoThreads)
+        {
+            _io = new KcpIoThreads(socket, Settings.Mtu, Settings.SocketBufferSize);
+        }
+
         _receiveAddress =
             new SocketAddress(socket.AddressFamily, SocketAddress.GetMaximumAddressSize(socket.AddressFamily));
         _sendBuffer = new byte[Settings.Mtu + KcpCipher.Overhead];

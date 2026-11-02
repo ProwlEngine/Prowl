@@ -122,7 +122,7 @@ public abstract class TransportContractTests : IDisposable
 
         toHost.Send(new byte[400], Delivery.Unreliable);
         toHost.Send(new byte[400], Delivery.Unreliable);
-        pump.Until(() => !host.Connections.Any(), what: "queue budget disconnect");
+        pump.Until(() => !host.Connections.Any() && !toHost.IsConnected, what: "queue budget disconnect");
         Assert.Single(pump.EventsOf(host), e => e.Type == TransportEventType.Disconnected);
         Assert.DoesNotContain(pump.EventsOf(host), e => e.Type == TransportEventType.Data);
 
@@ -360,9 +360,11 @@ public sealed class LocalTransportContractTests : TransportContractTests
     protected override string AddressOf(Transport host) => ((LocalTransport)host).Address;
 }
 
-public sealed class KcpTransportContractTests : TransportContractTests
+public class KcpTransportContractTests : TransportContractTests
 {
     protected override string UnreachableAddress => "not a valid host name";
+
+    protected virtual KcpTransportOptions Create() => Options();
 
     internal static KcpTransportOptions Options() => new()
     {
@@ -374,12 +376,23 @@ public sealed class KcpTransportContractTests : TransportContractTests
 
     protected override Transport CreateHost()
     {
-        KcpTransport host = Track(new KcpTransport(Options()));
+        KcpTransport host = Track(new KcpTransport(Create()));
         host.Listen();
         return host;
     }
 
-    protected override Transport CreateClient() => Track(new KcpTransport(Options()));
+    protected override Transport CreateClient() => Track(new KcpTransport(Create()));
 
     protected override string AddressOf(Transport host) => $"127.0.0.1:{((KcpTransport)host).LocalPort}";
+}
+
+/// <summary>The same contract, with sockets read and written on background threads.</summary>
+public sealed class ThreadedKcpTransportContractTests : KcpTransportContractTests
+{
+    protected override KcpTransportOptions Create()
+    {
+        KcpTransportOptions options = Options();
+        options.UseIoThreads = true;
+        return options;
+    }
 }

@@ -82,6 +82,12 @@ public sealed class KcpTransportOptions
     /// </summary>
     public KcpEncryption? Encryption { get; set; }
 
+    /// <summary>
+    ///     Reads and writes the socket on two background threads, so the thread that pumps the transport makes no
+    ///     socket calls. KCP, timers and events still run when you pump, on your thread. Off by default.
+    /// </summary>
+    public bool UseIoThreads { get; set; }
+
     /// <summary>Conservative memory budget for queued and unacknowledged reliable segments per peer.</summary>
     public long MaxPendingReliableBytes { get; set; } = 32 * 1024 * 1024;
 

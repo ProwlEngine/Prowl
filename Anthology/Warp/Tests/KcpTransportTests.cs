@@ -282,6 +282,36 @@ public class KcpTransportTests
     }
 
     [Fact]
+    public void IoThreadsReadTheSocketWhileTheGameThreadIsBusy()
+    {
+        KcpTransportOptions options = FastOptions();
+        options.UseIoThreads = true;
+        (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) = Connect(options, options);
+        using (host)
+        using (client)
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                toHost.Send(new byte[] { (byte)i }, Delivery.Unreliable);
+            }
+
+            pump.EventsOf(host).Clear();
+            Thread.Sleep(100);
+            Assert.True(host.QueuedDatagrams >= 10);
+
+            host.Receive();
+            int received = 0;
+            while (host.Poll(out TransportEvent ev))
+            {
+                received += ev.Type == TransportEventType.Data ? 1 : 0;
+            }
+
+            Assert.Equal(10, received);
+            Assert.Equal(0, host.QueuedDatagrams);
+        }
+    }
+
+    [Fact]
     public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
     {
         KcpTransportOptions options = FastOptions();
