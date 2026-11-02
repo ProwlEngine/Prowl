@@ -58,7 +58,7 @@ public class OptionsTests
         options.Simulation.PacketLoss = 1;
         transport.Options.Mtu = 600;
         Assert.Equal(1200, transport.Options.Mtu);
-        Assert.Equal(4096u, transport.Options.Reliability.ReceiveWindow);
+        Assert.Equal(256u, transport.Options.Reliability.ReceiveWindow);
         Assert.Equal(0.1, transport.Options.Simulation!.PacketLoss);
     }
 

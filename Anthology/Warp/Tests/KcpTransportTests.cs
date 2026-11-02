@@ -378,22 +378,86 @@ public class KcpTransportTests
             .Select(e => e.Data[0]));
     }
 
-    [Theory]
-    [InlineData(KcpPacket.WireVersion + 1, 4)]
-    [InlineData(KcpPacket.WireVersion, 3)]
-    public void HandshakesFromAnotherWireVersionOrChannelCountAreRejected(int version, int channels)
+    [Fact]
+    public void ReplayedRequestAndResponseDoNotReplaceRestartedSession()
     {
         using KcpTransport host = new(FastOptions());
         host.Listen();
         using Socket raw = RawSocket(host);
         Pump pump = new(host);
 
-        byte[] request = new byte[KcpPacket.HandshakeRequestSize];
-        request[0] = (byte)KcpPacketType.ConnectRequest;
-        BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(1), new KcpTransportOptions().ProtocolId);
-        BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(5), 0x5555);
+        byte[] firstResponse = RawHandshake(raw, pump, 0x1111, out _);
+        byte[] firstRequest = Request(0x1111);
+        RawHandshake(raw, pump, 0x2222, out _);
+        Connection restarted = Assert.Single(host.Connections);
+
+        raw.Send(firstRequest);
+        pump.For(100);
+        raw.Send(firstResponse);
+        pump.For(200);
+        Assert.Same(restarted, Assert.Single(host.Connections));
+        Assert.True(restarted.IsConnected);
+    }
+
+    [Fact]
+    public void ForgedPongDoesNotInflateRoundTripTime()
+    {
+        using KcpTransport host = new(FastOptions());
+        host.Listen();
+        using Socket raw = RawSocket(host);
+        Pump pump = new(host);
+        RawHandshake(raw, pump, 0x3333, out uint session);
+
+        byte[] pong = new byte[KcpPacket.PingSize];
+        pong[0] = (byte)KcpPacketType.Pong;
+        BinaryPrimitives.WriteUInt32LittleEndian(pong.AsSpan(1), session);
+        BinaryPrimitives.WriteUInt32LittleEndian(pong.AsSpan(KcpPacket.SessionHeaderSize), 0xF000_0000);
+        raw.Send(pong);
+        pump.For(100);
+
+        Assert.True(Assert.Single(host.Connections).RoundTripTime < TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public void SpoofedRequestsDoNotBlockAGenuineRestart()
+    {
+        using KcpTransport host = new(FastOptions());
+        host.Listen();
+        using Socket raw = RawSocket(host);
+        Pump pump = new(host);
+
+        RawHandshake(raw, pump, 0x1111, out _);
+        Connection first = Assert.Single(host.Connections);
+
+        raw.Send(Request(0x2222));
+        byte[] challenge = Expect(raw, pump, KcpPacketType.Challenge);
+        raw.Send(Request(0x9999));
+        pump.For(100);
+        raw.Send(Response(Request(0x2222), challenge));
+        Expect(raw, pump, KcpPacketType.Accept);
+
+        Connection restarted = Assert.Single(host.Connections);
+        Assert.NotSame(first, restarted);
+        Assert.True(restarted.IsConnected);
+    }
+
+    [Theory]
+    [InlineData(KcpPacket.WireVersion + 1, 4, 1200, 256)]
+    [InlineData(KcpPacket.WireVersion, 3, 1200, 256)]
+    [InlineData(KcpPacket.WireVersion, 4, 1000, 256)]
+    [InlineData(KcpPacket.WireVersion, 4, 1200, 128)]
+    public void HandshakesWithOtherSettingsAreRejected(int version, int channels, int mtu, int window)
+    {
+        using KcpTransport host = new(FastOptions());
+        host.Listen();
+        using Socket raw = RawSocket(host);
+        Pump pump = new(host);
+
+        byte[] request = Request(0x5555);
         request[KcpPacket.HandshakeVersionOffset] = (byte)version;
-        request[KcpPacket.HandshakeVersionOffset + 1] = (byte)channels;
+        request[KcpPacket.HandshakeChannelsOffset] = (byte)channels;
+        BinaryPrimitives.WriteUInt16LittleEndian(request.AsSpan(KcpPacket.HandshakeMtuOffset), (ushort)mtu);
+        BinaryPrimitives.WriteUInt16LittleEndian(request.AsSpan(KcpPacket.HandshakeWindowOffset), (ushort)window);
         raw.Send(request);
 
         byte[] reject = Expect(raw, pump, KcpPacketType.Reject);
@@ -401,11 +465,16 @@ public class KcpTransportTests
         Assert.Empty(host.Connections);
     }
 
-    [Fact]
-    public void ClientsWithAnotherChannelCountAreRefused()
+    [Theory]
+    [InlineData(2, 1200, 256u)]
+    [InlineData(4, 1000, 256u)]
+    [InlineData(4, 1200, 128u)]
+    public void ClientsWithOtherSettingsAreRefused(int channels, int mtu, uint window)
     {
         KcpTransportOptions clientOptions = FastOptions();
-        clientOptions.Channels = 2;
+        clientOptions.Channels = channels;
+        clientOptions.Mtu = mtu;
+        clientOptions.Reliability.ReceiveWindow = window;
         using KcpTransport host = new(FastOptions());
         host.Listen();
         using KcpTransport client = new(clientOptions);
@@ -447,22 +516,41 @@ public class KcpTransportTests
     /// <summary>Runs the client half of the handshake by hand, returning the ChallengeResponse it sent.</summary>
     private static byte[] RawHandshake(Socket raw, Pump pump, uint nonce, out uint session)
     {
-        byte[] request = new byte[KcpPacket.HandshakeRequestSize];
-        request[0] = (byte)KcpPacketType.ConnectRequest;
-        BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(1), new KcpTransportOptions().ProtocolId);
-        BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(5), nonce);
-        request[KcpPacket.HandshakeVersionOffset] = KcpPacket.WireVersion;
-        request[KcpPacket.HandshakeVersionOffset + 1] = (byte)new KcpTransportOptions().Channels;
+        byte[] request = Request(nonce);
         raw.Send(request);
         byte[] challenge = Expect(raw, pump, KcpPacketType.Challenge);
 
-        byte[] response = (byte[])request.Clone();
-        response[0] = (byte)KcpPacketType.ChallengeResponse;
-        challenge.AsSpan(5, KcpPacket.CookieSize).CopyTo(response.AsSpan(9));
+        byte[] response = Response(request, challenge);
         raw.Send(response);
         byte[] accept = Expect(raw, pump, KcpPacketType.Accept);
         Assert.Equal(nonce, BinaryPrimitives.ReadUInt32LittleEndian(accept.AsSpan(1)));
         session = BinaryPrimitives.ReadUInt32LittleEndian(accept.AsSpan(5));
+        return response;
+    }
+
+    /// <summary>A ConnectRequest with the default settings.</summary>
+    private static byte[] Request(uint nonce)
+    {
+        KcpTransportOptions defaults = new();
+        byte[] request = new byte[KcpPacket.HandshakeRequestSize];
+        request[0] = (byte)KcpPacketType.ConnectRequest;
+        BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(1), defaults.ProtocolId);
+        BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(5), nonce);
+        request[KcpPacket.HandshakeVersionOffset] = KcpPacket.WireVersion;
+        request[KcpPacket.HandshakeChannelsOffset] = (byte)defaults.Channels;
+        BinaryPrimitives.WriteUInt16LittleEndian(request.AsSpan(KcpPacket.HandshakeMtuOffset), (ushort)defaults.Mtu);
+        BinaryPrimitives.WriteUInt16LittleEndian(request.AsSpan(KcpPacket.HandshakeWindowOffset),
+            (ushort)defaults.Reliability.ReceiveWindow);
+        return request;
+    }
+
+    /// <summary>The ChallengeResponse answering <paramref name="challenge" /> for <paramref name="request" />.</summary>
+    private static byte[] Response(byte[] request, byte[] challenge)
+    {
+        byte[] response = (byte[])request.Clone();
+        response[0] = (byte)KcpPacketType.ChallengeResponse;
+        challenge.AsSpan(9, KcpPacket.CookieSize).CopyTo(response.AsSpan(9));
+        challenge.AsSpan(5, 4).CopyTo(response.AsSpan(KcpPacket.HandshakeIssuedOffset));
         return response;
     }
 

@@ -10,11 +10,12 @@ namespace Prowl.Warp.Transports.Kcp;
 ///     <para>Wire format, all integers little-endian:</para>
 ///     <code>
 /// Handshake (before a session exists)
-///   ConnectRequest     [type][u32 protocolId][u32 nonce][16 zero bytes][u8 wireVersion][u8 channels]
+///   ConnectRequest     [type][u32 protocolId][u32 nonce][16 zero bytes][settings][4 zero bytes]
 ///                                                                         padded to 64 bytes
-///   Challenge          [type][u32 nonce][16 byte cookie]                 21 bytes
-///   ChallengeResponse  [type][u32 protocolId][u32 nonce][16 byte cookie][u8 wireVersion][u8 channels]
+///   Challenge          [type][u32 nonce][u32 issued][16 byte cookie]     25 bytes
+///   ChallengeResponse  [type][u32 protocolId][u32 nonce][16 byte cookie][settings][u32 issued]
 ///                                                                         padded to 64 bytes
+///   settings           [u8 wireVersion][u8 channels][u16 mtu][u16 receiveWindow]
 ///   Accept             [type][u32 nonce][u32 sessionId]                  9 bytes
 ///   Reject             [type][u32 nonce][u8 DisconnectReason]            6 bytes
 /// 
@@ -36,7 +37,9 @@ namespace Prowl.Warp.Transports.Kcp;
 ///     <para>
 ///         Each reliable channel has its own KCP conversation, so channels never wait on each other. Channel 0,
 ///         which carries most traffic, is implied by its packet type rather than spending a byte on it.
-///         A host rejects a handshake whose wire version or channel count differs from its own.
+///         A host rejects a handshake whose settings differ from its own. The cookie covers the time the host
+///         issued it, so a host can tell a restart that began after the current session from a replay of an
+///         older handshake.
 ///     </para>
 /// </remarks>
 internal enum KcpPacketType : byte
@@ -67,17 +70,24 @@ internal static class KcpPacket
     public const int ChannelHeaderSize = SessionHeaderSize + 1;
 
     /// <summary>Bumped whenever the datagram format changes, so mismatched builds refuse each other.</summary>
-    public const byte WireVersion = 3;
+    public const byte WireVersion = 4;
 
-    /// <summary>Where a handshake request carries <see cref="WireVersion" />, then the channel count.</summary>
+    /// <summary>Where a handshake request carries <see cref="WireVersion" />, then the rest of its settings.</summary>
     public const int HandshakeVersionOffset = 9 + CookieSize;
+
+    public const int HandshakeChannelsOffset = HandshakeVersionOffset + 1;
+    public const int HandshakeMtuOffset = HandshakeVersionOffset + 2;
+    public const int HandshakeWindowOffset = HandshakeVersionOffset + 4;
+
+    /// <summary>Where a ChallengeResponse echoes the time its cookie was issued.</summary>
+    public const int HandshakeIssuedOffset = HandshakeVersionOffset + 6;
 
     public const int CookieSize = 16;
 
     /// <summary>Size of ConnectRequest and ChallengeResponse, which must exceed every reply.</summary>
     public const int HandshakeRequestSize = 64;
 
-    public const int ChallengeSize = 1 + 4 + CookieSize;
+    public const int ChallengeSize = 1 + 4 + 4 + CookieSize;
     public const int AcceptSize = 1 + 4 + 4;
     public const int RejectSize = 1 + 4 + 1;
     public const int PingSize = SessionHeaderSize + 4;

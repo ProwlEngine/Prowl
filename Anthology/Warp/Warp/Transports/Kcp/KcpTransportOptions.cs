@@ -160,9 +160,10 @@ public sealed class KcpReliabilityOptions
 
     /// <summary>
     ///     Receive window, in segments. Also caps the largest reliable message, which can span at most
-    ///     this many segments (and never more than 255).
+    ///     this many segments (and never more than 255). A peer can make each channel hold up to a window of
+    ///     segments, so this bounds the memory one connection can pin. Both ends must use the same value.
     /// </summary>
-    public uint ReceiveWindow { get; set; } = 4096;
+    public uint ReceiveWindow { get; set; } = 256;
 
     /// <summary>How many times one segment may be resent without being acknowledged before the connection is considered dead.</summary>
     public uint MaxRetransmits { get; set; } = 40;

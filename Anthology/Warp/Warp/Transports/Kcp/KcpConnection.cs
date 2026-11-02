@@ -15,6 +15,7 @@ public sealed class KcpConnection : Connection
     private readonly byte[] _cookie = new byte[KcpPacket.CookieSize];
     private readonly KcpTransportOptions _options;
     private readonly KcpTransport _transport;
+    private uint _cookieIssued;
     private bool _hasCookie;
     private bool _hasRtt;
     private long _lastReceiveMs;
@@ -44,11 +45,8 @@ public sealed class KcpConnection : Connection
     /// <summary>Picked by the client, echoed through the handshake so both sides know which attempt a packet belongs to.</summary>
     internal uint ClientNonce { get; init; }
 
-    /// <summary>
-    ///     Host side: the nonce of a newer ConnectRequest from this address, the only attempt allowed to
-    ///     replace this session.
-    /// </summary>
-    internal uint? RestartNonce { get; set; }
+    /// <summary>When the session started, on the transport's clock. Handshakes issued before it cannot replace it.</summary>
+    internal long SessionStartMs { get; private set; }
 
     /// <summary>Picked by the host on Accept. Tags every session packet, and doubles as the KCP conversation id.</summary>
     internal uint SessionId { get; set; }
@@ -115,6 +113,7 @@ public sealed class KcpConnection : Connection
         _reliable = new Protocol.Kcp?[_options.Channels];
         Reliable(0);
 
+        SessionStartMs = now;
         _lastReceiveMs = now;
         _nextPingMs = now;
     }
@@ -176,9 +175,10 @@ public sealed class KcpConnection : Connection
                     ReadNonce(packet) == ClientNonce)
                 {
                     RecordPacketReceived(length);
-                    packet.Slice(5, KcpPacket.CookieSize).CopyTo(_cookie);
+                    _cookieIssued = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
+                    packet.Slice(9, KcpPacket.CookieSize).CopyTo(_cookie);
                     _hasCookie = true;
-                    _transport.SendChallengeResponse(this, _cookie);
+                    _transport.SendChallengeResponse(this, _cookie, _cookieIssued);
                     _nextHandshakeMs = now + (long)_options.HandshakeResendInterval.TotalMilliseconds;
                 }
 
@@ -254,7 +254,12 @@ public sealed class KcpConnection : Connection
             case KcpPacketType.Pong:
                 if (body.Length >= 4)
                 {
-                    AddRttSample((uint)now - BinaryPrimitives.ReadUInt32LittleEndian(body));
+                    // Ignores echoes older than the timeout, which only a forged Pong can carry.
+                    uint sample = (uint)now - BinaryPrimitives.ReadUInt32LittleEndian(body);
+                    if (sample <= _options.Timeout.TotalMilliseconds)
+                    {
+                        AddRttSample(sample);
+                    }
                 }
 
                 break;
@@ -281,7 +286,7 @@ public sealed class KcpConnection : Connection
             {
                 if (_hasCookie)
                 {
-                    _transport.SendChallengeResponse(this, _cookie);
+                    _transport.SendChallengeResponse(this, _cookie, _cookieIssued);
                 }
                 else
                 {

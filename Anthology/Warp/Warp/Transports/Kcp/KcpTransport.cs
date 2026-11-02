@@ -31,8 +31,8 @@ public sealed class KcpTransport : Transport
     // otherwise let one vanished client break the host's receive loop. This turns that off.
     private const int SioUdpConnReset = unchecked((int)0x9800000C);
 
-    // How often the cookie key rotates. A cookie is accepted for one to two of these.
-    private const long CookieWindowMs = 10_000;
+    // How long a cookie stays valid after the host issues it.
+    private const uint CookieLifetimeMs = 20_000;
 
     // Disconnect packets are unreliable, so send a few and hope one lands. The remote end times out otherwise.
     private const int DisconnectRepeats = 3;
@@ -303,7 +303,7 @@ public sealed class KcpTransport : Transport
         switch ((KcpPacketType)packet[0])
         {
             case KcpPacketType.ConnectRequest:
-                HandleConnectRequest(from, packet, out _);
+                HandleConnectRequest(from, packet);
                 break;
 
             case KcpPacketType.ChallengeResponse:
@@ -312,33 +312,33 @@ public sealed class KcpTransport : Transport
         }
     }
 
-    private bool HandleConnectRequest(SocketAddress from, ReadOnlySpan<byte> packet, out uint nonce)
+    private void HandleConnectRequest(SocketAddress from, ReadOnlySpan<byte> packet)
     {
-        nonce = 0;
         if (packet.Length != KcpPacket.HandshakeRequestSize ||
             BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != Settings.ProtocolId)
         {
-            return false;
+            return;
         }
 
-        nonce = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
-        if (!MatchesVersion(packet))
+        uint nonce = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
+        if (!MatchesSettings(packet))
         {
             SendReject(from, nonce, DisconnectReason.ProtocolError);
-            return false;
+            return;
         }
 
+        uint issued = (uint)NowMs;
         Span<byte> reply = stackalloc byte[KcpPacket.ChallengeSize];
         reply[0] = (byte)KcpPacketType.Challenge;
         BinaryPrimitives.WriteUInt32LittleEndian(reply[1..], nonce);
-        ComputeCookie(from, nonce, NowMs / CookieWindowMs, reply[5..]);
+        BinaryPrimitives.WriteUInt32LittleEndian(reply[5..], issued);
+        ComputeCookie(from, nonce, issued, reply[9..]);
         SendRaw(null, from, reply);
-        return true;
     }
 
     private void HandleChallengeResponse(SocketAddress from, ReadOnlySpan<byte> packet, long now)
     {
-        if (!TryReadChallengeResponse(from, packet, out uint nonce))
+        if (!TryReadChallengeResponse(from, packet, out uint nonce, out _))
         {
             return;
         }
@@ -375,15 +375,11 @@ public sealed class KcpTransport : Transport
         switch ((KcpPacketType)packet[0])
         {
             case KcpPacketType.ConnectRequest:
-                if (HandleConnectRequest(remote, packet, out uint requestNonce) && requestNonce != connection.ClientNonce)
-                {
-                    connection.RestartNonce = requestNonce;
-                }
-
+                HandleConnectRequest(remote, packet);
                 break;
 
             case KcpPacketType.ChallengeResponse:
-                if (!TryReadChallengeResponse(remote, packet, out uint nonce))
+                if (!TryReadChallengeResponse(remote, packet, out uint nonce, out uint issued))
                 {
                     return;
                 }
@@ -394,9 +390,9 @@ public sealed class KcpTransport : Transport
                     return;
                 }
 
-                // Only the attempt that asked to restart since this session began may replace it. Anything
-                // else is a delayed or replayed response from an attempt that is already over.
-                if (nonce != connection.RestartNonce)
+                // Only an attempt that began after this session started may replace it. An older cookie is a
+                // delayed or replayed handshake from an attempt that is already over.
+                if ((int)(issued - (uint)connection.SessionStartMs) < 0)
                 {
                     return;
                 }
@@ -408,41 +404,44 @@ public sealed class KcpTransport : Transport
         }
     }
 
-    private bool TryReadChallengeResponse(SocketAddress from, ReadOnlySpan<byte> packet, out uint nonce)
+    private bool TryReadChallengeResponse(SocketAddress from, ReadOnlySpan<byte> packet, out uint nonce,
+        out uint issued)
     {
         nonce = 0;
+        issued = 0;
         if (packet.Length != KcpPacket.HandshakeRequestSize ||
-            BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != Settings.ProtocolId || !MatchesVersion(packet))
+            BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != Settings.ProtocolId || !MatchesSettings(packet))
         {
             return false;
         }
 
         nonce = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
-        ReadOnlySpan<byte> cookie = packet.Slice(9, KcpPacket.CookieSize);
-
-        // Accept cookies from this key window and the one before, so a handshake that straddles a
-        // rotation still succeeds.
-        long window = NowMs / CookieWindowMs;
-        Span<byte> expected = stackalloc byte[KcpPacket.CookieSize];
-        ComputeCookie(from, nonce, window, expected);
-        if (CryptographicOperations.FixedTimeEquals(cookie, expected))
+        issued = BinaryPrimitives.ReadUInt32LittleEndian(packet[KcpPacket.HandshakeIssuedOffset..]);
+        if ((uint)NowMs - issued >= CookieLifetimeMs)
         {
-            return true;
+            return false;
         }
 
-        ComputeCookie(from, nonce, window - 1, expected);
-        return CryptographicOperations.FixedTimeEquals(cookie, expected);
+        Span<byte> expected = stackalloc byte[KcpPacket.CookieSize];
+        ComputeCookie(from, nonce, issued, expected);
+        return CryptographicOperations.FixedTimeEquals(packet.Slice(9, KcpPacket.CookieSize), expected);
     }
 
-    /// <summary>Whether a handshake request comes from a build with this wire format and channel count.</summary>
-    private bool MatchesVersion(ReadOnlySpan<byte> packet) =>
+    /// <summary>Whether a handshake request comes from a build with the same wire format and connection settings.</summary>
+    private bool MatchesSettings(ReadOnlySpan<byte> packet) =>
         packet[KcpPacket.HandshakeVersionOffset] == KcpPacket.WireVersion &&
-        packet[KcpPacket.HandshakeVersionOffset + 1] == Settings.Channels;
+        packet[KcpPacket.HandshakeChannelsOffset] == Settings.Channels &&
+        BinaryPrimitives.ReadUInt16LittleEndian(packet[KcpPacket.HandshakeMtuOffset..]) == Settings.Mtu &&
+        BinaryPrimitives.ReadUInt16LittleEndian(packet[KcpPacket.HandshakeWindowOffset..]) ==
+        Settings.Reliability.ReceiveWindow;
 
-    private void WriteVersion(Span<byte> packet)
+    private void WriteSettings(Span<byte> packet)
     {
         packet[KcpPacket.HandshakeVersionOffset] = KcpPacket.WireVersion;
-        packet[KcpPacket.HandshakeVersionOffset + 1] = (byte)Settings.Channels;
+        packet[KcpPacket.HandshakeChannelsOffset] = (byte)Settings.Channels;
+        BinaryPrimitives.WriteUInt16LittleEndian(packet[KcpPacket.HandshakeMtuOffset..], (ushort)Settings.Mtu);
+        BinaryPrimitives.WriteUInt16LittleEndian(packet[KcpPacket.HandshakeWindowOffset..],
+            (ushort)Settings.Reliability.ReceiveWindow);
     }
 
     private void SendReject(SocketAddress to, uint nonce, DisconnectReason reason)
@@ -454,12 +453,12 @@ public sealed class KcpTransport : Transport
         SendRaw(null, to, reject);
     }
 
-    private void ComputeCookie(SocketAddress address, uint nonce, long window, Span<byte> destination)
+    private void ComputeCookie(SocketAddress address, uint nonce, uint issued, Span<byte> destination)
     {
-        Span<byte> input = stackalloc byte[address.Size + 12];
+        Span<byte> input = stackalloc byte[address.Size + 8];
         address.Buffer.Span[..address.Size].CopyTo(input);
         BinaryPrimitives.WriteUInt32LittleEndian(input[address.Size..], nonce);
-        BinaryPrimitives.WriteInt64LittleEndian(input[(address.Size + 4)..], window);
+        BinaryPrimitives.WriteUInt32LittleEndian(input[(address.Size + 4)..], issued);
 
         Span<byte> hash = stackalloc byte[32];
         HMACSHA256.HashData(_cookieKey, input, hash);
@@ -475,11 +474,11 @@ public sealed class KcpTransport : Transport
         packet[0] = (byte)KcpPacketType.ConnectRequest;
         BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], Settings.ProtocolId);
         BinaryPrimitives.WriteUInt32LittleEndian(packet[5..], connection.ClientNonce);
-        WriteVersion(packet);
+        WriteSettings(packet);
         SendRaw(connection, connection.RemoteAddress!, packet);
     }
 
-    internal void SendChallengeResponse(KcpConnection connection, ReadOnlySpan<byte> cookie)
+    internal void SendChallengeResponse(KcpConnection connection, ReadOnlySpan<byte> cookie, uint issued)
     {
         Span<byte> packet = stackalloc byte[KcpPacket.HandshakeRequestSize];
         packet.Clear();
@@ -487,7 +486,8 @@ public sealed class KcpTransport : Transport
         BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], Settings.ProtocolId);
         BinaryPrimitives.WriteUInt32LittleEndian(packet[5..], connection.ClientNonce);
         cookie.CopyTo(packet[9..]);
-        WriteVersion(packet);
+        WriteSettings(packet);
+        BinaryPrimitives.WriteUInt32LittleEndian(packet[KcpPacket.HandshakeIssuedOffset..], issued);
         SendRaw(connection, connection.RemoteAddress!, packet);
     }
 
