@@ -135,9 +135,9 @@ standard ones, replacing any of the same name.
 
 Graphite/Lit is OpenPBR Surface v1.1.1. Its properties are the spec's parameters under their spec names, such as
 `base_color`, `specular_roughness` and `coat_weight`, and engine extensions under plain names: `ambient_occlusion`,
-`normal_scale`, `coat_normal_scale`, `height_scale`, `tangent_rotation` and `alpha_cutoff`. Every texturable input `X` has a map
+`ambient_occlusion_map_strength`, `normal_scale`, `coat_normal_scale`, `height_scale`, `tangent_rotation` and `alpha_cutoff`. Every texturable input `X` has a map
 `X_map`, and `geometry_normal_map`, `geometry_coat_normal_map` and `geometry_tangent_map` feed the frame. The input is `X` times
-its map wherever the map is set. A map's channel, UV set, scale and offset are part of its texture value, set with
+its map wherever the map is set, with the occlusion map first blended from white by `ambient_occlusion_map_strength`. A map's channel, UV set, scale and offset are part of its texture value, set with
 `Material.SetTextureChannel`, `SetTextureUVSet` and `SetTextureScaleOffset`. Transparent PBR surfaces write
 premultiplied colour with `geometry_opacity` as coverage. Its Forward, Transmission and Debug passes are tagged
 `"Output" = "Premultiplied"`, so `SurfaceSettings` blends them with premultiplied factors whichever `SurfaceBlend` is set:

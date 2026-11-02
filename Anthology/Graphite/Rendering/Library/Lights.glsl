@@ -1,7 +1,9 @@
 // Forward lighting from lights: local lights from the H-Forward trees and directional lights from the world's buffer
 // with the sun first. Directional lights are in lux, points and spots in candela, rects, disks and tubes in nits.
-// Spheres, tubes, rects and disks light diffuse by their luminance times their cosine weighted solid angle and specular
-// from their most representative point, the lobe widened by the light's size so their energy stays right. A surface
+// Spheres, tubes, rects and disks light diffuse by their luminance times their cosine weighted solid angle. Spheres light
+// specular from their most representative point, the lobe widened by the light's size so their energy stays right. Tubes,
+// rects and disks give the share of each specular lobe they cover, by linearly transformed cosines, which the surface
+// weights by the lobe's albedo, see Graphite/Ltc.glsl. A surface
 // model walks the lights itself, giving each its Graphite_LightFrame and shading the Graphite_LightContribution it gets
 // back. Everything these return is pre-exposed by Graphite_Exposure().
 //
@@ -14,6 +16,7 @@
 #include "Graphite/Shadows.glsl"
 #include "Graphite/Textures.glsl"
 #include "Graphite/Directional.glsl"
+#include "Graphite/Ltc.glsl"
 
 // Contact hardening is compiled in while a light of the world uses it
 #pragma variant global GRAPHITE_CONTACT_SHADOWS
@@ -198,6 +201,7 @@ struct Graphite_LightContribution
     float diffuseBack;       // as diffuse on the back, the normal flipped
 #endif
     float attenuation;       // irradiance per unit radiance facing the light
+    bool  shareSpecular;     // specular and coat are the shares of their lobes the light covers, for the surface to weight by each lobe's albedo
 };
 
 // A smooth window, reaching zero at the range
@@ -309,20 +313,6 @@ vec3 Graphite_SpherePoint(vec3 center, float radius, vec3 R)
     return center + toRay * clamp(radius / max(length(toRay), 1e-6), 0.0, 1.0);
 }
 
-// The point of a rect or disk nearest where the ray along R meets its plane, center relative, facing n
-vec3 Graphite_PlanePoint(vec3 center, vec3 n, vec3 right, vec3 up, vec2 halfSize, bool disk, vec3 R)
-{
-    float facing = dot(R, n);
-    vec3 hit = facing < -1e-4 ? R * (dot(center, n) / facing) : center + (R - n * facing) * 1e4;
-    vec3 local = hit - center;
-    vec2 p = vec2(dot(local, right), dot(local, up));
-    if (disk)
-        p *= min(1.0, halfSize.x / max(length(p), 1e-6));
-    else
-        p = clamp(p, -halfSize, halfSize);
-    return center + right * p.x + up * p.y;
-}
-
 // A sphere's specular for one lobe from its point nearest the lobe's reflected ray
 float graphite_SphereSpecular(vec3 toLight, float radius, float dist, float attenuation, vec3 N, vec3 V, float alpha, out vec3 L)
 {
@@ -332,34 +322,28 @@ float graphite_SphereSpecular(vec3 toLight, float radius, float dist, float atte
     return max(dot(N, L), 0.0) * attenuation * Graphite_AreaEnergy(alpha, extent, extent);
 }
 
-// A tube's specular for one lobe: the point of the segment from a along ab nearest the reflected ray, then of the capsule
-// around it, seen with its projected area
-float graphite_TubeSpecular(vec3 a, vec3 ab, vec3 direction, float radius, float tubeLength, float window, vec3 N, vec3 V, float alpha, out vec3 L, out vec2 extent)
+// The share of a lobe a rect or disk of half axes hx and hy around center covers
+float graphite_LtcShape(vec3 center, vec3 hx, vec3 hy, bool disk, vec3 N, vec3 V, float alpha)
 {
-    vec3 R = reflect(-V, N);
-    float rab = dot(R, ab);
-    float t = clamp((dot(R, a) * rab - dot(a, ab)) / max(dot(ab, ab) - rab * rab, 1e-8), 0.0, 1.0);
-    vec3 onLine = a + ab * t;
-    vec3 p = Graphite_SpherePoint(onLine, radius, R);
-    L = dot(p, p) > 1e-12 ? normalize(p) : N;
-    float lineDist = max(length(onLine), 1e-4);
-    float along = dot(onLine, direction) / lineDist;
-    float projected = 2.0 * radius * tubeLength * sqrt(max(1.0 - along * along, 0.0)) + GRAPHITE_PI * radius * radius;
-    extent = vec2(radius / (2.0 * lineDist), tubeLength / (GRAPHITE_PI * lineDist));
-    return max(dot(N, L), 0.0) * projected * window / max(dot(onLine, onLine), 0.01) * Graphite_AreaEnergy(alpha, extent.x, extent.y);
+    mat3 space = Graphite_LtcSpace(N, V, alpha);
+    vec3 c = space * center, x = space * hx, y = space * hy;
+    return disk ? Graphite_LtcDisk(c, x, y) : Graphite_LtcQuad(c - x - y, c + x - y, c + x + y, c - x + y);
 }
 
-// A rect or disk's specular for one lobe from its point nearest where the reflected ray meets its plane
-float graphite_PlaneSpecular(vec3 center, vec3 n, vec3 right, vec3 up, vec2 halfSize, vec2 size, bool disk, float area, float window,
-                             vec3 N, vec3 V, float alpha, out vec3 L, out vec2 extent)
+// A cap of a tube as a small half sphere at its end p, half of pi r^2 seen from any side
+float graphite_LtcCap(mat3 space, vec3 p, float radius)
 {
-    vec3 p = Graphite_PlanePoint(center, n, right, up, halfSize, disk, reflect(-V, N));
-    float pDist2 = max(dot(p, p), 1e-8);
-    float pDist = sqrt(pDist2);
-    L = p / pDist;
-    float pFront = max(dot(-L, n), 0.0);
-    extent = disk ? vec2(halfSize.x / (2.0 * pDist)) : size / (2.0 * sqrt(GRAPHITE_PI) * pDist);
-    return max(dot(N, L), 0.0) * area * pFront * window / max(pDist2, 0.01) * Graphite_AreaEnergy(alpha, extent.x, extent.y);
+    float p2 = max(dot(p, p), 1e-8);
+    return Graphite_LtcDensity(space, p * inversesqrt(p2)) * 0.5 * GRAPHITE_PI * radius * radius / p2;
+}
+
+// The share of a lobe a capsule from a to b covers: its side as a strip across the view of it two radii wide, then its caps
+float graphite_LtcTube(vec3 a, vec3 b, vec3 direction, float radius, vec3 N, vec3 V, float alpha)
+{
+    vec3 across = cross(direction, a + b);
+    across = dot(across, across) > 1e-12 ? normalize(across) : normalize(cross(direction, abs(direction.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+    mat3 space = Graphite_LtcSpace(N, V, alpha);
+    return Graphite_LtcStrip(space * a, space * b, space * (across * (2.0 * radius))) + graphite_LtcCap(space, a, radius) + graphite_LtcCap(space, b, radius);
 }
 
 // The cookie and profile in a point or spot's own space, w the direction from it to the surface
@@ -426,6 +410,7 @@ bool Graphite_ContributeLocal(Graphite_LightSample L, Graphite_LightFrame f, boo
     c.diffuseL = Lc;
     c.specularL = Lc;
     c.extent = vec2(0.0);
+    c.shareSpecular = false;
 #ifdef GRAPHITE_LIGHT_COAT
     c.coatL = Lc;
 #endif
@@ -510,10 +495,11 @@ bool Graphite_ContributeLocal(Graphite_LightSample L, Graphite_LightFrame f, boo
         c.diffuseBack = (Graphite_TubeIrradiance(a, b, tubeRadius, -N) + Graphite_SphereIrradiance(-NdotL, sinSigma2)) * window;
 #endif
         c.attenuation = (2.0 * tubeRadius * tubeLength + GRAPHITE_PI * tubeRadius * tubeRadius) * window / max(dist2, 0.01);
-        c.specular = graphite_TubeSpecular(a, ab, direction, tubeRadius, tubeLength, window, N, f.view, f.baseAlpha, c.specularL, c.extent);
+        c.specular = graphite_LtcTube(a, b, direction, tubeRadius, N, f.view, f.baseAlpha) * window;
+        c.shareSpecular = true;
+        c.extent = vec2(tubeRadius, 0.5 * tubeLength) / max(dist, 1e-4);
 #ifdef GRAPHITE_LIGHT_COAT
-        vec2 coatExtent;
-        c.coat = graphite_TubeSpecular(a, ab, direction, tubeRadius, tubeLength, window, f.coatNormal, f.view, f.coatAlpha, c.coatL, coatExtent);
+        c.coat = graphite_LtcTube(a, b, direction, tubeRadius, f.coatNormal, f.view, f.coatAlpha) * window;
 #endif
     }
     else
@@ -552,10 +538,12 @@ bool Graphite_ContributeLocal(Graphite_LightSample L, Graphite_LightFrame f, boo
 #endif
         }
 
-        c.specular = graphite_PlaneSpecular(toLight, n, right, up, halfSize, size, disk, area, window, N, f.view, f.baseAlpha, c.specularL, c.extent);
+        vec3 shapeX = right * halfSize.x, shapeY = up * halfSize.y;
+        c.specular = graphite_LtcShape(toLight, shapeX, shapeY, disk, N, f.view, f.baseAlpha) * window;
+        c.shareSpecular = true;
+        c.extent = halfSize / max(dist, 1e-4);
 #ifdef GRAPHITE_LIGHT_COAT
-        vec2 coatExtent;
-        c.coat = graphite_PlaneSpecular(toLight, n, right, up, halfSize, size, disk, area, window, f.coatNormal, f.view, f.coatAlpha, c.coatL, coatExtent);
+        c.coat = graphite_LtcShape(toLight, shapeX, shapeY, disk, f.coatNormal, f.view, f.coatAlpha) * window;
 #endif
     }
 
@@ -614,6 +602,7 @@ bool Graphite_ContributeDirectional(Graphite_DirectionalLight d, uint index, Gra
     c.specularL = d.direction;
     c.specular = c.diffuse;
     c.extent = vec2(0.0);
+    c.shareSpecular = false;
 #ifdef GRAPHITE_LIGHT_COAT
     c.coatL = d.direction;
     c.coat = max(dot(f.coatNormal, d.direction), 0.0);

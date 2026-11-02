@@ -14,7 +14,7 @@ namespace Prowl.Graphite.Rendering;
 internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
 {
     private static readonly PropertyID s_anisotropicDfg = "Graphite_AnisotropicDfg", s_backDepth = "Graphite_BackDepth",
-        s_cascades = "Graphite_Cascades", s_chunks = "Graphite_Chunks", s_dfg = "Graphite_Dfg", s_dielectricE = "Graphite_DielectricE",
+        s_cascades = "Graphite_Cascades", s_chunks = "Graphite_Chunks", s_dfg = "Graphite_Dfg", s_ltc = "Graphite_Ltc", s_dielectricE = "Graphite_DielectricE",
         s_directionals = "Graphite_Directionals", s_globals = "Graphite_Globals", s_materialSlots = "Graphite_MaterialSlots",
         s_objectProbes = "Graphite_ObjectProbes", s_objects = "Graphite_Objects", s_previousTransforms = "Graphite_PreviousTransforms",
         s_sceneColor = "Graphite_SceneColor", s_sceneColorSampler = "Graphite_SceneColorSampler", s_sceneDepth = "Graphite_SceneDepth",
@@ -62,6 +62,7 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         camera.ViewTable.Set(s_dfg, 0, frame.Resources.Dfg);
         camera.ViewTable.Set(s_dielectricE, 0, frame.Resources.DielectricE);
         camera.ViewTable.Set(s_anisotropicDfg, 0, frame.Resources.AnisotropicDfg);
+        camera.ViewTable.Set(s_ltc, 0, frame.Resources.Ltc);
         camera.ViewTable.Set(s_backDepth, 0, (object?)camera.BackDepthView() ?? frame.Resources.NoSceneDepth);
         camera.ViewTable.Set(s_tableSampler, 0, frame.Resources.LinearClamp);
         _viewTable = camera.ViewTable.Get(ring);

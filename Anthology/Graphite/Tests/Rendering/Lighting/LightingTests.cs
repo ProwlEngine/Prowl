@@ -817,6 +817,44 @@ public sealed partial class LightingTests : IDisposable
     }
 
     [Fact]
+    public void AreaSpecular_FollowsTheShapeAcrossItsHighlight_IntoItsEdgesCornersAndGrazingViews()
+    {
+        Vector3 n = new(0, 1, 0);
+        Vector3 Facing(Vector3 center) => Vector3.Normalize(-center);
+        Vector3 Up(Vector3 axis) => Vector3.Normalize(Vector3.Cross(axis, Vector3.UnitX));
+        Vector3 ahead = new(0, 1.5f, 3), wall = new(0, 1, 4);
+        // A light, then the views a sweep takes from 0 to 1, the mirror direction crossing the light
+        var sweeps = new (string Name, LightType Type, Vector3 Center, Vector3 Axis, Vector3 Up, float Radius, Vector2 Size, Func<float, Vector3> View)[]
+        {
+            ("rect ahead", LightType.Rect, ahead, Facing(ahead), Up(Facing(ahead)), 0, new(1.2f, 0.6f), t => new(0, 0.1f + 1.4f * t, -1)),
+            ("rect corner", LightType.Rect, ahead, Facing(ahead), Up(Facing(ahead)), 0, new(1.2f, 0.6f), t => new(-0.8f + t, 0.5f + 0.4f * t, -1)),
+            ("wall grazing", LightType.Rect, wall, new(0, 0, -1), Vector3.UnitY, 0, new(2, 2), t => new(-0.9f + 1.8f * t, 0.15f, -1)),
+            ("disk ahead", LightType.Disk, ahead, Facing(ahead), Up(Facing(ahead)), 0, new(0.5f, 0), t => new(0.3f * t, 0.1f + 1.4f * t, -1)),
+            ("disk grazing", LightType.Disk, wall, new(0, 0, -1), Vector3.UnitY, 0, new(1, 0), t => new(-0.9f + 1.8f * t, 0.15f, -1)),
+            ("tube across", LightType.Tube, wall, Vector3.UnitX, Vector3.UnitY, 0.03f, new(2.5f, 0), t => new(-1.2f + 2.4f * t, 0.25f, -1)),
+        };
+
+        List<string> report = new();
+        bool failed = false;
+        foreach (float roughness in new[] { 0.2f, 0.4f, 0.6f })
+        {
+            foreach ((string name, LightType type, Vector3 center, Vector3 axis, Vector3 up, float radius, Vector2 size, Func<float, Vector3> view) in sweeps)
+            {
+                const int samples = 13;
+                var pairs = new (float Truth, float Estimate)[samples];
+                for (int s = 0; s < samples; s++)
+                    pairs[s] = Reference.Specular(type, center, axis, up, radius, size, Vector3.Normalize(view(s / (samples - 1f))), n, roughness);
+                float peak = pairs.Max(p => p.Truth);
+                float worst = pairs.Max(p => MathF.Abs(p.Estimate - p.Truth)) / peak;
+                float mean = pairs.Average(p => MathF.Abs(p.Estimate - p.Truth)) / peak;
+                failed |= worst > 0.25f || mean > 0.1f;
+                report.Add($"{name} roughness {roughness}: worst {worst:F3}, mean {mean:F3} of the peak");
+            }
+        }
+        Assert.False(failed, string.Join(Environment.NewLine, report));
+    }
+
+    [Fact]
     public void SmallShapesInNits_LightLikePointsOfTheirLuminanceTimesTheirArea()
     {
         Vector3 albedo = new(0.7f, 0.7f, 0.7f);
@@ -3779,6 +3817,17 @@ public sealed partial class LightingTests : IDisposable
                         Vector3 l = c * cos + t * (sin * MathF.Cos(a)) + b * (sin * MathF.Sin(a));
                         truth += Lobe(l, v, n, roughness) * 2 * MathF.PI * (1 - cosMax) / (steps * steps) / (MathF.PI * radius * radius);
                     }
+                    else if (type == LightType.Tube)
+                    {
+                        // Along its length, one nit, a thin tube as wide as it looks
+                        if (j > 0)
+                            continue;
+                        Vector3 q = center + axis * ((u - 0.5f) * size.X);
+                        float d2 = q.LengthSquared();
+                        Vector3 l = q / MathF.Sqrt(d2);
+                        float along = Vector3.Dot(l, axis);
+                        truth += Lobe(l, v, n, roughness) * 2 * radius * MathF.Sqrt(MathF.Max(1 - along * along, 0)) / d2 * size.X / steps;
+                    }
                     else
                     {
                         // Over the surface, one nit, seen with its cosine
@@ -3825,8 +3874,46 @@ public sealed partial class LightingTests : IDisposable
         }
 
         // The closure with the diffuse and specular lobes each from their own direction
-        private static Vector3 Shade(Vector3 ld, float diffuse, Vector3 ls, float specular, Vector3 v, Vector3 n, Vector3 albedo, float metallic, float roughness)
+        private static readonly ushort[] s_ltc = LtcTables.Embedded();
+
+        private static LtcTables.D3 D(Vector3 w) => new(w.X, w.Y, w.Z);
+
+        // The share of a lobe of normal n and alpha a tube, rect or disk covers, as Graphite/Ltc.glsl and Lights.glsl give it.
+        // A rect or disk takes its half axes, a tube its ends and radius.
+        public static float LtcShare(LightType type, Vector3 center, Vector3 h1, Vector3 h2, float radius, Vector3 n, Vector3 v, float alpha)
         {
+            float mu = Math.Clamp(Vector3.Dot(n, v), 1e-4f, 1);
+            Vector3 t1 = v - n * Vector3.Dot(n, v);
+            t1 = t1.Length() > 1e-5f ? Vector3.Normalize(t1) : Vector3.Normalize(Vector3.Cross(n, MathF.Abs(n.Y) < 0.99f ? Vector3.UnitY : Vector3.UnitX));
+            Vector3 t2 = Vector3.Cross(n, t1);
+            LtcTables.M3 inverse = LtcTables.Lookup(s_ltc, mu, MathF.Sqrt(MathF.Max(alpha, 0)));
+            LtcTables.D3 Space(Vector3 w) => inverse * new LtcTables.D3(Vector3.Dot(w, t1), Vector3.Dot(w, t2), Vector3.Dot(w, n));
+            if (type == LightType.Tube)
+            {
+                // h1 and h2 the tube's ends, each cap a small half sphere there
+                Vector3 direction = Vector3.Normalize(h2 - h1);
+                Vector3 across = Vector3.Cross(direction, h1 + h2);
+                across = across.LengthSquared() > 1e-12f ? Vector3.Normalize(across) : Vector3.Normalize(Vector3.Cross(direction, MathF.Abs(direction.Y) < 0.99f ? Vector3.UnitY : Vector3.UnitX));
+                double Cap(Vector3 end)
+                {
+                    float end2 = MathF.Max(end.LengthSquared(), 1e-8f);
+                    LtcTables.D3 o = Space(end / MathF.Sqrt(end2));
+                    double o2 = LtcTables.D3.Dot(o, o);
+                    return Math.Max(o.Z, 0) * Math.Abs(inverse.Determinant) / (Math.PI * o2 * o2) * 0.5 * Math.PI * radius * radius / end2;
+                }
+                return (float)(LtcTables.Strip(Space(h1), Space(h2), Space(across * (2 * radius))) + Cap(h1) + Cap(h2));
+            }
+            LtcTables.D3 c = Space(center), x = Space(h1), y = Space(h2);
+            return (float)(type == LightType.Disk ? LtcTables.Disk(c, x, y) : LtcTables.Polygon([c - x - y, c + x - y, c + x + y, c - x + y]));
+        }
+
+        private static Vector3 Shade(Vector3 ld, float diffuse, Vector3 ls, float specular, Vector3 v, Vector3 n, Vector3 albedo, float metallic, float roughness, bool share = false)
+        {
+            if (share)
+            {
+                PbrReference lit = Closure(n, v, albedo, metallic, roughness);
+                return lit.Diffuse(ld) * diffuse + lit.SpecularAlbedo * specular;
+            }
             PbrReference c = Closure(n, v, albedo, metallic, roughness);
             return c.Diffuse(ld) * diffuse + c.Specular(ls) * specular;
         }
@@ -3926,19 +4013,6 @@ public sealed partial class LightingTests : IDisposable
             return center + toRay * Math.Clamp(radius / MathF.Max(toRay.Length(), 1e-6f), 0, 1);
         }
 
-        private static Vector3 PlanePoint(Vector3 center, Vector3 n, Vector3 right, Vector3 up, Vector2 half, bool disk, Vector3 r)
-        {
-            float facing = Vector3.Dot(r, n);
-            Vector3 hit = facing < -1e-4f ? r * (Vector3.Dot(center, n) / facing) : center + (r - n * facing) * 1e4f;
-            Vector3 local = hit - center;
-            Vector2 p = new(Vector3.Dot(local, right), Vector3.Dot(local, up));
-            if (disk)
-                p *= MathF.Min(1, half.X / MathF.Max(p.Length(), 1e-6f));
-            else
-                p = Vector2.Clamp(p, -half, half);
-            return center + right * p.X + up * p.Y;
-        }
-
         private static Vector3 V(Float3 f) => new(f.X, f.Y, f.Z);
 
         // Spheres, tubes, rects and disks: diffuse from their luminance times their cosine weighted solid angle, a sphere's
@@ -3958,6 +4032,7 @@ public sealed partial class LightingTests : IDisposable
             Vector3 up = Vector3.Normalize(V(light.Up) - dir * Vector3.Dot(V(light.Up), dir));
             Vector3 ld = lc, ls = lc;
             float diffuse, specular;
+            bool share = false;
 
             if (light.Type is LightType.Point or LightType.Spot)
             {
@@ -3985,15 +4060,8 @@ public sealed partial class LightingTests : IDisposable
                 ld = Vector3.Normalize(a + ab * t);
                 float caps = SphereIrradiance(Vector3.Dot(n, lc), MathF.Min(light.SourceRadius * light.SourceRadius / dist2, 1));
                 diffuse = (TubeIrradiance(a, b, light.SourceRadius, n) + caps) * window;
-                float rab = Vector3.Dot(r, ab);
-                float tr = Math.Clamp((Vector3.Dot(r, a) * rab - Vector3.Dot(a, ab)) / MathF.Max(ab.LengthSquared() - rab * rab, 1e-8f), 0, 1);
-                Vector3 onLine = a + ab * tr;
-                ls = Vector3.Normalize(SpherePoint(onLine, light.SourceRadius, r));
-                float lineDist = MathF.Max(onLine.Length(), 1e-4f);
-                float along = Vector3.Dot(onLine, dir) / lineDist;
-                float projected = 2 * light.SourceRadius * light.Size.X * MathF.Sqrt(MathF.Max(1 - along * along, 0)) + MathF.PI * light.SourceRadius * light.SourceRadius;
-                specular = MathF.Max(Vector3.Dot(n, ls), 0) * projected * window / MathF.Max(onLine.LengthSquared(), 0.01f)
-                    * AreaEnergy(PbrReference.Alpha(roughness), light.SourceRadius / (2 * lineDist), light.Size.X / (MathF.PI * lineDist));
+                specular = LtcShare(LightType.Tube, toLight, a, b, light.SourceRadius, n, v, PbrReference.Alpha(roughness)) * window;
+                share = true;
             }
             else
             {
@@ -4003,7 +4071,6 @@ public sealed partial class LightingTests : IDisposable
                 Vector3 right = Vector3.Cross(up, dir);
                 bool disk = light.Type == LightType.Disk;
                 Vector2 half = disk ? new Vector2(light.Size.X) : 0.5f * new Vector2(light.Size.X, light.Size.Y);
-                float area = disk ? MathF.PI * half.X * half.X : light.Size.X * light.Size.Y;
                 if (disk)
                 {
                     float r2 = half.X * half.X;
@@ -4014,15 +4081,11 @@ public sealed partial class LightingTests : IDisposable
                     Vector3 hx = right * half.X, hy = up * half.Y;
                     diffuse = QuadIrradiance([toLight - hx - hy, toLight + hx - hy, toLight + hx + hy, toLight - hx + hy], n) * window;
                 }
-                Vector3 q = PlanePoint(toLight, dir, right, up, half, disk, r);
-                float qDist2 = MathF.Max(q.LengthSquared(), 1e-8f), qDist = MathF.Sqrt(qDist2);
-                ls = q / qDist;
-                float qFront = MathF.Max(Vector3.Dot(-ls, dir), 0);
-                Vector2 extent = disk ? new Vector2(half.X / (2 * qDist)) : new Vector2(light.Size.X, light.Size.Y) / (2 * MathF.Sqrt(MathF.PI) * qDist);
-                specular = MathF.Max(Vector3.Dot(n, ls), 0) * area * qFront * window / MathF.Max(qDist2, 0.01f) * AreaEnergy(PbrReference.Alpha(roughness), extent.X, extent.Y);
+                specular = LtcShare(light.Type, toLight, right * half.X, up * half.Y, 0, n, v, PbrReference.Alpha(roughness)) * window;
+                share = true;
             }
 
-            return Shade(ld, diffuse, ls, specular, v, n, albedo, metallic, roughness) * (V(light.Color) * light.Intensity);
+            return Shade(ld, diffuse, ls, specular, v, n, albedo, metallic, roughness, share) * (V(light.Color) * light.Intensity);
         }
     }
 }

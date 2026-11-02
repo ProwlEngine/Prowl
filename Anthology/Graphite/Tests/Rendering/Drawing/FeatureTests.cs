@@ -1836,6 +1836,73 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0, 0, 0), Frame(View()));
     }
 
+    // The object's colour, which a transient draw's instances each carry
+    private const string ObjectTintSource = """
+        Shader "Test/ObjectTint"
+        {
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                Cull Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
+                }
+                Fragment
+                {
+                    #include "Graphite/Core.glsl"
+                    #include "Graphite/Passes.glsl"
+                    layout(location = 0) out vec4 outColor;
+                    void main()
+                    {
+                        outColor = vec4(Graphite_Object().color.rgb, 1.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
+                    }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    private TransientDraw Instanced(Material material) => new()
+    {
+        Mesh = _quad,
+        Material = material,
+        Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)),
+    };
+
+    private static readonly Float4[] s_instanceColors = [new(1, 0, 0, 1), new(0, 1, 0, 1), new(0, 0, 1, 1)];
+
+    // The eight unit quad shrunk to two units, centred at x, y
+    private static Float4x4 At(float x, float y) => Float4x4.CreateTranslation(new Float3(x, y, 0)) * Float4x4.CreateScale(0.25f);
+
+    [Fact]
+    public void TransientInstances_EachDrawAtTheirTransformAndColour_ForOneFrame()
+    {
+        Material tint = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(ObjectTintSource)));
+        _world.DrawTransient(Instanced(tint), [At(-2, -2), At(2, 2), At(2, -2)], s_instanceColors);
+
+        Float4[] pixels = Frame(View());
+        AssertAll(new Float3(1, 0, 0), pixels, Inside(-2, -2));
+        AssertAll(new Float3(0, 1, 0), pixels, Inside(2, 2));
+        AssertAll(new Float3(0, 0, 1), pixels, Inside(2, -2));
+        AssertAll(new Float3(0, 0, 0), pixels, Inside(-2, 2));
+
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+    }
+
+    [Fact]
+    public void TransientInstances_AreCulledAsOne_ByTheBoundsGiven()
+    {
+        Material tint = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(ObjectTintSource)));
+        TransientDraw offscreen = Instanced(tint);
+        offscreen.InstanceBounds = new AABB(new Float3(100, 100, 0), new Float3(101, 101, 1));
+        _world.DrawTransient(offscreen, [At(-2, -2), At(2, 2), At(2, -2)], s_instanceColors);
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+    }
+
     private sealed class Items(GpuMesh mesh, Material material) : RenderProvider
     {
         public readonly List<(Double4x4 Transform, Float4 Color, uint Instances)> Draws = new();

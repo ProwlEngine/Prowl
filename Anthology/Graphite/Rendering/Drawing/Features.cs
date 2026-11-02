@@ -1674,7 +1674,56 @@ public sealed class DrawItemSink
     /// <summary>One submesh of geometry placed in the pool without a mesh, for one object.</summary>
     internal void AddPlaced(MeshPlacement placement, int subMesh, Material material, in DrawItem item) => Emit(placement, subMesh, material, item, 1, false, default, 0);
 
-    private void Emit(MeshPlacement placement, int subMesh, Material material, in DrawItem item, uint count, bool shared, RenderResourceID source, uint offset)
+    /// <summary>Where a frame's instance objects start, made by the first view that adds them and reused by the rest.</summary>
+    internal struct InstanceObjects
+    {
+        public ulong Frame;
+        public uint First;
+    }
+
+    /// <summary>
+    /// Instances of one submesh, each its own object at the item's transform times its own, coloured by the item's colour
+    /// times its own, in one instanced draw.
+    /// </summary>
+    internal void AddPlacedInstances(MeshPlacement placement, int subMesh, Material material, in DrawItem item, ref InstanceObjects objects,
+        ReadOnlySpan<Float4x4> transforms, ReadOnlySpan<Float4> colors)
+    {
+        if (transforms.IsEmpty)
+            return;
+        RenderWorld.RenderSide render = _world.World.Render;
+        if (objects.Frame != render.TransientFrame)
+        {
+            ObjectAttributes attributes = Attributes(item);
+            for (int i = 0; i < transforms.Length; i++)
+            {
+                attributes.Color = colors.IsEmpty ? item.Color : item.Color * colors[i];
+                uint index = render.AddTransientObject(item.Transform * (Double4x4)transforms[i], attributes);
+                if (i == 0)
+                    objects.First = index;
+            }
+            objects.Frame = render.TransientFrame;
+        }
+        Emit(placement, subMesh, material, item, (uint)transforms.Length, true, default, 0, objects.First);
+    }
+
+    private ObjectAttributes Attributes(in DrawItem item) => new()
+    {
+        Flags = (uint)item.Flags,
+        ObjectId = item.ObjectId,
+        PreviousTransform = ObjectAttributes.NoPrevious,
+        LightmapTexture = ObjectAttributes.NoLightmap,
+        ProbeIndex = item.Probe.IsValid ? _world.World.Probes.AnchorSlotOf(item.Probe.Index) : uint.MaxValue,
+        LodFade = 1,
+        LayerMask = item.LayerMask,
+        LightmapScaleOffset = new Float4(1, 1, 0, 0),
+        Color = item.Color,
+        Custom0 = item.Custom0,
+        Custom1 = item.Custom1,
+    };
+
+    // A first object makes each instance draw the object that many after it, else one object is made for the item
+    private void Emit(MeshPlacement placement, int subMesh, Material material, in DrawItem item, uint count, bool shared, RenderResourceID source, uint offset,
+        uint? firstObject = null)
     {
         ArgumentNullException.ThrowIfNull(material);
         if ((item.LayerMask & _cullingMask) == 0 || (item.Flags & RenderableFlags.Hidden) != 0)
@@ -1684,22 +1733,7 @@ public sealed class DrawItemSink
         if ((uint)subMesh >= (uint)placement.SubMeshes.Length)
             throw new ArgumentOutOfRangeException(nameof(subMesh), $"The mesh has {placement.SubMeshes.Length} submeshes.");
 
-        RenderWorld.RenderSide render = _world.World.Render;
-        ObjectAttributes attributes = new()
-        {
-            Flags = (uint)item.Flags,
-            ObjectId = item.ObjectId,
-            PreviousTransform = ObjectAttributes.NoPrevious,
-            LightmapTexture = ObjectAttributes.NoLightmap,
-            ProbeIndex = item.Probe.IsValid ? _world.World.Probes.AnchorSlotOf(item.Probe.Index) : uint.MaxValue,
-            LodFade = 1,
-            LayerMask = item.LayerMask,
-            LightmapScaleOffset = new Float4(1, 1, 0, 0),
-            Color = item.Color,
-            Custom0 = item.Custom0,
-            Custom1 = item.Custom1,
-        };
-        uint objectIndex = render.AddTransientObject(item.Transform, attributes);
+        uint objectIndex = firstObject ?? _world.World.Render.AddTransientObject(item.Transform, Attributes(item));
         bool mirrored = RenderWorld.RenderSide.Determinant3(item.Transform) < 0;
         Double4x4 m = item.Transform;
         float depth = float.IsNaN(item.SortDepth) ? Length(_frustum.Relative(new Double3(m.c3.X, m.c3.Y, m.c3.Z))) : item.SortDepth;
@@ -1727,6 +1761,7 @@ public sealed class DrawItemSink
             entry.Depth = depth;
             entry.MaterialSlot = material.Slot;
             entry.Shared = shared;
+            entry.Consecutive = firstObject.HasValue;
             entry.InstanceCount = count;
             if (!_lists.TryGetValue(list, out ProvidedItems? items))
                 _lists[list] = items = new ProvidedItems();

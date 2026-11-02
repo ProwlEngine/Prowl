@@ -6,10 +6,10 @@
 
 #include "Graphite/Core.glsl"
 #include "Graphite/PBR/Microfacet.glsl"
+#include "Graphite/Tables.glsl"
 
 layout(set = 1, binding = 37) uniform texture2D Graphite_Dfg;
 layout(set = 1, binding = 38) uniform texture3D Graphite_DielectricE;
-layout(set = 1, binding = 39) uniform sampler Graphite_TableSampler;
 layout(set = 1, binding = 40) uniform texture3D Graphite_AnisotropicDfg;
 
 #define PBR_DFG_SIZE 128.0

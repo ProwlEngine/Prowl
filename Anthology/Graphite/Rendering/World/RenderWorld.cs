@@ -83,6 +83,9 @@ public struct TransientDraw
     public uint LayerMask;
     public RenderableFlags Flags;
 
+    /// <summary>What every instance covers relative to <see cref="Transform"/>, worked out from the instances when null.</summary>
+    public AABB? InstanceBounds;
+
     public TransientDraw()
     {
         Material = null!;
@@ -278,8 +281,14 @@ public sealed partial class RenderWorld : IDisposable
     /// <summary>The world's transient draws, a provider culled before the host's.</summary>
     internal TransientDraws Transients { get; } = new();
 
-    /// <summary>Draws geometry in the next frame only, through every pass its material has. Host thread.</summary>
-    public void DrawTransient(in TransientDraw draw) => Transients.Add(draw);
+    /// <summary>
+    /// Draws geometry in the next frame only, through every pass its material has. Given instances, it draws once per
+    /// transform relative to the draw's, each its own object with its colour multiplying the standard surfaces' vertex
+    /// colour, all in one instanced draw culled as a whole. Mirrored instances keep the winding of the draw's transform.
+    /// The instances are copied. Host thread.
+    /// </summary>
+    public void DrawTransient(in TransientDraw draw, ReadOnlySpan<Float4x4> instances = default, ReadOnlySpan<Float4> instanceColors = default)
+        => Transients.Add(draw, instances, instanceColors);
 
     /// <summary>The features as of the last SubmitFrame. The render thread reads only this.</summary>
     internal RenderFeature[] FeatureSnapshot = [];
@@ -873,10 +882,14 @@ public sealed partial class RenderWorld : IDisposable
 
         private uint _transientObjects;
 
+        /// <summary>Moves each frame, so provider objects made in an earlier one are known to be gone.</summary>
+        public ulong TransientFrame { get; private set; } = 1;
+
         /// <summary>Forgets last frame's provider objects and starts a frame of culls. Render thread, before any view.</summary>
         public void BeginFrame()
         {
             _transientObjects = 0;
+            TransientFrame++;
             foreach (int index in Deforming)
                 _seenLastFrame[index] = DeformSeen[index] == DeformStamp;
             DeformStamp++;

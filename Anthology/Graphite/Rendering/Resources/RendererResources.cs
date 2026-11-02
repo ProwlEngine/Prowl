@@ -63,6 +63,7 @@ internal sealed class RendererResources : IDisposable
         Dfg = LoadTable(device, "Dfg.bin", PixelFormat.R16_G16_B16_A16_Float, 128, 128, 1);
         DielectricE = LoadTable(device, "DielectricE.bin", PixelFormat.R16_Float, 32, 32, 32);
         AnisotropicDfg = LoadTable(device, "AnisotropicDfg.bin", PixelFormat.R16_G16_B16_A16_Float, 32, 16, 64);
+        Ltc = LoadTable(device, "Ltc.bin", PixelFormat.R16_G16_B16_A16_Float, 64, 64, 1);
 
         NoScreenVisibility = factory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R8_UNorm, TextureUsage.Sampled));
         NoScreenIrradiance = factory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
@@ -127,6 +128,7 @@ internal sealed class RendererResources : IDisposable
     public Texture Dfg { get; }
     public Texture DielectricE { get; }
     public Texture AnisotropicDfg { get; }
+    public Texture Ltc { get; }
 
     /// <summary>The screen lighting a view without a producer reads: full visibility, no irradiance, six layers.</summary>
     public Texture NoScreenVisibility { get; }
@@ -218,6 +220,7 @@ internal sealed class RendererResources : IDisposable
         Dfg.Dispose();
         DielectricE.Dispose();
         AnisotropicDfg.Dispose();
+        Ltc.Dispose();
         NoScreenVisibility.Dispose();
         NoScreenIrradiance.Dispose();
         NoSceneColor.Dispose();

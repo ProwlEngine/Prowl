@@ -182,11 +182,9 @@ public sealed partial class LightingTests
     public void TheLightFrame_LightsEachLobeAndTheBack_FromDirectionalLights(float angularRadius, bool behind)
         => AssertFrameLights(new LightDesc { Type = LightType.Directional, Direction = new Float3(0.3f, -0.2f, behind ? -1 : 1), Intensity = 0.05f, AngularRadius = angularRadius }, behind);
 
+    // Tubes, rects and disks give each lobe its share by linearly transformed cosines, with no representative point
     [Theory]
     [InlineData(LightType.Point, 0.6f, 0f, 0f)]
-    [InlineData(LightType.Tube, 0.15f, 2.5f, 0f)]
-    [InlineData(LightType.Rect, 0f, 2f, 1f)]
-    [InlineData(LightType.Disk, 0f, 0.8f, 0f)]
     [InlineData(LightType.Directional, 0f, 0f, 0f)]
     public void TheCoat_TakesItsOwnRepresentativePoint(LightType type, float sourceRadius, float sizeX, float sizeY)
     {
@@ -276,15 +274,7 @@ public sealed partial class LightingTests
                 Vector3 a = toLight - axis, b = toLight + axis, ab = b - a;
                 float caps = SphereIrradiance(Vector3.Dot(n, lc), MathF.Min(radius * radius / dist2, 1));
                 float diffuse = (TubeIrradiance(a, b, radius, n) + caps) * window;
-                float rab = Vector3.Dot(r, ab);
-                float tr = Math.Clamp((Vector3.Dot(r, a) * rab - Vector3.Dot(a, ab)) / MathF.Max(ab.LengthSquared() - rab * rab, 1e-8f), 0, 1);
-                Vector3 onLine = a + ab * tr;
-                ls = Vector3.Normalize(SpherePoint(onLine, radius, r));
-                float lineDist = MathF.Max(onLine.Length(), 1e-4f);
-                float along = Vector3.Dot(onLine, dir) / lineDist;
-                float projected = 2 * radius * length * MathF.Sqrt(MathF.Max(1 - along * along, 0)) + MathF.PI * radius * radius;
-                return (diffuse, ls, MathF.Max(Vector3.Dot(n, ls), 0) * projected * window / MathF.Max(onLine.LengthSquared(), 0.01f)
-                    * AreaEnergy(alpha, radius / (2 * lineDist), length / (MathF.PI * lineDist)));
+                return (diffuse, lc, LtcShare(LightType.Tube, toLight, a, b, radius, n, v, alpha) * window);
             }
 
             float front = Vector3.Dot(-lc, dir);
@@ -293,7 +283,6 @@ public sealed partial class LightingTests
             Vector3 right = Vector3.Cross(up, dir);
             bool isDisk = light.Type == LightType.Disk;
             Vector2 half = isDisk ? new Vector2(light.Size.X) : 0.5f * new Vector2(light.Size.X, light.Size.Y);
-            float area = isDisk ? MathF.PI * half.X * half.X : light.Size.X * light.Size.Y;
             float irradiance;
             if (isDisk)
             {
@@ -305,12 +294,7 @@ public sealed partial class LightingTests
                 Vector3 hx = right * half.X, hy = up * half.Y;
                 irradiance = QuadIrradiance([toLight - hx - hy, toLight + hx - hy, toLight + hx + hy, toLight - hx + hy], n) * window;
             }
-            Vector3 q = PlanePoint(toLight, dir, right, up, half, isDisk, r);
-            float qDist2 = MathF.Max(q.LengthSquared(), 1e-8f), qDist = MathF.Sqrt(qDist2);
-            ls = q / qDist;
-            float qFront = MathF.Max(Vector3.Dot(-ls, dir), 0);
-            Vector2 extent = isDisk ? new Vector2(half.X / (2 * qDist)) : new Vector2(light.Size.X, light.Size.Y) / (2 * MathF.Sqrt(MathF.PI) * qDist);
-            return (irradiance, ls, MathF.Max(Vector3.Dot(n, ls), 0) * area * qFront * window / MathF.Max(qDist2, 0.01f) * AreaEnergy(alpha, extent.X, extent.Y));
+            return (irradiance, lc, LtcShare(light.Type, toLight, right * half.X, up * half.Y, 0, n, v, alpha) * window);
         }
     }
 }

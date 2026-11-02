@@ -58,6 +58,7 @@ internal static class GraphiteBindings
     public const int TableSampler = 39;
     public const int AnisotropicDfg = 40;
     public const int BackDepth = 41;
+    public const int Ltc = 42;
 
     public const int Materials = 0;
     public const int Instances = 1;
@@ -126,7 +127,8 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_DielectricE", ResourceKind.TextureReadOnly, Graphics, DielectricE),
         new ResourceLayoutElementDescription("Graphite_TableSampler", ResourceKind.Sampler, Graphics, TableSampler),
         new ResourceLayoutElementDescription("Graphite_AnisotropicDfg", ResourceKind.TextureReadOnly, Graphics, AnisotropicDfg),
-        new ResourceLayoutElementDescription("Graphite_BackDepth", ResourceKind.TextureReadOnly, Graphics, BackDepth))
+        new ResourceLayoutElementDescription("Graphite_BackDepth", ResourceKind.TextureReadOnly, Graphics, BackDepth),
+        new ResourceLayoutElementDescription("Graphite_Ltc", ResourceKind.TextureReadOnly, Graphics, Ltc))
     {
         Table = true,
     };

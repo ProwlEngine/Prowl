@@ -31,11 +31,11 @@ internal static class DebugGroups
             int command = call.FirstCommand + c;
             DrawRecord record = list.Records[command];
             uint count = list.Commands[command].InstanceCount;
-            bool shared = (record.Flags & DrawRecord.SharedObject) != 0;
-            DrawnRenderable[] drawn = new DrawnRenderable[shared ? 1 : count];
+            bool shared = (record.Flags & DrawRecord.SharedObject) != 0, consecutive = (record.Flags & DrawRecord.ConsecutiveObjects) != 0;
+            DrawnRenderable[] drawn = new DrawnRenderable[shared && !consecutive ? 1 : count];
             for (int i = 0; i < drawn.Length; i++)
             {
-                int index = shared ? (int)record.Object : (int)list.Instances[record.FirstInstance + i];
+                int index = consecutive ? (int)record.Object + i : shared ? (int)record.Object : (int)list.Instances[record.FirstInstance + i];
                 drawn[i] = Renderable(side, index, record);
             }
             commands[c] = new DrawnCommand(drawn);

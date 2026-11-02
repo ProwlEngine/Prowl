@@ -22,6 +22,10 @@ internal sealed class TransientDraws : RenderProvider
         public bool Colors;
         public AABB Bounds;
         public MeshPlacement? Placement;
+        public int FirstInstance, Instances;
+        public bool InstanceColors;
+        public AABB? InstanceBounds;
+        public DrawItemSink.InstanceObjects Objects;
     }
 
     private const uint PositionStream = 1u << (int)VertexSemantic.Position, ColorStream = 1u << (int)VertexSemantic.Color;
@@ -29,11 +33,13 @@ internal sealed class TransientDraws : RenderProvider
     private List<Draw> _host = new(), _render = new();
     private List<uint> _hostWords = new(), _renderWords = new();
     private List<uint> _hostIndices = new(), _renderIndices = new();
+    private List<Float4x4> _hostInstances = new(), _renderInstances = new();
+    private List<Float4> _hostInstanceColors = new(), _renderInstanceColors = new();
     private readonly List<MeshPlacement> _placed = new();
     private readonly List<MeshChunk> _chunks = new();
 
     /// <summary>Copies a draw for the next frame. Host thread.</summary>
-    public void Add(in TransientDraw draw)
+    public void Add(in TransientDraw draw, ReadOnlySpan<Float4x4> instances, ReadOnlySpan<Float4> instanceColors)
     {
         ArgumentNullException.ThrowIfNull(draw.Material);
         Draw entry = new()
@@ -43,6 +49,18 @@ internal sealed class TransientDraws : RenderProvider
             Item = new DrawItem { Transform = draw.Transform, LayerMask = draw.LayerMask, Flags = draw.Flags },
             Topology = draw.Topology,
         };
+        if (!instances.IsEmpty)
+        {
+            if (!instanceColors.IsEmpty && instanceColors.Length != instances.Length)
+                throw new ArgumentException($"A transient draw has {instances.Length} instances and {instanceColors.Length} instance colours.", nameof(instanceColors));
+            entry.FirstInstance = _hostInstances.Count;
+            entry.Instances = instances.Length;
+            entry.InstanceColors = !instanceColors.IsEmpty;
+            entry.InstanceBounds = draw.InstanceBounds;
+            _hostInstances.AddRange(instances);
+            if (entry.InstanceColors)
+                _hostInstanceColors.AddRange(instanceColors);
+        }
         if (draw.Mesh == null)
         {
             ReadOnlySpan<Float3> positions = draw.Positions.Span;
@@ -89,9 +107,13 @@ internal sealed class TransientDraws : RenderProvider
         (_host, _render) = (_render, _host);
         (_hostWords, _renderWords) = (_renderWords, _hostWords);
         (_hostIndices, _renderIndices) = (_renderIndices, _hostIndices);
+        (_hostInstances, _renderInstances) = (_renderInstances, _hostInstances);
+        (_hostInstanceColors, _renderInstanceColors) = (_renderInstanceColors, _hostInstanceColors);
         _host.Clear();
         _hostWords.Clear();
         _hostIndices.Clear();
+        _hostInstances.Clear();
+        _hostInstanceColors.Clear();
     }
 
     /// <summary>
@@ -151,16 +173,49 @@ internal sealed class TransientDraws : RenderProvider
 
     public override void Cull(in ProviderView view, DrawItemSink sink)
     {
-        foreach (Draw draw in _render)
+        Span<Draw> draws = CollectionsMarshal.AsSpan(_render);
+        for (int d = 0; d < draws.Length; d++)
         {
+            ref Draw draw = ref draws[d];
             MeshPlacement? placement = draw.Mesh != null ? draw.Mesh.Placement : draw.Placement;
             if (placement == null || (draw.Mesh?.IsDisposed ?? false))
                 continue;
-            (Double3 center, Float3 extents) = RenderWorld.RenderSide.TransformBox(draw.Item.Transform, placement.Bounds);
+            if (draw.Instances > 0)
+                draw.InstanceBounds ??= InstanceBounds(placement.Bounds, CollectionsMarshal.AsSpan(_renderInstances).Slice(draw.FirstInstance, draw.Instances));
+            (Double3 center, Float3 extents) = RenderWorld.RenderSide.TransformBox(draw.Item.Transform, draw.InstanceBounds ?? placement.Bounds);
             if (!view.Sees(center, MathF.Sqrt(extents.X * extents.X + extents.Y * extents.Y + extents.Z * extents.Z)))
                 continue;
+            if (draw.Instances == 0)
+            {
+                for (int s = 0; s < placement.SubMeshes.Length; s++)
+                    sink.AddPlaced(placement, s, draw.Material, draw.Item);
+                continue;
+            }
+
+            ReadOnlySpan<Float4x4> transforms = CollectionsMarshal.AsSpan(_renderInstances).Slice(draw.FirstInstance, draw.Instances);
+            ReadOnlySpan<Float4> colors = draw.InstanceColors ? CollectionsMarshal.AsSpan(_renderInstanceColors).Slice(draw.FirstInstance, draw.Instances) : default;
             for (int s = 0; s < placement.SubMeshes.Length; s++)
-                sink.AddPlaced(placement, s, draw.Material, draw.Item);
+                sink.AddPlacedInstances(placement, s, draw.Material, draw.Item, ref draw.Objects, transforms, colors);
         }
+    }
+
+    // The box around the mesh's bounds at every instance
+    private static AABB InstanceBounds(AABB mesh, ReadOnlySpan<Float4x4> instances)
+    {
+        AABB bounds = default;
+        for (int i = 0; i < instances.Length; i++)
+        {
+            (Double3 center, Float3 extents) = RenderWorld.RenderSide.TransformBox((Double4x4)instances[i], mesh);
+            Float3 c = (Float3)center;
+            AABB box = new(c - extents, c + extents);
+            if (i == 0)
+                bounds = box;
+            else
+            {
+                bounds.Encapsulate(box.Min);
+                bounds.Encapsulate(box.Max);
+            }
+        }
+        return bounds;
     }
 }

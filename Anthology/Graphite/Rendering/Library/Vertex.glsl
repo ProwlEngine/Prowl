@@ -98,7 +98,9 @@ void Graphite_BeginVertex()
     // A draw's command carries its record's index as its first instance, as gl_DrawID has no Metal equivalent
     graphite_Draw = graphite_DrawRecords[uint(gl_BaseInstance)];
     graphite_Chunk = graphite_Chunks[graphite_Draw.chunk];
-    graphite_Object = (graphite_Draw.flags & 1u) != 0u ? graphite_Draw.object : graphite_Instances[graphite_Push.instanceBase + graphite_Draw.firstInstance + uint(gl_InstanceIndex - gl_BaseInstance)];
+    graphite_Object = (graphite_Draw.flags & 1u) != 0u
+        ? graphite_Draw.object + ((graphite_Draw.flags & 4u) != 0u ? Graphite_InstanceIndex() : 0u)
+        : graphite_Instances[graphite_Push.instanceBase + graphite_Draw.firstInstance + Graphite_InstanceIndex()];
     uint currentPositions = graphite_Objects[graphite_Object].currentPositions;
     if (currentPositions != 0u)
         graphite_Chunk.streamOffsets[0] = currentPositions - 1u;

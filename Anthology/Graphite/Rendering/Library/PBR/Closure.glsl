@@ -478,7 +478,8 @@ vec3 PBR_CoatedBase(PBR_Closure c, vec3 L)
 // What a light gives the closure, each lobe from its own direction
 vec3 PBR_EvaluateLight(PBR_Closure c, Graphite_LightContribution l)
 {
-    vec3 color = PBR_EvaluateDiffuse(c, l.diffuseL) * l.diffuse + PBR_EvaluateSpecular(c, l.specularL) * l.specular;
+    vec3 specular = l.shareSpecular ? c.specularAlbedo : PBR_EvaluateSpecular(c, l.specularL);
+    vec3 color = PBR_EvaluateDiffuse(c, l.diffuseL) * l.diffuse + specular * l.specular;
 #ifdef PBR_WRAP
     color += PBR_EvaluateWrap(c, l.diffuseL, l.diffuse, l.attenuation);
 #endif
@@ -491,7 +492,7 @@ vec3 PBR_EvaluateLight(PBR_Closure c, Graphite_LightContribution l)
     back *= c.coatedBase;
 #endif
 #ifdef PBR_DIRECT_COAT
-    color += PBR_EvaluateCoat(c, l.coatL) * l.coat;
+    color += (l.shareSpecular ? c.coatAlbedo : PBR_EvaluateCoat(c, l.coatL)) * l.coat;
 #endif
 #endif
 #ifdef PBR_SHEET

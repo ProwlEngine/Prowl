@@ -60,6 +60,7 @@ Shader "Graphite/Lit"
         geometry_opacity("Geometry Opacity", Float) = 1.0 [Range(0, 1)] [Header("Geometry")]
         geometry_thin_walled("Geometry Thin Walled", Integer) = 0 [Enum(Off, On)] [Toggle(PBR_THIN_WALLED)] [TwoSided]
         ambient_occlusion("Ambient Occlusion", Float) = 1.0 [Range(0, 1)]
+        ambient_occlusion_map_strength("Ambient Occlusion Map Strength", Float) = 1.0 [Range(0, 1)]
         normal_scale("Normal Scale", Float) = 1.0
         coat_normal_scale("Coat Normal Scale", Float) = 1.0
         height_scale("Height Scale", Float) = 0.0 [Range(0, 0.2)] [Toggle(PBR_PARALLAX)]

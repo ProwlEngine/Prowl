@@ -62,6 +62,7 @@ uniform float thin_film_ior;
 uniform float geometry_opacity;
 uniform int geometry_thin_walled;
 uniform float ambient_occlusion;
+uniform float ambient_occlusion_map_strength;
 uniform float normal_scale;
 uniform float coat_normal_scale;
 uniform float height_scale;
@@ -309,7 +310,7 @@ PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out floa
     if (geometry_opacity_map_Present)
         p.geometryOpacity *= texture(geometry_opacity_map, Graphite_StandardUV(geometry_opacity_map_UV, geometry_opacity_map_ST, geometry_opacity_map_Rotation, i))[geometry_opacity_map_Channel];
     if (ambient_occlusion_map_Present)
-        p.occlusion *= texture(ambient_occlusion_map, Graphite_StandardUV(ambient_occlusion_map_UV, ambient_occlusion_map_ST, ambient_occlusion_map_Rotation, i))[ambient_occlusion_map_Channel];
+        p.occlusion *= mix(1.0, texture(ambient_occlusion_map, Graphite_StandardUV(ambient_occlusion_map_UV, ambient_occlusion_map_ST, ambient_occlusion_map_Rotation, i))[ambient_occlusion_map_Channel], ambient_occlusion_map_strength);
 
     p.baseColor *= i.vertexColor.rgb;
     p.geometryOpacity *= i.vertexColor.a;

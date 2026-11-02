@@ -185,6 +185,9 @@ internal struct DrawRecord
     /// <summary>SubMesh holds the material slot itself rather than the submesh whose slot the object's slice holds.</summary>
     public const uint DirectSlot = 2;
 
+    /// <summary>With SharedObject, each instance draws the object as many after Object as its instance index.</summary>
+    public const uint ConsecutiveObjects = 4;
+
     public uint Chunk;
     public uint Object;
     public uint Flags;
@@ -592,6 +595,7 @@ internal sealed class BucketSet
         public float Depth;
         public uint MaterialSlot;
         public bool Shared;
+        public bool Consecutive;
         public uint InstanceCount;
         public int FirstCommand;
         public required int Pass;
@@ -927,7 +931,7 @@ internal sealed class BucketSet
 
     private static void EmitProvidedChunk(DrawList list, ItemDraw item, ChunkRef chunk, ushort program)
     {
-        uint flags = DrawRecord.DirectSlot | (item.Shared ? DrawRecord.SharedObject : 0);
+        uint flags = DrawRecord.DirectSlot | (item.Shared ? DrawRecord.SharedObject : 0) | (item.Consecutive ? DrawRecord.ConsecutiveObjects : 0);
         if (!item.Shared)
             list.AddInstance((uint)item.Object);
         list.AddCommand(
