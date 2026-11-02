@@ -17,7 +17,7 @@ namespace Prowl.Warp.Transports.Kcp;
 ///                                                                         padded to 160 bytes
 ///   settings           [u8 wireVersion][u8 channels][u16 mtu][u16 receiveWindow][u8 flags, 1 = encrypted]
 ///   Accept             [type][u32 nonce][u32 sessionId]                  9 bytes
-///                      encrypted: then [65 byte host key][64 byte signature, or zeros]
+///                      encrypted: then [65 byte host key][64 byte signature, or zeros][16 byte key confirmation]
 ///   Reject             [type][u32 nonce][u8 DisconnectReason]            6 bytes
 /// 
 /// Session (after Accept)
@@ -104,7 +104,8 @@ internal static class KcpPacket
 
     public const int ChallengeSize = 1 + 4 + 4 + CookieSize;
     public const int AcceptSize = 1 + 4 + 4;
-    public const int EncryptedAcceptSize = AcceptSize + KcpCipher.PublicKeySize + KcpCipher.SignatureSize;
+    public const int EncryptedAcceptSize =
+        AcceptSize + KcpCipher.PublicKeySize + KcpCipher.SignatureSize + KcpCipher.ConfirmationSize;
     public const int RejectSize = 1 + 4 + 1;
     public const int PingSize = SessionHeaderSize + 4;
 

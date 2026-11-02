@@ -642,7 +642,9 @@ public sealed class KcpConnection : Connection
     private bool AgreeKeys(ReadOnlySpan<byte> accept)
     {
         ReadOnlySpan<byte> hostPublic = accept.Slice(KcpPacket.AcceptSize, KcpCipher.PublicKeySize);
-        ReadOnlySpan<byte> signature = accept.Slice(KcpPacket.AcceptSize + KcpCipher.PublicKeySize);
+        ReadOnlySpan<byte> signature = accept.Slice(KcpPacket.AcceptSize + KcpCipher.PublicKeySize,
+            KcpCipher.SignatureSize);
+        ReadOnlySpan<byte> confirmation = accept[^KcpCipher.ConfirmationSize..];
         if (_transport.TrustedHostKey is { } trusted && !trusted.VerifyData(
                 KcpCipher.Transcript(PublicKey, hostPublic, ClientNonce, SessionId, _options.ProtocolId), signature,
                 HashAlgorithmName.SHA256))
@@ -650,11 +652,15 @@ public sealed class KcpConnection : Connection
             return false;
         }
 
-        Cipher = KcpCipher.Create(KeyExchange!, PublicKey, hostPublic, ClientNonce, SessionId, true);
-        if (Cipher == null)
+        Span<byte> expected = stackalloc byte[KcpCipher.ConfirmationSize];
+        KcpCipher? cipher = KcpCipher.Create(KeyExchange!, PublicKey, hostPublic, ClientNonce, SessionId, true, expected);
+        if (cipher == null || !CryptographicOperations.FixedTimeEquals(expected, confirmation))
         {
+            cipher?.Dispose();
             return false;
         }
+
+        Cipher = cipher;
 
         KeyExchange!.Dispose();
         return true;

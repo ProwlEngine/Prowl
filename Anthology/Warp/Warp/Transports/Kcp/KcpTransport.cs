@@ -545,13 +545,14 @@ public sealed class KcpTransport : Transport
         }
 
         using ECDiffieHellman exchange = KcpCipher.CreateKeyExchange(out byte[] hostPublic);
-        cipher = KcpCipher.Create(exchange, clientPublic, hostPublic, nonce, sessionId, false);
+        accept = new byte[KcpPacket.EncryptedAcceptSize];
+        cipher = KcpCipher.Create(exchange, clientPublic, hostPublic, nonce, sessionId, false,
+            accept.AsSpan(KcpPacket.EncryptedAcceptSize - KcpCipher.ConfirmationSize));
         if (cipher == null)
         {
             return false;
         }
 
-        accept = new byte[KcpPacket.EncryptedAcceptSize];
         accept[0] = (byte)KcpPacketType.Accept;
         BinaryPrimitives.WriteUInt32LittleEndian(accept.AsSpan(1), nonce);
         BinaryPrimitives.WriteUInt32LittleEndian(accept.AsSpan(5), sessionId);

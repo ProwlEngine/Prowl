@@ -27,6 +27,11 @@ internal sealed class KcpCipher : IDisposable
     /// <summary>An ECDSA P-256 signature in IEEE P1363 form.</summary>
     public const int SignatureSize = 64;
 
+    /// <summary>Proof in the Accept that the host derived the same keys.</summary>
+    public const int ConfirmationSize = 16;
+
+    private static readonly byte[] ConfirmationLabel = Encoding.ASCII.GetBytes("Prowl.Warp.Kcp.5 key confirmation");
+
     // How far behind the newest packet a late one may still arrive. Kept as a ring of bits.
     private const int ReplayWindow = 1024;
 
@@ -93,9 +98,12 @@ internal sealed class KcpCipher : IDisposable
         return transcript;
     }
 
-    /// <summary>Agrees on keys with the remote public key. Null if that key is not a valid P-256 point.</summary>
+    /// <summary>
+    ///     Agrees on keys with the remote public key. Null if that key is not a valid P-256 point.
+    ///     <paramref name="confirmation" /> is a tag only an end holding the same keys can produce.
+    /// </summary>
     public static KcpCipher? Create(ECDiffieHellman local, ReadOnlySpan<byte> clientPublic,
-        ReadOnlySpan<byte> hostPublic, uint nonce, uint sessionId, bool isClient)
+        ReadOnlySpan<byte> hostPublic, uint nonce, uint sessionId, bool isClient, Span<byte> confirmation)
     {
         ReadOnlySpan<byte> remote = isClient ? hostPublic : clientPublic;
         if (!IsValidPublicKey(remote))
@@ -126,9 +134,12 @@ internal sealed class KcpCipher : IDisposable
         clientPublic.CopyTo(info.AsSpan(Label.Length));
         hostPublic.CopyTo(info.AsSpan(Label.Length + PublicKeySize));
 
-        Span<byte> keys = stackalloc byte[72];
+        Span<byte> keys = stackalloc byte[104];
         HKDF.DeriveKey(HashAlgorithmName.SHA256, secret, keys, salt, info);
         CryptographicOperations.ZeroMemory(secret);
+        Span<byte> tag = stackalloc byte[32];
+        HMACSHA256.HashData(keys[72..], ConfirmationLabel, tag);
+        tag[..ConfirmationSize].CopyTo(confirmation);
         KcpCipher cipher = new(keys, isClient);
         CryptographicOperations.ZeroMemory(keys);
         return cipher;

@@ -175,6 +175,34 @@ public class KcpEncryptionTests
     }
 
     [Fact]
+    public void AnAcceptWhoseKeysDoNotMatchIsIgnoredEvenWithoutAPinnedKey()
+    {
+        using KcpTransport host = new(Options(new KcpEncryption()));
+        host.Listen();
+        using KcpTransport client = new(Options(new KcpEncryption()));
+        using Relay relay = new(host);
+        relay.BeforeClient = datagram =>
+        {
+            if (datagram[0] != (byte)KcpPacketType.Accept)
+            {
+                return Array.Empty<byte[]>();
+            }
+
+            byte[] forged = (byte[])datagram.Clone();
+            using ECDiffieHellman other = KcpCipher.CreateKeyExchange(out byte[] otherKey);
+            otherKey.CopyTo(forged, KcpPacket.AcceptSize);
+            return new[] { forged };
+        };
+        Pump pump = new(host, client);
+        Connection toHost = client.Connect(relay.Address);
+        pump.Until(() => { relay.Step(); return toHost.IsConnected; }, what: "connect");
+
+        toHost.Send(new byte[] { 5 }, Delivery.Reliable);
+        pump.Until(() => { relay.Step(); return pump.EventsOf(host).Any(ev => ev.Type == TransportEventType.Data); },
+            timeoutMs: 2000, what: "data under the agreed keys");
+    }
+
+    [Fact]
     public void AForgedAcceptDoesNotStopTheGenuineOne()
     {
         using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -386,8 +414,8 @@ public class KcpEncryptionTests
     {
         using ECDiffieHellman clientExchange = KcpCipher.CreateKeyExchange(out byte[] clientPublic);
         using ECDiffieHellman hostExchange = KcpCipher.CreateKeyExchange(out byte[] hostPublic);
-        return (KcpCipher.Create(clientExchange, clientPublic, hostPublic, 1, 2, true)!,
-            KcpCipher.Create(hostExchange, clientPublic, hostPublic, 1, 2, false)!);
+        return (KcpCipher.Create(clientExchange, clientPublic, hostPublic, 1, 2, true, new byte[16])!,
+            KcpCipher.Create(hostExchange, clientPublic, hostPublic, 1, 2, false, new byte[16])!);
     }
 
     [Theory]
@@ -399,8 +427,8 @@ public class KcpEncryptionTests
     {
         using ECDiffieHellman local = KcpCipher.CreateKeyExchange(out byte[] mine);
         byte[] key = BadKey(kind);
-        Assert.Null(KcpCipher.Create(local, key, mine, 1, 2, false));
-        Assert.Null(KcpCipher.Create(local, mine, key, 1, 2, true));
+        Assert.Null(KcpCipher.Create(local, key, mine, 1, 2, false, new byte[16]));
+        Assert.Null(KcpCipher.Create(local, mine, key, 1, 2, true, new byte[16]));
     }
 
     [Fact]
