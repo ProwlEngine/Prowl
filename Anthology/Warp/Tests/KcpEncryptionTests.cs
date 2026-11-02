@@ -230,6 +230,58 @@ public class KcpEncryptionTests
     }
 
     [Fact]
+    public void ReplayingAClientPacketFromAnotherAddressDoesNotMoveTheSession()
+    {
+        using KcpTransport host = new(Options(new KcpEncryption()));
+        host.Listen();
+        using KcpTransport client = new(Options(new KcpEncryption()));
+        using Relay relay = new(host);
+        using Socket attacker = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        attacker.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        Pump pump = new(host, client);
+        Connection toHost = client.Connect(relay.Address);
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+        Connection toClient = host.Connections.Single();
+        string address = toClient.Address;
+
+        // An on-path observer races each fresh client packet to the host from its own address.
+        relay.Spy = datagram =>
+        {
+            if (datagram[0] >= 16)
+            {
+                attacker.SendTo(datagram, new IPEndPoint(IPAddress.Loopback, relay.HostPort));
+            }
+        };
+        for (int i = 0; i < 20; i++)
+        {
+            toHost.Send(new byte[] { (byte)i }, Delivery.Reliable);
+            relay.Step();
+            pump.Step();
+            Assert.Equal(address, toClient.Address);
+        }
+    }
+
+    [Fact]
+    public void EncryptedClientsFollowAHostToANewAddress()
+    {
+        using KcpTransport host = new(Options(new KcpEncryption()));
+        host.Listen();
+        using KcpTransport client = new(Options(new KcpEncryption()));
+        using Relay relay = new(host);
+        Pump pump = new(host, client);
+        Connection toHost = client.Connect(relay.Address);
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+
+        relay.MoveClientSide();
+        host.Connections.Single().Send(new byte[] { 1 }, Delivery.Reliable);
+        pump.Until(() =>
+        {
+            relay.Step();
+            return pump.EventsOf(client).Any(ev => ev.Type == TransportEventType.Data) && toHost.Address == relay.Address;
+        }, what: "the client to follow the host");
+    }
+
+    [Fact]
     public void ForgedPacketsFromANewAddressDoNotMoveTheSession()
     {
         using KcpTransport host = new(Options(new KcpEncryption()));
@@ -410,13 +462,23 @@ public class KcpEncryptionTests
     private sealed class Relay : IDisposable
     {
         private readonly IPEndPoint _host;
-        private readonly Socket _clientSide = Bound();
+        private readonly List<Socket> _clientSides = new() { Bound() };
         private EndPoint? _client;
         private Socket _hostSide = Bound();
+        private Socket _clientSide;
 
-        public Relay(KcpTransport host) => _host = new IPEndPoint(IPAddress.Loopback, host.LocalPort);
+        public Relay(KcpTransport host)
+        {
+            _host = new IPEndPoint(IPAddress.Loopback, host.LocalPort);
+            _clientSide = _clientSides[0];
+        }
+
+        /// <summary>Called with each datagram from the client before it is forwarded.</summary>
+        public Action<byte[]>? Spy { get; set; }
 
         public string Address => $"127.0.0.1:{((IPEndPoint)_clientSide.LocalEndPoint!).Port}";
+
+        public int HostPort => _host.Port;
 
         /// <summary>The address the host sees this client at.</summary>
         public string HostSideAddress => $"127.0.0.1:{((IPEndPoint)_hostSide.LocalEndPoint!).Port}";
@@ -427,8 +489,19 @@ public class KcpEncryptionTests
 
         public void Dispose()
         {
-            _clientSide.Dispose();
+            foreach (Socket socket in _clientSides)
+            {
+                socket.Dispose();
+            }
+
             _hostSide.Dispose();
+        }
+
+        /// <summary>Answers the client from a new address, like a host behind a NAT that rebinds. The old one still listens.</summary>
+        public void MoveClientSide()
+        {
+            _clientSide = Bound();
+            _clientSides.Add(_clientSide);
         }
 
         public void MoveToNewAddress()
@@ -442,17 +515,21 @@ public class KcpEncryptionTests
         public void Step()
         {
             byte[] buffer = new byte[2048];
-            while (_clientSide.Available > 0)
+            foreach (Socket clientSide in _clientSides)
             {
-                EndPoint from = new IPEndPoint(IPAddress.Any, 0);
-                int length = _clientSide.ReceiveFrom(buffer, ref from);
-                byte[] datagram = buffer[..length];
-                Seen.Add(datagram);
-                _client = from;
-                byte[]? forwarded = ToHost == null ? datagram : ToHost(datagram);
-                if (forwarded != null)
+                while (clientSide.Available > 0)
                 {
-                    _hostSide.SendTo(forwarded, _host);
+                    EndPoint from = new IPEndPoint(IPAddress.Any, 0);
+                    int length = clientSide.ReceiveFrom(buffer, ref from);
+                    byte[] datagram = buffer[..length];
+                    Seen.Add(datagram);
+                    _client = from;
+                    Spy?.Invoke(datagram);
+                    byte[]? forwarded = ToHost == null ? datagram : ToHost(datagram);
+                    if (forwarded != null)
+                    {
+                        _hostSide.SendTo(forwarded, _host);
+                    }
                 }
             }
 

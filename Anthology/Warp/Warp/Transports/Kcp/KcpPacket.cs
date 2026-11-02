@@ -30,6 +30,8 @@ namespace Prowl.Warp.Transports.Kcp;
 ///   Ping               body = u32 sender time in ms
 ///   Pong               body = u32 time echoed from the Ping
 ///   Disconnect         no body
+///   PathChallenge      body = 8 random bytes, sent to a new address an encrypted peer's packets came from
+///   PathResponse       body = the 8 bytes echoed; only an answer from that address moves the session there
 ///   Encrypted, every session packet is [type][u32 sessionId][u64 counter][sealed body][16 byte tag].
 /// </code>
 ///     <para>
@@ -60,7 +62,9 @@ internal enum KcpPacketType : byte
     Pong = 19,
     Disconnect = 20,
     ReliableChannel = 21,
-    UnreliableFramed = 22
+    UnreliableFramed = 22,
+    PathChallenge = 23,
+    PathResponse = 24
 }
 
 internal static class KcpPacket

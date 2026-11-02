@@ -353,8 +353,11 @@ public sealed class KcpConnection : Connection
         Address = address;
     }
 
-    /// <summary>Handles a session packet that <see cref="Authenticate" /> accepted.</summary>
-    internal void Process(byte[] buffer, int length, long now)
+    /// <summary>
+    ///     Handles a session packet that <see cref="Authenticate" /> accepted. <paramref name="from" /> is where it
+    ///     came from when that isn't the connection's address, which is where a path challenge is answered.
+    /// </summary>
+    internal void Process(byte[] buffer, int length, long now, SocketAddress? from = null)
     {
         ReadOnlySpan<byte> packet = buffer.AsSpan(0, length);
         KcpPacketType type = (KcpPacketType)packet[0];
@@ -409,7 +412,48 @@ public sealed class KcpConnection : Connection
             case KcpPacketType.Disconnect:
                 _transport.Close(this, DisconnectReason.RemoteClosed, false);
                 break;
+
+            case KcpPacketType.PathChallenge:
+                if (body.Length == PathTokenSize)
+                {
+                    _transport.SendSession(this, KcpPacketType.PathResponse, ReadOnlySpan<byte>.Empty, body, from);
+                }
+
+                break;
         }
+    }
+
+    private const int PathTokenSize = 8;
+    private SocketAddress? _pathCandidate;
+    private readonly byte[] _pathToken = new byte[PathTokenSize];
+    private long _pathChallengedMs;
+
+    /// <summary>Asks <paramref name="candidate" /> to echo a fresh token, at most every 100 ms per address.</summary>
+    internal void ChallengePath(SocketAddress candidate, long now)
+    {
+        if (State != ConnectionState.Connected ||
+            (candidate.Equals(_pathCandidate) && now - _pathChallengedMs < 100))
+        {
+            return;
+        }
+
+        _pathCandidate = _transport.CloneAddress(candidate);
+        RandomNumberGenerator.Fill(_pathToken);
+        _pathChallengedMs = now;
+        _transport.SendSession(this, KcpPacketType.PathChallenge, ReadOnlySpan<byte>.Empty, _pathToken, _pathCandidate);
+    }
+
+    /// <summary>Whether a PathResponse from <paramref name="from" /> echoes the challenge sent there.</summary>
+    internal bool ConfirmsPath(ReadOnlySpan<byte> body, SocketAddress from)
+    {
+        if (State != ConnectionState.Connected || _pathCandidate == null || !from.Equals(_pathCandidate) ||
+            !CryptographicOperations.FixedTimeEquals(body, _pathToken))
+        {
+            return false;
+        }
+
+        _pathCandidate = null;
+        return true;
     }
 
     /// <summary>Handshake resends, keepalives, the reliable channel's timers and timeouts.</summary>

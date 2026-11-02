@@ -374,12 +374,18 @@ public sealed class KcpTransport : Transport
             return;
         }
 
+        ReadOnlySpan<byte> packet = _receiveBuffer.AsSpan(0, length);
+        if (packet[0] >= (byte)KcpPacketType.Reliable)
+        {
+            FollowToNewAddress(from, length, now);
+            return;
+        }
+
         if (!_listening)
         {
             return;
         }
 
-        ReadOnlySpan<byte> packet = _receiveBuffer.AsSpan(0, length);
         switch ((KcpPacketType)packet[0])
         {
             case KcpPacketType.ConnectRequest:
@@ -389,14 +395,13 @@ public sealed class KcpTransport : Transport
             case KcpPacketType.ChallengeResponse:
                 HandleChallengeResponse(from, packet, now);
                 break;
-
-            default:
-                FollowToNewAddress(from, length, now);
-                break;
         }
     }
 
-    /// <summary>Moves an encrypted session to the address a genuine, newest packet of it came from.</summary>
+    /// <summary>
+    ///     Handles a genuine packet of an encrypted session from an address the session isn't at. The session only
+    ///     moves once that address echoes a path challenge, so replaying a packet from elsewhere can't redirect it.
+    /// </summary>
     private void FollowToNewAddress(SocketAddress from, int length, long now)
     {
         if (length < KcpPacket.SessionHeaderSize || !_bySession.TryGetValue(
@@ -405,18 +410,29 @@ public sealed class KcpTransport : Transport
             return;
         }
 
+        bool response = _receiveBuffer[0] == (byte)KcpPacketType.PathResponse;
         byte[] buffer = _receiveBuffer;
-        if (!connection.Authenticate(ref buffer, ref length, true))
+        if (!connection.Authenticate(ref buffer, ref length, !response))
         {
             return;
         }
 
-        SocketAddress moved = Clone(from);
-        _byAddress.Remove(connection.RemoteAddress!);
-        _byAddress.Add(moved, connection);
-        connection.MoveTo(moved, Format(moved));
-        connection.Process(buffer, length, now);
+        if (!response)
+        {
+            connection.Process(buffer, length, now, from);
+            connection.ChallengePath(from, now);
+        }
+        else if (connection.ConfirmsPath(buffer.AsSpan(KcpPacket.SessionHeaderSize, length - KcpPacket.SessionHeaderSize),
+                     from))
+        {
+            SocketAddress moved = Clone(from);
+            _byAddress.Remove(connection.RemoteAddress!);
+            _byAddress.Add(moved, connection);
+            connection.MoveTo(moved, Format(moved));
+        }
     }
+
+    internal SocketAddress CloneAddress(SocketAddress address) => Clone(address);
 
     private void HandleConnectRequest(SocketAddress from, ReadOnlySpan<byte> packet)
     {
@@ -704,8 +720,9 @@ public sealed class KcpTransport : Transport
         SendSession(connection, type, ReadOnlySpan<byte>.Empty, body);
 
     /// <summary>Sends <c>[type][sessionId][prefix][body]</c>, the prefix being a data packet's channel and sequence.</summary>
+    /// <param name="to">Where to send it, if not the connection's own address.</param>
     internal void SendSession(KcpConnection connection, KcpPacketType type, ReadOnlySpan<byte> prefix,
-        ReadOnlySpan<byte> body)
+        ReadOnlySpan<byte> body, SocketAddress? to = null)
     {
         int length = KcpPacket.SessionHeaderSize + prefix.Length + body.Length;
         int sealedLength = length + (connection.Cipher != null ? KcpCipher.Overhead : 0);
@@ -723,13 +740,13 @@ public sealed class KcpTransport : Transport
             prefix.CopyTo(plain);
             body.CopyTo(plain[prefix.Length..]);
             int written = cipher.Seal(packet[..KcpPacket.SessionHeaderSize], plain, _sendBuffer);
-            SendRaw(connection, connection.RemoteAddress!, _sendBuffer.AsSpan(0, written));
+            SendRaw(connection, to ?? connection.RemoteAddress!, _sendBuffer.AsSpan(0, written));
             return;
         }
 
         prefix.CopyTo(packet[KcpPacket.SessionHeaderSize..]);
         body.CopyTo(packet[(KcpPacket.SessionHeaderSize + prefix.Length)..]);
-        SendRaw(connection, connection.RemoteAddress!, packet);
+        SendRaw(connection, to ?? connection.RemoteAddress!, packet);
     }
 
     private void SendRaw(KcpConnection? connection, SocketAddress to, ReadOnlySpan<byte> datagram)
@@ -832,7 +849,15 @@ public sealed class KcpTransport : Transport
     protected override void OnReceiveQueueOverflow(Connection connection) =>
         Close((KcpConnection)connection, DisconnectReason.ResourceLimit, true);
 
-    internal void OnConnected(KcpConnection connection) => RaiseConnected(connection);
+    internal void OnConnected(KcpConnection connection)
+    {
+        if (connection.Cipher != null)
+        {
+            _bySession.TryAdd(connection.SessionId, connection);
+        }
+
+        RaiseConnected(connection);
+    }
 
     internal void OnData(KcpConnection connection, ReadOnlySpan<byte> data, Delivery delivery, byte channel) =>
         RaiseData(connection, data, delivery, channel);
