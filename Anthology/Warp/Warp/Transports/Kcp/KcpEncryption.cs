@@ -8,7 +8,8 @@ namespace Prowl.Warp.Transports.Kcp;
 
 /// <summary>
 ///     Turns on encryption for a <see cref="KcpTransport" />. Each connection agrees on fresh keys with an
-///     ephemeral P-256 key exchange, then seals every session packet with AES-256-GCM and drops replays.
+///     ephemeral P-256 key exchange, then seals every session packet with AES-256-GCM and drops replays. Each
+///     direction moves to fresh keys every 2^24 packets and wipes the old ones.
 /// </summary>
 /// <remarks>
 ///     Without <see cref="TrustedHostKey" /> traffic is private from anyone who only listens, but a man in the

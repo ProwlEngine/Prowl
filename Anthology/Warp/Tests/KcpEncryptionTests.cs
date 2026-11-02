@@ -410,12 +410,43 @@ public class KcpEncryptionTests
         Assert.False(host.Open(sealedPackets[^1], header.Length, plain, out _));
     }
 
-    private static (KcpCipher Client, KcpCipher Host) CipherPair()
+    [Fact]
+    public void KeysMoveOnEveryEpochAndOldEpochsCannotBeOpened()
+    {
+        (KcpCipher client, KcpCipher host) = CipherPair(epochBits: 4);
+        byte[] header = { 16, 1, 2, 3, 4 };
+        byte[][] sealedPackets = new byte[100][];
+        for (int i = 0; i < sealedPackets.Length; i++)
+        {
+            sealedPackets[i] = new byte[header.Length + 1 + KcpCipher.Overhead];
+            client.Seal(header, new[] { (byte)i }, sealedPackets[i]);
+        }
+
+        byte[] plain = new byte[16];
+        for (int i = 0; i < 40; i++)
+        {
+            if (i != 31 && i != 2)
+            {
+                Assert.True(host.Open(sealedPackets[i], header.Length, plain, out _), $"packet {i}");
+                Assert.Equal(i, plain[0]);
+            }
+        }
+
+        // 31 is from the epoch just before, still open for late packets. 2 is two epochs back, its key gone.
+        Assert.True(host.Open(sealedPackets[31], header.Length, plain, out _));
+        Assert.False(host.Open(sealedPackets[2], header.Length, plain, out _));
+        for (int i = 40; i < 100; i++)
+        {
+            Assert.True(host.Open(sealedPackets[i], header.Length, plain, out _), $"packet {i}");
+        }
+    }
+
+    private static (KcpCipher Client, KcpCipher Host) CipherPair(int epochBits = KcpCipher.DefaultEpochBits)
     {
         using ECDiffieHellman clientExchange = KcpCipher.CreateKeyExchange(out byte[] clientPublic);
         using ECDiffieHellman hostExchange = KcpCipher.CreateKeyExchange(out byte[] hostPublic);
-        return (KcpCipher.Create(clientExchange, clientPublic, hostPublic, 1, 2, true, new byte[16])!,
-            KcpCipher.Create(hostExchange, clientPublic, hostPublic, 1, 2, false, new byte[16])!);
+        return (KcpCipher.Create(clientExchange, clientPublic, hostPublic, 1, 2, true, new byte[16], epochBits)!,
+            KcpCipher.Create(hostExchange, clientPublic, hostPublic, 1, 2, false, new byte[16], epochBits)!);
     }
 
     [Theory]

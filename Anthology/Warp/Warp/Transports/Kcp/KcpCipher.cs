@@ -27,6 +27,9 @@ internal sealed class KcpCipher : IDisposable
     /// <summary>An ECDSA P-256 signature in IEEE P1363 form.</summary>
     public const int SignatureSize = 64;
 
+    /// <summary>Each direction moves to fresh keys every 2^24 packets.</summary>
+    public const int DefaultEpochBits = 24;
+
     /// <summary>Proof in the Accept that the host derived the same keys.</summary>
     public const int ConfirmationSize = 16;
 
@@ -44,30 +47,65 @@ internal sealed class KcpCipher : IDisposable
     private static readonly byte[] Label = Encoding.ASCII.GetBytes("Prowl.Warp.Kcp.5");
     private static readonly byte[] SignatureLabel = Encoding.ASCII.GetBytes("Prowl.Warp.Kcp.5 host signature");
 
-    private readonly AesGcm _receive;
+    private static readonly byte[] KeyLabel = Encoding.ASCII.GetBytes("key");
+    private static readonly byte[] NextLabel = Encoding.ASCII.GetBytes("next");
+
+    // Each direction's keys come from a chain secret that moves forward one step per epoch of packets. Old
+    // secrets are wiped, so the keys of earlier epochs can't be recovered from later state.
+    private readonly int _epochBits;
+    private readonly byte[] _receiveChain = new byte[32];
+    private ulong _receiveEpoch;
+    private AesGcm _receive;
+    private AesGcm? _receivePrevious;
     private readonly uint _receiveSalt;
-    private readonly AesGcm _send;
+    private readonly byte[] _sendChain = new byte[32];
+    private ulong _sendEpoch;
+    private AesGcm _send;
     private readonly uint _sendSalt;
     private ulong _highest;
     private bool _received;
     private ulong _nextCounter;
     private readonly ulong[] _window = new ulong[ReplayWindow / 64];
 
-    private KcpCipher(ReadOnlySpan<byte> keys, bool isClient)
+    private KcpCipher(ReadOnlySpan<byte> keys, bool isClient, int epochBits)
     {
-        ReadOnlySpan<byte> clientKey = keys[..32], hostKey = keys[32..64];
+        ReadOnlySpan<byte> clientChain = keys[..32], hostChain = keys[32..64];
         uint clientSalt = BinaryPrimitives.ReadUInt32LittleEndian(keys[64..]);
         uint hostSalt = BinaryPrimitives.ReadUInt32LittleEndian(keys[68..]);
-        _send = new AesGcm(isClient ? clientKey : hostKey, TagSize);
-        _receive = new AesGcm(isClient ? hostKey : clientKey, TagSize);
+        (isClient ? clientChain : hostChain).CopyTo(_sendChain);
+        (isClient ? hostChain : clientChain).CopyTo(_receiveChain);
+        _send = KeyFor(_sendChain);
+        _receive = KeyFor(_receiveChain);
         _sendSalt = isClient ? clientSalt : hostSalt;
         _receiveSalt = isClient ? hostSalt : clientSalt;
+        _epochBits = epochBits;
     }
 
     public void Dispose()
     {
         _send.Dispose();
         _receive.Dispose();
+        _receivePrevious?.Dispose();
+        CryptographicOperations.ZeroMemory(_sendChain);
+        CryptographicOperations.ZeroMemory(_receiveChain);
+    }
+
+    private static AesGcm KeyFor(ReadOnlySpan<byte> chain)
+    {
+        Span<byte> key = stackalloc byte[32];
+        HKDF.Expand(HashAlgorithmName.SHA256, chain, key, KeyLabel);
+        AesGcm aes = new(key, TagSize);
+        CryptographicOperations.ZeroMemory(key);
+        return aes;
+    }
+
+    /// <summary>Moves a chain secret one epoch forward in place, wiping the old one.</summary>
+    private static void Advance(Span<byte> chain)
+    {
+        Span<byte> next = stackalloc byte[32];
+        HKDF.Expand(HashAlgorithmName.SHA256, chain, next, NextLabel);
+        next.CopyTo(chain);
+        CryptographicOperations.ZeroMemory(next);
     }
 
     /// <summary>A fresh P-256 key pair for one handshake, and its public half in uncompressed form.</summary>
@@ -103,7 +141,8 @@ internal sealed class KcpCipher : IDisposable
     ///     <paramref name="confirmation" /> is a tag only an end holding the same keys can produce.
     /// </summary>
     public static KcpCipher? Create(ECDiffieHellman local, ReadOnlySpan<byte> clientPublic,
-        ReadOnlySpan<byte> hostPublic, uint nonce, uint sessionId, bool isClient, Span<byte> confirmation)
+        ReadOnlySpan<byte> hostPublic, uint nonce, uint sessionId, bool isClient, Span<byte> confirmation,
+        int epochBits = DefaultEpochBits)
     {
         ReadOnlySpan<byte> remote = isClient ? hostPublic : clientPublic;
         if (!IsValidPublicKey(remote))
@@ -140,7 +179,7 @@ internal sealed class KcpCipher : IDisposable
         Span<byte> tag = stackalloc byte[32];
         HMACSHA256.HashData(keys[72..], ConfirmationLabel, tag);
         tag[..ConfirmationSize].CopyTo(confirmation);
-        KcpCipher cipher = new(keys, isClient);
+        KcpCipher cipher = new(keys, isClient, epochBits);
         CryptographicOperations.ZeroMemory(keys);
         return cipher;
     }
@@ -173,6 +212,14 @@ internal sealed class KcpCipher : IDisposable
     /// <summary>Writes <c>[header][counter][ciphertext][tag]</c> and returns its length. The header and counter are authenticated too.</summary>
     public int Seal(ReadOnlySpan<byte> header, ReadOnlySpan<byte> plain, Span<byte> destination)
     {
+        while (_nextCounter >> _epochBits > _sendEpoch)
+        {
+            Advance(_sendChain);
+            _send.Dispose();
+            _send = KeyFor(_sendChain);
+            _sendEpoch++;
+        }
+
         header.CopyTo(destination);
         BinaryPrimitives.WriteUInt64LittleEndian(destination[header.Length..], _nextCounter);
         Span<byte> nonce = stackalloc byte[12];
@@ -204,14 +251,54 @@ internal sealed class KcpCipher : IDisposable
             return false;
         }
 
+        // Packets may come from this epoch, the one before it, or the next, which moves the keys forward.
+        ulong epoch = counter >> _epochBits;
+        AesGcm? key = epoch == _receiveEpoch ? _receive : epoch + 1 == _receiveEpoch ? _receivePrevious : null;
+        byte[]? nextChain = null;
+        if (epoch == _receiveEpoch + 1)
+        {
+            nextChain = (byte[])_receiveChain.Clone();
+            Advance(nextChain);
+            key = KeyFor(nextChain);
+        }
+
+        if (key == null)
+        {
+            return false;
+        }
+
         Span<byte> nonce = stackalloc byte[12];
         WriteNonce(nonce, _receiveSalt, counter);
+        bool opened = true;
         try
         {
-            _receive.Decrypt(nonce, packet.Slice(aad, length), packet.Slice(aad + length, TagSize),
+            key.Decrypt(nonce, packet.Slice(aad, length), packet.Slice(aad + length, TagSize),
                 plain[..length], packet[..aad]);
         }
         catch (CryptographicException)
+        {
+            opened = false;
+        }
+
+        if (nextChain != null)
+        {
+            if (opened)
+            {
+                _receivePrevious?.Dispose();
+                _receivePrevious = _receive;
+                _receive = key;
+                nextChain.CopyTo(_receiveChain);
+                _receiveEpoch++;
+            }
+            else
+            {
+                key.Dispose();
+            }
+
+            CryptographicOperations.ZeroMemory(nextChain);
+        }
+
+        if (!opened)
         {
             return false;
         }
