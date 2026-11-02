@@ -290,17 +290,17 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/EJTP">
-                    <img src="https://avatars.githubusercontent.com/u/87308197?v=4" width="100;" alt="EJTP"/>
-                    <br />
-                    <sub><b>EJTP</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/paulbartrum">
                     <img src="https://avatars.githubusercontent.com/u/1572571?v=4" width="100;" alt="paulbartrum"/>
                     <br />
                     <sub><b>paulbartrum</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/EJTP">
+                    <img src="https://avatars.githubusercontent.com/u/87308197?v=4" width="100;" alt="EJTP"/>
+                    <br />
+                    <sub><b>EJTP</b></sub>
                 </a>
             </td>
             <td align="center">
