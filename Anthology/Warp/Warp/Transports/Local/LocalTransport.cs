@@ -275,7 +275,7 @@ public sealed class LocalTransport : Transport
 
     internal bool Post(Packet packet) => Post(packet, out _);
 
-    /// <param name="closed">Whether the packet was refused because this transport has shut down.</param>
+    /// <summary>Queues a packet, with <paramref name="closed" /> telling whether a refusal was because this transport shut down.</summary>
     private bool Post(Packet packet, out bool closed)
     {
         lock (_inboxGate)
