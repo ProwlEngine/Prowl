@@ -709,6 +709,19 @@ public class KcpTests
     }
 
     [Fact]
+    public void AnIdleConversationIsSmall()
+    {
+        new Transports.Kcp.Protocol.Kcp(1, (_, _) => { }).SetMtu(1195);
+        long before = System.GC.GetAllocatedBytesForCurrentThread();
+        Transports.Kcp.Protocol.Kcp kcp = new(1, (_, _) => { });
+        kcp.SetMtu(1195);
+        kcp.SetWindowSize(4096, 256);
+        long allocated = System.GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.InRange(allocated, 0, 12 * 1024);
+    }
+
+    [Fact]
     public void LargeMessagesDoNotGrowTheSegmentPoolForever()
     {
         Transports.Kcp.Protocol.Kcp? receiver = null;

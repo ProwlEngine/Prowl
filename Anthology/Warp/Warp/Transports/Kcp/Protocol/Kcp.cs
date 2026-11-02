@@ -50,8 +50,8 @@ public sealed class Kcp
         () => new Segment(),
         // reset segment before reuse
         segment => segment.Reset(),
-        // initial capacity
-        32,
+        // initial capacity. filled on demand, so idle conversations stay small.
+        0,
         // max capacity
         32
     );
