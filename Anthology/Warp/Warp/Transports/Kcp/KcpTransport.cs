@@ -117,10 +117,10 @@ public sealed class KcpTransport : Transport
         ValueTask<SocketAddress?> resolution = TryResolveAsync(address, Settings.Port, _socket!.AddressFamily,
             cancellation.Token, _resolver);
         SocketAddress? remote = resolution.IsCompletedSuccessfully ? resolution.Result : null;
+        // One socket can hold only one connection per remote address.
         if (remote != null && _byAddress.ContainsKey(remote))
         {
-            cancellation.Dispose();
-            throw new InvalidOperationException($"Already connected to {address}.");
+            remote = null;
         }
 
         KcpConnection connection = new(this, NextConnectionId(), address, true, remote, NowMs)

@@ -154,6 +154,23 @@ public class KcpTransportTests
     }
 
     [Fact]
+    public void ConnectingTwiceToOneAddressFailsLaterNotSynchronously()
+    {
+        (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) = Connect();
+        using (host)
+        using (client)
+        {
+            Connection again = client.Connect($"127.0.0.1:{host.LocalPort}");
+            Assert.Equal(ConnectionState.Connecting, again.State);
+            pump.Until(() => again.State == ConnectionState.Disconnected, what: "refusal");
+
+            Assert.Equal(DisconnectReason.Unreachable,
+                Assert.Single(pump.EventsOf(client), ev => ev.Connection == again).Reason);
+            Assert.True(toHost.IsConnected);
+        }
+    }
+
+    [Fact]
     public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
     {
         KcpTransportOptions options = FastOptions();
