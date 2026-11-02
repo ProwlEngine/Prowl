@@ -259,13 +259,35 @@ public abstract class NetSessionTests : IDisposable
         Assert.Throws<ArgumentException>(() => sender.SendRaw(to, 30, new byte[limit]));
         if (toClient)
         {
-            Assert.Throws<ArgumentException>(() => host.Session.BroadcastRaw(30, new byte[limit]));
+            // Broadcasts skip a client that can't take the message instead.
+            host.Session.BroadcastRaw(30, new byte[limit]);
         }
 
         sender.SendRaw(to, 30, new byte[limit - 2]);
         SessionProbe.PumpFor(100, host, alice);
         Assert.Equal(SessionState.Active, alice.Session.State);
         Assert.Equal(2, host.Session.Peers.Count);
+    }
+
+    [Fact]
+    public void OneClientsSmallLimitBreaksNeitherBroadcastsNorThePeerList()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice", new NetSessionOptions { BatchMessages = BatchMessages, MaxMessageSize = 64 });
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        SessionProbe bob = Join(new string('b', 120));
+        SessionProbe.PumpUntil(() => bob.Session.State == SessionState.Active && alice.PeersJoined.Count == 1,
+            host, alice, bob);
+        Assert.Equal(3, alice.Session.Peers.Count);
+        Assert.Equal(2, host.PeersJoined.Count);
+
+        int atAlice = 0, atBob = 0;
+        alice.Session.OnRaw(30, (_, ref _, _, _) => atAlice++);
+        bob.Session.OnRaw(30, (_, ref _, _, _) => atBob++);
+        host.Session.BroadcastRaw(30, new byte[100]);
+        host.Session.BroadcastRaw(30, new byte[10]);
+        SessionProbe.PumpUntil(() => atBob == 2 && atAlice == 1, host, alice, bob);
+        Assert.Equal(SessionState.Active, alice.Session.State);
     }
 
     [Fact]

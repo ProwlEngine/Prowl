@@ -348,6 +348,7 @@ public sealed class NetSession : IDisposable
         ArgumentNullException.ThrowIfNull(to);
         BeginUserMessage(T.Id);
         message.Write(_writer);
+        ValidateSize(to);
         SendWritten(to, delivery, flags, channel);
     }
 
@@ -362,7 +363,8 @@ public sealed class NetSession : IDisposable
 
     /// <summary>
     ///     Host: sends a message to every client, except <paramref name="except" />, and to itself if
-    ///     <paramref name="includeLocal" />.
+    ///     <paramref name="includeLocal" />. Clients that announced a smaller <see cref="NetSessionOptions.MaxMessageSize" />
+    ///     than this message are skipped.
     /// </summary>
     public void Broadcast<T>(T message, Delivery delivery = Delivery.Reliable, NetPeer? except = null,
         bool includeLocal = false, SendFlags flags = SendFlags.None, byte channel = 0) where T : INetMessage
@@ -381,6 +383,7 @@ public sealed class NetSession : IDisposable
         ValidateUserId(id);
         BeginUserMessage(id);
         _writer.WriteBytes(payload);
+        ValidateSize(to);
         SendWritten(to, delivery, flags, channel);
     }
 
@@ -638,7 +641,7 @@ public sealed class NetSession : IDisposable
             }
 
             ushort id = reader.ReadUInt16();
-            if (id != (ushort)InternalMessage.Batch && data.Length > _options.MaxMessageSize)
+            if (id < ReservedMessageIds && data.Length > _options.MaxMessageSize)
             {
                 throw new InvalidDataException(
                     $"A {data.Length} byte message exceeds the {_options.MaxMessageSize} byte limit.");
@@ -941,7 +944,7 @@ public sealed class NetSession : IDisposable
             }
 
             ushort id = reader.ReadUInt16();
-            if (id != (ushort)InternalMessage.Batch && data.Length > _options.MaxMessageSize)
+            if (id < ReservedMessageIds && data.Length > _options.MaxMessageSize)
             {
                 throw new InvalidDataException(
                     $"A {data.Length} byte message exceeds the {_options.MaxMessageSize} byte limit.");
@@ -1225,7 +1228,6 @@ public sealed class NetSession : IDisposable
     private void SendWritten(NetPeer to, Delivery delivery, SendFlags flags, byte channel)
     {
         ValidateSend(delivery, flags, channel);
-        ValidateSize(to);
 
         if (to.IsLocal)
         {
@@ -1532,17 +1534,11 @@ public sealed class NetSession : IDisposable
     {
         ValidateSend(delivery, flags, channel);
 
+        // Warp's own messages have their own bounds, and every peer accepts them.
+        bool user = BinaryPrimitives.ReadUInt16LittleEndian(_writer.WrittenSpan) < ReservedMessageIds;
         foreach (NetPeer peer in _peers.Values)
         {
-            if (peer != except)
-            {
-                ValidateSize(peer);
-            }
-        }
-
-        foreach (NetPeer peer in _peers.Values)
-        {
-            if (peer == except || (peer.IsLocal && !includeLocal))
+            if (peer == except || (peer.IsLocal && !includeLocal) || (user && _writer.Length > peer.MaxMessageSize))
             {
                 continue;
             }
