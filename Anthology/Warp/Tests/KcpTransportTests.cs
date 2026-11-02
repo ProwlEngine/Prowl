@@ -138,6 +138,21 @@ public class KcpTransportTests
         }
     }
 
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(10, 25)]
+    [InlineData(0, 30)]
+    [InlineData(40, 60)]
+    [InlineData(5, 100)]
+    public void RestartsAreRecognisedHoweverLongTheSessionRan(int startDays, int nowDays)
+    {
+        long start = startDays * 86_400_000L;
+        long now = nowDays * 86_400_000L;
+        Assert.True(KcpTransport.IssuedSince((uint)now, start, now));
+        Assert.True(KcpTransport.IssuedSince((uint)(now - 5000), now - 10_000, now));
+        Assert.False(KcpTransport.IssuedSince((uint)(now - 5000), now - 1000, now));
+    }
+
     [Fact]
     public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
     {

@@ -392,7 +392,7 @@ public sealed class KcpTransport : Transport
 
                 // Only an attempt that began after this session started may replace it. An older cookie is a
                 // delayed or replayed handshake from an attempt that is already over.
-                if ((int)(issued - (uint)connection.SessionStartMs) < 0)
+                if (!IssuedSince(issued, connection.SessionStartMs, now))
                 {
                     return;
                 }
@@ -403,6 +403,9 @@ public sealed class KcpTransport : Transport
                 break;
         }
     }
+
+    /// <summary>Whether a cookie issued at <paramref name="issued" />, a truncated clock reading, dates from <paramref name="sinceMs" /> or later.</summary>
+    internal static bool IssuedSince(uint issued, long sinceMs, long nowMs) => nowMs - ((uint)nowMs - issued) >= sinceMs;
 
     private bool TryReadChallengeResponse(SocketAddress from, ReadOnlySpan<byte> packet, out uint nonce,
         out uint issued)
