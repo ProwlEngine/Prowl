@@ -58,10 +58,14 @@ is lost. Keep frequent ones small.
 ## KCP options
 
 - `Encryption`: off by default. Each connection agrees on keys with an ephemeral P-256 exchange, then every session
-  packet is sealed with AES-256-GCM and replays are dropped. Give the host a `SigningKey` and clients its public key
-  as `TrustedHostKey` to stop a man in the middle. Encrypted clients keep their session when their address
-  changes, such as a phone moving between Wi-Fi and mobile data. Both ends must agree.
-- `MaxSendRate`: caps the bytes per second each connection sends. Lower channels get the bandwidth first.
+  packet is sealed with AES-256-GCM and replays are dropped. Keys move forward every 2^24 packets. Give the host a
+  `SigningKey` and clients its public key as `TrustedHostKey` to stop a man in the middle. Either end keeps the
+  session when the other's address changes, such as a phone moving between Wi-Fi and mobile data, once the new
+  address answers an encrypted challenge. Both ends must agree.
+- `MaxSendRate`: caps the bytes per second each connection sends. Lower channels get the bandwidth first, and
+  unreliable messages over the cap are dropped and counted in `Stats.UnreliableDropped`.
+- `MaxConnectionsPerAddress` and `MaxHandshakesPerAddressPerSecond`: limit what one IP address (one IPv6 /64) can
+  take. Players behind carrier grade NAT share addresses, so keep them generous.
 - `UseIoThreads`: reads and writes the socket on background threads. Everything else still runs when you pump.
 - `Reliability.MaxRetransmitTimeout`: the longest a lost segment waits before it is resent, 1 second by default.
 
@@ -88,8 +92,8 @@ session.SendRaw(peer, ChatId, payload, Delivery.Reliable, channel: 1);  // doesn
 
 `NetSession` adds admission, peer lists, typed/raw messages and fragmentation. Clients connect to
 one host; there is no host migration. Match `AppVersion` and transport settings between peers.
-`MaxPeers` cannot exceed the transport's connection limit. Each side announces its `MaxMessageSize` when joining,
-and sending a larger message throws `ArgumentException`.
+`MaxPeers` cannot exceed the transport's connection limit. Each side announces its `MaxMessageSize` when joining.
+Sending a larger message to one peer throws `ArgumentException`; a broadcast skips peers that can't take it.
 
 `NetSessionOptions.BatchMessages` defaults to true. When both peers enable it, sessions combine
 small messages per connection and delivery mode until `Flush`. Full batches and
