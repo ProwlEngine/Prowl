@@ -31,6 +31,19 @@ public sealed class KcpTransportOptions
     public int MaxConnections { get; set; } = 64;
 
     /// <summary>
+    ///     The most incoming connections from one IP address (one /64 for IPv6). Further attempts are rejected
+    ///     with <see cref="DisconnectReason.Rejected" />, so one machine cannot fill the server. Players behind
+    ///     carrier grade NAT can share an address, so don't set it too low.
+    /// </summary>
+    public int MaxConnectionsPerAddress { get; set; } = 32;
+
+    /// <summary>
+    ///     Completed handshakes accepted per second from one IP address (one /64 for IPv6). Extra attempts are
+    ///     ignored and the client retries, which bounds the work, including key agreement, one address can cause.
+    /// </summary>
+    public int MaxHandshakesPerAddressPerSecond { get; set; } = 20;
+
+    /// <summary>
     ///     Independent channels per delivery mode. Each reliable channel orders its own messages only, so a
     ///     lost packet on one never holds up another. Both ends must use the same count.
     /// </summary>
@@ -121,6 +134,16 @@ public sealed class KcpTransportOptions
         {
             throw new ArgumentOutOfRangeException(nameof(Channels), Channels,
                 $"Channels must be between 1 and {MaxChannels}.");
+        }
+
+        if (MaxConnectionsPerAddress < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MaxConnectionsPerAddress));
+        }
+
+        if (MaxHandshakesPerAddressPerSecond < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MaxHandshakesPerAddressPerSecond));
         }
 
         if (MaxConnections < 0)

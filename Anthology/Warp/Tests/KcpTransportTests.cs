@@ -312,6 +312,77 @@ public class KcpTransportTests
     }
 
     [Fact]
+    public void ACookieOpensOneSessionOnly()
+    {
+        using KcpTransport host = new(FastOptions());
+        host.Listen();
+        using Socket raw = RawSocket(host);
+        Pump pump = new(host);
+        byte[] response = RawHandshake(raw, pump, 0x5555, out _);
+        host.Connections.Single().Disconnect();
+        pump.Step();
+
+        raw.Send(response);
+        pump.For(100);
+        Assert.Empty(host.Connections);
+    }
+
+    [Fact]
+    public void OneAddressCannotTakeMoreThanItsShareOfConnections()
+    {
+        KcpTransportOptions options = FastOptions();
+        options.MaxConnectionsPerAddress = 3;
+        using KcpTransport host = new(options);
+        host.Listen();
+        KcpTransport[] clients = Enumerable.Range(0, 5).Select(_ => new KcpTransport(FastOptions())).ToArray();
+        try
+        {
+            Pump pump = new(clients.Prepend(host).ToArray());
+            Connection[] connections = clients.Select(c => c.Connect($"127.0.0.1:{host.LocalPort}")).ToArray();
+            pump.Until(() => connections.All(c => c.State != ConnectionState.Connecting), what: "every attempt to finish");
+
+            Assert.Equal(3, connections.Count(c => c.IsConnected));
+            Assert.Equal(3, host.Connections.Count);
+            Assert.All(connections.Where(c => !c.IsConnected), c =>
+                Assert.Equal(DisconnectReason.Rejected,
+                    pump.EventsOf(clients[Array.IndexOf(connections, c)]).Single(ev => ev.Connection == c).Reason));
+        }
+        finally
+        {
+            foreach (KcpTransport client in clients)
+            {
+                client.Dispose();
+            }
+        }
+    }
+
+    [Fact]
+    public void HandshakesFromOneAddressAreRateLimited()
+    {
+        KcpTransportOptions options = FastOptions();
+        options.MaxHandshakesPerAddressPerSecond = 4;
+        using KcpTransport host = new(options);
+        host.Listen();
+        KcpTransport[] clients = Enumerable.Range(0, 12).Select(_ => new KcpTransport(FastOptions())).ToArray();
+        try
+        {
+            Pump pump = new(clients.Prepend(host).ToArray());
+            Connection[] connections = clients.Select(c => c.Connect($"127.0.0.1:{host.LocalPort}")).ToArray();
+            pump.For(200);
+            Assert.InRange(host.Connections.Count, 1, 6);
+
+            pump.Until(() => connections.All(c => c.IsConnected), timeoutMs: 4000, what: "the rest, at the limited rate");
+        }
+        finally
+        {
+            foreach (KcpTransport client in clients)
+            {
+                client.Dispose();
+            }
+        }
+    }
+
+    [Fact]
     public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
     {
         KcpTransportOptions options = FastOptions();

@@ -56,6 +56,9 @@ public sealed class KcpConnection : Connection
     /// <summary>Where packets for this connection go, and come from. Null if the address never resolved.</summary>
     internal SocketAddress? RemoteAddress { get; set; }
 
+    /// <summary>Host: the client's IP address (its /64 for IPv6), which its connection counts against.</summary>
+    internal UInt128 IpKey { get; init; }
+
     /// <summary>Picked by the client, echoed through the handshake so both sides know which attempt a packet belongs to.</summary>
     internal uint ClientNonce { get; init; }
 

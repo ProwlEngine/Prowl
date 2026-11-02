@@ -39,6 +39,14 @@ public sealed class KcpTransport : Transport
 
     private readonly Dictionary<SocketAddress, KcpConnection> _byAddress = new();
 
+    // Per IP address (one /64 for IPv6): its incoming connections and handshake budget.
+    private readonly Dictionary<UInt128, AddressBudget> _byIp = new();
+
+    // Cookies that already opened a session, each kept until it would have expired anyway.
+    private readonly HashSet<ulong> _usedCookies = new();
+    private readonly Queue<(long ExpiresMs, ulong Cookie)> _cookieExpiry = new();
+    private long _nextSweepMs;
+
     // Encrypted incoming connections, so an authenticated packet from a new address can find its session.
     private readonly Dictionary<uint, KcpConnection> _bySession = new();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
@@ -250,6 +258,38 @@ public sealed class KcpTransport : Transport
         _scratch.Clear();
 
         SendDelayed(now, false);
+        if (now >= _nextSweepMs)
+        {
+            SweepHandshakeState(now);
+            _nextSweepMs = now + 1000;
+        }
+    }
+
+    /// <summary>Forgets expired cookies and addresses that have no connections and a full handshake budget.</summary>
+    private void SweepHandshakeState(long now)
+    {
+        while (_cookieExpiry.TryPeek(out (long ExpiresMs, ulong Cookie) oldest) && oldest.ExpiresMs <= now)
+        {
+            _cookieExpiry.Dequeue();
+            _usedCookies.Remove(oldest.Cookie);
+        }
+
+        List<UInt128>? idle = null;
+        foreach ((UInt128 ip, AddressBudget budget) in _byIp)
+        {
+            if (budget.Connections == 0 && budget.IsFull(now, Settings.MaxHandshakesPerAddressPerSecond))
+            {
+                (idle ??= new List<UInt128>()).Add(ip);
+            }
+        }
+
+        if (idle != null)
+        {
+            foreach (UInt128 ip in idle)
+            {
+                _byIp.Remove(ip);
+            }
+        }
     }
 
     private void ProcessResolutions()
@@ -409,11 +449,38 @@ public sealed class KcpTransport : Transport
             return;
         }
 
+        ulong cookie = BinaryPrimitives.ReadUInt64LittleEndian(packet[9..]);
+        if (_usedCookies.Contains(cookie))
+        {
+            return;
+        }
+
         if (_incomingCount >= Settings.MaxConnections)
         {
             SendReject(from, nonce, DisconnectReason.ServerFull);
             return;
         }
+
+        UInt128 ip = IpKey(from);
+        if (!_byIp.TryGetValue(ip, out AddressBudget? budget))
+        {
+            budget = new AddressBudget(Settings.MaxHandshakesPerAddressPerSecond, now);
+            _byIp.Add(ip, budget);
+        }
+
+        if (budget.Connections >= Settings.MaxConnectionsPerAddress)
+        {
+            SendReject(from, nonce, DisconnectReason.Rejected);
+            return;
+        }
+
+        if (!budget.TrySpend(now, Settings.MaxHandshakesPerAddressPerSecond))
+        {
+            return;
+        }
+
+        _usedCookies.Add(cookie);
+        _cookieExpiry.Enqueue((now + CookieLifetimeMs, cookie));
 
         uint sessionId;
         do
@@ -431,8 +498,9 @@ public sealed class KcpTransport : Transport
         SocketAddress remote = Clone(from);
         KcpConnection connection = new(this, NextConnectionId(), Format(remote), false, remote, now)
         {
-            ClientNonce = nonce, SessionId = sessionId, Cipher = cipher, AcceptPacket = accept
+            ClientNonce = nonce, SessionId = sessionId, Cipher = cipher, AcceptPacket = accept, IpKey = ip
         };
+        budget.Connections++;
         connection.StartSession(now);
 
         AddConnection(connection);
@@ -749,6 +817,10 @@ public sealed class KcpTransport : Transport
         if (connection.RemoteAddress != null && _byAddress.Remove(connection.RemoteAddress) && !connection.IsOutgoing)
         {
             _incomingCount--;
+            if (_byIp.TryGetValue(connection.IpKey, out AddressBudget? budget))
+            {
+                budget.Connections--;
+            }
         }
 
         RaiseDisconnected(connection, reason);
@@ -981,6 +1053,22 @@ public sealed class KcpTransport : Transport
         return copy;
     }
 
+    /// <summary>Groups addresses the way one machine or one home network would hold them: an IPv4 address, or an IPv6 /64.</summary>
+    internal static UInt128 IpKey(SocketAddress address)
+    {
+        ReadOnlySpan<byte> bytes = address.Buffer.Span;
+        if (address.Family == AddressFamily.InterNetwork)
+        {
+            return BinaryPrimitives.ReadUInt32BigEndian(bytes[4..]);
+        }
+
+        // sockaddr_in6: family, port, flow info, then the 16 byte address.
+        ReadOnlySpan<byte> ip = bytes.Slice(8, 16);
+        bool mappedIPv4 = ip[..10].IndexOfAnyExcept((byte)0) < 0 && ip[10] == 0xFF && ip[11] == 0xFF;
+        UInt128 key = BinaryPrimitives.ReadUInt128BigEndian(ip);
+        return mappedIPv4 ? key : key >> 64 << 64;
+    }
+
     private static uint RandomUInt32()
     {
         Span<byte> bytes = stackalloc byte[4];
@@ -998,6 +1086,37 @@ public sealed class KcpTransport : Transport
         Task<SocketAddress?> Task,
         CancellationTokenSource Cancellation,
         long Started);
+
+    private sealed class AddressBudget(int perSecond, long now)
+    {
+        private double _tokens = perSecond;
+        private long _updatedMs = now;
+        public int Connections;
+
+        public bool TrySpend(long now, int perSecond)
+        {
+            Refill(now, perSecond);
+            if (_tokens < 1)
+            {
+                return false;
+            }
+
+            _tokens--;
+            return true;
+        }
+
+        public bool IsFull(long now, int perSecond)
+        {
+            Refill(now, perSecond);
+            return _tokens >= perSecond;
+        }
+
+        private void Refill(long now, int perSecond)
+        {
+            _tokens = Math.Min(perSecond, _tokens + perSecond * (now - _updatedMs) / 1000.0);
+            _updatedMs = now;
+        }
+    }
 
     private readonly record struct DelayedPacket(SocketAddress To, byte[] Buffer, int Length, long DueMs);
 }
