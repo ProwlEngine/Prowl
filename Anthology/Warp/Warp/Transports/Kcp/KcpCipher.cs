@@ -3,6 +3,7 @@
 
 using System;
 using System.Buffers.Binary;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -27,6 +28,13 @@ internal sealed class KcpCipher : IDisposable
     public const int SignatureSize = 64;
 
     private const int ReplayWindow = 64;
+
+    // The P-256 field prime and curve constant b, big-endian. The curve is y^2 = x^3 - 3x + b.
+    private static readonly BigInteger FieldPrime = Unsigned(Convert.FromHexString(
+        "FFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF"));
+
+    private static readonly BigInteger CurveB = Unsigned(Convert.FromHexString(
+        "5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B"));
     private static readonly byte[] Label = Encoding.ASCII.GetBytes("Prowl.Warp.Kcp.5");
 
     private readonly AesGcm _receive;
@@ -84,7 +92,7 @@ internal sealed class KcpCipher : IDisposable
         ReadOnlySpan<byte> hostPublic, uint nonce, uint sessionId, bool isClient)
     {
         ReadOnlySpan<byte> remote = isClient ? hostPublic : clientPublic;
-        if (remote.Length != PublicKeySize || remote[0] != 4)
+        if (!IsValidPublicKey(remote))
         {
             return null;
         }
@@ -99,7 +107,7 @@ internal sealed class KcpCipher : IDisposable
             });
             secret = local.DeriveKeyFromHash(peer.PublicKey, HashAlgorithmName.SHA256);
         }
-        catch (CryptographicException)
+        catch (Exception e) when (e is CryptographicException or PlatformNotSupportedException or ArgumentException)
         {
             return null;
         }
@@ -119,6 +127,31 @@ internal sealed class KcpCipher : IDisposable
         CryptographicOperations.ZeroMemory(keys);
         return cipher;
     }
+
+    /// <summary>Whether <paramref name="key" /> is an uncompressed point on P-256. Checked before any key work.</summary>
+    public static bool IsValidPublicKey(ReadOnlySpan<byte> key)
+    {
+        if (key.Length != PublicKeySize || key[0] != 4)
+        {
+            return false;
+        }
+
+        BigInteger x = Unsigned(key[1..33]), y = Unsigned(key[33..]);
+        if (x >= FieldPrime || y >= FieldPrime)
+        {
+            return false;
+        }
+
+        BigInteger right = (BigInteger.ModPow(x, 3, FieldPrime) - 3 * x + CurveB) % FieldPrime;
+        if (right < 0)
+        {
+            right += FieldPrime;
+        }
+
+        return BigInteger.ModPow(y, 2, FieldPrime) == right;
+    }
+
+    private static BigInteger Unsigned(ReadOnlySpan<byte> bigEndian) => new(bigEndian, true, true);
 
     /// <summary>Writes <c>[header][counter][ciphertext][tag]</c> and returns its length. The header and counter are authenticated too.</summary>
     public int Seal(ReadOnlySpan<byte> header, ReadOnlySpan<byte> plain, Span<byte> destination)

@@ -453,7 +453,13 @@ public sealed class KcpTransport : Transport
         out byte[]? accept)
     {
         accept = null;
+        cipher = null;
         ReadOnlySpan<byte> clientPublic = response.Slice(KcpPacket.HandshakeKeyOffset, KcpCipher.PublicKeySize);
+        if (!KcpCipher.IsValidPublicKey(clientPublic))
+        {
+            return false;
+        }
+
         using ECDiffieHellman exchange = KcpCipher.CreateKeyExchange(out byte[] hostPublic);
         cipher = KcpCipher.Create(exchange, clientPublic, hostPublic, nonce, sessionId, false);
         if (cipher == null)

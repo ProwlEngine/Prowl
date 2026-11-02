@@ -252,6 +252,133 @@ public class KcpEncryptionTests
         Assert.Equal(address, host.Connections.Single().Address);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void InvalidPublicKeysAreRefusedWithoutThrowing(int kind)
+    {
+        using ECDiffieHellman local = KcpCipher.CreateKeyExchange(out byte[] mine);
+        byte[] key = BadKey(kind);
+        Assert.Null(KcpCipher.Create(local, key, mine, 1, 2, false));
+        Assert.Null(KcpCipher.Create(local, mine, key, 1, 2, true));
+    }
+
+    [Fact]
+    public void AHandshakeWithAnInvalidKeyDoesNotBreakTheHost()
+    {
+        using KcpTransport host = new(Options(new KcpEncryption()));
+        host.Listen();
+        using Socket raw = RawSocket(host);
+        byte[] request = EncryptedRequest(0x1234);
+        raw.Send(request);
+        byte[] challenge = Expect(raw, host, KcpPacketType.Challenge);
+        byte[] response = (byte[])request.Clone();
+        response[0] = (byte)KcpPacketType.ChallengeResponse;
+        challenge.AsSpan(9, KcpPacket.CookieSize).CopyTo(response.AsSpan(9));
+        challenge.AsSpan(5, 4).CopyTo(response.AsSpan(KcpPacket.HandshakeIssuedOffset));
+        BadKey(1).CopyTo(response, KcpPacket.HandshakeKeyOffset);
+
+        for (int i = 0; i < 20; i++)
+        {
+            raw.Send(response);
+        }
+
+        System.Threading.Thread.Sleep(50);
+        host.Receive();
+        host.Flush();
+        Assert.Empty(host.Connections);
+    }
+
+    [Fact]
+    public void AnAcceptWithAnInvalidKeyDoesNotBreakTheClient()
+    {
+        using Socket fakeHost = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        fakeHost.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        using KcpTransport client = new(Options(new KcpEncryption()));
+        Connection toHost = client.Connect($"127.0.0.1:{((IPEndPoint)fakeHost.LocalEndPoint!).Port}");
+        client.Flush();
+
+        byte[] buffer = new byte[2048];
+        EndPoint from = new IPEndPoint(IPAddress.Any, 0);
+        fakeHost.ReceiveTimeout = 2000;
+        fakeHost.ReceiveFrom(buffer, ref from);
+        byte[] accept = new byte[KcpPacket.EncryptedAcceptSize];
+        accept[0] = (byte)KcpPacketType.Accept;
+        accept.AsSpan(1, 4).CopyTo(accept.AsSpan(1));
+        buffer.AsSpan(5, 4).CopyTo(accept.AsSpan(1));
+        BinaryPrimitives.WriteUInt32LittleEndian(accept.AsSpan(5), 99);
+        BadKey(1).CopyTo(accept, KcpPacket.AcceptSize);
+        fakeHost.SendTo(accept, from);
+
+        System.Threading.Thread.Sleep(50);
+        client.Receive();
+        client.Flush();
+        Assert.False(toHost.IsConnected);
+    }
+
+    private static byte[] BadKey(int kind)
+    {
+        byte[] key = new byte[KcpCipher.PublicKeySize];
+        key[0] = 4;
+        switch (kind)
+        {
+            case 1: key.AsSpan(1).Fill(0xFF); break;
+            case 2: new Random(1).NextBytes(key.AsSpan(1)); break;
+            case 3: key[0] = 2; break;
+        }
+
+        return key;
+    }
+
+    private static Socket RawSocket(KcpTransport host)
+    {
+        Socket raw = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        raw.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        raw.Connect(new IPEndPoint(IPAddress.Loopback, host.LocalPort));
+        return raw;
+    }
+
+    /// <summary>A ConnectRequest with the default settings, asking for encryption.</summary>
+    private static byte[] EncryptedRequest(uint nonce)
+    {
+        KcpTransportOptions defaults = new();
+        byte[] request = new byte[KcpPacket.HandshakeRequestSize];
+        request[0] = (byte)KcpPacketType.ConnectRequest;
+        BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(1), defaults.ProtocolId);
+        BinaryPrimitives.WriteUInt32LittleEndian(request.AsSpan(5), nonce);
+        request[KcpPacket.HandshakeVersionOffset] = KcpPacket.WireVersion;
+        request[KcpPacket.HandshakeChannelsOffset] = (byte)defaults.Channels;
+        BinaryPrimitives.WriteUInt16LittleEndian(request.AsSpan(KcpPacket.HandshakeMtuOffset), (ushort)defaults.Mtu);
+        BinaryPrimitives.WriteUInt16LittleEndian(request.AsSpan(KcpPacket.HandshakeWindowOffset),
+            (ushort)defaults.Reliability.ReceiveWindow);
+        request[KcpPacket.HandshakeFlagsOffset] = KcpPacket.EncryptedFlag;
+        return request;
+    }
+
+    private static byte[] Expect(Socket raw, KcpTransport host, KcpPacketType type)
+    {
+        byte[] buffer = new byte[KcpPacket.MaxDatagramSize];
+        raw.ReceiveTimeout = 2000;
+        for (int i = 0; i < 100; i++)
+        {
+            System.Threading.Thread.Sleep(5);
+            host.Receive();
+            host.Flush();
+            if (raw.Available > 0)
+            {
+                int length = raw.Receive(buffer);
+                if (buffer[0] == (byte)type)
+                {
+                    return buffer[..length];
+                }
+            }
+        }
+
+        throw new TimeoutException(type.ToString());
+    }
+
     [Fact]
     public void OnlyP256KeysAreAccepted()
     {
