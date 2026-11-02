@@ -720,8 +720,10 @@ public sealed class KcpTransport : Transport
     internal void SendSession(KcpConnection connection, KcpPacketType type, ReadOnlySpan<byte> body) =>
         SendSession(connection, type, ReadOnlySpan<byte>.Empty, body);
 
-    /// <summary>Sends <c>[type][sessionId][prefix][body]</c>, the prefix being a data packet's channel and sequence.</summary>
-    /// <param name="to">Where to send it, if not the connection's own address.</param>
+    /// <summary>
+    ///     Sends <c>[type][sessionId][prefix][body]</c>, the prefix being a data packet's channel and sequence, to
+    ///     <paramref name="to" /> if given, or else the connection's own address.
+    /// </summary>
     internal void SendSession(KcpConnection connection, KcpPacketType type, ReadOnlySpan<byte> prefix,
         ReadOnlySpan<byte> body, SocketAddress? to = null)
     {
