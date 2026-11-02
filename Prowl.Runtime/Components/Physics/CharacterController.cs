@@ -724,7 +724,7 @@ public class CharacterController : Component
     private bool WalkableFaceBelow(Float3 point, float reach, out Float3 normal)
     {
         normal = _up;
-        if (!GameObject.Scene.Physics.Raycast(point + _up * LedgeProbeHeight, Down, out RaycastHit ray, LedgeProbeHeight + reach, _filter)) return false;
+        if (!GameObject.Scene.Physics.Raycast(point + _up * LedgeProbeHeight, Down, LedgeProbeHeight + reach, out RaycastHit ray, _filter)) return false;
         if (!IsFinite(ray.Normal) || ray.Distance <= 0f || Rise(ray.Normal) < MinWalkableNormalY) return false;
 
         normal = ray.Normal;
