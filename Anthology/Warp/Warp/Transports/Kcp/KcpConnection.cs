@@ -18,6 +18,7 @@ public sealed class KcpConnection : Connection
     private readonly KcpTransport _transport;
     private uint _cookieIssued;
     private bool _hasCookie;
+    private bool _refusedAccept;
     private bool _hasRtt;
     private long _lastReceiveMs;
     private long _nextHandshakeMs;
@@ -294,9 +295,12 @@ public sealed class KcpConnection : Connection
                 {
                     RecordPacketReceived(length);
                     SessionId = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
+
+                    // A forged Accept is ignored, so it can't cut off the genuine one still on its way.
                     if (KeyExchange != null && !AgreeKeys(packet))
                     {
-                        _transport.Close(this, DisconnectReason.AuthenticationFailed, false);
+                        SessionId = 0;
+                        _refusedAccept = true;
                         return;
                     }
 
@@ -464,7 +468,8 @@ public sealed class KcpConnection : Connection
             // Incoming connections are connected as soon as they exist; only outgoing ones wait here.
             if (now - _connectStartMs >= (long)_options.ConnectTimeout.TotalMilliseconds)
             {
-                _transport.Close(this, DisconnectReason.Timeout, false);
+                _transport.Close(this,
+                    _refusedAccept ? DisconnectReason.AuthenticationFailed : DisconnectReason.Timeout, false);
                 return;
             }
 
@@ -646,8 +651,13 @@ public sealed class KcpConnection : Connection
         }
 
         Cipher = KcpCipher.Create(KeyExchange!, PublicKey, hostPublic, ClientNonce, SessionId, true);
+        if (Cipher == null)
+        {
+            return false;
+        }
+
         KeyExchange!.Dispose();
-        return Cipher != null;
+        return true;
     }
 
     private const long PartialLifetimeMs = 1000;

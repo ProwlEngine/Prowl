@@ -24,7 +24,7 @@ public sealed class KcpEncryption
     /// <summary>
     ///     Client: the host's P-256 public key, as exported by <see cref="AsymmetricAlgorithm.ExportSubjectPublicKeyInfo" />.
     ///     When set, a host that cannot prove it holds the matching <see cref="SigningKey" /> is refused with
-    ///     <see cref="DisconnectReason.AuthenticationFailed" />.
+    ///     <see cref="DisconnectReason.AuthenticationFailed" /> once the connect timeout passes.
     /// </summary>
     public byte[]? TrustedHostKey { get; set; }
 

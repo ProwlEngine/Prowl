@@ -157,6 +157,32 @@ public class KcpEncryptionTests
         pump.Until(() => toHost.IsConnected, what: "connect");
     }
 
+    [Fact]
+    public void AForgedAcceptDoesNotStopTheGenuineOne()
+    {
+        using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using KcpTransport host = new(Options(new KcpEncryption { SigningKey = key }));
+        host.Listen();
+        using KcpTransport client = new(Options(new KcpEncryption { TrustedHostKey = key.ExportSubjectPublicKeyInfo() }));
+        using Relay relay = new(host);
+        relay.BeforeClient = datagram =>
+        {
+            if (datagram[0] != (byte)KcpPacketType.Accept)
+            {
+                return Array.Empty<byte[]>();
+            }
+
+            byte[] forged = (byte[])datagram.Clone();
+            forged.AsSpan(KcpPacket.AcceptSize + KcpCipher.PublicKeySize).Fill(0x11);
+            return new[] { forged };
+        };
+        Pump pump = new(host, client);
+        Connection toHost = client.Connect(relay.Address);
+        pump.Until(() => { relay.Step(); return toHost.State != ConnectionState.Connecting; }, what: "connect");
+
+        Assert.True(toHost.IsConnected);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -505,6 +531,9 @@ public class KcpEncryptionTests
             _clientSide = _clientSides[0];
         }
 
+        /// <summary>Extra datagrams to deliver to the client ahead of each one from the host.</summary>
+        public Func<byte[], byte[][]>? BeforeClient { get; set; }
+
         /// <summary>Called with each datagram from the client before it is forwarded.</summary>
         public Action<byte[]>? Spy { get; set; }
 
@@ -578,6 +607,11 @@ public class KcpEncryptionTests
 
                 if (_client != null)
                 {
+                    foreach (byte[] extra in BeforeClient?.Invoke(datagram) ?? Array.Empty<byte[]>())
+                    {
+                        _clientSide.SendTo(extra, _client);
+                    }
+
                     _clientSide.SendTo(datagram, _client);
                 }
             }
