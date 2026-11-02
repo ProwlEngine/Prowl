@@ -449,7 +449,7 @@ public sealed class Kcp
         }
 
         int rto = rx_srtt + Math.Max((int)interval, 4 * rx_rttval);
-        rx_rto = Utils.Clamp(rto, rx_minrto, Math.Max(rx_minrto, rx_maxrto));
+        rx_rto = Utils.Clamp(rto, rx_minrto, RTO_MAX);
     }
 
     // ikcp_shrink_buf

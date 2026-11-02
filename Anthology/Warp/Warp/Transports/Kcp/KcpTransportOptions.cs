@@ -220,8 +220,9 @@ public sealed class KcpReliabilityOptions
     public uint MaxRetransmits { get; set; } = 40;
 
     /// <summary>
-    ///     The longest a lost segment waits before being resent, in milliseconds (30 to 60000). Keeps reliable
-    ///     traffic from stalling for seconds after a link comes back from an outage.
+    ///     The longest a lost segment waits before being resent, in milliseconds (30 to 60000), unless the measured
+    ///     round trip needs longer. Keeps reliable traffic from stalling for seconds after a link comes back from
+    ///     an outage.
     /// </summary>
     public uint MaxRetransmitTimeout { get; set; } = 1000;
 

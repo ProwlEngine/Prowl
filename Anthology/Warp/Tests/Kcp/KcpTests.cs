@@ -2,6 +2,7 @@
 // test some of the internal Kcp.cs functions to guarantee stability.
 
 using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.Warp.Transports.Kcp.Protocol;
 
@@ -762,6 +763,50 @@ public class KcpTests
         }
 
         Assert.InRange(System.GC.GetAllocatedBytesForCurrentThread() - before, 0, 1024);
+    }
+
+    [Fact]
+    public void SlowLinksAreNotFloodedWithResendsByTheTimeoutCap()
+    {
+        // 750 ms each way, so a 1.5 s round trip, longer than the 1 s cap.
+        uint now = 0;
+        List<(uint Due, bool ToReceiver, byte[] Data)> inFlight = new();
+        Transports.Kcp.Protocol.Kcp sender = new(1, (data, length) => inFlight.Add((now + 750, true, data[..length])));
+        Transports.Kcp.Protocol.Kcp receiver = new(1, (data, length) => inFlight.Add((now + 750, false, data[..length])));
+        foreach (Transports.Kcp.Protocol.Kcp kcp in new[] { sender, receiver })
+        {
+            kcp.SetNoDelay(1, 10, 2, true);
+            kcp.SetMaxRetransmitTimeout(1000);
+        }
+
+        byte[] received = new byte[100];
+        long warmRetransmits = 0;
+        for (now = 0; now < 20_000; now += 10)
+        {
+            if (now % 100 == 0)
+            {
+                sender.Send(new byte[10], 0, 10);
+            }
+
+            foreach ((uint Due, bool ToReceiver, byte[] Data) packet in inFlight.Where(p => p.Due <= now).ToList())
+            {
+                inFlight.Remove(packet);
+                (packet.ToReceiver ? receiver : sender).Input(packet.Data, 0, packet.Data.Length);
+            }
+
+            sender.Update(now);
+            receiver.Update(now);
+            while (receiver.Receive(received, received.Length) > 0)
+            {
+            }
+
+            if (now == 10_000)
+            {
+                warmRetransmits = sender.retransmits;
+            }
+        }
+
+        Assert.Equal(warmRetransmits, sender.retransmits);
     }
 
     [Fact]
