@@ -531,7 +531,7 @@ public class Animator : Component
         var filter = new QueryFilter(GroundLayers);
         if (_ragdoll != null) filter = filter.Ignoring(_ragdoll.Bodies);
 
-        if (!Scene!.Physics.Raycast(origin, direction, out RaycastHit hit, maxDistance, filter))
+        if (!Scene!.Physics.Raycast(origin, direction, maxDistance, out RaycastHit hit, filter))
             return false;
 
         point = hit.Point;
