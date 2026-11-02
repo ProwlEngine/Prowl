@@ -126,12 +126,10 @@ public sealed class LocalTransport : Transport
             // Reported on the next Receive, the same as a real transport discovering it.
             Post(new Packet(PacketKind.Reject, connection, null, null, 0, default, DisconnectReason.Unreachable));
         }
-        else
+        else if (!host.Post(new Packet(PacketKind.ConnectRequest, null, connection, null, 0, default, default),
+                     out bool closed))
         {
-            if (!host.Post(new Packet(PacketKind.ConnectRequest, null, connection, null, 0, default, default)))
-            {
-                RaiseDisconnected(connection, DisconnectReason.ResourceLimit);
-            }
+            RaiseDisconnected(connection, closed ? DisconnectReason.Unreachable : DisconnectReason.ResourceLimit);
         }
 
         return connection;
@@ -275,10 +273,14 @@ public sealed class LocalTransport : Transport
         RaiseDisconnected(connection, reason);
     }
 
-    internal bool Post(Packet packet)
+    internal bool Post(Packet packet) => Post(packet, out _);
+
+    /// <param name="closed">Whether the packet was refused because this transport has shut down.</param>
+    private bool Post(Packet packet, out bool closed)
     {
         lock (_inboxGate)
         {
+            closed = !_accepting;
             int reserve = packet.Kind is PacketKind.Disconnect or PacketKind.Accept or PacketKind.Reject
                 ? MaxConnections * 2
                 : 0;
@@ -356,10 +358,12 @@ public sealed class LocalTransport : Transport
             return;
         }
 
-        if (!_listening || Connections.Count >= MaxConnections)
+        if (!_listening || Connections.Count >= MaxConnections || clientTransport.Channels != Channels)
         {
-            clientTransport.Post(new Packet(PacketKind.Reject, client, null, null, 0, default,
-                !_listening ? DisconnectReason.Unreachable : DisconnectReason.ServerFull));
+            DisconnectReason reason = !_listening ? DisconnectReason.Unreachable
+                : clientTransport.Channels != Channels ? DisconnectReason.ProtocolError
+                : DisconnectReason.ServerFull;
+            clientTransport.Post(new Packet(PacketKind.Reject, client, null, null, 0, default, reason));
             return;
         }
 

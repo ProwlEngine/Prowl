@@ -243,6 +243,41 @@ public class LocalTransportTests
     }
 
     [Fact]
+    public void ClientsWithAnotherChannelCountAreRefused()
+    {
+        LocalNetwork network = new();
+        LocalTransport host = new(network, "host");
+        host.Listen();
+        LocalTransport client = new(network) { Channels = 2 };
+        Pump pump = new(host, client);
+
+        Connection connection = client.Connect("host");
+        pump.Until(() => connection.State == ConnectionState.Disconnected, what: "refusal");
+
+        Assert.Equal(DisconnectReason.ProtocolError, Assert.Single(pump.EventsOf(client)).Reason);
+        Assert.Empty(host.Connections);
+    }
+
+    [Fact]
+    public void ConnectingToAHostThatJustShutDownIsUnreachable()
+    {
+        LocalNetwork network = new();
+        LocalTransport host = new(network, "host");
+        host.Listen();
+        host.Shutdown();
+
+        // As if the lookup found the host a moment before it shut down.
+        network.TryRegister("host", host);
+        LocalTransport client = new(network);
+        Pump pump = new(client);
+        Connection connection = client.Connect("host");
+        pump.Step();
+
+        Assert.Equal(ConnectionState.Disconnected, connection.State);
+        Assert.Equal(DisconnectReason.Unreachable, Assert.Single(pump.EventsOf(client)).Reason);
+    }
+
+    [Fact]
     public void ClientAddressIsItsOwnLocalAddress()
     {
         LocalNetwork network = new();
