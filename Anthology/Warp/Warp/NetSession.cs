@@ -1058,8 +1058,18 @@ public sealed class NetSession : IDisposable
         _batchWithHost = reader.ReadBool() && _options.BatchMessages;
         State = SessionState.Active;
         _joinDeadlineMs = long.MaxValue;
-        Joined?.Invoke();
+        try
+        {
+            Joined?.Invoke();
+        }
+        finally
+        {
+            ReplayHeldUntilJoined();
+        }
+    }
 
+    private void ReplayHeldUntilJoined()
+    {
         while (State == SessionState.Active && _heldUntilJoined.TryDequeue(out Loopback held))
         {
             PendingReassemblyBytes -= held.Buffer.Length;

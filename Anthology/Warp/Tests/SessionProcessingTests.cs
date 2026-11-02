@@ -150,6 +150,39 @@ public class SessionProcessingTests
     }
 
     [Fact]
+    public void HeldMessagesSurviveAThrowingJoinedHandler()
+    {
+        using ProbeTransport transport = new();
+        ProbeConnection connection = transport.OpenPeer();
+        using NetSession client = CreateClient(connection);
+        List<byte> received = new();
+        client.Joined += () => throw new InvalidOperationException("Application failure");
+        client.OnRaw(30, (_, ref reader, _, _) => received.Add(reader.ReadByte()));
+        client.ProcessEvent(new TransportEvent(TransportEventType.Connected, connection));
+
+        using NetWriter early = new();
+        early.WriteUInt16(30);
+        early.WriteByte(7);
+        client.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, early.WrittenMemory,
+            Delivery.Reliable, default, 1));
+
+        using NetWriter accepted = new();
+        accepted.WriteUInt16(NetSession.ReservedMessageIds + 1);
+        accepted.WriteVarUInt32(1);
+        accepted.WriteVarUInt32(2);
+        accepted.WriteVarUInt32(NetPeer.HostId);
+        accepted.WriteString("host");
+        accepted.WriteVarUInt32(1);
+        accepted.WriteString("client");
+        accepted.WriteBool(false);
+        Assert.Throws<InvalidOperationException>(() =>
+            client.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, accepted.WrittenMemory)));
+
+        Assert.Equal(new byte[] { 7 }, received);
+        Assert.Equal(0, client.PendingReassemblyBytes);
+    }
+
+    [Fact]
     public void HostRefusesMessagesOnOtherChannelsBeforeJoining()
     {
         using ProbeTransport transport = new();
