@@ -240,4 +240,41 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); ClearStaticProbe(); }
     }
+
+    [Fact]
+    public void ReliableStaticRpcsArriveAfterTheCollectionChangesMadeBeforeThem()
+    {
+        Scene scene = CreateScene();
+        GameObject root = CreateGameObject("Board");
+        root.Network.Mode = NetworkMode.Object;
+        NetCollectionTestComponent component = root.AddComponent<NetCollectionTestComponent>();
+        scene.Add(root);
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice"), bob = FakePeer.Join(network, "bob");
+        ClearStaticProbe();
+        try
+        {
+            Pump(() => alice.IsReady && bob.IsReady, alice, bob);
+            PumpFor(50, alice, bob);
+            alice.Received.Clear();
+            bob.Received.Clear();
+
+            component.Scores.Add(1);
+            StaticRpcProbe.Call(901, 3);
+            Pump(() => alice.Has(FakePeer.Sync) && alice.Has(FakePeer.StaticRpcFromHost), alice, bob);
+            Assert.True(alice.Received.FindIndex(m => m.Id == FakePeer.Sync) <
+                        alice.Received.FindIndex(m => m.Id == FakePeer.StaticRpcFromHost));
+
+            // A relayed call is behind the host's own changes too.
+            bob.Received.Clear();
+            component.Scores.Add(2);
+            alice.Send(FakePeer.StaticRpcToHost, w => WriteStaticRpc(w, 901, a => NetSerializer<int>.Write(a, 4)));
+            Pump(() => bob.Has(FakePeer.Sync) && bob.Has(FakePeer.StaticRpcFromHost), alice, bob);
+            Assert.True(bob.Received.FindIndex(m => m.Id == FakePeer.Sync) <
+                        bob.Received.FindIndex(m => m.Id == FakePeer.StaticRpcFromHost));
+        }
+        finally { Networking.Networking.Shutdown(); ClearStaticProbe(); }
+    }
 }

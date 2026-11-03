@@ -56,6 +56,8 @@ internal sealed partial class RpcSystem
             return false;
         }
 
+        Delivery delivery = StaticRpcDelivery(rpc);
+        FlushSyncChangesAhead(delivery, rpc.Channel);
         using NetWriter message = new();
         if (scene.IsHost)
         {
@@ -63,7 +65,6 @@ internal sealed partial class RpcSystem
         }
 
         WriteStaticCall(message, rpc, arguments.WrittenSpan);
-        Delivery delivery = StaticRpcDelivery(rpc);
         if (scene.IsHost)
         {
             SendRpcRecipients(EngineMessage.StaticRpcFromHost, message.WrittenSpan, delivery, recipients,
@@ -94,6 +95,15 @@ internal sealed partial class RpcSystem
     internal Delivery StaticRpcDelivery(StaticRpcMember rpc) =>
         (rpc.Flags & RpcFlags.Unreliable) != 0 ? Delivery.Unreliable : Delivery.Reliable;
 
+    /// <summary>Only channel 0 keeps a reliable call behind the Sync changes made before it.</summary>
+    internal void FlushSyncChangesAhead(Delivery delivery, byte channel)
+    {
+        if (delivery == Delivery.Reliable && channel == 0)
+        {
+            scene.Sync.SendSyncChanges();
+        }
+    }
+
     internal void OnStaticRpcToHost(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
         if (!scene.IsHost)
@@ -112,6 +122,7 @@ internal sealed partial class RpcSystem
 
         if (rpc.Mode == RpcMode.Broadcast)
         {
+            FlushSyncChangesAhead(StaticRpcDelivery(rpc), rpc.Channel);
             using NetWriter relay = new();
             new RpcCallerMessage(sender.Id).Write(relay);
             WriteStaticCall(relay, rpc, arguments);
