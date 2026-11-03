@@ -301,7 +301,7 @@ public static class NetworkDiagnostics
     private static void AppendValue(StringBuilder context, List<string> names, Component? component, string id,
         uint slot, ReadOnlySpan<byte> value)
     {
-        if (component == null)
+        if (ReferenceEquals(component, null))
         {
             context.Append($"\n\nComponent: {id}\nUnknown SyncVar #{slot}");
             if (names.Count < 2)

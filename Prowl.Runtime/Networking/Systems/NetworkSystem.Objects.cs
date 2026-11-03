@@ -26,7 +26,7 @@ internal sealed partial class NetworkSystem
     /// <summary>The GameObject or Component with this identifier in the replicated scene, or null.</summary>
     internal EngineObject? FindByIdentifier(Guid id)
     {
-        if (id == Guid.Empty || ReplicatedScene == null)
+        if (id == Guid.Empty || ReferenceEquals(ReplicatedScene, null))
         {
             return null;
         }
@@ -86,7 +86,7 @@ internal sealed partial class NetworkSystem
     internal NetworkObject? FindEntry(GameObject go)
     {
         GameObject? root = NetworkAccessor.RootOf(go);
-        return root != null && Entries.TryGetValue(root.Identifier, out NetworkObject? entry) &&
+        return !ReferenceEquals(root, null) && Entries.TryGetValue(root.Identifier, out NetworkObject? entry) &&
                entry.GameObject == root
             ? entry
             : null;
@@ -241,7 +241,7 @@ internal sealed partial class NetworkSystem
 
     internal void OnSpawn(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
-        if (IsHost || ReplicatedScene == null)
+        if (IsHost || ReferenceEquals(ReplicatedScene, null))
         {
             return;
         }

@@ -68,7 +68,7 @@ public sealed class NetworkAnimator : Component, INetworkEvents
 
     private void Unbind()
     {
-        if (_bound is not null)
+        if (!ReferenceEquals(_bound, null))
         {
             _bound.BeforeEvaluate -= Synchronize;
             _bound.ParameterWritten -= ParameterWritten;

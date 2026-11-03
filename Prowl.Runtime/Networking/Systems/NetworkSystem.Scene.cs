@@ -76,7 +76,7 @@ internal sealed partial class NetworkSystem
     /// <summary>Starts <paramref name="peers" /> loading the scene, from one snapshot written for all of them.</summary>
     internal void SendSnapshot(params NetPeer[] peers)
     {
-        if (Session is not { } session || ReplicatedScene == null || peers.Length == 0)
+        if (Session is not { } session || ReferenceEquals(ReplicatedScene, null) || peers.Length == 0)
         {
             return;
         }

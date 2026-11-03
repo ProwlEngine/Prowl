@@ -57,7 +57,7 @@ public abstract class NetCollection
             return;
         }
 
-        if (_owner != null)
+        if (!ReferenceEquals(_owner, null))
         {
             throw new InvalidOperationException(
                 $"This {GetType().Name} is already {_owner.GetType().Name}.{_member!.Name}. A network collection can only be one [Sync] property.");
@@ -74,7 +74,7 @@ public abstract class NetCollection
     private protected bool BeginChange(out NetWriter? record)
     {
         record = null;
-        if (_owner == null || _member == null || !Networking.IsActive)
+        if (ReferenceEquals(_owner, null) || _member == null || !Networking.IsActive)
         {
             return true;
         }

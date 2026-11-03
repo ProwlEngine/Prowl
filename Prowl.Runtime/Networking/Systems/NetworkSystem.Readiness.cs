@@ -81,7 +81,7 @@ internal sealed partial class NetworkSystem
     {
         // A joining client can still activate local scenes before the host supplies its first snapshot.
         // Only guard scene replacement once there is a network scene to protect (including a queued one).
-        if (!IsClient || ReplicatedScene is null)
+        if (!IsClient || ReferenceEquals(ReplicatedScene, null))
         {
             return;
         }
