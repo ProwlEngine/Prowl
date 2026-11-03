@@ -160,6 +160,14 @@ public sealed class KcpConnection : Connection
         }
     }
 
+    protected override void OnTrusted()
+    {
+        if (!IsOutgoing && State != ConnectionState.Disconnected)
+        {
+            _transport.ReleaseAddressSlot(IpKey);
+        }
+    }
+
     /// <summary>Sends this connection's queued reliable messages without ticking the rest of the transport.</summary>
     public override void Flush() => FlushReliable(_transport.NowMs);
 

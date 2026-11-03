@@ -593,7 +593,7 @@ public sealed class NetSession : IDisposable
                 _remotes[ev.Connection] = new Remote
                 {
                     Stage = RemoteStage.AwaitingRequest,
-                    DeadlineMs = NowMs + (long)_options.JoinTimeout.TotalMilliseconds
+                    DeadlineMs = NowMs + (long)_options.JoinRequestTimeout.TotalMilliseconds
                 };
                 break;
 
@@ -802,6 +802,7 @@ public sealed class NetSession : IDisposable
             return;
         }
 
+        connection.MarkTrusted();
         NetPeer peer = new(_nextPeerId++, pending.Request.Name, false, connection)
         {
             MaxMessageSize = remote.MaxMessageSize

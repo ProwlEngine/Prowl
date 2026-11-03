@@ -32,6 +32,19 @@ public class SessionProcessingTests
     }
 
     [Fact]
+    public void AConnectionThatNeverAsksToJoinIsDroppedSoon()
+    {
+        using ProbeTransport transport = new();
+        using NetSession host = NetSession.CreateHost(transport,
+            options: new NetSessionOptions { JoinRequestTimeout = TimeSpan.FromMilliseconds(50) });
+        ProbeConnection connection = transport.OpenPeer();
+        host.ProcessEvent(new TransportEvent(TransportEventType.Connected, connection));
+        Thread.Sleep(80);
+        host.Flush();
+        Assert.Equal(1, connection.DisconnectCalls);
+    }
+
+    [Fact]
     public void MembershipHandlerCanDisposeSessionDuringTimerIteration()
     {
         using ProbeTransport transport = new();

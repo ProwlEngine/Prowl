@@ -98,7 +98,10 @@ public class RobustnessTests
     [Fact]
     public void ThirtyTwoClientsRemainResponsiveWhenOneStopsReading()
     {
-        using KcpTransport transport = new(new KcpTransportOptions { Port = 0, MaxPendingReliableBytes = 1024 * 1024 });
+        using KcpTransport transport = new(new KcpTransportOptions
+        {
+            Port = 0, MaxPendingReliableBytes = 1024 * 1024, MaxConnectionsPerAddress = 64
+        });
         using NetSession host = NetSession.Host(transport);
         SessionProbe hostProbe = new(host);
         SessionProbe[] clients = Enumerable.Range(0, 32).Select(i => new SessionProbe(NetSession.Join(

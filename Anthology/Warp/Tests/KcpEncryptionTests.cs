@@ -667,6 +667,7 @@ public class KcpEncryptionTests
         using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         KcpTransportOptions hostOptions = Options(new KcpEncryption { SigningKey = key });
         hostOptions.MaxHandshakesPerAddressPerSecond = 100;
+        hostOptions.MaxConnectionsPerAddress = 100;
         using KcpTransport host = new(hostOptions);
         host.Listen();
         KcpTransport[] clients = Enumerable.Range(0, 20).Select(_ => new KcpTransport(Options(new KcpEncryption()))).ToArray();

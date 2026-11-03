@@ -399,6 +399,7 @@ public class KcpTransportTests
         KcpTransportOptions options = FastOptions();
         options.MaxHandshakesPerSecond = 4;
         options.MaxHandshakesPerAddressPerSecond = 100;
+        options.MaxConnectionsPerAddress = 100;
         using KcpTransport host = new(options);
         host.Listen();
         KcpTransport[] clients = Enumerable.Range(0, 12).Select(_ => new KcpTransport(FastOptions())).ToArray();
@@ -421,10 +422,79 @@ public class KcpTransportTests
     }
 
     [Fact]
+    public void TrustedConnectionsDoNotCountAgainstTheirAddress()
+    {
+        KcpTransportOptions options = FastOptions();
+        options.MaxConnectionsPerAddress = 2;
+        using KcpTransport host = new(options);
+        host.Listen();
+        KcpTransport[] clients = Enumerable.Range(0, 4).Select(_ => new KcpTransport(FastOptions())).ToArray();
+        try
+        {
+            Pump pump = new(clients.Prepend(host).ToArray());
+            foreach (KcpTransport client in clients)
+            {
+                Connection toHost = client.Connect($"127.0.0.1:{host.LocalPort}");
+                pump.Until(() => toHost.State != ConnectionState.Connecting, what: "connect");
+                Assert.True(toHost.IsConnected);
+                pump.Until(() => host.Connections.All(c => c.IsConnected), what: "the host side");
+                foreach (Connection connection in host.Connections)
+                {
+                    connection.MarkTrusted();
+                }
+            }
+
+            Assert.Equal(4, host.Connections.Count);
+        }
+        finally
+        {
+            foreach (KcpTransport client in clients)
+            {
+                client.Dispose();
+            }
+        }
+    }
+
+    [Fact]
+    public void PlayersWhoJoinedDoNotCountAgainstTheirAddress()
+    {
+        KcpTransportOptions options = FastOptions();
+        options.MaxConnectionsPerAddress = 2;
+        using NetSession host = NetSession.Host(new KcpTransport(options));
+        List<NetSession> players = new();
+        try
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                NetSession player = NetSession.Join(new KcpTransport(FastOptions()),
+                    $"127.0.0.1:{host.Transport.LocalPort}", $"player{i}");
+                players.Add(player);
+                System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+                while (player.State == SessionState.Joining && watch.ElapsedMilliseconds < 5000)
+                {
+                    host.Update();
+                    player.Update();
+                    Thread.Sleep(1);
+                }
+
+                Assert.Equal(SessionState.Active, player.State);
+            }
+        }
+        finally
+        {
+            foreach (NetSession player in players)
+            {
+                player.Dispose();
+            }
+        }
+    }
+
+    [Fact]
     public void HandshakesFromOneAddressAreRateLimited()
     {
         KcpTransportOptions options = FastOptions();
         options.MaxHandshakesPerAddressPerSecond = 4;
+        options.MaxConnectionsPerAddress = 100;
         using KcpTransport host = new(options);
         host.Listen();
         KcpTransport[] clients = Enumerable.Range(0, 12).Select(_ => new KcpTransport(FastOptions())).ToArray();

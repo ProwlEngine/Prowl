@@ -38,11 +38,12 @@ public sealed class KcpTransportOptions
     public int MaxConnections { get; set; } = 64;
 
     /// <summary>
-    ///     The most incoming connections from one IP address (one /64 for IPv6). Further attempts are rejected
-    ///     with <see cref="DisconnectReason.Rejected" />, so one machine cannot fill the server. Players behind
-    ///     carrier grade NAT can share an address, so don't set it too low.
+    ///     The most untrusted incoming connections from one IP address (one /64 for IPv6). Further attempts are
+    ///     rejected with <see cref="DisconnectReason.Rejected" />, so one machine cannot fill the server. Connections
+    ///     marked with <see cref="Connection.MarkTrusted" />, which sessions do for players who joined, don't count, so
+    ///     players behind one carrier NAT address can all play.
     /// </summary>
-    public int MaxConnectionsPerAddress { get; set; } = 32;
+    public int MaxConnectionsPerAddress { get; set; } = 8;
 
     /// <summary>
     ///     Completed handshakes accepted per second from one IP address (one /64 for IPv6). Extra attempts are

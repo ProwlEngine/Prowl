@@ -616,7 +616,7 @@ public sealed class KcpTransport : Transport
         }
     }
 
-    private void ReleaseAddressSlot(UInt128 ip)
+    internal void ReleaseAddressSlot(UInt128 ip)
     {
         if (_byIp.TryGetValue(ip, out AddressBudget? budget))
         {
@@ -978,9 +978,9 @@ public sealed class KcpTransport : Transport
         if (connection.RemoteAddress != null && _byAddress.Remove(connection.RemoteAddress) && !connection.IsOutgoing)
         {
             _incomingCount--;
-            if (_byIp.TryGetValue(connection.IpKey, out AddressBudget? budget))
+            if (!connection.IsTrusted)
             {
-                budget.Connections--;
+                ReleaseAddressSlot(connection.IpKey);
             }
         }
 

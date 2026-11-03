@@ -34,6 +34,12 @@ public struct NetSessionOptions
     public TimeSpan JoinTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
+    ///     Host: how long a new connection may take to send its join request, which clients do straight away. A
+    ///     connection that sends nothing frees its slot this soon.
+    /// </summary>
+    public TimeSpan JoinRequestTimeout { get; set; } = TimeSpan.FromSeconds(3);
+
+    /// <summary>
     ///     After the host kicks or refuses a client, how long it waits for the client to hang up before
     ///     closing the connection itself. Gives the reason time to arrive over a lossy link. While the goodbye
     ///     is still unacknowledged the host keeps waiting, up to five times this long.
@@ -89,6 +95,7 @@ public struct NetSessionOptions
         ValidateDuration(ReassemblyTimeout, nameof(ReassemblyTimeout));
         ValidateDuration(JoinTimeout, nameof(JoinTimeout));
         ValidateDuration(GoodbyeLinger, nameof(GoodbyeLinger));
+        ValidateDuration(JoinRequestTimeout, nameof(JoinRequestTimeout));
         return this;
     }
 

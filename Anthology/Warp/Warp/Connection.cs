@@ -75,6 +75,29 @@ public abstract class Connection
 
     public virtual ConnectionStats Stats => new(_packetsSent, _packetsReceived, _bytesSent, _bytesReceived);
 
+    /// <summary>True once <see cref="MarkTrusted" /> has been called.</summary>
+    public bool IsTrusted { get; private set; }
+
+    /// <summary>
+    ///     Marks the peer as authenticated by the application, such as a player who joined. A trusted connection no
+    ///     longer counts against per-address limits, so many players behind one carrier NAT address can all play.
+    /// </summary>
+    public void MarkTrusted()
+    {
+        if (IsTrusted)
+        {
+            return;
+        }
+
+        IsTrusted = true;
+        OnTrusted();
+    }
+
+    /// <summary>Called once, when the connection becomes trusted.</summary>
+    protected virtual void OnTrusted()
+    {
+    }
+
     /// <summary>Free slot for whoever is using the transport, such as a higher level session or player object.</summary>
     public object? UserData { get; set; }
 
