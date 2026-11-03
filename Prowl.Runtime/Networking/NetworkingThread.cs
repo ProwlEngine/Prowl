@@ -90,6 +90,18 @@ internal sealed class NetworkingThread : IDisposable
 
     public bool IsWorkerRunning => _worker?.IsAlive == true;
 
+    /// <summary>What stopped the worker, until the next shutdown.</summary>
+    public Exception? Failure
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _failure;
+            }
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)

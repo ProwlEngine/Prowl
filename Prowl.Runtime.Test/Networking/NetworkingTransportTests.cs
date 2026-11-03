@@ -152,6 +152,53 @@ public partial class NetworkingTests
         });
     }
 
+    [Fact]
+    public void AWorkerFailureEndsTheHostSessionInsteadOfThrowingEveryFrame()
+    {
+        MakeCurrent(CreateScene());
+        FailingTransport transport = new();
+        try
+        {
+            Networking.Networking.Host(transport);
+            transport.Fail = true;
+            Assert.True(SpinWait.SpinUntil(() => transport.Failed, 1000));
+            Thread.Sleep(20);
+            int throws = 0;
+            for (int i = 0; i < 20; i++)
+            {
+                try
+                {
+                    Networking.Networking.Receive();
+                    Networking.Networking.Flush();
+                }
+                catch (InvalidOperationException)
+                {
+                    throws++;
+                }
+            }
+
+            Assert.Equal(0, throws);
+            Assert.Null(Networking.Networking.Session);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    private sealed class FailingTransport : Transport
+    {
+        public volatile bool Fail, Failed;
+        public override bool IsListening => true;
+        public override void Listen() { }
+        public override Connection Connect(string address) => throw new NotSupportedException();
+        public override void Receive()
+        {
+            if (!Fail) return;
+            Failed = true;
+            throw new InvalidOperationException("Injected worker failure.");
+        }
+        public override void Flush() { }
+        public override void Shutdown() { }
+    }
+
     // Different per-connection limits, with reliable packets smaller than a single transform record.
     private sealed class LimitedTransport(LocalNetwork network, Func<string, int> limit, DeliverySupport deliveries = DeliverySupport.All, string address = "host") : Transport
     {

@@ -125,6 +125,11 @@ public static partial class Networking
         MainThreadContext.AssertMainThread();
         using FrameStatScope stats = FrameStats.Network.Scope();
         NetworkingThread? thread = s_thread;
+        if (EndIfWorkerFailed())
+        {
+            return;
+        }
+
         if (thread != null)
         {
             while (session.State != SessionState.Ended && thread.TryReadEvent(out TransportEvent ev))
@@ -151,6 +156,11 @@ public static partial class Networking
 
         MainThreadContext.AssertMainThread();
         using FrameStatScope stats = FrameStats.Network.Scope();
+        if (EndIfWorkerFailed())
+        {
+            return;
+        }
+
         system.Flush();
         if (Session != session)
         {
@@ -162,5 +172,21 @@ public static partial class Networking
         {
             s_thread?.RequestFlush();
         }
+    }
+
+    /// <summary>Ends the session once, when the networking worker has stopped with an error.</summary>
+    private static bool EndIfWorkerFailed()
+    {
+        if (s_thread is not { Failure: { } failure } thread)
+        {
+            return false;
+        }
+
+        Debug.LogError($"[Network] The networking worker failed: {failure}");
+
+        // Joining the stopped worker closes its connections, so the goodbye has nothing left to send on.
+        thread.Shutdown();
+        Shutdown("The networking worker failed.");
+        return true;
     }
 }
