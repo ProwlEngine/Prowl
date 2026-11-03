@@ -120,4 +120,17 @@ public class RewriteTests
                     "public int Ammo2 { get; set; } [Sync] public int Ammo"), "B.cs");
         Assert.Same(first, Scripts.Generate(a, b2).Trees[0]);
     }
+
+    [Fact]
+    public void ExpressionBodiedRpcThatOnlyThrowsCompiles()
+    {
+        Assert.NotNull(Scripts.Compile("""
+            using Prowl.Runtime;
+            using Prowl.Runtime.Networking;
+            public class Gun : Component
+            {
+                [Rpc.Broadcast] public void Fire(int shots) => throw new System.InvalidOperationException();
+            }
+            """));
+    }
 }

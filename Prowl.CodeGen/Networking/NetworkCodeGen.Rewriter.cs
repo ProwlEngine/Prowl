@@ -124,10 +124,12 @@ internal sealed partial class NetworkCodeGen
 
             // The block opens where the arrow was and the expression keeps everything around it, so it stays on its own line.
             ArrowExpressionClauseSyntax arrow = node.ExpressionBody!;
-            ExpressionStatementSyntax statement = SyntaxFactory.ExpressionStatement(
-                arrow.Expression.WithLeadingTrivia(
-                    arrow.ArrowToken.TrailingTrivia.AddRange(arrow.Expression.GetLeadingTrivia())),
-                node.SemicolonToken.WithTrailingTrivia(SyntaxFactory.Space));
+            ExpressionSyntax expression = arrow.Expression.WithLeadingTrivia(
+                arrow.ArrowToken.TrailingTrivia.AddRange(arrow.Expression.GetLeadingTrivia()));
+            SyntaxToken semicolon = node.SemicolonToken.WithTrailingTrivia(SyntaxFactory.Space);
+            StatementSyntax statement = expression is ThrowExpressionSyntax thrown
+                ? SyntaxFactory.ThrowStatement(default, thrown.ThrowKeyword, thrown.Expression, semicolon)
+                : SyntaxFactory.ExpressionStatement(expression, semicolon);
             BlockSyntax block = SyntaxFactory.Block(check.WithTrailingTrivia(), statement)
                 .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken)
                     .WithLeadingTrivia(arrow.ArrowToken.LeadingTrivia).WithTrailingTrivia(SyntaxFactory.Space))
