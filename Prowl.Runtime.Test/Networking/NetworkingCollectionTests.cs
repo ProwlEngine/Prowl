@@ -556,4 +556,67 @@ public partial class NetworkingTests
             host.Dispose();
         }
     }
+
+    [Fact]
+    public void AnOwnersChangeTurnedAwayByAHandoffDoesNotOutliveIt()
+    {
+        // A real host gives a ship to a client, takes it back, then changes its list. Its messages are kept.
+        Scene scene = CreateScene();
+        GameObject ship = CreateGameObject("Ship");
+        ship.Network.Mode = NetworkMode.Object;
+        NetCollectionTestComponent source = ship.AddComponent<NetCollectionTestComponent>();
+        scene.Add(ship);
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        byte[] snapshot, given, handoff, takenBack, hostChange;
+        using (FakePeer observer = FakePeer.Join(network, "observer"))
+        {
+            try
+            {
+                Pump(() => observer.IsReady, observer);
+                snapshot = observer.Last(FakePeer.SceneSnapshot);
+                ship.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
+                Pump(() => observer.Has(FakePeer.Owner), observer);
+                given = observer.Last(FakePeer.Owner);
+                observer.Received.Clear();
+
+                ship.Network.AssignOwnership(null);
+                Pump(() => observer.Has(FakePeer.Owner), observer);
+                handoff = observer.Last(FakePeer.OwnershipState);
+                takenBack = observer.Last(FakePeer.Owner);
+
+                source.Scores.Add(7);
+                Pump(() => observer.Has(FakePeer.Sync), observer);
+                hostChange = observer.WireReceived.Last(m => m.Id == FakePeer.Sync).Data;
+            }
+            finally { Networking.Networking.Shutdown(); }
+        }
+
+        // A client given the ship adds to the list, but the host takes the ship back before that arrives.
+        LocalNetwork receiving = new();
+        using FakePeer host = FakePeer.Host(receiving);
+        host.Session.PeerJoined += peer =>
+        {
+            host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot), peer);
+            host.Send(FakePeer.Owner, w => w.WriteBytes(given), peer);
+        };
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(receiving, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady && !Find(Scene.Current, ship.Identifier).IsProxy, host);
+            NetCollectionTestComponent here = Find(Scene.Current, ship.Identifier).GetComponent<NetCollectionTestComponent>()!;
+            here.Scores.Add(5);
+            Pump(() => host.Has(FakePeer.Sync), host);
+
+            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
+            host.Send(FakePeer.OwnershipState, w => w.WriteBytes(handoff), client);
+            host.Send(FakePeer.Owner, w => w.WriteBytes(takenBack), client);
+            host.Session.SendRaw(client, FakePeer.Sync, hostChange);
+            Pump(() => here.GameObject.IsProxy, host);
+            PumpFor(50, host);
+            Assert.Equal([7], here.Scores);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }

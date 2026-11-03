@@ -946,6 +946,7 @@ internal sealed class SnapshotSystem : IDisposable
     ///     The [Sync] values in <paramref name="entry" />'s tree, for a handoff: all of them from the host, or the ones
     ///     this peer controls for a release. They go reliably with it, since once ownership moves on, snapshots
     ///     wouldn't carry them: the old owner's would be turned away, and the new owner isn't sent what it controls.
+    ///     The host's include network collections whole, replacing any changes it turned away from the old owner.
     /// </summary>
     internal void WriteHandoffValues(NetWriter output, NetworkObject entry, bool includeAll)
     {
@@ -962,7 +963,7 @@ internal sealed class SnapshotSystem : IDisposable
             {
                 foreach (SyncMember sync in NetworkMembers.Of(component).Syncs)
                 {
-                    if (sync.IsCollection || (!includeAll && !_scene.HasControl(component, sync.Flags)))
+                    if (!includeAll && (sync.IsCollection || !_scene.HasControl(component, sync.Flags)))
                     {
                         continue;
                     }
