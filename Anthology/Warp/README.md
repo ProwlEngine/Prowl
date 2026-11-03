@@ -1,135 +1,218 @@
-# Prowl.Warp
+# Prowl.Warp Networking
 
-Dependency-free C# networking for .NET 8, 9 and 10. Provides transports, reliable and unreliable
-messages, serialization and host/client sessions. Scene replication belongs to the engine.
+A dependency free networking library built for the Prowl Game Engine. Warp gives you reliable and unreliable messages over UDP.
 
-```sh
+## Features
+
+- **Transports**
+  - `KcpTransport`: UDP with an embedded KCP for reliable delivery
+  - `LocalTransport`: connections inside one process, for the editor, tests and listen servers
+  - `ThreadedTransport`: runs any transport on a worker thread
+  - Pluggable: write your own by deriving from `Transport`
+  - 590+ tests, run against every transport
+
+- **Delivery**
+  - Reliable and ordered, per channel
+  - Unreliable, fire and forget
+  - Unreliable sequenced, where anything older than the newest message is dropped
+  - Up to 32 independent channels, so a lost packet on one never holds up another
+  - Large reliable messages are fragmented and reassembled for you
+  - Large unreliable messages are split and delivered whole or not at all
+
+- **Sessions**
+  - Host and client roles with join requests, auth tokens, kicks and goodbyes with reasons
+  - Peer list kept in sync on every client, or kept on the host for large sessions
+  - Typed messages through `INetMessage`, or raw messages with your own ids
+  - Message batching, so many small messages share a packet
+  - Loopback: the host sends to itself through the same handlers
+
+- **Security**
+  - Optional encryption: an ephemeral P-256 key exchange per connection, AES-256-GCM per packet
+  - Optional host signing key that clients pin, to stop a man in the middle
+  - Stateless cookie handshake, so a host holds nothing for a client until it proves its address
+  - Handshake requests are padded so a host can never amplify traffic
+  - Per address and global limits on handshakes and connections
+  - Every queue and buffer has a budget, so a misbehaving peer is disconnected before it costs memory
+
+- **Resilience**
+  - Sessions survive an address change, such as a phone moving from Wi-Fi to mobile data
+  - A restarted host resets clients of its previous run instead of leaving them to time out
+  - Host names resolve to every address and the first that answers wins, so IPv6 only networks work
+  - Retransmit timeouts are capped, so a link that comes back after an outage recovers quickly
+
+- **Performance**
+  - No allocations per message in steady state
+  - Optional send rate cap per connection, serving lower channels first
+  - Optional socket I/O threads, and the worker thread wrapper
+  - Connection stats: packets, bytes, retransmits, drops, round trip time and send queue depth
+
+## Usage
+
+### Installation
+
+```
 dotnet add package Prowl.Warp
 ```
 
-## Transports
-
-| Transport           | Purpose                                                      |
-|---------------------|--------------------------------------------------------------|
-| `KcpTransport`      | Reliable ordered messages and unreliable datagrams over UDP  |
-| `LocalTransport`    | Connections within one process                               |
-
-Transports live under `Prowl.Warp.Transports.<Kcp/Local>`.
+### Hosting and Joining
 
 ```csharp
 using Prowl.Warp;
 using Prowl.Warp.Transports.Kcp;
 
-using KcpTransport transport = new(new() { Port = 7777 });
-transport.Listen(); // On a client, use transport.Connect("127.0.0.1:7777") instead.
+// On the server
+NetSession host = NetSession.Host(new KcpTransport(new() { Port = 7777 }), "Server", new() { AppVersion = 1 });
 
-// Each frame:
-transport.Receive();
-while (transport.Poll(out TransportEvent ev))
-{
-    // Handle Connected, Data and Disconnected events.
-}
-// Send with connection.Send(data, Delivery.Reliable / Unreliable / UnreliableSequenced).
-transport.Flush();
-```
+// On a client
+NetSession client = NetSession.Join(new KcpTransport(), "127.0.0.1:7777", "Player", options: new() { AppVersion = 1 });
 
-- Drive each transport from one thread. KCP resolves hostnames asynchronously.
-- Event data is borrowed until the next `Poll` or disposal. Copy it to retain it.
-- `GetMaxMessageSize(delivery)` gives the message limit; `GetBatchThreshold(delivery)` gives the
-  preferred batch size. `SendFlags.Immediate` submits queued messages without waiting for the next flush.
-- `Transport.Capabilities` reports availability, supported deliveries and thread requirements.
-- Options are copied at construction. Queue budgets and timeouts bound stalled peers;
-  exhausted transport budgets disconnect with `ResourceLimit`.
-- Transport `Shutdown` permits reuse; `Dispose` is terminal. Wrappers own their inner transport.
-- `Connection.PendingSendBytes` and `MaxPendingSendBytes` show how full a peer's send queue is, so a sender can
-  back off before a slow peer is disconnected. `Connection.Stats` counts packets, bytes and retransmits.
-
-## Delivery
-
-| Delivery              | Guarantees                                                                  |
-|-----------------------|-----------------------------------------------------------------------------|
-| `Reliable`            | Every message, in order within its channel                                  |
-| `Unreliable`          | None. Channel 0 only                                                        |
-| `UnreliableSequenced` | None, but an older message than one already delivered on its channel is dropped |
-
-On KCP, unreliable messages larger than one datagram are split into up to 32 pieces and are lost whole if any piece
-is lost. Keep frequent ones small.
-
-## KCP options
-
-- `Encryption`: off by default. Each connection agrees on keys with an ephemeral P-256 exchange, then every session
-  packet is sealed with AES-256-GCM and replays are dropped. Keys move forward every 2^24 packets. Give the host a
-  `SigningKey` and clients its public key as `TrustedHostKey` to stop a man in the middle. Give the host a
-  `ResetKey` it keeps across restarts so encrypted clients learn of a restart at once. Both ends must agree.
-- Either end keeps the session when the other's address changes, such as a phone moving between Wi-Fi and mobile
-  data, once the new address answers a challenge. A restarted host resets clients of its previous run.
-- `MaxSendRate`: caps the bytes per second each connection sends. Lower channels get the bandwidth first, and
-  unreliable messages over the cap are dropped and counted in `Stats.PacketsDropped`.
-- `MaxConnectionsPerAddress` and `MaxHandshakesPerAddressPerSecond`: limit what one IP address (one IPv6 /64) can
-  take. Players behind carrier grade NAT share addresses, so keep them generous.
-- `UseIoThreads`: reads and writes the socket on background threads. Everything else still runs when you pump.
-- `Reliability.MaxRetransmitTimeout`: the longest a lost segment waits before it is resent, 1 second by default.
-
-`NetWriter` and `NetReader` serialize primitives, strings, GUIDs and varints.
-
-## Channels
-
-Reliable and sequenced messages take an optional channel, `0` to `Capabilities.Channels - 1` (KCP and Local default
-to 4). Each channel is its own ordered stream; on KCP, its own conversation, so a lost packet on one never holds up
-another. Plain unreliable messages have no order to keep, so they always use channel 0. Channel 0 costs nothing on
-the wire; other channels add one byte per reliable packet. Keep bulk transfers off channel 0, which also carries
-session messages.
-
-```csharp
-session.SendRaw(peer, ChatId, payload, Delivery.Reliable, channel: 1);  // doesn't wait behind channel 0
-```
-
-- Nothing is ordered across channels. Session messages (joining, the peer list, goodbyes) use channel 0, so a
-  message on another channel may arrive before a `PeerJoined` or after a `PeerLeft` sent around it.
-- Both ends must use the same channel count. A KCP host refuses a client with a different count, or from a build
-  with a different wire format, with `DisconnectReason.ProtocolError`.
-
-## Sessions
-
-`NetSession` adds admission, peer lists, typed/raw messages and fragmentation. Clients connect to
-one host; there is no host migration. Match `AppVersion` and transport settings between peers.
-`MaxPeers` cannot exceed the transport's connection limit. Each side announces its `MaxMessageSize` when joining.
-Sending a larger message to one peer throws `ArgumentException`; a broadcast skips peers that can't take it.
-
-`NetSessionOptions.BatchMessages` defaults to true. When both peers enable it, sessions combine
-small messages per connection and delivery mode until `Flush`. Full batches and
-`SendFlags.Immediate` submit earlier. Raw transports preserve individual message boundaries.
-Batching is negotiated during joining; changing the toggle does not require a different transport.
-
-```csharp
-using KcpTransport hostTransport = new(new() { Port = 7777 });
-using NetSession host = NetSession.Host(hostTransport, "Host", new() { AppVersion = 1 });
-host.JoinRequested += pending => pending.Accept(); // Optional: validate tokens, reject or defer.
-
-using KcpTransport clientTransport = new();
-using NetSession client = NetSession.Join(clientTransport, "127.0.0.1:7777", "Player",
-    options: new() { AppVersion = 1 });
-
-// Each frame:
+// Every frame, on both
 host.Update();
 client.Update();
 ```
 
-Register typed `INetMessage` handlers with `On<T>` or raw handlers with `OnRaw`.
-Use `SendToHost`, `SendRaw` or `Broadcast` to send messages. Validate application authentication
-in `JoinRequested`; approval is automatic when no handler is registered.
+`Update` is `Receive` followed by `Flush`. Call `Receive` before your simulation step and `Flush` after it if you want this frame's sends to go out straight away. Events and message handlers run inside `Receive`, on your thread. Clients with a different `AppVersion` are turned away.
 
-`Host` / `Join` pump transport I/O inline when the session is updated. For an external driver,
-use `CreateHost` / `CreateClient` and feed events through `ProcessEvent`. The driver owns transport
-I/O and lifetime. Sessions require reliable delivery; callbacks run on the session's calling thread.
+### Messages
 
-## Tests
+```csharp
+public struct ChatMessage : INetMessage
+{
+    public static ushort Id => 1;
 
-From this directory:
+    public string Text;
 
-```powershell
-dotnet test Tests/Prowl.Warp.Tests.csproj -c Release
-# Optional longer reconnect/transfer run:
-$env:WARP_STRESS_ROUNDS = '100'
-dotnet test Tests/Prowl.Warp.Tests.csproj -c Release --filter FullyQualifiedName~RobustnessTests
+    public void Write(NetWriter writer) => writer.WriteString(Text);
+    public void Read(ref NetReader reader) => Text = reader.ReadString();
+}
+
+session.On<ChatMessage>((sender, message) => Console.WriteLine($"{sender.Name}: {message.Text}"));
+
+// Client to host
+client.SendToHost(new ChatMessage { Text = "Hello" });
+
+// Host to everyone
+host.Broadcast(new ChatMessage { Text = "Welcome" });
+
+// Positions: only the newest matters, on a channel of their own
+host.Broadcast(position, Delivery.UnreliableSequenced, channel: 1);
 ```
+
+Message ids below `NetSession.ReservedMessageIds` are yours. Raw messages skip the struct: `SendRaw(peer, id, payload)` and `OnRaw(id, (sender, ref reader, delivery, channel) => ...)`. Small messages are batched into one packet per connection until `Flush`, or sooner with `SendFlags.Immediate`.
+
+### Membership
+
+```csharp
+host.JoinRequested += pending =>
+{
+    if (IsValidTicket(pending.Request.Token.Span))
+        pending.Accept();
+    else
+        pending.Reject("Invalid ticket.");
+};
+
+host.PeerJoined += peer => SpawnPlayer(peer);
+host.PeerLeft += (peer, reason) => DespawnPlayer(peer);
+client.Ended += (reason, message) => ShowDisconnected(reason, message);
+
+host.Kick(peer, "Cheating.");
+```
+
+With no `JoinRequested` handler every client that passes the version and capacity checks is accepted. Clients pass their token to `NetSession.Join`. A request can also be resolved later, such as after checking the ticket with a web service.
+
+### Channels
+
+```csharp
+host.SendRaw(peer, MapDataId, mapBytes, Delivery.Reliable, channel: 2);
+```
+
+Each channel is its own ordered stream, so a big transfer on channel 2 never delays chat on channel 0. Nothing is ordered across channels. Plain unreliable messages always use channel 0. Session messages such as joins and goodbyes travel on channel 0, so keep bulk transfers on other channels.
+
+### Encryption
+
+```csharp
+// Server: sign each handshake with a key you keep
+KcpTransportOptions serverOptions = new()
+{
+    Port = 7777,
+    Encryption = new KcpEncryption { SigningKey = serverKey, ResetKey = resetSecret }
+};
+
+// Client: trust only that server
+KcpTransportOptions clientOptions = new()
+{
+    Encryption = new KcpEncryption { TrustedHostKey = serverKey.ExportSubjectPublicKeyInfo() }
+};
+```
+
+Encryption is off by default and both ends must agree. Without `TrustedHostKey` traffic is private from anyone who only listens, but someone in the middle could still pose as the server. The `ResetKey` lets a restarted server tell clients of its previous run that their session is gone.
+
+### Worker Thread
+
+```csharp
+Transport transport = new ThreadedTransport(new KcpTransport(new() { Port = 7777, UseIoThreads = true }));
+NetSession host = NetSession.Host(transport, "Server");
+```
+
+Socket reads and writes, retransmits, acknowledgements and encryption move to a worker thread. Your thread uses the session exactly as before, and connections keep acknowledging data even while your thread is in a long frame. With `UseIoThreads` the worker wakes the moment a packet arrives.
+
+### Raw Transports
+
+```csharp
+using KcpTransport transport = new(new() { Port = 7777 });
+transport.Listen();
+
+transport.Receive();
+while (transport.Poll(out TransportEvent ev))
+{
+    switch (ev.Type)
+    {
+        case TransportEventType.Connected: break;
+        case TransportEventType.Data: Handle(ev.Connection, ev.Data.Span); break;
+        case TransportEventType.Disconnected: break;
+    }
+}
+
+connection.Send(data, Delivery.Reliable);
+transport.Flush();
+```
+
+Event data is only valid until the next `Poll`, so copy it to keep it. To drive a session from your own transport loop, create it with `NetSession.CreateHost` or `CreateClient` and hand it each event with `ProcessEvent`.
+
+### Serialization
+
+```csharp
+using NetWriter writer = new();
+writer.WriteVarInt32(health);
+writer.WriteSingle(position.X);
+writer.WriteString(name);
+
+NetReader reader = new(writer.WrittenSpan);
+int health = reader.ReadVarInt32();
+```
+
+`NetWriter` and `NetReader` cover primitives, varints, strings, GUIDs and byte spans. For richer types, [Prowl.Echo](../Echo) with `[FixedEchoStructure]` makes compact network messages.
+
+## Tuning Tips
+
+For large servers:
+1. Raise `KcpTransportOptions.MaxConnections` and `NetSessionOptions.MaxPeers` together, since a host refuses a `MaxPeers` above the transport's limit
+2. Turn off `NetSessionOptions.SharePeerList` when clients don't need to know about each other
+3. Set `MaxSendRate` so one busy connection can't flood a player's link, and keep bulk data on higher channels
+4. Use `ThreadedTransport` with `UseIoThreads` when the game thread can't pump the network every frame
+5. Check `Connection.PendingSendBytes` against `MaxPendingSendBytes` and send less to peers that fall behind
+
+Players behind carrier grade NAT can share one address. Sessions mark players who joined as trusted, so `MaxConnectionsPerAddress` only limits connections that haven't joined yet.
+
+On a server with several addresses, set `BindAddress` to the one clients connect to.
+
+## Limitations
+
+- One host per session, with no host migration
+- Scene replication and interest management, deciding who receives which updates, belong to the engine
+- Encryption needs a pinned `TrustedHostKey` to rule out a man in the middle
+- Both ends must use the same channel count, MTU and receive window
+
+## License
+
+This component is part of the Prowl Game Engine and is licensed under the MIT License. See the LICENSE file in the project root for details.
