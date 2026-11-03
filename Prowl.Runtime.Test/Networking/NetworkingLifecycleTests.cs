@@ -383,4 +383,45 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
     }
+
+    [Fact]
+    public void AnObjectKeptAcrossLoadsIsNotDuplicatedWhenTheHostChangesScene()
+    {
+        Scene scene = CreateScene();
+        GameObject manager = CreateGameObject("Manager");
+        manager.AddComponent<KeptAcrossLoadsComponent>();
+        scene.Add(manager);
+        using NetWriter first = new(), second = new();
+        NetworkTestScene.Current.SceneGeneration = 1;
+        NetworkTestScene.Current.WriteSnapshot(scene, first);
+        NetworkTestScene.Current.SceneGeneration = 2;
+        NetworkTestScene.Current.WriteSnapshot(scene, second);
+        NetworkTestScene.Current.SceneGeneration = 0;
+        LocalNetwork network = new();
+        FakePeer host = FakePeer.Host(network);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, first.WrittenSpan);
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady && Scene.Current.AllObjects.Any(o => o.Identifier == manager.Identifier), host);
+            Assert.Contains(Scene.Preserved, p => p.Identifier == manager.Identifier);
+
+            host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), FakePeer.SceneSnapshot, second.WrittenSpan);
+            Pump(() => NetworkTestScene.Current.SceneGeneration == 2 && Networking.Networking.IsReady, host);
+            PumpFor(50, host);
+
+            Assert.Single(Scene.Current.AllObjects, o => o.Identifier == manager.Identifier);
+            Assert.Single(Scene.Preserved, p => p.Identifier == manager.Identifier);
+        }
+        finally
+        {
+            Networking.Networking.Shutdown();
+            host.Dispose();
+        }
+    }
+}
+
+public class KeptAcrossLoadsComponent : Component
+{
+    public override void OnEnable() => Scene.DontDestroyOnLoad(GameObject);
 }

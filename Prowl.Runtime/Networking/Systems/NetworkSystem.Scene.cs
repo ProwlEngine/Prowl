@@ -233,6 +233,7 @@ internal sealed partial class NetworkSystem
                 return;
             }
 
+            ReleasePreservedCopies(scene);
             Scene.Load(scene);
             queuedForActivation = true;
         }
@@ -243,6 +244,19 @@ internal sealed partial class NetworkSystem
             if (!queuedForActivation)
             {
                 scene.Dispose();
+            }
+        }
+    }
+
+    /// <summary>Objects kept across loads that the incoming scene brings again go with the old scene instead.</summary>
+    internal static void ReleasePreservedCopies(Scene incoming)
+    {
+        HashSet<Guid> ids = incoming.AllObjects.Select(go => go.Identifier).ToHashSet();
+        foreach (GameObject kept in Scene.Preserved.ToArray())
+        {
+            if (kept.IsValid() && ids.Contains(kept.Identifier))
+            {
+                Scene.CancelDontDestroyOnLoad(kept);
             }
         }
     }
