@@ -972,6 +972,24 @@ public sealed class KcpNetSessionTests : NetSessionTests
     protected override string AddressOf(Transport host) => $"127.0.0.1:{((KcpTransport)host).LocalPort}";
 }
 
+public sealed class WorkerKcpNetSessionTests : NetSessionTests
+{
+    protected override string UnreachableAddress => "not a valid host name";
+
+    protected override Transport CreateHostTransport() => new ThreadedTransport(new KcpTransport(Options()));
+
+    protected override Transport CreateClientTransport(string name) => new ThreadedTransport(new KcpTransport(Options()));
+
+    private static KcpTransportOptions Options()
+    {
+        KcpTransportOptions options = KcpTransportContractTests.Options();
+        options.UseIoThreads = true;
+        return options;
+    }
+
+    protected override string AddressOf(Transport host) => $"127.0.0.1:{host.LocalPort}";
+}
+
 public sealed class ThreadedKcpNetSessionTests : NetSessionTests
 {
     protected override string UnreachableAddress => "not a valid host name";

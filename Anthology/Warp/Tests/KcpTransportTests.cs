@@ -651,6 +651,27 @@ public class KcpTransportTests
     }
 
     [Fact]
+    public void AWorkerThreadKeepsTheConnectionAliveWhileTheMainThreadIsBusy()
+    {
+        using ThreadedTransport host = new(new KcpTransport(FastOptions()));
+        host.Listen();
+        using KcpTransport client = new(FastOptions());
+        Pump pump = new(host, client);
+        Connection toHost = client.Connect($"127.0.0.1:{host.LocalPort}");
+        pump.Until(() => toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1, what: "connect");
+
+        // Only the client is pumped. The host's worker still acknowledges what arrives.
+        toHost.Send(new byte[5000], Delivery.Reliable);
+        Pump clientOnly = new(client);
+        clientOnly.Until(() => toHost.PendingSendBytes == 0, what: "acknowledgements from the worker");
+
+        host.Receive();
+        Assert.True(host.Poll(out TransportEvent ev));
+        Assert.Equal(TransportEventType.Data, ev.Type);
+        Assert.Equal(5000, ev.Data.Length);
+    }
+
+    [Fact]
     public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
     {
         KcpTransportOptions options = FastOptions();

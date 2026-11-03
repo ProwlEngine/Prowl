@@ -4,6 +4,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Prowl.Warp;
 
@@ -208,6 +209,14 @@ public abstract class Transport : IDisposable
         _events.Enqueue(new PendingEvent(TransportEventType.Disconnected, connection, null, 0, default, reason, 0));
     }
 
+    /// <summary>
+    ///     Gives the transport an event to set whenever something arrives, so a thread waiting to pump it can wake at
+    ///     once rather than on its next timer tick. Transports that can't tell ignore it.
+    /// </summary>
+    internal virtual void SetActivitySignal(EventWaitHandle? signal)
+    {
+    }
+
     /// <summary>Stops tracking a connection that was never reported, without raising any event.</summary>
     protected void ForgetConnection(Connection connection)
     {
@@ -289,6 +298,12 @@ public abstract class Transport : IDisposable
     private void Overflow(Connection connection)
     {
         OnReceiveQueueOverflow(connection);
+        DiscardQueuedData(connection);
+    }
+
+    /// <summary>Releases the queued data events of one connection, keeping every other event.</summary>
+    protected void DiscardQueuedData(Connection connection)
+    {
         int pendingCount = _events.Count;
         for (int i = 0; i < pendingCount; i++)
         {

@@ -53,6 +53,9 @@ internal sealed class KcpIoThreads : IDisposable
         _sender.Start();
     }
 
+    /// <summary>Set whenever a datagram is queued, if given.</summary>
+    public volatile EventWaitHandle? Signal;
+
     /// <summary>Datagrams received and not yet taken.</summary>
     public int Count => _received.Count;
 
@@ -164,6 +167,7 @@ internal sealed class KcpIoThreads : IDisposable
             buffer.AsSpan(0, length).CopyTo(copy);
             Interlocked.Add(ref _queuedBytes, Cost(length));
             _received.Enqueue(new Datagram(copy, length, CopyAddress(address)));
+            Signal?.Set();
         }
     }
 

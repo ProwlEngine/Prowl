@@ -386,6 +386,51 @@ public class KcpTransportContractTests : TransportContractTests
     protected override string AddressOf(Transport host) => $"127.0.0.1:{((KcpTransport)host).LocalPort}";
 }
 
+/// <summary>The same contract, with KCP running on a worker thread behind <see cref="ThreadedTransport" />.</summary>
+public sealed class WorkerKcpTransportContractTests : TransportContractTests
+{
+    protected override string UnreachableAddress => "not a valid host name";
+
+    protected override Transport CreateHost()
+    {
+        ThreadedTransport host = Track(new ThreadedTransport(new KcpTransport(Options())));
+        host.Listen();
+        return host;
+    }
+
+    protected override Transport CreateClient() => Track(new ThreadedTransport(new KcpTransport(Options())));
+
+    private static KcpTransportOptions Options()
+    {
+        KcpTransportOptions options = KcpTransportContractTests.Options();
+        options.UseIoThreads = true;
+        return options;
+    }
+
+    protected override string AddressOf(Transport host) => $"127.0.0.1:{host.LocalPort}";
+}
+
+/// <summary>The same contract, with local transports running on worker threads.</summary>
+public sealed class WorkerLocalTransportContractTests : TransportContractTests
+{
+    private readonly LocalNetwork _network = new();
+    private int _clients;
+
+    protected override string UnreachableAddress => "nobody";
+
+    protected override Transport CreateHost()
+    {
+        ThreadedTransport host = Track(new ThreadedTransport(new LocalTransport(_network, "host")));
+        host.Listen();
+        return host;
+    }
+
+    protected override Transport CreateClient() =>
+        Track(new ThreadedTransport(new LocalTransport(_network, $"client{_clients++}")));
+
+    protected override string AddressOf(Transport host) => "host";
+}
+
 /// <summary>The same contract, with sockets read and written on background threads.</summary>
 public sealed class ThreadedKcpTransportContractTests : KcpTransportContractTests
 {

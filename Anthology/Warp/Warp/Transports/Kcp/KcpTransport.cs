@@ -1077,6 +1077,18 @@ public sealed class KcpTransport : Transport
 
     protected override void DisposeCore() => TrustedHostKey?.Dispose();
 
+    private EventWaitHandle? _activity;
+
+    /// <summary>Only the I/O threads can tell when a datagram arrives; inline, the waiting thread polls.</summary>
+    internal override void SetActivitySignal(EventWaitHandle? signal)
+    {
+        _activity = signal;
+        if (_io != null)
+        {
+            _io.Signal = signal;
+        }
+    }
+
     protected override void OnReceiveQueueOverflow(Connection connection) =>
         Close((KcpConnection)connection, DisconnectReason.ResourceLimit, true);
 
@@ -1175,7 +1187,7 @@ public sealed class KcpTransport : Transport
         _socket = socket;
         if (Settings.UseIoThreads)
         {
-            _io = new KcpIoThreads(socket, Settings.Mtu, Settings.MaxIoQueueBytes);
+            _io = new KcpIoThreads(socket, Settings.Mtu, Settings.MaxIoQueueBytes) { Signal = _activity };
         }
 
         _receiveAddress =

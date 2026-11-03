@@ -71,6 +71,10 @@ public sealed class LocalTransport : Transport
 
     public LocalNetwork Network { get; }
 
+    private volatile EventWaitHandle? _activity;
+
+    internal override void SetActivitySignal(EventWaitHandle? signal) => _activity = signal;
+
     public string Address { get; }
 
     public override TransportCapabilities Capabilities =>
@@ -307,6 +311,7 @@ public sealed class LocalTransport : Transport
             _inboxBytes += packet.Buffer?.Length ?? 0;
             _inbox.Enqueue(packet);
             _postedPackets++;
+            _activity?.Set();
             return true;
         }
     }
