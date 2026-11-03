@@ -699,7 +699,7 @@ public sealed class PhysicsGrabber : Component
     private void TryGrab(Ray ray)
     {
         PhysicsWorld physics = GameObject.Scene.Physics;
-        if (!physics.Raycast(ray.Origin, ray.Direction, out RaycastHit hit, 200f, QueryFilter.Default)) return;
+        if (!physics.Raycast(ray.Origin, ray.Direction, 200f, out RaycastHit hit, QueryFilter.Default)) return;
 
         Rigidbody3D body = hit.Rigidbody;
         if (body.IsNotValid()) return;
