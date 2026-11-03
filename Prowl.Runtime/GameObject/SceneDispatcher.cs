@@ -399,7 +399,7 @@ internal sealed class SceneDispatcher
     }
 
     private static void Report(Component c, string callback, Exception ex)
-        => Debug.LogError($"[{(c.GameObject.IsValid() ? c.GameObject.Name : null)}/{c.GetType().Name}] {callback} threw: {ex.Message}\n{ex.StackTrace}");
+        => Debug.LogException($"[{(c.GameObject.IsValid() ? c.GameObject.Name : null)}/{c.GetType().Name}] {callback} threw", ex);
 
     // ---- sparse physics events -----------------------------------------------------------------------
     //

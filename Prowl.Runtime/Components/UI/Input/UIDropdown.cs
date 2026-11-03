@@ -116,7 +116,7 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
         if (changed && notify)
         {
             try { OnValueChanged?.Invoke(_value); }
-            catch (Exception ex) { Debug.LogError($"[UIDropdown] OnValueChanged on '{Name}' threw: {ex.Message}\n{ex.StackTrace}"); }
+            catch (Exception ex) { Debug.LogException($"[UIDropdown] OnValueChanged on '{Name}' threw", ex); }
             _onValueChanged.Invoke();
         }
     }

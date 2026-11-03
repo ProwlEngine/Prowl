@@ -526,7 +526,7 @@ public static class CliServer
                 for (int i = 0; i < pending && _queue.TryDequeue(out (SendOrPostCallback Callback, object? State) entry); i++)
                 {
                     try { entry.Callback(entry.State); }
-                    catch (Exception ex) { Debug.LogError($"[CLI] A command continuation threw: {ex}"); }
+                    catch (Exception ex) { Debug.LogException($"[CLI] A command continuation threw", ex); }
                 }
             }
             finally { SetSynchronizationContext(previous); }

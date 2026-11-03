@@ -230,7 +230,7 @@ internal static class AssetLoader
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to load {asset.GetType().Name} '{asset.Name}' ({asset.AssetID}): {ex}");
+            Debug.LogException($"Failed to load {asset.GetType().Name} '{asset.Name}' ({asset.AssetID})", ex);
         }
         finally
         {

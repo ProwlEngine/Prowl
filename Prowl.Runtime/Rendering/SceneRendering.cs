@@ -116,7 +116,7 @@ public sealed class SceneRendering : IDisposable
         if (_world != null)
         {
             try { member.Detach(_world); }
-            catch (Exception e) { Debug.LogError($"Removing {member.GetType().Name} from the render world threw: {e}"); }
+            catch (Exception e) { Debug.LogException($"Removing {member.GetType().Name} from the render world threw", e); }
         }
     }
 
@@ -284,7 +284,7 @@ public sealed class SceneRendering : IDisposable
             foreach (IRenderSync member in _memberSet)
             {
                 try { member.Detach(_world); }
-                catch (Exception e) { Debug.LogError($"Removing {member.GetType().Name} from the render world threw: {e}"); }
+                catch (Exception e) { Debug.LogException($"Removing {member.GetType().Name} from the render world threw", e); }
             }
             _world.Dispose();
             _world = null;

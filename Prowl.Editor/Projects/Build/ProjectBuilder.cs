@@ -203,7 +203,7 @@ public static class ProjectBuilder
         // files first. Waiting on the watcher would ship whatever the assets were before the last save.
         EditorAssetBackend.Instance?.Refresh();
 
-        Runtime.Debug.Log($"[Build] Starting {pipeline.DisplayName} build to {outputPath}...", LogSeverity.Normal);
+        Runtime.Debug.Log($"[Build] Starting {pipeline.DisplayName} build to {outputPath}...");
 
         var progress = new BuildProgress();
         string projectPath = Project.Current?.RootPath ?? "";

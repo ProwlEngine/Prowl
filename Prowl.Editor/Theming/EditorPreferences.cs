@@ -379,7 +379,7 @@ public static class Preferences
     private static void ApplySafely(PreferencesSection section)
     {
         try { section.Instance.Apply(); }
-        catch (Exception ex) { Debug.LogError($"[Preferences] {section.Type.Name}.Apply threw: {ex}"); }
+        catch (Exception ex) { Debug.LogException($"[Preferences] {section.Type.Name}.Apply threw", ex); }
     }
 
     private static bool SameValue(object? a, object? b)

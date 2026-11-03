@@ -853,7 +853,7 @@ public class EditorAssetBackend : AssetBackend
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogError($"Import failed for '{entry.Path}': {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+            Runtime.Debug.LogException($"Import failed for '{entry.Path}'", ex);
             // Keep NeedsReimport true so file changes will trigger a retry.
             // Only clear the timestamp so next scan detects the file as changed.
             entry.LastModifiedTicks = 0;

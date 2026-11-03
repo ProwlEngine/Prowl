@@ -122,7 +122,7 @@ public abstract class EngineObject : IDisposable
             if (obj.IsDisposed) continue; // disposed by hand, or by an owner that went first
 
             try { obj.Dispose(); }
-            catch (Exception ex) { Debug.LogError($"[{obj.Name}/{obj.GetType().Name}] Dispose() threw while being destroyed: {ex.Message}\n{ex.StackTrace}"); }
+            catch (Exception ex) { Debug.LogException($"[{obj.Name}/{obj.GetType().Name}] Dispose() threw while being destroyed", ex); }
         }
     }
 

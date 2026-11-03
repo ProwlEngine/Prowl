@@ -197,7 +197,7 @@ public sealed class EventSystem : Component
                 if (comp is TInterface handler && comp.EnabledInHierarchy)
                 {
                     try { action(handler); }
-                    catch (Exception ex) { Debug.LogError($"[EventSystem] {typeof(TInterface).Name} threw on {comp.Name}: {ex.Message}\n{ex.StackTrace}"); }
+                    catch (Exception ex) { Debug.LogException($"[EventSystem] {typeof(TInterface).Name} threw on {comp.Name}", ex); }
                     return node;
                 }
             }
@@ -227,7 +227,7 @@ public sealed class EventSystem : Component
                 {
                     if (first.IsNotValid()) first = node;
                     try { action(handler, e); }
-                    catch (Exception ex) { Debug.LogError($"[EventSystem] {typeof(TInterface).Name} threw on {comp.Name}: {ex.Message}\n{ex.StackTrace}"); }
+                    catch (Exception ex) { Debug.LogException($"[EventSystem] {typeof(TInterface).Name} threw on {comp.Name}", ex); }
                     if (e.Used) return first;
                 }
             }
@@ -245,7 +245,7 @@ public sealed class EventSystem : Component
         {
             if (comp is not TInterface handler || !comp.EnabledInHierarchy) continue;
             try { action(handler, e); }
-            catch (Exception ex) { Debug.LogError($"[EventSystem] {typeof(TInterface).Name} threw on {comp.Name}: {ex.Message}\n{ex.StackTrace}"); }
+            catch (Exception ex) { Debug.LogException($"[EventSystem] {typeof(TInterface).Name} threw on {comp.Name}", ex); }
         }
     }
 

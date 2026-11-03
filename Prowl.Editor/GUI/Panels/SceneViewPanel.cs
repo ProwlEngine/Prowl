@@ -354,7 +354,7 @@ public class SceneViewPanel : DockPanel
         catch (Exception ex)
         {
             // A broken scene view render or scene editor must not crash the editor. Keep the panel alive.
-            Runtime.Debug.LogError($"[SceneView] Scene render/input threw and was skipped: {ex.Message}\n{ex.StackTrace}");
+            Runtime.Debug.LogException($"[SceneView] Scene render/input threw and was skipped", ex);
         }
         finally
         {

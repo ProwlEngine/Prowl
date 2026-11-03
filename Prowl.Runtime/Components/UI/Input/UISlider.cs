@@ -81,7 +81,7 @@ public class UISlider : Selectable, IDragHandler, IBeginDragHandler
         if (changed && notify)
         {
             try { OnValueChanged?.Invoke(_value); }
-            catch (Exception ex) { Debug.LogError($"[UISlider] OnValueChanged on '{Name}' threw: {ex.Message}\n{ex.StackTrace}"); }
+            catch (Exception ex) { Debug.LogException($"[UISlider] OnValueChanged on '{Name}' threw", ex); }
             _onValueChanged.Invoke();
         }
     }

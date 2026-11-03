@@ -506,12 +506,12 @@ public static class TextureSpriteMeta
                 }
 
                 failed = true;
-                Prowl.Runtime.Debug.LogError("[Sprite] Sprite import settings deserialized to null. Keeping the existing block rather than replacing it with defaults.");
+                Debug.LogError("[Sprite] Sprite import settings deserialized to null. Keeping the existing block rather than replacing it with defaults.");
             }
             catch (Exception ex)
             {
                 failed = true;
-                Prowl.Runtime.Debug.LogError($"[Sprite] Failed to read sprite import settings: {ex.Message}\n{ex.StackTrace}");
+                Debug.LogException($"[Sprite] Failed to read sprite import settings", ex);
             }
         }
         return new SpriteImportSettings();
@@ -560,7 +560,7 @@ public static class TextureSpriteMeta
         catch (Exception ex)
         {
             failed = true;
-            Prowl.Runtime.Debug.LogError($"[Sprite] Could not read the meta for texture {textureGuid}: {ex.Message}\n{ex.StackTrace}");
+            Debug.LogException($"[Sprite] Could not read the meta for texture {textureGuid}", ex);
             return new SpriteImportSettings();
         }
     }

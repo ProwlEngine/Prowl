@@ -256,7 +256,7 @@ public class CollisionModule : ParticleSystemModule
             _queriesLeft--;
 
             surface = new CachedSurface { Frame = frame };
-            if (physics.Raycast(from, direction, out RaycastHit hit, MathF.Max(distance + radius, cell * 2f), CollidesWith))
+            if (physics.Raycast(from, direction, MathF.Max(distance + radius, cell * 2f), out RaycastHit hit, CollidesWith))
             {
                 surface.HasSurface = true;
                 surface.Point = hit.Point;

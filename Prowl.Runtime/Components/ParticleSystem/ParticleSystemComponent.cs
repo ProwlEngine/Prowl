@@ -750,7 +750,7 @@ public class ParticleSystemComponent : Component, IRenderSync
         if (driven) return;
 
         try { Stopped?.Invoke(this); }
-        catch (Exception ex) { Debug.LogError($"[{Name}] Stopped handler threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}] Stopped handler threw", ex); }
 
         // A handler that played the system again has taken it over, so the stop action no longer applies.
         if (_isPlaying || !Application.IsPlaying || _prewarming) return;
@@ -1302,7 +1302,7 @@ public class ParticleSystemComponent : Component, IRenderSync
             if (ParticleCollided != null)
             {
                 try { ParticleCollided(this, hit); }
-                catch (Exception ex) { Debug.LogError($"[{Name}] ParticleCollided handler threw: {ex.Message}\n{ex.StackTrace}"); }
+                catch (Exception ex) { Debug.LogException($"[{Name}] ParticleCollided handler threw", ex); }
             }
 
             if (!Collision.SendCollisionMessages || !Application.IsPlaying) continue;
@@ -1315,7 +1315,7 @@ public class ParticleSystemComponent : Component, IRenderSync
                 Component component = components[c];
                 if (component is not IParticleCollisionHandler handler || !component.EnabledInHierarchy) continue;
                 try { handler.OnParticleCollision(this, in hit); }
-                catch (Exception ex) { Debug.LogError($"[{component.GetType().Name}] OnParticleCollision threw: {ex.Message}\n{ex.StackTrace}"); }
+                catch (Exception ex) { Debug.LogException($"[{component.GetType().Name}] OnParticleCollision threw", ex); }
             }
         }
     }

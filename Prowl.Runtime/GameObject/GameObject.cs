@@ -747,7 +747,7 @@ public partial class GameObject : EngineObject, ISerializable
         if (!scene.IsValid()) return;
 
         try { comp.OnAddedToScene(); }
-        catch (Exception ex) { Debug.LogError($"[{Name}/{comp.GetType().Name}] OnAddedToScene() threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}/{comp.GetType().Name}] OnAddedToScene() threw", ex); }
 
         if (scene.IsActive && comp.EnabledInHierarchy)
             comp.InternalOnEnable();
@@ -1415,9 +1415,8 @@ public partial class GameObject : EngineObject, ISerializable
                     }
                     catch (Exception e)
                     {
-                        Debug.LogError($"'{oType.Name}' on '{Name}' threw while being loaded, so it was " +
-                                       $"kept as missing rather than dropping the rest of the scene. " +
-                                       $"{e.GetType().Name}: {e.Message}");
+                        Debug.LogException($"'{oType.Name}' on '{Name}' threw while being loaded, so it was " +
+                                       $"kept as missing rather than dropping the rest of the scene.", e);
                     }
                 }
 
@@ -1468,7 +1467,7 @@ public partial class GameObject : EngineObject, ISerializable
             }
             catch (Exception e)
             {
-                Debug.LogError($"A child of '{Name}' threw while being loaded and was skipped. {e.GetType().Name}: {e.Message}");
+                Debug.LogException($"A child of '{Name}' threw while being loaded and was skipped.", e);
                 continue;
             }
             if (child.IsNotValid() || !existing.Add(child!)) continue;
@@ -1610,7 +1609,7 @@ public partial class GameObject : EngineObject, ISerializable
         }
         catch (Exception e)
         {
-            Debug.LogError($"'{oType.Name}' on '{Name}' threw while being recovered, so it was kept as missing. {e.GetType().Name}: {e.Message}");
+            Debug.LogException($"'{oType.Name}' on '{Name}' threw while being recovered, so it was kept as missing.", e);
             return null;
         }
     }
