@@ -1,6 +1,7 @@
 // From kcp2k (MIT, see Warp/Transports/Kcp/Protocol/LICENSE.txt).
 // test some of the internal Kcp.cs functions to guarantee stability.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -807,6 +808,28 @@ public class KcpTests
         }
 
         Assert.Equal(warmRetransmits, sender.retransmits);
+    }
+
+    [Fact]
+    public void EmptySegmentsHeldOutOfOrderCostLittleMemory()
+    {
+        Transports.Kcp.Protocol.Kcp kcp = new(1, (_, _) => { });
+        kcp.SetWindowSize(256, 256);
+        byte[] segment = new byte[Transports.Kcp.Protocol.Kcp.OVERHEAD];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(segment, 1);
+        segment[4] = Transports.Kcp.Protocol.Kcp.CMD_PUSH;
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(segment.AsSpan(6), 256);
+        kcp.Input(segment, 0, segment.Length);
+
+        long before = System.GC.GetAllocatedBytesForCurrentThread();
+        for (uint sn = 2; sn < 202; sn++)
+        {
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(segment.AsSpan(12), sn);
+            kcp.Input(segment, 0, segment.Length);
+        }
+
+        Assert.Equal(200, kcp.rcv_buf.Count);
+        Assert.InRange(System.GC.GetAllocatedBytesForCurrentThread() - before, 0, 200 * 400);
     }
 
     [Fact]

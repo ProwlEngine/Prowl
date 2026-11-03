@@ -11,13 +11,13 @@ internal sealed class Segment
     // we need an auto scaling byte[] with a WriteBytes function.
     // MemoryStream does that perfectly, no need to reinvent the wheel.
     // note: no need to pool it, because Segment is already pooled.
-    // -> default MTU as initial capacity to avoid most runtime resizing/allocations
+    // -> starts empty, so a segment a peer sends with no data holds no buffer. pooled segments keep what they grew to.
     //
     // .data is only used for Encode(), which always fits it into a buffer.
     // the buffer is always Kcp.buffer. Kcp ctor creates the buffer of size:
     // (mtu + OVERHEAD) * 3 bytes.
     // in other words, Encode only ever writes up to the above amount of bytes.
-    internal MemoryStream data = new(Kcp.MTU_DEF);
+    internal MemoryStream data = new();
 
     internal uint fastack;
 
