@@ -765,22 +765,28 @@ public sealed class KcpTransport : Transport
             return;
         }
 
-        connection?.RecordSent(datagram.Length);
-
         if (Settings.Simulation is { } simulation && Simulate(simulation, to, datagram))
         {
+            connection?.RecordSent(datagram.Length);
             return;
         }
 
-        SendNow(to, datagram);
+        if (SendNow(to, datagram))
+        {
+            connection?.RecordSent(datagram.Length);
+        }
+        else
+        {
+            connection?.RecordDropped();
+        }
     }
 
-    private void SendNow(SocketAddress to, ReadOnlySpan<byte> datagram)
+    /// <summary>Hands the datagram to the socket, or to the send thread. False only if the send queue is full.</summary>
+    private bool SendNow(SocketAddress to, ReadOnlySpan<byte> datagram)
     {
         if (_io != null)
         {
-            _io.Send(to, datagram);
-            return;
+            return _io.Send(to, datagram);
         }
 
         try
@@ -791,6 +797,8 @@ public sealed class KcpTransport : Transport
         {
             // UDP makes no promises; a failed send is just a lost packet.
         }
+
+        return true;
     }
 
     /// <summary>Decrypts a sealed session packet into <c>[type][sessionId][body]</c> in a scratch buffer.</summary>
@@ -954,7 +962,7 @@ public sealed class KcpTransport : Transport
         _socket = socket;
         if (Settings.UseIoThreads)
         {
-            _io = new KcpIoThreads(socket, Settings.Mtu, Settings.SocketBufferSize);
+            _io = new KcpIoThreads(socket, Settings.Mtu, Settings.MaxIoQueueBytes);
         }
 
         _receiveAddress =

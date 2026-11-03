@@ -37,7 +37,7 @@ public sealed class KcpConnection : Connection
 
     // Send rate budget in bytes, refilled over time and spent by every packet sent.
     private double _sendTokens;
-    private long _unreliableDropped;
+    private long _packetsDropped;
     private bool _tokensStarted;
     private long _tokensUpdatedMs;
     private long _tokensCountedBytes;
@@ -92,7 +92,7 @@ public sealed class KcpConnection : Connection
     private int Mtu => _options.Mtu - (_options.Encryption != null ? KcpCipher.Overhead : 0);
 
     public override ConnectionStats Stats =>
-        base.Stats with { Retransmits = Retransmits(), UnreliableDropped = _unreliableDropped };
+        base.Stats with { Retransmits = Retransmits(), PacketsDropped = _packetsDropped };
 
     public override TimeSpan RoundTripTime => TimeSpan.FromMilliseconds(_smoothedRttMs);
 
@@ -163,7 +163,7 @@ public sealed class KcpConnection : Connection
             RefillSendTokens(_transport.NowMs);
             if (_sendTokens < 0)
             {
-                _unreliableDropped++;
+                _packetsDropped++;
                 return;
             }
         }
@@ -597,6 +597,8 @@ public sealed class KcpConnection : Connection
     }
 
     internal void RecordSent(int bytes) => RecordPacketSent(bytes);
+
+    internal void RecordDropped() => _packetsDropped++;
 
     private void InputReliable(byte channel, byte[] buffer, int offset, int length)
     {

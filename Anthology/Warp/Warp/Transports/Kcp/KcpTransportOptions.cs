@@ -86,7 +86,7 @@ public sealed class KcpTransportOptions
     ///     Most bytes per second each connection sends, counting every packet, or 0 for no limit. Reliable
     ///     messages beyond it wait in the send queue, and lower channels get the bandwidth first, so keep
     ///     bulk transfers on higher channels. Unreliable messages are never queued: once the budget is spent they are
-    ///     dropped and counted in <see cref="ConnectionStats.UnreliableDropped" />.
+    ///     dropped and counted in <see cref="ConnectionStats.PacketsDropped" />.
     /// </summary>
     public int MaxSendRate { get; set; }
 
@@ -101,6 +101,12 @@ public sealed class KcpTransportOptions
     ///     socket calls. KCP, timers and events still run when you pump, on your thread. Off by default.
     /// </summary>
     public bool UseIoThreads { get; set; }
+
+    /// <summary>
+    ///     With <see cref="UseIoThreads" />, the most bytes each direction's queue holds. A datagram counts at least
+    ///     256 bytes. Datagrams beyond it are dropped and counted in <see cref="ConnectionStats.PacketsDropped" />.
+    /// </summary>
+    public long MaxIoQueueBytes { get; set; } = 16 * 1024 * 1024;
 
     /// <summary>Conservative memory budget for queued and unacknowledged reliable segments per peer.</summary>
     public long MaxPendingReliableBytes { get; set; } = 32 * 1024 * 1024;
@@ -163,6 +169,11 @@ public sealed class KcpTransportOptions
         {
             throw new ArgumentOutOfRangeException(nameof(MaxSendRate), MaxSendRate,
                 "MaxSendRate must be 0 or at least one Mtu per second.");
+        }
+
+        if (MaxIoQueueBytes < Mtu)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MaxIoQueueBytes));
         }
 
         if (MaxPendingReliableBytes <= 0)

@@ -107,12 +107,12 @@ internal sealed class KcpIoThreads : IDisposable
         return true;
     }
 
-    /// <summary>Queues a datagram for the send thread. The data and address are copied.</summary>
-    public void Send(SocketAddress to, ReadOnlySpan<byte> datagram)
+    /// <summary>Queues a datagram for the send thread, copying the data and address. False if the queue is full.</summary>
+    public bool Send(SocketAddress to, ReadOnlySpan<byte> datagram)
     {
         if (Interlocked.Read(ref _outgoingBytes) + Cost(datagram.Length) > _maxQueuedBytes)
         {
-            return;
+            return false;
         }
 
         Interlocked.Add(ref _outgoingBytes, Cost(datagram.Length));
@@ -123,6 +123,8 @@ internal sealed class KcpIoThreads : IDisposable
         {
             _sendSignal.Set();
         }
+
+        return true;
     }
 
     private void ReceiveLoop()

@@ -387,7 +387,7 @@ public class KcpTransportTests
     {
         KcpTransportOptions options = FastOptions();
         options.UseIoThreads = true;
-        options.SocketBufferSize = 64 * 1024;
+        options.MaxIoQueueBytes = 64 * 1024;
         using KcpTransport host = new(options);
         host.Listen();
         using Socket raw = RawSocket(host);
@@ -424,12 +424,48 @@ public class KcpTransportTests
             pump.For(100);
             int arrived = pump.EventsOf(host).Count(ev => ev.Type == TransportEventType.Data);
             Assert.InRange(arrived, 1, sent * 3 / 4);
-            Assert.Equal(sent - arrived, toHost.Stats.UnreliableDropped);
+            Assert.Equal(sent - arrived, toHost.Stats.PacketsDropped);
 
             toHost.Send(new byte[] { 7, 7 }, Delivery.Reliable);
             watch.Restart();
             pump.Until(() => pump.EventsOf(host).Any(ev => ev.Type == TransportEventType.Data && ev.Delivery == Delivery.Reliable),
                 timeoutMs: 1000, what: "the reliable message");
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void IoThreadsCarryALargeBurstAndCountWhatTheyDrop(bool smallQueue)
+    {
+        KcpTransportOptions options = FastOptions();
+        options.UseIoThreads = true;
+        if (smallQueue)
+        {
+            options.MaxIoQueueBytes = 64 * 1024;
+        }
+
+        (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) = Connect(options, options);
+        using (host)
+        using (client)
+        {
+            Connection toClient = host.Connections.Single();
+            long before = toClient.Stats.PacketsSent;
+            for (int i = 0; i < 3000; i++)
+            {
+                toClient.Send(new byte[1000], Delivery.Unreliable);
+            }
+
+            ConnectionStats stats = toClient.Stats;
+            Assert.Equal(3000, stats.PacketsSent - before + stats.PacketsDropped);
+            if (smallQueue)
+            {
+                Assert.True(stats.PacketsDropped > 0);
+                return;
+            }
+
+            pump.Until(() => pump.EventsOf(client).Count(ev => ev.Type == TransportEventType.Data) == 3000,
+                what: "the whole burst");
         }
     }
 

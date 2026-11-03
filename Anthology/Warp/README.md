@@ -63,7 +63,7 @@ is lost. Keep frequent ones small.
   session when the other's address changes, such as a phone moving between Wi-Fi and mobile data, once the new
   address answers an encrypted challenge. Both ends must agree.
 - `MaxSendRate`: caps the bytes per second each connection sends. Lower channels get the bandwidth first, and
-  unreliable messages over the cap are dropped and counted in `Stats.UnreliableDropped`.
+  unreliable messages over the cap are dropped and counted in `Stats.PacketsDropped`.
 - `MaxConnectionsPerAddress` and `MaxHandshakesPerAddressPerSecond`: limit what one IP address (one IPv6 /64) can
   take. Players behind carrier grade NAT share addresses, so keep them generous.
 - `UseIoThreads`: reads and writes the socket on background threads. Everything else still runs when you pump.
