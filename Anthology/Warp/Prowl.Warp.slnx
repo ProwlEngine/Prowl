@@ -1,8 +1,0 @@
-<Solution>
-    <Folder Name="/Warp/">
-        <Project Path="Warp/Prowl.Warp.csproj" />
-    </Folder>
-    <Folder Name="/Tests/">
-        <Project Path="Tests/Prowl.Warp.Tests.csproj" />
-    </Folder>
-</Solution>

@@ -28,7 +28,7 @@
     <Project Path="Aperture/Aperture/Aperture.csproj" />
     <Project Path="Motion/Motion/Motion.csproj" />
     <Project Path="Prism/Prism/Prowl.Prism.csproj" />
-    <Project Path="Warp/Warp/Prowl.Warp.csproj" />
+    <Project Path="Courier/Courier/Prowl.Courier.csproj" />
   </Folder>
   <Folder Name="/Tooling/">
     <Project Path="Echo/Echo.SourceGenerator/Echo.SourceGenerator.csproj" />
@@ -105,6 +105,6 @@
     <Project Path="Recast/Tests/Prowl.Recast.Tests.csproj" />
     <Project Path="Motion/Tests/Motion.Tests.csproj" />
     <Project Path="Prism/Tests/Prowl.Prism.Tests.csproj" />
-    <Project Path="Warp/Tests/Prowl.Warp.Tests.csproj" />
+    <Project Path="Courier/Tests/Prowl.Courier.Tests.csproj" />
   </Folder>
 </Solution>

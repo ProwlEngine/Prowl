@@ -1,0 +1,1006 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
+
+using Prowl.Courier.Transports.Kcp;
+using Prowl.Courier.Transports.Local;
+
+using Xunit;
+
+namespace Prowl.Courier.Tests;
+
+public struct ChatMessage : INetMessage
+{
+    public static ushort Id => 1;
+
+    public string Text;
+
+    public ChatMessage(string text) => Text = text;
+
+    public void Write(NetWriter writer) => writer.WriteString(Text);
+
+    public void Read(ref NetReader reader) => Text = reader.ReadString();
+}
+
+public struct PositionMessage : INetMessage
+{
+    public static ushort Id => 2;
+
+    public float X;
+    public float Y;
+
+    public void Write(NetWriter writer)
+    {
+        writer.WriteSingle(X);
+        writer.WriteSingle(Y);
+    }
+
+    public void Read(ref NetReader reader)
+    {
+        X = reader.ReadSingle();
+        Y = reader.ReadSingle();
+    }
+}
+
+/// <summary>Records what a session reports, and pumps a group of sessions.</summary>
+public sealed class SessionProbe
+{
+    public SessionProbe(NetSession session)
+    {
+        Session = session;
+        session.Joined += () => JoinedCount++;
+        session.PeerJoined += peer => PeersJoined.Add(peer);
+        session.PeerLeft += (peer, reason) => PeersLeft.Add((peer, reason));
+        session.Ended += (reason, message) => EndedWith = (reason, message);
+        session.On<ChatMessage>((sender, message) => Chat.Add((sender, message.Text)));
+    }
+
+    public NetSession Session { get; }
+    public int JoinedCount { get; private set; }
+    public List<NetPeer> PeersJoined { get; } = new();
+    public List<(NetPeer Peer, SessionEndReason Reason)> PeersLeft { get; } = new();
+    public (SessionEndReason Reason, string? Message)? EndedWith { get; private set; }
+    public List<(NetPeer Sender, string Text)> Chat { get; } = new();
+
+    public static void PumpUntil(Func<bool> condition, params SessionProbe[] probes) =>
+        PumpUntil(condition, 5000, probes);
+
+    public static void PumpUntil(Func<bool> condition, int timeoutMs, params SessionProbe[] probes)
+    {
+        Stopwatch watch = Stopwatch.StartNew();
+        while (!condition())
+        {
+            if (watch.ElapsedMilliseconds > timeoutMs)
+            {
+                throw new TimeoutException("Sessions never reached the expected state.");
+            }
+
+            foreach (SessionProbe probe in probes)
+            {
+                probe.Session.Update();
+            }
+
+            Thread.Sleep(1);
+        }
+    }
+
+    public static void PumpFor(int milliseconds, params SessionProbe[] probes)
+    {
+        Stopwatch watch = Stopwatch.StartNew();
+        while (watch.ElapsedMilliseconds < milliseconds)
+        {
+            foreach (SessionProbe probe in probes)
+            {
+                probe.Session.Update();
+            }
+
+            Thread.Sleep(1);
+        }
+    }
+}
+
+/// <summary>The session suite, run once per transport by the subclasses at the bottom.</summary>
+public abstract class NetSessionTests : IDisposable
+{
+    private readonly List<NetSession> _sessions = new();
+    private string? _hostAddress;
+
+    /// <summary>An address nothing can be reached at.</summary>
+    protected abstract string UnreachableAddress { get; }
+
+    protected virtual bool BatchMessages => true;
+
+    public void Dispose()
+    {
+        foreach (NetSession session in _sessions)
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>A transport for a host. <see cref="NetSession.Host" /> starts it listening.</summary>
+    protected abstract Transport CreateHostTransport();
+
+    protected abstract Transport CreateClientTransport(string name);
+
+    /// <summary>The address clients connect to, for a host transport that is listening.</summary>
+    protected abstract string AddressOf(Transport host);
+
+    private SessionProbe Host(NetSessionOptions? options = null)
+    {
+        NetSession session = NetSession.Host(CreateHostTransport(), "Hosty",
+            options ?? new NetSessionOptions { BatchMessages = BatchMessages });
+        _sessions.Add(session);
+        _hostAddress = AddressOf(session.Transport);
+        return new SessionProbe(session);
+    }
+
+    private SessionProbe Join(string name, NetSessionOptions? options = null, byte[]? token = null,
+        string? address = null)
+    {
+        NetSession session =
+            NetSession.Join(CreateClientTransport(name), address ?? _hostAddress!, name, token,
+                options ?? new NetSessionOptions { BatchMessages = BatchMessages });
+        _sessions.Add(session);
+        return new SessionProbe(session);
+    }
+
+    [Fact]
+    public void HostIsPeerZero()
+    {
+        SessionProbe host = Host();
+
+        Assert.Equal(SessionState.Active, host.Session.State);
+        NetPeer self = Assert.Single(host.Session.Peers);
+        Assert.Equal(NetPeer.HostId, self.Id);
+        Assert.True(self.IsHost && self.IsLocal);
+        Assert.Same(self, host.Session.LocalPeer);
+        Assert.Same(self, host.Session.HostPeer);
+    }
+
+    [Fact]
+    public void ChannelsReachRawHandlersBothWaysAndThroughLoopback()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        List<(Delivery, byte, byte)> atHost = new(), atAlice = new();
+        host.Session.OnRaw(30, (_, ref reader, delivery, channel) => atHost.Add((delivery, channel, reader.ReadByte())));
+        alice.Session.OnRaw(30,
+            (_, ref reader, delivery, channel) => atAlice.Add((delivery, channel, reader.ReadByte())));
+
+        NetPeer aliceAtHost = host.Session.Peers.Single(p => !p.IsLocal);
+        host.Session.SendRaw(aliceAtHost, 30, new byte[] { 1 }, Delivery.Reliable, channel: 2);
+        host.Session.SendRaw(aliceAtHost, 30, new byte[] { 2 }, Delivery.Unreliable);
+        alice.Session.SendRaw(alice.Session.HostPeer!, 30, new byte[] { 3 }, Delivery.Reliable, channel: 3);
+        host.Session.SendRaw(host.Session.LocalPeer!, 30, new byte[] { 4 }, Delivery.Reliable, channel: 1);
+        SessionProbe.PumpUntil(() => atHost.Count == 2 && atAlice.Count == 2, host, alice);
+
+        Assert.Equal(new (Delivery, byte, byte)[] { (Delivery.Reliable, 2, 1), (Delivery.Unreliable, 0, 2) },
+            atAlice.OrderBy(m => m.Item3));
+        Assert.Equal(new (Delivery, byte, byte)[] { (Delivery.Reliable, 3, 3), (Delivery.Reliable, 1, 4) },
+            atHost.OrderBy(m => m.Item3));
+    }
+
+    [Fact]
+    public void SequencedMessagesTravelOnTheirOwnChannels()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        List<(Delivery, byte, int)> atAlice = new();
+        alice.Session.OnRaw(30,
+            (_, ref reader, delivery, channel) => atAlice.Add((delivery, channel, reader.Remaining)));
+
+        NetPeer aliceAtHost = host.Session.Peers.Single(p => !p.IsLocal);
+        host.Session.SendRaw(aliceAtHost, 30, new byte[10], Delivery.UnreliableSequenced, channel: 1);
+        host.Session.SendRaw(aliceAtHost, 30, new byte[5000], Delivery.UnreliableSequenced, channel: 2);
+        SessionProbe.PumpUntil(() => atAlice.Count == 2, host, alice);
+
+        Assert.Equal(new (Delivery, byte, int)[]
+        {
+            (Delivery.UnreliableSequenced, 1, 10), (Delivery.UnreliableSequenced, 2, 5000)
+        }, atAlice.OrderBy(m => m.Item2));
+    }
+
+    [Fact]
+    public void FragmentedMessagesOnDifferentChannelsAreReassembledIndependently()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        Dictionary<byte, byte[]> received = new();
+        alice.Session.OnRaw(31,
+            (_, ref reader, _, channel) => received[channel] = reader.ReadBytes(reader.Remaining).ToArray());
+
+        byte[] first = TestData.Pattern(400_000, 1), second = TestData.Pattern(300_000, 2);
+        NetPeer aliceAtHost = host.Session.Peers.Single(p => !p.IsLocal);
+        host.Session.SendRaw(aliceAtHost, 31, first, channel: 0);
+        host.Session.SendRaw(aliceAtHost, 31, second, channel: 1);
+        SessionProbe.PumpUntil(() => received.Count == 2, host, alice);
+
+        Assert.Equal(first, received[0]);
+        Assert.Equal(second, received[1]);
+        Assert.Equal(0, alice.Session.PendingReassemblyBytes);
+    }
+
+    [Fact]
+    public void ChannelsBeyondTheTransportAndUnreliableChannelsAreRejected()
+    {
+        SessionProbe host = Host();
+        byte channels = (byte)host.Session.Transport.Capabilities.Channels;
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            host.Session.SendRaw(host.Session.LocalPeer!, 30, new byte[] { 1 }, channel: channels));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            host.Session.SendRaw(host.Session.LocalPeer!, 30, new byte[] { 1 }, Delivery.Unreliable, channel: 1));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MessagesLargerThanTheReceiverAcceptsThrowAtTheSender(bool toClient)
+    {
+        SessionProbe host = Host(new NetSessionOptions { BatchMessages = BatchMessages, MaxMessageSize = 4096 });
+        SessionProbe alice = Join("alice",
+            new NetSessionOptions { BatchMessages = BatchMessages, MaxMessageSize = toClient ? 1024 : 1 << 20 });
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        NetSession sender = toClient ? host.Session : alice.Session;
+        NetPeer to = toClient ? host.Session.Peers.Single(p => !p.IsLocal) : alice.Session.HostPeer!;
+        int limit = toClient ? 1024 : 4096;
+
+        Assert.Throws<ArgumentException>(() => sender.SendRaw(to, 30, new byte[limit]));
+        if (toClient)
+        {
+            // Broadcasts skip a client that can't take the message instead.
+            host.Session.BroadcastRaw(30, new byte[limit]);
+        }
+
+        sender.SendRaw(to, 30, new byte[limit - 2]);
+        SessionProbe.PumpFor(100, host, alice);
+        Assert.Equal(SessionState.Active, alice.Session.State);
+        Assert.Equal(2, host.Session.Peers.Count);
+    }
+
+    [Fact]
+    public void OneClientsSmallLimitBreaksNeitherBroadcastsNorThePeerList()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice", new NetSessionOptions { BatchMessages = BatchMessages, MaxMessageSize = 64 });
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        SessionProbe bob = Join(new string('b', 120));
+        SessionProbe.PumpUntil(() => bob.Session.State == SessionState.Active && alice.PeersJoined.Count == 1,
+            host, alice, bob);
+        Assert.Equal(3, alice.Session.Peers.Count);
+        Assert.Equal(2, host.PeersJoined.Count);
+
+        int atAlice = 0, atBob = 0;
+        alice.Session.OnRaw(30, (_, ref _, _, _) => atAlice++);
+        bob.Session.OnRaw(30, (_, ref _, _, _) => atBob++);
+        host.Session.BroadcastRaw(30, new byte[100]);
+        host.Session.BroadcastRaw(30, new byte[10]);
+        SessionProbe.PumpUntil(() => atBob == 2 && atAlice == 1, host, alice, bob);
+        Assert.Equal(SessionState.Active, alice.Session.State);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AHandlerKeepsItsMessageWhileItShutsDownOrPumpsTheSession(bool shutdown)
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        byte[]? seen = null;
+        host.Session.OnRaw(30, (_, ref reader, _, _) =>
+        {
+            if (shutdown)
+            {
+                host.Session.Shutdown();
+            }
+            else
+            {
+                host.Session.Receive();
+            }
+
+            foreach (int size in new[] { 64, 128, 256, 512, 1024 })
+            {
+                for (int i = 0; i < 8; i++)
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Rent(size).AsSpan().Fill(0xEE);
+                }
+            }
+
+            seen = reader.ReadBytes(reader.Remaining).ToArray();
+        });
+
+        byte[] payload = Enumerable.Repeat((byte)0x11, 62).ToArray();
+        alice.Session.SendRaw(alice.Session.HostPeer!, 30, payload);
+        SessionProbe.PumpUntil(() => seen != null, host, alice);
+        Assert.Equal(payload, seen);
+    }
+
+    [Fact]
+    public void AHostCanKeepThePeerListToItself()
+    {
+        SessionProbe host = Host(new NetSessionOptions { BatchMessages = BatchMessages, SharePeerList = false });
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        SessionProbe bob = Join("bob");
+        SessionProbe.PumpUntil(() => bob.Session.State == SessionState.Active, host, alice, bob);
+        bob.Session.Shutdown();
+        SessionProbe.PumpUntil(() => host.PeersLeft.Count == 1, host, alice);
+        SessionProbe.PumpFor(50, host, alice);
+
+        Assert.Equal(new[] { (0, "Hosty"), (1, "alice") }, alice.Session.Peers.OrderBy(p => p.Id).Select(p => (p.Id, p.Name)));
+        Assert.Empty(alice.PeersJoined);
+        Assert.Empty(alice.PeersLeft);
+        Assert.Equal(2, host.PeersJoined.Count);
+    }
+
+    [Fact]
+    public void ClientsJoinAndEveryoneAgreesOnThePeerList()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        SessionProbe bob = Join("bob");
+        SessionProbe.PumpUntil(() => bob.Session.State == SessionState.Active && alice.PeersJoined.Count == 1, host,
+            alice, bob);
+
+        foreach (SessionProbe probe in new[] { host, alice, bob })
+        {
+            Assert.Equal(
+                new[] { (0, "Hosty"), (1, "alice"), (2, "bob") },
+                probe.Session.Peers.OrderBy(p => p.Id).Select(p => (p.Id, p.Name)));
+        }
+
+        Assert.Equal(1, alice.JoinedCount);
+        Assert.Equal("alice", alice.Session.LocalPeer!.Name);
+        Assert.True(alice.Session.HostPeer!.IsHost);
+        Assert.NotNull(alice.Session.HostPeer.Connection);
+        Assert.Null(alice.Session.Peers.Single(p => p.Name == "bob").Connection);
+
+        Assert.Equal(new[] { "alice", "bob" }, host.PeersJoined.Select(p => p.Name));
+        Assert.Equal("bob", Assert.Single(alice.PeersJoined).Name);
+        Assert.Empty(bob.PeersJoined);
+    }
+
+    [Fact]
+    public void UnreliableMessageSentOnAdmissionDoesNotBreakJoin()
+    {
+        SessionProbe host = Host();
+        host.Session.PeerJoined += peer => host.Session.Send(peer, new PositionMessage(), Delivery.Unreliable);
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active || alice.EndedWith != null, host,
+            alice);
+        SessionProbe.PumpFor(100, host, alice);
+
+        Assert.Null(alice.EndedWith);
+        Assert.Equal(SessionState.Active, alice.Session.State);
+    }
+
+    [Fact]
+    public void MessagesFlowBetweenHostAndClients()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe bob = Join("bob");
+        SessionProbe.PumpUntil(
+            () => host.Session.Peers.Count == 3 && bob.Session.State == SessionState.Active &&
+                  alice.Session.Peers.Count == 3, host, alice, bob);
+
+        alice.Session.SendToHost(new ChatMessage("hi host"));
+        host.Session.Broadcast(new ChatMessage("hi all"), except: host.Session.Peers.Single(p => p.Name == "bob"),
+            includeLocal: true);
+        host.Session.Send(host.Session.Peers.Single(p => p.Name == "bob"), new ChatMessage("just bob"));
+
+        SessionProbe.PumpUntil(() => host.Chat.Count == 2 && alice.Chat.Count == 1 && bob.Chat.Count == 1, host, alice,
+            bob);
+
+        Assert.Contains(host.Chat, c => c.Text == "hi host" && c.Sender.Name == "alice");
+        Assert.Contains(host.Chat, c => c.Text == "hi all" && c.Sender.IsLocal);
+        Assert.Equal(("Hosty", "hi all"), (alice.Chat[0].Sender.Name, alice.Chat[0].Text));
+        Assert.Equal("just bob", bob.Chat[0].Text);
+    }
+
+    [Fact]
+    public void ClientsCannotMessageEachOtherDirectly()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe bob = Join("bob");
+        SessionProbe.PumpUntil(() => alice.Session.Peers.Count == 3, host, alice, bob);
+
+        NetPeer bobSeenByAlice = alice.Session.Peers.Single(p => p.Name == "bob");
+        Assert.Throws<InvalidOperationException>(() => alice.Session.Send(bobSeenByAlice, new ChatMessage("psst")));
+        Assert.Throws<InvalidOperationException>(() => alice.Session.Broadcast(new ChatMessage("all")));
+    }
+
+    [Fact]
+    public void UnhandledMessagesAreDropped()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+
+        alice.Session.SendToHost(new PositionMessage { X = 1, Y = 2 });
+        alice.Session.SendToHost(new ChatMessage("after"));
+        SessionProbe.PumpUntil(() => host.Chat.Count == 1, host, alice);
+
+        Assert.Equal(SessionState.Active, alice.Session.State);
+    }
+
+    [Fact]
+    public void ApprovalCanRejectWithAMessage()
+    {
+        SessionProbe host = Host();
+        host.Session.JoinRequested += pending =>
+        {
+            if (pending.Request.Name == "mallory")
+            {
+                pending.Reject("No mallorys.");
+            }
+            else
+            {
+                pending.Accept();
+            }
+        };
+
+        SessionProbe mallory = Join("mallory");
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => mallory.EndedWith != null && alice.Session.State == SessionState.Active, host,
+            mallory, alice);
+
+        Assert.Equal((SessionEndReason.Rejected, "No mallorys."), mallory.EndedWith);
+        Assert.Equal(new[] { "alice" }, host.PeersJoined.Select(p => p.Name));
+    }
+
+    [Fact]
+    public void ApprovalCanBeDeferredAndSeesTheToken()
+    {
+        SessionProbe host = Host();
+        PendingJoin? waiting = null;
+        host.Session.JoinRequested += pending => waiting = pending;
+
+        SessionProbe alice = Join("alice", token: new byte[] { 42 });
+        SessionProbe.PumpUntil(() => waiting != null, host, alice);
+        SessionProbe.PumpFor(30, host, alice);
+        Assert.Equal(SessionState.Joining, alice.Session.State);
+        Assert.NotNull(alice.Session.HostConnection);
+        Assert.True(alice.Session.HostConnection.IsConnected);
+        Assert.Null(host.Session.HostConnection);
+        Assert.Equal(new byte[] { 42 }, waiting!.Request.Token.ToArray());
+
+        waiting.Accept();
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        Assert.True(waiting.IsResolved);
+        Assert.Same(alice.Session.HostConnection, alice.Session.HostPeer!.Connection);
+    }
+
+    [Fact]
+    public void UndecidedJoinsTimeOut()
+    {
+        NetSessionOptions options = new() { JoinTimeout = TimeSpan.FromMilliseconds(200) };
+        SessionProbe host = Host(options);
+        host.Session.JoinRequested += _ => { };
+
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.EndedWith != null, host, alice);
+        Assert.Equal(SessionEndReason.Timeout, alice.EndedWith!.Value.Reason);
+    }
+
+    [Fact]
+    public void VersionMismatchIsTurnedAway()
+    {
+        SessionProbe host = Host(new NetSessionOptions { AppVersion = 2 });
+        SessionProbe old = Join("old", new NetSessionOptions { AppVersion = 1 });
+        SessionProbe.PumpUntil(() => old.EndedWith != null, host, old);
+
+        Assert.Equal(SessionEndReason.VersionMismatch, old.EndedWith!.Value.Reason);
+        Assert.Contains("version 2", old.EndedWith.Value.Message);
+    }
+
+    [Fact]
+    public void FullSessionIsTurnedAway()
+    {
+        SessionProbe host = Host(new NetSessionOptions { MaxPeers = 1 });
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+
+        SessionProbe bob = Join("bob");
+        SessionProbe.PumpUntil(() => bob.EndedWith != null, host, alice, bob);
+        Assert.Equal(SessionEndReason.ServerFull, bob.EndedWith!.Value.Reason);
+    }
+
+    [Fact]
+    public void KickEndsTheClientAndTellsEveryone()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe bob = Join("bob");
+        SessionProbe.PumpUntil(() => alice.Session.Peers.Count == 3 && bob.Session.Peers.Count == 3, host, alice, bob);
+
+        host.Session.Kick(host.Session.Peers.Single(p => p.Name == "bob"), "Be nice.");
+        SessionProbe.PumpUntil(() => bob.EndedWith != null && alice.PeersLeft.Count == 1, host, alice, bob);
+
+        Assert.Equal((SessionEndReason.Kicked, "Be nice."), bob.EndedWith);
+        Assert.Equal(("bob", SessionEndReason.Kicked), (alice.PeersLeft[0].Peer.Name, alice.PeersLeft[0].Reason));
+        Assert.Equal(("bob", SessionEndReason.Kicked), (host.PeersLeft[0].Peer.Name, host.PeersLeft[0].Reason));
+        Assert.Equal(2, host.Session.Peers.Count);
+        Assert.Equal(2, alice.Session.Peers.Count);
+    }
+
+    [Fact]
+    public void ClientLeavingIsSeenByEveryone()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe bob = Join("bob");
+        SessionProbe.PumpUntil(() => alice.Session.Peers.Count == 3 && bob.Session.Peers.Count == 3, host, alice, bob);
+
+        bob.Session.Shutdown();
+        Assert.Equal((SessionEndReason.Left, null), bob.EndedWith);
+
+        SessionProbe.PumpUntil(() => alice.PeersLeft.Count == 1, host, alice);
+        Assert.Equal(SessionEndReason.Left, alice.PeersLeft[0].Reason);
+        Assert.Equal(SessionEndReason.Left, host.PeersLeft[0].Reason);
+    }
+
+    [Fact]
+    public void HostShutdownEndsEveryClient()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+
+        host.Session.Shutdown("Server restarting.");
+        SessionProbe.PumpUntil(() => alice.EndedWith != null, alice);
+
+        Assert.Equal((SessionEndReason.Left, "Server restarting."), host.EndedWith);
+        Assert.Equal((SessionEndReason.HostShutdown, "Server restarting."), alice.EndedWith);
+        Assert.Empty(alice.Session.Peers);
+    }
+
+    [Fact]
+    public void MalformedMessagesGetTheSenderRemoved()
+    {
+        SessionProbe host = Host();
+        host.Session.OnRaw(10, (sender, ref reader, delivery, _) => reader.ReadInt64());
+
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+
+        alice.Session.SendRaw(alice.Session.HostPeer!, 10, new byte[] { 1, 2 });
+        SessionProbe.PumpUntil(() => alice.EndedWith != null, host, alice);
+
+        Assert.Equal(SessionEndReason.ProtocolError, alice.EndedWith!.Value.Reason);
+        Assert.Equal(SessionEndReason.ProtocolError, host.PeersLeft.Single().Reason);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NestedFragmentsAreRejected(bool toClient)
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        using NetWriter chat = new();
+        chat.WriteUInt16(ChatMessage.Id);
+        chat.WriteString("nested");
+        using NetWriter inner = Fragment(chat.WrittenSpan);
+        using NetWriter outer = Fragment(inner.WrittenSpan);
+        Connection connection = toClient
+            ? host.Session.Peers.Single(p => !p.IsLocal).Connection!
+            : alice.Session.HostPeer!.Connection!;
+        connection.Send(outer.WrittenSpan, Delivery.Reliable);
+        SessionProbe.PumpFor(100, host, alice);
+        Assert.Empty(toClient ? alice.Chat : host.Chat);
+        Assert.Equal(SessionState.Ended, alice.Session.State);
+    }
+
+    private static NetWriter Fragment(ReadOnlySpan<byte> payload)
+    {
+        NetWriter writer = new();
+        writer.WriteUInt16(NetSession.ReservedMessageIds + 5);
+        writer.WriteBool(true);
+        writer.WriteVarUInt32((uint)payload.Length);
+        writer.WriteBytes(payload);
+        return writer;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void IncompleteFragmentsAreReleasedOnShutdown(bool toClient)
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        Connection connection = toClient
+            ? host.Session.Peers.Single(p => !p.IsLocal).Connection!
+            : alice.Session.HostPeer!.Connection!;
+        using NetWriter fragment = new();
+        fragment.WriteUInt16(NetSession.ReservedMessageIds + 5);
+        fragment.WriteBool(true);
+        fragment.WriteVarUInt32(100_000);
+        fragment.WriteByte(1);
+        connection.Send(fragment.WrittenSpan, Delivery.Reliable);
+        SessionProbe.PumpFor(30, host, alice);
+        NetSession receiver = toClient ? alice.Session : host.Session;
+        object? incoming;
+        object? remote = null;
+        if (toClient)
+        {
+            incoming = typeof(NetSession).GetField("_incomingFromHost", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(receiver);
+        }
+        else
+        {
+            IDictionary remotes =
+                (IDictionary)typeof(NetSession).GetField("_remotes", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .GetValue(receiver)!;
+            remote = remotes.Values.Cast<object>().Single();
+            incoming = remote.GetType().GetField("Incoming")!.GetValue(remote);
+        }
+
+        Assert.NotNull(incoming);
+        Assert.True(receiver.PendingReassemblyBytes > 0);
+        receiver.Shutdown();
+        Assert.Equal(0, receiver.PendingReassemblyBytes);
+        object? released = toClient
+            ? typeof(NetSession).GetField("_incomingFromHost", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(receiver)
+            : remote!.GetType().GetField("Incoming")!.GetValue(remote);
+        Assert.All(((Array)released!).Cast<object?>(), Assert.Null);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ResourceLimitReasonSurvivesTheSessionLayer(bool atClient)
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        NetSession receiver = atClient ? alice.Session : host.Session;
+        receiver.Transport.MaxQueuedDataEventsPerConnection = 1;
+        if (atClient)
+        {
+            NetPeer peer = host.Session.Peers.Single(p => !p.IsLocal);
+            host.Session.SendRaw(peer, 20, new byte[] { 1 }, flags: SendFlags.Immediate);
+            host.Session.SendRaw(peer, 20, new byte[] { 2 }, flags: SendFlags.Immediate);
+        }
+        else
+        {
+            alice.Session.SendRaw(alice.Session.HostPeer!, 20, new byte[] { 1 }, flags: SendFlags.Immediate);
+            alice.Session.SendRaw(alice.Session.HostPeer!, 20, new byte[] { 2 }, flags: SendFlags.Immediate);
+        }
+
+        // Both must be waiting at once, which socket threads only guarantee once they have arrived.
+        Thread.Sleep(50);
+        SessionProbe.PumpFor(100, host, alice);
+        string reason = atClient ? alice.EndedWith!.Value.Reason.ToString() : host.PeersLeft.Single().Reason.ToString();
+        Assert.Equal("ResourceLimit", reason);
+    }
+
+    private static void SendPartial(Connection connection, int total, int sent = 1)
+    {
+        using NetWriter fragment = new();
+        fragment.WriteUInt16(NetSession.ReservedMessageIds + 5);
+        fragment.WriteBool(true);
+        fragment.WriteVarUInt32((uint)total);
+        fragment.WriteBytes(new byte[sent]);
+        connection.Send(fragment.WrittenSpan, Delivery.Reliable);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PartialMessagesExpireEvenWhileTheConnectionIsAlive(bool atClient)
+    {
+        NetSessionOptions options = new();
+        options.ReassemblyTimeout = TimeSpan.FromMilliseconds(30);
+        SessionProbe host = Host(options);
+        SessionProbe alice = Join("alice", options);
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        SendPartial(
+            atClient ? host.Session.Peers.Single(p => !p.IsLocal).Connection! : alice.Session.HostPeer!.Connection!,
+            100_000);
+        SessionProbe.PumpFor(150, host, alice);
+        Assert.Equal(SessionState.Ended, alice.Session.State);
+        Assert.Equal(SessionEndReason.Timeout,
+            atClient ? alice.EndedWith!.Value.Reason : host.PeersLeft.Single().Reason);
+    }
+
+    [Fact]
+    public void ReassemblyHasAnAggregateMemoryBudget()
+    {
+        NetSessionOptions options = new();
+        options.MaxReassemblyBytes = 262144;
+        SessionProbe host = Host(options);
+        SessionProbe alice = Join("alice");
+        SessionProbe bob = Join("bob");
+        SessionProbe.PumpUntil(
+            () => alice.Session.State == SessionState.Active && bob.Session.State == SessionState.Active, host, alice,
+            bob);
+        SendPartial(alice.Session.HostPeer!.Connection!, 200_000, 150_000);
+        SessionProbe.PumpFor(100, host, alice, bob);
+        SendPartial(bob.Session.HostPeer!.Connection!, 1000);
+        SessionProbe.PumpFor(100, host, alice, bob);
+
+        // The sender holding the most goes, not whoever happens to ask next.
+        (NetPeer left, SessionEndReason reason) = host.PeersLeft.Single();
+        Assert.Equal("alice", left.Name);
+        Assert.Equal(SessionEndReason.ResourceLimit, reason);
+        Assert.Equal(SessionState.Active, bob.Session.State);
+    }
+
+    [Fact]
+    public void AnnouncedLengthAloneHoldsNoReassemblyMemory()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        SendPartial(alice.Session.HostPeer!.Connection!, 16 * 1024 * 1024);
+        SessionProbe.PumpFor(50, host, alice);
+        Assert.InRange(host.Session.PendingReassemblyBytes, 1, 1024);
+    }
+
+    [Fact]
+    public void MessagesOnChannelsTheSessionLacksAreRejected()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        Connection fromAlice = host.Session.Peers.Single(p => !p.IsLocal).Connection!;
+
+        host.Session.ProcessEvent(new TransportEvent(TransportEventType.Data, fromAlice, new byte[] { 0, 0 },
+            Delivery.Reliable, default, 200));
+
+        Assert.Equal(SessionEndReason.ProtocolError, host.PeersLeft.Single().Reason);
+    }
+
+    [Fact]
+    public void FlushingFromATimerHandlerDoesNotBreakTheTimers()
+    {
+        NetSessionOptions options = new();
+        options.ReassemblyTimeout = TimeSpan.FromMilliseconds(30);
+        SessionProbe host = Host(options);
+        host.Session.PeerLeft += (_, _) => host.Session.Flush();
+        SessionProbe alice = Join("alice", options);
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        SendPartial(alice.Session.HostPeer!.Connection!, 100_000);
+        SessionProbe.PumpFor(150, host, alice);
+        Assert.Equal(SessionEndReason.Timeout, host.PeersLeft.Single().Reason);
+    }
+
+    [Fact]
+    public void PendingJoinsCannotAllocateFragmentBuffers()
+    {
+        SessionProbe host = Host();
+        bool pending = false;
+        host.Session.JoinRequested += _ => pending = true;
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => pending, host, alice);
+        SendPartial(alice.Session.Transport.Connections.Single(), 100_000);
+        SessionProbe.PumpFor(30, host, alice);
+        IDictionary remotes =
+            (IDictionary)typeof(NetSession).GetField("_remotes", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(host.Session)!;
+        Assert.All(remotes.Values.Cast<object>(),
+            remote => Assert.Null(remote.GetType().GetField("Incoming")!.GetValue(remote)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AdmissionMetadataIsBounded(bool token)
+    {
+        Host();
+        using Transport transport = CreateClientTransport("oversized");
+        Assert.Throws<ArgumentException>(() => NetSession.Join(transport, _hostAddress!,
+            token ? "alice" : new string('x', 257), token ? new byte[4097] : Array.Empty<byte>()));
+        Assert.Empty(transport.Connections);
+    }
+
+    [Fact]
+    public void MalformedPeerIdentifiersCannotEscapeTheReceiveLoop()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        using NetWriter forged = new();
+        forged.WriteUInt16(NetSession.ReservedMessageIds + 2);
+        forged.WriteVarUInt32(uint.MaxValue);
+        forged.WriteString("bad");
+        host.Session.Peers.Single(p => !p.IsLocal).Connection!.Send(forged.WrittenSpan, Delivery.Reliable);
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Ended, host, alice);
+        Assert.Equal(SessionEndReason.ProtocolError, alice.EndedWith!.Value.Reason);
+    }
+
+    [Fact]
+    public void LoopbackMessagesCannotGrowWithoutBound()
+    {
+        NetSessionOptions options = new();
+        options.MaxLoopbackBytes = 2048;
+        SessionProbe host = Host(options);
+        host.Session.SendToHost(new ChatMessage(new string('x', 1000)));
+        host.Session.SendToHost(new ChatMessage(new string('x', 1000)));
+        Assert.Throws<InvalidOperationException>(() => host.Session.SendToHost(new ChatMessage(new string('x', 1000))));
+        host.Session.Receive();
+        host.Session.SendToHost(new ChatMessage("capacity reclaimed"));
+        host.Session.Receive();
+        Assert.Equal(3, host.Chat.Count);
+    }
+
+    [Fact]
+    public void ApplicationHandlerFailuresDoNotDisconnectTheSender()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        host.Session.Off<ChatMessage>();
+        int calls = 0;
+        host.Session.On<ChatMessage>((sender, message) =>
+        {
+            calls++;
+            if (message.Text == "throw")
+            {
+                throw new InvalidDataException("application failure");
+            }
+        });
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        alice.Session.SendToHost(new ChatMessage("throw"));
+        alice.Session.SendToHost(new ChatMessage("continue"));
+        SessionProbe.PumpFor(100, host, alice);
+        Assert.Equal(2, calls);
+        Assert.Equal(SessionState.Active, alice.Session.State);
+    }
+
+    [Theory]
+    [InlineData(Delivery.Reliable)]
+    public void LargeReliableMessagesArriveWhole(Delivery delivery)
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        byte[]? received = null;
+        alice.Session.OnRaw(20,
+            (sender, ref reader, delivery, _) => received = reader.ReadBytes(reader.Remaining).ToArray());
+        SessionProbe.PumpUntil(() => host.Session.Peers.Count == 2 && alice.Session.State == SessionState.Active, host,
+            alice);
+
+        byte[] large = TestData.Pattern(1_500_000, 3);
+        host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), 20, large, delivery);
+        host.Session.SendToHost(new ChatMessage("still in order after"));
+        alice.Session.SendToHost(new ChatMessage("and the other way"));
+        SessionProbe.PumpUntil(() => received != null && host.Chat.Count == 2, 10_000, host, alice);
+
+        Assert.Equal(large, received);
+    }
+
+    [Fact]
+    public void OversizedMessagesGetTheSenderRemoved()
+    {
+        SessionProbe host = Host(new NetSessionOptions { MaxMessageSize = 10_000 });
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+
+        // Senders refuse to send this, so announce it by hand, as a misbehaving client would.
+        using NetWriter fragment = new();
+        fragment.WriteUInt16(NetSession.ReservedMessageIds + 5);
+        fragment.WriteBool(true);
+        fragment.WriteVarUInt32(500_000);
+        fragment.WriteBytes(new byte[100]);
+        alice.Session.HostPeer!.Connection!.Send(fragment.WrittenSpan, Delivery.Reliable);
+        SessionProbe.PumpUntil(() => alice.EndedWith != null, host, alice);
+
+        Assert.Equal(SessionEndReason.ProtocolError, alice.EndedWith!.Value.Reason);
+    }
+
+    [Fact]
+    public void HostCannotBeReached()
+    {
+        SessionProbe lonely = Join("lonely", address: UnreachableAddress);
+        SessionProbe.PumpUntil(() => lonely.EndedWith != null, lonely);
+        Assert.Equal(SessionEndReason.Unreachable, lonely.EndedWith!.Value.Reason);
+    }
+
+    [Fact]
+    public void ReservedAndDuplicateHandlerIdsAreRefused()
+    {
+        SessionProbe host = Host();
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            host.Session.OnRaw(NetSession.ReservedMessageIds, (s, ref r, d, _) => { }));
+        Assert.Throws<InvalidOperationException>(() => host.Session.On<ChatMessage>((s, m) => { }));
+        Assert.True(host.Session.Off<ChatMessage>());
+        host.Session.On<ChatMessage>((s, m) => { });
+    }
+
+    [Fact]
+    public void SendingWhileJoiningThrows()
+    {
+        SessionProbe host = Host();
+        host.Session.JoinRequested += _ => { };
+        SessionProbe alice = Join("alice");
+
+        Assert.Throws<InvalidOperationException>(() => alice.Session.SendToHost(new ChatMessage("too early")));
+    }
+}
+
+public sealed class LocalNetSessionTests : NetSessionTests
+{
+    private readonly LocalNetwork _network = new();
+
+    protected override string UnreachableAddress => "nobody";
+
+    protected override Transport CreateHostTransport() => new LocalTransport(_network, "host");
+
+    protected override Transport CreateClientTransport(string name) => new LocalTransport(_network, name);
+
+    protected override string AddressOf(Transport host) => ((LocalTransport)host).Address;
+}
+
+public sealed class UnbatchedNetSessionTests : NetSessionTests
+{
+    private readonly LocalNetwork _network = new();
+    protected override string UnreachableAddress => "nobody";
+    protected override bool BatchMessages => false;
+    protected override Transport CreateHostTransport() => new LocalTransport(_network, "host");
+
+    protected override Transport CreateClientTransport(string name) =>
+        new LocalTransport(_network, name);
+
+    protected override string AddressOf(Transport host) => "host";
+}
+
+public sealed class KcpNetSessionTests : NetSessionTests
+{
+    protected override string UnreachableAddress => "not a valid host name";
+    protected override Transport CreateHostTransport() => new KcpTransport(KcpTransportContractTests.Options());
+
+    protected override Transport CreateClientTransport(string name) =>
+        new KcpTransport(KcpTransportContractTests.Options());
+
+    protected override string AddressOf(Transport host) => $"127.0.0.1:{((KcpTransport)host).LocalPort}";
+}
+
+public sealed class WorkerKcpNetSessionTests : NetSessionTests
+{
+    protected override string UnreachableAddress => "not a valid host name";
+
+    protected override Transport CreateHostTransport() => new ThreadedTransport(new KcpTransport(Options()));
+
+    protected override Transport CreateClientTransport(string name) => new ThreadedTransport(new KcpTransport(Options()));
+
+    private static KcpTransportOptions Options()
+    {
+        KcpTransportOptions options = KcpTransportContractTests.Options();
+        options.UseIoThreads = true;
+        return options;
+    }
+
+    protected override string AddressOf(Transport host) => $"127.0.0.1:{host.LocalPort}";
+}
+
+public sealed class ThreadedKcpNetSessionTests : NetSessionTests
+{
+    protected override string UnreachableAddress => "not a valid host name";
+    protected override Transport CreateHostTransport() => new KcpTransport(Threaded());
+    protected override Transport CreateClientTransport(string name) => new KcpTransport(Threaded());
+    protected override string AddressOf(Transport host) => $"127.0.0.1:{((KcpTransport)host).LocalPort}";
+
+    private static KcpTransportOptions Threaded()
+    {
+        KcpTransportOptions options = KcpTransportContractTests.Options();
+        options.UseIoThreads = true;
+        return options;
+    }
+}

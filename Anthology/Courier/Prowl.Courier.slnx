@@ -1,0 +1,8 @@
+<Solution>
+    <Folder Name="/Courier/">
+        <Project Path="Courier/Prowl.Courier.csproj" />
+    </Folder>
+    <Folder Name="/Tests/">
+        <Project Path="Tests/Prowl.Courier.Tests.csproj" />
+    </Folder>
+</Solution>
