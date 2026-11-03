@@ -185,4 +185,56 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Configure(previous); }
     }
+
+    /// <summary>Sends a Snapshot defining <paramref name="count" /> component ids from <paramref name="firstId" /> on.</summary>
+    private static void SendDefinitions(FakePeer peer, uint snapshotId, uint firstId, int count, Func<Guid> component)
+    {
+        using NetWriter w = new();
+        new SnapshotMessage(snapshotId, (uint)NetworkTestScene.Current.SceneGeneration, firstId).Write(w);
+        w.WriteVarUInt32(0);
+        w.WriteVarUInt32((uint)count);
+        for (int i = 0; i < count; i++)
+        {
+            new SnapshotValue(firstId + (uint)i, component(), NetTestComponent.HealthSlot, 0, ReadOnlySpan<byte>.Empty).Write(w);
+        }
+
+        peer.Session.SendRaw(peer.Session.HostPeer!, FakePeer.Snapshot, w.WrittenSpan, Delivery.Unreliable);
+        peer.Session.Flush();
+    }
+
+    [Fact]
+    public void ClientComponentDefinitionsAndRejectionsStayBounded()
+    {
+        var (_, state, network) = ReadinessHost();
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        alice.AutoAck = false;
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
+            uint next = 1;
+            for (int m = 0; m < 20; m++)
+            {
+                SendDefinitions(alice, 0, next, 2000, Guid.NewGuid);
+                next += 2000;
+                SendDefinitions(alice, 0, next, 2000, () => state.Identifier);
+                next += 2000;
+                PumpFor(5, alice);
+            }
+
+            PumpFor(50, alice);
+            NetworkTestScene.Current.Snapshots.TryGetComponentIds(aliceHere, out _, out IReadOnlyDictionary<uint, Guid> received);
+            Assert.True(received.Count <= 1, $"The host keeps {received.Count} component ids the client chose");
+
+            // Rejections from snapshots nobody asked to acknowledge don't pile up into the next acknowledgement.
+            alice.Received.Clear();
+            SendDefinitions(alice, 1, next, 1, Guid.NewGuid);
+            Pump(() => alice.Has(FakePeer.SnapshotAck), alice);
+            NetReader ack = new(alice.Last(FakePeer.SnapshotAck));
+            uint acknowledged = ack.ReadVarUInt32();
+            for (uint i = 0; i < acknowledged; i++) ack.ReadVarUInt32();
+            Assert.Equal(1u, ack.ReadVarUInt32());
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }

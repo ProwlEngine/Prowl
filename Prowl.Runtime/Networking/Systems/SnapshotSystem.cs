@@ -47,10 +47,12 @@ internal sealed class SnapshotSystem : IDisposable
     private readonly List<NetworkObject> _scratchObjects = new();
     private readonly List<SyncKey> _scratchKeys = new();
     private readonly List<Component> _scratchComponents = new();
+    private readonly List<uint> _scratchIds = new();
     private readonly List<NetPeer> _sendTargets = new();
     private readonly Stack<SentSnapshot> _sentPool = new();
     private readonly List<NetPeer> _targets = new();
     private readonly NetWriter _translated = new(4096);
+    private readonly NetWriter _translatedValues = new(4096);
     private readonly NetWriter _valueWriter = new();
 
     // What the filter of the values being applied compares against.
@@ -69,6 +71,7 @@ internal sealed class SnapshotSystem : IDisposable
         _itemBytes.Dispose();
         _message.Dispose();
         _translated.Dispose();
+        _translatedValues.Dispose();
     }
 
     /// <summary>Forgets everything owed and received, as when the scene changes.</summary>
@@ -277,6 +280,11 @@ internal sealed class SnapshotSystem : IDisposable
             {
                 state.ComponentIds.Remove(component);
                 state.DefinedComponents.Remove(component);
+            }
+
+            if (_scene.IsHost)
+            {
+                ForgetGoneDefinitions(state);
             }
         }
     }
@@ -585,8 +593,12 @@ internal sealed class SnapshotSystem : IDisposable
         NetSession session = _scene.Session!;
         foreach ((int peerId, PeerState state) in _peers)
         {
+            // Rejections only travel with an acknowledgement, so without one they are dropped.
             if (state.Received.Count == 0 || !session.TryGetPeer(peerId, out NetPeer? peer))
             {
+                state.Received.Clear();
+                state.RejectedComponents.Clear();
+                state.RejectedObjects.Clear();
                 continue;
             }
 
@@ -716,28 +728,86 @@ internal sealed class SnapshotSystem : IDisposable
             throw new InvalidDataException("Snapshot value count exceeds the remaining data.");
         }
 
-        _translated.Reset();
-        new SyncBlock(count).Write(_translated);
+        _translatedValues.Reset();
+        uint kept = 0;
         for (uint i = 0; i < count; i++)
         {
             SnapshotValue value = SnapshotValue.Read(ref reader);
-            Guid component;
-            if (value.Definition is { } definition)
+            if (TryResolve(state, value, out Guid component))
             {
-                component = definition;
-                state.ReceivedIds[value.ComponentId] = definition;
+                new SyncValue(component, value.Slot, value.Generation, value.Value).Write(_translatedValues);
+                kept++;
             }
-            else if (!state.ReceivedIds.TryGetValue(value.ComponentId, out component))
-            {
-                throw new InvalidDataException("A snapshot names a component it never defined.");
-            }
-
-            new SyncValue(component, value.Slot, value.Generation, value.Value).Write(_translated);
         }
 
         if (!reader.IsAtEnd)
         {
             throw new InvalidDataException("Snapshot contains trailing bytes.");
+        }
+
+        _translated.Reset();
+        new SyncBlock(kept).Write(_translated);
+        _translated.WriteBytes(_translatedValues.WrittenSpan);
+    }
+
+    /// <summary>The component a value names. The host keeps a client's definitions only for components it has, one id each.</summary>
+    private bool TryResolve(PeerState state, SnapshotValue value, out Guid component)
+    {
+        if (value.Definition is { } definition)
+        {
+            component = definition;
+            if (!_scene.IsHost || _scene.FindByIdentifier(definition) is Component)
+            {
+                Define(state, value.ComponentId, definition);
+            }
+
+            return true;
+        }
+
+        if (state.ReceivedIds.TryGetValue(value.ComponentId, out component))
+        {
+            return true;
+        }
+
+        if (!_scene.IsHost)
+        {
+            throw new InvalidDataException("A snapshot names a component it never defined.");
+        }
+
+        return false;
+    }
+
+    private static void Define(PeerState state, uint id, Guid component)
+    {
+        if (state.ReceivedGuids.Remove(component, out uint previous))
+        {
+            state.ReceivedIds.Remove(previous);
+        }
+
+        if (state.ReceivedIds.Remove(id, out Guid replaced))
+        {
+            state.ReceivedGuids.Remove(replaced);
+        }
+
+        state.ReceivedIds[id] = component;
+        state.ReceivedGuids[component] = id;
+    }
+
+    private void ForgetGoneDefinitions(PeerState state)
+    {
+        _scratchIds.Clear();
+        foreach ((uint id, Guid component) in state.ReceivedIds)
+        {
+            if (_scene.FindByIdentifier(component) is not Component)
+            {
+                _scratchIds.Add(id);
+            }
+        }
+
+        foreach (uint id in _scratchIds)
+        {
+            state.ReceivedGuids.Remove(state.ReceivedIds[id]);
+            state.ReceivedIds.Remove(id);
         }
     }
 
@@ -979,6 +1049,7 @@ internal sealed class SnapshotSystem : IDisposable
 
         // Ids the other gave components, as it defined them.
         public readonly Dictionary<uint, Guid> ReceivedIds = new();
+        public readonly Dictionary<Guid, uint> ReceivedGuids = new();
         public readonly HashSet<Guid> RejectedComponents = new();
         public readonly HashSet<uint> RejectedObjects = new();
         public readonly Dictionary<uint, SentSnapshot> Sent = new();
