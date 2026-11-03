@@ -1,0 +1,105 @@
+using System;
+using System.Net;
+using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
+
+using Prowl.Courier.Transports.Kcp;
+
+using Xunit;
+
+namespace Prowl.Courier.Tests;
+
+public class KcpResolutionTests
+{
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void EveryResolvedAddressIsTriedUntilOneAnswers(bool ipv6Answers)
+    {
+        KcpTransportOptions options = new()
+        {
+            Port = 0, ConnectTimeout = TimeSpan.FromSeconds(3), HandshakeResendInterval = TimeSpan.FromMilliseconds(50)
+        };
+        using KcpTransport host = new(options);
+        host.Listen();
+        // 192.0.2.1 and 2001:db8::1 are documentation addresses nothing answers at.
+        IPAddress[] answers = ipv6Answers
+            ? new[] { IPAddress.Parse("192.0.2.1"), IPAddress.IPv6Loopback }
+            : new[] { IPAddress.Parse("2001:db8::1"), IPAddress.Loopback };
+        using KcpTransport client = new(options, (_, _) => Task.FromResult(answers));
+        Pump pump = new(host, client);
+
+        Connection toHost = client.Connect($"game.test:{host.LocalPort}");
+        pump.Until(() => toHost.State != ConnectionState.Connecting, what: "connect");
+        Assert.True(toHost.IsConnected);
+    }
+
+    [Fact]
+    public void PendingResolutionDoesNotBlockPumpingAndDisconnectCancelsIt()
+    {
+        CancellationToken token = default;
+        TaskCompletionSource<IPAddress[]> completion = new();
+        using KcpTransport transport = new(new KcpTransportOptions(), (_, cancellation) =>
+        {
+            token = cancellation;
+            return completion.Task;
+        });
+        Connection peer = transport.Connect("pending.test:7777");
+        transport.Update();
+        Assert.Equal(ConnectionState.Connecting, peer.State);
+        peer.Disconnect();
+        Assert.True(token.IsCancellationRequested);
+        completion.SetResult(new[] { IPAddress.Loopback });
+        transport.Update();
+        Assert.True(transport.Poll(out TransportEvent ev));
+        Assert.Equal(DisconnectReason.Requested, ev.Reason);
+        Assert.False(transport.Poll(out _));
+        Assert.Empty(transport.Connections);
+    }
+
+    [Fact]
+    public void ShutdownCancelsResolutionAndTransportCanBeReused()
+    {
+        CancellationToken token = default;
+        using KcpTransport transport = new(new KcpTransportOptions { Port = 0 }, (_, cancellation) =>
+        {
+            token = cancellation;
+            return new TaskCompletionSource<IPAddress[]>().Task;
+        });
+        Connection peer = transport.Connect("pending.test:7777");
+        transport.Shutdown();
+        Assert.True(token.IsCancellationRequested);
+        Assert.Equal(ConnectionState.Disconnected, peer.State);
+        transport.Listen();
+        Assert.True(transport.IsListening);
+    }
+
+    [Fact]
+    public void ConnectTimeoutIncludesResolution()
+    {
+        CancellationToken token = default;
+        using KcpTransport transport = new(new KcpTransportOptions { ConnectTimeout = TimeSpan.FromMilliseconds(20) },
+            (_, cancellation) =>
+            {
+                token = cancellation;
+                return new TaskCompletionSource<IPAddress[]>().Task;
+            });
+        Connection peer = transport.Connect("pending.test:7777");
+        Thread.Sleep(30);
+        transport.Update();
+        Assert.True(token.IsCancellationRequested);
+        Assert.Equal(ConnectionState.Disconnected, peer.State);
+        Assert.True(transport.Poll(out TransportEvent ev));
+        Assert.Equal(DisconnectReason.Timeout, ev.Reason);
+    }
+
+    [Fact]
+    public async Task HostNamesAndLiteralsResolveWithoutChangingAddressSemantics()
+    {
+        AddressFamily family = AddressFamily.InterNetworkV6;
+        Assert.NotNull(await KcpTransport.TryResolveAsync("localhost:7777", 0, family, default));
+        Assert.NotNull(await KcpTransport.TryResolveAsync("[::1]:7777", 0, family, default));
+        Assert.Null(await KcpTransport.TryResolveAsync("localhost:notaport", 0, family, default));
+    }
+}

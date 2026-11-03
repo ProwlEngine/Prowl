@@ -1,0 +1,874 @@
+// From kcp2k (MIT, see Courier/Transports/Kcp/Protocol/LICENSE.txt).
+// test some of the internal Kcp.cs functions to guarantee stability.
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+using Prowl.Courier.Transports.Kcp.Protocol;
+
+using Xunit;
+
+namespace Prowl.Courier.Tests.Kcp;
+
+public class KcpTests
+{
+    [Fact]
+    public void InsertSegmentInReceiveBuffer()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert '1' should insert into empty buffer
+        Segment one = new() { sn = 1 };
+        kcp.InsertSegmentInReceiveBuffer(one);
+        Assert.Single(kcp.rcv_buf);
+        Assert.Equal(one, kcp.rcv_buf[0]);
+
+        // insert '3' should insert after '1'
+        Segment three = new() { sn = 3 };
+        kcp.InsertSegmentInReceiveBuffer(three);
+        Assert.Equal(2, kcp.rcv_buf.Count);
+        Assert.Equal(one, kcp.rcv_buf[0]);
+        Assert.Equal(three, kcp.rcv_buf[1]);
+
+        // insert '2' should insert before '3'
+        Segment two = new() { sn = 2 };
+        kcp.InsertSegmentInReceiveBuffer(two);
+        Assert.Equal(3, kcp.rcv_buf.Count);
+        Assert.Equal(one, kcp.rcv_buf[0]);
+        Assert.Equal(two, kcp.rcv_buf[1]);
+        Assert.Equal(three, kcp.rcv_buf[2]);
+
+        // insert '0' should insert before '1'
+        Segment zero = new() { sn = 0 };
+        kcp.InsertSegmentInReceiveBuffer(zero);
+        Assert.Equal(4, kcp.rcv_buf.Count);
+        Assert.Equal(zero, kcp.rcv_buf[0]);
+        Assert.Equal(one, kcp.rcv_buf[1]);
+        Assert.Equal(two, kcp.rcv_buf[2]);
+        Assert.Equal(three, kcp.rcv_buf[3]);
+
+        // insert '2' again should do nothing because duplicate
+        Segment two_again = new() { sn = 2 };
+        kcp.InsertSegmentInReceiveBuffer(two_again);
+        Assert.Equal(4, kcp.rcv_buf.Count);
+        Assert.Equal(zero, kcp.rcv_buf[0]);
+        Assert.Equal(one, kcp.rcv_buf[1]);
+        Assert.Equal(two, kcp.rcv_buf[2]);
+        Assert.Equal(three, kcp.rcv_buf[3]);
+    }
+
+    [Fact]
+    public void ParseAckFirst()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert three segments into send buffer
+        Segment one = new() { sn = 1 };
+        Segment two = new() { sn = 2 };
+        Segment three = new() { sn = 3 };
+        kcp.snd_buf.Add(one);
+        kcp.snd_buf.Add(two);
+        kcp.snd_buf.Add(three);
+
+        // parse ack only removes if sn < snd_nxt
+        kcp.snd_nxt = 999;
+
+        // parse ack with sn == 3, should remove the last segment
+        kcp.ParseAck(1);
+        Assert.Equal(2, kcp.snd_buf.Count);
+        Assert.Equal(two, kcp.snd_buf[0]);
+        Assert.Equal(three, kcp.snd_buf[1]);
+    }
+
+    [Fact]
+    public void ParseAckMiddle()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert three segments into send buffer
+        Segment one = new() { sn = 1 };
+        kcp.snd_buf.Add(one);
+        Segment two = new() { sn = 2 };
+        kcp.snd_buf.Add(two);
+        Segment three = new() { sn = 3 };
+        kcp.snd_buf.Add(three);
+
+        // parse ack only removes if sn < snd_nxt
+        kcp.snd_nxt = 999;
+
+        // parse ack with sn == 2, should remove the middle segment
+        kcp.ParseAck(2);
+        Assert.Equal(2, kcp.snd_buf.Count);
+        Assert.Equal(one, kcp.snd_buf[0]);
+        Assert.Equal(three, kcp.snd_buf[1]);
+    }
+
+    [Fact]
+    public void ParseAckLast()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert three segments into send buffer
+        Segment one = new() { sn = 1 };
+        kcp.snd_buf.Add(one);
+        Segment two = new() { sn = 2 };
+        kcp.snd_buf.Add(two);
+        Segment three = new() { sn = 3 };
+        kcp.snd_buf.Add(three);
+
+        // parse ack only removes if sn < snd_nxt
+        kcp.snd_nxt = 999;
+
+        // parse ack with sn == 3, should remove the last segment
+        kcp.ParseAck(3);
+        Assert.Equal(2, kcp.snd_buf.Count);
+        Assert.Equal(one, kcp.snd_buf[0]);
+        Assert.Equal(two, kcp.snd_buf[1]);
+    }
+
+    [Fact]
+    public void ParseAckSndNxtSmaller()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert three segments into send buffer
+        Segment one = new() { sn = 1 };
+        kcp.snd_buf.Add(one);
+        Segment two = new() { sn = 2 };
+        kcp.snd_buf.Add(two);
+        Segment three = new() { sn = 3 };
+        kcp.snd_buf.Add(three);
+
+        // parse ack only removes if sn < snd_nxt.
+        // it should do nothing if snd_nxt is <= sn
+        kcp.snd_nxt = 1;
+
+        // parse ack should not remove anything
+        kcp.ParseAck(1);
+        Assert.Equal(3, kcp.snd_buf.Count);
+        Assert.Equal(one, kcp.snd_buf[0]);
+        Assert.Equal(two, kcp.snd_buf[1]);
+        Assert.Equal(three, kcp.snd_buf[2]);
+    }
+
+    // test with empty buffer
+    [Fact]
+    public void ParseUna_Empty()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // parse_una should remove all segments < una from send buffer
+        kcp.ParseUna(2);
+        Assert.Empty(kcp.snd_buf);
+    }
+
+    // test where no elements should be removed
+    [Fact]
+    public void ParseUna_None()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert three segments into send buffer
+        Segment one = new() { sn = 1 };
+        kcp.snd_buf.Add(one);
+        Segment two = new() { sn = 2 };
+        kcp.snd_buf.Add(two);
+        Segment three = new() { sn = 3 };
+        kcp.snd_buf.Add(three);
+
+        // parse_una should remove all segments < una from send buffer
+        kcp.ParseUna(1);
+        Assert.Equal(3, kcp.snd_buf.Count);
+        Assert.Equal(one, kcp.snd_buf[0]);
+        Assert.Equal(two, kcp.snd_buf[1]);
+        Assert.Equal(three, kcp.snd_buf[2]);
+    }
+
+    // test where some elements should be removed
+    [Fact]
+    public void ParseUna_Some()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert three segments into send buffer
+        Segment one = new() { sn = 1 };
+        kcp.snd_buf.Add(one);
+        Segment two = new() { sn = 2 };
+        kcp.snd_buf.Add(two);
+        Segment three = new() { sn = 3 };
+        kcp.snd_buf.Add(three);
+
+        // parse_una should remove all segments < una from send buffer
+        kcp.ParseUna(2);
+        Assert.Equal(2, kcp.snd_buf.Count);
+        Assert.Equal(two, kcp.snd_buf[0]);
+        Assert.Equal(three, kcp.snd_buf[1]);
+    }
+
+    // test where all elements should be removed
+    [Fact]
+    public void ParseUna_All()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert three segments into send buffer
+        Segment one = new() { sn = 1 };
+        kcp.snd_buf.Add(one);
+        Segment two = new() { sn = 2 };
+        kcp.snd_buf.Add(two);
+        Segment three = new() { sn = 3 };
+        kcp.snd_buf.Add(three);
+
+        // parse_una should remove all segments < una from send buffer
+        kcp.ParseUna(4);
+        Assert.Empty(kcp.snd_buf);
+    }
+
+    // test with no elements in send buffer
+    [Fact]
+    public void ParseFastack_Empty()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        kcp.snd_una = 1; // == sn to ensure <= is checked
+        kcp.snd_nxt = 2; // sn + 1 to ensure < is checked
+
+        kcp.ParseFastack(1, 0);
+        Assert.Empty(kcp.snd_buf);
+    }
+
+    // test where no elements should be counted
+    [Fact]
+    public void ParseFastAck_None()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert three segments into send buffer
+        Segment one = new() { sn = 2 };
+        kcp.snd_buf.Add(one);
+        Segment two = new() { sn = 3 };
+        kcp.snd_buf.Add(two);
+        Segment three = new() { sn = 4 };
+        kcp.snd_buf.Add(three);
+
+        // sn needs to be between snd_una and snd_nxt
+        kcp.snd_una = 1; // == sn to ensure <= is checked
+        kcp.snd_nxt = 2; // sn + 1 to ensure < is checked
+
+        // only segments with seg.sn < sn should have their fastack incremented
+        // in this case, none
+        kcp.ParseFastack(1, 0);
+        Assert.Equal(3, kcp.snd_buf.Count);
+        Assert.Equal((uint)0, kcp.snd_buf[0].fastack);
+        Assert.Equal((uint)0, kcp.snd_buf[1].fastack);
+        Assert.Equal((uint)0, kcp.snd_buf[2].fastack);
+    }
+
+    // test where some elements should be counted
+    [Fact]
+    public void ParseFastAck_Some()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert three segments into send buffer
+        Segment one = new() { sn = 2 };
+        kcp.snd_buf.Add(one);
+        Segment two = new() { sn = 3 };
+        kcp.snd_buf.Add(two);
+        Segment three = new() { sn = 4 };
+        kcp.snd_buf.Add(three);
+
+        // sn needs to be between snd_una and snd_nxt
+        kcp.snd_una = 3; // == sn to ensure <= is checked
+        kcp.snd_nxt = 4; // sn + 1 to ensure < is checked
+
+        // only segments with seg.sn < sn should have their fastack incremented
+        kcp.ParseFastack(3, 0);
+        Assert.Equal(3, kcp.snd_buf.Count);
+        Assert.Equal((uint)1, kcp.snd_buf[0].fastack);
+        Assert.Equal((uint)0, kcp.snd_buf[1].fastack);
+        Assert.Equal((uint)0, kcp.snd_buf[2].fastack);
+    }
+
+    // test where all elements should be counted
+    [Fact]
+    public void ParseFastAck_All()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert three segments into send buffer
+        Segment one = new() { sn = 2 };
+        kcp.snd_buf.Add(one);
+        Segment two = new() { sn = 3 };
+        kcp.snd_buf.Add(two);
+        Segment three = new() { sn = 4 };
+        kcp.snd_buf.Add(three);
+
+        // sn needs to be between snd_una and snd_nxt
+        kcp.snd_una = 5; // == sn to ensure <= is checked
+        kcp.snd_nxt = 6; // sn + 1 to ensure < is checked
+
+        // only segments with seg.sn < sn should have their fastack incremented
+        // in this case, all
+        kcp.ParseFastack(5, 0);
+        Assert.Equal(3, kcp.snd_buf.Count);
+        Assert.Equal((uint)1, kcp.snd_buf[0].fastack);
+        Assert.Equal((uint)1, kcp.snd_buf[1].fastack);
+        Assert.Equal((uint)1, kcp.snd_buf[2].fastack);
+    }
+
+    // peek without any messages in the receive queue
+    [Fact]
+    public void PeekSize_Empty()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // peek should indicate empty size
+        Assert.Equal(-1, kcp.PeekSize());
+    }
+
+    // peek with a complete unfragmented message in the receive queue
+    [Fact]
+    public void PeekSize_Unfragmented()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert a small unfragmented message
+        Segment seg = new();
+        seg.frg = 0; // frg == 0 indicates unfragmented message
+        seg.data.Position = 42;
+        kcp.rcv_queue.Enqueue(seg);
+
+        // peek should get the unfragmented message's size
+        Assert.Equal(42, kcp.PeekSize());
+    }
+
+    // peek with an incomplete fragmented message in the receive queue
+    [Fact]
+    public void PeekSize_Fragmented_Incomplete()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert only one fragment of a two fragment message
+        Segment part1 = new();
+        part1.frg = 1; // first segment's .frg indicates the last .frg number. total: 1,0
+        part1.data.Position = 42; // set some data
+        kcp.rcv_queue.Enqueue(part1);
+
+        // peek should indicate incomplete fragments
+        Assert.Equal(-1, kcp.PeekSize());
+    }
+
+    // peek with a complete fragmented message in the receive queue
+    [Fact]
+    public void PeekSize_Fragmented_Complete()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // insert only one fragment of a two fragment message
+        Segment part1 = new();
+        part1.frg = 1; // first segment's .frg indicates the last .frg number. total: 1,0
+        part1.data.Position = 42; // set some data
+        kcp.rcv_queue.Enqueue(part1);
+
+        Segment part2 = new();
+        part2.frg = 0; // fragment count in reverse
+        part2.data.Position = 11; // set some data
+        kcp.rcv_queue.Enqueue(part2);
+
+        // peek should peek through all fragments to calculate the whole message's size
+        Assert.Equal(42 + 11, kcp.PeekSize());
+    }
+
+    [Fact]
+    public void WaitSnd()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // add some to send buffer and send buffer and queue
+        kcp.snd_buf.Add(new Segment());
+        kcp.snd_buf.Add(new Segment());
+        kcp.snd_queue.Enqueue(new Segment());
+
+        // WaitSnd should be send buffer + queue
+        Assert.Equal(3, kcp.WaitSnd);
+    }
+
+    [Fact]
+    public void WndUnused()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // add a few entries into receive queue
+        kcp.rcv_queue.Enqueue(new Segment());
+        kcp.rcv_queue.Enqueue(new Segment());
+        kcp.rcv_queue.Enqueue(new Segment());
+
+        // unused should be window size - queue size
+        Assert.Equal(kcp.rcv_wnd - 3, kcp.WndUnused());
+    }
+
+    [Fact]
+    public void ShrinkBufFilledSendBuffer()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // add some to send buffer and send queue
+        kcp.snd_buf.Add(new Segment { sn = 2 });
+        kcp.snd_buf.Add(new Segment { sn = 3 });
+
+        // ShrinkBuf should set snd_una to first send buffer element's 'sn'
+        kcp.ShrinkBuf();
+        Assert.Equal((uint)2, kcp.snd_una);
+    }
+
+    [Fact]
+    public void ShrinkBufEmptySendBuffer()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // ShrinkBuf with empty send buffer should set snd_una to snd_nxt
+        kcp.snd_nxt = 42;
+        kcp.ShrinkBuf();
+        Assert.Equal((uint)42, kcp.snd_una);
+    }
+
+    [Fact]
+    public void SetMtu()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // set an allowed MTU that's smaller than default
+        kcp.SetMtu(500);
+        Assert.Equal((uint)500, kcp.mtu);
+        Assert.True(kcp.buffer.Length >= 500);
+
+        // set an allowed MTU that's larger than default
+        kcp.SetMtu(5000);
+        Assert.Equal((uint)5000, kcp.mtu);
+        Assert.True(kcp.buffer.Length >= 5000);
+    }
+
+    [Fact]
+    public void SetNoDelay()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // enable nodelay with specific settings
+        kcp.SetNoDelay(1, 11, 2, true);
+        Assert.Equal((uint)1, kcp.nodelay);
+        Assert.Equal(Transports.Kcp.Protocol.Kcp.RTO_NDL, kcp.rx_minrto);
+        Assert.Equal((uint)11, kcp.interval);
+        Assert.Equal(2, kcp.fastresend);
+        Assert.True(kcp.nocwnd);
+
+        // disable nodelay with specific settings
+        kcp.SetNoDelay(0, 22);
+        Assert.Equal((uint)0, kcp.nodelay);
+        Assert.Equal(Transports.Kcp.Protocol.Kcp.RTO_MIN, kcp.rx_minrto);
+        Assert.Equal((uint)22, kcp.interval);
+        Assert.Equal(0, kcp.fastresend);
+        Assert.False(kcp.nocwnd);
+    }
+
+    [Fact]
+    public void SetIntervalTooSmall()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // setting a too small interval should limit it to 10
+        kcp.SetInterval(0);
+        Assert.Equal((uint)10, kcp.interval);
+    }
+
+    [Fact]
+    public void SetInterval()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // set interval
+        kcp.SetInterval(2500);
+        Assert.Equal((uint)2500, kcp.interval);
+    }
+
+    [Fact]
+    public void SetIntervalTooBig()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // setting a too big interval should limit it to 5000
+        kcp.SetInterval(9999);
+        Assert.Equal((uint)5000, kcp.interval);
+    }
+
+    [Fact]
+    public void SetWindowSize()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // set an allowed window size
+        kcp.SetWindowSize(42, 512);
+        Assert.Equal((uint)42, kcp.snd_wnd);
+        Assert.Equal((uint)512, kcp.rcv_wnd);
+    }
+
+    [Fact]
+    public void SetWindowSizeWithTooSmallReceiveWindow()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // set window size with receive window < max fragment size (WND_RCV)
+        kcp.SetWindowSize(42, Transports.Kcp.Protocol.Kcp.WND_RCV - 1);
+        Assert.Equal((uint)42, kcp.snd_wnd);
+        Assert.Equal((uint)Transports.Kcp.Protocol.Kcp.WND_RCV, kcp.rcv_wnd);
+    }
+
+    [Fact]
+    public void Check()
+    {
+        void Output(byte[] data, int len)
+        {
+        }
+
+        // setup KCP
+        Transports.Kcp.Protocol.Kcp kcp = new(0, Output);
+
+        // update at time = 1
+        kcp.Update(1);
+
+        // check at time = 2
+        uint next = kcp.Check(2);
+
+        // check returns 'ts_flush + interval', or in other words,
+        // 'interval' seconds after UPDATE was called. so 1+100 = 101.
+        Assert.Equal(1 + kcp.interval, next);
+    }
+
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(1u)]
+    public void RetransmitTimeoutStopsGrowingAtTheCap(uint nodelay)
+    {
+        List<uint> sends = new();
+        uint now = 0;
+        Transports.Kcp.Protocol.Kcp kcp = new(1, (_, _) => sends.Add(now));
+        kcp.SetNoDelay(nodelay, 10, 0, true);
+        kcp.SetMaxRetransmitTimeout(1000);
+        kcp.dead_link = 1000;
+        kcp.Send(new byte[] { 1 }, 0, 1);
+
+        for (now = 0; now < 20_000; now += 10)
+        {
+            kcp.Update(now);
+        }
+
+        Assert.True(sends.Count > 15);
+        for (int i = 1; i < sends.Count; i++)
+        {
+            Assert.InRange(sends[i] - sends[i - 1], 0u, 1000u + 10u);
+        }
+    }
+
+    [Fact]
+    public void AnIdleConversationIsSmall()
+    {
+        new Transports.Kcp.Protocol.Kcp(1, (_, _) => { }).SetMtu(1195);
+        long before = System.GC.GetAllocatedBytesForCurrentThread();
+        Transports.Kcp.Protocol.Kcp kcp = new(1, (_, _) => { });
+        kcp.SetMtu(1195);
+        kcp.SetWindowSize(4096, 256);
+        long allocated = System.GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.InRange(allocated, 0, 12 * 1024);
+    }
+
+    [Fact]
+    public void SteadyTrafficDoesNotAllocateOnceWarm()
+    {
+        Transports.Kcp.Protocol.Kcp? receiver = null;
+        Transports.Kcp.Protocol.Kcp sender = new(1, (data, length) => receiver!.Input(data, 0, length));
+        receiver = new Transports.Kcp.Protocol.Kcp(1, (data, length) => sender.Input(data, 0, length));
+        sender.SetNoDelay(1, 10, 2, true);
+        receiver.SetNoDelay(1, 10, 2, true);
+        sender.SetWindowSize(4096, 256);
+        receiver.SetWindowSize(4096, 256);
+        byte[] message = new byte[1100];
+        byte[] received = new byte[2000];
+        uint time = 0;
+
+        void Tick()
+        {
+            for (int i = 0; i < 60; i++)
+            {
+                sender.Send(message, 0, message.Length);
+            }
+
+            time += 16;
+            sender.Update(time);
+            receiver.Update(time);
+            while (receiver.Receive(received, received.Length) > 0)
+            {
+            }
+        }
+
+        for (int i = 0; i < 200; i++)
+        {
+            Tick();
+        }
+
+        long before = System.GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 100; i++)
+        {
+            Tick();
+        }
+
+        Assert.InRange(System.GC.GetAllocatedBytesForCurrentThread() - before, 0, 1024);
+    }
+
+    [Fact]
+    public void SlowLinksAreNotFloodedWithResendsByTheTimeoutCap()
+    {
+        // 750 ms each way, so a 1.5 s round trip, longer than the 1 s cap.
+        uint now = 0;
+        List<(uint Due, bool ToReceiver, byte[] Data)> inFlight = new();
+        Transports.Kcp.Protocol.Kcp sender = new(1, (data, length) => inFlight.Add((now + 750, true, data[..length])));
+        Transports.Kcp.Protocol.Kcp receiver = new(1, (data, length) => inFlight.Add((now + 750, false, data[..length])));
+        foreach (Transports.Kcp.Protocol.Kcp kcp in new[] { sender, receiver })
+        {
+            kcp.SetNoDelay(1, 10, 2, true);
+            kcp.SetMaxRetransmitTimeout(1000);
+        }
+
+        byte[] received = new byte[100];
+        long warmRetransmits = 0;
+        for (now = 0; now < 20_000; now += 10)
+        {
+            if (now % 100 == 0)
+            {
+                sender.Send(new byte[10], 0, 10);
+            }
+
+            foreach ((uint Due, bool ToReceiver, byte[] Data) packet in inFlight.Where(p => p.Due <= now).ToList())
+            {
+                inFlight.Remove(packet);
+                (packet.ToReceiver ? receiver : sender).Input(packet.Data, 0, packet.Data.Length);
+            }
+
+            sender.Update(now);
+            receiver.Update(now);
+            while (receiver.Receive(received, received.Length) > 0)
+            {
+            }
+
+            if (now == 10_000)
+            {
+                warmRetransmits = sender.retransmits;
+            }
+        }
+
+        Assert.Equal(warmRetransmits, sender.retransmits);
+    }
+
+    [Fact]
+    public void EmptySegmentsHeldOutOfOrderCostLittleMemory()
+    {
+        Transports.Kcp.Protocol.Kcp kcp = new(1, (_, _) => { });
+        kcp.SetWindowSize(256, 256);
+        byte[] segment = new byte[Transports.Kcp.Protocol.Kcp.OVERHEAD];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(segment, 1);
+        segment[4] = Transports.Kcp.Protocol.Kcp.CMD_PUSH;
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(segment.AsSpan(6), 256);
+        kcp.Input(segment, 0, segment.Length);
+
+        long before = System.GC.GetAllocatedBytesForCurrentThread();
+        for (uint sn = 2; sn < 202; sn++)
+        {
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(segment.AsSpan(12), sn);
+            kcp.Input(segment, 0, segment.Length);
+        }
+
+        Assert.Equal(200, kcp.rcv_buf.Count);
+        Assert.InRange(System.GC.GetAllocatedBytesForCurrentThread() - before, 0, 200 * 400);
+    }
+
+    [Fact]
+    public void LargeMessagesDoNotGrowTheSegmentPoolForever()
+    {
+        Transports.Kcp.Protocol.Kcp? receiver = null;
+        Transports.Kcp.Protocol.Kcp? sender = null;
+        sender = new Transports.Kcp.Protocol.Kcp(1, (data, length) => receiver!.Input(data, 0, length));
+        receiver = new Transports.Kcp.Protocol.Kcp(1, (data, length) => sender.Input(data, 0, length));
+        sender.SetNoDelay(1, 10, 2, true);
+        receiver.SetNoDelay(1, 10, 2, true);
+        sender.SetWindowSize(256, 256);
+        receiver.SetWindowSize(256, 256);
+
+        byte[] message = new byte[200 * 1000];
+        Assert.Equal(0, sender.Send(message, 0, message.Length));
+        byte[] received = new byte[message.Length];
+        int got = -1;
+        for (uint time = 0; time < 10_000 && (got < 0 || sender.WaitSnd > 0); time += 10)
+        {
+            sender.Update(time);
+            receiver.Update(time);
+            if (got < 0)
+            {
+                got = receiver.Receive(received, received.Length);
+            }
+        }
+
+        Assert.Equal(message.Length, got);
+        Assert.Equal(0, sender.WaitSnd);
+
+        // The pool shrinks back within a couple of trims once the burst is over.
+        for (uint time = 10_000; time < 13_000; time += 10)
+        {
+            sender.Update(time);
+            receiver.Update(time);
+        }
+
+        Assert.InRange(sender.SegmentPool.Count, 0, 64);
+        Assert.InRange(receiver.SegmentPool.Count, 0, 64);
+    }
+}
