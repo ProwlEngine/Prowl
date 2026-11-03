@@ -47,6 +47,12 @@ public static partial class Networking
     {
         BeginSession();
         NetworkSystem.ValidateSceneMessageLimit(options);
+        if (options is { SharePeerList: false })
+        {
+            throw new NotSupportedException(
+                "Scene replication relays RPCs and changes from one client to the others, so clients need the peer list.");
+        }
+
         using FrameStatScope stats = FrameStats.Network.Scope();
         PrepareTransport(transport);
         try

@@ -20,6 +20,20 @@ public partial class NetworkingTests
         Assert.Null(Networking.Networking.Session);
     }
 
+    [Fact]
+    public void SceneSessionsRejectHostsThatKeepThePeerListToThemselvesBeforeIo()
+    {
+        using LimitedTransport transport = new(new(), _ => 1200);
+        try
+        {
+            Assert.Throws<NotSupportedException>(() =>
+                Networking.Networking.Host(transport, options: new NetSessionOptions { SharePeerList = false }));
+            Assert.Equal(0, transport.Starts);
+            Assert.Null(Networking.Networking.Session);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
     [Theory]
     [InlineData(false, NetworkExecution.Inline, 92, DeliverySupport.All)]
     [InlineData(true, NetworkExecution.Inline, 92, DeliverySupport.All)]
