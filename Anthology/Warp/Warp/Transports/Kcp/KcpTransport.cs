@@ -505,9 +505,19 @@ public sealed class KcpTransport : Transport
     /// </summary>
     private void FollowToNewAddress(SocketAddress from, int length, long now)
     {
-        if (length < KcpPacket.SessionHeaderSize || !_bySession.TryGetValue(
-                BinaryPrimitives.ReadUInt32LittleEndian(_receiveBuffer.AsSpan(1)), out KcpConnection? connection))
+        if (length < KcpPacket.SessionHeaderSize || _receiveBuffer[0] == (byte)KcpPacketType.Reset)
         {
+            return;
+        }
+
+        uint sessionId = BinaryPrimitives.ReadUInt32LittleEndian(_receiveBuffer.AsSpan(1));
+        if (!_bySession.TryGetValue(sessionId, out KcpConnection? connection))
+        {
+            if (_listening)
+            {
+                SendReset(from, sessionId);
+            }
+
             return;
         }
 
@@ -534,6 +544,42 @@ public sealed class KcpTransport : Transport
     }
 
     internal SocketAddress CloneAddress(SocketAddress address) => Clone(address);
+
+    /// <summary>The token a client checks a Reset against. Zeros, which clients never accept, without a reset key.</summary>
+    private void WriteResetToken(uint sessionId, Span<byte> destination)
+    {
+        destination[..KcpPacket.ResetTokenSize].Clear();
+        if (Settings.Encryption?.ResetKey is not { } key)
+        {
+            return;
+        }
+
+        Span<byte> id = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(id, sessionId);
+        Span<byte> hash = stackalloc byte[32];
+        HMACSHA256.HashData(key, id, hash);
+        hash[..KcpPacket.ResetTokenSize].CopyTo(destination);
+    }
+
+    /// <summary>Tells the sender of a packet for a session this host doesn't have that the session is gone.</summary>
+    private void SendReset(SocketAddress to, uint sessionId)
+    {
+        bool encrypted = Settings.Encryption != null;
+        if (encrypted && Settings.Encryption!.ResetKey == null)
+        {
+            return;
+        }
+
+        Span<byte> reset = stackalloc byte[encrypted ? KcpPacket.EncryptedResetSize : KcpPacket.ResetSize];
+        reset[0] = (byte)KcpPacketType.Reset;
+        BinaryPrimitives.WriteUInt32LittleEndian(reset[1..], sessionId);
+        if (encrypted)
+        {
+            WriteResetToken(sessionId, reset[KcpPacket.SessionHeaderSize..]);
+        }
+
+        SendRaw(null, to, reset);
+    }
 
     private void HandleConnectRequest(SocketAddress from, ReadOnlySpan<byte> packet)
     {
@@ -690,7 +736,9 @@ public sealed class KcpTransport : Transport
         using ECDiffieHellman exchange = KcpCipher.CreateKeyExchange(out byte[] hostPublic);
         byte[] accept = new byte[KcpPacket.EncryptedAcceptSize];
         KcpCipher? cipher = KcpCipher.Create(exchange, clientPublic, hostPublic, nonce, sessionId, false,
-            accept.AsSpan(KcpPacket.EncryptedAcceptSize - KcpCipher.ConfirmationSize));
+            accept.AsSpan(KcpPacket.EncryptedAcceptSize - KcpPacket.ResetTokenSize - KcpCipher.ConfirmationSize,
+                KcpCipher.ConfirmationSize));
+        WriteResetToken(sessionId, accept.AsSpan(KcpPacket.EncryptedAcceptSize - KcpPacket.ResetTokenSize));
         if (cipher == null)
         {
             return default;

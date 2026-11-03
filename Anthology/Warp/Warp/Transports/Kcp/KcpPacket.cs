@@ -11,13 +11,14 @@ namespace Prowl.Warp.Transports.Kcp;
 ///     <code>
 /// Handshake (before a session exists)
 ///   ConnectRequest     [type][u32 protocolId][u32 nonce][16 zero bytes][settings][4 zero bytes]
-///                                                                         padded to 160 bytes
+///                                                                         padded to 176 bytes
 ///   Challenge          [type][u32 nonce][u32 issued][16 byte cookie]     25 bytes
 ///   ChallengeResponse  [type][u32 protocolId][u32 nonce][16 byte cookie][settings][u32 issued][65 byte key]
-///                                                                         padded to 160 bytes
+///                                                                         padded to 176 bytes
 ///   settings           [u8 wireVersion][u8 channels][u16 mtu][u16 receiveWindow][u8 flags, 1 = encrypted]
 ///   Accept             [type][u32 nonce][u32 sessionId]                  9 bytes
 ///                      encrypted: then [65 byte host key][64 byte signature, or zeros][16 byte key confirmation]
+///                      [16 byte reset token, or zeros]
 ///   Reject             [type][u32 nonce][u8 DisconnectReason]            6 bytes
 /// 
 /// Session (after Accept)
@@ -32,6 +33,8 @@ namespace Prowl.Warp.Transports.Kcp;
 ///   Disconnect         no body
 ///   PathChallenge      body = 8 random bytes, sent to a new address an encrypted peer's packets came from
 ///   PathResponse       body = the 8 bytes echoed; only an answer from that address moves the session there
+///   Reset              [type][u32 sessionId], plus the session's 16 byte reset token when encrypted. Sent, never
+///                      sealed, by a host that has no such session, such as one that restarted.
 ///   Encrypted, every session packet is [type][u32 sessionId][u64 counter][sealed body][16 byte tag].
 /// </code>
 ///     <para>
@@ -64,7 +67,8 @@ internal enum KcpPacketType : byte
     ReliableChannel = 21,
     UnreliableFramed = 22,
     PathChallenge = 23,
-    PathResponse = 24
+    PathResponse = 24,
+    Reset = 25
 }
 
 internal static class KcpPacket
@@ -100,12 +104,16 @@ internal static class KcpPacket
     public const int CookieSize = 16;
 
     /// <summary>Size of ConnectRequest and ChallengeResponse, which must exceed every reply.</summary>
-    public const int HandshakeRequestSize = 160;
+    public const int HandshakeRequestSize = 176;
 
     public const int ChallengeSize = 1 + 4 + 4 + CookieSize;
     public const int AcceptSize = 1 + 4 + 4;
     public const int EncryptedAcceptSize =
-        AcceptSize + KcpCipher.PublicKeySize + KcpCipher.SignatureSize + KcpCipher.ConfirmationSize;
+        AcceptSize + KcpCipher.PublicKeySize + KcpCipher.SignatureSize + KcpCipher.ConfirmationSize + ResetTokenSize;
+
+    public const int ResetTokenSize = 16;
+    public const int ResetSize = SessionHeaderSize;
+    public const int EncryptedResetSize = SessionHeaderSize + ResetTokenSize;
     public const int RejectSize = 1 + 4 + 1;
     public const int PingSize = SessionHeaderSize + 4;
 

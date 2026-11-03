@@ -329,6 +329,14 @@ public sealed class KcpConnection : Connection
 
                 return;
 
+            case KcpPacketType.Reset:
+                if (IsOutgoing && State == ConnectionState.Connected && IsGenuineReset(packet))
+                {
+                    _transport.Close(this, DisconnectReason.RemoteClosed, false);
+                }
+
+                return;
+
             case KcpPacketType.Reject:
                 if (IsOutgoing && State == ConnectionState.Connecting && length == KcpPacket.RejectSize &&
                     ReadNonce(packet) == ClientNonce)
@@ -686,7 +694,8 @@ public sealed class KcpConnection : Connection
         ReadOnlySpan<byte> hostPublic = accept.Slice(KcpPacket.AcceptSize, KcpCipher.PublicKeySize);
         ReadOnlySpan<byte> signature = accept.Slice(KcpPacket.AcceptSize + KcpCipher.PublicKeySize,
             KcpCipher.SignatureSize);
-        ReadOnlySpan<byte> confirmation = accept[^KcpCipher.ConfirmationSize..];
+        ReadOnlySpan<byte> confirmation = accept.Slice(
+            KcpPacket.EncryptedAcceptSize - KcpPacket.ResetTokenSize - KcpCipher.ConfirmationSize, KcpCipher.ConfirmationSize);
         if (_transport.TrustedHostKey is { } trusted && !trusted.VerifyData(
                 KcpCipher.Transcript(PublicKey, hostPublic, ClientNonce, SessionId, _options.ProtocolId), signature,
                 HashAlgorithmName.SHA256))
@@ -703,10 +712,34 @@ public sealed class KcpConnection : Connection
         }
 
         Cipher = cipher;
+        accept[^KcpPacket.ResetTokenSize..].CopyTo(_resetToken);
 
         KeyExchange!.Dispose();
         return true;
     }
+
+    /// <summary>
+    ///     A plain Reset only needs the session id. An encrypted one must carry the token from the Accept, which a host
+    ///     without the reset key leaves as zeros, and those are never accepted.
+    /// </summary>
+    private bool IsGenuineReset(ReadOnlySpan<byte> reset)
+    {
+        if (reset.Length < KcpPacket.SessionHeaderSize ||
+            BinaryPrimitives.ReadUInt32LittleEndian(reset[1..]) != SessionId)
+        {
+            return false;
+        }
+
+        if (Cipher == null)
+        {
+            return reset.Length == KcpPacket.ResetSize;
+        }
+
+        return reset.Length == KcpPacket.EncryptedResetSize && _resetToken.AsSpan().IndexOfAnyExcept((byte)0) >= 0 &&
+               CryptographicOperations.FixedTimeEquals(reset[KcpPacket.SessionHeaderSize..], _resetToken);
+    }
+
+    private readonly byte[] _resetToken = new byte[KcpPacket.ResetTokenSize];
 
     private const long PartialLifetimeMs = 1000;
 

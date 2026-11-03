@@ -437,6 +437,56 @@ public class KcpEncryptionTests
         }, what: "the client to follow the host");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ARestartedHostTellsClientsTheirSessionIsGone(bool encrypted)
+    {
+        byte[] resetKey = RandomNumberGenerator.GetBytes(32);
+        KcpEncryption? Encryption() => encrypted ? new KcpEncryption { ResetKey = resetKey } : null;
+        using KcpTransport host = new(Options(Encryption()));
+        host.Listen();
+        using KcpTransport restarted = new(Options(Encryption()));
+        restarted.Listen();
+        using KcpTransport client = new(Options(encrypted ? new KcpEncryption() : null));
+        using Relay relay = new(host);
+        Pump pump = new(host, restarted, client);
+        Connection toHost = client.Connect(relay.Address);
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1; },
+            what: "connect");
+
+        relay.Retarget(restarted);
+        toHost.Send(new byte[] { 1 }, Delivery.Reliable);
+        pump.Until(() => { relay.Step(); return !toHost.IsConnected; }, timeoutMs: 1000, what: "the reset");
+        Assert.Equal(DisconnectReason.RemoteClosed,
+            pump.EventsOf(client).Single(ev => ev.Type == TransportEventType.Disconnected).Reason);
+    }
+
+    [Fact]
+    public void AResetWithoutTheRightTokenIsIgnored()
+    {
+        using KcpTransport host = new(Options(new KcpEncryption { ResetKey = RandomNumberGenerator.GetBytes(32) }));
+        host.Listen();
+        using KcpTransport impostor = new(Options(new KcpEncryption { ResetKey = RandomNumberGenerator.GetBytes(32) }));
+        impostor.Listen();
+        using KcpTransport client = new(Options(new KcpEncryption()));
+        using Relay relay = new(host);
+        Pump pump = new(host, impostor, client);
+        Connection toHost = client.Connect(relay.Address);
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1; },
+            what: "connect");
+
+        relay.Retarget(impostor);
+        toHost.Send(new byte[] { 1 }, Delivery.Reliable);
+        for (int i = 0; i < 200; i++)
+        {
+            relay.Step();
+            pump.Step();
+        }
+
+        Assert.True(toHost.IsConnected);
+    }
+
     [Fact]
     public void ForgedPacketsFromANewAddressDoNotMoveTheSession()
     {
@@ -737,7 +787,7 @@ public class KcpEncryptionTests
     /// </summary>
     private sealed class Relay : IDisposable
     {
-        private readonly IPEndPoint _host;
+        private IPEndPoint _host;
         private readonly List<Socket> _clientSides = new() { Bound() };
         private EndPoint? _client;
         private Socket _hostSide = Bound();
@@ -785,6 +835,9 @@ public class KcpEncryptionTests
             _clientSide = Bound();
             _clientSides.Add(_clientSide);
         }
+
+        /// <summary>Sends the client's traffic to another host from now on, like a server that restarted.</summary>
+        public void Retarget(KcpTransport host) => _host = new IPEndPoint(IPAddress.Loopback, host.LocalPort);
 
         public void MoveToNewAddress()
         {

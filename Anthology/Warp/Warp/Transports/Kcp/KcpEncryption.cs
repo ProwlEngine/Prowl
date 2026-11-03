@@ -29,6 +29,13 @@ public sealed class KcpEncryption
     /// </summary>
     public byte[]? TrustedHostKey { get; set; }
 
+    /// <summary>
+    ///     Host: a secret of at least 16 bytes that you keep across restarts. With it, a restarted host can tell clients
+    ///     of its previous run that their session is gone, so they don't wait for a timeout. Without it, encrypted
+    ///     clients only learn of a restart by timing out.
+    /// </summary>
+    public byte[]? ResetKey { get; set; }
+
     internal void Validate()
     {
         if (!AesGcm.IsSupported)
@@ -44,6 +51,11 @@ public sealed class KcpEncryption
         if (TrustedHostKey != null)
         {
             using ECDsa trusted = ImportTrustedHostKey();
+        }
+
+        if (ResetKey != null && ResetKey.Length < 16)
+        {
+            throw new ArgumentException("The reset key must be at least 16 bytes.", nameof(ResetKey));
         }
     }
 
@@ -70,5 +82,10 @@ public sealed class KcpEncryption
         return key;
     }
 
-    internal KcpEncryption Copy() => new() { SigningKey = SigningKey, TrustedHostKey = (byte[]?)TrustedHostKey?.Clone() };
+    internal KcpEncryption Copy() => new()
+    {
+        SigningKey = SigningKey,
+        TrustedHostKey = (byte[]?)TrustedHostKey?.Clone(),
+        ResetKey = (byte[]?)ResetKey?.Clone()
+    };
 }
