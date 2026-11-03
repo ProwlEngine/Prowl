@@ -270,4 +270,26 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
     }
+
+    [Fact]
+    public void AReleaseWithMalformedValuesChangesNothing()
+    {
+        var (_, state, network) = ReadinessHost();
+        GameObject root = state.GameObject;
+        using FakePeer owner = FakePeer.Join(network, "owner");
+        try
+        {
+            Pump(() => owner.IsReady, owner);
+            root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
+            uint generation = NetworkGeneration(root);
+            using NetWriter values = new();
+            values.WriteVarUInt32(1);
+            values.WriteGuid(state.Identifier); values.WriteVarUInt32(NetTestComponent.HealthSlot); values.WriteVarUInt32(generation);
+            values.WriteBytesWithLength([2, 0]);
+            RequestOwnership(owner, root, generation, false, Poses(root, 42), values.ToArray());
+            Pump(() => Networking.Networking.Session!.Peers.All(p => p.IsLocal), owner);
+            Assert.NotEqual(42f, root.Transform.LocalPosition.X);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }

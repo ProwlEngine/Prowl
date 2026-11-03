@@ -134,6 +134,7 @@ internal sealed partial class NetworkSystem
                 return;
             }
 
+            Sync.ValidateSyncState(sender, new NetReader(values), false, true);
             entry.ApplyHandoffPoses(poses, sender);
             Snapshots.ApplyHandoffValues(sender, values);
             entry.TransferVelocity = velocity;
@@ -164,6 +165,7 @@ internal sealed partial class NetworkSystem
             return;
         }
 
+        Sync.ValidateSyncState(sender, new NetReader(message.Values), false, true);
         entry.ApplyHandoffPoses(poses, sender);
         Snapshots.ApplyHandoffValues(sender, message.Values);
         entry.TransferVelocity = velocity;
