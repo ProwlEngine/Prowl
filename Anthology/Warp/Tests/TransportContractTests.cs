@@ -54,7 +54,7 @@ public abstract class TransportContractTests : IDisposable
 
         Connection toHost = client.Connect(AddressOf(host));
         Assert.Equal(ConnectionState.Connecting, toHost.State);
-        pump.Until(() => toHost.IsConnected && host.Connections.Count == 1, what: "connect");
+        pump.Until(() => toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1, what: "connect");
         return (host, client, pump, toHost);
     }
 
@@ -128,7 +128,7 @@ public abstract class TransportContractTests : IDisposable
 
         // A new connection can use the memory released by the offending peer.
         Connection second = client.Connect(AddressOf(host));
-        pump.Until(() => second.IsConnected && host.Connections.Count == 1, what: "reconnect after overflow");
+        pump.Until(() => second.IsConnected && host.Connections.Count(c => c.IsConnected) == 1, what: "reconnect after overflow");
         second.Send(new byte[400], Delivery.Unreliable);
         pump.Until(() => pump.EventsOf(host).Any(e => e.Type == TransportEventType.Data),
             what: "reclaimed queue capacity");
@@ -142,7 +142,7 @@ public abstract class TransportContractTests : IDisposable
         Transport other = CreateClient();
         Pump otherPump = new(host, other);
         Connection small = other.Connect(AddressOf(host));
-        otherPump.Until(() => small.IsConnected && host.Connections.Count == 2, what: "second connect");
+        otherPump.Until(() => small.IsConnected && host.Connections.Count(c => c.IsConnected) == 2, what: "second connect");
         host.MaxQueuedDataBytes = 1024;
 
         hog.Send(new byte[400], Delivery.Unreliable);

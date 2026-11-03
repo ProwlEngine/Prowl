@@ -36,7 +36,7 @@ public class KcpEncryptionTests
         using Relay relay = new(host);
         Pump pump = new(host, client);
         Connection toHost = client.Connect(relay.Address);
-        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1; }, what: "connect");
 
         byte[] secret = Encoding.ASCII.GetBytes("SECRETSECRETSECRET");
         byte[] large = TestData.Pattern(5000, 1);
@@ -69,7 +69,7 @@ public class KcpEncryptionTests
         using Relay relay = new(host);
         Pump pump = new(host, client);
         Connection toHost = client.Connect(relay.Address);
-        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1; }, what: "connect");
 
         int count = 0;
         relay.ToHost = datagram =>
@@ -99,7 +99,7 @@ public class KcpEncryptionTests
         using Relay relay = new(host);
         Pump pump = new(host, client);
         Connection toHost = client.Connect(relay.Address);
-        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1; }, what: "connect");
 
         byte[]? captured = null;
         relay.ToHost = datagram =>
@@ -131,7 +131,7 @@ public class KcpEncryptionTests
         using Relay relay = new(host);
         Pump pump = new(host, client);
         Connection toHost = client.Connect(relay.Address);
-        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1; }, what: "connect");
 
         byte[] disconnect = new byte[KcpPacket.SessionHeaderSize];
         disconnect[0] = 20;
@@ -303,7 +303,7 @@ public class KcpEncryptionTests
         using Relay relay = new(host);
         Pump pump = new(host, client);
         Connection toHost = client.Connect(relay.Address);
-        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1; }, what: "connect");
         Connection toClient = host.Connections.Single();
 
         relay.MoveToNewAddress();
@@ -339,7 +339,7 @@ public class KcpEncryptionTests
         attacker.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         Pump pump = new(host, client);
         Connection toHost = client.Connect(relay.Address);
-        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1; }, what: "connect");
         Connection toClient = host.Connections.Single();
         string address = toClient.Address;
 
@@ -370,7 +370,7 @@ public class KcpEncryptionTests
         List<Socket> sources = new();
         Pump pump = new(host, client);
         Connection toHost = client.Connect(relay.Address);
-        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1; }, what: "connect");
 
         // Each fresh client packet also reaches the host first from a new address, as if spoofed.
         relay.Spy = datagram =>
@@ -426,7 +426,7 @@ public class KcpEncryptionTests
         using Relay relay = new(host);
         Pump pump = new(host, client);
         Connection toHost = client.Connect(relay.Address);
-        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1; }, what: "connect");
 
         relay.MoveClientSide();
         host.Connections.Single().Send(new byte[] { 1 }, Delivery.Reliable);
@@ -446,7 +446,7 @@ public class KcpEncryptionTests
         using Relay relay = new(host);
         Pump pump = new(host, client);
         Connection toHost = client.Connect(relay.Address);
-        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1; }, what: "connect");
         string address = host.Connections.Single().Address;
 
         byte[] forged = new byte[100];

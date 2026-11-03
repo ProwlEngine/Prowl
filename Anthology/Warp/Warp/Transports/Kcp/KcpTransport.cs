@@ -643,8 +643,8 @@ public sealed class KcpTransport : Transport
 
         _incomingCount++;
 
+        // Reported once the client's first session packet arrives.
         SendAccept(connection);
-        RaiseConnected(connection);
     }
 
     /// <summary>
@@ -984,7 +984,14 @@ public sealed class KcpTransport : Transport
             }
         }
 
-        RaiseDisconnected(connection, reason);
+        if (!connection.IsOutgoing && connection.State == ConnectionState.Connecting)
+        {
+            ForgetConnection(connection);
+        }
+        else
+        {
+            RaiseDisconnected(connection, reason);
+        }
         connection.ReleaseBuffers();
     }
 

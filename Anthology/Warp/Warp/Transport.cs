@@ -208,6 +208,13 @@ public abstract class Transport : IDisposable
         _events.Enqueue(new PendingEvent(TransportEventType.Disconnected, connection, null, 0, default, reason, 0));
     }
 
+    /// <summary>Stops tracking a connection that was never reported, without raising any event.</summary>
+    protected void ForgetConnection(Connection connection)
+    {
+        connection.State = ConnectionState.Disconnected;
+        _connections.Remove(connection.Id);
+    }
+
     /// <summary>Queues a <see cref="TransportEventType.Data" /> event with a copy of <paramref name="data" />.</summary>
     protected void RaiseData(Connection connection, ReadOnlySpan<byte> data, Delivery delivery, byte channel = 0)
     {

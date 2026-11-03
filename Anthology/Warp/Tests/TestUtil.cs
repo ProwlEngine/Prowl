@@ -34,6 +34,8 @@ public sealed class Pump
 
     public List<Received> EventsOf(Transport transport) => _events[transport];
 
+    public IReadOnlyList<Transport> Transports => _transports;
+
     public void Step()
     {
         foreach (Transport transport in _transports)

@@ -40,7 +40,7 @@ public class KcpTransportTests
 
         Pump pump = new(host, client);
         Connection toHost = client.Connect($"127.0.0.1:{host.LocalPort}");
-        pump.Until(() => toHost.IsConnected && host.Connections.Count == 1, what: "connect");
+        pump.Until(() => toHost.IsConnected && host.Connections.Count(c => c.IsConnected) == 1, what: "connect");
         return (host, client, pump, toHost);
     }
 
@@ -85,7 +85,7 @@ public class KcpTransportTests
         Pump pump = new(host, alice, bob);
         alice.Connect($"127.0.0.1:{host.LocalPort}");
         bob.Connect($"127.0.0.1:{host.LocalPort}");
-        pump.Until(() => host.Connections.Count == 2, what: "connect");
+        pump.Until(() => host.Connections.Count(c => c.IsConnected) == 2, what: "connect");
         pump.For(50);
         Connection toAlice = host.Connections.First(c => c.Address.EndsWith($":{alice.LocalPort}"));
         Connection toBob = host.Connections.First(c => c != toAlice);
@@ -309,6 +309,43 @@ public class KcpTransportTests
             Assert.Equal(10, received);
             Assert.Equal(0, host.QueuedDatagrams);
         }
+    }
+
+    [Fact]
+    public void TheHostReportsAClientOnlyOnceTheClientConfirmsTheSession()
+    {
+        KcpTransportOptions options = FastOptions();
+        options.ConnectTimeout = TimeSpan.FromMilliseconds(500);
+        using KcpTransport host = new(options);
+        host.Listen();
+        using Socket raw = RawSocket(host);
+        Pump pump = new(host);
+        RawHandshake(raw, pump, 0x6666, out uint session, confirm: false);
+        pump.For(100);
+        Assert.DoesNotContain(pump.EventsOf(host), ev => ev.Type == TransportEventType.Connected);
+
+        byte[] ping = new byte[KcpPacket.PingSize];
+        ping[0] = (byte)KcpPacketType.Ping;
+        BinaryPrimitives.WriteUInt32LittleEndian(ping.AsSpan(1), session);
+        raw.Send(ping);
+        pump.Until(() => pump.EventsOf(host).Any(ev => ev.Type == TransportEventType.Connected), what: "Connected");
+        Assert.True(host.Connections.Single().IsConnected);
+    }
+
+    [Fact]
+    public void AnUnconfirmedSessionIsDroppedQuietly()
+    {
+        KcpTransportOptions options = FastOptions();
+        options.ConnectTimeout = TimeSpan.FromMilliseconds(300);
+        using KcpTransport host = new(options);
+        host.Listen();
+        using Socket raw = RawSocket(host);
+        Pump pump = new(host);
+        RawHandshake(raw, pump, 0x7777, out _, confirm: false);
+        pump.For(600);
+
+        Assert.Empty(host.Connections);
+        Assert.Empty(pump.EventsOf(host));
     }
 
     [Fact]
@@ -870,11 +907,15 @@ public class KcpTransportTests
         raw.Send(Request(0x9999));
         pump.For(100);
         raw.Send(Response(Request(0x2222), challenge));
-        Expect(raw, pump, KcpPacketType.Accept);
+        byte[] accept = Expect(raw, pump, KcpPacketType.Accept);
 
         Connection restarted = Assert.Single(host.Connections);
         Assert.NotSame(first, restarted);
-        Assert.True(restarted.IsConnected);
+        byte[] ping = new byte[KcpPacket.PingSize];
+        ping[0] = (byte)KcpPacketType.Ping;
+        accept.AsSpan(5, 4).CopyTo(ping.AsSpan(1));
+        raw.Send(ping);
+        pump.Until(() => restarted.IsConnected, what: "the restarted session to be confirmed");
     }
 
     [Theory]
@@ -949,8 +990,11 @@ public class KcpTransportTests
         return packet;
     }
 
-    /// <summary>Runs the client half of the handshake by hand, returning the ChallengeResponse it sent.</summary>
-    private static byte[] RawHandshake(Socket raw, Pump pump, uint nonce, out uint session)
+    /// <summary>
+    ///     Runs the client half of the handshake by hand, returning the ChallengeResponse it sent. Unless told not to,
+    ///     it then confirms the session with a Ping, as a real client does.
+    /// </summary>
+    private static byte[] RawHandshake(Socket raw, Pump pump, uint nonce, out uint session, bool confirm = true)
     {
         byte[] request = Request(nonce);
         raw.Send(request);
@@ -961,6 +1005,18 @@ public class KcpTransportTests
         byte[] accept = Expect(raw, pump, KcpPacketType.Accept);
         Assert.Equal(nonce, BinaryPrimitives.ReadUInt32LittleEndian(accept.AsSpan(1)));
         session = BinaryPrimitives.ReadUInt32LittleEndian(accept.AsSpan(5));
+        if (confirm)
+        {
+            byte[] ping = new byte[KcpPacket.PingSize];
+            ping[0] = (byte)KcpPacketType.Ping;
+            BinaryPrimitives.WriteUInt32LittleEndian(ping.AsSpan(1), session);
+            raw.Send(ping);
+            uint confirmed = session;
+            pump.Until(() => pump.EventsOf(pump.Transports[0]).Any(ev =>
+                ev.Type == TransportEventType.Connected && ((KcpConnection)ev.Connection).SessionId == confirmed),
+                what: "the host to report the session");
+        }
+
         return response;
     }
 

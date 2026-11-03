@@ -352,7 +352,8 @@ public sealed class KcpConnection : Connection
     /// </summary>
     internal bool Authenticate(ref byte[] buffer, ref int length, bool newestOnly)
     {
-        if (State != ConnectionState.Connected || length < KcpPacket.SessionHeaderSize ||
+        bool inSession = State == ConnectionState.Connected || (State == ConnectionState.Connecting && !IsOutgoing);
+        if (!inSession || length < KcpPacket.SessionHeaderSize ||
             BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(1)) != SessionId)
         {
             return false;
@@ -376,6 +377,11 @@ public sealed class KcpConnection : Connection
     {
         ReadOnlySpan<byte> packet = buffer.AsSpan(0, length);
         KcpPacketType type = (KcpPacketType)packet[0];
+        if (State == ConnectionState.Connecting)
+        {
+            _transport.OnConnected(this);
+        }
+
         RecordPacketReceived(length);
         _lastReceiveMs = now;
         ReadOnlySpan<byte> body = packet[KcpPacket.SessionHeaderSize..];
@@ -478,11 +484,16 @@ public sealed class KcpConnection : Connection
     {
         if (State == ConnectionState.Connecting)
         {
-            // Incoming connections are connected as soon as they exist; only outgoing ones wait here.
             if (now - _connectStartMs >= (long)_options.ConnectTimeout.TotalMilliseconds)
             {
                 _transport.Close(this,
                     _refusedAccept ? DisconnectReason.AuthenticationFailed : DisconnectReason.Timeout, false);
+                return;
+            }
+
+            // An incoming connection waits for the client's first session packet, which proves it has the Accept.
+            if (!IsOutgoing)
+            {
                 return;
             }
 
