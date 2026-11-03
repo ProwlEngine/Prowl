@@ -505,4 +505,55 @@ public partial class NetworkingTests
             host.Dispose();
         }
     }
+
+    /// <summary>Joins a fake host that spawns a ship owned by this client, and waits until it's ready.</summary>
+    private (FakePeer Host, Guid ShipId) JoinOwningShip()
+    {
+        Scene hostScene = CreateScene();
+        using NetWriter snapshot = new();
+        NetworkTestScene.Current.WriteSnapshot(hostScene, snapshot);
+        byte[] snapshotBytes = snapshot.ToArray();
+
+        GameObject ship = CreateGameObject("Ship");
+        ship.AddComponent<NetCollectionTestComponent>();
+        ship.Network.Mode = NetworkMode.Object;
+        Guid shipId = ship.Identifier;
+
+        LocalNetwork network = new();
+        FakePeer host = FakePeer.Host(network);
+        host.Session.PeerJoined += peer =>
+        {
+            using NetWriter spawn = new();
+            NetworkTestScene.Current.WriteSpawn(ship, owner: peer.Id, NetworkOrphaned.Destroy, spawn, generation: 5, netId: 7);
+            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshotBytes);
+            host.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
+        };
+
+        Networking.Networking.Join(new LocalTransport(network, "bob"), "host", "bob");
+        Pump(() => Networking.Networking.IsReady && Scene.Current.AllObjects.Any(o => o.Identifier == shipId), host);
+        return (host, shipId);
+    }
+
+    [Fact]
+    public void ClientChangesSyncValuesOnObjectsThatAreNeverNetworked()
+    {
+        (FakePeer host, _) = JoinOwningShip();
+        try
+        {
+            GameObject local = CreateGameObject("Local effect");
+            local.Network.Mode = NetworkMode.Never;
+            NetCollectionTestComponent component = local.AddComponent<NetCollectionTestComponent>();
+            Scene.Current.Add(local);
+
+            component.Health = 5;
+            component.Scores.Add(1);
+            Assert.Equal(5, component.Health);
+            Assert.Equal([1], component.Scores);
+        }
+        finally
+        {
+            Networking.Networking.Shutdown();
+            host.Dispose();
+        }
+    }
 }
