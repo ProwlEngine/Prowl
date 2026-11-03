@@ -170,4 +170,36 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
     }
+
+    [Fact]
+    public void AnOwnerRpcFromAClientRunsOnTheHostWhenTheHostsPeerOwnsTheObject()
+    {
+        Scene scene = CreateScene();
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            GameObject crate = CreateGameObject("Crate");
+            NetTestComponent component = crate.AddComponent<NetTestComponent>();
+            scene.Add(crate);
+            crate.Network.Spawn(Networking.Networking.Session!.LocalPeer);
+            Pump(() => alice.Has(FakePeer.Spawn), alice);
+            Assert.Same(Networking.Networking.Session!.LocalPeer, crate.Network.Owner);
+
+            alice.Send(FakePeer.RpcToHost, w =>
+            {
+                w.WriteGuid(component.Identifier);
+                w.WriteUInt32(204u);
+                w.WriteString("hello");
+            });
+            Pump(() => component.Shouts.Count > 0, alice);
+            PumpFor(50, alice);
+
+            Assert.Equal("hello", Assert.Single(component.Shouts).Text);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }

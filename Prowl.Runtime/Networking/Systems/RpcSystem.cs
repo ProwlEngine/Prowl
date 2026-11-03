@@ -224,7 +224,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
             case RpcMode.Owner:
                 int owner = scene.OwnerOf(component.GameObject);
-                if (owner == NoOwner)
+                if (owner == NoOwner || owner == scene.Session!.LocalPeer!.Id)
                 {
                     if (RpcRecipients.Includes(recipients, scene.Session!.LocalPeer!))
                     {
