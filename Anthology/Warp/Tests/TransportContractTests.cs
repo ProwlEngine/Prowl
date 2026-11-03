@@ -122,6 +122,8 @@ public abstract class TransportContractTests : IDisposable
 
         toHost.Send(new byte[400], Delivery.Unreliable);
         toHost.Send(new byte[400], Delivery.Unreliable);
+        // Both must be waiting at once, so let both arrive before the host reads.
+        Thread.Sleep(50);
         pump.Until(() => !host.Connections.Any() && !toHost.IsConnected, what: "queue budget disconnect");
         Assert.Single(pump.EventsOf(host), e => e.Type == TransportEventType.Disconnected);
         Assert.DoesNotContain(pump.EventsOf(host), e => e.Type == TransportEventType.Data);
