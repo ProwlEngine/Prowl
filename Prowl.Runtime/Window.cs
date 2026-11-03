@@ -337,11 +337,15 @@ public static class Window
         TrySetWindowIcon();
     }
 
-    // GLFW doesn't use the executable's icon for the window/taskbar, so set it explicitly from a
-    // raw-RGBA pack embedded in the entry assembly (the editor ships "Resources/prowl-icon.rgba").
+
+    // Sets the window icon from a raw-RGBA resource embedded in the entry assembly whose name is "prowl-icon.rgba".
     // Format: int32 count, then per image: int32 width, int32 height, width*height*4 straight-alpha RGBA.
     private static void TrySetWindowIcon()
     {
+        // Note: GLFW for Windows initially creates windows with an icon that is sourced from a specific named
+        // resource ("GLFW_ICON"). In a .rc file the needed resource would look like this:
+        //
+        // GLFW_ICON ICON DISCARDABLE "<path to .ico file>"
         try
         {
             var asm = System.Reflection.Assembly.GetEntryAssembly();

@@ -47,15 +47,15 @@ internal sealed class GridFeature : RenderFeature
             Graphite_ViewData view = Graphite_PostView();
             vec3 camera = view.cameraHigh.xyz + view.cameraLow.xyz;
 
-            vec3 nearPoint = Graphite_PostRelativePosition(view, vUV, 1.0);
-            vec3 farPoint = Graphite_PostRelativePosition(view, vUV, 0.5);
+            vec3 nearPoint = Graphite_RelativeFromDepth(view, vUV, 1.0);
+            vec3 farPoint = Graphite_RelativeFromDepth(view, vUV, 0.5);
             vec3 direction = farPoint - nearPoint;
             float t = abs(direction.y) > 1e-6 ? (-camera.y - nearPoint.y) / direction.y : -1.0;
             vec3 hit = nearPoint + direction * t;
             vec2 uv = hit.xz + camera.xz;
 
             float sceneDepth = Graphite_Sample(_CameraDepthTexture, vUV).r;
-            vec3 scene = Graphite_PostRelativePosition(view, vUV, max(sceneDepth, 1e-7));
+            vec3 scene = Graphite_RelativeFromDepth(view, vUV, max(sceneDepth, 1e-7));
             bool hidden = t <= 0.0 || (sceneDepth > 0.0 && dot(hit, hit) > dot(scene, scene) * 0.99);
 
             float sg = pristineGrid(uv * _PrimaryGridSize, vec2(_LineWidth));
@@ -103,15 +103,11 @@ internal sealed class GridFeature : RenderFeature
     private readonly PropertySet _properties = new();
     private readonly Sampler _point;
 
-    private GridFeature(Renderer renderer)
+    private GridFeature(Renderer renderer) : base(RenderSlot.Overlay, runsOn: ViewKinds.All)
     {
         _program = renderer.CreateFullscreenProgram(Fragment, "Editor Grid");
         _point = Graphics.GetSampler(SamplerDescription.Point);
     }
-
-    public override RenderSlot Slot => RenderSlot.Overlay;
-
-    public override ViewKinds RunsOn => ViewKinds.All;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {

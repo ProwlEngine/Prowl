@@ -103,7 +103,7 @@ public class TerrainCollider : Component, ITerrainHeightProvider
     {
         height = 0;
         TerrainData? data = _terrain.IsValid() ? _terrain.Data : null;
-        if (data == null || data.Heights == null) return false;
+        if (data.IsNotValid() || data.Heights == null) return false;
 
         int res = data.HeightmapResolution;
         if (x < 0 || x >= res || z < 0 || z >= res) return false;
@@ -121,7 +121,7 @@ public class TerrainCollider : Component, ITerrainHeightProvider
     public bool IsCellHole(int x, int z)
     {
         TerrainData? data = _terrain.IsValid() ? _terrain.Data : null;
-        return data != null && data.IsCellHole(x, z);
+        return data.IsValid() && data.IsCellHole(x, z);
     }
 
     #endregion
@@ -131,7 +131,7 @@ public class TerrainCollider : Component, ITerrainHeightProvider
         base.OnEnable();
 
         _terrain = GetComponent<TerrainComponent>();
-        if (_terrain == null)
+        if (_terrain.IsNotValid())
         {
             Debug.LogError("TerrainCollider requires a TerrainComponent on the same GameObject.");
             Enabled = false;
@@ -160,14 +160,14 @@ public class TerrainCollider : Component, ITerrainHeightProvider
     private void RegisterWithPhysics()
     {
         Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
-        if (_isRegistered || scene.IsNotValid() || scene.Physics == null || _terrain == null)
+        if (_isRegistered || scene.IsNotValid() || scene.Physics == null || _terrain.IsNotValid())
             return;
 
         // Collider registration happens once: block-load the terrain data (prioritized) so a
         // transient null from async streaming doesn't leave the terrain without collision.
         if (_terrain.Data is { } stored) stored.Load();
         TerrainData? terrainData = _terrain.Data;
-        if (terrainData == null) return;
+        if (terrainData.IsNotValid()) return;
 
         PhysicsWorld physics = GameObject.Scene.Physics;
 
@@ -246,7 +246,7 @@ public class TerrainCollider : Component, ITerrainHeightProvider
     public float GetWorldHeight(float worldX, float worldZ)
     {
         TerrainData? data = _terrain.IsValid() ? _terrain.Data : null;
-        if (data == null) return 0;
+        if (data.IsNotValid()) return 0;
 
         Float3 localPos = Transform.InverseTransformPoint(new Float3(worldX, 0, worldZ));
         float u = (float)(localPos.X / data.Size);

@@ -93,7 +93,7 @@ public class MaterialAssetEditor : AssetImporterEditor
         Origami.Header(paper, $"{id}_h_info", $"{EditorIcons.Palette}  Material").Show();
         Origami.Label(paper, $"{id}_path", $"Path: {entry.Path}").Show();
 
-        if (material == null) return;
+        if (material.IsNotValid()) return;
 
         // Shader reference
         Origami.Separator(paper, $"{id}_sep_shader").Show();

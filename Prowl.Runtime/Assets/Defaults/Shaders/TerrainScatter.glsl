@@ -1,4 +1,4 @@
-// Procedural terrain detail placement, vertex stage only.
+// Procedural terrain detail placement, vertex stage only, included in a Surface shader's Vertex block.
 //
 // Every blade is derived from its own cell on a fixed world grid, so its position, size and
 // orientation depend only on where it is, never on where the camera is. Cascades sample every
@@ -12,6 +12,7 @@
 
 #include "Graphite/Vertex.glsl"
 #include "Prowl/TerrainHeight.glsl"
+#include "Prowl/Common.glsl"
 
 uniform sampler2D _HolesMap;
 uniform int _HasHoles;
@@ -215,10 +216,10 @@ vec2 sampleWindZones(vec3 worldPosition, float time)
 
 // A blade vertex's offset from its root at a time, bent along an arc rather than dragged sideways: a blade lays
 // over in strong wind, it does not stretch. Saturates at a right angle, so it never goes inside out.
-vec3 grassOffset(vec3 vertex, vec3 rootAbsolute, vec3 up, vec3 right, vec2 scale, float windPhase, float time)
+vec3 grassOffset(vec3 vertex, vec3 rootWorld, vec3 up, vec3 right, vec2 scale, float windPhase, float time)
 {
-    float sway = sin(time * _WindSpeed + rootAbsolute.x * 0.7 + rootAbsolute.z * 0.4 + windPhase) * _WindStrength;
-    vec2 windForce = (vec2(sway, sway * 0.3) + sampleWindZones(rootAbsolute, time)) * _ProtoBendFactor;
+    float sway = sin(time * _WindSpeed + rootWorld.x * 0.7 + rootWorld.z * 0.4 + windPhase) * _WindStrength;
+    vec2 windForce = (vec2(sway, sway * 0.3) + sampleWindZones(rootWorld, time)) * _ProtoBendFactor;
 
     float windMag = length(windForce);
     vec3 bendDir = windMag > 1e-4 ? vec3(windForce.x, 0.0, windForce.y) / windMag : vec3(0.0);
@@ -237,43 +238,38 @@ vec3 grassOffset(vec3 vertex, vec3 rootAbsolute, vec3 up, vec3 right, vec2 scale
     return right * vertex.x * scale.x + up * (alongUp * scale.y) + bendDir * (alongWind * scale.y) + up * 0.01 * scale.y;
 }
 
-// Places this vertex of this instance's blade: its camera relative world position, normal and tint. Hands last
-// frame's bend to the motion vectors. False for an instance without a blade, whose quad collapses.
-bool grassVertex(out vec3 world, out vec3 normal, out vec4 color)
+// Places this vertex of this instance's blade in terrain local space at the vertex's time, with its normal, tangent and
+// tint. An instance without a blade puts every vertex on one point, so its quad rasterizes nothing.
+void grassVertex(inout Graphite_SurfaceVertex v)
 {
-    world = vec3(0.0);
-    normal = vec3(0.0, 1.0, 0.0);
-    color = vec4(0.0);
-
     ScatterBlade blade = scatterResolve(int(Graphite_InstanceIndex()), _ProtoNoiseSpread);
     if (!blade.valid)
-        return false;
+    {
+        v.position = vec3(0.0);
+        return;
+    }
 
     float sizeT = blade.noise * min(1.0, blade.density * 2.0);
     vec2 scale = vec2(mix(_ProtoSize.x, _ProtoSize.y, sizeT), mix(_ProtoSize.z, _ProtoSize.w, sizeT)) * blade.fade;
 
+    mat3 toWorld = Graphite_Linear(Graphite_ObjectTransform());
     vec3 rootLocal = vec3(blade.localXZ.x, terrainHeight(blade.terrainUV), blade.localXZ.y);
-    vec3 root = Graphite_ObjectToWorld(rootLocal);
-    vec3 rootAbsolute = Graphite_AbsoluteFromRelative(root);
+    vec3 rootWorld = Graphite_RelativeToWorld(Graphite_ObjectToRelative(rootLocal));
 
     vec3 up = _AlignToNormal > 0.5
         ? Graphite_ObjectToWorldNormal(terrainNormal(blade.terrainUV))
-        : normalize(Graphite_ObjectToWorldDirection(vec3(0.0, 1.0, 0.0)));
+        : normalize(toWorld * vec3(0.0, 1.0, 0.0));
 
     Graphite_ViewData view = Graphite_View();
     vec3 right = _Billboard > 0.5
         ? vec3(view.view[0][0], view.view[1][0], view.view[2][0])
-        : normalize(Graphite_ObjectToWorldDirection(vec3(cos(blade.rotation), 0.0, sin(blade.rotation))));
+        : normalize(toWorld * vec3(cos(blade.rotation), 0.0, sin(blade.rotation)));
     right = normalize(right - up * dot(right, up));
 
-    vec3 vertex = vertexPosition;
-    float time = view.time.x;
-    vec3 offset = grassOffset(vertex, rootAbsolute, up, right, scale, blade.windPhase, time);
-    vec3 previousOffset = grassOffset(vertex, rootAbsolute, up, right, scale, blade.windPhase, time - view.time.y);
-    Graphite_SetPreviousPosition(rootLocal + inverse(Graphite_Linear(Graphite_ObjectTransform())) * previousOffset);
-
-    world = root + offset;
-    normal = normalize(cross(up, right));
-    color = mix(_ProtoHealthyColor, _ProtoDryColor, 1.0 - blade.noise);
-    return true;
+    mat3 toLocal = inverse(toWorld);
+    v.position = rootLocal + toLocal * grassOffset(v.position, rootWorld, up, right, scale, blade.windPhase, v.time);
+    v.normal = normalize(transpose(toWorld) * cross(up, right));
+    v.tangent = vec4(normalize(toLocal * right), 1.0);
+    vec4 tint = mix(_ProtoHealthyColor, _ProtoDryColor, 1.0 - blade.noise);
+    v.color = vec4(gammaToLinearSpace(tint.rgb), tint.a);
 }

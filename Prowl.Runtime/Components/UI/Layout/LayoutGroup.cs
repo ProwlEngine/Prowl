@@ -53,7 +53,7 @@ public abstract class LayoutGroup : UIBehaviour, ILayoutElement
         _layoutChildren.Clear();
         foreach (GameObject child in GameObject.Children)
         {
-            if (!child.EnabledInHierarchy || child.RectTransform is null) continue;
+            if (!child.EnabledInHierarchy || child.RectTransform.IsNotValid()) continue;
             LayoutElement? le = child.GetComponent<LayoutElement>();
             if (le is { IgnoreLayout: true }) continue;
             _layoutChildren.Add(child);

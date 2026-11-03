@@ -56,11 +56,12 @@ public sealed class RenderingShowcaseGame : StationGame
     // The time of day each station is shown at, in hours.
     private static readonly float[] StationHours = [14f, 15f, 13f, 13f, 22f, 22f, 22f, 23f, 11f, 14f, 16f];
 
-    private Light _sun = null!;
+    private DirectionalLight _sun = null!;
     private VolumetricFog _fog = null!;
     private VolumetricClouds _clouds = null!;
     private float _cloudFlightSpeed = 300f;
     private Bloom _bloom = null!;
+    private Tonemapping _tonemapping = null!;
 
     private float _hours = 14f;
     private bool _animateSky;
@@ -78,10 +79,7 @@ public sealed class RenderingShowcaseGame : StationGame
         _concrete = Lit(new Color(0.12f, 0.12f, 0.12f, 1f), 0f, 0.85f);
 
         var sun = new GameObject("Sun");
-        _sun = sun.AddComponent<Light>();
-        _sun.Type = LightType.Directional;
-        _sun.ShadowDistance = 80f;
-        _sun.Cascades = ShadowCascades.Four;
+        _sun = sun.AddComponent<DirectionalLight>();
         Add(sun);
 
         _fog = MainCamera.Profile!.Add<VolumetricFog>(overrideAll: true);
@@ -89,7 +87,9 @@ public sealed class RenderingShowcaseGame : StationGame
         _fog.GlobalDensity.Value = 0.02f;
         _fog.MaxDistance.Value = 60f;
         _bloom = MainCamera.Profile.Get<Bloom>()!;
+        _tonemapping = MainCamera.Profile.Get<Tonemapping>()!;
         SampleScene.Environment.Fog.Mode = FogMode.Off;
+        SampleScene.Environment.Ambient.Mode = AmbientMode.Uniform;
 
         float length = StationSpacing * StationCount + 30f;
         Add(Block("Floor", new Float3(length, 1f, 60f), Floor(length, 60f), new Float3(StationSpacing * (StationCount - 1) * 0.5f, -0.5f, 0f)));
@@ -151,9 +151,9 @@ public sealed class RenderingShowcaseGame : StationGame
         float day = Saturate((height + 0.05f) / 0.25f);
         float warm = Saturate(1f - height * 2.5f);
         _sun.Color = Lerp(new Color(1f, 0.97f, 0.92f, 1f), new Color(1f, 0.55f, 0.25f, 1f), warm);
-        _sun.Intensity = 0.6f * day * _sunStrength;
+        _sun.Intensity = 100000f * day * _sunStrength;
 
-        SampleScene.Environment.Ambient.Intensity = (0.08f + 0.92f * day) * _ambientStrength;
+        SampleScene.Environment.Ambient.Intensity = (1600f + 18400f * day) * _ambientStrength;
     }
 
     public override string Stats
@@ -223,7 +223,7 @@ public sealed class RenderingShowcaseGame : StationGame
         Toggle(paper, font, "Bloom", _bloom.Active, v => _bloom.Active = v);
         Slider(paper, font, "Bloom intensity", _bloom.Intensity, 0f, 2f, v => _bloom.Intensity.Value = v);
         Toggle(paper, font, "Volumetric fog", _fog.Enabled, v => _fog.Enabled.Value = v);
-        Cycle(paper, font, "Tonemapper", MainCamera.Tonemapping, v => MainCamera.Tonemapping = v);
+        Cycle(paper, font, "Tonemapper", _tonemapping.Mode.Value, v => _tonemapping.Mode.Value = v);
     }
 
     // ----------------------------------------------------------------
@@ -274,19 +274,22 @@ public sealed class RenderingShowcaseGame : StationGame
         AddStation("Surface maps", "Three panels built from generated textures. Bricks use albedo, a normal map and a parallax height map. The panel is worn paint over metal, with metallic and roughness painted into its surface texture. The last one glows from an emission map.", c, new Float3(0f, 2.5f, -8f), 1.8f);
 
         _bricks = Lit(Color.White, 0f, 0.9f)
-            .With("_MainTex", Load<Texture2D>("Textures/Bricks"))
-            .With("_NormalTex", Load<Texture2D>("Textures/Bricks Normal"))
-            .With("_ParallaxMap", Load<Texture2D>("Textures/Bricks Height"));
-        _bricks.SetFloat("_Parallax", _parallax);
+            .With("base_color_map", Load<Texture2D>("Textures/Bricks"))
+            .With("geometry_normal_map", Load<Texture2D>("Textures/Bricks Normal"))
+            .With("geometry_height_map", Load<Texture2D>("Textures/Bricks Height"));
+        _bricks.SetFloat("height_scale", _parallax);
         Add(Model("Bricks", Mesh.CreateCube(new Float3(2.5f, 2.5f, 0.2f)), _bricks, c + new Float3(-3f, 1.6f, 0f)));
 
         _panel = Lit(Color.White, 1f, 1f)
-            .With("_MainTex", Load<Texture2D>("Textures/Worn Panel"))
-            .With("_SurfaceTex", Load<Texture2D>("Textures/Worn Panel Surface"))
-            .With("_NormalTex", Load<Texture2D>("Textures/Worn Panel Normal"));
+            .With("base_color_map", Load<Texture2D>("Textures/Worn Panel"))
+            .With("specular_roughness_map", Load<Texture2D>("Textures/Worn Panel Surface"))
+            .With("base_metalness_map", Load<Texture2D>("Textures/Worn Panel Surface"))
+            .With("geometry_normal_map", Load<Texture2D>("Textures/Worn Panel Normal"));
+        _panel.SetTextureChannel("specular_roughness_map", 1);
+        _panel.SetTextureChannel("base_metalness_map", 2);
         Add(Model("Worn Panel", Mesh.CreateCube(new Float3(2.5f, 2.5f, 0.2f)), _panel, c + new Float3(0f, 1.6f, 0f)));
 
-        Add(Model("Circuit", Mesh.CreateCube(new Float3(2.5f, 2.5f, 0.2f)), Lit(new Color(0.02f, 0.05f, 0.03f, 1f), 0f, 0.4f).Emissive(Color.White, 4f).With("_EmissionTex", Load<Texture2D>("Textures/Circuit Emission")), c + new Float3(3f, 1.6f, 0f)));
+        Add(Model("Circuit", Mesh.CreateCube(new Float3(2.5f, 2.5f, 0.2f)), Lit(new Color(0.02f, 0.05f, 0.03f, 1f), 0f, 0.4f).Emissive(Color.White, 80000f).With("emission_color_map", Load<Texture2D>("Textures/Circuit Emission")), c + new Float3(3f, 1.6f, 0f)));
     }
 
     private void SurfaceControls(Paper paper, FontFile font)
@@ -296,10 +299,10 @@ public sealed class RenderingShowcaseGame : StationGame
         {
             _normalMaps = v;
             Texture2D flat = Texture2D.LoadDefault(DefaultTexture.Normal);
-            _bricks.SetTexture("_NormalTex", v ? Load<Texture2D>("Textures/Bricks Normal") : flat);
-            _panel.SetTexture("_NormalTex", v ? Load<Texture2D>("Textures/Worn Panel Normal") : flat);
+            _bricks.SetTexture("geometry_normal_map", v ? Load<Texture2D>("Textures/Bricks Normal") : flat);
+            _panel.SetTexture("geometry_normal_map", v ? Load<Texture2D>("Textures/Worn Panel Normal") : flat);
         });
-        Slider(paper, font, "Parallax height", _parallax, 0f, 0.1f, v => { _parallax = v; _bricks.SetFloat("_Parallax", v); }, "0.000");
+        Slider(paper, font, "Parallax height", _parallax, 0f, 0.1f, v => { _parallax = v; _bricks.SetFloat("height_scale", v); }, "0.000");
     }
 
     // ----------------------------------------------------------------
@@ -374,11 +377,13 @@ public sealed class RenderingShowcaseGame : StationGame
     {
         AddStation("Transparency", "Leaf cards use the cutout shader, which drops pixels below an alpha threshold and still casts shaped shadows. The colored panes blend with the transparent shader, the flag is a double sided plane, and the sphere bends what is behind it with the refraction shader.", c, new Float3(0f, 2.5f, -9f), 1.5f);
 
-        Add(Model("Checker Wall", Mesh.CreateCube(new Float3(12f, 4f, 0.2f)), Lit(Color.White, 0f, 0.8f).With("_MainTex", Load<Texture2D>("Textures/Checker")), c + new Float3(0f, 2f, 3f)));
+        Add(Model("Checker Wall", Mesh.CreateCube(new Float3(12f, 4f, 0.2f)), Lit(Color.White, 0f, 0.8f).With("base_color_map", Load<Texture2D>("Textures/Checker")), c + new Float3(0f, 2f, 3f)));
 
         // Cutout leaves on crossed cards.
-        Material leafMaterial = Lit(Color.White, 0f, 0.7f, SurfaceType.Cutout, SurfaceCull.Off).With("_MainTex", Load<Texture2D>("Textures/Leaves"));
-        leafMaterial.SetFloat("_AlphaCutoff", 0.5f);
+        Material leafMaterial = Lit(Color.White, 0f, 0.7f, SurfaceType.Cutout, SurfaceCull.Off).With("base_color_map", Load<Texture2D>("Textures/Leaves"));
+        leafMaterial.SetFloat("alpha_cutoff", 0.5f);
+        leafMaterial.SetTexture("geometry_opacity_map", Load<Texture2D>("Textures/Leaves"));
+        leafMaterial.SetTextureChannel("geometry_opacity_map", 3);
         for (int i = 0; i < 2; i++)
             Add(Model("Leaf Card", Plane(3f, 3f), leafMaterial, c + new Float3(-4f, 1.5f, 0f), new Float3(90f, 45f + i * 90f, 0f)));
 
@@ -390,7 +395,7 @@ public sealed class RenderingShowcaseGame : StationGame
 
         // A double sided flag, readable from both sides.
         Add(Model("Flag Pole", Mesh.CreateCylinder(0.04f, 3f, 8), _dark, c + new Float3(1.8f, 1.5f, 0f)));
-        Add(Model("Flag", Plane(1.6f, 1f), Lit(Color.White, 0f, 0.8f, SurfaceType.Opaque, SurfaceCull.Off).With("_MainTex", Load<Texture2D>("Textures/Flag")), c + new Float3(2.6f, 2.4f, 0f), new Float3(-90f, 0f, 0f)));
+        Add(Model("Flag", Plane(1.6f, 1f), Lit(Color.White, 0f, 0.8f, SurfaceType.Opaque, SurfaceCull.Off).With("base_color_map", Load<Texture2D>("Textures/Flag")), c + new Float3(2.6f, 2.4f, 0f), new Float3(-90f, 0f, 0f)));
 
         // Refraction bends the scene behind the sphere.
         var refraction = new Material(Shader.LoadDefault(DefaultShader.Refraction));
@@ -403,8 +408,8 @@ public sealed class RenderingShowcaseGame : StationGame
     //  5  Lights
     // ----------------------------------------------------------------
 
-    private Light _orbitLight = null!;
-    private Light _spotLight = null!;
+    private PointLight _orbitLight = null!;
+    private SpotLight _spotLight = null!;
     private GameObject _orbitBulb = null!;
 
     private void BuildLights(Float3 c)
@@ -420,11 +425,10 @@ public sealed class RenderingShowcaseGame : StationGame
 
         Color warm = new(1f, 0.6f, 0.25f, 1f);
         GameObject orbit = Add(Model("Orbit Light", Mesh.CreateSphere(0.12f, 8, 12), Unlit(new Color(4f, 2.4f, 1f, 1f)), c + new Float3(4.5f, 1.2f, 0f)));
-        _orbitLight = orbit.AddComponent<Light>();
-        _orbitLight.Type = LightType.Point;
+        _orbitLight = orbit.AddComponent<PointLight>();
         _orbitLight.Color = warm;
         _orbitLight.Range = 14f;
-        _orbitLight.Intensity = 6f;
+        _orbitLight.Intensity = 950000f;
         _orbitLight.ShadowResolution = ShadowResolution._1024;
         _orbitLight.ShadowFilter = ShadowFilter.ContactHardening;
         _orbitLight.SourceRadius = 0.12f;
@@ -434,13 +438,12 @@ public sealed class RenderingShowcaseGame : StationGame
         orbiter.Radius = 4.5f;
 
         var spot = new GameObject("Spot Light");
-        _spotLight = spot.AddComponent<Light>();
-        _spotLight.Type = LightType.Spot;
+        _spotLight = spot.AddComponent<SpotLight>();
         _spotLight.Color = new Color(0.4f, 0.65f, 1f, 1f);
         _spotLight.Range = 20f;
-        _spotLight.Intensity = 40f;
-        _spotLight.OuterAngle = 35f;
-        _spotLight.InnerAngle = 25f;
+        _spotLight.Intensity = 6300000f;
+        _spotLight.SpotAngle = 70f;
+        _spotLight.SpotSoftness = 1f - 25f / 35f;
         _spotLight.ShadowResolution = ShadowResolution._1024;
         _spotLight.ShadowFilter = ShadowFilter.ContactHardening;
         _spotLight.SourceRadius = 0.2f;
@@ -465,14 +468,16 @@ public sealed class RenderingShowcaseGame : StationGame
         Toggle(paper, font, "Spot shadows", _spotLight.CastShadows, v => _spotLight.CastShadows = v);
         Cycle(paper, font, "Spot shadow filter", _spotLight.ShadowFilter, v => _spotLight.ShadowFilter = v);
         Slider(paper, font, "Spot light size", _spotLight.SourceRadius, 0.01f, 0.6f, v => _spotLight.SourceRadius = v, "0.00", 1);
-        Slider(paper, font, "Spot angle", _spotLight.OuterAngle, 10f, 80f, v => { _spotLight.OuterAngle = v; _spotLight.InnerAngle = v * 0.7f; }, "0");
+        Slider(paper, font, "Spot angle", _spotLight.SpotAngle, 20f, 160f, v => _spotLight.SpotAngle = v, "0");
     }
 
     // ----------------------------------------------------------------
     //  6  Area lights
     // ----------------------------------------------------------------
 
-    private Light _rectLight = null!, _diskLight = null!, _tubeLight = null!;
+    private RectLight _rectLight = null!;
+    private DiskLight _diskLight = null!;
+    private TubeLight _tubeLight = null!;
     private GameObject _rectPanel = null!, _diskPanel = null!, _tubePanel = null!;
 
     private void BuildAreaLights(Float3 c)
@@ -488,29 +493,29 @@ public sealed class RenderingShowcaseGame : StationGame
         }
 
         // The rectangle and the disk shine along Forward, the tube lies along it
-        (_rectLight, _rectPanel) = AddAreaLight(LightType.Rect, new Color(1f, 0.85f, 0.7f, 1f), c + new Float3(0f, 1.6f, 3.5f), Quaternion.LookRotation(-Float3.UnitZ, Float3.UnitY), Mesh.CreateCube(Float3.One));
+        (_rectLight, _rectPanel) = AddAreaLight<RectLight>(new Color(1f, 0.85f, 0.7f, 1f), c + new Float3(0f, 1.6f, 3.5f), Quaternion.LookRotation(-Float3.UnitZ, Float3.UnitY), Mesh.CreateCube(Float3.One));
         _rectLight.Width = 4f;
         _rectLight.Height = 1.6f;
 
-        (_diskLight, _diskPanel) = AddAreaLight(LightType.Disk, new Color(0.6f, 0.8f, 1f, 1f), c + new Float3(-3.5f, 3.2f, -0.2f), Quaternion.LookRotation(-Float3.UnitY, Float3.UnitZ), Mesh.CreateCylinder(0.5f, 1f, 48));
-        _diskLight.Width = 1.6f;
+        (_diskLight, _diskPanel) = AddAreaLight<DiskLight>(new Color(0.6f, 0.8f, 1f, 1f), c + new Float3(-3.5f, 3.2f, -0.2f), Quaternion.LookRotation(-Float3.UnitY, Float3.UnitZ), Mesh.CreateCylinder(0.5f, 1f, 48));
+        _diskLight.Diameter = 1.6f;
 
-        (_tubeLight, _tubePanel) = AddAreaLight(LightType.Tube, new Color(1f, 0.35f, 0.75f, 1f), c + new Float3(0.5f, 0.3f, -2.6f), Quaternion.LookRotation(Float3.UnitX, Float3.UnitY), Mesh.CreateCylinder(0.5f, 1f, 24));
+        (_tubeLight, _tubePanel) = AddAreaLight<TubeLight>(new Color(1f, 0.35f, 0.75f, 1f), c + new Float3(0.5f, 0.3f, -2.6f), Quaternion.LookRotation(Float3.UnitX, Float3.UnitY), Mesh.CreateCylinder(0.5f, 1f, 24));
         _tubeLight.Length = 5f;
-        _tubeLight.SourceRadius = 0.05f;
+        _tubeLight.Radius = 0.05f;
         UpdateAreaPanels();
     }
 
     // A light and the unlit shape that shows where it is, kept apart so the shape can be scaled to the light's size
-    private (Light, GameObject) AddAreaLight(LightType type, Color color, Float3 position, Quaternion rotation, Mesh shape)
+    private (T, GameObject) AddAreaLight<T>(Color color, Float3 position, Quaternion rotation, Mesh shape) where T : AreaLight, new()
     {
-        var go = new GameObject($"{type} Light");
+        string type = typeof(T).Name;
+        var go = new GameObject(type);
         go.Transform.Position = position;
         go.Transform.Rotation = rotation;
-        Light light = go.AddComponent<Light>();
-        light.Type = type;
+        T light = go.AddComponent<T>();
         light.Color = color;
-        light.Intensity = 6f;
+        light.Intensity = 950000f;
         light.Range = 12f;
         Add(go);
         GameObject panel = Add(Model($"{type} Shape", shape, Unlit(new Color(color.R * 6f, color.G * 6f, color.B * 6f, 1f)), position));
@@ -521,11 +526,11 @@ public sealed class RenderingShowcaseGame : StationGame
     {
         _rectPanel.Transform.Rotation = _rectLight.Transform.Rotation;
         _rectPanel.Transform.LocalScale = new Float3(_rectLight.Width, _rectLight.Height, 0.02f);
-        _diskPanel.Transform.LocalScale = new Float3(_diskLight.Width, 0.02f, _diskLight.Width);
+        _diskPanel.Transform.LocalScale = new Float3(_diskLight.Diameter, 0.02f, _diskLight.Diameter);
         _tubePanel.Transform.LocalEulerAngles = new Float3(0f, 0f, 90f);
-        float thickness = Maths.Max(_tubeLight.SourceRadius * 2f, 0.02f);
+        float thickness = Maths.Max(_tubeLight.Radius * 2f, 0.02f);
         _tubePanel.Transform.LocalScale = new Float3(thickness, _tubeLight.Length, thickness);
-        foreach ((Light light, GameObject panel) in new[] { (_rectLight, _rectPanel), (_diskLight, _diskPanel), (_tubeLight, _tubePanel) })
+        foreach ((Light light, GameObject panel) in new (Light, GameObject)[] { (_rectLight, _rectPanel), (_diskLight, _diskPanel), (_tubeLight, _tubePanel) })
             panel.Enabled = light.GameObject.Enabled;
     }
 
@@ -535,18 +540,18 @@ public sealed class RenderingShowcaseGame : StationGame
         Toggle(paper, font, "On", _rectLight.GameObject.Enabled, v => { _rectLight.GameObject.Enabled = v; UpdateAreaPanels(); });
         Slider(paper, font, "Width", _rectLight.Width, 0.2f, 8f, v => { _rectLight.Width = v; UpdateAreaPanels(); }, "0.0");
         Slider(paper, font, "Height", _rectLight.Height, 0.2f, 3f, v => { _rectLight.Height = v; UpdateAreaPanels(); }, "0.0");
-        Slider(paper, font, "Intensity", _rectLight.Intensity, 0f, 20f, v => _rectLight.Intensity = v, "0.0");
+        Slider(paper, font, "Intensity", _rectLight.Intensity, 0f, 3000000f, v => _rectLight.Intensity = v, "0");
 
         Header(paper, font, "Disk", 1);
         Toggle(paper, font, "On", _diskLight.GameObject.Enabled, v => { _diskLight.GameObject.Enabled = v; UpdateAreaPanels(); }, 1);
-        Slider(paper, font, "Diameter", _diskLight.Width, 0.2f, 4f, v => { _diskLight.Width = v; UpdateAreaPanels(); }, "0.0", 1);
-        Slider(paper, font, "Intensity", _diskLight.Intensity, 0f, 20f, v => _diskLight.Intensity = v, "0.0", 1);
+        Slider(paper, font, "Diameter", _diskLight.Diameter, 0.2f, 4f, v => { _diskLight.Diameter = v; UpdateAreaPanels(); }, "0.0", 1);
+        Slider(paper, font, "Intensity", _diskLight.Intensity, 0f, 3000000f, v => _diskLight.Intensity = v, "0", 1);
 
         Header(paper, font, "Tube", 2);
         Toggle(paper, font, "On", _tubeLight.GameObject.Enabled, v => { _tubeLight.GameObject.Enabled = v; UpdateAreaPanels(); }, 2);
         Slider(paper, font, "Length", _tubeLight.Length, 0.2f, 8f, v => { _tubeLight.Length = v; UpdateAreaPanels(); }, "0.0", 2);
-        Slider(paper, font, "Radius", _tubeLight.SourceRadius, 0f, 0.3f, v => { _tubeLight.SourceRadius = v; UpdateAreaPanels(); }, "0.00", 2);
-        Slider(paper, font, "Intensity", _tubeLight.Intensity, 0f, 20f, v => _tubeLight.Intensity = v, "0.0", 2);
+        Slider(paper, font, "Radius", _tubeLight.Radius, 0f, 0.3f, v => { _tubeLight.Radius = v; UpdateAreaPanels(); }, "0.00", 2);
+        Slider(paper, font, "Intensity", _tubeLight.Intensity, 0f, 3000000f, v => _tubeLight.Intensity = v, "0", 2);
     }
 
     // ----------------------------------------------------------------
@@ -568,11 +573,10 @@ public sealed class RenderingShowcaseGame : StationGame
         {
             Color color = Hsv(Sample.Rng.NextSingle(), 0.75f, 1f);
             GameObject go = Model("Wandering Light", bulb, Unlit(new Color(color.R * 4f, color.G * 4f, color.B * 4f, 1f)), c);
-            Light light = go.AddComponent<Light>();
-            light.Type = LightType.Point;
+            PointLight light = go.AddComponent<PointLight>();
             light.Color = color;
             light.Range = 1.25f;
-            light.Intensity = 1.5f;
+            light.Intensity = 240000f;
             light.CastShadows = false;
             Wanderer wanderer = go.AddComponent<Wanderer>();
             wanderer.Center = c + new Float3(0f, 0.5f, 0f);
@@ -606,13 +610,12 @@ public sealed class RenderingShowcaseGame : StationGame
         for (int i = 0; i < beams.Length; i++)
         {
             var go = new GameObject("Beam");
-            Light spot = go.AddComponent<Light>();
-            spot.Type = LightType.Spot;
+            SpotLight spot = go.AddComponent<SpotLight>();
             spot.Color = beams[i];
             spot.Range = 14f;
-            spot.Intensity = 30f;
-            spot.OuterAngle = 25f;
-            spot.InnerAngle = 15f;
+            spot.Intensity = 4700000f;
+            spot.SpotAngle = 50f;
+            spot.SpotSoftness = 1f - 15f / 25f;
             go.AddComponent<FogLight>().IntensityMultiplier = 4f;
             go.Transform.Position = c + new Float3((i - 1) * 5f, 8f, 1f);
             Sweep sweep = go.AddComponent<Sweep>();
@@ -692,7 +695,6 @@ public sealed class RenderingShowcaseGame : StationGame
         _instancedWave = instanced.AddComponent<InstancedWave>();
         _instancedWave.Mesh = cube;
         _instancedWave.Material = Lit(Color.White, 0.5f, 0.35f);
-        _instancedWave.Material.SetInt("_InstanceTint", 1);
         _instancedWave.Side = side;
         _instancedWave.Spacing = 0.45f;
         _cubeRoot.Enabled = false;
@@ -722,13 +724,17 @@ public sealed class RenderingShowcaseGame : StationGame
 
     private void BuildRenderTextures(Float3 c)
     {
-        AddStation("Render textures", "The camera on the pole renders into a texture every frame, before the main camera, and the monitor shows that texture with an unlit material. Fly in front of the security camera to see yourself.", c, new Float3(0f, 3f, -9f), 1.8f);
+        AddStation("Render textures", "The camera on the pole renders into a texture every frame, before the main camera, and the monitor shows that texture with an unlit material. The feed is HDR light at a fixed exposure, and the monitor gives back the light the camera saw, so the main camera exposes and tonemaps it once and it matches the view around it. Fly in front of the security camera to see yourself.", c, new Float3(0f, 3f, -9f), 1.8f);
 
-        var target = new RenderTexture(512, 288, true, [TextureFormat.RGBA8]);
+        // Scene light pre-exposed by the security camera, kept linear and unclamped
+        var target = new RenderTexture(512, 288, true, [TextureFormat.RGBA16Float]);
 
         GameObject pole = Add(Model("Pole", Mesh.CreateCylinder(0.06f, 3f, 8), _dark, c + new Float3(-4f, 1.5f, 3f)));
         GameObject head = Model("Security Camera", Mesh.CreateCube(new Float3(0.3f, 0.3f, 0.6f)), Lit(new Color(0.6f, 0.6f, 0.6f, 1f), 0.5f, 0.4f), c + new Float3(-4f, 3.1f, 3f));
         Camera security = head.AddComponent<Camera>();
+        // No tonemapping or auto exposure, so the texture holds scene light times a known exposure
+        security.Profile = new VolumeProfile { Name = "Security Camera Profile" };
+        security.EV100 = 14f;
         security.Target = target;
         security.Depth = -2;
         security.FieldOfView = 70f;
@@ -737,8 +743,10 @@ public sealed class RenderingShowcaseGame : StationGame
         pan.Center = 150f;
         head.SetParent(pole);
 
+        // One over the security camera's exposure turns its texels back into the nits it saw
         Material screen = Unlit(Color.White);
-        screen.SetTexture("_MainTex", target.MainTexture);
+        screen.SetTexture("base_color_map", target.MainTexture);
+        screen.SetFloat("emission_luminance", 1.2f * MathF.Pow(2f, security.EV100));
         Add(Model("Monitor Frame", Mesh.CreateCube(new Float3(3.4f, 2f, 0.15f)), _dark, c + new Float3(2f, 1.8f, 2f)));
         Add(Model("Monitor Screen", Plane(3.2f, 1.8f), screen, c + new Float3(2f, 1.8f, 1.92f), new Float3(-90f, 0f, 0f)));
 

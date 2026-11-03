@@ -135,7 +135,7 @@ public sealed class UISceneEditor : SceneTool
     {
         HandleContext ctx = toolCtx.Handles;
         Scene scene = toolCtx.Scene;
-        if (_target == null)
+        if (_target.IsNotValid())
             return;
 
         // Revert overlay preview if play mode starts while we're active.
@@ -144,7 +144,7 @@ public sealed class UISceneEditor : SceneTool
 
         RectTransform? rt = _target.GameObject.RectTransform;
         GameCanvas? canvas = _target.GetCanvas();
-        if (rt == null || canvas == null)
+        if (rt.IsNotValid() || canvas.IsNotValid())
         {
             _hover = Handle.None;
             _active = Handle.None;
@@ -275,7 +275,7 @@ public sealed class UISceneEditor : SceneTool
                     // Released without dragging: treat as a selection click, not a move -> select the
                     // top-most element under the cursor (the one in front), leaving the rect untouched.
                     GameObject? topMost = UIPicker.Pick(scene, ctx.MouseRay);
-                    if (topMost != null && !ReferenceEquals(topMost, _target.GameObject))
+                    if (topMost.IsValid() && !ReferenceEquals(topMost, _target.GameObject))
                     {
                         if (ctx.Ctrl) Selection.ToggleSelection(topMost);
                         else Selection.Select(topMost);
@@ -620,7 +620,7 @@ public sealed class UISceneEditor : SceneTool
         RectTransform? parent = parentGo.IsValid() && !ReferenceEquals(parentGo, canvas.GameObject)
             ? parentGo.RectTransform
             : null;
-        return parent != null ? parent.ComputedRect : canvas.RootRect;
+        return parent.IsValid() ? parent.ComputedRect : canvas.RootRect;
     }
 
     private void RegisterUndo(GameObject go, LayoutState before, LayoutState after)
@@ -630,8 +630,8 @@ public sealed class UISceneEditor : SceneTool
 
         Guid id = go.Identifier;
         Undo.RegisterAction("Modify UI Rect",
-            () => { GameObject? go = Undo.FindGO(id); RectTransform? rt = go.IsValid() ? go.RectTransform : null; if (rt != null) before.ApplyTo(rt); },
-            () => { GameObject? go = Undo.FindGO(id); RectTransform? rt = go.IsValid() ? go.RectTransform : null; if (rt != null) after.ApplyTo(rt); });
+            () => { GameObject? go = Undo.FindGO(id); RectTransform? rt = go.IsValid() ? go.RectTransform : null; if (rt.IsValid()) before.ApplyTo(rt); },
+            () => { GameObject? go = Undo.FindGO(id); RectTransform? rt = go.IsValid() ? go.RectTransform : null; if (rt.IsValid()) after.ApplyTo(rt); });
     }
 
 }

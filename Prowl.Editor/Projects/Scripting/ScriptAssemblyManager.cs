@@ -103,7 +103,7 @@ public static class ScriptAssemblyManager
         var report = new CompileReport(success, reloaded, durationMs, diagnostics ?? [], DateTime.UtcNow);
         LastCompile = report;
         try { CompileFinished?.Invoke(report); }
-        catch (Exception ex) { Runtime.Debug.LogError($"[ScriptAssemblyManager] A CompileFinished handler threw: {ex}"); }
+        catch (Exception ex) { Debug.LogException($"[ScriptAssemblyManager] A CompileFinished handler threw", ex); }
     }
 
     /// <summary>Pending-recompile flag, so tests can assert that a change asked for one.</summary>
@@ -253,7 +253,7 @@ public static class ScriptAssemblyManager
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogError($"[ScriptAssemblyManager] Hot-reload threw: {ex.Message}\n{ex.StackTrace}");
+            Debug.LogException($"[ScriptAssemblyManager] Hot-reload threw", ex);
         }
 
         // The migration failed. The old assemblies are still the active set (the commit only happens on
@@ -485,7 +485,7 @@ public static class ScriptAssemblyManager
             // BEFORE committing the new context as active, so a mid-migration throw leaves the old assemblies
             // as the active set - the editor then keeps running on the old code. The walk also migrates the
             // editor's own references into the scene (selection, inspector, hierarchy), so no repointing needed.
-            if (scene != null)
+            if (scene.IsValid())
             {
                 var pairs = new List<(Assembly, Assembly)>();
                 foreach (Assembly? oldAsm in oldAssemblies)
@@ -521,7 +521,7 @@ public static class ScriptAssemblyManager
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogError($"[ScriptAssemblyManager] Migration hot-reload failed: {ex.Message}\n{ex.StackTrace}");
+            Debug.LogException($"[ScriptAssemblyManager] Migration hot-reload failed", ex);
             return false;
         }
     }
@@ -550,7 +550,7 @@ public static class ScriptAssemblyManager
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogError($"[ScriptAssemblyManager] Initial script load failed: {ex.Message}\n{ex.StackTrace}");
+            Debug.LogException($"[ScriptAssemblyManager] Initial script load failed", ex);
             return false;
         }
     }

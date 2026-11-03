@@ -1,3 +1,4 @@
+using Prowl.Runtime;
 using Prowl.Runtime.Audio;
 
 namespace Prowl.Editor.Importers;
@@ -30,7 +31,7 @@ public class AudioMixerImporter : AssetImporter
         {
             AudioMixerGroup group = mixer.Groups[i];
 
-            if (group == null) continue;
+            if (group.IsNotValid()) continue;
 
             // Recorded before the sub-asset is registered, so it is part of what gets cached for the
             // group. Without it a group loaded on its own cannot tell what it feeds into.

@@ -82,7 +82,7 @@ public class PhysicsSettings : ProjectSettingsBase
 
     private void ApplyToScene(Runtime.Resources.Scene scene)
     {
-        if (scene == null) return;
+        if (scene.IsNotValid()) return;
         scene.Physics.Gravity = new Float3(GravityX, GravityY, GravityZ);
         scene.Physics.SolverIterations = SolverIterations;
         scene.Physics.RelaxIterations = RelaxIterations;

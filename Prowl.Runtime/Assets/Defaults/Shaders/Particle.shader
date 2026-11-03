@@ -8,6 +8,9 @@ Shader "Default/Particle"
 
     // Particles and trail segments are instances of one shared object. Each instance reads its record from
     // ProwlParticleRecords and is turned to face the view here, so every view sees it square on.
+    // Not a Surface shader: the blend mode, lighting and fades are per particle system, read from its header record by
+    // one shared material, soft particles read the scene depth, and frame blending needs more varyings than a surface
+    // vertex carries. Lit particles go through Graphite's PBR closure like every lit surface.
     // Custom1.x is the draw's header record, custom1.y its view's sort order plus one (0 draws in record order).
     // Premultiplied output serves every blend mode from one state: additive writes zero alpha.
     Pass
@@ -29,7 +32,7 @@ Shader "Default/Particle"
             out vec2 vUV1;
             out float vFrameBlend;
             out vec4 vColor;
-            out vec3 vWorldPos;
+            out vec3 vRelativePos;
             out vec3 vNormal;
             out vec4 vCustom;
             flat out vec4 vShading;
@@ -99,7 +102,7 @@ Shader "Default/Particle"
                     // Segments meeting at a point build the same edge there, so the strip has no seams.
                     float end = clamp(vertex.x + 0.5, 0.0, 1.0);
                     vec3 local = mix(r0.xyz, r1.xyz, end);
-                    vec3 point = Graphite_ObjectToWorld(local);
+                    vec3 point = Graphite_ObjectToRelative(local);
                     float width = mix(r0.w, r1.w, end);
                     vec3 tangent = normalize(mix(r2.xyz, r3.xyz, end));
                     vec3 toCamera = SafeNormalize(-point, towardCamera);
@@ -108,8 +111,8 @@ Shader "Default/Particle"
                     side = sideLength > 1e-5 ? side / sideLength : normalize(cross(tangent, abs(tangent.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
 
                     vec3 offset = side * (vertex.y * width);
-                    vWorldPos = point + offset;
-                    gl_Position = Graphite_RelativeToClip(vWorldPos);
+                    vRelativePos = point + offset;
+                    gl_Position = Graphite_RelativeToClip(vRelativePos);
                     Graphite_SetPreviousPosition(local + offset);
                     vNormal = toCamera;
                     vUV0 = vec2(mix(r2.w, r3.w, end), vertexTexCoord0.y);
@@ -121,7 +124,7 @@ Shader "Default/Particle"
                 }
 
                 // A particle: position, velocity, signed size (negative is mirrored), rotation, color, frame data
-                vec3 position = Graphite_ObjectToWorld(r0.xyz);
+                vec3 position = Graphite_ObjectToRelative(r0.xyz);
                 vec3 velocity = r1.xyz;
                 vec2 size = vec2(r0.w, r1.w);
                 vec4 rotation = r2;
@@ -129,7 +132,7 @@ Shader "Default/Particle"
                 float angle = r5.y;
                 int renderMode = int(h0.y + 0.5);
                 int alignment = int(h0.z + 0.5);
-                vec3 world;
+                vec3 relative;
                 vec3 normal;
 
                 if (renderMode == 4)
@@ -144,7 +147,7 @@ Shader "Default/Particle"
                         turned = look * turned;
                         turnedNormal = look * turnedNormal;
                     }
-                    world = position + turned;
+                    relative = position + turned;
                     normal = turnedNormal;
                 }
                 else
@@ -221,13 +224,13 @@ Shader "Default/Particle"
                     }
 
                     vec3 center = position + right * (pivot.x * width) + up * (pivot.y * height) + normal * (pivot.z * sizeZ);
-                    world = center + right * (vertex.x * width) + up * (vertex.y * height) + normal * vertex.z;
+                    relative = center + right * (vertex.x * width) + up * (vertex.y * height) + normal * vertex.z;
                 }
 
-                vWorldPos = world;
+                vRelativePos = relative;
                 vNormal = normal;
-                gl_Position = Graphite_RelativeToClip(world);
-                Graphite_SetPreviousPosition(r0.xyz + (world - position));
+                gl_Position = Graphite_RelativeToClip(relative);
+                Graphite_SetPreviousPosition(r0.xyz + (relative - position));
 
                 // r4: frame (the fraction blends to the next), normalized age, custom data
                 float frame = max(r4.x, 0.0);
@@ -244,9 +247,9 @@ Shader "Default/Particle"
         }
         Fragment
         {
-            #include "Graphite/Lighting.glsl"
+            #pragma variant global PBR_TIER FULL LITE
+            #include "Graphite/PBR/Closure.glsl"
             #include "Graphite/SceneDepth.glsl"
-            #include "Prowl/Common.glsl"
 
             layout(location = 0) out vec4 fragColor;
 
@@ -254,7 +257,7 @@ Shader "Default/Particle"
             in vec2 vUV1;
             in float vFrameBlend;
             in vec4 vColor;
-            in vec3 vWorldPos;
+            in vec3 vRelativePos;
             in vec3 vNormal;
             in vec4 vCustom;
             flat in vec4 vShading;
@@ -264,14 +267,14 @@ Shader "Default/Particle"
             uniform vec4 _MainColor;
 
             // How much of the surface color survives the fog, 1 with no fog
-            float FogVisibility(vec3 worldPos)
+            float FogVisibility(vec3 relativePos)
             {
                 vec4 states = graphite_World.fogStates;
                 if (states.x + states.y + states.z < 0.5)
                     return 1.0;
 
                 vec4 params = graphite_World.fogParams;
-                float dist = length(worldPos);
+                float dist = length(relativePos);
                 float fog = 0.0;
                 fog += (dist * params.z + params.w) * states.x;
                 fog += exp2(-dist * params.y) * states.y;
@@ -296,7 +299,7 @@ Shader "Default/Particle"
                 {
                     Graphite_ViewData view = Graphite_View();
                     vec3 forward = vec3(view.view[0][2], view.view[1][2], view.view[2][2]);
-                    fade *= clamp((dot(vWorldPos, forward) - cameraFade.x) / (cameraFade.y - cameraFade.x), 0.0, 1.0);
+                    fade *= clamp((dot(vRelativePos, forward) - cameraFade.x) / (cameraFade.y - cameraFade.x), 0.0, 1.0);
                 }
 
                 if (vSoftDistance > 0.0)
@@ -307,22 +310,25 @@ Shader "Default/Particle"
                     {
                         Graphite_ViewData view = Graphite_View();
                         vec3 forward = vec3(view.view[0][2], view.view[1][2], view.view[2][2]);
-                        vec3 scene = Graphite_RelativeFromDepth(vec2(screenUV.x, 1.0 - screenUV.y), sceneDepth);
-                        fade *= clamp(dot(scene - vWorldPos, forward) / vSoftDistance, 0.0, 1.0);
+                        vec3 scene = Graphite_RelativeFromDepth(view, screenUV, sceneDepth);
+                        fade *= clamp(dot(scene - vRelativePos, forward) / vSoftDistance, 0.0, 1.0);
                     }
                 }
 
                 if (vShading.y > 0.5)
                 {
-                    vec3 viewDir = normalize(-vWorldPos);
+                    vec3 viewDir = Graphite_ViewDir(vRelativePos);
                     vec3 normal = normalize(vNormal);
                     if (dot(normal, viewDir) < 0.0)
                         normal = -normal;
-                    vec3 lighting = CalculateForwardLighting(vWorldPos, normal, viewDir, rgb, 0.0, 1.0, 1.0);
-                    rgb = rgb * CalculateAmbient(normal) + lighting;
+                    PBR_Params p = PBR_DefaultParams(normal, PBR_TangentFor(normal, vec3(1.0, 0.0, 0.0)));
+                    p.baseColor = rgb;
+                    p.specularRoughness = 1.0;
+                    PBR_Closure c = PBR_Prepare(p, vRelativePos, viewDir, normal, 0.0);
+                    rgb = PBR_ShadeLights(c) + Graphite_AmbientBRDF(c, PBR_GatherIndirect(c, vec2(0.0), PBR_FindProbes(c)));
                 }
 
-                float visibility = FogVisibility(vWorldPos);
+                float visibility = FogVisibility(vRelativePos);
 
                 if (blend == 1)
                 {
@@ -340,14 +346,14 @@ Shader "Default/Particle"
                     // Zero alpha texels can still add light, so only drop the ones that add nothing
                     if (coverage < 0.002 && max(premultiplied.r, max(premultiplied.g, premultiplied.b)) < 0.002)
                         discard;
-                    fragColor = vec4(mix(FogColor(vWorldPos) * coverage, premultiplied, visibility), coverage);
+                    fragColor = vec4(mix(Graphite_FogColor(vRelativePos) * coverage, premultiplied, visibility), coverage);
                 }
                 else
                 {
                     alpha *= fade;
                     if (alpha < 0.002)
                         discard;
-                    fragColor = vec4(mix(FogColor(vWorldPos), rgb, visibility) * alpha, alpha);
+                    fragColor = vec4(mix(Graphite_FogColor(vRelativePos), rgb, visibility) * alpha, alpha);
                 }
             }
         }

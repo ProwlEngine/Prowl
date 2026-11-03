@@ -101,6 +101,39 @@ public class AnimatorRagdollTests : RuntimeTestBase
         Assert.InRange(Float3.Distance(Part("LeftUpperLeg"), Part("LeftLowerLeg")), 0.4f, 0.5f);
     }
 
+    // Nothing drives a limp ragdoll, so once it lies still physics must be free to put it to sleep.
+    [Fact]
+    public void ALimpRagdoll_ComesToRest_AndSleeps()
+    {
+        (Scene scene, Animator animator, _) = SetupRagdoll(active: 0f);
+        scene.Physics.UseMultithreading = false;
+        var floor = new GameObject("Floor");
+        floor.Transform.Position = new Float3(0f, -0.5f, 0f);
+        floor.AddComponent<BoxCollider>().Size = new Float3(20f, 1f, 20f);
+        scene.Add(floor);
+
+        Tick(scene, 1200);
+
+        Assert.All(animator.Ragdoll!.Bodies, b => Assert.False(b.IsActive, $"{b.GameObject.Name} is still awake"));
+    }
+
+    // Standing thighs overlap in the animation, but a limp ragdoll no longer follows it, so once they part they must collide.
+    [Fact]
+    public void ALimpRagdoll_KeepsItsLegsFromPassingThroughEachOther()
+    {
+        (Scene scene, Animator animator, _) = SetupRagdoll(active: 0f);
+        scene.Physics.UseMultithreading = false;
+        var floor = new GameObject("Floor");
+        floor.Transform.Position = new Float3(0f, -0.5f, 0f);
+        floor.AddComponent<BoxCollider>().Size = new Float3(20f, 1f, 20f);
+        scene.Add(floor);
+
+        Tick(scene, 120);
+
+        Rigidbody3D Part(string name) => animator.Ragdoll!.Bodies.First(b => b.GameObject.Name == name);
+        Assert.True(scene.Physics.Collides(Part("LeftUpperLeg"), Part("RightUpperLeg")));
+    }
+
     // The puppet trails the animation by a step, but what shows is the animation moved by what physics did,
     // so a running character's shown hips stay with it.
     [Fact]
@@ -230,7 +263,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
         (Scene scene, Animator animator, GameObject root) = SetupStandingRagdoll();
         Tick(scene, 5);
         animator.GraphInstance!.SetFloat("Active", 0f);
-        Tick(scene, 120);
+        Tick(scene, 3);
         animator.GraphInstance!.SetFloat("Active", 1f);
         Tick(scene, 180);
 

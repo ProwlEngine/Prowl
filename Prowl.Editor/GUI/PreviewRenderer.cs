@@ -25,6 +25,7 @@ public class PreviewRenderer : IDisposable
     private Scene _scene;
     private GameObject _cameraGo;
     private Camera _camera;
+    private ulong _renderedFrame = ulong.MaxValue;
     private GameObject _lightGo;
     private GameObject? _subjectGo;
     private RenderTexture? _rt;
@@ -81,16 +82,15 @@ public class PreviewRenderer : IDisposable
         _camera.FarClipPlane = 100f;
         _camera.Background = CameraBackground.Skybox;
         _camera.StereoTargetEye = StereoTargetEyeMask.None;
+        _camera.Profile = VolumeProfile.CreateCameraDefault("Preview Profile");
+        _camera.Profile.Get<AutoExposure>()!.Enabled.Set(false);
         _scene.Add(_cameraGo);
 
         // Light
         _lightGo = new GameObject("PreviewLight");
         _lightGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         _lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
-        Light light = _lightGo.AddComponent<Light>();
-        light.Type = LightType.Directional;
-        light.Intensity = 1f;
-        light.CastShadows = false;
+        _lightGo.AddComponent<DirectionalLight>().CastShadows = false;
         _scene.Add(_lightGo);
 
         _scene.Enable();
@@ -103,7 +103,7 @@ public class PreviewRenderer : IDisposable
     public void SetupForMesh(Mesh mesh, Material? material = null)
     {
         ClearSubject();
-        if (mesh == null) return;
+        if (mesh.IsNotValid()) return;
 
         _subjectGo = new GameObject("PreviewSubject");
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
@@ -176,10 +176,10 @@ public class PreviewRenderer : IDisposable
     public void SetupForPrefab(PrefabAsset prefab)
     {
         ClearSubject();
-        if (prefab == null) return;
+        if (prefab.IsNotValid()) return;
 
         _subjectGo = GameObject.InstantiateDetached(prefab);
-        if (_subjectGo == null) { _subjectGo = new GameObject("PreviewSubject"); return; }
+        if (_subjectGo.IsNotValid()) { _subjectGo = new GameObject("PreviewSubject"); return; }
         _subjectGo.Name = "PreviewSubject";
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
 
@@ -225,14 +225,14 @@ public class PreviewRenderer : IDisposable
     public void SetupForMaterial(Material material)
     {
         ClearSubject();
-        if (material == null) return;
+        if (material.IsNotValid()) return;
 
         _subjectGo = new GameObject("PreviewSubject");
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
         MeshRenderer renderer = _subjectGo.AddComponent<MeshRenderer>();
         renderer.Mesh = Mesh.CreateSphere(0.5f, 32, 32);
 
-        if (material.Shader == null || !material.Shader.IsValid())
+        if (material.Shader.IsNotValid())
             material.Shader = Shader.LoadDefault(DefaultShader.Lit);
         renderer.Material = material;
 
@@ -246,7 +246,7 @@ public class PreviewRenderer : IDisposable
     /// <summary>Render the preview to the RenderTexture.</summary>
     public void Render()
     {
-        if (_rt == null) return;
+        if (_rt.IsNotValid()) return;
 
         _camera.UpdateRenderData(_rt);
 
@@ -284,10 +284,15 @@ public class PreviewRenderer : IDisposable
     public void DrawPreview(Paper paper, string id, float width, float height,
         Action<Canvas, Rect>? overlay = null, Action<Float2>? onClick = null)
     {
-        Resize((int)width, (int)height);
-        Render();
+        // Inspectors showing the same asset share this preview, and its camera may only render once a frame
+        if (_renderedFrame != Graphics.FrameIndex)
+        {
+            _renderedFrame = Graphics.FrameIndex;
+            Resize((int)width, (int)height);
+            Render();
+        }
 
-        if (_rt == null || _rt.MainTexture == null) return;
+        if (_rt.IsNotValid() || _rt.MainTexture.IsNotValid()) return;
         float round = Prowl.OrigamiUI.Origami.Current.Metrics.ContainerRounding;
 
         ElementBuilder box = paper.Box(id)
@@ -355,9 +360,9 @@ public class PreviewRenderer : IDisposable
         // Fast path for single-MeshRenderer subjects (SetupForMesh case): use the mesh's own
         // bounds directly, since there is no child hierarchy to walk and world == local at this
         // point thanks to the identity reset above.
-        if (meshRenderer != null && meshRenderer.Mesh != null && subject.Children.Count == 0)
+        if (meshRenderer.IsValid() && meshRenderer.Mesh.IsValid() && subject.Children.Count == 0)
             bounds = meshRenderer.Mesh.bounds;
-        else if (skinnedRenderer != null && skinnedRenderer.SharedMesh != null && subject.Children.Count == 0)
+        else if (skinnedRenderer.IsValid() && skinnedRenderer.SharedMesh.IsValid() && subject.Children.Count == 0)
             bounds = skinnedRenderer.SharedMesh.bounds;
         else
             bounds = ComputeHierarchyBounds(subject);
@@ -377,7 +382,7 @@ public class PreviewRenderer : IDisposable
         _avatar = null;
         _clips.Clear();
 
-        if (_subjectGo != null)
+        if (!ReferenceEquals(_subjectGo, null))
         {
             _scene.Remove(_subjectGo);
             _subjectGo.Dispose();
@@ -440,10 +445,10 @@ public class PreviewRenderer : IDisposable
     {
         // Check MeshRenderer
         MeshRenderer? mr = go.GetComponent<MeshRenderer>();
-        if (mr != null)
+        if (mr.IsValid())
         {
             Mesh? mesh = mr.Mesh;
-            if (mesh != null)
+            if (mesh.IsValid())
             {
                 AABB worldBounds = mesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
                 min = new Float3(MathF.Min(min.X, worldBounds.Min.X), MathF.Min(min.Y, worldBounds.Min.Y), MathF.Min(min.Z, worldBounds.Min.Z));
@@ -454,10 +459,10 @@ public class PreviewRenderer : IDisposable
 
         // Check SkinnedMeshRenderer
         SkinnedMeshRenderer? smr = go.GetComponent<SkinnedMeshRenderer>();
-        if (smr != null)
+        if (smr.IsValid())
         {
             Mesh? mesh = smr.SharedMesh;
-            if (mesh != null)
+            if (mesh.IsValid())
             {
                 AABB worldBounds = mesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
                 min = new Float3(MathF.Min(min.X, worldBounds.Min.X), MathF.Min(min.Y, worldBounds.Min.Y), MathF.Min(min.Z, worldBounds.Min.Z));

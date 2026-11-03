@@ -149,11 +149,15 @@ public sealed class MigrationContext
         RewriteProjectSettings(convert);
     }
 
-    public void RewriteEchoAssets(Func<EchoObject, EchoObject?> convert)
+    public void RewriteEchoAssets(Func<EchoObject, EchoObject?> convert) => RewriteEchoAssets((_, echo) => convert(echo));
+
+    /// <summary> Runs convert on every Echo asset file with the asset's GUID. Convert returns null to leave one alone. </summary>
+    public void RewriteEchoAssets(Func<Guid, EchoObject, EchoObject?> convert)
     {
         foreach (string metaPath in MetaFiles())
         {
-            string importer = ShortName(MetaFile.Read(metaPath).ImporterType);
+            MetaFileData meta = MetaFile.Read(metaPath);
+            string importer = ShortName(meta.ImporterType);
             bool binary = s_echoBinaryImporters.Contains(importer);
             if (!binary && !s_echoTextImporters.Contains(importer)) continue;
 
@@ -161,7 +165,7 @@ public sealed class MigrationContext
             if (!File.Exists(path)) continue;
 
             EchoObject echo = binary ? EchoObject.ReadFromBinary(new FileInfo(path)) : EchoObject.ReadFromString(File.ReadAllText(path));
-            if (convert(echo) is not { } result) continue;
+            if (convert(meta.Guid, echo) is not { } result) continue;
 
             if (binary) result.WriteToBinary(new FileInfo(path));
             else File.WriteAllText(path, result.WriteToString());
@@ -212,9 +216,8 @@ public sealed class MigrationContext
     /// <summary> Runs convert on the text of every asset with one of the extensions, like ".shader". </summary>
     public void RewriteText(Func<string, string> convert, params string[] extensions)
     {
-        foreach (string path in Directory.EnumerateFiles(Project.AssetsPath, "*.*", SearchOption.AllDirectories))
+        foreach (string path in AssetFiles(extensions))
         {
-            if (!extensions.Any(e => path.EndsWith(e, StringComparison.OrdinalIgnoreCase))) continue;
             string source = File.ReadAllText(path);
             string result = convert(source);
             if (result == source) continue;
@@ -222,6 +225,11 @@ public sealed class MigrationContext
             ChangedFiles.Add(path);
         }
     }
+
+    /// <summary> Every asset with one of the extensions, like ".shader". </summary>
+    public IEnumerable<string> AssetFiles(params string[] extensions)
+        => Directory.EnumerateFiles(Project.AssetsPath, "*.*", SearchOption.AllDirectories)
+            .Where(path => extensions.Any(e => path.EndsWith(e, StringComparison.OrdinalIgnoreCase)));
 
     private IEnumerable<string> MetaFiles() => Directory.EnumerateFiles(Project.AssetsPath, "*.meta", SearchOption.AllDirectories);
 

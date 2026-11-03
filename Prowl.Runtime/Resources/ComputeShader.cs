@@ -152,7 +152,8 @@ public sealed class ComputeShader : Asset
         try
         {
             ShaderPass pass = new() { State = new PassState(), Source = KernelSource(kernel), SourceName = $"{Name}/{_kernels[kernel].Name}" };
-            _programs[kernel] = Graphics.Device.ResourceFactory.CreateComputeProgram(pass.Variants(Graphics.Compiler, Graphics.Device.BackendType).RequireCompute());
+            new ShaderDefinition { Name = pass.SourceName, Passes = [pass] }.Create(Graphics.Device, Graphics.ShaderCompiler);
+            _programs[kernel] = Graphics.Device.ResourceFactory.CreateComputeProgram(pass.CompileCompute());
             _programs[kernel]!.Name = pass.SourceName;
         }
         catch (Exception ex)

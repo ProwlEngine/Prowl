@@ -28,7 +28,7 @@ public class SceneEnvironmentTests
     }
 
     [Theory]
-    [InlineData(BuiltInSky.Procedural, "_Exposure")]
+    [InlineData(BuiltInSky.Procedural, "intensity")]
     [InlineData(BuiltInSky.Gradient, "_TopColor")]
     [InlineData(BuiltInSky.Cubemap, "_Cubemap")]
     [InlineData(BuiltInSky.Panorama, "_Panorama")]
@@ -47,7 +47,7 @@ public class SceneEnvironmentTests
     {
         SceneEnvironment environment = new() { SkyMaterial = null, SkyColor = new Color(0.1f, 0.2f, 0.3f, 1) };
         environment.Ambient = new SceneEnvironment.AmbientSettings { Mode = AmbientMode.Hemisphere, Intensity = 0.5f, Color = new Color(1f, 0f, 0f, 1f), SkyColor = new Color(0f, 1f, 0f, 1f), GroundColor = new Color(0f, 0f, 1f, 1f) };
-        environment.Fog = new SceneEnvironment.FogSettings { Mode = FogMode.Linear, Color = new Color(0.4f, 0.4f, 0.4f, 1), Density = 0.03f, Start = 2, End = 30, UseSky = true };
+        environment.Fog = new SceneEnvironment.FogSettings { Mode = FogMode.Linear, Color = new Color(0.4f, 0.4f, 0.4f, 1), Intensity = 1000f, Density = 0.03f, Start = 2, End = 30, UseSky = true };
         environment.SkyCapture = new SceneEnvironment.SkyCaptureSettings { Mode = SkyCaptureMode.EveryFrame, Resolution = 100, Interval = 0 };
 
         EnvironmentDesc desc = new() { Sky = null };
@@ -58,7 +58,7 @@ public class SceneEnvironmentTests
         Assert.Equal(new Float4(1, 0, 0, 1), desc.AmbientColor);
         Assert.Equal(new Float4(0, 1, 0, 1), desc.AmbientSky);
         Assert.Equal(new Float4(0, 0, 1, 1), desc.AmbientGround);
-        Assert.Equal(new FogDesc { Mode = Prowl.Graphite.Rendering.FogMode.Linear, Color = new Float4(0.4f, 0.4f, 0.4f, 1), Density = 0.03f, Start = 2, End = 30, UseSky = true }, desc.Fog);
+        Assert.Equal(new FogDesc { Mode = Prowl.Graphite.Rendering.FogMode.Linear, Color = new Float4(400f, 400f, 400f, 1), Density = 0.03f, Start = 2, End = 30, UseSky = true }, desc.Fog);
         Assert.Equal(new Float4(0.1f, 0.2f, 0.3f, 1), desc.SkyColor);
         Assert.Null(desc.Sky);
         Assert.Equal(Prowl.Graphite.Rendering.SkyCaptureMode.EveryFrame, desc.SkyCapture);

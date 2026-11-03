@@ -87,8 +87,9 @@ public sealed class ManyLightsGame : StationGame
         SampleScene.Environment.Fog.Mode = FogMode.Off;
         SampleScene.Environment.SkyMaterial = null;
         SampleScene.Environment.SkyColor = new Color(0.004f, 0.006f, 0.012f, 1f);
+        SampleScene.Environment.Ambient.Mode = AmbientMode.Uniform;
         SampleScene.Environment.Ambient.Color = new Color(0.2f, 0.25f, 0.4f, 1f);
-        SampleScene.Environment.Ambient.Intensity = 0.04f;
+        SampleScene.Environment.Ambient.Intensity = 800f;
         MainCamera.FarClipPlane = 300f;
         CameraObject.GetComponent<FlyCamera>().Speed = 12f;
         CameraObject.GetComponent<FlyCamera>().FastSpeed = 40f;
@@ -158,11 +159,10 @@ public sealed class ManyLightsGame : StationGame
         (Float3 position, int color) = _slots[_lights.Count];
 
         GameObject go = Model("Light", _bulb, _bulbMaterials[color], position);
-        Light light = go.AddComponent<Light>();
-        light.Type = LightType.Point;
+        PointLight light = go.AddComponent<PointLight>();
         light.Color = Palette[color];
         light.Range = 6f;
-        light.Intensity = 5f;
+        light.Intensity = 800000f;
         return Static(go);
     }
 

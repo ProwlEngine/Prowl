@@ -83,8 +83,7 @@ public abstract class Game
                 // Nothing above this catches, so without it a failure here closes the window with no
                 // message at all. It is still fatal, since a half built editor is worse than none,
                 // but it is reported first.
-                Debug.LogError("An exception occurred while starting up:");
-                Debug.LogError(e.ToString());
+                Debug.LogException("An exception occurred while starting up", e);
                 throw;
             }
         };
@@ -130,9 +129,7 @@ public abstract class Game
                 Time.TimeStack.Clear();
                 Time.TimeStack.Push(time);
 
-                // Input interaction timing (Hold/Tap/MultiTap windows) is real-world timing, so it uses
-                // UNSCALED delta
-                Input.UpdateActions(Time.UnscaledDeltaTime);
+                UpdateInputActions();
 
                 BeginUpdate();
 
@@ -140,7 +137,7 @@ public abstract class Game
 
                 EndUpdate();
 
-                if (frameCounter++ % 60 == 0)
+                if (Debug.LogToConsole && (frameCounter++ % 60 == 0))
                 {
                     double fps = delta > 0 ? 1.0 / delta : 0; // real (unscaled) frame rate
                     Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {fps:F0}";
@@ -210,8 +207,7 @@ public abstract class Game
 
         void ReportLoopFailure(string loop, Exception e)
         {
-            Debug.LogError($"An exception occurred during the {loop} loop:");
-            Debug.LogError(e.ToString());
+            Debug.LogException($"An exception occurred during the {loop} loop:", e);
 
             // A game has nowhere useful to carry on to, so it still fails fast. The editor does: the
             // scene, the panels and whatever is unsaved are all still there, and taking the process
@@ -306,7 +302,7 @@ public abstract class Game
                 Time.TimeStack.Clear();
                 Time.TimeStack.Push(time);
 
-                Input.UpdateActions(Time.UnscaledDeltaTime);
+                UpdateInputActions();
 
                 BeginUpdate();
                 SimulationStep(Time.DeltaTime);
@@ -353,6 +349,23 @@ public abstract class Game
 
     /// <summary>Signals a running <see cref="RunHeadless"/> loop to exit after the current frame.</summary>
     public void RequestHeadlessQuit() => _headlessQuitRequested = true;
+
+    /// <summary>
+    /// Updates the input action maps. Shared by the windowed and headless loops.
+    /// </summary>
+    private static void UpdateInputActions()
+    {
+        // Actions are gameplay input and their callbacks are gameplay code, so in the editor they read input the
+        // way the scene update does: from the game view only, in its pixels, with simulated input included.
+        if (Application.ShouldRunGameplay)
+            Application.IsGameplayExecuting = true;
+
+        // Input interaction timing (Hold/Tap/MultiTap windows) is real-world timing, so it uses
+        // UNSCALED delta
+        Input.UpdateActions(Time.UnscaledDeltaTime);
+
+        Application.IsGameplayExecuting = false;
+    }
 
     /// <summary>
     /// Advances one simulation step: the fixed-update loop (when gameplay should run) followed by

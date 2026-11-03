@@ -89,7 +89,7 @@ public class ModelAssetEditor : ImportSettingsEditor
 
         EchoObject settings = Settings(entry);
 
-        PreviewRenderer? preview = model != null
+        PreviewRenderer? preview = model.IsValid()
             ? PreviewWidget.For(entry.Guid, showGrid: true).Get(model, p => p.SetupForPrefab(model))
             : null;
 

@@ -79,7 +79,7 @@ internal static class UIRendering
         private readonly WorldProvider _provider = new();
         private readonly OverlayFeature _feature;
         private readonly List<GameCanvas> _ordered = [];
-        private readonly List<ViewDesc> _overlayViews = [];
+        private readonly List<RenderView> _overlayViews = [];
         private readonly List<UIRenderItem> _items = [];
         private readonly List<(int Canvas, int Version)> _stamp = [];
         private readonly Dictionary<(uint, uint), OverlayDraws?> _sized = [];
@@ -100,12 +100,12 @@ internal static class UIRendering
         {
             _overlayViews.Clear();
             bool anyView = false, sceneView = false;
-            foreach (ViewDesc view in Graphics.FrameViews)
+            foreach (RenderView view in Graphics.FrameViews)
             {
                 if (view.World != _world) continue;
                 anyView = true;
                 if (view.Kind == ViewKind.SceneView) sceneView = true;
-                else if (view.Kind is ViewKind.Game or ViewKind.RenderTexture && view.LayerCount == 1) _overlayViews.Add(view);
+                else if (view.Kind is ViewKind.Game or ViewKind.RenderTexture && view.Camera.LayerCount == 1) _overlayViews.Add(view);
             }
 
             _ordered.Clear();
@@ -135,9 +135,9 @@ internal static class UIRendering
         {
             OverlayFrame frame = new();
             _sized.Clear();
-            foreach (ViewDesc view in _overlayViews)
+            foreach (RenderView view in _overlayViews)
             {
-                uint width = Math.Max(1u, (uint)MathF.Round(view.Target.Width * view.Viewport.Z * view.RenderScale));
+                uint width = Math.Max(1u, (uint)MathF.Round(view.Target!.Width * view.Viewport.Z * view.RenderScale));
                 uint height = Math.Max(1u, (uint)MathF.Round(view.Target.Height * view.Viewport.W * view.RenderScale));
                 if (!_sized.TryGetValue((width, height), out OverlayDraws? draws))
                 {
@@ -145,7 +145,7 @@ internal static class UIRendering
                     _sized[(width, height)] = draws;
                 }
                 if (draws != null)
-                    frame.Views[view.ViewId] = new OverlayView(draws);
+                    frame.Views[view] = new OverlayView(draws);
             }
 
             _stale.Clear();
@@ -480,7 +480,7 @@ internal static class UIRendering
     private sealed class OverlayFrame
     {
         public static readonly OverlayFrame Empty = new();
-        public readonly Dictionary<int, OverlayView> Views = [];
+        public readonly Dictionary<RenderView, OverlayView> Views = [];
     }
 
     /// <summary>The overlay items' geometry in one vertex and index buffer, kept while their canvases do not change.</summary>
@@ -572,19 +572,16 @@ internal static class UIRendering
         private readonly GraphicsProgram? _program;
         private readonly PropertySet _properties = new();
 
-        public OverlayFeature(Renderer renderer)
+        public OverlayFeature(Renderer renderer) : base(RenderSlot.Ui, runsOn: ViewKinds.Game | ViewKinds.RenderTexture)
         {
             _copy = renderer.CreateFullscreenProgram("void main() { outColor = Graphite_SampleSource(vUV); }", "Prowl UI Overlay Copy");
             try { _program = CreateProgram(renderer.Device); }
             catch (Exception e) { Debug.LogErrorOnce("UIRendering.Overlay", $"The UI overlay shader did not compile, so screen space UI does not draw: {e}"); }
         }
 
-        public override RenderSlot Slot => RenderSlot.Ui;
-        public override ViewKinds RunsOn => ViewKinds.Game | ViewKinds.RenderTexture;
-
         public override void Extract() => _current = Pending;
 
-        public override bool IsActive(in FeatureView view) => _program != null && view.LayerCount == 1 && _current.Views.ContainsKey(view.ViewId);
+        public override bool IsActive(in FeatureView view) => _program != null && view.LayerCount == 1 && view.RenderView != null && _current.Views.ContainsKey(view.RenderView);
 
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
 
@@ -592,7 +589,7 @@ internal static class UIRendering
         {
             // The view's image first, whatever its colour target is, then the UI over it
             context.Fullscreen(_copy);
-            if (_program == null || !_current.Views.TryGetValue(context.View.ViewId, out OverlayView? overlay)) return;
+            if (_program == null || context.View.RenderView is not { } view || !_current.Views.TryGetValue(view, out OverlayView? overlay)) return;
 
             CommandBuffer cmd = context.Command;
             cmd.SetShader(_program);
@@ -617,9 +614,9 @@ internal static class UIRendering
         private static GraphicsProgram CreateProgram(GraphicsDevice device)
         {
             ShaderDefinition definition = ShaderParser.Parse(EmbeddedResources.ReadAllText("Assets/Defaults/Shaders/UIOverlay.shader"));
-            definition.Create(device, Graphics.Compiler, new Variant(), CompileMode.All);
+            definition.Create(device, Graphics.ShaderCompiler);
             ShaderPass pass = definition.Passes![0];
-            if (!pass.GetVariant(0).TryGetDescription(device.BackendType, out ShaderDescription description))
+            if (!pass.GetVariant().TryGetDescription(device.BackendType, out ShaderDescription description))
                 throw new InvalidOperationException("The UI overlay shader did not compile.");
             description.VertexLayouts =
             [

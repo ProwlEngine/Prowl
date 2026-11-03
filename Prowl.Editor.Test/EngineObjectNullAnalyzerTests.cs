@@ -9,8 +9,8 @@ using Xunit;
 namespace Prowl.Editor.Test;
 
 /// <summary>
-/// The analyzer that refuses '?.', '??' and '??=' on engine objects, which test only for a null reference and miss a
-/// destroyed object.
+/// The analyzer that refuses '?.', '??', '??=' and comparisons with null on engine objects, which test only for a null
+/// reference and miss a destroyed object.
 /// </summary>
 [Trait("Category", "Build")]
 public class EngineObjectNullAnalyzerTests : EditorTestHarness
@@ -28,6 +28,12 @@ public class EngineObjectNullAnalyzerTests : EditorTestHarness
     [InlineData("void N<T>(T? asset) where T : Asset { asset?.Load(); }", EngineObjectNullAnalyzer.NullConditionalId)]
     [InlineData("T N<T>(T? a, T b) where T : Component => a ?? b;", EngineObjectNullAnalyzer.NullCoalescingId)]
     [InlineData("void N<T, U>(T? a) where T : U where U : Asset { a?.Load(); }", EngineObjectNullAnalyzer.NullConditionalId)]
+    [InlineData("bool N(GameObject? go) => go == null;", EngineObjectNullAnalyzer.NullComparisonId)]
+    [InlineData("bool N(GameObject? go) => go != null;", EngineObjectNullAnalyzer.NullComparisonId)]
+    [InlineData("bool N(GameObject? go) => null == go;", EngineObjectNullAnalyzer.NullComparisonId)]
+    [InlineData("bool N(GameObject? go) => go is null;", EngineObjectNullAnalyzer.NullComparisonId)]
+    [InlineData("bool N(GameObject? go) => go is not null;", EngineObjectNullAnalyzer.NullComparisonId)]
+    [InlineData("bool N<T>(T? c) where T : Component => c == null;", EngineObjectNullAnalyzer.NullComparisonId)]
     public void FlagsNullOperatorsOnEngineObjectsIncludingGenerics(string members, string expectedId)
     {
         ScriptCompiler.CompileResult result = Compile(members);
@@ -39,6 +45,9 @@ public class EngineObjectNullAnalyzerTests : EditorTestHarness
     [InlineData("string? N(string? s) => s?.Trim();")]
     [InlineData("string N<T>(T? x) where T : class => x?.ToString() ?? \"\";")]
     [InlineData("bool N(GameObject? go) => go.IsValid();")]
+    [InlineData("bool N(string? s) => s == null || s is null;")]
+    [InlineData("bool N(GameObject a, GameObject b) => a == b;")]
+    [InlineData("bool N(GameObject? go) => ReferenceEquals(go, null);")]
     public void LeavesOtherTypesAlone(string members)
     {
         ScriptCompiler.CompileResult result = Compile(members);

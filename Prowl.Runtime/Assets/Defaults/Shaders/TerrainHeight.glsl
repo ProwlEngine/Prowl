@@ -86,15 +86,13 @@ vec3 terrainNormal(vec2 uv)
 #ifdef GRAPHITE_VERTEX
 #include "Graphite/Vertex.glsl"
 
-// One vertex of a chunk on the height field, in terrain local space. The chunk's draw item holds its terrain local
-// corner in custom0.xy and its size in custom0.z. The terrain never moves, so last frame's position is this one.
-vec3 terrainVertex(out vec2 terrainUV)
+// A chunk vertex on the height field, in terrain local space. The chunk's draw item holds its terrain local corner in
+// custom0.xy and its size in custom0.z.
+vec3 terrainVertex(vec3 vertex, out vec2 terrainUV)
 {
     vec4 chunk = Graphite_Object().custom0;
-    vec2 localXZ = chunk.xy + vertexPosition.xz * chunk.z;
+    vec2 localXZ = chunk.xy + vertex.xz * chunk.z;
     terrainUV = localXZ / _TerrainSize;
-    vec3 local = vec3(localXZ.x, terrainHeight(terrainUV), localXZ.y);
-    Graphite_SetPreviousPosition(local);
-    return local;
+    return vec3(localXZ.x, terrainHeight(terrainUV), localXZ.y);
 }
 #endif

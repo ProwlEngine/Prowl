@@ -61,7 +61,7 @@ public sealed class MeshCollider : Collider
     private RigidBodyShape[] BuildShapes(Float4x4 transform)
     {
         Mesh m = ResolveMesh();
-        if (m == null)
+        if (m.IsNotValid())
         {
             Debug.LogError("MeshCollider: no mesh assigned.");
             return null;
@@ -154,13 +154,13 @@ public sealed class MeshCollider : Collider
     internal Mesh? ResolveMesh()
     {
         Mesh? resolved = SourceMesh();
-        if (resolved is not null) resolved.Load();
+        if (resolved.IsValid()) resolved.Load();
         return resolved;
     }
 
     private Mesh? SourceMesh()
     {
-        if (mesh is not null) return mesh;
+        if (mesh.IsValid()) return mesh;
         MeshRenderer? mr = GetComponent<MeshRenderer>();
         return mr.IsValid() ? mr.Mesh : null;
     }
@@ -197,7 +197,7 @@ public sealed class MeshCollider : Collider
 
     public override void OnEnable()
     {
-        if (mesh == null)
+        if (mesh.IsNotValid())
         {
             MeshRenderer? mr = GetComponent<MeshRenderer>();
             if (mr.IsValid())
@@ -213,12 +213,12 @@ public sealed class MeshCollider : Collider
     public override void DrawGizmosSelected()
     {
         Mesh? m = mesh;
-        if (m == null)
+        if (m.IsNotValid())
         {
             MeshRenderer? mr = GetComponent<MeshRenderer>();
-            if (mr != null) m = mr.Mesh;
+            if (mr.IsValid()) m = mr.Mesh;
         }
-        if (m == null) return;
+        if (m.IsNotValid()) return;
 
         Float4x4 matrix = Float4x4.CreateTRS(Transform.Position, Transform.Rotation * Quaternion.FromEuler(Rotation), Transform.LossyScale);
         Debug.PushMatrix(matrix);

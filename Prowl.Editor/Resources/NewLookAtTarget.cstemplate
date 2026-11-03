@@ -8,7 +8,7 @@ public class {[className]} : Component
 
     public override void LateUpdate()
     {
-        if (Target == null) return;
+        if (Target.IsNotValid()) return;
 
         Float3 dir = Target.Transform.Position - Transform.Position;
         if (LockYAxis) dir.Y = 0f;

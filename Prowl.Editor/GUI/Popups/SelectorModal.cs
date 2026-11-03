@@ -167,7 +167,7 @@ public static class SelectorModal
     private static void DrawSceneTab(Paper paper, Prowl.Scribe.FontFile font, float height)
     {
         Scene scene = Runtime.Resources.Scene.Current;
-        if (scene == null)
+        if (scene.IsNotValid())
         {
             EditorGUI.EmptyState(paper, "sel_scene_empty", Loc.Get("selector.no_scene"), font);
             return;
@@ -359,7 +359,7 @@ public static class SelectorModal
             .Tooltip(name)
             .Enter())
         {
-            if (thumbTex != null)
+            if (thumbTex.IsValid())
             {
                 float thumbRound = Origami.Current.Metrics.SmallRounding;
                 paper.Box($"{id}_t")
@@ -397,10 +397,10 @@ public static class SelectorModal
 
     private static string GetGOIcon(GameObject go)
     {
-        if (go.GetComponent<Camera>() != null) return EditorIcons.Camera;
-        if (go.GetComponent<Light>() != null) return EditorIcons.Sun;
-        if (go.GetComponent<MeshRenderer>() != null) return EditorIcons.Cube;
-        if (go.GetComponent<SkinnedMeshRenderer>() != null) return EditorIcons.Cubes;
+        if (go.GetComponent<Camera>().IsValid()) return EditorIcons.Camera;
+        if (go.GetComponent<Light>().IsValid()) return EditorIcons.Sun;
+        if (go.GetComponent<MeshRenderer>().IsValid()) return EditorIcons.Cube;
+        if (go.GetComponent<SkinnedMeshRenderer>().IsValid()) return EditorIcons.Cubes;
         return EditorIcons.Circle;
     }
 

@@ -37,7 +37,7 @@ Results describe objects as `{id, path, name}`, components as `{id, ref, type}`,
 4. Build the scene with the commands below, then `scene --action save` (or `scene --action saveas --path Scenes/Level.scene`).
 5. Check your work: `play --action start`, `input`, `play --action wait --seconds 2`, read state with `get`, `logs --level error`, `screenshot`, then `play --action stop`.
 
-Scene, component, field, material, prefab and graph edits are one undo step each, and `undo` and `undo --redo` step through them outside play mode. File operations (`asset create`, `move`, `delete`, `import`, `importer`, `script`) and `eval` are not undoable, and `asset delete` is permanent.
+Scene, component, field, material, prefab and graph edits are one undo step each, and `undo` and `undo --redo` step through them outside play mode. File operations (`asset create`, `copy`, `move`, `delete`, `import`, `importer`, `script`) and `eval` are not undoable, and `asset delete` is permanent.
 
 ## Scenes and objects
 
@@ -58,7 +58,8 @@ Scene, component, field, material, prefab and graph edits are one undo step each
 
 - `asset find --type AnimationClip --query Run`, `asset info --path Models/Gun.fbx` (shows sub assets and dependencies)
 - `asset create --path Materials/Metal --type Material` (`asset types` lists creatable types, plus `Folder`)
-- After writing or copying files into Assets yourself: `asset import --path <file>` or `asset refresh`
+- After writing files into Assets yourself: `asset import --path <file>` or `asset refresh`
+- `asset copy --path Materials/Metal.mat --to Materials/Red.mat` copies a file, folder or sub asset (`Models/Gun.fbx#Metal`) under a fresh GUID with the same import settings. Use it rather than copying a file together with its `.meta`, which reuses the original's GUID.
 - `asset move --path A.mat --to B.mat`, `asset delete --path A.mat --confirm`, `asset reimport --path ...`
 - `material Materials/Metal.mat` lists shader properties. `--values '{"_MainColor": [1, 0, 0], "_Roughness": 0.3, "_MainTex": "Textures/Metal.png"}'` sets them. `--shader <ref>` swaps the shader.
 - `importer Models/Gun.fbx` shows import settings and sub assets. `--values` merges keys (dots for nested keys) and reimports. Values keep their JSON type, so pass numbers as numbers: `--values '{"rigType": 2}'` (0 none, 1 generic, 2 humanoid). Animation import settings are in the prowl-animation skill.

@@ -109,10 +109,8 @@ public sealed partial class VRShowcaseGame : StationGame
         _accent = Lit(Orange, 0f, 0.45f);
 
         var sun = new GameObject("Sun");
-        Light light = sun.AddComponent<Light>();
-        light.Type = LightType.Directional;
-        light.ShadowDistance = 40f;
-        light.Intensity = 0.6f;
+        DirectionalLight light = sun.AddComponent<DirectionalLight>();
+        light.Intensity = 100000f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         Add(sun);
         _sunLight = light;
@@ -161,7 +159,7 @@ public sealed partial class VRShowcaseGame : StationGame
         Camera camera = head.AddComponent<Camera>();
         camera.NearClipPlane = 0.05f;
         camera.FarClipPlane = 300f;
-        camera.Profile = new VolumeProfile();
+        camera.Profile = VolumeProfile.CreateCameraDefault("Head Camera Profile");
         Bloom bloom = camera.Profile.Add<Bloom>();
         bloom.Intensity.Set(0.4f);
         bloom.Threshold.Set(1.0f);

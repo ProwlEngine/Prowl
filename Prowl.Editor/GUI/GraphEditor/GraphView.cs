@@ -142,7 +142,7 @@ public abstract class GraphDomain
 {
     protected GraphDomain(Asset asset)
     {
-        if (asset is null) throw new ArgumentNullException(nameof(asset));
+        if (ReferenceEquals(asset, null)) throw new ArgumentNullException(nameof(asset));
         Asset = asset;
     }
 

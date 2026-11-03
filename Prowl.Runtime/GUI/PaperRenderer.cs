@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
@@ -134,13 +135,22 @@ public class PaperRenderer : ICanvasRenderer
         public required Framebuffer Framebuffer;
         public required uint Width, Height;
         public required byte[] Vertices;
+        public required int VertexBytes;
         public required uint[] Indices;
+        public required int IndexCount;
         public required Call[] Calls;
         public required GTexture[] Sampled;
         public required float SdfRange;
         public required bool Clear;
         public required Sampler LinearClamp;
         public required GTexture White;
+
+        // Returns the pooled geometry copies once the pass has uploaded them
+        public void Release()
+        {
+            ArrayPool<byte>.Shared.Return(Vertices);
+            ArrayPool<uint>.Shared.Return(Indices);
+        }
     }
 
     public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
@@ -187,16 +197,24 @@ public class PaperRenderer : ICanvasRenderer
             sampled.Remove(attachment.Target);
 
         bool drawnUnder = false;
-        foreach (Graphite.Rendering.ViewDesc view in Graphics.FrameViews)
+        foreach (Graphite.Rendering.RenderView view in Graphics.FrameViews)
             if (view.Target == framebuffer) drawnUnder = true;
+
+        ReadOnlySpan<byte> vertexBytes = MemoryMarshal.AsBytes(canvas.Vertices);
+        byte[] vertices = ArrayPool<byte>.Shared.Rent(vertexBytes.Length);
+        vertexBytes.CopyTo(vertices);
+        uint[] indices = ArrayPool<uint>.Shared.Rent(canvas.Indices.Length);
+        canvas.Indices.CopyTo(indices);
 
         UiView frame = new()
         {
             Framebuffer = framebuffer,
             Width = (uint)target.Width,
             Height = (uint)target.Height,
-            Vertices = MemoryMarshal.AsBytes(canvas.Vertices).ToArray(),
-            Indices = canvas.Indices.ToArray(),
+            Vertices = vertices,
+            VertexBytes = vertexBytes.Length,
+            Indices = indices,
+            IndexCount = canvas.Indices.Length,
             Calls = calls,
             Sampled = sampled.ToArray(),
             SdfRange = canvas.Text.FontEngine.DistanceRange,
@@ -267,18 +285,22 @@ public class PaperRenderer : ICanvasRenderer
             {
                 foreach (TextureHandle read in reads) pass.Read(read);
                 pass.Write(handle, TextureState.Attachment | TextureState.Sampled, firstWrite: ops);
-            }, context => Render(context, view));
+            }, context =>
+            {
+                try { Render(context, view); }
+                finally { view.Release(); }
+            });
         }
 
         private void EnsurePrograms(GraphicsDevice device)
         {
             if (_canvas != null) return;
             ShaderDefinition definition = ShaderParser.Parse(EmbeddedResources.ReadAllText("Assets/Defaults/Shaders/PaperCanvas.shader"));
-            definition.Create(device, Graphics.Compiler, new Variant(), CompileMode.All);
+            definition.Create(device, Graphics.ShaderCompiler);
             _canvasPass = definition.Passes![0];
             _blur = definition.Passes[1];
 
-            if (!_canvasPass.GetVariant(0).TryGetDescription(device.BackendType, out ShaderDescription description))
+            if (!_canvasPass.GetVariant().TryGetDescription(device.BackendType, out ShaderDescription description))
                 throw new InvalidOperationException("The Paper canvas shader did not compile.");
             description.VertexLayouts =
             [
@@ -298,15 +320,15 @@ public class PaperRenderer : ICanvasRenderer
             CommandBuffer cmd = context.Command;
             GraphicsDevice device = Graphics.Device!;
             EnsurePrograms(device);
-            bool hasGeometry = view.Calls.Length > 0 && view.Vertices.Length > 0 && view.Indices.Length > 0;
+            bool hasGeometry = view.Calls.Length > 0 && view.VertexBytes > 0 && view.IndexCount > 0;
 
             DeviceBuffer? vertices = null, indices = null;
             if (hasGeometry)
             {
-                vertices = device.RentTransientBuffer(context.Task, new BufferDescription((uint)view.Vertices.Length, BufferUsage.VertexBuffer));
-                indices = device.RentTransientBuffer(context.Task, new BufferDescription((uint)(view.Indices.Length * sizeof(uint)), BufferUsage.IndexBuffer));
-                cmd.UpdateBuffer<byte>(vertices, 0, view.Vertices);
-                cmd.UpdateBuffer<uint>(indices, 0, view.Indices);
+                vertices = device.RentTransientBuffer(context.Task, new BufferDescription((uint)view.VertexBytes, BufferUsage.VertexBuffer));
+                indices = device.RentTransientBuffer(context.Task, new BufferDescription((uint)(view.IndexCount * sizeof(uint)), BufferUsage.IndexBuffer));
+                cmd.UpdateBuffer<byte>(vertices, 0, view.Vertices.AsSpan(0, view.VertexBytes));
+                cmd.UpdateBuffer<uint>(indices, 0, view.Indices.AsSpan(0, view.IndexCount));
             }
 
             Framebuffer target = view.Framebuffer;

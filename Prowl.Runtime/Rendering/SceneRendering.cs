@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
@@ -54,6 +53,7 @@ public sealed class SceneRendering : IDisposable
     private readonly System.Collections.Concurrent.ConcurrentQueue<Mesh> _changedMeshes = new();
     private readonly Action<Mesh> _onMeshChanged;
     private int _lightingVersion = -1;
+    private int _qualityVersion = -1;
 
     /// <summary>
     /// Moves once every scene sync. A Transform pushes its move to its renderers and its children's at most once a sync,
@@ -62,18 +62,7 @@ public sealed class SceneRendering : IDisposable
     internal static uint Epoch { get; private set; } = 1;
     private RenderWorld? _world;
     private ulong _syncedFrame = ulong.MaxValue;
-    private readonly List<Light> _directionals = [];
-
-    // Instances drawn for one frame through Graphics.DrawMeshInstanced, a batch for each mesh, material and settings
-    private sealed class ImmediateBatch
-    {
-        public readonly List<InstanceData> Instances = [];
-        public InstanceBatchHandle Handle;
-        public ulong Frame;
-    }
-
-    private readonly Dictionary<(GpuMesh Mesh, GMaterial Material, RenderableFlags Flags, uint LayerMask), ImmediateBatch> _immediate = [];
-    private readonly List<(GpuMesh, GMaterial, RenderableFlags, uint)> _immediateGone = [];
+    private readonly List<DirectionalLight> _directionals = [];
 
     internal SceneRendering(Scene scene)
     {
@@ -127,7 +116,7 @@ public sealed class SceneRendering : IDisposable
         if (_world != null)
         {
             try { member.Detach(_world); }
-            catch (Exception e) { Debug.LogError($"Removing {member.GetType().Name} from the render world threw: {e}"); }
+            catch (Exception e) { Debug.LogException($"Removing {member.GetType().Name} from the render world threw", e); }
         }
     }
 
@@ -178,12 +167,13 @@ public sealed class SceneRendering : IDisposable
         _parkedMeshes.Clear();
     }
 
-    // Wakes the members drawing a mesh edited since the last sync, and every member after a lightmap rebake
+    // Wakes the members drawing a mesh edited since the last sync, and every member after a lightmap rebake or a quality change
     internal void WakeChanged()
     {
-        if (_scene.BakedLightingVersion != _lightingVersion)
+        if (_scene.BakedLightingVersion != _lightingVersion || QualitySettings.Version != _qualityVersion)
         {
             _lightingVersion = _scene.BakedLightingVersion;
+            _qualityVersion = QualitySettings.Version;
             UnparkAll();
         }
         while (_changedMeshes.TryDequeue(out Mesh? mesh))
@@ -194,48 +184,8 @@ public sealed class SceneRendering : IDisposable
         }
     }
 
-    /// <summary>Adds instances to this frame's batch of a mesh and material, drawn at the next sync and then gone.</summary>
-    internal void DrawInstanced(GpuMesh mesh, GMaterial material, RenderableFlags flags, uint layerMask, ReadOnlySpan<Float4x4> transforms, ReadOnlySpan<Color> colors)
-    {
-        if (!_immediate.TryGetValue((mesh, material, flags, layerMask), out ImmediateBatch? batch))
-            _immediate[(mesh, material, flags, layerMask)] = batch = new ImmediateBatch();
-        if (batch.Frame != Graphics.FrameIndex)
-        {
-            batch.Instances.Clear();
-            batch.Frame = Graphics.FrameIndex;
-        }
-        for (int i = 0; i < transforms.Length; i++)
-        {
-            Color c = i < colors.Length ? colors[i] : Color.White;
-            batch.Instances.Add(new InstanceData { Transform = transforms[i], Color = new Float4(c.R, c.G, c.B, c.A) });
-        }
-    }
-
-    // Brings each immediate batch to this frame's instances, removing the ones nothing drew
-    private void SyncImmediate(RenderWorld world)
-    {
-        foreach (((GpuMesh mesh, GMaterial material, RenderableFlags flags, uint layerMask) key, ImmediateBatch batch) in _immediate)
-        {
-            if (batch.Instances.Count == 0 || batch.Frame != Graphics.FrameIndex || key.mesh.IsDisposed || key.material.IsDisposed)
-            {
-                if (batch.Handle.IsValid) world.RemoveInstanceBatch(batch.Handle);
-                _immediateGone.Add(key);
-                continue;
-            }
-            ReadOnlySpan<InstanceData> instances = CollectionsMarshal.AsSpan(batch.Instances);
-            if (batch.Handle.IsValid)
-                world.SetInstances(batch.Handle, instances);
-            else
-                batch.Handle = world.AddInstanceBatch(new InstanceBatchDesc { Mesh = key.mesh, Transform = Double4x4.Identity, LayerMask = key.layerMask, Flags = key.flags }, [key.material], instances);
-            batch.Instances.Clear();
-        }
-        foreach ((GpuMesh, GMaterial, RenderableFlags, uint) key in _immediateGone)
-            _immediate.Remove(key);
-        _immediateGone.Clear();
-    }
-
-    internal void AddDirectional(Light light) { if (!_directionals.Contains(light)) _directionals.Add(light); }
-    internal void RemoveDirectional(Light light) => _directionals.Remove(light);
+    internal void AddDirectional(DirectionalLight light) { if (!_directionals.Contains(light)) _directionals.Add(light); }
+    internal void RemoveDirectional(DirectionalLight light) => _directionals.Remove(light);
 
     /// <summary>
     /// Pushes this frame's changes into the world: every member's, then the environment. Once a frame however many
@@ -266,7 +216,6 @@ public sealed class SceneRendering : IDisposable
             i--;
         }
 
-        SyncImmediate(world);
         SyncEnvironment(world);
         SyncProbes(world);
         Epoch++;
@@ -312,9 +261,9 @@ public sealed class SceneRendering : IDisposable
         EnvironmentDesc env = world.Environment;
         _scene.Environment.ApplyTo(env);
 
-        Light? sun = null;
-        foreach (Light light in _directionals)
-            if (light.Handle.IsValid && (sun == null || light.Intensity > sun.Intensity)) sun = light;
+        DirectionalLight? sun = null;
+        foreach (DirectionalLight light in _directionals)
+            if (light.Handle.IsValid && (sun.IsNotValid() || light.Intensity > sun.Intensity)) sun = light;
         env.Sun = sun.IsValid() ? sun.Handle : default;
     }
 
@@ -335,7 +284,7 @@ public sealed class SceneRendering : IDisposable
             foreach (IRenderSync member in _memberSet)
             {
                 try { member.Detach(_world); }
-                catch (Exception e) { Debug.LogError($"Removing {member.GetType().Name} from the render world threw: {e}"); }
+                catch (Exception e) { Debug.LogException($"Removing {member.GetType().Name} from the render world threw", e); }
             }
             _world.Dispose();
             _world = null;
@@ -345,7 +294,6 @@ public sealed class SceneRendering : IDisposable
         _parked.Clear();
         _meshUsers.Clear();
         _parkedMeshes.Clear();
-        _immediate.Clear();
         _directionals.Clear();
     }
 }

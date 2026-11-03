@@ -144,12 +144,12 @@ public static class SceneToolManager
     }
 
     private static void LogToolError(SceneTool tool, string stage, Exception ex)
-        => Debug.LogError($"[SceneTool] {tool.GetType().Name}.{stage} threw: {ex.Message}\n{ex.StackTrace}");
+        => Debug.LogException($"[SceneTool] {tool.GetType().Name}.{stage} threw", ex);
 
     private static bool SelectionHasComponent(Type componentType)
     {
         GameObject? go = Selection.GetSelected<GameObject>().FirstOrDefault();
-        return go.IsValid() && go.GetComponent(componentType) != null;
+        return go.IsValid() && go.GetComponent(componentType).IsValid();
     }
 
     // ================================================================

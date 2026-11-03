@@ -91,7 +91,7 @@ Attributes: `[RequireComponent(typeof(A), typeof(B))]` (adds missing components 
 
 ## Null checks
 
-`==` on engine objects is plain reference equality, so `obj == null` is **false** for a destroyed object. Always use `obj.IsValid()` and `obj.IsNotValid()`. `?.`, `?[]`, `??` and `??=` on any `EngineObject` (GameObject, components, assets, scenes) are compile errors (PROWLEO001, PROWLEO002).
+A destroyed engine object is still a live reference, so null checks miss it. Always use `obj.IsValid()` and `obj.IsNotValid()`. `?.`, `?[]`, `??`, `??=`, `== null`, `!= null`, `is null` and `is not null` on any `EngineObject` (GameObject, components, assets, scenes) are compile errors (PROWLEO001, PROWLEO002, PROWLEO003). `ReferenceEquals(obj, null)` is the rare true null check.
 
 ## Transform
 

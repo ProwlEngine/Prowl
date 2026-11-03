@@ -27,8 +27,8 @@ Shader "Default/Refraction"
 
             void main()
             {
-                vec3 relative = Graphite_ObjectToWorld(vertexPosition);
-                vWorldPos = Graphite_AbsoluteFromRelative(relative);
+                vec3 relative = Graphite_ObjectToRelative(vertexPosition);
+                vWorldPos = Graphite_RelativeToWorld(relative);
                 gl_Position = Graphite_RelativeToClip(relative);
             }
         }

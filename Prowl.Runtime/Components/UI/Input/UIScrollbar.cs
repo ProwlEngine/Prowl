@@ -56,7 +56,7 @@ public class UIScrollbar : Selectable, IDragHandler, IBeginDragHandler
         if (changed && notify)
         {
             try { OnValueChanged?.Invoke(_value); }
-            catch (Exception ex) { Debug.LogError($"[UIScrollbar] OnValueChanged on '{Name}' threw: {ex.Message}\n{ex.StackTrace}"); }
+            catch (Exception ex) { Debug.LogException($"[UIScrollbar] OnValueChanged on '{Name}' threw", ex); }
             _onValueChanged.Invoke();
         }
     }
@@ -136,7 +136,7 @@ public class UIScrollbar : Selectable, IDragHandler, IBeginDragHandler
 
     private void UpdateVisuals()
     {
-        if (_handleRect == null) return;
+        if (_handleRect.IsNotValid()) return;
 
         float s = Maths.Clamp(_size, 0.02f, 1f);
         float span = 1f - s;

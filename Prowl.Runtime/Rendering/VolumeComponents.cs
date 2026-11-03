@@ -14,16 +14,56 @@ internal static class EffectSettings
     public static Float4 ToFloat4(this Color color) => new(color.R, color.G, color.B, color.A);
 }
 
-/// <summary>Adapts exposure to the scene's brightness over time.</summary>
+/// <summary>How an HDR camera maps its colour to the display.</summary>
+public enum TonemappingMode
+{
+    None,
+    ACES,
+
+    /// <summary>AgX with no look, flat and desaturated.</summary>
+    AgXNeutral,
+
+    /// <summary>AgX with the reference Punchy look: more contrast and saturation.</summary>
+    AgXPunchy,
+
+    /// <summary>Extended Reinhard on luminance, white at 2.</summary>
+    Reinhard,
+    RomBinDaHouse,
+    Uncharted2,
+}
+
+/// <summary>
+/// Maps HDR colour to the display. Off while the mode is None, when an HDR camera clips light above 1. New cameras get
+/// one in their base profile, see <see cref="VolumeProfile.CreateCameraDefault"/>.
+/// </summary>
+[VolumeComponentMenu("Image/Tonemapping")]
+public sealed class Tonemapping : VolumeComponent<G.Tonemapper>
+{
+    public VolumeParameter<TonemappingMode> Mode = new(TonemappingMode.None);
+
+    public override bool IsActive => Mode.Value != TonemappingMode.None;
+
+    protected override G.Tonemapper CreateFeature(G.Renderer renderer) => new(renderer);
+
+    protected override void Apply(G.Tonemapper feature, Camera camera) => feature.Operator = (G.TonemapOperator)((int)Mode.Value - 1);
+}
+
+/// <summary>Adapts exposure to the scene's brightness over time, in place of the camera's EV100.</summary>
 [VolumeComponentMenu("Camera/Auto Exposure")]
 public sealed class AutoExposure : VolumeComponent<G.AutoExposure>
 {
     public VolumeParameter<bool> Enabled = new(false);
-    [Range(-5f, 5f)] public VolumeParameter<float> ExposureCompensation = new(0f);
+
+    /// <summary>Stops brighter than the meter reads. The default puts the metered scene a stop over the 0.18 mid grey, so a bright sky does not pull the ground dark.</summary>
+    [Range(-5f, 5f)] public VolumeParameter<float> ExposureCompensation = new(2.5f);
     public VolumeParameter<float> AdaptSpeedUp = new(3f);
     public VolumeParameter<float> AdaptSpeedDown = new(1.5f);
-    public VolumeParameter<float> MinExposure = new(0.1f);
-    public VolumeParameter<float> MaxExposure = new(10f);
+
+    /// <summary>The darkest scene metered, as the lowest EV100 the camera takes.</summary>
+    public VolumeParameter<float> MinEV100 = new(-6f);
+
+    /// <summary>The brightest scene metered, as the highest EV100 the camera takes.</summary>
+    public VolumeParameter<float> MaxEV100 = new(20f);
 
     public override bool IsActive => Enabled.Value;
 
@@ -34,8 +74,8 @@ public sealed class AutoExposure : VolumeComponent<G.AutoExposure>
         feature.ExposureCompensation = ExposureCompensation;
         feature.AdaptSpeedUp = AdaptSpeedUp;
         feature.AdaptSpeedDown = AdaptSpeedDown;
-        feature.MinExposure = MinExposure;
-        feature.MaxExposure = MaxExposure;
+        feature.MinEV100 = MinEV100;
+        feature.MaxEV100 = MaxEV100;
     }
 }
 
@@ -62,7 +102,7 @@ public sealed class Bloom : VolumeComponent<G.Bloom>
         feature.SoftKnee = SoftKnee;
         feature.Clamp = Clamp;
         feature.AntiFlicker = AntiFlicker;
-        feature.Iterations = Iterations;
+        feature.Iterations = Iterations.Value;
         feature.Scatter = Scatter;
     }
 }
@@ -113,7 +153,6 @@ public sealed class ScreenSpaceReflections : VolumeComponent<G.ScreenSpaceReflec
     public VolumeParameter<float> TemporalScale = new(2f);
     [Range(0f, 1f)] public VolumeParameter<float> TemporalResponse = new(0.85f);
     public VolumeParameter<bool> ReflectionVelocity = new(true);
-    public VolumeParameter<bool> UseFresnel = new(true);
     [Range(0f, 1f)] public VolumeParameter<float> ScreenFadeSize = new(0.25f);
 
     public override bool IsActive => Enabled.Value;
@@ -133,7 +172,6 @@ public sealed class ScreenSpaceReflections : VolumeComponent<G.ScreenSpaceReflec
         feature.TemporalScale = TemporalScale;
         feature.TemporalResponse = TemporalResponse;
         feature.ReflectionVelocity = ReflectionVelocity;
-        feature.UseFresnel = UseFresnel;
         feature.ScreenFadeSize = ScreenFadeSize;
     }
 }

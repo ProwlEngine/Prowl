@@ -64,7 +64,7 @@ public sealed class NavMeshBakeService
         if (task.IsFaulted)
         {
             Status = "Failed";
-            Runtime.Debug.LogError($"[Navigation] Bake failed: {task.Exception!.GetBaseException()}");
+            Runtime.Debug.LogException($"[Navigation] Bake failed", task.Exception!.GetBaseException());
             return;
         }
         if (surface.IsNotValid())
@@ -73,7 +73,7 @@ public sealed class NavMeshBakeService
             Runtime.Debug.LogWarning("[Navigation] The surface was destroyed while its navmesh baked; the result was discarded.");
             return;
         }
-        if (task.Result == null)
+        if (task.Result.IsNotValid())
         {
             Status = "Nothing to bake";
             Runtime.Debug.LogWarning($"[Navigation] Bake of '{surface.GameObject.Name}' produced no walkable geometry.");
@@ -137,7 +137,7 @@ public sealed class NavMeshBakeService
         }
         catch (Exception e)
         {
-            Runtime.Debug.LogError($"[Navigation] Saving the baked navmesh failed: {e}");
+            Runtime.Debug.LogException($"[Navigation] Saving the baked navmesh failed", e);
             return false;
         }
     }

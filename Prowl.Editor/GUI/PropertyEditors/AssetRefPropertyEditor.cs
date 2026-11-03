@@ -28,11 +28,11 @@ public class AssetRefPropertyEditor : PropertyEditor
             => onChange(Activator.CreateInstance(refType, picked is Asset { IsFromDatabase: true } asset ? asset.AssetID : Guid.Empty));
         void Pick() => SelectorModal.Open($"Select {fieldType.Name}", fieldType, SelectorTabs.Assets, Assign);
 
-        bool missing = target is null ? !assetRef.IsEmpty : target.IsMissing;
+        bool missing = target.IsNotValid() ? !assetRef.IsEmpty : target.IsMissing;
         PropertyGridUtils.ObjectField(paper, id, label,
             assetRef.IsEmpty ? EditorIcons.Circle : EditorIcons.Cube,
             missing ? EditorTheme.Red400 : assetRef.IsEmpty ? EditorTheme.Ink300 : EditorTheme.Purple400,
-            target is null && !assetRef.IsEmpty ? $"Missing ({fieldType.Name})" : PropertyGridUtils.DescribeObjectRef(target, fieldType),
+            target.IsNotValid() && !assetRef.IsEmpty ? $"Missing ({fieldType.Name})" : PropertyGridUtils.DescribeObjectRef(target, fieldType),
             !assetRef.IsEmpty,
             EditorGUI.IsCompatibleDragTarget(fieldType),
             // Click pings what is assigned or opens the selector when empty, double click selects what is assigned.
@@ -41,7 +41,7 @@ public class AssetRefPropertyEditor : PropertyEditor
                 if (assetRef.IsEmpty) Pick();
                 else Selection.Ping(assetRef.AssetID);
             },
-            onDoubleClick: () => { if (target != null) Selection.Select(target); },
+            onDoubleClick: () => { if (target.IsValid()) Selection.Select(target); },
             onPick: Pick,
             acceptDrops: () =>
             {

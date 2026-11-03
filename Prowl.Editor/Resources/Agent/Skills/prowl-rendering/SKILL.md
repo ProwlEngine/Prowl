@@ -34,17 +34,19 @@ The built in `Standard` shader uses these property names. `material <ref>` lists
 - A newly added Camera component has `FarClipPlane` 100, `FieldOfView` 60, no `Profile` and `AntiAliasing` `None`. The default scene's Main Camera is the same.
 - `Camera.Main` is the enabled camera with the highest `Depth` that draws to the screen.
 - Anti aliasing is a camera field, not an effect: `camera.AntiAliasing = AntiAliasingMode.FXAA` (also `SMAA`, `TAA`), tuned through `camera.Fxaa`, `camera.Smaa` and `camera.Taa`.
+- `camera.HDR` (on by default) renders into float colour, which the `Tonemapping` volume component maps to the display. Without one, or with `Mode` `None`, light above 1 clips. Cameras made by a new scene or GameObject > Camera start with `VolumeProfile.CreateCameraDefault(name)`, a profile with `Tonemapping` set to `AgXPunchy`. A camera added with `AddComponent<Camera>()` has no profile, so give it that one.
 - Post processing comes from volume profiles. A `VolumeProfile` holds volume components from `Prowl.Runtime.Rendering`: `Tonemapping`, `Bloom`, `AutoExposure`, `AmbientOcclusion`, `ScreenSpaceReflections`, `MotionBlur`, `DepthOfField`, `GodRays`, `Vignette`, `ChromaticAberration`, `FilmGrain`, `ColorGrading`, `ColorLookup`, `Sharpen`, `EdgeDetection`, `Pixelation`, `VolumetricFog`. The camera's own `Profile` applies under every `Volume` component in the scene. A `Volume` is global by default, or set `IsGlobal = false` and a `Size` to apply it only inside a box.
 - Each setting is a `VolumeParameter` and only counts once overridden. Use `.Set(value)` to set and override it in one go, or `Add<T>(overrideAll: true)`.
-- `Bloom` is off until `Intensity` is above 0. `Threshold` defaults to 1.2, so mostly emissive and very bright surfaces bloom. Lower it to make lit surfaces glow too. `Tonemapping` is off while `Mode` is `TonemappingMode.None`. `AgX` is a soft filmic curve that desaturates bright colours, `ACES` keeps colours punchier.
+- `Bloom` is off until `Intensity` is above 0. `Threshold` defaults to 1.2, so mostly emissive and very bright surfaces bloom. Lower it to make lit surfaces glow too. `Tonemapping.Mode` is a `TonemappingMode`: `None`, `ACES`, `AgXNeutral`, `AgXPunchy`, `Reinhard`, `RomBinDaHouse` or `Uncharted2`. `AgXNeutral` is a soft filmic curve that desaturates bright colours, `AgXPunchy` adds contrast and saturation, and `ACES` keeps colours punchier still.
+- A custom tonemapper is a `PostEffect` whose `Stage` is `PostEffectStage.Tonemap`. Its shader maps linear HDR light to linear 0 to 1 in `outColor`, Prowl clamps and encodes it for the display, and it takes the place of the `Tonemapping` component.
 
 ```csharp
 // prowl eval: bloom, tonemapping and FXAA on the main camera
 using Prowl.Runtime.Rendering;
 var camera = Scene.Current.FindObjectsOfType<Camera>()[0]!;
-camera.Profile = new VolumeProfile { Name = "Main Camera Profile" };
+camera.Profile = VolumeProfile.CreateCameraDefault("Main Camera Profile");
 camera.Profile.Add<Bloom>().Intensity.Set(1f);
-camera.Profile.Add<Tonemapping>().Mode.Set(TonemappingMode.ACES);
+camera.Profile.Get<Tonemapping>()!.Mode.Set(TonemappingMode.ACES);
 camera.AntiAliasing = AntiAliasingMode.FXAA;
 return camera.Profile.Components.Count;
 ```
@@ -82,7 +84,7 @@ The viewmodel camera is a child of the world camera, and the arms and gun object
 
 ## Lights and lightmaps
 
-- One `Light` component, its `Type` one of `LightType.Directional`, `Point`, `Spot`, `Rect`, `Disk`, `Tube`. It shines along Forward. Spot angles are half angles (`InnerAngle`, `OuterAngle`), rects use `Width` and `Height`, disks `Width` as the diameter, tubes `Length` and `SourceRadius`. `Cookie` (2D for a spot, cubemap for a point) and `IesProfile` work on points and spots. Directional, point and spot lights cast shadows (`CastShadows`, `ShadowResolution`, `ShadowFilter`, directional `Cascades` and `ShadowDistance`). The brightest directional light is the sun.
+- A component for each kind of light, all deriving from `Light`: `DirectionalLight` (lux), `PointLight` and `SpotLight` (candela), `RectLight`, `DiskLight` and `TubeLight` (nits). Each starts as a real light preset, the sun at 100000 lux and 5600 K. They shine along Forward. Spots take a whole cone `SpotAngle` and a `SpotSoftness`, rects `Width` and `Height`, disks `Diameter`, tubes `Length` and `Radius`. Local lights reach an automatic `Range` unless one is set. `Cookie` (2D for a spot, cubemap for a point) and `IesProfile` work on points and spots. Directional, point and spot lights cast shadows (`CastShadows`, `ShadowResolution`, `ShadowFilter`), cascades and shadow distance come from the quality level. The brightest directional light is the sun.
 - Renderers take `ShadowCasting` (`Off`, `On`, `ShadowsOnly`) and `ReceiveShadows`.
 - Only objects with `IsStatic` set get lightmaps. The bake runs from the Environment panel and only progresses while that panel is open.
 

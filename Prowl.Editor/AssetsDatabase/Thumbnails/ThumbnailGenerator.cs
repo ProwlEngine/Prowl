@@ -48,7 +48,7 @@ public static class ThumbnailGenerator
     /// <summary> Queues a thumbnail generation job for the given asset. No-op if the guid is empty, the asset is null, the guid is already queued, or a thumbnail file already exists on disk. </summary>
     public static void Enqueue(Guid guid, Asset asset, string? sourceFilePath = null)
     {
-        if (guid == Guid.Empty || asset == null) return;
+        if (guid == Guid.Empty || asset.IsNotValid()) return;
         if (_queued.Contains(guid)) return;
 
         EditorAssetBackend? db = EditorAssetBackend.Instance;
@@ -362,7 +362,7 @@ public static class ThumbnailGenerator
         try
         {
             Texture2D? tex = sprite.Texture;
-            if (tex == null) return null;
+            if (tex.IsNotValid()) return null;
             int tw = (int)tex.Width, th = (int)tex.Height;
             if (tw <= 0 || th <= 0) return null;
 

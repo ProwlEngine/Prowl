@@ -91,7 +91,7 @@ public abstract class StationGame : Game
         CameraObject = new GameObject("Main Camera") { Tag = "Main Camera" };
         MainCamera = CameraObject.AddComponent<Camera>();
         MainCamera.FarClipPlane = 500f;
-        MainCamera.Profile = new VolumeProfile();
+        MainCamera.Profile = VolumeProfile.CreateCameraDefault("Main Camera Profile");
         Bloom bloom = MainCamera.Profile.Add<Bloom>();
         bloom.Intensity.Set(0.4f);
         bloom.Threshold.Set(1.0f);
@@ -974,6 +974,9 @@ public sealed class SampleHud : Component
 /// <summary>Small helpers every sample uses: materials, meshes, curves, procedural textures and Paper widgets.</summary>
 public static class Sample
 {
+    /// <summary>The luminance in nits that shows a colour as it is under a camera at EV100 14.</summary>
+    public const float DisplayLuminance = 1.2f * 16384f;
+
     /// <summary>Randomness for sample content, seeded so every run builds the same scene.</summary>
     public static readonly Random Rng = new(1);
 
@@ -990,37 +993,39 @@ public static class Sample
     // ----------------------------------------------------------------
 
     /// <summary>
-    /// A Standard material. Roughness and metallic come from the surface texture's green and blue
-    /// channels times these factors, so a white surface texture makes the factors the final values.
+    /// A Lit material: base_color, base_metalness and specular_roughness, each times its map where one is set. The colour's
+    /// alpha is the geometry_opacity, as Lit's base colour carries no coverage.
     /// </summary>
     public static Material Lit(Color color, float metallic = 0f, float roughness = 0.6f, SurfaceType surface = SurfaceType.Opaque, SurfaceCull cull = SurfaceCull.Back)
     {
         var material = new Material(Shader.LoadDefault(DefaultShader.Lit)) { Surface = new SurfaceSettings(surface, SurfaceBlend.Alpha, cull) };
-        material.SetColor("_MainColor", color);
-        material.SetFloat("_Metallic", metallic);
-        material.SetFloat("_Roughness", roughness);
+        material.SetColor("base_color", new Color(color.R, color.G, color.B, 1f));
+        material.SetFloat("geometry_opacity", color.A);
+        material.SetFloat("base_metalness", metallic);
+        material.SetFloat("specular_roughness", roughness);
         return material;
     }
 
-    /// <summary>Makes a Lit material glow. Intensity above 1 feeds bloom.</summary>
-    public static Material Emissive(this Material material, Color color, float intensity)
+    /// <summary>Makes a Lit material glow, its luminance in nits. A daylit white wall is about 10000.</summary>
+    public static Material Emissive(this Material material, Color color, float nits)
     {
-        material.SetInt("_Emission", 1);
-        material.SetColor("_EmissiveColor", color);
-        material.SetFloat("_EmissionIntensity", intensity);
+        material.SetColor("emission_color", color);
+        material.SetFloat("emission_luminance", nits);
         return material;
     }
 
+    /// <summary>An Unlit material glowing in its colour, at a luminance that shows the colour as it is under a camera at EV100 14.</summary>
     public static Material Unlit(Color color)
     {
         var material = new Material(Shader.LoadDefault(DefaultShader.Unlit));
-        material.SetColor("_MainColor", color);
+        material.SetColor("base_color", color);
+        material.SetFloat("emission_luminance", DisplayLuminance);
         return material;
     }
 
     /// <summary>The runtime grid texture on a floor of this size, tiled so each square is a metre across.</summary>
     public static Material Floor(float width, float depth)
-        => Lit(new Color(0.42f, 0.44f, 0.48f, 1f), 0f, 0.9f).With("_MainTex", Texture2D.LoadDefault(DefaultTexture.Grid)).Tiled(width * 0.5f, depth * 0.5f);
+        => Lit(new Color(0.42f, 0.44f, 0.48f, 1f), 0f, 0.9f).With("base_color_map", Texture2D.LoadDefault(DefaultTexture.Grid)).Tiled(width * 0.5f, depth * 0.5f);
 
     /// <summary>Sets a texture and returns the material, to build one in a single expression.</summary>
     public static Material With(this Material material, string property, Texture2D texture)
@@ -1032,7 +1037,7 @@ public static class Sample
     /// <summary>Tiles the material's main texture, to build one in a single expression.</summary>
     public static Material Tiled(this Material material, float x, float y)
     {
-        material.SetTextureScaleOffset("_MainTex", new Float4(x, y, 0, 0));
+        material.SetTextureScaleOffset("base_color_map", new Float4(x, y, 0, 0));
         return material;
     }
 

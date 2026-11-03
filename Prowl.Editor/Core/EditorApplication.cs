@@ -230,7 +230,7 @@ public class EditorApplication : Game
             if (eo.IsValid())
             {
                 try { eo.OnValidate(); }
-                catch (Exception ex) { Runtime.Debug.LogError($"OnValidate threw on {eo.GetType().Name}: {ex}"); }
+                catch (Exception ex) { Debug.LogException($"OnValidate threw on {eo.GetType().Name}", ex); }
             }
 
             // Record the edit against the prefab it belongs to as it happens, rather than relying on
@@ -912,6 +912,14 @@ public class EditorApplication : Game
     /// <summary> Ends the editor GUI frame: draws the on-boarding guide overlay, renders Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips), plays the intro animation, and pops the Origami theme. </summary>
     public override void EndGui(Paper paper)
     {
+        // Play mode spotlight on the Game view (above panels, below popups/toasts).
+        if (Project.Current != null && !ProjectLauncher.IsOpen)
+        {
+            // The docked window's own rect, tab bar included, so the ring sits on the window's edge.
+            Vector.Rect? gameRect = _dockSpace.TryGetPanelRect(typeof(GameViewPanel), out Vector.Rect r) ? r : null;
+            GUI.PlayModeSpotlight.Draw(paper, (float)Time.UnscaledDeltaTime, gameRect, EditorTheme.MenuBarHeight + EditorTheme.DockPadding);
+        }
+
         GUI.Popups.RenameOverlay.EndFrame();
 
         // Render all Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips)
@@ -1124,7 +1132,7 @@ public class EditorApplication : Game
             string? scenePath = EditorSceneManager.CurrentScenePath;
             string sceneName = !string.IsNullOrEmpty(scenePath)
                 ? System.IO.Path.GetFileNameWithoutExtension(scenePath)
-                : (Runtime.Resources.Scene.Current != null ? Loc.Get("editor.untitled_scene") : Loc.Get("hierarchy.no_scene_loaded"));
+                : (Runtime.Resources.Scene.Current.IsValid() ? Loc.Get("editor.untitled_scene") : Loc.Get("hierarchy.no_scene_loaded"));
             using (paper.Row("sb_scene").Width(UnitValue.Auto).Height(sh).Padding(pad, pad, 0, 0).Enter())
                 GlyphCell("sb_scene_cell", EditorIcons.Shapes, EditorTheme.Ink300, sceneName, EditorTheme.Ink400);
 
@@ -1865,7 +1873,7 @@ public class EditorApplication : Game
             // A handler that throws must not leave the play button dead. Letting the transition
             // through is the safer failure: the alternative is an editor that cannot be played in
             // and does not say why.
-            Runtime.Debug.LogError($"A play mode handler threw, so the transition went ahead anyway: {ex}");
+            Runtime.Debug.LogException($"A play mode handler threw, so the transition went ahead anyway", ex);
             return false;
         }
 
@@ -1918,7 +1926,7 @@ public class EditorApplication : Game
         }
 
         Scene scene = Runtime.Resources.Scene.Current;
-        if (scene == null) return;
+        if (scene.IsNotValid()) return;
 
         PlayModePreferences prefs = Preferences.Get<PlayModePreferences>();
         if (prefs.SaveSceneOnPlay && EditorSceneManager.IsDirty && EditorSceneManager.CurrentScenePath != null)
@@ -1948,7 +1956,7 @@ public class EditorApplication : Game
         // the frame, so a failure here leaves the editor scene loaded and the editor usable.
         SerializationContext playCtx = Importers.ImportHelper.CreateTrackingContext(out _);
         Scene? playScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, playCtx);
-        if (playScene == null)
+        if (playScene.IsNotValid())
         {
             Runtime.Debug.LogError("Failed to deserialize play scene.");
             return;
@@ -2028,7 +2036,7 @@ public class EditorApplication : Game
 
             SerializationContext ctx = Importers.ImportHelper.CreateTrackingContext(out _);
             Scene? restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, ctx);
-            if (restoredScene != null)
+            if (restoredScene.IsValid())
             {
                 // Ends the play session at the swap, once the play scene's teardown has run, so nothing still
                 // awaiting can resume against the edit scene.

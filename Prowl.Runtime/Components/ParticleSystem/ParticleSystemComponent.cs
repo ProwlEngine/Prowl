@@ -750,7 +750,7 @@ public class ParticleSystemComponent : Component, IRenderSync
         if (driven) return;
 
         try { Stopped?.Invoke(this); }
-        catch (Exception ex) { Debug.LogError($"[{Name}] Stopped handler threw: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogException($"[{Name}] Stopped handler threw", ex); }
 
         // A handler that played the system again has taken it over, so the stop action no longer applies.
         if (_isPlaying || !Application.IsPlaying || _prewarming) return;
@@ -1154,11 +1154,11 @@ public class ParticleSystemComponent : Component, IRenderSync
 
         // The transform the simulation space follows, with the scale it uses. Null for world space.
         Transform? space = SimulationSpace == SimulationSpace.Local ? t : custom.IsValid() ? custom.Transform : null;
-        Float3 spaceScale = custom != null ? space!.LossyScale : ScalingMode == ParticleScalingMode.Shape ? Float3.One : scale;
+        Float3 spaceScale = custom.IsValid() ? space!.LossyScale : ScalingMode == ParticleScalingMode.Shape ? Float3.One : scale;
 
         _simIsWorld = space == null;
         _simToWorld = _simIsWorld ? Float4x4.Identity
-            : custom != null || ScalingMode == ParticleScalingMode.Hierarchy ? space!.LocalToWorldMatrix
+            : custom.IsValid() || ScalingMode == ParticleScalingMode.Hierarchy ? space!.LocalToWorldMatrix
             : Float4x4.CreateTRS(position, rotation, spaceScale);
 
         if (_simIsWorld)
@@ -1302,7 +1302,7 @@ public class ParticleSystemComponent : Component, IRenderSync
             if (ParticleCollided != null)
             {
                 try { ParticleCollided(this, hit); }
-                catch (Exception ex) { Debug.LogError($"[{Name}] ParticleCollided handler threw: {ex.Message}\n{ex.StackTrace}"); }
+                catch (Exception ex) { Debug.LogException($"[{Name}] ParticleCollided handler threw", ex); }
             }
 
             if (!Collision.SendCollisionMessages || !Application.IsPlaying) continue;
@@ -1315,7 +1315,7 @@ public class ParticleSystemComponent : Component, IRenderSync
                 Component component = components[c];
                 if (component is not IParticleCollisionHandler handler || !component.EnabledInHierarchy) continue;
                 try { handler.OnParticleCollision(this, in hit); }
-                catch (Exception ex) { Debug.LogError($"[{component.GetType().Name}] OnParticleCollision threw: {ex.Message}\n{ex.StackTrace}"); }
+                catch (Exception ex) { Debug.LogException($"[{component.GetType().Name}] OnParticleCollision threw", ex); }
             }
         }
     }

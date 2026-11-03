@@ -71,9 +71,9 @@ public sealed class MaterialProperties
     internal void SetFloat(string name, float value) { Remove(name); _floats[name] = value; }
     internal void SetInt(string name, int value) { Remove(name); _ints[name] = value; }
     internal void SetMatrix(string name, Float4x4 value) { Remove(name); _matrices[name] = value; }
-    internal void SetTexture(string name, Texture2D? value) { Remove(name); if (value != null) _textures[name] = value; }
-    internal void SetTexture3D(string name, Texture3D? value) { Remove(name); if (value != null) _textures3D[name] = value; }
-    internal void SetTextureCube(string name, Cubemap? value) { Remove(name); if (value != null) _texturesCube[name] = value; }
+    internal void SetTexture(string name, Texture2D? value) { Remove(name); if (value.IsValid()) _textures[name] = value; }
+    internal void SetTexture3D(string name, Texture3D? value) { Remove(name); if (value.IsValid()) _textures3D[name] = value; }
+    internal void SetTextureCube(string name, Cubemap? value) { Remove(name); if (value.IsValid()) _texturesCube[name] = value; }
 
     public void Remove(string name)
     {

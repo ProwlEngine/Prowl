@@ -127,7 +127,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
                     changed();
                 }, 0);
 
-                if (owner != null)
+                if (owner.IsValid())
                 {
                     List<MemberOption> members = BuildMembers(owner);
                     string[] names = [.. members.Select(m => m.Display)];
@@ -185,7 +185,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
         AddMembers(list, go, "GameObject", go);
         foreach (Component comp in go.GetComponents<Component>())
         {
-            if (comp == null) continue;
+            if (comp.IsNotValid()) continue;
             AddMembers(list, comp, comp.GetType().Name, comp);
         }
         return list;

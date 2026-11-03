@@ -282,7 +282,7 @@ public sealed class RectTransform : Component
     /// </summary>
     private Float2 ParentSize()
     {
-        for (GameObject? node = GameObject.Parent; node != null; node = node.Parent)
+        for (GameObject? node = GameObject.Parent; node.IsValid(); node = node.Parent)
         {
             if (node.RectTransform is { } prt) return prt.ComputedRect.Size;
             GameCanvas? canvas = node.GetComponent<GameCanvas>();

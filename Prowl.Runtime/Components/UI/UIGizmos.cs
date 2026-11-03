@@ -31,10 +31,10 @@ internal static class UIGizmos
     public static void DrawRect(UIBehaviour ui, Color color, bool drawPivot, bool drawAnchors)
     {
         GameCanvas? canvas = ui.GetCanvas();
-        if (canvas is null || canvas.RenderMode != RenderMode.WorldSpace) return;
+        if (canvas.IsNotValid() || canvas.RenderMode != RenderMode.WorldSpace) return;
 
         RectTransform? rt = ui.GameObject.RectTransform;
-        if (rt is null) return;
+        if (rt.IsNotValid()) return;
 
         // Layout might be stale (gizmos can fire before the world-space canvas has
         // been collected this frame). RebuildIfDirty is a no-op when clean.
@@ -97,10 +97,10 @@ internal static class UIGizmos
     private static void DrawAnchorHandles(UIBehaviour ui, GameCanvas canvas, RectTransform rt, Float3 rightU, Float3 upU)
     {
         GameObject? parent = ui.GameObject.Parent;
-        if (parent is null) return;
+        if (parent.IsNotValid()) return;
 
         RectTransform? prt = parent.RectTransform;
-        if (prt is null) return;
+        if (prt.IsNotValid()) return;
 
         Rect pr = prt.ComputedRect;
         if (pr.Size.X <= 0 || pr.Size.Y <= 0) return;

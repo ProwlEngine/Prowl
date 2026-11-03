@@ -447,7 +447,7 @@ public static class PackageImportDialog
             // Thumbnail
             Texture2D? thumbTex = GetPackageThumbnail(asset.Path);
             float thumbDisplaySize = Math.Min(detailWidth - 32, 128);
-            if (thumbTex != null)
+            if (thumbTex.IsValid())
             {
                 float thumbRound = Origami.Current.Metrics.ContainerRounding;
                 paper.Box("pkgimp_thumb")

@@ -373,7 +373,7 @@ public class GameCanvas : Component, IRenderSync
         // An auto-layout group on this container arranges its children (writes their ComputedRect)
         // before we place them; ignored children still fall through to their own RectTransform.
         LayoutGroup? layout = parent.GetComponent<LayoutGroup>();
-        bool arrangingChildren = layout != null && layout.EnabledInHierarchy;
+        bool arrangingChildren = layout.IsValid() && layout.EnabledInHierarchy;
         if (arrangingChildren) layout.Arrange(parentRect);
 
         foreach (GameObject child in parent.Children)
@@ -382,12 +382,12 @@ public class GameCanvas : Component, IRenderSync
 
             // Nested GameCanvas - skip; it manages its own tree.
             GameCanvas? nested = child.GetComponent<GameCanvas>();
-            if (nested != null && nested != this) continue;
+            if (nested.IsValid() && nested != this) continue;
 
             // Apply CanvasGroup to the inherited context.
             UIContext childCtx = ctx;
             CanvasGroup? grp = child.GetComponent<CanvasGroup>();
-            if (grp != null && grp.EnabledInHierarchy)
+            if (grp.IsValid() && grp.EnabledInHierarchy)
                 childCtx = grp.ApplyTo(ctx);
 
             // Lay out this child's RectTransform.
@@ -413,7 +413,7 @@ public class GameCanvas : Component, IRenderSync
             Rect? childScissor = canvasScissor;
             UIClip? childClip = activeClip;
             RectMask? rectMask = child.GetComponent<RectMask>();
-            if (rectMask != null && rectMask.EnabledInHierarchy && child.RectTransform is { } maskRt)
+            if (rectMask.IsValid() && rectMask.EnabledInHierarchy && child.RectTransform is { } maskRt)
             {
                 // The innermost mask supplies the shader clip; nested masks still intersect for the cull.
                 childClip = ComputeClip(rectMask);
@@ -472,7 +472,7 @@ public class GameCanvas : Component, IRenderSync
         // so compare them explicitly or a stretched child would render at its stale size/alpha.
         RectTransform? sizeRt = ui.GameObject.RectTransform;
         Float2 size = sizeRt.IsValid() ? sizeRt.ComputedRect.Size : Float2.Zero;
-        bool needsBake = ui.CachedMesh is null
+        bool needsBake = ui.CachedMesh.IsNotValid()
                       || (ui.DirtyFlags & UIDirtyFlags.Vertices) != 0
                       || !ui.LastBakeSize.Equals(size)
                       || !ui.LastBakeAlpha.Equals(childCtx.Alpha)
@@ -603,10 +603,10 @@ public class GameCanvas : Component, IRenderSync
 
         RectTransform? canvasRT = GameObject.RectTransform;
         GameObject? cur = rt.GameObject.Parent;
-        while (cur != null)
+        while (cur.IsValid())
         {
             RectTransform? prt = cur.RectTransform;
-            if (prt == null || prt == canvasRT) break;
+            if (prt.IsNotValid() || prt == canvasRT) break;
 
             Rect pcr = prt.ComputedRect;
             float pPivotX = pcr.Min.X + prt.Pivot.X * pcr.Size.X;

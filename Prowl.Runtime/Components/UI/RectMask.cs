@@ -54,7 +54,7 @@ public class RectMask : UIBehaviour
     public Rect GetClipRectInCanvasPixels()
     {
         RectTransform? rt = GameObject.RectTransform;
-        if (rt is null) return new Rect(0, 0, 0, 0);
+        if (rt.IsNotValid()) return new Rect(0, 0, 0, 0);
         Rect r = rt.ComputedRect;
         return new Rect(
             r.Min.X + _padding.X,

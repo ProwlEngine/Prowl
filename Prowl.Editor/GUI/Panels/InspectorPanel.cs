@@ -51,7 +51,7 @@ public class InspectorPanel : DockPanel
         if (state["selection"] is not System.Text.Json.Nodes.JsonArray arr) return;
 
         Scene scene = Runtime.Resources.Scene.Current;
-        if (scene == null) return;
+        if (scene.IsNotValid()) return;
 
         bool first = true;
         foreach (JsonNode? node in arr)
@@ -59,7 +59,7 @@ public class InspectorPanel : DockPanel
             string? guidStr = node?.GetValue<string>();
             if (!Guid.TryParse(guidStr, out Guid guid)) continue;
             GameObject? go = scene.FindObjectByIdentifier<GameObject>(guid);
-            if (go == null) continue;
+            if (go.IsNotValid()) continue;
 
             if (first) { Selection.Select(go); first = false; }
             else Selection.AddToSelection(go);
@@ -352,7 +352,7 @@ public class InspectorPanel : DockPanel
         if (DragDrop.Payload is not AssetDragPayload payload) return;
 
         var go = Selection.ActiveObject as GameObject;
-        if (go == null || Selection.GetSelected<GameObject>().Count() != 1) return;
+        if (go.IsNotValid() || Selection.GetSelected<GameObject>().Count() != 1) return;
 
         Type? componentType = Prowl.Editor.Projects.Scripting.ScriptComponentResolver.ResolveComponentType(payload);
         if (componentType == null) return;
@@ -699,7 +699,7 @@ public class InspectorPanel : DockPanel
         // scope so Origami widgets are disabled. Editors that draw non-Origami interactive elements gate them
         // on Origami.IsReadOnly themselves (e.g. TextureAssetEditor's Save button).
         Asset? asset = Runtime.AssetDatabase.Get(item.Guid);
-        if (asset != null)
+        if (asset.IsValid())
         {
             AssetImporterEditor? subEditor = parentEntry != null ? EditorRegistries.GetAssetEditor(asset.GetType()) : null;
             if (subEditor != null)
@@ -749,50 +749,16 @@ public class InspectorPanel : DockPanel
         Origami.Separator(paper, "insp_sub_sep3").Show();
 
         // Extract button clone sub-asset to a standalone file
-        Origami.Button(paper, "insp_sub_extract", $"{EditorIcons.FileExport}  {Loc.Get("inspector.extract_as_asset")}", () => ExtractSubAsset(item, parentEntry, subEntry, asset)).Show();
+        Origami.Button(paper, "insp_sub_extract", $"{EditorIcons.FileExport}  {Loc.Get("inspector.extract_as_asset")}", () => ExtractSubAsset(db, item, parentEntry)).Show();
     }
 
-    private void ExtractSubAsset(ContentItem item, AssetEntry? parentEntry, SubAssetEntry? subEntry, EngineObject? obj)
+    private void ExtractSubAsset(EditorAssetBackend db, ContentItem item, AssetEntry? parentEntry)
     {
-        if (obj is not Asset asset || parentEntry == null || Project.Current == null) return;
+        if (parentEntry == null) return;
 
-        EditorAssetBackend? db = EditorAssetBackend.Instance;
-        if (db == null) return;
-
-        // Determine target path same folder as parent, with sub-asset name
         string parentDir = Path.GetDirectoryName(parentEntry.Path)?.Replace('\\', '/') ?? "";
-        string ext = asset switch
-        {
-            Prowl.Runtime.Resources.Material => ".mat",
-            Prowl.Runtime.Resources.Mesh => ".mesh",
-            Prowl.Runtime.AnimationClip => ".anim",
-            Prowl.Runtime.Resources.Texture2D => ".png",
-            _ => ".asset"
-        };
-
-        // Never over an existing file, and never a path segment from the sub-asset's name.
-        string absFolder = AssetCreateMenu.GetAbsoluteFolder(parentDir);
-        string fileName = AssetCreateMenu.FindUniqueName(absFolder, Utils.EditorUtils.SafeFileName(item.Name, "Extracted"), ext);
-        string relativePath = string.IsNullOrEmpty(parentDir) ? fileName : $"{parentDir}/{fileName}";
-
-        // Written as the root, so in full, with whatever it references kept as references.
-        asset.Load();
-        try
-        {
-            EchoObject echo = Echo.Serializer.Serialize(typeof(object), asset);
-
-            if (echo != null)
-            {
-                string absPath = Path.Combine(Project.Current.AssetsPath, relativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(absPath)!);
-                File.WriteAllText(absPath, echo.WriteToString());
-                Runtime.Debug.Log($"Extracted sub-asset '{item.Name}' to '{relativePath}'");
-            }
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogError($"Failed to extract sub-asset: {ex.Message}");
-        }
+        if (db.ExtractSubAsset(item.Guid, parentDir) is { } relativePath)
+            Runtime.Debug.Log($"Extracted sub-asset '{item.Name}' to '{relativePath}'");
     }
 
     /// <summary>

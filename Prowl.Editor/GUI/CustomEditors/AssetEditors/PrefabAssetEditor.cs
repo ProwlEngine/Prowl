@@ -16,7 +16,7 @@ public class PrefabAssetEditor : AssetImporterEditor
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
         var prefab = asset as PrefabAsset;
-        if (prefab == null) return;
+        if (prefab.IsNotValid()) return;
 
         Origami.Header(paper, $"{id}_hdr", $"{EditorIcons.Cubes}  {Loc.Get("prefab.title", new { name = prefab.Name })}").Underline().Show();
 

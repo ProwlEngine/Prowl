@@ -38,6 +38,7 @@ public static class PlayerSettingsLoader
         ApplyTime(settingsDir);
         ApplyNetworking(settingsDir);
         ApplyTagsAndLayers(settingsDir);
+        ApplyQuality(settingsDir);
 
         // Physics needs to apply to each new scene's PhysicsWorld
         ApplyPhysics(settingsDir);
@@ -107,7 +108,7 @@ public static class PlayerSettingsLoader
             float specRelax = settings.TryGet("SpeculativeRelaxationFactor", out EchoObject? sr) ? sr!.FloatValue : 0.9f;
 
             Scene scene = Resources.Scene.Current;
-            if (scene != null)
+            if (scene.IsValid())
             {
                 scene.Physics.Gravity = new Vector.Float3(gx, gy, gz);
                 scene.Physics.SolverIterations = solverIter;
@@ -208,6 +209,22 @@ public static class PlayerSettingsLoader
             Debug.Log("[PlayerSettings] Time applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply time: {ex.Message}"); }
+    }
+
+    /// <summary>The quality levels and the one the player starts at.</summary>
+    private static void ApplyQuality(string dir)
+    {
+        EchoObject? settings = Read(dir, PlayerSettingsFiles.Quality);
+        if (settings == null) return;
+
+        try
+        {
+            List<QualityLevel> levels = settings.TryGet("Levels", out EchoObject? levelsProp) ? Serializer.Deserialize<List<QualityLevel>>(levelsProp) ?? [] : [];
+            int active = settings.TryGet("Active", out EchoObject? activeProp) ? activeProp!.IntValue : 0;
+            QualitySettings.Set(levels, active);
+            Debug.Log($"[PlayerSettings] Quality applied ({QualitySettings.Active.Name}).");
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply quality: {ex.Message}"); }
     }
 
     private static void ApplyTagsAndLayers(string dir)

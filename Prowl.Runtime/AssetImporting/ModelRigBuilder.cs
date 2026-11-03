@@ -103,9 +103,10 @@ internal static class ModelRigBuilder
 
     /// <summary>
     /// Which parts of a bone's movement a clip moves the character by, rather than keeping in the pose.
-    /// The bone is the one carrying the body, the hips on a humanoid.
+    /// The bone is the one carrying the body, the hips on a humanoid. Height follows the lower of the
+    /// feet when the rig names them, and the body bone when it does not.
     /// </summary>
-    public readonly record struct RootExtraction(int Bone, bool Travel, bool Turn, bool Height)
+    public readonly record struct RootExtraction(int Bone, bool Travel, bool Turn, bool Height, int[]? Feet = null)
     {
         public static readonly RootExtraction None = new(-1, false, false, false);
 
@@ -250,13 +251,15 @@ internal static class ModelRigBuilder
 
         float turn = root.Turn ? NetTurn(body) : 0f;
         Float3 start = body[0].position;
+        float[]? ground = root.Height ? Ground(poses, skeleton, root.Feet) : null;
 
         var frames = new Transform3D[count];
         for (int f = 0; f < count; f++)
         {
             float t = count > 1 ? f / (float)(count - 1) : 0f;
             Float3 moved = body[f].position - start;
-            var position = new Float3(root.Travel ? moved.X : 0f, root.Height ? moved.Y : 0f, root.Travel ? moved.Z : 0f);
+            float height = ground != null ? ground[f] - ground[0] : moved.Y;
+            var position = new Float3(root.Travel ? moved.X : 0f, root.Height ? height : 0f, root.Travel ? moved.Z : 0f);
             frames[f] = new Transform3D(position, Quaternion.AxisAngle(Float3.UnitY, turn * t), Float3.One);
 
             // The body keeps whatever the root does not take, in the root's frame.
@@ -264,6 +267,24 @@ internal static class ModelRigBuilder
             poses[f].SetTransform(root.Bone, Delta(parent[f], kept));
         }
         return new RootMotion(frames, duration);
+    }
+
+    /// <summary>The height of the lower foot each frame, or null when the rig names no feet.</summary>
+    private static float[]? Ground(Pose[] poses, MotionSkeleton skeleton, int[]? feet)
+    {
+        if (feet == null) return null;
+        int[] valid = Array.FindAll(feet, b => b >= 0 && b < skeleton.BoneCount);
+        if (valid.Length == 0) return null;
+
+        var ground = new float[poses.Length];
+        for (int f = 0; f < poses.Length; f++)
+        {
+            float lowest = float.MaxValue;
+            foreach (int foot in valid)
+                lowest = MathF.Min(lowest, Combine(ParentModelSpace(poses[f], skeleton, foot), poses[f].GetTransform(foot)).position.Y);
+            ground[f] = lowest;
+        }
+        return ground;
     }
 
     /// <summary>

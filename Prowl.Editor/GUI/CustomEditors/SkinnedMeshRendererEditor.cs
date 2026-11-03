@@ -32,7 +32,7 @@ public class SkinnedMeshRendererEditor : CustomEditor
 
         Mesh? mesh = renderer.SharedMesh;
         int count = mesh.IsValid() ? mesh.BlendShapeCount : 0;
-        if (mesh == null || count == 0)
+        if (mesh.IsNotValid() || count == 0)
             return;
 
         Origami.Separator(paper, $"{id}_bs_sep").Show();

@@ -222,7 +222,7 @@ public sealed class NavMeshWorld
     /// </summary>
     public NavMeshInstance? AddNavMeshData(NavMeshData data)
     {
-        if (data == null || !data.HasTiles) return null;
+        if (data.IsNotValid() || !data.HasTiles) return null;
 
         // Refused before instantiating: a query attaches to exactly one Detour navmesh, so a
         // second registration would contour every tile and then never be consulted.
@@ -988,7 +988,7 @@ public sealed class NavMeshWorld
             // Without this a Detour throw from the swap surfaces from the scene's update as a
             // once-only error, far from the rebuild that queued it, and takes the rest of the
             // frame's swaps with it.
-            Debug.LogError($"[Navigation] A deferred tile swap threw and was dropped: {ex.Message}\n{ex.StackTrace}");
+            Debug.LogException($"[Navigation] A deferred tile swap threw and was dropped", ex);
         }
         finally
         {

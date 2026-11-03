@@ -32,7 +32,7 @@ internal sealed class WindowPresent
         if (_copy == null)
         {
             ShaderDefinition definition = ShaderParser.Parse(EmbeddedResources.ReadAllText("Assets/Defaults/Shaders/PaperCanvas.shader"));
-            definition.Create(Graphics.Device!, Graphics.Compiler, new Variant(), CompileMode.All);
+            definition.Create(Graphics.Device!, Graphics.ShaderCompiler);
             _copy = definition.Passes![1];
         }
 

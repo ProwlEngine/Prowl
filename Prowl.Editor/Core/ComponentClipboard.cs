@@ -43,7 +43,7 @@ public static class ComponentClipboard
     /// <summary>Serialize a component onto the system clipboard.</summary>
     public static void Copy(Component comp)
     {
-        if (comp == null) return;
+        if (comp.IsNotValid()) return;
 
         DependencySerializationContext context = SerializeContext(comp);
         EchoObject data = Serializer.Serialize(comp.GetType(), comp, context);
@@ -103,7 +103,7 @@ public static class ComponentClipboard
     /// </summary>
     public static Component? PasteAsNew(GameObject go)
     {
-        if (go == null) return null;
+        if (go.IsNotValid()) return null;
 
         try
         {
@@ -111,7 +111,7 @@ public static class ComponentClipboard
                 return null;
 
             var comp = Serializer.Deserialize(data, type, DeserializeContext()) as Component;
-            if (comp == null) return null;
+            if (comp.IsNotValid()) return null;
 
             // AddComponent(instance) attaches, registers with the scene and fires OnAddedToScene /
             // OnEnable, so the pasted component is live immediately.
@@ -138,7 +138,7 @@ public static class ComponentClipboard
                     GameObject g = Undo.FindGO(goId)!;
                     if (g.IsNotValid()) return;
                     var restored = Serializer.Deserialize(compData, compType, DeserializeContext()) as Component;
-                    if (restored == null) return;
+                    if (restored.IsNotValid()) return;
                     restored.Identifier = compId;
                     g.AddComponent(restored);
                     restored.OnValidate();
@@ -161,7 +161,7 @@ public static class ComponentClipboard
     /// </summary>
     public static bool PasteValues(Component target)
     {
-        if (target == null) return false;
+        if (target.IsNotValid()) return false;
 
         try
         {
@@ -180,8 +180,8 @@ public static class ComponentClipboard
             var after = new MemoryCopy(data, s_linkedAssets);
 
             Undo.RegisterAction("Paste Component Values",
-                undo: () => { Component? c = Undo.FindComponent(compId); if (c != null) ApplyState(c, before.Data); },
-                redo: () => { Component? c = Undo.FindComponent(compId); if (c != null) ApplyState(c, after.Data); });
+                undo: () => { Component? c = Undo.FindComponent(compId); if (c.IsValid()) ApplyState(c, before.Data); },
+                redo: () => { Component? c = Undo.FindComponent(compId); if (c.IsValid()) ApplyState(c, after.Data); });
 
             EditorSceneManager.MarkDirty();
             return true;

@@ -164,6 +164,9 @@ public static class Input
     /// </summary>
     public static void PushLockContext(CursorLockContext context) => _lockContextStack.Push(context);
 
+    /// <summary>Whether <paramref name="context"/> is the topmost lock context.</summary>
+    public static bool IsTopLockContext(CursorLockContext context) => _lockContextStack.Count > 0 && ReferenceEquals(_lockContextStack.Peek(), context);
+
     /// <summary>
     /// Pop the topmost lock context. If the cursor is locked and the stack becomes empty
     /// or the new top disallows locks, the cursor is automatically unlocked.

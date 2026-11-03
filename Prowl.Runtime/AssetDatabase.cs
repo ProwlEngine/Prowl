@@ -132,7 +132,7 @@ public static class AssetDatabase
     public static async Task<T?> LoadAsync<T>(Guid assetId, CancellationToken cancel = default) where T : Asset
     {
         T? asset = Get<T>(assetId);
-        if (asset != null) await asset.LoadAsync(cancel);
+        if (asset.IsValid()) await asset.LoadAsync(cancel);
         return asset;
     }
 
@@ -145,7 +145,7 @@ public static class AssetDatabase
         if (assetId == Guid.Empty) return null;
 
         Asset? asset = s_assets.TryGetValue(assetId, out Asset? existing) ? existing : null;
-        if (asset == null)
+        if (ReferenceEquals(asset, null))
         {
             Type? type = GetAssetType(assetId);
             if (type != null) asset = GetOrCreate(assetId, type, AssetState.Unloaded);
@@ -378,13 +378,13 @@ public static class AssetDatabase
     private static void Raise(Action<Asset>? handler, Asset asset)
     {
         try { handler?.Invoke(asset); }
-        catch (Exception ex) { Debug.LogError($"An asset event handler threw for '{asset.Name}': {ex}"); }
+        catch (Exception ex) { Debug.LogException($"An asset event handler threw for '{asset.Name}'", ex); }
     }
 
     private static void RaiseReloaded(Asset asset, ReloadReason reason)
     {
         try { Reloaded?.Invoke(asset, reason); }
-        catch (Exception ex) { Debug.LogError($"An asset event handler threw for '{asset.Name}': {ex}"); }
+        catch (Exception ex) { Debug.LogException($"An asset event handler threw for '{asset.Name}'", ex); }
     }
 
     /// <summary>Loads a set of assets, and by default everything they depend on, holding them all until the group is disposed.</summary>
@@ -460,7 +460,7 @@ public static class AssetDatabase
     public static async Task<T?> FindResourceAsync<T>(string loadPath, CancellationToken cancel = default) where T : Asset
     {
         T? asset = FindUnloaded<T>(loadPath);
-        if (asset != null) await asset.LoadAsync(cancel);
+        if (asset.IsValid()) await asset.LoadAsync(cancel);
         return asset;
     }
 
@@ -780,7 +780,7 @@ public static class AssetDatabase
         }
 
         try { WalkingRoots?.Invoke(s_walker); }
-        catch (Exception ex) { Debug.LogError($"Walking extra asset roots threw: {ex}"); }
+        catch (Exception ex) { Debug.LogException($"Walking extra asset roots threw", ex); }
 
         s_walker.VisitHeldStatics();
     }

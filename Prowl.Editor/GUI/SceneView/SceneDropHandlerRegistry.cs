@@ -54,11 +54,11 @@ internal class MaterialDropHandler : ISceneDropHandler
     public void Handle(AssetDragPayload payload, SceneDropContext context)
     {
         GameObject? hitGO = SceneViewPanel.PickObjectAt(context.Scene, context.Camera, context.MouseLocal, context.PanelSize);
-        if (hitGO == null) return;
+        if (hitGO.IsNotValid()) return;
         var mat = Runtime.AssetDatabase.Get(payload.AssetGuid) as Material;
-        if (mat == null) return;
+        if (mat.IsNotValid()) return;
         MeshRenderer? meshRenderer = hitGO.GetComponent<MeshRenderer>();
-        if (meshRenderer != null) { meshRenderer.Material = mat; EditorSceneManager.MarkDirty(); }
+        if (meshRenderer.IsValid()) { meshRenderer.Material = mat; EditorSceneManager.MarkDirty(); }
     }
 }
 

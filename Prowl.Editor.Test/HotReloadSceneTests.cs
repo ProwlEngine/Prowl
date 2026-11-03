@@ -441,4 +441,47 @@ public class HotReloadSceneTests : EditorTestHarness
         PropertyOverride recorded = Assert.Single(instance.PrefabOverrides);
         Assert.EndsWith("Value", recorded.Path);
     }
+
+    // The list of fields an override can address is cached per type. Carried across a recompile it would
+    // still name the old fields: a renamed one has no counterpart and arrives as null, and an added one
+    // is missing, so its edits would never be recorded.
+    // Each case names its own type: compiled assemblies stay loaded for the run, and a prefab binds its
+    // component by type name.
+    [Theory]
+    [InlineData("Gauge", "public int Value; public int Renamed; public int Added;")]
+    [InlineData("Meter", "public int Value; public int Old; public int Added;")]
+    public void RealRecompile_ChangedFields_AreComparedOnPrefabInstances(string typeName, string v2Fields)
+    {
+        Assembly v1 = CompileGameAssembly($"{typeName}.cs",
+            $"using Prowl.Runtime; public class {typeName} : Component {{ public int Value; public int Old; }}");
+        Type typeV1 = v1.GetType(typeName)!;
+
+        var authored = new GameObject("Root");
+        authored.AddComponent(typeV1);
+        Guid guid = CreatePrefabAsset(authored, $"{typeName}.prefab");
+
+        GameObject instance = GameObject.InstantiateDetached(GetPrefab(guid)!)!;
+        var scene = new Scene();
+        scene.Add(instance);
+        Scene.Load(scene);
+        Scene.ProcessPendingLoad();
+
+        // Warm the field cache against v1.
+        Prefabs.PrefabUtility.ReconcileInstance(instance);
+
+        Assembly v2 = CompileGameAssembly($"{typeName}.cs",
+            $"using Prowl.Runtime; public class {typeName} : Component {{ {v2Fields} }}");
+        Type typeV2 = v2.GetType(typeName)!;
+
+        SceneHotReload.Migrate(Scene.Current!, v1, v2);
+
+        Component migrated = instance.GetComponents().Single(c => c.GetType().Name == typeName);
+        Assert.Same(typeV2, migrated.GetType());
+
+        typeV2.GetField("Added")!.SetValue(migrated, 7);
+        Prefabs.PrefabUtility.ReconcileInstance(instance);
+
+        PropertyOverride recorded = Assert.Single(instance.PrefabOverrides);
+        Assert.EndsWith("Added", recorded.Path);
+    }
 }

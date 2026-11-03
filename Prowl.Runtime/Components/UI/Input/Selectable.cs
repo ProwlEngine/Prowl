@@ -58,15 +58,15 @@ public class Selectable : UIBehaviour,
         if (!_interactable) return false;
 
         GameObject? node = GameObject;
-        while (node != null)
+        while (node.IsValid())
         {
             CanvasGroup? grp = node.GetComponent<CanvasGroup>();
-            if (grp != null && grp.EnabledInHierarchy)
+            if (grp.IsValid() && grp.EnabledInHierarchy)
             {
                 if (!grp.Interactable) return false;
                 if (grp.IgnoreParentGroups) break;
             }
-            if (node.GetComponent<GameCanvas>() != null) break; // reached the canvas root
+            if (node.GetComponent<GameCanvas>().IsValid()) break; // reached the canvas root
             node = node.Parent;
         }
         return true;
@@ -214,7 +214,7 @@ public class Selectable : UIBehaviour,
     {
         if (!Application.IsPlaying) return;
         if (_transition != SelectableTransition.ColorTint) return;
-        if (TargetGraphic == null) return;
+        if (TargetGraphic.IsNotValid()) return;
 
         float dur = _transitionDuration;
         if (dur <= 0f || _transitionElapsed >= dur)
@@ -307,7 +307,7 @@ public class Selectable : UIBehaviour,
         _toColor = target;
         _transitionElapsed = immediate ? float.PositiveInfinity : 0f;
 
-        if (immediate && TargetGraphic != null)
+        if (immediate && TargetGraphic.IsValid())
         {
             TargetGraphic.Color = target;
             _displayedColor = target;
@@ -335,7 +335,7 @@ public class Selectable : UIBehaviour,
             _                          => _authoredSprite,
         };
 
-        image.Sprite = next is null ? _authoredSprite : next;
+        image.Sprite = next.IsNotValid() ? _authoredSprite : next;
     }
 
     private SelectionState ComputeState()
@@ -397,7 +397,7 @@ public class Selectable : UIBehaviour,
     public Selectable? FindSelectable(Float2 dir)
     {
         Scene? scene = GameObject.Scene;
-        if (scene is null) return null;
+        if (scene.IsNotValid()) return null;
         if (!TryWorldCenter(this, out Float3 origin, out Float4x4 model)) return null;
 
         // Map the design-space direction through the canvas so a rotated (or world-space) canvas
@@ -449,7 +449,7 @@ public class Selectable : UIBehaviour,
         model = Float4x4.Identity;
 
         RectTransform? rt = s.GameObject.RectTransform;
-        if (rt is null) return false;
+        if (rt.IsNotValid()) return false;
 
         GameCanvas? canvas = s.GetCanvas();
         if (canvas.IsNotValid()) return false;

@@ -75,7 +75,7 @@ public static class AnimationNodeRegistry
             try { node = (AnimationGraphNode)Activator.CreateInstance(type)!; }
             catch (Exception ex)
             {
-                Debug.LogError($"[AnimationGraph] Could not create the node type {type.FullName}: {ex.InnerException?.Message ?? ex.Message}");
+                Debug.LogException($"[AnimationGraph] Could not create the node type {type.FullName}", ex);
                 continue;
             }
 
@@ -480,7 +480,7 @@ public sealed class GraphCompileContext
     public Motion.AnimationClipBase? Clip(GraphNodeRecord record, AssetSetting setting)
     {
         AnimationClip? asset = ClipAsset(record, setting);
-        if (asset == null) return null;
+        if (asset.IsNotValid()) return null;
 
         Motion.AnimationClipBase? clip = asset.GetClip(Avatar);
         if (clip == null)

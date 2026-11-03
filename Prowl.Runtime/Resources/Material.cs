@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Graphite.Rendering;
@@ -206,6 +207,12 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
     /// <summary>Sets a texture's scale (xy) and offset (zw), kept as the vector "name_ST".</summary>
     public void SetTextureScaleOffset(string name, Float4 scaleOffset) => SetVector(name + "_ST", scaleOffset);
 
+    /// <summary>Sets the channel a map reads a scalar input from, 0 to 3 for R to A, kept as the int "name_Channel".</summary>
+    public void SetTextureChannel(string name, int channel) => SetInt(name + "_Channel", channel);
+
+    /// <summary>Sets the UV set a map samples, 0 or 1, kept as the int "name_UVSet".</summary>
+    public void SetTextureUVSet(string name, int uvSet) => SetInt(name + "_UVSet", uvSet);
+
     /// <summary>A texture's scale (xy) and offset (zw), (1, 1, 0, 0) when nothing sets it.</summary>
     public Float4 GetTextureScaleOffset(string name)
     {
@@ -213,6 +220,36 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         string key = name + "_ST";
         if (_properties.HasVector4(key)) return _properties.GetVector4(key);
         return _parent.IsValid() ? _parent.GetTextureScaleOffset(name) : MaterialValue.IdentityScaleOffset;
+    }
+
+    /// <summary>Turns a map's UV counter clockwise by radians after its scale, before its offset, kept as the float "name_Rotation".</summary>
+    public void SetTextureRotation(string name, float radians) => SetFloat(name + "_Rotation", radians);
+
+    /// <summary>The channel a map reads a scalar input from, R (0) when nothing sets it.</summary>
+    public int GetTextureChannel(string name)
+    {
+        EnsureLoaded();
+        string key = name + "_Channel";
+        if (_properties.HasInt(key)) return _properties.GetInt(key);
+        return _parent.IsValid() ? _parent.GetTextureChannel(name) : 0;
+    }
+
+    /// <summary>The UV set a map samples, 0 when nothing sets it.</summary>
+    public int GetTextureUVSet(string name)
+    {
+        EnsureLoaded();
+        string key = name + "_UVSet";
+        if (_properties.HasInt(key)) return _properties.GetInt(key);
+        return _parent.IsValid() ? _parent.GetTextureUVSet(name) : 0;
+    }
+
+    /// <summary>A map's rotation in radians, 0 when nothing sets it.</summary>
+    public float GetTextureRotation(string name)
+    {
+        EnsureLoaded();
+        string key = name + "_Rotation";
+        if (_properties.HasFloat(key)) return _properties.GetFloat(key);
+        return _parent.IsValid() ? _parent.GetTextureRotation(name) : 0f;
     }
 
     public Texture2D? GetTexture(string name) { EnsureLoaded(); return _overrides.Contains(name) || _parent.IsNotValid() ? _properties.GetTexture(name) : _parent.GetTexture(name); }
@@ -238,10 +275,11 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         _properties.Remove(name);
         _gpu?.ClearOverride(name);
         _boundTextures.Remove(name);
-        if (_gpu != null && ScaleOffsetTexture(name) is { } texture)
+        if (_gpu != null && SettingTexture(name) is { } texture)
         {
             _gpu.ClearOverride(texture);
             Push(texture);
+            foreach (string suffix in s_textureSettings) Push(texture + suffix);
         }
     }
 
@@ -264,7 +302,27 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         EnsureLoaded();
         if (_keywords.TryGetValue(axis, out string? current) && current == value) return;
         _keywords[axis] = value;
-        _gpu?.SetKeyword(axis, value);
+        PushKeyword(axis, value);
+    }
+
+    /// <summary>The material axis of a Graphite shader by name, null when it has none of that name.</summary>
+    public static MaterialAxis? FindAxis(GShader shader, string name)
+    {
+        foreach (VariantSpace axis in shader.MaterialAxes)
+            if (axis.Name == name) return shader.Axis(name);
+        return null;
+    }
+
+    // Axes the shader lacks, or values it does not take, stay on this material only
+    private void PushKeyword(string axis, string? value)
+    {
+        if (_gpu == null || FindAxis(_gpu.Shader, axis) is not { } gpuAxis) return;
+        if (value != null && !gpuAxis.Values.Contains(value))
+        {
+            Debug.LogWarningOnce($"Material.Keyword.{_gpu.Shader.Name}.{axis}.{value}", $"The axis {axis} of {_gpu.Shader.Name} has no value {value}, only {string.Join(" ", gpuAxis.Values)}.");
+            return;
+        }
+        _gpu.Set(gpuAxis, value);
     }
 
     /// <summary>
@@ -275,7 +333,7 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
     {
         EnsureLoaded();
         if (_keywords.TryGetValue(axis, out string? value)) return value;
-        if (GpuMaterial is { } gpu) return gpu.GetKeyword(axis);
+        if (GpuMaterial is { } gpu) return FindAxis(gpu.Shader, axis) is { } gpuAxis ? gpu.Get(gpuAxis) : "";
         return _parent.IsValid() ? _parent.GetKeyword(axis) : "";
     }
 
@@ -286,7 +344,7 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
     public void RevertKeyword(string axis)
     {
         EnsureLoaded();
-        if (_keywords.Remove(axis)) _gpu?.ClearOverride(axis);
+        if (_keywords.Remove(axis)) PushKeyword(axis, null);
     }
 
     /// <summary>Whether a toggle keyword is on.</summary>
@@ -421,7 +479,7 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         foreach ((Graphite.PropertyID name, _) in new List<(Graphite.PropertyID, MaterialValue)>(_gpu.LocalValues))
             if (!_overrides.Contains(Graphite.PropertyID.ToString(name) ?? "")) _gpu.ClearOverride(name);
         foreach (string name in _properties.EnumerateNames()) Push(name);
-        foreach (KeyValuePair<string, string> keyword in _keywords) _gpu.SetKeyword(keyword.Key, keyword.Value);
+        foreach (KeyValuePair<string, string> keyword in _keywords) PushKeyword(keyword.Key, keyword.Value);
         _gpu.RenderQueue = _renderQueue;
         _gpu.CastShadows = _castShadows;
         _gpu.Surface = _surface?.Settings.ToGraphite();
@@ -433,8 +491,15 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         if (_gpu == null) return;
         if (_gpu.Shader.FindProperty(name) < 0)
         {
-            if (ScaleOffsetTexture(name) is { } texture && _properties.HasVector4(name))
+            if (SettingTexture(name) is not { } texture) return;
+            if (name.EndsWith("_ST", StringComparison.Ordinal) && _properties.HasVector4(name))
                 _gpu.SetTextureScaleOffset(texture, _properties.GetVector4(name));
+            else if (name.EndsWith("_Channel", StringComparison.Ordinal) && _properties.HasInt(name))
+                _gpu.SetTextureChannel(texture, _properties.GetInt(name));
+            else if (name.EndsWith("_UVSet", StringComparison.Ordinal) && _properties.HasInt(name))
+                _gpu.SetTextureUVSet(texture, _properties.GetInt(name));
+            else if (name.EndsWith("_Rotation", StringComparison.Ordinal) && _properties.HasFloat(name))
+                _gpu.SetTextureRotation(texture, _properties.GetFloat(name));
             return;
         }
         MaterialProperties p = _properties;
@@ -450,13 +515,20 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         else if (p._texturesCube.TryGetValue(name, out Cubemap? tc)) PushTexture(name, tc);
     }
 
-    // The texture property a "name_ST" vector scales and offsets, or null
-    private string? ScaleOffsetTexture(string name)
+    private static readonly string[] s_textureSettings = ["_ST", "_Channel", "_UVSet", "_Rotation"];
+
+    // The texture property a "name_ST", "name_Channel", "name_UVSet" or "name_Rotation" setting belongs to, or null
+    private string? SettingTexture(string name)
     {
-        if (_gpu == null || !name.EndsWith("_ST", StringComparison.Ordinal)) return null;
-        string texture = name[..^3];
-        int index = _gpu.Shader.FindProperty(texture);
-        return index >= 0 && _gpu.Shader.Properties[index].Type >= MaterialPropertyType.Texture2D ? texture : null;
+        if (_gpu == null) return null;
+        foreach (string suffix in s_textureSettings)
+        {
+            if (!name.EndsWith(suffix, StringComparison.Ordinal)) continue;
+            string texture = name[..^suffix.Length];
+            int index = _gpu.Shader.FindProperty(texture);
+            return index >= 0 && _gpu.Shader.Properties[index].Type >= MaterialPropertyType.Texture2D ? texture : null;
+        }
+        return null;
     }
 
     // Older materials store ints and floats under either kind, so the value follows the shader's type
@@ -535,50 +607,6 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         _properties ??= new();
         if (_overrides.Count == 0)
             foreach (string name in _properties.EnumerateNames()) _overrides.Add(name);
-        if (_shader.IsValid() && Shader.Legacy.TryGetValue(_shader.AssetID, out var legacy))
-            AdoptLegacy(legacy.Shader, legacy.Surface, legacy.Anisotropic);
-    }
-
-    /// <summary>
-    /// Moves a material of a shader from before Graphite onto Lit or Unlit with the same look: the surface the old file
-    /// stood for, no placeholder textures, metallic at zero where no surface map gave it, emission on where an emission
-    /// map was set.
-    /// </summary>
-    internal void AdoptLegacy(DefaultShader shader, SurfaceSettings surface, bool anisotropic)
-    {
-        _shader = Shader.GetDefault(shader);
-        _surface ??= new SurfaceData(surface);
-
-        bool RealTexture(string slot) => _properties.GetTexture(slot) is { } texture && texture.IsValid() && !BuiltInAssets.IsPlaceholderTexture(texture.AssetID);
-        bool hadSurfaceMap = RealTexture("_SurfaceTex");
-        bool hadEmissionMap = RealTexture("_EmissionTex");
-        foreach (string slot in s_legacySlots)
-        {
-            if (_properties.GetTexture(slot) is { } texture && texture.IsValid() && BuiltInAssets.IsPlaceholderTexture(texture.AssetID))
-                Forget(slot);
-        }
-        if (shader != DefaultShader.Lit) return;
-
-        if (!hadSurfaceMap) Forget("_Metallic");
-        if (hadEmissionMap)
-        {
-            _properties.SetInt("_Emission", 1);
-            _overrides.Add("_Emission");
-        }
-        if (!anisotropic) Forget("_Anisotropy");
-        else if (!_overrides.Contains("_Anisotropy"))
-        {
-            _properties.SetFloat("_Anisotropy", 0.5f);
-            _overrides.Add("_Anisotropy");
-        }
-    }
-
-    private static readonly string[] s_legacySlots = ["_MainTex", "_NormalTex", "_SurfaceTex", "_OcclusionTex", "_EmissionTex", "_ParallaxMap", "_TranslucencyMap", "_AnisoDirectionMap"];
-
-    private void Forget(string name)
-    {
-        _properties.Remove(name);
-        _overrides.Remove(name);
     }
 
     // The Graphite material outlives reloads, so renderers drawing with it see the new values

@@ -171,7 +171,7 @@ public class Animator : Component
             return;
         }
 
-        if (_animator != null && Graph is null) return;
+        if (_animator != null && Graph.IsNotValid()) return;
         _pendingParameters[name] = value;
     }
 
@@ -290,7 +290,7 @@ public class Animator : Component
     private ExternalPoseInstance? FindExternalPose(string name)
     {
         AnimationGraph? asset = Graph;
-        if (_graph == null || asset is null || !asset.TryGetCompiledMaps(_graph.Graph.Graph, out IReadOnlyDictionary<string, int>? nodes, out _)) return null;
+        if (_graph == null || asset.IsNotValid() || !asset.TryGetCompiledMaps(_graph.Graph.Graph, out IReadOnlyDictionary<string, int>? nodes, out _)) return null;
 
         foreach (GraphNodeRecord record in asset.Nodes)
             if (record.Type == AnimationNodeIds.ExternalPose && record.Get(ExternalPoseNode.NameSetting) == name
@@ -320,7 +320,7 @@ public class Animator : Component
     public void Play(string clipName)
     {
         foreach (AnimationClip clip in Clips)
-            if (clip is not null && clip.Name == clipName) { Play(clip); return; }
+            if (clip.IsValid() && clip.Name == clipName) { Play(clip); return; }
         Debug.LogWarning($"[Animator] '{GameObject.Name}' has no clip named '{clipName}'.");
     }
 
@@ -366,7 +366,7 @@ public class Animator : Component
         if (_animator != null) return true;
 
         Avatar? avatar = Avatar;
-        if (avatar is null) return false;
+        if (avatar.IsNotValid()) return false;
         if (avatar.State is not (AssetState.Missing or AssetState.Failed)) avatar.Load();
         if (!avatar.IsLoaded)
         {
@@ -380,7 +380,7 @@ public class Animator : Component
         if (runtime == null) return false;
 
         AnimationGraph? graphAsset = Graph;
-        if (graphAsset is not null)
+        if (graphAsset.IsValid())
         {
             if (graphAsset.State is not (AssetState.Missing or AssetState.Failed)) graphAsset.LoadDependencies();
             if (!graphAsset.IsLoaded)
@@ -456,13 +456,17 @@ public class Animator : Component
         if (_autoPlayPending)
         {
             AnimationClip? first = Clips.Count > 0 ? Clips[0] : null;
-            if (first is null) return;
+            if (first.IsNotValid()) return;
             _autoPlayPending = false;
             Play(first!);
             return;
         }
 
-        if (_pending == null) return;
+        if (_pending.IsNotValid())
+        {
+            _pending = null;
+            return;
+        }
         if (Resolve(_pending) is not { } runtime) return;
 
         _clips!.Play(runtime, _pending.Loop);
@@ -475,7 +479,7 @@ public class Animator : Component
     private bool GraphOutOfDate(out AnimationGraph? asset)
     {
         asset = Graph;
-        if (asset is null || !ReferenceEquals(asset, _boundGraph)) return !ReferenceEquals(asset, _boundGraph);
+        if (ReferenceEquals(asset, null) || !ReferenceEquals(asset, _boundGraph)) return !ReferenceEquals(asset, _boundGraph);
         if (_seenEdits == AnimationGraph.Edits) return false;
 
         if (asset!.DeepVersion == _boundVersion)
@@ -537,7 +541,7 @@ public class Animator : Component
         var filter = new QueryFilter(GroundLayers);
         if (_ragdoll != null) filter = filter.Ignoring(_ragdoll.Bodies);
 
-        if (!Scene!.Physics.Raycast(origin, direction, out RaycastHit hit, maxDistance, filter))
+        if (!Scene!.Physics.Raycast(origin, direction, maxDistance, out RaycastHit hit, filter))
             return false;
 
         point = hit.Point;

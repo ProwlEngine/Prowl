@@ -72,19 +72,45 @@ public class HeadlessGraphicsTests
         Assert.NotEmpty(Passes(loaded));
     }
 
+    [Theory]
+    [MemberData(nameof(AllDefaultShaders))]
+    public void DefaultShader_EveryPassCompiles(DefaultShader shader)
+    {
+        foreach (ShaderPass pass in Passes(Shader.LoadDefault(shader)))
+        {
+            List<Keyword> combo = [];
+            foreach (VariantSpace axis in Graphics.Compiler.GetAxes(pass))
+                combo.Add(new Keyword(axis.Name, axis.Values[0]));
+            Graphics.Compiler.CompileProgram(pass, [.. combo]);
+        }
+    }
+
+    [Fact]
+    public void CustomTonemapShaders_CompileInsideTheDisplayEncode()
+    {
+        string shader = Rendering.PostEffect.TonemapShader("void main() { vec4 c = Graphite_SampleSource(vUV); outColor = vec4(c.rgb / (1.0 + c.rgb), c.a); }");
+        ShaderPass pass = FullscreenProgram.Pass(shader, "CustomTonemap");
+        List<Keyword> combo = [];
+        foreach (VariantSpace axis in Graphics.Compiler.GetAxes(pass))
+            combo.Add(new Keyword(axis.Name, axis.Name == "GRAPHITE_NO_SOURCE" ? "false" : axis.Values[0]));
+        Graphics.Compiler.CompileProgram(pass, [.. combo]);
+    }
+
     [Fact]
     public void Lit_ExposesPbrFactors()
     {
         // The model importer sets these factors, so every glTF material without textures depends on them
         HashSet<string> names = PropertyNames(Shader.LoadDefault(DefaultShader.Lit));
 
-        Assert.Contains("_Metallic", names);
-        Assert.Contains("_Roughness", names);
-        Assert.Contains("_OcclusionTex", names);
-        Assert.Contains("_OcclusionStrength", names);
-        Assert.Contains("_NormalScale", names);
-        Assert.Contains("_EmissiveColor", names);
-        Assert.Contains("_AlphaCutoff", names);
+        Assert.Contains("base_color", names);
+        Assert.Contains("base_metalness", names);
+        Assert.Contains("specular_roughness", names);
+        Assert.Contains("ambient_occlusion_map", names);
+        Assert.Contains("normal_scale", names);
+        Assert.Contains("emission_color", names);
+        Assert.Contains("emission_luminance", names);
+        Assert.Contains("alpha_cutoff", names);
+        Assert.Contains("geometry_opacity", names);
     }
 
     [Theory]

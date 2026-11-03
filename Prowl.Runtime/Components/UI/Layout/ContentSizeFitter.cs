@@ -30,7 +30,7 @@ public class ContentSizeFitter : UIBehaviour
     public void ApplyFit()
     {
         RectTransform? rt = GameObject.RectTransform;
-        if (rt is null) return;
+        if (rt.IsNotValid()) return;
         if (_horizontalFit == FitMode.Unconstrained && _verticalFit == FitMode.Unconstrained) return;
 
         Float2 sd = rt.SizeDelta;

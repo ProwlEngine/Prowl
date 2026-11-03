@@ -160,7 +160,7 @@ public sealed class GraphStateRecord
     public List<GraphTransitionRecord> Transitions = [];
     public Float2 EditorPosition;
 
-    public bool UsesAsset => Graph is not null;
+    public bool UsesAsset => !ReferenceEquals(Graph, null);
 
     public GraphStateRecord Clone()
     {

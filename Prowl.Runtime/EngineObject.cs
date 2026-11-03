@@ -124,7 +124,7 @@ public abstract class EngineObject : IDisposable
             if (obj.IsDisposed) continue; // disposed by hand, or by an owner that went first
 
             try { obj.Dispose(); }
-            catch (Exception ex) { Debug.LogError($"[{obj.Name}/{obj.GetType().Name}] Dispose() threw while being destroyed: {ex.Message}\n{ex.StackTrace}"); }
+            catch (Exception ex) { Debug.LogException($"[{obj.Name}/{obj.GetType().Name}] Dispose() threw while being destroyed", ex); }
         }
     }
 
@@ -161,8 +161,8 @@ public abstract class EngineObject : IDisposable
 public static class EngineObjectExtensions
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsNotValid([NotNullWhen(false)] this EngineObject? obj) => obj is null || obj.IsDisposed;
+    public static bool IsNotValid([NotNullWhen(false)] this EngineObject? obj) => ReferenceEquals(obj, null) || obj.IsDisposed;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsValid([NotNullWhen(true)] this EngineObject? obj) => obj is not null && !obj.IsDisposed;
+    public static bool IsValid([NotNullWhen(true)] this EngineObject? obj) => !ReferenceEquals(obj, null) && !obj.IsDisposed;
 }

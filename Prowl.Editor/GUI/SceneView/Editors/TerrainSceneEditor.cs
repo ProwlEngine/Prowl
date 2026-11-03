@@ -43,7 +43,7 @@ public class TerrainSceneEditor : SceneTool
     public override void OnActivated(SceneToolContext ctx)
     {
         GameObject? target = ctx.ActiveObject;
-        if (target == null) return;
+        if (target.IsNotValid()) return;
         _terrain = target.GetComponent<TerrainComponent>();
         _useTransformTool = false;
         _isPainting = false;
@@ -51,7 +51,7 @@ public class TerrainSceneEditor : SceneTool
 
     public override void OnDeactivated()
     {
-        if (_terrain != null)
+        if (!ReferenceEquals(_terrain, null))
         {
             _terrain.BrushVisible = false;
             if (_isPainting)
@@ -65,7 +65,7 @@ public class TerrainSceneEditor : SceneTool
 
     public override void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id)
     {
-        if (_terrain == null) return;
+        if (_terrain.IsNotValid()) return;
         // Transform tool button (always available)
         EditorGUI.ToolStripButton(paper, $"{id}_xform", EditorIcons.ArrowsUpDownLeftRight_I, "Move", _useTransformTool,
             () => _useTransformTool = true);
@@ -117,9 +117,9 @@ public class TerrainSceneEditor : SceneTool
     public override void OnSceneInput(SceneToolContext toolCtx)
     {
         HandleContext ctx = toolCtx.Handles;
-        if (_terrain == null || _useTransformTool)
+        if (_terrain.IsNotValid() || _useTransformTool)
         {
-            if (_terrain != null) _terrain.BrushVisible = false;
+            if (_terrain.IsValid()) _terrain.BrushVisible = false;
             return;
         }
 
@@ -139,7 +139,7 @@ public class TerrainSceneEditor : SceneTool
 
         // Update brush preview
         TerrainData? terrainData = _terrain.Data;
-        if (terrainData == null)
+        if (terrainData.IsNotValid())
         {
             _terrain.BrushVisible = false;
             return;

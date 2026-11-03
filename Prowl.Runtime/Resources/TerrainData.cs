@@ -69,12 +69,16 @@ public class DetailPrototype
 /// <summary>A placed tree instance on the terrain.</summary>
 public struct TreeInstance
 {
-    public Float2 Position;        // terrain UV (0-1)
-    public int PrototypeIndex;     // index into TerrainData.TreePrototypes
-    public float Rotation;         // Y-axis rotation in radians
-    public float WidthScale;       // width scale multiplier
-    public float HeightScale;      // height scale multiplier
-    public Color Tint;             // per-instance color variation
+    public Float2 Position;                 // terrain UV (0-1)
+    public int PrototypeIndex;              // index into TerrainData.TreePrototypes
+    public float Rotation;                  // Y-axis rotation in radians
+    public float WidthScale = 1f;           // width scale multiplier
+    public float HeightScale = 1f;          // height scale multiplier
+
+    /// <summary>Multiplies the tree's base colour and coverage, as the draw's colour. White leaves it as its materials are.</summary>
+    public Color Tint = Color.White;
+
+    public TreeInstance() { }
 }
 
 /// <summary>Defines a tree type for terrain vegetation.</summary>
@@ -1220,7 +1224,7 @@ public sealed class TerrainData : Asset, ISerializable
                     Rotation = tio.Get("Rot")?.FloatValue ?? 0,
                     WidthScale = tio.Get("WS")?.FloatValue ?? tio.Get("Scale")?.FloatValue ?? 1f,
                     HeightScale = tio.Get("HS")?.FloatValue ?? tio.Get("Scale")?.FloatValue ?? 1f,
-                    Tint = tio.Get("Tint") is { } tint ? Serializer.Deserialize<Color>(tint, ctx) : Color.White,
+                    Tint = TreeTint(tio.Get("Tint"), ctx),
                 });
 
         _heightmapDirty = true;
@@ -1234,6 +1238,13 @@ public sealed class TerrainData : Asset, ISerializable
     #endregion
 
     #region Helpers
+
+    // A tree's tint, white when it has none or was saved as zero, which trees placed without a tint got before white was the default
+    private static Color TreeTint(EchoObject? value, SerializationContext ctx)
+    {
+        Color tint = value != null ? Serializer.Deserialize<Color>(value, ctx) : Color.White;
+        return tint == default ? Color.White : tint;
+    }
 
     private static void SerializeShortArray(EchoObject value, string key, short[]? data)
     {

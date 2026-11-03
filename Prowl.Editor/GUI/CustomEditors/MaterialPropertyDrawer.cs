@@ -188,6 +188,80 @@ public static class MaterialPropertyDrawer
         string name = prop.Name.Text();
         OverrideRow(paper, id, material.IsOverridden(name), () => { material.RevertProperty(name); onChanged?.Invoke(); },
             () => DrawProperty(paper, id, material, prop, onChanged));
+
+        if (prop.Type == MaterialPropertyType.Texture2D && prop.HasAttribute("Map") && material.GetTexture(name).IsValid())
+            DrawMapSettings(paper, id, material, prop, onChanged);
+    }
+
+    private static readonly string[] s_channels = ["R", "G", "B", "A"];
+    private static readonly string[] s_uvSets = ["UV0", "UV1"];
+
+    /// <summary>
+    /// A set map's sampling, as Unity lays it out: tiling and offset, rotation in degrees, and the UV set, with the channel
+    /// for maps of scalar inputs.
+    /// </summary>
+    private static void DrawMapSettings(Paper paper, string id, Material material, MaterialProperty prop, Action? onChanged)
+    {
+        string name = prop.Name.Text();
+        void Revert(string setting) { material.RevertProperty(name + setting); onChanged?.Invoke(); }
+
+        Float4 st = material.GetTextureScaleOffset(name);
+        bool stSet = material.IsOverridden(name + "_ST");
+        OverrideRow(paper, $"{id}_tiling", stSet, () => Revert("_ST"), () =>
+            EditorGUI.Row(paper, $"{id}_tiling", "Tiling", () =>
+                Origami.Float2Field(paper, $"{id}_tiling_v", new Float2(st.X, st.Y), v =>
+                {
+                    material.SetTextureScaleOffset(name, new Float4(v.X, v.Y, st.Z, st.W));
+                    onChanged?.Invoke();
+                }).Show()));
+        OverrideRow(paper, $"{id}_offset", stSet, () => Revert("_ST"), () =>
+            EditorGUI.Row(paper, $"{id}_offset", "Offset", () =>
+                Origami.Float2Field(paper, $"{id}_offset_v", new Float2(st.Z, st.W), v =>
+                {
+                    material.SetTextureScaleOffset(name, new Float4(st.X, st.Y, v.X, v.Y));
+                    onChanged?.Invoke();
+                }).Show()));
+
+        float degrees = material.GetTextureRotation(name) * (180f / MathF.PI);
+        OverrideRow(paper, $"{id}_rotation", material.IsOverridden(name + "_Rotation"), () => Revert("_Rotation"), () =>
+            EditorGUI.Row(paper, $"{id}_rotation", "Rotation", () =>
+                Origami.NumericField<float>(paper, $"{id}_rotation_v", degrees, v =>
+                {
+                    material.SetTextureRotation(name, v * (MathF.PI / 180f));
+                    onChanged?.Invoke();
+                }).Show()));
+
+        bool scalar = IsScalarMap(material.Shader!, name);
+        bool samplingSet = material.IsOverridden(name + "_UVSet") || (scalar && material.IsOverridden(name + "_Channel"));
+        OverrideRow(paper, $"{id}_sampling", samplingSet, () => { Revert("_UVSet"); if (scalar) Revert("_Channel"); }, () =>
+            EditorGUI.Row(paper, $"{id}_sampling", scalar ? "Channel, UV" : "UV", () =>
+            {
+                using (paper.Row($"{id}_sampling_row").Height(EditorTheme.RowHeight).Gap(4).Enter())
+                {
+                    if (scalar)
+                    {
+                        Origami.Dropdown(paper, $"{id}_channel_v", Math.Clamp(material.GetTextureChannel(name), 0, 3), i =>
+                        {
+                            material.SetTextureChannel(name, i);
+                            onChanged?.Invoke();
+                        }, s_channels).Width(52).Show();
+                    }
+                    Origami.Dropdown(paper, $"{id}_uv_v", Math.Clamp(material.GetTextureUVSet(name), 0, 1), i =>
+                    {
+                        material.SetTextureUVSet(name, i);
+                        onChanged?.Invoke();
+                    }, s_uvSets).Width(64).Show();
+                }
+            }));
+    }
+
+    // A map of a number input reads one channel: X_map of a Float or Int X, and the height map
+    private static bool IsScalarMap(Shader shader, string map)
+    {
+        if (map == "geometry_height_map") return true;
+        if (!map.EndsWith("_map", StringComparison.Ordinal)) return false;
+        MaterialProperty? input = shader.FindProperty(map[..^4]);
+        return input is { Type: MaterialPropertyType.Float or MaterialPropertyType.Int };
     }
 
     /// <summary>The range a property's Range(min, max) attribute gives, if it has one.</summary>

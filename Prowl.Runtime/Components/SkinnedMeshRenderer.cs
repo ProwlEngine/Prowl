@@ -48,7 +48,7 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
     [SerializeField]
     public string[]? BonePaths;
 
-    /// <summary>Tint every material draws with in place of its own _MainColor.</summary>
+    /// <summary>Tint every material draws with in place of its own base_color, or _MainColor in Prowl's own shaders.</summary>
     public Color MainColor = Color.White;
 
     public ShadowCasting ShadowCasting = ShadowCasting.On;
@@ -373,7 +373,7 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
         return false;
     }
 
-    // Each slot's material as a child carrying MainColor as its _MainColor
+    // Each slot's material as a child carrying MainColor as its base_color, or _MainColor in Prowl's own shaders
     private GMaterial[] TintedMaterials(int subMeshCount)
     {
         GMaterial[] materials = RenderableState.MaterialsFor(Materials, subMeshCount, ref _baseMaterials);
@@ -387,6 +387,7 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
         for (int i = 0; i < materials.Length; i++)
         {
             _gpuMaterials[i] = _tinted[i].Of(materials[i])!;
+            _tinted[i].SetColor("base_color", MainColor);
             _tinted[i].SetColor("_MainColor", MainColor);
         }
         return _gpuMaterials;

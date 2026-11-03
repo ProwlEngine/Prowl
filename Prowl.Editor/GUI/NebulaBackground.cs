@@ -123,10 +123,6 @@ public sealed class NebulaBackground
             box.BackgroundLinearGradient(0, 0, 0, 1, EditorTheme.BackgroundColorA, EditorTheme.BackgroundColorB);
         else
             box.BackgroundColor(EditorTheme.BackgroundColorA);
-
-        if (Runtime.Application.IsPlaying && EditorTheme.PlayModeTint.A > 0)
-            paper.Box($"{id}_play_tint").PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
-                .BackgroundColor(EditorTheme.PlayModeTint).IsNotInteractable();
     }
 
     // The open project's own background image, which wins over the theme's background.

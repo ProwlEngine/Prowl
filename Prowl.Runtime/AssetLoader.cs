@@ -230,7 +230,7 @@ internal static class AssetLoader
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to load {asset.GetType().Name} '{asset.Name}' ({asset.AssetID}): {ex}");
+            Debug.LogException($"Failed to load {asset.GetType().Name} '{asset.Name}' ({asset.AssetID})", ex);
         }
         finally
         {
@@ -272,7 +272,7 @@ internal static class AssetLoader
             if (AssetDatabase.ReadContent(job.Asset.AssetID, staging)) job.Staging = staging;
         }
 
-        if (job.Staging != null) AssetDatabase.Publish(job.Asset, job.Staging, ReloadReason.Load);
+        if (job.Staging.IsValid()) AssetDatabase.Publish(job.Asset, job.Staging, ReloadReason.Load);
         else AssetDatabase.PublishFailed(job.Asset);
     }
 

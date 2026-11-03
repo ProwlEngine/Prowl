@@ -93,10 +93,8 @@ public sealed class ControllerShowcaseGame : StationGame
         AddStation("Controller playground", "One open world full of everything a character controller has to cope with: stairs and slopes, low ceilings and tight gaps, traps that press from several sides, curves, rough ground, moving platforms, jump pads, teleporters, and gravity that pulls sideways, upward or toward a little planet. Walk up to anything and the line below says what it is testing.", Float3.Zero, new Float3(0f, 5f, -12f), 1f);
 
         var sun = new GameObject("Sun");
-        Light light = sun.AddComponent<Light>();
-        light.Type = LightType.Directional;
-        light.ShadowDistance = 70f;
-        light.Intensity = 0.6f;
+        DirectionalLight light = sun.AddComponent<DirectionalLight>();
+        light.Intensity = 100000f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         Add(sun);
 
@@ -135,7 +133,7 @@ public sealed class ControllerShowcaseGame : StationGame
     private void BuildSpawnPad()
     {
         Mesh pad = Mesh.CreateCylinder(3f, 0.06f, 40);
-        Add(Model("Spawn Pad", pad, Lit(new Color(0.05f, 0.05f, 0.06f, 1f)).Emissive(Orange, 0.08f), new Float3(0f, 0.03f, 0f)));
+        Add(Model("Spawn Pad", pad, Lit(new Color(0.05f, 0.05f, 0.06f, 1f)).Emissive(Orange, 1600f), new Float3(0f, 0.03f, 0f)));
     }
 
     // ----------------------------------------------------------------
@@ -160,7 +158,7 @@ public sealed class ControllerShowcaseGame : StationGame
         Material suit = Lit(Orange, 0f, 0.45f);
         Part(Mesh.CreateCapsule(0.35f, 1.25f), suit, new Float3(0f, 0.68f, 0f));
         Part(Mesh.CreateSphere(0.27f, 12, 18), suit, new Float3(0f, 1.52f, 0f));
-        Part(Mesh.CreateCube(new Float3(0.38f, 0.14f, 0.12f)), Lit(new Color(0.01f, 0.02f, 0.04f, 1f), 0.8f, 0.1f).Emissive(new Color(0.2f, 0.7f, 1f, 1f), 1.5f), new Float3(0f, 1.55f, 0.22f));
+        Part(Mesh.CreateCube(new Float3(0.38f, 0.14f, 0.12f)), Lit(new Color(0.01f, 0.02f, 0.04f, 1f), 0.8f, 0.1f).Emissive(new Color(0.2f, 0.7f, 1f, 1f), 30000f), new Float3(0f, 1.55f, 0.22f));
         Part(Mesh.CreateCube(new Float3(0.45f, 0.55f, 0.22f)), Lit(new Color(0.05f, 0.05f, 0.06f, 1f), 0f, 0.6f), new Float3(0f, 0.95f, -0.3f));
 
         _character = player.AddComponent<CharacterController>();

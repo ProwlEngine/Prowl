@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -27,7 +28,7 @@ internal static class ShaderBaker
     {
         GraphicsBackend backend = Graphics.Device?.BackendType ?? GraphicsBackend.Vulkan;
         IShaderCompiler compiler = Graphics.Compiler;
-        Dictionary<PassVariants, HashSet<int>> wanted = new();
+        Dictionary<ShaderPass, Dictionary<string, Keyword[]>> wanted = new();
 
         foreach (Guid asset in assets)
         {
@@ -37,42 +38,47 @@ internal static class ShaderBaker
             if (source.IsNotValid() || source.GpuShader is not GShader shader)
                 continue;
 
-            List<Keyword> keywords = new();
+            Dictionary<string, string> values = new(StringComparer.Ordinal);
             foreach (VariantSpace axis in shader.MaterialAxes)
-                keywords.Add(new Keyword(axis.Name, material.GetKeyword(axis.Name) is { Length: > 0 } value ? value : axis.Values[0]));
+                values[axis.Name] = material.GetKeyword(axis.Name) is { Length: > 0 } value ? value : axis.Values[0];
             Keyword[][] globals = VariantCombos.Generate(shader.GlobalAxes);
 
             foreach (ShaderPass pass in shader.Definition.Passes ?? [])
             {
-                PassVariants variants = pass.Variants(compiler, backend);
-                if (!wanted.TryGetValue(variants, out HashSet<int>? keys))
-                    wanted[variants] = keys = new HashSet<int>();
+                if (!wanted.TryGetValue(pass, out Dictionary<string, Keyword[]>? combos))
+                    wanted[pass] = combos = new Dictionary<string, Keyword[]>(StringComparer.Ordinal);
+                IReadOnlyList<VariantSpace> axes = pass.AxesWith(compiler);
                 foreach (Keyword[] global in globals)
                 {
-                    if (variants.TryGetKey([.. keywords, .. global], out int key))
-                        keys.Add(key);
+                    foreach (Keyword keyword in global) values[keyword.Name] = keyword.Value;
+                    if (ComboOf(axes, values) is { } combo)
+                        combos.TryAdd(string.Join(";", combo.Select(k => $"{k.Name}={k.Value}")), combo);
                 }
             }
         }
 
+        BakedVariants baked = new(compiler);
         Parallel.ForEach(wanted, new ParallelOptions { CancellationToken = cancel }, pass =>
         {
-            foreach (int key in pass.Value)
-                pass.Key.Request(key, CompilePolicy.Sync, out _, out _);
+            if (pass.Value.Count > 0)
+                baked.Capture(pass.Key, backend, pass.Value.Values);
         });
 
-        BakedVariants.Clear();
-        try
+        using FileStream file = File.Create(path);
+        baked.Write(file);
+        return baked.Count;
+    }
+
+    // The value of each of the pass's axes, or null when one has a value the axis does not take
+    private static Keyword[]? ComboOf(IReadOnlyList<VariantSpace> axes, Dictionary<string, string> values)
+    {
+        Keyword[] combo = new Keyword[axes.Count];
+        for (int i = 0; i < axes.Count; i++)
         {
-            foreach ((PassVariants variants, HashSet<int> keys) in wanted)
-                BakedVariants.Capture(variants, keys);
-            using FileStream file = File.Create(path);
-            BakedVariants.Write(file);
-            return BakedVariants.Count;
+            string value = values.TryGetValue(axes[i].Name, out string? set) ? set : axes[i].Values[0];
+            if (!axes[i].Values.Contains(value)) return null;
+            combo[i] = new Keyword(axes[i].Name, value);
         }
-        finally
-        {
-            BakedVariants.Clear();
-        }
+        return combo;
     }
 }

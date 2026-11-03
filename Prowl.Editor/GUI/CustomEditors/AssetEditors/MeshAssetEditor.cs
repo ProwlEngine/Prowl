@@ -51,7 +51,7 @@ public class MeshAssetEditor : AssetImporterEditor
         if (font == null) return;
         OrigamiMetrics m = Origami.Current.Metrics;
 
-        if (mesh == null)
+        if (mesh.IsNotValid())
         {
             EditorGUI.SectionHeader(paper, $"{id}_h_info", "Mesh", first: true);
             paper.Box($"{id}_noasset").Height(m.RowHeight)
@@ -122,7 +122,7 @@ public class MeshAssetEditor : AssetImporterEditor
         EditorGUI.SectionHeader(paper, $"{id}_h_feat", "Mesh Features");
 
         MeshSDF? sdf = FindSDF(parentEntry, subEntry, mesh);
-        string sdfText = sdf != null
+        string sdfText = sdf.IsValid()
             ? $"{sdf.Resolution.X}x{sdf.Resolution.Y}x{sdf.Resolution.Z}  voxel={sdf.VoxelSize:F3}"
             : "Not generated (see the Assets project settings)";
         ValueRow(paper, id, "_sdf", "SDF", sdfText, font, m);

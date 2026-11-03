@@ -398,7 +398,7 @@ internal struct ParticleBatch
 /// render thread, Cull adds the instanced draws per view with their back to front order, and the world's upload feature
 /// writes the records and orders into the world's buffers before any view draws.
 /// </summary>
-internal sealed class ParticleRenderProvider(ParticleSystemComponent system, ParticleBuffers buffers) : RenderProvider
+internal sealed class ParticleRenderProvider(ParticleSystemComponent system, ParticleBuffers buffers) : RenderProvider(ViewKinds.Cameras | ViewKinds.ObjectId)
 {
     /// <summary>Float4 rows in one record: a header, a particle or a trail segment.</summary>
     public const int RecordRows = 6;
@@ -423,7 +423,6 @@ internal sealed class ParticleRenderProvider(ParticleSystemComponent system, Par
     private readonly List<(int Offset, int Start, int Count)> _orderUploads = [];
     private float[] _sortKeys = [];
 
-    public override ViewKinds RunsOn => ViewKinds.Cameras | ViewKinds.ObjectId;
 
     /// <summary>The next record to be written this frame.</summary>
     public int NextRecord => _host.Count / RecordRows;
@@ -496,7 +495,7 @@ internal sealed class ParticleRenderProvider(ParticleSystemComponent system, Par
     {
         if (_render.Batches.Count == 0) return;
 
-        ParticleBuffers.ViewInfo info = buffers.Find(view.View.ViewId);
+        ParticleBuffers.ViewInfo info = buffers.Find(view.View.RenderView);
         foreach (ParticleBatch batch in _render.Batches)
         {
             float radius = batch.Radius;
@@ -604,7 +603,7 @@ internal sealed class ParticleBuffers
     public DeviceBuffer? Order { get; private set; }
 
     /// <summary>What sorting and culling need from one view of this frame.</summary>
-    public readonly record struct ViewInfo(int ViewId, Float3 Forward, float YScale, bool Orthographic, bool Found);
+    public readonly record struct ViewInfo(RenderView View, Float3 Forward, float YScale, bool Orthographic, bool Found);
 
     public static ParticleBuffers Acquire(RenderWorld world)
     {
@@ -685,12 +684,12 @@ internal sealed class ParticleBuffers
         _renderOrder = Order;
 
         _views.Clear();
-        foreach (ViewDesc view in Graphics.FrameViews)
+        foreach (RenderView view in Graphics.FrameViews)
         {
             if (view.World != _world) continue;
-            ViewLayer layer = view.Layers[0];
+            ViewLayer layer = view.Camera.Layers[0];
             Float4x4 v = layer.View;
-            _views.Add(new ViewInfo(view.ViewId, new Float3(v.c0.Z, v.c1.Z, v.c2.Z), layer.Projection.c1.Y, layer.Projection.c3.W > 0.5f, true));
+            _views.Add(new ViewInfo(view, new Float3(v.c0.Z, v.c1.Z, v.c2.Z), layer.Projection.c1.Y, layer.Projection.c3.W > 0.5f, true));
         }
     }
 
@@ -715,10 +714,10 @@ internal sealed class ParticleBuffers
         _extracted.Clear();
     }
 
-    public ViewInfo Find(int viewId)
+    public ViewInfo Find(RenderView? view)
     {
         foreach (ViewInfo info in _views)
-            if (info.ViewId == viewId)
+            if (info.View == view)
                 return info;
         return default;
     }
@@ -746,12 +745,13 @@ internal sealed class ParticleBuffers
     /// </summary>
     public static bool AnyViewSees(RenderWorld world, AABB box, float minSize)
     {
-        foreach (ViewDesc view in Graphics.FrameViews)
+        foreach (RenderView view in Graphics.FrameViews)
         {
             if (view.World != world || view.Kind is not (ViewKind.Game or ViewKind.SceneView or ViewKind.Preview or ViewKind.RenderTexture)) continue;
-            for (int l = 0; l < Math.Max((int)view.LayerCount, 1); l++)
+            ViewCamera camera = view.Camera;
+            for (int l = 0; l < Math.Max((int)camera.LayerCount, 1); l++)
             {
-                ViewLayer layer = view.Layers[l];
+                ViewLayer layer = camera.Layers[l];
                 Float3 min = box.Min - (Float3)layer.Position;
                 Float3 max = box.Max - (Float3)layer.Position;
                 if (minSize > 0f)
@@ -787,9 +787,8 @@ internal sealed class ParticleBuffers
 }
 
 /// <summary>Writes the records and orders of a world's particle systems into its buffers, ahead of every view.</summary>
-internal sealed class ParticleUploadFeature(ParticleBuffers buffers) : FrameFeature
+internal sealed class ParticleUploadFeature(ParticleBuffers buffers) : FrameFeature(FrameSlot.BeforeViews)
 {
-    public override FrameSlot Slot => FrameSlot.BeforeViews;
 
     public override bool IsActive() => buffers.Writes() is (not null, _) or (_, not null);
 

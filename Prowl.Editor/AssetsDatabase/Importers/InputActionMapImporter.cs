@@ -25,7 +25,7 @@ public class InputActionMapImporter : AssetImporter
             var echo = EchoObject.ReadFromString(text);
 
             InputActionMap? map = Serializer.Deserialize<InputActionMap>(echo);
-            if (map != null)
+            if (map.IsValid())
             {
                 map.Name = ctx.FileName;
                 ctx.SetMainAsset(map);

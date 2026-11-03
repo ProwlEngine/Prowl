@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Graphite.Rendering;
+using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 
 using Xunit;
@@ -12,38 +13,35 @@ namespace Prowl.Runtime.Test;
 
 public class LightTests : RuntimeTestBase
 {
-    private static Light Make(LightType type)
-    {
-        Light light = new GameObject("Light").AddComponent<Light>();
-        light.Type = type;
-        return light;
-    }
+    private static T Make<T>() where T : Light, new() => new GameObject("Light").AddComponent<T>();
+
+    private static Light Make(Type type) => (Light)new GameObject("Light").AddComponent(type)!;
 
     [Theory]
-    [InlineData(LightType.Directional, GLightType.Directional)]
-    [InlineData(LightType.Point, GLightType.Point)]
-    [InlineData(LightType.Spot, GLightType.Spot)]
-    [InlineData(LightType.Rect, GLightType.Rect)]
-    [InlineData(LightType.Disk, GLightType.Disk)]
-    [InlineData(LightType.Tube, GLightType.Tube)]
-    public void Type_MapsOntoGraphite(LightType type, GLightType expected)
+    [InlineData(typeof(DirectionalLight), GLightType.Directional)]
+    [InlineData(typeof(PointLight), GLightType.Point)]
+    [InlineData(typeof(SpotLight), GLightType.Spot)]
+    [InlineData(typeof(RectLight), GLightType.Rect)]
+    [InlineData(typeof(DiskLight), GLightType.Disk)]
+    [InlineData(typeof(TubeLight), GLightType.Tube)]
+    public void Kind_MapsOntoGraphite(Type type, GLightType expected)
         => Assert.Equal(expected, Make(type).Describe().Type);
 
     [Fact]
     public void Shapes_FillGraphitesSize()
     {
-        Light rect = Make(LightType.Rect);
+        RectLight rect = Make<RectLight>();
         rect.Width = 2f;
         rect.Height = 0.5f;
         Assert.Equal(new Float2(2f, 0.5f), rect.Describe().Size);
 
-        Light disk = Make(LightType.Disk);
-        disk.Width = 3f;
+        DiskLight disk = Make<DiskLight>();
+        disk.Diameter = 3f;
         Assert.Equal(1.5f, disk.Describe().Size.X);
 
-        Light tube = Make(LightType.Tube);
+        TubeLight tube = Make<TubeLight>();
         tube.Length = 4f;
-        tube.SourceRadius = 0.1f;
+        tube.Radius = 0.1f;
         LightDesc desc = tube.Describe();
         Assert.Equal(4f, desc.Size.X);
         Assert.Equal(0.1f, desc.SourceRadius);
@@ -52,32 +50,233 @@ public class LightTests : RuntimeTestBase
     [Fact]
     public void Spot_ClampsItsAngles()
     {
-        Light spot = Make(LightType.Spot);
-        spot.OuterAngle = 120f;
-        spot.InnerAngle = 100f;
+        SpotLight spot = Make<SpotLight>();
+        spot.SpotAngle = 240f;
+        spot.SpotSoftness = -1f;
         LightDesc desc = spot.Describe();
-        Assert.Equal(89.9f, desc.OuterAngle);
-        Assert.Equal(89.9f, desc.InnerAngle);
+        Assert.Equal(89.5f, desc.OuterAngle);
+        Assert.Equal(89.5f, desc.InnerAngle);
     }
 
     [Fact]
-    public void Directional_CarriesItsCascades()
+    public void Spot_SplitsItsConeIntoGraphitesHalfAngles()
     {
-        Light sun = Make(LightType.Directional);
-        sun.Cascades = ShadowCascades.Four;
-        sun.ShadowDistance = 80f;
+        SpotLight spot = Make<SpotLight>();
+        LightDesc defaults = spot.Describe();
+        Assert.Equal(30f, defaults.OuterAngle, 3);
+        Assert.Equal(20f, defaults.InnerAngle, 3);
+
+        spot.SpotAngle = 60f;
+        spot.SpotSoftness = 0.25f;
+        LightDesc desc = spot.Describe();
+        Assert.Equal(30f, desc.OuterAngle, 4);
+        Assert.Equal(22.5f, desc.InnerAngle, 4);
+    }
+
+    [Fact]
+    public void NewLights_AreA60WattBulbAt2700Kelvin_AndColorTintsTheTemperature()
+    {
+        PointLight light = Make<PointLight>();
+        Assert.True(light.UseTemperature);
+        Assert.Equal(2700f, light.Temperature);
+        Assert.Equal(800f / (4f * MathF.PI), light.Intensity, 4);
+        Assert.Equal(Color.White, light.Color);
+
+        light.Temperature = 2700f;
+        light.Color = new Color(0.5f, 1f, 1f, 1f);
+        Color blackbody = ColorTemperature.ToLinear(2700f);
+        Assert.Equal(new Float3(0.5f * blackbody.R, blackbody.G, blackbody.B), light.Describe().Color);
+
+        light.UseTemperature = false;
+        Assert.Equal(new Float3(0.5f, 1f, 1f), light.Describe().Color);
+    }
+
+    [Theory]
+    [InlineData(typeof(DirectionalLight), "Midday sun")]
+    [InlineData(typeof(PointLight), "60 W bulb")]
+    [InlineData(typeof(SpotLight), "Downlight")]
+    [InlineData(typeof(RectLight), "Ceiling panel")]
+    [InlineData(typeof(DiskLight), "Ceiling disk")]
+    [InlineData(typeof(TubeLight), "Fluorescent tube")]
+    public void NewLights_StartAsTheirKindsDefaultPreset(Type type, string name)
+    {
+        Light fresh = Make(type);
+        LightPreset preset = fresh.DefaultPreset;
+        Assert.Equal(name, preset.Name);
+        Assert.Contains(preset, fresh.Presets);
+        Assert.Contains(preset.Unit, fresh.Units);
+        Assert.True(fresh.IsPreset(preset));
+
+        Light applied = Make(type);
+        applied.Intensity = 1f;
+        applied.Temperature = 1000f;
+        applied.UseTemperature = false;
+        applied.ApplyPreset(preset);
+        Assert.Equal(applied.Intensity, fresh.Intensity);
+        Assert.Equal(applied.Temperature, fresh.Temperature);
+        Assert.True(fresh.UseTemperature);
+    }
+
+    [Fact]
+    public void NewSun_IsTheMiddaySun()
+    {
+        DirectionalLight sun = Make<DirectionalLight>();
+        Assert.Equal(100000f, sun.Intensity);
+        Assert.Equal(5600f, sun.Temperature);
+    }
+
+    [Fact]
+    public void ApplyPreset_SetsShapeAndTemperature_ThenIntensityForThatShape()
+    {
+        SpotLight spot = Make<SpotLight>();
+        spot.UseTemperature = false;
+        spot.ApplyPreset(new LightPreset("Test", LightUnit.Lumen, 1000f, 3000f, SpotAngle: 60f));
+        Assert.Equal(60f, spot.SpotAngle);
+        Assert.True(spot.UseTemperature);
+        Assert.Equal(3000f, spot.Temperature);
+        Assert.Equal(1000f / (2f * MathF.PI * (1f - MathF.Cos(30f * MathF.PI / 180f))), spot.Intensity, 2);
+
+        RectLight rect = Make<RectLight>();
+        rect.ApplyPreset(new LightPreset("Test", LightUnit.Nit, 250f, 6500f, Width: 0.6f, Height: 0.34f));
+        Assert.Equal(0.6f, rect.Width);
+        Assert.Equal(0.34f, rect.Height);
+        Assert.Equal(250f, rect.Intensity);
+    }
+
+    [Fact]
+    public void Units_ConvertToAndFromWhatTheLightStores()
+    {
+        PointLight point = Make<PointLight>();
+        Assert.Equal(100f / (4f * MathF.PI), point.ToStored(LightUnit.Lumen, 100f), 4);
+        Assert.Equal(100f, point.FromStored(LightUnit.Lumen, point.ToStored(LightUnit.Lumen, 100f)), 3);
+        Assert.Equal(7f, point.ToStored(LightUnit.Candela, 7f));
+
+        DirectionalLight sun = Make<DirectionalLight>();
+        Assert.Equal(2.5f * 1024f, sun.ToStored(LightUnit.Ev100, 10f), 2);
+        Assert.Equal(10f, sun.FromStored(LightUnit.Ev100, 2.5f * 1024f), 4);
+
+        DiskLight disk = Make<DiskLight>();
+        disk.Diameter = 2f;
+        Assert.Equal(1000f / (MathF.PI * MathF.PI), disk.ToStored(LightUnit.Lumen, 1000f), 3);
+
+        TubeLight tube = Make<TubeLight>();
+        tube.Length = 1f;
+        tube.Radius = 0.1f;
+        float area = 2f * MathF.PI * 0.1f + 4f * MathF.PI * 0.01f;
+        Assert.Equal(1000f / (MathF.PI * area), tube.ToStored(LightUnit.Lumen, 1000f), 2);
+    }
+
+    [Fact]
+    public void Range_IsAutomatic_FromTheAxisCandelaAndTheCutoff()
+    {
+        float cutoff = QualitySettings.Active.LightCutoff;
+        Assert.Equal(0.01f, cutoff);
+
+        PointLight point = Make<PointLight>();
+        point.UseTemperature = false;
+        point.Intensity = 1000f;
+        Assert.False(point.OverrideRange);
+        Assert.Equal(MathF.Sqrt(1000f / cutoff), point.Range, 3);
+        Assert.Equal(point.Range, point.Describe().Range);
+
+        point.Color = new Color(0.25f, 0.5f, 0.1f, 1f);
+        Assert.Equal(MathF.Sqrt(1000f * 0.5f / cutoff), point.Range, 3);
+
+        RectLight rect = Make<RectLight>();
+        rect.UseTemperature = false;
+        rect.Intensity = 100f;
+        rect.Width = 2f;
+        rect.Height = 0.5f;
+        Assert.Equal(MathF.Sqrt(100f / cutoff), rect.Range, 3);
+
+        DiskLight disk = Make<DiskLight>();
+        disk.UseTemperature = false;
+        disk.Intensity = 100f;
+        disk.Diameter = 2f;
+        Assert.Equal(MathF.Sqrt(100f * MathF.PI / cutoff), disk.Range, 3);
+
+        TubeLight tube = Make<TubeLight>();
+        tube.UseTemperature = false;
+        tube.Intensity = 100f;
+        tube.Length = 2f;
+        tube.Radius = 0.1f;
+        Assert.Equal(MathF.Sqrt(100f * (2f * 0.1f * 2f + MathF.PI * 0.01f) / cutoff), tube.Range, 3);
+    }
+
+    [Fact]
+    public void Range_FollowsTheQualityLevelsCutoff()
+    {
+        PointLight point = Make<PointLight>();
+        point.UseTemperature = false;
+        point.Intensity = 800f;
+        QualityLevel level = QualitySettings.Active;
+        float before = level.LightCutoff;
+        try
+        {
+            level.LightCutoff = 2f;
+            Assert.Equal(20f, point.Range, 3);
+        }
+        finally
+        {
+            level.LightCutoff = before;
+        }
+    }
+
+    [Fact]
+    public void Range_SetByHand_OverridesTheAutomaticOne()
+    {
+        PointLight point = Make<PointLight>();
+        point.Range = 6f;
+        Assert.True(point.OverrideRange);
+        Assert.Equal(6f, point.Describe().Range);
+
+        point.OverrideRange = false;
+        Assert.Equal(point.AutomaticRange, point.Range);
+    }
+
+    [Fact]
+    public void ColorTemperature_FollowsThePlanckianLocus()
+    {
+        Float2 xy = ColorTemperature.Chromaticity(2700f);
+        Assert.Equal(0.4599f, xy.X, 3);
+        Assert.Equal(0.4106f, xy.Y, 3);
+
+        Color daylight = ColorTemperature.ToLinear(6500f);
+        Assert.Equal(1f, MathF.Max(daylight.R, MathF.Max(daylight.G, daylight.B)), 5);
+        Assert.InRange(daylight.R, 0.93f, 1f);
+        Assert.InRange(daylight.G, 0.93f, 1f);
+        Assert.InRange(daylight.B, 0.93f, 1f);
+
+        Color bulb = ColorTemperature.ToLinear(2700f);
+        Assert.Equal(1f, bulb.R, 5);
+        Assert.Equal(0.416f, bulb.G, 2);
+        Assert.Equal(0.098f, bulb.B, 2);
+
+        Color candle = ColorTemperature.ToLinear(1900f);
+        Assert.Equal(1f, candle.R, 5);
+        Assert.Equal(0.232f, candle.G, 2);
+        Assert.InRange(candle.B, 0f, 0.01f);
+    }
+
+    [Fact]
+    public void Directional_TakesItsCascadesFromTheActiveQualityLevel()
+    {
+        QualityLevel quality = QualitySettings.Active;
+        DirectionalLight sun = Make<DirectionalLight>();
+        sun.ShadowResolution = ShadowResolution._4096;
         sun.AngularRadius = 0.5f;
         LightDesc desc = sun.Describe();
-        Assert.Equal(4, desc.Shadow.Cascades);
-        Assert.Equal(80f, desc.Shadow.Distance);
+        Assert.Equal((int)quality.ShadowCascades, desc.Shadow.Cascades);
+        Assert.Equal(quality.ShadowDistance, desc.Shadow.Distance);
+        Assert.Equal((uint)quality.MaxShadowResolution, desc.Shadow.Resolution);
         Assert.Equal(0.5f, desc.AngularRadius);
     }
 
     [Theory]
-    [InlineData(LightType.Rect)]
-    [InlineData(LightType.Disk)]
-    [InlineData(LightType.Tube)]
-    public void AreaLights_CastNoShadows(LightType type)
+    [InlineData(typeof(RectLight))]
+    [InlineData(typeof(DiskLight))]
+    [InlineData(typeof(TubeLight))]
+    public void AreaLights_CastNoShadows(Type type)
     {
         Light light = Make(type);
         light.CastShadows = true;
@@ -87,7 +286,7 @@ public class LightTests : RuntimeTestBase
     [Fact]
     public void ShadowSettings_PassThrough()
     {
-        Light light = Make(LightType.Point);
+        PointLight light = Make<PointLight>();
         light.ShadowResolution = ShadowResolution._2048;
         light.ShadowFilter = ShadowFilter.ContactHardening;
         light.ShadowStrength = 0.5f;

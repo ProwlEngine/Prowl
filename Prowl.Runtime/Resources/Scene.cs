@@ -59,7 +59,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         get
         {
-            if (_current is null || _current.IsDisposed)
+            if (ReferenceEquals(_current, null) || _current.IsDisposed)
             {
                 // Before anything is created, so a read from another thread cannot leave an inactive scene current.
                 MainThreadContext.AssertMainThread(nameof(Current));
@@ -83,7 +83,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     /// <summary>Whether a <see cref="Load(Scene)"/> is queued and has not been applied yet, so <see cref="Current"/>
     /// is still the outgoing scene.</summary>
-    public static bool IsLoadPending => _pendingScene != null;
+    public static bool IsLoadPending => !ReferenceEquals(_pendingScene, null);
 
     /// <summary>
     /// Queues a scene to become the current one, replacing the previously loaded scene. The swap
@@ -93,7 +93,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public static void Load(Scene scene)
     {
         MainThreadContext.AssertMainThread();
-        if (scene == null)
+        if (ReferenceEquals(scene, null))
             throw new ArgumentNullException(nameof(scene));
 
         _pendingLoad?.Cancel();
@@ -146,7 +146,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         asset.Load();
         Scene? scene = asset.Data is { } data ? Serializer.Deserialize<Scene>(data) : null;
-        if (scene is null) scene = new Scene();
+        if (scene.IsNotValid()) scene = new Scene();
         scene.Name = asset.Name;
         scene.Source = asset;
         return scene;
@@ -242,7 +242,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             _pendingLoad = null;
             _pendingScene = ready.Activate();
         }
-        if (_pendingScene is null) return;
+        if (ReferenceEquals(_pendingScene, null)) return;
 
         Scene next = _pendingScene;
         _pendingScene = null;
@@ -276,9 +276,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         // Everything the incoming scene uses is loaded before any of it enables, so OnEnable never sees an asset still loading.
         try { AssetDatabase.LoadEverythingReached(); }
-        catch (Exception e) { Debug.LogError($"[Scene] Loading what '{next.Name}' uses threw: {e.Message}\n{e.StackTrace}"); }
+        catch (Exception e) { Debug.LogException($"[Scene] Loading what '{next.Name}' uses threw", e); }
 
-        if (_current is not null && !_current.IsDisposed)
+        if (!ReferenceEquals(_current, null) && !_current.IsDisposed)
         {
             Scene outgoing = _current;
             try
@@ -287,7 +287,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                     outgoing.Disable();
                 outgoing.Dispose();
             }
-            catch (Exception e) { Debug.LogError($"[Scene] Tearing down '{outgoing.Name}' threw: {e.Message}\n{e.StackTrace}"); }
+            catch (Exception e) { Debug.LogException($"[Scene] Tearing down '{outgoing.Name}' threw", e); }
         }
 
         // Between the two scenes, so the outgoing one's teardown belongs to its own session and the incoming
@@ -318,7 +318,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         DestroyPreserved(immediate: true);
 
-        if (_current is null || _current.IsDisposed)
+        if (ReferenceEquals(_current, null) || _current.IsDisposed)
         {
             _current = null;
             return;
@@ -395,7 +395,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         SceneEvents.Reset();
         foreach (GameObject go in _allObj)
-            if (go is not null && !go.IsDisposed)
+            if (!ReferenceEquals(go, null) && !go.IsDisposed)
                 go.OnHotReload();
 
         // Re-registering from the live scene rather than from what was registered before is what lets a
@@ -406,11 +406,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         foreach (GameObject go in _allObj)
         {
-            if (go is null || go.IsDisposed) continue;
+            if (ReferenceEquals(go, null) || go.IsDisposed) continue;
 
             foreach (Component comp in go._components)
             {
-                if (comp is null || comp.IsDisposed || !comp.EnabledInHierarchy) continue;
+                if (ReferenceEquals(comp, null) || comp.IsDisposed || !comp.EnabledInHierarchy) continue;
                 comp._countedCollisionListener = false;
                 _dispatcher.Register(comp);
                 if (comp is GameCanvas canvas) canvas.RegisterIn(this);
@@ -439,6 +439,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         /// <summary>Baked lightmap atlas pages (RGBM-encoded). A placement below selects one.</summary>
         public List<Texture2D> Lightmaps = [];
+
+        /// <summary>What the decoded RGBM texels of every page are multiplied by to give irradiance over pi, in nits.</summary>
+        public float LightmapScale = 1f;
 
         /// <summary>
         /// Where each baked renderer landed in the atlas, keyed by the identifier of the object it is on.
@@ -795,7 +798,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             {
                 if (component.IsDisposed) continue;
                 try { component.OnAddedToScene(); }
-                catch (Exception ex) { Debug.LogError($"[{obj.Name}/{component.GetType().Name}] OnAddedToScene() threw: {ex.Message}\n{ex.StackTrace}"); }
+                catch (Exception ex) { Debug.LogException($"[{obj.Name}/{component.GetType().Name}] OnAddedToScene() threw", ex); }
             }
 
             // Call OnEnable for enabled components, but only if the scene is active
@@ -845,7 +848,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             {
                 if (component.IsDisposed) continue;
                 try { component.OnRemovedFromScene(); }
-                catch (Exception ex) { Debug.LogError($"[{component.Name}/{component.GetType().Name}] OnRemovedFromScene() threw: {ex.Message}\n{ex.StackTrace}"); }
+                catch (Exception ex) { Debug.LogException($"[{component.Name}/{component.GetType().Name}] OnRemovedFromScene() threw", ex); }
             }
 
             obj.Scene = null;
@@ -980,7 +983,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         foreach (GameObject obj in serializeObj)
         {
             // A GameObject that failed to deserialize leaves a null slot; skip it rather than lose the rest.
-            if (obj == null) continue;
+            if (ReferenceEquals(obj, null)) continue;
             if (obj.LoadedIdentifier != Guid.Empty)
                 obj.SetIdentifier(obj.LoadedIdentifier);
 
@@ -990,7 +993,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         }
 
         foreach (GameObject obj in serializeObj)
-            if (obj != null) Add(obj);
+            if (!ReferenceEquals(obj, null)) Add(obj);
         serializeObj = null;
     }
 
@@ -1130,8 +1133,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
             foreach (Component component in go._components)
             {
-                if (component is Camera camera && camera.EnabledInHierarchy && camera.Target == null && camera.Background != CameraBackground.None
-                    && (main == null || camera.Depth > main.Depth))
+                if (component is Camera camera && camera.EnabledInHierarchy && camera.Target.IsNotValid() && camera.Background != CameraBackground.None
+                    && (main.IsNotValid() || camera.Depth > main.Depth))
                     main = camera;
             }
         }
@@ -1162,7 +1165,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[Render] Camera '{(cam.GameObject.IsValid() ? cam.GameObject.Name : null)}' render threw and was skipped: {ex.Message}\n{ex.StackTrace}");
+                Debug.LogException($"[Render] Camera '{(cam.GameObject.IsValid() ? cam.GameObject.Name : null)}' render threw and was skipped", ex);
             }
         }
 

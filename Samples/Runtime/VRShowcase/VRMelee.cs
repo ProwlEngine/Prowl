@@ -259,7 +259,7 @@ public sealed class HitFlash : Component
             BaseColor.B + (FlashColor.B - BaseColor.B) * _flash,
             1f);
         foreach (Material material in Materials)
-            material.SetColor("_MainColor", color);
+            material.SetColor("base_color", color);
     }
 }
 

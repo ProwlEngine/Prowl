@@ -626,7 +626,7 @@ public class Transform : ISerializationCallbackReceiver
     /// <summary>Enumerate direct children as Transforms.</summary>
     public IEnumerable<Transform> GetChildren()
     {
-        if (GameObject == null) yield break;
+        if (GameObject.IsNotValid()) yield break;
         foreach (GameObject child in GameObject.Children)
             yield return child.Transform;
     }
@@ -648,7 +648,7 @@ public class Transform : ISerializationCallbackReceiver
     public int GetSiblingIndex()
     {
         Transform p = Parent;
-        if (p == null || p.GameObject == null) return -1;
+        if (p == null || p.GameObject.IsNotValid()) return -1;
         return p.GameObject.Children.IndexOf(GameObject);
     }
 
@@ -660,7 +660,7 @@ public class Transform : ISerializationCallbackReceiver
     {
         AssertOwner();
         Transform p = Parent;
-        if (p == null || p.GameObject == null) return;
+        if (p == null || p.GameObject.IsNotValid()) return;
         List<GameObject> siblings = p.GameObject.Children;
         int current = siblings.IndexOf(GameObject);
         if (current < 0) return;
@@ -678,7 +678,7 @@ public class Transform : ISerializationCallbackReceiver
     public void SetAsLastSibling()
     {
         Transform p = Parent;
-        if (p == null || p.GameObject == null) return;
+        if (p == null || p.GameObject.IsNotValid()) return;
         SetSiblingIndex(p.GameObject.Children.Count - 1);
     }
 
@@ -688,7 +688,7 @@ public class Transform : ISerializationCallbackReceiver
     /// </summary>
     public void DetachChildren(bool worldPositionStays = true)
     {
-        if (GameObject == null) return;
+        if (GameObject.IsNotValid()) return;
         // Copy because SetParent mutates the Children list.
         GameObject[] snapshot = [.. GameObject.Children];
         foreach (GameObject child in snapshot)

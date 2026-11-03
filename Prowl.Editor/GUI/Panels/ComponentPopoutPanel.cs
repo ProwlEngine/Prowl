@@ -45,7 +45,7 @@ public class ComponentPopoutPanel : DockPanel
         // Find the component in the current scene
         (GameObject? go, Component? comp) = FindComponent();
 
-        if (comp == null)
+        if (comp.IsNotValid())
         {
             using (paper.Column($"cpop_missing").Size(width, height).Enter())
             {
@@ -128,7 +128,7 @@ public class ComponentPopoutPanel : DockPanel
     private (GameObject? go, Component? comp) FindComponent()
     {
         Scene scene = Scene.Current;
-        if (scene == null) return (null, null);
+        if (scene.IsNotValid()) return (null, null);
 
         foreach (GameObject go in scene.AllObjects)
         {

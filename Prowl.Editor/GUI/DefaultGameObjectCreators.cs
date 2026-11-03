@@ -6,6 +6,7 @@ using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Terrain;
 using Prowl.Runtime.UI;
@@ -25,13 +26,13 @@ internal static class DefaultGameObjectCreators
     static void CreateEmptyChild()
     {
         GameObject? parent = MenuContext.ActiveGameObject;
-        if (parent == null) return;
+        if (parent.IsNotValid()) return;
         HierarchyPanel.CreateGameObject("GameObject", parent);
     }
 
     // Nothing to parent to from the scene-root menu, or with an empty selection.
     [MenuItem("GameObject/Empty Child", isValidate: true)]
-    static bool ValidateCreateEmptyChild() => MenuContext.ActiveGameObject != null;
+    static bool ValidateCreateEmptyChild() => MenuContext.ActiveGameObject.IsValid();
 
     [MenuItem("GameObject/Empty Parent", priority: 2, Icon = EditorIcons.ObjectGroup, SelectionWide = true)]
     static void CreateEmptyParent() => HierarchyPanel.CreateEmptyParent();
@@ -80,28 +81,28 @@ internal static class DefaultGameObjectCreators
     }
 
     [MenuItem("GameObject/Light/Directional Light", priority: 30, Icon = EditorIcons.Sun)]
-    static void CreateDirectionalLight() => CreateLight("Directional Light", LightType.Directional, new Float3(50, 210, 0));
+    static void CreateDirectionalLight() => CreateLight<DirectionalLight>("Directional Light", new Float3(50, 210, 0));
 
     [MenuItem("GameObject/Light/Point Light", priority: 31, Icon = EditorIcons.Lightbulb)]
-    static void CreatePointLight() => CreateLight("Point Light", LightType.Point, Float3.Zero);
+    static void CreatePointLight() => CreateLight<PointLight>("Point Light", Float3.Zero);
 
     [MenuItem("GameObject/Light/Spot Light", priority: 32, Icon = EditorIcons.Bullseye)]
-    static void CreateSpotLight() => CreateLight("Spot Light", LightType.Spot, new Float3(90, 0, 0));
+    static void CreateSpotLight() => CreateLight<SpotLight>("Spot Light", new Float3(90, 0, 0));
 
     [MenuItem("GameObject/Light/Rect Light", priority: 33, Icon = EditorIcons.Lightbulb)]
-    static void CreateRectLight() => CreateLight("Rect Light", LightType.Rect, new Float3(90, 0, 0));
+    static void CreateRectLight() => CreateLight<RectLight>("Rect Light", new Float3(90, 0, 0));
 
     [MenuItem("GameObject/Light/Disk Light", priority: 34, Icon = EditorIcons.Lightbulb)]
-    static void CreateDiskLight() => CreateLight("Disk Light", LightType.Disk, new Float3(90, 0, 0));
+    static void CreateDiskLight() => CreateLight<DiskLight>("Disk Light", new Float3(90, 0, 0));
 
     [MenuItem("GameObject/Light/Tube Light", priority: 35, Icon = EditorIcons.Lightbulb)]
-    static void CreateTubeLight() => CreateLight("Tube Light", LightType.Tube, Float3.Zero);
+    static void CreateTubeLight() => CreateLight<TubeLight>("Tube Light", Float3.Zero);
 
-    static void CreateLight(string name, LightType type, Float3 euler)
+    static void CreateLight<T>(string name, Float3 euler) where T : Light, new()
     {
         GameObject go = HierarchyPanel.CreateGameObject(name, MenuContext.ActiveGameObject);
         go.Transform.Rotation = Quaternion.FromEuler(euler);
-        go.AddComponent<Light>().Type = type;
+        go.AddComponent<T>();
     }
 
     [MenuItem("GameObject/Effects/Fog/Global", priority: 40, Icon = EditorIcons.Cloud)]
@@ -431,7 +432,7 @@ internal static class DefaultGameObjectCreators
     static void CreateCamera()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Camera", MenuContext.ActiveGameObject);
-        go.AddComponent<Camera>();
+        go.AddComponent<Camera>().Profile = VolumeProfile.CreateCameraDefault("Camera Profile");
     }
 
     private static void CreatePrimitive(string name, DefaultModel model)
@@ -454,9 +455,9 @@ internal static class DefaultGameObjectCreators
     private static void EnsureEventSystem(Scene? scene)
     {
         if (scene.IsNotValid()) scene = Scene.Current;
-        if (scene == null) return;
+        if (scene.IsNotValid()) return;
         foreach (EventSystem? es in scene.FindObjectsOfType<EventSystem>())
-            if (es != null) return;
+            if (es.IsValid()) return;
         GameObject esGo = HierarchyPanel.CreateGameObject("Event System", null, select: false, beginRename: false);
         esGo.AddComponent<EventSystem>();
     }
@@ -464,13 +465,13 @@ internal static class DefaultGameObjectCreators
     private static GameObject ResolveCanvasParent(GameObject? parent)
     {
         GameCanvas? canvas = parent.IsValid() ? parent.GetComponentInParent<GameCanvas>(includeSelf: true) : null;
-        if (canvas != null) return parent!;
+        if (canvas.IsValid()) return parent!;
 
         Scene scene = Scene.Current;
-        if (scene != null)
+        if (scene.IsValid())
         {
             foreach (GameCanvas? c in scene.FindObjectsOfType<GameCanvas>())
-                if (c != null) return c.GameObject;
+                if (c.IsValid()) return c.GameObject;
         }
 
         GameObject canvasGo = HierarchyPanel.CreateGameObject("Canvas", null, select: false, beginRename: false);

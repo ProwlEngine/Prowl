@@ -309,7 +309,7 @@ public class ModelRigImportTests
     // ---- materials -----------------------------------------------------------------------------
 
     // One triangle with one named material, which is all an extraction test needs.
-    private static string MaterialGltf()
+    private static string MaterialGltf(string material = """{ "name": "Red" }""", string images = "")
     {
         byte[] bytes = new byte[9 * sizeof(float) + 3 * sizeof(ushort)];
         Span<byte> span = bytes.AsSpan();
@@ -323,7 +323,7 @@ public class ModelRigImportTests
           "scenes": [ { "nodes": [ 0 ] } ],
           "nodes": [ { "name": "Tri", "mesh": 0 } ],
           "meshes": [ { "primitives": [ { "attributes": { "POSITION": 0 }, "indices": 1, "material": 0 } ] } ],
-          "materials": [ { "name": "Red" } ],
+          "materials": [ {{material}} ],{{images}}
           "buffers": [ { "byteLength": {{bytes.Length}}, "uri": "data:application/octet-stream;base64,{{Convert.ToBase64String(bytes)}}" } ],
           "bufferViews": [
             { "buffer": 0, "byteOffset": 0, "byteLength": 36 },
@@ -351,6 +351,36 @@ public class ModelRigImportTests
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(MaterialGltf()));
         return ClayBackedImporter.Import(stream, "tri.gltf", new ModelImporterSettings { MaterialResolver = resolver });
+    }
+
+    private sealed class ReferenceTextureResolver : IModelTextureResolver
+    {
+        public readonly Texture2D Texture = AssetDatabase.Get<Texture2D>(Guid.NewGuid());
+
+        public Texture2D? ResolveExternal(string sourcePath, bool srgb) => Texture;
+
+        public Texture2D? ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType, bool srgb) => Texture;
+    }
+
+    [Fact]
+    public void AnOcclusionMapKeepsItsStrength()
+    {
+        const string png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+        string gltf = MaterialGltf(
+            """{ "name": "Red", "occlusionTexture": { "index": 0, "strength": 0.4 } }""",
+            $$"""
+
+          "images": [ { "uri": "data:image/png;base64,{{png}}" } ],
+          "textures": [ { "source": 0 } ],
+        """);
+        var resolver = new ReferenceTextureResolver();
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(gltf));
+
+        ModelImportResult result = ClayBackedImporter.Import(stream, "tri.gltf", new ModelImporterSettings { TextureResolver = resolver });
+
+        Material material = Assert.Single(result.Materials);
+        Assert.Same(resolver.Texture, material.GetTexture("ambient_occlusion_map"));
+        Assert.Equal(0.4f, material.GetFloat("ambient_occlusion_map_strength"), 5);
     }
 
     [Fact]
