@@ -232,6 +232,38 @@ public class SessionProcessingTests
     }
 
     [Fact]
+    public void AHostCannotGrowAClientsPeerListWithoutLimit()
+    {
+        using ProbeTransport transport = new();
+        ProbeConnection connection = transport.OpenPeer();
+        using NetSession client = CreateClient(connection);
+        client.ProcessEvent(new TransportEvent(TransportEventType.Connected, connection));
+        using NetWriter accepted = new();
+        accepted.WriteUInt16(NetSession.ReservedMessageIds + 1);
+        accepted.WriteVarUInt32(1);
+        accepted.WriteVarUInt32(2);
+        accepted.WriteVarUInt32(NetPeer.HostId);
+        accepted.WriteString("host");
+        accepted.WriteVarUInt32(1);
+        accepted.WriteString("client");
+        accepted.WriteBool(false);
+        accepted.WriteVarUInt32(1 << 20);
+        client.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, accepted.WrittenMemory));
+
+        using NetWriter joined = new();
+        for (int id = 2; id < 70_000 && client.State == SessionState.Active; id++)
+        {
+            joined.Reset();
+            joined.WriteUInt16(NetSession.ReservedMessageIds + 2);
+            joined.WriteVarUInt32((uint)id);
+            joined.WriteString("x");
+            client.ProcessEvent(new TransportEvent(TransportEventType.Data, connection, joined.WrittenMemory));
+        }
+
+        Assert.InRange(client.Peers.Count, 0, 65536);
+    }
+
+    [Fact]
     public void HostRefusesMessagesOnOtherChannelsBeforeJoining()
     {
         using ProbeTransport transport = new();

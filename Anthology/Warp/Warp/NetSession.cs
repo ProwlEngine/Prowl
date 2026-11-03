@@ -89,6 +89,9 @@ public sealed class NetSession : IDisposable
     // Host only.
     private int _nextPeerId = NetPeer.HostId + 1;
 
+    // The host, plus the most clients MaxPeers allows.
+    private const int MaxSessionPeers = 65536;
+
     private NetSession(Transport transport, NetSessionOptions? options, bool isHost, bool pumpTransport = true)
     {
         ArgumentNullException.ThrowIfNull(transport);
@@ -1024,6 +1027,11 @@ public sealed class NetSession : IDisposable
                     if (State == SessionState.Active)
                     {
                         NetPeer peer = new(ReadPeerId(ref reader), reader.ReadString(MaxNameBytes), false, null);
+                        if (_peers.Count >= MaxSessionPeers)
+                        {
+                            throw new InvalidDataException("The host listed more peers than a session can hold.");
+                        }
+
                         if (_peers.TryAdd(peer.Id, peer))
                         {
                             PeerJoined?.Invoke(peer);
@@ -1079,7 +1087,7 @@ public sealed class NetSession : IDisposable
     {
         int localId = ReadPeerId(ref reader);
         uint count = reader.ReadVarUInt32();
-        if (count > (uint)reader.Remaining)
+        if (count > (uint)reader.Remaining || count > MaxSessionPeers)
         {
             throw new InvalidDataException("Peer count exceeds the message size.");
         }
