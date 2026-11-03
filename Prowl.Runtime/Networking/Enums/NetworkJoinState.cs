@@ -3,7 +3,7 @@
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>The local player's progress towards gameplay, separate from Warp session admission.</summary>
+/// <summary>The local player's progress towards gameplay, separate from Courier session admission.</summary>
 public enum NetworkJoinState
 {
     Disconnected,

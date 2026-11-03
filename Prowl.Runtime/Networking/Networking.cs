@@ -4,11 +4,11 @@
 using System;
 
 using Prowl.Runtime.Diagnostics;
-using Prowl.Warp;
+using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>Hosts or joins the engine's replicated scene session. Additional service connections use Warp directly.</summary>
+/// <summary>Hosts or joins the engine's replicated scene session. Additional service connections use Courier directly.</summary>
 public static partial class Networking
 {
     /// <summary>Message IDs from here up are reserved for engine replication.</summary>

@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 
-using Prowl.Warp;
+using Prowl.Courier;
 
 using static Prowl.Runtime.Networking.NetworkSystem;
 
@@ -567,7 +567,7 @@ internal sealed class SnapshotSystem : IDisposable
             limit = Math.Min(limit, connection.GetMaxMessageSize(Delivery.Unreliable));
         }
 
-        // Warp adds a two-byte message id.
+        // Courier adds a two-byte message id.
         return (delivery, limit - sizeof(ushort));
     }
 

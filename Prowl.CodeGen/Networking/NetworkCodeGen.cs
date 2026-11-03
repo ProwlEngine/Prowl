@@ -43,8 +43,8 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
     private const string RpcModeType = "global::Prowl.Runtime.Networking.RpcMode";
     private const string Serializer = "global::Prowl.Runtime.Networking.NetSerializer";
     private const string TypeSerializer = "global::Prowl.Runtime.Networking.NetTypeSerializer";
-    private const string WriterType = "global::Prowl.Warp.NetWriter";
-    private const string ReaderType = "global::Prowl.Warp.NetReader";
+    private const string WriterType = "global::Prowl.Courier.NetWriter";
+    private const string ReaderType = "global::Prowl.Courier.NetReader";
 
     // Hot reload would carry the previous assembly's descriptor over; the new one's own initializer builds the right one.
     private const string Descriptor = "[global::Prowl.Ember.ReloadIgnore] private static readonly";

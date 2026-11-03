@@ -38,8 +38,8 @@
     <Project Path="../Anthology/Scribe/Scribe/Scribe.csproj" />
     <Project Path="../Anthology/Unwrapper/Unwrapper/Unwrapper.csproj" />
     <Project Path="../Anthology/Vector/Vector/Vector.csproj" />
-    <Project Path="../Anthology/Warp/Warp/Prowl.Warp.csproj" />
-    <Project Path="../Anthology/Warp/Tests/Prowl.Warp.Tests.csproj" />
+    <Project Path="../Anthology/Courier/Courier/Prowl.Courier.csproj" />
+    <Project Path="../Anthology/Courier/Tests/Prowl.Courier.Tests.csproj" />
   </Folder>
   <Folder Name="/Samples/" />
   <Folder Name="/Samples/Runtime/">

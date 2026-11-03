@@ -43,9 +43,9 @@
     <ProjectReference Include="$(AnthologyDir)Graphite\Rendering\Prowl.Graphite.Rendering.csproj" />
   </ItemGroup>
 
-  <!-- Prowl.Warp isn't on NuGet yet, so it always builds from the sibling Anthology checkout. -->
+  <!-- Prowl.Courier isn't on NuGet yet, so it always builds from the sibling Anthology checkout. -->
   <ItemGroup>
-    <ProjectReference Include="$(AnthologyDir)Warp\Warp\Prowl.Warp.csproj" />
+    <ProjectReference Include="$(AnthologyDir)Courier\Courier\Prowl.Courier.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(ProwlLocalAnthology)' != 'true'">

@@ -6,8 +6,8 @@ using System.Runtime.CompilerServices;
 using Prowl.Echo;
 using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
-using Prowl.Warp;
-using Prowl.Warp.Transports.Local;
+using Prowl.Courier;
+using Prowl.Courier.Transports.Local;
 
 using Xunit;
 

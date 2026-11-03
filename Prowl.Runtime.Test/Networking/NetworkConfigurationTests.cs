@@ -1,7 +1,7 @@
 using Prowl.Runtime.Networking;
-using Prowl.Warp;
-using Prowl.Warp.Transports.Kcp;
-using Prowl.Warp.Transports.Local;
+using Prowl.Courier;
+using Prowl.Courier.Transports.Kcp;
+using Prowl.Courier.Transports.Local;
 
 using Xunit;
 
@@ -98,7 +98,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
         {
             Networking.Networking.Configure(new() { Port = 0 });
             using Transport transport = Networking.Networking.CreateTransport(true);
-            Assert.IsType<Prowl.Warp.Transports.Kcp.KcpTransport>(transport);
+            Assert.IsType<Prowl.Courier.Transports.Kcp.KcpTransport>(transport);
             using NetSession session = Networking.Networking.Host(transport);
             Assert.Same(transport, session.Transport);
             Assert.True(session.IsExternallyPumped);

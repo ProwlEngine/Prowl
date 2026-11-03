@@ -10,8 +10,8 @@ using Prowl.Editor.Projects.Scripting;
 using Prowl.Runtime;
 using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
-using Prowl.Warp.Transports.Kcp;
-using Prowl.Warp;
+using Prowl.Courier.Transports.Kcp;
+using Prowl.Courier;
 
 using Xunit;
 

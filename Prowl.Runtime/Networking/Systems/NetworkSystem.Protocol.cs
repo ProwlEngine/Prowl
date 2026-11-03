@@ -4,7 +4,7 @@
 using System;
 using System.IO;
 
-using Prowl.Warp;
+using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;
 
@@ -45,7 +45,7 @@ internal sealed partial class NetworkSystem
             catch (Exception e) when (e is OverflowException or NotSupportedException or FormatException
                                           or ArgumentException)
             {
-                // A value that doesn't fit its type is a malformed message. Warp drops whoever sent it.
+                // A value that doesn't fit its type is a malformed message. Courier drops whoever sent it.
                 throw new InvalidDataException($"A {kind} message could not be read: {e.Message}", e);
             }
             catch (Exception e) when (e is not (EndOfStreamException or InvalidDataException))
@@ -64,7 +64,7 @@ internal sealed partial class NetworkSystem
             return;
         }
 
-        // Unreliable is a preference: reliable delivery and Warp fragmentation work on every
+        // Unreliable is a preference: reliable delivery and Courier fragmentation work on every
         // session transport, including backends without datagrams or with smaller payload limits.
         if (delivery == Delivery.Unreliable &&
             (!Session!.Transport.Capabilities.Supports(delivery) ||
