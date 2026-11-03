@@ -19,6 +19,9 @@ public sealed class KcpConnection : Connection
     private uint _cookieIssued;
     private bool _hasCookie;
     private bool _refusedAccept;
+    private long _challengeRttMs;
+    private long _cookieMs;
+    private long _requestSentMs;
     private bool _hasRtt;
     private long _lastReceiveMs;
     private long _nextHandshakeMs;
@@ -289,6 +292,8 @@ public sealed class KcpConnection : Connection
                     _cookieIssued = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
                     packet.Slice(9, KcpPacket.CookieSize).CopyTo(_cookie);
                     _hasCookie = true;
+                    _cookieMs = now;
+                    _challengeRttMs = now - _requestSentMs;
                     _transport.SendChallengeResponse(this, _cookie, _cookieIssued);
                     _nextHandshakeMs = now + (long)_options.HandshakeResendInterval.TotalMilliseconds;
                 }
@@ -483,6 +488,13 @@ public sealed class KcpConnection : Connection
 
             if (now >= _nextHandshakeMs)
             {
+                // A cookie that gets no Accept may be spoiled or from a host that restarted, so ask for a new one.
+                long interval = (long)_options.HandshakeResendInterval.TotalMilliseconds;
+                if (_hasCookie && now - _cookieMs > Math.Max(4 * interval, 3 * _challengeRttMs))
+                {
+                    _hasCookie = false;
+                }
+
                 if (_hasCookie)
                 {
                     _transport.SendChallengeResponse(this, _cookie, _cookieIssued);
@@ -490,6 +502,7 @@ public sealed class KcpConnection : Connection
                 else
                 {
                     _transport.SendConnectRequest(this);
+                    _requestSentMs = now;
                 }
 
                 _nextHandshakeMs = now + (long)_options.HandshakeResendInterval.TotalMilliseconds;

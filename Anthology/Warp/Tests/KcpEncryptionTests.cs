@@ -202,6 +202,34 @@ public class KcpEncryptionTests
             timeoutMs: 2000, what: "data under the agreed keys");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AClientWithACookieThatNoLongerWorksAsksForANewOne(bool encrypted)
+    {
+        using KcpTransport host = new(Options(encrypted ? new KcpEncryption() : null));
+        host.Listen();
+        using KcpTransport client = new(Options(encrypted ? new KcpEncryption() : null));
+        using Relay relay = new(host);
+        bool spoiled = false;
+        relay.ToClient = datagram =>
+        {
+            if (datagram[0] == (byte)KcpPacketType.Challenge && !spoiled)
+            {
+                spoiled = true;
+                datagram[^1] ^= 0xFF;
+            }
+
+            return datagram;
+        };
+        Pump pump = new(host, client);
+        Connection toHost = client.Connect(relay.Address);
+        pump.Until(() => { relay.Step(); return toHost.State != ConnectionState.Connecting; }, what: "connect");
+
+        Assert.True(spoiled);
+        Assert.True(toHost.IsConnected);
+    }
+
     [Fact]
     public void AForgedAcceptDoesNotStopTheGenuineOne()
     {
@@ -720,6 +748,9 @@ public class KcpEncryptionTests
             _clientSide = _clientSides[0];
         }
 
+        /// <summary>Changes each datagram from the host before it reaches the client.</summary>
+        public Func<byte[], byte[]>? ToClient { get; set; }
+
         /// <summary>Extra datagrams to deliver to the client ahead of each one from the host.</summary>
         public Func<byte[], byte[][]>? BeforeClient { get; set; }
 
@@ -792,6 +823,11 @@ public class KcpEncryptionTests
                 if (datagram[0] == 4)
                 {
                     SessionId = BinaryPrimitives.ReadUInt32LittleEndian(datagram.AsSpan(5));
+                }
+
+                if (ToClient != null)
+                {
+                    datagram = ToClient(datagram);
                 }
 
                 if (_client != null)
