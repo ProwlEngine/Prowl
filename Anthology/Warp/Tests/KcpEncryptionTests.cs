@@ -295,7 +295,7 @@ public class KcpEncryptionTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void OnlyEncryptedSessionsFollowAClientToANewAddress(bool encrypted)
+    public void SessionsFollowAClientToANewAddress(bool encrypted)
     {
         using KcpTransport host = new(Options(encrypted ? new KcpEncryption() : null));
         host.Listen();
@@ -312,12 +312,6 @@ public class KcpEncryptionTests
         {
             relay.Step();
             pump.Step();
-        }
-
-        if (!encrypted)
-        {
-            Assert.DoesNotContain(pump.EventsOf(host), ev => ev.Type == TransportEventType.Data);
-            return;
         }
 
         Assert.Same(toClient, Assert.Single(host.Connections));

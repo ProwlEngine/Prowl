@@ -53,7 +53,7 @@ public sealed class KcpTransport : Transport
     private readonly List<PendingAgreement> _agreements = new();
     private readonly object _signing = new();
 
-    // Encrypted incoming connections, so an authenticated packet from a new address can find its session.
+    // Every session, so a packet from an address the session isn't at can find it.
     private readonly Dictionary<uint, KcpConnection> _bySession = new();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly byte[] _cookieKey = RandomNumberGenerator.GetBytes(32);
@@ -500,8 +500,9 @@ public sealed class KcpTransport : Transport
     }
 
     /// <summary>
-    ///     Handles a genuine packet of an encrypted session from an address the session isn't at. The session only
-    ///     moves once that address echoes a path challenge, so replaying a packet from elsewhere can't redirect it.
+    ///     Handles a packet of a session from an address the session isn't at. The session only moves once that
+    ///     address echoes a path challenge, so replaying a packet from elsewhere can't redirect it. Plain sessions
+    ///     rely on the session id, which only an observer on the path sees.
     /// </summary>
     private void FollowToNewAddress(SocketAddress from, int length, long now)
     {
@@ -716,10 +717,7 @@ public sealed class KcpTransport : Transport
 
         AddConnection(connection);
         _byAddress.Add(remote, connection);
-        if (cipher != null)
-        {
-            _bySession.Add(sessionId, connection);
-        }
+        _bySession.Add(sessionId, connection);
 
         _incomingCount++;
 
@@ -1084,10 +1082,7 @@ public sealed class KcpTransport : Transport
 
     internal void OnConnected(KcpConnection connection)
     {
-        if (connection.Cipher != null)
-        {
-            _bySession.TryAdd(connection.SessionId, connection);
-        }
+        _bySession.TryAdd(connection.SessionId, connection);
 
         RaiseConnected(connection);
     }

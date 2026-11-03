@@ -59,9 +59,10 @@ is lost. Keep frequent ones small.
 
 - `Encryption`: off by default. Each connection agrees on keys with an ephemeral P-256 exchange, then every session
   packet is sealed with AES-256-GCM and replays are dropped. Keys move forward every 2^24 packets. Give the host a
-  `SigningKey` and clients its public key as `TrustedHostKey` to stop a man in the middle. Either end keeps the
-  session when the other's address changes, such as a phone moving between Wi-Fi and mobile data, once the new
-  address answers an encrypted challenge. Both ends must agree.
+  `SigningKey` and clients its public key as `TrustedHostKey` to stop a man in the middle. Give the host a
+  `ResetKey` it keeps across restarts so encrypted clients learn of a restart at once. Both ends must agree.
+- Either end keeps the session when the other's address changes, such as a phone moving between Wi-Fi and mobile
+  data, once the new address answers a challenge. A restarted host resets clients of its previous run.
 - `MaxSendRate`: caps the bytes per second each connection sends. Lower channels get the bandwidth first, and
   unreliable messages over the cap are dropped and counted in `Stats.PacketsDropped`.
 - `MaxConnectionsPerAddress` and `MaxHandshakesPerAddressPerSecond`: limit what one IP address (one IPv6 /64) can

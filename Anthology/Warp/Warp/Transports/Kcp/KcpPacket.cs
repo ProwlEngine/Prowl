@@ -31,7 +31,7 @@ namespace Prowl.Warp.Transports.Kcp;
 ///   Ping               body = u32 sender time in ms
 ///   Pong               body = u32 time echoed from the Ping
 ///   Disconnect         no body
-///   PathChallenge      body = 8 random bytes, sent to a new address an encrypted peer's packets came from
+///   PathChallenge      body = 8 random bytes, sent to a new address a peer's packets came from
 ///   PathResponse       body = the 8 bytes echoed; only an answer from that address moves the session there
 ///   Reset              [type][u32 sessionId], plus the session's 16 byte reset token when encrypted. Sent, never
 ///                      sealed, by a host that has no such session, such as one that restarted.
