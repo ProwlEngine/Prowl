@@ -66,7 +66,9 @@ public class MultiplayerPlayTests : EditorTestHarness
         Scene.Load(scene);
         Scene.ProcessPendingLoad();
 
-        Transport transport = new KcpTransport(new KcpTransportOptions { Port = 0 });
+        KcpTransportOptions options = Networking.Configuration.CreateKcpOptions();
+        options.Port = 0;
+        Transport transport = new KcpTransport(options);
         Networking.Host(transport, "Host");
         int port = Networking.LocalPort;
 
