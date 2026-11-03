@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Net;
 
 namespace Prowl.Warp.Transports.Kcp;
 
@@ -17,6 +18,12 @@ public sealed class KcpTransportOptions
     ///     <see cref="KcpTransport.LocalPort" />.
     /// </summary>
     public int Port { get; set; } = 7777;
+
+    /// <summary>
+    ///     The local address to bind, or null for every address. On a host with several addresses, bind the one
+    ///     clients connect to: replies from an unbound socket can leave from another address, which clients ignore.
+    /// </summary>
+    public IPAddress? BindAddress { get; set; }
 
     /// <summary>
     ///     Identifies your game and protocol version. Peers with a different id are ignored, so change it

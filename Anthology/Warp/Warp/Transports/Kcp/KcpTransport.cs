@@ -1001,12 +1001,14 @@ public sealed class KcpTransport : Transport
 
     private void OpenSocket(int port)
     {
-        Socket socket = CreateDualModeSocket() ??
-                        new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        IPAddress? bind = Settings.BindAddress;
+        Socket socket = bind != null
+            ? new Socket(bind.AddressFamily, SocketType.Dgram, ProtocolType.Udp)
+            : CreateDualModeSocket() ?? new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         try
         {
             IPAddress any = socket.AddressFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
-            socket.Bind(new IPEndPoint(any, port));
+            socket.Bind(new IPEndPoint(bind ?? any, port));
             socket.Blocking = false;
             socket.ReceiveBufferSize = Settings.SocketBufferSize;
             socket.SendBufferSize = Settings.SocketBufferSize;

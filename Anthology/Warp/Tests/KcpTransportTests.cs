@@ -497,6 +497,20 @@ public class KcpTransportTests
     }
 
     [Fact]
+    public void AHostBoundToOneOfSeveralAddressesAnswersFromIt()
+    {
+        KcpTransportOptions options = FastOptions();
+        options.BindAddress = IPAddress.Parse("127.0.0.2");
+        using KcpTransport host = new(options);
+        host.Listen();
+        using KcpTransport client = new(FastOptions());
+        Pump pump = new(host, client);
+        Connection toHost = client.Connect($"127.0.0.2:{host.LocalPort}");
+        pump.Until(() => toHost.State != ConnectionState.Connecting, what: "connect");
+        Assert.True(toHost.IsConnected);
+    }
+
+    [Fact]
     public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
     {
         KcpTransportOptions options = FastOptions();
