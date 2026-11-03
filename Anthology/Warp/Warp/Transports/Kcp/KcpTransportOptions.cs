@@ -125,10 +125,11 @@ public sealed class KcpTransportOptions
             throw new ArgumentOutOfRangeException(nameof(Port), Port, "Port must be between 0 and 65535.");
         }
 
-        if (Mtu < KcpPacket.SessionHeaderSize + 64 || Mtu > KcpPacket.MaxDatagramSize)
+        // Handshake requests are padded to a fixed size, and a datagram over the Mtu is dropped.
+        if (Mtu < KcpPacket.HandshakeRequestSize || Mtu > KcpPacket.MaxDatagramSize)
         {
             throw new ArgumentOutOfRangeException(nameof(Mtu), Mtu,
-                $"MTU must be between {KcpPacket.SessionHeaderSize + 64} and {KcpPacket.MaxDatagramSize}.");
+                $"MTU must be between {KcpPacket.HandshakeRequestSize} and {KcpPacket.MaxDatagramSize}.");
         }
 
         if (Channels < 1 || Channels > MaxChannels)
