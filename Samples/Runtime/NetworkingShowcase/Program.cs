@@ -172,10 +172,8 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         _stone = Lit(new Color(0.08f, 0.08f, 0.09f, 1f), 0f, 0.8f);
 
         GameObject sun = new("Sun");
-        Light light = sun.AddComponent<Light>();
-        light.Type = LightType.Directional;
-        light.ShadowDistance = 60f;
-        light.Intensity = 0.7f;
+        DirectionalLight light = sun.AddComponent<DirectionalLight>();
+        light.Intensity = 100000f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         Add(sun);
 
