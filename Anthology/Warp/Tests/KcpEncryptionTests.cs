@@ -333,6 +333,63 @@ public class KcpEncryptionTests
     }
 
     [Fact]
+    public void PathChallengesAreRateLimitedAcrossAddresses()
+    {
+        using KcpTransport host = new(Options(new KcpEncryption()));
+        host.Listen();
+        using KcpTransport client = new(Options(new KcpEncryption()));
+        using Relay relay = new(host);
+        List<Socket> sources = new();
+        Pump pump = new(host, client);
+        Connection toHost = client.Connect(relay.Address);
+        pump.Until(() => { relay.Step(); return toHost.IsConnected && host.Connections.Count == 1; }, what: "connect");
+
+        // Each fresh client packet also reaches the host first from a new address, as if spoofed.
+        relay.Spy = datagram =>
+        {
+            if (datagram[0] >= 16)
+            {
+                Socket source = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                source.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+                source.SendTo(datagram, new IPEndPoint(IPAddress.Loopback, relay.HostPort));
+                sources.Add(source);
+            }
+        };
+        try
+        {
+            System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+            while (watch.ElapsedMilliseconds < 300)
+            {
+                toHost.Send(new byte[] { 1 }, Delivery.Unreliable);
+                relay.Step();
+                pump.Step();
+            }
+
+            pump.For(50);
+            int challenges = sources.Sum(source =>
+            {
+                int count = 0;
+                byte[] buffer = new byte[2048];
+                while (source.Available > 0)
+                {
+                    count += source.Receive(buffer) > 0 && buffer[0] == (byte)KcpPacketType.PathChallenge ? 1 : 0;
+                }
+
+                return count;
+            });
+            Assert.True(sources.Count > 20);
+            Assert.InRange(challenges, 1, 5);
+        }
+        finally
+        {
+            foreach (Socket source in sources)
+            {
+                source.Dispose();
+            }
+        }
+    }
+
+    [Fact]
     public void EncryptedClientsFollowAHostToANewAddress()
     {
         using KcpTransport host = new(Options(new KcpEncryption()));

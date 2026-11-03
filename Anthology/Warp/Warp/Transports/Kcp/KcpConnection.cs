@@ -438,11 +438,13 @@ public sealed class KcpConnection : Connection
     private readonly byte[] _pathToken = new byte[PathTokenSize];
     private long _pathChallengedMs;
 
-    /// <summary>Asks <paramref name="candidate" /> to echo a fresh token, at most every 100 ms per address.</summary>
+    /// <summary>
+    ///     Asks <paramref name="candidate" /> to echo a fresh token. At most one challenge per 100 ms, whatever the
+    ///     address, so spoofed sources can't turn the host into a reflector.
+    /// </summary>
     internal void ChallengePath(SocketAddress candidate, long now)
     {
-        if (State != ConnectionState.Connected ||
-            (candidate.Equals(_pathCandidate) && now - _pathChallengedMs < 100))
+        if (State != ConnectionState.Connected || (_pathCandidate != null && now - _pathChallengedMs < 100))
         {
             return;
         }
