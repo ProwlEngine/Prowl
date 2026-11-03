@@ -86,10 +86,32 @@ public sealed class StaticRpcMember
             "Player builds preserve script assemblies; generated descriptors root their declaring type fields.")]
     internal static StaticRpcMember? Find(string typeName, uint id)
     {
-        Type? type = RuntimeUtils.ResolveType(typeName);
-        return type is { IsClass: true, ContainsGenericParameters: false }
+        Type? type = ResolveDeclaringType(typeName);
+        return type is { IsClass: true, IsGenericType: false }
             ? s_members[type].GetValueOrDefault(id)
             : null;
+    }
+
+    /// <summary>A plain, non-generic type from an assembly already loaded, or null for any other name.</summary>
+    private static Type? ResolveDeclaringType(string typeName)
+    {
+        int comma = typeName.IndexOf(", ", StringComparison.Ordinal);
+        if (comma <= 0 || typeName.AsSpan().IndexOfAny("[]`*&") >= 0 || typeName.IndexOf(',') != comma)
+        {
+            return null;
+        }
+
+        string assemblyName = typeName[(comma + 2)..].Split(',')[0];
+
+        foreach (Assembly assembly in RuntimeUtils.AssemblySource())
+        {
+            if (string.Equals(assembly.GetName().Name, assemblyName, StringComparison.Ordinal))
+            {
+                return assembly.GetType(typeName[..comma], false);
+            }
+        }
+
+        return null;
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2070",

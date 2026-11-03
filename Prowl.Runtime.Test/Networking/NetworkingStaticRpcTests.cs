@@ -44,6 +44,12 @@ public static class StaticRpcProbe
     }
 }
 
+public static class StaticRpcGenericProbe<T>
+{
+    internal static readonly StaticRpcMember Member = new(typeof(StaticRpcGenericProbe<T>), 905, "Call905()",
+        RpcMode.Broadcast, RpcFlags.None, (ref NetReader reader, bool execute) => { });
+}
+
 public partial class NetworkingTests
 {
     private static void WriteStaticRpc(NetWriter output, uint id, Action<NetWriter> arguments, int? caller = null)
@@ -276,5 +282,18 @@ public partial class NetworkingTests
                         bob.Received.FindIndex(m => m.Id == FakePeer.StaticRpcFromHost));
         }
         finally { Networking.Networking.Shutdown(); ClearStaticProbe(); }
+    }
+
+    [Fact]
+    public void StaticRpcsAreOnlyFoundUnderThePlainNamesTheySendThemselvesBy()
+    {
+        static string NameOf(Type type) => $"{type.FullName}, {type.Assembly.GetName().Name}";
+        Assert.NotNull(StaticRpcMember.Find(NameOf(typeof(StaticRpcProbe)), 901));
+        Assert.NotNull(StaticRpcGenericProbe<int>.Member);
+        Assert.Null(StaticRpcMember.Find(NameOf(typeof(StaticRpcGenericProbe<int>)), 905));
+        Assert.Null(StaticRpcMember.Find(NameOf(typeof(StaticRpcGenericProbe<List<NetTestComponent>>)), 905));
+        Assert.NotNull(StaticRpcMember.Find(typeof(StaticRpcProbe).AssemblyQualifiedName!, 901));
+        Assert.Null(StaticRpcMember.Find(NameOf(typeof(StaticRpcProbe)).Replace(",", "[],"), 901));
+        Assert.Null(StaticRpcMember.Find(typeof(StaticRpcProbe).FullName!, 901));
     }
 }
