@@ -22,6 +22,13 @@ public struct NetSessionOptions
     public bool BatchMessages { get; set; } = true;
 
     /// <summary>
+    ///     Host: tell every client who else is in the session, and every join and leave. Turn off for large sessions
+    ///     where clients don't need the list, which saves a message to every client on each join and leave. Clients
+    ///     then know only the host and themselves.
+    /// </summary>
+    public bool SharePeerList { get; set; } = true;
+
+    /// <summary>
     ///     The most clients that may be joined at once, not counting the host. Cannot exceed the transport's
     ///     <see cref="TransportCapabilities.MaxIncomingConnections" />.
     /// </summary>

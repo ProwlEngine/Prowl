@@ -328,6 +328,24 @@ public abstract class NetSessionTests : IDisposable
     }
 
     [Fact]
+    public void AHostCanKeepThePeerListToItself()
+    {
+        SessionProbe host = Host(new NetSessionOptions { BatchMessages = BatchMessages, SharePeerList = false });
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        SessionProbe bob = Join("bob");
+        SessionProbe.PumpUntil(() => bob.Session.State == SessionState.Active, host, alice, bob);
+        bob.Session.Shutdown();
+        SessionProbe.PumpUntil(() => host.PeersLeft.Count == 1, host, alice);
+        SessionProbe.PumpFor(50, host, alice);
+
+        Assert.Equal(new[] { (0, "Hosty"), (1, "alice") }, alice.Session.Peers.OrderBy(p => p.Id).Select(p => (p.Id, p.Name)));
+        Assert.Empty(alice.PeersJoined);
+        Assert.Empty(alice.PeersLeft);
+        Assert.Equal(2, host.PeersJoined.Count);
+    }
+
+    [Fact]
     public void ClientsJoinAndEveryoneAgreesOnThePeerList()
     {
         SessionProbe host = Host();

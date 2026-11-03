@@ -815,22 +815,36 @@ public sealed class NetSession : IDisposable
         _writer.Reset();
         _writer.WriteUInt16((ushort)InternalMessage.JoinAccepted);
         _writer.WriteVarUInt32((uint)peer.Id);
-        _writer.WriteVarUInt32((uint)_peers.Count);
-        foreach (NetPeer present in _peers.Values)
+        if (_options.SharePeerList)
         {
-            _writer.WriteVarUInt32((uint)present.Id);
-            _writer.WriteString(present.Name);
+            _writer.WriteVarUInt32((uint)_peers.Count);
+            foreach (NetPeer present in _peers.Values)
+            {
+                _writer.WriteVarUInt32((uint)present.Id);
+                _writer.WriteString(present.Name);
+            }
+        }
+        else
+        {
+            _writer.WriteVarUInt32(2);
+            _writer.WriteVarUInt32((uint)LocalPeer!.Id);
+            _writer.WriteString(LocalPeer.Name);
+            _writer.WriteVarUInt32((uint)peer.Id);
+            _writer.WriteString(peer.Name);
         }
 
         _writer.WriteBool(remote.BatchMessages);
         _writer.WriteVarUInt32((uint)_options.MaxMessageSize);
         SendToConnection(connection, _writer.WrittenSpan, Delivery.Reliable);
 
-        _writer.Reset();
-        _writer.WriteUInt16((ushort)InternalMessage.PeerJoined);
-        _writer.WriteVarUInt32((uint)peer.Id);
-        _writer.WriteString(peer.Name);
-        BroadcastWritten(Delivery.Reliable, peer, false);
+        if (_options.SharePeerList)
+        {
+            _writer.Reset();
+            _writer.WriteUInt16((ushort)InternalMessage.PeerJoined);
+            _writer.WriteVarUInt32((uint)peer.Id);
+            _writer.WriteString(peer.Name);
+            BroadcastWritten(Delivery.Reliable, peer, false);
+        }
 
         PeerJoined?.Invoke(peer);
     }
@@ -873,11 +887,14 @@ public sealed class NetSession : IDisposable
             return;
         }
 
-        _writer.Reset();
-        _writer.WriteUInt16((ushort)InternalMessage.PeerLeft);
-        _writer.WriteVarUInt32((uint)peer.Id);
-        _writer.WriteByte((byte)reason);
-        BroadcastWritten(Delivery.Reliable, null, false);
+        if (_options.SharePeerList)
+        {
+            _writer.Reset();
+            _writer.WriteUInt16((ushort)InternalMessage.PeerLeft);
+            _writer.WriteVarUInt32((uint)peer.Id);
+            _writer.WriteByte((byte)reason);
+            BroadcastWritten(Delivery.Reliable, null, false);
+        }
 
         PeerLeft?.Invoke(peer, reason);
     }
