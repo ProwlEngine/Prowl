@@ -44,6 +44,39 @@ public class KcpTransportTests
         return (host, client, pump, toHost);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OneFloodingSourceCannotCrowdOutOthersInAReceive(bool ioThreads)
+    {
+        KcpTransportOptions options = FastOptions();
+        options.MaxDatagramsPerReceive = 256;
+        options.SocketBufferSize = 4 * 1024 * 1024;
+        options.UseIoThreads = ioThreads;
+        (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) = Connect(options);
+        using (host)
+        using (client)
+        using (Socket flood = RawSocket(host))
+        {
+            byte[] junk = { 99 };
+            for (int i = 0; i < 2000; i++)
+            {
+                flood.Send(junk);
+            }
+
+            toHost.Send(new byte[] { 7 }, Delivery.Unreliable);
+            Thread.Sleep(100);
+            host.Receive();
+            bool arrived = false;
+            while (host.Poll(out TransportEvent ev))
+            {
+                arrived |= ev.Type == TransportEventType.Data;
+            }
+
+            Assert.True(arrived);
+        }
+    }
+
     [Fact]
     public void ReceiveWorkIsBoundedPerCall()
     {

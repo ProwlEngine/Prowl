@@ -61,6 +61,10 @@ public sealed class KcpTransport : Transport
     private readonly List<DelayedPacket> _delayed = new();
 
     private readonly byte[] _receiveBuffer = new byte[KcpPacket.MaxDatagramSize];
+
+    // Datagrams handled this Receive from each address without a connection.
+    private const int UnknownSourceShare = 32;
+    private readonly Dictionary<(UInt128, int), int> _unknownSources = new();
     private readonly byte[] _openBuffer = new byte[KcpPacket.MaxDatagramSize];
     private readonly byte[] _plainBuffer = new byte[KcpPacket.MaxDatagramSize];
     private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolver;
@@ -232,19 +236,26 @@ public sealed class KcpTransport : Transport
         }
 
         long now = NowMs;
+        int processed = 0;
+        int reads = 0;
+        int maxReads = Settings.MaxDatagramsPerReceive * 16;
+        _unknownSources.Clear();
         if (_io != null)
         {
-            for (int processed = 0;
-                 processed < Settings.MaxDatagramsPerReceive && _io.TryTake(_receiveBuffer, ref _ioAddress, out int length);
-                 processed++)
+            while (processed < Settings.MaxDatagramsPerReceive && reads++ < maxReads &&
+                   _io.TryTake(_receiveBuffer, ref _ioAddress, out int length))
             {
-                HandleDatagram(_ioAddress!, length, now);
+                if (Admit(_ioAddress!))
+                {
+                    processed++;
+                    HandleDatagram(_ioAddress!, length, now);
+                }
             }
 
             return;
         }
 
-        for (int processed = 0; processed < Settings.MaxDatagramsPerReceive; processed++)
+        while (processed < Settings.MaxDatagramsPerReceive && reads++ < maxReads)
         {
             int length;
             try
@@ -266,13 +277,36 @@ public sealed class KcpTransport : Transport
                 continue;
             }
 
-            if (length == 0 || length > Settings.Mtu)
+            if (length == 0 || length > Settings.Mtu || !Admit(_receiveAddress!))
             {
                 continue;
             }
 
+            processed++;
             HandleDatagram(_receiveAddress!, length, now);
         }
+    }
+
+    /// <summary>
+    ///     Whether to handle a datagram this Receive. Addresses with a connection always are. Each other address gets
+    ///     a few, so a flood from one source is read and dropped instead of using up the budget meant for everyone.
+    /// </summary>
+    private bool Admit(SocketAddress from)
+    {
+        if (_byAddress.ContainsKey(from))
+        {
+            return true;
+        }
+
+        ReadOnlySpan<byte> bytes = from.Buffer.Span;
+        // sockaddr_in and sockaddr_in6 both hold the port at 2, then the address at 4 or 8.
+        UInt128 ip = from.Family == AddressFamily.InterNetwork
+            ? BinaryPrimitives.ReadUInt32BigEndian(bytes[4..])
+            : BinaryPrimitives.ReadUInt128BigEndian(bytes.Slice(8, 16));
+        (UInt128, int) source = (ip, BinaryPrimitives.ReadUInt16BigEndian(bytes[2..]));
+        int count = _unknownSources.GetValueOrDefault(source) + 1;
+        _unknownSources[source] = count;
+        return count <= UnknownSourceShare;
     }
 
     public override void Flush()
