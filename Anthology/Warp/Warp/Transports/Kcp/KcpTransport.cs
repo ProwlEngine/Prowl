@@ -6,6 +6,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -145,14 +146,9 @@ public sealed class KcpTransport : Transport
         }
 
         CancellationTokenSource cancellation = new();
-        ValueTask<SocketAddress?> resolution = TryResolveAsync(address, Settings.Port, _socket!.AddressFamily,
+        ValueTask<SocketAddress[]?> resolution = TryResolveAllAsync(address, Settings.Port, _socket!.AddressFamily,
             cancellation.Token, _resolver);
-        SocketAddress? remote = resolution.IsCompletedSuccessfully ? resolution.Result : null;
-        // One socket can hold only one connection per remote address.
-        if (remote != null && _byAddress.ContainsKey(remote))
-        {
-            remote = null;
-        }
+        SocketAddress[]? remotes = resolution.IsCompletedSuccessfully ? Unused(resolution.Result) : null;
 
         ECDiffieHellman? exchange = null;
         byte[]? publicKey = null;
@@ -161,7 +157,7 @@ public sealed class KcpTransport : Transport
             exchange = KcpCipher.CreateKeyExchange(out publicKey);
         }
 
-        KcpConnection connection = new(this, NextConnectionId(), address, true, remote, NowMs)
+        KcpConnection connection = new(this, NextConnectionId(), address, true, remotes?[0], NowMs)
         {
             ClientNonce = RandomUInt32(), KeyExchange = exchange, PublicKey = publicKey
         };
@@ -173,17 +169,49 @@ public sealed class KcpTransport : Transport
         else
         {
             cancellation.Dispose();
-            if (remote == null)
+            if (remotes == null)
             {
                 _unreachable.Add(connection);
             }
             else
             {
-                _byAddress.Add(remote, connection);
+                Register(connection, remotes);
             }
         }
 
         return connection;
+    }
+
+    /// <summary>The addresses no other connection uses, since one socket holds one connection per address. Null if none.</summary>
+    private SocketAddress[]? Unused(SocketAddress[]? addresses)
+    {
+        SocketAddress[]? free = addresses?.Where(address => !_byAddress.ContainsKey(address)).ToArray();
+        return free is { Length: > 0 } ? free : null;
+    }
+
+    /// <summary>Starts an outgoing connection on every address its host resolved to. The first to answer is kept.</summary>
+    private void Register(KcpConnection connection, SocketAddress[] remotes)
+    {
+        connection.RemoteAddress = remotes[0];
+        connection.Candidates = remotes.Length > 1 ? remotes : null;
+        foreach (SocketAddress remote in remotes)
+        {
+            _byAddress.Add(remote, connection);
+        }
+    }
+
+    /// <summary>Keeps the address that answered and forgets the other candidates.</summary>
+    private void SettleCandidates(KcpConnection connection)
+    {
+        foreach (SocketAddress candidate in connection.Candidates!)
+        {
+            if (!candidate.Equals(connection.RemoteAddress))
+            {
+                _byAddress.Remove(candidate);
+            }
+        }
+
+        connection.Candidates = null;
     }
 
     public override void Receive()
@@ -319,15 +347,14 @@ public sealed class KcpTransport : Transport
 
             _resolving.Remove(connection);
             pending.Cancellation.Dispose();
-            SocketAddress? remote = pending.Task.GetAwaiter().GetResult();
-            if (remote == null || _byAddress.ContainsKey(remote))
+            SocketAddress[]? remotes = Unused(pending.Task.GetAwaiter().GetResult());
+            if (remotes == null)
             {
                 Close(connection, DisconnectReason.Unreachable, false);
             }
             else
             {
-                connection.RemoteAddress = remote;
-                _byAddress.Add(remote, connection);
+                Register(connection, remotes);
             }
         }
 
@@ -387,7 +414,30 @@ public sealed class KcpTransport : Transport
     {
         if (_byAddress.TryGetValue(from, out KcpConnection? connection))
         {
+            if (connection.Candidates == null)
+            {
+                connection.HandlePacket(_receiveBuffer, length, now);
+                return;
+            }
+
+            // One of several addresses still being tried. A genuine Challenge from it picks it.
+            if (_receiveBuffer[0] != (byte)KcpPacketType.Challenge)
+            {
+                return;
+            }
+
+            SocketAddress tried = connection.RemoteAddress!;
+            connection.RemoteAddress = Array.Find(connection.Candidates, candidate => candidate.Equals(from));
             connection.HandlePacket(_receiveBuffer, length, now);
+            if (connection.HasCookie)
+            {
+                SettleCandidates(connection);
+            }
+            else
+            {
+                connection.RemoteAddress = tried;
+            }
+
             return;
         }
 
@@ -747,7 +797,16 @@ public sealed class KcpTransport : Transport
         BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], Settings.ProtocolId);
         BinaryPrimitives.WriteUInt32LittleEndian(packet[5..], connection.ClientNonce);
         WriteSettings(packet);
-        SendRaw(connection, connection.RemoteAddress!, packet);
+        if (connection.Candidates == null)
+        {
+            SendRaw(connection, connection.RemoteAddress!, packet);
+            return;
+        }
+
+        foreach (SocketAddress candidate in connection.Candidates)
+        {
+            SendRaw(connection, candidate, packet);
+        }
     }
 
     internal void SendChallengeResponse(KcpConnection connection, ReadOnlySpan<byte> cookie, uint issued)
@@ -906,6 +965,11 @@ public sealed class KcpTransport : Transport
         }
 
         _unreachable.Remove(connection);
+        if (connection.Candidates != null)
+        {
+            SettleCandidates(connection);
+        }
+
         if (_bySession.TryGetValue(connection.SessionId, out KcpConnection? listed) && listed == connection)
         {
             _bySession.Remove(connection.SessionId);
@@ -1058,14 +1122,24 @@ public sealed class KcpTransport : Transport
     /// <summary>Resolves an address to the form the socket sends to and receives from, or null if it can't.</summary>
     internal static async ValueTask<SocketAddress?> TryResolveAsync(string address, int defaultPort,
         AddressFamily socketFamily,
+        CancellationToken cancellation, Func<string, CancellationToken, Task<IPAddress[]>>? resolver = null) =>
+        (await TryResolveAllAsync(address, defaultPort, socketFamily, cancellation, resolver).ConfigureAwait(false))
+        ?[0];
+
+    /// <summary>
+    ///     Every address a host name resolves to that the socket can reach, IPv4 first, or null if there are none.
+    ///     A literal gives just itself.
+    /// </summary>
+    internal static async ValueTask<SocketAddress[]?> TryResolveAllAsync(string address, int defaultPort,
+        AddressFamily socketFamily,
         CancellationToken cancellation, Func<string, CancellationToken, Task<IPAddress[]>>? resolver = null)
     {
-        IPAddress? ip;
+        IPAddress[] ips;
         int port;
 
         if (IPEndPoint.TryParse(address, out IPEndPoint? literal))
         {
-            ip = literal.Address;
+            ips = new[] { literal.Address };
             port = literal.Port;
         }
         else
@@ -1084,11 +1158,7 @@ public sealed class KcpTransport : Transport
                 host = address[..colon];
             }
 
-            ip = await ResolveHostAsync(host, socketFamily, cancellation, resolver).ConfigureAwait(false);
-            if (ip == null)
-            {
-                return null;
-            }
+            ips = await ResolveHostAsync(host, cancellation, resolver).ConfigureAwait(false);
         }
 
         if (port == 0)
@@ -1096,49 +1166,34 @@ public sealed class KcpTransport : Transport
             port = defaultPort;
         }
 
-        if (socketFamily == AddressFamily.InterNetworkV6)
+        List<SocketAddress> usable = new();
+        foreach (IPAddress ip in ips.OrderBy(ip => ip.AddressFamily == AddressFamily.InterNetwork ? 0 : 1))
         {
-            ip = ip.MapToIPv6();
-        }
-        else if (ip.AddressFamily != AddressFamily.InterNetwork)
-        {
-            return null;
+            if (socketFamily == AddressFamily.InterNetworkV6)
+            {
+                usable.Add(new IPEndPoint(ip.MapToIPv6(), port).Serialize());
+            }
+            else if (ip.AddressFamily == AddressFamily.InterNetwork)
+            {
+                usable.Add(new IPEndPoint(ip, port).Serialize());
+            }
         }
 
-        return new IPEndPoint(ip, port).Serialize();
+        return usable.Count == 0 ? null : usable.ToArray();
     }
 
-    private static async ValueTask<IPAddress?> ResolveHostAsync(string host, AddressFamily socketFamily,
-        CancellationToken cancellation, Func<string, CancellationToken, Task<IPAddress[]>>? resolver)
+    private static async ValueTask<IPAddress[]> ResolveHostAsync(string host, CancellationToken cancellation,
+        Func<string, CancellationToken, Task<IPAddress[]>>? resolver)
     {
-        IPAddress[] candidates;
         try
         {
-            candidates =
-                await (resolver == null ? Dns.GetHostAddressesAsync(host, cancellation) : resolver(host, cancellation))
-                    .ConfigureAwait(false);
+            return await (resolver == null ? Dns.GetHostAddressesAsync(host, cancellation) : resolver(host, cancellation))
+                .ConfigureAwait(false);
         }
         catch (Exception e) when (e is SocketException or ArgumentException or OperationCanceledException)
         {
-            return null;
+            return Array.Empty<IPAddress>();
         }
-
-        // Prefer IPv4: it works from both kinds of socket and is what most hosts listen on.
-        IPAddress? fallback = null;
-        foreach (IPAddress candidate in candidates)
-        {
-            if (candidate.AddressFamily == AddressFamily.InterNetwork)
-            {
-                return candidate;
-            }
-
-            if (candidate.AddressFamily == AddressFamily.InterNetworkV6 && socketFamily == AddressFamily.InterNetworkV6)
-            {
-                fallback ??= candidate;
-            }
-        }
-
-        return fallback;
     }
 
     internal static string Format(SocketAddress address)
@@ -1190,7 +1245,7 @@ public sealed class KcpTransport : Transport
     }
 
     private readonly record struct Resolution(
-        Task<SocketAddress?> Task,
+        Task<SocketAddress[]?> Task,
         CancellationTokenSource Cancellation,
         long Started);
 

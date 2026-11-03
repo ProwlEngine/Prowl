@@ -12,6 +12,29 @@ namespace Prowl.Warp.Tests;
 
 public class KcpResolutionTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void EveryResolvedAddressIsTriedUntilOneAnswers(bool ipv6Answers)
+    {
+        KcpTransportOptions options = new()
+        {
+            Port = 0, ConnectTimeout = TimeSpan.FromSeconds(3), HandshakeResendInterval = TimeSpan.FromMilliseconds(50)
+        };
+        using KcpTransport host = new(options);
+        host.Listen();
+        // 192.0.2.1 and 2001:db8::1 are documentation addresses nothing answers at.
+        IPAddress[] answers = ipv6Answers
+            ? new[] { IPAddress.Parse("192.0.2.1"), IPAddress.IPv6Loopback }
+            : new[] { IPAddress.Parse("2001:db8::1"), IPAddress.Loopback };
+        using KcpTransport client = new(options, (_, _) => Task.FromResult(answers));
+        Pump pump = new(host, client);
+
+        Connection toHost = client.Connect($"game.test:{host.LocalPort}");
+        pump.Until(() => toHost.State != ConnectionState.Connecting, what: "connect");
+        Assert.True(toHost.IsConnected);
+    }
+
     [Fact]
     public void PendingResolutionDoesNotBlockPumpingAndDisconnectCancelsIt()
     {

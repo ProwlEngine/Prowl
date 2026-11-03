@@ -55,6 +55,12 @@ public sealed class KcpConnection : Connection
         _lastReceiveMs = now;
     }
 
+    /// <summary>Every address of the host while more than one is being tried, until one answers.</summary>
+    internal SocketAddress[]? Candidates { get; set; }
+
+    /// <summary>The host's Challenge has arrived, so the address it came from is the one to keep.</summary>
+    internal bool HasCookie => _hasCookie;
+
     /// <summary>Where packets for this connection go, and come from. Null if the address never resolved.</summary>
     internal SocketAddress? RemoteAddress { get; set; }
 
