@@ -290,6 +290,43 @@ public abstract class NetSessionTests : IDisposable
         Assert.Equal(SessionState.Active, alice.Session.State);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AHandlerKeepsItsMessageWhileItShutsDownOrPumpsTheSession(bool shutdown)
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        byte[]? seen = null;
+        host.Session.OnRaw(30, (_, ref reader, _, _) =>
+        {
+            if (shutdown)
+            {
+                host.Session.Shutdown();
+            }
+            else
+            {
+                host.Session.Receive();
+            }
+
+            foreach (int size in new[] { 64, 128, 256, 512, 1024 })
+            {
+                for (int i = 0; i < 8; i++)
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Rent(size).AsSpan().Fill(0xEE);
+                }
+            }
+
+            seen = reader.ReadBytes(reader.Remaining).ToArray();
+        });
+
+        byte[] payload = Enumerable.Repeat((byte)0x11, 62).ToArray();
+        alice.Session.SendRaw(alice.Session.HostPeer!, 30, payload);
+        SessionProbe.PumpUntil(() => seen != null, host, alice);
+        Assert.Equal(payload, seen);
+    }
+
     [Fact]
     public void ClientsJoinAndEveryoneAgreesOnThePeerList()
     {

@@ -450,7 +450,11 @@ public sealed class NetSession : IDisposable
 
     // --- Pumping -------------------------------------------------------------------------------
 
-    /// <summary>Reads from the transport and runs everything that arrived: membership changes, events and message handlers.</summary>
+    /// <summary>
+    ///     Reads from the transport and runs everything that arrived: membership changes, events and message handlers.
+    ///     Called from inside a handler it reads nothing new, and a Shutdown from a handler closes the transport once
+    ///     the handler returns.
+    /// </summary>
     public void Receive()
     {
         if (State == SessionState.Ended)
