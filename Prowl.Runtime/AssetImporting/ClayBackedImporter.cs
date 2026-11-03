@@ -563,8 +563,10 @@ internal static class ClayBackedImporter
         SetMap(mat, "specular_roughness_map", metallicRoughness, src.MetallicRoughnessTexture, src, channel: 1);
 
         // When a model packs ORM into one image both occlusion and metallic roughness point at it
-        if (src.OcclusionStrength > 0)
-            SetMap(mat, "ambient_occlusion_map", ResolveTexture(src.OcclusionTexture, textureCache), src.OcclusionTexture, src, channel: 0);
+        Texture2D? occlusion = src.OcclusionStrength > 0 ? ResolveTexture(src.OcclusionTexture, textureCache) : null;
+        SetMap(mat, "ambient_occlusion_map", occlusion, src.OcclusionTexture, src, channel: 0);
+        if (occlusion.IsValid() && src.OcclusionStrength != 1f)
+            mat.SetFloat("ambient_occlusion_map_strength", src.OcclusionStrength);
 
         bool emits = src.EmissiveStrength > 0 && (src.EmissiveFactor.R > 0 || src.EmissiveFactor.G > 0 || src.EmissiveFactor.B > 0);
         if (emits)

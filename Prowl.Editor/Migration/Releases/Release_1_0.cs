@@ -698,7 +698,8 @@ internal sealed partial class Release_1_0 : MigrationRelease
         ("_MainColor", "base_color"), ("_MainTex", "base_color_map"), ("_AlphaCutoff", "alpha_cutoff"),
         ("_Metallic", "base_metalness"), ("_Roughness", "specular_roughness"),
         ("_SurfaceTex", "specular_roughness_map from G and base_metalness_map from B"), ("_NormalTex", "geometry_normal_map"),
-        ("_NormalScale", "normal_scale"), ("_OcclusionTex", "ambient_occlusion_map"), ("_ParallaxMap", "geometry_height_map from G"),
+        ("_NormalScale", "normal_scale"), ("_OcclusionTex", "ambient_occlusion_map"), ("_OcclusionStrength", "ambient_occlusion_map_strength"),
+        ("_ParallaxMap", "geometry_height_map from G"),
         ("_Parallax", "height_scale"), ("_Emission", "emission_luminance"), ("_EmissiveColor", "emission_color"),
         ("_EmissionIntensity", "emission_luminance"), ("_EmissionTex", "emission_color_map"), ("_Exposure", "intensity on the skies"),
     ];

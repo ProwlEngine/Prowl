@@ -430,6 +430,8 @@ public class ProjectMigrationTests : IDisposable
             m.SetVector("_MainTex_ST", new Float4(2, 3, 0.5f, 0.25f));
             m.SetTexture("_SurfaceTex", grid);
             m.SetInt("_SurfaceTexUV", 1);
+            m.SetTexture("_OcclusionTex", grid);
+            m.SetFloat("_OcclusionStrength", 0.35f);
             m.SetFloat("_Custom", 4f);
         }, new SurfaceSettings(SurfaceType.Cutout)));
 
@@ -455,6 +457,9 @@ public class ProjectMigrationTests : IDisposable
         Assert.Equal(2, material.GetTextureChannel("base_metalness_map"));
         Assert.Equal(1, material.GetTextureUVSet("specular_roughness_map"));
         Assert.Equal(1, material.GetTextureUVSet("base_metalness_map"));
+        Assert.Equal(grid.AssetID, material.GetTexture("ambient_occlusion_map")!.AssetID);
+        Assert.Equal(0.35f, material.GetFloat("ambient_occlusion_map_strength"));
+        Assert.False(material._properties.HasFloat("_OcclusionStrength"));
         Assert.Null(material._properties.GetTexture("_MainTex"));
         Assert.Null(material._properties.GetTexture("_SurfaceTex"));
         Assert.False(material._properties.HasVector4("_MainTex_ST"));

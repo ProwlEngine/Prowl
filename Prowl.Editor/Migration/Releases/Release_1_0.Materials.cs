@@ -128,7 +128,7 @@ internal sealed partial class Release_1_0
 
     /// <summary>
     /// The tint and texture become base_color and its map, the surface texture's G and B the roughness and metalness
-    /// maps, then the normal, occlusion and height maps, anisotropy, and emission when it was on with its intensity in nits.
+    /// maps, then the normal, occlusion and height maps with the occlusion strength, anisotropy, and emission when it was on with its intensity in nits.
     /// Transparent and cutout Lit materials take their opacity from the tint's alpha. An Unlit material without a
     /// luminance glows at the one that keeps its old look.
     /// </summary>
@@ -160,6 +160,7 @@ internal sealed partial class Release_1_0
         m.MoveMap("_NormalTex", "geometry_normal_map", -1);
         m.Move("_NormalScale", "normal_scale");
         m.MoveMap("_OcclusionTex", "ambient_occlusion_map", 0);
+        m.Move("_OcclusionStrength", "ambient_occlusion_map_strength");
         m.MoveMap("_ParallaxMap", "geometry_height_map", 1);
         m.Move("_Parallax", "height_scale");
         m.Forget("_ParallaxSteps");

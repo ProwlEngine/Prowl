@@ -392,12 +392,13 @@ public static class Graphics
 
     /// <summary>
     /// Draws a mesh once per transform, in world space, for this frame only, so call it every frame the instances should
-    /// show, from Update or anywhere before the scene renders. Each instance is a renderable with its colour, white where
-    /// missing, as its RenderableDesc.Color, which Lit, Unlit and Surface shaders multiply into the base colour and coverage. Draws into
-    /// the current scene unless given one, and draws nothing while the mesh or material is still loading.
+    /// show, from Update or anywhere before the scene renders. All of them are one instanced draw, culled as a whole by
+    /// <paramref name="bounds"/>, or by the box around every instance when none is given. Each instance's colour, white
+    /// where missing, multiplies the base colour and coverage of Lit, Unlit and Surface shaders. Draws into the current
+    /// scene unless given one, and draws nothing while the mesh or material is still loading.
     /// </summary>
     public static void DrawMeshInstanced(Mesh mesh, Material material, ReadOnlySpan<Float4x4> transforms, ReadOnlySpan<Color> colors = default,
-        ShadowCasting shadowCasting = ShadowCasting.On, int layer = 0, Scene? scene = null)
+        ShadowCasting shadowCasting = ShadowCasting.On, int layer = 0, Scene? scene = null, AABB? bounds = null)
     {
         if (Renderer == null || transforms.IsEmpty || mesh.IsNotValid() || material.IsNotValid()) return;
         if (!mesh.IsLoaded || !material.IsLoaded)
@@ -409,8 +410,30 @@ public static class Graphics
         mesh.Upload();
         if (mesh.GpuIfLoaded is not { } gpuMesh || material.GpuMaterial is not { } gpuMaterial) return;
         if (scene.IsNotValid()) scene = Scene.Current;
-        RenderableFlags flags = shadowCasting.ToFlags() | RenderableFlags.ReceiveShadows;
-        scene.Rendering.DrawInstanced(gpuMesh, gpuMaterial, flags, Rendering.RenderableState.LayerBit(layer), transforms, colors);
+        if (scene.Rendering.World is not { } world) return;
+
+        var draw = new TransientDraw
+        {
+            Mesh = gpuMesh,
+            Material = gpuMaterial,
+            LayerMask = Rendering.RenderableState.LayerBit(layer),
+            Flags = shadowCasting.ToFlags() | RenderableFlags.ReceiveShadows,
+            InstanceBounds = bounds,
+        };
+        world.DrawTransient(draw, transforms, InstanceColors(colors, transforms.Length));
+    }
+
+    private static Float4[] s_instanceColors = [];
+
+    // The colours as Graphite reads them, padded with white when there are fewer than instances
+    private static ReadOnlySpan<Float4> InstanceColors(ReadOnlySpan<Color> colors, int instances)
+    {
+        ReadOnlySpan<Float4> given = System.Runtime.InteropServices.MemoryMarshal.Cast<Color, Float4>(colors);
+        if (colors.IsEmpty || colors.Length >= instances) return given[..Math.Min(given.Length, instances)];
+        if (s_instanceColors.Length < instances) s_instanceColors = new Float4[instances];
+        given.CopyTo(s_instanceColors);
+        s_instanceColors.AsSpan(given.Length, instances - given.Length).Fill(Float4.One);
+        return s_instanceColors.AsSpan(0, instances);
     }
 
     /// <summary>Disposes a GPU object once the frames that may use it have finished.</summary>

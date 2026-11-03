@@ -64,18 +64,6 @@ public sealed class SceneRendering : IDisposable
     private ulong _syncedFrame = ulong.MaxValue;
     private readonly List<DirectionalLight> _directionals = [];
 
-    // Instances drawn for one frame through Graphics.DrawMeshInstanced, a batch for each mesh, material and settings,
-    // each instance a renderable kept from frame to frame with its colour as the renderable's
-    private sealed class ImmediateBatch
-    {
-        public readonly List<(Float4x4 Transform, Float4 Color)> Instances = [];
-        public readonly List<RenderableHandle> Handles = [];
-        public ulong Frame;
-    }
-
-    private readonly Dictionary<(GpuMesh Mesh, GMaterial Material, RenderableFlags Flags, uint LayerMask), ImmediateBatch> _immediate = [];
-    private readonly List<(GpuMesh, GMaterial, RenderableFlags, uint)> _immediateGone = [];
-
     internal SceneRendering(Scene scene)
     {
         _scene = scene;
@@ -196,57 +184,6 @@ public sealed class SceneRendering : IDisposable
         }
     }
 
-    /// <summary>Adds instances to this frame's batch of a mesh and material, drawn at the next sync and then gone.</summary>
-    internal void DrawInstanced(GpuMesh mesh, GMaterial material, RenderableFlags flags, uint layerMask, ReadOnlySpan<Float4x4> transforms, ReadOnlySpan<Color> colors)
-    {
-        if (!_immediate.TryGetValue((mesh, material, flags, layerMask), out ImmediateBatch? batch))
-            _immediate[(mesh, material, flags, layerMask)] = batch = new ImmediateBatch();
-        if (batch.Frame != Graphics.FrameIndex)
-        {
-            batch.Instances.Clear();
-            batch.Frame = Graphics.FrameIndex;
-        }
-        for (int i = 0; i < transforms.Length; i++)
-        {
-            Color c = i < colors.Length ? colors[i] : Color.White;
-            batch.Instances.Add((transforms[i], new Float4(c.R, c.G, c.B, c.A)));
-        }
-    }
-
-    // Brings each immediate batch to this frame's instances, removing the ones nothing drew
-    private void SyncImmediate(RenderWorld world)
-    {
-        foreach (((GpuMesh mesh, GMaterial material, RenderableFlags flags, uint layerMask) key, ImmediateBatch batch) in _immediate)
-        {
-            if (batch.Instances.Count == 0 || batch.Frame != Graphics.FrameIndex || key.mesh.IsDisposed || key.material.IsDisposed)
-            {
-                foreach (RenderableHandle handle in batch.Handles) world.Remove(handle);
-                _immediateGone.Add(key);
-                continue;
-            }
-            for (int i = 0; i < batch.Instances.Count; i++)
-            {
-                (Float4x4 transform, Float4 color) = batch.Instances[i];
-                if (i == batch.Handles.Count)
-                {
-                    batch.Handles.Add(world.Add(new RenderableDesc { Mesh = key.mesh, Transform = (Double4x4)transform, LayerMask = key.layerMask, Flags = key.flags, Color = color }, [key.material]));
-                    continue;
-                }
-                world.SetTransform(batch.Handles[i], transform);
-                world.SetColor(batch.Handles[i], color);
-            }
-            for (int i = batch.Handles.Count - 1; i >= batch.Instances.Count; i--)
-            {
-                world.Remove(batch.Handles[i]);
-                batch.Handles.RemoveAt(i);
-            }
-            batch.Instances.Clear();
-        }
-        foreach ((GpuMesh, GMaterial, RenderableFlags, uint) key in _immediateGone)
-            _immediate.Remove(key);
-        _immediateGone.Clear();
-    }
-
     internal void AddDirectional(DirectionalLight light) { if (!_directionals.Contains(light)) _directionals.Add(light); }
     internal void RemoveDirectional(DirectionalLight light) => _directionals.Remove(light);
 
@@ -279,7 +216,6 @@ public sealed class SceneRendering : IDisposable
             i--;
         }
 
-        SyncImmediate(world);
         SyncEnvironment(world);
         SyncProbes(world);
         Epoch++;
@@ -358,7 +294,6 @@ public sealed class SceneRendering : IDisposable
         _parked.Clear();
         _meshUsers.Clear();
         _parkedMeshes.Clear();
-        _immediate.Clear();
         _directionals.Clear();
     }
 }
