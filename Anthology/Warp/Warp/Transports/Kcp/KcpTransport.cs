@@ -47,6 +47,11 @@ public sealed class KcpTransport : Transport
     private readonly Queue<(long ExpiresMs, ulong Cookie)> _cookieExpiry = new();
     private long _nextSweepMs;
 
+    // Handshakes from every address together, and encrypted ones whose key agreement runs on the thread pool.
+    private readonly AddressBudget _allHandshakes;
+    private readonly List<PendingAgreement> _agreements = new();
+    private readonly object _signing = new();
+
     // Encrypted incoming connections, so an authenticated packet from a new address can find its session.
     private readonly Dictionary<uint, KcpConnection> _bySession = new();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
@@ -79,6 +84,7 @@ public sealed class KcpTransport : Transport
     {
         Settings = (options ?? new KcpTransportOptions()).CopyValidated();
         _resolver = resolver;
+        _allHandshakes = new AddressBudget(Settings.MaxHandshakesPerSecond, 0);
         if (Settings.Encryption?.TrustedHostKey != null)
         {
             TrustedHostKey = Settings.Encryption.ImportTrustedHostKey();
@@ -184,6 +190,7 @@ public sealed class KcpTransport : Transport
     {
         ThrowIfDisposed();
         ProcessResolutions();
+        CompleteAgreements(NowMs);
         foreach (KcpConnection connection in _unreachable)
         {
             RaiseDisconnected(connection, DisconnectReason.Unreachable);
@@ -245,6 +252,7 @@ public sealed class KcpTransport : Transport
         ThrowIfDisposed();
         ProcessResolutions();
         long now = NowMs;
+        CompleteAgreements(now);
 
         _scratch.AddRange(_byAddress.Values);
         foreach (KcpConnection connection in _scratch)
@@ -328,6 +336,15 @@ public sealed class KcpTransport : Transport
 
     public override void Shutdown()
     {
+        foreach (PendingAgreement pending in _agreements)
+        {
+            ReleaseAddressSlot(pending.IpKey);
+            pending.Task.ContinueWith(static task => task.Result.Cipher?.Dispose(),
+                TaskContinuationOptions.OnlyOnRanToCompletion);
+        }
+
+        _agreements.Clear();
+
         _scratch.AddRange(_resolving.Keys);
         foreach (KcpConnection connection in _scratch)
         {
@@ -471,7 +488,7 @@ public sealed class KcpTransport : Transport
             return;
         }
 
-        if (_incomingCount >= Settings.MaxConnections)
+        if (_incomingCount + _agreements.Count >= Settings.MaxConnections)
         {
             SendReject(from, nonce, DisconnectReason.ServerFull);
             return;
@@ -490,7 +507,14 @@ public sealed class KcpTransport : Transport
             return;
         }
 
-        if (!budget.TrySpend(now, Settings.MaxHandshakesPerAddressPerSecond))
+        if (!budget.TrySpend(now, Settings.MaxHandshakesPerAddressPerSecond) ||
+            !_allHandshakes.TrySpend(now, Settings.MaxHandshakesPerSecond))
+        {
+            return;
+        }
+
+        ReadOnlySpan<byte> clientPublic = packet.Slice(KcpPacket.HandshakeKeyOffset, KcpCipher.PublicKeySize);
+        if (Settings.Encryption != null && !KcpCipher.IsValidPublicKey(clientPublic))
         {
             return;
         }
@@ -502,21 +526,62 @@ public sealed class KcpTransport : Transport
         do
         {
             sessionId = RandomUInt32();
-        } while (_bySession.ContainsKey(sessionId));
+        } while (_bySession.ContainsKey(sessionId) || _agreements.Exists(a => a.SessionId == sessionId));
 
-        byte[]? accept = null;
-        KcpCipher? cipher = null;
-        if (Settings.Encryption != null && !TryAgreeKeys(packet, nonce, sessionId, out cipher, out accept))
+        budget.Connections++;
+        if (Settings.Encryption == null)
         {
+            Accept(Clone(from), nonce, sessionId, ip, null, null, now);
             return;
         }
 
-        SocketAddress remote = Clone(from);
+        // Key agreement and signing take a couple of milliseconds, so they run on the thread pool. The connection
+        // appears on a later Receive or Flush.
+        byte[] key = clientPublic.ToArray();
+        _agreements.Add(new PendingAgreement(Task.Run(() => AgreeKeys(key, nonce, sessionId)), Clone(from), nonce,
+            sessionId, ip));
+    }
+
+    /// <summary>Creates connections for key agreements that have finished.</summary>
+    private void CompleteAgreements(long now)
+    {
+        for (int i = _agreements.Count - 1; i >= 0; i--)
+        {
+            PendingAgreement pending = _agreements[i];
+            if (!pending.Task.IsCompleted)
+            {
+                continue;
+            }
+
+            _agreements.RemoveAt(i);
+            (KcpCipher? cipher, byte[]? accept) = pending.Task.IsCompletedSuccessfully ? pending.Task.Result : default;
+            if (cipher == null || _byAddress.ContainsKey(pending.From))
+            {
+                cipher?.Dispose();
+                ReleaseAddressSlot(pending.IpKey);
+                continue;
+            }
+
+            Accept(pending.From, pending.Nonce, pending.SessionId, pending.IpKey, cipher, accept, now);
+        }
+    }
+
+    private void ReleaseAddressSlot(UInt128 ip)
+    {
+        if (_byIp.TryGetValue(ip, out AddressBudget? budget))
+        {
+            budget.Connections--;
+        }
+    }
+
+    /// <summary>Opens an incoming connection whose handshake is complete, with its address slot already taken.</summary>
+    private void Accept(SocketAddress remote, uint nonce, uint sessionId, UInt128 ip, KcpCipher? cipher,
+        byte[]? accept, long now)
+    {
         KcpConnection connection = new(this, NextConnectionId(), Format(remote), false, remote, now)
         {
             ClientNonce = nonce, SessionId = sessionId, Cipher = cipher, AcceptPacket = accept, IpKey = ip
         };
-        budget.Connections++;
         connection.StartSession(now);
 
         AddConnection(connection);
@@ -532,25 +597,19 @@ public sealed class KcpTransport : Transport
         RaiseConnected(connection);
     }
 
-    /// <summary>Host: answers the client's public key with its own, signed if it has a key, and derives the session keys.</summary>
-    private bool TryAgreeKeys(ReadOnlySpan<byte> response, uint nonce, uint sessionId, out KcpCipher? cipher,
-        out byte[]? accept)
+    /// <summary>
+    ///     Host, on the thread pool: answers the client's public key with its own, signed if it has a key, and derives
+    ///     the session keys. Both are null if the key agreement fails.
+    /// </summary>
+    private (KcpCipher? Cipher, byte[]? Accept) AgreeKeys(byte[] clientPublic, uint nonce, uint sessionId)
     {
-        accept = null;
-        cipher = null;
-        ReadOnlySpan<byte> clientPublic = response.Slice(KcpPacket.HandshakeKeyOffset, KcpCipher.PublicKeySize);
-        if (!KcpCipher.IsValidPublicKey(clientPublic))
-        {
-            return false;
-        }
-
         using ECDiffieHellman exchange = KcpCipher.CreateKeyExchange(out byte[] hostPublic);
-        accept = new byte[KcpPacket.EncryptedAcceptSize];
-        cipher = KcpCipher.Create(exchange, clientPublic, hostPublic, nonce, sessionId, false,
+        byte[] accept = new byte[KcpPacket.EncryptedAcceptSize];
+        KcpCipher? cipher = KcpCipher.Create(exchange, clientPublic, hostPublic, nonce, sessionId, false,
             accept.AsSpan(KcpPacket.EncryptedAcceptSize - KcpCipher.ConfirmationSize));
         if (cipher == null)
         {
-            return false;
+            return default;
         }
 
         accept[0] = (byte)KcpPacketType.Accept;
@@ -559,11 +618,15 @@ public sealed class KcpTransport : Transport
         hostPublic.CopyTo(accept, KcpPacket.AcceptSize);
         if (Settings.Encryption!.SigningKey is { } signer)
         {
-            signer.SignData(KcpCipher.Transcript(clientPublic, hostPublic, nonce, sessionId, Settings.ProtocolId),
-                accept.AsSpan(KcpPacket.AcceptSize + KcpCipher.PublicKeySize), HashAlgorithmName.SHA256);
+            byte[] transcript = KcpCipher.Transcript(clientPublic, hostPublic, nonce, sessionId, Settings.ProtocolId);
+            lock (_signing)
+            {
+                signer.SignData(transcript, accept.AsSpan(KcpPacket.AcceptSize + KcpCipher.PublicKeySize),
+                    HashAlgorithmName.SHA256);
+            }
         }
 
-        return true;
+        return (cipher, accept);
     }
 
     /// <summary>
@@ -1159,6 +1222,13 @@ public sealed class KcpTransport : Transport
             _updatedMs = now;
         }
     }
+
+    private readonly record struct PendingAgreement(
+        Task<(KcpCipher? Cipher, byte[]? Accept)> Task,
+        SocketAddress From,
+        uint Nonce,
+        uint SessionId,
+        UInt128 IpKey);
 
     private readonly record struct DelayedPacket(SocketAddress To, byte[] Buffer, int Length, long DueMs);
 }

@@ -357,6 +357,33 @@ public class KcpTransportTests
     }
 
     [Fact]
+    public void HandshakesAreRateLimitedAcrossAllAddresses()
+    {
+        KcpTransportOptions options = FastOptions();
+        options.MaxHandshakesPerSecond = 4;
+        options.MaxHandshakesPerAddressPerSecond = 100;
+        using KcpTransport host = new(options);
+        host.Listen();
+        KcpTransport[] clients = Enumerable.Range(0, 12).Select(_ => new KcpTransport(FastOptions())).ToArray();
+        try
+        {
+            Pump pump = new(clients.Prepend(host).ToArray());
+            Connection[] connections = clients.Select(c => c.Connect($"127.0.0.1:{host.LocalPort}")).ToArray();
+            pump.For(200);
+            Assert.InRange(host.Connections.Count, 1, 6);
+
+            pump.Until(() => connections.All(c => c.IsConnected), timeoutMs: 4000, what: "the rest, at the limited rate");
+        }
+        finally
+        {
+            foreach (KcpTransport client in clients)
+            {
+                client.Dispose();
+            }
+        }
+    }
+
+    [Fact]
     public void HandshakesFromOneAddressAreRateLimited()
     {
         KcpTransportOptions options = FastOptions();

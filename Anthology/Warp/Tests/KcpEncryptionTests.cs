@@ -577,6 +577,51 @@ public class KcpEncryptionTests
     }
 
     [Fact]
+    public void KeyAgreementRunsOffTheThreadThatPumpsTheHost()
+    {
+        using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        KcpTransportOptions hostOptions = Options(new KcpEncryption { SigningKey = key });
+        hostOptions.MaxHandshakesPerAddressPerSecond = 100;
+        using KcpTransport host = new(hostOptions);
+        host.Listen();
+        KcpTransport[] clients = Enumerable.Range(0, 20).Select(_ => new KcpTransport(Options(new KcpEncryption()))).ToArray();
+        try
+        {
+            Connection[] connections = clients.Select(c => c.Connect($"127.0.0.1:{host.LocalPort}")).ToArray();
+            System.Diagnostics.Stopwatch onHostThread = new(), total = System.Diagnostics.Stopwatch.StartNew();
+            while (!connections.All(c => c.IsConnected) && total.ElapsedMilliseconds < 5000)
+            {
+                foreach (KcpTransport client in clients)
+                {
+                    client.Update();
+                    while (client.Poll(out _))
+                    {
+                    }
+                }
+
+                onHostThread.Start();
+                host.Update();
+                while (host.Poll(out _))
+                {
+                }
+
+                onHostThread.Stop();
+                System.Threading.Thread.Sleep(1);
+            }
+
+            Assert.True(connections.All(c => c.IsConnected));
+            Assert.InRange(onHostThread.ElapsedMilliseconds, 0, 15);
+        }
+        finally
+        {
+            foreach (KcpTransport client in clients)
+            {
+                client.Dispose();
+            }
+        }
+    }
+
+    [Fact]
     public void OnlyP256KeysAreAccepted()
     {
         using ECDsa p384 = ECDsa.Create(ECCurve.NamedCurves.nistP384);

@@ -44,6 +44,12 @@ public sealed class KcpTransportOptions
     public int MaxHandshakesPerAddressPerSecond { get; set; } = 20;
 
     /// <summary>
+    ///     Completed handshakes accepted per second from all addresses together. Bounds the handshake work a crowd of
+    ///     addresses, or a mass reconnect, can cause. Extra attempts are ignored and the clients retry.
+    /// </summary>
+    public int MaxHandshakesPerSecond { get; set; } = 500;
+
+    /// <summary>
     ///     Independent channels per delivery mode. Each reliable channel orders its own messages only, so a
     ///     lost packet on one never holds up another. Both ends must use the same count.
     /// </summary>
@@ -147,6 +153,11 @@ public sealed class KcpTransportOptions
         if (MaxConnectionsPerAddress < 1)
         {
             throw new ArgumentOutOfRangeException(nameof(MaxConnectionsPerAddress));
+        }
+
+        if (MaxHandshakesPerSecond < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(MaxHandshakesPerSecond));
         }
 
         if (MaxHandshakesPerAddressPerSecond < 1)
