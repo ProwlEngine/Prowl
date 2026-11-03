@@ -127,4 +127,38 @@ public partial class NetworkingTests
         Assert.True(GC.GetAllocatedBytesForCurrentThread() - before < 1_000_000,
             "Malformed dimensions must not allocate the four-megabyte array.");
     }
+
+    [Fact]
+    public void SpawningAnObjectTheSceneSnapshotBroughtKeepsTheClientsOneInstance()
+    {
+        Scene scene = CreateScene();
+        GameObject crate = CreateGameObject("Crate");
+        NetTestComponent original = crate.AddComponent<NetTestComponent>();
+        scene.Add(crate);
+        using NetWriter snapshot = new(), spawn = new();
+        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        crate.Network.Mode = NetworkMode.Object;
+        original.Health = 7;
+        NetworkTestScene.Current.WriteSpawn(crate, -1, NetworkOrphaned.ClearOwner, spawn, 1, 1);
+        LocalNetwork network = new();
+        FakePeer host = FakePeer.Host(network);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady && Scene.Current.AllObjects.Any(o => o.Identifier == crate.Identifier), host);
+            GameObject before = Find(Scene.Current, crate.Identifier);
+            host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), FakePeer.Spawn, spawn.WrittenSpan);
+            Pump(() => before.Network.Active, host);
+            PumpFor(50, host);
+
+            Assert.Same(before, Find(Scene.Current, crate.Identifier));
+            Assert.Equal(7, before.GetComponent<NetTestComponent>()!.Health);
+        }
+        finally
+        {
+            Networking.Networking.Shutdown();
+            host.Dispose();
+        }
+    }
 }

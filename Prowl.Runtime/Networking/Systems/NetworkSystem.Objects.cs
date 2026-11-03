@@ -264,7 +264,7 @@ internal sealed partial class NetworkSystem
             throw new InvalidDataException("The host sent a networked object that could not be read.");
         }
 
-        bool attached = false;
+        bool attached = false, adopted = false;
         try
         {
             if (Session != session || ReplicatedScene != scene)
@@ -275,6 +275,17 @@ internal sealed partial class NetworkSystem
             if (go!.Identifier != id)
             {
                 throw new InvalidDataException("A spawned object's identifier doesn't match its message.");
+            }
+
+            // An object the scene snapshot brought stays the same instance, so references to it keep working.
+            if (!Entries.Contains(id) && FindByIdentifier(id) is GameObject existing)
+            {
+                existing.Network.Mode = NetworkMode.Object;
+                existing.Network.ApplyFlags(go.Network.Flags);
+                existing.Network.ApplyOwnerTransfer(go.Network.OwnerTransfer);
+                go.Dispose();
+                go = existing;
+                adopted = true;
             }
 
             // Resolve initial Sync references within the new tree before enabling its components.
@@ -308,9 +319,12 @@ internal sealed partial class NetworkSystem
             entry.UpdatePhysics();
             if (FindByIdentifier(parentId) is GameObject parent)
             {
-                go.SetParent(parent, false);
+                if (go.Parent != parent)
+                {
+                    go.SetParent(parent, false);
+                }
             }
-            else
+            else if (!adopted)
             {
                 scene.Add(go);
             }
@@ -335,7 +349,10 @@ internal sealed partial class NetworkSystem
                     Entries.Remove(go.Identifier);
                 }
 
-                go.Dispose();
+                if (!adopted)
+                {
+                    go.Dispose();
+                }
             }
         }
     }
