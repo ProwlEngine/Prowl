@@ -272,4 +272,50 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
     }
+
+    [Fact]
+    public void ValuesOfAComponentAPeerKeepsRejectingStopBeingResent()
+    {
+        Scene scene = CreateScene();
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            GameObject crate = CreateGameObject("Crate");
+            scene.Add(crate);
+            crate.Network.Spawn();
+            Pump(() => alice.Has(FakePeer.Spawn), alice);
+
+            // Added after the spawn, so alice never gets it and rejects its values, as a client does.
+            NetTestComponent late = crate.AddComponent<NetTestComponent>();
+            alice.AutoAck = false;
+            late.Health = 5;
+            int handled = alice.WireReceived.Count, owed = 0;
+            DateTime quietFrom = DateTime.UtcNow.AddMilliseconds(SnapshotSystem.MissingComponentSeconds * 1000 + 500);
+            DateTime end = quietFrom.AddMilliseconds(1000);
+            while (DateTime.UtcNow < end)
+            {
+                Frame([alice]);
+                for (; handled < alice.WireReceived.Count; handled++)
+                {
+                    if (alice.WireReceived[handled].Id != FakePeer.Snapshot) continue;
+                    NetReader reader = new(alice.WireReceived[handled].Data);
+                    uint id = reader.ReadVarUInt32();
+                    if (id == 0) continue;
+                    if (DateTime.UtcNow >= quietFrom) owed++;
+                    using NetWriter ack = new();
+                    ack.WriteVarUInt32(1); ack.WriteVarUInt32(id);
+                    ack.WriteVarUInt32(1); ack.WriteGuid(late.Identifier);
+                    ack.WriteVarUInt32(0);
+                    alice.Session.SendRaw(alice.Session.HostPeer!, FakePeer.SnapshotAck, ack.WrittenSpan, Delivery.Unreliable);
+                }
+            }
+
+            Assert.Equal(0, owed);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }

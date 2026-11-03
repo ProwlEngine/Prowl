@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 using Prowl.Courier;
@@ -32,12 +33,16 @@ internal sealed class SnapshotSystem : IDisposable
     // Sent but unacknowledged snapshots remembered per peer. Older ones are forgotten, and their state resent.
     private const int MaxOutstanding = 256;
 
+    // How long a peer may keep rejecting a component before its values stop going to that peer.
+    internal const double MissingComponentSeconds = 3;
+
     private readonly List<(Component Component, SyncMember Sync)> _applied = new();
     private readonly HashSet<uint> _ackedIds = new();
     private readonly Func<Component, SyncMember, bool> _filter;
     private readonly List<Item> _items = new();
     private readonly NetWriter _itemBytes = new(4096);
     private readonly NetWriter _message = new(4096);
+    private readonly HashSet<Type> _missingWarnings = new();
     private readonly List<(NetworkObject Entry, TransformUpdate Update)> _moving = new();
     private readonly Dictionary<int, PeerState> _peers = new();
     private readonly HashSet<Guid> _rejectedComponents = new();
@@ -100,6 +105,8 @@ internal sealed class SnapshotSystem : IDisposable
         {
             state.Values.Clear();
             state.Poses.Clear();
+            state.Rejecting.Clear();
+            state.Missing.Clear();
             Forget(state);
         }
     }
@@ -163,12 +170,13 @@ internal sealed class SnapshotSystem : IDisposable
         SyncKey key = new(component, sync.Slot);
         foreach (NetPeer peer in Targets())
         {
-            if (peer.Id == controller)
+            PeerState state = State(peer);
+            if (peer.Id == controller || state.Missing.Contains(component))
             {
                 continue;
             }
 
-            Dictionary<SyncKey, Pending> values = State(peer).Values;
+            Dictionary<SyncKey, Pending> values = state.Values;
             values[key] = values.TryGetValue(key, out Pending pending) ? pending with { Changed = tick } : new Pending(tick, 0);
         }
     }
@@ -282,6 +290,14 @@ internal sealed class SnapshotSystem : IDisposable
                 state.DefinedComponents.Remove(component);
             }
 
+            state.Missing.RemoveWhere(component => component.IsDisposed);
+            _scratchComponents.Clear();
+            _scratchComponents.AddRange(state.Rejecting.Keys.Where(component => component.IsDisposed));
+            foreach (Component component in _scratchComponents)
+            {
+                state.Rejecting.Remove(component);
+            }
+
             if (_scene.IsHost)
             {
                 ForgetGoneDefinitions(state);
@@ -372,7 +388,8 @@ internal sealed class SnapshotSystem : IDisposable
         foreach ((SyncKey key, Pending pending) in state.Values)
         {
             Component component = key.Component;
-            if (component.IsDisposed || NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
+            if (component.IsDisposed || state.Missing.Contains(component) ||
+                NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
                 NetworkMembers.Of(component).Sync(key.Slot) is not { } sync ||
                 (_scene.IsHost ? ControllerOf(component, sync.Flags) == peer.Id : !_scene.HasControl(component, sync.Flags)))
             {
@@ -909,13 +926,21 @@ internal sealed class SnapshotSystem : IDisposable
                     continue;
                 }
 
-                if (_rejectedComponents.Contains(key.Component.Identifier))
+                if (!_rejectedComponents.Contains(key.Component.Identifier))
                 {
-                    state.Values[key] = pending with { LastSent = 0 };
+                    state.Rejecting.Remove(key.Component);
+                    if (pending.Changed <= sent.Tick)
+                    {
+                        state.Values.Remove(key);
+                    }
                 }
-                else if (pending.Changed <= sent.Tick)
+                else if (KeepsRejecting(state, key.Component, sender))
                 {
                     state.Values.Remove(key);
+                }
+                else
+                {
+                    state.Values[key] = pending with { LastSent = 0 };
                 }
             }
 
@@ -938,6 +963,29 @@ internal sealed class SnapshotSystem : IDisposable
 
             Release(sent);
         }
+    }
+
+    /// <summary>
+    ///     True once <paramref name="peer" /> has rejected the component for too long to be catching up, so it never
+    ///     got it: from then on its values don't go to that peer.
+    /// </summary>
+    private bool KeepsRejecting(PeerState state, Component component, NetPeer peer)
+    {
+        double now = _scene.Now;
+        if (state.Rejecting.TryAdd(component, now) || now - state.Rejecting[component] < MissingComponentSeconds)
+        {
+            return false;
+        }
+
+        state.Rejecting.Remove(component);
+        state.Missing.Add(component);
+        if (_missingWarnings.Add(component.GetType()))
+        {
+            Debug.LogWarning(
+                $"[Network] {peer.Name} doesn't have {component.GetType().Name} on '{component.GameObject.Name}', so its [Sync] values stopped going there. Components added to an object after it spawns aren't replicated.");
+        }
+
+        return true;
     }
 
     // --- Ownership handoff ----------------------------------------------------------------------
@@ -1045,6 +1093,10 @@ internal sealed class SnapshotSystem : IDisposable
         // Ids this peer gave components for the other, and the ones it knows the other has.
         public readonly Dictionary<Component, uint> ComponentIds = new();
         public readonly HashSet<Component> DefinedComponents = new();
+
+        // Components the other keeps rejecting, since when, and the ones it was given up on for.
+        public readonly HashSet<Component> Missing = new();
+        public readonly Dictionary<Component, double> Rejecting = new();
         public readonly Dictionary<NetworkObject, PendingPose> Poses = new();
         public readonly List<uint> Received = new();
 
