@@ -81,8 +81,24 @@ public class DiagnosticTests
     [InlineData(
         "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public Prowl.Runtime.Networking.NetList<int> X { get; set; } }",
         "PROWLNET007")]
+    // Overrides
+    [InlineData(
+        "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Broadcast] public virtual void F() { } } public class B : A { public override void F() { } }",
+        "PROWLNET010")]
+    [InlineData(
+        "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Host] public virtual void F() { } } public class B : A { [System.Obsolete] public override void F() { } }",
+        "PROWLNET010")]
+    [InlineData(
+        "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public virtual int X { get; set; } } public class B : A { public override int X { get; set; } }",
+        "PROWLNET010")]
     public void UnsupportedNetworkingIsACompileError(string script, string id) =>
         Assert.Contains(Scripts.Build(script).Errors, e => e.Id == id);
+
+    [Fact]
+    public void AnOverrideInAFileWithoutNetworkingStillNeedsTheRpcAttribute() =>
+        Assert.Contains(Scripts.Build(
+            "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Broadcast] public virtual void F() { } }",
+            "public class B : A { public override void F() { } }").Errors, e => e.Id == "PROWLNET010");
 
     [Fact]
     public void AChannelOnAnUnreliableRpcIsAWarning()

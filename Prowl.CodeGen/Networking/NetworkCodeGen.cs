@@ -94,6 +94,11 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         "RPC '{0}' is unreliable, so its Channel is ignored: unreliable calls have no order to keep and go on channel 0",
         "Networking", DiagnosticSeverity.Warning, true);
 
+    private static readonly DiagnosticDescriptor s_unnetworkedOverride = new(
+        "PROWLNET010", "Override drops its networking",
+        "'{0}' overrides a networked member, so it needs the {1} attribute too",
+        "Networking", DiagnosticSeverity.Error, true);
+
     // A file whose rewrite comes out the same gets back the very same tree, so the compiler's incremental reuse holds.
     private static readonly ConditionalWeakTable<SyntaxTree, Rewritten> s_rewritten = new();
 
@@ -114,11 +119,14 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
 
         Context context = new(compilation, symbols);
         SyntaxTree[] output = new SyntaxTree[trees.Count];
+
+        // An override can drop a networked member's attribute in a file that never names networking.
+        bool overridable = trees.Any(t => MayHaveNetworking(t) && Mentions(t, "virtual"));
         for (int i = 0; i < trees.Count; i++)
         {
             SyntaxTree tree = trees[i];
             output[i] = tree;
-            if (!MayHaveNetworking(tree))
+            if (!MayHaveNetworking(tree) && !(overridable && Mentions(tree, "override")))
             {
                 continue;
             }
@@ -159,6 +167,9 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
     }
 
     private static readonly string[] s_networkingWords = ["Sync", "Rpc", "Change", "Broadcast", "Host", "Owner"];
+
+    private static bool Mentions(SyntaxTree tree, string word) =>
+        tree.GetText().ToString().Contains(word, StringComparison.Ordinal);
 
     private static bool MayHaveNetworking(SyntaxTree tree) =>
         s_mayHaveNetworking.GetValue(tree, t =>

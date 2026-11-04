@@ -215,6 +215,7 @@ internal sealed partial class NetworkCodeGen
                 return known;
             }
 
+            CheckOverride(node, node.Identifier);
             return _syncs[node] = node.AttributeLists.Count == 0 ? null : AnalyzeSync(node);
         }
 
@@ -225,8 +226,49 @@ internal sealed partial class NetworkCodeGen
                 return known;
             }
 
+            CheckOverride(node, node.Identifier);
             return _rpcs[node] = node.AttributeLists.Count == 0 ? null : AnalyzeRpc(node);
         }
+
+        /// <summary>Reports an override that leaves out the [Sync] or RPC attribute of the member it overrides.</summary>
+        private void CheckOverride(MemberDeclarationSyntax node, SyntaxToken identifier)
+        {
+            if (!node.Modifiers.Any(SyntaxKind.OverrideKeyword))
+            {
+                return;
+            }
+
+            Symbols symbols = context.Symbols;
+            switch (model.GetDeclaredSymbol(node))
+            {
+                case IMethodSymbol method when !HasRpc(method):
+                    for (IMethodSymbol? m = method.OverriddenMethod; m != null; m = m.OverriddenMethod)
+                    {
+                        if (HasRpc(m))
+                        {
+                            context.Report(s_unnetworkedOverride, identifier.GetLocation(), method.Name, "[Rpc.*]");
+                            return;
+                        }
+                    }
+
+                    break;
+
+                case IPropertySymbol property when Find(property, symbols.Sync) == null:
+                    for (IPropertySymbol? p = property.OverriddenProperty; p != null; p = p.OverriddenProperty)
+                    {
+                        if (Find(p, symbols.Sync) != null)
+                        {
+                            context.Report(s_unnetworkedOverride, identifier.GetLocation(), property.Name, "[Sync]");
+                            return;
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        private bool HasRpc(IMethodSymbol method) =>
+            method.GetAttributes().Any(a => DerivesFrom(a.AttributeClass, context.Symbols.Rpc));
 
         private SyncInfo? AnalyzeSync(PropertyDeclarationSyntax node)
         {
