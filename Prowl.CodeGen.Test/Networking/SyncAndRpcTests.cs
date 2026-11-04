@@ -4,9 +4,14 @@
 using System.Reflection;
 
 using Prowl.CodeGen.Networking;
+using Prowl.Runtime;
 using Prowl.Runtime.Networking;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Courier;
+using Prowl.Courier.Transports.Local;
+
+using Net = Prowl.Runtime.Networking.Networking;
 
 using Xunit;
 
@@ -196,4 +201,120 @@ public class SyncAndRpcTests
                                            public void WithLocal() { int __rpc_stats = 1; }
                                        }
                                        """).GetType("StatsNames"));
+
+    [Fact]
+    public void AnOverrideIsTheSameRpcHoweverItsParametersAreSpelled()
+    {
+        Assembly assembly = Scripts.Compile("""
+                                            using System;
+                                            using Prowl.Runtime;
+                                            using Prowl.Runtime.Networking;
+
+                                            public class Gun : Component
+                                            {
+                                                [Rpc.Broadcast] public virtual void Fire(int power) { }
+                                            }
+
+                                            public class Cannon : Gun
+                                            {
+                                                [Rpc.Broadcast] public override void Fire(Int32 power) { base.Fire(power); }
+                                            }
+
+                                            public class Mortar : Cannon
+                                            {
+                                                [Rpc.Broadcast] public override void Fire(System.Int32 power) { base.Fire(power); }
+                                            }
+                                            """);
+        Scripts.WithComponent(assembly.GetType("Mortar")!, component =>
+        {
+            NetworkMembers members = NetworkMembers.Of(component);
+            Assert.NotNull(members.Rpc(NetworkCodeGen.NetworkId("Fire(int)")));
+            Assert.Null(members.Rpc(NetworkCodeGen.NetworkId("Fire(Int32)")));
+            Assert.Null(members.Rpc(NetworkCodeGen.NetworkId("Fire(System.Int32)")));
+        });
+    }
+
+    [Fact]
+    public void AReceivedCallToAnOverrideIsNotSentAgainByTheBaseCall()
+    {
+        Assembly assembly = Scripts.Compile("""
+                                            using System;
+                                            using Prowl.Runtime;
+                                            using Prowl.Runtime.Networking;
+
+                                            public class Gun : Component
+                                            {
+                                                public int Fired;
+                                                [Rpc.Broadcast] public virtual void Fire(int power) => Fired++;
+                                            }
+
+                                            public class Cannon : Gun
+                                            {
+                                                [Rpc.Broadcast] public override void Fire(Int32 power) { base.Fire(power); }
+                                            }
+                                            """);
+        Type cannon = assembly.GetType("Cannon")!;
+        Scene scene = new();
+        GameObject go = new("Cannon");
+        Component component = go.AddComponent(cannon)!;
+        scene.Add(go);
+        Scene.Load(scene);
+        Scene.ProcessPendingLoad();
+        LocalNetwork network = new();
+        Net.Host(new LocalTransport(network, "host"));
+        using NetSession client = NetSession.Join(new LocalTransport(network, "client"), "host", "client");
+        const ushort sceneSnapshot = Net.EngineMessageIds, rpcToHost = sceneSnapshot + 6,
+            rpcFromHost = sceneSnapshot + 7, sceneLoaded = sceneSnapshot + 8, sceneCatchUp = sceneSnapshot + 9,
+            sceneReady = sceneSnapshot + 10;
+        int relayedBack = 0;
+        void Reply(ushort id, ulong generation)
+        {
+            using NetWriter writer = new();
+            writer.WriteUInt64(generation);
+            client.SendRaw(client.HostPeer!, id, writer.WrittenSpan);
+        }
+
+        client.OnRaw(sceneSnapshot, (NetPeer _, ref NetReader r, Delivery _, byte _) =>
+        {
+            r.ReadByte();
+            Reply(sceneLoaded, r.ReadUInt64());
+        });
+        client.OnRaw(sceneCatchUp, (NetPeer _, ref NetReader r, Delivery _, byte _) => Reply(sceneReady, r.ReadUInt64()));
+        client.OnRaw(rpcFromHost, (NetPeer _, ref NetReader _, Delivery _, byte _) => relayedBack++);
+        void Frame()
+        {
+            Net.Receive();
+            Net.Flush();
+            client.Update();
+            Thread.Sleep(1);
+        }
+
+        try
+        {
+            for (int i = 0; i < 1000 && !Net.Session!.Peers.Any(p => !p.IsLocal && Net.IsPeerReady(p)); i++)
+            {
+                Frame();
+            }
+
+            Assert.Contains(Net.Session!.Peers, p => !p.IsLocal && Net.IsPeerReady(p));
+            using NetWriter call = new(), arguments = new();
+            NetSerializer<int>.Write(arguments, 3);
+            call.WriteGuid(component.Identifier);
+            call.WriteUInt32(NetworkCodeGen.NetworkId("Fire(int)"));
+            call.WriteBytesWithLength(arguments.WrittenSpan);
+            client.SendRaw(client.HostPeer!, rpcToHost, call.WrittenSpan);
+            for (int i = 0; i < 50; i++)
+            {
+                Frame();
+            }
+
+            Assert.Equal(1, (int)cannon.GetField("Fired")!.GetValue(component)!);
+            Assert.Equal(0, relayedBack);
+        }
+        finally
+        {
+            Net.Shutdown();
+            scene.Dispose();
+        }
+    }
 }

@@ -397,13 +397,28 @@ internal sealed partial class NetworkCodeGen
                     parameter.Locations.FirstOrDefault() ?? location);
             }
 
-            // Hashed as written, so the id only changes when the declaration does.
+            // Hashed as written, so the id only changes when the declaration does. An override is the method it overrides.
             List<string> types = node.ParameterList.Parameters.Select(p => OneLine(p.Type!)).ToList();
-            string key = $"{method.Name}({string.Join(",", types)})";
+            string key = $"{method.Name}({string.Join(",", WrittenParameterTypes(RootDeclaration(method)) ?? types)})";
             context.ClaimId(method.ContainingType, true, key, location);
             return new RpcInfo(method.Name, NetworkId(key), kind.Name[..^"Attribute".Length], flags, types,
                 method.IsStatic, channel);
         }
+
+        private static MethodDeclarationSyntax? RootDeclaration(IMethodSymbol method)
+        {
+            IMethodSymbol root = method;
+            while (root.OverriddenMethod is { } overridden)
+            {
+                root = overridden;
+            }
+
+            return root.OriginalDefinition.DeclaringSyntaxReferences
+                .Select(reference => reference.GetSyntax()).OfType<MethodDeclarationSyntax>().FirstOrDefault();
+        }
+
+        private static IEnumerable<string>? WrittenParameterTypes(MethodDeclarationSyntax? declaration) =>
+            declaration?.ParameterList.Parameters.Select(p => OneLine(p.Type!));
 
         private static bool GenericContainer(INamedTypeSymbol? type)
         {
