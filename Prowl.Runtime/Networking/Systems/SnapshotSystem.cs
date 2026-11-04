@@ -150,6 +150,16 @@ internal sealed class SnapshotSystem : IDisposable
         {
             state.Poses.Remove(entry);
         }
+
+        // Given up on before, its components get a fresh chance with what was just delivered.
+        state.Missing.RemoveWhere(component => !component.IsDisposed && InTree(component.GameObject, root));
+        _scratchComponents.Clear();
+        _scratchComponents.AddRange(state.Rejecting.Keys.Where(component =>
+            !component.IsDisposed && InTree(component.GameObject, root)));
+        foreach (Component component in _scratchComponents)
+        {
+            state.Rejecting.Remove(component);
+        }
     }
 
     /// <summary>Hands every remembered sent snapshot back to the pool.</summary>
