@@ -178,6 +178,29 @@ internal sealed partial class NetworkSystem
             LocalJoinState == NetworkJoinState.Synchronizing && Scene.Current == ReplicatedScene)
         {
             SetLocalReady();
+            RunEarlyRpcs();
+        }
+    }
+
+    /// <summary>A call the host sent once this peer was ready, arriving on another channel ahead of the activation.</summary>
+    internal bool AwaitsActivation(EngineMessage kind) =>
+        IsClient && CatchUpApplied && LocalJoinState == NetworkJoinState.Synchronizing &&
+        kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost;
+
+    internal void RunEarlyRpcs()
+    {
+        NetSession? session = Session;
+        (NetPeer Peer, EngineMessageHandler Handler, byte[] Payload, Delivery Delivery)[] calls = EarlyRpcs.ToArray();
+        EarlyRpcs.Clear();
+        foreach ((NetPeer peer, EngineMessageHandler handler, byte[] payload, Delivery delivery) in calls)
+        {
+            if (Session != session || !IsReady)
+            {
+                return;
+            }
+
+            NetReader reader = new(payload);
+            handler(peer, ref reader, delivery);
         }
     }
 

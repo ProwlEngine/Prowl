@@ -422,6 +422,47 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AReliableRpcOnAnotherChannelThatOvertakesActivationStillRuns(bool rpcFirst)
+    {
+        Scene scene = CreateScene();
+        GameObject go = CreateGameObject("Talker");
+        RpcChannelTestComponent component = go.AddComponent<RpcChannelTestComponent>();
+        scene.Add(go);
+        using NetWriter snapshot = new();
+        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        host.AutoReady = false;
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => host.Has(FakePeer.SceneLoaded), host);
+            NetPeer peer = host.Session.Peers.Single(p => !p.IsLocal);
+            host.Send(FakePeer.SceneCatchUp, w => { w.WriteUInt64(1); w.WriteVarUInt32(0); w.WriteVarUInt32(0); }, peer);
+            Pump(() => host.Has(FakePeer.SceneReady), host);
+
+            void Talk() => host.Send(FakePeer.RpcFromHost, w =>
+            {
+                w.WriteVarUInt32((uint)NetPeer.HostId); w.WriteGuid(component.Identifier);
+                w.WriteUInt32(RpcChannelTestComponent.TalkId);
+            }, peer, channel: 1);
+            void Activate() => host.Send(FakePeer.SceneActivate, w => w.WriteUInt64(1), peer);
+
+            // Channels are independent streams, so a call sent after activation can arrive before it.
+            if (rpcFirst) { Talk(); Activate(); }
+            else { Activate(); Talk(); }
+
+            Pump(() => Networking.Networking.IsReady, host);
+            PumpFor(50, host);
+            Assert.Equal(1, Find(Scene.Current, go.Identifier).GetComponent<RpcChannelTestComponent>()!.Talks);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
     /// <summary>A handoff's poses: just the root's, at <paramref name="x" /> along X.</summary>
     private static byte[] Poses(GameObject root, float x)
     {

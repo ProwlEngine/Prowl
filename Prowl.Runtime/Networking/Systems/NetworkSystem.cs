@@ -16,6 +16,7 @@ internal sealed partial class NetworkSystem : IDisposable
 {
     internal readonly NetworkObjectTable Entries = new();
     internal readonly object Identity = new();
+    internal readonly List<(NetPeer Peer, EngineMessageHandler Handler, byte[] Payload, Delivery Delivery)> EarlyRpcs = new();
     internal readonly Dictionary<Guid, EngineObject> Index = new();
     internal readonly Dictionary<int, PeerReadiness> LoadingPeers = new();
     internal readonly RpcSystem Rpcs;
@@ -78,6 +79,7 @@ internal sealed partial class NetworkSystem : IDisposable
         Spawning = null;
         ReplicatedScene = null;
         LoadingPeers.Clear();
+        EarlyRpcs.Clear();
         Sync.Dirty.Clear();
         Sync.Dispose();
         Snapshots.Clear();

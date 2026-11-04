@@ -176,6 +176,7 @@ internal sealed partial class NetworkSystem
             SceneGeneration = sceneGeneration;
             LocalJoinState = NetworkJoinState.Loading;
             CatchUpApplied = false;
+            EarlyRpcs.Clear();
             ReadyDeadline = Now + Configuration.SceneLoadTimeoutSeconds;
 
             foreach (NetworkObject entry in Entries.Values.ToArray())

@@ -37,6 +37,11 @@ internal sealed partial class NetworkSystem
             {
                 if (!CanReceiveEngineMessage(peer, kind))
                 {
+                    if (AwaitsActivation(kind))
+                    {
+                        EarlyRpcs.Add((peer, handler, reader.ReadBytes(reader.Remaining).ToArray(), delivery));
+                    }
+
                     return;
                 }
 
