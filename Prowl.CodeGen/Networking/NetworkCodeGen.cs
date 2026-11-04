@@ -56,7 +56,7 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
 
     private static readonly DiagnosticDescriptor s_rpcShape = new(
         "PROWLNET002", "RPC shape not supported",
-        "RPC '{0}' must be a non-generic method returning void, with a body and no ref, out or params parameters",
+        "RPC '{0}' must be a non-generic, non-async method returning void, with a body and no ref, out or params parameters",
         "Networking", DiagnosticSeverity.Error, true);
 
     private static readonly DiagnosticDescriptor s_notInClass = new(

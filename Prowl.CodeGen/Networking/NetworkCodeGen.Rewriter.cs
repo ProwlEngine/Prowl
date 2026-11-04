@@ -379,7 +379,7 @@ internal sealed partial class NetworkCodeGen
             }
 
             bool plainParameters = method.Parameters.All(p => p.RefKind == RefKind.None && !p.IsParams && !p.IsThis);
-            if (!method.ReturnsVoid || !plainParameters || method.IsGenericMethod ||
+            if (!method.ReturnsVoid || !plainParameters || method.IsGenericMethod || method.IsAsync ||
                 (node.Body == null && node.ExpressionBody == null))
             {
                 context.Report(s_rpcShape, location, method.Name);

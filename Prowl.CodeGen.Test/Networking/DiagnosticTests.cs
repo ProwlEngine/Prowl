@@ -22,6 +22,12 @@ public class DiagnosticTests
     [InlineData(
         "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Host] public void F(ref int x) { } }",
         "PROWLNET002")]
+    [InlineData(
+        "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Broadcast] public async void F() { await System.Threading.Tasks.Task.Yield(); } }",
+        "PROWLNET002")]
+    [InlineData(
+        "public class A { [Prowl.Runtime.Networking.Rpc.Broadcast] public static async void F() { await System.Threading.Tasks.Task.Yield(); } }",
+        "PROWLNET002")]
     [InlineData("public struct A { [Prowl.Runtime.Networking.Sync] public int X { get; set; } }", "PROWLNET003")]
     [InlineData("public class A { [Prowl.Runtime.Networking.Sync] public int X { get; set; } }", "PROWLNET003")]
     // Values
