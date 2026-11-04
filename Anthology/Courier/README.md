@@ -158,6 +158,8 @@ Socket reads and writes, retransmits, acknowledgements and encryption move to a 
 
 `Shutdown(TimeSpan)` gives up with a `TimeoutException` if the worker is stuck in the inner transport. The worker and the inner transport are kept, so you can call it again later.
 
+Sends waiting for the worker have a budget too. `MaxQueuedSendsPerConnection` (4096) and `MaxQueuedSendBytes` (64 MB in all) close a connection with `ResourceLimit` when they are passed. Over the byte budget it's the connection with the most waiting that goes, not whichever sent last.
+
 ### Raw Transports
 
 ```csharp
