@@ -346,6 +346,16 @@ public class ComponentTests : RuntimeTestBase
     }
 
     [Fact]
+    public void ComponentsOfOneType_ShareTheirDefaultName()
+    {
+        PlainComponent first = new();
+        PlainComponent second = new();
+
+        Assert.Equal("NewPlainComponent", first.Name);
+        Assert.Same(first.Name, second.Name);
+    }
+
+    [Fact]
     public void GameObject_KeepsItsScene_WhenNothingElseHoldsIt()
     {
         GameObject go = AddedToUnheldScene();

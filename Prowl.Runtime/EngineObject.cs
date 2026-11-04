@@ -38,10 +38,11 @@ public abstract class EngineObject : IDisposable
     public EngineObject(string? name = "New Object")
     {
         _instanceID = Interlocked.Increment(ref s_nextID);
-        Name = "New" + GetType().Name;
+        Name = name ?? s_defaultNames.GetValue(GetType(), static type => "New" + type.Name);
         CreatedInstance();
-        Name = name ?? Name;
     }
+
+    private static readonly ConditionalWeakTable<Type, string> s_defaultNames = new();
 
     public virtual void CreatedInstance() { }
 
