@@ -69,6 +69,11 @@ internal sealed partial class NetworkSystem
             return;
         }
 
+        if (IsHost && (_overLimitPeers.Contains(peer) || !FitsPeer(peer, kind, payload.Length)))
+        {
+            return;
+        }
+
         // Unreliable is a preference: reliable delivery and Courier fragmentation work on every
         // session transport, including backends without datagrams or with smaller payload limits.
         if (delivery == Delivery.Unreliable &&
@@ -115,6 +120,14 @@ internal sealed partial class NetworkSystem
             return;
         }
 
+        foreach (NetPeer peer in Session!.Peers)
+        {
+            if (!peer.IsLocal && peer != except)
+            {
+                FitsPeer(peer, kind, payload.Length);
+            }
+        }
+
         channel = EngineChannel(channel, delivery);
         Session!.BroadcastRaw((ushort)kind, payload, delivery, except, channel: channel);
         if (!NetworkDiagnostics.Enabled)
@@ -129,6 +142,45 @@ internal sealed partial class NetworkSystem
             {
                 NetworkDiagnostics.Record(kind.ToString(), "Out", peer, Guid.Empty, Describe(delivery, channel),
                     payload, description.Context, description.Name);
+            }
+        }
+    }
+
+    /// <summary>False, and the peer is queued to be kicked, when a message this size is more than it accepts.</summary>
+    private bool FitsPeer(NetPeer peer, EngineMessage kind, int payloadLength)
+    {
+        // Courier adds a two-byte message id.
+        if ((long)payloadLength + sizeof(ushort) <= peer.MaxMessageSize)
+        {
+            return true;
+        }
+
+        if (!_overLimitPeers.Contains(peer))
+        {
+            _overLimitPeers.Add(peer);
+            Debug.LogWarning($"[Network] {peer.Name} accepts messages of at most {peer.MaxMessageSize} bytes, " +
+                             $"too few for a {payloadLength + sizeof(ushort)} byte {kind} message, so it is removed.");
+        }
+
+        return false;
+    }
+
+    /// <summary>Kicks the peers whose message limit is too small for replication, outside any send loop.</summary>
+    internal void KickOverLimitPeers()
+    {
+        if (_overLimitPeers.Count == 0)
+        {
+            return;
+        }
+
+        NetPeer[] peers = _overLimitPeers.ToArray();
+        _overLimitPeers.Clear();
+        foreach (NetPeer peer in peers)
+        {
+            if (Session is { IsHost: true, State: SessionState.Active } session &&
+                session.TryGetPeer(peer.Id, out NetPeer? current) && current == peer)
+            {
+                session.Kick(peer, "Your message limit is too small for scene replication.");
             }
         }
     }

@@ -249,8 +249,8 @@ public sealed class FakePeer : IDisposable
     public List<(ushort Id, Delivery Delivery)> Deliveries { get; } = new();
     public List<(ushort Id, byte Channel)> Channels { get; } = new();
 
-    public static FakePeer Join(LocalNetwork network, string name) =>
-        new(NetSession.Join(new LocalTransport(network, name), "host", name));
+    public static FakePeer Join(LocalNetwork network, string name, NetSessionOptions? options = null) =>
+        new(NetSession.Join(new LocalTransport(network, name), "host", name, options: options));
 
     public static FakePeer Host(LocalNetwork network) => new(NetSession.Host(new LocalTransport(network, "host"), "FakeHost"));
 

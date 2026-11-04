@@ -57,6 +57,11 @@ internal sealed partial class NetworkSystem
 
     internal void OnPeerConnected(NetPeer peer)
     {
+        if (!FitsPeer(peer, EngineMessage.Snapshot, SnapshotMessage.MinMessageSize - sizeof(ushort)))
+        {
+            return;
+        }
+
         NetSession? session = Session;
         DispatchNetworkListener(e =>
         {

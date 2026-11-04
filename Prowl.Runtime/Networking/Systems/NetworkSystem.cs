@@ -19,6 +19,7 @@ internal sealed partial class NetworkSystem : IDisposable
     internal readonly List<(NetPeer Peer, EngineMessageHandler Handler, byte[] Payload, Delivery Delivery)> EarlyRpcs = new();
     internal readonly Dictionary<Guid, EngineObject> Index = new();
     internal readonly Dictionary<int, PeerReadiness> LoadingPeers = new();
+    private readonly List<NetPeer> _overLimitPeers = new();
     internal readonly RpcSystem Rpcs;
     internal readonly SnapshotSystem Snapshots;
     internal readonly SyncSystem Sync;
@@ -79,6 +80,7 @@ internal sealed partial class NetworkSystem : IDisposable
         Spawning = null;
         ReplicatedScene = null;
         LoadingPeers.Clear();
+        _overLimitPeers.Clear();
         EarlyRpcs.Clear();
         Sync.Dirty.Clear();
         Sync.Dispose();
@@ -154,6 +156,8 @@ internal sealed partial class NetworkSystem : IDisposable
             Snapshots.ResolveReferences();
             ApplyInterpolation();
         }
+
+        KickOverLimitPeers();
     }
 
     internal void Flush()
@@ -171,5 +175,7 @@ internal sealed partial class NetworkSystem : IDisposable
         {
             Snapshots.SendAcks();
         }
+
+        KickOverLimitPeers();
     }
 }

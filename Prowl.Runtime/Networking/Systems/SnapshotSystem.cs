@@ -445,7 +445,7 @@ internal sealed class SnapshotSystem : IDisposable
     /// <summary>Splits the items into snapshots that fit the connection, and sends them.</summary>
     private void SendItems(NetPeer peer, PeerState? state, uint tick, Connection connection)
     {
-        (Delivery delivery, int budget) = Budget(connection);
+        (Delivery delivery, int budget) = Budget(peer, connection);
         int start = 0;
         while (start < _items.Count)
         {
@@ -585,11 +585,11 @@ internal sealed class SnapshotSystem : IDisposable
     }
 
     /// <summary>Unreliable when the connection can carry a whole transform record in one packet, else reliable.</summary>
-    private (Delivery Delivery, int Budget) Budget(Connection connection)
+    private (Delivery Delivery, int Budget) Budget(NetPeer peer, Connection connection)
     {
-        int limit = _scene.Session!.Options.MaxMessageSize;
+        int limit = peer.MaxMessageSize;
         Delivery delivery = Delivery.Reliable;
-        if (_scene.Session.Transport.Capabilities.Supports(Delivery.Unreliable) &&
+        if (_scene.Session!.Transport.Capabilities.Supports(Delivery.Unreliable) &&
             connection.GetMaxMessageSize(Delivery.Unreliable) >= SnapshotMessage.MinMessageSize)
         {
             delivery = Delivery.Unreliable;
