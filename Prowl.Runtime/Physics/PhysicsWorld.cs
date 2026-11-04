@@ -431,14 +431,12 @@ public class PhysicsWorld
             _syncBodies.Add(body);
         }
         body.SyncWorld = this;
-        body.Transform.ChangeListener = body;
         if (body.IsSimulated) HookContacts(body.Native);
     }
 
     internal void UnregisterBody(Rigidbody3D body)
     {
         if (ReferenceEquals(body.SyncWorld, this)) body.SyncWorld = null;
-        if (body.GameObject.IsValid() && ReferenceEquals(body.Transform.ChangeListener, body)) body.Transform.ChangeListener = null;
 
         int index = body.SyncIndex;
         if (index < 0 || index >= _syncBodies.Count || !ReferenceEquals(_syncBodies[index], body)) return;
@@ -624,6 +622,9 @@ public class PhysicsWorld
     public void SyncTransforms()
     {
         Tasks.MainThreadContext.AssertMainThread();
+
+        foreach (Rigidbody3D body in _syncBodies)
+            if (body.IsValid() && body.TransformEdited) QueueSync(body);
 
         // Indexed, since a sync may queue further bodies and they are handled in the same pass.
         for (int i = 0; i < _pendingSync.Count; i++)
