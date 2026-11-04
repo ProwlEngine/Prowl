@@ -35,6 +35,30 @@ public partial class NetworkingTests
     }
 
     [Theory]
+    [InlineData(NetworkExecution.Inline)]
+    [InlineData(NetworkExecution.DedicatedThread)]
+    public void JoinedPeersAreTrustedAndTheirBacklogIsSeenOnTheRealTransport(NetworkExecution execution)
+    {
+        NetworkConfiguration previous = Networking.Networking.Configuration;
+        Networking.Networking.Configure(new() { Execution = execution });
+        MakeCurrent(CreateScene());
+        LocalNetwork network = new();
+        using LimitedTransport transport = new(network, _ => 1200) { Backlog = 1234 };
+        Networking.Networking.Host(transport);
+        using FakePeer client = FakePeer.Join(network, "client");
+        try
+        {
+            Pump(() => client.IsReady, client);
+            PumpFor(20, client);
+            Assert.NotEmpty(transport.Connections);
+            Assert.All(transport.Connections, c => Assert.True(c.IsTrusted));
+            Connection connection = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal).Connection!;
+            Pump(() => connection.PendingSendBytes >= 1234, client);
+        }
+        finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
+    }
+
+    [Theory]
     [InlineData(false, NetworkExecution.Inline, 92, DeliverySupport.All)]
     [InlineData(true, NetworkExecution.Inline, 92, DeliverySupport.All)]
     [InlineData(false, NetworkExecution.DedicatedThread, 92, DeliverySupport.All)]
@@ -219,6 +243,7 @@ public partial class NetworkingTests
         private readonly LocalTransport _inner = new(network, address);
         private readonly Dictionary<Connection, LimitedConnection> _peers = new();
         public int Starts;
+        public long Backlog;
         public override TransportCapabilities Capabilities => new(true, deliveries, TransportExecution.InlinePreferred);
         public override bool IsListening => _inner.IsListening;
         public override void Listen() { Starts++; _inner.Listen(); }
@@ -251,6 +276,7 @@ public partial class NetworkingTests
             : Connection(owner, inner.Id, inner.Address, inner.IsOutgoing)
         {
             public override TimeSpan RoundTripTime => inner.RoundTripTime;
+            public override long PendingSendBytes => owner.Backlog;
             public override int GetMaxMessageSize(Delivery delivery) => delivery == Delivery.Unreliable ? limit : 64;
             protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel) => inner.Send(data, delivery, channel: channel);
             public override void Disconnect() => inner.Disconnect();

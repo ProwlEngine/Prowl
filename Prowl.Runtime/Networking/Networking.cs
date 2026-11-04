@@ -20,7 +20,7 @@ public static partial class Networking
     public static NetSession? Session { get; private set; }
 
     /// <summary>The bound IP port, or zero for a transport without an IP listener.</summary>
-    public static int LocalPort => s_thread?.LocalPort ?? s_transport?.LocalPort ?? 0;
+    public static int LocalPort => s_transport?.LocalPort ?? 0;
 
     /// <summary>Session admission completed. Use IsReady to check scene readiness.</summary>
     public static bool IsActive => Session?.State == SessionState.Active;
@@ -57,14 +57,14 @@ public static partial class Networking
         PrepareTransport(transport);
         try
         {
-            if (s_thread == null)
+            if (s_transport is not ThreadedTransport worker)
             {
                 return AttachSession(
                     NetSession.Host(transport, name, options ?? s_configuration.CreateSessionOptions()));
             }
 
-            s_thread.Listen();
-            return AttachSession(NetSession.CreateHost(transport, name,
+            worker.Listen();
+            return AttachSession(NetSession.CreateHost(worker, name,
                 options ?? s_configuration.CreateSessionOptions()));
         }
         catch
@@ -84,9 +84,9 @@ public static partial class Networking
         PrepareTransport(transport);
         try
         {
-            return AttachSession(s_thread == null
+            return AttachSession(s_transport is not ThreadedTransport worker
                 ? NetSession.Join(transport, address, name, token, options ?? s_configuration.CreateSessionOptions())
-                : NetSession.CreateClient(s_thread.Connect(address), name, token,
+                : NetSession.CreateClient(worker.Connect(address), name, token,
                     options ?? s_configuration.CreateSessionOptions()));
         }
         catch

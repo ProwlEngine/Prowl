@@ -11,7 +11,7 @@ namespace Prowl.Runtime.Networking;
 
 public static partial class Networking
 {
-    private static NetworkingThread? s_thread;
+    private static readonly TimeSpan s_workerShutdownTimeout = TimeSpan.FromSeconds(5);
     private static Transport? s_transport;
     private static bool s_ending;
 
@@ -28,9 +28,24 @@ public static partial class Networking
     private static void PrepareTransport(Transport transport)
     {
         ArgumentNullException.ThrowIfNull(transport);
-        bool worker = s_configuration.UsesWorker(transport);
-        s_thread = worker ? new NetworkingThread(transport) : null;
-        s_transport = transport;
+        s_transport = s_configuration.UsesWorker(transport) ? CreateWorker(transport) : transport;
+    }
+
+    /// <summary>Runs <paramref name="transport" /> on a networking worker, with the same queue budgets it has itself.</summary>
+    internal static ThreadedTransport CreateWorker(Transport transport)
+    {
+        TransportCapabilities capabilities = transport.Capabilities;
+        if (!capabilities.IsAvailable || capabilities.Execution == TransportExecution.CreatingThreadRequired)
+        {
+            throw new NotSupportedException("This transport cannot run on a networking worker.");
+        }
+
+        return new ThreadedTransport(transport)
+        {
+            MaxQueuedDataEventsPerConnection = transport.MaxQueuedDataEventsPerConnection,
+            MaxQueuedDataBytesPerConnection = transport.MaxQueuedDataBytesPerConnection,
+            MaxQueuedDataBytes = transport.MaxQueuedDataBytes
+        };
     }
 
     private static NetSession AttachSession(NetSession session)
@@ -87,11 +102,11 @@ public static partial class Networking
         session?.Shutdown(message);
         if (Session == session)
         {
-            ReleaseTransport();
             Session = null;
             System?.Dispose();
             System = null;
             s_ending = false;
+            ReleaseTransport();
         }
 
         session?.Dispose();
@@ -99,17 +114,13 @@ public static partial class Networking
 
     private static void ReleaseTransport()
     {
-        // Clear ownership only after disposal succeeds. A stalled worker can be retried.
-        if (s_thread != null)
+        // Ownership is kept until the worker stops, so a stalled one can be shut down again later.
+        if (s_transport is ThreadedTransport worker)
         {
-            s_thread.Dispose();
-        }
-        else
-        {
-            s_transport?.Dispose();
+            worker.Shutdown(s_workerShutdownTimeout);
         }
 
-        s_thread = null;
+        s_transport?.Dispose();
         s_transport = null;
     }
 
@@ -124,18 +135,9 @@ public static partial class Networking
 
         MainThreadContext.AssertMainThread();
         using FrameStatScope stats = FrameStats.Network.Scope();
-        NetworkingThread? thread = s_thread;
-        if (EndIfWorkerFailed())
+        if (s_transport is ThreadedTransport worker && !ReceiveFromWorker(worker, session))
         {
             return;
-        }
-
-        if (thread != null)
-        {
-            while (session.State != SessionState.Ended && thread.TryReadEvent(out TransportEvent ev))
-            {
-                session.ProcessEvent(ev);
-            }
         }
 
         session.Receive();
@@ -143,6 +145,28 @@ public static partial class Networking
         {
             system.Receive();
         }
+    }
+
+    /// <summary>Hands the worker's events to the session. False once a failed worker has ended the session.</summary>
+    private static bool ReceiveFromWorker(ThreadedTransport worker, NetSession session)
+    {
+        try
+        {
+            worker.Receive();
+        }
+        catch (Exception failure)
+        {
+            Debug.LogError($"[Network] The networking worker failed: {failure}");
+            Shutdown("The networking worker failed.");
+            return false;
+        }
+
+        while (session.State != SessionState.Ended && worker.Poll(out TransportEvent ev))
+        {
+            session.ProcessEvent(ev);
+        }
+
+        return Session == session;
     }
 
     internal static void Flush()
@@ -156,11 +180,6 @@ public static partial class Networking
 
         MainThreadContext.AssertMainThread();
         using FrameStatScope stats = FrameStats.Network.Scope();
-        if (EndIfWorkerFailed())
-        {
-            return;
-        }
-
         system.Flush();
         if (Session != session)
         {
@@ -168,25 +187,9 @@ public static partial class Networking
         }
 
         session.Flush();
-        if (Session == session)
+        if (Session == session && s_transport is ThreadedTransport worker)
         {
-            s_thread?.RequestFlush();
+            worker.Flush();
         }
-    }
-
-    /// <summary>Ends the session once, when the networking worker has stopped with an error.</summary>
-    private static bool EndIfWorkerFailed()
-    {
-        if (s_thread is not { Failure: { } failure } thread)
-        {
-            return false;
-        }
-
-        Debug.LogError($"[Network] The networking worker failed: {failure}");
-
-        // Joining the stopped worker closes its connections, so the goodbye has nothing left to send on.
-        thread.Shutdown();
-        Shutdown("The networking worker failed.");
-        return true;
     }
 }

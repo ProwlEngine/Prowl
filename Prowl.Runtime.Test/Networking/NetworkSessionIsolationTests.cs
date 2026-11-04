@@ -12,7 +12,7 @@ public sealed class NetworkSessionIsolationTests : RuntimeTestBase
     public void TimedOutWorkerRetainsItsTransportUntilShutdownCanBeRetried()
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
-        using NetworkingThreadTests.BlockingTransport transport = new();
+        using NetworkingWorkerTests.BlockingTransport transport = new();
         try
         {
             Networking.Networking.Configure(new() { Execution = NetworkExecution.DedicatedThread });

@@ -62,7 +62,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
         using Transport transport = new ThreadAffineTransport();
         Assert.False(new NetworkConfiguration().UsesWorker(transport));
         Assert.Throws<NotSupportedException>(() => new NetworkConfiguration { Execution = NetworkExecution.DedicatedThread }.UsesWorker(transport));
-        Assert.Throws<NotSupportedException>(() => new NetworkingThread(transport));
+        Assert.Throws<NotSupportedException>(() => Networking.Networking.CreateWorker(transport));
     }
 
     private sealed class ThreadAffineTransport(bool available = true) : Transport
@@ -100,7 +100,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
             using Transport transport = Networking.Networking.CreateTransport(true);
             Assert.IsType<Prowl.Courier.Transports.Kcp.KcpTransport>(transport);
             using NetSession session = Networking.Networking.Host(transport);
-            Assert.Same(transport, session.Transport);
+            Assert.IsType<ThreadedTransport>(session.Transport);
             Assert.True(session.IsExternallyPumped);
             Assert.NotEqual(0, Networking.Networking.LocalPort);
         }
