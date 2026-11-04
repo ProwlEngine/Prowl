@@ -277,6 +277,12 @@ internal sealed class SnapshotSystem : IDisposable
             foreach (SyncKey key in _scratchKeys)
             {
                 state.Applied.Remove(key);
+
+                // Forgets the id the host gave a component that is gone here.
+                if (!_scene.IsHost && state.ReceivedGuids.Remove(key.Component.Identifier, out uint id))
+                {
+                    state.ReceivedIds.Remove(id);
+                }
             }
 
             _scratchComponents.Clear();
