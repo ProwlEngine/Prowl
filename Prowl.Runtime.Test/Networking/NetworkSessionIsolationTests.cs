@@ -21,7 +21,7 @@ public sealed class NetworkSessionIsolationTests : RuntimeTestBase
             Scene.ProcessPendingLoad();
             Networking.Networking.Host(transport);
             Assert.True(transport.Entered.Wait(TimeSpan.FromSeconds(2)));
-            Assert.Throws<TimeoutException>(() => Networking.Networking.Shutdown());
+            Networking.Networking.Shutdown();
             Assert.Null(Networking.Networking.Session);
             Assert.Null(Networking.Networking.System);
             Assert.False(transport.Disposed);
@@ -37,6 +37,9 @@ public sealed class NetworkSessionIsolationTests : RuntimeTestBase
 
         Assert.Null(Networking.Networking.System);
         Assert.True(transport.Disposed);
+        using LocalTransport again = new(new(), "again");
+        Networking.Networking.Host(again);
+        Networking.Networking.Shutdown();
     }
 
     [Fact]

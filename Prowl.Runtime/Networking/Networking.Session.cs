@@ -117,7 +117,15 @@ public static partial class Networking
         // Ownership is kept until the worker stops, so a stalled one can be shut down again later.
         if (s_transport is ThreadedTransport worker)
         {
-            worker.Shutdown(s_workerShutdownTimeout);
+            try
+            {
+                worker.Shutdown(s_workerShutdownTimeout);
+            }
+            catch (TimeoutException failure)
+            {
+                Debug.LogError($"[Network] The networking worker did not stop. Call Networking.Shutdown again later: {failure.Message}");
+                return;
+            }
         }
 
         s_transport?.Dispose();
