@@ -20,6 +20,49 @@ public class SyncReferenceTestComponent : Component
 public partial class NetworkingTests
 {
     [Fact]
+    public void ALateAcknowledgementFromThePreviousSceneDoesNotAcknowledgeTheNextScenesSnapshots()
+    {
+        var (_, state, network) = ReadinessHost();
+        using FakePeer client = FakePeer.Join(network, "client");
+        try
+        {
+            Pump(() => client.IsReady, client);
+            state.Health = 5;
+            Pump(() => client.WireReceived.Any(m => m.Id == FakePeer.Snapshot && new NetReader(m.Data).ReadVarUInt32() != 0), client);
+            uint oldId = new NetReader(client.WireReceived.First(m => m.Id == FakePeer.Snapshot).Data).ReadVarUInt32();
+            PumpFor(20, client);
+
+            Scene next = CreateScene();
+            GameObject root = CreateGameObject("Next actor");
+            NetTestComponent component = root.AddComponent<NetTestComponent>();
+            next.Add(root);
+            MakeCurrent(next);
+            Pump(() => client.IsReady && Networking.Networking.IsPeerReady(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal)), client);
+            client.AutoAck = false;
+            client.WireReceived.Clear();
+            component.Health = 7;
+            Pump(() => client.WireReceived.Any(m => m.Id == FakePeer.Snapshot), client);
+
+            // An unreliable acknowledgement of the previous scene's snapshot, arriving this late.
+            using NetWriter stale = new();
+            stale.WriteVarUInt32(1); stale.WriteVarUInt32(oldId); stale.WriteVarUInt32(0); stale.WriteVarUInt32(0);
+            client.Session.SendRaw(client.Session.HostPeer!, FakePeer.SnapshotAck, stale.WrittenSpan, Delivery.Unreliable);
+            client.Session.Flush();
+            PumpFor(20, client);
+
+            client.WireReceived.Clear();
+            component.Health = 8;
+            Pump(() => client.WireReceived.Any(m => m.Id == FakePeer.Snapshot), client);
+            NetReader snapshot = new(client.WireReceived.Last(m => m.Id == FakePeer.Snapshot).Data);
+            snapshot.ReadVarUInt32(); snapshot.ReadVarUInt32(); snapshot.ReadVarUInt32();
+            FakePeer.SkipTransformGroups(ref snapshot);
+            Assert.True(snapshot.ReadVarUInt32() > 0);
+            Assert.True((snapshot.ReadVarUInt32() & 1) != 0, "The value names a component the client was never told about.");
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
     public void AReferenceThatArrivesBeforeItsSpawnResolvesOnceTheSpawnArrives()
     {
         Scene scene = CreateScene();

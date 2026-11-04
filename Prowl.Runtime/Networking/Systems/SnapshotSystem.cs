@@ -61,6 +61,9 @@ internal sealed class SnapshotSystem : IDisposable
     private readonly NetWriter _translatedValues = new(4096);
     private readonly NetWriter _valueWriter = new();
 
+    // Never reset with the scene, so a late acknowledgement can't match a later scene's snapshot.
+    private uint _nextSnapshotId = 1;
+
     // What the filter of the values being applied compares against.
     private PeerState? _filterState;
     private uint _filterTick;
@@ -500,10 +503,10 @@ internal sealed class SnapshotSystem : IDisposable
 
             if (sent != null)
             {
-                id = state.NextId++;
-                if (state.NextId == 0)
+                id = _nextSnapshotId++;
+                if (_nextSnapshotId == 0)
                 {
-                    state.NextId = 1;
+                    _nextSnapshotId = 1;
                 }
 
                 Remember(state, id, sent);
@@ -1172,6 +1175,5 @@ internal sealed class SnapshotSystem : IDisposable
         public readonly Dictionary<SyncKey, Pending> Values = new();
         public readonly Dictionary<SyncKey, UnresolvedValue> Unresolved = new();
         public uint NextComponentId = 1;
-        public uint NextId = 1;
     }
 }
