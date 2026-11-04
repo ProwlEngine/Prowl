@@ -209,10 +209,36 @@ public abstract class RpcMember(uint id, string signature, RpcMode mode, RpcFlag
     /// <summary>Marks the end of argument decoding; subsequent exceptions belong to the RPC body.</summary>
     public static void ArgumentsRead() => Networking.System?.Rpcs.RpcArgumentsRead();
 
+    /// <summary>Generated: while the body runs, a base call to this same RPC runs here instead of being sent again.</summary>
+    public RpcBodyScope EnterBody(Component component) =>
+        Networking.System is { } system ? system.Rpcs.EnterBody(component, Id) : default;
+
     /// <summary>Reads the arguments and calls the method.</summary>
     internal abstract void Invoke(Component component, ref NetReader reader);
 
     internal abstract void ValidateArguments(Component component, ref NetReader reader);
+}
+
+/// <summary>An RPC body running on this peer, from <see cref="RpcMember.EnterBody" /> until disposed.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
+public readonly struct RpcBodyScope : IDisposable
+{
+    private readonly RpcSystem? _rpcs;
+    private readonly (Component Component, uint Id)? _previous;
+
+    internal RpcBodyScope(RpcSystem rpcs, (Component Component, uint Id)? previous)
+    {
+        _rpcs = rpcs;
+        _previous = previous;
+    }
+
+    public void Dispose()
+    {
+        if (_rpcs != null)
+        {
+            _rpcs._incoming = _previous;
+        }
+    }
 }
 
 /// <summary>Reads arguments, then optionally executes the RPC. Validation never runs game code.</summary>

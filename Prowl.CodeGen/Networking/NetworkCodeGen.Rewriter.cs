@@ -109,17 +109,24 @@ internal sealed partial class NetworkCodeGen
             prologue.Append(rpc.Static
                 ? $"if (!{rpc.Descriptor}.Send(__rpc_w)) return; }} }} }} "
                 : $"if (!{rpc.Descriptor}.Send(this, __rpc_w)) return; }} }} ");
-            StatementSyntax check = SyntaxFactory.ParseStatement(prologue.ToString());
+            List<StatementSyntax> checks = [SyntaxFactory.ParseStatement(prologue.ToString())];
+
+            // Instance RPCs can be overridden: a base call made from the running body runs here, not sent again.
+            if (!rpc.Static)
+            {
+                checks.Add(SyntaxFactory.ParseStatement(
+                    $"using global::Prowl.Runtime.Networking.RpcBodyScope __rpc_body = {rpc.Descriptor}.EnterBody(this); "));
+            }
 
             // Inserted right after the opening brace, on its line, taking over whatever followed the brace, so
             // the body's own lines don't change at all.
             if (node.Body != null)
             {
                 SyntaxToken open = node.Body.OpenBraceToken;
-                StatementSyntax placed = check.WithLeadingTrivia(SyntaxFactory.Space)
-                    .WithTrailingTrivia(open.TrailingTrivia);
+                List<StatementSyntax> placed = checks.Select(c => c.WithLeadingTrivia(SyntaxFactory.Space)).ToList();
+                placed[^1] = placed[^1].WithTrailingTrivia(open.TrailingTrivia);
                 BlockSyntax body = node.Body.WithOpenBraceToken(open.WithTrailingTrivia(SyntaxFactory.TriviaList()));
-                return node.WithBody(body.WithStatements(body.Statements.Insert(0, placed)));
+                return node.WithBody(body.WithStatements(body.Statements.InsertRange(0, placed)));
             }
 
             // The block opens where the arrow was and the expression keeps everything around it, so it stays on its own line.
@@ -130,7 +137,10 @@ internal sealed partial class NetworkCodeGen
             StatementSyntax statement = expression is ThrowExpressionSyntax thrown
                 ? SyntaxFactory.ThrowStatement(default, thrown.ThrowKeyword, thrown.Expression, semicolon)
                 : SyntaxFactory.ExpressionStatement(expression, semicolon);
-            BlockSyntax block = SyntaxFactory.Block(check.WithTrailingTrivia(), statement)
+            List<StatementSyntax> statements = checks.Select(c => c.WithTrailingTrivia(SyntaxFactory.Space)).ToList();
+            statements[^1] = statements[^1].WithTrailingTrivia();
+            statements.Add(statement);
+            BlockSyntax block = SyntaxFactory.Block(statements)
                 .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken)
                     .WithLeadingTrivia(arrow.ArrowToken.LeadingTrivia).WithTrailingTrivia(SyntaxFactory.Space))
                 .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken)

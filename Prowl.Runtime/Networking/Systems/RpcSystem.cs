@@ -24,8 +24,8 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     internal readonly HashSet<string> _rpcWarnings = new();
     internal readonly NetWriter _rpcWriter = new();
 
-    // The incoming call being dispatched, so its prologue lets the body run instead of sending it again. It holds
-    // for the whole call, so an override calling base.Method() runs the base body here too.
+    // The call whose body is running, received or made here, so its prologue runs the body instead of sending it
+    // again. It holds for the whole body, so an override calling base.Method() runs the base body here too.
     internal (Component Component, uint Id)? _incoming;
 
     // Set once the incoming call's arguments are read: from then on an exception is the body's, not the sender's.
@@ -335,6 +335,13 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
     /// <summary>The incoming call's arguments are read and its body is about to run.</summary>
     internal void RpcArgumentsRead() => _incomingRead = true;
+
+    internal RpcBodyScope EnterBody(Component component, uint id)
+    {
+        RpcBodyScope scope = new(this, _incoming);
+        _incoming = (component, id);
+        return scope;
+    }
 
     internal void WarnOnce(Component component, uint id, string problem)
     {

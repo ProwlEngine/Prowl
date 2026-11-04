@@ -253,68 +253,113 @@ public class SyncAndRpcTests
                                                 [Rpc.Broadcast] public override void Fire(Int32 power) { base.Fire(power); }
                                             }
                                             """);
-        Type cannon = assembly.GetType("Cannon")!;
-        Scene scene = new();
-        GameObject go = new("Cannon");
-        Component component = go.AddComponent(cannon)!;
-        scene.Add(go);
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
-        LocalNetwork network = new();
-        Net.Host(new LocalTransport(network, "host"));
-        using NetSession client = NetSession.Join(new LocalTransport(network, "client"), "host", "client");
-        const ushort sceneSnapshot = Net.EngineMessageIds, rpcToHost = sceneSnapshot + 6,
-            rpcFromHost = sceneSnapshot + 7, sceneLoaded = sceneSnapshot + 8, sceneCatchUp = sceneSnapshot + 9,
-            sceneReady = sceneSnapshot + 10;
-        int relayedBack = 0;
-        void Reply(ushort id, ulong generation)
+        using HostedComponent hosted = new(assembly.GetType("Cannon")!);
+        using NetWriter call = new(), arguments = new();
+        NetSerializer<int>.Write(arguments, 3);
+        call.WriteGuid(hosted.Component.Identifier);
+        call.WriteUInt32(NetworkCodeGen.NetworkId("Fire(int)"));
+        call.WriteBytesWithLength(arguments.WrittenSpan);
+        hosted.Client.SendRaw(hosted.Client.HostPeer!, HostedComponent.RpcToHost, call.WrittenSpan);
+        hosted.Frames(50);
+
+        Assert.Equal(1, hosted.Field("Fired"));
+        Assert.Equal(0, hosted.CallsAtClient);
+    }
+
+    [Theory]
+    [InlineData("base.Fire(power);", 1)]
+    [InlineData("Extra++;", 0)]
+    public void ALocalCallToAnOverrideIsSentOnce(string overrideBody, int baseRuns)
+    {
+        Assembly assembly = Scripts.Compile($$"""
+                                              using Prowl.Runtime;
+                                              using Prowl.Runtime.Networking;
+
+                                              public class Gun : Component
+                                              {
+                                                  public int Fired, Extra;
+                                                  [Rpc.Broadcast] public virtual void Fire(int power) => Fired++;
+                                              }
+
+                                              public class Cannon : Gun
+                                              {
+                                                  [Rpc.Broadcast] public override void Fire(int power) { {{overrideBody}} }
+                                              }
+                                              """);
+        using HostedComponent hosted = new(assembly.GetType("Cannon")!);
+        hosted.Component.GetType().GetMethod("Fire")!.Invoke(hosted.Component, [3]);
+        hosted.Frames(50);
+
+        Assert.Equal(1, hosted.CallsAtClient);
+        Assert.Equal(baseRuns, hosted.Field("Fired"));
+        Assert.Equal(1 - baseRuns, hosted.Field("Extra"));
+    }
+
+    /// <summary>A script component on the host of a running session, with a raw client that gets ready and counts the calls it is sent.</summary>
+    private sealed class HostedComponent : IDisposable
+    {
+        public const ushort SceneSnapshot = Net.EngineMessageIds, RpcToHost = SceneSnapshot + 6,
+            RpcFromHost = SceneSnapshot + 7, SceneLoaded = SceneSnapshot + 8, SceneCatchUp = SceneSnapshot + 9,
+            SceneReady = SceneSnapshot + 10;
+
+        private readonly Scene _scene = new();
+
+        public HostedComponent(Type type)
+        {
+            GameObject go = new(type.Name);
+            Component = go.AddComponent(type)!;
+            _scene.Add(go);
+            Scene.Load(_scene);
+            Scene.ProcessPendingLoad();
+            LocalNetwork network = new();
+            Net.Host(new LocalTransport(network, "host"));
+            Client = NetSession.Join(new LocalTransport(network, "client"), "host", "client");
+            Client.OnRaw(SceneSnapshot, (NetPeer _, ref NetReader r, Delivery _, byte _) =>
+            {
+                r.ReadByte();
+                Reply(SceneLoaded, r.ReadUInt64());
+            });
+            Client.OnRaw(SceneCatchUp, (NetPeer _, ref NetReader r, Delivery _, byte _) => Reply(SceneReady, r.ReadUInt64()));
+            Client.OnRaw(RpcFromHost, (NetPeer _, ref NetReader _, Delivery _, byte _) => CallsAtClient++);
+            for (int i = 0; i < 1000 && !ClientReady; i++)
+            {
+                Frames(1);
+            }
+
+            Assert.True(ClientReady);
+        }
+
+        public Component Component { get; }
+        public NetSession Client { get; }
+        public int CallsAtClient { get; private set; }
+
+        private bool ClientReady => Net.Session!.Peers.Any(p => !p.IsLocal && Net.IsPeerReady(p));
+
+        public int Field(string name) => (int)Component.GetType().GetField(name)!.GetValue(Component)!;
+
+        public void Frames(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                Net.Receive();
+                Net.Flush();
+                Client.Update();
+                Thread.Sleep(1);
+            }
+        }
+
+        private void Reply(ushort id, ulong generation)
         {
             using NetWriter writer = new();
             writer.WriteUInt64(generation);
-            client.SendRaw(client.HostPeer!, id, writer.WrittenSpan);
+            Client.SendRaw(Client.HostPeer!, id, writer.WrittenSpan);
         }
 
-        client.OnRaw(sceneSnapshot, (NetPeer _, ref NetReader r, Delivery _, byte _) =>
-        {
-            r.ReadByte();
-            Reply(sceneLoaded, r.ReadUInt64());
-        });
-        client.OnRaw(sceneCatchUp, (NetPeer _, ref NetReader r, Delivery _, byte _) => Reply(sceneReady, r.ReadUInt64()));
-        client.OnRaw(rpcFromHost, (NetPeer _, ref NetReader _, Delivery _, byte _) => relayedBack++);
-        void Frame()
-        {
-            Net.Receive();
-            Net.Flush();
-            client.Update();
-            Thread.Sleep(1);
-        }
-
-        try
-        {
-            for (int i = 0; i < 1000 && !Net.Session!.Peers.Any(p => !p.IsLocal && Net.IsPeerReady(p)); i++)
-            {
-                Frame();
-            }
-
-            Assert.Contains(Net.Session!.Peers, p => !p.IsLocal && Net.IsPeerReady(p));
-            using NetWriter call = new(), arguments = new();
-            NetSerializer<int>.Write(arguments, 3);
-            call.WriteGuid(component.Identifier);
-            call.WriteUInt32(NetworkCodeGen.NetworkId("Fire(int)"));
-            call.WriteBytesWithLength(arguments.WrittenSpan);
-            client.SendRaw(client.HostPeer!, rpcToHost, call.WrittenSpan);
-            for (int i = 0; i < 50; i++)
-            {
-                Frame();
-            }
-
-            Assert.Equal(1, (int)cannon.GetField("Fired")!.GetValue(component)!);
-            Assert.Equal(0, relayedBack);
-        }
-        finally
+        public void Dispose()
         {
             Net.Shutdown();
-            scene.Dispose();
+            Client.Dispose();
+            _scene.Dispose();
         }
     }
 }
