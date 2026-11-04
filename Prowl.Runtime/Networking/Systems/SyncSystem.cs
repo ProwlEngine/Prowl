@@ -226,7 +226,8 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     /// </summary>
     internal int ApplySyncState(NetPeer sender, ref NetReader reader, NetWriter? relay, bool initial,
         bool requireEnd = false, Func<Component, SyncMember, bool>? filter = null,
-        List<(Component Component, SyncMember Sync)>? accepted = null, HashSet<Guid>? rejected = null)
+        List<(Component Component, SyncMember Sync)>? accepted = null, HashSet<Guid>? rejected = null,
+        List<(Component Component, SyncMember Sync, byte[] Value)>? unresolved = null)
     {
         // Validate all framing and accepted values before changing live state or relays.
         // Collection validation only reads, so partial operations cannot leak out.
@@ -265,8 +266,13 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
                 if (take)
                 {
                     NetReader valueReader = new(value);
+                    int unresolvedBefore = NetSerializers.UnresolvedReferences;
                     sync!.Read(component, ref valueReader, initial);
                     accepted?.Add((component, sync));
+                    if (unresolved != null && NetSerializers.UnresolvedReferences != unresolvedBefore)
+                    {
+                        unresolved.Add((component, sync, value.ToArray()));
+                    }
                 }
 
                 NetworkDiagnostics.TraceMember("SyncVar", take ? "Apply" : "Rejected", sender, component, slot,

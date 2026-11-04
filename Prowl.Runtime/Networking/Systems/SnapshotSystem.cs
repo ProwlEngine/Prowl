@@ -37,6 +37,7 @@ internal sealed class SnapshotSystem : IDisposable
     internal const double MissingComponentSeconds = 3;
 
     private readonly List<(Component Component, SyncMember Sync)> _applied = new();
+    private readonly List<(Component Component, SyncMember Sync, byte[] Value)> _unresolved = new();
     private readonly HashSet<uint> _ackedIds = new();
     private readonly Func<Component, SyncMember, bool> _filter;
     private readonly List<Item> _items = new();
@@ -689,12 +690,13 @@ internal sealed class SnapshotSystem : IDisposable
         NetReader translated = new(_translated.WrittenSpan);
         NetSession? session = _scene.Session;
         _applied.Clear();
+        _unresolved.Clear();
         _filterState = state;
         _filterTick = header.Tick;
         try
         {
             _scene.Sync.ApplySyncState(sender, ref translated, null, false, true, _filter, _applied,
-                state.RejectedComponents);
+                state.RejectedComponents, _unresolved);
         }
         finally
         {
@@ -715,6 +717,12 @@ internal sealed class SnapshotSystem : IDisposable
             }
         }
 
+        foreach ((Component component, SyncMember sync, byte[] value) in _unresolved)
+        {
+            state.Unresolved[new SyncKey(component, sync.Slot)] =
+                new UnresolvedValue(value, header.Tick, _scene.GenerationOf(component.GameObject));
+        }
+
         if (header.Id != 0)
         {
             state.Received.Add(header.Id);
@@ -723,6 +731,57 @@ internal sealed class SnapshotSystem : IDisposable
         if (_relay.Count > 0)
         {
             Relay(sender);
+        }
+    }
+
+    /// <summary>Applies again the received values whose referenced objects have arrived since, unless newer ones came.</summary>
+    internal void ResolveReferences()
+    {
+        NetSession session = _scene.Session!;
+        foreach ((int peerId, PeerState state) in _peers)
+        {
+            if (state.Unresolved.Count == 0)
+            {
+                continue;
+            }
+
+            _scratchKeys.Clear();
+            session.TryGetPeer(peerId, out NetPeer? sender);
+            foreach ((SyncKey key, UnresolvedValue pending) in state.Unresolved)
+            {
+                Component component = key.Component;
+                if (sender == null || component.IsDisposed ||
+                    NetworkMembers.Of(component).Sync(key.Slot) is not { } sync ||
+                    !state.Applied.TryGetValue(key, out uint applied) || applied != pending.Tick ||
+                    _scene.GenerationOf(component.GameObject) != pending.Generation ||
+                    !_scene.Sync.AcceptSync(sender, component, sync.Flags) ||
+                    (!_scene.IsHost && _scene.HasControl(component, sync.Flags)))
+                {
+                    _scratchKeys.Add(key);
+                    continue;
+                }
+
+                int before = NetSerializers.UnresolvedReferences;
+                NetReader probe = new(pending.Value);
+                sync.Validate(component, ref probe);
+                if (NetSerializers.UnresolvedReferences != before)
+                {
+                    continue;
+                }
+
+                NetReader reader = new(pending.Value);
+                sync.Read(component, ref reader, false);
+                _scratchKeys.Add(key);
+                if (_scene.IsHost)
+                {
+                    MarkChanged(component, sync);
+                }
+            }
+
+            foreach (SyncKey key in _scratchKeys)
+            {
+                state.Unresolved.Remove(key);
+            }
         }
     }
 
@@ -1062,6 +1121,9 @@ internal sealed class SnapshotSystem : IDisposable
         double SentAt,
         TransformUpdate Update);
 
+    /// <summary>A received value naming an object this peer didn't have yet.</summary>
+    private readonly record struct UnresolvedValue(byte[] Value, uint Tick, uint Generation);
+
     /// <summary>What one sent snapshot owed, and the component ids it defined. Pooled.</summary>
     private sealed class SentSnapshot
     {
@@ -1108,6 +1170,7 @@ internal sealed class SnapshotSystem : IDisposable
         public readonly Dictionary<uint, SentSnapshot> Sent = new();
         public readonly Queue<uint> SentOrder = new();
         public readonly Dictionary<SyncKey, Pending> Values = new();
+        public readonly Dictionary<SyncKey, UnresolvedValue> Unresolved = new();
         public uint NextComponentId = 1;
         public uint NextId = 1;
     }

@@ -111,6 +111,9 @@ internal static class NetSerializers
     private const float CompactRange = 0.70710678f;
     private const uint CompactSteps = 1023;
 
+    /// <summary>Engine object references read so far whose object this peer doesn't have.</summary>
+    [ThreadStatic] internal static int UnresolvedReferences;
+
     public static (NetSerializer<T>.Writer?, NetSerializer<T>.Reader?) Create<T>()
     {
         Type t = typeof(T);
@@ -279,7 +282,18 @@ internal static class NetSerializers
                 (ref r) =>
                 {
                     Guid id = r.ReadGuid();
-                    return Networking.System?.FindByIdentifier(id) is T found ? found : default!;
+                    if (Networking.System is not { } system || id == Guid.Empty)
+                    {
+                        return default!;
+                    }
+
+                    EngineObject? found = system.FindByIdentifier(id);
+                    if (found.IsNotValid())
+                    {
+                        UnresolvedReferences++;
+                    }
+
+                    return found is T value ? value : default!;
                 });
         }
 

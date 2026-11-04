@@ -151,6 +151,7 @@ internal sealed partial class NetworkSystem : IDisposable
         UpdateReadiness();
         if (IsActive)
         {
+            Snapshots.ResolveReferences();
             ApplyInterpolation();
         }
     }

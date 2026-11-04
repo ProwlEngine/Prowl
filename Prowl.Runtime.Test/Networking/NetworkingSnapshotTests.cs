@@ -7,8 +7,57 @@ using Xunit;
 
 namespace Prowl.Runtime.Test;
 
+/// <summary>A [Sync] GameObject reference, as the script compiler generates for <c>[Sync] public GameObject? Target { get; set; }</c>.</summary>
+public class SyncReferenceTestComponent : Component
+{
+    public const uint TargetSlot = 401;
+    private GameObject? _target;
+    private static readonly SyncMember<SyncReferenceTestComponent, GameObject?> TargetState = new(TargetSlot, "Target",
+        SyncFlags.None, static c => c._target, static (c, v) => c._target = v);
+    public GameObject? Target { get => _target; set => TargetState.Set(this, ref _target, value); }
+}
+
 public partial class NetworkingTests
 {
+    [Fact]
+    public void AReferenceThatArrivesBeforeItsSpawnResolvesOnceTheSpawnArrives()
+    {
+        Scene scene = CreateScene();
+        GameObject holderObject = CreateGameObject("Holder");
+        SyncReferenceTestComponent holder = holderObject.AddComponent<SyncReferenceTestComponent>();
+        scene.Add(holderObject);
+        using NetWriter snapshot = new();
+        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        GameObject target = CreateGameObject("Target");
+        target.Network.Mode = NetworkMode.Object;
+        using NetWriter spawn = new();
+        NetworkTestScene.Current.WriteSpawn(target, owner: -1, NetworkOrphaned.Destroy, spawn, generation: 1);
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady, host);
+            NetPeer peer = host.Session.Peers.Single(p => !p.IsLocal);
+            using NetWriter reference = new();
+            reference.WriteGuid(target.Identifier);
+
+            // Unreliable, so the value can overtake the reliable spawn of the object it names.
+            host.SendSnapshotValues(peer, 7, 1, (holder.Identifier, SyncReferenceTestComponent.TargetSlot, 0u, reference.ToArray()));
+            Pump(() => host.Has(FakePeer.SnapshotAck), host);
+            host.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
+            host.Session.Flush();
+            Pump(() => Scene.Current.AllObjects.Any(o => o.Identifier == target.Identifier), host);
+            PumpFor(50, host);
+
+            GameObject? resolved = Find(Scene.Current, holderObject.Identifier).GetComponent<SyncReferenceTestComponent>()!.Target;
+            Assert.NotNull(resolved);
+            Assert.Equal(target.Identifier, resolved!.Identifier);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
     private static byte[] IntValue(int value)
     {
         using NetWriter writer = new();
