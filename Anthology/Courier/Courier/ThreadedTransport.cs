@@ -5,6 +5,7 @@ using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 
@@ -41,6 +42,7 @@ public sealed class ThreadedTransport : Transport
     private readonly AutoResetEvent _wake = new(false);
     private volatile bool _listening;
     private int _nextId;
+    private ManualResetEventSlim? _shutdownDone;
     private volatile bool _stopping;
     private Thread? _worker;
     private ExceptionDispatchInfo? _workerError;
@@ -108,16 +110,48 @@ public sealed class ThreadedTransport : Transport
         _wake.Set();
     }
 
-    public override void Shutdown()
+    public override void Shutdown() => Shutdown(Timeout.InfiniteTimeSpan);
+
+    /// <summary>
+    ///     Shuts down as <see cref="Shutdown()" /> does, but gives up after <paramref name="timeout" /> with a
+    ///     <see cref="TimeoutException" /> if the worker is stuck in the inner transport. The worker and the inner
+    ///     transport are kept then, so a later call can finish the shutdown.
+    /// </summary>
+    public void Shutdown(TimeSpan timeout)
     {
+        if (timeout < TimeSpan.Zero && timeout != Timeout.InfiniteTimeSpan)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+        }
+
         if (_worker != null)
         {
-            RunOnWorker(new Command(CommandKind.Shutdown));
+            Stopwatch elapsed = Stopwatch.StartNew();
+            if (_shutdownDone == null && !_worker.IsAlive)
+            {
+                Run(new Command(CommandKind.Shutdown));
+                ForwardEvents();
+            }
+            else
+            {
+                _shutdownDone ??= PostShutdown();
+                if (!_shutdownDone.Wait(timeout))
+                {
+                    throw new TimeoutException("The worker did not finish shutting down in time.");
+                }
+            }
+
             _stopping = true;
             _wake.Set();
-            _worker.Join();
+            if (!_worker.Join(Remaining(timeout, elapsed)))
+            {
+                throw new TimeoutException("The worker did not stop in time.");
+            }
+
             _worker = null;
             _stopping = false;
+            _shutdownDone?.Dispose();
+            _shutdownDone = null;
         }
         else
         {
@@ -167,6 +201,18 @@ public sealed class ThreadedTransport : Transport
         RaiseDisconnected(proxy, DisconnectReason.Requested);
         Post(new Command(CommandKind.Disconnect) { Proxy = proxy });
     }
+
+    private ManualResetEventSlim PostShutdown()
+    {
+        ManualResetEventSlim done = new();
+        Post(new Command(CommandKind.Shutdown) { Done = done });
+        return done;
+    }
+
+    private static TimeSpan Remaining(TimeSpan timeout, Stopwatch elapsed) =>
+        timeout == Timeout.InfiniteTimeSpan
+            ? Timeout.InfiniteTimeSpan
+            : TimeSpan.FromTicks(Math.Max(0, (timeout - elapsed.Elapsed).Ticks));
 
     private void StartWorker()
     {
