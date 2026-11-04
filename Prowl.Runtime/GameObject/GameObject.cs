@@ -49,7 +49,7 @@ public partial class GameObject : EngineObject, ISerializable
     private Transform _transform = new();
 
     [SerializeIgnore]
-    private WeakReference<Scene> _scene;
+    private Scene? _scene;
 
     // Everything tying this object to a prefab, or null for the ordinary case. One reference rather
     // than a copy of each value on every GameObject in the scene.
@@ -161,8 +161,8 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     public Scene? Scene
     {
-        get => _scene != null && _scene.TryGetTarget(out Scene? scene) ? scene : null;
-        internal set => _scene = new(value);
+        get => _scene;
+        internal set => _scene = value;
     }
 
     /// <summary>

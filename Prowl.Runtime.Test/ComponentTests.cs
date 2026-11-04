@@ -325,6 +325,26 @@ public class ComponentTests : RuntimeTestBase
     }
 
     [Fact]
+    public void GameObject_KeepsItsScene_WhenNothingElseHoldsIt()
+    {
+        GameObject go = AddedToUnheldScene();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Assert.True(go.Scene.IsValid());
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static GameObject AddedToUnheldScene()
+    {
+        GameObject go = new();
+        new Scene().Add(go);
+        return go;
+    }
+
+    [Fact]
     public void GetComponents_ByBaseType_IncludesDerived()
     {
         GameObject go = CreateGameObject();
