@@ -19,13 +19,17 @@ internal class NullInputHandler : IInputHandler
     public Int2 PrevMousePosition => Int2.Zero;
 
     public event Action<KeyCode, bool> OnKeyEvent { add { } remove { } }
+    public event Action<KeyCode, bool> OnPhysicalKeyEvent { add { } remove { } }
     public event Action<MouseButton, float, float, bool, bool> OnMouseEvent { add { } remove { } }
 
     public char? GetPressedChar() => null;
     public string InputString => string.Empty;
-    public bool GetKey(KeyCode key) => false;
-    public bool GetKeyDown(KeyCode key) => false;
-    public bool GetKeyUp(KeyCode key) => false;
+    public bool GetKey(KeyCode key, bool physical = false) => false;
+    public bool GetKeyDown(KeyCode key, bool physical = false) => false;
+    public bool GetKeyUp(KeyCode key, bool physical = false) => false;
+
+    public int GetScancode(KeyCode key) => -1;
+    public KeyCode GetPhysicalKey(int scancode) => KeyCode.Unknown;
     public bool GetMouseButton(int button) => false;
     public bool GetMouseButtonDown(int button) => false;
     public bool GetMouseButtonUp(int button) => false;

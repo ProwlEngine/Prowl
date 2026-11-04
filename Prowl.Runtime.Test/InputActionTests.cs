@@ -14,17 +14,34 @@ public class InputActionTests
     private sealed class HeldKeys : NullInputHandler, IInputHandler
     {
         public readonly HashSet<KeyCode> Held = [];
-        bool IInputHandler.GetKey(KeyCode key) => Held.Contains(key);
+        public readonly HashSet<KeyCode> PhysicalHeld = [];
+        bool IInputHandler.GetKey(KeyCode key, bool physical) => physical ? PhysicalHeld.Contains(key) : Held.Contains(key);
+        
     }
 
     private sealed class PressedThisFrame : NullInputHandler, IInputHandler
     {
         public KeyCode? Key;
+        public KeyCode? PhysicalKey;
         public int? MouseButton;
         public bool HeldKey;
-        bool IInputHandler.GetKeyDown(KeyCode key) => key == Key;
+        public readonly HashSet<KeyCode> Held = [];
+        public readonly HashSet<KeyCode> PhysicalHeld = [];
+        bool IInputHandler.GetKey(KeyCode key, bool physical) => physical ? PhysicalHeld.Contains(key) : Held.Contains(key);
+        bool IInputHandler.GetKeyDown(KeyCode key, bool physical) => physical ? key == PhysicalKey : key == Key;
         bool IInputHandler.GetMouseButtonDown(int button) => button == MouseButton;
         bool IInputHandler.IsAnyKeyDown => HeldKey;
+    }
+
+    private sealed class PhysicalEventDispatcher : NullInputHandler, IInputHandler
+    {
+        public event Action<KeyCode, bool>? PhysicalKeyEvent;
+        event Action<KeyCode, bool> IInputHandler.OnPhysicalKeyEvent
+        {
+            add => PhysicalKeyEvent += value;
+            remove => PhysicalKeyEvent -= value;
+        }
+        public void Fire(KeyCode key, bool down) => PhysicalKeyEvent?.Invoke(key, down);
     }
 
     private static void WithInput(IInputHandler handler, Action test)
@@ -372,6 +389,127 @@ public class InputActionTests
             Input.UpdateActions(1f);
 
             Assert.Equal((0, 0.3f, 0.3f), input.Calls[^1]);
+        });
+    }
+
+        [Fact]
+    public void PhysicalKey_BindsAndActuatesAction()
+    {
+        var input = new HeldKeys();
+        var action = new InputAction("MoveForward");
+        action.AddBinding(KeyCode.W, physical: true);
+        action.Enable();
+
+        action.UpdateState(input, 0f);
+        Assert.False(action.IsPressed());
+
+        input.PhysicalHeld.Add(KeyCode.W);
+        action.UpdateState(input, 0.016f);
+        Assert.True(action.IsPressed());
+        Assert.Equal(1.0f, action.ReadValue<float>());
+
+        input.PhysicalHeld.Remove(KeyCode.W);
+        action.UpdateState(input, 0.032f);
+        Assert.False(action.IsPressed());
+    }
+
+    [Fact]
+    public void PhysicalKey_SurvivesSaveAndLoad()
+    {
+        var map = new InputActionMap("Player");
+        InputAction jump = map.AddAction("Jump");
+        jump.AddBinding(KeyCode.Space, physical: true);
+
+        EchoObject saved = EchoObject.NewCompound();
+        map.Serialize(ref saved, new SerializationContext());
+        var loaded = new InputActionMap("Loaded");
+        loaded.Deserialize(saved, new SerializationContext());
+
+        var loadedAction = loaded.GetAction("Jump");
+        Assert.NotNull(loadedAction);
+        Assert.Single(loadedAction.Bindings);
+        Assert.Equal(InputBindingType.Key, loadedAction.Bindings[0].BindingType);
+        Assert.True(loadedAction.Bindings[0].UsePhysicalKey);
+        Assert.Equal(KeyCode.Space, loadedAction.Bindings[0].Key);
+    }
+
+    [Fact]
+    public void PhysicalKey_DirectQuery()
+    {
+        var input = new HeldKeys();
+        WithInput(input, () =>
+        {
+            input.PhysicalHeld.Add(KeyCode.ControlLeft);
+            input.PhysicalHeld.Add(KeyCode.S);
+
+            Assert.True(Input.GetKey(KeyCode.ControlLeft, physical: true));
+            Assert.True(Input.GetKey(KeyCode.S, physical: true));
+            Assert.False(Input.GetKey(KeyCode.A, physical: true));
+
+            // Default physical = false
+            Assert.False(Input.GetKey(KeyCode.ControlLeft));
+            Assert.False(Input.GetKey(KeyCode.S));
+        });
+    }
+
+    [Fact]
+    public void PhysicalKey_KeyCombo()
+    {
+        var input = new PressedThisFrame { Key = KeyCode.S, PhysicalKey = KeyCode.S };
+        input.PhysicalHeld.Add(KeyCode.ControlLeft);
+        WithInput(input, () =>
+        {
+            Assert.True(Input.GetKeyCombo(KeyCode.ControlLeft, KeyCode.S, physical: true));
+            Assert.False(Input.GetKeyCombo(KeyCode.ControlLeft, KeyCode.S, physical: false));
+        });
+    }
+
+    [Fact]
+    public void PhysicalKeyEvent_FiredByHandler()
+    {
+        var dispatcher = new PhysicalEventDispatcher();
+        WithInput(dispatcher, () =>
+        {
+            KeyCode receivedKey = KeyCode.Unknown;
+            bool receivedDown = false;
+            int count = 0;
+
+            Action<KeyCode, bool> handler = (k, down) =>
+            {
+                receivedKey = k;
+                receivedDown = down;
+                count++;
+            };
+
+            Input.OnPhysicalKeyEvent += handler;
+            try
+            {
+                dispatcher.Fire(KeyCode.Space, true);
+                Assert.Equal(1, count);
+                Assert.Equal(KeyCode.Space, receivedKey);
+                Assert.True(receivedDown);
+
+                dispatcher.Fire(KeyCode.Space, false);
+                Assert.Equal(2, count);
+                Assert.Equal(KeyCode.Space, receivedKey);
+                Assert.False(receivedDown);
+            }
+            finally
+            {
+                Input.OnPhysicalKeyEvent -= handler;
+            }
+        });
+    }
+
+    [Fact]
+    public void PhysicalKey_PressedThisFrame()
+    {
+        var input = new PressedThisFrame { PhysicalKey = KeyCode.Space };
+        WithInput(input, () =>
+        {
+            Assert.True(Input.GetKeyDown(KeyCode.Space, physical: true));
+            Assert.False(Input.GetKeyDown(KeyCode.Space, physical: false));
+            Assert.False(Input.GetKeyDown(KeyCode.Enter, physical: true));
         });
     }
 }

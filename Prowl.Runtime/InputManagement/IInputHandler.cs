@@ -21,6 +21,7 @@ public interface IInputHandler
     Int2 PrevMousePosition { get; }
 
     event Action<KeyCode, bool> OnKeyEvent;
+    event Action<KeyCode, bool> OnPhysicalKeyEvent;
     event Action<MouseButton, float, float, bool, bool> OnMouseEvent;
 
     // Keyboard methods
@@ -29,9 +30,12 @@ public interface IInputHandler
     /// <summary>The characters typed this frame, read non-destructively (any number of consumers can read
     /// it). Cleared at the frame boundary. Prefer this over <see cref="GetPressedChar"/> for text input.</summary>
     string InputString { get; }
-    bool GetKey(KeyCode key);
-    bool GetKeyDown(KeyCode key);
-    bool GetKeyUp(KeyCode key);
+    bool GetKey(KeyCode key, bool physical = false);
+    bool GetKeyDown(KeyCode key, bool physical = false);
+    bool GetKeyUp(KeyCode key, bool physical = false);
+
+    int GetScancode(KeyCode key) => -1;
+    KeyCode GetPhysicalKey(int scancode) => KeyCode.Unknown;
 
     /// <summary>
     /// Maps a window-space cursor position into the space this handler reports mouse positions in.

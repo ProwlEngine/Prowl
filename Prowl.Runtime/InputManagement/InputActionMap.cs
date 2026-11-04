@@ -247,6 +247,7 @@ public class InputActionMap : Asset, ISerializable
         SerializeInteraction(tag, binding);
 
         if (binding.Key.HasValue) tag["key"] = new EchoObject((int)binding.Key.Value);
+        if (binding.UsePhysicalKey) tag["physical"] = new EchoObject(true);
         if (binding.MouseButton.HasValue) tag["mouseButton"] = new EchoObject((int)binding.MouseButton.Value);
         if (binding.GamepadButton.HasValue) tag["gamepadButton"] = new EchoObject((int)binding.GamepadButton.Value);
         if (binding.AxisIndex.HasValue) tag["axisIndex"] = new EchoObject(binding.AxisIndex.Value);
@@ -274,6 +275,7 @@ public class InputActionMap : Asset, ISerializable
         DeserializeInteraction(tag, binding);
 
         if (tag.TryGet("key", out EchoObject? k)) binding.Key = (KeyCode)k.IntValue;
+        if (tag.TryGet("physical", out EchoObject? phys)) binding.UsePhysicalKey = phys.BoolValue;
         if (tag.TryGet("mouseButton", out EchoObject? mb)) binding.MouseButton = (MouseButton)mb.IntValue;
         if (tag.TryGet("gamepadButton", out EchoObject? gb)) binding.GamepadButton = (GamepadButton)gb.IntValue;
         if (tag.TryGet("axisIndex", out EchoObject? ai)) binding.AxisIndex = ai.IntValue;

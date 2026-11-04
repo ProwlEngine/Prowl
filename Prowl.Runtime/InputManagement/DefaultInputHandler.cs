@@ -81,6 +81,11 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
     private Dictionary<KeyCode, bool> wasKeyPressed = [];
     private Dictionary<KeyCode, bool> isKeyPressed = [];
+    private Dictionary<KeyCode, bool> wasPhysicalKeyPressed = [];
+    private Dictionary<KeyCode, bool> isPhysicalKeyPressed = [];
+    private static readonly Dictionary<KeyCode, int> s_keyToScancode = [];
+    private static readonly Dictionary<int, KeyCode> s_scancodeToKey = [];
+    private static bool s_scancodeMapInitialized = false;
     private Dictionary<MouseButton, bool> wasMousePressed = [];
     private Dictionary<MouseButton, bool> isMousePressed = [];
 
@@ -96,15 +101,18 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     private string _inputString = string.Empty;
 
     public event Action<KeyCode, bool> OnKeyEvent;
+    public event Action<KeyCode, bool> OnPhysicalKeyEvent;
     public event Action<MouseButton, float, float, bool, bool> OnMouseEvent;
 
-    public bool IsAnyKeyDown => isKeyPressed.ContainsValue(true);
+    public bool IsAnyKeyDown => isKeyPressed.ContainsValue(true) || isPhysicalKeyPressed.ContainsValue(true);
 
     public DefaultInputHandler(IInputContext context)
     {
         Context = context;
         _prevMousePos = (Int2)(Float2)Mice[0].Position;
         _currentMousePos = (Int2)(Float2)Mice[0].Position;
+
+        InitializeScancodeMap();
 
         // initialize key states
         foreach (KeyCode key in s_keyCodes)
@@ -113,6 +121,8 @@ public class DefaultInputHandler : IInputHandler, IDisposable
             {
                 wasKeyPressed[key] = false;
                 isKeyPressed[key] = false;
+                wasPhysicalKeyPressed[key] = false;
+                isPhysicalKeyPressed[key] = false;
             }
         }
 
@@ -132,7 +142,11 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         }
 
         foreach (IKeyboard keyboard in Keyboards)
+        {
             keyboard.KeyChar += (keyboard, c) => { pressedChars.Enqueue(c); _inputString += c; };
+            keyboard.KeyDown += (k, key, scancode) => OnRawKeyEvent((KeyCode)key, scancode);
+            keyboard.KeyUp += (k, key, scancode) => OnRawKeyEvent((KeyCode)key, scancode);
+        }
 
         UpdateKeyStates();
     }
@@ -194,18 +208,46 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         {
             if (key != KeyCode.Unknown)
             {
+
                 wasKeyPressed[key] = isKeyPressed[key];
                 isKeyPressed[key] = false;
+
+                wasPhysicalKeyPressed[key] = Down(isPhysicalKeyPressed, key);
+                isPhysicalKeyPressed[key] = false;
+
+                int scancode = GetScancode(key);
+
                 IReadOnlyList<IKeyboard> keyboards = Keyboards;
                 for (int k = 0; k < keyboards.Count; k++)
+                {
+                    bool keyFound = false;
                     if (keyboards[k].IsKeyPressed((Silk.NET.Input.Key)key))
                     {
                         isKeyPressed[key] = true;
-                        break;
+                        keyFound = true;
                     }
+
+                    if (keyboards[k].IsScancodePressed(scancode))
+                    {
+                        isPhysicalKeyPressed[key] = true;
+                        keyFound = true;
+                    }
+                    // Fallback to key if scancode is invalid
+                    else if (scancode <= 0 && keyFound)
+                    {
+                        isPhysicalKeyPressed[key] = true;
+                        keyFound = true;
+                    }
+
+                    if (keyFound)
+                        break;
+                }
 
                 if (wasKeyPressed[key] != isKeyPressed[key])
                     OnKeyEvent?.Invoke(key, isKeyPressed[key]);
+
+                if (wasPhysicalKeyPressed[key] != isPhysicalKeyPressed[key])
+                    OnPhysicalKeyEvent?.Invoke(key, isPhysicalKeyPressed[key]);
             }
         }
 
@@ -270,11 +312,69 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     private static bool Down(Dictionary<KeyCode, bool> map, KeyCode key) => map.TryGetValue(key, out bool v) && v;
     private static bool Down(Dictionary<MouseButton, bool> map, MouseButton btn) => map.TryGetValue(btn, out bool v) && v;
 
-    public bool GetKey(KeyCode key) => Down(isKeyPressed, key);
+    public bool GetKey(KeyCode key, bool physical = false) => physical ? Down(isPhysicalKeyPressed, key) : Down(isKeyPressed, key);
 
-    public bool GetKeyDown(KeyCode key) => Down(isKeyPressed, key) && !Down(wasKeyPressed, key);
+    public bool GetKeyDown(KeyCode key, bool physical = false) => physical
+        ? Down(isPhysicalKeyPressed, key) && !Down(wasPhysicalKeyPressed, key)
+        : Down(isKeyPressed, key) && !Down(wasKeyPressed, key);
 
-    public bool GetKeyUp(KeyCode key) => !Down(isKeyPressed, key) && Down(wasKeyPressed, key);
+    public bool GetKeyUp(KeyCode key, bool physical = false) => physical
+        ? !Down(isPhysicalKeyPressed, key) && Down(wasPhysicalKeyPressed, key)
+        : !Down(isKeyPressed, key) && Down(wasKeyPressed, key);
+
+    /// <summary>
+    /// Gets the physical key code for a given scancode.
+    /// </summary>
+    /// <param name="key">The key to get the scancode for.</param>
+    /// <returns>The scancode for the given key.</returns>
+    public int GetScancode(KeyCode key)
+    {
+        return s_keyToScancode.TryGetValue(key, out int scancode) ? scancode : -1;
+    }
+
+    /// <summary>
+    /// Gets the physical key code for a given scancode.
+    /// </summary>
+    /// <param name="scancode">The scancode to get the physical key for.</param>
+    /// <returns>The physical key for the given scancode.</returns>
+    public KeyCode GetPhysicalKey(int scancode)
+    {
+        return s_scancodeToKey.TryGetValue(scancode, out KeyCode key) ? key : KeyCode.Unknown;
+    }
+
+    private static void InitializeScancodeMap()
+    {
+        if (s_scancodeMapInitialized) return;
+        s_scancodeMapInitialized = true;
+
+        try
+        {
+            var glfw = Silk.NET.GLFW.Glfw.GetApi();
+            foreach (KeyCode key in s_keyCodes)
+            {
+                if (key == KeyCode.Unknown) continue;
+                int scancode = glfw.GetKeyScancode((int)key);
+                if (scancode > 0)
+                {
+                    s_keyToScancode[key] = scancode;
+                    s_scancodeToKey[scancode] = key;
+                }
+            }
+        }
+        catch
+        {
+            // Glfw uninitialized or unavailable (e.g. headless/test environment)
+        }
+    }
+
+    private void OnRawKeyEvent(KeyCode key, int scancode)
+    {
+        if (scancode > 0 && !s_scancodeToKey.ContainsKey(scancode) && Enum.IsDefined(typeof(KeyCode), key))
+        {
+            s_scancodeToKey[scancode] = key;
+            s_keyToScancode[key] = scancode;
+        }
+    }
 
     public bool GetMouseButton(int button) => Down(isMousePressed, (MouseButton)button);
 

@@ -83,6 +83,11 @@ public class InputBinding : IInputInteractionSettings
     public KeyCode? Key { get; set; }
 
     /// <summary>
+    /// The specific physical key (scancode) if this is a physical keyboard binding.
+    /// </summary>
+    public bool UsePhysicalKey { get; set; } = false;
+
+    /// <summary>
     /// The specific mouse button if this is a mouse button binding.
     /// </summary>
     public MouseButton? MouseButton { get; set; }
@@ -165,6 +170,7 @@ public class InputBinding : IInputInteractionSettings
     public void ClearControl()
     {
         Key = null;
+        UsePhysicalKey = false;
         MouseButton = null;
         GamepadButton = null;
         AxisIndex = null;
@@ -177,14 +183,21 @@ public class InputBinding : IInputInteractionSettings
     /// <summary>
     /// Creates a keyboard key binding.
     /// </summary>
-    public static InputBinding CreateKeyBinding(KeyCode key, InputInteractionType interaction = InputInteractionType.Default)
+
+    public static InputBinding CreateKeyBinding(KeyCode key, bool physical = false, InputInteractionType interaction = InputInteractionType.Default)
     {
         return new InputBinding
         {
             BindingType = InputBindingType.Key,
             Key = key,
+            UsePhysicalKey = physical,
             Interaction = interaction
         };
+    }
+
+    public static InputBinding CreateKeyBinding(KeyCode key, InputInteractionType interaction)
+    {
+        return CreateKeyBinding(key, false, interaction);
     }
 
     /// <summary>
@@ -296,7 +309,7 @@ public class InputBinding : IInputInteractionSettings
     /// <summary>Whether this button style binding is held. Triggers and XR axes count once past <see cref="PressPoint"/>.</summary>
     internal bool IsPressed(IInputHandler inputHandler) => BindingType switch
     {
-        InputBindingType.Key => Key.HasValue && inputHandler.GetKey(Key.Value),
+        InputBindingType.Key => Key.HasValue && inputHandler.GetKey(Key.Value, UsePhysicalKey),
         InputBindingType.AnyKey => inputHandler.IsAnyKeyDown,
         InputBindingType.MouseButton => MouseButton.HasValue && inputHandler.GetMouseButton((int)MouseButton.Value),
         InputBindingType.GamepadButton => GamepadButton.HasValue && AnyGamepad(inputHandler, pad => inputHandler.GetGamepadButton(pad, GamepadButton.Value)),

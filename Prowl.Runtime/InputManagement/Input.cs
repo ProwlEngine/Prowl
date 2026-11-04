@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -44,6 +44,12 @@ public static class Input
         remove => Current.OnKeyEvent -= value;
     }
 
+    public static event Action<KeyCode, bool> OnPhysicalKeyEvent
+    {
+        add => Current.OnPhysicalKeyEvent += value;
+        remove => Current.OnPhysicalKeyEvent -= value;
+    }
+
     public static event Action<MouseButton, float, float, bool, bool> OnMouseEvent
     {
         add => Current.OnMouseEvent += value;
@@ -72,9 +78,12 @@ public static class Input
     /// <summary>The characters typed this frame, read non-destructively. Prefer this over
     /// <see cref="GetPressedChar"/> for text input - multiple consumers can read it in the same frame.</summary>
     public static string InputString => Current.InputString;
-    public static bool GetKey(KeyCode key) => Current.GetKey(key);
-    public static bool GetKeyDown(KeyCode key) => Current.GetKeyDown(key);
-    public static bool GetKeyUp(KeyCode key) => Current.GetKeyUp(key);
+    public static bool GetKey(KeyCode key, bool physical = false) => Current.GetKey(key, physical);
+    public static bool GetKeyDown(KeyCode key, bool physical = false) => Current.GetKeyDown(key, physical);
+    public static bool GetKeyUp(KeyCode key, bool physical = false) => Current.GetKeyUp(key, physical);
+
+    public static int GetScancode(KeyCode key) => Current.GetScancode(key);
+    public static KeyCode GetPhysicalKey(int scancode) => Current.GetPhysicalKey(scancode);
 
     // Mouse Buttons
     public static bool GetMouseButton(int button) => Current.GetMouseButton(button);
@@ -377,9 +386,10 @@ public static class Input
     /// <summary>
     /// Checks if a specific key combination is pressed (e.g., Ctrl+S).
     /// </summary>
-    public static bool GetKeyCombo(KeyCode modifier, KeyCode key)
+
+    public static bool GetKeyCombo(KeyCode modifier, KeyCode key, bool physical = false)
     {
-        return GetKey(modifier) && GetKeyDown(key);
+        return GetKey(modifier, physical) && GetKeyDown(key, physical);
     }
 
     /// <summary>

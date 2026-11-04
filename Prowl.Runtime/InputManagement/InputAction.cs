@@ -142,9 +142,14 @@ public class InputAction
     /// <summary>
     /// Adds a keyboard key binding.
     /// </summary>
-    public InputAction AddBinding(KeyCode key, InputInteractionType interaction = InputInteractionType.Default)
+    public InputAction AddBinding(KeyCode key, bool physical = false, InputInteractionType interaction = InputInteractionType.Default)
     {
-        return AddBinding(InputBinding.CreateKeyBinding(key, interaction));
+        return AddBinding(InputBinding.CreateKeyBinding(key, physical, interaction));
+    }
+
+    public InputAction AddBinding(KeyCode key, InputInteractionType interaction)
+    {
+        return AddBinding(key, false, interaction);
     }
 
     /// <summary>

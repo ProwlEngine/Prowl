@@ -23,17 +23,29 @@ public class GameViewInputHandler : IInputHandler
     // Static so a shortcut that enters play is suppressed before this wrapper exists. Hidden from everyone,
     // editor included, until released: the editor only cares about the next press, which needs a release first.
     private static readonly HashSet<KeyCode> s_suppressedKeys = [];
+    private static readonly HashSet<KeyCode> s_suppressedPhysicalKeys = [];
     private static readonly KeyCode[] s_keyCodes = [.. Enum.GetValues<KeyCode>().Distinct()];
 
-    internal static void SuppressKeyUntilRelease(KeyCode key) => s_suppressedKeys.Add(key);
+    internal static void SuppressKeyUntilRelease(KeyCode key, bool physical = false)
+    {
+        if (physical) s_suppressedPhysicalKeys.Add(key);
+        else s_suppressedKeys.Add(key);
+    }
 
     // On leaving play, so nothing carries over into the next session.
-    internal static void ClearSuppressedKeys() => s_suppressedKeys.Clear();
+    internal static void ClearSuppressedKeys()
+    {
+        s_suppressedKeys.Clear();
+        s_suppressedPhysicalKeys.Clear();
+    }
 
     // Called each frame from BeginGui, after the window samples input. Keeps the release edge hidden too,
     // since the next Update reads the same cached state.
     internal void UpdateSuppressedKeys()
-        => s_suppressedKeys.RemoveWhere(key => !_real.GetKey(key) && !_real.GetKeyUp(key));
+    {
+        s_suppressedKeys.RemoveWhere(key => !_real.GetKey(key, false) && !_real.GetKeyUp(key, false));
+        s_suppressedPhysicalKeys.RemoveWhere(key => !_real.GetKey(key, true) && !_real.GetKeyUp(key, true));
+    }
 
     /// <summary>
     /// Set to true each frame by GameViewPanel when it's hovered.
@@ -115,16 +127,33 @@ public class GameViewInputHandler : IInputHandler
 
     // Keyboard filtered only during gameplay execution outside game view. Simulated input reaches gameplay either way.
     public bool IsAnyKeyDown => (!ShouldFilter && HasPhysicalKey) || SimulatedInput.AnyKey;
-    private bool HasPhysicalKey => s_suppressedKeys.Count > 0
-        ? s_keyCodes.Any(key => !s_suppressedKeys.Contains(key) && _real.GetKey(key))
-        : _real.IsAnyKeyDown;
+    private bool HasPhysicalKey => (s_suppressedKeys.Count > 0
+        ? s_keyCodes.Any(key => !s_suppressedKeys.Contains(key) && _real.GetKey(key, false))
+        : _real.IsAnyKeyDown) || (s_suppressedPhysicalKeys.Count > 0
+        ? s_keyCodes.Any(key => !s_suppressedPhysicalKeys.Contains(key) && _real.GetKey(key, true))
+        : false);
     // Typed characters don't say which key made them, so drop them all while a shortcut key is held. Otherwise a
     // shortcut rebound to a key that types (Space, a letter) still types into gameplay UI, key repeats included.
-    public char? GetPressedChar() => ShouldFilter || s_suppressedKeys.Count > 0 ? null : _real.GetPressedChar();
-    public string InputString => ShouldFilter || s_suppressedKeys.Count > 0 ? string.Empty : _real.InputString;
-    public bool GetKey(KeyCode key) => (!ShouldFilter && !s_suppressedKeys.Contains(key) && _real.GetKey(key)) || SimulatedInput.GetKey(key);
-    public bool GetKeyDown(KeyCode key) => (!ShouldFilter && !s_suppressedKeys.Contains(key) && _real.GetKeyDown(key)) || SimulatedInput.GetKeyDown(key);
-    public bool GetKeyUp(KeyCode key) => (!ShouldFilter && !s_suppressedKeys.Contains(key) && _real.GetKeyUp(key)) || SimulatedInput.GetKeyUp(key);
+    public char? GetPressedChar() => ShouldFilter || s_suppressedKeys.Count > 0 || s_suppressedPhysicalKeys.Count > 0 ? null : _real.GetPressedChar();
+    public string InputString => ShouldFilter || s_suppressedKeys.Count > 0 || s_suppressedPhysicalKeys.Count > 0 ? string.Empty : _real.InputString;
+    public bool GetKey(KeyCode key, bool physical = false)
+    {
+        var suppressed = physical ? s_suppressedPhysicalKeys : s_suppressedKeys;
+        return (!ShouldFilter && !suppressed.Contains(key) && _real.GetKey(key, physical)) || SimulatedInput.GetKey(key, physical);
+    }
+    public bool GetKeyDown(KeyCode key, bool physical = false)
+    {
+        var suppressed = physical ? s_suppressedPhysicalKeys : s_suppressedKeys;
+        return (!ShouldFilter && !suppressed.Contains(key) && _real.GetKeyDown(key, physical)) || SimulatedInput.GetKeyDown(key, physical);
+    }
+    public bool GetKeyUp(KeyCode key, bool physical = false)
+    {
+        var suppressed = physical ? s_suppressedPhysicalKeys : s_suppressedKeys;
+        return (!ShouldFilter && !suppressed.Contains(key) && _real.GetKeyUp(key, physical)) || SimulatedInput.GetKeyUp(key, physical);
+    }
+
+    public int GetScancode(KeyCode key) => _real.GetScancode(key);
+    public KeyCode GetPhysicalKey(int scancode) => _real.GetPhysicalKey(scancode);
 
     public Int2 MapWindowPosition(Int2 windowPos) => ToViewport(windowPos);
 
@@ -171,6 +200,11 @@ public class GameViewInputHandler : IInputHandler
         add => _real.OnKeyEvent += value;
         remove => _real.OnKeyEvent -= value;
     }
+    public event Action<KeyCode, bool> OnPhysicalKeyEvent
+    {
+        add => _real.OnPhysicalKeyEvent += value;
+        remove => _real.OnPhysicalKeyEvent -= value;
+    }
     public event Action<MouseButton, float, float, bool, bool> OnMouseEvent
     {
         add => _real.OnMouseEvent += value;
@@ -205,6 +239,7 @@ public static class SimulatedInput
     }
 
     private static readonly Dictionary<KeyCode, Hold> s_keys = [];
+    private static readonly Dictionary<KeyCode, Hold> s_physicalKeys = [];
     private static readonly Dictionary<int, Hold> s_buttons = [];
     private static readonly Stopwatch s_clock = Stopwatch.StartNew();
     private static readonly object s_lock = new();
@@ -213,7 +248,14 @@ public static class SimulatedInput
     private static Int2 s_pointer;
     private static TimeSpan s_pointerUntil;
 
-    public static void Press(KeyCode key, double seconds) { lock (s_lock) s_keys[key] = new Hold { ReleaseAt = s_clock.Elapsed + TimeSpan.FromSeconds(seconds) }; }
+    public static void Press(KeyCode key, double seconds, bool physical = false)
+    {
+        lock (s_lock)
+        {
+            var target = physical ? s_physicalKeys : s_keys;
+            target[key] = new Hold { ReleaseAt = s_clock.Elapsed + TimeSpan.FromSeconds(seconds) };
+        }
+    }
 
     /// <summary>
     /// Presses a mouse button. With a position, in game render pixels, the pointer moves there first and the button
@@ -259,6 +301,7 @@ public static class SimulatedInput
         lock (s_lock)
         {
             s_keys.Clear();
+            s_physicalKeys.Clear();
             s_buttons.Clear();
             s_lookUntil = TimeSpan.Zero;
             s_pointerUntil = TimeSpan.Zero;
@@ -268,7 +311,7 @@ public static class SimulatedInput
     /// <summary> Whether anything is still held or moving. </summary>
     public static bool Busy
     {
-        get { lock (s_lock) return s_keys.Count > 0 || s_buttons.Count > 0 || s_clock.Elapsed < s_lookUntil; }
+        get { lock (s_lock) return s_keys.Count > 0 || s_physicalKeys.Count > 0 || s_buttons.Count > 0 || s_clock.Elapsed < s_lookUntil; }
     }
 
     /// <summary> Releases holds whose time is up and forgets finished ones. Called once per editor frame. </summary>
@@ -283,6 +326,7 @@ public static class SimulatedInput
         lock (s_lock)
         {
             Tick(s_keys);
+            Tick(s_physicalKeys);
             Tick(s_buttons);
         }
     }
@@ -308,13 +352,13 @@ public static class SimulatedInput
         get
         {
             if (!Gameplay) return false;
-            lock (s_lock) return s_keys.Values.Any(h => !h.Released);
+            lock (s_lock) return s_keys.Values.Any(h => !h.Released) || s_physicalKeys.Values.Any(h => !h.Released);
         }
     }
 
-    public static bool GetKey(KeyCode key) => Held(s_keys, key);
-    public static bool GetKeyDown(KeyCode key) => Down(s_keys, key);
-    public static bool GetKeyUp(KeyCode key) => Up(s_keys, key);
+    public static bool GetKey(KeyCode key, bool physical = false) => Held(physical ? s_physicalKeys : s_keys, key);
+    public static bool GetKeyDown(KeyCode key, bool physical = false) => Down(physical ? s_physicalKeys : s_keys, key);
+    public static bool GetKeyUp(KeyCode key, bool physical = false) => Up(physical ? s_physicalKeys : s_keys, key);
     public static bool GetMouseButton(int button) => Held(s_buttons, button);
     public static bool GetMouseButtonDown(int button) => Down(s_buttons, button);
     public static bool GetMouseButtonUp(int button) => Up(s_buttons, button);

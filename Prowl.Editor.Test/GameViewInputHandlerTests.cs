@@ -20,9 +20,12 @@ public class GameViewInputHandlerTests
         public readonly HashSet<KeyCode> Pressed = [];
         public readonly HashSet<KeyCode> Released = [];
         public string Typed = string.Empty;
-        bool IInputHandler.GetKey(KeyCode key) => Held.Contains(key);
-        bool IInputHandler.GetKeyDown(KeyCode key) => Pressed.Contains(key);
-        bool IInputHandler.GetKeyUp(KeyCode key) => Released.Contains(key);
+        public readonly HashSet<KeyCode> PhysicalHeld = [];
+        public readonly HashSet<KeyCode> PhysicalPressed = [];
+        public readonly HashSet<KeyCode> PhysicalReleased = [];
+        bool IInputHandler.GetKey(KeyCode key, bool physical) => (physical ? PhysicalHeld : Held).Contains(key);
+        bool IInputHandler.GetKeyDown(KeyCode key, bool physical) => (physical ? PhysicalPressed : Pressed).Contains(key);
+        bool IInputHandler.GetKeyUp(KeyCode key, bool physical) => (physical ? PhysicalReleased : Released).Contains(key);
         bool IInputHandler.IsAnyKeyDown => Held.Count > 0;
         string IInputHandler.InputString => Typed;
         char? IInputHandler.GetPressedChar() => Typed.Length > 0 ? Typed[0] : null;
@@ -116,5 +119,70 @@ public class GameViewInputHandlerTests
 
         // Still held, but a new session must not inherit the old suppression.
         Assert.True(new GameViewInputHandler(real).GetKey(KeyCode.F5));
+    }
+
+    [Theory]
+    [InlineData(KeyCode.F5)]
+    [InlineData(KeyCode.W)]
+    [InlineData(KeyCode.Space)]
+    public void PhysicalShortcut_IsHiddenUntilRelease(KeyCode key)
+    {
+        bool previousFocus = GameViewInputHandler.IsGameViewFocused;
+        var real = new KeyboardInput();
+        var map = new InputActionMap("Physical Shortcut regression");
+        InputAction action = map.AddAction("Jump").AddBinding(key, physical: true);
+        map.Enable();
+
+        real.PhysicalHeld.Add(key);
+        real.PhysicalPressed.Add(key);
+        GameViewInputHandler.SuppressKeyUntilRelease(key, physical: true);
+        var game = new GameViewInputHandler(real);
+        Input.PushHandler(game);
+        Input.RegisterActionMap(map);
+        try
+        {
+            GameViewInputHandler.IsGameViewFocused = true;
+
+            Input.UpdateActions(0.016f);
+            Assert.False(action.IsPressed());
+            Assert.False(game.GetKey(key, physical: true));
+            Assert.False(game.GetKeyDown(key, physical: true));
+
+            // Other keys unaffected
+            real.PhysicalHeld.Add(KeyCode.A);
+            Assert.True(game.GetKey(KeyCode.A, physical: true));
+            real.PhysicalHeld.Remove(KeyCode.A);
+
+            // Holding keeps it hidden
+            real.PhysicalPressed.Clear();
+            game.UpdateSuppressedKeys();
+            Input.UpdateActions(0.016f);
+            Assert.False(action.IsPressed());
+
+            // Release edge hidden
+            real.PhysicalHeld.Clear();
+            real.PhysicalReleased.Add(key);
+            game.UpdateSuppressedKeys();
+            Assert.False(game.GetKeyUp(key, physical: true));
+
+            // Fresh press works
+            real.PhysicalReleased.Clear();
+            game.UpdateSuppressedKeys();
+            real.PhysicalHeld.Add(key);
+            real.PhysicalPressed.Add(key);
+            Input.UpdateActions(0.016f);
+            Assert.True(action.IsPressed());
+            Assert.True(game.GetKeyDown(key, physical: true));
+        }
+        finally
+        {
+            Input.PopHandler();
+            Input.UnregisterActionMap(map);
+            real.PhysicalHeld.Clear();
+            real.PhysicalPressed.Clear();
+            real.PhysicalReleased.Clear();
+            game.UpdateSuppressedKeys();
+            GameViewInputHandler.IsGameViewFocused = previousFocus;
+        }
     }
 }
