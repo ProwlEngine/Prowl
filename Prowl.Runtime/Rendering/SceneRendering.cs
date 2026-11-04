@@ -48,8 +48,11 @@ public sealed class SceneRendering : IDisposable
     private readonly HashSet<IRenderSync> _parked = [];
 
     // Parked members by the mesh they draw, so a mesh edit wakes them, and meshes edited since the last sync
-    private readonly Dictionary<Mesh, List<IRenderSync>> _meshUsers = [];
+    private readonly Dictionary<Mesh, HashSet<IRenderSync>> _meshUsers = [];
     private readonly Dictionary<IRenderSync, Mesh> _parkedMeshes = [];
+
+    // Emptied user sets kept for the next mesh to park, as a mover alone on its mesh empties and refills one every frame
+    private readonly Stack<HashSet<IRenderSync>> _spareUserSets = [];
     private readonly System.Collections.Concurrent.ConcurrentQueue<Mesh> _changedMeshes = new();
     private readonly Action<Mesh> _onMeshChanged;
     private int _lightingVersion = -1;
@@ -142,8 +145,8 @@ public sealed class SceneRendering : IDisposable
     {
         _parked.Add(member);
         if (member.SyncedMesh is not { } mesh) return;
-        if (!_meshUsers.TryGetValue(mesh, out List<IRenderSync>? users))
-            _meshUsers[mesh] = users = [];
+        if (!_meshUsers.TryGetValue(mesh, out HashSet<IRenderSync>? users))
+            _meshUsers[mesh] = users = _spareUserSets.Count > 0 ? _spareUserSets.Pop() : [];
         users.Add(member);
         _parkedMeshes[member] = mesh;
     }
@@ -151,10 +154,14 @@ public sealed class SceneRendering : IDisposable
     private bool Unpark(IRenderSync member)
     {
         if (!_parked.Remove(member)) return false;
-        if (_parkedMeshes.Remove(member, out Mesh? mesh) && _meshUsers.TryGetValue(mesh, out List<IRenderSync>? users))
+        if (_parkedMeshes.Remove(member, out Mesh? mesh) && _meshUsers.TryGetValue(mesh, out HashSet<IRenderSync>? users))
         {
             users.Remove(member);
-            if (users.Count == 0) _meshUsers.Remove(mesh);
+            if (users.Count == 0)
+            {
+                _meshUsers.Remove(mesh);
+                _spareUserSets.Push(users);
+            }
         }
         return true;
     }
@@ -165,6 +172,7 @@ public sealed class SceneRendering : IDisposable
         _parked.Clear();
         _meshUsers.Clear();
         _parkedMeshes.Clear();
+        _spareUserSets.Clear();
     }
 
     // Wakes the members drawing a mesh edited since the last sync, and every member after a lightmap rebake or a quality change
@@ -178,8 +186,8 @@ public sealed class SceneRendering : IDisposable
         }
         while (_changedMeshes.TryDequeue(out Mesh? mesh))
         {
-            if (!_meshUsers.TryGetValue(mesh, out List<IRenderSync>? users)) continue;
-            foreach (IRenderSync member in users.ToArray())
+            if (!_meshUsers.TryGetValue(mesh, out HashSet<IRenderSync>? users)) continue;
+            foreach (IRenderSync member in (IRenderSync[])[.. users])
                 Refresh(member);
         }
     }
@@ -294,6 +302,7 @@ public sealed class SceneRendering : IDisposable
         _parked.Clear();
         _meshUsers.Clear();
         _parkedMeshes.Clear();
+        _spareUserSets.Clear();
         _directionals.Clear();
     }
 }
