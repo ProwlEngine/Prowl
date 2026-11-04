@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Sampler creation params.
 /// </summary>
-public struct SamplerDescription
+public record struct SamplerDescription
 {
     /// <summary>
     /// U address mode.
