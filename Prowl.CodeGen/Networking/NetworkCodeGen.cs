@@ -158,13 +158,14 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         return hash;
     }
 
+    private static readonly string[] s_networkingWords = ["Sync", "Rpc", "Change", "Broadcast", "Host", "Owner"];
+
     private static bool MayHaveNetworking(SyntaxTree tree) =>
         s_mayHaveNetworking.GetValue(tree, t =>
         {
             string text = t.GetText().ToString();
-            return new StrongBox<bool>(text.Contains("Sync", StringComparison.Ordinal) ||
-                                       text.Contains("Rpc", StringComparison.Ordinal)
-                                       || text.Contains("Change", StringComparison.Ordinal));
+            // The RPC attributes' own names cover a using static of Rpc.
+            return new StrongBox<bool>(s_networkingWords.Any(word => text.Contains(word, StringComparison.Ordinal)));
         }).Value!;
 
     // --- Helpers --------------------------------------------------------------------------------------

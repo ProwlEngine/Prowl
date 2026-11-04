@@ -160,6 +160,21 @@ public class SyncAndRpcTests
     }
 
     [Fact]
+    public void RpcsNamedThroughAGlobalUsingStaticAreNetworked()
+    {
+        Type bell = Scripts.Compile("global using static Prowl.Runtime.Networking.Rpc;",
+                "public class Bell : Prowl.Runtime.Component { [Broadcast] public void Ring() { } [Host] public void Ask() { } [Owner] public void Tell() { } }")
+            .GetType("Bell")!;
+        Scripts.WithComponent(bell, component =>
+        {
+            NetworkMembers members = NetworkMembers.Of(component);
+            Assert.Equal(RpcMode.Broadcast, members.Rpc(NetworkCodeGen.NetworkId("Ring()"))!.Mode);
+            Assert.Equal(RpcMode.Host, members.Rpc(NetworkCodeGen.NetworkId("Ask()"))!.Mode);
+            Assert.Equal(RpcMode.Owner, members.Rpc(NetworkCodeGen.NetworkId("Tell()"))!.Mode);
+        });
+    }
+
+    [Fact]
     public void RpcChannelsAreCarriedIntoTheDescriptors()
     {
         Assembly assembly = Scripts.Compile("""
