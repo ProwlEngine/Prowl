@@ -320,8 +320,29 @@ public class ComponentTests : RuntimeTestBase
         GameObject go = CreateGameObject();
         DerivedTestComponent derived = go.AddComponent<DerivedTestComponent>();
 
-        // Lookup by base type isn't an exact cache key, so this exercises the assignable fallback.
         Assert.Same(derived, go.GetComponent<BaseTestComponent>());
+    }
+
+    [Fact]
+    public void GetComponents_ByBaseType_IncludesDerived_AlongsideTheBase()
+    {
+        GameObject go = CreateGameObject();
+        DerivedTestComponent derived = go.AddComponent<DerivedTestComponent>();
+        BaseTestComponent plain = go.AddComponent<BaseTestComponent>();
+
+        Assert.Equal([derived, plain], go.GetComponents<BaseTestComponent>());
+    }
+
+    [Fact]
+    public void RemoveAll_ByBaseType_RemovesDerived()
+    {
+        GameObject go = CreateGameObject();
+        go.AddComponent<DerivedTestComponent>();
+        go.AddComponent<BaseTestComponent>();
+
+        go.RemoveAll<BaseTestComponent>();
+
+        Assert.Empty(go.GetComponents());
     }
 
     [Fact]
