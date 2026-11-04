@@ -126,6 +126,16 @@ public class MultiplayerPlayTests : EditorTestHarness
         Assert.Null(MultiplayerPlay.ParseInstanceLog(null));
     }
 
+    [Fact]
+    public void InstanceLogLinesKeepWindowsLineBreaksAndBackslashes()
+    {
+        const string message = "boom\r\n   at Game.Update()\r\n   at C:\\new\\rules.cs\\n\rend";
+        string line = MultiplayerPlay.FormatInstanceLog(LogSeverity.Error, message);
+        Assert.DoesNotContain('\r', line);
+        Assert.DoesNotContain('\n', line);
+        Assert.Equal((LogSeverity.Error, message), MultiplayerPlay.ParseInstanceLog(line));
+    }
+
     private static void Pump(Func<bool> condition, string what, ConcurrentQueue<string> output, Process instance)
     {
         Stopwatch watch = Stopwatch.StartNew();

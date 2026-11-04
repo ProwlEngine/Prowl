@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 
 using Prowl.Editor.Projects;
@@ -126,6 +127,28 @@ public static class MultiplayerPlay
         return start;
     }
 
+    /// <summary>A log message as one marked output line, for <see cref="ParseInstanceLog" /> to read back.</summary>
+    internal static string FormatInstanceLog(LogSeverity severity, string message) =>
+        $"{LogMarker}{(int)severity}|{message.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n")}";
+
+    private static string UnescapeInstanceLog(string text)
+    {
+        StringBuilder result = new(text.Length);
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] != '\\' || i + 1 == text.Length)
+            {
+                result.Append(text[i]);
+                continue;
+            }
+
+            char next = text[++i];
+            result.Append(next switch { 'n' => '\n', 'r' => '\r', _ => next });
+        }
+
+        return result.ToString();
+    }
+
     /// <summary>The severity and text of a log line an instance printed, or null for any other output.</summary>
     internal static (LogSeverity Severity, string Message)? ParseInstanceLog(string? line)
     {
@@ -136,7 +159,7 @@ public static class MultiplayerPlay
         if (bar < 0 || !int.TryParse(line.AsSpan(LogMarker.Length, bar - LogMarker.Length), out int severity))
             return null;
 
-        return ((LogSeverity)severity, line[(bar + 1)..].Replace("\\n", "\n"));
+        return ((LogSeverity)severity, UnescapeInstanceLog(line[(bar + 1)..]));
     }
 
     private static void ForwardLog(string instance, string? line, LogSeverity fallback = LogSeverity.Normal)
@@ -177,7 +200,7 @@ public static class MultiplayerPlay
     internal static void RunInstance(string projectPath, string address, string name, int index, bool headless = false)
     {
         // Every log line also goes out marked, for the editor that launched this to show.
-        Debug.OnLog += (message, _, severity) => Console.Out.WriteLine($"{LogMarker}{(int)severity}|{message.Replace("\n", "\\n")}");
+        Debug.OnLog += (message, _, severity) => Console.Out.WriteLine(FormatInstanceLog(severity, message));
 
         EditorRegistries.Initialize();
         Project project = Project.Open(projectPath);
