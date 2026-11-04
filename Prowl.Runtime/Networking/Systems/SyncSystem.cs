@@ -142,9 +142,9 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             sync.WriteChanges(component, _valueWriter);
             sync.ChangesSent(component);
         }
-        else
+        else if (!TryWrite(component, sync, _valueWriter))
         {
-            sync.Write(component, _valueWriter);
+            return false;
         }
 
         new SyncValue(component.Identifier, slot, scene.GenerationOf(component.GameObject),
@@ -153,6 +153,21 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             "Serialized",
             _valueWriter.WrittenSpan);
         return true;
+    }
+
+    /// <summary>Writes the whole value into <paramref name="scratch" />, or warns once and returns false if it can't be serialized.</summary>
+    internal bool TryWrite(Component component, SyncMember sync, NetWriter scratch)
+    {
+        try
+        {
+            sync.Write(component, scratch);
+            return true;
+        }
+        catch (Exception e)
+        {
+            WarnSyncOnce(component, sync, $"could not be serialized ({e.Message})");
+            return false;
+        }
     }
 
     /// <summary>Writes every [Sync] value of every component on <paramref name="objects" />, for a snapshot or spawn.</summary>

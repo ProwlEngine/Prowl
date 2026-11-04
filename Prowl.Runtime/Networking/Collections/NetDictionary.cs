@@ -72,8 +72,9 @@ public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKe
 
         if (record != null)
         {
+            ReadOnlySpan<byte> bytes = ChangeValues(key);
             record.WriteByte((byte)NetChangeKind.Removed);
-            NetSerializer<TKey>.Write(record, key);
+            record.WriteBytes(bytes);
         }
 
         _items.Remove(key);
@@ -151,9 +152,9 @@ public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKe
         NetChangeKind kind = had ? NetChangeKind.Replaced : NetChangeKind.Added;
         if (record != null)
         {
+            ReadOnlySpan<byte> bytes = ChangeValues(key, value);
             record.WriteByte((byte)kind);
-            NetSerializer<TKey>.Write(record, key);
-            NetSerializer<TValue>.Write(record, value);
+            record.WriteBytes(bytes);
         }
 
         _items[key] = value;

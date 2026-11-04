@@ -415,9 +415,10 @@ internal sealed class SnapshotSystem : IDisposable
             {
                 _scratchKeys.Add(key);
             }
-            else if (pending.Changed > pending.LastSent || tick - pending.LastSent >= resend)
+            else if ((pending.Changed > pending.LastSent || tick - pending.LastSent >= resend) &&
+                     !AddValue(state, key, component, sync))
             {
-                AddValue(state, key, component, sync);
+                _scratchKeys.Add(key);
             }
         }
 
@@ -440,8 +441,14 @@ internal sealed class SnapshotSystem : IDisposable
         _items.Add(new Item(true, groupTick, sentAt, offset, _itemBytes.Length - offset, pose, default, null));
     }
 
-    private void AddValue(PeerState state, SyncKey key, Component component, SyncMember sync)
+    private bool AddValue(PeerState state, SyncKey key, Component component, SyncMember sync)
     {
+        _valueWriter.Reset();
+        if (!_scene.Sync.TryWrite(component, sync, _valueWriter))
+        {
+            return false;
+        }
+
         if (!state.ComponentIds.TryGetValue(component, out uint id))
         {
             id = state.NextComponentId++;
@@ -450,12 +457,11 @@ internal sealed class SnapshotSystem : IDisposable
 
         // Named by its guid too, until the receiver is known to have that.
         bool define = !state.DefinedComponents.Contains(component);
-        _valueWriter.Reset();
-        sync.Write(component, _valueWriter);
         int offset = _itemBytes.Length;
         new SnapshotValue(id, define ? component.Identifier : null, key.Slot,
             _scene.GenerationOf(component.GameObject), _valueWriter.WrittenSpan).Write(_itemBytes);
         _items.Add(new Item(false, 0, 0, offset, _itemBytes.Length - offset, null, key, define ? component : null));
+        return true;
     }
 
     /// <summary>Splits the items into snapshots that fit the connection, and sends them.</summary>
@@ -1095,7 +1101,11 @@ internal sealed class SnapshotSystem : IDisposable
                     }
 
                     _valueWriter.Reset();
-                    sync.Write(component, _valueWriter);
+                    if (!_scene.Sync.TryWrite(component, sync, _valueWriter))
+                    {
+                        continue;
+                    }
+
                     new SyncValue(component.Identifier, sync.Slot, entry.Generation, _valueWriter.WrittenSpan)
                         .Write(values);
                     count++;

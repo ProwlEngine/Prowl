@@ -31,6 +31,8 @@ namespace Prowl.Runtime.Networking;
 public abstract class NetCollection
 {
     private const byte Whole = 0, Changes = 1;
+
+    [ThreadStatic] private static NetWriter? t_values;
     private uint _changeCount;
 
     // The changes not sent yet, already written, the first of them being number _changesFrom.
@@ -107,6 +109,56 @@ public abstract class NetCollection
         _sequence++;
         record = _changes;
         return true;
+    }
+
+    /// <summary>
+    ///     Serializes the values of the change <see cref="BeginChange" /> just counted, before any of it is recorded. One
+    ///     that can't be serialized takes the change back and throws, so no half written change is ever sent.
+    /// </summary>
+    private protected ReadOnlySpan<byte> ChangeValues<T>(T value)
+    {
+        NetWriter values = ResetChangeValues();
+        try
+        {
+            NetSerializer<T>.Write(values, value);
+        }
+        catch
+        {
+            CancelChange();
+            throw;
+        }
+
+        return values.WrittenSpan;
+    }
+
+    private protected ReadOnlySpan<byte> ChangeValues<TKey, TValue>(TKey key, TValue value)
+    {
+        NetWriter values = ResetChangeValues();
+        try
+        {
+            NetSerializer<TKey>.Write(values, key);
+            NetSerializer<TValue>.Write(values, value);
+        }
+        catch
+        {
+            CancelChange();
+            throw;
+        }
+
+        return values.WrittenSpan;
+    }
+
+    private static NetWriter ResetChangeValues()
+    {
+        NetWriter values = t_values ??= new NetWriter();
+        values.Reset();
+        return values;
+    }
+
+    private void CancelChange()
+    {
+        _changeCount--;
+        _sequence--;
     }
 
     internal void WriteAll(NetWriter writer)

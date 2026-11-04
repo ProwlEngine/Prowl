@@ -47,8 +47,9 @@ public sealed class NetSet<T> : NetCollection, ISet<T>, IReadOnlySet<T>
 
         if (record != null)
         {
+            ReadOnlySpan<byte> bytes = ChangeValues(item);
             record.WriteByte((byte)NetChangeKind.Added);
-            NetSerializer<T>.Write(record, item);
+            record.WriteBytes(bytes);
         }
 
         _items.Add(item);
@@ -66,8 +67,9 @@ public sealed class NetSet<T> : NetCollection, ISet<T>, IReadOnlySet<T>
 
         if (record != null)
         {
+            ReadOnlySpan<byte> bytes = ChangeValues(item);
             record.WriteByte((byte)NetChangeKind.Removed);
-            NetSerializer<T>.Write(record, item);
+            record.WriteBytes(bytes);
         }
 
         _items.Remove(item);

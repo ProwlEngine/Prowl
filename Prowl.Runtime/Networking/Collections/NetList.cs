@@ -48,9 +48,10 @@ public sealed class NetList<T> : NetCollection, IList<T>, IReadOnlyList<T>
 
             if (record != null)
             {
+                ReadOnlySpan<byte> bytes = ChangeValues(value);
                 record.WriteByte((byte)NetChangeKind.Replaced);
                 record.WriteVarUInt32((uint)index);
-                NetSerializer<T>.Write(record, value);
+                record.WriteBytes(bytes);
             }
 
             _items[index] = value;
@@ -70,9 +71,10 @@ public sealed class NetList<T> : NetCollection, IList<T>, IReadOnlyList<T>
 
         if (record != null)
         {
+            ReadOnlySpan<byte> bytes = ChangeValues(item);
             record.WriteByte((byte)NetChangeKind.Added);
             record.WriteVarUInt32((uint)index);
-            NetSerializer<T>.Write(record, item);
+            record.WriteBytes(bytes);
         }
 
         _items.Insert(index, item);
