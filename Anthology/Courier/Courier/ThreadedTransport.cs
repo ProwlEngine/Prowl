@@ -5,6 +5,7 @@ using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 
@@ -37,10 +38,17 @@ public sealed class ThreadedTransport : Transport
 {
     private readonly ConcurrentQueue<Command> _commands = new();
     private readonly Transport _inner;
+    private readonly object _sendGate = new();
     private readonly ConcurrentQueue<Item> _toMain = new();
     private readonly AutoResetEvent _wake = new(false);
     private volatile bool _listening;
+    private long _maxQueuedSendBytes = 64L * 1024 * 1024;
+    private int _maxQueuedSendsPerConnection = 4096;
     private int _nextId;
+
+    // Under _sendGate: bytes queued for the worker by connections that aren't closing.
+    private long _queuedSendBytes;
+    private ManualResetEventSlim? _shutdownDone;
     private volatile bool _stopping;
     private Thread? _worker;
     private ExceptionDispatchInfo? _workerError;
@@ -60,6 +68,35 @@ public sealed class ThreadedTransport : Transport
     public override bool IsListening => _listening;
 
     public override TransportCapabilities Capabilities => _inner.Capabilities;
+
+    /// <summary>
+    ///     The most sends one connection may have waiting for the worker. One more closes that connection with
+    ///     <see cref="DisconnectReason.ResourceLimit" />.
+    /// </summary>
+    public int MaxQueuedSendsPerConnection
+    {
+        get => _maxQueuedSendsPerConnection;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            _maxQueuedSendsPerConnection = value;
+        }
+    }
+
+    /// <summary>
+    ///     The most bytes all connections together may have waiting for the worker. A send past it closes whichever
+    ///     connection has the most waiting with <see cref="DisconnectReason.ResourceLimit" />, so one slow peer can't
+    ///     cost a healthy one its connection.
+    /// </summary>
+    public long MaxQueuedSendBytes
+    {
+        get => _maxQueuedSendBytes;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            _maxQueuedSendBytes = value;
+        }
+    }
 
     public override int LocalPort => _inner.LocalPort;
 
@@ -108,16 +145,48 @@ public sealed class ThreadedTransport : Transport
         _wake.Set();
     }
 
-    public override void Shutdown()
+    public override void Shutdown() => Shutdown(Timeout.InfiniteTimeSpan);
+
+    /// <summary>
+    ///     Shuts down as <see cref="Shutdown()" /> does, but gives up after <paramref name="timeout" /> with a
+    ///     <see cref="TimeoutException" /> if the worker is stuck in the inner transport. The worker and the inner
+    ///     transport are kept then, so a later call can finish the shutdown.
+    /// </summary>
+    public void Shutdown(TimeSpan timeout)
     {
+        if (timeout < TimeSpan.Zero && timeout != Timeout.InfiniteTimeSpan)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+        }
+
         if (_worker != null)
         {
-            RunOnWorker(new Command(CommandKind.Shutdown));
+            Stopwatch elapsed = Stopwatch.StartNew();
+            if (_shutdownDone == null && !_worker.IsAlive)
+            {
+                Run(new Command(CommandKind.Shutdown));
+                ForwardEvents();
+            }
+            else
+            {
+                _shutdownDone ??= PostShutdown();
+                if (!_shutdownDone.Wait(timeout))
+                {
+                    throw new TimeoutException("The worker did not finish shutting down in time.");
+                }
+            }
+
             _stopping = true;
             _wake.Set();
-            _worker.Join();
+            if (!_worker.Join(Remaining(timeout, elapsed)))
+            {
+                throw new TimeoutException("The worker did not stop in time.");
+            }
+
             _worker = null;
             _stopping = false;
+            _shutdownDone?.Dispose();
+            _shutdownDone = null;
         }
         else
         {
@@ -132,7 +201,7 @@ public sealed class ThreadedTransport : Transport
 
         while (_commands.TryDequeue(out Command command))
         {
-            command.Release();
+            Discard(command);
         }
 
         _listening = false;
@@ -157,6 +226,80 @@ public sealed class ThreadedTransport : Transport
         _wake.Set();
     }
 
+    /// <summary>Counts a send against the queue budgets. Returns the connection to close for it, or null.</summary>
+    internal ThreadedConnection? ReserveSend(ThreadedConnection proxy, int bytes)
+    {
+        lock (_sendGate)
+        {
+            ThreadedConnection? closing = null;
+            if (proxy.QueuedSends >= _maxQueuedSendsPerConnection)
+            {
+                closing = proxy;
+            }
+            else if (bytes > _maxQueuedSendBytes - _queuedSendBytes)
+            {
+                closing = LargestBacklog(proxy, bytes);
+            }
+
+            // Once another connection's backlog is let go, this send fits.
+            if (closing != proxy)
+            {
+                proxy.QueuedSends++;
+                proxy.QueuedSendBytes += bytes;
+                _queuedSendBytes += bytes;
+            }
+
+            if (closing != null)
+            {
+                closing.Closing = true;
+                _queuedSendBytes -= closing.QueuedSendBytes;
+            }
+
+            return closing;
+        }
+    }
+
+    internal void ReleaseSend(ThreadedConnection proxy, int bytes)
+    {
+        lock (_sendGate)
+        {
+            proxy.QueuedSends--;
+            proxy.QueuedSendBytes -= bytes;
+            if (!proxy.Closing)
+            {
+                _queuedSendBytes -= bytes;
+            }
+        }
+    }
+
+    // Under _sendGate. The open connection with the most queued, counting what proxy is about to add; proxy on a tie.
+    private ThreadedConnection LargestBacklog(ThreadedConnection proxy, long adding)
+    {
+        ThreadedConnection largest = proxy;
+        long most = proxy.QueuedSendBytes + adding;
+        foreach (Connection connection in Connections)
+        {
+            if (connection is ThreadedConnection other && other != proxy && !other.Closing &&
+                other.QueuedSendBytes > most)
+            {
+                (largest, most) = (other, other.QueuedSendBytes);
+            }
+        }
+
+        return largest;
+    }
+
+    internal void CloseForBacklog(ThreadedConnection proxy)
+    {
+        if (proxy.State == ConnectionState.Disconnected)
+        {
+            return;
+        }
+
+        RaiseDisconnected(proxy, DisconnectReason.ResourceLimit);
+        Post(new Command(CommandKind.Disconnect) { Proxy = proxy });
+    }
+
     internal void CloseFromMain(ThreadedConnection proxy)
     {
         if (proxy.State == ConnectionState.Disconnected)
@@ -167,6 +310,18 @@ public sealed class ThreadedTransport : Transport
         RaiseDisconnected(proxy, DisconnectReason.Requested);
         Post(new Command(CommandKind.Disconnect) { Proxy = proxy });
     }
+
+    private ManualResetEventSlim PostShutdown()
+    {
+        ManualResetEventSlim done = new();
+        Post(new Command(CommandKind.Shutdown) { Done = done });
+        return done;
+    }
+
+    private static TimeSpan Remaining(TimeSpan timeout, Stopwatch elapsed) =>
+        timeout == Timeout.InfiniteTimeSpan
+            ? Timeout.InfiniteTimeSpan
+            : TimeSpan.FromTicks(Math.Max(0, (timeout - elapsed.Elapsed).Ticks));
 
     private void StartWorker()
     {
@@ -269,10 +424,21 @@ public sealed class ThreadedTransport : Transport
             _workerError = ExceptionDispatchInfo.Capture(e);
             while (_commands.TryDequeue(out Command command))
             {
-                command.Release();
+                Discard(command);
                 command.Done?.Set();
             }
         }
+    }
+
+    private void Discard(in Command command)
+    {
+        if (command is { Kind: CommandKind.Send, Proxy: { } proxy })
+        {
+            proxy.ReleasePending(command.Length);
+            ReleaseSend(proxy, command.Length);
+        }
+
+        command.Release();
     }
 
     private void RunCommands()
@@ -313,8 +479,9 @@ public sealed class ThreadedTransport : Transport
 
             case CommandKind.Send:
                 proxy!.ReleasePending(command.Length);
+                ReleaseSend(proxy, command.Length);
                 // The inner connection can close between this check and the send, which is the normal race.
-                if (proxy.Inner is { IsConnected: true } target)
+                if (!proxy.Closing && proxy.Inner is { IsConnected: true } target)
                 {
                     try
                     {
@@ -489,6 +656,13 @@ public sealed class ThreadedConnection : Connection
     /// <summary>Set on the worker once your thread has closed this connection, so the inner one's events are ignored.</summary>
     internal bool ClosedByMain { get; set; }
 
+    /// <summary>Closed for its send backlog: what it still has queued is dropped, not sent.</summary>
+    internal volatile bool Closing;
+
+    // Under the transport's send gate: sends waiting for the worker.
+    internal int QueuedSends;
+    internal long QueuedSendBytes;
+
     public override TimeSpan RoundTripTime => TimeSpan.FromTicks(Interlocked.Read(ref _rttTicks));
 
     public override ConnectionStats Stats => new(Interlocked.Read(ref _packetsSent), Interlocked.Read(ref _packetsReceived),
@@ -506,13 +680,22 @@ public sealed class ThreadedConnection : Connection
 
     protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
     {
-        byte[] buffer = ArrayPool<byte>.Shared.Rent(Math.Max(1, data.Length));
-        data.CopyTo(buffer);
-        Interlocked.Add(ref _pending, data.Length);
-        _transport.Post(new ThreadedTransport.Command(ThreadedTransport.CommandKind.Send)
+        ThreadedConnection? closing = _transport.ReserveSend(this, data.Length);
+        if (closing != this)
         {
-            Proxy = this, Buffer = buffer, Length = data.Length, Delivery = delivery, Channel = channel
-        });
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(Math.Max(1, data.Length));
+            data.CopyTo(buffer);
+            Interlocked.Add(ref _pending, data.Length);
+            _transport.Post(new ThreadedTransport.Command(ThreadedTransport.CommandKind.Send)
+            {
+                Proxy = this, Buffer = buffer, Length = data.Length, Delivery = delivery, Channel = channel
+            });
+        }
+
+        if (closing != null)
+        {
+            _transport.CloseForBacklog(closing);
+        }
     }
 
     /// <summary>Asks the worker to send this connection's queued messages now.</summary>
