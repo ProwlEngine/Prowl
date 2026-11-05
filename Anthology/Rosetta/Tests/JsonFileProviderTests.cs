@@ -46,4 +46,46 @@ public class JsonFileProviderTests
         var provider = new JsonFileProvider(LocalizationPath);
         Assert.Throws<FileNotFoundException>(() => provider.Load("zz"));
     }
+
+    [Fact]
+    public void Changed_TriggersWhenAJsonFileIsModified()
+    {
+        // Create a temporary JSON localization file.
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, """
+            {
+                "ui.button.confirm": "Confirm",
+                "ui.button.cancel": "Cancel"
+            }
+            """);
+
+            // Check it loads as expected.
+            int changeCount = 0;
+            var provider = new JsonFileProvider(path);
+            provider.Changed += (object? sender, EventArgs e) => changeCount++;
+            Assert.Equal("Confirm", provider.Load("en")["ui.button.confirm"]);
+
+            // Now modify the file.
+            File.WriteAllText(path, """
+            {
+                "ui.button.confirm": "Confirm",
+                "ui.button.cancel": "Cancel",
+                "ui.button.new": "New"
+            }
+            """);
+
+            // Wait a moment for the file system watcher to detect the change.
+            Thread.Sleep(100);
+
+            // The event should have fired.
+            Assert.True(changeCount > 0);
+        }
+        finally
+        {
+            // Delete the temporary file.
+            File.Delete(path);
+        }
+    }
 }

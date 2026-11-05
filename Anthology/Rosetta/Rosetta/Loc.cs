@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
@@ -9,20 +10,25 @@ namespace Prowl.Rosetta;
 /// <summary>
 /// Static localization entry point. Call Loc.Configure() once at startup, then Loc.Get() from anywhere.
 /// </summary>
-public static class Loc
+public static partial class Loc
 {
-    private static readonly List<ILocalizationProvider> _providers = new();
-
+    private static readonly List<ILocalizationProvider> _providers = [];
     // locale → (key → value)
-    private static readonly Dictionary<string, Dictionary<string, string>> _cache = new();
+    private static readonly Dictionary<string, Dictionary<string, string>> _cache = [];
+    private static readonly ReaderWriterLockSlim _lock = new();
 
     private static string _currentLocale = "en";
     private static string _fallbackLocale = "en";
     private static MissingKeyBehavior _missingKeyBehavior = MissingKeyBehavior.ReturnFallback;
 
-    [ThreadStatic] private static string? _scopedLocale;
+    // Hot reload state.
+    private static readonly Timer _timer = new(OnTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
+    private static int _retryCount = 0;
+    private const int InitialDelayInMs = 100;
+    private const int MaxRetryCount = 3;
+    private const int RetryDelayInMs = 400;
 
-    private static readonly Regex _interpolationRegex = new(@"\{\{(\w+)\}\}", RegexOptions.Compiled);
+    [ThreadStatic] private static string? _scopedLocale;
 
     /// <summary>The currently active locale.</summary>
     public static string CurrentLocale => _scopedLocale ?? _currentLocale;
@@ -41,8 +47,13 @@ public static class Loc
     /// <summary>
     /// Configure Rosetta. Call once at startup.
     /// </summary>
+    /// <remarks> This method is not thread-safe. </remarks>
     public static void Configure(Action<LocConfig> configure)
     {
+        // Unbind any previous event handlers.
+        foreach (ILocalizationProvider provider in _providers)
+            provider.Changed -= OnProviderTranslationsChanged;
+
         var config = new LocConfig();
         configure(config);
 
@@ -54,8 +65,6 @@ public static class Loc
         _fallbackLocale = config.Fallback ?? "en";
         _missingKeyBehavior = config.MissingBehavior;
         _currentLocale = config.InitialLocale ?? _fallbackLocale;
-
-        // Swap providers atomically to avoid enumeration issues
         _providers.Clear();
         _providers.AddRange(config.Providers);
 
@@ -63,6 +72,10 @@ public static class Loc
         LoadLocale(_currentLocale);
         if (_currentLocale != _fallbackLocale)
             LoadLocale(_fallbackLocale);
+
+        // Bind event handlers for all providers.
+        foreach (ILocalizationProvider provider in _providers)
+            provider.Changed += OnProviderTranslationsChanged;
     }
 
     /// <summary>
@@ -70,11 +83,22 @@ public static class Loc
     /// </summary>
     public static void SetLocale(string locale)
     {
-        if (_currentLocale == locale) return;
-        var old = _currentLocale;
-        _currentLocale = locale;
-        LoadLocale(locale);
-        LocaleChanged?.Invoke(old, locale);
+        string previousLocale;
+        _lock.EnterWriteLock();
+        try
+        {
+            if (_currentLocale == locale) return;
+            previousLocale = _currentLocale;
+            _currentLocale = locale;
+            LoadLocale(locale);
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+
+        // Never call user-provided callbacks inside a lock.
+        LocaleChanged?.Invoke(previousLocale, locale);
     }
 
     /// <summary>
@@ -85,14 +109,36 @@ public static class Loc
     /// </summary>
     public static void AddProvider(ILocalizationProvider provider)
     {
-        _providers.Add(provider);
-        Reload();
+        _lock.EnterWriteLock();
+        try
+        {
+            _providers.Add(provider);
+            provider.Changed += OnProviderTranslationsChanged;
+            ReloadInternal();
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
     }
 
     /// <summary>
     /// Force reload all cached translations for the current locale.
     /// </summary>
     public static void Reload()
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            ReloadInternal();
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+    }
+
+    private static void ReloadInternal()
     {
         _cache.Clear();
         LoadLocale(_currentLocale);
@@ -105,7 +151,27 @@ public static class Loc
     /// </summary>
     public static IDisposable BeginScope(string locale)
     {
-        LoadLocale(locale);
+        _lock.EnterUpgradeableReadLock();
+        try
+        {
+            if (!_cache.ContainsKey(locale))
+            {
+                _lock.EnterWriteLock();
+                try
+                {
+                    LoadLocale(locale);
+                }
+                finally
+                {
+                    _lock.ExitWriteLock();
+                }
+            }
+        }
+        finally
+        {
+            _lock.ExitUpgradeableReadLock();
+        }
+
         return new LocaleScope(locale);
     }
 
@@ -134,8 +200,9 @@ public static class Loc
     /// </summary>
     public static string GetPlural(string key, int count)
     {
-        var category = PluralRules.GetCategory(CurrentLocale, count);
-        var raw = Resolve($"{key}.{category}", CurrentLocale);
+        var locale = CurrentLocale;
+        var category = PluralRules.GetCategory(locale, count);
+        var raw = Resolve($"{key}.{category}", locale);
         return Interpolate(raw, new { count });
     }
 
@@ -144,8 +211,9 @@ public static class Loc
     /// </summary>
     public static string GetPlural(string key, int count, object args)
     {
-        var category = PluralRules.GetCategory(CurrentLocale, count);
-        var raw = Resolve($"{key}.{category}", CurrentLocale);
+        var locale = CurrentLocale;
+        var category = PluralRules.GetCategory(locale, count);
+        var raw = Resolve($"{key}.{category}", locale);
         // Merge count into args via reflection
         var dict = ObjectToDict(args);
         dict["count"] = count.ToString();
@@ -186,36 +254,47 @@ public static class Loc
 
     #region Internals
 
+    [GeneratedRegex(@"\{\{(\w+)\}\}", RegexOptions.Compiled)]
+    private static partial Regex GetInterpolationRegex();
+
     private static string Resolve(string key, string locale)
     {
-        // Try current locale
-        if (TryGet(key, locale, out var value))
-            return value;
+        string? value = null;
 
-        // Try fallback
-        if (_missingKeyBehavior == MissingKeyBehavior.ReturnFallback && locale != _fallbackLocale)
+        _lock.EnterReadLock();
+        try
         {
-            if (TryGet(key, _fallbackLocale, out value))
-            {
-                MissingKey?.Invoke(locale, key);
+            // Try current locale
+            if (TryGetInternal(key, locale, out value))
                 return value;
-            }
+
+            // Try fallback
+            if (_missingKeyBehavior == MissingKeyBehavior.ReturnFallback && locale != _fallbackLocale)
+                TryGetInternal(key, _fallbackLocale, out value);
+        }
+        finally
+        {
+            _lock.ExitReadLock();
         }
 
+        // Never call user-provided callbacks inside a lock.
         MissingKey?.Invoke(locale, key);
 
+        if (value is not null)
+            return value;
         if (_missingKeyBehavior == MissingKeyBehavior.Throw)
             throw new KeyNotFoundException($"Localization key '{key}' not found for locale '{locale}'.");
-
         return key;
     }
 
-    private static bool TryGet(string key, string locale, out string value)
+    private static bool TryGetInternal(string key, string locale, [MaybeNullWhen(returnValue: false)] out string value)
     {
-        value = key;
-        if (!_cache.TryGetValue(locale, out var translations))
+        if (!_cache.TryGetValue(locale, out Dictionary<string, string>? translations))
+        {
+            value = null;
             return false;
-        return translations.TryGetValue(key, out value!);
+        }
+        return translations.TryGetValue(key, out value);
     }
 
     private static void LoadLocale(string locale)
@@ -243,9 +322,9 @@ public static class Loc
 
     private static string Interpolate(string template, Dictionary<string, string> values)
     {
-        return _interpolationRegex.Replace(template, match =>
+        return GetInterpolationRegex().Replace(template, match =>
         {
-            var name = match.Groups[1].Value;
+            string name = match.Groups[1].Value;
             return values.TryGetValue(name, out var val) ? val : match.Value;
         });
     }
@@ -260,6 +339,30 @@ public static class Loc
                 dict[prop.Name] = val.ToString()!;
         }
         return dict;
+    }
+
+    private static void OnProviderTranslationsChanged(object? sender, EventArgs e)
+    {
+        // Because of the way FileSystemWatcher works, this method may be called multiple times in quick succession.
+        // Additionally, it may not be safe to reload the translations yet.
+        // By triggering a timer, we "debounce" the file system event and additionally we ensure that loading is done
+        // off the file system watcher thread.
+        _retryCount = 0;
+        _timer.Change(InitialDelayInMs, Timeout.Infinite);
+    }
+
+    private static void OnTimerElapsed(object? state)
+    {
+        try
+        {
+            Reload();
+        }
+        catch (Exception)
+        {
+            // If hot-reload fails, try again later.
+            if (Interlocked.Increment(ref _retryCount) <= MaxRetryCount)
+                _timer.Change(RetryDelayInMs, Timeout.Infinite);
+        }
     }
 
     #endregion
@@ -287,7 +390,7 @@ public static class Loc
 /// </summary>
 public class LocConfig
 {
-    internal List<ILocalizationProvider> Providers { get; } = new();
+    internal List<ILocalizationProvider> Providers { get; } = [];
     internal string? Fallback { get; private set; }
     internal string? InitialLocale { get; private set; }
     internal MissingKeyBehavior MissingBehavior { get; private set; } = MissingKeyBehavior.ReturnFallback;

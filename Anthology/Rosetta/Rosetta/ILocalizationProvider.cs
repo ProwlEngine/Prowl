@@ -18,4 +18,15 @@ public interface ILocalizationProvider
     /// Returns true if this provider can supply translations for the given locale.
     /// </summary>
     bool SupportsLocale(string locale);
+
+    /// <summary>
+    /// Triggers when the translations for a locale have changed. Warning: this event is inherently asynchronous and
+    /// may be triggered on the <see cref="FileSystemWatcher"/> background thread. Subscribers should not block or
+    /// perform any significant work.
+    /// </summary>
+    event EventHandler? Changed
+    {
+        add { }
+        remove { }
+    }
 }

@@ -188,7 +188,18 @@ public class LocTests
     }
 
     [Fact]
-    public void MissingKey_EventFired()
+    public void MissingKey_SuccessDoesNotFireEvent()
+    {
+        ConfigureEnglish(MissingKeyBehavior.ReturnKey);
+        string? missingLocale = null, missingKey = null;
+        Loc.MissingKey += (l, k) => { missingLocale = l; missingKey = k; };
+        Assert.Equal("Confirm", Loc.Get("ui.button.confirm"));
+        Assert.Null(missingLocale);
+        Assert.Null(missingKey);
+    }
+
+    [Fact]
+    public void MissingKey_ReturnKeyFiresEvent()
     {
         ConfigureEnglish(MissingKeyBehavior.ReturnKey);
         string? missingLocale = null, missingKey = null;
@@ -196,6 +207,20 @@ public class LocTests
         Loc.Get("nonexistent.key");
         Assert.Equal("en", missingLocale);
         Assert.Equal("nonexistent.key", missingKey);
+    }
+
+    [Fact]
+    public void MissingKey_ReturnFallbackFiresEvent()
+    {
+        ConfigureFrench();
+        string? missingLocale = null, missingKey = null;
+        Loc.MissingKey += (l, k) => { missingLocale = l; missingKey = k; };
+
+        // "only.in.english" exists in en but not fr
+        Assert.Equal("English only", Loc.Get("only.in.english"));
+
+        Assert.Equal("fr", missingLocale);
+        Assert.Equal("only.in.english", missingKey);
     }
 
     [Fact]
@@ -253,5 +278,47 @@ public class LocTests
         // Reconfigure with French
         ConfigureFrench();
         Assert.Equal("Confirmer", Loc.Get("ui.button.confirm"));
+    }
+
+    [Fact]
+    public void Get_SupportsHotReload()
+    {
+        // Create a temporary JSON localization file.
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, """
+            {
+                "ui.button.confirm": "Confirm",
+                "ui.button.cancel": "Cancel"
+            }
+            """);
+
+            // Check it loads as expected.
+            Loc.Configure(cfg => cfg
+                .AddProvider(new JsonFileProvider(path))
+                .SetLocale("en")
+            );
+            Assert.Equal("Confirm", Loc.Get("ui.button.confirm"));
+
+            // Now modify the file.
+            File.WriteAllText(path, """
+            {
+                "ui.button.confirm": "Confirmed",
+                "ui.button.cancel": "Cancel"
+            }
+            """);
+
+            // Wait a while.
+            Thread.Sleep(500);
+
+            // The string should have updated.
+            Assert.Equal("Confirmed", Loc.Get("ui.button.confirm"));
+        }
+        finally
+        {
+            // Delete the temporary file.
+            File.Delete(path);
+        }
     }
 }
