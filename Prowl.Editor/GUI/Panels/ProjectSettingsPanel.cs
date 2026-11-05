@@ -25,6 +25,16 @@ public class ProjectSettingsPanel : DockPanel
 
     private int _selectedIndex;
 
+    public static void OpenCategory<T>() where T : ProjectSettingsBase
+    {
+        EditorApplication? editor = EditorApplication.Instance;
+        editor?.OpenPanel(typeof(ProjectSettingsPanel));
+        if (editor?.FindOpenPanel(typeof(ProjectSettingsPanel)) is not ProjectSettingsPanel panel) return;
+        IReadOnlyList<EditorRegistries.SettingsEntry> entries = EditorRegistries.SettingsEntries;
+        for (int i = 0; i < entries.Count; i++)
+            if (entries[i].Instance is T) { panel._selectedIndex = i; break; }
+    }
+
     // Shared with EditorRegistries.SaveSettings keeping the serializer options identical
     // means the before/after JSON comparison is stable field-by-field.
     private static readonly JsonSerializerOptions s_jsonOpts = new()

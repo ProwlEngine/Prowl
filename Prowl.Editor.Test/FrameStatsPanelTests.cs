@@ -167,7 +167,7 @@ public class FrameStatsPanelTests
     }
 
     [Fact]
-    public void ThePeakCountsOnlyTheCategoriesShown()
+    public void TheReadoutAverageAndPeakCountOnlyTheCategoriesShown()
     {
         FrameStat big = FrameStats.GetCategory("PanelTest.Big");
         FrameStat small = FrameStats.GetCategory("PanelTest.Small");
@@ -180,6 +180,14 @@ public class FrameStatsPanelTests
 
         float peak = history.Ago(0)!.PeakMs;
         Assert.True(peak >= 1.9f && peak < 9, $"peak {peak}");
+        Assert.Equal(peak, history.Ago(0)!.AvgShownMs);
+        Assert.True(history.Ago(0)!.AvgFrameMs > peak);
+
+        // A later column must not retain the previous column's visible time.
+        Frames(2, big, 5);
+        history.Sample(Now, new HashSet<FrameStat>(FrameStats.Categories));
+        Assert.Equal(0, history.Ago(0)!.AvgShownMs);
+        Assert.Equal(0, history.Ago(0)!.PeakMs);
     }
 
     [Fact]

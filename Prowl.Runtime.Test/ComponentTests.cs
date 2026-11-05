@@ -320,8 +320,59 @@ public class ComponentTests : RuntimeTestBase
         GameObject go = CreateGameObject();
         DerivedTestComponent derived = go.AddComponent<DerivedTestComponent>();
 
-        // Lookup by base type isn't an exact cache key, so this exercises the assignable fallback.
         Assert.Same(derived, go.GetComponent<BaseTestComponent>());
+    }
+
+    [Fact]
+    public void GetComponents_ByBaseType_IncludesDerived_AlongsideTheBase()
+    {
+        GameObject go = CreateGameObject();
+        DerivedTestComponent derived = go.AddComponent<DerivedTestComponent>();
+        BaseTestComponent plain = go.AddComponent<BaseTestComponent>();
+
+        Assert.Equal([derived, plain], go.GetComponents<BaseTestComponent>());
+    }
+
+    [Fact]
+    public void RemoveAll_ByBaseType_RemovesDerived()
+    {
+        GameObject go = CreateGameObject();
+        go.AddComponent<DerivedTestComponent>();
+        go.AddComponent<BaseTestComponent>();
+
+        go.RemoveAll<BaseTestComponent>();
+
+        Assert.Empty(go.GetComponents());
+    }
+
+    [Fact]
+    public void ComponentsOfOneType_ShareTheirDefaultName()
+    {
+        PlainComponent first = new();
+        PlainComponent second = new();
+
+        Assert.Equal("NewPlainComponent", first.Name);
+        Assert.Same(first.Name, second.Name);
+    }
+
+    [Fact]
+    public void GameObject_KeepsItsScene_WhenNothingElseHoldsIt()
+    {
+        GameObject go = AddedToUnheldScene();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Assert.True(go.Scene.IsValid());
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static GameObject AddedToUnheldScene()
+    {
+        GameObject go = new();
+        new Scene().Add(go);
+        return go;
     }
 
     [Fact]

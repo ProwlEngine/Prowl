@@ -690,7 +690,7 @@ public sealed class PhysicsHand : Component
         bool found = false;
         foreach (Float3 local in directions)
         {
-            if (!GameObject.Scene.Physics.Raycast(grip, rotation * local, out RaycastHit hit, GrabRange, filter) || hit.Distance >= nearest) continue;
+            if (!GameObject.Scene.Physics.Raycast(grip, rotation * local, GrabRange, out RaycastHit hit, filter) || hit.Distance >= nearest) continue;
             Rigidbody3D? body = hit.Rigidbody;
             if (body.IsValid() && (body.MotionType == Jitter2.Dynamics.MotionType.Dynamic || body.GetComponent<Grabbable>().IsValid())) continue;
             nearest = hit.Distance;
@@ -1262,6 +1262,6 @@ public sealed class GravityGlove : Component
         _ignore.Add(Hand.Rigidbody);
         _ignore.Add(item.Body);
         Float3 direction = (item.Body.Position - origin) / distance;
-        return !GameObject.Scene.Physics.Raycast(origin, direction, out _, distance - 0.05f, QueryFilter.Default.Ignoring(_ignore));
+        return !GameObject.Scene.Physics.Raycast(origin, direction, distance - 0.05f, out _, QueryFilter.Default.Ignoring(_ignore));
     }
 }

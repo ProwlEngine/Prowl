@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
@@ -14,6 +14,7 @@ using Microsoft.CodeAnalysis.Emit;
 using Microsoft.CodeAnalysis.Text;
 
 using Prowl.Analyzers;
+using Prowl.CodeGen;
 using Prowl.Ember.Analyzers;
 
 using CompilationUnit = Prowl.Editor.Projects.Scripting.ScriptCompiler.CompilationUnit;
@@ -43,6 +44,10 @@ internal static class RoslynScriptBackend
 
     private sealed class UnitState
     {
+        // What each file parsed to, reused while its bytes are unchanged, bound as written for the network code
+        // generation; and what the unit compiled as after it, the generated serializers included.
+        public Dictionary<string, (ulong Hash, SyntaxTree Tree)> Parsed = new(StringComparer.OrdinalIgnoreCase);
+        public CSharpCompilation? Source;
         public Dictionary<string, (ulong Hash, SyntaxTree Tree)> Trees = new(StringComparer.OrdinalIgnoreCase);
         public CSharpCompilation? Compilation;
         public MetadataReference[] References = Array.Empty<MetadataReference>();
@@ -144,44 +149,42 @@ internal static class RoslynScriptBackend
             }
 
             // 3. Build the current tree set, reusing unchanged trees by content hash.
-            var newTrees = new Dictionary<string, (ulong Hash, SyntaxTree Tree)>(StringComparer.OrdinalIgnoreCase);
+            var parsed = new Dictionary<string, (ulong Hash, SyntaxTree Tree)>(StringComparer.OrdinalIgnoreCase);
             foreach (string file in unit.Scripts)
             {
                 ulong hash = currentHashes[file];
-                if (state != null && state.Trees.TryGetValue(file, out (ulong Hash, SyntaxTree Tree) prev) && prev.Hash == hash)
+                if (state != null && state.Parsed.TryGetValue(file, out (ulong Hash, SyntaxTree Tree) prev) && prev.Hash == hash)
                 {
-                    newTrees[file] = prev; // unchanged, reuse the exact tree
+                    parsed[file] = prev; // unchanged, reuse the exact tree
                 }
                 else
                 {
                     var text = SourceText.From(fileBytes[file], fileBytes[file].Length, Encoding.UTF8);
-                    newTrees[file] = (hash, CSharpSyntaxTree.ParseText(text, parseOptions, path: file));
+                    parsed[file] = (hash, CSharpSyntaxTree.ParseText(text, parseOptions, path: file));
                 }
             }
 
-            // 4. Reuse the prior compilation, swapping only changed trees; otherwise create fresh.
-            CSharpCompilation compilation;
-            if (state?.Compilation != null && state.AllowUnsafe == unit.AllowUnsafe)
+            // 4. Bind the scripts as written, reusing the prior binding, and run script code generation over them
+            //    (Prowl.CodeGen, which dotnet build runs too): scripts rewritten in place, plus files of its own.
+            //    A file whose result is unchanged comes back as the very same tree.
+            string[] files = [.. parsed.Keys];
+            CSharpCompilation source = Reuse(state?.Source, state?.Parsed, parsed, state, references, unit);
+            ScriptCodeGen.Result generated = ScriptCodeGen.Run(source, [.. files.Select(f => parsed[f].Tree)]);
+            var newTrees = new Dictionary<string, (ulong Hash, SyntaxTree Tree)>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < files.Length; i++)
+                newTrees[files[i]] = (parsed[files[i]].Hash, generated.Trees[i]);
+            for (int i = 0; i < generated.Added.Count; i++)
             {
-                compilation = state.Compilation;
-
-                foreach ((string? path, (ulong Hash, SyntaxTree Tree) entry) in state.Trees)
-                    if (!newTrees.TryGetValue(path, out (ulong Hash, SyntaxTree Tree) ne) || !ReferenceEquals(ne.Tree, entry.Tree))
-                        compilation = compilation.RemoveSyntaxTrees(entry.Tree);
-
-                foreach ((string? path, (ulong Hash, SyntaxTree Tree) entry) in newTrees)
-                    if (!state.Trees.TryGetValue(path, out (ulong Hash, SyntaxTree Tree) oe) || !ReferenceEquals(oe.Tree, entry.Tree))
-                        compilation = compilation.AddSyntaxTrees(entry.Tree);
-
-                if (!SameReferences(state.References, references))
-                    compilation = compilation.WithReferences(references);
-            }
-            else
-            {
-                compilation = CSharpCompilation.Create(unit.Name, newTrees.Values.Select(t => t.Tree), references, BuildOptions(unit));
+                string key = $"<ProwlCodeGen {i}: {generated.Added[i].FilePath}>";
+                bool same = state != null && state.Trees.TryGetValue(key, out (ulong Hash, SyntaxTree Tree) previous)
+                    && previous.Tree.GetText().ContentEquals(generated.Added[i].GetText());
+                newTrees[key] = same ? state!.Trees[key] : (0, generated.Added[i]);
             }
 
-            // 5. Emit with an embedded PDB.
+            // 5. What compiles is the rewrite, again swapping only the trees that changed.
+            CSharpCompilation compilation = Reuse(state?.Compilation, state?.Trees, newTrees, state, references, unit);
+
+            // 6. Emit with an embedded PDB.
             using var peStream = new MemoryStream();
             EmitResult result = compilation.Emit(peStream,
                 options: new EmitOptions().WithDebugInformationFormat(DebugInformationFormat.Embedded));
@@ -190,6 +193,7 @@ internal static class RoslynScriptBackend
                 .Where(d => d.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning)
                 .ToList();
             diagnostics.AddRange(RunScriptAnalyzers(compilation));
+            diagnostics.AddRange(generated.Diagnostics);
 
             // An analyzer reporting an error is describing something that will not survive being run,
             // so it fails the compile the way the compiler's own errors do. Loading the assembly anyway
@@ -197,12 +201,14 @@ internal static class RoslynScriptBackend
             bool blocked = diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error);
             byte[]? image = result.Success && !blocked ? peStream.ToArray() : null;
 
-            // 6. Update state. Compilation/trees/refs reflect what we just built; the success snapshot
+            // 7. Update state. Compilation/trees/refs reflect what we just built; the success snapshot
             //    only advances when the emit actually succeeded (so a repeat of failing source does not
             //    get skipped and silently return the last good image).
             MetadataReference[] refArray = [.. references];
             state ??= new UnitState();
+            state.Parsed = parsed;
             state.Trees = newTrees;
+            state.Source = source;
             state.Compilation = compilation;
             state.References = refArray;
             state.AllowUnsafe = unit.AllowUnsafe;
@@ -225,6 +231,28 @@ internal static class RoslynScriptBackend
                 Recompiled = true
             };
         }
+    }
+
+    /// <summary>
+    /// <paramref name="previous"/> with its trees swapped for <paramref name="trees"/> where they differ, so Roslyn
+    /// keeps the binding of the rest; or a new compilation when there's nothing to build on.
+    /// </summary>
+    private static CSharpCompilation Reuse(CSharpCompilation? previous, Dictionary<string, (ulong Hash, SyntaxTree Tree)>? previousTrees,
+        Dictionary<string, (ulong Hash, SyntaxTree Tree)> trees, UnitState? state, List<MetadataReference> references, CompilationUnit unit)
+    {
+        if (previous == null || previousTrees == null || state == null || state.AllowUnsafe != unit.AllowUnsafe)
+            return CSharpCompilation.Create(unit.Name, trees.Values.Select(t => t.Tree), references, BuildOptions(unit));
+
+        CSharpCompilation compilation = previous;
+        foreach ((string path, (ulong Hash, SyntaxTree Tree) entry) in previousTrees)
+            if (!trees.TryGetValue(path, out (ulong Hash, SyntaxTree Tree) now) || !ReferenceEquals(now.Tree, entry.Tree))
+                compilation = compilation.RemoveSyntaxTrees(entry.Tree);
+
+        foreach ((string path, (ulong Hash, SyntaxTree Tree) entry) in trees)
+            if (!previousTrees.TryGetValue(path, out (ulong Hash, SyntaxTree Tree) before) || !ReferenceEquals(before.Tree, entry.Tree))
+                compilation = compilation.AddSyntaxTrees(entry.Tree);
+
+        return SameReferences(state.References, references) ? compilation : compilation.WithReferences(references);
     }
 
     /// <summary>Prowl's script safety analyzers, also run live by the code editor.</summary>

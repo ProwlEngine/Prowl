@@ -83,6 +83,10 @@ public class Animator : Component
     /// <summary>The running graph, for reading node state. Null while clips are playing.</summary>
     public AnimationGraphInstance? GraphInstance => _graph?.Graph;
 
+    internal event Action? BeforeEvaluate;
+    internal event Action<string, ParameterValue>? ParameterWritten;
+    internal event Action<string>? TriggerWritten;
+
     public SampledEventsBuffer? Events => _graph?.Events;
 
     public override void OnEnable()
@@ -119,7 +123,11 @@ public class Animator : Component
     public void SetInt(string name, int value) => SetParameter(name, ParameterValue.FromInt(value));
 
     /// <summary>Sets a trigger, which stays set until a state machine transition fires on it.</summary>
-    public void SetTrigger(string name) => SetBool(name, true);
+    public void SetTrigger(string name)
+    {
+        SetParameter(name, ParameterValue.FromBool(true), notify: false);
+        TriggerWritten?.Invoke(name);
+    }
 
     /// <summary>Clears a trigger no transition has used yet.</summary>
     public void ResetTrigger(string name) => SetBool(name, false);
@@ -153,9 +161,10 @@ public class Animator : Component
         return default;
     }
 
-    private void SetParameter(string name, ParameterValue value)
+    private void SetParameter(string name, ParameterValue value, bool notify = true)
     {
         AssertOwner();
+        if (notify) ParameterWritten?.Invoke(name, value);
         if (_graph != null)
         {
             TryWrite(name, value);
@@ -330,6 +339,7 @@ public class Animator : Component
     /// <summary>Advances the animation and pushes the pose onto the hierarchy.</summary>
     internal void Tick(float deltaTime)
     {
+        BeforeEvaluate?.Invoke();
         if (_animator != null && (GraphOutOfDate(out AnimationGraph? edited) || AvatarChanged()))
         {
             KeepParameters();

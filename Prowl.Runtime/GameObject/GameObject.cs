@@ -10,6 +10,7 @@ using System.Runtime.CompilerServices;
 
 using Prowl.Ember;
 using Prowl.Echo;
+using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
@@ -27,8 +28,6 @@ public partial class GameObject : EngineObject, ISerializable
     // The hot reload walk migrates this list in place; a removed-type component becomes null and is cleaned up
     // in OnHotReload.
     internal List<Component> _components = [];
-    // Type-keyed lookup - skipped by the walk (its keys reference old types) and rebuilt in OnHotReload.
-    [ReloadIgnore, NotHeld] private MultiValueDictionary<Type, Component> _componentCache = [];
 
     private Guid _identifier = Guid.NewGuid();
 
@@ -48,15 +47,22 @@ public partial class GameObject : EngineObject, ISerializable
     private Transform _transform = new();
 
     [SerializeIgnore]
-    private WeakReference<Scene> _scene;
+    private Scene? _scene;
 
     // Everything tying this object to a prefab, or null for the ordinary case. One reference rather
     // than a copy of each value on every GameObject in the scene.
     private PrefabLink? _prefabLink;
+    [SerializeIgnore] internal NetworkAccessor? _network;
 
     #endregion
 
     #region Public Fields/Properties
+
+    /// <summary>Network configuration, ownership and replication operations. Created on first access.</summary>
+    public NetworkAccessor Network => _network ??= new NetworkAccessor(this);
+
+    /// <summary>True when this peer receives the object's state from its controller.</summary>
+    public bool IsProxy => Networking.Networking.System?.IsProxy(this) == true;
 
     /// <summary> The Tag Index of this GameObject </summary>
     public int TagIndex;
@@ -153,8 +159,8 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     public Scene? Scene
     {
-        get => _scene != null && _scene.TryGetTarget(out Scene? scene) ? scene : null;
-        internal set => _scene = new(value);
+        get => _scene;
+        internal set => _scene = value;
     }
 
     /// <summary>
@@ -302,6 +308,8 @@ public partial class GameObject : EngineObject, ISerializable
         MainThreadContext.AssertOwner(NewParent);
         if (NewParent == _parent)
             return true;
+
+        SceneEvents.Invalidate();
 
         // Make sure that the new father is not a child of this transform.
         if (IsChildOrSameTransform(NewParent, this))
@@ -556,6 +564,7 @@ public partial class GameObject : EngineObject, ISerializable
 
         // Insert at new position
         Parent.Children.Insert(index, this);
+        SceneEvents.Invalidate();
 
         // Sibling order feeds the canvas draw-order (depth-first index); force a rebuild so the
         // reorder is reflected instead of drawing in the stale order.
@@ -604,7 +613,6 @@ public partial class GameObject : EngineObject, ISerializable
 
             newComponent.AttachToGameObject(this);
             _components.Add(newComponent);
-            _componentCache.Add(type, newComponent);
 
             NotifyComponentAddedToScene(newComponent);
 
@@ -702,7 +710,6 @@ public partial class GameObject : EngineObject, ISerializable
 
         comp.AttachToGameObject(this);
         _components.Add(comp);
-        _componentCache.Add(comp.GetType(), comp);
 
         NotifyComponentAddedToScene(comp);
         return true;
@@ -722,19 +729,8 @@ public partial class GameObject : EngineObject, ISerializable
         return false;
     }
 
-    /// <summary>
-    /// Post-hot-reload fixup, after the walk migrated the component references in place: drop any component
-    /// whose type was removed (the walk left it null) and rebuild the type-keyed lookup against the new types.
-    /// The lookup is keyed on the previous types, so it has to be rebuilt rather than repointed.
-    /// </summary>
-    internal void OnHotReload()
-    {
-        _components.RemoveAll(c => ReferenceEquals(c, null));
-
-        _componentCache = [];
-        foreach (Component comp in _components)
-            _componentCache.Add(comp.GetType(), comp);
-    }
+    /// <summary>Drops any component whose type a hot reload removed, which the walk left null.</summary>
+    internal void OnHotReload() => _components.RemoveAll(c => ReferenceEquals(c, null));
 
     /// <summary>
     /// When a component is added to a GameObject that already lives in a scene, it is entering that
@@ -759,23 +755,18 @@ public partial class GameObject : EngineObject, ISerializable
     /// <typeparam name="T">The type of components to remove.</typeparam>
     public void RemoveAll<T>() where T : Component
     {
-        if (_componentCache.TryGetValue(typeof(T), out IReadOnlyCollection<Component>? components))
+        List<T> components = [.. GetComponents<T>()];
+
+        // OnDisable is only called if OnEnable was previously called
+        foreach (T c in components)
+            if (c.HasBeenEnabled && c.EnabledInHierarchy)
+                c.InternalOnDisable();
+
+        foreach (T c in components)
         {
-            // Create a copy to avoid potential collection modification issues
-            var componentList = components.ToList();
-
-            // OnDisable is only called if OnEnable was previously called
-            foreach (Component c in componentList)
-                if (c.HasBeenEnabled && c.EnabledInHierarchy)
-                    c.InternalOnDisable();
-
-            foreach (Component c in componentList)
-            {
-                c.Destroy(); // Will call Dispose at end of frame not immediately so the component technically is still usable
-                c.DetachFromGameObject();
-                _components.Remove(c);
-            }
-            _componentCache.Remove(typeof(T));
+            c.Destroy(); // Will call Dispose at end of frame not immediately so the component technically is still usable
+            c.DetachFromGameObject();
+            _components.Remove(c);
         }
     }
 
@@ -832,8 +823,6 @@ public partial class GameObject : EngineObject, ISerializable
 
         if (_components.Remove(component))
         {
-            _componentCache.Remove(component.GetType(), component);
-
             // OnDisable only if OnEnable ran, but disposal is unconditional: a component can take
             // ownership of something from its constructor, long before it is ever enabled.
             if (component.HasBeenEnabled && component.EnabledInHierarchy)
@@ -850,8 +839,6 @@ public partial class GameObject : EngineObject, ISerializable
     internal void DetachComponent(Component component)
     {
         if (!_components.Remove(component)) return;
-
-        _componentCache.Remove(component.GetType(), component);
 
         if (component.HasBeenEnabled && component.EnabledInHierarchy)
             component.InternalOnDisable();
@@ -875,7 +862,13 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     /// <typeparam name="T">The type of component to get.</typeparam>
     /// <returns>The component of type T, or null if not found.</returns>
-    public T? GetComponent<T>() where T : Component => (T?)GetComponent(typeof(T));
+    public T? GetComponent<T>() where T : Component
+    {
+        foreach (Component comp in _components)
+            if (comp is T match)
+                return match;
+        return null;
+    }
 
     /// <summary>
     /// Gets the first component of the specified type attached to the GameObject.
@@ -885,12 +878,9 @@ public partial class GameObject : EngineObject, ISerializable
     public Component? GetComponent(Type type)
     {
         if (type == null) return null;
-        if (_componentCache.TryGetValue(type, out IReadOnlyCollection<Component>? components))
-            return components.FirstOrDefault();
-        else
-            foreach (Component comp in _components)
-                if (comp.GetType().IsAssignableTo(type))
-                    return comp;
+        foreach (Component comp in _components)
+            if (comp.GetType().IsAssignableTo(type))
+                return comp;
         return null;
     }
 
@@ -927,7 +917,14 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     /// <typeparam name="T">The type of components to get.</typeparam>
     /// <returns>An IEnumerable of components of type T.</returns>
-    public IEnumerable<T> GetComponents<T>() where T : Component => GetComponents(typeof(T)).Cast<T>();
+    public IEnumerable<T> GetComponents<T>() where T : Component
+    {
+        List<T> matches = [];
+        foreach (Component comp in _components)
+            if (comp is T match)
+                matches.Add(match);
+        return matches;
+    }
 
     /// <summary>
     /// Gets all components of the specified type attached to the GameObject.
@@ -941,9 +938,6 @@ public partial class GameObject : EngineObject, ISerializable
         // small enough that the copy costs less than the crash it prevents.
         if (type == typeof(Component))
             return [.. _components];
-
-        if (_componentCache.TryGetValue(type, out IReadOnlyCollection<Component>? components))
-            return [.. components];
 
         return [.. _components.Where(comp => comp.GetType().IsAssignableTo(type))];
     }
@@ -1149,13 +1143,19 @@ public partial class GameObject : EngineObject, ISerializable
         return false;
     }
 
-    private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(this, nameof(Dispose));
+    private protected override void AssertCanDispose()
+    {
+        MainThreadContext.AssertOwner(this, nameof(Dispose));
+        Networking.Networking.System?.BeforeObjectDisposed(this);
+    }
 
     /// <summary>
     /// Disposes of the GameObject and its components.
     /// </summary>
     protected override void OnDispose()
     {
+        Networking.Networking.System?.OnGameObjectDisposed(this);
+
         for (int i = Children.Count - 1; i >= 0; i--)
             Children[i].Dispose();
 
@@ -1178,7 +1178,6 @@ public partial class GameObject : EngineObject, ISerializable
         // still holding a reference to this GameObject (an editor panel, a render cache, a stray
         // delegate) transitively keeps its components - and therefore their user-script types and
         // the collectible AssemblyLoadContext - alive, which blocks script hot-reload.
-        _componentCache.Clear();
         Children.Clear();
 
         if (_parent.IsValid() && !_parent.IsDisposed)
@@ -1326,6 +1325,8 @@ public partial class GameObject : EngineObject, ISerializable
 
         compoundTag.Add("HideFlags", new EchoObject((int)HideFlags));
 
+        NetworkSerialization.Write(this, compoundTag);
+
         compoundTag.Add("Transform", Serializer.Serialize(typeof(object), _transform, ctx));
 
         EchoObject components = EchoObject.NewList();
@@ -1335,7 +1336,11 @@ public partial class GameObject : EngineObject, ISerializable
 
         EchoObject children = EchoObject.NewList();
         foreach (GameObject child in Children)
+        {
+            if (!NetworkSerialization.Include(child))
+                continue;
             children.ListAdd(Serializer.Serialize(typeof(GameObject), child, ctx));
+        }
         compoundTag.Add("Children", children);
 
         // One block, absent entirely for an ordinary GameObject, and a build can drop the editor-only
@@ -1367,6 +1372,7 @@ public partial class GameObject : EngineObject, ISerializable
         TagIndex = value["TagIndex"]?.IntValue ?? 0;
         LayerIndex = value["LayerIndex"]?.IntValue ?? 0;
         HideFlags = (HideFlags)(value["HideFlags"]?.IntValue ?? 0);
+        NetworkSerialization.Read(this, value);
 
         // Absent for an ordinary GameObject, which then allocates nothing for it.
         _prefabLink = value.TryGet("Prefab", out EchoObject? linkTag)
@@ -1476,11 +1482,7 @@ public partial class GameObject : EngineObject, ISerializable
         }
     }
 
-    private void AddLoadedComponent(Component component)
-    {
-        _components.Add(component);
-        _componentCache.Add(component.GetType(), component);
-    }
+    private void AddLoadedComponent(Component component) => _components.Add(component);
 
     /// <summary>
     /// Attaches a bare component of the given type, for a copy to fill. Unlike <see cref="AddComponent(Type)"/> this

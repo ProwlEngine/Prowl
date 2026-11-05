@@ -98,6 +98,22 @@
             "problemMatcher": "$msCompile"
         },
         {
+            "label": "build: NetworkingShowcase Debug",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/Samples/Runtime/NetworkingShowcase/NetworkingShowcase.csproj",
+                "-c",
+                "Debug"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
             "label": "build: PhysicsShowcase Debug",
             "command": "dotnet",
             "type": "process",
