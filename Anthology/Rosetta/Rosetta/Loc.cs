@@ -21,6 +21,13 @@ public static partial class Loc
     private static string _fallbackLocale = "en";
     private static MissingKeyBehavior _missingKeyBehavior = MissingKeyBehavior.ReturnFallback;
 
+    // Hot reload state.
+    private static readonly Timer _timer = new(OnTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
+    private static int _retryCount = 0;
+    private const int InitialDelayInMs = 100;
+    private const int MaxRetryCount = 3;
+    private const int RetryDelayInMs = 400;
+
     [ThreadStatic] private static string? _scopedLocale;
 
     /// <summary>The currently active locale.</summary>
@@ -43,6 +50,10 @@ public static partial class Loc
     /// <remarks> This method is not thread-safe. </remarks>
     public static void Configure(Action<LocConfig> configure)
     {
+        // Unbind any previous event handlers.
+        foreach (ILocalizationProvider provider in _providers)
+            provider.Changed -= OnProviderTranslationsChanged;
+
         var config = new LocConfig();
         configure(config);
 
@@ -58,9 +69,13 @@ public static partial class Loc
         _providers.AddRange(config.Providers);
 
         // Pre-load current and fallback
-        LoadLocaleInternal(_currentLocale);
+        LoadLocale(_currentLocale);
         if (_currentLocale != _fallbackLocale)
-            LoadLocaleInternal(_fallbackLocale);
+            LoadLocale(_fallbackLocale);
+
+        // Bind event handlers for all providers.
+        foreach (ILocalizationProvider provider in _providers)
+            provider.Changed += OnProviderTranslationsChanged;
     }
 
     /// <summary>
@@ -75,7 +90,7 @@ public static partial class Loc
             if (_currentLocale == locale) return;
             previousLocale = _currentLocale;
             _currentLocale = locale;
-            LoadLocaleInternal(locale);
+            LoadLocale(locale);
         }
         finally
         {
@@ -98,6 +113,7 @@ public static partial class Loc
         try
         {
             _providers.Add(provider);
+            provider.Changed += OnProviderTranslationsChanged;
             ReloadInternal();
         }
         finally
@@ -125,9 +141,9 @@ public static partial class Loc
     private static void ReloadInternal()
     {
         _cache.Clear();
-        LoadLocaleInternal(_currentLocale);
+        LoadLocale(_currentLocale);
         if (_currentLocale != _fallbackLocale)
-            LoadLocaleInternal(_fallbackLocale);
+            LoadLocale(_fallbackLocale);
     }
 
     /// <summary>
@@ -143,7 +159,7 @@ public static partial class Loc
                 _lock.EnterWriteLock();
                 try
                 {
-                    LoadLocaleInternal(locale);
+                    LoadLocale(locale);
                 }
                 finally
                 {
@@ -280,7 +296,7 @@ public static partial class Loc
         return translations.TryGetValue(key, out value);
     }
 
-    private static void LoadLocaleInternal(string locale)
+    private static void LoadLocale(string locale)
     {
         if (_cache.ContainsKey(locale)) return;
 
@@ -322,6 +338,30 @@ public static partial class Loc
                 dict[prop.Name] = val.ToString()!;
         }
         return dict;
+    }
+
+    private static void OnProviderTranslationsChanged(object? sender, EventArgs e)
+    {
+        // Because of the way FileSystemWatcher works, this method may be called multiple times in quick succession.
+        // Additionally, it may not be safe to reload the translations yet.
+        // By triggering a timer, we "debounce" the file system event and additionally we ensure that loading is done
+        // off the file system watcher thread.
+        _retryCount = 0;
+        _timer.Change(InitialDelayInMs, Timeout.Infinite);
+    }
+
+    private static void OnTimerElapsed(object? state)
+    {
+        try
+        {
+            Reload();
+        }
+        catch (Exception)
+        {
+            // If hot-reload fails, try again later.
+            if (Interlocked.Increment(ref _retryCount) <= MaxRetryCount)
+                _timer.Change(RetryDelayInMs, Timeout.Infinite);
+        }
     }
 
     #endregion

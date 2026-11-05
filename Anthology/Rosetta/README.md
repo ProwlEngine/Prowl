@@ -103,7 +103,7 @@ Rosetta ships with the following built-in providers:
 
 | Provider | Description |
 |---|---|
-| `JsonFileProvider` | Loads `.json` files from disk. Path supports `{locale}` token. |
+| `JsonFileProvider` | Loads `.json` files from disk. Path supports `{locale}` token. Automatically reloads if the `.json` file changes. |
 | `EmbeddedResourceProvider` | Loads from embedded assembly resources. Good for libraries and engines. |
 | `InMemoryProvider` | Loads from a `Dictionary<string, string>`. Useful for testing. |
 
@@ -232,3 +232,8 @@ Loc.Reload();
 - **Never throws in production.** The default missing key behaviour is `ReturnFallback` then `ReturnKey`. Your game keeps running.
 
 ---
+
+## Thread-safety Note
+
+All public static methods other than `Loc.Configure` (which is designed to be called once at startup) are thread-safe
+and may be called concurrently. If you subscribe to any events, it is up to you to ensure the event handlers are thread-safe.
