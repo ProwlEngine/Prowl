@@ -188,8 +188,8 @@ public class PhysicsWorld
     private List<Rigidbody3D> _movedBodies = [];
     private List<Rigidbody3D> _movedScratch = [];
 
-    // Colliders that can move relative to their body: static ones, and ones on a child GameObject.
-    private readonly List<Collider> _watchedColliders = [];
+    // Colliders whose placement or layer may have changed since the last sync, never ones on their rigidbody's own GameObject.
+    private readonly List<Collider> _pendingColliders = [];
     private uint _captureStamp;
 
     // Colliders without a Rigidbody3D all share one static body per layer, so a hit's body cannot say
@@ -616,6 +616,9 @@ public class PhysicsWorld
         return null;
     }
 
+    /// <summary>Bumped by every sync, so a Transform queues its colliders once a sync however often it moves.</summary>
+    internal static uint SyncEpoch { get; private set; } = 1;
+
     /// <summary>
     /// Pushes any changed Transforms into their physics bodies and collider shapes (transform -> body).
     /// Runs automatically before each simulation step when <see cref="AutoSyncTransforms"/> is on. Call it
@@ -635,6 +638,7 @@ public class PhysicsWorld
         _pendingSync.Clear();
 
         RefreshColliders();
+        SyncEpoch++;
     }
 
     internal void QueueSync(Rigidbody3D body)
@@ -644,36 +648,25 @@ public class PhysicsWorld
         _pendingSync.Add(body);
     }
 
-    internal void WatchCollider(Collider collider)
+    internal void QueueCheck(Collider collider)
     {
-        if (collider.WatchIndex >= 0) return;
-        collider.WatchIndex = _watchedColliders.Count;
-        _watchedColliders.Add(collider);
+        if (collider.CheckQueued) return;
+        collider.CheckQueued = true;
+        _pendingColliders.Add(collider);
     }
 
-    internal void UnwatchCollider(Collider collider)
-    {
-        int index = collider.WatchIndex;
-        if (index < 0 || index >= _watchedColliders.Count || !ReferenceEquals(_watchedColliders[index], collider)) return;
-
-        int last = _watchedColliders.Count - 1;
-        Collider moved = _watchedColliders[last];
-        _watchedColliders[index] = moved;
-        moved.WatchIndex = index;
-        _watchedColliders.RemoveAt(last);
-        collider.WatchIndex = -1;
-    }
-
-    /// <summary>Rebuilds the shapes of watched colliders whose placement changed.</summary>
+    /// <summary>Rebuilds the shapes of queued colliders whose placement changed.</summary>
     private void RefreshColliders()
     {
-        // Backwards, since a rebuild swaps the collider out of its slot and appends it again.
-        for (int i = _watchedColliders.Count - 1; i >= 0; i--)
+        // Indexed, since a rebuild queues the collider again and it is checked again in the same pass.
+        for (int i = 0; i < _pendingColliders.Count; i++)
         {
-            if (i >= _watchedColliders.Count) continue;
-            Collider collider = _watchedColliders[i];
+            Collider collider = _pendingColliders[i];
+            if (ReferenceEquals(collider, null)) continue; // a hot reload nulls a removed type's references
+            collider.CheckQueued = false;
             if (collider.IsValid() && collider.EnabledInHierarchy) collider.RefreshPlacement();
         }
+        _pendingColliders.Clear();
     }
 
     /// <summary>
@@ -879,9 +872,9 @@ public class PhysicsWorld
         foreach (Rigidbody3D body in _pendingSync)
             body.SyncQueued = false;
         _pendingSync.Clear();
-        foreach (Collider collider in _watchedColliders)
-            collider.WatchIndex = -1;
-        _watchedColliders.Clear();
+        foreach (Collider collider in _pendingColliders)
+            collider.CheckQueued = false;
+        _pendingColliders.Clear();
         _shapeOwners.Clear();
         _shapeOwnersById.Clear();
         _layerFilter.ClearIgnoredCollisions();
