@@ -74,11 +74,12 @@ public class JsonFileProvider : ILocalizationProvider
     /// <summary>Watches a file for changes.</summary>
     private void WatchFile(string path)
     {
+        string fileName = Path.GetFileName(path);
         if (_watcher is null)
         {
             string directoryPath = Path.GetDirectoryName(path) ?? throw new ArgumentException("Invalid file path.", nameof(path));
             _watcher = new FileSystemWatcher(directoryPath);
-            _watcher.Filter = Path.GetFileName(path);
+            _watcher.Filter = fileName;
             _watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName;
             _watcher.Created += OnFileChanged;
             _watcher.Changed += OnFileChanged;
@@ -87,7 +88,8 @@ public class JsonFileProvider : ILocalizationProvider
         }
         else
         {
-            _watcher.Filters.Add(Path.GetFileName(path));
+            if (!_watcher.Filters.Contains(fileName))
+                _watcher.Filters.Add(fileName);
         }
     }
 
