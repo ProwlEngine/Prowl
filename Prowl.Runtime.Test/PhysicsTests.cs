@@ -1998,7 +1998,7 @@ public class PhysicsTests : RuntimeTestBase
         var dir = new Float3(0, -1, 0);
 
         Assert.True(scene.Physics.Raycast(from, dir, 50f, out _));
-        Assert.False(scene.Physics.Raycast(from, dir, out _, 50f, QueryFilter.Default.Ignoring(rb)),
+        Assert.False(scene.Physics.Raycast(from, dir, 50f, out _, QueryFilter.Default.Ignoring(rb)),
             "the ignored body should not be reported");
     }
 
@@ -2015,7 +2015,7 @@ public class PhysicsTests : RuntimeTestBase
         Assert.True(scene.Physics.Raycast(from, dir, 50f, out _));
 
         Collider collider = floor.GetComponent<BoxCollider>()!;
-        Assert.False(scene.Physics.Raycast(from, dir, out _, 50f, QueryFilter.Default.Ignoring(collider)),
+        Assert.False(scene.Physics.Raycast(from, dir, 50f, out _, QueryFilter.Default.Ignoring(collider)),
             "the ignored collider should not be reported");
     }
 
