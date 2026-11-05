@@ -102,15 +102,6 @@ public sealed class VolumetricClouds : Component, IRenderSync
     /// <summary>Size of the detail noise in meters.</summary>
     public float DetailScale = 1000f;
 
-    /// <summary>
-    /// How much billowy puffs eat into thin cloud, detail at screen resolution on top of <see cref="Erosion"/>.
-    /// </summary>
-    [Range(0f, 1f)]
-    public float PuffStrength = 0.5f;
-
-    /// <summary>How many puffs fit across twice the layer's thickness.</summary>
-    public float PuffScale = 10f;
-
     /// <summary>Wind speed in meters a second.</summary>
     [Header("Wind")]
     public float WindSpeed = 15f;
@@ -157,14 +148,14 @@ public sealed class VolumetricClouds : Component, IRenderSync
     /// Resolution the clouds are built at before they are scaled up over the scene. With
     /// <see cref="TemporalUpscale"/> on, only a quarter of these pixels are drawn each frame.
     /// </summary>
-    public CloudResolution Resolution = CloudResolution.Quarter;
+    public CloudResolution Resolution = CloudResolution.Full;
 
     /// <summary>
     /// Draws a quarter of the clouds' pixels each frame, a different one of every 2x2 block in turn, and fills in the
     /// rest from earlier frames moved to where the clouds are now. About a quarter of the cost for the same sharpness
     /// once settled, a little soft for a few frames after fast camera turns.
     /// </summary>
-    public bool TemporalUpscale = true;
+    public bool TemporalUpscale = false;
 
 
     /// <summary>Radius of the planet in meters, which curves the cloud layers down toward the horizon.</summary>

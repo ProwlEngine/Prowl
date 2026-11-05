@@ -56,6 +56,7 @@ public abstract class StationGame : Game
     private const int PerformanceFrames = 300;
     private string? _captureFolder;
     private int _captureFrames = 120;
+    private string? _captureStation;
     private int _captureCounter;
     private bool _captureNow;
     private readonly Stopwatch _frameClock = new();
@@ -109,7 +110,7 @@ public abstract class StationGame : Game
         Build();
         if (_captureFolder != null) FixParticleSeeds();
 
-        GoToStation(0);
+        GoToStation(_captureStation == null ? 0 : Math.Max(Stations.FindIndex(s => s.Name.Equals(_captureStation, StringComparison.OrdinalIgnoreCase)), 0));
         Scene.Load(SampleScene);
     }
 
@@ -229,6 +230,11 @@ public abstract class StationGame : Game
         if (at + 2 < args.Length && int.TryParse(args[at + 2], out int frames))
             _captureFrames = frames;
 
+        // With --station only that station is captured
+        int station = Array.IndexOf(args, "--station");
+        if (station >= 0 && station + 1 < args.Length)
+            _captureStation = args[station + 1];
+
         // Warnings and errors land in the capture's log, so a capture that looks wrong says why
         Prowl.Runtime.Debug.OnLog += (message, _, severity) =>
         {
@@ -287,7 +293,7 @@ public abstract class StationGame : Game
 
         WritePerformance();
         _captureCounter = 0;
-        if (CurrentStation + 1 < Stations.Count)
+        if (_captureStation == null && CurrentStation + 1 < Stations.Count)
             GoToStation(CurrentStation + 1);
         else
         {

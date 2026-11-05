@@ -783,8 +783,6 @@ public sealed class RenderingShowcaseGame : StationGame
         Slider(paper, font, "Coverage", _clouds.Coverage, 0f, 1f, v => _clouds.Coverage = v);
         Slider(paper, font, "Density", _clouds.Density, 0f, 4f, v => _clouds.Density = v);
         Slider(paper, font, "Erosion", _clouds.Erosion, 0f, 1f, v => _clouds.Erosion = v);
-        Slider(paper, font, "Puff strength", _clouds.PuffStrength, 0f, 1f, v => _clouds.PuffStrength = v);
-        Slider(paper, font, "Puff scale", _clouds.PuffScale, 0.5f, 10f, v => _clouds.PuffScale = v, "0.0");
         Toggle(paper, font, "Temporal upscale", _clouds.TemporalUpscale, v => _clouds.TemporalUpscale = v);
         Slider(paper, font, "Reach", _clouds.Reach, 8000f, 128000f, v => _clouds.Reach = v, "0");
         Toggle(paper, font, "March toward the sun", _clouds.MarchToSun, v => _clouds.MarchToSun = v);

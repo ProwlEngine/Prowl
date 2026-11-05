@@ -33,7 +33,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
     internal sealed class CloudSettings
     {
         public Float4 Shape, Pattern, Lighting, Albedo;
-        public Float2 Wind, Puff;
+        public Float2 Wind;
         public double WindX, WindZ;
         public Float3 ToSun, SunColor, SkyLight;
         public float AmbientSaturation, HorizonFade, Reach, DetailScale;
@@ -48,7 +48,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         public void CopyTo(CloudSettings other)
         {
             (other.Shape, other.Pattern, other.Lighting, other.Albedo) = (Shape, Pattern, Lighting, Albedo);
-            (other.Wind, other.Puff, other.WindX, other.WindZ) = (Wind, Puff, WindX, WindZ);
+            (other.Wind, other.WindX, other.WindZ) = (Wind, WindX, WindZ);
             (other.ToSun, other.SunColor, other.SkyLight) = (ToSun, SunColor, SkyLight);
             (other.AmbientSaturation, other.HorizonFade, other.Reach, other.DetailScale) = (AmbientSaturation, HorizonFade, Reach, DetailScale);
             (other.LightSamples, other.Scale, other.Temporal) = (LightSamples, Scale, Temporal);
@@ -138,7 +138,6 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         s.Albedo = new Float4(clouds.Albedo.R, clouds.Albedo.G, clouds.Albedo.B, clouds.Albedo.A);
         s.Wind = clouds.WindOffset;
         (s.WindX, s.WindZ) = (clouds.WindX, clouds.WindZ);
-        s.Puff = new Float2(Math.Clamp(clouds.PuffStrength, 0f, 1f), MathF.Max(clouds.PuffScale, 0.01f));
         s.AmbientSaturation = Math.Clamp(clouds.AmbientSaturation, 0f, 1f);
         s.HorizonFade = 1f / MathF.Max(clouds.HorizonFade, 100f);
         s.Reach = MathF.Max(clouds.Reach, 200f);
@@ -205,8 +204,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         _values.Clear();
         _tolerances.Clear();
         Add(clouds.Altitude); Add(clouds.Thickness); Add(clouds.Coverage); Add(clouds.Density);
-        Add(clouds.PatternScale); Add(clouds.Erosion); Add(clouds.DetailScale); Add(clouds.PuffStrength);
-        Add(clouds.PuffScale); Add(clouds.Albedo.R); Add(clouds.Albedo.G); Add(clouds.Albedo.B);
+        Add(clouds.PatternScale); Add(clouds.Erosion); Add(clouds.DetailScale); Add(clouds.Albedo.R); Add(clouds.Albedo.G); Add(clouds.Albedo.B);
         Add(clouds.SunBrightness); Add(clouds.AmbientBrightness); Add(clouds.AmbientSaturation);
         Add(clouds.SilverLining); Add(clouds.HorizonFade); Add(clouds.Reach);
         Add(clouds.MarchToSun ? 1f : 0f); Add(clouds.LightSamples); Add(clouds.PlanetRadius);
@@ -328,7 +326,6 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         _properties.SetFloat("_CloudAmbientSaturation", s.AmbientSaturation);
         _properties.SetFloat("_CloudHorizonFade", s.HorizonFade);
         _properties.SetInt("_CloudLightSamples", s.LightSamples);
-        _properties.SetFloat2("_CloudPuff", s.Puff);
         SetLayers(s);
         _properties.SetFloat("_CloudReach", s.Reach);
         context.Fullscreen(_march, target, _properties);
