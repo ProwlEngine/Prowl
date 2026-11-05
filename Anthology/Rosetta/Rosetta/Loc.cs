@@ -214,6 +214,7 @@ public static partial class Loc
         var locale = CurrentLocale;
         var category = PluralRules.GetCategory(locale, count);
         var raw = Resolve($"{key}.{category}", locale);
+        // Merge count into args via reflection
         var dict = ObjectToDict(args);
         dict["count"] = count.ToString();
         return Interpolate(raw, dict);
