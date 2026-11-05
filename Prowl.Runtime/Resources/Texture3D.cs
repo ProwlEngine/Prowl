@@ -40,7 +40,7 @@ public sealed class Texture3D : Texture, ISerializable
     {
         (string fileName, uint size, TextureFormat format) = texture switch
         {
-            DefaultTexture3D.CloudNoise => ("cloud_noise_3d.bin", 64u, TextureFormat.RG16),
+            DefaultTexture3D.CloudNoise => ("cloud_noise_3d.bin", 64u, TextureFormat.RGBA16),
             _ => throw new ArgumentException($"Unknown default 3D texture: {texture}")
         };
 

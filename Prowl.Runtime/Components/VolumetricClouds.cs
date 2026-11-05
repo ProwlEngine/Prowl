@@ -68,9 +68,10 @@ public sealed class CloudLayer
 /// <summary>
 /// Volumetric clouds over the whole scene, with optional flat cloud layers above or below them.
 /// <para/>
-/// The cloud layer is ray marched through the view at a reduced resolution, taking its density from a coverage map
-/// around the camera and eroding its edges with 3D noise, lit from a sun map drawn once a frame or by marching a few
-/// steps toward the sun. Everything is scaled up over the scene. The scene's first enabled clouds are drawn, by a
+/// The cloud layer is ray marched through the view, taking its density from a coverage map around the camera shaped by
+/// a height profile and eroded by 3D noise. Each pixel of cloud marches a short way toward the sun with all its detail
+/// and reads the rest of the way from a sun map. The maps are kept from frame to frame and only drawn where the camera
+/// or the wind uncovers them, plus a slice a frame. Everything is scaled up over the scene. The scene's first enabled clouds are drawn, by a
 /// <see cref="VolumetricCloudsFeature"/> in the scene's world.
 /// </summary>
 [ExecuteAlways]
@@ -93,14 +94,17 @@ public sealed class VolumetricClouds : Component, IRenderSync
     public float Density = 1f;
 
     /// <summary>Size of the weather pattern in meters, how far apart clusters of clouds are.</summary>
-    public float PatternScale = 24000f;
+    public float PatternScale = 12000f;
 
     /// <summary>How much the detail noise eats into cloud edges.</summary>
     [Range(0f, 1f)]
-    public float Erosion = 0.5f;
+    public float Erosion = 1f;
 
     /// <summary>Size of the detail noise in meters.</summary>
-    public float DetailScale = 1000f;
+    public float DetailScale = 600f;
+
+    /// <summary>How quickly the clouds change shape as they drift, in turns of the detail noise per second.</summary>
+    public float FormationChangeSpeed = 0.002f;
 
     /// <summary>Wind speed in meters a second.</summary>
     [Header("Wind")]
@@ -112,37 +116,53 @@ public sealed class VolumetricClouds : Component, IRenderSync
     [Header("Lighting")]
     public Color Albedo = new(1f, 1f, 1f, 1f);
 
-    /// <summary>Scales the sunlight the clouds receive.</summary>
-    public float SunBrightness = 1f;
+    /// <summary>
+    /// Scales the sunlight the clouds receive. Above 1 makes up for the light that scatters many times inside real
+    /// clouds, which the march only roughly follows.
+    /// </summary>
+    public float SunBrightness = 1.5f;
 
     /// <summary>Scales the sky light the clouds receive.</summary>
-    public float AmbientBrightness = 1f;
+    public float AmbientBrightness = 2f;
 
     /// <summary>How much of the sky's color the sky light keeps. Lower greys it, so clouds do not turn blue.</summary>
     [Range(0f, 1f)]
-    public float AmbientSaturation = 0.5f;
+    public float AmbientSaturation = 1f;
 
     /// <summary>How bright the rim around the sun gets when looking through thin cloud toward it.</summary>
     [Range(0f, 1f)]
     public float SilverLining = 0.6f;
 
-    /// <summary>Beyond about this distance in meters the clouds fade into the sky behind them.</summary>
-    public float HorizonFade = 40000f;
-
-    /// <summary>How far the clouds reach around the camera, in meters.</summary>
-    [Header("Quality")]
-    public float Reach = 64000f;
+    /// <summary>
+    /// How much of the light that scatters more than once comes back out. Higher fills the shaded parts of a cloud
+    /// with light, lower leaves them darker.
+    /// </summary>
+    [Range(0f, 1f)]
+    public float MultipleScattering = 0.4f;
 
     /// <summary>
-    /// Marches toward the sun for every pixel of cloud instead of reading the sun map, which is drawn once a frame
-    /// from the same march. Sharper self shadowing from the detail noise, at <see cref="LightSamples"/> extra reads of
-    /// the coverage and noise per pixel.
+    /// How much cloud light that scattered more than once still has to cross. Lower lets it reach deeper, so thick
+    /// cloud stays brighter inside.
     /// </summary>
+    [Range(0f, 1f)]
+    public float MultipleScatteringOcclusion = 0.2f;
+
+    /// <summary>
+    /// Around this distance in meters the clouds fade into the sky behind them, little before it and quickly past it.
+    /// They are drawn out to twice this, where nothing of them is left to see.
+    /// </summary>
+    public float HorizonFade = 16000f;
+
+    /// <summary>
+    /// Shades every pixel of cloud from one sample <see cref="SunTapDistance"/> toward the sun instead of the sun map:
+    /// where the cloud grows denser toward the sun the pixel is in shadow. Cheaper, and every billow shades itself, but
+    /// without the shadow of cloud further toward the sun.
+    /// </summary>
+    [Header("Quality")]
     public bool MarchToSun = false;
 
-    /// <summary>Samples taken toward the sun for each pixel of cloud, when <see cref="MarchToSun"/> is on.</summary>
-    [Range(1, 12)]
-    public int LightSamples = 5;
+    /// <summary>How far toward the sun the sample is taken when <see cref="MarchToSun"/> is on, in meters.</summary>
+    public float SunTapDistance = 0.5f;
 
     /// <summary>
     /// Resolution the clouds are built at before they are scaled up over the scene. With
@@ -182,6 +202,11 @@ public sealed class VolumetricClouds : Component, IRenderSync
 
     /// <summary>How far the wind has carried the clouds, in meters on the XZ plane.</summary>
     public Float2 WindOffset => new((float)_windX, (float)_windZ);
+
+    private double _formation;
+
+    /// <summary>How far the formations have changed, along the 3D noise's third axis.</summary>
+    public float FormationOffset => (float)(_formation % 1.0);
 
     internal double WindX => _windX;
     internal double WindZ => _windZ;
@@ -255,5 +280,6 @@ public sealed class VolumetricClouds : Component, IRenderSync
         Float2 wind = WindVector * (WindSpeed * Time.DeltaTime);
         _windX += wind.X;
         _windZ += wind.Y;
+        _formation += FormationChangeSpeed * Time.DeltaTime;
     }
 }

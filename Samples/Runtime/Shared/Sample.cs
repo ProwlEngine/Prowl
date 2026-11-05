@@ -53,7 +53,7 @@ public abstract class StationGame : Game
 
     // Capture mode renders every station with time locked to 60 frames a second, saves an image of each and then
     // times a run of frames there, for reference images and performance numbers that repeat run to run
-    private const int PerformanceFrames = 300;
+    private int _performanceFrames = 300;
     private string? _captureFolder;
     private int _captureFrames = 120;
     private string? _captureStation;
@@ -230,6 +230,11 @@ public abstract class StationGame : Game
         if (at + 2 < args.Length && int.TryParse(args[at + 2], out int frames))
             _captureFrames = frames;
 
+        // With --frames each station times that many frames instead of 300
+        int timed = Array.IndexOf(args, "--frames");
+        if (timed >= 0 && timed + 1 < args.Length && int.TryParse(args[timed + 1], out int count))
+            _performanceFrames = Math.Max(count, 1);
+
         // With --station only that station is captured
         int station = Array.IndexOf(args, "--station");
         if (station >= 0 && station + 1 < args.Length)
@@ -289,7 +294,7 @@ public abstract class StationGame : Game
 
         _frameTimes.Add(elapsed);
         _waitTimes.Add(Graphics.LastFrameWaitMs);
-        if (_frameTimes.Count < PerformanceFrames) return;
+        if (_frameTimes.Count < _performanceFrames) return;
 
         WritePerformance();
         _captureCounter = 0;
@@ -686,7 +691,7 @@ public sealed class PhysicsGrabber : Component
     private void TryGrab(Ray ray)
     {
         PhysicsWorld physics = GameObject.Scene.Physics;
-        if (!physics.Raycast(ray.Origin, ray.Direction, out RaycastHit hit, 200f, QueryFilter.Default)) return;
+        if (!physics.Raycast(ray.Origin, ray.Direction, 200f, out RaycastHit hit, QueryFilter.Default)) return;
 
         Rigidbody3D body = hit.Rigidbody;
         if (body.IsNotValid() || body.MotionType != Jitter2.Dynamics.MotionType.Dynamic) return;

@@ -764,13 +764,13 @@ public sealed class RenderingShowcaseGame : StationGame
 
     private void BuildClouds(Float3 c)
     {
-        AddStation("Clouds", "Clouds cover the whole scene, so they are over every station. They are ray marched at a reduced resolution, shaped by a coverage map and noise, and lit from a sun map so each step reads its light once.", c, new Float3(0f, 2f, -6f), 8f);
+        AddStation("Clouds", "Clouds cover the whole scene, so they are over every station. They are ray marched through a coverage map shaped by a height profile and eroded by cell noise, lit by a short march toward the sun and a sun map past it.", c, new Float3(0f, 2f, -6f), 4.2f);
 
         var clouds = new GameObject("Clouds");
         _clouds = clouds.AddComponent<VolumetricClouds>();
         _clouds.Layers =
         [
-            new CloudLayer { Style = CloudLayerStyle.Cirrus, Altitude = 9000f, Coverage = 0.5f, Opacity = 0.6f },
+            new CloudLayer { Enabled = false, Style = CloudLayerStyle.Cirrus, Altitude = 9000f, Coverage = 0.5f, Opacity = 0.6f },
             new CloudLayer { Enabled = false, Style = CloudLayerStyle.Stratus, Altitude = 5000f, Coverage = 0.45f, Opacity = 0.6f, WindMultiplier = 1.5f },
         ];
         Add(clouds);
@@ -783,11 +783,16 @@ public sealed class RenderingShowcaseGame : StationGame
         Slider(paper, font, "Coverage", _clouds.Coverage, 0f, 1f, v => _clouds.Coverage = v);
         Slider(paper, font, "Density", _clouds.Density, 0f, 4f, v => _clouds.Density = v);
         Slider(paper, font, "Erosion", _clouds.Erosion, 0f, 1f, v => _clouds.Erosion = v);
+        Slider(paper, font, "Sun brightness", _clouds.SunBrightness, 0f, 6f, v => _clouds.SunBrightness = v);
+        Slider(paper, font, "Ambient brightness", _clouds.AmbientBrightness, 0f, 4f, v => _clouds.AmbientBrightness = v);
+        Slider(paper, font, "Ambient saturation", _clouds.AmbientSaturation, 0f, 1f, v => _clouds.AmbientSaturation = v);
+        Slider(paper, font, "Multiple scattering", _clouds.MultipleScattering, 0f, 1f, v => _clouds.MultipleScattering = v);
+        Slider(paper, font, "Scattering occlusion", _clouds.MultipleScatteringOcclusion, 0f, 1f, v => _clouds.MultipleScatteringOcclusion = v);
         Toggle(paper, font, "Temporal upscale", _clouds.TemporalUpscale, v => _clouds.TemporalUpscale = v);
-        Slider(paper, font, "Reach", _clouds.Reach, 8000f, 128000f, v => _clouds.Reach = v, "0");
+        Slider(paper, font, "Horizon fade", _clouds.HorizonFade, 5000f, 100000f, v => _clouds.HorizonFade = v, "0");
         Toggle(paper, font, "March toward the sun", _clouds.MarchToSun, v => _clouds.MarchToSun = v);
         if (_clouds.MarchToSun)
-            Slider(paper, font, "Light samples", _clouds.LightSamples, 1f, 8f, v => _clouds.LightSamples = (int)MathF.Round(v), "0");
+            Slider(paper, font, "Sun sample distance", _clouds.SunTapDistance, 0.1f, 200f, v => _clouds.SunTapDistance = v, "0.0");
         Slider(paper, font, "Altitude", _clouds.Altitude, 200f, 4000f, v => _clouds.Altitude = v, "0");
         Slider(paper, font, "Thickness", _clouds.Thickness, 100f, 3000f, v => _clouds.Thickness = v, "0");
         Slider(paper, font, "Wind speed", _clouds.WindSpeed, 0f, 200f, v => _clouds.WindSpeed = v, "0");
