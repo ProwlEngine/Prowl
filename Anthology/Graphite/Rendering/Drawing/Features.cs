@@ -736,6 +736,17 @@ public sealed class FeatureBuilder
         => _graph.Write(FrameGraph.Create(_pass.IdOf("History", name, -1), desc, Lifetime.History(frames), Scope), usage);
 
     /// <summary>
+    /// A texture the feature made and owns, kept across frames until it disposes it, which this pass draws and reads.
+    /// Draws keep what it holds, so a feature can fill it a region at a time.
+    /// </summary>
+    public TextureHandle Import(RenderTexture texture, TextureState usage = TextureState.Attachment | TextureState.Sampled)
+        => _graph.Write(FrameGraph.Import(texture), usage);
+
+    /// <summary>A texture the feature made and owns, which this pass only reads.</summary>
+    public TextureHandle ImportRead(RenderTexture texture, TextureState usage = TextureState.Sampled)
+        => _graph.Read(FrameGraph.Import(texture), usage);
+
+    /// <summary>
     /// Declares the feature records the view's renderables or sky through the context's Draw methods, or draws lit
     /// programs, which read the view's lights, shadows and probes.
     /// </summary>
@@ -1061,13 +1072,20 @@ public sealed class FeatureContext
     }
 
     /// <summary>
-    /// Draws a fullscreen program over a texture the feature declared, Temporary or History, the colour it reads bound as
+    /// Draws a fullscreen program over a texture the feature declared, Temporary, History or imported, the colour it reads bound as
     /// Graphite_Source, with any properties given. Clear first clears it to transparent black, for programs that discard.
     /// Shared draws once over a texture of one layer, for state a layered view's layers share, with the program's layered
     /// form on a layered view so the view sized textures it reads give their first layer.
     /// </summary>
     public void Fullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties = null, bool clear = false, bool shared = false)
-        => DrawFullscreen(program, target, properties, shared ? 1 : View.LayerCount, clear);
+        => DrawFullscreen(program, target, properties, shared ? 1 : View.LayerCount, clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store), null);
+
+    /// <summary>
+    /// Draws a fullscreen program over one region of a texture the feature declared, keeping the rest of what it holds,
+    /// for a texture filled a region at a time. Shared as for <see cref="Fullscreen(FullscreenProgram, RenderTexture, PropertySet?, bool, bool)"/>.
+    /// </summary>
+    public void Fullscreen(FullscreenProgram program, RenderTexture target, int x, int y, int width, int height, PropertySet? properties = null, bool shared = false)
+        => DrawFullscreen(program, target, properties, shared ? 1 : View.LayerCount, AttachmentOps.Loaded, (x, y, width, height));
 
     /// <summary>
     /// Draws a procedural program's vertices over a texture the feature declared, for geometry made in the shader such as
@@ -1092,7 +1110,7 @@ public sealed class FeatureContext
         Command.Draw(vertexCount);
     }
 
-    private void DrawFullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties, int layers, bool clear)
+    private void DrawFullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties, int layers, AttachmentOps color, (int X, int Y, int Width, int Height)? region)
     {
         if (program.Procedural)
             throw new InvalidOperationException($"{_pass.Name} draws a procedural program as a fullscreen one; draw it with DrawProcedural.");
@@ -1100,9 +1118,15 @@ public sealed class FeatureContext
             throw new InvalidOperationException($"{_pass.Name} draws a program reading the view's colour once for every layer; create it with source: false and bind what it reads.");
         if (Program(program) is not { } shader)
             return;
-        AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store);
-        Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
+        Framebuffer framebuffer = target.Framebuffer;
+        Command.SetFramebuffer(framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
         Command.SetFullViewport();
+        if (region is { } r)
+        {
+            int width = (int)framebuffer.Width, height = (int)framebuffer.Height;
+            int x = Math.Clamp(r.X, 0, width), y = Math.Clamp(r.Y, 0, height);
+            Command.SetScissor((uint)x, (uint)y, (uint)Math.Clamp(r.Width, 0, width - x), (uint)Math.Clamp(r.Height, 0, height - y));
+        }
         Command.SetShader(shader);
         Command.SetVertexSource(VertexSource.None);
         BindLighting(program);
@@ -1113,6 +1137,8 @@ public sealed class FeatureContext
         if (properties != null)
             Command.SetProperties(properties);
         Command.Draw(3);
+        if (region != null)
+            Command.SetScissor(0, 0, framebuffer.Width, framebuffer.Height);
     }
 
     /// <summary>
