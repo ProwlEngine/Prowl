@@ -1,22 +1,24 @@
-#pragma variant CLOUD COMPOSITE MAPS DEPTH MARCH TEMPORAL
+#pragma variant CLOUD COMPOSITE MAPS DEPTH TILES SHADOW MARCH TEMPORAL
 // Volumetric clouds as fullscreen passes, one per define:
-// CLOUD_MAPS       how cloudy each point of the ground plane is and how much cloud the sunlight crosses to reach four
-//                  heights through the layer, over a square around the camera. Kept from frame to frame, only the
-//                  texels the square newly covers and a slice of the rest are drawn again
+// CLOUD_MAPS       how cloudy each point of the ground plane is over a square around the camera. Kept from frame to
+//                  frame, only the texels the square newly covers are drawn
 // CLOUD_DEPTH      scene distance at the clouds' resolution
+// CLOUD_TILES      how far along the centre ray of each block of pixels the first and last clouds lie, what the
+//                  march covers
 // CLOUD_MARCH      the cloud layer and the flat layers marched front to back at the clouds' resolution
-// CLOUD_TEMPORAL   the clouds built up at their target resolution from one pixel of each 2x2 block a frame
+// CLOUD_SHADOW     one cascade of the clouds' shadow map: along each texel's ray from the sun, where it first meets
+//                  cloud, the cloud's mean density from there on and how much cloud the ray crosses in all
+// CLOUD_TEMPORAL   the march blended over last frame's, moved to where the clouds are now, for a march in long steps
 // otherwise        the clouds scaled up over the colour, matched to the scene's depth
 // Cloud positions are absolute, the camera's from the host. Each ray's planet centre sits straight under the camera.
-// The maps ride the wind: a texel holds one point of the pattern for as long as it is in the square, wrapped around the
-// map by its place on the wind's lattice, so the maps are read with repeat at the position relative to the wind.
+// The map rides the wind: a texel holds one point of the pattern for as long as it is in the square, wrapped around the
+// map by its place on the wind's lattice, so the map is read with repeat at the position relative to the wind.
 
 #include "Graphite/Internal/PostView.glsl"
 
 uniform sampler2D _CloudCoverage;
 uniform sampler2D _CloudNoise2D;
 uniform sampler3D _CloudNoise3D;
-uniform sampler2D _CloudSunDepth;
 uniform sampler2D _CloudProfile;
 uniform vec4 _CloudCoverageRect; // min x, min z, 1 / span, span
 uniform vec4 _CloudShape;        // base altitude, thickness, 1 / thickness, planet radius
@@ -25,6 +27,10 @@ uniform vec2 _CloudWind;
 uniform vec3 _CloudToSun;        // toward the sun, straight up when the scene has none
 uniform float _CloudErosionSize; // texels along each side of the 3D noise
 uniform float _CloudFormation;   // how far the formations have changed, along the 3D noise's third axis
+uniform float _CloudReach;       // how far out the clouds reach around the camera
+uniform vec2 _CloudWarp;         // how far smooth noise bends the outlines, how much the bend changes through the layer
+uniform float _CloudErosionWeight; // how much erosion leans toward a cloud's base, 1 leaving its very top smooth
+uniform float _CloudTileSize;    // pixels along each side of a block the march's range is found for
 
 // The weather at a point relative to the wind, what the coverage map stores: broad noise that thins and thickens the
 // sky, and how tall the clouds there grow
@@ -38,15 +44,17 @@ vec2 CloudWeatherNoise(vec2 windRel)
 
 // Cloudiness at a point: 0 at a cloud's edge, rising to 1 in its core. Smooth noise, bent by more smooth noise, gives
 // the clouds irregular outlines, cells of the 3D noise add lumps to them, and the weather's broad noise thins and
-// thickens the sky. Read live as the noise moves through time, so clouds change shape smoothly. Also gives the shape
-// noise alone, which lifts and lowers the tops even where the sky is fully covered
-vec2 CloudCloudiness(vec2 windRel, float broad)
+// thickens the sky. Read live as the noise moves through time, so clouds change shape smoothly. The bend drifts with
+// height h through the layer, so a cloud twists from its base to its top. Also gives the shape noise alone, which lifts
+// and lowers the tops even where the sky is fully covered
+vec2 CloudCloudiness(vec2 windRel, float broad, float h)
 {
     vec2 q = windRel * _CloudPattern.x;
     float z = _CloudFormation;
-    vec2 bend = vec2(textureLod(_CloudNoise3D, vec3(q * 0.7, z + 0.13), 0.0).b,
-                     textureLod(_CloudNoise3D, vec3(q * 0.7 + 0.31, z + 0.61), 0.0).b) - 0.5;
-    vec2 p = q * 1.3 + bend * 0.55;
+    float drift = h * _CloudWarp.y;
+    vec2 bend = vec2(textureLod(_CloudNoise3D, vec3(q * 0.7, z + 0.13 + drift), 0.0).b,
+                     textureLod(_CloudNoise3D, vec3(q * 0.7 + 0.31, z + 0.61 + drift), 0.0).b) - 0.5;
+    vec2 p = q * 1.3 + bend * _CloudWarp.x;
     vec2 small = mat2(0.8, -0.6, 0.6, 0.8) * (p * 2.7) + 0.37;
     vec2 noise = textureLod(_CloudNoise3D, vec3(p, z), 0.0).ba;
     float lumps = textureLod(_CloudNoise3D, vec3(small, z * 2.0 + 0.5), 0.0).a;
@@ -132,83 +140,79 @@ vec2 CloudWeatherAt(vec2 windRel) { return textureLod(_CloudCoverage, CloudMapUV
 // The cloud at a point before its detail: its cloudiness less the profile's taper, so clouds narrow toward their tops
 // and sit on flat bases. The profile is squeezed into how tall the cloud grows there, low at its edges, up to what the
 // weather allows in its core and lifted and lowered by the shape noise, so clouds rise in domes rather than walls and
-// a covered sky still has an uneven top. The shape thins over the top of each cloud, so erosion carves billows there.
-// The point is relative to the wind across, absolute in height
-float CloudShape(vec3 q, out vec3 profile)
+// a covered sky still has an uneven top. The shape thins over the top of each cloud, so erosion carves billows there,
+// less toward the top as the erosion weight leans it to the base.
+// The point is relative to the wind across, absolute in height. Also gives how high through the layer the cloud over
+// q reaches, 0 where there is none, so a march can tell when a long stride would step over a thin cloud below it
+float CloudShape(vec3 q, out vec3 profile, out float top)
 {
     float h = (q.y - _CloudShape.x) * _CloudShape.z;
     profile = vec3(0.0);
+    top = 0.0;
     if (h <= 0.0 || h >= 1.0)
         return 0.0;
     vec2 weather = CloudWeatherAt(q.xz);
-    if (h >= weather.y)
-        return 0.0;
-    vec2 cloud = CloudCloudiness(q.xz, weather.x);
+    vec2 cloud = CloudCloudiness(q.xz, weather.x, h);
     float cloudiness = cloud.x;
     if (cloudiness <= 0.0)
         return 0.0;
-    h /= weather.y * (0.25 + 0.75 * sqrt(cloudiness)) * mix(0.55, 1.0, smoothstep(0.3, 0.7, cloud.y));
+    top = weather.y * (0.25 + 0.75 * sqrt(cloudiness)) * mix(0.55, 1.0, smoothstep(0.3, 0.7, cloud.y));
+    h /= top;
     if (h >= 1.0)
         return 0.0;
     profile = CloudProfile(h);
+    profile.z *= mix(1.0, 1.0 - h, _CloudErosionWeight);
     return clamp(cloudiness - (1.0 - profile.x) * 0.5 - smoothstep(0.5, 1.0, h) * 0.7, 0.0, 1.0);
+}
+
+float CloudShape(vec3 q, out vec3 profile)
+{
+    float top;
+    return CloudShape(q, profile, top);
+}
+
+// Whether a stride from q that drops by fall through the layer ends below the top of the cloud over q, where thin
+// cloud can lie anywhere down to its base
+bool CloudUnderTop(vec3 q, float top, float fall)
+{
+    float h = (q.y - _CloudShape.x) * _CloudShape.z;
+    return top > 0.0 && h - fall < top;
 }
 
 // The cloud's density at a point: the edges between cells of the 3D noise eat into the shape, most where the profile
 // says. Large cells carve the main lobes of a cloud, small ones billow over them and the finest give the billows their
 // own small puffs, bent, mixed between sizes and stronger in some places than others by slow noise, so the billows
-// differ across a cloud. Thin cloud thins faster
-// still, so edges stay soft. Times the profile's density through the layer
-float CloudDensity(vec3 q, float shape, vec3 profile, float lod)
+// differ across a cloud. Thin cloud thins faster still, so edges stay soft. Times the profile's density through the
+// layer. Every size only takes away, so once one has eaten the cloud the finer ones are not read. For light only the
+// main lobes are read, the billows and puffs taken at their average
+float CloudDensity(vec3 q, float shape, vec3 profile, float lod, bool forLight)
 {
     vec3 uvw = q * _CloudPattern.z;
     vec2 slow = textureLod(_CloudNoise3D, uvw * 0.17 + vec3(0.31, 0.17, 0.53), lod).ba;
     uvw += (slow.x - 0.5) * 0.35;
-    float base = textureLod(_CloudNoise3D, uvw, lod).r;
-    float coarse = textureLod(_CloudNoise3D, uvw * 0.55 + 0.5, lod).r;
-    float finer = textureLod(_CloudNoise3D, mat3(0.8, 0.0, -0.6, 0.0, 1.0, 0.0, 0.6, 0.0, 0.8) * uvw * 1.8 + 0.3, lod + 0.85).r;
-    float edges = mix(mix(base, coarse, slow.y), finer, smoothstep(0.45, 0.75, slow.x) * (1.0 - slow.y));
+    float bite = _CloudPattern.w * profile.z;
+
     float large = textureLod(_CloudNoise3D, uvw * 0.3 + 0.7, max(lod - 1.7, 0.0)).r;
-    float lobes = large * large * mix(0.9, 1.6, slow.y);
-    float billows = edges * edges * mix(0.4, 1.7, smoothstep(0.2, 0.8, slow.x));
-    float puffs = textureLod(_CloudNoise3D, mat3(0.6, 0.8, 0.0, -0.8, 0.6, 0.0, 0.0, 0.0, 1.0) * uvw * 2.1 + 0.11, lod + 1.07).g;
-    puffs = puffs * puffs * mix(0.25, 0.8, slow.y);
-    float density = clamp(shape - (lobes + billows + puffs) * _CloudPattern.w * profile.z, 0.0, 1.0);
-    return density * smoothstep(0.0, 0.15, density) * profile.y;
-}
-
-// How much cloud lies between q and the sun, density times meters, at a blur of lod. Steps grow outward and reach a
-// little past the layer's thickness
-float CloudMarchToSun(vec3 q, vec3 toSun, int samples, float lod)
-{
-    const float growth = 1.3;
-    float reach = _CloudShape.y * 1.1;
-    float stride = reach * (growth - 1.0) / (pow(growth, float(samples)) - 1.0);
-    float travelled = 0.0, optical = 0.0;
-    for (int i = 0; i < samples; i++)
-    {
-        vec3 p = q + toSun * (travelled + stride * 0.5);
-        vec3 profile;
-        float s = CloudShape(p, profile);
-        if (s > 0.0)
-            optical += CloudDensity(p, s, profile, lod) * stride;
-        travelled += stride;
-        stride *= growth;
-        if (p.y > _CloudShape.x + _CloudShape.y)
-            break;
-    }
-    return optical;
-}
-
-// The sun map holds the march toward the sun from four heights, one per channel, blended between the two around q
-float CloudSunDepthAt(vec3 q)
-{
-    if (q.y >= _CloudShape.x + _CloudShape.y)
+    float density = shape - large * large * mix(0.9, 1.6, slow.y) * bite;
+    if (density <= 0.0)
         return 0.0;
-    vec4 depths = textureLod(_CloudSunDepth, CloudMapUV(q.xz), 0.0);
-    float slot = clamp((q.y - _CloudShape.x) * _CloudShape.z * 4.0 - 0.5, 0.0, 3.0);
-    vec4 weights = max(1.0 - abs(vec4(slot) - vec4(0.0, 1.0, 2.0, 3.0)), 0.0);
-    return dot(depths, weights);
+
+    float billows = 0.3194;
+    if (!forLight)
+    {
+        float base = textureLod(_CloudNoise3D, uvw, lod).r;
+        float coarse = textureLod(_CloudNoise3D, uvw * 0.55 + 0.5, lod).r;
+        float finer = textureLod(_CloudNoise3D, mat3(0.8, 0.0, -0.6, 0.0, 1.0, 0.0, 0.6, 0.0, 0.8) * uvw * 1.8 + 0.3, lod + 0.85).r;
+        float edges = mix(mix(base, coarse, slow.y), finer, smoothstep(0.45, 0.75, slow.x) * (1.0 - slow.y));
+        billows = edges * edges;
+    }
+    density -= billows * mix(0.4, 1.7, smoothstep(0.2, 0.8, slow.x)) * bite;
+    if (density <= 0.0)
+        return 0.0;
+
+    float puffs = forLight ? 0.3181 : pow(textureLod(_CloudNoise3D, mat3(0.6, 0.8, 0.0, -0.8, 0.6, 0.0, 0.0, 0.0, 1.0) * uvw * 2.1 + 0.11, lod + 1.07).g, 2.0);
+    density = clamp(density - puffs * mix(0.25, 0.8, slow.y) * bite, 0.0, 1.0);
+    return density * smoothstep(0.0, 0.15, density) * profile.y;
 }
 
 // Distance from the camera to the scene under a pixel of the full resolution depth, far for the sky
@@ -220,16 +224,39 @@ float CloudSceneDistance(Graphite_ViewData view, GRAPHITE_SCREEN_TEXTURE depthTe
     return length(Graphite_RelativeFromDepth(view, (vec2(pixel) + 0.5) / resolution, depth));
 }
 
+// Where a ray from the camera enters and leaves the cloud layer, up to the clouds' reach
+vec2 CloudLayerRange(vec3 dir, float cameraHeight)
+{
+    vec2 outer = CloudShellRoots(dir, cameraHeight, _CloudShape.x + _CloudShape.y);
+    vec2 inner = CloudShellRoots(dir, cameraHeight, _CloudShape.x);
+    float start = max(outer.x, 0.0), end = outer.y;
+    if (inner.x < inner.y)
+    {
+        if (inner.x > start)
+            end = min(end, inner.x);
+        else if (inner.y > start)
+            start = inner.y;
+    }
+    return vec2(start, min(end, _CloudReach / max(length(dir.xz), 1e-3)));
+}
+
+// A point along a ray relative to the wind across, its height above the curved ground, and its squared distance from
+// the camera across the ground
+vec3 CloudWindPoint(vec3 p, vec3 cam, out float ground2)
+{
+    float planet = _CloudShape.w;
+    vec2 ground = p.xz - cam.xz;
+    ground2 = dot(ground, ground);
+    float radius = sqrt((p.y + planet) * (p.y + planet) + ground2);
+    return vec3(p.x - _CloudWind.x, (p.y * (p.y + 2.0 * planet) + ground2) / (radius + planet), p.z - _CloudWind.y);
+}
+
 #if defined(CLOUD_MAPS)
 
-layout(location = 1) out vec4 outSun;
-
 uniform sampler2D _CloudMapsPrevious;
-uniform sampler2D _CloudMapsPreviousSun;
 uniform vec4 _CloudMapWindow;   // the first lattice texel of the square now, then last frame's
-uniform vec4 _CloudMapRefresh;  // the slice of rows drawn again this frame, the slice count, 1 when last frame's maps hold, texel size
+uniform vec2 _CloudMapState;    // 1 when last frame's map holds, texel size
 uniform float _CloudMapSize;    // texels along each side, a power of two
-uniform float _CloudSunMapLod;
 
 void main()
 {
@@ -237,27 +264,12 @@ void main()
     ivec2 texel = ivec2(gl_FragCoord.xy);
     ivec2 first = ivec2(_CloudMapWindow.xy), previous = ivec2(_CloudMapWindow.zw);
     ivec2 lattice = first + ((texel - first) & (size - 1));
-
-    int slices = int(_CloudMapRefresh.y);
-    bool held = _CloudMapRefresh.z > 0.5 && all(greaterThanEqual(lattice, previous)) && all(lessThan(lattice, previous + size));
-    if (held && (lattice.y & (slices - 1)) != int(_CloudMapRefresh.x))
+    if (_CloudMapState.x > 0.5 && all(greaterThanEqual(lattice, previous)) && all(lessThan(lattice, previous + size)))
     {
         outColor = texelFetch(_CloudMapsPrevious, texel, 0);
-        outSun = texelFetch(_CloudMapsPreviousSun, texel, 0);
         return;
     }
-
-    vec2 windRel = (vec2(lattice) + 0.5) * _CloudMapRefresh.w;
-    outColor = vec4(CloudWeatherNoise(windRel), 0.0, 1.0);
-    for (int i = 0; i < 4; i++)
-    {
-        float height = _CloudShape.x + (float(i) + 0.5) * 0.25 * _CloudShape.y;
-        outSun[i] = CloudMarchToSun(vec3(windRel.x, height, windRel.y), _CloudToSun, 8, _CloudSunMapLod);
-    }
-
-    // A row drawn again eases toward its new light, so the slices it is refreshed in never show
-    if (held)
-        outSun = mix(texelFetch(_CloudMapsPreviousSun, texel, 0), outSun, 0.35);
+    outColor = vec4(CloudWeatherNoise((vec2(lattice) + 0.5) * _CloudMapState.y), 0.0, 1.0);
 }
 
 #elif defined(CLOUD_DEPTH)
@@ -266,8 +278,6 @@ uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
 uniform vec2 _CloudFullResolution;
 uniform vec2 _CloudLowResolution;
 uniform int _CloudDownsample;
-uniform int _CloudDepthMode;     // 1 takes the one scene pixel under each jittered cloud sample
-uniform vec2 _CloudJitter;       // this frame's sample offset, in pixels of the clouds' target
 
 // Neighbouring pixels alternate between the nearest and furthest of what they cover, so both sides of an edge survive
 // for the depth aware upsample
@@ -275,13 +285,6 @@ void main()
 {
     Graphite_ViewData view = Graphite_PostView();
     ivec2 last = ivec2(_CloudFullResolution) - 1;
-    if (_CloudDepthMode == 1)
-    {
-        vec2 at = (gl_FragCoord.xy + _CloudJitter) / _CloudLowResolution * _CloudFullResolution;
-        outColor = vec4(CloudSceneDistance(view, _CameraDepthTexture, min(ivec2(at), last), _CloudFullResolution), 0.0, 0.0, 1.0);
-        return;
-    }
-
     ivec2 low = ivec2(gl_FragCoord.xy);
     float spread = float(max(_CloudDownsample - 1, 0));
     vec2 base = gl_FragCoord.xy / _CloudLowResolution * _CloudFullResolution - spread * 0.5;
@@ -296,6 +299,104 @@ void main()
     outColor = vec4(pick, 0.0, 0.0, 1.0);
 }
 
+#elif defined(CLOUD_TILES)
+
+uniform vec2 _CloudLowResolution;
+uniform vec3 _CloudCamera;
+
+// Steps half the march's stride through empty sky along the block's centre ray and keeps two steps short of the first
+// cloud and two steps past the last, an empty range when the ray meets none
+void main()
+{
+    Graphite_ViewData view = Graphite_PostView();
+    outColor = vec4(1e30, -1e30, 0.0, 1.0);
+    vec2 uv = gl_FragCoord.xy * _CloudTileSize / _CloudLowResolution;
+    vec3 dir = normalize(Graphite_RelativeFromDepth(view, uv, 1.0));
+    vec3 cam = _CloudCamera + view.treeOffset.xyz;
+    vec2 range = CloudLayerRange(dir, cam.y);
+    float nearStride = _CloudShape.y / 32.0;
+    float t = range.x;
+    for (int i = 0; i < 256 && t < range.y; i++)
+    {
+        float stride = max(nearStride, t * 0.005) * 3.0;
+        float ground2, top;
+        vec3 profile;
+        vec3 q = CloudWindPoint(cam + dir * t, cam, ground2);
+        if (CloudShape(q, profile, top) > 0.0 || CloudUnderTop(q, top, -dir.y * stride * _CloudShape.z))
+        {
+            outColor.x = min(outColor.x, t - stride * 2.0);
+            outColor.y = t + stride * 2.0;
+        }
+        t += stride;
+    }
+    if (t < range.y)
+        outColor.xy = vec2(min(outColor.x, t), 1e30);
+}
+
+#elif defined(CLOUD_SHADOW)
+
+uniform vec3 _CloudCamera;
+uniform vec4 _CloudShadowBuild;         // centre of the cascade drawn, absolute, and half its width
+uniform vec3 _CloudShadowRight;         // across the shadow map, both square to the sun
+uniform vec3 _CloudShadowUp;
+uniform float _CloudShadowResolution;   // texels along each side of one cascade
+
+// The cloud's density at a point the shadow map's ray reaches, the main lobes only as the light reads them
+float CloudShadowDensity(vec3 p, vec3 cam, float lod)
+{
+    float g2;
+    vec3 q = CloudWindPoint(p, cam, g2);
+    vec3 profile;
+    float shape = CloudShape(q, profile);
+    return shape > 0.0 ? CloudDensity(q, shape, profile, lod, true) : 0.0;
+}
+
+// Marches the texel's ray from the sun down through the cloud layer, from a start that differs texel to texel so the
+// steps do not band. Where it first meets cloud is narrowed down between the last empty step and the first in cloud.
+// Distances along it are toward the sun from the cascade's plane through its centre
+void main()
+{
+    vec2 local = vec2(mod(gl_FragCoord.x, _CloudShadowResolution), gl_FragCoord.y) / _CloudShadowResolution * 2.0 - 1.0;
+    vec3 plane = _CloudShadowBuild.xyz + (_CloudShadowRight * local.x + _CloudShadowUp * local.y) * _CloudShadowBuild.w;
+    vec3 cam = _CloudCamera;
+    float sunY = max(_CloudToSun.y, 0.05);
+
+    // The ground curves away under far clouds, so the march reaches below the layer's base by as much
+    float across = length(plane.xz - cam.xz) + _CloudShape.y / sunY;
+    float top = _CloudShape.x + _CloudShape.y, bottom = _CloudShape.x - across * across / (2.0 * _CloudShape.w);
+    float from = (top - plane.y) / sunY, to = (bottom - plane.y) / sunY;
+
+    const int steps = 48;
+    float step = (from - to) / float(steps);
+    float texel = 2.0 * _CloudShadowBuild.w / _CloudShadowResolution;
+    float lod = max(log2(texel * _CloudPattern.z * _CloudErosionSize), 0.0);
+    float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    float front = to, back = to, optical = 0.0;
+    for (int i = 0; i < steps; i++)
+    {
+        float s = from - (float(i) + jitter) * step;
+        float density = CloudShadowDensity(plane + _CloudToSun * s, cam, lod);
+        if (density <= 0.0)
+            continue;
+        if (optical <= 0.0)
+        {
+            float above = min(s + step, from), below = s;
+            for (int k = 0; k < 4; k++)
+            {
+                float middle = (above + below) * 0.5;
+                if (CloudShadowDensity(plane + _CloudToSun * middle, cam, lod) > 0.0)
+                    below = middle;
+                else
+                    above = middle;
+            }
+            front = above;
+        }
+        back = s - step * 0.5;
+        optical += density * step;
+    }
+    outColor = vec4(front, optical / max(front - back, step), optical, 1.0);
+}
+
 #elif defined(CLOUD_MARCH)
 
 #define CLOUD_MAX_LAYERS 4
@@ -304,7 +405,6 @@ layout(location = 1) out vec4 outDistance;
 
 uniform GRAPHITE_SCREEN_TEXTURE _CloudSceneDepth;
 uniform vec2 _CloudLowResolution;
-uniform vec2 _CloudJitter;          // this frame's sample offset, in pixels of the clouds' target
 uniform vec3 _CloudCamera;          // the first layer's camera, absolute
 uniform vec4 _CloudLighting;        // extinction per meter, unused, ambient, silver lining
 uniform vec3 _CloudSunColor;        // colour times intensity times sun brightness
@@ -312,10 +412,48 @@ uniform vec3 _CloudSkyLight;
 uniform vec4 _CloudAlbedo;
 uniform float _CloudAmbientSaturation;
 uniform float _CloudHorizonFade;
+uniform GRAPHITE_SCREEN_TEXTURE _CloudTileRange;
+uniform vec2 _CloudTileResolution;
+uniform float _CloudStepScale;      // how many times longer than full quality the march's steps are
+uniform float _CloudFrame;          // counts frames for a march blended over frames, 0 otherwise
+
+uniform sampler2D _CloudShadowMap;
+uniform vec4 _CloudShadowCascade0, _CloudShadowCascade1, _CloudShadowCascade2, _CloudShadowCascade3; // centre, half width
+uniform vec4 _CloudShadowWindA, _CloudShadowWindB;  // how far the wind has carried the clouds since each was drawn
+uniform vec3 _CloudShadowRight;
+uniform vec3 _CloudShadowUp;
+
+// How much cloud the sunlight crosses to reach p, from the smallest cascade of the shadow map holding it, moved back
+// by the wind since that cascade was drawn. Each texel's ray crosses its mean density from where it first meets cloud
+// to p, up to all the cloud it crosses
+float CloudShadowDepth(vec3 p)
+{
+    for (int c = 0; c < 4; c++)
+    {
+        vec4 cascade = c == 0 ? _CloudShadowCascade0 : c == 1 ? _CloudShadowCascade1 : c == 2 ? _CloudShadowCascade2 : _CloudShadowCascade3;
+        vec2 wind = c == 0 ? _CloudShadowWindA.xy : c == 1 ? _CloudShadowWindA.zw : c == 2 ? _CloudShadowWindB.xy : _CloudShadowWindB.zw;
+        vec3 rel = p - vec3(wind.x, 0.0, wind.y) - cascade.xyz;
+        vec2 local = vec2(dot(rel, _CloudShadowRight), dot(rel, _CloudShadowUp)) / cascade.w;
+        if (max(abs(local.x), abs(local.y)) < 0.98)
+        {
+            vec4 texel = textureLod(_CloudShadowMap, vec2((local.x * 0.5 + 0.5 + float(c)) * 0.25, local.y * 0.5 + 0.5), 0.0);
+            return clamp((texel.x - dot(rel, _CloudToSun)) * texel.y, 0.0, texel.z);
+        }
+    }
+    return 0.0;
+}
 
 vec3 CloudSun()
 {
     return _CloudSunColor * smoothstep(-0.1, 0.05, _CloudToSun.y);
+}
+
+// Where along its first step a ray starts: interleaved gradient noise over the pixels, moved each frame so the frames
+// blended together fill in between the steps
+float CloudJitter(vec2 pixel, float frame)
+{
+    pixel += 5.588238 * mod(frame, 64.0);
+    return fract(52.9829189 * fract(dot(pixel, vec2(0.06711056, 0.00583715))));
 }
 
 // Each flat layer: altitude, coverage, opacity and 1 / scale, its wind offset and the wind's direction, its tint and style
@@ -381,9 +519,6 @@ float CloudStratus(vec2 q, vec4 wind, float coverage)
     return clamp(puffs * mix(0.0, 1.6, streaks), 0.0, 1.0);
 }
 
-uniform float _CloudSunTap;         // how far toward the sun one sample shades from, 0 for the sun map past a short detailed march
-uniform float _CloudReach;          // how far out the clouds reach around the camera
-
 vec4 CloudLayerSample(int i, vec3 cam, vec3 dir, float sceneDist, vec3 sun, out float t)
 {
     vec4 shape, wind, tint;
@@ -403,37 +538,6 @@ vec4 CloudLayerSample(int i, vec3 cam, vec3 dir, float sceneDist, vec3 sun, out 
     return vec4(_CloudAlbedo.rgb * tint.rgb * (sun * phase * (1.0 - 0.4 * density) + _CloudSkyLight * _CloudLighting.z), alpha);
 }
 
-// How much cloud the sunlight crosses to reach q, whose own density is given: where the view still sees through, a
-// short march with all the detail through the cloud right around it then the sun map from where it ends, fading to the
-// sun map alone deeper in. With the sun tap, one sample a short way toward the sun instead: denser there means q is
-// on the shadowed side of its billow, and how fast it grows denser says how much cloud the light crosses
-float CloudLightDepth(vec3 q, float density, float lod, float front)
-{
-    if (_CloudSunTap > 0.0)
-    {
-        const float reach = 100.0;
-        vec3 p = q + _CloudToSun * _CloudSunTap;
-        vec3 profile;
-        float s = CloudShape(p, profile);
-        float toward = s > 0.0 ? CloudDensity(p, s, profile, lod) : 0.0;
-        return max(density + (toward - density) / _CloudSunTap * reach * 0.5, 0.0) * reach;
-    }
-    float coarse = CloudSunDepthAt(q);
-    if (front <= 0.0)
-        return coarse;
-    float near = _CloudShape.y * 0.25;
-    float optical = 0.0;
-    for (int i = 0; i < 3; i++)
-    {
-        vec3 p = q + _CloudToSun * (near * (float(i) + 0.5) / 3.0);
-        vec3 profile;
-        float s = CloudShape(p, profile);
-        if (s > 0.0)
-            optical += CloudDensity(p, s, profile, lod + 1.0) * near / 3.0;
-    }
-    return mix(coarse, optical + CloudSunDepthAt(q + _CloudToSun * near), front);
-}
-
 void main()
 {
     Graphite_ViewData view = Graphite_PostView();
@@ -442,10 +546,11 @@ void main()
     if (Graphite_PostOrthographic(view))
         return;
 
-    vec2 uv = (gl_FragCoord.xy + _CloudJitter) / _CloudLowResolution;
-    vec3 dir = normalize(Graphite_RelativeFromDepth(view, uv, 1.0));
-    vec3 cam = _CloudCamera + view.treeOffset.xyz;
     float sceneDist = Graphite_Fetch(_CloudSceneDepth, ivec2(gl_FragCoord.xy), 0).r;
+    vec2 uv = gl_FragCoord.xy / _CloudLowResolution;
+    vec3 dir = normalize(Graphite_RelativeFromDepth(view, uv, 1.0));
+    float pixelAngle = 2.0 / (max(abs(view.projection[1][1]), 1e-4) * _CloudLowResolution.y);
+    vec3 cam = _CloudCamera + view.treeOffset.xyz;
     vec3 sun = CloudSun();
 
     float layerT[CLOUD_MAX_LAYERS];
@@ -467,25 +572,22 @@ void main()
         layerColor[at] = c;
     }
 
-    float top = _CloudShape.x + _CloudShape.y;
-    vec2 outer = CloudShellRoots(dir, cam.y, top);
-    vec2 inner = CloudShellRoots(dir, cam.y, _CloudShape.x);
-    float start = max(outer.x, 0.0), end = outer.y;
-    if (inner.x < inner.y)
+    // The march covers where clouds lie along this pixel's block and the blocks around it
+    ivec2 tile = ivec2(gl_FragCoord.xy / _CloudTileSize);
+    ivec2 lastTile = ivec2(_CloudTileResolution) - 1;
+    vec2 tileRange = vec2(1e30, -1e30);
+    for (int i = 0; i < 9; i++)
     {
-        if (inner.x > start)
-            end = min(end, inner.x);
-        else if (inner.y > start)
-            start = inner.y;
+        vec2 around = Graphite_Fetch(_CloudTileRange, clamp(tile + ivec2(i % 3 - 1, i / 3 - 1), ivec2(0), lastTile), 0).rg;
+        tileRange = vec2(min(tileRange.x, around.x), max(tileRange.y, around.y));
     }
-    float horizontal = max(length(dir.xz), 1e-3);
-    end = min(min(end, sceneDist), _CloudReach / horizontal);
+    vec2 range = CloudLayerRange(dir, cam.y);
+    float start = max(range.x, tileRange.x);
+    float end = min(min(range.y, sceneDist), tileRange.y);
 
     vec3 ambientSky = mix(vec3(dot(_CloudSkyLight, vec3(0.2126, 0.7152, 0.0722))), _CloudSkyLight, _CloudAmbientSaturation) * _CloudLighting.z;
-    float planet = _CloudShape.w;
     float cosTheta = dot(dir, _CloudToSun);
     vec3 phases = CloudPhases(cosTheta, _CloudLighting.w);
-    float pixelAngle = 2.0 / (max(abs(view.projection[1][1]), 1e-4) * _CloudLowResolution.y);
     float powderFacing = cosTheta * 0.5 + 0.5;
     float extinction = _CloudLighting.x * 40.0;
 
@@ -495,17 +597,15 @@ void main()
 
     if (end > start)
     {
-        // Steps grow with distance, as a pixel covers more of the cloud further away. Through empty sky the march takes
-        // long strides, and steps back to fine ones when it lands in cloud
-        float nearStride = _CloudShape.y / 40.0;
-        float stride = max(nearStride, start * 0.004);
-        float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy + mod(view.time.z, 64.0) * 5.588238, vec2(0.06711056, 0.00583715))));
+        // Every step is the same length at a distance, growing further out as a pixel covers more of the cloud there.
+        // Only where the march starts moves, along its first step, so frames blended together fill in between steps
+        float nearStride = _CloudShape.y / 32.0 * _CloudStepScale;
+        float stride = max(nearStride, start * 0.005 * _CloudStepScale);
+        float jitter = CloudJitter(floor(gl_FragCoord.xy), _CloudFrame);
         float t = start + stride * jitter;
-        bool fine = false;
-        int empty = 0;
         for (int i = 0; i < 256 && t < end && transmittance > 0.01; i++)
         {
-            stride = max(nearStride, t * 0.004);
+            stride = max(nearStride, t * 0.005 * _CloudStepScale);
             for (; nextLayer < layers && layerT[nextLayer] <= t; nextLayer++)
             {
                 float w = transmittance * layerColor[nextLayer].a;
@@ -516,37 +616,19 @@ void main()
             }
 
             vec3 p = cam + dir * t;
-            vec2 ground = p.xz - cam.xz;
-            float g2 = dot(ground, ground);
-            float radius = sqrt((p.y + planet) * (p.y + planet) + g2);
-            vec3 q = vec3(p.x - _CloudWind.x, (p.y * (p.y + 2.0 * planet) + g2) / (radius + planet), p.z - _CloudWind.y);
+            float g2;
+            vec3 q = CloudWindPoint(p, cam, g2);
 
             vec3 profile;
             float shape = CloudShape(q, profile);
             if (shape <= 0.0)
             {
-                if (fine && ++empty < 4)
-                {
-                    t += stride;
-                    continue;
-                }
-                fine = false;
-                t += stride * 4.0;
+                t += stride;
                 continue;
             }
-            if (!fine)
-            {
-                fine = true;
-                empty = 0;
-                t = max(t - stride * 3.0, start + stride * jitter);
-                continue;
-            }
-            empty = 0;
 
             float lod = max(log2(t * pixelAngle * _CloudPattern.z * _CloudErosionSize * 2.0), 0.0);
-            // Detailed light only shows where the view still sees through the cloud
-            float front = smoothstep(0.1, 0.4, transmittance);
-            float density = CloudDensity(q, shape, profile, lod);
+            float density = CloudDensity(q, shape, profile, lod, false);
             if (density < 1e-4)
             {
                 t += stride;
@@ -565,21 +647,18 @@ void main()
             }
 
             float h = (q.y - _CloudShape.x) * _CloudShape.z;
-            float transmitted = CloudScattering(CloudLightDepth(q, density, lod, front) * extinction, phases);
+            float transmitted = CloudScattering(CloudShadowDepth(p) * extinction, phases);
             float powder = mix(1.0 - exp(-sigma * 300.0), 1.0, powderFacing);
             vec3 ambient = ambientSky * mix(0.55, 1.0, sqrt(h));
             vec3 lit = _CloudAlbedo.rgb * (sun * transmitted * powder + ambient);
 
-            // In dense cloud a whole step would be opaque and show as a slice, so the step shortens to about two
-            // optical depths. The march ends soon after anyway, once the cloud has hidden what is behind it
-            float step = clamp(2.0 / sigma, nearStride * 0.25, stride);
-            float stepTransmittance = exp(-sigma * step);
+            float stepTransmittance = exp(-sigma * stride);
             float w = transmittance * (1.0 - stepTransmittance);
             color += lit * w;
             distSum += t * w;
             weightSum += w;
             transmittance *= stepTransmittance;
-            t += step;
+            t += stride;
         }
     }
 
@@ -598,171 +677,59 @@ void main()
     float far = distance * _CloudHorizonFade;
     float alpha = (1.0 - transmittance) * exp(-far * far);
     color *= exp(-far * far);
+    // How far the cloud the pixel shows is, 0 for clear sky
     outColor = vec4(color, alpha);
-    outDistance = vec4(distance * 0.001 * alpha, 0.0, 0.0, 1.0);
+    outDistance = vec4(alpha > 0.01 ? distance : 0.0, 0.0, 0.0, 0.0);
 }
 
 #elif defined(CLOUD_TEMPORAL)
 
-layout(location = 1) out vec4 outDistance;
-
 uniform GRAPHITE_SCREEN_TEXTURE _CloudCurrent;
-uniform GRAPHITE_SCREEN_TEXTURE _CloudCurrentDistance;     // kilometers times coverage
-uniform GRAPHITE_SCREEN_TEXTURE _CloudTargetDepth;         // scene distance at this pass's own resolution
-uniform GRAPHITE_SCREEN_TEXTURE _CloudPreviousTargetDepth; // the same, last frame
-uniform GRAPHITE_SCREEN_TEXTURE _CloudLowDepth;            // scene distance under each of this frame's samples
+uniform GRAPHITE_SCREEN_TEXTURE _CloudCurrentDistance;
 uniform GRAPHITE_SCREEN_TEXTURE _CloudHistory;
-uniform GRAPHITE_SCREEN_TEXTURE _CloudHistoryDistance;
 uniform vec2 _CloudLowResolution;
-uniform vec2 _CloudHistoryResolution;
-uniform vec2 _CloudJitterCell;   // which pixel of each block this frame's samples land on
-uniform int _CloudBlock;         // pixels along each side of a block
-uniform float _CloudHistoryValid;
-uniform vec2 _CloudWindStep;     // how far the wind carried the clouds since the history was drawn
+uniform float _CloudHistoryValid;   // 1 when last frame's clouds can be blended over
+uniform vec2 _CloudWindMoved;       // how far the wind carried the clouds since last frame
 
-// This frame's samples interpolated to any pixel, each counted by how well the scene behind it matches the pixel's
-void CurrentAt(vec2 pixelCentre, ivec2 last, float sceneDistance, out vec4 color, out float dist)
-{
-    vec2 at = (pixelCentre - _CloudJitterCell - 0.5) / float(_CloudBlock);
-    ivec2 first = ivec2(floor(at));
-    vec2 f = at - vec2(first);
-    color = vec4(0.0);
-    dist = 0.0;
-    float total = 0.0;
-    for (int i = 0; i < 4; i++)
-    {
-        ivec2 offset = ivec2(i & 1, i >> 1);
-        ivec2 tap = clamp(first + offset, ivec2(0), last);
-        float bilinear = (offset.x == 1 ? f.x : 1.0 - f.x) * (offset.y == 1 ? f.y : 1.0 - f.y);
-        float difference = abs(Graphite_Fetch(_CloudLowDepth, tap, 0).r - sceneDistance) / max(sceneDistance, 1.0);
-        float weight = (bilinear + 1e-3) / (difference + 1e-3);
-        color += Graphite_Fetch(_CloudCurrent, tap, 0) * weight;
-        dist += Graphite_Fetch(_CloudCurrentDistance, tap, 0).r * weight;
-        total += weight;
-    }
-    color /= total;
-    dist /= total;
-}
-
-// History read with a sharpening cubic from five bilinear reads, so reprojecting it every frame does not blur it
-vec4 HistoryAt(vec2 uv)
-{
-    vec2 position = uv * _CloudHistoryResolution;
-    vec2 centre = floor(position - 0.5) + 0.5;
-    vec2 f = position - centre;
-    vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
-    vec2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
-    vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
-    vec2 w3 = f * f * (-0.5 + 0.5 * f);
-    vec2 w12 = w1 + w2;
-    vec2 middle = (centre + w2 / w12) / _CloudHistoryResolution;
-    vec2 before = (centre - 1.0) / _CloudHistoryResolution;
-    vec2 after = (centre + 2.0) / _CloudHistoryResolution;
-
-    vec4 sum = Graphite_Sample(_CloudHistory, vec2(middle.x, before.y)) * (w12.x * w0.y)
-             + Graphite_Sample(_CloudHistory, vec2(before.x, middle.y)) * (w0.x * w12.y)
-             + Graphite_Sample(_CloudHistory, middle) * (w12.x * w12.y)
-             + Graphite_Sample(_CloudHistory, vec2(after.x, middle.y)) * (w3.x * w12.y)
-             + Graphite_Sample(_CloudHistory, vec2(middle.x, after.y)) * (w12.x * w3.y);
-    float total = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
-    return max(sum / total, vec4(0.0));
-}
-
-// Nothing that is not a number survives into the history, where it would stay until the next reset
-void Output(vec4 color, float dist)
-{
-    bool bad = any(isnan(color)) || any(isinf(color)) || isnan(dist) || isinf(dist);
-    outColor = bad ? vec4(0.0) : max(color, vec4(0.0));
-    outDistance = vec4(bad ? 0.0 : max(dist, 0.0), 0.0, 0.0, 1.0);
-}
-
+// This frame's march blended over last frame's result, read where this pixel's cloud was last frame by its distance,
+// the camera's move and the wind's. Last frame's is kept within the colours around the pixel this frame, so clouds
+// that changed or came into view leave no trails
 void main()
 {
     Graphite_ViewData view = Graphite_PostView();
     ivec2 pixel = ivec2(gl_FragCoord.xy);
     ivec2 last = ivec2(_CloudLowResolution) - 1;
-    ivec2 historyLast = ivec2(_CloudHistoryResolution) - 1;
-    ivec2 low = min(pixel / _CloudBlock, last);
-    vec4 current = Graphite_Fetch(_CloudCurrent, low, 0);
-    float currentDist = Graphite_Fetch(_CloudCurrentDistance, low, 0).r;
-    float sceneDistance = Graphite_Fetch(_CloudTargetDepth, pixel, 0).r;
-    vec4 smoothed;
-    float smoothedDist;
-    CurrentAt(gl_FragCoord.xy, last, sceneDistance, smoothed, smoothedDist);
-
-    // The pixel this frame's samples landed on takes its own sample, the others this frame's samples around them
-    bool fresh = all(equal(pixel - low * _CloudBlock, ivec2(_CloudJitterCell)));
-    vec4 own = fresh ? current : smoothed;
-    float ownDist = fresh ? currentDist : smoothedDist;
+    vec4 current = Graphite_Fetch(_CloudCurrent, pixel, 0);
+    outColor = current;
     if (_CloudHistoryValid < 0.5)
-    {
-        Output(own, ownDist);
         return;
-    }
 
-    // How far away this pixel's cloud is, from this frame's samples where they hold cloud, else from the history
-    float guideAlpha = own.a, guideDist = ownDist;
-    if (guideAlpha <= 0.01)
-    {
-        guideAlpha = Graphite_Fetch(_CloudHistory, pixel, 0).a;
-        guideDist = Graphite_Fetch(_CloudHistoryDistance, pixel, 0).r;
-    }
-    bool cloudy = guideAlpha > 0.01;
-    float distance = cloudy ? guideDist / guideAlpha * 1000.0 : 1e6;
-
-    // Where this pixel's cloud was last frame, found from how far away it is and moved back against the wind
-    vec2 uv = gl_FragCoord.xy / _CloudHistoryResolution;
-    vec3 now = normalize(Graphite_RelativeFromDepth(view, uv, 1.0)) * distance;
-    vec3 then = now;
-    if (cloudy)
-        then.xz -= _CloudWindStep;
-    vec3 moved = then + (view.cameraHigh.xyz - view.previousCameraHigh.xyz) + (view.cameraLow.xyz - view.previousCameraLow.xyz);
-    vec4 previous = view.previousViewProjection * vec4(moved, 1.0);
-    vec2 previousUV = vec2(previous.x / previous.w * 0.5 + 0.5, 0.5 - previous.y / previous.w * 0.5);
-    if (previous.w <= 0.0 || any(lessThan(previousUV, vec2(0.0))) || any(greaterThanEqual(previousUV, vec2(1.0))))
-    {
-        Output(own, ownDist);
+    float distance = Graphite_Fetch(_CloudCurrentDistance, pixel, 0).r;
+    vec3 ray = normalize(Graphite_RelativeFromDepth(view, gl_FragCoord.xy / _CloudLowResolution, 1.0));
+    vec3 shift = (view.cameraHigh.xyz - view.previousCameraHigh.xyz) + (view.cameraLow.xyz - view.previousCameraLow.xyz);
+    vec3 point = ray * (distance > 0.0 ? distance : 1e6) + shift - vec3(_CloudWindMoved.x, 0.0, _CloudWindMoved.y);
+    vec4 previous = view.previousViewProjection * vec4(point, 1.0);
+    if (previous.w <= 0.0)
         return;
-    }
-
-    // Where geometry hid this pixel's cloud last frame there is no history for it
-    ivec2 previousPixel = clamp(ivec2(previousUV * _CloudHistoryResolution), ivec2(0), historyLast);
-    if (Graphite_Fetch(_CloudPreviousTargetDepth, previousPixel, 0).r < distance - 50.0)
-    {
-        Output(own, ownDist);
+    vec2 uv = vec2(previous.x / previous.w * 0.5 + 0.5, 0.5 - previous.y / previous.w * 0.5);
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))))
         return;
-    }
 
-    vec4 history = HistoryAt(previousUV);
-    float historyDist = Graphite_Sample(_CloudHistoryDistance, previousUV).r;
-
-    // The guards against stale history only act on movement, so a still sky does not shimmer through the cycle
-    float motion = clamp(length((previousUV - uv) * _CloudHistoryResolution) * 2.0, 0.0, 1.0);
-
-    // Held within what the clouds around it look like this frame, centred on this frame's nearest sample
-    ivec2 nearest = clamp(ivec2(floor((gl_FragCoord.xy - _CloudJitterCell - 0.5) / float(_CloudBlock) + 0.5)), ivec2(0), last);
-    vec4 lowest = smoothed, highest = smoothed;
-    for (int y = -1; y <= 1; y++)
+    vec4 low = current, high = current;
+    for (int i = 0; i < 9; i++)
     {
-        for (int x = -1; x <= 1; x++)
-        {
-            vec4 around = Graphite_Fetch(_CloudCurrent, clamp(nearest + ivec2(x, y), ivec2(0), last), 0);
-            lowest = min(lowest, around);
-            highest = max(highest, around);
-        }
+        vec4 around = Graphite_Fetch(_CloudCurrent, clamp(pixel + ivec2(i % 3 - 1, i / 3 - 1), ivec2(0), last), 0);
+        low = min(low, around);
+        high = max(high, around);
     }
-    history = mix(history, clamp(history, lowest, highest), motion);
-
-    // A sampled pixel takes a large share of its sample, the others a little of this frame's while moving
-    float amount = fresh ? 0.5 : 0.1 * motion;
-    Output(mix(history, own, amount), mix(historyDist, ownDist, amount));
+    outColor = mix(clamp(Graphite_Sample(_CloudHistory, uv), low, high), current, 0.15);
 }
 
 #else
 
 uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
 uniform GRAPHITE_SCREEN_TEXTURE _CloudTex;
-uniform GRAPHITE_SCREEN_TEXTURE _CloudTexDistance; // kilometers times coverage
+uniform GRAPHITE_SCREEN_TEXTURE _CloudTexDistance; // how far the cloud each pixel shows is
 uniform GRAPHITE_SCREEN_TEXTURE _CloudSceneDepth;
 uniform vec2 _CloudLowResolution;
 
@@ -788,8 +755,9 @@ void main()
         float bilinear = (offset.x == 1 ? f.x : 1.0 - f.x) * (offset.y == 1 ? f.y : 1.0 - f.y);
         float difference = abs(Graphite_Fetch(_CloudSceneDepth, pixel, 0).r - own) / max(own, 1.0);
         float weight = (bilinear + 1e-3) / (difference + 1e-3);
-        sum += Graphite_Fetch(_CloudTex, pixel, 0) * weight;
-        sumDistance += Graphite_Fetch(_CloudTexDistance, pixel, 0).r * weight;
+        vec4 cloudColor = Graphite_Fetch(_CloudTex, pixel, 0);
+        sum += cloudColor * weight;
+        sumDistance += Graphite_Fetch(_CloudTexDistance, pixel, 0).r * 0.001 * cloudColor.a * weight;
         total += weight;
     }
 

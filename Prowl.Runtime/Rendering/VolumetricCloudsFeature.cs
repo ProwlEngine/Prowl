@@ -20,27 +20,28 @@ namespace Prowl.Runtime.Rendering;
 /// Draws a scene's <see cref="VolumetricClouds"/> over its opaques and sky, under the transparents, as a feature of the
 /// scene's world.
 /// <para/>
-/// Each view draws a coverage map around its camera holding how much cloud there is at every point of the ground plane,
-/// and a sun map holding how much cloud the sunlight crosses. The cloud layer and the flat layers are marched front to
-/// back at a reduced resolution, a quarter of its pixels a frame with temporal upscaling, and scaled up over the scene
-/// with depth aware weights so the clouds stay behind geometry edges.
+/// Each view draws a coverage map around its camera holding how much cloud there is at every point of the ground plane.
+/// The cloud layer and the flat layers are marched front to back and scaled up over the scene with depth aware weights
+/// so the clouds stay behind geometry edges.
 /// </summary>
 internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
 {
     private const int MapResolution = 1024;
-    private const int MapRefreshSlices = 16;
     private const int MaxLayers = 4;
+    private const int TileSize = 16;
+    private const int TemporalFrames = 4;
+    private const int ShadowCascades = 4;
 
     internal sealed class CloudSettings
     {
         public Float4 Shape, Pattern, Lighting, Albedo;
-        public Float2 Wind, Scatter;
+        public Float2 Wind, Scatter, Warp;
+        public float ErosionWeight;
         public float Formation;
         public double WindX, WindZ;
         public Float3 ToSun, SunColor, SkyLight;
         public float AmbientSaturation, HorizonFade, Reach, DetailScale;
-        public int Scale;
-        public float SunTap;
+        public int Scale, ShadowResolution;
         public bool Temporal;
         public Texture? Noise2D, Noise3D, Profile;
         public uint ErosionSize;
@@ -51,10 +52,10 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         public void CopyTo(CloudSettings other)
         {
             (other.Shape, other.Pattern, other.Lighting, other.Albedo, other.Formation) = (Shape, Pattern, Lighting, Albedo, Formation);
-            (other.Wind, other.Scatter, other.WindX, other.WindZ) = (Wind, Scatter, WindX, WindZ);
+            (other.Wind, other.Scatter, other.Warp, other.ErosionWeight, other.WindX, other.WindZ) = (Wind, Scatter, Warp, ErosionWeight, WindX, WindZ);
             (other.ToSun, other.SunColor, other.SkyLight) = (ToSun, SunColor, SkyLight);
             (other.AmbientSaturation, other.HorizonFade, other.Reach, other.DetailScale) = (AmbientSaturation, HorizonFade, Reach, DetailScale);
-            (other.SunTap, other.Scale, other.Temporal) = (SunTap, Scale, Temporal);
+            (other.Scale, other.Temporal, other.ShadowResolution) = (Scale, Temporal, ShadowResolution);
             (other.Noise2D, other.Noise3D, other.Profile, other.ErosionSize, other.Epoch) = (Noise2D, Noise3D, Profile, ErosionSize, Epoch);
             Array.Copy(Layers, other.Layers, MaxLayers);
             other.LayerCount = LayerCount;
@@ -69,29 +70,39 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
 
     private sealed class ViewState
     {
-        public TextureHandle Maps, Depth, Target, History, TargetDepth;
-        public bool Temporal;
-        public int OutWidth, OutHeight, Block;
+        public TextureHandle Maps, Depth, Tiles, Target, Accumulated, ShadowMap;
+        public bool Temporal, UsesShadows;
         public int Frame, Epoch;
-        public int MapFrame, MapEpoch;
+        public Float2 Wind;
+        public int MapEpoch;
         public long MapFirstX, MapFirstZ;
         public float MapTexel;
-        public double PreviousWindX, PreviousWindZ;
     }
 
-    // The order each frame's samples visit the pixels of a 2x2 block, diagonals first so any two frames cover it evenly
-    private static readonly Int2[] s_jitterCells = [new(0, 0), new(1, 1), new(1, 0), new(0, 1)];
+    // The world's cloud shadow map, which every view reads: cascades side by side, each square to the sun around where a
+    // camera was when it was drawn, the smallest first. The first camera drawn each frame draws the next one again
+    private sealed class Shadows(RenderTexture map, int resolution)
+    {
+        public readonly RenderTexture Map = map;
+        public readonly int Resolution = resolution;
+        public readonly Float4[] Cascades = new Float4[ShadowCascades];
+        public readonly Float2[] Winds = new Float2[ShadowCascades];
+        public int Next, Epoch = -1;
+    }
 
     private static readonly PropertyID[] s_layerShape = ["_LayerShape_0", "_LayerShape_1", "_LayerShape_2", "_LayerShape_3"];
     private static readonly PropertyID[] s_layerWind = ["_LayerWind_0", "_LayerWind_1", "_LayerWind_2", "_LayerWind_3"];
     private static readonly PropertyID[] s_layerTint = ["_LayerTint_0", "_LayerTint_1", "_LayerTint_2", "_LayerTint_3"];
     private static readonly PropertyID[] s_layerTexture = ["_LayerTexture_0", "_LayerTexture_1", "_LayerTexture_2", "_LayerTexture_3"];
 
-    private readonly FullscreenProgram _maps, _depth, _march, _temporal, _composite;
+    private readonly FullscreenProgram _maps, _depth, _tiles, _march, _composite, _temporal, _shadow;
+    private readonly GraphicsDevice _device;
     private readonly Sampler _linearClamp, _pointClamp, _linearRepeat;
     private readonly PropertySet _properties = new();
     private readonly CloudSettings _settings = new();
-    private (int Scale, bool Temporal) _declared = (1, false);
+    private int _scale = 1;
+    private Shadows? _shadows;
+    private bool _shadowsDrawn;
 
     // The settings the history was started with, so changing them enough starts it again
     private readonly List<float> _values = [], _tolerances = [];
@@ -103,11 +114,14 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
     public VolumetricCloudsFeature(Renderer renderer) : base(RenderSlot.Atmosphere, runsOn: ViewKinds.Cameras | ViewKinds.ReflectionProbe)
     {
         BlendStateDescription two = new(default, BlendAttachmentDescription.OverrideBlend, BlendAttachmentDescription.OverrideBlend);
-        _maps = Program(renderer, "CLOUD_MAPS", "Maps", two);
+        _maps = Program(renderer, "CLOUD_MAPS", "Maps");
         _depth = Program(renderer, "CLOUD_DEPTH", "Depth");
+        _tiles = Program(renderer, "CLOUD_TILES", "Tiles");
         _march = Program(renderer, "CLOUD_MARCH", "March", two);
-        _temporal = Program(renderer, "CLOUD_TEMPORAL", "Temporal", two);
         _composite = renderer.CreateFullscreenProgram(Clouds, "Prowl/VolumetricCloudsComposite");
+        _temporal = Program(renderer, "CLOUD_TEMPORAL", "Temporal");
+        _shadow = Program(renderer, "CLOUD_SHADOW", "Shadow");
+        _device = renderer.Device;
 
         SamplerDescription clamp = SamplerDescription.Linear with
         {
@@ -143,6 +157,8 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         s.Lighting = new Float4(MathF.Max(clouds.Density, 0f) * 0.004f, MathF.Max(clouds.SunBrightness, 0f), MathF.Max(clouds.AmbientBrightness, 0f), Math.Clamp(clouds.SilverLining, 0f, 1f));
         s.Albedo = new Float4(clouds.Albedo.R, clouds.Albedo.G, clouds.Albedo.B, clouds.Albedo.A);
         s.Scatter = new Float2(Math.Clamp(clouds.MultipleScattering, 0f, 1f), Math.Clamp(clouds.MultipleScatteringOcclusion, 0f, 1f));
+        s.Warp = new Float2(MathF.Max(clouds.Warp, 0f), clouds.WarpHeightShift);
+        s.ErosionWeight = Math.Clamp(clouds.ErosionWeight, 0f, 1f);
         s.Formation = clouds.FormationOffset;
         s.Wind = clouds.WindOffset;
         (s.WindX, s.WindZ) = (clouds.WindX, clouds.WindZ);
@@ -150,9 +166,9 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         s.HorizonFade = 1f / MathF.Max(clouds.HorizonFade, 100f);
         s.Reach = MathF.Max(clouds.HorizonFade, 100f) * 2f;
         s.DetailScale = MathF.Max(clouds.DetailScale, 1f);
-        s.SunTap = clouds.MarchToSun ? MathF.Max(clouds.SunTapDistance, 0.01f) : 0f;
         s.Scale = Math.Max((int)clouds.Resolution, 1);
-        s.Temporal = clouds.TemporalUpscale;
+        s.Temporal = clouds.Temporal;
+        s.ShadowResolution = Math.Clamp(clouds.ShadowResolution, 64, 2048);
 
         // Toward the scene's sun, straight up without one so the shaders never normalize a zero vector
         s.ToSun = Float3.UnitY;
@@ -265,11 +281,11 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         _values.Clear();
         _tolerances.Clear();
         Add(clouds.Altitude); Add(clouds.Thickness); Add(clouds.Coverage); Add(clouds.Density);
-        Add(clouds.PatternScale); Add(clouds.Erosion); Add(clouds.DetailScale); Add(clouds.Albedo.R);
+        Add(clouds.PatternScale); Add(clouds.Warp); Add(clouds.WarpHeightShift); Add(clouds.Erosion); Add(clouds.ErosionWeight); Add(clouds.DetailScale); Add(clouds.Albedo.R);
         Add(clouds.Albedo.G); Add(clouds.Albedo.B);
         Add(clouds.SunBrightness); Add(clouds.AmbientBrightness); Add(clouds.AmbientSaturation);
         Add(clouds.SilverLining); Add(clouds.MultipleScattering); Add(clouds.MultipleScatteringOcclusion); Add(clouds.HorizonFade);
-        Add(clouds.MarchToSun ? 1f : 0f); Add(clouds.PlanetRadius);
+        Add(clouds.PlanetRadius);
         Add(clouds.Noise.IsValid() ? clouds.Noise.InstanceID : 0, 0f);
         Add(clouds.ErosionNoise.IsValid() ? clouds.ErosionNoise.InstanceID : 0, 0f);
         Add(s.ToSun.X, 0.1f); Add(s.ToSun.Y, 0.1f); Add(s.ToSun.Z, 0.1f);
@@ -301,7 +317,8 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
     public override void Extract()
     {
         Pending.CopyTo(_settings);
-        _declared = (_settings.Scale, _settings.Temporal);
+        _scale = _settings.Scale;
+        _shadowsDrawn = false;
     }
 
     public override bool IsActive(in FeatureView view) => _settings.Noise2D is { IsDisposed: false } && _settings.Noise3D is { IsDisposed: false };
@@ -314,28 +331,34 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         builder.ReadScene();
         builder.WriteColor();
         ViewState state = builder.GetViewState<ViewState>();
+        TextureState usage = TextureState.Attachment | TextureState.Sampled;
+        state.Maps = builder.History("Maps", GraphTextureDesc.Sized(MapResolution, MapResolution, PixelFormat.R16_G16_Float), usage: usage);
 
-        // A probe capture turns to new faces every render, so there is nothing to carry over between them
-        state.Temporal = _declared.Temporal && view.Kind != ViewKind.ReflectionProbe;
-        state.Block = state.Temporal ? 2 : 1;
-        int outWidth = Math.Max(1, (int)view.Width / _declared.Scale), outHeight = Math.Max(1, (int)view.Height / _declared.Scale);
-        if (state.Temporal)
-        {
-            outWidth = (outWidth + 1) & ~1;
-            outHeight = (outHeight + 1) & ~1;
-        }
-        (state.OutWidth, state.OutHeight) = (outWidth, outHeight);
-        int width = outWidth / state.Block, height = outHeight / state.Block;
+        int width = Math.Max(1, (int)view.Width / _scale), height = Math.Max(1, (int)view.Height / _scale);
         uint layers = view.LayerCount > 1 ? (uint)view.LayerCount : 0;
 
-        state.Maps = builder.History("Maps", GraphTextureDesc.Sized(MapResolution, MapResolution, false, PixelFormat.R16_G16_Float, PixelFormat.R16_G16_B16_A16_Float), usage: TextureState.Attachment | TextureState.Sampled);
         state.Depth = builder.Temporary("Depth", Layered(view, width, height, PixelFormat.R32_Float));
+        state.Tiles = builder.Temporary("Tiles", Layered(view, (width + TileSize - 1) / TileSize, (height + TileSize - 1) / TileSize, PixelFormat.R32_G32_Float));
         state.Target = builder.Temporary("Target", GraphTextureDesc.Sized(width, height, false, PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R32_Float) with { ArrayLayers = layers });
+
+        // A probe capture turns to new faces every render, so there is nothing to blend over
+        state.Temporal = _settings.Temporal && view.Kind != ViewKind.ReflectionProbe;
         if (state.Temporal)
+            state.Accumulated = builder.History("Accumulated", Layered(view, width, height, PixelFormat.R16_G16_B16_A16_Float), usage: usage);
+
+        // Cameras draw the shadow map, so a probe sees the clouds unshadowed until a camera has drawn it
+        state.UsesShadows = view.Kind != ViewKind.ReflectionProbe || _shadows is { Epoch: >= 0 };
+        if (state.UsesShadows)
         {
-            TextureState usage = TextureState.Attachment | TextureState.Sampled;
-            state.History = builder.History("History", GraphTextureDesc.Sized(outWidth, outHeight, false, PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R32_Float) with { ArrayLayers = layers }, usage: usage);
-            state.TargetDepth = builder.History("TargetDepth", Layered(view, outWidth, outHeight, PixelFormat.R32_Float), usage: usage);
+            int resolution = _settings.ShadowResolution;
+            if (_shadows?.Resolution != resolution)
+            {
+                _shadows?.Map.Dispose();
+                RenderTexture map = _device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription((uint)(resolution * ShadowCascades), (uint)resolution, PixelFormat.R16_G16_B16_A16_Float, false));
+                map.Name = "Cloud Shadows";
+                _shadows = new Shadows(map, resolution);
+            }
+            state.ShadowMap = builder.Import(_shadows.Map);
         }
     }
 
@@ -353,30 +376,113 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         _properties.SetFloat2("_CloudWind", s.Wind);
         _properties.SetFloat3("_CloudToSun", s.ToSun);
         _properties.SetFloat("_CloudFormation", s.Formation);
+        _properties.SetFloat2("_CloudWarp", s.Warp);
+        _properties.SetFloat("_CloudErosionWeight", s.ErosionWeight);
+        _properties.SetFloat("_CloudReach", s.Reach);
+        _properties.SetFloat("_CloudTileSize", TileSize);
         _properties.SetTexture("_CloudProfile", s.Profile!, _linearClamp);
         DrawMaps(context, state, camera);
-
-        // With temporal upscaling the clouds draw one pixel of each 2x2 block a frame in turn, and the history fills in the rest
-        Int2 cell = default;
-        Float2 jitter = Float2.Zero;
-        if (state.Temporal)
-        {
-            cell = s_jitterCells[state.Frame++ & 3];
-            jitter = new Float2((cell.X + 0.5f) / state.Block - 0.5f, (cell.Y + 0.5f) / state.Block - 0.5f);
-        }
+        SetLighting(s);
 
         RenderTexture depth = context.Get(state.Depth), target = context.Get(state.Target);
         Float2 low = new(depth.ColorTextures[0].Width, depth.ColorTextures[0].Height);
         _properties.SetTexture("_CameraDepthTexture", context.Depth!, _pointClamp);
         _properties.SetFloat2("_CloudFullResolution", new Float2(context.View.Width, context.View.Height));
         _properties.SetFloat2("_CloudLowResolution", low);
-        _properties.SetFloat2("_CloudJitter", jitter);
-        _properties.SetInt("_CloudDownsample", _declared.Scale);
-        _properties.SetInt("_CloudDepthMode", state.Temporal ? 1 : 0);
+        _properties.SetInt("_CloudDownsample", _scale);
         context.Fullscreen(_depth, depth, _properties);
 
-        _properties.SetTexture("_CloudSceneDepth", depth.ColorTextures[0], _pointClamp);
         _properties.SetFloat3("_CloudCamera", new Float3((float)camera.X, (float)camera.Y, (float)camera.Z));
+        RenderTexture tiles = context.Get(state.Tiles);
+        context.Fullscreen(_tiles, tiles, _properties);
+
+        _properties.SetTexture("_CloudTileRange", tiles.ColorTextures[0], _pointClamp);
+        _properties.SetFloat2("_CloudTileResolution", new Float2(tiles.ColorTextures[0].Width, tiles.ColorTextures[0].Height));
+        _properties.SetTexture("_CloudSceneDepth", depth.ColorTextures[0], _pointClamp);
+        DrawShadows(context, state, camera);
+        _properties.SetFloat("_CloudStepScale", state.Temporal ? TemporalFrames : 1f);
+        _properties.SetFloat("_CloudFrame", state.Temporal ? state.Frame++ % 64 : 0f);
+        context.Fullscreen(_march, target, _properties);
+
+        Texture clouds = target.ColorTextures[0];
+        if (state.Temporal)
+            clouds = Accumulate(context, state, target);
+        _properties.SetTexture("_CloudTex", clouds, _pointClamp);
+        _properties.SetTexture("_CloudTexDistance", target.ColorTextures[1], _pointClamp);
+        context.Fullscreen(_composite, _properties);
+    }
+
+    // The first camera each frame draws the next cascade of the shadow map, every cascade when the settings or sun
+    // changed, around itself. Binds them all for the march. Each cascade reaches a third as far as the next, the last as
+    // far as the clouds
+    private void DrawShadows(FeatureContext context, ViewState state, Double3 camera)
+    {
+        CloudSettings s = _settings;
+        if (!state.UsesShadows || _shadows is not { } shadows)
+        {
+            for (int c = 0; c < ShadowCascades; c++)
+                _properties.SetFloat4(s_shadowCascade[c], Float4.Zero);
+            _properties.SetTexture("_CloudShadowMap", s.Noise2D!, _linearClamp);
+            return;
+        }
+
+        Float3 axis = MathF.Abs(s.ToSun.Y) > 0.99f ? Float3.UnitX : Float3.UnitY;
+        Float3 right = Float3.Normalize(Float3.Cross(axis, s.ToSun));
+        Float3 up = Float3.Cross(s.ToSun, right);
+        _properties.SetFloat3("_CloudShadowRight", right);
+        _properties.SetFloat3("_CloudShadowUp", up);
+        _properties.SetFloat("_CloudShadowResolution", shadows.Resolution);
+
+        RenderTexture map = context.Get(state.ShadowMap);
+        bool draws = !_shadowsDrawn && context.View.Kind != ViewKind.ReflectionProbe;
+        bool all = shadows.Epoch != s.Epoch;
+        for (int c = 0; c < ShadowCascades && draws; c++)
+        {
+            if (!all && c != shadows.Next)
+                continue;
+            float half = s.Reach / MathF.Pow(3f, ShadowCascades - 1 - c);
+            shadows.Cascades[c] = new Float4((float)camera.X, (float)camera.Y, (float)camera.Z, half);
+            shadows.Winds[c] = s.Wind;
+            _properties.SetFloat4("_CloudShadowBuild", shadows.Cascades[c]);
+            context.Fullscreen(_shadow, map, c * shadows.Resolution, 0, shadows.Resolution, shadows.Resolution, _properties, shared: true);
+        }
+        if (draws)
+        {
+            shadows.Next = (shadows.Next + 1) % ShadowCascades;
+            shadows.Epoch = s.Epoch;
+            _shadowsDrawn = true;
+        }
+
+        for (int c = 0; c < ShadowCascades; c++)
+            _properties.SetFloat4(s_shadowCascade[c], shadows.Cascades[c]);
+        Float2 w0 = s.Wind - shadows.Winds[0], w1 = s.Wind - shadows.Winds[1], w2 = s.Wind - shadows.Winds[2], w3 = s.Wind - shadows.Winds[3];
+        _properties.SetFloat4("_CloudShadowWindA", new Float4(w0.X, w0.Y, w1.X, w1.Y));
+        _properties.SetFloat4("_CloudShadowWindB", new Float4(w2.X, w2.Y, w3.X, w3.Y));
+        _properties.SetTexture("_CloudShadowMap", map.ColorTextures[0], _linearClamp);
+    }
+
+    private static readonly PropertyID[] s_shadowCascade = ["_CloudShadowCascade0", "_CloudShadowCascade1", "_CloudShadowCascade2", "_CloudShadowCascade3"];
+
+    // Blends this frame's march over last frame's result, which needs last frame's at this size and settings
+    private Texture Accumulate(FeatureContext context, ViewState state, RenderTexture target)
+    {
+        CloudSettings s = _settings;
+        RenderTexture accumulated = context.Get(state.Accumulated);
+        RenderTexture? previous = context.History(state.Accumulated);
+        bool held = previous != null && context.HasPreviousFrame && state.Epoch == s.Epoch
+            && previous.ColorTextures[0].Width == accumulated.ColorTextures[0].Width && previous.ColorTextures[0].Height == accumulated.ColorTextures[0].Height;
+        _properties.SetTexture("_CloudCurrent", target.ColorTextures[0], _pointClamp);
+        _properties.SetTexture("_CloudCurrentDistance", target.ColorTextures[1], _pointClamp);
+        _properties.SetTexture("_CloudHistory", previous?.ColorTextures[0] ?? target.ColorTextures[0], _linearClamp);
+        _properties.SetFloat("_CloudHistoryValid", held ? 1f : 0f);
+        _properties.SetFloat2("_CloudWindMoved", held ? s.Wind - state.Wind : Float2.Zero);
+        context.Fullscreen(_temporal, accumulated, _properties);
+        (state.Epoch, state.Wind) = (s.Epoch, s.Wind);
+        return accumulated.ColorTextures[0];
+    }
+
+    private void SetLighting(CloudSettings s)
+    {
         _properties.SetFloat4("_CloudLighting", s.Lighting);
         _properties.SetFloat3("_CloudSunColor", s.SunColor);
         _properties.SetFloat3("_CloudSkyLight", s.SkyLight);
@@ -384,53 +490,12 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         _properties.SetFloat2("_CloudScatter", s.Scatter);
         _properties.SetFloat("_CloudAmbientSaturation", s.AmbientSaturation);
         _properties.SetFloat("_CloudHorizonFade", s.HorizonFade);
-        _properties.SetFloat("_CloudSunTap", s.SunTap);
         SetLayers(s);
-        _properties.SetFloat("_CloudReach", s.Reach);
-        context.Fullscreen(_march, target, _properties);
-
-        RenderTexture result = target, resultDepth = depth;
-        if (state.Temporal)
-        {
-            // Scene depth at the full target resolution, which the history is checked against and the composite matches
-            RenderTexture outDepth = context.Get(state.TargetDepth);
-            RenderTexture? previousDepth = context.History(state.TargetDepth);
-            _properties.SetFloat2("_CloudLowResolution", new Float2(state.OutWidth, state.OutHeight));
-            _properties.SetInt("_CloudDepthMode", 0);
-            context.Fullscreen(_depth, outDepth, _properties);
-
-            RenderTexture history = context.Get(state.History);
-            RenderTexture? previous = context.History(state.History);
-            bool valid = previous != null && previousDepth != null && context.HasPreviousFrame && state.Epoch == s.Epoch;
-            _properties.SetTexture("_CloudTargetDepth", outDepth.ColorTextures[0], _pointClamp);
-            _properties.SetTexture("_CloudPreviousTargetDepth", (previousDepth ?? outDepth).ColorTextures[0], _pointClamp);
-            _properties.SetTexture("_CloudLowDepth", depth.ColorTextures[0], _pointClamp);
-            _properties.SetFloat2("_CloudLowResolution", low);
-            _properties.SetTexture("_CloudCurrent", target.ColorTextures[0], _pointClamp);
-            _properties.SetTexture("_CloudCurrentDistance", target.ColorTextures[1], _pointClamp);
-            _properties.SetTexture("_CloudHistory", (previous ?? target).ColorTextures[0], _linearClamp);
-            _properties.SetTexture("_CloudHistoryDistance", (previous ?? target).ColorTextures[1], _linearClamp);
-            _properties.SetFloat2("_CloudHistoryResolution", new Float2(state.OutWidth, state.OutHeight));
-            _properties.SetFloat2("_CloudJitterCell", new Float2(cell.X, cell.Y));
-            _properties.SetInt("_CloudBlock", state.Block);
-            _properties.SetFloat("_CloudHistoryValid", valid ? 1f : 0f);
-            _properties.SetFloat2("_CloudWindStep", new Float2((float)(s.WindX - state.PreviousWindX), (float)(s.WindZ - state.PreviousWindZ)));
-            context.Fullscreen(_temporal, history, _properties);
-
-            (state.PreviousWindX, state.PreviousWindZ, state.Epoch) = (s.WindX, s.WindZ, s.Epoch);
-            (result, resultDepth) = (history, outDepth);
-        }
-
-        _properties.SetTexture("_CloudTex", result.ColorTextures[0], _pointClamp);
-        _properties.SetTexture("_CloudTexDistance", result.ColorTextures[1], _pointClamp);
-        _properties.SetTexture("_CloudSceneDepth", resultDepth.ColorTextures[0], _pointClamp);
-        _properties.SetFloat2("_CloudLowResolution", new Float2(result.ColorTextures[0].Width, result.ColorTextures[0].Height));
-        context.Fullscreen(_composite, _properties);
     }
 
-    // The maps cover the clouds' reach around the view's camera, on a lattice the wind carries along. Each texel holds its
+    // The map covers the clouds' reach around the view's camera, on a lattice the wind carries along. Each texel holds its
     // lattice point for as long as the point is in the square, wrapped around the map, so only the texels the square
-    // newly covers are drawn, plus a slice of rows a frame that keeps up with the sun and the changing formations
+    // newly covers are drawn
     private void DrawMaps(FeatureContext context, ViewState state, Double3 camera)
     {
         CloudSettings s = _settings;
@@ -443,17 +508,15 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
 
         RenderTexture maps = context.Get(state.Maps);
         RenderTexture? previous = context.History(state.Maps);
-        bool held = previous != null && context.HasPreviousFrame && state.MapEpoch == s.Epoch && state.MapTexel == texel;        _properties.SetTexture("_CloudMapsPrevious", previous?.ColorTextures[0] ?? s.Noise2D!, _pointClamp);
-        _properties.SetTexture("_CloudMapsPreviousSun", previous?.ColorTextures[1] ?? s.Noise2D!, _pointClamp);
+        bool held = previous != null && context.HasPreviousFrame && state.MapEpoch == s.Epoch && state.MapTexel == texel;
+        _properties.SetTexture("_CloudMapsPrevious", previous?.ColorTextures[0] ?? s.Noise2D!, _pointClamp);
         _properties.SetFloat4("_CloudMapWindow", new Float4(firstX, firstZ, state.MapFirstX, state.MapFirstZ));
-        _properties.SetFloat4("_CloudMapRefresh", new Float4(state.MapFrame++ % MapRefreshSlices, MapRefreshSlices, held ? 1f : 0f, texel));
+        _properties.SetFloat2("_CloudMapState", new Float2(held ? 1f : 0f, texel));
         _properties.SetFloat("_CloudMapSize", MapResolution);
-        _properties.SetFloat("_CloudSunMapLod", MathF.Max(MathF.Log2(texel / s.DetailScale * s.ErosionSize), 0f));
         context.Fullscreen(_maps, maps, _properties, shared: true);
         (state.MapFirstX, state.MapFirstZ, state.MapEpoch, state.MapTexel) = (firstX, firstZ, s.Epoch, texel);
 
         _properties.SetTexture("_CloudCoverage", maps.ColorTextures[0], _linearRepeat);
-        _properties.SetTexture("_CloudSunDepth", maps.ColorTextures[1], _linearRepeat);
     }
 
     private void SetLayers(CloudSettings s)
@@ -473,8 +536,11 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
     {
         _maps.Dispose();
         _depth.Dispose();
+        _tiles.Dispose();
         _march.Dispose();
-        _temporal.Dispose();
         _composite.Dispose();
+        _temporal.Dispose();
+        _shadow.Dispose();
+        _shadows?.Map.Dispose();
     }
 }

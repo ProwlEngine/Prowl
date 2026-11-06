@@ -69,9 +69,9 @@ public sealed class CloudLayer
 /// Volumetric clouds over the whole scene, with optional flat cloud layers above or below them.
 /// <para/>
 /// The cloud layer is ray marched through the view, taking its density from a coverage map around the camera shaped by
-/// a height profile and eroded by 3D noise. Each pixel of cloud marches a short way toward the sun with all its detail
-/// and reads the rest of the way from a sun map. The maps are kept from frame to frame and only drawn where the camera
-/// or the wind uncovers them, plus a slice a frame. Everything is scaled up over the scene. The scene's first enabled clouds are drawn, by a
+/// a height profile and eroded by 3D noise. Each point of cloud marches a short ray toward the sun for its shading. The
+/// coverage map is kept from frame to frame and only drawn where the camera or the wind uncovers it. Everything is
+/// scaled up over the scene. The scene's first enabled clouds are drawn, by a
 /// <see cref="VolumetricCloudsFeature"/> in the scene's world.
 /// </summary>
 [ExecuteAlways]
@@ -88,7 +88,7 @@ public sealed class VolumetricClouds : Component, IRenderSync
 
     /// <summary>How much of the sky is covered.</summary>
     [Range(0f, 1f)]
-    public float Coverage = 0.45f;
+    public float Coverage = 0.5f;
 
     /// <summary>How quickly light dims inside the clouds. Higher looks heavier and darker underneath.</summary>
     public float Density = 1f;
@@ -100,8 +100,23 @@ public sealed class VolumetricClouds : Component, IRenderSync
     [Range(0f, 1f)]
     public float Erosion = 1f;
 
+    /// <summary>
+    /// How much the erosion leans toward each cloud's base. 0 erodes evenly, 1 fades it linearly to none at the very
+    /// top, so tops stay smooth.
+    /// </summary>
+    [Range(0f, 1f)]
+    public float ErosionWeight = 0.7f;
+
     /// <summary>Size of the detail noise in meters.</summary>
     public float DetailScale = 600f;
+
+    /// <summary>How far smooth noise bends the clouds' outlines, so they wind rather than sit as clumps.</summary>
+    [Range(0f, 2f)]
+    public float Warp = 0.4f;
+
+    /// <summary>How much the bend changes from a cloud's base to its top, so clouds twist as they rise.</summary>
+    [Range(0f, 1f)]
+    public float WarpHeightShift = 0.25f;
 
     /// <summary>How quickly the clouds change shape as they drift, in turns of the detail noise per second.</summary>
     public float FormationChangeSpeed = 0.002f;
@@ -120,7 +135,7 @@ public sealed class VolumetricClouds : Component, IRenderSync
     /// Scales the sunlight the clouds receive. Above 1 makes up for the light that scatters many times inside real
     /// clouds, which the march only roughly follows.
     /// </summary>
-    public float SunBrightness = 1.5f;
+    public float SunBrightness = 2f;
 
     /// <summary>Scales the sky light the clouds receive.</summary>
     public float AmbientBrightness = 2f;
@@ -151,32 +166,23 @@ public sealed class VolumetricClouds : Component, IRenderSync
     /// Around this distance in meters the clouds fade into the sky behind them, little before it and quickly past it.
     /// They are drawn out to twice this, where nothing of them is left to see.
     /// </summary>
-    public float HorizonFade = 16000f;
+    public float HorizonFade = 32000f;
 
-    /// <summary>
-    /// Shades every pixel of cloud from one sample <see cref="SunTapDistance"/> toward the sun instead of the sun map:
-    /// where the cloud grows denser toward the sun the pixel is in shadow. Cheaper, and every billow shades itself, but
-    /// without the shadow of cloud further toward the sun.
-    /// </summary>
+    /// <summary>Resolution the clouds are built at before they are scaled up over the scene.</summary>
     [Header("Quality")]
-    public bool MarchToSun = false;
-
-    /// <summary>How far toward the sun the sample is taken when <see cref="MarchToSun"/> is on, in meters.</summary>
-    public float SunTapDistance = 0.5f;
-
-    /// <summary>
-    /// Resolution the clouds are built at before they are scaled up over the scene. With
-    /// <see cref="TemporalUpscale"/> on, only a quarter of these pixels are drawn each frame.
-    /// </summary>
     public CloudResolution Resolution = CloudResolution.Full;
 
     /// <summary>
-    /// Draws a quarter of the clouds' pixels each frame, a different one of every 2x2 block in turn, and fills in the
-    /// rest from earlier frames moved to where the clouds are now. About a quarter of the cost for the same sharpness
-    /// once settled, a little soft for a few frames after fast camera turns.
+    /// Marches in steps four times as long from a start that moves along the ray each frame, and blends each frame over
+    /// the last, so four frames add up to the full march. Much cheaper, with a faint trail behind fast moving clouds.
     /// </summary>
-    public bool TemporalUpscale = false;
+    public bool Temporal = true;
 
+    /// <summary>
+    /// Texels along each side of one cascade of the shadow map the clouds are lit from, cascades around the camera drawn
+    /// one a frame.
+    /// </summary>
+    public int ShadowResolution = 512;
 
     /// <summary>Radius of the planet in meters, which curves the cloud layers down toward the horizon.</summary>
     public float PlanetRadius = 6371000f;
