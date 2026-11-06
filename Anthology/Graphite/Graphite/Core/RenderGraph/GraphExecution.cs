@@ -326,12 +326,13 @@ internal sealed partial class GraphExecution
         public BufferAccess Visible = BufferAccess.None;
     }
 
-    public CommandBuffer BeginCommandBuffer(string name, PassInfo? pass)
+    public CommandBuffer BeginCommandBuffer(string name, PassInfo? pass, GpuTimer? timer = null)
     {
         CommandBuffer cb = Device.RentGraphCommandBuffer(Task);
 
         cb.Execution = Task;
         cb.Pass = pass;
+        cb.Timer = timer;
         cb.Bindings = null;
         cb.PassSink = null;
         cb.SinkTicks = 0;
@@ -345,9 +346,9 @@ internal sealed partial class GraphExecution
         return cb;
     }
 
-    public CommandBuffer BeginPassCommandBuffer(string passName, PassInfo? pass, ReadOnlySpan<ResourceAccess> accesses)
+    public CommandBuffer BeginPassCommandBuffer(string passName, PassInfo? pass, ReadOnlySpan<ResourceAccess> accesses, GpuTimer? timer = null)
     {
-        CommandBuffer cb = BeginCommandBuffer(passName, pass);
+        CommandBuffer cb = BeginCommandBuffer(passName, pass, timer);
         if (Task.Profilers.CommandStream is { } profiler && cb.Pass is { } info && profiler.BeginPassCommands(in info) is { } sink)
             cb.PassSink = new TimedPassCommandSink(sink, cb);
 

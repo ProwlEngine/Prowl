@@ -211,6 +211,8 @@ internal unsafe partial class VkGraphicsDevice
                         ExecutionId = profilers.IsEmpty ? 0 : cb.ExecutionId,
                         Queries = cb.TakePendingQueries(),
                         Submission = submission,
+                        Timer = cb.Timer,
+                        TimerExecution = cb.ExecutionId,
                     });
                 }
             }
@@ -316,6 +318,8 @@ internal unsafe partial class VkGraphicsDevice
         if (pending.CommandBuffer is { } cb)
         {
             ResolveQueries(in pending.Queries, out milliseconds, out vertexStats);
+            if (pending.Timer is { } timer && milliseconds is { } timed)
+                timer.Record(pending.TimerExecution, timed);
 
             if (pending.Submission != null)
                 ReturnRecordCommandBuffer(cb);
@@ -403,5 +407,7 @@ internal unsafe partial class VkGraphicsDevice
         public ulong ExecutionId;
         public GpuQueries Queries;
         public VkGpuSubmission? Submission;
+        public GpuTimer? Timer;
+        public ulong TimerExecution;
     }
 }

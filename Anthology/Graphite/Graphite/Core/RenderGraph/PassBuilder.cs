@@ -9,6 +9,13 @@ public sealed class PassBuilder
 
     internal PassBuilder(FrameGraph graph) => _graph = graph;
 
+    /// <summary>Measures the GPU time of the pass into the timer, read back a few frames later.</summary>
+    public void MeasureGpuTime(GpuTimer timer)
+    {
+        ArgumentNullException.ThrowIfNull(timer);
+        Pass().Timer = timer;
+    }
+
     /// <summary>Declares a texture read. Returns the handle it was given.</summary>
     public TextureHandle Read(TextureHandle texture, TextureState usage = TextureState.Sampled, TextureState? depthUsage = null)
     {

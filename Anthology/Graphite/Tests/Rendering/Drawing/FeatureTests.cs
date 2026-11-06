@@ -1659,6 +1659,29 @@ public sealed class FeatureTests : IDisposable
         }
     }
 
+    // A fullscreen effect whose pass measures its GPU time
+    private sealed class Timed(FullscreenProgram program, GpuTimer timer) : RenderFeature(RenderSlot.HdrPost)
+    {
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.WriteColor();
+            builder.MeasureGpuTime(timer);
+        }
+
+        public override void Render(FeatureContext context) => context.Fullscreen(program);
+    }
+
+    [Fact]
+    public void GpuTimers_MeasureTheFeaturesPassOnceTheGpuHasRunIt()
+    {
+        GpuTimer timer = new();
+        _world.Features.Add(new Timed(Program("void main() { outColor = Graphite_SampleSource(vUV); }"), timer));
+        for (int i = 0; i < 6 && timer.Measurements == 0; i++)
+            Frame(View());
+        Assert.True(timer.Measurements > 0);
+        Assert.True(timer.Milliseconds > 0);
+    }
+
     [Fact]
     public void ImportedTextures_KeepWhatARegionDrawLeavesUntouched()
     {

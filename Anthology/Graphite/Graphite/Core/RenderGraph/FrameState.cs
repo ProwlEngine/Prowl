@@ -80,6 +80,7 @@ internal sealed class FramePass
     public string Name = "";
     public int Group;
     public PassRenderer Render = null!;
+    public GpuTimer? Timer;
 
     public bool Declares(int resource)
     {
@@ -97,5 +98,6 @@ internal sealed class FramePass
         Name = name;
         Group = group;
         Render = null!;
+        Timer = null;
     }
 }

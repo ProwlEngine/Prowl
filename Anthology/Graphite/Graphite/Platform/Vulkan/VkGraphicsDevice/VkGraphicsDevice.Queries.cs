@@ -24,10 +24,10 @@ internal unsafe partial class VkGraphicsDevice
     private readonly ConcurrentQueue<QueryPool> _availableTimingPools = new();
     private readonly ConcurrentQueue<QueryPool> _availableStatsPools = new();
 
-    internal GpuQueries BeginQueries(Silk.NET.Vulkan.CommandBuffer cb, bool enabled)
+    internal GpuQueries BeginQueries(Silk.NET.Vulkan.CommandBuffer cb, bool stats, bool timed)
     {
         GpuQueries queries = default;
-        if (!enabled)
+        if (!stats && !timed)
             return queries;
 
         if (_timestampValidBits != 0)
@@ -38,12 +38,12 @@ internal unsafe partial class VkGraphicsDevice
             queries.Timing = timing;
         }
 
-        if (_physicalDeviceFeatures.PipelineStatisticsQuery)
+        if (stats && _physicalDeviceFeatures.PipelineStatisticsQuery)
         {
-            QueryPool stats = GetPool(_availableStatsPools, QueryType.PipelineStatistics, 1, PipelineStatsFlags);
-            Vk.CmdResetQueryPool(cb, stats, 0, 1);
-            Vk.CmdBeginQuery(cb, stats, 0, QueryControlFlags.None);
-            queries.Stats = stats;
+            QueryPool pool = GetPool(_availableStatsPools, QueryType.PipelineStatistics, 1, PipelineStatsFlags);
+            Vk.CmdResetQueryPool(cb, pool, 0, 1);
+            Vk.CmdBeginQuery(cb, pool, 0, QueryControlFlags.None);
+            queries.Stats = pool;
         }
 
         return queries;

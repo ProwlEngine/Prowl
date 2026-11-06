@@ -72,7 +72,7 @@ internal sealed partial class GraphExecution
             begun = true;
             capture?.BeginPass(index);
             TransitionForAccesses(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(pass.Accesses));
-            passCommands = BeginPassCommandBuffer(pass.Name, passInfo, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(pass.Accesses));
+            passCommands = BeginPassCommandBuffer(pass.Name, passInfo, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(pass.Accesses), pass.Timer);
             passCommands.PushDebugGroup(pass.Name);
             BindPass(passCommands, pass, index);
             long recordStart = Stopwatch.GetTimestamp();

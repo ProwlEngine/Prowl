@@ -781,6 +781,9 @@ public sealed class FeatureBuilder
     /// <summary>State this feature keeps for this view, made the first time it is asked for and disposed with the view.</summary>
     public T GetViewState<T>() where T : class, new() => View.Camera.State<T>(_pass.Feature);
 
+    /// <summary>Measures the GPU time of this feature's pass, every view it runs for, into the timer.</summary>
+    public void MeasureGpuTime(GpuTimer timer) => _graph.MeasureGpuTime(timer);
+
     /// <summary>The texel a feature that measures exposure writes the view's next exposure into, as R32 float.</summary>
     internal TextureHandle WriteExposure()
     {

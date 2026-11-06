@@ -10,6 +10,9 @@ public abstract partial class CommandBuffer
     /// <summary>Pass this buffer was rented during, for profiler timing. Null outside a pass.</summary>
     internal PassInfo? Pass { get; set; }
 
+    /// <summary>Timer the GPU time of this buffer goes to, set before Begin. Null when its pass does not measure.</summary>
+    internal GpuTimer? Timer { get; set; }
+
     /// <summary>Profilers of the bound execution. Empty outside one, so transfers are never profiled.</summary>
     internal ProfilerSet Profilers => Execution?.Profilers ?? ProfilerSet.Empty;
 
