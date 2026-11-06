@@ -22,8 +22,7 @@ namespace Prowl.Runtime.Rendering;
 /// <para/>
 /// Each view draws a weather map around its camera holding how far each column's cloud rises from the layer's floor and
 /// hangs from its ceiling, and the edges between cells of 3D noise carve lobes, billows and puffs into the clouds.
-/// The cloud layer and the flat layers are marched front to back and scaled up over the scene with depth aware weights
-/// so the clouds stay behind geometry edges.
+/// The clouds and the high layer are marched front to back up to the scene's depth and scaled up over the scene.
 /// </summary>
 internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
 {
@@ -64,7 +63,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
 
     private sealed class ViewState
     {
-        public TextureHandle Maps, Depth, Target, Accumulated, ShadowMap;
+        public TextureHandle Maps, Target, Accumulated, ShadowMap;
         public bool Temporal, UsesShadows;
         public int Frame, Epoch;
         public Float2 Wind;
@@ -87,7 +86,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
     }
 
 
-    private readonly FullscreenProgram _maps, _depth, _march, _composite, _temporal, _shadow;
+    private readonly FullscreenProgram _maps, _march, _composite, _temporal, _shadow;
     private readonly GraphicsDevice _device;
     private readonly Sampler _linearClamp, _pointClamp, _linearRepeat;
     private readonly PropertySet _properties = new();
@@ -107,7 +106,6 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
     {
         BlendStateDescription two = new(default, BlendAttachmentDescription.OverrideBlend, BlendAttachmentDescription.OverrideBlend);
         _maps = Program(renderer, "CLOUD_MAPS", "Maps");
-        _depth = Program(renderer, "CLOUD_DEPTH", "Depth");
         _march = Program(renderer, "CLOUD_MARCH", "March", two);
         _composite = renderer.CreateFullscreenProgram(Clouds, "Prowl/VolumetricCloudsComposite");
         _temporal = Program(renderer, "CLOUD_TEMPORAL", "Temporal");
@@ -255,7 +253,6 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         int width = Math.Max(1, (int)view.Width / _scale), height = Math.Max(1, (int)view.Height / _scale);
         uint layers = view.LayerCount > 1 ? (uint)view.LayerCount : 0;
 
-        state.Depth = builder.Temporary("Depth", Layered(view, width, height, PixelFormat.R32_Float));
         state.Target = builder.Temporary("Target", GraphTextureDesc.Sized(width, height, false, PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R32_Float) with { ArrayLayers = layers });
 
         // A probe capture turns to new faces every render, so there is nothing to blend over
@@ -303,16 +300,13 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         DrawMaps(context, state, camera);
         SetLighting(s);
 
-        RenderTexture depth = context.Get(state.Depth), target = context.Get(state.Target);
-        Float2 low = new(depth.ColorTextures[0].Width, depth.ColorTextures[0].Height);
+        RenderTexture target = context.Get(state.Target);
+        Float2 low = new(target.ColorTextures[0].Width, target.ColorTextures[0].Height);
         _properties.SetTexture("_CameraDepthTexture", context.Depth!, _pointClamp);
         _properties.SetFloat2("_CloudFullResolution", new Float2(context.View.Width, context.View.Height));
         _properties.SetFloat2("_CloudLowResolution", low);
-        _properties.SetInt("_CloudDownsample", _scale);
-        context.Fullscreen(_depth, depth, _properties);
 
         _properties.SetFloat3("_CloudCamera", new Float3((float)camera.X, (float)camera.Y, (float)camera.Z));
-        _properties.SetTexture("_CloudSceneDepth", depth.ColorTextures[0], _pointClamp);
         DrawShadows(context, state, camera);
         _properties.SetFloat("_CloudStepScale", state.Temporal ? TemporalFrames : 1f);
         _properties.SetFloat("_CloudFrame", state.Temporal ? state.Frame++ % 64 : 0f);
@@ -463,7 +457,6 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
     public void Dispose()
     {
         _maps.Dispose();
-        _depth.Dispose();
         _march.Dispose();
         _composite.Dispose();
         _temporal.Dispose();

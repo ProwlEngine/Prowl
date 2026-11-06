@@ -1,10 +1,9 @@
-#pragma variant CLOUD COMPOSITE MAPS DEPTH SHADOW MARCH TEMPORAL
+#pragma variant CLOUD COMPOSITE MAPS SHADOW MARCH TEMPORAL
 // Volumetric clouds as fullscreen passes, one per define:
 // CLOUD_MAPS       the weather over a square around the camera: how far each column's cloud rises from the layer's
 //                  floor and hangs from its ceiling, and how high that ceiling is. Kept from frame to frame while the
 //                  clouds are not changing shape,
 //                  only the texels the square newly covers are drawn
-// CLOUD_DEPTH      scene distance at the clouds' resolution
 // CLOUD_MARCH      the clouds and the high layer marched front to back at the clouds' resolution
 // CLOUD_SHADOW     one cascade of the clouds' shadow map: along each texel's ray from the sun, where it first meets
 //                  cloud, the cloud's mean density from there on and how much cloud the ray crosses in all
@@ -285,33 +284,6 @@ void main()
     outColor = CloudWeatherNoise((vec2(lattice) + 0.5) * _CloudMapState.y);
 }
 
-#elif defined(CLOUD_DEPTH)
-
-uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
-uniform vec2 _CloudFullResolution;
-uniform vec2 _CloudLowResolution;
-uniform int _CloudDownsample;
-
-// Neighbouring pixels alternate between the nearest and furthest of what they cover, so both sides of an edge survive
-// for the depth aware upsample
-void main()
-{
-    Graphite_ViewData view = Graphite_PostView();
-    ivec2 last = ivec2(_CloudFullResolution) - 1;
-    ivec2 low = ivec2(gl_FragCoord.xy);
-    float spread = float(max(_CloudDownsample - 1, 0));
-    vec2 base = gl_FragCoord.xy / _CloudLowResolution * _CloudFullResolution - spread * 0.5;
-    bool takeFar = ((low.x + low.y) & 1) == 0;
-    float pick = takeFar ? 0.0 : 1e9;
-    for (int i = 0; i < 4; i++)
-    {
-        vec2 offset = vec2(i & 1, i >> 1) * spread;
-        float d = CloudSceneDistance(view, _CameraDepthTexture, clamp(ivec2(base + offset), ivec2(0), last), _CloudFullResolution);
-        pick = takeFar ? max(pick, d) : min(pick, d);
-    }
-    outColor = vec4(pick, 0.0, 0.0, 1.0);
-}
-
 #elif defined(CLOUD_SHADOW)
 
 uniform vec3 _CloudCamera;
@@ -399,7 +371,8 @@ void main()
 
 layout(location = 1) out vec4 outDistance;
 
-uniform GRAPHITE_SCREEN_TEXTURE _CloudSceneDepth;
+uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
+uniform vec2 _CloudFullResolution;
 uniform vec2 _CloudLowResolution;
 uniform vec3 _CloudCamera;          // the first layer's camera, absolute
 uniform vec4 _CloudLighting;        // extinction per meter, unused, ambient, silver lining
@@ -519,7 +492,8 @@ void main()
     if (Graphite_PostOrthographic(view))
         return;
 
-    float sceneDist = Graphite_Fetch(_CloudSceneDepth, ivec2(gl_FragCoord.xy), 0).r;
+    ivec2 full = min(ivec2(gl_FragCoord.xy / _CloudLowResolution * _CloudFullResolution), ivec2(_CloudFullResolution) - 1);
+    float sceneDist = CloudSceneDistance(view, _CameraDepthTexture, full, _CloudFullResolution);
     vec2 uv = gl_FragCoord.xy / _CloudLowResolution;
     vec3 dir = normalize(Graphite_RelativeFromDepth(view, uv, 1.0));
     float pixelAngle = 2.0 / (max(abs(view.projection[1][1]), 1e-4) * _CloudLowResolution.y);
@@ -686,10 +660,8 @@ void main()
 uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
 uniform GRAPHITE_SCREEN_TEXTURE _CloudTex;
 uniform GRAPHITE_SCREEN_TEXTURE _CloudTexDistance; // how far the cloud each pixel shows is
-uniform GRAPHITE_SCREEN_TEXTURE _CloudSceneDepth;
 uniform vec2 _CloudLowResolution;
 
-// Each pixel weights the nearby cloud pixels whose scene depth matches its own
 void main()
 {
     Graphite_ViewData view = Graphite_PostView();
@@ -703,23 +675,20 @@ void main()
     ivec2 last = ivec2(_CloudLowResolution) - 1;
 
     vec4 sum = vec4(0.0);
-    float sumDistance = 0.0, total = 0.0;
+    float sumDistance = 0.0;
     for (int i = 0; i < 4; i++)
     {
         ivec2 offset = ivec2(i & 1, i >> 1);
         ivec2 pixel = clamp(first + offset, ivec2(0), last);
-        float bilinear = (offset.x == 1 ? f.x : 1.0 - f.x) * (offset.y == 1 ? f.y : 1.0 - f.y);
-        float difference = abs(Graphite_Fetch(_CloudSceneDepth, pixel, 0).r - own) / max(own, 1.0);
-        float weight = (bilinear + 1e-3) / (difference + 1e-3);
+        float weight = (offset.x == 1 ? f.x : 1.0 - f.x) * (offset.y == 1 ? f.y : 1.0 - f.y);
         vec4 cloudColor = Graphite_Fetch(_CloudTex, pixel, 0);
         sum += cloudColor * weight;
         sumDistance += Graphite_Fetch(_CloudTexDistance, pixel, 0).r * 0.001 * cloudColor.a * weight;
-        total += weight;
     }
 
     // Wherever geometry is nearer than the cloud, the cloud fades out over 50 meters
-    vec4 color = sum / total;
-    float cloud = sumDistance / total / max(color.a, 1e-4) * 1000.0;
+    vec4 color = sum;
+    float cloud = sumDistance / max(color.a, 1e-4) * 1000.0;
     float visible = color.a > 1e-3 ? clamp((own - cloud) / 50.0, 0.0, 1.0) : 1.0;
     color *= visible;
     outColor = vec4(scene.rgb * (1.0 - color.a) + color.rgb * view.exposure.x, scene.a);
