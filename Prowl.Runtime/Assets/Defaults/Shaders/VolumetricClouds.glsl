@@ -24,6 +24,7 @@ uniform sampler2D _CloudCoverage;    // the weather: how far the cloud rises fro
                                      // and the ceiling's height in thicknesses
 uniform sampler2D _CloudNoise2D;
 uniform sampler3D _CloudNoise3D;     // R cell edges, G finer cell edges, B smooth noise, A cell centres
+uniform sampler3D _CloudEdges;       // the same noise's R and G alone
 uniform vec4 _CloudCoverageRect;     // min x, min z, 1 / span, span
 uniform vec4 _CloudShape;            // the layer's floor, how far up the highest ceiling is, 1 / that, planet radius
 uniform vec4 _CloudPattern;          // 1 / weather scale, coverage, 1 / detail scale, erosion
@@ -149,9 +150,10 @@ vec4 CloudWeatherAt(vec2 windRel) { return textureLod(_CloudCoverage, CloudMapUV
 // noise blended with smooth noise push each domed side in and out by a share of its height, changing with height too,
 // so clouds bulge into uneven lobes and overhangs rather than standing as smooth hills. The top clouds dome both ways
 // from the ceiling, down by their full depth and up by half, so only the bottom clouds keep a flat side. The point is relative
-// to the wind across, absolute in height. Also gives how strongly the detail eats it there, strongest at the flat side
-// and less toward the dome so domes stay round, and its height through the layer
-float CloudShape(vec3 q, out float bite, out float h)
+// to the wind across, absolute in height, and footprint is how far apart the samples reading it are, so far ones read
+// the lobes from coarser mips. Also gives how strongly the detail eats it there, strongest at the flat side and less
+// toward the dome so domes stay round, and its height through the layer
+float CloudShape(vec3 q, float footprint, out float bite, out float h)
 {
     bite = 0.0;
     h = (q.y - _CloudShape.x) * _CloudShape.z;
@@ -162,11 +164,23 @@ float CloudShape(vec3 q, out float bite, out float h)
     float rise = weather.x * _CloudHeights.y * thickness, hang = weather.y * _CloudHeights.z * thickness;
     if (rise <= 0.0 && hang <= 0.0)
         return 0.0;
-    vec4 lobeNoise = textureLod(_CloudNoise3D, q * _CloudLobes.y, 0.0);
-    float lobes = (mix(lobeNoise.a, lobeNoise.b, 0.5) - 0.5) * 2.0 * _CloudLobes.x;
+    float fromFloor = q.y - _CloudShape.x, fromCeiling = weather.z * thickness - fromFloor;
+
+    // Lobes stretch a cloud by at most their share of its height either way, so a point beyond that from every surface
+    // is clear of cloud or deep inside it whatever they do, and their noise is only read near a surface
+    float most = 1.0 + _CloudLobes.x, least = 1.0 - _CloudLobes.x;
+    float outer = max(min(fromFloor, rise * most - fromFloor), min(hang * most * 0.5 + fromCeiling, hang * most - fromCeiling));
+    if (outer <= 0.0)
+        return 0.0;
+    float inner = max(min(fromFloor, rise * least - fromFloor), min(hang * least * 0.5 + fromCeiling, hang * least - fromCeiling));
+    float lobes = 0.0;
+    if (inner < _CloudHeights.w)
+    {
+        vec4 lobeNoise = textureLod(_CloudNoise3D, q * _CloudLobes.y, max(log2(footprint * _CloudLobes.y * _CloudErosionSize), 0.0));
+        lobes = (mix(lobeNoise.a, lobeNoise.b, 0.5) - 0.5) * 2.0 * _CloudLobes.x;
+    }
     rise *= 1.0 + lobes;
     hang *= 1.0 + lobes;
-    float fromFloor = q.y - _CloudShape.x, fromCeiling = weather.z * thickness - fromFloor;
     float lower = min(fromFloor, rise - fromFloor), upper = min(hang * 0.5 + fromCeiling, hang - fromCeiling);
     float inside = max(lower, upper);
     if (inside <= 0.0)
@@ -187,7 +201,7 @@ float CloudDensity(vec3 q, float shape, float bite, float lod, bool forLight)
     vec2 slow = textureLod(_CloudNoise3D, uvw * 0.17 + vec3(0.31, 0.17, 0.53), lod).ba;
     uvw += (slow.x - 0.5) * 0.35;
 
-    float large = textureLod(_CloudNoise3D, uvw * 0.3 + 0.7, max(lod - 1.7, 0.0)).r;
+    float large = textureLod(_CloudEdges, uvw * 0.3 + 0.7, max(lod - 1.7, 0.0)).r;
     float density = shape - large * large * mix(0.9, 1.6, slow.y) * bite;
     if (density <= 0.0)
         return 0.0;
@@ -195,17 +209,19 @@ float CloudDensity(vec3 q, float shape, float bite, float lod, bool forLight)
     float billows = 0.3194;
     if (!forLight)
     {
-        float base = textureLod(_CloudNoise3D, uvw, lod).r;
-        float coarse = textureLod(_CloudNoise3D, uvw * 0.55 + 0.5, lod).r;
-        float finer = textureLod(_CloudNoise3D, mat3(0.8, 0.0, -0.6, 0.0, 1.0, 0.0, 0.6, 0.0, 0.8) * uvw * 1.8 + 0.3, lod + 0.85).r;
-        float edges = mix(mix(base, coarse, slow.y), finer, smoothstep(0.45, 0.75, slow.x) * (1.0 - slow.y));
+        float base = textureLod(_CloudEdges, uvw, lod).r;
+        float coarse = textureLod(_CloudEdges, uvw * 0.55 + 0.5, lod).r;
+        float edges = mix(base, coarse, slow.y);
+        float finerWeight = smoothstep(0.45, 0.75, slow.x) * (1.0 - slow.y);
+        if (finerWeight > 0.0)
+            edges = mix(edges, textureLod(_CloudEdges, mat3(0.8, 0.0, -0.6, 0.0, 1.0, 0.0, 0.6, 0.0, 0.8) * uvw * 1.8 + 0.3, lod + 0.85).r, finerWeight);
         billows = edges * edges;
     }
     density -= billows * mix(0.4, 1.7, smoothstep(0.2, 0.8, slow.x)) * bite;
     if (density <= 0.0)
         return 0.0;
 
-    float puffs = forLight ? 0.3181 : pow(textureLod(_CloudNoise3D, mat3(0.6, 0.8, 0.0, -0.8, 0.6, 0.0, 0.0, 0.0, 1.0) * uvw * 2.1 + 0.11, lod + 1.07).g, 2.0);
+    float puffs = forLight ? 0.3181 : pow(textureLod(_CloudEdges, mat3(0.6, 0.8, 0.0, -0.8, 0.6, 0.0, 0.0, 0.0, 1.0) * uvw * 2.1 + 0.11, lod + 1.07).g, 2.0);
     density = clamp(density - puffs * mix(0.25, 0.8, slow.y) * bite, 0.0, 1.0);
     return density * smoothstep(0.0, 0.15, density);
 }
@@ -304,12 +320,12 @@ uniform vec3 _CloudShadowUp;
 uniform float _CloudShadowResolution;   // texels along each side of one cascade
 
 // The cloud's density at a point the shadow map's ray reaches, its detail at its average as the light reads it
-float CloudShadowDensity(vec3 p, vec3 cam, float lod)
+float CloudShadowDensity(vec3 p, vec3 cam, float lod, float texel)
 {
     float g2;
     vec3 q = CloudWindPoint(p, cam, g2);
     float bite, h;
-    float shape = CloudShape(q, bite, h);
+    float shape = CloudShape(q, texel, bite, h);
     return shape > 0.0 ? CloudDensity(q, shape, bite, lod, true) : 0.0;
 }
 
@@ -338,9 +354,9 @@ void main()
         return;
     }
 
-    // Steps about four texels long, so a long slanted ray is not stepped too coarsely
+    // Steps about four texels long but no shorter than the light needs, so a long slanted ray is not stepped too coarsely
     float texel = 2.0 * _CloudShadowBuild.w / _CloudShadowResolution;
-    int steps = int(clamp((from - to) / (texel * 4.0), 32.0, 160.0));
+    int steps = int(clamp((from - to) / max(texel * 4.0, 150.0), 32.0, 160.0));
     float step = (from - to) / float(steps);
     float lod = max(log2(texel * _CloudPattern.z * _CloudErosionSize), 0.0);
     float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
@@ -349,7 +365,7 @@ void main()
     for (int i = 0; i < steps; i++)
     {
         float s = from - (float(i) + jitter) * step;
-        float density = CloudShadowDensity(plane + _CloudToSun * s, cam, lod);
+        float density = CloudShadowDensity(plane + _CloudToSun * s, cam, lod, texel);
         if (density <= 0.0)
             continue;
         if (!found)
@@ -359,7 +375,7 @@ void main()
             for (int k = 0; k < 4; k++)
             {
                 float middle = (above + below) * 0.5;
-                if (CloudShadowDensity(plane + _CloudToSun * middle, cam, lod) > 0.0)
+                if (CloudShadowDensity(plane + _CloudToSun * middle, cam, lod, texel) > 0.0)
                     below = middle;
                 else
                     above = middle;
@@ -460,12 +476,11 @@ vec3 CloudSun()
     return _CloudSunColor * smoothstep(-0.03, 0.02, _CloudToSun.y);
 }
 
-// Where along its first step a ray starts: interleaved gradient noise over the pixels, moved each frame so the frames
-// blended together fill in between the steps
+// Where along its first step a ray starts: interleaved gradient noise over the pixels, stepped by the golden ratio each
+// frame so any few frames blended together spread evenly between the steps
 float CloudJitter(vec2 pixel, float frame)
 {
-    pixel += 5.588238 * mod(frame, 64.0);
-    return fract(52.9829189 * fract(dot(pixel, vec2(0.06711056, 0.00583715))));
+    return fract(52.9829189 * fract(dot(pixel, vec2(0.06711056, 0.00583715))) + frame * 0.6180339887);
 }
 
 uniform vec4 _CloudHigh;            // the high layer's altitude, opacity, 1 / scale, 1 when it is drawn
@@ -533,7 +548,7 @@ void main()
         float stride = max(nearStride, start * 0.005 * _CloudStepScale);
         float jitter = CloudJitter(floor(gl_FragCoord.xy), _CloudFrame);
         float t = start + stride * jitter;
-        for (int i = 0; i < 256 && t < end && transmittance > 0.01; i++)
+        for (int i = 0; i < 256 && t < end && transmittance > 0.03; i++)
         {
             stride = max(nearStride, t * 0.005 * _CloudStepScale);
             if (high.a > 0.0 && highT <= t)
@@ -551,7 +566,7 @@ void main()
             vec3 q = CloudWindPoint(p, cam, g2);
 
             float bite, h;
-            float shape = CloudShape(q, bite, h);
+            float shape = CloudShape(q, t * pixelAngle * 2.0, bite, h);
             if (shape <= 0.0)
             {
                 t += stride;
@@ -559,7 +574,7 @@ void main()
             }
 
             float lod = max(log2(t * pixelAngle * _CloudPattern.z * _CloudErosionSize * 2.0), 0.0);
-            float density = CloudDensity(q, shape, bite, lod, false);
+            float density = CloudDensity(q, shape, bite, lod, transmittance < 0.1);
             if (density < 1e-4)
             {
                 t += stride;
@@ -590,6 +605,15 @@ void main()
             transmittance *= stepTransmittance;
             t += stride;
         }
+    }
+
+    // A ray stopped in thick cloud takes the rest of it as the same colour as what it saw
+    if (transmittance <= 0.03)
+    {
+        color /= 1.0 - transmittance;
+        weightSum += transmittance;
+        distSum += transmittance * distSum / max(weightSum - transmittance, 1e-6);
+        transmittance = 0.0;
     }
 
     if (high.a > 0.0)
@@ -652,7 +676,7 @@ void main()
         low = min(low, around);
         high = max(high, around);
     }
-    outColor = mix(clamp(Graphite_Sample(_CloudHistory, uv), low, high), current, 0.15);
+    outColor = mix(clamp(Graphite_Sample(_CloudHistory, uv), low, high), current, 0.04);
 }
 
 #else

@@ -97,6 +97,8 @@ public enum DefaultTexture
 public enum DefaultTexture3D
 {
     CloudNoise,
+    /// <summary>The cloud noise's two cell edge channels alone.</summary>
+    CloudEdges,
 }
 
 /// <summary>

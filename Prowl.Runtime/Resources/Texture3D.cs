@@ -40,7 +40,7 @@ public sealed class Texture3D : Texture, ISerializable
     {
         (string fileName, uint width, uint height, uint depth, TextureFormat format) = texture switch
         {
-            DefaultTexture3D.CloudNoise => ("cloud_noise_3d.bin", 64u, 64u, 64u, TextureFormat.RGBA16),
+            DefaultTexture3D.CloudNoise or DefaultTexture3D.CloudEdges => ("cloud_noise_3d.bin", 64u, 64u, 64u, TextureFormat.RGBA8),
             _ => throw new ArgumentException($"Unknown default 3D texture: {texture}")
         };
 
@@ -48,9 +48,21 @@ public sealed class Texture3D : Texture, ISerializable
         using var bytes = new MemoryStream();
         stream.CopyTo(bytes);
 
+        byte[] texels = bytes.ToArray();
+        if (texture == DefaultTexture3D.CloudEdges)
+            (texels, format) = (RedGreen(texels), TextureFormat.RG8);
+
         var result = new Texture3D(width, height, depth, format, mipmaps: true) { Name = texture.ToString(), Filter = FilterMode.Trilinear };
-        result.SetData(new Memory<byte>(bytes.ToArray()));
+        result.SetData(new Memory<byte>(texels));
         result.GenerateMipmaps();
+        return result;
+    }
+
+    private static byte[] RedGreen(byte[] rgba)
+    {
+        byte[] result = new byte[rgba.Length / 2];
+        for (int i = 0; i < result.Length / 2; i++)
+            (result[i * 2], result[i * 2 + 1]) = (rgba[i * 4], rgba[i * 4 + 1]);
         return result;
     }
 

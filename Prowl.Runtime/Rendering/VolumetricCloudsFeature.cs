@@ -44,7 +44,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         public float AmbientSaturation, HorizonFade, Reach, DetailScale;
         public int Scale, ShadowResolution;
         public bool Temporal;
-        public Texture? Noise2D, Noise3D;
+        public Texture? Noise2D, Noise3D, Edges;
         public uint ErosionSize;
         public int Epoch;
         public Float4 High;
@@ -57,7 +57,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
             (other.ToSun, other.SunColor, other.SkyLight) = (ToSun, SunColor, SkyLight);
             (other.AmbientSaturation, other.HorizonFade, other.Reach, other.DetailScale) = (AmbientSaturation, HorizonFade, Reach, DetailScale);
             (other.Scale, other.Temporal, other.ShadowResolution) = (Scale, Temporal, ShadowResolution);
-            (other.Noise2D, other.Noise3D, other.ErosionSize, other.Epoch) = (Noise2D, Noise3D, ErosionSize, Epoch);
+            (other.Noise2D, other.Noise3D, other.Edges, other.ErosionSize, other.Epoch) = (Noise2D, Noise3D, Edges, ErosionSize, Epoch);
             (other.High, other.HighWind) = (High, HighWind);
         }
     }
@@ -83,7 +83,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         public readonly Float4[] Cascades = new Float4[ShadowCascades];
         public Float4 Heights;
         public readonly Float2[] Winds = new Float2[ShadowCascades];
-        public int Next, Epoch = -1;
+        public int Next, Frame, Epoch = -1;
     }
 
 
@@ -138,7 +138,9 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         CloudSettings s = Pending;
         s.Noise2D = noise.GpuTexture;
         s.Noise3D = erosion.GpuTexture;
-        if (s.Noise2D == null || s.Noise3D == null) return false;
+        // The detail reads only the cell edges, so the default noise has them in a texture of their own, smaller to read
+        s.Edges = clouds.ErosionNoise.IsValid() ? s.Noise3D : Texture3D.LoadDefault(DefaultTexture3D.CloudEdges).GpuTexture;
+        if (s.Noise2D == null || s.Noise3D == null || s.Edges == null) return false;
         s.ErosionSize = erosion.Width;
 
         // The march covers up to the ceiling and the highest the top clouds dome above it, half their depth with lobes
@@ -235,7 +237,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         _shadowsDrawn = false;
     }
 
-    public override bool IsActive(in FeatureView view) => _settings.Noise2D is { IsDisposed: false } && _settings.Noise3D is { IsDisposed: false };
+    public override bool IsActive(in FeatureView view) => _settings.Noise2D is { IsDisposed: false } && _settings.Noise3D is { IsDisposed: false } && _settings.Edges is { IsDisposed: false };
 
     private static GraphTextureDesc Layered(in FeatureView view, int width, int height, PixelFormat format)
         => GraphTextureDesc.Sized(width, height, format) with { ArrayLayers = view.LayerCount > 1 ? (uint)view.LayerCount : 0 };
@@ -283,6 +285,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
 
         _properties.SetTexture("_CloudNoise2D", s.Noise2D!, _linearRepeat);
         _properties.SetTexture("_CloudNoise3D", s.Noise3D!, _linearRepeat);
+        _properties.SetTexture("_CloudEdges", s.Edges!, _linearRepeat);
         _properties.SetFloat("_CloudErosionSize", s.ErosionSize);
         _properties.SetFloat4("_CloudShape", s.Shape);
         _properties.SetFloat4("_CloudPattern", s.Pattern);
@@ -319,7 +322,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         context.Fullscreen(_composite, _properties);
     }
 
-    // The first camera each frame draws the next cascade of the shadow map, every cascade when the settings or sun
+    // Every other frame the first camera draws the next cascade of the shadow map, every cascade when the settings or sun
     // changed, around the scene's main camera, or around itself without one. Binds them all for the march. Each cascade reaches a third as far as the next, the last as
     // far as the clouds
     private void DrawShadows(FeatureContext context, ViewState state, Double3 camera)
@@ -350,7 +353,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         float clouds = (float)Math.Max(Math.Abs(cameraY - s.Shape.X), Math.Abs(cameraY - s.Shape.X - s.Shape.Y));
 
         RenderTexture map = context.Get(state.ShadowMap);
-        bool draws = !_shadowsDrawn && context.View.Kind != ViewKind.ReflectionProbe;
+        bool draws = !_shadowsDrawn && context.View.Kind != ViewKind.ReflectionProbe && (shadows.Epoch != s.Epoch || ++shadows.Frame % 2 == 0);
         bool all = shadows.Epoch != s.Epoch;
         for (int c = 0; c < ShadowCascades && draws; c++)
         {
