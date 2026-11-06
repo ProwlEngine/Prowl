@@ -1138,6 +1138,12 @@ public static class PropertyGridRenderer
     public static string FormatFieldName(string name)
     {
         if (string.IsNullOrEmpty(name)) return name;
+
+        // The field name might be a property backing field e.g. [field: SerializeField] int Prop { get; set; }
+        // Backing fields for properties have the form: "<PropertyName>k__BackingField"
+        // This format is undocumented, but is still likely to be stable across versions.
+        if (name.StartsWith('<') && name.EndsWith(">k__BackingField")) name = name[1..^16];
+
         if (name.StartsWith("m_") && name.Length > 2) name = name[2..];
         else if (name.StartsWith('_') && name.Length > 1) name = name[1..];
 
