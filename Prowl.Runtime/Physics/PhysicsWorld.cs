@@ -638,7 +638,6 @@ public class PhysicsWorld
         _pendingSync.Clear();
 
         RefreshColliders();
-        SyncEpoch++;
     }
 
     internal void QueueSync(Rigidbody3D body)
@@ -667,6 +666,7 @@ public class PhysicsWorld
             if (collider.IsValid() && collider.EnabledInHierarchy) collider.RefreshPlacement();
         }
         _pendingColliders.Clear();
+        SyncEpoch++;
     }
 
     /// <summary>
