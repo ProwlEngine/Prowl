@@ -285,6 +285,91 @@ public class PhysicsTests : RuntimeTestBase
     }
 
     [Fact]
+    public void StaticCollider_ParentMoved_ShapeFollows()
+    {
+        Scene scene = CreatePhysicsScene();
+        GameObject parent = CreateGameObject("Parent");
+        scene.Add(parent);
+        GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One);
+        wall.SetParent(parent);
+        StepPhysics(scene);
+
+        parent.Transform.Position = new Float3(10, 0, 0);
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.4f));
+        Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
+    }
+
+    // Moving a transform queues its colliders once a sync, so a collider built after the first move of a
+    // sync has to be checked anyway or the second move goes unseen.
+    [Fact]
+    public void StaticCollider_AddedBetweenTwoMoves_FollowsTheSecond()
+    {
+        Scene scene = CreatePhysicsScene();
+        GameObject wall = CreateGameObject("Wall");
+        scene.Add(wall);
+
+        wall.Transform.Position = new Float3(5, 0, 0);
+        wall.AddComponent<BoxCollider>().Size = Float3.One;
+        wall.Transform.Position = new Float3(10, 0, 0);
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(new Float3(5, 0, 0), 0.4f));
+        Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
+    }
+
+    // Each sync starts a new round of queueing, so a move after one has to reach the next.
+    [Fact]
+    public void StaticCollider_MovedAgainAfterASync_FollowsEveryMove()
+    {
+        Scene scene = CreatePhysicsScene();
+        GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One);
+        StepPhysics(scene);
+
+        wall.Transform.Position = new Float3(5, 0, 0);
+        StepPhysics(scene);
+        Assert.True(scene.Physics.CheckSphere(new Float3(5, 0, 0), 0.4f));
+
+        wall.Transform.Position = new Float3(10, 0, 0);
+        StepPhysics(scene);
+        Assert.False(scene.Physics.CheckSphere(new Float3(5, 0, 0), 0.4f));
+        Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
+    }
+
+    // Parenting at the same world pose leaves every local value alone, and the collider still has to change body.
+    [Fact]
+    public void StaticCollider_ParentedToARigidbodyWithItsLocalsUnchanged_JoinsTheBody()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero);
+        GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One);
+        StepPhysics(scene);
+
+        wall.SetParent(rb.GameObject);
+        StepPhysics(scene);
+
+        Assert.Same(rb, wall.GetComponent<BoxCollider>().AttachedRigidbody);
+    }
+
+    [Fact]
+    public void StaticCollider_MovedWhileDisabled_IsThereWhenEnabled()
+    {
+        Scene scene = CreatePhysicsScene();
+        GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One);
+        StepPhysics(scene);
+
+        wall.Enabled = false;
+        wall.Transform.Position = new Float3(10, 0, 0);
+        StepPhysics(scene);
+        wall.Enabled = true;
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.4f));
+        Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
+    }
+
+    [Fact]
     public void StaticCollider_LayerChanged_IsQueriedOnTheNewLayer()
     {
         Scene scene = CreatePhysicsScene();

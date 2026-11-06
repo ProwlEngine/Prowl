@@ -135,10 +135,11 @@ public sealed class SceneRendering : IDisposable
         if (Unpark(member)) _members.Add(member);
     }
 
-    /// <summary>Parks a member as a sync that found it settled does.</summary>
+    /// <summary>Parks a member as a sync that found it settled does, moving <see cref="Epoch"/> as the end of a sync does.</summary>
     internal void Settle(IRenderSync member)
     {
         if (_members.Remove(member)) Park(member);
+        Epoch++;
     }
 
     private void Park(IRenderSync member)
