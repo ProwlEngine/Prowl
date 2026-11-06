@@ -38,9 +38,9 @@ public sealed class Texture3D : Texture, ISerializable
     /// </summary>
     internal static Texture3D ParseDefault(DefaultTexture3D texture)
     {
-        (string fileName, uint size, TextureFormat format) = texture switch
+        (string fileName, uint width, uint height, uint depth, TextureFormat format) = texture switch
         {
-            DefaultTexture3D.CloudNoise => ("cloud_noise_3d.bin", 64u, TextureFormat.RGBA16),
+            DefaultTexture3D.CloudNoise => ("cloud_noise_3d.bin", 64u, 64u, 64u, TextureFormat.RGBA16),
             _ => throw new ArgumentException($"Unknown default 3D texture: {texture}")
         };
 
@@ -48,7 +48,7 @@ public sealed class Texture3D : Texture, ISerializable
         using var bytes = new MemoryStream();
         stream.CopyTo(bytes);
 
-        var result = new Texture3D(size, size, size, format, mipmaps: true) { Name = texture.ToString(), Filter = FilterMode.Trilinear };
+        var result = new Texture3D(width, height, depth, format, mipmaps: true) { Name = texture.ToString(), Filter = FilterMode.Trilinear };
         result.SetData(new Memory<byte>(bytes.ToArray()));
         result.GenerateMipmaps();
         return result;

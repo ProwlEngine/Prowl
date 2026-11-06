@@ -12,19 +12,6 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-/// <summary>How a flat cloud layer looks.</summary>
-public enum CloudLayerStyle
-{
-    /// <summary>Thin wispy streaks stretched along the wind, high up.</summary>
-    Cirrus,
-
-    /// <summary>Soft puffs drawn out into long streaks along the wind.</summary>
-    Stratus,
-
-    /// <summary>The red channel of <see cref="CloudLayer.Texture"/>, tiled over the sheet.</summary>
-    Custom,
-}
-
 /// <summary>How many pixels the clouds are drawn at before they are scaled up over the scene.</summary>
 public enum CloudResolution
 {
@@ -33,40 +20,8 @@ public enum CloudResolution
     Quarter = 4,
 }
 
-/// <summary>A flat cloud layer drawn as a curved sheet at one altitude, above or below the volumetric clouds.</summary>
-[Serializable]
-public sealed class CloudLayer
-{
-    public bool Enabled = true;
-
-    public CloudLayerStyle Style = CloudLayerStyle.Cirrus;
-
-    /// <summary>Height of the sheet above zero, in meters.</summary>
-    public float Altitude = 8000f;
-
-    [Range(0f, 1f)]
-    public float Coverage = 0.5f;
-
-    [Range(0f, 1f)]
-    public float Opacity = 0.7f;
-
-    /// <summary>Size of the pattern in meters, how far apart its features repeat.</summary>
-    public float Scale = 12000f;
-
-    /// <summary>How fast the layer drifts relative to the volumetric clouds' wind.</summary>
-    public float WindMultiplier = 2f;
-
-    public Color Tint = new(1f, 1f, 1f, 1f);
-
-    /// <summary>A tiling texture whose red channel is the layer's pattern, scaled by <see cref="Scale"/>.</summary>
-    [ShowIf(nameof(IsCustom))]
-    public Texture2D? Texture;
-
-    public bool IsCustom => Style == CloudLayerStyle.Custom;
-}
-
 /// <summary>
-/// Volumetric clouds over the whole scene, with optional flat cloud layers above or below them.
+/// Volumetric clouds over the whole scene, with an optional faint high layer above them.
 /// <para/>
 /// The cloud layer is ray marched through the view, taking its density from a coverage map around the camera shaped by
 /// a height profile and eroded by 3D noise. Each point of cloud marches a short ray toward the sun for its shading. The
@@ -79,16 +34,43 @@ public sealed class CloudLayer
 [ComponentIcon("")] // Cloud
 public sealed class VolumetricClouds : Component, IRenderSync
 {
-    /// <summary>Height of the cloud base above zero, in meters.</summary>
+    /// <summary>Height of the cloud layer's floor above zero, in meters.</summary>
     [Header("Shape")]
     public float Altitude = 1500f;
 
-    /// <summary>How tall the cloud layer is, in meters.</summary>
-    public float Thickness = 1300f;
+    /// <summary>How tall the cloud layer is in meters, from its floor to its ceiling before the gap moves it.</summary>
+    public float Thickness = 4000f;
+
+    /// <summary>How far through the layer the tallest clouds rise in domes from flat bases on its floor.</summary>
+    [Range(0f, 1f)]
+    public float BottomStrength = 0.3f;
+
+    /// <summary>How far through the layer the top clouds dome down from its ceiling. They dome up above it by half as far.</summary>
+    [Range(0f, 1f)]
+    public float TopStrength = 0.3f;
+
+    /// <summary>How far up the ceiling the top clouds hang from is, in layer thicknesses, so how far apart the two are.</summary>
+    public float GapMultiplier = 0.4f;
+
+    /// <summary>Scales the coverage of the clouds rising from the floor.</summary>
+    public float BottomCoverage = 1.1f;
+
+    /// <summary>Scales the coverage of the clouds hanging from the ceiling.</summary>
+    public float TopCoverage = 0.9f;
+
+    /// <summary>How far round lobes push each cloud's domed side in and out, as a share of its height.</summary>
+    [Range(0f, 1f)]
+    public float Lobes = 0.25f;
+
+    /// <summary>Size of the lobes in meters.</summary>
+    public float LobeScale = 2000f;
+
+    /// <summary>How quickly the clouds change shape, in turns of the noise they drift through per second.</summary>
+    public float FormationChangeSpeed = 0.002f;
 
     /// <summary>How much of the sky is covered.</summary>
     [Range(0f, 1f)]
-    public float Coverage = 0.5f;
+    public float Coverage = 0.69f;
 
     /// <summary>How quickly light dims inside the clouds. Higher looks heavier and darker underneath.</summary>
     public float Density = 1f;
@@ -100,26 +82,8 @@ public sealed class VolumetricClouds : Component, IRenderSync
     [Range(0f, 1f)]
     public float Erosion = 1f;
 
-    /// <summary>
-    /// How much the erosion leans toward each cloud's base. 0 erodes evenly, 1 fades it linearly to none at the very
-    /// top, so tops stay smooth.
-    /// </summary>
-    [Range(0f, 1f)]
-    public float ErosionWeight = 0.7f;
-
     /// <summary>Size of the detail noise in meters.</summary>
     public float DetailScale = 600f;
-
-    /// <summary>How far smooth noise bends the clouds' outlines, so they wind rather than sit as clumps.</summary>
-    [Range(0f, 2f)]
-    public float Warp = 0.4f;
-
-    /// <summary>How much the bend changes from a cloud's base to its top, so clouds twist as they rise.</summary>
-    [Range(0f, 1f)]
-    public float WarpHeightShift = 0.25f;
-
-    /// <summary>How quickly the clouds change shape as they drift, in turns of the detail noise per second.</summary>
-    public float FormationChangeSpeed = 0.002f;
 
     /// <summary>Wind speed in meters a second.</summary>
     [Header("Wind")]
@@ -195,13 +159,25 @@ public sealed class VolumetricClouds : Component, IRenderSync
     public Texture2D? Noise;
 
     /// <summary>
-    /// Tiling 3D noise that erodes the clouds' edges: R at the base scale, G three times finer. Empty uses the built in
-    /// one.
+    /// Tiling 3D noise the clouds are carved from: R cell edges, G finer cell edges, B smooth noise, A cell centres. Empty
+    /// uses the built in one.
     /// </summary>
     public Texture3D? ErosionNoise;
 
-    [Header("Flat Layers")]
-    public List<CloudLayer> Layers = [new CloudLayer()];
+
+    /// <summary>Draws a faint flat layer of noise high above the clouds, like thin cirrus.</summary>
+    [Header("High Layer")]
+    public bool HighLayer = false;
+
+    /// <summary>Height of the high layer above zero, in meters.</summary>
+    public float HighLayerAltitude = 8000f;
+
+    /// <summary>How opaque the high layer is where it is thickest.</summary>
+    [Range(0f, 1f)]
+    public float HighLayerOpacity = 0.35f;
+
+    /// <summary>Size of the high layer's pattern in meters.</summary>
+    public float HighLayerScale = 20000f;
 
     // Accumulated in double, since it only ever grows
     private double _windX, _windZ;
@@ -211,7 +187,7 @@ public sealed class VolumetricClouds : Component, IRenderSync
 
     private double _formation;
 
-    /// <summary>How far the formations have changed, along the 3D noise's third axis.</summary>
+    /// <summary>How far the clouds have drifted through the noise their shapes come from.</summary>
     public float FormationOffset => (float)(_formation % 1.0);
 
     internal double WindX => _windX;

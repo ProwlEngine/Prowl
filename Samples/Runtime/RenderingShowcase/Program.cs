@@ -768,11 +768,6 @@ public sealed class RenderingShowcaseGame : StationGame
 
         var clouds = new GameObject("Clouds");
         _clouds = clouds.AddComponent<VolumetricClouds>();
-        _clouds.Layers =
-        [
-            new CloudLayer { Enabled = false, Style = CloudLayerStyle.Cirrus, Altitude = 9000f, Coverage = 0.5f, Opacity = 0.6f },
-            new CloudLayer { Enabled = false, Style = CloudLayerStyle.Stratus, Altitude = 5000f, Coverage = 0.45f, Opacity = 0.6f, WindMultiplier = 1.5f },
-        ];
         Add(clouds);
     }
 
@@ -783,9 +778,14 @@ public sealed class RenderingShowcaseGame : StationGame
         Slider(paper, font, "Coverage", _clouds.Coverage, 0f, 1f, v => _clouds.Coverage = v);
         Slider(paper, font, "Density", _clouds.Density, 0f, 4f, v => _clouds.Density = v);
         Slider(paper, font, "Erosion", _clouds.Erosion, 0f, 1f, v => _clouds.Erosion = v);
-        Slider(paper, font, "Erosion weight", _clouds.ErosionWeight, 0f, 1f, v => _clouds.ErosionWeight = v);
-        Slider(paper, font, "Warp", _clouds.Warp, 0f, 2f, v => _clouds.Warp = v);
-        Slider(paper, font, "Warp height shift", _clouds.WarpHeightShift, 0f, 1f, v => _clouds.WarpHeightShift = v);
+        Slider(paper, font, "Bottom strength", _clouds.BottomStrength, 0f, 1f, v => _clouds.BottomStrength = v);
+        Slider(paper, font, "Top strength", _clouds.TopStrength, 0f, 1f, v => _clouds.TopStrength = v);
+        Slider(paper, font, "Gap multiplier", _clouds.GapMultiplier, 0f, 3f, v => _clouds.GapMultiplier = v);
+        Slider(paper, font, "Lobes", _clouds.Lobes, 0f, 1f, v => _clouds.Lobes = v);
+        Slider(paper, font, "Lobe scale", _clouds.LobeScale, 200f, 8000f, v => _clouds.LobeScale = v, "0");
+        Slider(paper, font, "Bottom coverage", _clouds.BottomCoverage, 0f, 2f, v => _clouds.BottomCoverage = v);
+        Slider(paper, font, "Top coverage", _clouds.TopCoverage, 0f, 2f, v => _clouds.TopCoverage = v);
+        Slider(paper, font, "Change speed", _clouds.FormationChangeSpeed, 0f, 0.05f, v => _clouds.FormationChangeSpeed = v, "0.000");
         Slider(paper, font, "Sun brightness", _clouds.SunBrightness, 0f, 6f, v => _clouds.SunBrightness = v);
         Slider(paper, font, "Ambient brightness", _clouds.AmbientBrightness, 0f, 4f, v => _clouds.AmbientBrightness = v);
         Slider(paper, font, "Ambient saturation", _clouds.AmbientSaturation, 0f, 1f, v => _clouds.AmbientSaturation = v);
@@ -795,11 +795,11 @@ public sealed class RenderingShowcaseGame : StationGame
         Slider(paper, font, "Shadow resolution", _clouds.ShadowResolution, 128f, 2048f, v => _clouds.ShadowResolution = (int)v, "0");
         Slider(paper, font, "Horizon fade", _clouds.HorizonFade, 5000f, 100000f, v => _clouds.HorizonFade = v, "0");
         Slider(paper, font, "Altitude", _clouds.Altitude, 200f, 4000f, v => _clouds.Altitude = v, "0");
-        Slider(paper, font, "Thickness", _clouds.Thickness, 100f, 3000f, v => _clouds.Thickness = v, "0");
+        Slider(paper, font, "Thickness", _clouds.Thickness, 100f, 4000f, v => _clouds.Thickness = v, "0");
         Slider(paper, font, "Wind speed", _clouds.WindSpeed, 0f, 200f, v => _clouds.WindSpeed = v, "0");
         Cycle(paper, font, "Resolution", _clouds.Resolution, v => _clouds.Resolution = v);
-        Toggle(paper, font, "Cirrus layer", _clouds.Layers[0].Enabled, v => _clouds.Layers[0].Enabled = v);
-        Toggle(paper, font, "Stratus layer", _clouds.Layers[1].Enabled, v => _clouds.Layers[1].Enabled = v);
+        Toggle(paper, font, "High layer", _clouds.HighLayer, v => _clouds.HighLayer = v);
+        Slider(paper, font, "High layer opacity", _clouds.HighLayerOpacity, 0f, 1f, v => _clouds.HighLayerOpacity = v);
     }
 }
 
