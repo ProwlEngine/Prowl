@@ -26,7 +26,7 @@ namespace Prowl.Runtime.Rendering;
 /// </summary>
 internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
 {
-    private const int MapResolution = 1024;
+    private const int MapResolution = 512;
     private const int TemporalFrames = 4;
     private const int ShadowCascades = 4;
 
@@ -248,7 +248,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         builder.WriteColor();
         ViewState state = builder.GetViewState<ViewState>();
         TextureState usage = TextureState.Attachment | TextureState.Sampled;
-        state.Maps = builder.History("Maps", GraphTextureDesc.Sized(MapResolution, MapResolution, PixelFormat.R16_G16_B16_A16_Float), usage: usage);
+        state.Maps = builder.History("Maps", GraphTextureDesc.Sized(MapResolution, MapResolution, PixelFormat.R16_G16_Float), usage: usage);
 
         int width = Math.Max(1, (int)view.Width / _scale), height = Math.Max(1, (int)view.Height / _scale);
         uint layers = view.LayerCount > 1 ? (uint)view.LayerCount : 0;

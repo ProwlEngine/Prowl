@@ -1,8 +1,7 @@
 #pragma variant CLOUD COMPOSITE MAPS SHADOW MARCH TEMPORAL
 // Volumetric clouds as fullscreen passes, one per define:
 // CLOUD_MAPS       the weather over a square around the camera: how far each column's cloud rises from the layer's
-//                  floor and hangs from its ceiling, and how high that ceiling is. Kept from frame to frame while the
-//                  clouds are not changing shape,
+//                  floor and hangs from its ceiling. Kept from frame to frame while the clouds are not changing shape,
 //                  only the texels the square newly covers are drawn
 // CLOUD_MARCH      the clouds and the high layer marched front to back at the clouds' resolution
 // CLOUD_SHADOW     one cascade of the clouds' shadow map: along each texel's ray from the sun, where it first meets
@@ -19,8 +18,7 @@
 
 #include "Graphite/Internal/PostView.glsl"
 
-uniform sampler2D _CloudCoverage;    // the weather: how far the cloud rises from the floor and hangs from the ceiling, 0 to 1,
-                                     // and the ceiling's height in thicknesses
+uniform sampler2D _CloudCoverage;    // the weather: how far the cloud rises from the floor and hangs from the ceiling, 0 to 1
 uniform sampler2D _CloudNoise2D;
 uniform sampler3D _CloudEdges;       // cell edges
 uniform sampler3D _CloudPuffs;       // finer cell edges
@@ -69,7 +67,7 @@ vec2 CloudPatternNoise(vec2 q, float z)
 // from the floor and the hang from the ceiling are each their own smooth noise times their coverage, so both rise
 // toward the middle from each cloud's core. The ceiling sits the gap's thicknesses up. All of it
 // drifts through the noise's third axis, so the clouds change shape
-vec4 CloudWeatherNoise(vec2 windRel)
+vec2 CloudWeatherNoise(vec2 windRel)
 {
     vec2 q = windRel * _CloudPattern.x;
     float drift = _CloudHeights.x;
@@ -79,7 +77,7 @@ vec4 CloudWeatherNoise(vec2 windRel)
     float high = clamp((highClusters.y * 0.6 + highClusters.x * 0.4 - (1.0 - _CloudCoverages.y)) / 0.3, 0.0, 1.0);
     float rise = CloudPatternNoise(q * 2.1 + 0.37, 0.75 + drift * 1.3).x;
     float hang = CloudPatternNoise(q * 1.7 + 0.61, 0.5 + drift * 0.7).x;
-    return vec4(low * mix(0.35, 1.0, rise), high * mix(0.35, 1.0, hang), _CloudGap.y, 1.0);
+    return vec2(low * mix(0.35, 1.0, rise), high * mix(0.35, 1.0, hang));
 }
 
 // Where a ray from cameraHeight meets the sphere at altitude around the planet's centre, both roots in order, or an
@@ -141,9 +139,9 @@ vec2 CloudMapUV(vec2 windRel)
 }
 
 #if defined(CLOUD_MAPS)
-vec4 CloudWeatherAt(vec2 windRel) { return CloudWeatherNoise(windRel); }
+vec2 CloudWeatherAt(vec2 windRel) { return CloudWeatherNoise(windRel); }
 #else
-vec4 CloudWeatherAt(vec2 windRel) { return textureLod(_CloudCoverage, CloudMapUV(windRel), 0.0); }
+vec2 CloudWeatherAt(vec2 windRel) { return textureLod(_CloudCoverage, CloudMapUV(windRel), 0.0).xy; }
 #endif
 
 // The cloud at a point before its detail, inside either height map: the one rising from the floor or the one hanging
@@ -160,12 +158,12 @@ float CloudShape(vec3 q, float footprint, out float bite, out float h)
     h = (q.y - _CloudShape.x) * _CloudShape.z;
     if (h <= 0.0 || h >= 1.0)
         return 0.0;
-    vec3 weather = CloudWeatherAt(q.xz).xyz;
+    vec2 weather = CloudWeatherAt(q.xz);
     float thickness = _CloudGap.x;
     float rise = weather.x * _CloudHeights.y * thickness, hang = weather.y * _CloudHeights.z * thickness;
     if (rise <= 0.0 && hang <= 0.0)
         return 0.0;
-    float fromFloor = q.y - _CloudShape.x, fromCeiling = weather.z * thickness - fromFloor;
+    float fromFloor = q.y - _CloudShape.x, fromCeiling = _CloudGap.y * thickness - fromFloor;
 
     // Lobes stretch a cloud by at most their share of its height either way, so a point beyond that from every surface
     // is clear of cloud or deep inside it whatever they do, and their noise is only read near a surface
@@ -281,7 +279,7 @@ void main()
         outColor = texelFetch(_CloudMapsPrevious, texel, 0);
         return;
     }
-    outColor = CloudWeatherNoise((vec2(lattice) + 0.5) * _CloudMapState.y);
+    outColor = vec4(CloudWeatherNoise((vec2(lattice) + 0.5) * _CloudMapState.y), 0.0, 1.0);
 }
 
 #elif defined(CLOUD_SHADOW)
