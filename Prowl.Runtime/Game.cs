@@ -110,6 +110,7 @@ public abstract class Game
             BuiltInAssets.Initialize();
             AssetLoader.SetMainThread();
 
+            PushGameTime();
             Initialize();
         }
 
@@ -125,9 +126,7 @@ public abstract class Game
 
                 AudioContext.Update();
 
-                time.Update();
-                Time.TimeStack.Clear();
-                Time.TimeStack.Push(time);
+                AdvanceTime();
 
                 UpdateInputActions();
 
@@ -279,6 +278,7 @@ public abstract class Game
         // Registers built-in asset loaders (no GPU work happens until something resolves them).
         BuiltInAssets.Initialize();
         AssetLoader.SetMainThread();
+        PushGameTime();
         Initialize();
 
         Debug.LogSuccess("Headless initialization complete");
@@ -297,9 +297,7 @@ public abstract class Game
         {
             while (!_headlessQuitRequested)
             {
-                time.Update();
-                Time.TimeStack.Clear();
-                Time.TimeStack.Push(time);
+                AdvanceTime();
 
                 UpdateInputActions();
 
@@ -492,6 +490,20 @@ public abstract class Game
         // and cs is the system DPI, so we divide mouse by cs.
         float csFbWin = win.X > 0 ? (float)fb.X / win.X : 1f;
         return new Float2(p.X * csFbWin / cs, p.Y * csFbWin / cs);
+    }
+
+    // Before Initialize, so settings written to Time at startup land on the clock the loop advances.
+    private void PushGameTime()
+    {
+        if (Time.TimeStack.Count == 0) Time.TimeStack.Push(time);
+    }
+
+    // Advances whichever clock is current, so one pushed over the game's own (play mode) keeps running.
+    private void AdvanceTime()
+    {
+        time.Update();
+        if (!Time.TimeStack.TryPeek(out TimeData? current)) Time.TimeStack.Push(time);
+        else if (!ReferenceEquals(current, time)) current.Advance(time.UnscaledDeltaTime);
     }
 
     private void UpdatePaperInput() => PaperInputBridge.Pump(_paper, GetPaperMousePosition());

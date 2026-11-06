@@ -58,7 +58,14 @@ public class TimeData
         _stopwatch ??= Stopwatch.StartNew();
 
         float dt = Prowl.Runtime.Time.LockedDeltaTime > 0f ? Prowl.Runtime.Time.LockedDeltaTime : (float)_stopwatch.Elapsed.TotalMilliseconds / 1000.0f;
+        _stopwatch.Restart();
 
+        Advance(dt);
+    }
+
+    /// <summary>Moves this clock on by an unscaled delta measured elsewhere.</summary>
+    public void Advance(float dt)
+    {
         FrameCount++;
 
         UnscaledDeltaTime = dt;
@@ -70,8 +77,6 @@ public class TimeData
 
         SmoothUnscaledDeltaTime += (dt - SmoothUnscaledDeltaTime) * TimeSmoothFactor;
         SmoothDeltaTime = SmoothUnscaledDeltaTime * scale;
-
-        _stopwatch.Restart();
     }
 }
 
