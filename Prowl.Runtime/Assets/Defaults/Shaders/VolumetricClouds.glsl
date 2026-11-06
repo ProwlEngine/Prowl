@@ -23,8 +23,10 @@
 uniform sampler2D _CloudCoverage;    // the weather: how far the cloud rises from the floor and hangs from the ceiling, 0 to 1,
                                      // and the ceiling's height in thicknesses
 uniform sampler2D _CloudNoise2D;
-uniform sampler3D _CloudNoise3D;     // R cell edges, G finer cell edges, B smooth noise, A cell centres
-uniform sampler3D _CloudEdges;       // the same noise's R and G alone
+uniform sampler3D _CloudEdges;       // cell edges
+uniform sampler3D _CloudPuffs;       // finer cell edges
+uniform sampler3D _CloudSlow;        // smooth noise, cell centres
+uniform sampler3D _CloudLobeNoise;   // the two averaged
 uniform vec4 _CloudCoverageRect;     // min x, min z, 1 / span, span
 uniform vec4 _CloudShape;            // the layer's floor, how far up the highest ceiling is, 1 / that, planet radius
 uniform vec4 _CloudPattern;          // 1 / weather scale, coverage, 1 / detail scale, erosion
@@ -56,10 +58,10 @@ float CloudRemap(float value, float fromMin, float fromMax, float toMin, float t
 
 // The tiling noise read twice, the second time turned and at an unrelated scale, so the weather built from it does not
 // visibly repeat. Blending two reads narrows their spread, so it is widened back to one read's
-vec4 CloudPatternNoise(vec2 q, float z)
+vec2 CloudPatternNoise(vec2 q, float z)
 {
-    vec4 first = textureLod(_CloudNoise3D, vec3(q, z), 0.0);
-    vec4 second = textureLod(_CloudNoise3D, vec3(mat2(0.8, -0.6, 0.6, 0.8) * q * 0.618 + 0.17, z + 0.41), 0.0);
+    vec2 first = textureLod(_CloudSlow, vec3(q, z), 0.0).xy;
+    vec2 second = textureLod(_CloudSlow, vec3(mat2(0.8, -0.6, 0.6, 0.8) * q * 0.618 + 0.17, z + 0.41), 0.0).xy;
     return clamp(0.5 + (mix(first, second, 0.4) - 0.5) / 0.72, 0.0, 1.0);
 }
 
@@ -72,12 +74,12 @@ vec4 CloudWeatherNoise(vec2 windRel)
 {
     vec2 q = windRel * _CloudPattern.x;
     float drift = _CloudHeights.x;
-    vec4 lowClusters = CloudPatternNoise(q, 0.25 + drift);
-    vec4 highClusters = CloudPatternNoise(q * 0.9 + vec2(0.53, 0.29), 0.62 + drift * 0.9);
-    float low = clamp((lowClusters.a * 0.6 + lowClusters.b * 0.4 - (1.0 - _CloudCoverages.x)) / 0.3, 0.0, 1.0);
-    float high = clamp((highClusters.a * 0.6 + highClusters.b * 0.4 - (1.0 - _CloudCoverages.y)) / 0.3, 0.0, 1.0);
-    float rise = CloudPatternNoise(q * 2.1 + 0.37, 0.75 + drift * 1.3).b;
-    float hang = CloudPatternNoise(q * 1.7 + 0.61, 0.5 + drift * 0.7).b;
+    vec2 lowClusters = CloudPatternNoise(q, 0.25 + drift);
+    vec2 highClusters = CloudPatternNoise(q * 0.9 + vec2(0.53, 0.29), 0.62 + drift * 0.9);
+    float low = clamp((lowClusters.y * 0.6 + lowClusters.x * 0.4 - (1.0 - _CloudCoverages.x)) / 0.3, 0.0, 1.0);
+    float high = clamp((highClusters.y * 0.6 + highClusters.x * 0.4 - (1.0 - _CloudCoverages.y)) / 0.3, 0.0, 1.0);
+    float rise = CloudPatternNoise(q * 2.1 + 0.37, 0.75 + drift * 1.3).x;
+    float hang = CloudPatternNoise(q * 1.7 + 0.61, 0.5 + drift * 0.7).x;
     return vec4(low * mix(0.35, 1.0, rise), high * mix(0.35, 1.0, hang), _CloudGap.y, 1.0);
 }
 
@@ -176,8 +178,8 @@ float CloudShape(vec3 q, float footprint, out float bite, out float h)
     float lobes = 0.0;
     if (inner < _CloudHeights.w)
     {
-        vec4 lobeNoise = textureLod(_CloudNoise3D, q * _CloudLobes.y, max(log2(footprint * _CloudLobes.y * _CloudErosionSize), 0.0));
-        lobes = (mix(lobeNoise.a, lobeNoise.b, 0.5) - 0.5) * 2.0 * _CloudLobes.x;
+        float lobeNoise = textureLod(_CloudLobeNoise, q * _CloudLobes.y, max(log2(footprint * _CloudLobes.y * _CloudErosionSize), 0.0)).r;
+        lobes = (lobeNoise - 0.5) * 2.0 * _CloudLobes.x;
     }
     rise *= 1.0 + lobes;
     hang *= 1.0 + lobes;
@@ -198,7 +200,7 @@ float CloudShape(vec3 q, float footprint, out float bite, out float h)
 float CloudDensity(vec3 q, float shape, float bite, float lod, bool forLight)
 {
     vec3 uvw = q * _CloudPattern.z;
-    vec2 slow = textureLod(_CloudNoise3D, uvw * 0.17 + vec3(0.31, 0.17, 0.53), lod).ba;
+    vec2 slow = textureLod(_CloudSlow, uvw * 0.17 + vec3(0.31, 0.17, 0.53), lod).xy;
     uvw += (slow.x - 0.5) * 0.35;
 
     float large = textureLod(_CloudEdges, uvw * 0.3 + 0.7, max(lod - 1.7, 0.0)).r;
@@ -214,14 +216,14 @@ float CloudDensity(vec3 q, float shape, float bite, float lod, bool forLight)
         float edges = mix(base, coarse, slow.y);
         float finerWeight = smoothstep(0.45, 0.75, slow.x) * (1.0 - slow.y);
         if (finerWeight > 0.0)
-            edges = mix(edges, textureLod(_CloudEdges, mat3(0.8, 0.0, -0.6, 0.0, 1.0, 0.0, 0.6, 0.0, 0.8) * uvw * 1.8 + 0.3, lod + 0.85).r, finerWeight);
+            edges = mix(edges, textureLod(_CloudEdges, mat3(0.8, 0.0, -0.6, 0.0, 1.0, 0.0, 0.6, 0.0, 0.8) * uvw * 1.8 + 0.3, lod + 1.0).r, finerWeight);
         billows = edges * edges;
     }
     density -= billows * mix(0.4, 1.7, smoothstep(0.2, 0.8, slow.x)) * bite;
     if (density <= 0.0)
         return 0.0;
 
-    float puffs = forLight ? 0.3181 : pow(textureLod(_CloudEdges, mat3(0.6, 0.8, 0.0, -0.8, 0.6, 0.0, 0.0, 0.0, 1.0) * uvw * 2.1 + 0.11, lod + 1.07).g, 2.0);
+    float puffs = forLight ? 0.3181 : pow(textureLod(_CloudPuffs, mat3(0.6, 0.8, 0.0, -0.8, 0.6, 0.0, 0.0, 0.0, 1.0) * uvw * 2.1 + 0.11, lod + 1.0).r, 2.0);
     density = clamp(density - puffs * mix(0.25, 0.8, slow.y) * bite, 0.0, 1.0);
     return density * smoothstep(0.0, 0.15, density);
 }

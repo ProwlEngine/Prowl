@@ -97,8 +97,14 @@ public enum DefaultTexture
 public enum DefaultTexture3D
 {
     CloudNoise,
-    /// <summary>The cloud noise's two cell edge channels alone.</summary>
+    /// <summary>The cloud noise's cell edges alone.</summary>
     CloudEdges,
+    /// <summary>The cloud noise's finer cell edges alone.</summary>
+    CloudPuffs,
+    /// <summary>The cloud noise's smooth noise and cell centres alone.</summary>
+    CloudSlow,
+    /// <summary>The cloud noise's smooth noise and cell centres averaged.</summary>
+    CloudLobes,
 }
 
 /// <summary>

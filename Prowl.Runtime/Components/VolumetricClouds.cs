@@ -158,13 +158,6 @@ public sealed class VolumetricClouds : Component, IRenderSync
     [Header("Noise")]
     public Texture2D? Noise;
 
-    /// <summary>
-    /// Tiling 3D noise the clouds are carved from: R cell edges, G finer cell edges, B smooth noise, A cell centres. Empty
-    /// uses the built in one.
-    /// </summary>
-    public Texture3D? ErosionNoise;
-
-
     /// <summary>Draws a faint flat layer of noise high above the clouds, like thin cirrus.</summary>
     [Header("High Layer")]
     public bool HighLayer = false;

@@ -44,7 +44,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         public float AmbientSaturation, HorizonFade, Reach, DetailScale;
         public int Scale, ShadowResolution;
         public bool Temporal;
-        public Texture? Noise2D, Noise3D, Edges;
+        public Texture? Noise2D, Edges, Puffs, Slow, LobeNoise;
         public uint ErosionSize;
         public int Epoch;
         public Float4 High;
@@ -57,7 +57,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
             (other.ToSun, other.SunColor, other.SkyLight) = (ToSun, SunColor, SkyLight);
             (other.AmbientSaturation, other.HorizonFade, other.Reach, other.DetailScale) = (AmbientSaturation, HorizonFade, Reach, DetailScale);
             (other.Scale, other.Temporal, other.ShadowResolution) = (Scale, Temporal, ShadowResolution);
-            (other.Noise2D, other.Noise3D, other.Edges, other.ErosionSize, other.Epoch) = (Noise2D, Noise3D, Edges, ErosionSize, Epoch);
+            (other.Noise2D, other.Edges, other.Puffs, other.Slow, other.LobeNoise, other.ErosionSize, other.Epoch) = (Noise2D, Edges, Puffs, Slow, LobeNoise, ErosionSize, Epoch);
             (other.High, other.HighWind) = (High, HighWind);
         }
     }
@@ -134,14 +134,15 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
     internal bool Capture(VolumetricClouds clouds, RenderWorld world, Scene scene)
     {
         Texture2D noise = clouds.Noise.IsValid() ? clouds.Noise : Texture2D.LoadDefault(DefaultTexture.CloudNoise);
-        Texture3D erosion = clouds.ErosionNoise.IsValid() ? clouds.ErosionNoise : Texture3D.LoadDefault(DefaultTexture3D.CloudNoise);
+        Texture3D edges = Texture3D.LoadDefault(DefaultTexture3D.CloudEdges);
         CloudSettings s = Pending;
         s.Noise2D = noise.GpuTexture;
-        s.Noise3D = erosion.GpuTexture;
-        // The detail reads only the cell edges, so the default noise has them in a texture of their own, smaller to read
-        s.Edges = clouds.ErosionNoise.IsValid() ? s.Noise3D : Texture3D.LoadDefault(DefaultTexture3D.CloudEdges).GpuTexture;
-        if (s.Noise2D == null || s.Noise3D == null || s.Edges == null) return false;
-        s.ErosionSize = erosion.Width;
+        s.Edges = edges.GpuTexture;
+        s.Puffs = Texture3D.LoadDefault(DefaultTexture3D.CloudPuffs).GpuTexture;
+        s.Slow = Texture3D.LoadDefault(DefaultTexture3D.CloudSlow).GpuTexture;
+        s.LobeNoise = Texture3D.LoadDefault(DefaultTexture3D.CloudLobes).GpuTexture;
+        if (s.Noise2D == null || s.Edges == null || s.Puffs == null || s.Slow == null || s.LobeNoise == null) return false;
+        s.ErosionSize = edges.Width;
 
         // The march covers up to the ceiling and the highest the top clouds dome above it, half their depth with lobes
         float thickness = MathF.Max(clouds.Thickness, 1f);
@@ -213,7 +214,6 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         Add(clouds.SilverLining); Add(clouds.MultipleScattering); Add(clouds.MultipleScatteringOcclusion); Add(clouds.HorizonFade);
         Add(clouds.PlanetRadius);
         Add(clouds.Noise.IsValid() ? clouds.Noise.InstanceID : 0, 0f);
-        Add(clouds.ErosionNoise.IsValid() ? clouds.ErosionNoise.InstanceID : 0, 0f);
         Add(s.ToSun.X, 0.1f); Add(s.ToSun.Y, 0.1f); Add(s.ToSun.Z, 0.1f);
         Add(s.SunColor.X, 0.1f); Add(s.SunColor.Y, 0.1f); Add(s.SunColor.Z, 0.1f);
 
@@ -237,7 +237,9 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         _shadowsDrawn = false;
     }
 
-    public override bool IsActive(in FeatureView view) => _settings.Noise2D is { IsDisposed: false } && _settings.Noise3D is { IsDisposed: false } && _settings.Edges is { IsDisposed: false };
+    public override bool IsActive(in FeatureView view)
+        => _settings.Noise2D is { IsDisposed: false } && _settings.Edges is { IsDisposed: false } && _settings.Puffs is { IsDisposed: false }
+            && _settings.Slow is { IsDisposed: false } && _settings.LobeNoise is { IsDisposed: false };
 
     private static GraphTextureDesc Layered(in FeatureView view, int width, int height, PixelFormat format)
         => GraphTextureDesc.Sized(width, height, format) with { ArrayLayers = view.LayerCount > 1 ? (uint)view.LayerCount : 0 };
@@ -284,8 +286,10 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         Double3 camera = context.View.Position;
 
         _properties.SetTexture("_CloudNoise2D", s.Noise2D!, _linearRepeat);
-        _properties.SetTexture("_CloudNoise3D", s.Noise3D!, _linearRepeat);
         _properties.SetTexture("_CloudEdges", s.Edges!, _linearRepeat);
+        _properties.SetTexture("_CloudPuffs", s.Puffs!, _linearRepeat);
+        _properties.SetTexture("_CloudSlow", s.Slow!, _linearRepeat);
+        _properties.SetTexture("_CloudLobeNoise", s.LobeNoise!, _linearRepeat);
         _properties.SetFloat("_CloudErosionSize", s.ErosionSize);
         _properties.SetFloat4("_CloudShape", s.Shape);
         _properties.SetFloat4("_CloudPattern", s.Pattern);
