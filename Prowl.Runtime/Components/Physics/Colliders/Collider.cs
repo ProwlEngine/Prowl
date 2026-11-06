@@ -61,9 +61,10 @@ public abstract class Collider : Component
     /// </summary>
     private PhysicsWorld _registeredWorld;
 
-    // The world that checks this collider when a transform or layer edit reaches it, and whether a check is queued there.
+    // The world that checks this collider when a transform or layer edit reaches it, and the world a check is queued in.
+    // They differ after a scene change, as the old world may never step again to clear its check.
     private PhysicsWorld _watchingWorld;
-    internal bool CheckQueued;
+    internal PhysicsWorld? CheckQueuedIn;
 
     /// <summary>
     /// Transform version tracking for static colliders.

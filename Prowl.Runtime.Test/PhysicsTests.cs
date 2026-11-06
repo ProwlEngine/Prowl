@@ -356,6 +356,25 @@ public class PhysicsTests : RuntimeTestBase
         Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
     }
 
+    // The old scene may never step again to clear its queued check, so the new scene has to queue the collider anyway.
+    [Fact]
+    public void StaticCollider_MovedToAnotherSceneWhileQueued_FollowsLaterMoves()
+    {
+        Scene oldScene = CreatePhysicsScene();
+        Scene newScene = CreatePhysicsScene();
+        GameObject wall = AddStaticBox(oldScene, Float3.Zero, Float3.One);
+        StepPhysics(oldScene);
+
+        wall.Transform.Position = new Float3(5, 0, 0);
+        newScene.Add(wall);
+        StepPhysics(newScene);
+
+        wall.Transform.Position = new Float3(10, 0, 0);
+        StepPhysics(newScene);
+        Assert.False(newScene.Physics.CheckSphere(new Float3(5, 0, 0), 0.4f));
+        Assert.True(newScene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
+    }
+
     // Parenting at the same world pose leaves every local value alone, and the collider still has to change body.
     [Fact]
     public void StaticCollider_ParentedToARigidbodyWithItsLocalsUnchanged_JoinsTheBody()
