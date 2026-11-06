@@ -9,12 +9,12 @@ namespace Prowl.Runtime.Test;
 
 /// <summary>
 /// Guards <see cref="Scene.GatherActiveCameras"/>, which replaced a per-object
-/// <c>GetComponentsInChildren</c> recursion in Scene.Render. The flat scan must return exactly what
+/// <c>GetComponentsInChildren</c> recursion in Scene.Render. The camera list must return exactly what
 /// the old recursive-plus-Distinct expression returned, for every hierarchy shape.
 /// </summary>
 public class SceneCameraGatherTests : RuntimeTestBase
 {
-    /// <summary>The exact expression Scene.Render used before the flat scan replaced it.</summary>
+    /// <summary>The exact expression Scene.Render used before the camera list replaced it.</summary>
     private static List<Camera> LegacyGather(Scene scene)
     {
         var cameras = scene.ActiveObjects
@@ -151,11 +151,143 @@ public class SceneCameraGatherTests : RuntimeTestBase
     }
 
     [Fact]
+    public void ReenabledCamera_IsFoundOnce()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject go = CreateGameObject("Cam");
+        Camera cam = go.AddComponent<Camera>();
+        scene.Add(go);
+
+        cam.Enabled = false;
+        cam.Enabled = true;
+        go.Enabled = false;
+        go.Enabled = true;
+
+        Assert.Single(scene.GatherActiveCameras());
+        AssertMatchesLegacy(scene);
+    }
+
+    [Fact]
+    public void CameraAddedToAnObjectInTheScene_IsFound()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject go = CreateGameObject("Cam");
+        scene.Add(go);
+
+        go.AddComponent<Camera>();
+
+        Assert.Single(scene.GatherActiveCameras());
+        AssertMatchesLegacy(scene);
+    }
+
+    [Fact]
+    public void RemovedCamera_IsGone()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject go = CreateGameObject("Cam");
+        Camera cam = go.AddComponent<Camera>();
+        scene.Add(go);
+
+        go.RemoveComponent(cam);
+
+        Assert.Empty(scene.GatherActiveCameras());
+        AssertMatchesLegacy(scene);
+    }
+
+    [Fact]
+    public void CameraOnAnObjectRemovedFromTheScene_IsGone()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject go = CreateGameObject("Cam");
+        go.AddComponent<Camera>();
+        scene.Add(go);
+
+        scene.Remove(go);
+
+        Assert.Empty(scene.GatherActiveCameras());
+        AssertMatchesLegacy(scene);
+    }
+
+    [Fact]
+    public void CameraInASceneThatIsNotActive_IsFound()
+    {
+        Scene scene = CreateScene();
+        GameObject go = CreateGameObject("Cam");
+        go.AddComponent<Camera>();
+        scene.Add(go);
+
+        Assert.Single(scene.GatherActiveCameras());
+    }
+
+    [Fact]
+    public void Camera_MovesWithDontDestroyOnLoad()
+    {
+        Scene first = CreateScene();
+        GameObject keeper = CreateGameObject("Keeper");
+        keeper.AddComponent<Camera>();
+        first.Add(keeper);
+        Scene.Load(first);
+        Scene.ProcessPendingLoad();
+        Scene.DontDestroyOnLoad(keeper);
+
+        Scene second = CreateScene();
+        Scene.Load(second);
+        Scene.ProcessPendingLoad();
+
+        Assert.Single(second.GatherActiveCameras());
+    }
+
+    [Fact]
+    public void DisabledCamera_MovedWithDontDestroyOnLoad_IsFoundOnceEnabled()
+    {
+        Scene first = CreateScene();
+        GameObject keeper = CreateGameObject("Keeper");
+        Camera cam = keeper.AddComponent<Camera>();
+        first.Add(keeper);
+        Scene.Load(first);
+        Scene.ProcessPendingLoad();
+        cam.Enabled = false;
+        Scene.DontDestroyOnLoad(keeper);
+
+        Scene second = CreateScene();
+        Scene.Load(second);
+        Scene.ProcessPendingLoad();
+        cam.Enabled = true;
+
+        Assert.Single(second.GatherActiveCameras());
+    }
+
+    private sealed class MainCameraReader : Component
+    {
+        public Camera? Seen;
+
+        public override void OnEnable() => Seen = Camera.Main;
+    }
+
+    // A scene enables its objects in order, so a script ahead of the camera must still find it.
+    [Fact]
+    public void Main_IsFoundByAnOnEnableThatRunsBeforeTheCameras()
+    {
+        Scene scene = CreateScene();
+        GameObject first = CreateGameObject("First");
+        MainCameraReader reader = first.AddComponent<MainCameraReader>();
+        GameObject second = CreateGameObject("Second");
+        Camera cam = second.AddComponent<Camera>();
+        scene.Add(first);
+        scene.Add(second);
+
+        Scene.Load(scene);
+        Scene.ProcessPendingLoad();
+
+        Assert.Same(cam, reader.Seen);
+    }
+
+    [Fact]
     public void GatherCost_DoesNotScaleWithSceneSize()
     {
         // The regression this guards: Scene.Render's camera gather used to allocate O(sum of subtree
         // sizes) worth of LINQ/iterator garbage EVERY frame - ~6 MB on a 10k-object tilemap, which
-        // dominated the engine's gen0 churn. A flat scan allocates only the result list, so cost must
+        // dominated the engine's gen0 churn. The camera list allocates only the result, so cost must
         // stay flat as the scene grows.
         static long MeasureGather(Scene scene)
         {

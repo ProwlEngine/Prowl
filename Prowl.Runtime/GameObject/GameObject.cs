@@ -74,6 +74,7 @@ public partial class GameObject : EngineObject, ISerializable
 
             // A rigidbody carries its layer into the physics world, so it has to pick the change up.
             if (TryGetComponent(out Rigidbody3D body)) body.QueueSync();
+            WakeColliders();
             WakeRendering();
         }
     }
@@ -126,6 +127,13 @@ public partial class GameObject : EngineObject, ISerializable
         if (!scene.IsValid() || scene.IsDisposed) return;
         foreach (Component component in _components)
             if (component is Rendering.IRenderSync member) scene.Rendering.Refresh(member);
+    }
+
+    /// <summary>Has the physics world check this object's colliders before its next step.</summary>
+    internal void WakeColliders()
+    {
+        foreach (Component component in _components)
+            if (component is Collider collider) collider.QueueCheck();
     }
 
     /// <summary> The Identifier of this GameObject </summary>
@@ -366,11 +374,10 @@ public partial class GameObject : EngineObject, ISerializable
             }
         }
 
-        // When worldPositionStays is true the local setters above already bumped the version; when
-        // false, the local values are unchanged but the new parent changes the world transform, so
-        // signal the change explicitly (world-space caches keyed on Version would otherwise go stale).
-        if (!worldPositionStays)
-            Transform.MarkChanged();
+        // The local setters above skip equal values, and a new parent changes what this transform
+        // depends on either way, so signal the change explicitly (world-space caches keyed on Version
+        // and colliders that follow a body would otherwise go stale).
+        Transform.MarkChanged();
 
         HierarchyStateChanged();
 
