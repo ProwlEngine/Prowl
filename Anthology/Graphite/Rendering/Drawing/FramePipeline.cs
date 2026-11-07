@@ -541,41 +541,47 @@ internal sealed partial class FramePipeline : IDisposable
         }
     }
 
-    // Whether the view's transparent list reads the scene colour this frame. Returns whether its copy was just made, which
-    // adds the copy to the view's graph; the lists keep their order through that rebuild, so what Prepare uploaded holds.
+    // Whether the view's transparent list or a feature's pass list reads the scene colour this frame. Returns whether its
+    // copy was just made, which adds the copy to the view's graph; the lists keep their order through that rebuild, so
+    // what Prepare uploaded holds.
     private void UpdateSceneColor(CameraFrame camera, CameraShape shape, uint width, uint height)
     {
-        bool used = false;
-        foreach (DrawCall call in camera.Transparent.Calls)
-        {
-            DrawProgram program = DrawPrograms[call.Program];
-            if (program.Shader.PassReadsSceneColor(program.PassIndex) && program.Shader.PassReadsIn(program.PassIndex, camera.Keywords))
-            {
-                used = true;
-                break;
-            }
-        }
+        bool used = ListsRead(camera, static (shader, pass) => shader.PassReadsSceneColor(pass));
         camera.SceneColorUsed = used;
         if (used)
             camera.EnsureSceneColor(width, height, (uint)shape.Layers, camera.Build.ColorFormatOf(shape));
     }
 
-    // Whether the view's transparent list reads the scene depth this frame, which makes the copy
+    // Whether the view's transparent list or a feature's pass list reads the scene depth this frame, which makes the copy
     private void UpdateSceneDepth(CameraFrame camera, CameraShape shape, uint width, uint height)
     {
-        bool used = false;
-        foreach (DrawCall call in camera.Transparent.Calls)
-        {
-            DrawProgram program = DrawPrograms[call.Program];
-            if (program.Shader.PassReadsSceneDepth(program.PassIndex) && program.Shader.PassReadsIn(program.PassIndex, camera.Keywords))
-            {
-                used = true;
-                break;
-            }
-        }
+        bool used = ListsRead(camera, static (shader, pass) => shader.PassReadsSceneDepth(pass));
         camera.SceneDepthUsed = used;
         if (used)
             camera.EnsureSceneDepth(width, height, (uint)shape.Layers, camera.Build.SceneDepthFormat);
+    }
+
+    private bool ListsRead(CameraFrame camera, Func<Shader, int, bool> reads)
+    {
+        if (ListReads(camera, camera.Transparent, reads))
+            return true;
+        foreach ((PassType _, DrawList list) in camera.PassLists)
+        {
+            if (ListReads(camera, list, reads))
+                return true;
+        }
+        return false;
+    }
+
+    private bool ListReads(CameraFrame camera, DrawList list, Func<Shader, int, bool> reads)
+    {
+        foreach (DrawCall call in list.Calls)
+        {
+            DrawProgram program = DrawPrograms[call.Program];
+            if (reads(program.Shader, program.PassIndex) && program.Shader.PassReadsIn(program.PassIndex, camera.Keywords))
+                return true;
+        }
+        return false;
     }
 
     // Whether the view's transparent list holds a Transmission pass, the only writer of the reactive mask
