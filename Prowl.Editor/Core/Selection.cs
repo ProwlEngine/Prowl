@@ -143,7 +143,7 @@ public static class Selection
     /// </summary>
     internal readonly struct Snapshot
     {
-        private readonly List<Func<object>> _callbacks;
+        private readonly List<Func<object?>> _callbacks;
         private readonly int _activeIndex;
 
         /// <summary>
@@ -155,7 +155,7 @@ public static class Selection
             _callbacks = new(capacity: _selected.Count);
             foreach (object selectedObject in _selected)
             {
-                // TODO: perhaps some sort of extensible system to serialize references...?
+                // TODO: consider some sort of extensible system to serialize references...
                 Func<object>? callback = selectedObject switch
                 {
                     GameObject go => () => Prowl.Runtime.Resources.Scene.Current.FindObjectByIdentifier<GameObject>(go.Identifier),
@@ -175,8 +175,12 @@ public static class Selection
         {
             _selected.Clear();
             _lastClickedIndex = -1;
-            foreach (Func<object> callback in _callbacks)
-                _selected.Add(callback());
+            foreach (Func<object?> callback in _callbacks)
+            {
+                object? selectedObject = callback();
+                if (selectedObject is not null)
+                    _selected.Add(selectedObject);
+            }
             _activeObject = _activeIndex >= 0 ? _selected[_activeIndex] : null;
             OnSelectionChanged?.Invoke();
         }
