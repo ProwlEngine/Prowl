@@ -4,11 +4,8 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Editor.Core;
-using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.GUI.Registries;
-using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.Prefabs;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
@@ -70,7 +67,6 @@ public class ProjectPanel : DockPanel
     private List<OrigamiUI.TreeNode>? _folderTreeNodes;
     private List<object>? _folderTreeItems;
     private readonly Dictionary<string, ContentItem> _folderTreeItemsByPath = [];
-    private readonly HashSet<string> _selectedFolderPaths = [];
     private int _folderTreeVersion = -1;
 
     public string CurrentFolder => _currentFolder;
@@ -481,7 +477,6 @@ public class ProjectPanel : DockPanel
         using (paper.Box("proj_tree_bg")
             .Size(FolderTreeWidth, height)
             .BackgroundColor(Color.FromArgb(26, 0, 0, 0))
-            .OnClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
             // Right-edge divider (a2 tree border-right).
@@ -525,29 +520,22 @@ public class ProjectPanel : DockPanel
             List<TreeNode> nodes = _folderTreeNodes;
             List<object> folderItems = _folderTreeItems!;
 
-            _selectedFolderPaths.Clear();
-            foreach (ContentItem sel in Selection.GetSelected<ContentItem>())
-                if (sel.IsFolder) _selectedFolderPaths.Add(sel.RelativePath);
-
             Origami.Tree(paper, "proj_tree", FolderTreeWidth, height)
                 .Nodes(nodes)
                 .MultiSelect()
                 .IsSelected(n =>
                 {
                     string relPath = (string)n.UserData!;
-                    return _selectedFolderPaths.Contains(relPath) || _currentFolder == relPath;
+                    return _currentFolder == relPath;
                 })
                 .OnSelectModified((e, ctrl, shift) =>
                 {
                     NavigateTo((string)e.Node.UserData!);
-                    Selection.HandleListClick(folderItems[e.Index], (IReadOnlyList<object>)folderItems, e.Index, ctrl, shift);
                 })
                 .OnDoubleClick(e => { /* tree handles expand toggle internally */ })
                 .OnRightClick(e =>
                 {
-                    var item = (ContentItem)folderItems[e.Index];
-                    if (!Selection.IsSelected(item))
-                        Selection.Select(item);
+                    NavigateTo((string)e.Node.UserData!);
                 })
                 .OnHover((n, normY) =>
                 {
@@ -663,7 +651,8 @@ public class ProjectPanel : DockPanel
         // Transparent background so the dock panel's glass (over the nebula) shows through.
         using (paper.Box("proj_content_bg")
             .Size(width, height)
-            .OnClick(0, (_, _) => Selection.Clear())
+            .OnClick(_ => { if (isList) Selection.Clear(); })
+            .OnPress(_ => { if (!isList) Selection.Clear(); })
             .OnPostLayout((_, rect) => _contentViewRect = rect)
             .Enter())
         {
@@ -807,7 +796,8 @@ public class ProjectPanel : DockPanel
             .OnRowContext(i =>
             {
                 ContentItem it = visible[i].item;
-                if (!Selection.IsSelected(it)) Selection.AddToSelection(it);
+                if (!Selection.IsSelected(it))
+                    Selection.Select(it);
                 Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, ItemContextMenu(it));
             })
             .OnRowDragStart(i =>
@@ -920,10 +910,6 @@ public class ProjectPanel : DockPanel
     // Origami.ContextMenu at a point - the table opens it from OnRowContext).
     private Action<ContextBuilder> ItemContextMenu(ContentItem item, bool inTree = false) => builder =>
         {
-            // Right-click should select the item if not already selected
-            if (!Selection.IsSelected(item))
-                Selection.AddToSelection(item);
-
             bool isMulti = Selection.Count > 1;
             bool isRoot = string.IsNullOrEmpty(item.RelativePath);
             string folder = item.IsFolder ? item.RelativePath : _currentFolder;
@@ -1267,12 +1253,17 @@ public class ProjectPanel : DockPanel
             .Padding(3, 3, 5, 5).Rounded(Origami.Current.Metrics.ContainerRounding).Gap(5)
             .BackgroundColor(isSelected ? EditorTheme.Selected : Color.Transparent)
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Selected : EditorTheme.Hover).End()
-            .OnClick((sub, idx, subObjects), (cap, e) =>
+            .OnPress((sub, idx, subObjects), (cap, e) =>
             {
                 e.StopPropagation();
                 bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
                 bool shift = _paper?.IsKeyDown(PaperKey.LeftShift) == true || _paper?.IsKeyDown(PaperKey.RightShift) == true;
                 Selection.HandleListClick(cap.Item1, (IReadOnlyList<object>)cap.Item3, cap.Item2, ctrl, shift);
+            })
+            .OnRightClick(sub, (item, e) =>
+            {
+                if (!Selection.IsSelected(item))
+                    Selection.Select(item);
             })
             .OnDragStart(sub, (s, _) =>
             {
@@ -1339,12 +1330,17 @@ public class ProjectPanel : DockPanel
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Selected : EditorTheme.Hover).End()
             .Rounded(cellRound)
             .Opacity(AssetClipboard.IsCut(item) ? CutOpacity : 1f)
-            .OnClick((item, idx, itemObjects), (cap, e) =>
+            .OnPress((item, idx, itemObjects), (cap, e) =>
             {
                 e.StopPropagation();
                 bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
                 bool shift = _paper?.IsKeyDown(PaperKey.LeftShift) == true || _paper?.IsKeyDown(PaperKey.RightShift) == true;
                 Selection.HandleListClick(cap.Item1, (IReadOnlyList<object>)cap.Item3, cap.Item2, ctrl, shift);
+            })
+            .OnRightClick(item, (item, e) =>
+            {
+                if (!Selection.IsSelected(item))
+                    Selection.Select(item);
             })
             .OnDoubleClick(item, (it, _) =>
             {
