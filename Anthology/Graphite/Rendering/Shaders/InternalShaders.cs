@@ -40,9 +40,12 @@ internal static class InternalShaders
         return new ShaderPass { State = new PassState(), Source = source, SourceName = name };
     }
 
-    /// <summary>A compute program of a library file, compiled under the policy.</summary>
-    public static InternalCompute Compute(GraphicsDevice device, IShaderCompiler? compiler, string file, CompilePolicy policy = CompilePolicy.Sync)
-        => new(device, FilePass(file).Variants(compiler, device.BackendType), ShaderLibrary.Prefix + file, policy);
+    /// <summary>
+    /// A compute program of a library file, compiled under the policy. A lit one binds the renderer's frame and view
+    /// tables whole, as lit fullscreen programs do, and its file declares "#pragma resource_set 3" and GRAPHITE_NO_OBJECT.
+    /// </summary>
+    public static InternalCompute Compute(GraphicsDevice device, IShaderCompiler? compiler, string file, CompilePolicy policy = CompilePolicy.Sync, bool lit = false)
+        => new(device, FilePass(file).Variants(compiler, device.BackendType), ShaderLibrary.Prefix + file, policy, lit);
 }
 
 /// <summary>
@@ -56,11 +59,14 @@ internal sealed class InternalCompute : IDisposable
     private readonly string _name;
     private ComputeProgram? _program;
 
-    public InternalCompute(GraphicsDevice device, PassVariants variants, string name, CompilePolicy policy)
+    private readonly bool _lit;
+
+    public InternalCompute(GraphicsDevice device, PassVariants variants, string name, CompilePolicy policy, bool lit = false)
     {
         _device = device;
         _variants = variants;
         _name = name;
+        _lit = lit;
         if (policy == CompilePolicy.Async)
             variants.QueueCompute(0, CompilePriority.Fallback);
         else
@@ -72,7 +78,10 @@ internal sealed class InternalCompute : IDisposable
 
     private ComputeProgram Create()
     {
-        ComputeProgram program = _device.ResourceFactory.CreateComputeProgram(_variants.RequireCompute());
+        ComputeDescription description = _variants.RequireCompute();
+        if (_lit)
+            description.ResourceLayouts = FullscreenProgram.LitLayouts(description.ResourceLayouts ?? []);
+        ComputeProgram program = _device.ResourceFactory.CreateComputeProgram(description);
         program.Name = _name;
         return program;
     }

@@ -521,7 +521,7 @@ public sealed class FullscreenProgram : IDisposable
     }
 
     // The renderer's frame and view tables whole, so the camera's bind as they are, and the program's own resources in the user set
-    private static ResourceLayoutDescription[] LitLayouts(ResourceLayoutDescription[] compiled)
+    internal static ResourceLayoutDescription[] LitLayouts(ResourceLayoutDescription[] compiled)
     {
         List<ResourceLayoutElementDescription> user = new();
         foreach (ResourceLayoutDescription layout in compiled)
@@ -1050,6 +1050,12 @@ public sealed class FeatureContext
             throw new InvalidOperationException($"{_pass.Name} draws a lit fullscreen program without declaring DrawsRenderables in Setup.");
         _pass.Camera.Drawer.BindTables(Command);
     }
+
+    /// <summary>
+    /// Binds the view's lights, shadows and probes for a lit compute program, the one set by SetComputeShader, its
+    /// Graphite_View the view's layer given. Needs DrawsRenderables in Setup.
+    /// </summary>
+    internal void BindLighting(int layer = 0) => Drawer.BindTables(Command, (uint)layer);
 
     private SceneDrawer Drawer => _pass.Draws ? _pass.Camera.Drawer
         : throw new InvalidOperationException($"{_pass.Name} draws renderables without declaring DrawsRenderables in Setup.");

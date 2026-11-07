@@ -71,11 +71,11 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
     }
 
     /// <summary>Binds the frame's texture tables and the view's table for a program drawn without draw records.</summary>
-    public void BindTables(CommandBuffer cmd)
+    public void BindTables(CommandBuffer cmd, uint layer = 0)
     {
         cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frame.Resources.TextureTable);
         cmd.SetDescriptorTable(GraphiteBindings.ViewSet, _viewTable);
-        cmd.SetPushConstants(new FramePipeline.Push());
+        cmd.SetPushConstants(new FramePipeline.Push { ViewBase = layer });
     }
 
     /// <summary>Records one of the view's draw lists.</summary>

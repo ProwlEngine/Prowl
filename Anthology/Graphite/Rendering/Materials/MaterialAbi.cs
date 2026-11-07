@@ -76,7 +76,7 @@ internal static class GraphiteBindings
     public const string DrawRecordsName = "Graphite_DrawRecords";
     public const string VerticesName = "Graphite_Vertices";
 
-    private const ShaderStages Graphics = ShaderStages.Vertex | ShaderStages.Fragment;
+    private const ShaderStages Graphics = ShaderStages.Vertex | ShaderStages.Fragment | ShaderStages.Compute;
 
     /// <summary>
     /// The texture table every material program declares as set 0: the renderer's bindless textures, one table shared by

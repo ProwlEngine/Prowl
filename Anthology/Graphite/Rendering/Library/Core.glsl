@@ -3,7 +3,12 @@
 // objects far from it. World means true world space, which directions and normals are in as moving changes none of them.
 #pragma once
 
+#ifdef GRAPHITE_COMPUTE
+#define GRAPHITE_VIEW_INDEX 0
+#else
 #extension GL_EXT_multiview : require
+#define GRAPHITE_VIEW_INDEX gl_ViewIndex
+#endif
 #extension GL_EXT_nonuniform_qualifier : require
 
 #include "Graphite/Math.glsl"
@@ -60,7 +65,8 @@ layout(set = 2, binding = 2, std430) readonly buffer Graphite_DrawRecords { Grap
 
 layout(push_constant) uniform Graphite_Push { uint drawRecordBase; uint instanceBase; uint viewBase; uint flags; } graphite_Push;
 
-Graphite_ViewData Graphite_View() { return graphite_Views[graphite_Push.viewBase + gl_ViewIndex]; }
+// The view drawn, in compute the layer the dispatch's view base picks
+Graphite_ViewData Graphite_View() { return graphite_Views[graphite_Push.viewBase + GRAPHITE_VIEW_INDEX]; }
 
 // The scale every light the view draws is pre-exposed by, 1 / (1.2 * 2^EV100)
 float Graphite_Exposure() { return Graphite_View().exposure.x; }
