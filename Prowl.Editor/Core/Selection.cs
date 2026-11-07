@@ -144,7 +144,8 @@ public static class Selection
     /// </summary>
     internal readonly struct Snapshot
     {
-        private readonly List<Func<object?>> _callbacks;
+        private record struct SerializedReference(Func<object, object?> Decoder, object Value);
+        private readonly List<SerializedReference> _state;
         private readonly int _activeIndex;
 
         /// <summary>
@@ -152,26 +153,26 @@ public static class Selection
         /// </summary>
         public Snapshot()
         {
-            _callbacks = new(capacity: _selected.Count);
+            _state = new(capacity: _selected.Count);
             foreach (object selectedObject in _selected)
             {
                 // TODO: consider some sort of extensible system to serialize references...
-                Func<object>? callback = selectedObject switch
+                SerializedReference? state = selectedObject switch
                 {
                     // GameObjects are restored via their identifying GUID.
-                    GameObject go => () => Prowl.Runtime.Resources.Scene.Current.FindObjectByIdentifier<GameObject>(go.Identifier),
+                    GameObject go => new SerializedReference(static val => Prowl.Runtime.Resources.Scene.Current.FindObjectByIdentifier<GameObject>((Guid)val), go.Identifier),
 
                     // ContentItem is used by the Project panel. It contains no scene-related references.
-                    ContentItem => () => selectedObject,
+                    ContentItem => new SerializedReference(static val => val, selectedObject),
 
                     // Other objects may contain scene references.
                     _ => null,
                 };
-                if (callback is not null)
+                if (state is not null)
                 {
                     if (ReferenceEquals(selectedObject, _activeObject))
-                        _activeIndex = _callbacks.Count;
-                    _callbacks.Add(callback);
+                        _activeIndex = _state.Count;
+                    _state.Add(state.Value);
                 }
             }
         }
@@ -186,9 +187,9 @@ public static class Selection
             _lastClickedIndex = -1;
             _activeObject = null;
             int index = 0;
-            foreach (Func<object?> callback in _callbacks)
+            foreach (SerializedReference state in _state)
             {
-                object? selectedObject = callback();
+                object? selectedObject = state.Decoder(state.Value);
                 if (selectedObject is not null)
                 {
                     if (index == _activeIndex)
