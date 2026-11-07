@@ -638,7 +638,6 @@ public class PhysicsWorld
         _pendingSync.Clear();
 
         RefreshColliders();
-        SyncEpoch++;
     }
 
     internal void QueueSync(Rigidbody3D body)
@@ -650,8 +649,8 @@ public class PhysicsWorld
 
     internal void QueueCheck(Collider collider)
     {
-        if (collider.CheckQueued) return;
-        collider.CheckQueued = true;
+        if (ReferenceEquals(collider.CheckQueuedIn, this)) return;
+        collider.CheckQueuedIn = this;
         _pendingColliders.Add(collider);
     }
 
@@ -663,10 +662,12 @@ public class PhysicsWorld
         {
             Collider collider = _pendingColliders[i];
             if (ReferenceEquals(collider, null)) continue; // a hot reload nulls a removed type's references
-            collider.CheckQueued = false;
+            if (!ReferenceEquals(collider.CheckQueuedIn, this)) continue; // it left for another world
+            collider.CheckQueuedIn = null;
             if (collider.IsValid() && collider.EnabledInHierarchy) collider.RefreshPlacement();
         }
         _pendingColliders.Clear();
+        SyncEpoch++;
     }
 
     /// <summary>
@@ -873,7 +874,7 @@ public class PhysicsWorld
             body.SyncQueued = false;
         _pendingSync.Clear();
         foreach (Collider collider in _pendingColliders)
-            collider.CheckQueued = false;
+            if (ReferenceEquals(collider.CheckQueuedIn, this)) collider.CheckQueuedIn = null;
         _pendingColliders.Clear();
         _shapeOwners.Clear();
         _shapeOwnersById.Clear();
