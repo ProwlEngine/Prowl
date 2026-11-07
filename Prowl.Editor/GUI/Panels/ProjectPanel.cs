@@ -4,11 +4,8 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Editor.Core;
-using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.GUI.Registries;
-using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.Prefabs;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
@@ -654,7 +651,8 @@ public class ProjectPanel : DockPanel
         // Transparent background so the dock panel's glass (over the nebula) shows through.
         using (paper.Box("proj_content_bg")
             .Size(width, height)
-            .OnClick(0, (_, _) => Selection.Clear())
+            .OnClick(_ => { if (isList) Selection.Clear(); })
+            .OnPress(_ => { if (!isList) Selection.Clear(); })
             .OnPostLayout((_, rect) => _contentViewRect = rect)
             .Enter())
         {
@@ -1255,7 +1253,7 @@ public class ProjectPanel : DockPanel
             .Padding(3, 3, 5, 5).Rounded(Origami.Current.Metrics.ContainerRounding).Gap(5)
             .BackgroundColor(isSelected ? EditorTheme.Selected : Color.Transparent)
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Selected : EditorTheme.Hover).End()
-            .OnClick((sub, idx, subObjects), (cap, e) =>
+            .OnPress((sub, idx, subObjects), (cap, e) =>
             {
                 e.StopPropagation();
                 bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
@@ -1332,7 +1330,7 @@ public class ProjectPanel : DockPanel
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Selected : EditorTheme.Hover).End()
             .Rounded(cellRound)
             .Opacity(AssetClipboard.IsCut(item) ? CutOpacity : 1f)
-            .OnClick((item, idx, itemObjects), (cap, e) =>
+            .OnPress((item, idx, itemObjects), (cap, e) =>
             {
                 e.StopPropagation();
                 bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
