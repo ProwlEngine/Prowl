@@ -153,6 +153,8 @@ internal sealed partial class FramePipeline : IDisposable
         DeclareShadowReads(graph, builder);
         foreach (DeviceBuffer buffer in camera.HostBuffers)
             builder.Read(graph.Import(buffer), BufferAccess.AllReads);
+        foreach (TextureHandle texture in _exports.DrawTextures)
+            builder.Read(texture, TextureState.Sampled);
         if (screenVisibility && camera.ScreenVisibility != null)
             builder.Read(graph.Import(camera.ScreenVisibility), TextureState.Sampled, TextureState.Sampled);
         if (screenIrradiance && camera.ScreenIrradiance != null)

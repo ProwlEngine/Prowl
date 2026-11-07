@@ -95,6 +95,9 @@ internal sealed class FrameExports
 {
     public readonly Dictionary<RenderResourceID, BufferHandle> Buffers = new();
     public readonly Dictionary<RenderResourceID, TextureHandle> Textures = new();
+
+    /// <summary>The exported textures materials sample, which every pass drawing renderables reads.</summary>
+    public readonly List<TextureHandle> DrawTextures = new();
     private readonly HashSet<(RenderResourceID Name, RenderWorld? World)> _provided = new();
     private readonly Dictionary<(RenderResourceID Name, RenderWorld World), int> _required = new();
 
@@ -102,6 +105,7 @@ internal sealed class FrameExports
     {
         Buffers.Clear();
         Textures.Clear();
+        DrawTextures.Clear();
         _provided.Clear();
         _required.Clear();
     }
@@ -167,6 +171,18 @@ public sealed class FrameBuilder
     public BufferHandle Write(DeviceBuffer buffer, BufferAccess usage = BufferAccess.ShaderRead | BufferAccess.ShaderWrite)
         => Graph.Write(FrameGraph.Import(buffer), usage);
 
+    /// <summary>Writes a texture the feature owns, kept across frames until it disposes it.</summary>
+    public TextureHandle Write(Texture texture, TextureState usage = TextureState.Storage)
+        => Graph.Write(FrameGraph.Import(texture), usage);
+
+    /// <summary>Reads a texture the host owns, so the feature runs after the passes writing it this frame.</summary>
+    public TextureHandle Read(Texture texture, TextureState usage = TextureState.Sampled)
+        => Graph.Read(FrameGraph.Import(texture), usage);
+
+    /// <summary>Reads a buffer the host owns, so the feature runs after the passes writing it this frame.</summary>
+    public BufferHandle Read(DeviceBuffer buffer, BufferAccess usage = BufferAccess.AllReads)
+        => Graph.Read(FrameGraph.Import(buffer), usage);
+
     /// <summary>Reads the world's tables, so the feature runs after the frame's uploads, probes and deformation.</summary>
     public void ReadWorld()
     {
@@ -188,6 +204,16 @@ public sealed class FrameBuilder
     {
         _pass.Frame.Exports.Textures[handle.Id] = handle;
         _pass.Frame.Exports.Provide(handle.Id, _pass.Feature.World);
+    }
+
+    /// <summary>
+    /// Makes a texture the feature wrote readable by every view, and by the materials of their draws: every pass that
+    /// draws renderables reads it, so a material may sample it once it is bound as one of its textures.
+    /// </summary>
+    public void ExportToDraws(TextureHandle handle)
+    {
+        Export(handle);
+        _pass.Frame.Exports.DrawTextures.Add(handle);
     }
 }
 
