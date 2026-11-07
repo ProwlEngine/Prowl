@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Runtime;
+
 namespace Prowl.Editor.Core;
 
 /// <summary>
@@ -133,6 +135,66 @@ public static class Selection
 
     /// <summary>Number of selected objects.</summary>
     public static int Count => _selected.Count;
+
+    #region Snapshots
+
+    /// <summary>
+    /// An opaque structure that can be used to restore the selection from a snapshotted state.
+    /// </summary>
+    internal readonly struct Snapshot
+    {
+        private readonly List<Func<object>> _callbacks;
+        private readonly int _activeIndex;
+
+        /// <summary>
+        /// Initializes a new selection snapshot. Don't call this directly; instead call <see cref="TakeSnapshot"/>.
+        /// </summary>
+        public Snapshot()
+        {
+            _activeIndex = _selected.IndexOf(_activeObject);
+            _callbacks = new(capacity: _selected.Count);
+            foreach (object selectedObject in _selected)
+            {
+                // TODO: perhaps some sort of extensible system to serialize references...?
+                Func<object>? callback = selectedObject switch
+                {
+                    GameObject go => () => Prowl.Runtime.Resources.Scene.Current.FindObjectByIdentifier<GameObject>(go.Identifier),
+                    Asset asset => () => AssetDatabase.Load<Asset>(asset.AssetID),
+                    _ => null
+                };
+                if (callback is not null)
+                    _callbacks.Add(callback);
+            }
+        }
+
+        /// <summary>
+        /// Restores the snapshot, overwriting the current selection state. Don't call this directly; instead call
+        /// <see cref="RestoreSnapshot"/>.
+        /// </summary>
+        public readonly void Restore()
+        {
+            _selected.Clear();
+            _lastClickedIndex = -1;
+            foreach (Func<object> callback in _callbacks)
+                _selected.Add(callback());
+            _activeObject = _activeIndex >= 0 ? _selected[_activeIndex] : null;
+            OnSelectionChanged?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Takes a snapshot of the current selection, and returns it.
+    /// </summary>
+    /// <returns> An opaque structure that represents a point-in-time view of the selection state. </returns>
+    internal static Snapshot TakeSnapshot() => new();
+
+    /// <summary>
+    /// Restores the given snapshot, overwriting the current selection state.
+    /// </summary>
+    /// <param name="snapshot"> The selection state, as returned by <see cref="TakeSnapshot"/>. </param>
+    internal static void RestoreSnapshot(Snapshot snapshot) => snapshot.Restore();
+
+    #endregion
 
     #region Ping
 
