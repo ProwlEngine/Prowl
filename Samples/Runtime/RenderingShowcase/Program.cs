@@ -51,15 +51,16 @@ public sealed class RenderingShowcaseGame : StationGame
 {
     private const float StationSpacing = 30f;
     private const int SurfaceStation = 1, DecalStation = 2, LightStation = 4, AreaLightStation = 5, ManyLightStation = 6;
-    private const int FogStation = 7, InstancingStation = 8, CloudStation = 10, StationCount = 11;
+    private const int FogStation = 7, InstancingStation = 8, CloudStation = 10, OceanStation = 11, StationCount = 12;
 
     // The time of day each station is shown at, in hours.
-    private static readonly float[] StationHours = [14f, 15f, 13f, 13f, 22f, 22f, 22f, 23f, 11f, 14f, 16f];
+    private static readonly float[] StationHours = [14f, 15f, 13f, 13f, 22f, 22f, 22f, 23f, 11f, 14f, 16f, 17.5f];
 
     private DirectionalLight _sun = null!;
     private VolumetricFog _fog = null!;
     private VolumetricClouds _clouds = null!;
     private float _cloudFlightSpeed = 300f;
+    private Ocean _ocean = null!;
     private Bloom _bloom = null!;
     private Tonemapping _tonemapping = null!;
 
@@ -92,7 +93,7 @@ public sealed class RenderingShowcaseGame : StationGame
         SampleScene.Environment.Ambient.Mode = AmbientMode.Uniform;
 
         float length = StationSpacing * StationCount + 30f;
-        Add(Block("Floor", new Float3(length, 1f, 60f), Floor(length, 60f), new Float3(StationSpacing * (StationCount - 1) * 0.5f, -0.5f, 0f)));
+        Add(Block("Floor", new Float3(length, 20f, 60f), Floor(length, 60f), new Float3(StationSpacing * (StationCount - 1) * 0.5f, -10f, 0f)));
 
         BuildMaterials(StationCenter(0));
         BuildSurfaceMaps(StationCenter(1));
@@ -105,6 +106,7 @@ public sealed class RenderingShowcaseGame : StationGame
         BuildInstancing(StationCenter(8));
         BuildRenderTextures(StationCenter(9));
         BuildClouds(StationCenter(10));
+        BuildOcean(StationCenter(OceanStation));
     }
 
     protected override void OnStationChanged(int index)
@@ -113,7 +115,7 @@ public sealed class RenderingShowcaseGame : StationGame
         _animateSky = false;
         _fog.Enabled.Value = index == FogStation;
         SetTimeOfDay(_hours);
-        SetFlightSpeed(index == CloudStation ? _cloudFlightSpeed : 7f);
+        SetFlightSpeed(index is CloudStation or OceanStation ? _cloudFlightSpeed : 7f);
     }
 
     // Shift flies about three times faster, as the fly camera does by default
@@ -172,7 +174,7 @@ public sealed class RenderingShowcaseGame : StationGame
     }
 
     public override bool HasStationControls => CurrentStation is SurfaceStation or DecalStation or LightStation or AreaLightStation
-        or ManyLightStation or FogStation or InstancingStation or CloudStation;
+        or ManyLightStation or FogStation or InstancingStation or CloudStation or OceanStation;
 
     public override void DrawControls(Paper paper, FontFile font)
     {
@@ -186,6 +188,7 @@ public sealed class RenderingShowcaseGame : StationGame
             case FogStation: FogControls(paper, font); break;
             case InstancingStation: InstancingControls(paper, font); break;
             case CloudStation: CloudControls(paper, font); break;
+            case OceanStation: OceanControls(paper, font); break;
         }
     }
 
@@ -767,6 +770,115 @@ public sealed class RenderingShowcaseGame : StationGame
         AddStation("Clouds", "Clouds cover the whole scene, so they are over every station. They are ray marched through a coverage map shaped by a height profile and eroded by cell noise, lit by a short march toward the sun.", c, new Float3(0f, 2f, -6f), 4.2f);
 
         _clouds = MainCamera.Profile!.Add<VolumetricClouds>(overrideAll: true);
+    }
+
+    // ----------------------------------------------------------------
+    //  -  Ocean
+    // ----------------------------------------------------------------
+
+    private void BuildOcean(Float3 c)
+    {
+        AddStation("Ocean", "FFT waves in four cascades on repeating tiles, drawn as rings of tiles that grow with the camera's height and curve down with the planet. The water absorbs what is behind it with depth and foams where the crests fold.", c + new Float3(0f, 0f, -40f), new Float3(0f, 4f, 12f), 0f);
+
+        var ocean = new GameObject("Ocean");
+        ocean.Transform.Position = new Float3(StationSpacing * (StationCount - 1) * 0.5f, -3f, 0f);
+
+        // A sand beach sloping from the floor's edge down past 100 m, where the longest waves start to feel the bottom,
+        // so they shrink gradually toward the shore and foam against it
+        const float Slope = 12f, Length = 520f, Thickness = 4f;
+        float angle = Slope * MathF.PI / 180f;
+        Float3 topEdge = new(0f, Thickness * 0.5f * MathF.Cos(angle) + Length * 0.5f * MathF.Sin(angle), -Thickness * 0.5f * MathF.Sin(angle) + Length * 0.5f * MathF.Cos(angle));
+        Add(Model("Beach", Mesh.CreateCube(new Float3(200f, Thickness, Length)), Lit(new Color(0.62f, 0.55f, 0.4f, 1f), 0f, 0.9f),
+            new Float3(c.X, 0f, -30f) - topEdge, new Float3(-Slope, 0f, 0f)));
+        _ocean = ocean.AddComponent<Ocean>();
+        _ocean.FloorCaptureSize = 1200f;
+        _ocean.FloorCaptureResolution = 2048;
+
+        // A walled pond on the platform, its water held a metre and a half above the floor
+        Float3 pond = c + new Float3(0f, 0f, 12f);
+        const float PondSize = 16f, WallHeight = 2f;
+        for (int side = 0; side < 4; side++)
+        {
+            bool alongX = side < 2;
+            float offset = (side % 2 == 0 ? -1f : 1f) * PondSize * 0.5f;
+            Float3 size = alongX ? new Float3(PondSize + 2f, WallHeight, 2f) : new Float3(2f, WallHeight, PondSize + 2f);
+            Float3 at = pond + (alongX ? new Float3(0f, WallHeight * 0.5f, offset) : new Float3(offset, WallHeight * 0.5f, 0f));
+            Add(Block("Pond Wall", size, _concrete, at));
+        }
+        var level = new GameObject("Pond Water");
+        level.Transform.Position = pond + new Float3(0f, 1.5f, 0f);
+        level.AddComponent<OceanWaterLevel>().Size = new Float2(PondSize, PondSize);
+        Add(level);
+
+        // The crates move, so they are kept out of the floor the ocean captures
+        const int FloatingLayer = 8;
+        _ocean.FloorLayers.RemoveLayer(FloatingLayer);
+
+        // Crates floating on probes at their bottom corners, rocked by the waves they sit on
+        for (int i = 0; i < 3; i++)
+        {
+            GameObject crate = Add(Model("Floating Crate", Mesh.CreateCube(new Float3(2f)), Lit(Hsv(0.08f + i * 0.3f, 0.6f, 0.6f), 0f, 0.7f), c + new Float3(-12f + i * 12f, 0f, -90f - i * 20f)));
+            crate.LayerIndex = FloatingLayer;
+            crate.AddComponent<Rigidbody3D>();
+            crate.AddComponent<BoxCollider>().Size = new Float3(2f);
+            OceanFloater floater = crate.AddComponent<OceanFloater>();
+            floater.Probes = [new Float3(-0.8f, -0.8f, -0.8f), new Float3(0.8f, -0.8f, -0.8f), new Float3(-0.8f, -0.8f, 0.8f), new Float3(0.8f, -0.8f, 0.8f)];
+            OceanWake wake = crate.AddComponent<OceanWake>();
+            wake.Radius = 1.2f;
+            wake.Weight = 4f;
+        }
+
+        // An open concrete box standing in the sea, kept dry inside by a clip box
+        Float3 dock = c + new Float3(-30f, -3f, -60f);
+        const float DockSize = 6f, DockHeight = 4f, DockWall = 0.3f;
+        var dockParts = new[]
+        {
+            Block("Dock Floor", new Float3(DockSize, DockWall, DockSize), _concrete, dock + new Float3(0f, -DockHeight * 0.5f, 0f)),
+            Block("Dock Wall", new Float3(DockSize, DockHeight, DockWall), _concrete, dock + new Float3(0f, 0f, DockSize * 0.5f)),
+            Block("Dock Wall", new Float3(DockSize, DockHeight, DockWall), _concrete, dock + new Float3(0f, 0f, -DockSize * 0.5f)),
+            Block("Dock Wall", new Float3(DockWall, DockHeight, DockSize), _concrete, dock + new Float3(DockSize * 0.5f, 0f, 0f)),
+            Block("Dock Wall", new Float3(DockWall, DockHeight, DockSize), _concrete, dock + new Float3(-DockSize * 0.5f, 0f, 0f)),
+        };
+        foreach (GameObject part in dockParts)
+        {
+            part.LayerIndex = FloatingLayer;
+            Add(part);
+        }
+        var dry = new GameObject("Dock Clip");
+        dry.Transform.Position = dock;
+        dry.AddComponent<OceanClip>().Size = new Float3(DockSize - DockWall, DockHeight, DockSize - DockWall);
+        Add(dry);
+
+        // A current running along x past the crates, carrying the waves, foam and their wakes downstream
+        var current = new GameObject("Ocean Current");
+        current.Transform.Position = c + new Float3(0f, 0f, -110f);
+        current.Transform.EulerAngles = new Float3(0f, 90f, 0f);
+        OceanFlow flow = current.AddComponent<OceanFlow>();
+        flow.Size = new Float2(80f, 80f);
+        flow.Speed = 2f;
+        flow.Feather = 25f;
+        Add(current);
+        Add(ocean);
+    }
+
+    private void OceanControls(Paper paper, FontFile font)
+    {
+        Header(paper, font, "Ocean");
+        Slider(paper, font, "Wind speed km/h", _ocean.WindSpeed, 1f, 150f, v => _ocean.WindSpeed = v, "0");
+        Slider(paper, font, "Wind direction", _ocean.WindDirection, 0f, 360f, v => _ocean.WindDirection = v, "0");
+        Slider(paper, font, "Turbulence", _ocean.Turbulence, 0f, 1f, v => _ocean.Turbulence = v);
+        Slider(paper, font, "Wave scale", _ocean.WaveScale, 0f, 4f, v => _ocean.WaveScale = v);
+        Slider(paper, font, "Chop", _ocean.Chop, 0f, 2f, v => _ocean.Chop = v);
+        Slider(paper, font, "Time scale", _ocean.TimeScale, 0f, 4f, v => _ocean.TimeScale = v);
+        Slider(paper, font, "Roughness", _ocean.Roughness, 0f, 0.3f, v => _ocean.Roughness = v, "0.000");
+        Slider(paper, font, "Refraction", _ocean.Refraction, 0f, 1f, v => _ocean.Refraction = v);
+        Slider(paper, font, "Foam coverage", _ocean.FoamCoverage, 0f, 1.5f, v => _ocean.FoamCoverage = v);
+        Slider(paper, font, "Caustics strength", _ocean.CausticsStrength, 0f, 10f, v => _ocean.CausticsStrength = v);
+        Slider(paper, font, "Caustics distortion", _ocean.CausticsDistortion, 0f, 0.25f, v => _ocean.CausticsDistortion = v, "0.000");
+        Slider(paper, font, "Distortion scale m", _ocean.CausticsDistortionScale, 1f, 100f, v => _ocean.CausticsDistortionScale = v, "0");
+        Slider(paper, font, "Shore foam depth", _ocean.ShorelineFoamDepth, 0f, 2f, v => _ocean.ShorelineFoamDepth = v);
+        Slider(paper, font, "Shallow attenuation", _ocean.ShallowAttenuation, 0f, 1f, v => _ocean.ShallowAttenuation = v);
+        Slider(paper, font, "Flight speed", _cloudFlightSpeed, 7f, 3000f, v => { _cloudFlightSpeed = v; SetFlightSpeed(v); }, "0");
     }
 
     private void CloudControls(Paper paper, FontFile font)
