@@ -78,7 +78,7 @@ public class EnvironmentPanel : DockPanel
                 {
                     switch (_cat)
                     {
-                        case "fog":      DrawFogSection(paper, "env_fog", font, scene); break;
+                        case "fog":      DrawFogSection(paper, "env_fog", font, scene); DrawVolumetricFogSection(paper, "env_vfog", scene); break;
                         case "ambient":  DrawAmbientSection(paper, "env_amb", font, scene); break;
                         case "lightmap": DrawLightmappingSection(paper, "env_lm", font, scene); break;
                         default:         DrawSkySection(paper, "env_sky", font, scene); break;
@@ -193,6 +193,36 @@ public class EnvironmentPanel : DockPanel
             EditorGUI.SettingsRow(paper, $"{id}_density", Loc.Get("env.density"), () =>
                 Origami.Slider(paper, $"{id}_density_v", fog.Density, v => { fog.Density = v; Dirty(); }, 0f, 0.1f).Format("F4").Show());
         }
+    }
+
+    private void DrawVolumetricFogSection(Paper paper, string id, Scene scene)
+    {
+        EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.volumetric_fog"));
+
+        SceneEnvironment.VolumetricFogSettings fog = scene.Environment.VolumetricFog;
+        void Dirty() { scene.Environment.VolumetricFog = fog; EditorSceneManager.MarkDirty(); }
+
+        EditorGUI.SettingsToggle(paper, $"{id}_on", Loc.Get("env.enabled"), fog.Enabled, v => { fog.Enabled = v; Dirty(); });
+        if (!fog.Enabled) return;
+
+        EditorGUI.SettingsRow(paper, $"{id}_density", Loc.Get("env.density"), () =>
+            Origami.Slider(paper, $"{id}_density_v", fog.Density, v => { fog.Density = v; Dirty(); }, 0f, 0.2f).Format("F4").Show());
+        EditorGUI.SettingsRow(paper, $"{id}_base", Loc.Get("env.base_height"), () =>
+            Origami.NumericField<float>(paper, $"{id}_base_v", fog.BaseHeight, v => { fog.BaseHeight = v; Dirty(); }).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_falloff", Loc.Get("env.height_falloff"), () =>
+            Origami.Slider(paper, $"{id}_falloff_v", fog.HeightFalloff, v => { fog.HeightFalloff = v; Dirty(); }, 0f, 1f).Format("F3").Show());
+        EditorGUI.SettingsRow(paper, $"{id}_albedo", Loc.Get("env.albedo"), () =>
+            Origami.ColorField(paper, $"{id}_albedo_v", fog.Albedo, v => { fog.Albedo = v; Dirty(); }).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_aniso", Loc.Get("env.anisotropy"), () =>
+            Origami.Slider(paper, $"{id}_aniso_v", fog.Anisotropy, v => { fog.Anisotropy = v; Dirty(); }, -0.95f, 0.95f).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_ambient", Loc.Get("env.ambient_scale"), () =>
+            Origami.Slider(paper, $"{id}_ambient_v", fog.AmbientScale, v => { fog.AmbientScale = v; Dirty(); }, 0f, 4f).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_distance", Loc.Get("env.distance"), () =>
+            Origami.NumericField<float>(paper, $"{id}_distance_v", fog.Distance, v => { fog.Distance = MathF.Max(1f, v); Dirty(); }).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_slices", Loc.Get("env.slices"), () =>
+            Origami.NumericField<int>(paper, $"{id}_slices_v", fog.Slices, v => { fog.Slices = Math.Clamp(v, 16, 256); Dirty(); }).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_temporal", Loc.Get("env.temporal_blend"), () =>
+            Origami.Slider(paper, $"{id}_temporal_v", fog.TemporalBlend, v => { fog.TemporalBlend = v; Dirty(); }, 0f, 0.98f).Show());
     }
 
     private void DrawAmbientSection(Paper paper, string id, Scribe.FontFile font, Scene scene)

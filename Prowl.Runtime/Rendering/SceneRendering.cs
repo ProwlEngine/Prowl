@@ -265,10 +265,26 @@ public sealed class SceneRendering : IDisposable
         });
     }
 
+    private readonly List<FogVolumeDesc> _fogVolumes = [];
+
+    // The scene's enabled fog volumes, their density a multiple of the volumetric fog's
+    private FogVolumeDesc[] FogVolumes(float density)
+    {
+        _fogVolumes.Clear();
+        foreach (GameObject go in _scene.ActiveObjects)
+        {
+            FogVolume? volume = go.GetComponent<FogVolume>();
+            if (volume.IsValid() && volume.EnabledInHierarchy && _fogVolumes.Count < EnvironmentDesc.MaxFogVolumes)
+                _fogVolumes.Add(volume.Describe(density));
+        }
+        return [.. _fogVolumes];
+    }
+
     private void SyncEnvironment(RenderWorld world)
     {
         EnvironmentDesc env = world.Environment;
         _scene.Environment.ApplyTo(env);
+        env.FogVolumes = FogVolumes(_scene.Environment.VolumetricFog.Density);
 
         DirectionalLight? sun = null;
         foreach (DirectionalLight light in _directionals)

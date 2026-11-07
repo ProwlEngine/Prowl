@@ -57,7 +57,6 @@ public sealed class RenderingShowcaseGame : StationGame
     private static readonly float[] StationHours = [14f, 15f, 13f, 13f, 22f, 22f, 22f, 23f, 11f, 14f, 16f, 17.5f];
 
     private DirectionalLight _sun = null!;
-    private VolumetricFog _fog = null!;
     private VolumetricClouds _clouds = null!;
     private float _cloudFlightSpeed = 300f;
     private Ocean _ocean = null!;
@@ -83,11 +82,9 @@ public sealed class RenderingShowcaseGame : StationGame
         _sun = sun.AddComponent<DirectionalLight>();
         Add(sun);
 
-        _fog = MainCamera.Profile!.Add<VolumetricFog>(overrideAll: true);
-        _fog.Enabled.Value = false;
-        _fog.GlobalDensity.Value = 0.02f;
-        _fog.MaxDistance.Value = 60f;
-        _bloom = MainCamera.Profile.Get<Bloom>()!;
+        SampleScene.Environment.VolumetricFog.Density = 0.02f;
+        SampleScene.Environment.VolumetricFog.Distance = 60f;
+        _bloom = MainCamera.Profile!.Get<Bloom>()!;
         _tonemapping = MainCamera.Profile.Get<Tonemapping>()!;
         SampleScene.Environment.Fog.Mode = FogMode.Off;
         SampleScene.Environment.Ambient.Mode = AmbientMode.Uniform;
@@ -113,7 +110,7 @@ public sealed class RenderingShowcaseGame : StationGame
     {
         _hours = StationHours[index];
         _animateSky = false;
-        _fog.Enabled.Value = index == FogStation;
+        SampleScene.Environment.VolumetricFog.Enabled = index == FogStation;
         SetTimeOfDay(_hours);
         SetFlightSpeed(index is CloudStation or OceanStation ? _cloudFlightSpeed : 7f);
     }
@@ -225,7 +222,7 @@ public sealed class RenderingShowcaseGame : StationGame
         Header(paper, font, "Post effects", 2);
         Toggle(paper, font, "Bloom", _bloom.Active, v => _bloom.Active = v);
         Slider(paper, font, "Bloom intensity", _bloom.Intensity, 0f, 2f, v => _bloom.Intensity.Value = v);
-        Toggle(paper, font, "Volumetric fog", _fog.Enabled, v => _fog.Enabled.Value = v);
+        Toggle(paper, font, "Volumetric fog", SampleScene.Environment.VolumetricFog.Enabled, v => SampleScene.Environment.VolumetricFog.Enabled = v);
         Cycle(paper, font, "Tonemapper", _tonemapping.Mode.Value, v => _tonemapping.Mode.Value = v);
     }
 
@@ -607,7 +604,7 @@ public sealed class RenderingShowcaseGame : StationGame
 
     private void BuildFog(Float3 c)
     {
-        AddStation("Fog", "Volumetric fog is a camera effect, switched on only at this station. Lights with a Fog Light component scatter in it, so the spot lights draw visible beams, and fog volumes thicken and tint it locally.", c, new Float3(0f, 4f, -13f), 2.5f);
+        AddStation("Fog", "Volumetric fog is part of the scene's environment, switched on only at this station. Every light scatters in it through its shadows, so the spot lights draw visible beams, and fog volumes thicken and tint it locally.", c, new Float3(0f, 4f, -13f), 2.5f);
 
         Color[] beams = [new(1f, 0.5f, 0.2f, 1f), new(0.3f, 0.6f, 1f, 1f), new(0.6f, 1f, 0.4f, 1f)];
         for (int i = 0; i < beams.Length; i++)
@@ -619,7 +616,6 @@ public sealed class RenderingShowcaseGame : StationGame
             spot.Intensity = 4700000f;
             spot.SpotAngle = 50f;
             spot.SpotSoftness = 1f - 15f / 25f;
-            go.AddComponent<FogLight>().IntensityMultiplier = 4f;
             go.Transform.Position = c + new Float3((i - 1) * 5f, 8f, 1f);
             Sweep sweep = go.AddComponent<Sweep>();
             sweep.Target = c + new Float3((i - 1) * 5f, 0f, 1f);
@@ -652,9 +648,9 @@ public sealed class RenderingShowcaseGame : StationGame
     private void FogControls(Paper paper, FontFile font)
     {
         Header(paper, font, "Volumetric fog");
-        Toggle(paper, font, "Enabled", _fog.Enabled, v => _fog.Enabled.Value = v);
-        Slider(paper, font, "Density", _fog.GlobalDensity, 0f, 0.1f, v => _fog.GlobalDensity.Value = v, "0.000");
-        Slider(paper, font, "Scattering", _fog.Scattering, 0f, 1f, v => _fog.Scattering.Value = v);
+        Toggle(paper, font, "Enabled", SampleScene.Environment.VolumetricFog.Enabled, v => SampleScene.Environment.VolumetricFog.Enabled = v);
+        Slider(paper, font, "Density", SampleScene.Environment.VolumetricFog.Density, 0f, 0.1f, v => SampleScene.Environment.VolumetricFog.Density = v, "0.000");
+        Slider(paper, font, "Anisotropy", SampleScene.Environment.VolumetricFog.Anisotropy, 0f, 0.95f, v => SampleScene.Environment.VolumetricFog.Anisotropy = v);
     }
 
     // ----------------------------------------------------------------

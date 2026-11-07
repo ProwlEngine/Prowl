@@ -51,6 +51,7 @@ public sealed class SceneEnvironment
 
     public AmbientSettings Ambient = new();
     public FogSettings Fog = new();
+    public VolumetricFogSettings VolumetricFog = new();
     public SkyCaptureSettings SkyCapture = new();
 
     public struct AmbientSettings
@@ -84,6 +85,44 @@ public sealed class SceneEnvironment
         public bool UseSky = true;
 
         public FogSettings() { }
+    }
+
+    /// <summary>
+    /// Fog in the air lit by the scene's lights through their shadows, dimming what lies behind it, thinning with height
+    /// above <see cref="BaseHeight"/>. <see cref="FogVolume"/>s add to it. Every fogged material reads it.
+    /// </summary>
+    public struct VolumetricFogSettings
+    {
+        public bool Enabled = false;
+
+        /// <summary>How much of the light it takes out per metre at <see cref="BaseHeight"/>.</summary>
+        public float Density = 0.02f;
+
+        /// <summary>The height it is at <see cref="Density"/>, and the same below.</summary>
+        public float BaseHeight = 0f;
+
+        /// <summary>How fast it thins with height above <see cref="BaseHeight"/>, per metre.</summary>
+        public float HeightFalloff = 0.1f;
+
+        /// <summary>The share of the light it takes out that it scatters rather than absorbs.</summary>
+        public Color Albedo = new(1f, 1f, 1f, 1f);
+
+        /// <summary>0 scatters evenly, toward 1 forward, glowing around lights seen through it.</summary>
+        public float Anisotropy = 0.6f;
+
+        /// <summary>Scales the ambient light it scatters.</summary>
+        public float AmbientScale = 1f;
+
+        /// <summary>How far from the camera it reaches in metres.</summary>
+        public float Distance = 128f;
+
+        /// <summary>The depth slices it is lit in, more for sharper shafts far away.</summary>
+        public int Slices = 128;
+
+        /// <summary>How much of last frame's light each frame keeps, smoothing it.</summary>
+        public float TemporalBlend = 0.9f;
+
+        public VolumetricFogSettings() { }
     }
 
     public struct SkyCaptureSettings
@@ -156,6 +195,19 @@ public sealed class SceneEnvironment
             Start = Fog.Start,
             End = Fog.End,
             UseSky = Fog.UseSky,
+        };
+        env.VolumetricFog = new VolumetricFogDesc
+        {
+            Enabled = VolumetricFog.Enabled,
+            Density = VolumetricFog.Density,
+            BaseHeight = VolumetricFog.BaseHeight,
+            HeightFalloff = VolumetricFog.HeightFalloff,
+            Albedo = VolumetricFog.Albedo.ToFloat4(),
+            Anisotropy = VolumetricFog.Anisotropy,
+            AmbientScale = VolumetricFog.AmbientScale,
+            Distance = VolumetricFog.Distance,
+            Slices = VolumetricFog.Slices,
+            TemporalBlend = VolumetricFog.TemporalBlend,
         };
         env.SkyColor = SkyColor.ToFloat4();
         env.Sky = SkyMaterial.IsValid() ? SkyMaterial.GpuMaterial : null;
