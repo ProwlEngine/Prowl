@@ -194,7 +194,8 @@ public sealed class FeatureGroup(string name)
     /// <summary>The built in view features' groups.</summary>
     public static readonly FeatureGroup SceneClear = new("SceneClear"), Cascades = new("Cascades"), Prepass = new("Prepass"),
         Opaque = new("Opaque"), Sky = new("Sky"), SceneColor = new("SceneColor"), SceneDepth = new("SceneDepth"),
-        BackDepth = new("BackDepth"), Transparent = new("Transparent"), Present = new("Present");
+        BackDepth = new("BackDepth"), Transparent = new("Transparent"), Present = new("Present"), VolumetricFog = new("VolumetricFog"),
+        VolumetricFogSky = new("VolumetricFogSky");
 
     /// <summary>The stock effects' groups, of which a view runs one each.</summary>
     public static readonly FeatureGroup ScreenLighting = new("ScreenLighting"), Tonemap = new("Tonemap"), AntiAliasing = new("AntiAliasing");
@@ -790,6 +791,23 @@ public sealed class FeatureBuilder
         if (!_pass.Feature.MeasuresExposure || View.Camera.MeasuredExposure is not { } measured)
             throw new InvalidOperationException($"{_pass.Name} writes the view's exposure without measuring it.");
         return _graph.Write(FrameGraph.Import(measured), TextureState.Attachment);
+    }
+
+    /// <summary>
+    /// The view's volumetric fog grid for a size, its history swapped in: this frame's light to write, last frame's to
+    /// read, and the integrated volume the view's draws read after this feature. Fresh is true when the grid was made
+    /// anew, its history empty.
+    /// </summary>
+    internal (TextureHandle Light, TextureHandle History, TextureHandle Volume, bool Fresh) WriteVolumetricFog(uint width, uint height, uint depth)
+    {
+        CameraFrame camera = View.Camera;
+        bool fresh = camera.EnsureVolumetricFog(width, height, depth);
+        if (!fresh)
+            camera.SwapFogHistory();
+        camera.FogWritten = true;
+        return (_graph.Write(FrameGraph.Import(camera.FogLight!), TextureState.Storage),
+            _graph.Read(FrameGraph.Import(camera.FogLightHistory!), TextureState.Sampled),
+            _graph.Write(FrameGraph.Import(camera.FogVolume!), TextureState.Storage), fresh);
     }
 
     /// <summary>
@@ -1498,6 +1516,8 @@ internal static class FeatureSelection
         [
             new SceneClearFeature(),
             new CascadeFeature(),
+            new VolumetricFogFeature(resources),
+            new VolumetricFogSkyFeature(resources),
             new DrawPassFeature(PassType.Prepass, RenderSlot.Prepass, group: FeatureGroup.Prepass, runsOn: ViewKinds.All),
             new DrawPassFeature(PassType.Forward, RenderSlot.Opaque, group: FeatureGroup.Opaque, runsOn: ViewKinds.All),
             new DrawPassFeature(PassType.Sky, RenderSlot.Sky, group: FeatureGroup.Sky, runsOn: ViewKinds.All),

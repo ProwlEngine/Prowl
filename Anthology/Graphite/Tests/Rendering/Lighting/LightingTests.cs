@@ -1074,6 +1074,40 @@ public sealed partial class LightingTests : IDisposable
         }, Frame());
     }
 
+    // Fog that only absorbs dims a surface by how much fog lies between it and the camera, past the grid's first slice
+    [Fact]
+    public void VolumetricFog_DimsBehindItByItsDensity()
+    {
+        AddQuad(Surface(new Float3(1, 1, 1)));
+        _world.Environment = new EnvironmentDesc
+        {
+            CaptureEV100 = UnitEV100,
+            AmbientColor = new Float4(0.5f, 0.5f, 0.5f, 1),
+            Fog = default,
+            VolumetricFog = new VolumetricFogDesc { Enabled = true, Density = 0.05f, HeightFalloff = 0f, Albedo = new Float4(0, 0, 0, 1), Distance = 64f, Slices = 64 },
+        };
+
+        AssertMatches(p => new Vector3(0.5f * MathF.Exp(-0.05f * (p.Length() - 0.5f))), Frame());
+    }
+
+    // Fog that scatters evenly, lit by a sun behind an unlit surface, adds the sunlight it scatters toward the camera, 4 pi
+    // times the sun's illuminance over 4 pi steradians, by the fog's share between the surface and the grid's first slice
+    [Fact]
+    public void VolumetricFog_ScattersTheSunTowardTheCamera()
+    {
+        AddQuad(Surface(new Float3(0, 0, 0)));
+        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0, 0, -1), Intensity = 4f * MathF.PI });
+        _world.Environment = new EnvironmentDesc
+        {
+            CaptureEV100 = UnitEV100,
+            AmbientColor = new Float4(0, 0, 0, 1),
+            Fog = default,
+            VolumetricFog = new VolumetricFogDesc { Enabled = true, Density = 0.05f, HeightFalloff = 0f, Albedo = new Float4(1, 1, 1, 1), Anisotropy = 0f, AmbientScale = 0f, Distance = 64f, Slices = 64 },
+        };
+
+        AssertMatches(p => new Vector3(1f - MathF.Exp(-0.05f * (p.Length() - 0.5f))), Frame());
+    }
+
     private DecalDesc Decal(Double3 center, Double3 size, Float4 color, int priority = 0, bool isStatic = false, uint layer = ~0u) => new()
     {
         Transform = Double4x4.CreateTranslation(_origin + center) * Double4x4.CreateScale(size.X, size.Y, -size.Z),

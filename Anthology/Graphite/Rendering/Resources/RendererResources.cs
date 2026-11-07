@@ -37,6 +37,10 @@ internal sealed class RendererResources : IDisposable
             _prefilterProgram = Fullscreen(device, _prefilter);
         SkyAmbientProgram = InternalShaders.Compute(device, compiler, "Internal/SkyAmbient.glsl", policy);
         ExposureProgram = InternalShaders.Compute(device, compiler, "Internal/Exposure.glsl", policy);
+        FogLightProgram = InternalShaders.Compute(device, compiler, "Internal/VolumetricFogLight.glsl", policy, lit: true);
+        FogBlendProgram = InternalShaders.Compute(device, compiler, "Internal/VolumetricFogBlend.glsl", policy, lit: true);
+        FogIntegrateProgram = InternalShaders.Compute(device, compiler, "Internal/VolumetricFogIntegrate.glsl", policy, lit: true);
+        FogSkyProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("VolumetricFogSky"), "Graphite/VolumetricFogSky", lit: true, policy: policy);
 
         SamplerDescription clamp = SamplerDescription.Linear with
         {
@@ -76,6 +80,8 @@ internal sealed class RendererResources : IDisposable
             device.UpdateTexture<ushort>(NoSceneColor, [0, 0, 0, 0], TextureRegion.Whole(NoSceneColor, 0, layer));
             device.UpdateTexture<float>(NoSceneDepth, [0f], TextureRegion.Whole(NoSceneDepth, 0, layer));
         }
+        NoFogVolume = factory.CreateTexture(TextureDescription.Texture3D(1, 1, 1, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
+        device.UpdateTexture<ushort>(NoFogVolume, [0, 0, 0, 0x3C00], TextureRegion.Whole(NoFogVolume, 0, 0));
         NoExposure = factory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_Float, TextureUsage.Sampled));
         device.UpdateTexture<float>(NoExposure, [0f], TextureRegion.Whole(NoExposure, 0, 0));
     }
@@ -138,6 +144,9 @@ internal sealed class RendererResources : IDisposable
     public Texture NoSceneColor { get; }
     public Texture NoSceneDepth { get; }
 
+    /// <summary>The fog volume a view without volumetric fog reads: no light and everything let through.</summary>
+    public Texture NoFogVolume { get; }
+
     /// <summary>What the exposure pass reads for a view an AutoExposure has not measured yet.</summary>
     public Texture NoExposure { get; }
 
@@ -155,6 +164,12 @@ internal sealed class RendererResources : IDisposable
 
     public InternalCompute SkyAmbientProgram { get; }
     public InternalCompute ExposureProgram { get; }
+
+    /// <summary>The volumetric fog's lighting and integration, see VolumetricFogFeature.</summary>
+    public InternalCompute FogLightProgram { get; }
+    public InternalCompute FogBlendProgram { get; }
+    public InternalCompute FogIntegrateProgram { get; }
+    public FullscreenProgram FogSkyProgram { get; }
 
     private static GraphicsProgram Fullscreen(GraphicsDevice device, PassVariants variants)
     {
@@ -223,6 +238,10 @@ internal sealed class RendererResources : IDisposable
         _prefilterProgram?.Dispose();
         SkyAmbientProgram.Dispose();
         ExposureProgram.Dispose();
+        FogLightProgram.Dispose();
+        FogBlendProgram.Dispose();
+        FogIntegrateProgram.Dispose();
+        FogSkyProgram.Dispose();
         Textures.Dispose();
         Noise.Dispose();
         SmaaArea.Dispose();
@@ -240,6 +259,7 @@ internal sealed class RendererResources : IDisposable
         NoScreenIrradiance.Dispose();
         NoSceneColor.Dispose();
         NoSceneDepth.Dispose();
+        NoFogVolume.Dispose();
         NoExposure.Dispose();
         LinearClamp.Dispose();
         PointClamp.Dispose();

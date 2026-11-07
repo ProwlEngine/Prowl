@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Graphite/Probes.glsl"
+#include "Graphite/VolumetricFog.glsl"
 
 // How blurred the sky is that fog takes its color from, as a sky probe roughness
 #define GRAPHITE_FOG_SKY_ROUGHNESS 0.35
@@ -20,7 +21,16 @@ vec3 Graphite_FogColor(vec3 relativePos)
     return Graphite_SampleSkyProbe(dir, GRAPHITE_FOG_SKY_ROUGHNESS);
 }
 
+vec3 graphite_ApplyAnalyticFog(vec3 color, vec3 relativePos);
+
+// The analytic fog toward a relative position, then the volumetric fog in front of it
 vec3 Graphite_ApplyFog(vec3 color, vec3 relativePos)
+{
+    vec4 volumetric = Graphite_VolumetricFog(relativePos);
+    return graphite_ApplyAnalyticFog(color, relativePos) * volumetric.a + volumetric.rgb;
+}
+
+vec3 graphite_ApplyAnalyticFog(vec3 color, vec3 relativePos)
 {
     vec4 states = graphite_World.fogStates;
     if (states.x + states.y + states.z < 0.5)

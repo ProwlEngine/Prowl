@@ -153,6 +153,7 @@ internal sealed partial class FramePipeline
                     camera.ReleaseSceneColor();
                     camera.ReleaseSceneDepth();
                     camera.ReleaseBackDepth();
+                    camera.ReleaseVolumetricFog();
                 }
             }
         }

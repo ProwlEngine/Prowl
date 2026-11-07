@@ -155,6 +155,8 @@ internal sealed partial class FramePipeline : IDisposable
             builder.Read(graph.Import(buffer), BufferAccess.AllReads);
         foreach (TextureHandle texture in _exports.DrawTextures)
             builder.Read(texture, TextureState.Sampled);
+        if (camera.FogWritten && camera.FogVolume != null)
+            builder.Read(graph.Import(camera.FogVolume), TextureState.Sampled);
         if (screenVisibility && camera.ScreenVisibility != null)
             builder.Read(graph.Import(camera.ScreenVisibility), TextureState.Sampled, TextureState.Sampled);
         if (screenIrradiance && camera.ScreenIrradiance != null)
@@ -389,6 +391,7 @@ internal sealed partial class FramePipeline : IDisposable
         UpdateSceneColor(camera, shape, width, height);
         UpdateSceneDepth(camera, shape, width, height);
         UpdateBackDepth(camera, shape, width, height);
+        camera.FogWritten = false;
         if ((shape.Targets & SceneTargets.Reactive) != 0 && !DrawsTransmission(camera))
             camera.ShapeKey = shape with { Targets = shape.Targets & ~SceneTargets.Reactive };
         camera.View.PixelWidth = width;

@@ -52,6 +52,46 @@ internal sealed class CameraFrame : IDisposable
     private TextureView? _sceneDepthView;
 
     /// <summary>
+    /// The volumetric fog's grid, a cell per 8 by 8 pixels and its depth slices, a slice set per layer one after another:
+    /// its light this frame blended over last frame's, last frame's, and the volume, this frame's light as lit, then the
+    /// light and transmittance integrated toward the camera that draws read.
+    /// Written says whether a feature wrote it this frame, so draws read it.
+    /// </summary>
+    public Texture? FogLight, FogLightHistory, FogVolume;
+    public bool FogWritten;
+
+    /// <summary>Makes the fog's grid for a size, true when it was made anew and has no history. Render thread.</summary>
+    public bool EnsureVolumetricFog(uint width, uint height, uint depth)
+    {
+        if (FogVolume is { } existing && existing.Width == width && existing.Height == height && existing.Depth == depth)
+            return false;
+        ReleaseVolumetricFog();
+        Texture Make(string name)
+        {
+            Texture texture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture3D(width, height, depth, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Storage | TextureUsage.Sampled));
+            texture.Name = $"Graphite.{name} {View.ViewId}";
+            return texture;
+        }
+        FogLight = Make("FogLight");
+        FogLightHistory = Make("FogLightHistory");
+        FogVolume = Make("FogVolume");
+        return true;
+    }
+
+    /// <summary>Makes last frame's light the history and the history this frame's to write. Render thread.</summary>
+    public void SwapFogHistory() => (FogLight, FogLightHistory) = (FogLightHistory, FogLight);
+
+    public void ReleaseVolumetricFog()
+    {
+        foreach (Texture? texture in new[] { FogLight, FogLightHistory, FogVolume })
+        {
+            if (texture != null)
+                _frame.Retired.Add(texture);
+        }
+        (FogLight, FogLightHistory, FogVolume) = (null, null, null);
+    }
+
+    /// <summary>
     /// The far side of the view's transmissive volumes, made the first time its transparent list holds a pass tagged
     /// "BackDepth" = "Read": their back faces' distance along the view ray in R32 float, 0 where there is none, over a
     /// depth target of its own. Used says whether this frame's list holds one.
@@ -527,6 +567,9 @@ internal sealed class CameraFrame : IDisposable
         _sceneDepthView?.Dispose();
         SceneDepth?.Dispose();
         _backDepthView.View?.Dispose();
+        FogLight?.Dispose();
+        FogLightHistory?.Dispose();
+        FogVolume?.Dispose();
         BackDepth?.Dispose();
         foreach (object state in States.Values)
             (state as IDisposable)?.Dispose();

@@ -263,6 +263,129 @@ public struct FogDesc : IEquatable<FogDesc>
     public static bool operator !=(FogDesc a, FogDesc b) => !a.Equals(b);
 }
 
+/// <summary>
+/// Volumetric fog: light scattered toward the camera by fog in the air, lit by the world's sun, local lights and ambient
+/// light through their shadows, and dimming what lies behind it. Its density thins exponentially with height above
+/// <see cref="BaseHeight"/>, and the world's fog volumes add to it. It is lit in a grid fitted to each view, out to
+/// <see cref="Distance"/>, and every fogged shader reads it through Graphite_ApplyFog.
+/// </summary>
+public struct VolumetricFogDesc : IEquatable<VolumetricFogDesc>
+{
+    public bool Enabled;
+
+    /// <summary>How much of the light the fog takes out per metre at <see cref="BaseHeight"/>, scattering or absorbing it.</summary>
+    public float Density;
+
+    /// <summary>The height in metres the fog is at <see cref="Density"/>, the same below it.</summary>
+    public float BaseHeight;
+
+    /// <summary>How fast the fog thins with height above <see cref="BaseHeight"/>, per metre.</summary>
+    public float HeightFalloff;
+
+    /// <summary>The share of what the fog takes out that it scatters rather than absorbs, per colour.</summary>
+    public Float4 Albedo;
+
+    /// <summary>Henyey Greenstein anisotropy, 0 scattering evenly and toward 1 forward, glowing around lights seen through it.</summary>
+    public float Anisotropy;
+
+    /// <summary>Scales the ambient light the fog scatters.</summary>
+    public float AmbientScale;
+
+    /// <summary>How far from the camera the fog reaches in metres.</summary>
+    public float Distance;
+
+    /// <summary>The grid's depth slices, spaced exponentially out to <see cref="Distance"/>.</summary>
+    public int Slices;
+
+    /// <summary>How much of last frame's lit grid each frame keeps, smoothing its jittered samples.</summary>
+    public float TemporalBlend;
+
+    public VolumetricFogDesc()
+    {
+        Density = 0.02f;
+        HeightFalloff = 0.1f;
+        Albedo = new Float4(1f, 1f, 1f, 1f);
+        Anisotropy = 0.6f;
+        AmbientScale = 1f;
+        Distance = 128f;
+        Slices = 128;
+        TemporalBlend = 0.9f;
+    }
+
+    public readonly bool Equals(VolumetricFogDesc other)
+        => Enabled == other.Enabled && Density == other.Density && BaseHeight == other.BaseHeight && HeightFalloff == other.HeightFalloff
+        && Albedo == other.Albedo && Anisotropy == other.Anisotropy && AmbientScale == other.AmbientScale && Distance == other.Distance
+        && Slices == other.Slices && TemporalBlend == other.TemporalBlend;
+
+    public override readonly bool Equals(object? obj) => obj is VolumetricFogDesc other && Equals(other);
+
+    public override readonly int GetHashCode() => HashCode.Combine(Enabled, Density, BaseHeight, HeightFalloff, Albedo, Anisotropy, Distance, Slices);
+
+    public static bool operator ==(VolumetricFogDesc a, VolumetricFogDesc b) => a.Equals(b);
+
+    public static bool operator !=(VolumetricFogDesc a, VolumetricFogDesc b) => !a.Equals(b);
+}
+
+public enum FogVolumeShape : byte
+{
+    /// <summary>Everywhere.</summary>
+    Global,
+
+    /// <summary>A box from -1 to 1.</summary>
+    Box,
+
+    /// <summary>A sphere of radius 1.</summary>
+    Sphere,
+
+    /// <summary>A cylinder of radius 1 from -1 to 1 along y.</summary>
+    Cylinder,
+
+    /// <summary>A cone opening up y from its apex at the origin to a cap at height 1.</summary>
+    Cone,
+}
+
+/// <summary>Fog filling a shape, adding to the volumetric fog. The shape is a unit one in its transform's own space.</summary>
+public struct FogVolumeDesc : IEquatable<FogVolumeDesc>
+{
+    public FogVolumeShape Shape;
+
+    /// <summary>From the shape's own space to the world.</summary>
+    public Double4x4 Transform;
+
+    /// <summary>How much of the light it takes out per metre inside it.</summary>
+    public float Density;
+
+    /// <summary>How far outside its shape it fades out, in its own units.</summary>
+    public float Falloff;
+
+    /// <summary>The share of what it takes out that it scatters, per colour.</summary>
+    public Float4 Albedo;
+
+    /// <summary>A cone's half angle in degrees.</summary>
+    public float ConeAngle;
+
+    public FogVolumeDesc()
+    {
+        Transform = Double4x4.Identity;
+        Density = 0.1f;
+        Falloff = 0.2f;
+        Albedo = new Float4(1f, 1f, 1f, 1f);
+        ConeAngle = 30f;
+    }
+
+    public readonly bool Equals(FogVolumeDesc other)
+        => Shape == other.Shape && Transform == other.Transform && Density == other.Density && Falloff == other.Falloff
+        && Albedo == other.Albedo && ConeAngle == other.ConeAngle;
+
+    public override readonly bool Equals(object? obj) => obj is FogVolumeDesc other && Equals(other);
+
+    public override readonly int GetHashCode() => HashCode.Combine(Shape, Transform, Density, Falloff, Albedo, ConeAngle);
+
+    public static bool operator ==(FogVolumeDesc a, FogVolumeDesc b) => a.Equals(b);
+
+    public static bool operator !=(FogVolumeDesc a, FogVolumeDesc b) => !a.Equals(b);
+}
+
 /// <summary>A world's ambient light, fog and sun. Changes to the world's own instance apply at the next frame.</summary>
 public sealed class EnvironmentDesc
 {
@@ -273,6 +396,12 @@ public sealed class EnvironmentDesc
     public Float4 AmbientGround = new(0.2f, 0.2f, 0.2f, 1);
     public float AmbientIntensity = 1;
     public FogDesc Fog = new();
+    public VolumetricFogDesc VolumetricFog = new();
+
+    /// <summary>The fog volumes adding to the volumetric fog, at most <see cref="MaxFogVolumes"/>. Replace the array to change them.</summary>
+    public FogVolumeDesc[] FogVolumes = [];
+
+    public const int MaxFogVolumes = 64;
 
     /// <summary>The directional light that is the sun, else the most intense directional light is.</summary>
     public LightHandle Sun;
@@ -300,7 +429,8 @@ public sealed class EnvironmentDesc
 
     internal bool Same(EnvironmentDesc other)
         => Ambient == other.Ambient && AmbientColor == other.AmbientColor && AmbientSky == other.AmbientSky && AmbientGround == other.AmbientGround
-        && AmbientIntensity == other.AmbientIntensity && Fog == other.Fog && Sun == other.Sun
+        && AmbientIntensity == other.AmbientIntensity && Fog == other.Fog && VolumetricFog == other.VolumetricFog
+        && FogVolumes.AsSpan().SequenceEqual(other.FogVolumes) && Sun == other.Sun
         && Sky == other.Sky && SkyColor == other.SkyColor && SkyCapture == other.SkyCapture
         && SkyProbeResolution == other.SkyProbeResolution && SkyCaptureInterval == other.SkyCaptureInterval && CaptureEV100 == other.CaptureEV100;
 }
@@ -358,7 +488,7 @@ internal struct DirectionalRecord
 internal struct WorldLightingRecord
 {
     public uint DirectionalCount;
-    private uint _pad0;
+    public uint FogVolumeCount;
     public uint HasProbes;
     private uint _pad1;
     public uint ProbeSlot;
@@ -375,6 +505,26 @@ internal struct WorldLightingRecord
     public Float4 FogColor;
     public Float4 FogParams;
     public Float4 FogStates;
+
+    /// <summary>Volumetric fog: on, reach, slices, the first slice's start, then density, base height, height falloff, anisotropy, then albedo and ambient scale.</summary>
+    public Float4 VolumetricGrid;
+    public Float4 VolumetricDensity;
+    public Float4 VolumetricAlbedo;
+}
+
+/// <summary>A fog volume as the shaders read it, 112 bytes, matching Graphite_FogVolumeRecord.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct FogVolumeRecord
+{
+    /// <summary>Its centre split into a high and low part like the camera's, then its shape, then its density.</summary>
+    public Float4 CentreHigh;
+    public Float4 CentreLow;
+
+    /// <summary>The rows of the world to its own space about its centre, then falloff, the cone's cosine and sine.</summary>
+    public Float4 Row0;
+    public Float4 Row1;
+    public Float4 Row2;
+    public Float4 Albedo;
 }
 
 public sealed partial class RenderWorld
@@ -590,7 +740,9 @@ internal sealed class WorldLighting
         World = tables.Of<WorldLightingRecord>("World", 1);
         Directionals = tables.Of<DirectionalRecord>("Directionals", 8);
         Directionals.Set(0, default(DirectionalRecord));
-        Tables = [Lights.StaticRecords, Lights.StaticNodes, Decals.StaticRecords, Decals.StaticNodes, World, Directionals];
+        FogVolumes = tables.Of<FogVolumeRecord>("FogVolumes", EnvironmentDesc.MaxFogVolumes);
+        FogVolumes.Set(0, default(FogVolumeRecord));
+        Tables = [Lights.StaticRecords, Lights.StaticNodes, Decals.StaticRecords, Decals.StaticNodes, World, Directionals, FogVolumes];
     }
 
     /// <summary>Point, spot and area lights, static ones in regions and moving ones in a tree per view.</summary>
@@ -600,6 +752,9 @@ internal sealed class WorldLighting
 
     /// <summary>Every directional light, the sun first, as many as there are.</summary>
     public GpuTable Directionals { get; }
+
+    /// <summary>The environment's fog volumes, in the world split high and low.</summary>
+    public GpuTable FogVolumes { get; }
     public GpuTable[] Tables { get; }
 
     public IMaterialResources Resources => _resources;
@@ -991,10 +1146,38 @@ internal sealed class WorldLighting
         record.FogColor = fog.Color;
         record.FogParams = new Float4(fog.Density / 1.2011224f, fog.Density / 0.693147181f, -1f / range, fog.End / range);
         record.FogStates = new Float4(fog.Mode == FogMode.Linear ? 1 : 0, fog.Mode == FogMode.Exponential ? 1 : 0, fog.Mode == FogMode.ExponentialSquared ? 1 : 0, fog.UseSky ? 1 : 0);
+
+        VolumetricFogDesc volumetric = env.VolumetricFog;
+        float reach = MathF.Max(volumetric.Distance, 1f);
+        record.VolumetricGrid = new Float4(volumetric.Enabled ? 1 : 0, reach, Math.Clamp(volumetric.Slices, 16, 256), MathF.Min(0.5f, reach * 0.25f));
+        record.VolumetricDensity = new Float4(MathF.Max(volumetric.Density, 0f), volumetric.BaseHeight, MathF.Max(volumetric.HeightFalloff, 0f), Math.Clamp(volumetric.Anisotropy, -0.95f, 0.95f));
+        record.VolumetricAlbedo = new Float4(volumetric.Albedo.X, volumetric.Albedo.Y, volumetric.Albedo.Z, MathF.Max(volumetric.AmbientScale, 0f));
+        int volumes = Math.Min(env.FogVolumes.Length, EnvironmentDesc.MaxFogVolumes);
+        for (int i = 0; i < volumes; i++)
+            FogVolumes.Set((uint)i, FogVolume(env.FogVolumes[i]));
+        record.FogVolumeCount = (uint)volumes;
         World.Set(0, record);
     }
 
     // The direction stored points from the surface to the light, the opposite of where it shines. The layer mask rides in w.
+    // A fog volume's centre split high and low like the camera's, and its world to own space rows about that centre
+    private static FogVolumeRecord FogVolume(FogVolumeDesc volume)
+    {
+        Double4x4 local = volume.Transform.Invert();
+        (Float3 high, Float3 low) = Precise.Split(volume.Transform.Translation.XYZ);
+        float cone = Math.Clamp(volume.ConeAngle, 0.1f, 89.9f) * (MathF.PI / 180f);
+        Float4 Row(int i) => new((float)local.c0[i], (float)local.c1[i], (float)local.c2[i], i == 0 ? MathF.Max(volume.Falloff, 1e-3f) : i == 1 ? MathF.Cos(cone) : MathF.Sin(cone));
+        return new FogVolumeRecord
+        {
+            CentreHigh = new Float4(high.X, high.Y, high.Z, (float)volume.Shape),
+            CentreLow = new Float4(low.X, low.Y, low.Z, MathF.Max(volume.Density, 0f)),
+            Row0 = Row(0),
+            Row1 = Row(1),
+            Row2 = Row(2),
+            Albedo = volume.Albedo,
+        };
+    }
+
     private static DirectionalRecord Directional(in LightDesc light)
     {
         float radius = light.AngularRadius * MathF.PI / 180f;
