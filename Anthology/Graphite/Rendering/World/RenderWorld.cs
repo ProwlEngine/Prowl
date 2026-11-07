@@ -267,7 +267,7 @@ public sealed partial class RenderWorld : IDisposable
     internal ShadowSettings ShadowSnapshot = new();
 
     /// <summary>Features every view of the world runs. Host thread.</summary>
-    public ExtensionSet<RenderFeature> Features { get; } = new();
+    public ExtensionSet<RenderFeature> Features { get; }
 
     /// <summary>GPU work run once a frame outside any view, with the world's built in LightProbes, LocalShadows and CaptureFill. Host thread.</summary>
     public ExtensionSet<FrameFeature> FrameFeatures { get; }
@@ -352,6 +352,7 @@ public sealed partial class RenderWorld : IDisposable
     {
         _owner = owner;
         _device = device;
+        Features = new ExtensionSet<RenderFeature>(this);
         FrameFeatures = new ExtensionSet<FrameFeature>(this) { new LightProbeFeature(), new LocalShadowFeature(), new CaptureFillFeature() };
         int id = System.Threading.Interlocked.Increment(ref s_nextId);
         Id = id;

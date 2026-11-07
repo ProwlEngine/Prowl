@@ -167,13 +167,25 @@ internal sealed class RendererResources : IDisposable
         return program;
     }
 
-    // An RGBA8 texture from the library's data, in its stored row order, in every layer, mipmapped on the GPU when asked
-    private static Texture LoadData(GraphicsDevice device, string file, uint width, uint height, bool mipmapped, uint layers = 1)
+    private CloudNoise? _cloudNoise;
+
+    /// <summary>The noise volumetric clouds are built from, loaded the first time. Host thread.</summary>
+    public CloudNoise CloudNoise => _cloudNoise ??= new CloudNoise(_device);
+
+    /// <summary>The first bytes of a file of the library's data.</summary>
+    internal static byte[] ReadData(string file, uint length)
     {
         using System.IO.Stream stream = typeof(RendererResources).Assembly.GetManifestResourceStream("Graphite/Data/" + file)
             ?? throw new InvalidOperationException($"The library has no Data/{file}.");
-        byte[] pixels = new byte[width * height * 4];
-        stream.ReadExactly(pixels);
+        byte[] bytes = new byte[length];
+        stream.ReadExactly(bytes);
+        return bytes;
+    }
+
+    // An RGBA8 texture from the library's data, in its stored row order, in every layer, mipmapped on the GPU when asked
+    internal static Texture LoadData(GraphicsDevice device, string file, uint width, uint height, bool mipmapped, uint layers = 1)
+    {
+        byte[] pixels = ReadData(file, width * height * 4);
         uint mips = mipmapped ? (uint)Math.Log2(Math.Max(width, height)) + 1 : 1;
         Texture texture = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(width, height, mips, layers, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
         texture.Name = "Graphite " + System.IO.Path.GetFileNameWithoutExtension(file);
@@ -217,6 +229,7 @@ internal sealed class RendererResources : IDisposable
         SmaaSearchLayered.Dispose();
         _smaaArea.Dispose();
         _smaaSearch.Dispose();
+        _cloudNoise?.Dispose();
         Dfg.Dispose();
         DielectricE.Dispose();
         AnisotropicDfg.Dispose();
