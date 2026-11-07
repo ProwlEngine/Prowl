@@ -28,9 +28,6 @@ public class InspectorPanel : DockPanel
 
     public override string Title => Loc.Get("panel.inspector");
     public override string Icon => EditorIcons.Sliders;
-
-    // Remember the last non-folder selection so navigating folders doesn't clear the inspector.
-    private object? _lastInspectable;
     private bool _subscribed;
 
     public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
@@ -73,7 +70,6 @@ public class InspectorPanel : DockPanel
     {
         if (_subscribed)
         {
-            Selection.OnSelectionChanged -= OnSelectionChanged;
             EditorApplication.PlayModeRequested -= OnPlayModeRequested;
             _subscribed = false;
         }
@@ -216,18 +212,6 @@ public class InspectorPanel : DockPanel
             cancellable: true);
     }
 
-    private void OnSelectionChanged()
-    {
-        object? active = Selection.ActiveObject;
-
-        // If the new selection is a folder (or all selected are folders), keep the
-        // previous inspectable so browsing folders doesn't wipe the inspector.
-        if (active == null || IsFolderSelection(active))
-            return;
-
-        _lastInspectable = active;
-    }
-
     public override void OnGUI(Paper paper, float width, float height)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
@@ -235,7 +219,6 @@ public class InspectorPanel : DockPanel
 
         if (!_subscribed)
         {
-            Selection.OnSelectionChanged += OnSelectionChanged;
             EditorApplication.PlayModeRequested += OnPlayModeRequested;
             _subscribed = true;
         }
@@ -245,9 +228,7 @@ public class InspectorPanel : DockPanel
         {
             // Determine what to inspect: current selection, unless it's a folder
             object? active = Selection.ActiveObject;
-            if (active == null || IsFolderSelection(active))
-                active = _lastInspectable;
-            if (active == null)
+            if (active == null || (active is EngineObject disposable && disposable.IsDisposed))
             {
                 DrawEmpty(paper, font);
                 return;
@@ -275,12 +256,6 @@ public class InspectorPanel : DockPanel
                 var gos = Selection.GetSelected<GameObject>().ToList();
                 if (gos.Count > 1)
                     GameObjectInspector.DrawMulti(paper, font, gos);
-                else if (gameObject.IsDestroyQueued || gameObject.IsDisposed)
-                {
-                    // Hide game objects that have been deleted.
-                    _lastInspectable = null;
-                    DrawEmpty(paper, font);
-                }
                 else
                     GameObjectInspector.Draw(paper, font, gameObject);
             }
