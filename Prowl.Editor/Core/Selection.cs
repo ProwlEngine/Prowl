@@ -151,7 +151,6 @@ public static class Selection
         /// </summary>
         public Snapshot()
         {
-            _activeIndex = _selected.IndexOf(_activeObject);
             _callbacks = new(capacity: _selected.Count);
             foreach (object selectedObject in _selected)
             {
@@ -159,11 +158,14 @@ public static class Selection
                 Func<object>? callback = selectedObject switch
                 {
                     GameObject go => () => Prowl.Runtime.Resources.Scene.Current.FindObjectByIdentifier<GameObject>(go.Identifier),
-                    Asset asset => () => AssetDatabase.Load<Asset>(asset.AssetID),
                     _ => null
                 };
                 if (callback is not null)
+                {
+                    if (ReferenceEquals(selectedObject, _activeObject))
+                        _activeIndex = _callbacks.Count;
                     _callbacks.Add(callback);
+                }
             }
         }
 
@@ -175,13 +177,19 @@ public static class Selection
         {
             _selected.Clear();
             _lastClickedIndex = -1;
+            _activeObject = null;
+            int index = 0;
             foreach (Func<object?> callback in _callbacks)
             {
                 object? selectedObject = callback();
                 if (selectedObject is not null)
+                {
+                    if (index == _activeIndex)
+                        _activeObject = selectedObject;
                     _selected.Add(selectedObject);
+                }
+                index++;
             }
-            _activeObject = _activeIndex >= 0 ? _selected[_activeIndex] : null;
             OnSelectionChanged?.Invoke();
         }
     }
