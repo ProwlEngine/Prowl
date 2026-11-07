@@ -32,9 +32,12 @@ public class AudioClipAssetEditor : ImportSettingsEditor
         Origami.Header(paper, $"{id}_hdr", $"{EditorIcons.VolumeHigh}  Audio Clip").Show();
         Origami.Label(paper, $"{id}_path", $"Path: {entry.Path}").Show();
 
-        DrawClipInfo(paper, id, asset as AudioClip);
-        DrawWaveform(paper, id, asset as AudioClip);
-        DrawTransport(paper, id, asset as AudioClip);
+        var audioClip = asset as AudioClip;
+        if (audioClip.IsNotValid()) return;
+
+        DrawClipInfo(paper, id, audioClip);
+        DrawWaveform(paper, id, audioClip);
+        DrawTransport(paper, id, audioClip);
 
         EchoObject settings = Settings(entry);
 
@@ -60,16 +63,14 @@ public class AudioClipAssetEditor : ImportSettingsEditor
         if (Bool(settings, AudioImportKeys.ForceMono) || Int(settings, AudioImportKeys.SampleRateOverride) > 0)
             Origami.Label(paper, $"{id}_convnote", "Converting stores the clip as uncompressed 16 bit.").Show();
 
-        DrawApplyRevertBar(paper, id, entry, asset);
+        DrawApplyRevertBar(paper, id, entry, audioClip);
     }
 
-    private static void DrawClipInfo(Paper paper, string id, AudioClip? clip)
+    private static void DrawClipInfo(Paper paper, string id, AudioClip clip)
     {
-        if (clip.IsNotValid()) return;
-
         Origami.Separator(paper, $"{id}_sep_info").Show();
 
-        int channels = clip!.Channels;
+        int channels = clip.Channels;
 
         if (channels == 0)
         {
@@ -99,11 +100,9 @@ public class AudioClipAssetEditor : ImportSettingsEditor
     private const int WaveformColumns = 160;
     private const float WaveformHeight = 64.0f;
 
-    private static void DrawWaveform(Paper paper, string id, AudioClip? clip)
+    private static void DrawWaveform(Paper paper, string id, AudioClip clip)
     {
-        if (clip.IsNotValid()) return;
-
-        float[] peaks = Waveform(clip!);
+        float[] peaks = GetWaveform(clip!);
 
         if (peaks.Length == 0) return;
 
@@ -126,7 +125,12 @@ public class AudioClipAssetEditor : ImportSettingsEditor
         }
     }
 
-    private static float[] Waveform(AudioClip clip) => s_waveforms.GetValue(clip, static c => BuildWaveform(c));
+    /// <summary>
+    /// Returns a cached array of waveform samples, for display purposes.
+    /// </summary>
+    /// <param name="clip"> The audio clip to retrieve the waveform from. </param>
+    /// <returns> A cached array of waveform samples. </returns>
+    public static float[] GetWaveform(AudioClip clip) => s_waveforms.GetValue(clip, static c => BuildWaveform(c));
 
     private static float[] BuildWaveform(AudioClip clip)
     {
@@ -154,10 +158,8 @@ public class AudioClipAssetEditor : ImportSettingsEditor
         return peaks;
     }
 
-    private static void DrawTransport(Paper paper, string id, AudioClip? clip)
+    private static void DrawTransport(Paper paper, string id, AudioClip clip)
     {
-        if (clip.IsNotValid()) return;
-
         using (paper.Row($"{id}_transport").Height(UnitValue.Auto)
             .Padding(Origami.Current.Metrics.PaddingLarge, Origami.Current.Metrics.PaddingLarge, 0, 0).Gap(Origami.Current.Metrics.Padding)
             .Margin(0, 0, 0, Origami.Current.Metrics.SpacingLarge).Enter())

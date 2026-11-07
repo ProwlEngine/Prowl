@@ -10,6 +10,7 @@
   "panel.project": "Project",
   "panel.project_settings": "Project Settings",
   "panel.scene": "Scene",
+  "panel.timeline": "Timeline",
 
   "save.auto_saved": "Auto-saved",
   "save.cant_play_mode": "Can't save during Play Mode",
@@ -737,5 +738,18 @@
   "frame_stats.desc_render_wait": "Waiting for the render thread to finish and present earlier frames, vsync included. High values with vsync off mean rendering is the bottleneck",
   "frame_stats.desc_idle": "The frame limiter holding the frame rate down",
   "frame_stats.desc_gc": "Garbage collection pauses",
-  "frame_stats.desc_other": "Frame time no category claimed"
+  "frame_stats.desc_other": "Frame time no category claimed",
+
+  "timeline.add_track": "Add Track",
+  "timeline.add_audio_track": "Add Audio Track",
+  "timeline.go_to_beginning": "Go to the beginning of the timeline",
+  "timeline.pause": "Pause",
+  "timeline.play": "Play",
+  "timeline.go_to_end": "Go to the end of the timeline",
+  "timeline.track_duplicate": "Duplicate",
+  "timeline.track_delete": "Delete",
+  "timeline.track_disable": "Disable",
+  "timeline.track_enable": "Enable",
+  "timeline.track_lock": "Lock",
+  "timeline.track_unlock": "Unlock"
 }

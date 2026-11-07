@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Editor.GUI.Panels;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Core;
@@ -157,8 +158,14 @@ public static class Selection
                 // TODO: consider some sort of extensible system to serialize references...
                 Func<object>? callback = selectedObject switch
                 {
+                    // GameObjects are restored via their identifying GUID.
                     GameObject go => () => Prowl.Runtime.Resources.Scene.Current.FindObjectByIdentifier<GameObject>(go.Identifier),
-                    _ => null
+
+                    // ContentItem is used by the Project panel. It contains no scene-related references.
+                    ContentItem => () => selectedObject,
+
+                    // Other objects may contain scene references.
+                    _ => null,
                 };
                 if (callback is not null)
                 {
