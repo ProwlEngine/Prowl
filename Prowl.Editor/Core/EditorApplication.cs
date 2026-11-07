@@ -1943,8 +1943,8 @@ public class EditorApplication : Game
             return;
         }
 
-        // The Selection will likely be invalid after the editor scene is torn down, so take a snapshot and then clear
-        // it. The snapshot only contains GUIDs so it is safe to persist.
+        // The selection may contain game objects from the editor scene which is being torn down, so take a snapshot
+        // and then clear the selection. The snapshot only contains GUIDs so it is safe to persist.
         _savedSelection = Selection.TakeSnapshot();
         Selection.Clear();
 
@@ -2017,6 +2017,11 @@ public class EditorApplication : Game
         // handlers its code added, which would otherwise fire into the next play session.
         XR.Stop();
         XR.ForgetHandlers();
+
+        // The selection might contain game objects from the play mode scene that is being torn down, so clear the
+        // selection to defend against this. The edit mode selection will be restored later from a snapshot, after
+        // the editor scene finishes loading.
+        Selection.Clear();
 
         Runtime.Resources.Scene.DestroyPreserved();
 
