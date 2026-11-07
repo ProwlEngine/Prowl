@@ -74,6 +74,7 @@ public class EditorApplication : Game
 
     // Play mode state
     private Echo.EchoObject? _savedEditorScene;
+    private Selection.Snapshot? _savedSelection;
     private int _savedActiveTabIndex = -1;
     private DockNode? _savedActiveTabNode;
     private TimeData? _savedEditorTime;
@@ -347,6 +348,9 @@ public class EditorApplication : Game
         };
 
         Window.FileDrop += ExternalAssetDrop.Enqueue;
+
+        // Hook the SceneLoaded event so that the selection can be reverted successfully.
+        Scene.OnSceneLoaded += RevertSelectionAfterPlay;
     }
 
     [DllImport("dwmapi.dll", PreserveSig = true)]
@@ -1939,7 +1943,9 @@ public class EditorApplication : Game
             return;
         }
 
-        // Clear selection (references will be invalid)
+        // The Selection will likely be invalid after the editor scene is torn down, so take a snapshot and then clear
+        // it. The snapshot only contains GUIDs so it is safe to persist.
+        _savedSelection = Selection.TakeSnapshot();
         Selection.Clear();
 
         // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
@@ -2012,9 +2018,6 @@ public class EditorApplication : Game
         XR.Stop();
         XR.ForgetHandlers();
 
-        // Clear selection (play scene references)
-        Selection.Clear();
-
         Runtime.Resources.Scene.DestroyPreserved();
 
         // Restore the editor scene. Loading it is what disposes the play scene, at the end of the frame.
@@ -2082,6 +2085,20 @@ public class EditorApplication : Game
             if (asset.IsLoaded && !AssetDatabase.IsBuiltIn(asset))
                 AssetDatabase.Reload(asset);
         AssetDatabase.Walk();
+    }
+
+    // This method is called when a new scene is loaded.
+    private void RevertSelectionAfterPlay()
+    {
+        // We are only concerned with the scene load that happens immediately after play mode is exited.
+        if (Application.IsPlaying || Application.IsPaused || !_savedSelection.HasValue)
+            return;
+
+        // Restore the selection.
+        Selection.RestoreSnapshot(_savedSelection.Value);
+
+        // Clear the selection state so we don't try to restore it again.
+        _savedSelection = null;
     }
 
     private void TogglePause()
