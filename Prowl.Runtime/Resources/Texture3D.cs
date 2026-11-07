@@ -30,51 +30,6 @@ public sealed class Texture3D : Texture, ISerializable
 
     private uint _width, _height, _depth;
 
-    public static Texture3D LoadDefault(DefaultTexture3D texture) => BuiltInAssets.Load<Texture3D>(BuiltInAssets.GuidFor(texture));
-
-    /// <summary>
-    /// Raw load of a default embedded 3D texture invoked by <see cref="BuiltInAssets"/> on first cache miss. They are
-    /// stored as raw texels, slice after slice, since no image format holds a volume.
-    /// </summary>
-    internal static Texture3D ParseDefault(DefaultTexture3D texture)
-    {
-        (string fileName, uint width, uint height, uint depth, TextureFormat format) = texture switch
-        {
-            DefaultTexture3D.CloudNoise or DefaultTexture3D.CloudEdges or DefaultTexture3D.CloudPuffs or DefaultTexture3D.CloudSlow or DefaultTexture3D.CloudLobes
-                => ("cloud_noise_3d.bin", 64u, 64u, 64u, TextureFormat.RGBA8),
-            _ => throw new ArgumentException($"Unknown default 3D texture: {texture}")
-        };
-
-        using Stream stream = EmbeddedResources.GetStream($"Assets/Defaults/{fileName}");
-        using var bytes = new MemoryStream();
-        stream.CopyTo(bytes);
-
-        byte[] texels = bytes.ToArray();
-        (texels, format) = texture switch
-        {
-            DefaultTexture3D.CloudEdges => (Repack(texels, 1, (rgba, i, _) => rgba[i]), TextureFormat.R8),
-            DefaultTexture3D.CloudPuffs => (Repack(texels, 1, (rgba, i, _) => rgba[i + 1]), TextureFormat.R8),
-            DefaultTexture3D.CloudSlow => (Repack(texels, 2, (rgba, i, channel) => rgba[i + 2 + channel]), TextureFormat.RG8),
-            DefaultTexture3D.CloudLobes => (Repack(texels, 1, (rgba, i, _) => (byte)((rgba[i + 2] + rgba[i + 3] + 1) / 2)), TextureFormat.R8),
-            _ => (texels, format),
-        };
-
-        var result = new Texture3D(width, height, depth, format, mipmaps: true) { Name = texture.ToString(), Filter = FilterMode.Trilinear };
-        result.SetData(new Memory<byte>(texels));
-        result.GenerateMipmaps();
-        return result;
-    }
-
-    // RGBA8 texels rebuilt with channels per texel, each picked from the texel's RGBA bytes starting at the given index
-    private static byte[] Repack(byte[] rgba, int channels, Func<byte[], int, int, byte> pick)
-    {
-        byte[] result = new byte[rgba.Length / 4 * channels];
-        for (int texel = 0; texel < rgba.Length / 4; texel++)
-            for (int channel = 0; channel < channels; channel++)
-                result[texel * channels + channel] = pick(rgba, texel * 4, channel);
-        return result;
-    }
-
     /// <summary>The width of this <see cref="Texture3D"/>.</summary>
     public uint Width { get { EnsureLoaded(); return _width; } }
 

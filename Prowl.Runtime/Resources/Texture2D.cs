@@ -435,7 +435,6 @@ public sealed class Texture2D : Texture, ISerializable
             DefaultTexture.UIPanel => ("UI_Panel.png", true),
             DefaultTexture.Handle => ("handle_ui.png", true),
             DefaultTexture.Noise => ("noise.png", false),
-            DefaultTexture.CloudNoise => ("cloud_noise.png", false),
             DefaultTexture.IconCamera => ("icon_camera.png", true),
             DefaultTexture.IconLight => ("icon_light.png", true),
             _ => throw new ArgumentException($"Unknown default texture: {texture}")

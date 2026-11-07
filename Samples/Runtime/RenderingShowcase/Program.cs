@@ -766,40 +766,41 @@ public sealed class RenderingShowcaseGame : StationGame
     {
         AddStation("Clouds", "Clouds cover the whole scene, so they are over every station. They are ray marched through a coverage map shaped by a height profile and eroded by cell noise, lit by a short march toward the sun.", c, new Float3(0f, 2f, -6f), 4.2f);
 
-        var clouds = new GameObject("Clouds");
-        _clouds = clouds.AddComponent<VolumetricClouds>();
-        Add(clouds);
+        _clouds = MainCamera.Profile!.Add<VolumetricClouds>(overrideAll: true);
     }
 
     private void CloudControls(Paper paper, FontFile font)
     {
         Header(paper, font, "Clouds");
         Slider(paper, font, "Flight speed", _cloudFlightSpeed, 7f, 3000f, v => { _cloudFlightSpeed = v; SetFlightSpeed(v); }, "0");
-        Slider(paper, font, "Coverage", _clouds.Coverage, 0f, 1f, v => _clouds.Coverage = v);
-        Slider(paper, font, "Density", _clouds.Density, 0f, 4f, v => _clouds.Density = v);
-        Slider(paper, font, "Erosion", _clouds.Erosion, 0f, 1f, v => _clouds.Erosion = v);
-        Slider(paper, font, "Bottom strength", _clouds.BottomStrength, 0f, 1f, v => _clouds.BottomStrength = v);
-        Slider(paper, font, "Top strength", _clouds.TopStrength, 0f, 1f, v => _clouds.TopStrength = v);
-        Slider(paper, font, "Gap multiplier", _clouds.GapMultiplier, 0f, 3f, v => _clouds.GapMultiplier = v);
-        Slider(paper, font, "Lobes", _clouds.Lobes, 0f, 1f, v => _clouds.Lobes = v);
-        Slider(paper, font, "Lobe scale", _clouds.LobeScale, 200f, 8000f, v => _clouds.LobeScale = v, "0");
-        Slider(paper, font, "Bottom coverage", _clouds.BottomCoverage, 0f, 2f, v => _clouds.BottomCoverage = v);
-        Slider(paper, font, "Top coverage", _clouds.TopCoverage, 0f, 2f, v => _clouds.TopCoverage = v);
-        Slider(paper, font, "Change speed", _clouds.FormationChangeSpeed, 0f, 0.05f, v => _clouds.FormationChangeSpeed = v, "0.000");
-        Slider(paper, font, "Sun brightness", _clouds.SunBrightness, 0f, 6f, v => _clouds.SunBrightness = v);
-        Slider(paper, font, "Ambient brightness", _clouds.AmbientBrightness, 0f, 4f, v => _clouds.AmbientBrightness = v);
-        Slider(paper, font, "Ambient saturation", _clouds.AmbientSaturation, 0f, 1f, v => _clouds.AmbientSaturation = v);
-        Slider(paper, font, "Multiple scattering", _clouds.MultipleScattering, 0f, 1f, v => _clouds.MultipleScattering = v);
-        Slider(paper, font, "Scattering occlusion", _clouds.MultipleScatteringOcclusion, 0f, 1f, v => _clouds.MultipleScatteringOcclusion = v);
-        Toggle(paper, font, "Temporal", _clouds.Temporal, v => _clouds.Temporal = v);
-        Slider(paper, font, "Shadow resolution", _clouds.ShadowResolution, 128f, 2048f, v => _clouds.ShadowResolution = (int)v, "0");
-        Slider(paper, font, "Horizon fade", _clouds.HorizonFade, 5000f, 100000f, v => _clouds.HorizonFade = v, "0");
-        Slider(paper, font, "Altitude", _clouds.Altitude, 200f, 4000f, v => _clouds.Altitude = v, "0");
-        Slider(paper, font, "Thickness", _clouds.Thickness, 100f, 4000f, v => _clouds.Thickness = v, "0");
-        Slider(paper, font, "Wind speed", _clouds.WindSpeed, 0f, 200f, v => _clouds.WindSpeed = v, "0");
-        Cycle(paper, font, "Resolution", _clouds.Resolution, v => _clouds.Resolution = v);
-        Toggle(paper, font, "High layer", _clouds.HighLayer, v => _clouds.HighLayer = v);
-        Slider(paper, font, "High layer opacity", _clouds.HighLayerOpacity, 0f, 1f, v => _clouds.HighLayerOpacity = v);
+        Slider(paper, font, "Coverage", _clouds.Coverage, 0f, 1f, v => _clouds.Coverage.Value = v);
+        Slider(paper, font, "Density", _clouds.Density, 0f, 4f, v => _clouds.Density.Value = v);
+        Slider(paper, font, "Erosion", _clouds.Erosion, 0f, 1f, v => _clouds.Erosion.Value = v);
+        Slider(paper, font, "Wisps", _clouds.Wisps, 0f, 1f, v => _clouds.Wisps.Value = v);
+        Slider(paper, font, "Wisp scale", _clouds.WispScale, 10f, 600f, v => _clouds.WispScale.Value = v, "0");
+        Slider(paper, font, "Bottom strength", _clouds.BottomStrength, 0f, 1f, v => _clouds.BottomStrength.Value = v);
+        Slider(paper, font, "Top strength", _clouds.TopStrength, 0f, 1f, v => _clouds.TopStrength.Value = v);
+        Slider(paper, font, "Dome strength", _clouds.DomeStrength, 0f, 2f, v => _clouds.DomeStrength.Value = v);
+        Slider(paper, font, "Gap multiplier", _clouds.GapMultiplier, 0f, 3f, v => _clouds.GapMultiplier.Value = v);
+        Slider(paper, font, "Lobes", _clouds.Lobes, 0f, 1f, v => _clouds.Lobes.Value = v);
+        Slider(paper, font, "Lobe scale", _clouds.LobeScale, 200f, 8000f, v => _clouds.LobeScale.Value = v, "0");
+        Slider(paper, font, "Bottom coverage", _clouds.BottomCoverage, 0f, 2f, v => _clouds.BottomCoverage.Value = v);
+        Slider(paper, font, "Top coverage", _clouds.TopCoverage, 0f, 2f, v => _clouds.TopCoverage.Value = v);
+        Slider(paper, font, "Change speed", _clouds.FormationChangeSpeed, 0f, 0.05f, v => _clouds.FormationChangeSpeed.Value = v, "0.000");
+        Slider(paper, font, "Sun brightness", _clouds.SunBrightness, 0f, 6f, v => _clouds.SunBrightness.Value = v);
+        Slider(paper, font, "Ambient brightness", _clouds.AmbientBrightness, 0f, 4f, v => _clouds.AmbientBrightness.Value = v);
+        Slider(paper, font, "Ambient saturation", _clouds.AmbientSaturation, 0f, 1f, v => _clouds.AmbientSaturation.Value = v);
+        Slider(paper, font, "Multiple scattering", _clouds.MultipleScattering, 0f, 1f, v => _clouds.MultipleScattering.Value = v);
+        Slider(paper, font, "Scattering occlusion", _clouds.MultipleScatteringOcclusion, 0f, 1f, v => _clouds.MultipleScatteringOcclusion.Value = v);
+        Toggle(paper, font, "Temporal", _clouds.Temporal, v => _clouds.Temporal.Value = v);
+        Slider(paper, font, "Shadow resolution", _clouds.ShadowResolution, 128f, 2048f, v => _clouds.ShadowResolution.Value = (int)v, "0");
+        Slider(paper, font, "Horizon fade", _clouds.HorizonFade, 5000f, 100000f, v => _clouds.HorizonFade.Value = v, "0");
+        Slider(paper, font, "Altitude", _clouds.Altitude, 200f, 4000f, v => _clouds.Altitude.Value = v, "0");
+        Slider(paper, font, "Thickness", _clouds.Thickness, 100f, 4000f, v => _clouds.Thickness.Value = v, "0");
+        Slider(paper, font, "Wind speed", _clouds.WindSpeed, 0f, 200f, v => _clouds.WindSpeed.Value = v, "0");
+        Cycle(paper, font, "Resolution", _clouds.Resolution.Value, v => _clouds.Resolution.Value = v);
+        Toggle(paper, font, "High layer", _clouds.HighLayer, v => _clouds.HighLayer.Value = v);
+        Slider(paper, font, "High layer opacity", _clouds.HighLayerOpacity, 0f, 1f, v => _clouds.HighLayerOpacity.Value = v);
     }
 }
 
