@@ -14,12 +14,27 @@ internal sealed class EffectResources : IDisposable
 {
     private readonly Renderer _renderer;
     private readonly Dictionary<string, FullscreenProgram> _programs = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, InternalCompute> _computes = new(StringComparer.Ordinal);
 
     public void Dispose()
     {
         foreach (FullscreenProgram program in _programs.Values)
             program.Dispose();
         _programs.Clear();
+        foreach (InternalCompute compute in _computes.Values)
+            compute.Dispose();
+        _computes.Clear();
+    }
+
+    /// <summary>The compute program of a library file, made the first time. Host thread.</summary>
+    public InternalCompute Compute(string file)
+    {
+        lock (_computes)
+        {
+            if (!_computes.TryGetValue(file, out InternalCompute? compute))
+                _computes[file] = compute = _renderer.CreateInternalCompute(file);
+            return compute;
+        }
     }
 
     /// <summary>How many programs were built, for tests.</summary>

@@ -686,6 +686,8 @@ public sealed class Renderer : IDisposable
     public FullscreenProgram CreateProceduralProgram(string code, string name = "Procedural", BlendStateDescription? blend = null, bool lit = false)
         => FullscreenProgram.Create(Device, _compiler, code, name, false, blend, lit, procedural: true, policy: _options.Compile, report: Report);
 
+    internal InternalCompute CreateInternalCompute(string file) => InternalShaders.Compute(Device, _compiler, file, _options.Compile);
+
     private int _frameCount;
     private readonly List<Double3> _cameras = new();
     private readonly List<(Action<BakedReflectionProbe> Done, BakedReflectionProbe Baked)> _bakes = new();
