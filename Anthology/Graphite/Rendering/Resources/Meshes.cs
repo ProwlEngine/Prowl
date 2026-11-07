@@ -97,6 +97,9 @@ public sealed class MeshData
 
     /// <summary>Object space bounds every vertex stays inside, required when the GPU writes the positions.</summary>
     public AABB? Bounds;
+
+    /// <summary>How far a vertex stage moves vertices from their positions at most along each axis, in object space, which every chunk's bounds grow by.</summary>
+    public Float3 Displacement;
 }
 
 /// <summary>A blend shape frame's words as they are placed: its weight, delta count and where each delta array starts.</summary>
@@ -201,6 +204,7 @@ internal sealed class MeshLayout
             {
                 uint count = Math.Min(chunkIndices, sub.IndexCount - start);
                 AABB chunkBounds = positions != null ? BoundsOf(positions, Indices.AsSpan((int)(sub.IndexStart + start), (int)count)) : data.Bounds!.Value;
+                chunkBounds = new AABB { Min = chunkBounds.Min - data.Displacement, Max = chunkBounds.Max + data.Displacement };
                 chunks.Add(new MeshChunk(s, sub.IndexStart + start, count, chunkBounds));
                 bounds.Encapsulate(chunkBounds);
             }
