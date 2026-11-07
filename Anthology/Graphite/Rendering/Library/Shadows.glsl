@@ -74,11 +74,15 @@ vec2 graphite_TentTap(int tap, float f)
     return vec2(w, f / w + 2.0);
 }
 
-// The lit fraction at uv of a tile of a depth texture, hard or a 5x5 tent from 9 comparisons, every tap half a texel inside the tile
+// The lit fraction at uv of a tile of a depth texture, hard or a 5x5 tent from 9 comparisons, every tap half a texel inside
+// the tile. A shader defining GRAPHITE_HARD_SHADOWS takes every shadow hard.
 float Graphite_SampleShadow(uint slot, vec4 rect, float inverseSize, vec3 coords, float filtering)
 {
     vec2 tileMin = rect.xy + 0.5 * inverseSize;
     vec2 tileMax = rect.xy + rect.z - 0.5 * inverseSize;
+#ifdef GRAPHITE_HARD_SHADOWS
+    filtering = GRAPHITE_SHADOW_HARD;
+#endif
     if (filtering == GRAPHITE_SHADOW_HARD)
         return texture(sampler2DShadow(Graphite_ShadowTextures2D[nonuniformEXT(slot)], Graphite_ShadowSampler), vec3(clamp(coords.xy, tileMin, tileMax), coords.z));
 
