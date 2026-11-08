@@ -149,9 +149,9 @@ public static class CliEditorCommands
     }
 
     [CliCommand("undo", "Undoes, or with --redo redoes, editor steps")]
-    public static object UndoCommand([CliArg("steps", "How many steps")] int steps = 1, [CliArg("redo", "Redo instead")] bool redo = false)
+    public static async Task<object> UndoCommand([CliArg("steps", "How many steps")] int steps = 1, [CliArg("redo", "Redo instead")] bool redo = false)
     {
-        if (Application.IsPlaying) throw new CliException("Undo is not available in play mode.");
+        await CliEdit.WaitForEditor();
 
         var done = new List<string>();
         for (int i = 0; i < steps; i++)
@@ -319,7 +319,7 @@ public static class CliEditorCommands
     }
 
     [CliCommand("go", "Creates, deletes, duplicates, renames, reparents, activates or moves GameObjects. One undo step per call")]
-    public static object Go(
+    public static async Task<object> Go(
         [CliArg("action")] GoAction action,
         [CliArg("target", "Ref of the object, or a comma list for delete, duplicate and active")] string target = "",
         [CliArg("name", "Name for create and rename")] string name = "",
@@ -333,6 +333,7 @@ public static class CliEditorCommands
         [CliArg("active", "For active: whether the objects are active")] bool active = true,
         [CliArg("index", "Sibling index for create and parent")] int index = -1)
     {
+        await CliEdit.WaitForEditor();
         Scene scene = CliRefs.Scene;
         switch (action)
         {
@@ -491,12 +492,13 @@ public static class CliEditorCommands
     }
 
     [CliCommand("component", "Adds (optionally setting --values), removes, or lists components. One undo step per call")]
-    public static object Component(
+    public static async Task<object> Component(
         [CliArg("action")] ComponentAction action,
         [CliArg("target", "GameObject ref, or a component ref like /Player:Rigidbody3D for remove")] string target,
         [CliArg("type", "Component type name for add")] string type = "",
         [CliArg("values", "JSON object of field path to value, applied after add")] string values = "")
     {
+        await CliEdit.WaitForEditor();
         switch (action)
         {
             case ComponentAction.List:
@@ -596,12 +598,13 @@ public static class CliEditorCommands
     }
 
     [CliCommand("set", "Writes field paths on a component or asset from JSON. A ref string sets a scene or asset reference. One undo step")]
-    public static object Set(
+    public static async Task<object> Set(
         [CliArg("target", "Component or asset ref")] string target,
         [CliArg("path", "Field path, for example speed or points[2].x")] string path = "",
         [CliArg("value", "JSON value. A bare word is a string, a ref sets a reference")] string value = "",
         [CliArg("values", "JSON object of field path to value, to set several at once")] string values = "")
     {
+        await CliEdit.WaitForEditor();
         List<(string Path, string Json)> list = ParseValues(values);
         if (path.Length > 0) list.Insert(0, (path, value));
         if (list.Count == 0) throw new CliException("Give --path and --value, or --values with a JSON object.");
@@ -613,11 +616,12 @@ public static class CliEditorCommands
     // ================================================================
 
     [CliCommand("menu", "Runs any editor menu item by path, such as GameObject/3D/Cube or Window/General/Console. Without --path lists them")]
-    public static object Menu(
+    public static async Task<object> Menu(
         [CliArg("path", "Menu path, or a prefix to list under")] string path = "",
         [CliArg("context", "GameObject the item acts on, for items that use one")] string context = "",
         [CliArg("list", "List the items under --path instead of running it")] bool list = false)
     {
+        await CliEdit.WaitForEditor();
         AppMenuItem? item = FindMenu(path);
         if (list || path.Length == 0 || item is { HasSubItems: true })
         {
@@ -885,12 +889,13 @@ public static class CliEditorCommands
     public enum PrefabAction { Create, Apply, Revert, Unpack, Overrides }
 
     [CliCommand("prefab", "Saves a GameObject as a prefab, or applies, reverts, unpacks or lists the overrides and additions of a prefab instance. Apply writes both into the prefab")]
-    public static object Prefab(
+    public static async Task<object> Prefab(
         [CliArg("action")] PrefabAction action,
         [CliArg("target", "GameObject ref")] string target,
         [CliArg("path", "Prefab path relative to Assets, for create")] string path = "",
         [CliArg("overwrite", "Replace an existing prefab on create")] bool overwrite = false)
     {
+        await CliEdit.WaitForEditor();
         GameObject go = CliRefs.ResolveGameObject(target);
         GameObject Root() => PrefabUtility.GetPrefabInstanceRoot(go) is { } root && root.IsValid()
             ? root : throw new CliException($"{CliRefs.PathOf(go)} is not part of a prefab instance.");

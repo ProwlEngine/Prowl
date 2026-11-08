@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 using Prowl.Echo;
 using Prowl.Editor.Core;
@@ -710,8 +711,21 @@ public static class CliEdit
     private static bool s_warnedThisPlay;
     private static bool s_wasPlaying;
 
+    /// <summary>
+    /// Waits for an editor interaction, such as a drag in the scene view, to end, so a command never splits or reverts it.
+    /// Commands wait before they resolve their targets. Simulated input is never held back, so a drag the CLI drives still ends.
+    /// </summary>
+    public static async Task WaitForEditor()
+    {
+        if (!await CliServer.WaitUntil(() => !Undo.InteractionActive, s_interactionTimeout))
+            throw new CliException("An editor interaction is in progress, such as a drag in the scene view. Try again once it ends.");
+    }
+
+    private static readonly TimeSpan s_interactionTimeout = TimeSpan.FromSeconds(20);
+
     public static void Run(string description, Action change)
     {
+        if (Undo.InteractionActive) throw new CliException("An editor interaction is in progress, such as a drag in the scene view. Try again once it ends.");
         WarnIfPlaying();
         Undo.IncrementGroup();
         change();
