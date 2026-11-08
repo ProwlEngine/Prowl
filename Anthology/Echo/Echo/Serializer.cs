@@ -160,6 +160,8 @@ public static class Serializer
         if (context.ExternalReferences != null)
         {
             object? key = context.ExternalReferences.GetReferenceKey(value);
+            if (ReferenceEquals(key, ExternalReference.Null))
+                return new EchoObject(EchoType.Null, null);
             if (key != null)
             {
                 var stub = EchoObject.NewCompound();

@@ -121,6 +121,32 @@ namespace Prowl.Echo.Test
             Assert.Null(clone.Target);
         }
 
+        private sealed class NullingResolver(HashSet<SceneObject> selection) : IExternalReferenceResolver
+        {
+            public object? GetReferenceKey(object value)
+                => value is SceneObject so && !selection.Contains(so) ? ExternalReference.Null : null;
+
+            public object? ResolveReference(object key, Type targetType) => null;
+        }
+
+        [Fact]
+        public void NullKeyWritesNullAndNeverInlinesTheObject()
+        {
+            var external = new SceneObject { Name = "Outsider" };
+            var root = new SceneObject { Name = "Root", Target = external, Alt = external };
+
+            var echo = Serializer.Serialize(root, new SerializationContext
+            {
+                ExternalReferences = new NullingResolver([root])
+            });
+
+            Assert.DoesNotContain("Outsider", echo.WriteToString());
+            var clone = Serializer.Deserialize<SceneObject>(echo)!;
+            Assert.Equal("Root", clone.Name);
+            Assert.Null(clone.Target);
+            Assert.Null(clone.Alt);
+        }
+
         [Fact]
         public void NoResolverCopiesEverything()
         {

@@ -15,7 +15,8 @@ public interface IExternalReferenceResolver
 {
     /// <summary>
     /// Called during serialization for every reference-type value. Return a stable key when
-    /// <paramref name="value"/> is external and should be linked rather than serialized; return null
+    /// <paramref name="value"/> is external and should be linked rather than serialized, return
+    /// <see cref="ExternalReference.Null"/> to write the reference as null, or return null
     /// to serialize it normally. Keys should be simple, self-contained values (a Guid, string, int,
     /// or small struct) so they round-trip on their own.
     /// </summary>
@@ -27,4 +28,11 @@ public interface IExternalReferenceResolver
     /// Return null if the reference can no longer be resolved.
     /// </summary>
     object? ResolveReference(object key, Type targetType);
+}
+
+/// <summary>Special results for <see cref="IExternalReferenceResolver.GetReferenceKey"/>.</summary>
+public static class ExternalReference
+{
+    /// <summary>Writes the reference as null, so the object is neither linked nor inlined.</summary>
+    public static readonly object Null = new();
 }
