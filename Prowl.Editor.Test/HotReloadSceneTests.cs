@@ -419,7 +419,7 @@ public class HotReloadSceneTests : EditorTestHarness
         GameObject instance = GameObject.InstantiateDetached(GetPrefab(guid)!)!;
         var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(instance);
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
 
         // Warm the cache: this is what builds and holds the baseline tree.
@@ -463,7 +463,7 @@ public class HotReloadSceneTests : EditorTestHarness
         GameObject instance = GameObject.InstantiateDetached(GetPrefab(guid)!)!;
         var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(instance);
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
 
         // Warm the field cache against v1.

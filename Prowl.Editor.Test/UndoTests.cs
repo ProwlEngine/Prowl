@@ -46,7 +46,7 @@ public class UndoTests : EditorTestHarness
         var go = new GameObject("GO");
         UndoComp comp = go.AddComponent<UndoComp>();
         scene.Add(go);
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
         return (scene, go, comp);
     }
@@ -86,7 +86,7 @@ public class UndoTests : EditorTestHarness
         var go = new GameObject("GO");
         AppliedComp comp = go.AddComponent<AppliedComp>();
         scene.Add(go);
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
 
         comp.Value = 10;
@@ -176,7 +176,7 @@ public class UndoTests : EditorTestHarness
     public void RegisterCreatedObject_Undo_Destroys_Redo_Recreates()
     {
         var scene = new SceneInstance(SceneMode.Edit);
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
         Undo.Clear();
 
@@ -262,7 +262,7 @@ public class UndoTests : EditorTestHarness
         string whileMissing = source.ActiveSection.CaptureTree().WriteToString().Replace(nameof(UndoLinkComp), "Ghost_DoesNotExist");
 
         SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(whileMissing)), SceneMode.Edit);
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
         GameObject loadedHolder = scene.Objects.Single(g => g.Name == "Holder");
 
@@ -282,7 +282,7 @@ public class UndoTests : EditorTestHarness
     public void RegisterDestroyObject_Undo_RestoresChildren()
     {
         var scene = new SceneInstance(SceneMode.Edit);
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
         Undo.Clear();
 
@@ -530,7 +530,7 @@ public class UndoTests : EditorTestHarness
     private static SceneInstance OpenScene()
     {
         var scene = new SceneInstance(SceneMode.Edit);
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
         Undo.ClearAll();
         EditorSceneManager.IsDirty = false;

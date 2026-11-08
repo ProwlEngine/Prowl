@@ -95,7 +95,7 @@ public partial class PrefabTests : EditorTestHarness
     {
         var scene = new SceneInstance(SceneMode.Edit);
         foreach (GameObject i in instances) scene.Add(i);
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
     }
 
@@ -816,7 +816,7 @@ public partial class PrefabTests : EditorTestHarness
         SetSceneCurrent();
         EditPrefabSource(prefabGuid, path, s => s.GetComponent<OverrideComp>()!.A = newValue);
 
-        SceneInstance.Load(SceneInstance.Instantiate(AssetDatabase.Load<Scene>(sceneGuid)!));
+        AssetDatabase.Load<Scene>(sceneGuid)!.Load().Wait();
         SceneInstance.ProcessPendingLoad();
         return SceneInstance.Main!.Roots.First();
     }
@@ -869,7 +869,7 @@ public partial class PrefabTests : EditorTestHarness
         SetSceneCurrent();
         EditPrefabSource(g, "ClosedKeep.prefab", s => s.GetComponent<OverrideComp>()!.A = 77);
 
-        SceneInstance.Load(SceneInstance.Instantiate(AssetDatabase.Load<Scene>(sceneGuid)!));
+        AssetDatabase.Load<Scene>(sceneGuid)!.Load().Wait();
         SceneInstance.ProcessPendingLoad();
 
         OverrideComp live = SceneInstance.Main!.Roots.First().GetComponent<OverrideComp>()!;
@@ -2777,7 +2777,7 @@ public partial class PrefabTests : EditorTestHarness
     {
         var scene = new SceneInstance(SceneMode.Edit);
         foreach (GameObject o in objects) scene.Add(o);
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
         return SceneInstance.Main!;
     }
@@ -3525,7 +3525,7 @@ public partial class PrefabTests : EditorTestHarness
     {
         EchoObject echo = scene.ActiveSection.CaptureTree();
         SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
-        SceneInstance.Load(reloaded);
+        SceneInstance.SwapMain(reloaded);
         SceneInstance.ProcessPendingLoad();
         return SceneInstance.Main!;
     }
@@ -4071,7 +4071,7 @@ public partial class PrefabTests : EditorTestHarness
 
         EchoObject echo = scene.ActiveSection.CaptureTree();
         SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
-        SceneInstance.Load(reloaded);
+        SceneInstance.SwapMain(reloaded);
         SceneInstance.ProcessPendingLoad();
 
         GameObject live = SceneInstance.Main!.Objects.First(o => o.Parent is null && o.IsPrefabInstance);

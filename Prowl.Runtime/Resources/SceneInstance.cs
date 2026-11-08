@@ -317,18 +317,15 @@ public class SceneInstance : EngineObject, ISerializable
     public static bool IsLoadPending => !ReferenceEquals(_pendingScene, null);
 
     /// <summary>
-    /// Queues a scene to become the current one, replacing the previously loaded scene. The swap
-    /// happens at the end of the frame, alongside the destroy queue, so the outgoing scene stays
-    /// usable for everything still running this frame.
+    /// Queues a world to be bound as <see cref="Main"/> at the end of the frame, disposing the one bound now. The editor
+    /// moves between its worlds this way.
     /// </summary>
-    public static void Load(SceneInstance scene)
+    internal static void SwapMain(SceneInstance scene)
     {
         MainThreadContext.AssertMainThread();
         if (ReferenceEquals(scene, null))
             throw new ArgumentNullException(nameof(scene));
 
-        _pendingLoad?.Cancel();
-        _pendingLoad = null;
         DropPendingScene(except: scene);
         _pendingScene = scene;
     }
@@ -342,45 +339,218 @@ public class SceneInstance : EngineObject, ISerializable
             dropped!.Dispose();
     }
 
-    /// <summary>Loads a stored scene and everything it uses, blocking, and makes it current at the end of the frame.</summary>
-    public static void Load(Scene asset)
-    {
-        using AssetGroup preload = AssetDatabase.Preload(asset);
-        preload.Wait();
-        Load(Instantiate(asset));
-    }
-
-    /// <summary>
-    /// Loads a stored scene and everything it uses in the background while the current scene keeps running, and
-    /// makes it current at the end of the frame the loading finishes on. A second load cancels this one.
-    /// </summary>
-    public static SceneLoad LoadAsync(Scene asset)
-    {
-        MainThreadContext.AssertMainThread();
-        _pendingLoad?.Cancel();
-        DropPendingScene(except: null);
-        _pendingLoad = new SceneLoad(asset);
-        return _pendingLoad;
-    }
-
-    private static SceneLoad? _pendingLoad;
-
-    /// <summary>Builds a live scene from a stored one, without making it current.</summary>
-    public static SceneInstance Instantiate(Scene asset, SceneMode mode = SceneMode.Game)
-    {
-        asset.Load();
-        SceneInstance scene = Instantiate(asset.ReadContent(), mode);
-        scene.Name = asset.Name;
-        scene.Source = asset;
-        return scene;
-    }
-
-    /// <summary>Builds a live world holding detached content, without making it current. The content's objects move into it.</summary>
+    /// <summary>Builds a dormant world holding detached content, without binding it anywhere. The content's objects move into it.</summary>
     public static SceneInstance Instantiate(SceneContent content, SceneMode mode = SceneMode.Game)
     {
         var scene = new SceneInstance(mode);
         scene.ActiveSection.Fill(content);
         return scene;
+    }
+
+    // Loads, additive loads and unloads, applied at the safe point in the order they were queued.
+    private static readonly List<object> s_queue = [];
+
+    /// <summary>True from the start of an engine frame until its safe point. Outside one, a waited load activates at once.</summary>
+    internal static bool FrameRunning;
+
+    /// <summary>The <see cref="Scene.Load"/> queued for this world, null when there is none.</summary>
+    public SceneLoad? PendingLoad
+    {
+        get
+        {
+            foreach (object entry in s_queue)
+                if (entry is SceneLoad { Kind: SceneLoadKind.Load } load && ReferenceEquals(load.Target, this) && !load.IsFinished)
+                    return load;
+            return null;
+        }
+    }
+
+    /// <summary>Fires when a section finished activating, inside its world.</summary>
+    public static event Action<SceneLoadedArgs>? Loaded;
+
+    /// <summary>Fires before a section's objects tear down, inside its world.</summary>
+    public static event Action<SceneSection>? Unloading;
+
+    /// <summary>Every load from instantiating until done, whose detached objects the asset walk keeps what they use for.</summary>
+    internal static IEnumerable<object> PendingContent
+    {
+        get
+        {
+            foreach (object entry in s_queue)
+                if (entry is SceneLoad { PendingObjects: { } objects })
+                    yield return objects;
+        }
+    }
+
+    internal static void Queue(SceneLoad load)
+    {
+        MainThreadContext.AssertMainThread();
+        // A Load replaces everything the world will hold, so it cancels the Load and the additive loads queued before it.
+        if (load.Kind == SceneLoadKind.Load)
+            foreach (object entry in s_queue.ToArray())
+                if (entry is SceneLoad { Kind: SceneLoadKind.Load or SceneLoadKind.Additive, IsApplying: false } earlier && ReferenceEquals(earlier.Target, load.Target))
+                {
+                    earlier.Cancel();
+                    s_queue.Remove(earlier);
+                }
+        s_queue.Add(load);
+    }
+
+    internal static void Queue(SceneSection unload) => s_queue.Add(unload);
+
+    internal static bool IsUnloadQueued(SceneSection section) => s_queue.Contains(section);
+
+    internal static int QueuedUnloads(SceneInstance world) => s_queue.Count(entry => entry is SceneSection section && ReferenceEquals(section.Instance, world));
+
+    /// <summary>
+    /// Applies queued loads and unloads that are ready, in the order they were queued. A world with an entry not yet
+    /// ready holds its later entries back, so an additive load queued after a Load never lands before it.
+    /// </summary>
+    internal static void ApplyQueue()
+    {
+        if (s_queue.Count == 0) return;
+        var blocked = new HashSet<SceneInstance>(ReferenceEqualityComparer.Instance);
+        foreach (object entry in s_queue.ToArray())
+        {
+            if (!s_queue.Contains(entry)) continue;
+            if (entry is SceneSection unload)
+            {
+                if (blocked.Contains(unload.Instance)) continue;
+                s_queue.Remove(unload);
+                if (unload.IsLoaded && unload.Instance._state is SceneState.Dormant or SceneState.Running)
+                    unload.Instance.ApplyUnload(unload);
+                continue;
+            }
+
+            var load = (SceneLoad)entry;
+            if (load.IsFinished) { s_queue.Remove(load); continue; }
+            SceneInstance? world = load.Target;
+            bool targeted = !ReferenceEquals(world, null);
+            if (targeted && blocked.Contains(world!)) continue;
+            if (targeted && world!._state is SceneState.Destroying or SceneState.Destroyed)
+            {
+                s_queue.Remove(load);
+                load.Cancel();
+                continue;
+            }
+            if (!load.Advance())
+            {
+                if (targeted) blocked.Add(world!);
+                continue;
+            }
+
+            // Still queued while it activates, so its detached content is a root of the residency walk.
+            load.IsApplying = true;
+            try { load.Complete(Activate(load)); }
+            catch (Exception e) { load.Fail(e); }
+            finally { s_queue.Remove(load); }
+        }
+    }
+
+    private static SceneSection Activate(SceneLoad load)
+    {
+        // Everything the level uses is resident before any of it enables, so OnEnable never sees a loading asset. The
+        // detached content is still a walk root here.
+        try { AssetDatabase.LoadEverythingReached(); }
+        catch (Exception e) { Debug.LogException($"[Scene] Loading what '{load.Scene.Name}' uses threw", e); }
+
+        SceneContent content = load.TakeContent();
+
+        SceneSection section;
+        if (load.Kind == SceneLoadKind.Open)
+        {
+            SceneInstance world = Create(load.Scene.Name, load.OpenMode);
+            section = world.ActiveSection;
+            section.Source = load.Scene;
+            section.Fill(content);
+        }
+        else
+        {
+            SceneInstance world = load.Target!;
+            section = new SceneSection(world, load.Scene.Name, persistent: false) { Source = load.Scene };
+            if (load.Kind == SceneLoadKind.Load)
+            {
+                // Torn down while still active, so a death effect spawned in OnDisable goes with them.
+                List<SceneSection> leaving = [.. world._sections.Where(s => !s.IsPersistent)];
+                world.TearDownSections(leaving);
+                world._sections.Add(section);
+                world._activeSection = section;
+            }
+            else
+            {
+                world._sections.Add(section);
+            }
+            section.Fill(content);
+        }
+
+        Raise(Loaded, section.Instance, handler => handler(new SceneLoadedArgs(section, load.Kind == SceneLoadKind.Additive)), nameof(Loaded));
+
+        if (load.Options.UnloadUnusedAssets) AssetDatabase.UnloadUnused();
+        else AssetDatabase.Walk();
+        return section;
+    }
+
+    private void ApplyUnload(SceneSection section)
+    {
+        bool wasActive = ReferenceEquals(_activeSection, section);
+        int index = _sections.IndexOf(section);
+        TearDownSections([section]);
+        if (wasActive)
+        {
+            // The next loaded section in order, or the previous one when it was the last.
+            SceneSection? next = null;
+            for (int i = index; i < _sections.Count && next == null; i++)
+                if (!_sections[i].IsPersistent) next = _sections[i];
+            for (int i = Math.Min(index, _sections.Count) - 1; i >= 0 && next == null; i--)
+                if (!_sections[i].IsPersistent) next = _sections[i];
+            if (next != null) ActiveSection = next;
+        }
+        AssetDatabase.Walk();
+    }
+
+    /// <summary>
+    /// Tears the sections' objects down inside this world in three passes, every OnDisable, then every
+    /// OnRemovedFromScene, then every dispose, each object guarded on its own. Anything created into a section while
+    /// it tears down, or destroyed meanwhile, goes in the same passes. Then the sections leave the world.
+    /// </summary>
+    private void TearDownSections(List<SceneSection> sections)
+    {
+        using SceneScope active = Enter(this);
+        foreach (SceneSection section in sections)
+            Raise(Unloading, this, handler => handler(section), nameof(Unloading));
+
+        for (int round = 0; round < 8; round++)
+        {
+            List<GameObject> objects = [];
+            foreach (SceneSection section in sections)
+                foreach (GameObject root in section.LiveRoots.ToArray())
+                    Collect(root);
+            if (objects.Count == 0) break;
+
+            if (_isActive)
+                foreach (GameObject g in objects)
+                    foreach (Component c in g._components.ToArray())
+                        if (!c.IsDisposed && c.HasBeenEnabled && c.EnabledInHierarchy)
+                            Guarded(c, "OnDisable", c.InternalOnDisable);
+            foreach (GameObject g in objects)
+                foreach (Component c in g._components.ToArray())
+                    if (!c.IsDisposed) Guarded(c, "OnRemovedFromScene", c.OnRemovedFromScene);
+            foreach (GameObject g in objects)
+                if (!g.IsDisposed) Guarded(g, "Dispose", g.Dispose);
+            _hasDisposedObjects = true;
+            Flush();
+
+            void Collect(GameObject go)
+            {
+                objects.Add(go);
+                foreach (GameObject child in go.Children)
+                    if (!child.IsDisposed) Collect(child);
+            }
+        }
+
+        foreach (SceneSection section in sections)
+            RemoveSection(section);
+        InvalidateProbeVolume();
     }
 
     /// <summary>The scene the active section was loaded from, if any.</summary>
@@ -398,11 +568,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// </summary>
     internal static void ProcessPendingLoad()
     {
-        if (_pendingLoad is { IsReady: true } ready)
-        {
-            _pendingLoad = null;
-            _pendingScene = ready.Activate();
-        }
+        ApplyQueue();
         if (ReferenceEquals(_pendingScene, null)) return;
 
         SceneInstance next = _pendingScene;
@@ -480,8 +646,9 @@ public class SceneInstance : EngineObject, ISerializable
     internal static void Shutdown()
     {
         _pendingScene = null;
-        _pendingLoad?.Cancel();
-        _pendingLoad = null;
+        foreach (object entry in s_queue.ToArray())
+            if (entry is SceneLoad load) load.Cancel();
+        s_queue.Clear();
 
         SceneInstance? main = _main;
         _main = null;
@@ -1576,6 +1743,20 @@ public sealed class SceneSection
 
     /// <summary>Cancelled when this section unloads, for awaits that must not outlive the level.</summary>
     public CancellationToken UnloadToken => _unload.Token;
+
+    /// <summary>
+    /// Unloads this section at the next safe point, in the same queue as loads. The persistent section and the last
+    /// other section of a world cannot be unloaded: Load is how a world swaps its only level.
+    /// </summary>
+    public void Unload()
+    {
+        MainThreadContext.AssertMainThread();
+        if (IsPersistent) throw new InvalidOperationException("The persistent section never unloads.");
+        if (!IsLoaded || SceneInstance.IsUnloadQueued(this)) return;
+        int remaining = Instance.Sections.Count(s => !s.IsPersistent) - SceneInstance.QueuedUnloads(Instance);
+        if (remaining <= 1) throw new InvalidOperationException($"'{Name}' is the last section of '{Instance.Name}'. Load another scene into it instead.");
+        SceneInstance.Queue(this);
+    }
 
     internal void MarkUnloaded()
     {

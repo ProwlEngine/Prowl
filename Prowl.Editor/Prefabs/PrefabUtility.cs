@@ -1209,6 +1209,11 @@ public static partial class PrefabUtility
     /// prefab used to have, and <see cref="ReconcileInstance"/>, which every scene save runs, then
     /// reads each of those differences as an edit the instance made and pins it as an override.
     /// </summary>
+    internal static void OnSectionLoaded(SceneLoadedArgs args)
+    {
+        if (ReferenceEquals(args.Section.Instance, SceneInstance.Main)) OnSceneLoaded();
+    }
+
     internal static void OnSceneLoaded()
     {
         if (Application.IsPlaying) return;

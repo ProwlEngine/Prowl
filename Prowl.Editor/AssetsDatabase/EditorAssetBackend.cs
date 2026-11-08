@@ -106,6 +106,8 @@ public class EditorAssetBackend : AssetBackend
         // scene opened afterwards has to catch up on whatever changed while it was closed.
         Runtime.Resources.SceneInstance.OnSceneLoaded -= PrefabUtility.OnSceneLoaded;
         Runtime.Resources.SceneInstance.OnSceneLoaded += PrefabUtility.OnSceneLoaded;
+        Runtime.Resources.SceneInstance.Loaded -= PrefabUtility.OnSectionLoaded;
+        Runtime.Resources.SceneInstance.Loaded += PrefabUtility.OnSectionLoaded;
 
         // Remove any ".meta.tmp" files left behind by a crash/power-loss mid-write before
         // ScanAssets runs, so it doesn't pick them up and import them as real asset files.

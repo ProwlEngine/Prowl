@@ -21,7 +21,7 @@ public class HeadlessRunTests
 
         public CountingHeadlessGame(SceneInstance scene) => _scene = scene;
 
-        public override void Initialize() => SceneInstance.Load(_scene);
+        public override void Initialize() => SceneInstance.SwapMain(_scene);
         public override void OnUpdate() => UpdateCount++;
     }
 

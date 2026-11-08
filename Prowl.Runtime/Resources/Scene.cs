@@ -4,9 +4,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Prowl.Echo;
+using Prowl.Runtime.Tasks;
 using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 
@@ -14,7 +17,7 @@ namespace Prowl.Runtime.Resources;
 
 /// <summary>
 /// A scene as stored in a .scene file. Holding one keeps only its stored data loaded, not what the scene uses:
-/// <see cref="SceneInstance.Load(Scene)"/> and <see cref="AssetDatabase.Preload"/> load that.
+/// <see cref="Load"/> and <see cref="AssetDatabase.Preload"/> load that.
 /// </summary>
 public sealed class Scene : Asset
 {
@@ -31,6 +34,24 @@ public sealed class Scene : Asset
     public IReadOnlyList<Asset> ReferencedAssets
     {
         get { EnsureLoaded(); return StoredTree.ReferencedAssets(_data); }
+    }
+
+    /// <summary>Replaces <paramref name="into"/>'s content with this scene, Main when none is given, at the next safe point.</summary>
+    public SceneLoad Load(SceneInstance? into = null, LoadOptions options = default)
+        => Queue(new SceneLoad(this, SceneLoadKind.Load, ReferenceEquals(into, null) ? SceneInstance.Main : into, SceneMode.Game, options));
+
+    /// <summary>Adds this scene as a section of <paramref name="into"/>, Main when none is given, at the next safe point.</summary>
+    public SceneLoad LoadAdditive(SceneInstance? into = null, LoadOptions options = default)
+        => Queue(new SceneLoad(this, SceneLoadKind.Additive, ReferenceEquals(into, null) ? SceneInstance.Main : into, SceneMode.Game, options));
+
+    /// <summary>Creates a new dormant world from this scene, with it as the active section. The caller activates it.</summary>
+    public SceneLoad Open(SceneMode mode = SceneMode.Game, LoadOptions options = default)
+        => Queue(new SceneLoad(this, SceneLoadKind.Open, null, mode, options));
+
+    private static SceneLoad Queue(SceneLoad load)
+    {
+        if (!load.IsFinished) SceneInstance.Queue(load);
+        return load;
     }
 
     /// <summary>
@@ -225,47 +246,227 @@ public sealed class LightmapBakeSettings
     public bool IgnoreAlbedo = false;
 }
 
-/// <summary>A stored scene loading in the background, made current at the end of the frame it finishes on.</summary>
+/// <summary>Where a <see cref="SceneLoad"/> is.</summary>
+public enum SceneLoadPhase
+{
+    /// <summary>The assets the level uses load in the background.</summary>
+    Preloading,
+    /// <summary>The stored content becomes detached objects.</summary>
+    Instantiating,
+    /// <summary>Ready, held back by <see cref="SceneLoad.AllowActivation"/>.</summary>
+    WaitingForActivation,
+    /// <summary>Queued for the next safe point.</summary>
+    Activating,
+    Done,
+    Failed,
+    Cancelled,
+}
+
+internal enum SceneLoadKind { Load, Additive, Open }
+
+/// <summary>How a scene loads.</summary>
+public struct LoadOptions
+{
+    /// <summary>Start with <see cref="SceneLoad.AllowActivation"/> false, for a "press any key" screen.</summary>
+    public bool HoldActivation;
+    /// <summary>After activation, free everything nothing reaches at once, without the grace period.</summary>
+    public bool UnloadUnusedAssets;
+}
+
+/// <summary>A section that finished activating, and whether it was loaded additively.</summary>
+public readonly record struct SceneLoadedArgs(SceneSection Section, bool Additive);
+
+/// <summary>A scene load that failed: the asset was missing or unreadable, or instantiating it threw.</summary>
+public sealed class SceneLoadException(string message, Exception? inner = null) : Exception(message, inner);
+
+/// <summary>
+/// A scene loading. It completes exactly once: done, failed or cancelled. Awaiting it gives the loaded section, throws a
+/// <see cref="SceneLoadException"/> when it failed, and an <see cref="OperationCanceledException"/> when it was cancelled.
+/// </summary>
 public sealed class SceneLoad
 {
-    private readonly Scene _asset;
-    private readonly AssetGroup _group;
-    private readonly TaskCompletionSource<SceneInstance?> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private bool _allowed = true;
+    private readonly TaskCompletionSource<SceneSection> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly CancellationTokenSource _cancel = new();
+    private AssetGroup? _group;
+    private SceneContent? _content;
 
-    internal SceneLoad(Scene asset)
+    internal SceneLoad(Scene scene, SceneLoadKind kind, SceneInstance? target, SceneMode openMode, LoadOptions options)
     {
-        _asset = asset;
-        _group = AssetDatabase.Preload(asset);
+        Scene = scene;
+        Kind = kind;
+        Target = target;
+        OpenMode = openMode;
+        Options = options;
+        AllowActivation = !options.HoldActivation;
+        try { _group = AssetDatabase.Preload(scene); }
+        catch (Exception e) { Fail(e); }
     }
 
-    public float Progress => _group.Progress;
-    public bool IsDone => _completion.Task.IsCompleted;
-    public SceneInstance? Scene { get; private set; }
-    public System.Runtime.CompilerServices.TaskAwaiter<SceneInstance?> GetAwaiter() => _completion.Task.GetAwaiter();
+    public Scene Scene { get; }
+    internal SceneLoadKind Kind { get; }
+    internal SceneInstance? Target { get; }
+    internal SceneMode OpenMode { get; }
+    internal LoadOptions Options { get; }
 
-    /// <summary>Keeps a finished load waiting until <see cref="Allow"/>, for a "press any key" screen.</summary>
-    public bool WaitForActivation
+    public SceneLoadPhase Phase { get; private set; }
+
+    /// <summary>How far the load is, 0 to 1. Preloading counts for most of it.</summary>
+    public float Progress => Phase switch
     {
-        get => !_allowed;
-        set => _allowed = !value;
+        SceneLoadPhase.Preloading => (_group?.Progress ?? 0f) * 0.9f,
+        SceneLoadPhase.Instantiating => 0.9f,
+        _ => 1f,
+    };
+
+    public Exception? Error { get; private set; }
+
+    /// <summary>The loaded section once done. Its <see cref="SceneSection.Instance"/> is the world, a new one for an open.</summary>
+    public SceneSection? Section { get; private set; }
+
+    /// <summary>False holds a ready load back until it is set.</summary>
+    public bool AllowActivation { get; set; }
+
+    // True while its activation runs, when a Load queued from a callback must not cancel it.
+    internal bool IsApplying { get; set; }
+
+    internal bool IsFinished => Phase is SceneLoadPhase.Done or SceneLoadPhase.Failed or SceneLoadPhase.Cancelled;
+
+    // The detached objects from instantiating until activation, a root of the asset walk.
+    internal GameObject[]? PendingObjects => _content?.Objects;
+
+    /// <summary>Cancels the load unless it is done. Its detached objects go away.</summary>
+    public void Cancel()
+    {
+        if (IsFinished) return;
+        Phase = SceneLoadPhase.Cancelled;
+        Release();
+        _cancel.Cancel();
+        _completion.TrySetCanceled(_cancel.Token);
     }
 
-    public void Allow() => _allowed = true;
-
-    internal bool IsReady => _allowed && _group.IsDone;
-
-    internal SceneInstance Activate()
+    /// <summary>
+    /// Blocks until the load is ready to activate. Activation still happens at the next safe point, which outside an
+    /// engine frame is at once.
+    /// </summary>
+    public void Wait()
     {
-        Scene = SceneInstance.Instantiate(_asset);
-        _group.Dispose();
-        _completion.TrySetResult(Scene);
-        return Scene;
+        MainThreadContext.AssertMainThread();
+        if (IsFinished) return;
+        _group?.Wait();
+        Advance();
+        if (!SceneInstance.FrameRunning) SceneInstance.ApplyQueue();
     }
 
-    internal void Cancel()
+    /// <summary>Awaits the load, giving up with an <see cref="OperationCanceledException"/> when <paramref name="cancellation"/> fires.</summary>
+    public Task<SceneSection> WaitAsync(CancellationToken cancellation) => _completion.Task.WaitAsync(cancellation);
+
+    public TaskAwaiter<SceneSection> GetAwaiter() => _completion.Task.GetAwaiter();
+
+    /// <summary>Moves the load on as far as it can go now. True once it is ready to activate.</summary>
+    internal bool Advance()
     {
-        _group.Dispose();
-        _completion.TrySetResult(null);
+        if (Phase == SceneLoadPhase.Preloading)
+        {
+            if (_group is { IsDone: false }) return false;
+            if (Scene.IsMissing || Scene.State is AssetState.Failed or AssetState.Missing)
+            {
+                Fail(new SceneLoadException($"The scene '{Scene.Name}' is missing or could not be read."));
+                return false;
+            }
+            Phase = SceneLoadPhase.Instantiating;
+        }
+
+        if (Phase == SceneLoadPhase.Instantiating)
+        {
+            try
+            {
+                if (Scene.Data == null) throw new SceneLoadException($"The scene '{Scene.Name}' holds no stored content.");
+                _content = Scene.ReadContent();
+            }
+            catch (Exception e)
+            {
+                Fail(e as SceneLoadException ?? new SceneLoadException($"Instantiating '{Scene.Name}' threw.", e));
+                return false;
+            }
+            Phase = SceneLoadPhase.WaitingForActivation;
+        }
+
+        if (Phase == SceneLoadPhase.WaitingForActivation && AllowActivation)
+            Phase = SceneLoadPhase.Activating;
+        return Phase == SceneLoadPhase.Activating;
     }
+
+    internal SceneContent TakeContent()
+    {
+        SceneContent content = _content ?? throw new InvalidOperationException("The load has no content to activate.");
+        _content = null;
+        return content;
+    }
+
+    internal void Complete(SceneSection section)
+    {
+        Section = section;
+        Phase = SceneLoadPhase.Done;
+        Release();
+        _completion.TrySetResult(section);
+    }
+
+    internal void Fail(Exception error)
+    {
+        if (IsFinished) return;
+        Error = error;
+        Phase = SceneLoadPhase.Failed;
+        Release();
+        _completion.TrySetException(error);
+        Debug.LogException($"[Scene] Loading '{Scene.Name}' failed", error);
+    }
+
+    private void Release()
+    {
+        _group?.Dispose();
+        _group = null;
+        _content?.DisposeObjects();
+        _content = null;
+    }
+
+    public override string ToString() => $"{Kind} {Scene.Name} ({Phase})";
+}
+
+/// <summary>Loading a scene through a soft reference, as through the <see cref="Scene"/> it names.</summary>
+public static class SceneReferenceExtensions
+{
+    public static SceneLoad Load(this AssetRef<Scene> scene, SceneInstance? into = null, LoadOptions options = default) => Resolve(scene).Load(into, options);
+
+    public static SceneLoad LoadAdditive(this AssetRef<Scene> scene, SceneInstance? into = null, LoadOptions options = default) => Resolve(scene).LoadAdditive(into, options);
+
+    public static SceneLoad Open(this AssetRef<Scene> scene, SceneMode mode = SceneMode.Game, LoadOptions options = default) => Resolve(scene).Open(mode, options);
+
+    private static Scene Resolve(AssetRef<Scene> scene)
+    {
+        Scene? found = AssetDatabase.Get<Scene>(scene.AssetID);
+        return found.IsValid() ? found! : throw new SceneLoadException($"No scene is stored under {scene.AssetID}.");
+    }
+}
+
+/// <summary>The scenes a build ships, in build order, and lookups by name.</summary>
+public static class SceneBuild
+{
+    private static Scene[] s_list = [];
+
+    /// <summary>The scenes in the build, in order. The player sets it from its manifest, the editor from the build settings.</summary>
+    public static IReadOnlyList<Scene> List => s_list;
+
+    internal static void Set(IEnumerable<Scene> scenes) => s_list = [.. scenes];
+
+    /// <summary>The scene in the build list with this name, or whose path ends with it.</summary>
+    public static Scene? Find(string nameOrPath)
+    {
+        foreach (Scene scene in s_list)
+            if (string.Equals(scene.Name, nameOrPath, StringComparison.OrdinalIgnoreCase))
+                return scene;
+        return null;
+    }
+
+    /// <summary>Where a scene is in the build list, -1 when it is not in it.</summary>
+    public static int IndexOf(Scene scene) => Array.IndexOf(s_list, scene);
 }

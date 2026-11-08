@@ -160,7 +160,7 @@ public static class EditorSceneManager
     /// </summary>
     public static void CreateAndLoadDefaultScene()
     {
-        SceneInstance.Load(CreateDefaultScene());
+        SceneInstance.SwapMain(CreateDefaultScene());
         Undo.Clear();
         Debug.Log("Created default scene.");
     }
@@ -197,7 +197,7 @@ public static class EditorSceneManager
             SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(echo, ctx), SceneMode.Edit);
             scene.Name = Path.GetFileNameWithoutExtension(relativePath);
             scene.Source = SceneAssetAt(relativePath);
-            SceneInstance.Load(scene);
+            SceneInstance.SwapMain(scene);
             CurrentScenePath = relativePath;
             IsDirty = false;
             Undo.Clear();

@@ -109,8 +109,8 @@ public abstract class Game
             BuiltInAssets.Initialize();
             AssetLoader.SetMainThread();
 
+            SceneInstance.Main = CreateMainWorld();
             Initialize();
-            BindMainIfUnbound();
         }
 
         Window.Update += (delta) =>
@@ -126,6 +126,7 @@ public abstract class Game
                 AudioContext.Update();
 
                 Time.AdvanceFrame();
+                SceneInstance.FrameRunning = true;
 
                 UpdateInputActions();
 
@@ -193,15 +194,17 @@ public abstract class Game
                 // update, render and GUI, and is torn down here where nothing is mid-callback.
                 EngineObject.ProcessDestroyed();
 
-                // Then the scene swap, so a load requested this frame tears the outgoing scene down
-                // here rather than under whatever was still running.
+                // Then queued loads and unloads, so one requested this frame tears its sections down here rather
+                // than under whatever was still running.
                 SceneInstance.ProcessPendingLoad();
+                SceneInstance.FrameRunning = false;
 
                 // Frees what nothing reaches any more, after rendering, so no draw in flight still uses it.
                 AssetDatabase.EndFrame();
             }
             catch (Exception e)
             {
+                SceneInstance.FrameRunning = false;
                 ReportLoopFailure("Render", e);
             }
         };
@@ -280,8 +283,8 @@ public abstract class Game
         // Registers built-in asset loaders (no GPU work happens until something resolves them).
         BuiltInAssets.Initialize();
         AssetLoader.SetMainThread();
+        SceneInstance.Main = CreateMainWorld();
         Initialize();
-        BindMainIfUnbound();
 
         Debug.LogSuccess("Headless initialization complete");
 
@@ -300,6 +303,7 @@ public abstract class Game
             while (!_headlessQuitRequested)
             {
                 Time.AdvanceFrame();
+                SceneInstance.FrameRunning = true;
 
                 UpdateInputActions();
 
@@ -310,9 +314,9 @@ public abstract class Game
                 // No render phase here, so the end of the simulation step is the end of the frame.
                 EngineObject.ProcessDestroyed();
 
-                // Then the scene swap, so a load requested this frame tears the outgoing scene down
-                // here rather than under whatever was still running.
+                // Then queued loads and unloads, applied where nothing is mid callback.
                 SceneInstance.ProcessPendingLoad();
+                SceneInstance.FrameRunning = false;
 
                 // Frees what nothing reaches any more, after rendering, so no draw in flight still uses it.
                 AssetDatabase.EndFrame();
@@ -417,14 +421,16 @@ public abstract class Game
         }
     }
 
-    // A game always has a world: one that loaded nothing yet draws as an empty presented one.
-    private static void BindMainIfUnbound()
+    /// <summary>
+    /// The world bound as Main before <see cref="Initialize"/> and kept until shutdown: a running, presented game world
+    /// that levels load into. The editor makes its edit world instead.
+    /// </summary>
+    protected virtual SceneInstance CreateMainWorld()
     {
-        if (SceneInstance.HasMain) return;
         SceneInstance main = SceneInstance.Create("Main");
         main.Present = true;
         main.Activate();
-        SceneInstance.Main = main;
+        return main;
     }
 
     public virtual void Initialize() { }

@@ -764,6 +764,8 @@ public static class AssetDatabase
 
         foreach (SceneInstance scene in SceneInstance.Live)
             s_walker.Visit(scene);
+        foreach (object pending in SceneInstance.PendingContent)
+            s_walker.Visit(pending);
 
         lock (s_holdLock)
         {

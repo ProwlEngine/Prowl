@@ -47,7 +47,7 @@ public class Spawner : Component
 
 ## What keeps an asset loaded
 
-A background walk starts from every live scene, `DontDestroyOnLoad` objects, held assets, roots added with `AssetDatabase.AddRoot`, and statics marked `[HeldStatic]`. It follows instance fields (collections too). Anything it reaches stays loaded. An asset it does not reach for two walks and longer than the grace period (10 seconds by default) is unloaded.
+A background walk starts from every live world, loads in progress, held assets, roots added with `AssetDatabase.AddRoot`, and statics marked `[HeldStatic]`. It follows instance fields (collections too). Anything it reaches stays loaded. An asset it does not reach for two walks and longer than the grace period (10 seconds by default) is unloaded.
 
 The walk does **not** see static fields (unless `[HeldStatic]`), lambda captures, delegates or locals in async methods. An asset kept only there will unload. Put it in a field, mark the static `[HeldStatic]`, or call `AssetDatabase.Hold(asset, owner)`, which holds it until `owner` is garbage collected or you call `Release`.
 
@@ -78,7 +78,7 @@ Builds only ship the scenes in the build, everything they reference (plain field
 - Spawn a prefab with `GameObject.Instantiate(prefab)`, with overloads for position, rotation, parent and scene.
 - Prefabs do not nest. A prefab instance inside another prefab is flattened into plain objects when the outer prefab is saved.
 - The prefab a model imports as is read only. To change it, instantiate it, edit the instance, and save a new prefab with `prefab create`.
-- `Scene` is the saved scene asset. `SceneInstance` is the live world. `SceneInstance.Load(scene)` blocks while it loads everything the scene uses. `SceneInstance.LoadAsync(scene)` returns an awaitable `SceneLoad` with `Progress` and swaps the scene in at the end of a frame.
+- `Scene` is the saved scene asset. `SceneInstance` is a live world. `level.Load()` replaces Main's content with the level, `level.LoadAdditive()` adds it as another section, `level.Open()` makes a new dormant world from it. Each returns a `SceneLoad`: await it for the loaded `SceneSection`, read `Phase` and `Progress`, or call `Wait()` to block until it is ready. Loads apply at the end of the frame. `AssetRef<Scene>` has the same three methods.
 
 ## Creating and saving assets (editor code only)
 

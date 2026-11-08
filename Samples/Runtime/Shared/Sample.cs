@@ -87,7 +87,7 @@ public abstract class StationGame : Game
         // imported the first time something asks for them by path.
         AssetDatabase.Mount(new SourceAssetBackend(new FolderAssetSource(Path.Combine(AppContext.BaseDirectory, "Assets"))));
 
-        SampleScene = new SceneInstance();
+        SampleScene = SceneInstance.Main;
 
         CameraObject = new GameObject("Main Camera") { Tag = "Main Camera" };
         MainCamera = CameraObject.AddComponent<Camera>();
@@ -111,7 +111,6 @@ public abstract class StationGame : Game
         if (_captureFolder != null) FixParticleSeeds();
 
         GoToStation(_captureStation == null ? 0 : Math.Max(Stations.FindIndex(s => s.Name.Equals(_captureStation, StringComparison.OrdinalIgnoreCase)), 0));
-        SceneInstance.Load(SampleScene);
     }
 
     /// <summary>Creates the sample's content. Called once, before the scene loads.</summary>

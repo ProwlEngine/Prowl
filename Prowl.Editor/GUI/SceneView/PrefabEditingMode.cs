@@ -177,7 +177,7 @@ public static class PrefabEditingMode
         lightGo.AddComponent<DirectionalLight>();
         editScene.Add(lightGo);
 
-        SceneInstance.Load(editScene);
+        SceneInstance.SwapMain(editScene);
         _savedSceneUndo = Undo.PushContext();
 
         EditingPrefabGuid = prefabGuid;
@@ -354,7 +354,7 @@ public static class PrefabEditingMode
             SceneInstance restoredScene = SceneInstance.Instantiate(SceneContent.Read(_savedSceneState), SceneMode.Edit);
             restoredScene.Name = OriginalSceneName ?? "";
             restoredScene.Source = _savedSceneSource;
-            SceneInstance.Load(restoredScene);
+            SceneInstance.SwapMain(restoredScene);
             EditorSceneManager.CurrentScenePath = _savedScenePath;
             return true;
         }

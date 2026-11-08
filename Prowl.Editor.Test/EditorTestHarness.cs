@@ -83,7 +83,7 @@ public abstract class EditorTestHarness : IDisposable
         {
             var scene = new SceneInstance(SceneMode.Edit);
             scene.Add(source);
-            SceneInstance.Load(scene);
+            SceneInstance.SwapMain(scene);
             SceneInstance.ProcessPendingLoad();
         }
 

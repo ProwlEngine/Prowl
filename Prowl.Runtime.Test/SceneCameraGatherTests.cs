@@ -226,12 +226,12 @@ public class SceneCameraGatherTests : RuntimeTestBase
         GameObject keeper = CreateGameObject("Keeper");
         keeper.AddComponent<Camera>();
         first.Add(keeper);
-        SceneInstance.Load(first);
+        SceneInstance.SwapMain(first);
         SceneInstance.ProcessPendingLoad();
         keeper.Persistent = true;
 
         SceneInstance second = CreateScene();
-        SceneInstance.Load(second);
+        SceneInstance.SwapMain(second);
         SceneInstance.ProcessPendingLoad();
 
         Assert.Single(second.GatherActiveCameras());
@@ -244,13 +244,13 @@ public class SceneCameraGatherTests : RuntimeTestBase
         GameObject keeper = CreateGameObject("Keeper");
         Camera cam = keeper.AddComponent<Camera>();
         first.Add(keeper);
-        SceneInstance.Load(first);
+        SceneInstance.SwapMain(first);
         SceneInstance.ProcessPendingLoad();
         cam.Enabled = false;
         keeper.Persistent = true;
 
         SceneInstance second = CreateScene();
-        SceneInstance.Load(second);
+        SceneInstance.SwapMain(second);
         SceneInstance.ProcessPendingLoad();
         cam.Enabled = true;
 
@@ -276,7 +276,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
         scene.Add(first);
         scene.Add(second);
 
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
 
         Assert.Same(cam, reader.Seen);
@@ -373,7 +373,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     public void Main_ReadsTheCurrentScene_AndForgetsADestroyedCamera()
     {
         SceneInstance scene = CreateScene();
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
 
         GameObject first = CreateGameObject("First");

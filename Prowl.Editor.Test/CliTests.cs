@@ -373,7 +373,7 @@ public class CliEditorCommandTests : EditorTestHarness
 
         Undo.Clear();
         _scene = new SceneInstance(SceneMode.Edit);
-        SceneInstance.Load(_scene);
+        SceneInstance.SwapMain(_scene);
         SceneInstance.ProcessPendingLoad();
     }
 
@@ -715,7 +715,7 @@ public class CliAssetCommandTests : EditorTestHarness
 
         Undo.Clear();
         _scene = new SceneInstance();
-        SceneInstance.Load(_scene);
+        SceneInstance.SwapMain(_scene);
         SceneInstance.ProcessPendingLoad();
     }
 
@@ -869,7 +869,7 @@ public class CliGraphCommandTests : EditorTestHarness
                 CliCommands.Scan(method);
         Undo.Clear();
         var scene = new SceneInstance(SceneMode.Edit);
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
     }
 

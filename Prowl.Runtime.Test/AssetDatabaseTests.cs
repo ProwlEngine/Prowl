@@ -815,7 +815,7 @@ public class AssetDatabaseTests : RuntimeTestBase
         authored.Dispose();
         Guid sceneId = _backend.Add(stored, "Level.scene");
 
-        SceneInstance.Load(AssetDatabase.Get<Scene>(sceneId)!);
+        AssetDatabase.Get<Scene>(sceneId)!.Load().Wait();
         SceneInstance.ProcessPendingLoad();
         try
         {

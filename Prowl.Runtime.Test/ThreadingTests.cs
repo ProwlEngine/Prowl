@@ -736,7 +736,7 @@ public class ThreadingTests : RuntimeTestBase
         GameObject oldObject = CreateGameObject("Old");
         first.Add(oldObject);
         SessionProbe outgoing = oldObject.AddComponent<SessionProbe>();
-        SceneInstance.Load(first);
+        SceneInstance.SwapMain(first);
         SceneInstance.ProcessPendingLoad();
         CancellationToken firstSession = GameTask.SessionToken;
 
@@ -745,7 +745,7 @@ public class ThreadingTests : RuntimeTestBase
         second.Add(newObject);
         SessionProbe incoming = newObject.AddComponent<SessionProbe>();
         SceneInstance.EndSessionOnSwap = true;
-        SceneInstance.Load(second);
+        SceneInstance.SwapMain(second);
         SceneInstance.ProcessPendingLoad();
 
         Assert.Equal(firstSession, outgoing.DisabledIn);
@@ -764,7 +764,7 @@ public class ThreadingTests : RuntimeTestBase
         SceneInstance doomed = CreateScene();
 
         SceneInstance.EndSessionOnSwap = true;
-        SceneInstance.Load(doomed);
+        SceneInstance.SwapMain(doomed);
         doomed.Dispose();
         SceneInstance.ProcessPendingLoad();
 
@@ -881,7 +881,7 @@ public class ThreadingTests : RuntimeTestBase
         Assert.Throws<InvalidOperationException>(() => OffThread(() => go.AddComponent<PhysicsListener>()));
         Assert.Throws<InvalidOperationException>(() => OffThread(() => scene.Add(loose)));
         Assert.Throws<InvalidOperationException>(() => OffThread(() => scene.Remove(go)));
-        Assert.Throws<InvalidOperationException>(() => OffThread(() => SceneInstance.Load(next)));
+        Assert.Throws<InvalidOperationException>(() => OffThread(() => SceneInstance.SwapMain(next)));
 
         Assert.True(go.Enabled);
         Assert.Null(go.Parent);

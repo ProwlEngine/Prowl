@@ -1996,7 +1996,7 @@ public class EditorApplication : Game
         if (xr.StartInPlayMode) XR.Start(xr.TrackingOrigin);
 
         // Load with full lifecycle (Enable -> OnEnable/Start will fire)
-        Runtime.Resources.SceneInstance.Load(playScene);
+        Runtime.Resources.SceneInstance.SwapMain(playScene);
 
         if (prefs.GameViewOnPlay != GameViewOnPlay.Nothing)
             FocusPanel(typeof(GameViewPanel));
@@ -2047,7 +2047,7 @@ public class EditorApplication : Game
             // Ends the play session at the swap, once the play scene's teardown has run, so nothing still
             // awaiting can resume against the edit scene.
             Runtime.Resources.SceneInstance.EndSessionOnSwap = true;
-            Runtime.Resources.SceneInstance.Load(restoredScene);
+            Runtime.Resources.SceneInstance.SwapMain(restoredScene);
             _savedEditorScene = null;
             _savedEditorSceneSource = null;
         }

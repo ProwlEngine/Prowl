@@ -548,7 +548,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     public void Instantiate_RunsTheLifecycleOnTheCopy()
     {
         SceneInstance scene = CreateScene();
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
 
         var original = new GameObject("orig");
@@ -570,7 +570,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     public void Instantiate_IntoAParentPlacesItRelativeToThatParent()
     {
         SceneInstance scene = CreateScene();
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
 
         var parent = new GameObject("parent");

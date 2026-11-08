@@ -814,6 +814,7 @@ public class DesktopBuildPipeline : BuildPipeline
             TargetId = plan.Profile.TargetId,
             BuildDateUtcTicks = BuildTimestampTicks(),
             DefaultScene = plan.DefaultScene.ToString(),
+            Scenes = [.. request.Scenes.Select(s => s.ToString())],
             AssemblyLoadOrder = [.. plan.Assemblies.Select(a => a.Name)],
             Packaging = request.Packaging,
             WindowWidth = plan.Profile.WindowWidth,

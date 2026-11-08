@@ -585,7 +585,7 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance.OnSceneLoaded += handler;
         try
         {
-            SceneInstance.Load(scene);
+            SceneInstance.SwapMain(scene);
             SceneInstance.ProcessPendingLoad();
 
             Assert.Same(scene, SceneInstance.Main);
@@ -604,7 +604,7 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance before = SceneInstance.Main;
         SceneInstance scene = CreateScene();
 
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
 
         Assert.Same(before, SceneInstance.Main);
         Assert.NotEqual(SceneState.Running, scene.State);
@@ -620,10 +620,10 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance first = CreateScene();
         SceneInstance second = CreateScene();
 
-        SceneInstance.Load(first);
+        SceneInstance.SwapMain(first);
         SceneInstance.ProcessPendingLoad();
 
-        SceneInstance.Load(second);
+        SceneInstance.SwapMain(second);
 
         // The outgoing scene stays usable until the swap actually applies.
         Assert.Same(first, SceneInstance.Main);
@@ -641,8 +641,8 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance first = CreateScene();
         SceneInstance second = CreateScene();
 
-        SceneInstance.Load(first);
-        SceneInstance.Load(second);
+        SceneInstance.SwapMain(first);
+        SceneInstance.SwapMain(second);
         SceneInstance.ProcessPendingLoad();
 
         Assert.Same(second, SceneInstance.Main);
@@ -655,7 +655,7 @@ public class SceneManagementTests : RuntimeTestBase
     {
         SceneInstance current = SceneInstance.Main;
 
-        SceneInstance.Load(current);
+        SceneInstance.SwapMain(current);
         SceneInstance.ProcessPendingLoad();
 
         Assert.Same(current, SceneInstance.Main);
@@ -668,7 +668,7 @@ public class SceneManagementTests : RuntimeTestBase
     {
         SceneInstance scene = CreateScene(enable: true);
 
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
 
         Assert.Same(scene, SceneInstance.Main);
@@ -736,13 +736,13 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance first = CreateScene();
         GameObject keeper = CreateGameObject("Keeper");
         first.Add(keeper);
-        SceneInstance.Load(first);
+        SceneInstance.SwapMain(first);
         SceneInstance.ProcessPendingLoad();
 
         SceneInstance second = CreateScene();
         first.Remove(keeper);
         second.Add(keeper);
-        SceneInstance.Load(second);
+        SceneInstance.SwapMain(second);
         SceneInstance.ProcessPendingLoad();
 
         Assert.False(keeper.IsDisposed);
@@ -758,12 +758,12 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance first = CreateScene();
         GameObject keeper = CreateGameObject("Keeper");
         first.Add(keeper);
-        SceneInstance.Load(first);
+        SceneInstance.SwapMain(first);
         SceneInstance.ProcessPendingLoad();
 
         SceneInstance second = CreateScene();
         first.Remove(keeper);
-        SceneInstance.Load(second);
+        SceneInstance.SwapMain(second);
         SceneInstance.Main.Add(keeper); // still `first` at this point
         SceneInstance.ProcessPendingLoad();
 
@@ -778,13 +778,13 @@ public class SceneManagementTests : RuntimeTestBase
         GameObject doomed = CreateGameObject("Doomed");
         first.Add(keeper);
         first.Add(doomed);
-        SceneInstance.Load(first);
+        SceneInstance.SwapMain(first);
         SceneInstance.ProcessPendingLoad();
 
         keeper.Persistent = true;
 
         SceneInstance second = CreateScene();
-        SceneInstance.Load(second);
+        SceneInstance.SwapMain(second);
         SceneInstance.ProcessPendingLoad();
 
         Assert.False(keeper.IsDisposed);
@@ -800,7 +800,7 @@ public class SceneManagementTests : RuntimeTestBase
         GameObject keeper = CreateGameObject("Keeper");
         TickCounter comp = keeper.AddComponent<TickCounter>();
         first.Add(keeper);
-        SceneInstance.Load(first);
+        SceneInstance.SwapMain(first);
         SceneInstance.ProcessPendingLoad();
         keeper.Persistent = true;
 
@@ -808,7 +808,7 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.Equal(1, comp.Updates);
 
         SceneInstance second = CreateScene();
-        SceneInstance.Load(second);
+        SceneInstance.SwapMain(second);
         SceneInstance.ProcessPendingLoad();
 
         Update(second);
@@ -822,13 +822,13 @@ public class SceneManagementTests : RuntimeTestBase
         GameObject keeper = CreateGameObject("Keeper");
         GameCanvas canvas = keeper.AddComponent<GameCanvas>();
         first.Add(keeper);
-        SceneInstance.Load(first);
+        SceneInstance.SwapMain(first);
         SceneInstance.ProcessPendingLoad();
         keeper.Persistent = true;
         Assert.Equal([canvas], first.Canvases);
 
         SceneInstance second = CreateScene();
-        SceneInstance.Load(second);
+        SceneInstance.SwapMain(second);
         SceneInstance.ProcessPendingLoad();
 
         Assert.Equal([canvas], second.Canvases);
@@ -841,12 +841,12 @@ public class SceneManagementTests : RuntimeTestBase
         GameObject keeper = CreateGameObject("Keeper");
         TickCounter comp = keeper.AddComponent<TickCounter>();
         first.Add(keeper);
-        SceneInstance.Load(first);
+        SceneInstance.SwapMain(first);
         SceneInstance.ProcessPendingLoad();
         keeper.Persistent = true;
         int enables = comp.Enables;
 
-        SceneInstance.Load(CreateScene());
+        SceneInstance.SwapMain(CreateScene());
         SceneInstance.ProcessPendingLoad();
 
         Assert.Equal(enables, comp.Enables);
@@ -861,7 +861,7 @@ public class SceneManagementTests : RuntimeTestBase
         GameObject child = CreateGameObject("Child");
         child.SetParent(root);
         first.Add(root);
-        SceneInstance.Load(first);
+        SceneInstance.SwapMain(first);
         SceneInstance.ProcessPendingLoad();
 
         Assert.Throws<InvalidOperationException>(() => child.Persistent = true);
@@ -870,7 +870,7 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.Same(first.Persistent, child.Section);
 
         SceneInstance second = CreateScene();
-        SceneInstance.Load(second);
+        SceneInstance.SwapMain(second);
         SceneInstance.ProcessPendingLoad();
 
         Assert.False(root.IsDisposed);
@@ -886,13 +886,13 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance first = CreateScene();
         GameObject go = CreateGameObject();
         first.Add(go);
-        SceneInstance.Load(first);
+        SceneInstance.SwapMain(first);
         SceneInstance.ProcessPendingLoad();
 
         go.Persistent = true;
         go.Persistent = false;
 
-        SceneInstance.Load(CreateScene());
+        SceneInstance.SwapMain(CreateScene());
         SceneInstance.ProcessPendingLoad();
 
         Assert.True(go.IsDisposed);
@@ -904,14 +904,14 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance first = CreateScene();
         GameObject go = CreateGameObject();
         first.Add(go);
-        SceneInstance.Load(first);
+        SceneInstance.SwapMain(first);
         SceneInstance.ProcessPendingLoad();
         go.Persistent = true;
 
         go.Dispose();
 
         SceneInstance second = CreateScene();
-        SceneInstance.Load(second);
+        SceneInstance.SwapMain(second);
         SceneInstance.ProcessPendingLoad(); // must not throw or re-add the corpse
 
         Assert.Empty(second.Objects);
@@ -934,7 +934,7 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance scene = CreateScene(enable: true);
         GameObject keeper = CreateGameObject("Keeper");
         scene.Add(keeper);
-        SceneInstance.Load(scene);
+        SceneInstance.SwapMain(scene);
         SceneInstance.ProcessPendingLoad();
         keeper.Persistent = true;
 
@@ -946,7 +946,7 @@ public class SceneManagementTests : RuntimeTestBase
 
         // And the registry is empty, so the next run does not inherit the last one's objects.
         SceneInstance next = CreateScene();
-        SceneInstance.Load(next);
+        SceneInstance.SwapMain(next);
         SceneInstance.ProcessPendingLoad();
         Assert.Empty(next.Objects);
     }
@@ -957,10 +957,10 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance current = CreateScene();
         SceneInstance queued = CreateScene();
 
-        SceneInstance.Load(current);
+        SceneInstance.SwapMain(current);
         SceneInstance.ProcessPendingLoad();
 
-        SceneInstance.Load(queued);
+        SceneInstance.SwapMain(queued);
         queued.Dispose();
         SceneInstance.ProcessPendingLoad();
 
@@ -1028,7 +1028,7 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance.OnSceneLoaded += Handler;
         try
         {
-            SceneInstance.Load(loaded);
+            SceneInstance.SwapMain(loaded);
             SceneInstance.ProcessPendingLoad();
         }
         finally { SceneInstance.OnSceneLoaded -= Handler; }
