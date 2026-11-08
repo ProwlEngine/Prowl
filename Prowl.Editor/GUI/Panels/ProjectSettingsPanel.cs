@@ -50,13 +50,24 @@ public class ProjectSettingsPanel : DockPanel
 
         if (beforeJson == afterJson) return;
 
-        EditorRegistries.SettingsEntry capturedEntry = entry;
-        Undo.RegisterCoalescableAction($"Modify {entry.Name}",
-            undo: () => ApplyJsonToEntry(capturedEntry, beforeJson),
-            redo: () => ApplyJsonToEntry(capturedEntry, afterJson));
+        Undo.RegisterOperation(new SettingsOperation($"Modify {entry.Name}", entry.Type, beforeJson, afterJson));
     }
 
-    private static void ApplyJsonToEntry(EditorRegistries.SettingsEntry entry, string json)
+    private sealed class SettingsOperation(string name, Type type, string beforeJson, string afterJson) : IUndoOperation
+    {
+        public string Name => name;
+        public IReadOnlyList<UndoOwner> Owners { get; } = [UndoOwner.OfSettings(type)];
+        public void Undo() => ApplyJson(type, beforeJson);
+        public void Redo() => ApplyJson(type, afterJson);
+    }
+
+    private static void ApplyJson(Type type, string json)
+    {
+        foreach (EditorRegistries.SettingsEntry entry in EditorRegistries.SettingsEntries)
+            if (entry.Type == type) ApplyJson(entry, json);
+    }
+
+    private static void ApplyJson(EditorRegistries.SettingsEntry entry, string json)
     {
         try
         {
@@ -64,7 +75,6 @@ public class ProjectSettingsPanel : DockPanel
             if (loaded == null) return;
             EditorRegistries.CopySettingsFields(loaded, entry.Instance);
             entry.Instance.Apply();
-            EditorRegistries.SaveSettings(entry);
         }
         catch (Exception ex)
         {

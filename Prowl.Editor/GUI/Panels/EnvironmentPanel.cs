@@ -104,7 +104,7 @@ public class EnvironmentPanel : DockPanel
 
         EditorGUI.SettingsRow(paper, $"{id}_mat", Loc.Get("env.sky_material"), () =>
             PropertyGridUtils.DrawField(paper, $"{id}_mat_v", "", typeof(Material), env.SkyMaterial,
-                v => { env.SkyMaterial = v as Material; EditorSceneManager.MarkDirty(); }, 0));
+                v => { RecordEnvironment("Sky Material"); env.SkyMaterial = v as Material; }, 0));
 
         EditorGUI.SettingsRow(paper, $"{id}_new", Loc.Get("env.new_sky"), () =>
         {
@@ -112,13 +112,13 @@ public class EnvironmentPanel : DockPanel
                 foreach ((BuiltInSky sky, string label) in s_newSkies)
                     SmallButton(paper, $"{id}_new_{sky}", Loc.Get(label), () =>
                     {
+                        RecordEnvironment("Sky Material");
                         env.SkyMaterial = SceneEnvironment.CreateSkyMaterial(sky);
-                        EditorSceneManager.MarkDirty();
                     });
         });
 
         EditorGUI.SettingsRow(paper, $"{id}_bg", Loc.Get("env.background_color"), () =>
-            Origami.ColorField(paper, $"{id}_bg_v", env.SkyColor, v => { env.SkyColor = v; EditorSceneManager.MarkDirty(); }).Show());
+            Origami.ColorField(paper, $"{id}_bg_v", env.SkyColor, v => { RecordEnvironment("Background Color"); env.SkyColor = v; }).Show());
 
         Material? material = env.SkyMaterial;
         if (material.IsNotValid())
@@ -131,8 +131,8 @@ public class EnvironmentPanel : DockPanel
             EditorGUI.SettingsRow(paper, $"{id}_embed", "", () =>
                 SmallButton(paper, $"{id}_embed_b", Loc.Get("env.make_embedded"), () =>
                 {
+                    RecordEnvironment("Sky Material");
                     env.SkyMaterial = material.Clone();
-                    EditorSceneManager.MarkDirty();
                 }));
         }
         else
@@ -141,8 +141,9 @@ public class EnvironmentPanel : DockPanel
             Shader? shader = material.Shader;
             if (shader.IsValid())
             {
+                Undo.InspectorBaseline(material);
                 foreach (MaterialProperty prop in shader.Properties)
-                    MaterialPropertyDrawer.DrawPropertyRow(paper, $"{id}_p_{prop.Name.Text()}", material, prop, EditorSceneManager.MarkDirty);
+                    MaterialPropertyDrawer.DrawPropertyRow(paper, $"{id}_p_{prop.Name.Text()}", material, prop, () => Undo.InspectorChanged(material, UndoOwner.OfCurrentScene));
                 if (shader.Name == "Graphite/Sky/Procedural")
                     Hint(paper, $"{id}_sun", font, Loc.Get("env.sun_auto"));
             }
@@ -150,7 +151,7 @@ public class EnvironmentPanel : DockPanel
 
         EditorGUI.SectionHeader(paper, $"{id}_h_cap", Loc.Get("env.sky_capture"));
         SceneEnvironment.SkyCaptureSettings capture = env.SkyCapture;
-        void Capture() { env.SkyCapture = capture; EditorSceneManager.MarkDirty(); }
+        void Capture() { RecordEnvironment("Sky Capture"); env.SkyCapture = capture; }
         EditorGUI.SettingsRow(paper, $"{id}_cap_mode", Loc.Get("env.mode"), () =>
             Origami.EnumDropdown(paper, $"{id}_cap_mode_v", capture.Mode, v => { capture.Mode = v; Capture(); }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_cap_res", Loc.Get("env.capture_resolution"), () =>
@@ -165,33 +166,33 @@ public class EnvironmentPanel : DockPanel
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.fog"), first: true);
 
         SceneEnvironment.FogSettings fog = scene.Environment.Fog;
-        void Dirty() { scene.Environment.Fog = fog; EditorSceneManager.MarkDirty(); }
+        void Apply() { RecordEnvironment("Fog"); scene.Environment.Fog = fog; }
 
         EditorGUI.SettingsRow(paper, $"{id}_mode", Loc.Get("env.mode"), () =>
-            Origami.EnumDropdown(paper, $"{id}_mode_v", fog.Mode, v => { fog.Mode = v; Dirty(); }).Show());
+            Origami.EnumDropdown(paper, $"{id}_mode_v", fog.Mode, v => { fog.Mode = v; Apply(); }).Show());
 
         if (fog.Mode == FogMode.Off) return;
 
-        EditorGUI.SettingsToggle(paper, $"{id}_sky", Loc.Get("env.fog_use_sky"), fog.UseSky, v => { fog.UseSky = v; Dirty(); });
+        EditorGUI.SettingsToggle(paper, $"{id}_sky", Loc.Get("env.fog_use_sky"), fog.UseSky, v => { fog.UseSky = v; Apply(); });
         if (!fog.UseSky)
         {
             EditorGUI.SettingsRow(paper, $"{id}_color", Loc.Get("env.color"), () =>
-                Origami.ColorField(paper, $"{id}_color_v", fog.Color, v => { fog.Color = v; Dirty(); }).Show());
+                Origami.ColorField(paper, $"{id}_color_v", fog.Color, v => { fog.Color = v; Apply(); }).Show());
             EditorGUI.SettingsRow(paper, $"{id}_int", Loc.Get("env.intensity") + " (nits)", () =>
-                Origami.NumericField<float>(paper, $"{id}_int_v", fog.Intensity, v => { fog.Intensity = MathF.Max(0f, v); Dirty(); }).Show());
+                Origami.NumericField<float>(paper, $"{id}_int_v", fog.Intensity, v => { fog.Intensity = MathF.Max(0f, v); Apply(); }).Show());
         }
 
         if (fog.Mode == FogMode.Linear)
         {
             EditorGUI.SettingsRow(paper, $"{id}_start", Loc.Get("env.start_distance"), () =>
-                Origami.NumericField<float>(paper, $"{id}_start_v", fog.Start, v => { fog.Start = v; Dirty(); }).Show());
+                Origami.NumericField<float>(paper, $"{id}_start_v", fog.Start, v => { fog.Start = v; Apply(); }).Show());
             EditorGUI.SettingsRow(paper, $"{id}_end", Loc.Get("env.end_distance"), () =>
-                Origami.NumericField<float>(paper, $"{id}_end_v", fog.End, v => { fog.End = v; Dirty(); }).Show());
+                Origami.NumericField<float>(paper, $"{id}_end_v", fog.End, v => { fog.End = v; Apply(); }).Show());
         }
         else
         {
             EditorGUI.SettingsRow(paper, $"{id}_density", Loc.Get("env.density"), () =>
-                Origami.Slider(paper, $"{id}_density_v", fog.Density, v => { fog.Density = v; Dirty(); }, 0f, 0.1f).Format("F4").Show());
+                Origami.Slider(paper, $"{id}_density_v", fog.Density, v => { fog.Density = v; Apply(); }, 0f, 0.1f).Format("F4").Show());
         }
     }
 
@@ -200,31 +201,31 @@ public class EnvironmentPanel : DockPanel
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.volumetric_clouds"));
 
         SceneEnvironment.VolumetricCloudsSettings clouds = scene.Environment.VolumetricClouds;
-        static void Dirty() => EditorSceneManager.MarkDirty();
+        static void Record() => RecordEnvironment("Clouds");
 
-        EditorGUI.SettingsToggle(paper, $"{id}_on", Loc.Get("env.enabled"), clouds.Enabled, v => { clouds.Enabled = v; Dirty(); });
+        EditorGUI.SettingsToggle(paper, $"{id}_on", Loc.Get("env.enabled"), clouds.Enabled, v => { Record(); clouds.Enabled = v; });
         if (!clouds.Enabled) return;
 
         EditorGUI.SettingsRow(paper, $"{id}_coverage", Loc.Get("env.coverage"), () =>
-            Origami.Slider(paper, $"{id}_coverage_v", clouds.Coverage, v => { clouds.Coverage = v; Dirty(); }, 0f, 1f).Show());
+            Origami.Slider(paper, $"{id}_coverage_v", clouds.Coverage, v => { Record(); clouds.Coverage = v; }, 0f, 1f).Show());
         EditorGUI.SettingsRow(paper, $"{id}_density", Loc.Get("env.density"), () =>
-            Origami.Slider(paper, $"{id}_density_v", clouds.Density, v => { clouds.Density = v; Dirty(); }, 0f, 4f).Show());
+            Origami.Slider(paper, $"{id}_density_v", clouds.Density, v => { Record(); clouds.Density = v; }, 0f, 4f).Show());
         EditorGUI.SettingsRow(paper, $"{id}_altitude", Loc.Get("env.altitude"), () =>
-            Origami.NumericField<float>(paper, $"{id}_altitude_v", clouds.Altitude, v => { clouds.Altitude = v; Dirty(); }).Show());
+            Origami.NumericField<float>(paper, $"{id}_altitude_v", clouds.Altitude, v => { Record(); clouds.Altitude = v; }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_thickness", Loc.Get("env.thickness"), () =>
-            Origami.NumericField<float>(paper, $"{id}_thickness_v", clouds.Thickness, v => { clouds.Thickness = MathF.Max(1f, v); Dirty(); }).Show());
+            Origami.NumericField<float>(paper, $"{id}_thickness_v", clouds.Thickness, v => { Record(); clouds.Thickness = MathF.Max(1f, v); }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_wind", Loc.Get("env.wind_speed"), () =>
-            Origami.NumericField<float>(paper, $"{id}_wind_v", clouds.WindSpeed, v => { clouds.WindSpeed = v; Dirty(); }).Show());
+            Origami.NumericField<float>(paper, $"{id}_wind_v", clouds.WindSpeed, v => { Record(); clouds.WindSpeed = v; }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_winddir", Loc.Get("env.wind_direction"), () =>
-            Origami.Slider(paper, $"{id}_winddir_v", clouds.WindDirection, v => { clouds.WindDirection = v; Dirty(); }, 0f, 360f).Show());
+            Origami.Slider(paper, $"{id}_winddir_v", clouds.WindDirection, v => { Record(); clouds.WindDirection = v; }, 0f, 360f).Show());
         EditorGUI.SettingsRow(paper, $"{id}_sun", Loc.Get("env.sun_brightness"), () =>
-            Origami.Slider(paper, $"{id}_sun_v", clouds.SunBrightness, v => { clouds.SunBrightness = v; Dirty(); }, 0f, 6f).Show());
+            Origami.Slider(paper, $"{id}_sun_v", clouds.SunBrightness, v => { Record(); clouds.SunBrightness = v; }, 0f, 6f).Show());
         EditorGUI.SettingsRow(paper, $"{id}_ambient", Loc.Get("env.ambient_brightness"), () =>
-            Origami.Slider(paper, $"{id}_ambient_v", clouds.AmbientBrightness, v => { clouds.AmbientBrightness = v; Dirty(); }, 0f, 4f).Show());
-        EditorGUI.SettingsToggle(paper, $"{id}_temporal", Loc.Get("env.temporal"), clouds.Temporal, v => { clouds.Temporal = v; Dirty(); });
+            Origami.Slider(paper, $"{id}_ambient_v", clouds.AmbientBrightness, v => { Record(); clouds.AmbientBrightness = v; }, 0f, 4f).Show());
+        EditorGUI.SettingsToggle(paper, $"{id}_temporal", Loc.Get("env.temporal"), clouds.Temporal, v => { Record(); clouds.Temporal = v; });
         EditorGUI.SettingsRow(paper, $"{id}_shadow", Loc.Get("env.shadow_resolution"), () =>
-            Origami.NumericField<int>(paper, $"{id}_shadow_v", clouds.ShadowResolution, v => { clouds.ShadowResolution = Math.Clamp(v, 64, 2048); Dirty(); }).Show());
-        EditorGUI.SettingsToggle(paper, $"{id}_high", Loc.Get("env.high_layer"), clouds.HighLayer, v => { clouds.HighLayer = v; Dirty(); });
+            Origami.NumericField<int>(paper, $"{id}_shadow_v", clouds.ShadowResolution, v => { Record(); clouds.ShadowResolution = Math.Clamp(v, 64, 2048); }).Show());
+        EditorGUI.SettingsToggle(paper, $"{id}_high", Loc.Get("env.high_layer"), clouds.HighLayer, v => { Record(); clouds.HighLayer = v; });
     }
 
     private void DrawVolumetricFogSection(Paper paper, string id, Scene scene)
@@ -232,29 +233,29 @@ public class EnvironmentPanel : DockPanel
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.volumetric_fog"));
 
         SceneEnvironment.VolumetricFogSettings fog = scene.Environment.VolumetricFog;
-        void Dirty() { scene.Environment.VolumetricFog = fog; EditorSceneManager.MarkDirty(); }
+        void Apply() { RecordEnvironment("Volumetric Fog"); scene.Environment.VolumetricFog = fog; }
 
-        EditorGUI.SettingsToggle(paper, $"{id}_on", Loc.Get("env.enabled"), fog.Enabled, v => { fog.Enabled = v; Dirty(); });
+        EditorGUI.SettingsToggle(paper, $"{id}_on", Loc.Get("env.enabled"), fog.Enabled, v => { fog.Enabled = v; Apply(); });
         if (!fog.Enabled) return;
 
         EditorGUI.SettingsRow(paper, $"{id}_density", Loc.Get("env.density"), () =>
-            Origami.Slider(paper, $"{id}_density_v", fog.Density, v => { fog.Density = v; Dirty(); }, 0f, 0.2f).Format("F4").Show());
+            Origami.Slider(paper, $"{id}_density_v", fog.Density, v => { fog.Density = v; Apply(); }, 0f, 0.2f).Format("F4").Show());
         EditorGUI.SettingsRow(paper, $"{id}_base", Loc.Get("env.base_height"), () =>
-            Origami.NumericField<float>(paper, $"{id}_base_v", fog.BaseHeight, v => { fog.BaseHeight = v; Dirty(); }).Show());
+            Origami.NumericField<float>(paper, $"{id}_base_v", fog.BaseHeight, v => { fog.BaseHeight = v; Apply(); }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_falloff", Loc.Get("env.height_falloff"), () =>
-            Origami.Slider(paper, $"{id}_falloff_v", fog.HeightFalloff, v => { fog.HeightFalloff = v; Dirty(); }, 0f, 1f).Format("F3").Show());
+            Origami.Slider(paper, $"{id}_falloff_v", fog.HeightFalloff, v => { fog.HeightFalloff = v; Apply(); }, 0f, 1f).Format("F3").Show());
         EditorGUI.SettingsRow(paper, $"{id}_albedo", Loc.Get("env.albedo"), () =>
-            Origami.ColorField(paper, $"{id}_albedo_v", fog.Albedo, v => { fog.Albedo = v; Dirty(); }).Show());
+            Origami.ColorField(paper, $"{id}_albedo_v", fog.Albedo, v => { fog.Albedo = v; Apply(); }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_aniso", Loc.Get("env.anisotropy"), () =>
-            Origami.Slider(paper, $"{id}_aniso_v", fog.Anisotropy, v => { fog.Anisotropy = v; Dirty(); }, -0.95f, 0.95f).Show());
+            Origami.Slider(paper, $"{id}_aniso_v", fog.Anisotropy, v => { fog.Anisotropy = v; Apply(); }, -0.95f, 0.95f).Show());
         EditorGUI.SettingsRow(paper, $"{id}_ambient", Loc.Get("env.ambient_scale"), () =>
-            Origami.Slider(paper, $"{id}_ambient_v", fog.AmbientScale, v => { fog.AmbientScale = v; Dirty(); }, 0f, 4f).Show());
+            Origami.Slider(paper, $"{id}_ambient_v", fog.AmbientScale, v => { fog.AmbientScale = v; Apply(); }, 0f, 4f).Show());
         EditorGUI.SettingsRow(paper, $"{id}_distance", Loc.Get("env.distance"), () =>
-            Origami.NumericField<float>(paper, $"{id}_distance_v", fog.Distance, v => { fog.Distance = MathF.Max(1f, v); Dirty(); }).Show());
+            Origami.NumericField<float>(paper, $"{id}_distance_v", fog.Distance, v => { fog.Distance = MathF.Max(1f, v); Apply(); }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_slices", Loc.Get("env.slices"), () =>
-            Origami.NumericField<int>(paper, $"{id}_slices_v", fog.Slices, v => { fog.Slices = Math.Clamp(v, 16, 256); Dirty(); }).Show());
+            Origami.NumericField<int>(paper, $"{id}_slices_v", fog.Slices, v => { fog.Slices = Math.Clamp(v, 16, 256); Apply(); }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_temporal", Loc.Get("env.temporal_blend"), () =>
-            Origami.Slider(paper, $"{id}_temporal_v", fog.TemporalBlend, v => { fog.TemporalBlend = v; Dirty(); }, 0f, 0.98f).Show());
+            Origami.Slider(paper, $"{id}_temporal_v", fog.TemporalBlend, v => { fog.TemporalBlend = v; Apply(); }, 0f, 0.98f).Show());
     }
 
     private void DrawAmbientSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
@@ -262,35 +263,38 @@ public class EnvironmentPanel : DockPanel
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.ambient_lighting"), first: true);
 
         SceneEnvironment.AmbientSettings ambient = scene.Environment.Ambient;
-        void Dirty() { scene.Environment.Ambient = ambient; EditorSceneManager.MarkDirty(); }
+        void Apply() { RecordEnvironment("Ambient"); scene.Environment.Ambient = ambient; }
 
         EditorGUI.SettingsRow(paper, $"{id}_mode", Loc.Get("env.mode"), () =>
-            Origami.EnumDropdown(paper, $"{id}_mode_v", ambient.Mode, v => { ambient.Mode = v; Dirty(); }).Show());
+            Origami.EnumDropdown(paper, $"{id}_mode_v", ambient.Mode, v => { ambient.Mode = v; Apply(); }).Show());
 
         if (ambient.Mode == AmbientMode.Sky)
             EditorGUI.SettingsRow(paper, $"{id}_int", Loc.Get("env.intensity"), () =>
-                Origami.Slider(paper, $"{id}_int_v", ambient.Intensity, v => { ambient.Intensity = v; Dirty(); }, 0f, 4f).Show());
+                Origami.Slider(paper, $"{id}_int_v", ambient.Intensity, v => { ambient.Intensity = v; Apply(); }, 0f, 4f).Show());
         else
             EditorGUI.SettingsRow(paper, $"{id}_int", Loc.Get("env.intensity") + " (nits)", () =>
-                Origami.NumericField<float>(paper, $"{id}_int_v", ambient.Intensity, v => { ambient.Intensity = MathF.Max(0f, v); Dirty(); }).Show());
+                Origami.NumericField<float>(paper, $"{id}_int_v", ambient.Intensity, v => { ambient.Intensity = MathF.Max(0f, v); Apply(); }).Show());
 
         switch (ambient.Mode)
         {
             case AmbientMode.Uniform:
                 EditorGUI.SettingsRow(paper, $"{id}_color", Loc.Get("env.color"), () =>
-                    Origami.ColorField(paper, $"{id}_color_v", ambient.Color, v => { ambient.Color = v; Dirty(); }).Show());
+                    Origami.ColorField(paper, $"{id}_color_v", ambient.Color, v => { ambient.Color = v; Apply(); }).Show());
                 break;
             case AmbientMode.Hemisphere:
                 EditorGUI.SettingsRow(paper, $"{id}_sky", Loc.Get("env.sky_color"), () =>
-                    Origami.ColorField(paper, $"{id}_sky_v", ambient.SkyColor, v => { ambient.SkyColor = v; Dirty(); }).Show());
+                    Origami.ColorField(paper, $"{id}_sky_v", ambient.SkyColor, v => { ambient.SkyColor = v; Apply(); }).Show());
                 EditorGUI.SettingsRow(paper, $"{id}_gnd", Loc.Get("env.ground_color"), () =>
-                    Origami.ColorField(paper, $"{id}_gnd_v", ambient.GroundColor, v => { ambient.GroundColor = v; Dirty(); }).Show());
+                    Origami.ColorField(paper, $"{id}_gnd_v", ambient.GroundColor, v => { ambient.GroundColor = v; Apply(); }).Show());
                 break;
             default:
                 Hint(paper, $"{id}_hint", font, Loc.Get("env.sky_ambient_hint"));
                 break;
         }
     }
+
+    private static void RecordEnvironment(string name)
+        => Undo.RecordObject(() => Scene.Current.IsValid() ? Scene.Current.Environment : null, UndoOwner.OfCurrentScene, name);
 
     private static void Hint(Paper paper, string id, Scribe.FontFile font, string text)
         => paper.Box(id).Height(20).Margin(Origami.Current.Metrics.PaddingLarge, 0, 0, 0)
@@ -305,34 +309,34 @@ public class EnvironmentPanel : DockPanel
         // switching to a different scene while it's in flight must not show this scene as baking too.
         bool baking = _bake.IsBaking && _bake.TargetScene == scene;
         Scene.LightmapBakeSettings s = scene.LightmapBake;
-        void Touch() { scene.LightmapBake = s; EditorSceneManager.MarkDirty(); }
+        void Record() => Undo.RecordObject(() => Scene.Current.IsValid() ? Scene.Current.LightmapBake : null, UndoOwner.OfCurrentScene, "Lightmap Settings");
 
         EditorGUI.SectionHeader(paper, $"{id}_h_res", Loc.Get("game.resolution"), first: true);
 
         EditorGUI.SettingsRow(paper, $"{id}_size", Loc.Get("env.atlas_size"), () =>
-            Origami.IntSlider(paper, $"{id}_size_v", s.AtlasSize, v => { if (!baking) { s.AtlasSize = v; Touch(); } }, 256, 4096).Show());
+            Origami.IntSlider(paper, $"{id}_size_v", s.AtlasSize, v => { if (!baking) { Record(); s.AtlasSize = v; } }, 256, 4096).Show());
         EditorGUI.SettingsRow(paper, $"{id}_tpu", Loc.Get("env.texels_unit"), () =>
-            Origami.Slider(paper, $"{id}_tpu_v", s.TexelsPerUnit, v => { if (!baking) { s.TexelsPerUnit = v; Touch(); } }, 1f, 100f).Format("F0").Show());
+            Origami.Slider(paper, $"{id}_tpu_v", s.TexelsPerUnit, v => { if (!baking) { Record(); s.TexelsPerUnit = v; } }, 1f, 100f).Format("F0").Show());
         EditorGUI.SettingsRow(paper, $"{id}_dil", Loc.Get("env.padding_dilate"), () =>
-            Origami.IntSlider(paper, $"{id}_dil_v", s.DilatePixels, v => { if (!baking) { s.DilatePixels = v; Touch(); } }, 0, 16).Show());
+            Origami.IntSlider(paper, $"{id}_dil_v", s.DilatePixels, v => { if (!baking) { Record(); s.DilatePixels = v; } }, 0, 16).Show());
 
         EditorGUI.SectionHeader(paper, $"{id}_h_qual", Loc.Get("env.quality"));
 
         EditorGUI.SettingsRow(paper, $"{id}_bnc", Loc.Get("env.bounces"), () =>
-            Origami.IntSlider(paper, $"{id}_bnc_v", s.Bounces, v => { if (!baking) { s.Bounces = v; Touch(); } }, 0, 8).Show());
+            Origami.IntSlider(paper, $"{id}_bnc_v", s.Bounces, v => { if (!baking) { Record(); s.Bounces = v; } }, 0, 8).Show());
         EditorGUI.SettingsRow(paper, $"{id}_smp", Loc.Get("env.indirect_samples"), () =>
-            Origami.IntSlider(paper, $"{id}_smp_v", s.Samples, v => { if (!baking) { s.Samples = v; Touch(); } }, 1, 1024).Show());
+            Origami.IntSlider(paper, $"{id}_smp_v", s.Samples, v => { if (!baking) { Record(); s.Samples = v; } }, 1, 1024).Show());
         EditorGUI.SettingsRow(paper, $"{id}_psmp", Loc.Get("env.probe_samples"), () =>
-            Origami.IntSlider(paper, $"{id}_psmp_v", s.ProbeSamples, v => { if (!baking) { s.ProbeSamples = v; Touch(); } }, 16, 2048).Show());
-        EditorGUI.SettingsToggle(paper, $"{id}_cull", Loc.Get("env.backface_cull"), s.DoBackfaceCull, v => { if (!baking) { s.DoBackfaceCull = v; Touch(); } });
+            Origami.IntSlider(paper, $"{id}_psmp_v", s.ProbeSamples, v => { if (!baking) { Record(); s.ProbeSamples = v; } }, 16, 2048).Show());
+        EditorGUI.SettingsToggle(paper, $"{id}_cull", Loc.Get("env.backface_cull"), s.DoBackfaceCull, v => { if (!baking) { Record(); s.DoBackfaceCull = v; } });
         EditorGUI.SettingsRow(paper, $"{id}_spr", Loc.Get("env.sparse_stride"), () =>
-            Origami.IntSlider(paper, $"{id}_spr_v", s.SparseStride, v => { if (!baking) { s.SparseStride = v; Touch(); } }, 1, 16).Show());
+            Origami.IntSlider(paper, $"{id}_spr_v", s.SparseStride, v => { if (!baking) { Record(); s.SparseStride = v; } }, 1, 16).Show());
 
         EditorGUI.SectionHeader(paper, $"{id}_h_env", Loc.Get("panel.environment"));
-        EditorGUI.SettingsToggle(paper, $"{id}_sky", Loc.Get("env.bake_sky_gi"), s.BakeSkyLighting, v => { if (!baking) { s.BakeSkyLighting = v; Touch(); } });
+        EditorGUI.SettingsToggle(paper, $"{id}_sky", Loc.Get("env.bake_sky_gi"), s.BakeSkyLighting, v => { if (!baking) { Record(); s.BakeSkyLighting = v; } });
 
         EditorGUI.SectionHeader(paper, $"{id}_h_adv", Loc.Get("env.advanced"));
-        EditorGUI.SettingsToggle(paper, $"{id}_alb", Loc.Get("env.ignore_albedo"), s.IgnoreAlbedo, v => { if (!baking) { s.IgnoreAlbedo = v; Touch(); } });
+        EditorGUI.SettingsToggle(paper, $"{id}_alb", Loc.Get("env.ignore_albedo"), s.IgnoreAlbedo, v => { if (!baking) { Record(); s.IgnoreAlbedo = v; } });
 
         DrawBakeCard(paper, id, font, scene, s, baking);
     }

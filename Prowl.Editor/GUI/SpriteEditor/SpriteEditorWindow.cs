@@ -126,8 +126,7 @@ public class SpriteEditorWindow : DockPanel
         // Revert just discarded.
         EditSnapshot before = Capture();
         SpriteEditRegistry.Reload(_textureGuid);
-        EditSnapshot after = Capture();
-        Undo.RegisterAction("Revert Sprite Changes", () => Restore(before), () => Restore(after));
+        Undo.RegisterOperation(new SpriteEditOperation("Revert Sprite Changes", _textureGuid, before, Capture()));
 
         _selected = -1;
         EnsureSingleSlice();
@@ -191,26 +190,31 @@ public class SpriteEditorWindow : DockPanel
         TightMeshAlphaThreshold = _settings.TightMeshAlphaThreshold,
     };
 
-    private void Restore(EditSnapshot s)
+    private static void Restore(Guid textureGuid, EditSnapshot s)
     {
-        _settings.Slices = s.Slices.ConvertAll(CloneSlice);
-        _settings.PixelsPerUnit = s.PixelsPerUnit;
-        _settings.GenerateTightMesh = s.GenerateTightMesh;
-        _settings.TightMeshDetail = s.TightMeshDetail;
-        _settings.TightMeshAlphaThreshold = s.TightMeshAlphaThreshold;
-        if (_selected >= ActiveSliceCount) _selected = ActiveSliceCount - 1;
-        _target.Dirty = true;
+        SpriteEditTarget target = SpriteEditRegistry.Get(textureGuid);
+        SpriteImportSettings settings = target.Settings;
+        settings.Slices = s.Slices.ConvertAll(CloneSlice);
+        settings.PixelsPerUnit = s.PixelsPerUnit;
+        settings.GenerateTightMesh = s.GenerateTightMesh;
+        settings.TightMeshDetail = s.TightMeshDetail;
+        settings.TightMeshAlphaThreshold = s.TightMeshAlphaThreshold;
+        target.Dirty = true;
     }
 
-    private void Mutate(string desc, Action change, bool coalesce = false)
+    private sealed class SpriteEditOperation(string name, Guid textureGuid, EditSnapshot before, EditSnapshot after) : IUndoOperation
+    {
+        public string Name => name;
+        public IReadOnlyList<UndoOwner> Owners { get; } = [UndoOwner.OfAssetFile(textureGuid)];
+        public void Undo() => Restore(textureGuid, before);
+        public void Redo() => Restore(textureGuid, after);
+    }
+
+    private void Mutate(string desc, Action change)
     {
         EditSnapshot before = Capture();
         change();
-        EditSnapshot after = Capture();
-        if (coalesce)
-            Undo.RegisterCoalescableAction(desc, () => Restore(before), () => Restore(after));
-        else
-            Undo.RegisterAction(desc, () => Restore(before), () => Restore(after));
+        Undo.RegisterOperation(new SpriteEditOperation(desc, _textureGuid, before, Capture()));
         _target.Dirty = true;
     }
 
@@ -221,6 +225,7 @@ public class SpriteEditorWindow : DockPanel
     {
         if (EditorTheme.DefaultFont == null) return;
         EnsureSingleSlice();
+        if (_selected >= ActiveSliceCount) _selected = ActiveSliceCount - 1;
 
         using (paper.Column("se_root").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Enter())
         {
@@ -650,8 +655,7 @@ public class SpriteEditorWindow : DockPanel
 
         if (desc != null && _dragBefore != null)
         {
-            EditSnapshot before = _dragBefore, after = Capture();
-            Undo.RegisterAction(desc, () => Restore(before), () => Restore(after));
+            Undo.RegisterOperation(new SpriteEditOperation(desc, _textureGuid, _dragBefore, Capture()));
             _target.Dirty = true;
         }
 
@@ -925,7 +929,7 @@ public class SpriteEditorWindow : DockPanel
 
         EditorGUI.Row(paper, "se_ppu", "Pixels Per Unit", () =>
             Origami.NumericField<float>(paper, "se_ppu_v", _settings.PixelsPerUnit,
-                v => Mutate("Edit Pixels Per Unit", () => _settings.PixelsPerUnit = MathF.Max(0.0001f, v), true)).Min(0.0001f).Show());
+                v => Mutate("Edit Pixels Per Unit", () => _settings.PixelsPerUnit = MathF.Max(0.0001f, v))).Min(0.0001f).Show());
 
         EditorGUI.Row(paper, "se_tight", "Tight Mesh", () =>
             Origami.Checkbox(paper, "se_tight_v", _settings.GenerateTightMesh,
@@ -935,11 +939,11 @@ public class SpriteEditorWindow : DockPanel
         {
             EditorGUI.Row(paper, "se_detail", "Detail", () =>
                 Origami.NumericField<float>(paper, "se_detail_v", _settings.TightMeshDetail,
-                    v => Mutate("Edit Tight Mesh Detail", () => _settings.TightMeshDetail = MathF.Max(0.1f, v), true)).Min(0.1f).Show());
+                    v => Mutate("Edit Tight Mesh Detail", () => _settings.TightMeshDetail = MathF.Max(0.1f, v))).Min(0.1f).Show());
 
             EditorGUI.Row(paper, "se_alpha", "Alpha Threshold", () =>
                 Origami.NumericField<int>(paper, "se_alpha_v", _settings.TightMeshAlphaThreshold,
-                    v => Mutate("Edit Alpha Threshold", () => _settings.TightMeshAlphaThreshold = (byte)Math.Clamp(v, 0, 255), true)).Min(0).Show());
+                    v => Mutate("Edit Alpha Threshold", () => _settings.TightMeshAlphaThreshold = (byte)Math.Clamp(v, 0, 255))).Min(0).Show());
         }
     }
 
@@ -959,17 +963,17 @@ public class SpriteEditorWindow : DockPanel
         Origami.Header(paper, "se_h_rect", IsSingle ? "Sprite" : "Rect Settings").Line().Show();
 
         EditorGUI.Row(paper, "se_name", "Name", () =>
-            Origami.TextField(paper, "se_name_v", s.Name, v => Mutate("Edit Name", () => s.Name = v, true)).CommitOnEnter().Show());
+            Origami.TextField(paper, "se_name_v", s.Name, v => Mutate("Edit Name", () => s.Name = v)).CommitOnEnter().Show());
 
         if (!IsSingle)
         {
             EditorGUI.Row(paper, "se_pos", "Position", () =>
                 Origami.Int2Field(paper, "se_pos_v", new Int2(s.Rect.X, s.Rect.Y), v =>
-                    Mutate("Edit Position", () => { SpriteRect r = s.Rect; r.X = v.X; r.Y = v.Y; s.Rect = r; }, true)).Show());
+                    Mutate("Edit Position", () => { SpriteRect r = s.Rect; r.X = v.X; r.Y = v.Y; s.Rect = r; })).Show());
 
             EditorGUI.Row(paper, "se_size", "Size", () =>
                 Origami.Int2Field(paper, "se_size_v", new Int2(s.Rect.Width, s.Rect.Height), v =>
-                    Mutate("Edit Size", () => { SpriteRect r = s.Rect; r.Width = Math.Max(1, v.X); r.Height = Math.Max(1, v.Y); s.Rect = r; }, true)).Show());
+                    Mutate("Edit Size", () => { SpriteRect r = s.Rect; r.Width = Math.Max(1, v.X); r.Height = Math.Max(1, v.Y); s.Rect = r; })).Show());
         }
 
         EditorGUI.Row(paper, "se_align", "Pivot", () =>
@@ -983,16 +987,16 @@ public class SpriteEditorWindow : DockPanel
                     v => Mutate("Edit Pivot Unit", () => SetPivotUnit(s, v))).Show());
 
             EditorGUI.Row(paper, "se_pivot", "Custom Pivot", () =>
-                Origami.Float2Field(paper, "se_pivot_v", s.CustomPivot, v => Mutate("Edit Custom Pivot", () => s.CustomPivot = v, true)).Show());
+                Origami.Float2Field(paper, "se_pivot_v", s.CustomPivot, v => Mutate("Edit Custom Pivot", () => s.CustomPivot = v)).Show());
         }
 
         EditorGUI.Row(paper, "se_border_lr", "Border L / R", () =>
             Origami.Float2Field(paper, "se_border_lr_v", new Float2(s.Border.X, s.Border.Z), v =>
-                Mutate("Edit Border", () => { Float4 b = s.Border; b.X = MathF.Max(0, v.X); b.Z = MathF.Max(0, v.Y); s.Border = b; }, true)).Show());
+                Mutate("Edit Border", () => { Float4 b = s.Border; b.X = MathF.Max(0, v.X); b.Z = MathF.Max(0, v.Y); s.Border = b; })).Show());
 
         EditorGUI.Row(paper, "se_border_tb", "Border T / B", () =>
             Origami.Float2Field(paper, "se_border_tb_v", new Float2(s.Border.Y, s.Border.W), v =>
-                Mutate("Edit Border", () => { Float4 b = s.Border; b.Y = MathF.Max(0, v.X); b.W = MathF.Max(0, v.Y); s.Border = b; }, true)).Show());
+                Mutate("Edit Border", () => { Float4 b = s.Border; b.Y = MathF.Max(0, v.X); b.W = MathF.Max(0, v.Y); s.Border = b; })).Show());
     }
 
     // --- Pan/zoom view -------------------------------------------------------------

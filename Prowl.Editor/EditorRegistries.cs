@@ -150,7 +150,7 @@ public static class EditorRegistries
 
         foreach (Action del in _sceneSavedCallbacks) EditorSceneManager.OnSceneSaved -= del;
         _sceneSavedCallbacks.Clear();
-        foreach (Action del in _undoRedoCallbacks) Undo.OnUndoRedo -= del;
+        foreach (Action del in _undoRedoCallbacks) Undo.undoRedoPerformed -= del;
         _undoRedoCallbacks.Clear();
 
         _initOnLoadMethods.Clear();
@@ -222,7 +222,7 @@ public static class EditorRegistries
         _settingsEntries.Sort((a, b) => a.Order.CompareTo(b.Order));
 
         foreach (Action del in _sceneSavedCallbacks) EditorSceneManager.OnSceneSaved += del;
-        foreach (Action del in _undoRedoCallbacks) Undo.OnUndoRedo += del;
+        foreach (Action del in _undoRedoCallbacks) Undo.undoRedoPerformed += del;
 
         foreach (MethodInfo m in _initOnLoadMethods)
         {

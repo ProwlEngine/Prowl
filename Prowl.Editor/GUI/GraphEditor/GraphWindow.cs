@@ -397,23 +397,23 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
 
         EchoObject before = _domain.Snapshot();
         change();
-        EditDone(description, before, coalesce: false, rebuild, compiles);
+        EditDone(description, before, rebuild, compiles);
     }
 
     // Where things sit, groups and notes: nothing the graph compiles, so whatever runs it keeps going.
     protected void EditLayout(string description, Action change) => Edit(description, change, compiles: false);
 
-    /// <summary>A one field edit, made undoable and folded into the one before it. Pass rebuild false when no card shows the value.</summary>
+    /// <summary>A one field edit, made undoable. Pass rebuild false when no card shows the value.</summary>
     protected void Set(string description, Action change, bool rebuild = true)
     {
         if (_domain == null) return;
 
         EchoObject before = _domain.Snapshot();
         change();
-        EditDone(description, before, coalesce: true, rebuild);
+        EditDone(description, before, rebuild);
     }
 
-    private void EditDone(string description, EchoObject before, bool coalesce, bool rebuild = true, bool compiles = true)
+    private void EditDone(string description, EchoObject before, bool rebuild = true, bool compiles = true)
     {
         if (_domain == null) return;
 
@@ -423,12 +423,18 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
         // Tied to the asset the edit was made on, which may no longer be the one showing.
         Guid asset = _assetGuid;
         Func<Guid, GraphDomain?> open = guid => LoadedAsset(guid) is { } loaded ? CreateDomain(loaded) : null;
-        void undo() => RestoreSnapshot(asset, before, compiles, open);
-        void redo() => RestoreSnapshot(asset, after, compiles, open);
-
-        if (coalesce) Undo.RegisterCoalescableAction(description, undo, redo);
-        else Undo.RegisterAction(description, undo, redo);
+        Undo.RegisterOperation(new GraphEditOperation(description, asset,
+            () => RestoreSnapshot(asset, before, compiles, open),
+            () => RestoreSnapshot(asset, after, compiles, open)));
         Touch(rebuild, compiles);
+    }
+
+    private sealed class GraphEditOperation(string name, Guid asset, Action undo, Action redo) : IUndoOperation
+    {
+        public string Name => name;
+        public IReadOnlyList<UndoOwner> Owners { get; } = [UndoOwner.OfAssetFile(asset)];
+        public void Undo() => undo();
+        public void Redo() => redo();
     }
 
     private static void RestoreSnapshot(Guid asset, EchoObject snapshot, bool compiles, Func<Guid, GraphDomain?> open)

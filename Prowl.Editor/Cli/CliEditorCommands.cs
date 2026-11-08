@@ -358,7 +358,7 @@ public static class CliEditorCommands
                     ApplyTransform(go, position, rotation, scale, world);
 
                     Selection.Select(go);
-                    Undo.RegisterCreatedObject(go, "CLI: Create");
+                    Undo.RegisterCreatedObjectUndo(go, "CLI: Create");
                     return Described(go);
                 });
 
@@ -376,7 +376,7 @@ public static class CliEditorCommands
                 return CliEdit.Run("Duplicate", () =>
                 {
                     List<GameObject> copies = GameObjectClipboard.Duplicate(Targets(target));
-                    foreach (GameObject copy in copies) Undo.RegisterCreatedObject(copy, "CLI: Duplicate");
+                    foreach (GameObject copy in copies) Undo.RegisterCreatedObjectUndo(copy, "CLI: Duplicate");
                     return copies.Select(CliRefs.Summary).ToList();
                 });
 
@@ -386,7 +386,7 @@ public static class CliEditorCommands
                 string newName = Require(name, "name");
                 CliEdit.Run("Rename", () =>
                 {
-                    Undo.RecordGameObjectChange(go, "CLI: Rename", go.Name, newName, (g, v) => g.Name = v);
+                    Undo.RecordObject(go, "CLI: Rename");
                     go.Name = newName;
                 });
                 return CliRefs.Summary(go);
@@ -404,8 +404,11 @@ public static class CliEditorCommands
 
                 CliEdit.Run("Parent", () =>
                 {
-                    var actions = targets.Select(go => Reparent(scene, go, newParent, index, world)).ToList();
-                    CliEdit.Record("Parent", actions);
+                    foreach (GameObject go in targets)
+                    {
+                        Undo.SetTransformParent(go, newParent, world, "CLI: Parent");
+                        if (index >= 0) Undo.SetSiblingIndex(go, index, "CLI: Parent");
+                    }
                 });
                 return targets.Select(CliRefs.Summary).ToList();
             }
@@ -413,24 +416,21 @@ public static class CliEditorCommands
             case GoAction.Active:
             {
                     List<GameObject> targets = Targets(target);
-                CliEdit.Run("Active", () => Undo.ApplyGameObjectChanges(targets, "CLI: Active", g => g.Enabled, (g, v) => g.Enabled = v, active));
+                CliEdit.Run("Active", () =>
+                {
+                    Undo.RecordObjects(targets, "CLI: Active");
+                    foreach (GameObject go in targets) go.Enabled = active;
+                });
                 return targets.Select(CliRefs.Summary).ToList();
             }
 
             case GoAction.Transform:
             {
                     GameObject go = CliRefs.ResolveGameObject(Require(target, "target"));
-                    (Float3 LocalPosition, Quaternion LocalRotation, Float3 LocalScale) before = (go.Transform.LocalPosition, go.Transform.LocalRotation, go.Transform.LocalScale);
                 CliEdit.Run("Transform", () =>
                 {
+                    Undo.RecordObject(go, "CLI: Transform");
                     ApplyTransform(go, position, rotation, scale, world);
-                    (Float3 LocalPosition, Quaternion LocalRotation, Float3 LocalScale) after = (go.Transform.LocalPosition, go.Transform.LocalRotation, go.Transform.LocalScale);
-                    Undo.RecordGameObjectChange(go, "CLI: Transform", before, after, (g, v) =>
-                    {
-                        g.Transform.LocalPosition = v.Item1;
-                        g.Transform.LocalRotation = v.Item2;
-                        g.Transform.LocalScale = v.Item3;
-                    });
                 });
                 return Described(go);
             }
@@ -470,27 +470,6 @@ public static class CliEditorCommands
         return node;
     }
 
-    private static (Action undo, Action redo) Reparent(Scene scene, GameObject go, GameObject? newParent, int index, bool keepWorld)
-    {
-        Guid goId = go.Identifier;
-        Guid oldParentId = go.Parent.IsValid() ? go.Parent.Identifier : Guid.Empty;
-        Guid newParentId = newParent.IsValid() ? newParent.Identifier : Guid.Empty;
-        int oldIndex = go.Parent.IsValid() ? go.GetSiblingIndex() ?? -1 : scene.GetRootIndex(go);
-
-        Move(go, newParentId, index);
-        return (() => { if (Undo.FindGO(goId) is { } g) Move(g, oldParentId, oldIndex); },
-                () => { if (Undo.FindGO(goId) is { } g) Move(g, newParentId, index); });
-
-        void Move(GameObject g, Guid parentId, int siblingIndex)
-        {
-            GameObject? p = parentId == Guid.Empty ? null : Undo.FindGO(parentId);
-            g.SetParent(p!, keepWorld);
-            if (siblingIndex < 0) return;
-            if (p.IsValid()) g.SetSiblingIndex(siblingIndex);
-            else if (Scene.Current.IsValid()) Scene.Current.SetRootIndex(g, siblingIndex);
-        }
-    }
-
     [CliCommand("component", "Adds (optionally setting --values), removes, or lists components. One undo step per call")]
     public static async Task<object> Component(
         [CliArg("action")] ComponentAction action,
@@ -511,7 +490,7 @@ public static class CliEditorCommands
                     List<(string Path, string Json)> fieldValues = ParseValues(values);
                 return CliEdit.Run("Add Component", () =>
                 {
-                    Component added = go.AddComponent(componentType);
+                    Component added = Undo.AddComponent(go, componentType);
                     if (added.IsNotValid()) throw new CliException($"{componentType.Name} could not be added to {go.Name}. See the logs.");
                     try
                     {
@@ -519,10 +498,9 @@ public static class CliEditorCommands
                     }
                     catch
                     {
-                        go.RemoveComponent(added);
+                        Undo.RevertAllInCurrentGroup();
                         throw;
                     }
-                    RecordAdd(go, added);
                     JsonObject summary = CliRefs.Summary(added);
                     summary["fields"] = CliRefs.GetFields(added, "");
                     return summary;
@@ -541,20 +519,6 @@ public static class CliEditorCommands
         }
 
         throw new CliException($"Unknown action {action}.");
-    }
-
-    private static void RecordAdd(GameObject go, Component added)
-    {
-        Guid goId = go.Identifier, compId = added.Identifier;
-        Type compType = added.GetType();
-        EchoObject serialized = Echo.Serializer.Serialize(compType, added);
-        Undo.RegisterAction("CLI: Add Component",
-            undo: () => { if (Undo.FindGO(goId) is { } g && g.GetComponentByIdentifier(compId) is { } c) g.RemoveComponent(c); },
-            redo: () =>
-            {
-                if (Undo.FindGO(goId) is not { } g) return;
-                if (Echo.Serializer.Deserialize(serialized, compType) is Component c) { c.Identifier = compId; g.AddComponent(c); }
-            });
     }
 
     /// <summary> A JSON object of field path to value, each value kept as JSON text. </summary>
@@ -918,15 +882,16 @@ public static class CliEditorCommands
                 Guid rootId = root.Identifier;
                 int overrides = PrefabUtility.CountOverrides(root);
                     List<PrefabUtility.AdditionDescription> additions = PrefabUtility.DescribeAdditions(root);
+                GameObject? LiveRoot() => Scene.Current.IsValid() ? Scene.Current.FindObjectByIdentifier<GameObject>(rootId) : null;
                 CliEdit.Run("Apply Prefab", () =>
                 {
                     PrefabUtility.ApplyOverrides(root);
                     // Each apply refreshes the instance, which can replace its objects, so the root is found again every time.
                     foreach (PrefabUtility.AdditionDescription addition in additions)
-                        if (Undo.FindGO(rootId) is { } live && live.IsValid())
+                        if (LiveRoot() is { } live && live.IsValid())
                             PrefabUtility.ApplyAddition(live, addition);
                 });
-                    GameObject? applied = Undo.FindGO(rootId);
+                    GameObject? applied = LiveRoot();
                 return new
                 {
                     instance = applied.IsValid() ? CliRefs.Summary(applied!) : null,
