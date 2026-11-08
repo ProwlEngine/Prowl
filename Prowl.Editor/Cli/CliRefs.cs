@@ -778,6 +778,6 @@ public static class CliEdit
 
         if (!playing || s_warnedThisPlay) return;
         s_warnedThisPlay = true;
-        Debug.LogWarning("[CLI] Play mode is running, so this change is not undoable and is lost when play stops. Stop play mode to make lasting edits.");
+        Debug.LogWarning("[CLI] Play mode is running, so this change is lost when play stops. Stop play mode to make lasting edits.");
     }
 }
