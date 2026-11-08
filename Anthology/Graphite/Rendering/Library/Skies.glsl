@@ -67,8 +67,39 @@ vec3 Graphite_SkyRadiance(vec3 view, vec3 sun, float sunGlow)
     return (single + bounce * (1.0 - viewT)) * 1.7557;
 }
 
+// How bright the sun's disk is against the sky's brightness, bright enough to read as the sun without its true glare
+#define GRAPHITE_SUN_DISK_BRIGHTNESS 4.0
+
+// The sun's disk and the glow around it at a view direction, per unit of the sky's brightness: a soft edged disk sizeScale
+// times half a degree across, darker and warmer toward its rim as the real sun is, a tight corona around it and a wide
+// faint halo, all reddened by the air the sunlight crosses, so it sets orange
+vec3 Graphite_SunDisk(vec3 view, vec3 sun, float sizeScale, float glowScale)
+{
+    float radius = 0.0087 * sizeScale;
+    float r = length(cross(view, sun)) / radius;
+    if (dot(view, sun) <= 0.0)
+        return vec3(0.0);
+
+    // Limb darkening, the rim's light from shallower and cooler gas
+    float mu = sqrt(max(1.0 - min(r * r, 1.0), 0.0));
+    vec3 limb = vec3(1.0) - vec3(0.45, 0.6, 0.75) * (1.0 - mu);
+    float edge = 1.0 - smoothstep(0.92, 1.0, r);
+    vec3 disk = limb * edge;
+
+    // A corona hugging the rim and a halo fading out over many radii
+    float outside = max(r - 1.0, 0.0);
+    float corona = exp(-outside * 3.0) * 0.12;
+    float halo = 0.02 / (1.0 + outside * outside * 0.05);
+    vec3 light = disk + vec3(corona + halo) * glowScale * (1.0 - edge);
+
+    // The sun seen through the air, as the sky's own scattering reddens it
+    float sunAir = 1.0279 / (max(sun.y, 0.0) + 0.027943);
+    vec3 through = exp(-vec3(0.088977, 0.16327, 0.31751) * sunAir);
+    return light * through / max(Graphite_Luminance(through), 1e-3) * min(Graphite_Luminance(through) * 4.0, 1.0);
+}
+
 // The procedural sky in nits: the scattered light of a sun of sunLux, its colour times lux, times tint, the sun's disk
-// scaled by sunSize (0 hides it) shining that illuminance, the light at the horizon times ground below it, all times
+// scaled by sunSize (0 hides it) and its glow by sunGlow, the light at the horizon times ground below it, all times
 // brightness. Captures leave the disk out while a directional light is the sun, which lights everything already.
 vec3 Graphite_ProceduralSky(vec3 view, vec3 sun, vec3 sunLux, float sunSize, float sunGlow, float brightness, vec3 tint, vec3 ground)
 {
@@ -76,10 +107,8 @@ vec3 Graphite_ProceduralSky(vec3 view, vec3 sun, vec3 sunLux, float sunSize, flo
     vec3 color = Graphite_SkyRadiance(view, sun, sunGlow) * tint * (lux * GRAPHITE_SKY_NITS_PER_LUX);
     if (sunSize > 0.0 && !(Graphite_IsCapture() && Graphite_DirectionalCount() > 0u))
     {
-        // The disk fades in over its rim, so its solid angle is 2 pi times its blend's mean width in cosine
-        float size2 = sunSize * sunSize;
-        float disk = smoothstep(1.0 - 1.5e-4 * size2, 1.0 - 1e-5 * size2, dot(view, sun)) * step(0.0, view.y);
-        color += disk * sunLux / (2.0 * GRAPHITE_PI * 8e-5 * size2);
+        vec3 hue = sunLux / max(lux, 1e-6);
+        color += Graphite_SunDisk(view, sun, sunSize, sunGlow) * hue * (lux * GRAPHITE_SKY_NITS_PER_LUX * GRAPHITE_SUN_DISK_BRIGHTNESS) * smoothstep(-0.01, 0.0, view.y);
     }
     color = mix(color, color * ground, smoothstep(0.0, -0.02, view.y));
     return color * brightness;
