@@ -2,6 +2,8 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.UI;
 
 using Xunit;
 
@@ -1131,5 +1133,33 @@ public class SceneManagementTests : RuntimeTestBase
         int lastRemoved = Math.Max(TeardownLog.Events.IndexOf("removed A"), TeardownLog.Events.IndexOf("removed B"));
         int firstDispose = Math.Min(TeardownLog.Events.IndexOf("dispose A"), TeardownLog.Events.IndexOf("dispose B"));
         Assert.True(lastDisable >= 0 && lastDisable < firstRemoved && lastRemoved < firstDispose, string.Join(", ", TeardownLog.Events));
+    }
+
+    // Each world keeps its own registries, and a dormant world's are empty.
+    [Fact]
+    public void Registries_ArePerWorld_AndEmptyWhileDormant()
+    {
+        SceneInstance first = CreateScene(enable: true);
+        SceneInstance second = CreateScene(enable: true);
+        WindZone zone = first.Create("Wind").AddComponent<WindZone>();
+        Volume volume = first.Create("Volume").AddComponent<Volume>();
+        EventSystem events = second.Create("Events").AddComponent<EventSystem>();
+        Camera camera = second.Create("Camera").AddComponent<Camera>();
+
+        Assert.Equal([zone], first.WindZones);
+        Assert.Empty(second.WindZones);
+        Assert.Equal([volume], first.Volumes);
+        Assert.Empty(second.Volumes);
+        Assert.Same(events, second.Input.EventSystem);
+        Assert.Null(first.Input.EventSystem);
+        Assert.Same(camera, second.MainCamera);
+        Assert.Null(first.MainCamera);
+
+        first.Deactivate();
+        Assert.Empty(first.WindZones);
+        Assert.Empty(first.Volumes);
+
+        first.Activate();
+        Assert.Equal([zone], first.WindZones);
     }
 }

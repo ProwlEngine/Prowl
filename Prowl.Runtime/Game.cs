@@ -387,6 +387,9 @@ public abstract class Game
         // for AudioContext.Suspended when it wants the audio to stop too.
         AudioContext.SuspendedByPause = Application.IsEditor && Application.IsPlaying && SceneInstance.HasMain && SceneInstance.Main.Paused;
 
+        // Before any world's event system ticks, so a menu drawn over the game takes the pointer from it.
+        UI.SceneInput.Arbitrate(PresentedWorlds());
+
         foreach (SceneInstance world in SceneInstance.All)
         {
             if (!world.TicksWithEngine) continue;

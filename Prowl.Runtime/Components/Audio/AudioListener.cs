@@ -5,6 +5,7 @@ using System;
 
 using Prowl.Runtime.Audio;
 using Prowl.Runtime.Audio.Native;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 
@@ -12,7 +13,10 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-/// <summary> This class represents a point in the 3D space where audio is perceived or heard. </summary>
+/// <summary>
+/// A point in 3D space where audio is heard. Only listeners in <see cref="SceneInstance.Main"/> are heard, so spatial
+/// sources in other worlds play relative to Main's listener.
+/// </summary>
 [AddComponentMenu("Audio/Audio Listener")]
 [ComponentIcon("\uf025")] // Headphones
 public sealed class AudioListener : Component
@@ -21,35 +25,36 @@ public sealed class AudioListener : Component
     private Float3 previousPosition;
     private int _deviceGeneration = -1;
 
-    private static int s_activeCount;
-
     /// <summary> A handle to the native ma_audio_listener instance. </summary>
     public IntPtr Handle => handle;
 
-    /// <summary>
-    /// How many listeners are currently enabled. Spatial audio is only well defined with exactly one:
-    /// none leaves every source positioned relative to the world origin, and more than one leaves it
-    /// undefined which of them sources are heard from.
-    /// </summary>
-    /// <remarks>
-    /// Counts enabled components rather than native listeners. Two of them in a scene is an authoring
-    /// mistake whether or not the machine running it happened to open a device, and counting the native
-    /// side meant a device restart passed through zero on the way back up.
-    /// </remarks>
-    public static int ActiveCount => s_activeCount;
+    // Spatial audio is only defined for one listener, so a second enabled in the same world is an authoring mistake.
+    internal override void JoinWorld(SceneInstance world)
+    {
+        if (!world.AudioListeners.Contains(this)) world.AudioListeners.Add(this);
+        if (world.AudioListeners.Count > 1)
+            Debug.LogWarning($"[{GameObject.Name}] There are now {world.AudioListeners.Count} enabled AudioListeners in '{world.Name}'. " +
+                             "Spatial audio is only defined for one, so which of them sources are heard from is arbitrary.");
+    }
+
+    internal override void LeaveWorld(SceneInstance world) => world.AudioListeners.Remove(this);
 
     public override void OnEnable()
     {
-        s_activeCount++;
-
-        if (s_activeCount > 1)
-        {
-            Debug.LogWarning($"[{GameObject.Name}] There are now {s_activeCount} enabled AudioListeners. " +
-                             "Spatial audio is only defined for one, so which of them sources are heard from is arbitrary.");
-        }
-
         AudioContext.DeviceClosing += OnDeviceClosing;
-        CreateNative();
+        SceneInstance.MainChanged += OnMainChanged;
+        Refresh();
+    }
+
+    private bool IsHeard => SceneInstance.HasMain && ReferenceEquals(GameObject.Scene, SceneInstance.Main);
+
+    private void OnMainChanged(SceneInstance? previous, SceneInstance? next) => Refresh();
+
+    // Makes the native listener while this is in Main, and lets it go otherwise.
+    private void Refresh()
+    {
+        if (!IsHeard) DestroyNative();
+        else if (handle == IntPtr.Zero) CreateNative();
     }
 
     /// <summary>
@@ -91,7 +96,7 @@ public sealed class AudioListener : Component
         if (_deviceGeneration != AudioContext.DeviceGeneration)
         {
             DestroyNative();
-            CreateNative();
+            if (IsHeard) CreateNative();
             _deviceGeneration = AudioContext.DeviceGeneration;
         }
 
@@ -127,9 +132,8 @@ public sealed class AudioListener : Component
 
     public override void OnDisable()
     {
-        s_activeCount = Math.Max(0, s_activeCount - 1);
-
         AudioContext.DeviceClosing -= OnDeviceClosing;
+        SceneInstance.MainChanged -= OnMainChanged;
         DestroyNative();
     }
 

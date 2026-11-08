@@ -39,11 +39,11 @@ public class WindZoneTests : RuntimeTestBase
         SceneInstance scene = CreateScene(enable: true);
         WindZone zone = CreateZone(scene, Float3.Zero, 10f, 1f);
 
-        Assert.Contains(zone, WindZone.Active);
+        Assert.Contains(zone, scene.WindZones);
 
         zone.Enabled = false;
 
-        Assert.DoesNotContain(zone, WindZone.Active);
+        Assert.DoesNotContain(zone, scene.WindZones);
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public class WindZoneTests : RuntimeTestBase
         CreateZone(scene, new Float3(100f, 0f, 0f), 10f, 1f);
         WindZone close = CreateZone(scene, new Float3(2f, 0f, 0f), 10f, 1f);
 
-        Assert.Equal(close, WindZone.GetNearest(Float3.Zero));
+        Assert.Equal(close, WindZone.GetNearest(scene, Float3.Zero));
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class WindZoneTests : RuntimeTestBase
             CreateZone(scene, new Float3(i * 10f, 0f, 0f), 1f, 1f);
 
         var zones = new WindZone?[WindZone.kMaxShaderZones];
-        int count = WindZone.GetNearest(Float3.Zero, zones);
+        int count = WindZone.GetNearest(scene, Float3.Zero, zones);
 
         Assert.Equal(WindZone.kMaxShaderZones, count);
         for (int i = 0; i < count; i++)

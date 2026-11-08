@@ -174,7 +174,8 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
         base.Update();
         if (!IsInPlayingWorld || !_open) return;
 
-        GameObject? hovered = EventSystem.Current.IsValid() ? EventSystem.Current.Hovered : null;
+        EventSystem? events = EventSystem.Of(GameObject);
+        GameObject? hovered = events.IsValid() ? events.Hovered : null;
         if (Input.GetMouseButtonDown(0) && !IsWithinDropdown(hovered))
             Close();
     }

@@ -12,6 +12,7 @@ using Prowl.PaperUI;
 using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Tasks;
+using Prowl.Runtime.UI;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.Resources;
@@ -734,9 +735,44 @@ public class SceneInstance : EngineObject, ISerializable
     [SerializeIgnore, NotHeld]
     internal readonly List<GameCanvas> Canvases = [];
 
-    /// <summary>The cameras in this scene, enabled or not, so finding them each frame doesn't walk every object.</summary>
+    /// <summary>The enabled cameras in this world, so finding them each frame doesn't walk every object.</summary>
     [SerializeIgnore, NotHeld]
     internal readonly List<Camera> Cameras = [];
+
+    [SerializeIgnore, NotHeld]
+    internal readonly List<WindZone> WindZoneList = [];
+
+    /// <summary>The enabled wind zones in this world.</summary>
+    public IReadOnlyList<WindZone> WindZones => WindZoneList;
+
+    [SerializeIgnore, NotHeld]
+    internal readonly List<Volume> VolumeList = [];
+
+    /// <summary>The enabled volumes in this world, which its cameras blend.</summary>
+    public IReadOnlyList<Volume> Volumes => VolumeList;
+
+    [SerializeIgnore, NotHeld]
+    internal readonly List<AudioListener> AudioListeners = [];
+
+    /// <summary>The first enabled audio listener in this world, or null. Only Main's listeners are heard.</summary>
+    public AudioListener? AudioListener => AudioListeners.Count > 0 ? AudioListeners[0] : null;
+
+    /// <summary>This world's UI input: its event system, its host viewport and pointer arbitration.</summary>
+    public SceneInput Input { get; } = new();
+
+    [SerializeIgnore, NotHeld]
+    internal readonly LayoutUtility.Cache LayoutCache = new();
+
+    private void ClearRegistries()
+    {
+        Canvases.Clear();
+        Cameras.Clear();
+        WindZoneList.Clear();
+        VolumeList.Clear();
+        AudioListeners.Clear();
+        Input.Clear();
+        LayoutCache.Sizes.Clear();
+    }
 
     [SerializeIgnore, NotHeld]
     private SceneRendering? _rendering;
@@ -761,8 +797,8 @@ public class SceneInstance : EngineObject, ISerializable
         // Re-registering from the live scene rather than from what was registered before is what lets a
         // component whose new type gained its first per-frame callback start dispatching at all.
         _dispatcher.Reset();
-        Canvases.Clear();
-        Cameras.Clear();
+        ClearRegistries();
+        if (!_isActive) return;
 
         foreach (GameObject go in _allObj)
         {
@@ -770,12 +806,10 @@ public class SceneInstance : EngineObject, ISerializable
 
             foreach (Component comp in go._components)
             {
-                if (ReferenceEquals(comp, null) || comp.IsDisposed) continue;
-                if (comp is Camera camera) camera.JoinScene(this);
-                if (!comp.EnabledInHierarchy) continue;
+                if (ReferenceEquals(comp, null) || comp.IsDisposed || !comp.EnabledInHierarchy) continue;
                 comp._countedCollisionListener = false;
                 _dispatcher.Register(comp);
-                if (comp is GameCanvas canvas) canvas.RegisterIn(this);
+                comp.JoinWorld(this);
             }
         }
     }
@@ -1111,25 +1145,25 @@ public class SceneInstance : EngineObject, ISerializable
         _state = SceneState.Running;
         _isActive = true;
 
-        // Create a copy to avoid collection modification during enumeration
-        List<GameObject> allObjectsCopy = [.. Objects];
-
-        // Trigger OnEnable for all enabled components in the scene
-        foreach (GameObject go in allObjectsCopy)
+        List<Component> enabling = [];
+        foreach (GameObject go in Objects)
         {
-            if (go.IsDisposed) continue;
-
-            if (go.EnabledInHierarchy)
-            {
-                IEnumerable<Component> components = go.GetComponents<Component>();
-                foreach (Component component in components)
-                {
-                    if (component.IsDisposed) continue;
-                    if (component.Enabled && component.EnabledInHierarchy)
-                        component.InternalOnEnable();
-                }
-            }
+            if (!go.EnabledInHierarchy) continue;
+            foreach (Component component in go._components)
+                if (!component.IsDisposed && component.EnabledInHierarchy)
+                    enabling.Add(component);
         }
+        Enable(enabling);
+    }
+
+    // Every component joins the registries before any OnEnable runs, so a script enabled first still finds the camera.
+    private void Enable(List<Component> enabling)
+    {
+        foreach (Component component in enabling)
+            component.JoinWorld(this);
+        foreach (Component component in enabling)
+            if (!component.IsDisposed && component.EnabledInHierarchy)
+                component.InternalOnEnable();
     }
 
     /// <summary>
@@ -1300,7 +1334,7 @@ public class SceneInstance : EngineObject, ISerializable
         {
             if (component.IsDisposed) continue;
             _dispatcher.Unregister(component);
-            component.LeaveScene(this);
+            component.LeaveWorld(this);
         }
 
         obj.Scene = null;
@@ -1320,7 +1354,7 @@ public class SceneInstance : EngineObject, ISerializable
                 {
                     if (component.IsDisposed || !component.Enabled || !component.EnabledInHierarchy) continue;
                     _dispatcher.Register(component);
-                    component.JoinScene(this);
+                    component.JoinWorld(this);
                 }
         }
 
@@ -1328,19 +1362,24 @@ public class SceneInstance : EngineObject, ISerializable
             Attach(child);
     }
 
+    // The whole tree joins, with OnAddedToScene, before any of it enables.
     private void AddObject(GameObject obj)
     {
         using SceneScope active = Enter(this);
+        List<Component> enabling = [];
+        JoinTree(obj, enabling);
+        if (_isActive) Enable(enabling);
+    }
+
+    private void JoinTree(GameObject obj, List<Component> enabling)
+    {
         if (_allObjSet.Add(obj))
         {
             _allObj.Add(obj);
             obj.Scene = this;
             _identifiers[obj.Identifier] = obj;
 
-            IEnumerable<Component> components = obj.GetComponents<Component>();
-
-            // Call OnAddedToScene for all components
-            foreach (Component component in components)
+            foreach (Component component in obj._components.ToArray())
             {
                 if (component.IsDisposed) continue;
                 ComponentJoined(component);
@@ -1348,22 +1387,14 @@ public class SceneInstance : EngineObject, ISerializable
                 catch (Exception ex) { Debug.LogException($"[{obj.Name}/{component.GetType().Name}] OnAddedToScene() threw", ex); }
             }
 
-            // Call OnEnable for enabled components, but only if the scene is active
-            if (_isActive && obj.EnabledInHierarchy)
-            {
-                foreach (Component component in components)
-                {
-                    if (component.IsDisposed) continue;
-                    if (component.Enabled && component.EnabledInHierarchy)
-                        component.InternalOnEnable();
-                }
-            }
+            if (obj.EnabledInHierarchy)
+                foreach (Component component in obj._components)
+                    if (!component.IsDisposed && component.EnabledInHierarchy)
+                        enabling.Add(component);
         }
 
-        // Create a copy to avoid modification during enumeration
-        List<GameObject> children = [.. obj.Children];
-        foreach (GameObject child in children)
-            AddObject(child);
+        foreach (GameObject child in obj.Children.ToArray())
+            JoinTree(child, enabling);
     }
 
     private void RemoveObject(GameObject obj)
@@ -1488,7 +1519,7 @@ public class SceneInstance : EngineObject, ISerializable
         // Clear any remaining references
         _allObj.Clear();
         _allObjSet.Clear();
-        Cameras.Clear();
+        ClearRegistries();
 
         _rendering?.Dispose();
         _rendering = null;

@@ -204,11 +204,11 @@ public sealed class WheelCollider : Component
     // a moment meets the ground again within the step instead of falling for the whole of it.
     private const float ContactMargin = 0.03f;
 
-    private static readonly Dictionary<Rigidbody3D, List<WheelCollider>> s_wheelsOnBody = [];
 
     // Runtime state
     private Rigidbody3D? rb;
     private bool _bound;
+    private PhysicsWorld? _boundWorld;
     private PhysicsWorld? _world;
     private DynamicTree.RayCastFilterPre _rayFilter = null!;
     private RigidBody? _rayCar;
@@ -441,27 +441,30 @@ public sealed class WheelCollider : Component
     private void Bind()
     {
         Rigidbody3D? found = FindBody();
-        if (_bound && ReferenceEquals(found, rb)) return;
+        PhysicsWorld? world = GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
+        if (_bound && ReferenceEquals(found, rb) && ReferenceEquals(world, _boundWorld)) return;
 
         Unbind();
         rb = found;
-        if (rb.IsNotValid()) return;
-        if (!s_wheelsOnBody.TryGetValue(rb!, out List<WheelCollider>? wheels)) s_wheelsOnBody[rb!] = wheels = [];
+        if (rb.IsNotValid() || world == null) return;
+        if (!world.WheelsOnBody.TryGetValue(rb!, out List<WheelCollider>? wheels)) world.WheelsOnBody[rb!] = wheels = [];
         wheels.Add(this);
+        _boundWorld = world;
         _bound = true;
     }
 
     private void Unbind()
     {
-        if (_bound && !ReferenceEquals(rb, null) && s_wheelsOnBody.TryGetValue(rb, out List<WheelCollider>? wheels))
+        if (_bound && !ReferenceEquals(rb, null) && _boundWorld!.WheelsOnBody.TryGetValue(rb, out List<WheelCollider>? wheels))
         {
             wheels.Remove(this);
-            if (wheels.Count == 0) s_wheelsOnBody.Remove(rb);
+            if (wheels.Count == 0) _boundWorld.WheelsOnBody.Remove(rb);
         }
+        _boundWorld = null;
         _bound = false;
     }
 
-    private int WheelCount => _bound && s_wheelsOnBody.TryGetValue(rb!, out List<WheelCollider>? wheels) ? Maths.Max(1, wheels.Count) : 1;
+    private int WheelCount => _bound && _boundWorld!.WheelsOnBody.TryGetValue(rb!, out List<WheelCollider>? wheels) ? Maths.Max(1, wheels.Count) : 1;
 
     // ----------------------------------------------------------------
     //  Once a step: find the ground

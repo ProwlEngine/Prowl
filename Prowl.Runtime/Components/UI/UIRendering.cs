@@ -79,6 +79,7 @@ internal static class UIRendering
         private readonly WorldProvider _provider = new();
         private readonly OverlayFeature _feature;
         private readonly List<GameCanvas> _ordered = [];
+        private SceneInput? _input;
         private readonly List<RenderView> _overlayViews = [];
         private readonly List<UIRenderItem> _items = [];
         private readonly List<(int Canvas, int Version)> _stamp = [];
@@ -113,7 +114,9 @@ internal static class UIRendering
                 if (canvas.IsValid() && canvas.EnabledInHierarchy) _ordered.Add(canvas);
             _ordered.Sort(static (a, b) => a.InstanceID.CompareTo(b.InstanceID));
 
-            Float2? screenSize = GameCanvas.ScreenSizeOverride;
+            // One render world draws one scene world, so its canvases share one input
+            _input = _ordered.Count > 0 && _ordered[0].GameObject.Scene.IsValid() ? _ordered[0].GameObject.Scene.Input : null;
+            Float2? screenSize = _input?.ScreenSize;
             bool worldSpace = GameCanvas.EditorWorldSpaceOverride;
             try
             {
@@ -123,7 +126,7 @@ internal static class UIRendering
             }
             finally
             {
-                GameCanvas.ScreenSizeOverride = screenSize;
+                if (_input != null) _input.ScreenSize = screenSize;
                 GameCanvas.EditorWorldSpaceOverride = worldSpace;
             }
             SweepMaterials();
@@ -163,7 +166,7 @@ internal static class UIRendering
         private OverlayDraws? BuildOverlay(uint width, uint height)
         {
             GameCanvas.EditorWorldSpaceOverride = false;
-            GameCanvas.ScreenSizeOverride = new Float2(width, height);
+            if (_input != null) _input.ScreenSize = new Float2(width, height);
 
             _items.Clear();
             _stamp.Clear();

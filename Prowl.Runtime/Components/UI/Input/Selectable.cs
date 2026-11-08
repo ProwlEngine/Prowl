@@ -353,10 +353,10 @@ public class Selectable : UIBehaviour,
     // Navigation
     // ============================================================
 
-    /// <summary>Gives this widget keyboard focus through the active <see cref="EventSystem"/>.</summary>
+    /// <summary>Gives this widget keyboard focus through its world's <see cref="EventSystem"/>.</summary>
     public void Select()
     {
-        EventSystem? es = EventSystem.Current;
+        EventSystem? es = EventSystem.Of(GameObject);
         if (es.IsValid()) es.SetSelected(GameObject);
     }
 

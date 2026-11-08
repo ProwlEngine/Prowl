@@ -391,14 +391,11 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public virtual void OnDisable() { }
 
-    /// <summary>
-    /// The object is moving to another scene without leaving the world, as <see cref="SceneInstance.DontDestroyOnLoad"/> does,
-    /// so nothing is disabled. Anything registered with the old scene moves in <see cref="JoinScene"/>.
-    /// </summary>
-    internal virtual void LeaveScene(SceneInstance? scene) { }
+    /// <summary>Adds this component to its world's registries as it enables there, before any gameplay gate.</summary>
+    internal virtual void JoinWorld(SceneInstance world) { }
 
-    /// <summary>The other half of <see cref="LeaveScene"/>, called while the component is enabled in the new scene.</summary>
-    internal virtual void JoinScene(SceneInstance? scene) { }
+    /// <summary>The other half of <see cref="JoinWorld"/>, as the component disables or leaves the world.</summary>
+    internal virtual void LeaveWorld(SceneInstance world) { }
 
     /// <summary>
     /// Called before the first frame update.
@@ -523,6 +520,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
             {
                 scene.Dispatcher.Register(this);
                 if (this is Rendering.IRenderSync render) scene.Rendering.Add(render);
+                JoinWorld(scene);
             }
         }
         if (!ShouldExecuteGameplay) return;
@@ -544,6 +542,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
             {
                 scene.Dispatcher.Unregister(this);
                 if (this is Rendering.IRenderSync render) scene.Rendering.Remove(render);
+                LeaveWorld(scene);
             }
         }
         if (!_gameplayEnabled) return;

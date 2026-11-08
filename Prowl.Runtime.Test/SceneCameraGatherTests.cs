@@ -208,14 +208,17 @@ public class SceneCameraGatherTests : RuntimeTestBase
         AssertMatchesLegacy(scene);
     }
 
+    // A dormant world's registries are empty, and fill as it activates.
     [Fact]
-    public void CameraInASceneThatIsNotActive_IsFound()
+    public void CameraInADormantWorld_IsListedOnceItActivates()
     {
         SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject("Cam");
         go.AddComponent<Camera>();
         scene.Add(go);
 
+        Assert.Empty(scene.GatherActiveCameras());
+        scene.Activate();
         Assert.Single(scene.GatherActiveCameras());
     }
 

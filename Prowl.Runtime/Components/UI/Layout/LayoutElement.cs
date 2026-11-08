@@ -4,6 +4,7 @@
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.UI;
@@ -60,13 +61,13 @@ public class LayoutElement : UIBehaviour, ILayoutElement
 /// element's intrinsic size (its <see cref="RectTransform.SizeDelta"/> on axes with fixed anchors).
 /// </summary>
 /// <remarks>
-/// Results are memoized for the duration of one canvas layout pass. A nested group answers a size query
+/// Results are memoized per world for the duration of one canvas layout pass. A nested group answers a size query
 /// by querying all of its own children, so without the memo the cost multiplies at every nesting level -
-/// each of the three queries below would re-walk the entire subtree beneath it.
+/// each of the three queries below would re-walk the entire subtree beneath it. Objects in no world are not memoized.
 /// </remarks>
 public static class LayoutUtility
 {
-    private readonly struct Sizes
+    internal readonly struct Sizes
     {
         public readonly Float2 Min;
         public readonly Float2 Preferred;
@@ -78,18 +79,23 @@ public static class LayoutUtility
         }
     }
 
-    private static readonly Dictionary<GameObject, Sizes> s_cache = [];
-
-    /// <summary>Bumped by <see cref="InvalidateCache"/>. Layout groups stamp their own cached
-    /// aggregates with it so they expire together with this cache.</summary>
-    internal static int Generation { get; private set; }
-
-    /// <summary>Drops the memo. Called by the canvas at the start of every layout pass, since a
-    /// <see cref="ContentSizeFitter"/> can rewrite sizes part-way through a walk.</summary>
-    internal static void InvalidateCache()
+    /// <summary>One world's memo, and the generation layout groups stamp their own cached aggregates with.</summary>
+    internal sealed class Cache
     {
-        s_cache.Clear();
-        Generation++;
+        public readonly Dictionary<GameObject, Sizes> Sizes = [];
+        public int Generation;
+    }
+
+    /// <summary>The generation of the memo <paramref name="go"/> resolves in, or -1 in no world, which never matches a stamp.</summary>
+    internal static int GenerationOf(GameObject go) => go.Scene.IsValid() ? go.Scene.LayoutCache.Generation : -1;
+
+    /// <summary>Drops a world's memo. Called by the canvas at the start of every layout pass, since a
+    /// <see cref="ContentSizeFitter"/> can rewrite sizes part-way through a walk.</summary>
+    internal static void InvalidateCache(SceneInstance? world)
+    {
+        if (world.IsNotValid()) return;
+        world.LayoutCache.Sizes.Clear();
+        world.LayoutCache.Generation++;
     }
 
     public static Float2 GetPreferredSize(GameObject go) => Resolve(go).Preferred;
@@ -101,7 +107,8 @@ public static class LayoutUtility
 
     private static Sizes Resolve(GameObject go)
     {
-        if (s_cache.TryGetValue(go, out Sizes cached)) return cached;
+        Dictionary<GameObject, Sizes>? cache = go.Scene.IsValid() ? go.Scene.LayoutCache.Sizes : null;
+        if (cache != null && cache.TryGetValue(go, out Sizes cached)) return cached;
 
         float pw = -1f, ph = -1f, mw = -1f, mh = -1f, fw = 0f, fh = 0f;
         foreach (Component c in go.GetComponents<Component>())
@@ -127,7 +134,7 @@ public static class LayoutUtility
             new Float2(w, h),
             new Float2(fw, fh));
 
-        s_cache[go] = sizes;
+        if (cache != null) cache[go] = sizes;
         return sizes;
     }
 

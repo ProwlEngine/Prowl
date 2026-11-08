@@ -202,34 +202,15 @@ public class Camera : Component
             disposable.Dispose();
     }
 
-    private SceneInstance? _registeredScene;
-
-    public override void OnAddedToScene() => JoinScene(GameObject.Scene);
-
-    public override void OnRemovedFromScene() => LeaveScene(_registeredScene);
-
-    // A scene move only rejoins enabled components, so a camera that moved while disabled joins here.
-    public override void OnEnable()
+    internal override void JoinWorld(SceneInstance world)
     {
-        if (_registeredScene.IsNotValid()) JoinScene(GameObject.Scene);
+        if (!world.Cameras.Contains(this)) world.Cameras.Add(this);
     }
 
-    internal override void JoinScene(SceneInstance? scene)
-    {
-        _registeredScene = scene;
-        if (scene.IsValid()) scene!.Cameras.Add(this);
-    }
-
-    internal override void LeaveScene(SceneInstance? scene)
-    {
-        if (_registeredScene.IsValid()) _registeredScene!.Cameras.Remove(this);
-        _registeredScene = null;
-    }
+    internal override void LeaveWorld(SceneInstance world) => world.Cameras.Remove(this);
 
     protected override void OnDispose()
     {
-        LeaveScene(_registeredScene);
-
         foreach (object data in _renderData.Values)
         {
             try { (data as IDisposable)?.Dispose(); }

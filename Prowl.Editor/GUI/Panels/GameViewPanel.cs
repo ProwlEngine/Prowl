@@ -363,8 +363,8 @@ public class GameViewPanel : DockPanel
                 // Camera.PixelWidth/Height), so picking works from the editor like a standalone build.
                 GameViewInputHandler.Viewport = new GameViewInputHandler.GameViewport(origin, size, new Int2(rtW, rtH));
 
-                if (RuntimeEventSystem.Current is { } es)
-                    es.Viewport = new RuntimeEventSystem.HostViewport
+                if (SceneInstance.HasMain)
+                    SceneInstance.Main.Input.Viewport = new RuntimeEventSystem.HostViewport
                     {
                         ReferenceSize = new Float2(rtW, rtH),
                         PointerPosition = pointerInRT,
@@ -374,8 +374,8 @@ public class GameViewPanel : DockPanel
             else
             {
                 GameViewInputHandler.Viewport = null;
-                if (RuntimeEventSystem.Current is { } es)
-                    es.Viewport = null;
+                if (SceneInstance.HasMain)
+                    SceneInstance.Main.Input.Viewport = null;
             }
 
             // Render game UI into the RT

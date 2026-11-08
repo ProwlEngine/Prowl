@@ -124,9 +124,10 @@ public sealed class UISceneEditor : SceneTool
         // The scene view renders at viewport size, so that IS the screen size a canvas should lay out
         // against here - and it's the viewport's own business, not something to read back off the camera.
         Float2 viewport = ctx.ViewportSize;
-        Float2? prevScreenOverride = GameCanvas.ScreenSizeOverride;
+        SceneInput input = SceneInstance.Main.Input;
+        Float2? prevScreenOverride = input.ScreenSize;
         if (viewport.X > 0 && viewport.Y > 0)
-            GameCanvas.ScreenSizeOverride = viewport;
+            input.ScreenSize = viewport;
 
         try
         {
@@ -260,7 +261,7 @@ public sealed class UISceneEditor : SceneTool
         }
         finally
         {
-            GameCanvas.ScreenSizeOverride = prevScreenOverride;
+            input.ScreenSize = prevScreenOverride;
         }
     }
 
