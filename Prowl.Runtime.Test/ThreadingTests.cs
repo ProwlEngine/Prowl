@@ -261,6 +261,26 @@ public class ThreadingTests : RuntimeTestBase
         Assert.False(resumed);
     }
 
+    // A world's token ends with its session, a world that outlives the restart gets a fresh one, and destroying ends it.
+    [Fact]
+    public void WorldToken_EndsWithTheSession_AndWithTheWorld()
+    {
+        using var loop = new LoopScope();
+        SceneInstance world = CreateScene(enable: true);
+        CancellationToken first = world.Token;
+
+        MainThreadContext.Restart();
+
+        Assert.True(first.IsCancellationRequested);
+        CancellationToken second = world.Token;
+        Assert.False(second.IsCancellationRequested);
+
+        world.Dispose();
+
+        Assert.True(second.IsCancellationRequested);
+        Assert.True(world.Token.IsCancellationRequested);
+    }
+
     [Fact]
     public void EndingASessionDropsQueuedWorkCancelsItsTokenAndItsFrameWaits()
     {

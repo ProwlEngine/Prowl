@@ -65,6 +65,36 @@ public class HotReloadSceneTests : EditorTestHarness
         Assert.Same(goA, newA.GameObject);                             // same GameObject
     }
 
+    // Every world is a root of one migration, the dormant one too, and each drops its type indices.
+    [Fact]
+    public void RealRecompile_MigratesEveryWorld_IncludingADormantOne()
+    {
+        Assembly v1 = CompileGameAssembly("Lantern.cs",
+            "using Prowl.Runtime; public class Lantern : Component { public int Lit; }");
+        Type lanternV1 = v1.GetType("Lantern")!;
+
+        var running = new SceneInstance(SceneMode.Edit);
+        running.Activate();
+        var dormant = new SceneInstance(SceneMode.Edit);
+        GameObject first = running.Create("First");
+        GameObject second = dormant.Create("Second");
+        first.AddComponent(lanternV1);
+        second.AddComponent(lanternV1);
+        Assert.Single(running.GetAll<Component>().Where(c => c.GetType() == lanternV1));
+
+        Assembly v2 = CompileGameAssembly("Lantern.cs",
+            "using Prowl.Runtime; public class Lantern : Component { public int Lit; public int Added; }");
+        Type lanternV2 = v2.GetType("Lantern")!;
+
+        SceneHotReload.Migrate([running, dormant], [(v1, v2)]);
+
+        Assert.Same(lanternV2, first.GetComponents().Single().GetType());
+        Assert.Same(lanternV2, second.GetComponents().Single().GetType());
+        Assert.Single(running.GetAll<Component>().Where(c => c.GetType() == lanternV2));
+        running.Dispose();
+        dormant.Dispose();
+    }
+
     // A running scene: after migration the registry dispatches to the migrated instance, so the new Update runs.
     [Fact]
     public void RealRecompile_RunningScene_RepointsRegistry_SoNewCodeRunsOnMigratedInstance()

@@ -820,6 +820,37 @@ public class SceneInstance : EngineObject, ISerializable
     private readonly List<SceneSection> _sections = [];
     private SceneSection _activeSection = null!;
 
+    [NotHeld] private CancellationTokenSource? _token;
+    [NotHeld] private MainThreadContext? _tokenSession;
+
+    /// <summary>
+    /// Cancelled when this world is destroyed and when the session restarts. A world that outlives a restart, like the
+    /// dormant edit world, gives a fresh token from then on.
+    /// </summary>
+    public CancellationToken Token
+    {
+        get
+        {
+            if (_state is SceneState.Destroying or SceneState.Destroyed) return new CancellationToken(true);
+            MainThreadContext? session = MainThreadContext.Current;
+            if (_token == null || !ReferenceEquals(_tokenSession, session))
+            {
+                _token?.Dispose();
+                _tokenSession = session;
+                _token = session == null ? new CancellationTokenSource() : CancellationTokenSource.CreateLinkedTokenSource(session.SessionToken);
+            }
+            return _token.Token;
+        }
+    }
+
+    private void CancelToken()
+    {
+        try { _token?.Cancel(); }
+        catch (AggregateException e) { Debug.LogException($"[Scene] A callback on the token of '{Name}' threw", e); }
+        _token?.Dispose();
+        _token = null;
+    }
+
     /// <summary>The world's sections: <see cref="Persistent"/> first, then in load order.</summary>
     public IReadOnlyList<SceneSection> Sections => _sections;
 
@@ -1569,6 +1600,7 @@ public class SceneInstance : EngineObject, ISerializable
 
         // Destroying still counts as playing, so every component gets OnDisable as it would in a running game.
         _state = SceneState.Destroying;
+        CancelToken();
         Raise(Destroying, this, handler => handler(this), nameof(Destroying));
 
         if (ReferenceEquals(_main, this))
