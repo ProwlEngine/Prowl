@@ -903,7 +903,7 @@ internal sealed class AnimationGraphProbe : IGraphProbe
             return;
         }
 
-        SceneInstance? scene = SceneInstance.Current;
+        SceneInstance? scene = SceneInstance.Main;
         if (scene.IsNotValid()) return;
 
         foreach (Animator animator in scene!.Animation.Animators)

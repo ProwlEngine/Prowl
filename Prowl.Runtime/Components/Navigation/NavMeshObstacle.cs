@@ -168,7 +168,7 @@ public class NavMeshObstacle : Component
             if (_carveApplied) RemoveCarve();
             // Velocity mode is crowd steering, and crowds only step during play — outside it a
             // blocker would sit in a crowd nothing is running.
-            if (Application.IsPlaying) UpdateBlockers();
+            if (IsInPlayingWorld) UpdateBlockers();
             else if (_blockers.Count > 0) RemoveBlockers();
             return;
         }

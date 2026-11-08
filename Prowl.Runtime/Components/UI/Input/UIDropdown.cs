@@ -154,7 +154,7 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
 
     private void Open()
     {
-        if (_open || !Application.IsPlaying || _optionsRoot.IsNotValid()) return;
+        if (_open || !IsInPlayingWorld || _optionsRoot.IsNotValid()) return;
         _open = true;
         RebuildItems();
         _optionsRoot.GameObject.Enabled = true;
@@ -172,7 +172,7 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
     public override void Update()
     {
         base.Update();
-        if (!Application.IsPlaying || !_open) return;
+        if (!IsInPlayingWorld || !_open) return;
 
         GameObject? hovered = EventSystem.Current.IsValid() ? EventSystem.Current.Hovered : null;
         if (Input.GetMouseButtonDown(0) && !IsWithinDropdown(hovered))

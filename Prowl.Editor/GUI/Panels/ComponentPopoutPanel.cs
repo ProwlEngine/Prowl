@@ -127,7 +127,7 @@ public class ComponentPopoutPanel : DockPanel
 
     private (GameObject? go, Component? comp) FindComponent()
     {
-        SceneInstance scene = SceneInstance.Current;
+        SceneInstance scene = SceneInstance.Main;
         if (scene.IsNotValid()) return (null, null);
 
         foreach (GameObject go in scene.AllObjects)

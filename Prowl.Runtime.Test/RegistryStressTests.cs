@@ -180,7 +180,7 @@ public class RegistryStressTests : RuntimeTestBase
         PlainUpdateCounter c = go.AddComponent<PlainUpdateCounter>();
         scene.Add(go);
 
-        scene.Disable(); // unregisters all
+        scene.Deactivate(); // unregisters all
         Update(scene);
 
         Assert.Equal(0, c.Updates);

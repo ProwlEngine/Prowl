@@ -153,7 +153,7 @@ public abstract class Game
         {
             try
             {
-                SceneInstance? currentScene = SceneInstance.Current;
+                SceneInstance? currentScene = SceneInstance.HasMain ? SceneInstance.Main : null;
 
                 BeginRender();
 
@@ -369,7 +369,7 @@ public abstract class Game
     /// </summary>
     private void SimulationStep(float delta)
     {
-        SceneInstance? currentScene = SceneInstance.Current;
+        SceneInstance? currentScene = SceneInstance.HasMain ? SceneInstance.Main : null;
 
         // Before the scene runs, so a continuation resumed this frame sees the same world the rest of
         // the frame will.

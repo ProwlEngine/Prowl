@@ -119,7 +119,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
     private static SceneInstance MakeScene(out GameObject a, out GameObject b)
     {
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         a = new GameObject("A");
         b = new GameObject("B");
         scene.Add(a);
@@ -357,7 +357,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         ComponentClipboard.Copy(src);
 
         // Swap to an unrelated scene, as entering/leaving prefab mode does.
-        var other = new SceneInstance();
+        var other = new SceneInstance(SceneMode.Edit);
         var host = new GameObject("Host");
         other.Add(host);
         SceneInstance.Load(other);
@@ -386,7 +386,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         Guid originalId = a.Identifier;
 
         EchoObject echo = scene.CaptureTree();
-        SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(echo));
+        SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
         SceneInstance.Load(restored);
         SceneInstance.ProcessPendingLoad();
 

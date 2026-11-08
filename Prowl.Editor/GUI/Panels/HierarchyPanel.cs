@@ -88,7 +88,7 @@ public class HierarchyPanel : DockPanel
             _dragHoverNormalizedYNext = 0f;
         }
 
-        SceneInstance scene = SceneInstance.Current;
+        SceneInstance scene = SceneInstance.Main;
 
         using (paper.Column("hier_root")
             .Size(width, height)
@@ -598,7 +598,7 @@ public class HierarchyPanel : DockPanel
                 case DropPosition.Below:
                     if (targetIsRoot)
                     {
-                        SceneInstance scene = SceneInstance.Current;
+                        SceneInstance scene = SceneInstance.Main;
                         if (scene.IsNotValid()) break;
 
                         // Unparent if needed
@@ -878,7 +878,7 @@ public class HierarchyPanel : DockPanel
     /// so they don't steal selection / rename focus from the object the user actually asked for.</param>
     internal static GameObject CreateGameObject(string name, GameObject? parent, bool select = true, bool beginRename = true)
     {
-        SceneInstance scene = SceneInstance.Current;
+        SceneInstance scene = SceneInstance.Main;
         if (scene.IsNotValid()) return new GameObject(name);
 
         var go = new GameObject(name);
@@ -920,7 +920,7 @@ public class HierarchyPanel : DockPanel
     /// </summary>
     internal static void CreateEmptyParent()
     {
-        SceneInstance scene = SceneInstance.Current;
+        SceneInstance scene = SceneInstance.Main;
         if (scene.IsNotValid()) return;
 
         // Only the top-level selection moves: an object whose ancestor is also selected already
@@ -939,7 +939,7 @@ public class HierarchyPanel : DockPanel
 
     private static void CreateEmptyParentCore(List<GameObject> targets)
     {
-        SceneInstance scene = SceneInstance.Current;
+        SceneInstance scene = SceneInstance.Main;
         if (scene.IsNotValid()) return;
 
         // The first selected object anchors the group: the new parent drops into its place in the
@@ -1046,7 +1046,7 @@ public class HierarchyPanel : DockPanel
 
     internal static void DeleteOneGameObject(GameObject go)
     {
-        SceneInstance scene = SceneInstance.Current;
+        SceneInstance scene = SceneInstance.Main;
         if (scene.IsNotValid()) return;
 
         Undo.DestroyObjectImmediate(go);
@@ -1097,7 +1097,7 @@ public class HierarchyPanel : DockPanel
 
     private GameObject? FindGOByIdentifier(string id)
     {
-        SceneInstance scene = SceneInstance.Current;
+        SceneInstance scene = SceneInstance.Main;
         if (scene.IsNotValid()) return null;
         return scene.AllObjects.FirstOrDefault(g => g.Identifier.ToString() == id);
     }
@@ -1146,7 +1146,7 @@ public class HierarchyPanel : DockPanel
 
     public static void SpawnAssetInScene(AssetDragPayload payload, GameObject? parent, Float3 position)
     {
-        SceneInstance scene = SceneInstance.Current;
+        SceneInstance scene = SceneInstance.Main;
         if (scene.IsNotValid()) return;
 
         Asset? asset = Runtime.AssetDatabase.Get(payload.AssetGuid);

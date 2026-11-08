@@ -72,7 +72,7 @@ public class AnimatorTests : RuntimeTestBase
         animator.Avatar = avatar;
         animator.Clips = [SlideClip(skeleton, avatar, distance, rootMotionEnd)];
 
-        scene.Enable();
+        scene.Activate();
         return (scene, animator, root);
     }
 

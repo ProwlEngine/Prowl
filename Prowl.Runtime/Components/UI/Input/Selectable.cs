@@ -212,7 +212,7 @@ public class Selectable : UIBehaviour,
     /// <summary>Drives the color lerp toward the current state's target. Called every frame.</summary>
     public override void Update()
     {
-        if (!Application.IsPlaying) return;
+        if (!IsInPlayingWorld) return;
         if (_transition != SelectableTransition.ColorTint) return;
         if (TargetGraphic.IsNotValid()) return;
 

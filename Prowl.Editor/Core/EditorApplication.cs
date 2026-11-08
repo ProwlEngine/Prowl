@@ -77,9 +77,9 @@ public class EditorApplication : Game
     private string _savedEditorSceneName = "";
     private Runtime.Resources.Scene? _savedEditorSceneSource;
 
-    private SceneInstance RestoreSavedScene(SerializationContext context)
+    private SceneInstance RestoreSavedScene(SerializationContext context, SceneMode mode)
     {
-        SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(_savedEditorScene!, context));
+        SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(_savedEditorScene!, context), mode);
         scene.Name = _savedEditorSceneName;
         scene.Source = _savedEditorSceneSource;
         return scene;
@@ -110,6 +110,11 @@ public class EditorApplication : Game
         Instance = this;
         Application.IsEditor = true;
         Application.IsPlaying = false;
+
+        // An empty edit world until a project's scene opens, so panels always have a world to show.
+        SceneInstance empty = SceneInstance.Create("Untitled", SceneMode.Edit);
+        empty.Activate();
+        SceneInstance.Main = empty;
         // Gameplay asking to quit stops play mode. Deferred to the GUI phase so the play scene is not torn down mid Update.
         Application.QuitHandler = () => _quitRequested = true;
 
@@ -1150,7 +1155,7 @@ public class EditorApplication : Game
             string? scenePath = EditorSceneManager.CurrentScenePath;
             string sceneName = !string.IsNullOrEmpty(scenePath)
                 ? System.IO.Path.GetFileNameWithoutExtension(scenePath)
-                : (Runtime.Resources.SceneInstance.Current.IsValid() ? Loc.Get("editor.untitled_scene") : Loc.Get("hierarchy.no_scene_loaded"));
+                : (Runtime.Resources.SceneInstance.Main.IsValid() ? Loc.Get("editor.untitled_scene") : Loc.Get("hierarchy.no_scene_loaded"));
             using (paper.Row("sb_scene").Width(UnitValue.Auto).Height(sh).Padding(pad, pad, 0, 0).Enter())
                 GlyphCell("sb_scene_cell", EditorIcons.Shapes, EditorTheme.Ink300, sceneName, EditorTheme.Ink400);
 
@@ -1599,7 +1604,7 @@ public class EditorApplication : Game
             if (EditorSceneManager.SaveAs(rel))
             {
                 Toasts.Success(Loc.Get("save.saved"),
-                    Loc.Get("save.scene", new { name = Runtime.Resources.SceneInstance.Current.IsValid() ? Runtime.Resources.SceneInstance.Current.Name : "Untitled" }));
+                    Loc.Get("save.scene", new { name = Runtime.Resources.SceneInstance.Main.IsValid() ? Runtime.Resources.SceneInstance.Main.Name : "Untitled" }));
                 onSaved?.Invoke();
             }
         }, Project.Current.AssetsPath,
@@ -1937,13 +1942,13 @@ public class EditorApplication : Game
 
         // Playing the prefab editing scene would run the editor-only camera/light rig, and stopping
         // restores it as the "editor scene", from where a save writes runtime state to the prefab.
-        if (PrefabEditingMode.IsEditing || PrefabEditingMode.IsPrefabEditScene(Runtime.Resources.SceneInstance.Current))
+        if (PrefabEditingMode.IsEditing || PrefabEditingMode.IsPrefabEditScene(Runtime.Resources.SceneInstance.Main))
         {
             Runtime.Debug.LogWarning("Exit prefab editing mode before entering play mode.");
             return;
         }
 
-        SceneInstance scene = Runtime.Resources.SceneInstance.Current;
+        SceneInstance scene = Runtime.Resources.SceneInstance.Main;
         if (scene.IsNotValid()) return;
 
         PlayModePreferences prefs = Preferences.Get<PlayModePreferences>();
@@ -1974,7 +1979,7 @@ public class EditorApplication : Game
         // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
         // the frame, so a failure here leaves the editor scene loaded and the editor usable.
         SerializationContext playCtx = Importers.ImportHelper.CreateTrackingContext(out _);
-        SceneInstance playScene = RestoreSavedScene(playCtx);
+        SceneInstance playScene = RestoreSavedScene(playCtx, SceneMode.Game);
 
         // Set play mode flags BEFORE loading so OnEnable/Start gates pass
         Application.IsPlaying = true;
@@ -2052,7 +2057,7 @@ public class EditorApplication : Game
             _dirtyAssetCopies = [];
 
             SerializationContext ctx = Importers.ImportHelper.CreateTrackingContext(out _);
-            SceneInstance restoredScene = RestoreSavedScene(ctx);
+            SceneInstance restoredScene = RestoreSavedScene(ctx, SceneMode.Edit);
 
             // Ends the play session at the swap, once the play scene's teardown has run, so nothing still
             // awaiting can resume against the edit scene.

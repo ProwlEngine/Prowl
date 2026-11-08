@@ -62,13 +62,13 @@ public static partial class PrefabUtility
         if (go.IsNotValid() || !PrefabEditingMode.IsEditing) return false;
 
         SceneInstance? scene = go.Scene;
-        return scene.IsValid() && ReferenceEquals(scene, SceneInstance.Current);
+        return scene.IsValid() && ReferenceEquals(scene, SceneInstance.Main);
     }
 
     /// <summary>Every instance root of a prefab in the current scene.</summary>
     public static List<GameObject> FindInstancesOf(Guid prefabGuid)
     {
-        SceneInstance scene = SceneInstance.Current;
+        SceneInstance scene = SceneInstance.Main;
         return scene.IsNotValid() ? [] : FindInstancesOf(prefabGuid, scene);
     }
 

@@ -7,7 +7,7 @@ description: Prowl physics for gameplay. Use when writing movement with Characte
 
 ## Queries
 
-Queries live on the world: `SceneInstance.Current.Physics`, or the static `Physics` class for the world whose code is running. `SceneInstance` is in `Prowl.Runtime.Resources`. Inside a component, `Scene` is the component's own nullable `Scene` property. Queries are **main thread only**.
+Queries live on the world: `SceneInstance.Main.Physics`, or the static `Physics` class for the world whose code is running. `SceneInstance` is in `Prowl.Runtime.Resources`. Inside a component, `Scene` is the component's own nullable `Scene` property. Queries are **main thread only**.
 
 - `Raycast(origin, direction, out RaycastHit hit)` and `Raycast(origin, direction, maxDistance, out hit)`.
 - **With a filter, the out comes after the distance:** `Raycast(origin, direction, maxDistance, out hit, filter)`, the same as `SphereCast(origin, radius, direction, maxDistance, out hit, filter)`.
@@ -41,7 +41,7 @@ public sealed class HitscanGun : Component
         if (!Input.GetMouseButtonDown(0)) return;
 
         QueryFilter filter = Owner.IsValid() ? new QueryFilter(LayerMask.Everything).Ignoring(Owner) : QueryFilter.Default;
-        if (SceneInstance.Current.Physics.Raycast(Transform.Position, Transform.Forward, Range, out RaycastHit hit, filter))
+        if (SceneInstance.Main.Physics.Raycast(Transform.Position, Transform.Forward, Range, out RaycastHit hit, filter))
         {
             if (hit.Transform.GameObject.TryGetComponent<Health>(out var health)) health.Hurt(Damage);
             if (hit.Rigidbody.IsValid()) hit.Rigidbody.ApplyImpulse(Transform.Forward * 2f, hit.Point);

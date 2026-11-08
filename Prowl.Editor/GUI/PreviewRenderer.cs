@@ -70,7 +70,7 @@ public class PreviewRenderer : IDisposable
         Width = width;
         Height = height;
 
-        _scene = new SceneInstance();
+        _scene = new SceneInstance(SceneMode.Preview);
         _scene.Name = "Preview";
 
         // Camera
@@ -93,7 +93,7 @@ public class PreviewRenderer : IDisposable
         _lightGo.AddComponent<DirectionalLight>().CastShadows = false;
         _scene.Add(_lightGo);
 
-        _scene.Enable();
+        _scene.Activate();
 
         EnsureRT();
         UpdateCameraPosition();

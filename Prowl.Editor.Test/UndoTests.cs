@@ -38,11 +38,11 @@ public class UndoTests : EditorTestHarness
 {
     public UndoTests() => Undo.Clear(); // static history persists across tests
 
-    private static GameObject? FindGO(Guid id) => SceneInstance.Current.FindObjectByIdentifier<GameObject>(id);
+    private static GameObject? FindGO(Guid id) => SceneInstance.Main.FindObjectByIdentifier<GameObject>(id);
 
     private (SceneInstance scene, GameObject go, UndoComp comp) MakeScene()
     {
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("GO");
         UndoComp comp = go.AddComponent<UndoComp>();
         scene.Add(go);
@@ -82,7 +82,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void PropertyChange_Undo_NotifiesTheRestoredObject()
     {
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("GO");
         AppliedComp comp = go.AddComponent<AppliedComp>();
         scene.Add(go);
@@ -175,7 +175,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void RegisterCreatedObject_Undo_Destroys_Redo_Recreates()
     {
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         SceneInstance.Load(scene);
         SceneInstance.ProcessPendingLoad();
         Undo.Clear();
@@ -251,7 +251,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void RegisterDestroyObject_Undo_MissingScriptKeepsItsLinkToTheRestOfTheScene()
     {
-        var source = new SceneInstance();
+        var source = new SceneInstance(SceneMode.Edit);
         var target = new GameObject("Target");
         var holder = new GameObject("Holder");
         UndoLinkComp link = holder.AddComponent<UndoLinkComp>();
@@ -261,7 +261,7 @@ public class UndoTests : EditorTestHarness
         source.Add(holder);
         string whileMissing = source.CaptureTree().WriteToString().Replace(nameof(UndoLinkComp), "Ghost_DoesNotExist");
 
-        SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(whileMissing)));
+        SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(whileMissing)), SceneMode.Edit);
         SceneInstance.Load(scene);
         SceneInstance.ProcessPendingLoad();
         GameObject loadedHolder = scene.AllObjects.Single(g => g.Name == "Holder");
@@ -270,8 +270,8 @@ public class UndoTests : EditorTestHarness
         Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Undo.PerformUndo();
 
-        string saved = SceneInstance.Current.CaptureTree().WriteToString().Replace("Ghost_DoesNotExist", nameof(UndoLinkComp));
-        SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(saved)));
+        string saved = SceneInstance.Main.CaptureTree().WriteToString().Replace("Ghost_DoesNotExist", nameof(UndoLinkComp));
+        SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(saved)), SceneMode.Edit);
         UndoLinkComp restoredLink = restored.AllObjects.Single(g => g.Name == "Holder").GetComponent<UndoLinkComp>()!;
 
         Assert.Equal(5, restoredLink.Value);
@@ -281,7 +281,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void RegisterDestroyObject_Undo_RestoresChildren()
     {
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         SceneInstance.Load(scene);
         SceneInstance.ProcessPendingLoad();
         Undo.Clear();
@@ -529,7 +529,7 @@ public class UndoTests : EditorTestHarness
 
     private static SceneInstance OpenScene()
     {
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         SceneInstance.Load(scene);
         SceneInstance.ProcessPendingLoad();
         Undo.ClearAll();
@@ -545,7 +545,7 @@ public class UndoTests : EditorTestHarness
         return go;
     }
 
-    private static T Live<T>(Guid id) where T : EngineObject => SceneInstance.Current.FindObjectByIdentifier<T>(id)!;
+    private static T Live<T>(Guid id) where T : EngineObject => SceneInstance.Main.FindObjectByIdentifier<T>(id)!;
 
     [Fact]
     public void DestroyedTogether_ReferenceEachOthersLiveInstancesOnUndo()

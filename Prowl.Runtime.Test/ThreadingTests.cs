@@ -829,16 +829,14 @@ public class ThreadingTests : RuntimeTestBase
     }
 
     [Fact]
-    public void ReadingTheCurrentSceneFromAnotherThreadCannotLeaveAnInactiveOneBehind()
+    public void BindingMainFromAnotherThreadIsRefused()
     {
-        SceneInstance.Shutdown();
+        SceneInstance world = SceneInstance.Create("Other");
         using var loop = new LoopScope();
 
-        Assert.Throws<InvalidOperationException>(() => OffThread(() => SceneInstance.Current));
-
-        SceneInstance current = SceneInstance.Current;
-        Assert.True(current.IsActive);
-        current.Dispose();
+        Assert.Throws<InvalidOperationException>(() => OffThread(() => SceneInstance.Main = world));
+        Assert.NotSame(world, SceneInstance.Main);
+        world.Dispose();
     }
 
     [Fact]

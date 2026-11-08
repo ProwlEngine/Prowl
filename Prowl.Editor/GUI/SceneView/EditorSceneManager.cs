@@ -43,7 +43,7 @@ public static class EditorSceneManager
     /// <summary>The save toast label for the open scene or prefab.</summary>
     public static string SaveLabel => PrefabEditingMode.IsEditing
         ? Rosetta.Loc.Get("save.prefab", new { name = Path.GetFileNameWithoutExtension(PrefabEditingMode.EditingPrefabPath) })
-        : Rosetta.Loc.Get("save.scene", new { name = SceneInstance.Current.IsValid() ? SceneInstance.Current.Name : "Untitled" });
+        : Rosetta.Loc.Get("save.scene", new { name = SceneInstance.Main.IsValid() ? SceneInstance.Main.Name : "Untitled" });
 
     /// <summary>Runs <paramref name="replace"/>, which swaps out the open scene, after asking to save the scene when it has changes.</summary>
     public static void ConfirmSceneChange(Action replace)
@@ -109,7 +109,7 @@ public static class EditorSceneManager
     /// </summary>
     public static SceneInstance CreateDefaultScene()
     {
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Name = "Untitled Scene";
 
         Material? defaultMat = AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
@@ -194,7 +194,7 @@ public static class EditorSceneManager
             Migration.Releases.Release_1_0.SceneContentLayout(echo);
 
             SerializationContext ctx = ImportHelper.CreateTrackingContext(out _);
-            SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(echo, ctx));
+            SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(echo, ctx), SceneMode.Edit);
             scene.Name = Path.GetFileNameWithoutExtension(relativePath);
             scene.Source = SceneAssetAt(relativePath);
             SceneInstance.Load(scene);
@@ -279,14 +279,14 @@ public static class EditorSceneManager
 
     private static bool SaveTo(string relativePath)
     {
-        if (Project.Current == null || SceneInstance.Current.IsNotValid()) return false;
+        if (Project.Current == null || SceneInstance.Main.IsNotValid()) return false;
         // The prefab session's scene holds the prefab and the editor-only viewing rig, which is not a
         // scene anyone means to save. Its own save goes through PrefabEditingMode.
         if (!GuardNotEditingPrefab("save a scene")) return false;
 
         // Recognized by identity rather than by the flag, so a session that ended without its scene being
         // swapped back cannot write the prefab and its editor-only rig over the user's scene file.
-        if (PrefabEditingMode.IsPrefabEditScene(SceneInstance.Current))
+        if (PrefabEditingMode.IsPrefabEditScene(SceneInstance.Main))
         {
             Debug.LogError($"The open scene is a prefab editing scene, so it was not saved over '{relativePath}'. " +
                 "Open a scene to get back to one.");
@@ -303,14 +303,14 @@ public static class EditorSceneManager
             // those edits the next time they are refreshed.
             PrefabUtility.ReconcileOpenScene();
 
-            EchoObject echo = SceneInstance.Current.CaptureTree();
+            EchoObject echo = SceneInstance.Main.CaptureTree();
             File.WriteAllText(absolutePath, echo.WriteToString());
 
             // The stored scene takes what was written, so a build or a Scene.Load of it sees this save.
             Guid guid = EditorAssetBackend.Instance?.ImportFile(relativePath) ?? Guid.Empty;
-            if (guid != Guid.Empty) SceneInstance.Current.Source = AssetDatabase.Get<Scene>(guid);
+            if (guid != Guid.Empty) SceneInstance.Main.Source = AssetDatabase.Get<Scene>(guid);
 
-            SceneInstance.Current.Name = Path.GetFileNameWithoutExtension(relativePath);
+            SceneInstance.Main.Name = Path.GetFileNameWithoutExtension(relativePath);
             IsDirty = false;
 
             // Notify listeners (e.g. terrain editor saves TerrainData assets)

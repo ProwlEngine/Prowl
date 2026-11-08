@@ -274,20 +274,97 @@ public class SceneManagementTests : RuntimeTestBase
     [Fact]
     public void Current_IsNeverNull()
     {
-        Assert.NotNull(SceneInstance.Current);
-        Assert.False(SceneInstance.Current.IsDisposed);
+        Assert.NotNull(SceneInstance.Main);
+        Assert.False(SceneInstance.Main.IsDisposed);
     }
 
     [Fact]
-    public void Current_RebuildsAfterTheCurrentSceneIsDisposed()
+    public void Main_IsNeverMadeOnTheFly_OnceItsWorldIsGone()
     {
-        SceneInstance first = SceneInstance.Current;
-        first.Dispose();
+        SceneInstance.Main.Dispose();
 
-        SceneInstance second = SceneInstance.Current;
+        Assert.False(SceneInstance.HasMain);
+        Assert.Throws<InvalidOperationException>(() => SceneInstance.Main);
+        Assert.Throws<InvalidOperationException>(() => SceneInstance.Active);
+    }
 
-        Assert.NotSame(first, second);
-        Assert.False(second.IsDisposed);
+    [Fact]
+    public void BindingMain_RaisesMainChanged_InsideTheNewWorld()
+    {
+        SceneInstance previous = SceneInstance.Main;
+        SceneInstance next = CreateScene(enable: true);
+        (SceneInstance? From, SceneInstance? To, SceneInstance? Active) seen = default;
+        void Handler(SceneInstance? from, SceneInstance? to) => seen = (from, to, SceneInstance.Active);
+        SceneInstance.MainChanged += Handler;
+        try { SceneInstance.Main = next; }
+        finally { SceneInstance.MainChanged -= Handler; }
+
+        Assert.Equal((previous, next, next), seen);
+    }
+
+    private sealed class GateProbe : Component
+    {
+        public bool EnableSawPlaying, DisableSawPlaying;
+        public override void OnEnable() => EnableSawPlaying = GameObject.Scene!.IsPlaying;
+        public override void OnDisable() => DisableSawPlaying = GameObject.Scene!.IsPlaying;
+    }
+
+    // Running is set before OnEnable and Dormant after OnDisable, so the gameplay gate passes for both.
+    [Fact]
+    public void ActivateAndDeactivate_DeliverLifecycle_WhileTheWorldCountsAsPlaying()
+    {
+        SceneInstance world = CreateScene();
+        GameObject go = CreateGameObject();
+        GateProbe probe = go.AddComponent<GateProbe>();
+        world.Add(go);
+        Assert.False(world.IsPlaying);
+
+        world.Activate();
+        Assert.True(probe.EnableSawPlaying);
+        Assert.True(world.IsPlaying);
+
+        world.Deactivate();
+        Assert.True(probe.DisableSawPlaying);
+        Assert.Equal(SceneState.Dormant, world.State);
+        Assert.False(world.IsPlaying);
+    }
+
+    [Fact]
+    public void EditAndPreviewWorlds_NeverPlay()
+    {
+        SceneInstance edit = new(SceneMode.Edit);
+        SceneInstance preview = new(SceneMode.Preview);
+        GameObject go = CreateGameObject();
+        GateProbe probe = go.AddComponent<GateProbe>();
+        edit.Add(go);
+        edit.Activate();
+        preview.Activate();
+
+        Assert.False(edit.IsPlaying);
+        Assert.False(preview.IsPlaying);
+        Assert.False(probe.EnableSawPlaying);
+        edit.Dispose();
+        preview.Dispose();
+    }
+
+    [Fact]
+    public void Destroy_GoesThroughDestroying_StillPlayingForOnDisable()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        GateProbe probe = go.AddComponent<GateProbe>();
+        world.Add(go);
+        SceneState? raisedIn = null;
+        void Handler(SceneInstance w) => raisedIn = w.State;
+        SceneInstance.Destroying += Handler;
+        try { world.Dispose(); }
+        finally { SceneInstance.Destroying -= Handler; }
+
+        Assert.Equal(SceneState.Destroying, raisedIn);
+        Assert.True(probe.DisableSawPlaying);
+        Assert.Equal(SceneState.Destroyed, world.State);
+        Assert.DoesNotContain(world, SceneInstance.All);
+        Assert.ThrowsAny<InvalidOperationException>(world.Activate);
     }
 
     [Fact]
@@ -302,8 +379,8 @@ public class SceneManagementTests : RuntimeTestBase
             SceneInstance.Load(scene);
             SceneInstance.ProcessPendingLoad();
 
-            Assert.Same(scene, SceneInstance.Current);
-            Assert.True(scene.IsActive);
+            Assert.Same(scene, SceneInstance.Main);
+            Assert.Equal(SceneState.Running, scene.State);
             Assert.True(fired);
         }
         finally
@@ -315,17 +392,17 @@ public class SceneManagementTests : RuntimeTestBase
     [Fact]
     public void Load_QueuedUntilProcessed()
     {
-        SceneInstance before = SceneInstance.Current;
+        SceneInstance before = SceneInstance.Main;
         SceneInstance scene = CreateScene();
 
         SceneInstance.Load(scene);
 
-        Assert.Same(before, SceneInstance.Current);
-        Assert.False(scene.IsActive);
+        Assert.Same(before, SceneInstance.Main);
+        Assert.NotEqual(SceneState.Running, scene.State);
 
         SceneInstance.ProcessPendingLoad();
 
-        Assert.Same(scene, SceneInstance.Current);
+        Assert.Same(scene, SceneInstance.Main);
     }
 
     [Fact]
@@ -340,12 +417,12 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance.Load(second);
 
         // The outgoing scene stays usable until the swap actually applies.
-        Assert.Same(first, SceneInstance.Current);
+        Assert.Same(first, SceneInstance.Main);
         Assert.False(first.IsDisposed);
 
         SceneInstance.ProcessPendingLoad();
 
-        Assert.Same(second, SceneInstance.Current);
+        Assert.Same(second, SceneInstance.Main);
         Assert.True(first.IsDisposed);
     }
 
@@ -359,7 +436,7 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance.Load(second);
         SceneInstance.ProcessPendingLoad();
 
-        Assert.Same(second, SceneInstance.Current);
+        Assert.Same(second, SceneInstance.Main);
         Assert.True(first.IsDisposed); // replaced before it loaded, so nothing else would ever free it
     }
 
@@ -367,14 +444,14 @@ public class SceneManagementTests : RuntimeTestBase
     [Fact]
     public void Load_TheCurrentScene_IsANoOp()
     {
-        SceneInstance current = SceneInstance.Current;
+        SceneInstance current = SceneInstance.Main;
 
         SceneInstance.Load(current);
         SceneInstance.ProcessPendingLoad();
 
-        Assert.Same(current, SceneInstance.Current);
+        Assert.Same(current, SceneInstance.Main);
         Assert.False(current.IsDisposed);
-        Assert.True(current.IsActive);
+        Assert.Equal(SceneState.Running, current.State);
     }
 
     [Fact]
@@ -385,8 +462,8 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance.Load(scene);
         SceneInstance.ProcessPendingLoad();
 
-        Assert.Same(scene, SceneInstance.Current);
-        Assert.True(scene.IsActive);
+        Assert.Same(scene, SceneInstance.Main);
+        Assert.Equal(SceneState.Running, scene.State);
     }
 
     [Fact]
@@ -394,13 +471,13 @@ public class SceneManagementTests : RuntimeTestBase
     {
         SceneInstance scene = CreateScene();
 
-        scene.Enable();
-        scene.Enable();
-        Assert.True(scene.IsActive);
+        scene.Activate();
+        scene.Activate();
+        Assert.Equal(SceneState.Running, scene.State);
 
-        scene.Disable();
-        scene.Disable();
-        Assert.False(scene.IsActive);
+        scene.Deactivate();
+        scene.Deactivate();
+        Assert.NotEqual(SceneState.Running, scene.State);
     }
 
     // A component disposing its own scene mid-callback used to blow up on the trailing Flush().
@@ -478,7 +555,7 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance second = CreateScene();
         first.Remove(keeper);
         SceneInstance.Load(second);
-        SceneInstance.Current.Add(keeper); // still `first` at this point
+        SceneInstance.Main.Add(keeper); // still `first` at this point
         SceneInstance.ProcessPendingLoad();
 
         Assert.True(keeper.IsDisposed, "Scene.Current is only the new scene once the swap applies.");
@@ -712,7 +789,7 @@ public class SceneManagementTests : RuntimeTestBase
         queued.Dispose();
         SceneInstance.ProcessPendingLoad();
 
-        Assert.Same(current, SceneInstance.Current);
+        Assert.Same(current, SceneInstance.Main);
         Assert.False(current.IsDisposed);
     }
 

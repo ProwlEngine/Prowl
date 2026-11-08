@@ -264,7 +264,7 @@ public class GameViewPanel : DockPanel
     {
         using (paper.Box("gv_game").Clip().Enter())
         {
-            SceneInstance scene = SceneInstance.Current;
+            SceneInstance scene = SceneInstance.Main;
             if (scene.IsNotValid())
             {
                 paper.Box("gv_no_scene")

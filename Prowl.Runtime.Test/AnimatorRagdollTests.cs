@@ -38,7 +38,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
         Animator animator = root.AddComponent<Animator>();
         animator.Avatar = avatar;
         animator.Graph = graph;
-        scene.Enable();
+        scene.Activate();
         return (scene, animator, root);
     }
 
@@ -215,7 +215,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
         Animator animator = root.AddComponent<Animator>();
         animator.Avatar = avatar;
         animator.Graph = graph;
-        scene.Enable();
+        scene.Activate();
         scene.Physics.UseMultithreading = false;
         return (scene, animator, root);
     }
@@ -360,7 +360,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
 
         (GameObject Player, Dictionary<string, Transform> Bones) plain = Spawn(-3f, false);
         (GameObject Player, Dictionary<string, Transform> Bones) ragdolled = Spawn(3f, true);
-        scene.Enable();
+        scene.Activate();
         scene.Physics.UseMultithreading = false;
 
         static float Yaw(Quaternion q)

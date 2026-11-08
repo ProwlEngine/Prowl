@@ -756,7 +756,7 @@ public partial class GameObject : EngineObject, ISerializable
         try { comp.OnAddedToScene(); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{comp.GetType().Name}] OnAddedToScene() threw", ex); }
 
-        if (scene.IsActive && comp.EnabledInHierarchy)
+        if (scene.ComponentsEnabled && comp.EnabledInHierarchy)
             comp.InternalOnEnable();
     }
 
@@ -816,7 +816,7 @@ public partial class GameObject : EngineObject, ISerializable
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
 
-        if (!Application.IsPlaying && IsPrefabInstance && component.SourceIdentifier != Guid.Empty)
+        if (!(Scene.IsValid() ? Scene!.IsPlaying : Application.IsPlaying) && IsPrefabInstance && component.SourceIdentifier != Guid.Empty)
         {
             Debug.LogWarning($"[Prefab] '{component.GetType().Name}' on '{Name}' comes from a prefab, " +
                 "so removing it means breaking the connection to that prefab first.");
@@ -1177,7 +1177,7 @@ public partial class GameObject : EngineObject, ISerializable
             // Only call OnDisable if OnEnable previously ran, the component is enabled in hierarchy
             // and the scene is active, so it is never delivered twice after a scene deactivation.
             SceneInstance? scene = Scene;
-            if (component.HasBeenEnabled && component.EnabledInHierarchy && scene.IsValid() && scene.IsActive)
+            if (component.HasBeenEnabled && component.EnabledInHierarchy && scene.IsValid() && scene.ComponentsEnabled)
                 component.InternalOnDisable();
 
             try { component.Dispose(); }

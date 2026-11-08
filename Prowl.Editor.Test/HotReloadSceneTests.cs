@@ -35,7 +35,7 @@ public class HotReloadSceneTests : EditorTestHarness
         Type enemyV1 = v1.GetType("Enemy")!;
         Assert.Null(enemyV1.GetField("Shield")); // v1 has no Shield yet
 
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         var goA = new GameObject("A");
         var goB = new GameObject("B");
         Component a = goA.AddComponent(enemyV1);
@@ -76,7 +76,7 @@ public class HotReloadSceneTests : EditorTestHarness
         Type tickerV1 = v1.GetType("Ticker")!;
 
         var scene = new SceneInstance();
-        scene.Enable();
+        scene.Activate();
         var go = new GameObject("T");
         Component comp = go.AddComponent(tickerV1);
         scene.Add(go);
@@ -108,14 +108,14 @@ public class HotReloadSceneTests : EditorTestHarness
             "using Prowl.Runtime; public class Loot : Component { public int Gold; }");
         Type lootType = asm.GetType("Loot")!;
 
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Chest");
         Component loot = go.AddComponent(lootType);
         lootType.GetField("Gold")!.SetValue(loot, 777);
         scene.Add(go);
 
         string text = scene.CaptureTree().WriteToString();
-        SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text)));
+        SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text)), SceneMode.Edit);
 
         Component restoredLoot = restored.AllObjects
             .First(g => g.Name == "Chest")
@@ -199,7 +199,7 @@ public class HotReloadSceneTests : EditorTestHarness
             "using Prowl.Runtime; public class Node : Component { public Node Other; public int Val; }");
         Type nodeV1 = v1.GetType("Node")!;
 
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go1 = new GameObject("1");
         var go2 = new GameObject("2");
         Component a = go1.AddComponent(nodeV1);
@@ -233,7 +233,7 @@ public class HotReloadSceneTests : EditorTestHarness
         Type cV1 = v1.GetType("C")!;
 
         var scene = new SceneInstance();
-        scene.Enable();
+        scene.Activate();
         var go = new GameObject("G");
         go.AddComponent(cV1);
         scene.Add(go);
@@ -263,7 +263,7 @@ public class HotReloadSceneTests : EditorTestHarness
         Type cV1 = v1.GetType("C")!;
 
         var scene = new SceneInstance();
-        scene.Enable();
+        scene.Activate();
         var go = new GameObject("G");
         Component comp = go.AddComponent(cV1);
         cV1.GetField("Data")!.SetValue(comp, 5);
@@ -294,7 +294,7 @@ public class HotReloadSceneTests : EditorTestHarness
         Type cV1 = v1.GetType("C")!;
 
         var scene = new SceneInstance();
-        scene.Enable();
+        scene.Activate();
         var go = new GameObject("G");
         go.AddComponent(cV1);
         scene.Add(go);
@@ -323,7 +323,7 @@ public class HotReloadSceneTests : EditorTestHarness
             "public void OnReloadAttach(ReloadState s) { Setups = s.GetOrDefault<int>(\"n\") + 1; } }");
         Type netV1 = v1.GetType("Net")!;
 
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("G");
         Component comp = go.AddComponent(netV1);
         netV1.GetField("Setups")!.SetValue(comp, 5);
@@ -350,7 +350,7 @@ public class HotReloadSceneTests : EditorTestHarness
         Type keeperV1 = v1.GetType("Keeper")!;
         Type doomedV1 = v1.GetType("Doomed")!;
 
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("G");
         go.AddComponent(keeperV1);
         go.AddComponent(doomedV1);
@@ -379,7 +379,7 @@ public class HotReloadSceneTests : EditorTestHarness
             "using Prowl.Runtime; public class Sub : Component { public int Pings; public void OnPing(){ Pings++; } }");
         Type subV1 = v1.GetType("Sub")!;
 
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("A");
         Component oldSub = go.AddComponent(subV1);
         scene.Add(go);
@@ -417,7 +417,7 @@ public class HotReloadSceneTests : EditorTestHarness
         Guid guid = CreatePrefabAsset(authored, "Knob.prefab");
 
         GameObject instance = GameObject.InstantiateDetached(GetPrefab(guid)!)!;
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(instance);
         SceneInstance.Load(scene);
         SceneInstance.ProcessPendingLoad();
@@ -429,7 +429,7 @@ public class HotReloadSceneTests : EditorTestHarness
             "using Prowl.Runtime; public class Knob : Component { public int Value; public int Added; }");
         Type knobV2 = v2.GetType("Knob")!;
 
-        SceneHotReload.Migrate(SceneInstance.Current!, v1, v2);
+        SceneHotReload.Migrate(SceneInstance.Main!, v1, v2);
 
         Component migrated = instance.GetComponents().Single(c => c.GetType().Name == "Knob");
         Assert.Same(knobV2, migrated.GetType());
@@ -461,7 +461,7 @@ public class HotReloadSceneTests : EditorTestHarness
         Guid guid = CreatePrefabAsset(authored, $"{typeName}.prefab");
 
         GameObject instance = GameObject.InstantiateDetached(GetPrefab(guid)!)!;
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(instance);
         SceneInstance.Load(scene);
         SceneInstance.ProcessPendingLoad();
@@ -473,7 +473,7 @@ public class HotReloadSceneTests : EditorTestHarness
             $"using Prowl.Runtime; public class {typeName} : Component {{ {v2Fields} }}");
         Type typeV2 = v2.GetType(typeName)!;
 
-        SceneHotReload.Migrate(SceneInstance.Current!, v1, v2);
+        SceneHotReload.Migrate(SceneInstance.Main!, v1, v2);
 
         Component migrated = instance.GetComponents().Single(c => c.GetType().Name == typeName);
         Assert.Same(typeV2, migrated.GetType());

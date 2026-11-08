@@ -657,7 +657,7 @@ public class ProjectMigrationTests : IDisposable
 
     private static EchoObject BakedScene(float lightmapScale)
     {
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Lighting.ProbePositions = [Float3.Zero];
         scene.Lighting.ProbeSH = [new SphericalHarmonicsL2 { C0 = new Float3(1f, 2f, 3f), C8 = new Float3(0.5f, 0.5f, 0.5f) }];
         scene.Lighting.LightmapScale = lightmapScale;
@@ -704,13 +704,13 @@ public class ProjectMigrationTests : IDisposable
         Assert.Equal(Float3.Zero, lighting.ProbePositions[0]);
 
         Assert.False(Release_1_0.NeedsRebake(BakedScene(3f)));
-        Assert.False(Release_1_0.NeedsRebake(LegacyScene(new SceneInstance())));
+        Assert.False(Release_1_0.NeedsRebake(LegacyScene(new SceneInstance(SceneMode.Edit))));
     }
 
     [Fact]
     public void LegacyScenes_BecomeSceneContent_WithTheSameObjectsAndIdentifiers()
     {
-        var world = new SceneInstance();
+        var world = new SceneInstance(SceneMode.Edit);
         var parent = new GameObject("Parent");
         var child = new GameObject("Child");
         child.SetParent(parent);

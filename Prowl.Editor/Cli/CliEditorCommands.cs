@@ -252,8 +252,8 @@ public static class CliEditorCommands
         {
             path = EditorSceneManager.CurrentScenePath,
             dirty = EditorSceneManager.IsDirty,
-            objects = SceneInstance.Current.IsValid() ? SceneInstance.Current.AllObjects.Count() : 0,
-            roots = SceneInstance.Current.IsValid() ? SceneInstance.Current.RootObjects.Select(g => g.Name).ToList() : [],
+            objects = SceneInstance.Main.IsValid() ? SceneInstance.Main.AllObjects.Count() : 0,
+            roots = SceneInstance.Main.IsValid() ? SceneInstance.Main.RootObjects.Select(g => g.Name).ToList() : [],
         };
 
         static void RequirePath(string path)
@@ -882,7 +882,7 @@ public static class CliEditorCommands
                 Guid rootId = root.Identifier;
                 int overrides = PrefabUtility.CountOverrides(root);
                     List<PrefabUtility.AdditionDescription> additions = PrefabUtility.DescribeAdditions(root);
-                GameObject? LiveRoot() => SceneInstance.Current.IsValid() ? SceneInstance.Current.FindObjectByIdentifier<GameObject>(rootId) : null;
+                GameObject? LiveRoot() => SceneInstance.Main.IsValid() ? SceneInstance.Main.FindObjectByIdentifier<GameObject>(rootId) : null;
                 CliEdit.Run("Apply Prefab", () =>
                 {
                     PrefabUtility.ApplyOverrides(root);

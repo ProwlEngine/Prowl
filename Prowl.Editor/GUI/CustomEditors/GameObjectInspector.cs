@@ -971,7 +971,7 @@ public static class GameObjectInspector
 
         private void MoveTo(int index)
         {
-            Runtime.Resources.SceneInstance scene = Runtime.Resources.SceneInstance.Current;
+            Runtime.Resources.SceneInstance scene = Runtime.Resources.SceneInstance.Main;
             if (scene.IsNotValid()) return;
             Component? c = scene.FindObjectByIdentifier<Component>(component);
             if (c.IsValid()) c.SetSiblingIndex(index);
@@ -1359,7 +1359,7 @@ public static class GameObjectInspector
 
         Origami.Button(paper, id, label, () =>
             {
-                Runtime.Resources.SceneInstance scene = Runtime.Resources.SceneInstance.Current;
+                Runtime.Resources.SceneInstance scene = Runtime.Resources.SceneInstance.Main;
                 GameObject? live = scene.IsValid() ? scene.FindObjectByIdentifier<GameObject>(rootId) : null;
                 if (live.IsValid()) act(live!);
             })

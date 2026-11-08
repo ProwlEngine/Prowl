@@ -55,14 +55,14 @@ public class MissingTypeReferenceGraphTests
         MissRefComp misser = root.AddComponent<MissRefComp>();
         misser.TargetGO = child;
 
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(root);
 
         string text = scene.CaptureTree().WriteToString()
             .Replace(nameof(MissRefComp), "GhostComp_DoesNotExist");
 
         // Mimic the editor: a caller-supplied context passed to the 3-arg Deserialize.
-        SceneInstance loaded = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text), new SerializationContext()));
+        SceneInstance loaded = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text), new SerializationContext()), SceneMode.Edit);
 
         Assert.DoesNotContain(loaded.AllObjects, o => o.Name == "New GameObject"); // no phantom placeholders
         GameObject? loadedRoot = loaded.AllObjects.FirstOrDefault(o => o.Name == "Root");
@@ -123,12 +123,12 @@ public class MissingTypeReferenceGraphTests
         MissRefComp misser = root.AddComponent<MissRefComp>();
         misser.TargetGO = grandchild;
 
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(root);
 
         string text = scene.CaptureTree().WriteToString();
         text = text.Replace(nameof(MissRefComp), "GhostComp_DoesNotExist");
-        SceneInstance loaded = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text)));
+        SceneInstance loaded = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text)), SceneMode.Edit);
 
         GameObject? loadedRoot = loaded.AllObjects.FirstOrDefault(o => o.Name == "Root");
         string Structure(GameObject g, int d = 0) =>

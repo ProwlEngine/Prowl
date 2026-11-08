@@ -318,7 +318,7 @@ public class ParticleSystemComponent : Component, IRenderSync
     /// <summary>Freezes the system where it is. <see cref="Play"/> resumes it.</summary>
     public void Pause(bool withChildren = true)
     {
-        if (!Application.IsPlaying) _previewHeld = true;
+        if (!IsInPlayingWorld) _previewHeld = true;
         if (_isPlaying)
             _isPaused = true;
 
@@ -329,7 +329,7 @@ public class ParticleSystemComponent : Component, IRenderSync
 
     public void Stop(bool withChildren = true, ParticleStopBehavior behavior = ParticleStopBehavior.StopEmitting)
     {
-        if (!Application.IsPlaying) _previewHeld = true;
+        if (!IsInPlayingWorld) _previewHeld = true;
         if (_isPlaying)
         {
             _isEmitting = false;
@@ -512,7 +512,7 @@ public class ParticleSystemComponent : Component, IRenderSync
     {
         // Claim sub emitter children before any of them gets to emit on its own.
         ClaimSubEmitters();
-        if (Application.IsPlaying && PlayOnEnable)
+        if (IsInPlayingWorld && PlayOnEnable)
             Play(false);
     }
 
@@ -538,7 +538,7 @@ public class ParticleSystemComponent : Component, IRenderSync
         // Claimed every frame, even while stopped, so a child never gets a frame to emit on its own.
         ClaimSubEmitters();
 
-        if (!Application.IsPlaying && !UpdateEditorPreview())
+        if (!IsInPlayingWorld && !UpdateEditorPreview())
         {
             _hasEmitterHistory = false;
             return;
@@ -556,7 +556,7 @@ public class ParticleSystemComponent : Component, IRenderSync
         // A debugger pause or loading hitch must not turn into hundreds of simulation steps.
         dt = MathF.Min(dt, MaxFrameDelta);
 
-        if (Application.IsPlaying && CullingMode != ParticleCullingMode.AlwaysSimulate && !IsDriven && Time.FrameCount - _lastVisibleFrame > 2)
+        if (IsInPlayingWorld && CullingMode != ParticleCullingMode.AlwaysSimulate && !IsDriven && Time.FrameCount - _lastVisibleFrame > 2)
         {
             UpdateCulled(dt);
             _hasEmitterHistory = false;
@@ -753,7 +753,7 @@ public class ParticleSystemComponent : Component, IRenderSync
         catch (Exception ex) { Debug.LogException($"[{Name}] Stopped handler threw", ex); }
 
         // A handler that played the system again has taken it over, so the stop action no longer applies.
-        if (_isPlaying || !Application.IsPlaying || _prewarming) return;
+        if (_isPlaying || !IsInPlayingWorld || _prewarming) return;
 
         switch (StopAction)
         {
@@ -1305,7 +1305,7 @@ public class ParticleSystemComponent : Component, IRenderSync
                 catch (Exception ex) { Debug.LogException($"[{Name}] ParticleCollided handler threw", ex); }
             }
 
-            if (!Collision.SendCollisionMessages || !Application.IsPlaying) continue;
+            if (!Collision.SendCollisionMessages || !IsInPlayingWorld) continue;
             GameObject? other = hit.Other;
             if (other.IsNotValid()) continue;
 

@@ -119,7 +119,7 @@ public static class PrefabEditingMode
 
         // Save current scene. Reconciled first: the session ends by restoring this snapshot and
         // refreshing its instances, which would otherwise drop any edit nothing had recorded yet.
-        SceneInstance currentScene = SceneInstance.Current;
+        SceneInstance currentScene = SceneInstance.Main;
         if (currentScene.IsValid())
         {
             PrefabUtility.ReconcileOpenScene();
@@ -130,7 +130,7 @@ public static class PrefabEditingMode
         }
 
         // Instantiate prefab into isolated scene
-        var editScene = new SceneInstance();
+        var editScene = new SceneInstance(SceneMode.Edit);
         editScene.Name = $"Editing: {prefab.Name}";
         _editScenes.AddOrUpdate(editScene, new object());
 
@@ -221,7 +221,7 @@ public static class PrefabEditingMode
             return false;
         }
 
-        SceneInstance scene = SceneInstance.Current;
+        SceneInstance scene = SceneInstance.Main;
         if (scene.IsNotValid()) return false;
 
         // The tracked prefab root, and only that: it is what skips the editor-only camera and light.
@@ -351,7 +351,7 @@ public static class PrefabEditingMode
     {
         if (_savedSceneState != null)
         {
-            SceneInstance restoredScene = SceneInstance.Instantiate(SceneContent.Read(_savedSceneState));
+            SceneInstance restoredScene = SceneInstance.Instantiate(SceneContent.Read(_savedSceneState), SceneMode.Edit);
             restoredScene.Name = OriginalSceneName ?? "";
             restoredScene.Source = _savedSceneSource;
             SceneInstance.Load(restoredScene);

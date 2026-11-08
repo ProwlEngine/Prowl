@@ -16,6 +16,29 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.Resources;
 
+/// <summary>What kind of world a <see cref="SceneInstance"/> is.</summary>
+public enum SceneMode
+{
+    /// <summary>Gameplay runs while the world is running.</summary>
+    Game,
+    /// <summary>An editor world: only components with [ExecuteAlways] run gameplay.</summary>
+    Edit,
+    /// <summary>Never runs gameplay and is never ticked, rendered on demand.</summary>
+    Preview,
+}
+
+/// <summary>Where a <see cref="SceneInstance"/> is in its life.</summary>
+public enum SceneState
+{
+    /// <summary>Objects exist and are registered, no OnEnable has been delivered and nothing ticks.</summary>
+    Dormant,
+    /// <summary>Components are enabled.</summary>
+    Running,
+    /// <summary>Being torn down. Still counts as playing, so every component gets its OnDisable.</summary>
+    Destroying,
+    Destroyed,
+}
+
 /// <summary>
 /// A live world of GameObjects. Its stored form is a <see cref="Scene"/>, and any number of scenes can be
 /// instantiated from one, like the editor's edit copy and play copy.
@@ -25,10 +48,21 @@ public class SceneInstance : EngineObject, ISerializable
 {
     #region Scene Manager
 
-    private static SceneInstance? _current;
+    private static SceneInstance? _main;
 
     // Weak, so a scene dropped without being disposed goes away with whatever it used rather than being walked forever.
     private static readonly List<WeakReference<SceneInstance>> s_live = [];
+
+    /// <summary>Every world that is not destroyed, in creation order. Held weakly: something else keeps a world alive.</summary>
+    public static IReadOnlyList<SceneInstance> All
+    {
+        get
+        {
+            SceneInstance[] live = Live;
+            Array.Reverse(live);
+            return live;
+        }
+    }
 
     /// <summary>Every scene not yet disposed: the current one, one waiting to load, previews and prefab editing.</summary>
     internal static SceneInstance[] Live
@@ -51,23 +85,59 @@ public class SceneInstance : EngineObject, ISerializable
     internal static IReadOnlyList<GameObject> Preserved => _preserved;
 
     /// <summary>
-    /// The currently active scene. There is always one: reading this before anything has been loaded
-    /// creates an empty scene, so the engine is never in a no-scene state and callers never have to
-    /// handle null. Use <see cref="Load(SceneInstance)"/> to replace it.
+    /// The game world. The host binds it: the player at startup, the editor to the world it edits or plays. Reading it
+    /// while nothing is bound throws, it is never created on the fly.
     /// </summary>
-    public static SceneInstance Current
+    public static SceneInstance Main
     {
         get
         {
-            if (ReferenceEquals(_current, null) || _current.IsDisposed)
-            {
-                // Before anything is created, so a read from another thread cannot leave an inactive scene current.
-                MainThreadContext.AssertMainThread(nameof(Current));
-                _current = new SceneInstance { Name = "Untitled" };
-                _current.Enable();
-            }
-            return _current;
+            SceneInstance? main = _main;
+            if (ReferenceEquals(main, null) || main._state == SceneState.Destroyed)
+                throw new InvalidOperationException("No world is bound as SceneInstance.Main. The host binds it: the player at startup, the editor to the world it edits, a test through its test base.");
+            return main;
         }
+        set
+        {
+            MainThreadContext.AssertMainThread(nameof(Main));
+            SceneInstance? previous = _main;
+            if (ReferenceEquals(previous, value)) return;
+            _main = value;
+            Raise(MainChanged, value, handler => handler(previous, value), nameof(MainChanged));
+        }
+    }
+
+    /// <summary>Whether a world is bound as <see cref="Main"/>.</summary>
+    public static bool HasMain => !ReferenceEquals(_main, null) && _main._state != SceneState.Destroyed;
+
+    /// <summary>Fires when a world is created with <see cref="Create"/>.</summary>
+    public static event Action<SceneInstance>? Created;
+
+    /// <summary>Fires when a world starts its teardown, inside that world.</summary>
+    public static event Action<SceneInstance>? Destroying;
+
+    /// <summary>Fires when <see cref="Main"/> is bound to another world, with the old and the new one.</summary>
+    public static event Action<SceneInstance?, SceneInstance?>? MainChanged;
+
+    // Every handler runs inside the raising world and is guarded on its own.
+    private static void Raise<T>(T? handlers, SceneInstance? world, Action<T> invoke, string name) where T : Delegate
+    {
+        if (handlers == null) return;
+        using SceneScope scope = Enter(world);
+        foreach (Delegate handler in handlers.GetInvocationList())
+        {
+            try { invoke((T)handler); }
+            catch (Exception e) { Debug.LogException($"[Scene] A {name} handler threw", e); }
+        }
+    }
+
+    /// <summary>Creates an empty, dormant world. Call <see cref="Activate"/> to start it.</summary>
+    public static SceneInstance Create(string name, SceneMode mode = SceneMode.Game)
+    {
+        MainThreadContext.AssertMainThread(nameof(Create));
+        var world = new SceneInstance(mode) { Name = name };
+        Raise(Created, world, handler => handler(world), nameof(Created));
+        return world;
     }
 
     /// <summary>Fires after a scene is loaded via Load(), inside that scene, so its handlers see it as <see cref="Active"/>.</summary>
@@ -86,8 +156,8 @@ public class SceneInstance : EngineObject, ISerializable
         {
             MainThreadContext.AssertMainThread();
             SceneInstance? scene = s_active.Value;
-            if (ReferenceEquals(scene, null)) return Current;
-            if (scene._destroyed)
+            if (ReferenceEquals(scene, null)) return Main;
+            if (scene._state == SceneState.Destroyed)
                 throw new ObjectDisposedException(scene.Name, $"The scene '{scene.Name}' this code was running in has been destroyed.");
             return scene;
         }
@@ -124,8 +194,19 @@ public class SceneInstance : EngineObject, ISerializable
         }
     }
 
-    // Set once teardown has finished. A scene being torn down stays Active for its own teardown callbacks.
-    private bool _destroyed;
+    private SceneState _state;
+
+    /// <summary>What kind of world this is, fixed at creation.</summary>
+    public SceneMode Mode { get; }
+
+    /// <summary>Whether this world's components are enabled. A world being torn down stays Active for its own teardown callbacks.</summary>
+    public SceneState State => _state;
+
+    /// <summary>Whether gameplay runs here: a game world that is running or being torn down.</summary>
+    public bool IsPlaying => Mode == SceneMode.Game && _state is SceneState.Running or SceneState.Destroying;
+
+    // Whether components here have had OnEnable delivered, which stays true while a destroy disables them.
+    internal bool ComponentsEnabled => _isActive;
 
     private static SceneInstance? _pendingScene;
 
@@ -135,7 +216,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// </summary>
     internal static bool EndSessionOnSwap;
 
-    /// <summary>Whether a <see cref="Load(SceneInstance)"/> is queued and has not been applied yet, so <see cref="Current"/>
+    /// <summary>Whether a <see cref="Load(SceneInstance)"/> is queued and has not been applied yet, so <see cref="Main"/>
     /// is still the outgoing scene.</summary>
     public static bool IsLoadPending => !ReferenceEquals(_pendingScene, null);
 
@@ -161,7 +242,7 @@ public class SceneInstance : EngineObject, ISerializable
     {
         SceneInstance? dropped = _pendingScene;
         _pendingScene = null;
-        if (dropped.IsValid() && !ReferenceEquals(dropped, except) && !ReferenceEquals(dropped, _current))
+        if (dropped.IsValid() && !ReferenceEquals(dropped, except) && !ReferenceEquals(dropped, _main))
             dropped!.Dispose();
     }
 
@@ -189,19 +270,19 @@ public class SceneInstance : EngineObject, ISerializable
     private static SceneLoad? _pendingLoad;
 
     /// <summary>Builds a live scene from a stored one, without making it current.</summary>
-    public static SceneInstance Instantiate(Scene asset)
+    public static SceneInstance Instantiate(Scene asset, SceneMode mode = SceneMode.Game)
     {
         asset.Load();
-        SceneInstance scene = Instantiate(asset.ReadContent());
+        SceneInstance scene = Instantiate(asset.ReadContent(), mode);
         scene.Name = asset.Name;
         scene.Source = asset;
         return scene;
     }
 
     /// <summary>Builds a live world holding detached content, without making it current. The content's objects move into it.</summary>
-    public static SceneInstance Instantiate(SceneContent content)
+    public static SceneInstance Instantiate(SceneContent content, SceneMode mode = SceneMode.Game)
     {
-        var scene = new SceneInstance
+        var scene = new SceneInstance(mode)
         {
             Environment = content.Environment,
             Lighting = content.Lighting,
@@ -310,7 +391,7 @@ public class SceneInstance : EngineObject, ISerializable
         bool endSession = EndSessionOnSwap;
         EndSessionOnSwap = false;
 
-        if (next.IsDisposed)
+        if (next._state is SceneState.Destroying or SceneState.Destroyed)
         {
             Debug.LogWarning("[Scene] The scene queued for loading was disposed before the frame ended, so it was skipped.");
             if (endSession) MainThreadContext.Restart();
@@ -318,7 +399,7 @@ public class SceneInstance : EngineObject, ISerializable
         }
 
         // Loading the scene that is already current would dispose it and then enable the corpse.
-        if (ReferenceEquals(next, _current))
+        if (ReferenceEquals(next, _main))
         {
             if (endSession) MainThreadContext.Restart();
             return;
@@ -328,8 +409,8 @@ public class SceneInstance : EngineObject, ISerializable
         // after it is enabled, so they are never registered with a scene that is being torn down.
         _preserved.RemoveAll(p => p.IsNotValid());
         foreach (GameObject go in _preserved)
-            if (ReferenceEquals(go.Scene, _current))
-                _current!.Detach(go);
+            if (ReferenceEquals(go.Scene, _main))
+                _main!.Detach(go);
 
         // A failure in either step below is reported and the swap carries on, so the incoming scene always
         // becomes current and the session always ends when it was asked to, rather than leaving both half done.
@@ -338,37 +419,33 @@ public class SceneInstance : EngineObject, ISerializable
         try { AssetDatabase.LoadEverythingReached(); }
         catch (Exception e) { Debug.LogException($"[Scene] Loading what '{next.Name}' uses threw", e); }
 
-        if (!ReferenceEquals(_current, null) && !_current.IsDisposed)
+        SceneInstance? outgoing = _main;
+        if (!ReferenceEquals(outgoing, null) && !outgoing.IsDisposed)
         {
-            try
-            {
-                if (_current.IsActive)
-                    _current.Disable();
-                _current.Dispose();
-            }
-            catch (Exception e) { Debug.LogException($"[Scene] Tearing down '{_current.Name}' threw", e); }
+            try { outgoing.Dispose(); }
+            catch (Exception e) { Debug.LogException($"[Scene] Tearing down '{outgoing.Name}' threw", e); }
         }
 
         // Between the two scenes, so the outgoing one's teardown belongs to its own session and the incoming
         // one starts in a fresh one.
         if (endSession) MainThreadContext.Restart();
 
-        _current = next;
-        _current.Enable();
+        Main = next;
+        next.Activate();
 
         foreach (GameObject go in _preserved)
-            _current.Attach(go);
+            _main.Attach(go);
 
         // Assets only the outgoing scene used are unreached from here, and go once the grace period is over.
         AssetDatabase.Walk();
 
-        using (_current.Enter())
+        using (_main.Enter())
             OnSceneLoaded?.Invoke();
     }
 
     /// <summary>
     /// Disposes the current scene, so everything in it runs its teardown callbacks. Driven by the
-    /// game loop on the way out. Reading <see cref="Current"/> afterwards creates a fresh empty scene.
+    /// game loop on the way out. Reading <see cref="Main"/> afterwards creates a fresh empty scene.
     /// </summary>
     internal static void Shutdown()
     {
@@ -378,16 +455,10 @@ public class SceneInstance : EngineObject, ISerializable
 
         DestroyPreserved(immediate: true);
 
-        if (ReferenceEquals(_current, null) || _current.IsDisposed)
-        {
-            _current = null;
-            return;
-        }
-
-        if (_current.IsActive)
-            _current.Disable();
-        _current.Dispose();
-        _current = null;
+        SceneInstance? main = _main;
+        _main = null;
+        if (!ReferenceEquals(main, null) && !main.IsDisposed)
+            main.Dispose();
     }
 
     #endregion
@@ -541,14 +612,10 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary> Returns whether this Scene is completely empty. </summary>
     public bool IsEmpty { get { EnsureNotDisposed(); return !AllObjects.Any(); } }
 
-    /// <summary> Returns whether this scene is currently active. </summary>
-    public bool IsActive { get { EnsureNotDisposed(); return _isActive; } }
-
-    /// <summary>
-    /// Creates a new, empty scene which does not contain any <see cref="GameObject">GameObjects</see>.
-    /// </summary>
-    public SceneInstance()
+    /// <summary>Creates an empty, dormant world. <see cref="Create"/> is the same and raises <see cref="Created"/>.</summary>
+    public SceneInstance(SceneMode mode = SceneMode.Game)
     {
+        Mode = mode;
         lock (s_live) s_live.Add(new WeakReference<SceneInstance>(this));
     }
 
@@ -556,14 +623,18 @@ public class SceneInstance : EngineObject, ISerializable
     /// Enables this scene, triggering OnEnable callbacks for its components.
     /// For most use cases, prefer using Scene.Load() instead of calling Enable() directly.
     /// </summary>
-    public void Enable()
+    public void Activate()
     {
         EnsureNotDisposed();
         MainThreadContext.AssertMainThread();
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
         using SceneScope active = Enter(this);
+        if (_state is SceneState.Destroying or SceneState.Destroyed)
+            throw new InvalidOperationException($"The world '{Name}' is being destroyed and cannot be activated.");
         if (_isActive) return; // already enabled, nothing to deliver
 
+        // Running first, so ShouldExecuteGameplay already sees a playing world in OnEnable.
+        _state = SceneState.Running;
         _isActive = true;
 
         // Create a copy to avoid collection modification during enumeration
@@ -591,7 +662,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// Disables this scene, triggering OnDisable callbacks for its components.
     /// For most use cases, prefer using Scene.Unload() or Scene.Load() instead of calling Disable() directly.
     /// </summary>
-    public void Disable()
+    public void Deactivate()
     {
         EnsureNotDisposed();
         MainThreadContext.AssertOwner(this);
@@ -619,7 +690,9 @@ public class SceneInstance : EngineObject, ISerializable
             }
         }
 
+        // Dormant last, so the gameplay gate still passes for OnDisable.
         _isActive = false;
+        _state = SceneState.Dormant;
     }
 
 
@@ -747,7 +820,7 @@ public class SceneInstance : EngineObject, ISerializable
             _allObj.Add(obj);
             obj.Scene = this;
 
-            if (IsActive && obj.EnabledInHierarchy)
+            if (_isActive && obj.EnabledInHierarchy)
                 foreach (Component component in obj._components)
                 {
                     if (component.IsDisposed || !component.Enabled || !component.EnabledInHierarchy) continue;
@@ -779,7 +852,7 @@ public class SceneInstance : EngineObject, ISerializable
             }
 
             // Call OnEnable for enabled components, but only if the scene is active
-            if (IsActive && obj.EnabledInHierarchy)
+            if (_isActive && obj.EnabledInHierarchy)
             {
                 foreach (Component component in components)
                 {
@@ -810,7 +883,7 @@ public class SceneInstance : EngineObject, ISerializable
             IEnumerable<Component> components = obj.GetComponents<Component>();
 
             // Call OnDisable for currently enabled components (only if scene is active)
-            if (IsActive && obj.EnabledInHierarchy)
+            if (_isActive && obj.EnabledInHierarchy)
             {
                 foreach (Component component in components)
                 {
@@ -920,10 +993,12 @@ public class SceneInstance : EngineObject, ISerializable
         using SceneScope active = Enter(this);
         base.OnDispose();
 
-        // Drop the current-scene reference without going through the property, which would build a
-        // replacement scene in the middle of this one's teardown.
-        if (ReferenceEquals(_current, this))
-            _current = null;
+        // Destroying still counts as playing, so every component gets OnDisable as it would in a running game.
+        _state = SceneState.Destroying;
+        Raise(Destroying, this, handler => handler(this), nameof(Destroying));
+
+        if (ReferenceEquals(_main, this))
+            _main = null;
 
         lock (s_live) s_live.RemoveAll(entry => !entry.TryGetTarget(out SceneInstance? scene) || ReferenceEquals(scene, this));
 
@@ -961,7 +1036,7 @@ public class SceneInstance : EngineObject, ISerializable
         _rendering?.Dispose();
         _rendering = null;
 
-        _destroyed = true;
+        _state = SceneState.Destroyed;
     }
 
     /// <summary>

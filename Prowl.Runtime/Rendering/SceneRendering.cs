@@ -208,7 +208,7 @@ public sealed class SceneRendering : IDisposable
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         int synced = _members.Count;
 
-        bool playing = Application.IsPlaying;
+        bool playing = _scene.IsPlaying;
         if (!playing && _parked.Count > 0)
             UnparkAll();
         WakeChanged();

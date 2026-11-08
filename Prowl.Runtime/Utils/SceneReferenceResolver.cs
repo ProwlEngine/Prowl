@@ -215,7 +215,7 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
             return found;
         }
 
-        SceneInstance? target = ResolveIn.IsValid() ? ResolveIn : SceneInstance.Current;
+        SceneInstance? target = ResolveIn.IsValid() ? ResolveIn : SceneInstance.HasMain ? SceneInstance.Main : null;
         if (key is not Guid id || target is not { } scene) return null;
 
         // GameObject and Component share the FindObjectByIdentifier lookup; a Transform key is

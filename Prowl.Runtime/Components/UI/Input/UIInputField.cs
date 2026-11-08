@@ -260,7 +260,7 @@ public class UIInputField : Selectable,
     public override void Update()
     {
         base.Update(); // Selectable tint lerp
-        if (!Application.IsPlaying) return;
+        if (!IsInPlayingWorld) return;
 
         // Keep the label in sync every frame so the text shows regardless of how it was set.
         UpdateDisplay();

@@ -35,22 +35,26 @@ public class SceneGizmoVisibilityTests : IDisposable
         Application.IsEditor = true;
         Application.IsPlaying = false;
         Selection.Clear();
+        SceneInstance edited = SceneInstance.Create("Untitled", SceneMode.Edit);
+        edited.Activate();
+        SceneInstance.Main = edited;
     }
 
     public void Dispose()
     {
         Selection.Clear();
+        SceneInstance.Shutdown();
         Application.IsPlaying = _wasPlaying;
         Application.IsEditor = _wasEditor;
     }
 
     private static SceneInstance CreateScene(out SceneGizmoProbe probe)
     {
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Gizmo probe");
         probe = go.AddComponent<SceneGizmoProbe>();
         scene.Add(go);
-        scene.Enable();
+        scene.Activate();
         return scene;
     }
 

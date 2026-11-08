@@ -40,7 +40,7 @@ public sealed class ThrowingTestImporter : AssetImporter
 /// </summary>
 public class AssetDatabaseTests : EditorTestHarness
 {
-    private Guid CreateScene(string path) => CreateSceneAsset(new SceneInstance(), path);
+    private Guid CreateScene(string path) => CreateSceneAsset(new SceneInstance(SceneMode.Edit), path);
 
     private Material CreateMaterial(string path, float value = 1f)
     {
@@ -238,7 +238,7 @@ public class AssetDatabaseTests : EditorTestHarness
     public void Reopen_PicksUpFileAddedOutOfBand()
     {
         File.WriteAllText(AssetAbsolutePath("Extra.scene"),
-            Serializer.Serialize(typeof(object), new SceneInstance()).WriteToString());
+            Serializer.Serialize(typeof(object), new SceneInstance(SceneMode.Edit)).WriteToString());
 
         ReopenDatabase();
 
@@ -654,7 +654,7 @@ public class AssetDatabaseTests : EditorTestHarness
     public void AnAssetALiveSceneUses_StaysLoaded()
     {
         Material material = CreateMaterial("M.mat");
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         try
         {
             var go = new GameObject("Holder");
@@ -750,7 +750,7 @@ public class AssetDatabaseTests : EditorTestHarness
     [Fact]
     public void LegacyScene_ImportsAsContent_WithItsIdentifiers()
     {
-        var world = new SceneInstance();
+        var world = new SceneInstance(SceneMode.Edit);
         var parent = new GameObject("Parent");
         var child = new GameObject("Child");
         child.SetParent(parent);
@@ -770,7 +770,7 @@ public class AssetDatabaseTests : EditorTestHarness
         Guid next = CreateScene("Next.scene");
         var go = new GameObject("Door");
         go.AddComponent<AssetRefComponent>().Ref = new AssetRef<Scene>(next);
-        var world = new SceneInstance();
+        var world = new SceneInstance(SceneMode.Edit);
         world.Add(go);
 
         Guid level = CreateSceneAsset(world, "Level.scene");
@@ -810,7 +810,7 @@ public class AssetDatabaseTests : EditorTestHarness
             Value = Serializer.Serialize(typeof(Material), material, new SerializationContext { RootByReference = true })
         });
 
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(go);
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
 
@@ -826,7 +826,7 @@ public class AssetDatabaseTests : EditorTestHarness
         SceneInstance scene = instance.Scene!;
         scene.Remove(instance);
 
-        var holder = new SceneInstance();
+        var holder = new SceneInstance(SceneMode.Edit);
         holder.Add(instance);
         Guid sceneGuid = CreateSceneAsset(holder, "Main.scene");
 
@@ -972,7 +972,7 @@ public class AssetDatabaseTests : EditorTestHarness
         Guid guid = Assets.ImportFile("Shared.navmesh");
         Assert.NotEqual(Guid.Empty, guid);
 
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         try
         {
             var original = new GameObject("Original");
@@ -1000,8 +1000,8 @@ public class AssetDatabaseTests : EditorTestHarness
     [Fact]
     public void NavMeshBake_RunsInTheBackground_ThenSavesAndAssignsTheAsset()
     {
-        var scene = new SceneInstance();
-        scene.Enable();
+        var scene = new SceneInstance(SceneMode.Edit);
+        scene.Activate();
         try
         {
             var floor = new GameObject("Floor");

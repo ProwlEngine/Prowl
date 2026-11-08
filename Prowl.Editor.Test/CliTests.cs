@@ -372,7 +372,7 @@ public class CliEditorCommandTests : EditorTestHarness
                 CliCommands.Scan(method);
 
         Undo.Clear();
-        _scene = new SceneInstance();
+        _scene = new SceneInstance(SceneMode.Edit);
         SceneInstance.Load(_scene);
         SceneInstance.ProcessPendingLoad();
     }
@@ -589,7 +589,7 @@ public class CliEditorCommandTests : EditorTestHarness
         JsonNode created = Ok("scene", "--action", "new")!;
 
         Assert.DoesNotContain(created["roots"]!.AsArray(), r => r!.GetValue<string>() == "OnlyInTheOldScene");
-        Assert.DoesNotContain(SceneInstance.Current.AllObjects, g => g.Name == "OnlyInTheOldScene");
+        Assert.DoesNotContain(SceneInstance.Main.AllObjects, g => g.Name == "OnlyInTheOldScene");
     }
 
     [Fact]
@@ -605,7 +605,7 @@ public class CliEditorCommandTests : EditorTestHarness
         AssertTonemaps(Assert.Single(EditorSceneManager.CreateDefaultScene().FindObjectsOfType<Camera>())!);
 
         typeof(GUI.DefaultGameObjectCreators).GetMethod("CreateCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, null);
-        AssertTonemaps(SceneInstance.Current.AllObjects.Single(g => g.Name == "Camera").GetComponent<Camera>()!);
+        AssertTonemaps(SceneInstance.Main.AllObjects.Single(g => g.Name == "Camera").GetComponent<Camera>()!);
     }
     // Runs a command the way the editor does, with this thread as the main thread pumping frames, while a drag is held
     // for the first frames and released after.
@@ -868,7 +868,7 @@ public class CliGraphCommandTests : EditorTestHarness
             foreach (MethodInfo method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
                 CliCommands.Scan(method);
         Undo.Clear();
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         SceneInstance.Load(scene);
         SceneInstance.ProcessPendingLoad();
     }

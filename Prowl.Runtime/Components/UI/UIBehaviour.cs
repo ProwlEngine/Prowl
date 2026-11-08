@@ -61,7 +61,7 @@ public abstract class UIBehaviour : Component
     public override void OnValidate()
     {
         // Run the OnValide only in the editor- During runtime, dirtying should be driven by the fields themselves.
-        if (!Application.IsPlaying)
+        if (!IsInPlayingWorld)
         {
             GameCanvas? canvas = GetCanvas();
             if (canvas.IsValid()) canvas.MarkDirty(UIDirtyFlags.All);

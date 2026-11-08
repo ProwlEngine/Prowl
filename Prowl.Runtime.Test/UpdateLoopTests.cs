@@ -167,8 +167,8 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void NotPlaying_GameplayCallbacksDoNotRun()
     {
-        // Edit-mode: a plain component's gameplay callbacks are gated off.
-        Application.IsPlaying = false;
+        // An edit world: a plain component's gameplay callbacks are gated off.
+        using EditModeScope edit = EditMode();
 
         (SceneInstance? scene, CounterComponent? comp) = MakeRunningCounter();
 
@@ -196,23 +196,23 @@ public class UpdateLoopTests : RuntimeTestBase
 
     // Entering play mode flips IsPlaying while the edit scene is still current until the end of the frame.
     [Fact]
-    public void ASceneEnabledOutsidePlay_GetsNoGameplayCallbacks_WhenPlayStartsUnderIt()
+    public void AnEditWorld_GetsNoGameplayCallbacks_EvenWhileTheEditorPlays()
     {
-        Application.IsPlaying = false;
-        SceneInstance scene = CreateScene(enable: true);
+        SceneInstance scene = new(SceneMode.Edit);
         GameObject go = CreateGameObject();
         LifecycleRecorder comp = go.AddComponent<LifecycleRecorder>();
         scene.Add(go);
+        scene.Activate();
 
         Application.IsPlaying = true;
         Update(scene, 2);
-        scene.Disable();
+        scene.Dispose();
 
         Assert.Empty(comp.Calls);
     }
 
     [Fact]
-    public void OnDisable_PairsWithOnEnable_WhenPlayStopsUnderIt()
+    public void OnDisable_PairsWithOnEnable_WhenTheWorldGoesDormant()
     {
         SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
@@ -220,9 +220,8 @@ public class UpdateLoopTests : RuntimeTestBase
         scene.Add(go);
         Update(scene);
 
-        Application.IsPlaying = false;
+        scene.Deactivate();
         Update(scene);
-        scene.Disable();
 
         Assert.Equal(["OnEnable", "Start", "Update", "OnDisable"], comp.Calls);
     }
@@ -230,7 +229,7 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void ExecuteAlways_RunsEvenWhenNotPlaying()
     {
-        Application.IsPlaying = false;
+        using EditModeScope edit = EditMode();
 
         SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();

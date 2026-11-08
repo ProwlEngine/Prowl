@@ -408,7 +408,7 @@ public sealed class MainThreadContext : SynchronizationContext
     internal static void AssertOwner(GameObject? go, [CallerMemberName] string member = "")
     {
         if (OnMainThread) return;
-        if (!ReferenceEquals(go, null) && go.Scene is { IsDisposed: false, IsActive: true }) ThrowOffThread(member);
+        if (!ReferenceEquals(go, null) && go.Scene is { IsDisposed: false, ComponentsEnabled: true }) ThrowOffThread(member);
     }
 
     /// <inheritdoc cref="AssertOwner(GameObject?, string)"/>
@@ -416,7 +416,7 @@ public sealed class MainThreadContext : SynchronizationContext
     internal static void AssertOwner(SceneInstance? scene, [CallerMemberName] string member = "")
     {
         if (OnMainThread) return;
-        if (scene is { IsDisposed: false, IsActive: true }) ThrowOffThread(member);
+        if (scene is { IsDisposed: false, ComponentsEnabled: true }) ThrowOffThread(member);
     }
 
     /// <summary>Throws when called off the main thread while a loop is running, whatever is being touched.</summary>

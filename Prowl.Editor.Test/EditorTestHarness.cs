@@ -56,6 +56,11 @@ public abstract class EditorTestHarness : IDisposable
 
         Assets = new EditorAssetBackend(Project);
         Assets.Initialize(); // registers itself as AssetDatabase.Backend
+
+        // After the database, since a new world loads its default sky.
+        SceneInstance edited = SceneInstance.Create("Untitled", SceneMode.Edit);
+        edited.Activate();
+        SceneInstance.Main = edited;
     }
 
     /// <summary>The asset with this GUID, loaded.</summary>
@@ -76,7 +81,7 @@ public abstract class EditorTestHarness : IDisposable
     {
         if (source.Scene is null)
         {
-            var scene = new SceneInstance();
+            var scene = new SceneInstance(SceneMode.Edit);
             scene.Add(source);
             SceneInstance.Load(scene);
             SceneInstance.ProcessPendingLoad();
@@ -254,7 +259,7 @@ public abstract class EditorTestHarness : IDisposable
     /// <summary>Author a scene containing a single empty GameObject and save it as Main.scene.</summary>
     protected Guid AuthorEmptyScene(string relativePath = "Main.scene")
     {
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(new GameObject("Root"));
         Guid guid = CreateSceneAsset(scene, relativePath);
         Assert.NotEqual(Guid.Empty, guid);
@@ -268,7 +273,7 @@ public abstract class EditorTestHarness : IDisposable
         Type type = gameAsm.GetType(componentTypeName)
             ?? throw new InvalidOperationException($"Type '{componentTypeName}' not found in the game assembly.");
 
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Root");
         go.AddComponent(type);
         scene.Add(go);
@@ -376,7 +381,7 @@ public abstract class EditorTestHarness : IDisposable
 
     public virtual void Dispose()
     {
-        // Drop this test's scene so the next one starts from a fresh empty Scene.Current.
+        // Drop this test's world so the next one binds its own.
         try { SceneInstance.Shutdown(); } catch { }
 
         Assets.Dispose(); // stops the FileSystemWatcher and clears AssetDatabase.Current / Instance

@@ -240,7 +240,7 @@ public class AnimationGraphTests : RuntimeTestBase
         animator.Avatar = avatar;
         animator.Graph = asset;
 
-        scene.Enable();
+        scene.Activate();
         return (scene, animator, root);
     }
 

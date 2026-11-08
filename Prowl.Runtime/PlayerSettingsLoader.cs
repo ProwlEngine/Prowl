@@ -96,9 +96,9 @@ public static class PlayerSettingsLoader
                 SpeculativeRelaxationFactor = specRelax,
             };
 
-            // Settings load before the first scene, but one already made gets them too.
-            SceneInstance scene = Resources.SceneInstance.Current;
-            if (scene.IsValid()) scene.Physics.ApplySettings(PhysicsWorld.Defaults);
+            // Settings load before the first scene, but worlds already made get them too.
+            foreach (SceneInstance world in SceneInstance.All)
+                world.Physics.ApplySettings(PhysicsWorld.Defaults);
 
             // Collision matrix (uint[] serializes as a compound holding an "array" list)
             if (settings.TryGet("CollisionMatrixRows", out EchoObject? cmProp) && cmProp!.TryGet("array", out EchoObject? rows)

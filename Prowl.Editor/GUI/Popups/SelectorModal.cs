@@ -166,7 +166,7 @@ public static class SelectorModal
 
     private static void DrawSceneTab(Paper paper, Prowl.Scribe.FontFile font, float height)
     {
-        SceneInstance scene = Runtime.Resources.SceneInstance.Current;
+        SceneInstance scene = Runtime.Resources.SceneInstance.Main;
         if (scene.IsNotValid())
         {
             EditorGUI.EmptyState(paper, "sel_scene_empty", Loc.Get("selector.no_scene"), font);

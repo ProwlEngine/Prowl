@@ -112,17 +112,19 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     internal int _dispatchSequence;
 
     /// <summary>
-    /// Whether this component's gameplay methods should execute.
-    /// True when in play mode, or when the component has [ExecuteAlways].
+    /// Whether this component's gameplay methods should execute: its world is playing, or it has [ExecuteAlways].
     /// </summary>
     internal bool ShouldExecuteGameplay
     {
         get
         {
             _executeAlwaysCached ??= GetType().IsDefined(typeof(ExecuteAlwaysAttribute), true);
-            return Application.IsPlaying || _executeAlwaysCached.Value;
+            return IsInPlayingWorld || _executeAlwaysCached.Value;
         }
     }
+
+    /// <summary>Whether this component is in a world where gameplay runs.</summary>
+    internal bool IsInPlayingWorld => (ReferenceEquals(_go, null) ? null : _go.Scene) is { IsPlaying: true };
 
     /// <summary>
     /// Whether gameplay callbacks run now. A component enabled while gameplay was gated off, such as the edit
@@ -333,7 +335,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
             // Only call OnEnable/OnDisable if we're in an active Scene
             SceneInstance? scene = _go.IsValid() ? _go.Scene : null;
-            if (scene.IsValid() && scene.IsActive)
+            if (scene.IsValid() && scene.ComponentsEnabled)
             {
                 if (newState)
                     InternalOnEnable();

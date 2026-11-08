@@ -43,6 +43,10 @@ public abstract class RuntimeTestBase : IDisposable
         // by a wall-clock stopwatch. Physics uses the static Time.FixedDeltaTime (default 1/60).
         _time = new TimeData { DeltaTime = Time.FixedDeltaTime };
         Time.TimeStack.Push(_time);
+
+        SceneInstance main = SceneInstance.Create("Test");
+        main.Activate();
+        SceneInstance.Main = main;
     }
 
     /// <summary> The fixed timestep used by physics, mirrored from <see cref="Time.FixedDeltaTime"/>. </summary>
@@ -54,41 +58,47 @@ public abstract class RuntimeTestBase : IDisposable
     /// the scope: enabling one decides there and then which components get OnEnable, and a
     /// scene assembled in play mode has already had them.
     /// </summary>
-    protected static EditModeScope EditMode() => new();
+    protected EditModeScope EditMode() => new(this);
+
+    private SceneMode _createMode = SceneMode.Game;
 
     protected readonly struct EditModeScope : IDisposable
     {
+        private readonly RuntimeTestBase _test;
         private readonly bool _wasPlaying;
         private readonly bool _wasEditor;
 
-        public EditModeScope()
+        public EditModeScope(RuntimeTestBase test)
         {
+            _test = test;
             _wasPlaying = Application.IsPlaying;
             _wasEditor = Application.IsEditor;
             Application.IsPlaying = false;
             Application.IsEditor = true;
+            test._createMode = SceneMode.Edit;
         }
 
         public void Dispose()
         {
             Application.IsPlaying = _wasPlaying;
             Application.IsEditor = _wasEditor;
+            _test._createMode = SceneMode.Game;
         }
     }
 
-    /// <summary>
-    /// Creates a tracked scene. Pass <paramref name="enable"/> to immediately enable it (play mode),
-    /// otherwise it starts disabled so component OnEnable is deferred until <see cref="SceneInstance.Enable"/>.
-    /// </summary>
     /// <summary>The list of stored objects in a captured scene tree.</summary>
     protected static Prowl.Echo.EchoObject StoredObjects(Prowl.Echo.EchoObject content) => content["Objects"]["array"];
 
+    /// <summary>
+    /// Creates a tracked world, an edit world inside <see cref="EditMode"/>. Pass <paramref name="enable"/> to activate
+    /// it at once, otherwise it stays dormant so component OnEnable is deferred until <see cref="SceneInstance.Activate"/>.
+    /// </summary>
     protected SceneInstance CreateScene(bool enable = false)
     {
-        var scene = new SceneInstance();
+        var scene = new SceneInstance(_createMode);
         _scenes.Add(scene);
         if (enable)
-            scene.Enable();
+            scene.Activate();
         return scene;
     }
 
@@ -180,15 +190,15 @@ public abstract class RuntimeTestBase : IDisposable
 
     public virtual void Dispose()
     {
-        // DontDestroyOnLoad is static state, so anything a test preserved would still be in the
-        // registry for the next one. Immediate teardown: no frame follows to drain a destroy queue.
-        SceneInstance.DestroyPreserved(immediate: true);
+        // Main, a pending load and anything preserved are static state the next test must not see. Immediate
+        // teardown: no frame follows to drain a destroy queue.
+        SceneInstance.Shutdown();
 
         foreach (SceneInstance scene in _scenes)
         {
             if (scene.IsDisposed) continue;
-            if (scene.IsActive)
-                scene.Disable();
+            if (scene.State == SceneState.Running)
+                scene.Deactivate();
             scene.Dispose();
         }
         _scenes.Clear();
