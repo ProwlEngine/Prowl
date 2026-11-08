@@ -13,40 +13,22 @@ using Prowl.Runtime.Rendering;
 
 namespace Prowl.Editor.Inspector;
 
-/// <summary>The .volume asset inspector: the profile's components, edited live, with Apply and Revert.</summary>
+/// <summary>The .volume asset inspector: the profile's components, edited live. Edits are undo records that put the profile in the dirty asset set.</summary>
 [CustomAssetEditor(typeof(VolumeProfile))]
 public class VolumeProfileAssetEditor : AssetImporterEditor
 {
-    /// <summary>One editor for inline edits of profile assets from the Volume and Camera inspectors.</summary>
-    internal static readonly VolumeProfileAssetEditor Shared = new();
-
-    protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
-        => asset is VolumeProfile profile && profile.IsValid() ? Serializer.Serialize(typeof(object), profile) : null;
-
-    protected override EchoObject? CapturePersistedState(AssetEntry entry, EngineObject? asset)
-        => EditorAssetBackend.Instance?.ReadCachedEcho(entry.Guid) ?? CaptureState(entry, asset);
-
-    protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
-        => asset is VolumeProfile profile && profile.IsValid() && (EditorAssetBackend.Instance?.SaveAsset(entry.Guid, Serializer.Serialize(typeof(object), profile)) ?? false);
-
-    protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
-    {
-        if (asset is VolumeProfile profile && profile.IsValid()) EditorAssetBackend.Instance?.RevertToSaved(profile);
-    }
-
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
         if (asset is not VolumeProfile profile || profile.IsNotValid()) return;
         EditorGUI.SectionHeader(paper, $"{id}_hdr", $"{EditorIcons.LayerGroup}  Volume Profile", first: true);
         VolumeProfileGUI.DrawComponents(paper, $"{id}_list", profile);
-        DrawApplyRevertBar(paper, id, entry, asset);
+        DrawSaveRevertBar(paper, id, profile);
     }
 
-    /// <summary>The Apply and Revert bar for a database profile edited outside its own inspector.</summary>
-    internal void DrawPendingBar(Paper paper, string id, VolumeProfile profile)
+    /// <summary>The Save and Revert bar for a database profile edited outside its own inspector.</summary>
+    internal static void DrawPendingBar(Paper paper, string id, VolumeProfile profile)
     {
-        if (!profile.IsFromDatabase || EditorAssetBackend.Instance?.GetEntry(profile.AssetID) is not { } entry) return;
-        DrawApplyRevertBar(paper, id, entry, profile);
+        if (profile.IsFromDatabase) DrawSaveRevertBar(paper, id, profile);
     }
 }
 
@@ -96,7 +78,7 @@ public class VolumeEditor : CustomEditor
         VolumeProfile? profile = volume.SharedProfile;
         if (profile.IsNotValid()) return;
         VolumeProfileGUI.DrawComponents(paper, $"{id}_list", profile, volume);
-        VolumeProfileAssetEditor.Shared.DrawPendingBar(paper, $"{id}_pending", profile);
+        VolumeProfileAssetEditor.DrawPendingBar(paper, $"{id}_pending", profile);
     }
 }
 
@@ -136,6 +118,6 @@ public class CameraEditor : CustomEditor
 
         if (profile.IsNotValid()) return;
         VolumeProfileGUI.DrawComponents(paper, $"{id}_base", profile, camera);
-        VolumeProfileAssetEditor.Shared.DrawPendingBar(paper, $"{id}_base_pending", profile);
+        VolumeProfileAssetEditor.DrawPendingBar(paper, $"{id}_base_pending", profile);
     }
 }
