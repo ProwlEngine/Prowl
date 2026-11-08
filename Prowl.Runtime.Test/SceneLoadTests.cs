@@ -1,7 +1,9 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 using Xunit;
 
@@ -264,5 +266,67 @@ public class SceneLoadTests : RuntimeTestBase
         Assert.Same(SceneInstance.Main.ActiveSection, seen!.Value.Section);
         Assert.False(seen.Value.Additive);
         Assert.Same(SceneInstance.Main, active);
+    }
+
+    // A stored scene with five probes around a point, tetrahedralized as a bake stores them.
+    private Scene StoredWithProbes(string name, Float3 at)
+    {
+        var authoring = new SceneInstance();
+        authoring.Create(name + "Root");
+        Float3[] positions = [at, at + Float3.UnitX, at + Float3.UnitY, at + Float3.UnitZ, at + new Float3(1f, 1f, 1f)];
+        ProbeTetrahedralizer.Result tet = ProbeTetrahedralizer.Build(positions);
+        SceneLighting lighting = authoring.ActiveSection.Lighting;
+        lighting.ProbePositions = positions;
+        lighting.ProbeSH = new SphericalHarmonicsL2[positions.Length];
+        lighting.ProbeTetrahedra = tet.Tetrahedra;
+        lighting.ProbeTetNeighbours = tet.Neighbours;
+        var stored = new Scene { Data = authoring.ActiveSection.CaptureTree() };
+        authoring.Dispose();
+        return AssetDatabase.Get<Scene>(_backend.Add(stored, name + ".scene"))!;
+    }
+
+    [Fact]
+    public void ProbesInOneSection_AreUsedAsStored_WithoutARebuild()
+    {
+        SceneLoad load = StoredWithProbes("Lit", Float3.Zero).Load();
+        load.Wait();
+        SceneInstance main = SceneInstance.Main;
+
+        Assert.Null(main.ProbeRebuild);
+        Assert.Same(load.Section!.Lighting.ProbeTetrahedra, main.Probes!.Tetrahedra);
+    }
+
+    [Fact]
+    public void ProbesInTwoSections_MergeIntoOneSet_AndUnloadingOneGoesBackToItsStoredSet()
+    {
+        SceneLoad first = StoredWithProbes("A", Float3.Zero).Load();
+        first.Wait();
+        SceneLoad second = StoredWithProbes("B", new Float3(10f, 0f, 0f)).LoadAdditive();
+        second.Wait();
+        SceneInstance main = SceneInstance.Main;
+
+        main.ProbeRebuild!.Wait();
+        SceneInstance.ProbeSet merged = main.Probes!;
+        Assert.Equal(10, merged.Positions.Length);
+        Assert.Equal(new Float3(10f, 0f, 0f), merged.Positions[5]);
+        Assert.NotEmpty(merged.Tetrahedra);
+
+        first.Section!.Unload();
+        SceneInstance.ProcessPendingLoad();
+
+        Assert.Null(main.ProbeRebuild);
+        Assert.Same(second.Section!.Lighting.ProbeTetrahedra, main.Probes!.Tetrahedra);
+    }
+
+    [Fact]
+    public void Load_DropsTheOldProbesAtOnce()
+    {
+        StoredWithProbes("Lit", Float3.Zero).Load().Wait();
+        Assert.NotNull(SceneInstance.Main.Probes);
+
+        Stored("Dark", "d").Load().Wait();
+
+        Assert.Null(SceneInstance.Main.Probes);
+        Assert.Null(SceneInstance.Main.ProbeVolume);
     }
 }

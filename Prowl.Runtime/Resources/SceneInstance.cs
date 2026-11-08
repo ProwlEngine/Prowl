@@ -481,7 +481,7 @@ public class SceneInstance : EngineObject, ISerializable
             {
                 world._sections.Add(section);
             }
-            section.Fill(content);
+            section.Fill(content, additive: load.Kind == SceneLoadKind.Additive);
         }
 
         Raise(Loaded, section.Instance, handler => handler(new SceneLoadedArgs(section, load.Kind == SceneLoadKind.Additive)), nameof(Loaded));
@@ -551,7 +551,7 @@ public class SceneInstance : EngineObject, ISerializable
 
         foreach (SceneSection section in sections)
             RemoveSection(section);
-        InvalidateProbeVolume();
+        RebuildProbes(keepPrevious: false);
     }
 
     /// <summary>The scene the active section was loaded from, if any.</summary>
@@ -841,7 +841,7 @@ public class SceneInstance : EngineObject, ISerializable
             if (!_sections.Contains(value)) throw new InvalidOperationException($"'{value.Name}' has been unloaded.");
             if (ReferenceEquals(_activeSection, value)) return;
             _activeSection = value;
-            InvalidateProbeVolume();
+            BakedLightingVersion++;
         }
     }
 
@@ -869,24 +869,110 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>The active section's lightmapper settings.</summary>
     public LightmapBakeSettings LightmapBake => _activeSection.LightmapBake;
 
-    [SerializeField, NotHeld]
-    [NonSerialized] private LightProbeVolume? _probeVolume;
+    /// <summary>The light probes a world draws with, merged over its sections.</summary>
+    internal sealed class ProbeSet
+    {
+        public required Float3[] Positions;
+        public required SphericalHarmonicsL2[] SH;
+        public required int[] Tetrahedra;
+        public required int[] Neighbours;
+    }
 
-    /// <summary>Runtime probe sampler built from <see cref="Lighting"/> (lazy). Null when there are no baked probes.</summary>
+    [NotHeld] private ProbeSet? _probes;
+    [NotHeld] private LightProbeVolume? _probeVolume;
+    [NotHeld] private Task<ProbeSet>? _probeRebuild;
+    [NotHeld] private CancellationTokenSource? _probeCancel;
+
+    /// <summary>
+    /// The probes over every loaded section: one section's stored set as it is, or one tetrahedralization over all of
+    /// them, rebuilt on a worker, when two or more sections have probes. A finished rebuild is taken here.
+    /// </summary>
+    internal ProbeSet? Probes
+    {
+        get
+        {
+            if (_probeRebuild is { IsCompleted: true } done)
+            {
+                _probeRebuild = null;
+                _probeCancel?.Dispose();
+                _probeCancel = null;
+                if (done.IsCompletedSuccessfully) SetProbes(done.Result);
+                else if (done.Exception is { } failure) Debug.LogException($"[Probes] Merging the probes of '{Name}' threw", failure);
+            }
+            return _probes;
+        }
+    }
+
+    /// <summary>The rebuild merging several sections' probes while one runs, so a caller can wait for it.</summary>
+    internal Task? ProbeRebuild => _probeRebuild;
+
+    /// <summary>Runtime probe sampler over <see cref="Probes"/> (lazy). Null when no section has baked probes.</summary>
     public LightProbeVolume? ProbeVolume
     {
         get
         {
             EnsureNotDisposed();
-            if (_probeVolume == null && Lighting.HasProbes)
-                _probeVolume = new LightProbeVolume(Lighting.ProbePositions, Lighting.ProbeSH,
-                                                    Lighting.ProbeTetrahedra, Lighting.ProbeTetNeighbours);
+            ProbeSet? probes = Probes;
+            if (_probeVolume == null && probes != null)
+                _probeVolume = new LightProbeVolume(probes.Positions, probes.SH, probes.Tetrahedra, probes.Neighbours);
             return _probeVolume;
         }
     }
 
-    /// <summary>Drop the cached probe volume so the next access rebuilds it (call after a rebake).</summary>
-    public void InvalidateProbeVolume() { EnsureNotDisposed(); _probeVolume = null; BakedLightingVersion++; }
+    /// <summary>Takes the sections' probes again, after a bake changed them.</summary>
+    public void InvalidateProbeVolume() => RebuildProbes(keepPrevious: false);
+
+    // Only an additive load keeps the previous set while a rebuild runs. Everything else drops it at once, so the probes
+    // of an unloaded level never light the next one.
+    internal void RebuildProbes(bool keepPrevious)
+    {
+        EnsureNotDisposed();
+        CancelProbeRebuild();
+
+        List<SceneLighting> baked = [];
+        foreach (SceneSection section in _sections)
+            if (section.Lighting.HasProbes) baked.Add(section.Lighting);
+
+        if (baked.Count <= 1)
+        {
+            SetProbes(baked.Count == 0 ? null : new ProbeSet
+            {
+                Positions = baked[0].ProbePositions,
+                SH = baked[0].ProbeSH,
+                Tetrahedra = baked[0].ProbeTetrahedra,
+                Neighbours = baked[0].ProbeTetNeighbours,
+            });
+            return;
+        }
+
+        if (!keepPrevious) SetProbes(null);
+
+        // Section order, since the tetrahedralization depends on point order.
+        Float3[] positions = [.. baked.SelectMany(lighting => lighting.ProbePositions)];
+        SphericalHarmonicsL2[] sh = [.. baked.SelectMany(lighting => lighting.ProbeSH)];
+        _probeCancel = new CancellationTokenSource();
+        CancellationToken cancel = _probeCancel.Token;
+        _probeRebuild = Task.Run(() =>
+        {
+            ProbeTetrahedralizer.Result tet = ProbeTetrahedralizer.Build(positions, cancel);
+            return new ProbeSet { Positions = positions, SH = sh, Tetrahedra = tet.Tetrahedra, Neighbours = tet.Neighbours };
+        }, cancel);
+    }
+
+    private void CancelProbeRebuild()
+    {
+        _probeCancel?.Cancel();
+        _probeCancel?.Dispose();
+        _probeCancel = null;
+        _probeRebuild = null;
+    }
+
+    private void SetProbes(ProbeSet? probes)
+    {
+        _probes = probes;
+        _probeVolume = null;
+        BakedLightingVersion++;
+    }
 
     /// <summary>Moves whenever the baked lighting changes, so the render world takes the new probes.</summary>
     [SerializeIgnore, NonSerialized]
@@ -1491,6 +1577,8 @@ public class SceneInstance : EngineObject, ISerializable
         lock (s_live) s_live.RemoveAll(entry => !entry.TryGetTarget(out SceneInstance? scene) || ReferenceEquals(scene, this));
 
 
+        CancelProbeRebuild();
+
         // Clear the physics world
         _physics.Clear();
 
@@ -1797,7 +1885,7 @@ public sealed class SceneSection
     }
 
     /// <summary>Takes in detached content: its settings, and its objects as this section's.</summary>
-    internal void Fill(SceneContent content)
+    internal void Fill(SceneContent content, bool additive = false)
     {
         Environment = content.Environment;
         Lighting = content.Lighting;
@@ -1805,7 +1893,7 @@ public sealed class SceneSection
         foreach (GameObject obj in content.Objects)
             if (obj.IsValid() && obj.Parent.IsNotValid())
                 Instance.Add(obj, this);
-        Instance.InvalidateProbeVolume();
+        Instance.RebuildProbes(keepPrevious: additive);
     }
 
     /// <summary>

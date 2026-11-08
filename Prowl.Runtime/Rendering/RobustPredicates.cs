@@ -13,7 +13,7 @@
 
 using System;
 
-namespace Prowl.Editor.Lightmapping;
+namespace Prowl.Runtime.Rendering;
 
 /// <summary>
 /// Exact-sign 3D orientation and in-sphere predicates. All inputs are 3 doubles per point.

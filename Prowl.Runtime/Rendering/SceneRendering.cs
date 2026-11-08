@@ -232,37 +232,37 @@ public sealed class SceneRendering : IDisposable
         RenderStats.AddSceneSync(System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds, synced, _parked.Count);
     }
 
-    private SceneLighting? _probesFrom;
+    private SceneInstance.ProbeSet? _probesFrom;
     private int _probesVersion = -1;
 
     private void SyncProbes(RenderWorld world)
     {
-        SceneLighting baked = _scene.Lighting;
+        SceneInstance.ProbeSet? baked = _scene.Probes;
         if (baked == _probesFrom && _scene.BakedLightingVersion == _probesVersion) return;
         _probesFrom = baked;
         _probesVersion = _scene.BakedLightingVersion;
 
-        if (baked == null || !baked.HasProbes)
+        if (baked == null)
         {
             world.SetLightProbes(null);
             return;
         }
 
-        var positions = new Double3[baked.ProbePositions.Length];
+        var positions = new Double3[baked.Positions.Length];
         for (int i = 0; i < positions.Length; i++)
-            positions[i] = new Double3(baked.ProbePositions[i].X, baked.ProbePositions[i].Y, baked.ProbePositions[i].Z);
-        var coefficients = new Graphite.Rendering.SphericalHarmonicsL2[baked.ProbeSH.Length];
+            positions[i] = new Double3(baked.Positions[i].X, baked.Positions[i].Y, baked.Positions[i].Z);
+        var coefficients = new Graphite.Rendering.SphericalHarmonicsL2[baked.SH.Length];
         for (int i = 0; i < coefficients.Length; i++)
         {
-            SphericalHarmonicsL2 sh = baked.ProbeSH[i];
+            SphericalHarmonicsL2 sh = baked.SH[i];
             coefficients[i] = new Graphite.Rendering.SphericalHarmonicsL2 { C0 = sh.C0, C1 = sh.C1, C2 = sh.C2, C3 = sh.C3, C4 = sh.C4, C5 = sh.C5, C6 = sh.C6, C7 = sh.C7, C8 = sh.C8 };
         }
         world.SetLightProbes(new LightProbeData
         {
             Positions = positions,
             Coefficients = coefficients,
-            Tetrahedra = baked.ProbeTetrahedra,
-            Neighbours = baked.ProbeTetNeighbours,
+            Tetrahedra = baked.Tetrahedra,
+            Neighbours = baked.Neighbours,
         });
     }
 
