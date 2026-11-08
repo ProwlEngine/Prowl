@@ -12,7 +12,7 @@ namespace Prowl.Runtime.Rendering;
 /// <summary>
 /// Floats a <see cref="Rigidbody3D"/> on the <see cref="Ocean"/>, each probe pushes straight
 /// up in proportion to how deep it sits below the water, the body drags against the water's motion along its own axes,
-/// and its spin is damped while it is wet.
+/// rising and falling with the waves and carried by the current, and its spin is damped while it is wet.
 /// The water is read a few frames late, from the GPU.
 /// </summary>
 [AddComponentMenu("Physics/Ocean Floater")]
@@ -73,11 +73,11 @@ public sealed class OceanFloater : Component
 
         float share = body!.Mass * 9.81f * Buoyancy / Probes.Length;
         bool wet = false;
-        float waterRise = 0f;
+        Float3 water = Float3.Zero;
         for (int i = 0; i < Probes.Length; i++)
         {
             float depth = (float)(_query.Heights[i] - world[i].Y);
-            waterRise += _query.Velocities[i] / Probes.Length;
+            water += new Float3(_query.Flows[i].X, _query.Velocities[i], _query.Flows[i].Y) / Probes.Length;
             if (depth <= 0f)
                 continue;
             wet = true;
@@ -86,7 +86,7 @@ public sealed class OceanFloater : Component
         if (!wet)
             return;
 
-        Float3 relative = body.LinearVelocity - new Float3(0f, waterRise, 0f);
+        Float3 relative = body.LinearVelocity - water;
         Float3 up = Float3.UnitY, right = Transform.Right, forward = Transform.Forward;
         Float3 drag = up * (-DragUp * Float3.Dot(relative, up)) + right * (-DragSideways * Float3.Dot(relative, right)) + forward * (-DragForward * Float3.Dot(relative, forward));
         body.AddForce(drag, ForceMode.Acceleration);
