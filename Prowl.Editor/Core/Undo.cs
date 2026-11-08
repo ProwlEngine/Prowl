@@ -267,12 +267,13 @@ public static class Undo
         }
 
         int group = _currentGroup;
-        if (FindMergeablePending(key, group) != null) { NoteRecord(); return; }
+        if (FindMergeablePending(key, group) != null) { if (!legacy) NoteRecord(); return; }
 
         if (owner.Kind == UndoOwner.OwnerKind.None && target is EngineObject eo and not GameObject and not Component and not Asset { IsFromDatabase: true })
             WarnOnce(eo.GetType(), $"'{eo.GetType().Name}' is recorded with no owner, so undoing it marks nothing.");
 
-        NoteRecord();
+        // A legacy snapshot is a baseline, so it only counts for an interaction once it turns out to have changed.
+        if (!legacy) NoteRecord();
         _pending.Add(new PendingObject(target, key, owner, Capture.Of(target), legacy) { Group = group, Name = name });
     }
 
@@ -809,6 +810,11 @@ public static class Undo
     /// <summary>End of an editor frame: the group closes unless a drag is recording or a text field has focus.</summary>
     internal static void EndFrame(bool textFocused)
     {
+        if (_mouseHeld && !_interactionRecorded && _pending.Any(e => e is PendingObject { Legacy: true }))
+        {
+            FlushUndoRecordObjects();
+            if (OpenGroupHasStep) _interactionRecorded = true;
+        }
         if (!InteractionActive && !textFocused && !_isContinuous) IncrementCurrentGroup();
     }
 

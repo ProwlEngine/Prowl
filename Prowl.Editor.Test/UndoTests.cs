@@ -1548,4 +1548,23 @@ public class UndoTests : EditorTestHarness
 
         Assert.Same(second, renderer.Material);
     }
+
+    [Fact]
+    public void CustomEditorSnapshotsOverADrag_AreOneStep_AndAHoldWithNoChangeIsNoInteraction()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+
+        Frame(mouseDown: true, edits: () => Undo.Snapshot(comp));
+        Assert.False(Undo.InteractionActive);
+        Frame(mouseHeld: true, edits: () => { Undo.Snapshot(comp); comp.Value = 1; });
+        Frame(mouseHeld: true, edits: () => { Undo.Snapshot(comp); comp.Value = 2; });
+        Frame(mouseHeld: true, edits: () => { Undo.Snapshot(comp); comp.Value = 3; });
+        Frame();
+        Frame();
+
+        Undo.PerformUndo();
+        Assert.Equal(0, comp.Value);
+        Assert.False(Undo.CanUndo);
+    }
 }
