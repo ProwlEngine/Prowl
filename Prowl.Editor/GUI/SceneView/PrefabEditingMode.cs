@@ -24,15 +24,15 @@ namespace Prowl.Editor.GUI.SceneView;
 public static class PrefabEditingMode
 {
     public static bool IsEditing { get; private set; }
+
+    /// <summary>Whether the prefab being edited has unsaved changes. Its own flag, so the scene's is left as it was.</summary>
+    public static bool IsDirty { get; internal set; }
     public static Guid EditingPrefabGuid { get; private set; }
     public static string? EditingPrefabPath { get; private set; }
     public static string? OriginalSceneName { get; private set; }
 
     private static EchoObject? _savedSceneState;
     private static string? _savedScenePath;
-    // The scene's own dirty flag, parked while the prefab session borrows it. Without this the
-    // prefab and the scene share one flag, so each makes the other look unsaved.
-    private static bool _savedSceneDirty;
     // The scene's undo history, parked the same way. The session's own steps address objects that
     // stop existing when it ends, so the two histories cannot be one.
     private static object? _savedSceneUndo;
@@ -126,7 +126,6 @@ public static class PrefabEditingMode
             _savedSceneState = Serializer.Serialize(currentScene);
             _savedScenePath = EditorSceneManager.CurrentScenePath;
         }
-        _savedSceneDirty = EditorSceneManager.IsDirty;
 
         // Instantiate prefab into isolated scene
         var editScene = new Scene();
@@ -140,7 +139,6 @@ public static class PrefabEditingMode
             // the next session would restore a scene from whenever this failed.
             _savedSceneState = null;
             _savedScenePath = null;
-            _savedSceneDirty = false;
             OriginalSceneName = null;
             Debug.LogWarning("[Prefab] Failed to instantiate prefab for editing.");
             return;
@@ -183,7 +181,7 @@ public static class PrefabEditingMode
         EditingPrefabGuid = prefabGuid;
         IsEditing = true;
         EditorSceneManager.CurrentScenePath = null;
-        EditorSceneManager.IsDirty = false; // the prefab session starts clean
+        IsDirty = false;
 
         Debug.Log($"[Prefab] Entered editing mode: {prefab.Name}");
     }
@@ -382,7 +380,6 @@ public static class PrefabEditingMode
         if (!sceneRestored) Undo.Clear();
         _savedSceneUndo = null;
 
-        EditorSceneManager.IsDirty = _savedSceneDirty;
-        _savedSceneDirty = false;
+        IsDirty = false;
     }
 }

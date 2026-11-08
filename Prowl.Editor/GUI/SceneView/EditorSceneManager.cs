@@ -24,8 +24,18 @@ public static class EditorSceneManager
     /// <summary>Path to the currently open scene file (relative to Assets/). Null for unsaved scenes.</summary>
     public static string? CurrentScenePath { get; internal set; }
 
-    /// <summary>Whether the current scene has unsaved changes.</summary>
-    public static bool IsDirty { get; set; }
+    private static bool _sceneDirty;
+
+    /// <summary>Whether the open scene, or the prefab being edited, has unsaved changes.</summary>
+    public static bool IsDirty
+    {
+        get => PrefabEditingMode.IsEditing ? PrefabEditingMode.IsDirty : _sceneDirty;
+        internal set
+        {
+            if (PrefabEditingMode.IsEditing) PrefabEditingMode.IsDirty = value;
+            else _sceneDirty = value;
+        }
+    }
 
     /// <summary>Marks the current scene as having unsaved changes.</summary>
     public static void MarkDirty() => IsDirty = true;
