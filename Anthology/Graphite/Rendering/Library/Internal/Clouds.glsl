@@ -419,6 +419,8 @@ void main()
 layout(location = 1) out vec4 outDistance;
 
 uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
+#include "Graphite/Probes.glsl"
+
 uniform vec2 _CloudFullResolution;
 uniform vec2 _CloudLowResolution;
 uniform vec3 _CloudCamera;          // the first layer's camera, absolute
@@ -660,6 +662,25 @@ void main()
     float fade = exp(-far * far * far * far);
     float alpha = (1.0 - transmittance) * fade;
     color *= fade;
+    // How far the cloud the pixel shows is, 0 for clear sky
+    outColor = vec4(color, alpha);
+    // Far clouds fade into the sky behind them as a whole, by how far the cloud the pixel shows is, so their shapes
+    // stay whole as they go rather than thinning out. They fade to the captured sky, which has no sun disk, and still
+    // block what lies behind them. The sky is read at least 1 degree above the horizon, so it never takes in the ground
+    float distance = weightSum > 1e-6 ? distSum / weightSum : 0.0;
+    float far = distance * _CloudHorizonFade;
+    float fade = exp(-far * far * far * far);
+    float alpha = 1.0 - transmittance;
+    if (Graphite_ReflectionProbesReady())
+    {
+        vec3 skyDir = normalize(vec3(dir.x, max(dir.y, 0.0175), dir.z));
+        color = mix(Graphite_SampleSkyProbe(skyDir, 0.0) / max(Graphite_Exposure(), 1e-12) * alpha, color, fade);
+    }
+    else
+    {
+        color *= fade;
+        alpha *= fade;
+    }
     // How far the cloud the pixel shows is, 0 for clear sky
     outColor = vec4(color, alpha);
     // What lies behind is blocked as if the cloud were four times as thick, so the sun and bright HDR highlights do not
