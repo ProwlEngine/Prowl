@@ -268,7 +268,30 @@ Shader "Graphite/Ocean"
                 p.specularRoughness = mix(_Roughness, _FarRoughness, clamp(far / max(_FarRoughnessDistance, 1.0), 0.0, 1.0));
                 p.transmissionWeight = 1.0;
                 PBR_Closure c = PBR_Prepare(p, vRelativePos, view, geomNormal, 0.0);
-                vec3 direct = PBR_ShadeLights(c);
+
+                // The lights as PBR_ShadeLights gives them, keeping the sun's shadowed light for the water's body
+                Graphite_LightFrame frame = PBR_LightFrame(c);
+                Graphite_LightContribution light;
+                vec3 direct = vec3(0.0), sun = vec3(0.0), toSun = vec3(0.0, 1.0, 0.0);
+                for (uint i = 0u; i < Graphite_DirectionalCount(); i++)
+                {
+                    Graphite_DirectionalLight d = Graphite_GetDirectional(i);
+                    if (!Graphite_ContributeDirectional(d, i, frame, light))
+                        continue;
+                    direct += Graphite_BRDF(c, light);
+                    if (i == 0u)
+                    {
+                        sun = light.radiance;
+                        toSun = d.direction;
+                    }
+                }
+                Graphite_LightIterator it = Graphite_BeginLights(c.position);
+                Graphite_LightSample local;
+                while (Graphite_NextLight(it, local))
+                {
+                    if (Graphite_ContributeLocal(local, frame, false, light))
+                        direct += Graphite_BRDF(c, light);
+                }
                 Graphite_ProbeSet probes = PBR_FindProbes(c);
                 PBR_Indirect indirect = PBR_GatherIndirect(c, vec2(0.0), probes);
 #ifndef PBR_TIER_LITE
@@ -282,25 +305,6 @@ Shader "Graphite/Ocean"
                 vec3 ambient = Graphite_AmbientBRDF(c, indirect);
 
                 vec3 sky = Graphite_IndirectDiffuse(vec3(0.0, 1.0, 0.0), vec2(0.0));
-                vec3 sun = vec3(0.0), toSun = vec3(0.0, 1.0, 0.0);
-                if (Graphite_DirectionalCount() > 0u)
-                {
-                    Graphite_LightFrame frame;
-                    frame.position = vRelativePos;
-                    frame.view = view;
-                    frame.geomNormal = geomNormal;
-                    frame.baseNormal = vec3(0.0, 1.0, 0.0);
-                    frame.coatNormal = frame.baseNormal;
-                    frame.baseAlpha = 1.0;
-                    frame.coatAlpha = 1.0;
-                    Graphite_LightContribution light;
-                    Graphite_DirectionalLight d = Graphite_GetDirectional(0u);
-                    if (Graphite_ContributeDirectional(d, 0u, frame, light))
-                    {
-                        sun = light.radiance;
-                        toSun = d.direction;
-                    }
-                }
 
                 vec3 scatter = _ScatterColor.rgb * (sky + sun * max(toSun.y, 0.0)) / GRAPHITE_PI;
                 float pinch = clamp(0.6 - 0.12 * jacobian, 0.0, 1.0);
