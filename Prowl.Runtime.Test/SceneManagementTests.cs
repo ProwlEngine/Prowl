@@ -579,105 +579,6 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Load_SetsCurrent_EnablesScene_FiresEvent()
-    {
-        SceneInstance scene = CreateScene();
-        bool fired = false;
-        void handler() => fired = true;
-        SceneInstance.OnSceneLoaded += handler;
-        try
-        {
-            SceneInstance.SwapMain(scene);
-            SceneInstance.ProcessPendingLoad();
-
-            Assert.Same(scene, SceneInstance.Main);
-            Assert.Equal(SceneState.Running, scene.State);
-            Assert.True(fired);
-        }
-        finally
-        {
-            SceneInstance.OnSceneLoaded -= handler;
-        }
-    }
-
-    [Fact]
-    public void Load_QueuedUntilProcessed()
-    {
-        SceneInstance before = SceneInstance.Main;
-        SceneInstance scene = CreateScene();
-
-        SceneInstance.SwapMain(scene);
-
-        Assert.Same(before, SceneInstance.Main);
-        Assert.NotEqual(SceneState.Running, scene.State);
-
-        SceneInstance.ProcessPendingLoad();
-
-        Assert.Same(scene, SceneInstance.Main);
-    }
-
-    [Fact]
-    public void Load_ReplacingCurrent_DisposesPrevious()
-    {
-        SceneInstance first = CreateScene();
-        SceneInstance second = CreateScene();
-
-        SceneInstance.SwapMain(first);
-        SceneInstance.ProcessPendingLoad();
-
-        SceneInstance.SwapMain(second);
-
-        // The outgoing scene stays usable until the swap actually applies.
-        Assert.Same(first, SceneInstance.Main);
-        Assert.False(first.IsDisposed);
-
-        SceneInstance.ProcessPendingLoad();
-
-        Assert.Same(second, SceneInstance.Main);
-        Assert.True(first.IsDisposed);
-    }
-
-    [Fact]
-    public void Load_LastRequestOfTheFrameWins()
-    {
-        SceneInstance first = CreateScene();
-        SceneInstance second = CreateScene();
-
-        SceneInstance.SwapMain(first);
-        SceneInstance.SwapMain(second);
-        SceneInstance.ProcessPendingLoad();
-
-        Assert.Same(second, SceneInstance.Main);
-        Assert.True(first.IsDisposed); // replaced before it loaded, so nothing else would ever free it
-    }
-
-    // Loading the scene that is already current used to dispose it and then enable the corpse.
-    [Fact]
-    public void Load_TheCurrentScene_IsANoOp()
-    {
-        SceneInstance current = SceneInstance.Main;
-
-        SceneInstance.SwapMain(current);
-        SceneInstance.ProcessPendingLoad();
-
-        Assert.Same(current, SceneInstance.Main);
-        Assert.False(current.IsDisposed);
-        Assert.Equal(SceneState.Running, current.State);
-    }
-
-    [Fact]
-    public void Load_AnAlreadyEnabledScene_DoesNotThrow()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-
-        SceneInstance.SwapMain(scene);
-        SceneInstance.ProcessPendingLoad();
-
-        Assert.Same(scene, SceneInstance.Main);
-        Assert.Equal(SceneState.Running, scene.State);
-    }
-
-    [Fact]
     public void EnableAndDisable_AreIdempotent()
     {
         SceneInstance scene = CreateScene();
@@ -729,194 +630,74 @@ public class SceneManagementTests : RuntimeTestBase
         public override void Update() => Updates++;
     }
 
-    // The hand-rolled version: take the object out of the outgoing scene and put it in the incoming
-    // one. It works, as long as you add it to the scene you are loading and not to Scene.Current,
-    // which is still the outgoing scene until the swap applies.
-    [Fact]
-    public void ManualPreserve_RemoveFromOldSceneAndAddToTheNextOne_Survives()
-    {
-        SceneInstance first = CreateScene();
-        GameObject keeper = CreateGameObject("Keeper");
-        first.Add(keeper);
-        SceneInstance.SwapMain(first);
-        SceneInstance.ProcessPendingLoad();
-
-        SceneInstance second = CreateScene();
-        first.Remove(keeper);
-        second.Add(keeper);
-        SceneInstance.SwapMain(second);
-        SceneInstance.ProcessPendingLoad();
-
-        Assert.False(keeper.IsDisposed);
-        Assert.Same(second, keeper.Scene);
-        Assert.Contains(keeper, second.Objects);
-    }
-
-    // The trap: after Load(), Scene.Current is still the outgoing scene, so adding there hands the
-    // object to the scene that is about to be disposed.
-    [Fact]
-    public void ManualPreserve_AddingBackToSceneCurrentAfterLoad_LosesTheObject()
-    {
-        SceneInstance first = CreateScene();
-        GameObject keeper = CreateGameObject("Keeper");
-        first.Add(keeper);
-        SceneInstance.SwapMain(first);
-        SceneInstance.ProcessPendingLoad();
-
-        SceneInstance second = CreateScene();
-        first.Remove(keeper);
-        SceneInstance.SwapMain(second);
-        SceneInstance.Main.Add(keeper); // still `first` at this point
-        SceneInstance.ProcessPendingLoad();
-
-        Assert.True(keeper.IsDisposed, "Scene.Current is only the new scene once the swap applies.");
-    }
+    // What a Load does at the safe point, without a stored scene.
+    private static void LoadEmpty(SceneInstance world) => world.ReplaceContent(new SceneContent(), "Next", null);
 
     [Fact]
-    public void DontDestroyOnLoad_SurvivesTheLoad_AndJoinsTheNewScene()
+    public void Persistent_SurvivesALoad_WithoutRestarting_AndKeepsItsRegistrations()
     {
-        SceneInstance first = CreateScene();
-        GameObject keeper = CreateGameObject("Keeper");
-        GameObject doomed = CreateGameObject("Doomed");
-        first.Add(keeper);
-        first.Add(doomed);
-        SceneInstance.SwapMain(first);
-        SceneInstance.ProcessPendingLoad();
-
-        keeper.Persistent = true;
-
-        SceneInstance second = CreateScene();
-        SceneInstance.SwapMain(second);
-        SceneInstance.ProcessPendingLoad();
-
-        Assert.False(keeper.IsDisposed);
-        Assert.Same(second, keeper.Scene);
-        Assert.Contains(keeper, second.Objects);
-        Assert.True(doomed.IsDisposed, "Anything not preserved goes with the old scene.");
-    }
-
-    [Fact]
-    public void DontDestroyOnLoad_KeepsTicking_InTheNewScene()
-    {
-        SceneInstance first = CreateScene(enable: true);
-        GameObject keeper = CreateGameObject("Keeper");
+        SceneInstance main = SceneInstance.Main;
+        GameObject keeper = main.Create("Keeper");
         TickCounter comp = keeper.AddComponent<TickCounter>();
-        first.Add(keeper);
-        SceneInstance.SwapMain(first);
-        SceneInstance.ProcessPendingLoad();
-        keeper.Persistent = true;
-
-        Update(first);
-        Assert.Equal(1, comp.Updates);
-
-        SceneInstance second = CreateScene();
-        SceneInstance.SwapMain(second);
-        SceneInstance.ProcessPendingLoad();
-
-        Update(second);
-        Assert.Equal(2, comp.Updates); // re-registered with the new scene's dispatcher
-    }
-
-    [Fact]
-    public void DontDestroyOnLoad_MovesSceneRegistrations_ToTheNewScene()
-    {
-        SceneInstance first = CreateScene(enable: true);
-        GameObject keeper = CreateGameObject("Keeper");
         GameCanvas canvas = keeper.AddComponent<GameCanvas>();
-        first.Add(keeper);
-        SceneInstance.SwapMain(first);
-        SceneInstance.ProcessPendingLoad();
+        GameObject doomed = main.Create("Doomed");
         keeper.Persistent = true;
-        Assert.Equal([canvas], first.Canvases);
+        Update(main);
 
-        SceneInstance second = CreateScene();
-        SceneInstance.SwapMain(second);
-        SceneInstance.ProcessPendingLoad();
+        LoadEmpty(main);
+        Update(main);
 
-        Assert.Equal([canvas], second.Canvases);
-    }
-
-    [Fact]
-    public void DontDestroyOnLoad_DoesNotRestartTheObject()
-    {
-        SceneInstance first = CreateScene(enable: true);
-        GameObject keeper = CreateGameObject("Keeper");
-        TickCounter comp = keeper.AddComponent<TickCounter>();
-        first.Add(keeper);
-        SceneInstance.SwapMain(first);
-        SceneInstance.ProcessPendingLoad();
-        keeper.Persistent = true;
-        int enables = comp.Enables;
-
-        SceneInstance.SwapMain(CreateScene());
-        SceneInstance.ProcessPendingLoad();
-
-        Assert.Equal(enables, comp.Enables);
+        Assert.False(keeper.IsDisposed);
+        Assert.True(doomed.IsDisposed, "Anything not persistent goes with the old level.");
+        Assert.Equal(2, comp.Updates);
+        Assert.Equal(1, comp.Enables);
         Assert.Equal(0, comp.Disables);
+        Assert.Equal([canvas], main.Canvases);
     }
 
     [Fact]
     public void Persistent_IsSetOnARoot_AndReadOnAChildForItsRoot()
     {
-        SceneInstance first = CreateScene();
-        GameObject root = CreateGameObject("Root");
-        GameObject child = CreateGameObject("Child");
-        child.SetParent(root);
-        first.Add(root);
-        SceneInstance.SwapMain(first);
-        SceneInstance.ProcessPendingLoad();
+        SceneInstance main = SceneInstance.Main;
+        GameObject root = main.Create("Root");
+        GameObject child = main.Create("Child", root);
 
         Assert.Throws<InvalidOperationException>(() => child.Persistent = true);
         root.Persistent = true;
         Assert.True(child.Persistent);
-        Assert.Same(first.Persistent, child.Section);
+        Assert.Same(main.Persistent, child.Section);
 
-        SceneInstance second = CreateScene();
-        SceneInstance.SwapMain(second);
-        SceneInstance.ProcessPendingLoad();
+        LoadEmpty(main);
 
         Assert.False(root.IsDisposed);
         Assert.False(child.IsDisposed);
-        Assert.Same(second, root.Scene);
-        Assert.Same(second, child.Scene);
         Assert.Same(root, child.Parent);
     }
 
     [Fact]
-    public void CancelDontDestroyOnLoad_LetsItDieWithTheScene()
+    public void Persistent_SetBackToFalse_LetsItGoWithTheLevel()
     {
-        SceneInstance first = CreateScene();
-        GameObject go = CreateGameObject();
-        first.Add(go);
-        SceneInstance.SwapMain(first);
-        SceneInstance.ProcessPendingLoad();
+        SceneInstance main = SceneInstance.Main;
+        GameObject go = main.Create("Go");
 
         go.Persistent = true;
         go.Persistent = false;
-
-        SceneInstance.SwapMain(CreateScene());
-        SceneInstance.ProcessPendingLoad();
+        LoadEmpty(main);
 
         Assert.True(go.IsDisposed);
     }
 
     [Fact]
-    public void DontDestroyOnLoad_ADestroyedObject_IsDroppedNotResurrected()
+    public void Persistent_ADestroyedObject_IsDroppedNotResurrected()
     {
-        SceneInstance first = CreateScene();
-        GameObject go = CreateGameObject();
-        first.Add(go);
-        SceneInstance.SwapMain(first);
-        SceneInstance.ProcessPendingLoad();
+        SceneInstance main = SceneInstance.Main;
+        GameObject go = main.Create("Go");
         go.Persistent = true;
 
         go.Dispose();
+        LoadEmpty(main);
 
-        SceneInstance second = CreateScene();
-        SceneInstance.SwapMain(second);
-        SceneInstance.ProcessPendingLoad(); // must not throw or re-add the corpse
-
-        Assert.Empty(second.Objects);
+        Assert.DoesNotContain(go, main.Objects);
     }
 
     [Fact]
@@ -931,43 +712,17 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Shutdown_DestroysPreservedObjects()
+    public void Shutdown_DestroysPersistentObjects()
     {
-        SceneInstance scene = CreateScene(enable: true);
-        GameObject keeper = CreateGameObject("Keeper");
-        scene.Add(keeper);
-        SceneInstance.SwapMain(scene);
-        SceneInstance.ProcessPendingLoad();
+        SceneInstance main = SceneInstance.Main;
+        GameObject keeper = main.Create("Keeper");
         keeper.Persistent = true;
 
         SceneInstance.Shutdown();
 
         // No frame follows a shutdown, so nothing would drain a destroy queue: teardown is immediate.
         Assert.True(keeper.IsDisposed);
-        Assert.True(scene.IsDisposed);
-
-        // And the registry is empty, so the next run does not inherit the last one's objects.
-        SceneInstance next = CreateScene();
-        SceneInstance.SwapMain(next);
-        SceneInstance.ProcessPendingLoad();
-        Assert.Empty(next.Objects);
-    }
-
-    [Fact]
-    public void Load_SkipsASceneDisposedBeforeItApplied()
-    {
-        SceneInstance current = CreateScene();
-        SceneInstance queued = CreateScene();
-
-        SceneInstance.SwapMain(current);
-        SceneInstance.ProcessPendingLoad();
-
-        SceneInstance.SwapMain(queued);
-        queued.Dispose();
-        SceneInstance.ProcessPendingLoad();
-
-        Assert.Same(current, SceneInstance.Main);
-        Assert.False(current.IsDisposed);
+        Assert.True(main.IsDisposed);
     }
 
     // ---- The ambient world ----
@@ -1019,23 +774,6 @@ public class SceneManagementTests : RuntimeTestBase
             await Task.Delay(1).ConfigureAwait(false);
             return SceneInstance.Active;
         }
-    }
-
-    [Fact]
-    public void SceneLoadedHandlers_RunInTheLoadedScene()
-    {
-        SceneInstance loaded = CreateScene();
-        SceneInstance? seen = null;
-        void Handler() => seen = SceneInstance.Active;
-        SceneInstance.OnSceneLoaded += Handler;
-        try
-        {
-            SceneInstance.SwapMain(loaded);
-            SceneInstance.ProcessPendingLoad();
-        }
-        finally { SceneInstance.OnSceneLoaded -= Handler; }
-
-        Assert.Same(loaded, seen);
     }
 
     // A scene stays Active for its own teardown, and code still holding it afterwards gets a clear error.

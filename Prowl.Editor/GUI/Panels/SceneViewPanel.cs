@@ -266,7 +266,7 @@ public class SceneViewPanel : DockPanel
         uint rtHeight = (uint)MathF.Max(1, height);
         _editorCamera.EnsureRenderTarget(rtWidth, rtHeight);
 
-        SceneInstance scene = SceneInstance.Main;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         RenderTexture? rt = _editorCamera.RenderTarget;
 
         if (scene.IsNotValid())

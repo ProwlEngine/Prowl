@@ -104,8 +104,6 @@ public class EditorAssetBackend : AssetBackend
 
         // The notification above only reaches the scene that was open when the import happened, so a
         // scene opened afterwards has to catch up on whatever changed while it was closed.
-        Runtime.Resources.SceneInstance.OnSceneLoaded -= PrefabUtility.OnSceneLoaded;
-        Runtime.Resources.SceneInstance.OnSceneLoaded += PrefabUtility.OnSceneLoaded;
         Runtime.Resources.SceneInstance.Loaded -= PrefabUtility.OnSectionLoaded;
         Runtime.Resources.SceneInstance.Loaded += PrefabUtility.OnSectionLoaded;
 

@@ -33,21 +33,6 @@ public sealed class GameplayHook : Component
     public override void Update() => OnUpdate?.Invoke();
 }
 
-/// <summary>Records which async session its enable and disable callbacks ran in.</summary>
-public sealed class SessionProbe : Component
-{
-    public CancellationToken EnabledIn, DisabledIn;
-    public bool DisabledInEndedSession;
-
-    public override void OnEnable() => EnabledIn = GameTask.SessionToken;
-
-    public override void OnDisable()
-    {
-        DisabledIn = GameTask.SessionToken;
-        DisabledInEndedSession = DisabledIn.IsCancellationRequested;
-    }
-}
-
 // Installs and uninstalls the process wide main thread loop, so nothing else may run alongside it.
 [CollectionDefinition(nameof(ThreadingTests), DisableParallelization = true)]
 public sealed class ThreadingTestsCollection { }
@@ -743,55 +728,6 @@ public class ThreadingTests : RuntimeTestBase
         Assert.Equal(Environment.CurrentManagedThreadId, ranOn);
     }
 
-    /// <summary>
-    /// The editor ends the session at the scene swap, so the outgoing scene's teardown runs in the session it
-    /// belongs to, and the incoming scene starts in the next one.
-    /// </summary>
-    [Fact]
-    public void EndingTheSessionAtASwapSplitsTheTwoScenesBetweenSessions()
-    {
-        using var loop = new LoopScope();
-
-        SceneInstance first = CreateScene();
-        GameObject oldObject = CreateGameObject("Old");
-        first.Add(oldObject);
-        SessionProbe outgoing = oldObject.AddComponent<SessionProbe>();
-        SceneInstance.SwapMain(first);
-        SceneInstance.ProcessPendingLoad();
-        CancellationToken firstSession = GameTask.SessionToken;
-
-        SceneInstance second = CreateScene();
-        GameObject newObject = CreateGameObject("New");
-        second.Add(newObject);
-        SessionProbe incoming = newObject.AddComponent<SessionProbe>();
-        SceneInstance.EndSessionOnSwap = true;
-        SceneInstance.SwapMain(second);
-        SceneInstance.ProcessPendingLoad();
-
-        Assert.Equal(firstSession, outgoing.DisabledIn);
-        Assert.False(outgoing.DisabledInEndedSession);
-        Assert.True(firstSession.IsCancellationRequested);
-        Assert.NotEqual(firstSession, incoming.EnabledIn);
-        Assert.False(incoming.EnabledIn.IsCancellationRequested);
-        Assert.False(SceneInstance.EndSessionOnSwap);
-    }
-
-    [Fact]
-    public void ASkippedSwapStillEndsTheSession()
-    {
-        using var loop = new LoopScope();
-        CancellationToken session = GameTask.SessionToken;
-        SceneInstance doomed = CreateScene();
-
-        SceneInstance.EndSessionOnSwap = true;
-        SceneInstance.SwapMain(doomed);
-        doomed.Dispose();
-        SceneInstance.ProcessPendingLoad();
-
-        Assert.True(session.IsCancellationRequested);
-        Assert.False(SceneInstance.EndSessionOnSwap);
-    }
-
     // ---- ownership checks ---------------------------------------------------------------------------
 
     [Fact]
@@ -889,7 +825,6 @@ public class ThreadingTests : RuntimeTestBase
         GameObject other = CreateGameObject("Other");
         scene.Add(other);
         GameObject loose = CreateGameObject("Loose");
-        SceneInstance next = CreateScene();
         using var loop = new LoopScope();
 
         Assert.Throws<InvalidOperationException>(() => OffThread(() => go.Transform.LocalScale = new Float3(2)));
@@ -901,7 +836,6 @@ public class ThreadingTests : RuntimeTestBase
         Assert.Throws<InvalidOperationException>(() => OffThread(() => go.AddComponent<PhysicsListener>()));
         Assert.Throws<InvalidOperationException>(() => OffThread(() => scene.Add(loose)));
         Assert.Throws<InvalidOperationException>(() => OffThread(() => scene.Remove(go)));
-        Assert.Throws<InvalidOperationException>(() => OffThread(() => SceneInstance.SwapMain(next)));
 
         Assert.True(go.Enabled);
         Assert.Null(go.Parent);

@@ -58,9 +58,15 @@ public abstract class EditorTestHarness : IDisposable
         Assets.Initialize(); // registers itself as AssetDatabase.Backend
 
         // After the database, since a new world loads its default sky.
-        SceneInstance edited = SceneInstance.Create("Untitled", SceneMode.Edit);
-        edited.Activate();
-        SceneInstance.Main = edited;
+        BindEditWorld(SceneInstance.Create("Untitled", SceneMode.Edit));
+    }
+
+    /// <summary>Binds <paramref name="world"/> as the editor's edit world and as Main, running, as the editor does at startup.</summary>
+    protected static void BindEditWorld(SceneInstance world)
+    {
+        world.Activate();
+        GUI.SceneView.EditorSceneManager.EditWorld = world;
+        SceneInstance.Main = world;
     }
 
     /// <summary>The asset with this GUID, loaded.</summary>
@@ -83,8 +89,7 @@ public abstract class EditorTestHarness : IDisposable
         {
             var scene = new SceneInstance(SceneMode.Edit);
             scene.Add(source);
-            SceneInstance.SwapMain(scene);
-            SceneInstance.ProcessPendingLoad();
+            BindEditWorld(scene);
         }
 
         if (!Prefabs.PrefabUtility.SaveAsPrefabAssetAndConnect(source, relativePath, overwrite: true))

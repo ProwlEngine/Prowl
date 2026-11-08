@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Core;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Theming;
@@ -537,7 +538,7 @@ internal sealed class TerrainDataUndo : IUndoOperation
         if (_assetId != Guid.Empty)
             return AssetDatabase.TryGetExisting(_assetId, out Asset asset) && asset is TerrainData { IsLoaded: true } loaded ? loaded : null;
 
-        SceneInstance scene = SceneInstance.Main;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return null;
         TerrainComponent? terrain = scene.FindObject<TerrainComponent>(_terrainId);
         return terrain.IsValid() ? terrain.Data : null;

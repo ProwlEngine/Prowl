@@ -346,7 +346,7 @@ public static partial class PrefabUtility
                 InvalidateSource(prefabGuid);
                 EditorAssetBackend.Instance?.Reimport(prefabGuid);
 
-                GameObject? live = SceneInstance.Main.IsValid() ? SceneInstance.Main!.FindObject<GameObject>(instanceRootId) : null;
+                GameObject? live = EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.FindObject<GameObject>(instanceRootId) : null;
                 if (instance != null && live.IsValid()) instance(live!);
                 RefreshAllInstances(prefabGuid);
             }
@@ -1162,7 +1162,7 @@ public static partial class PrefabUtility
 
             // Whether instances may be rebuilt right now is a separate question.
             if (s_refreshingFromApply || Application.IsPlaying) continue;
-            if (SceneInstance.Main.IsNotValid() || PrefabEditingMode.IsEditing) continue;
+            if (EditorSceneManager.EditedWorld.IsNotValid() || PrefabEditingMode.IsEditing) continue;
 
             try
             {
@@ -1186,7 +1186,7 @@ public static partial class PrefabUtility
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db == null) return;
 
-        SceneInstance? scene = SceneInstance.Main;
+        SceneInstance? scene = EditorSceneManager.EditedWorld;
 
         // The entries are gone, so go by which cached prefabs the database can no longer resolve.
         foreach (Guid prefabGuid in s_sourceCache.Keys.ToList())
@@ -1220,7 +1220,7 @@ public static partial class PrefabUtility
         // The prefab editing scene holds the prefab itself, not instances of it.
         if (PrefabEditingMode.IsEditing) return;
 
-        SceneInstance? scene = SceneInstance.Main;
+        SceneInstance? scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         // Collected before anything is refreshed, since a refresh adds and removes objects.
@@ -1253,7 +1253,7 @@ public static partial class PrefabUtility
     /// </summary>
     public static void RefreshAllInstances(Guid prefabGuid)
     {
-        SceneInstance? scene = SceneInstance.Main;
+        SceneInstance? scene = EditorSceneManager.EditedWorld;
         if (scene.IsValid()) RefreshInstancesOf(prefabGuid, scene.Objects);
     }
 
@@ -1839,7 +1839,7 @@ public static partial class PrefabUtility
     /// </summary>
     public static void ReconcileOpenScene()
     {
-        SceneInstance? scene = SceneInstance.Main;
+        SceneInstance? scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         // Anything that drifted out of its instance is settled first, so what follows records overrides

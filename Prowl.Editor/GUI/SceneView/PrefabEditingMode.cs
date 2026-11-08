@@ -18,8 +18,8 @@ using Prowl.Vector;
 namespace Prowl.Editor.GUI.SceneView;
 
 /// <summary>
-/// Isolated prefab editing mode. Saves the current scene, loads the prefab
-/// into a temporary scene for editing, and restores on exit.
+/// Isolated prefab editing mode. The prefab is edited in its own world while the edit world sleeps underneath,
+/// and the edit world wakes again as it was when the session ends.
 /// </summary>
 public static class PrefabEditingMode
 {
@@ -31,10 +31,9 @@ public static class PrefabEditingMode
     public static string? EditingPrefabPath { get; private set; }
     public static string? OriginalSceneName { get; private set; }
 
-    private static EchoObject? _savedSceneState;
-    private static Scene? _savedSceneSource;
+    private static SceneInstance? _world;
     private static string? _savedScenePath;
-    // The scene's undo history, parked the same way. The session's own steps address objects that
+    // The edit world's undo history, parked for the session. The session's own steps address objects that
     // stop existing when it ends, so the two histories cannot be one.
     private static object? _savedSceneUndo;
     // Tracked so Save() can serialize the prefab root specifically, skipping the
@@ -44,6 +43,9 @@ public static class PrefabEditingMode
     // Every scene a session has built, so one can still be recognized after the session that made it
     // ended. A prefab and its editor-only rig is not a scene anyone means to save over their own.
     private static readonly ConditionalWeakTable<SceneInstance, object> _editScenes = [];
+
+    /// <summary>The world the prefab is edited in, with its viewing camera and light, while a session runs.</summary>
+    public static SceneInstance? World => _world.IsValid() ? _world : null;
 
     /// <summary>Whether <paramref name="scene"/> was built to edit a prefab in, rather than opened as a scene.</summary>
     public static bool IsPrefabEditScene(SceneInstance? scene) => !ReferenceEquals(scene, null) && _editScenes.TryGetValue(scene, out _);
@@ -79,25 +81,8 @@ public static class PrefabEditingMode
         EnterInternal(prefabGuid);
     }
 
-    /// <summary>
-    /// Start a session once the scene swap has landed. A scene load only applies at the end of the frame,
-    /// so starting now would snapshot the scene being swapped out, which for a switch between prefabs is
-    /// the previous session's own scene, and restore that as the user's scene when the session ends.
-    /// </summary>
     private static void EnterInternal(Guid prefabGuid)
     {
-        if (SceneInstance.IsLoadPending)
-        {
-            void onLoaded()
-            {
-                SceneInstance.OnSceneLoaded -= onLoaded;
-                EnterInternal(prefabGuid);
-            }
-
-            SceneInstance.OnSceneLoaded += onLoaded;
-            return;
-        }
-
         PrefabAsset? prefab = PrefabUtility.LoadPrefab(prefabGuid);
         if (prefab.IsNotValid())
         {
@@ -117,34 +102,22 @@ public static class PrefabEditingMode
         AssetEntry? entry = db?.GetEntry(prefabGuid);
         EditingPrefabPath = entry?.Path;
 
-        // Save current scene. Reconciled first: the session ends by restoring this snapshot and
-        // refreshing its instances, which would otherwise drop any edit nothing had recorded yet.
-        SceneInstance currentScene = SceneInstance.Main;
-        if (currentScene.IsValid())
-        {
-            PrefabUtility.ReconcileOpenScene();
-            OriginalSceneName = currentScene.Name;
-            _savedSceneState = currentScene.ActiveSection.CaptureTree();
-            _savedSceneSource = currentScene.Source;
-            _savedScenePath = EditorSceneManager.CurrentScenePath;
-        }
-
-        // Instantiate prefab into isolated scene
-        var editScene = new SceneInstance(SceneMode.Edit);
-        editScene.Name = $"Editing: {prefab.Name}";
-        _editScenes.AddOrUpdate(editScene, new object());
-
         var go = GameObject.InstantiateDetached(prefab);
         if (go.IsNotValid())
         {
-            // The scene snapshot above is only meaningful to a session that started. Dropped here, or
-            // the next session would restore a scene from whenever this failed.
-            _savedSceneState = null;
-            _savedScenePath = null;
-            OriginalSceneName = null;
             Debug.LogWarning("[Prefab] Failed to instantiate prefab for editing.");
             return;
         }
+
+        // Reconciled first: the edit world refreshes its instances when the session saves, which would otherwise
+        // drop any edit nothing had recorded yet.
+        SceneInstance edit = EditorSceneManager.EditWorld;
+        PrefabUtility.ReconcileOpenScene();
+        OriginalSceneName = edit.Name;
+        _savedScenePath = EditorSceneManager.CurrentScenePath;
+
+        SceneInstance editScene = SceneInstance.Create($"Editing: {prefab.Name}", SceneMode.Edit);
+        _editScenes.AddOrUpdate(editScene, new object());
 
         // We're editing the source, not an instance, so drop this prefab's own instance data. Nested
         // instances of other prefabs keep theirs, otherwise saving would flatten them permanently.
@@ -177,7 +150,9 @@ public static class PrefabEditingMode
         lightGo.AddComponent<DirectionalLight>();
         editScene.Add(lightGo);
 
-        SceneInstance.SwapMain(editScene);
+        edit.Deactivate();
+        editScene.Activate();
+        _world = editScene;
         _savedSceneUndo = Undo.PushContext();
 
         EditingPrefabGuid = prefabGuid;
@@ -221,7 +196,7 @@ public static class PrefabEditingMode
             return false;
         }
 
-        SceneInstance scene = SceneInstance.Main;
+        SceneInstance? scene = World;
         if (scene.IsNotValid()) return false;
 
         // The tracked prefab root, and only that: it is what skips the editor-only camera and light.
@@ -295,19 +270,10 @@ public static class PrefabEditingMode
         Save();
         Guid prefabGuid = EditingPrefabGuid;
 
-        // Restore original scene
-        bool restored = RestoreScene();
+        Close();
+        PrefabUtility.RefreshAllInstances(prefabGuid);
 
-        // The restore only queues the swap, so refresh instances once that scene is actually current.
-        void onLoaded()
-        {
-            SceneInstance.OnSceneLoaded -= onLoaded;
-            PrefabUtility.RefreshAllInstances(prefabGuid);
-        }
-
-        SceneInstance.OnSceneLoaded += onLoaded;
-
-        Cleanup(restored);
+        Cleanup();
         Debug.Log("[Prefab] Saved and exited editing mode.");
     }
 
@@ -341,43 +307,33 @@ public static class PrefabEditingMode
     {
         if (!IsEditing) return;
 
-        Cleanup(RestoreScene());
+        Close();
+        Cleanup();
 
         Debug.Log("[Prefab] Exited editing mode.");
     }
 
-    /// <summary>Puts the scene back, reporting whether it is the one that was there before.</summary>
-    private static bool RestoreScene()
+    // Destroys the prefab world and wakes the edit world underneath, as it was.
+    private static void Close()
     {
-        if (_savedSceneState != null)
-        {
-            SceneInstance restoredScene = SceneInstance.Instantiate(SceneContent.Read(_savedSceneState), SceneMode.Edit);
-            restoredScene.Name = OriginalSceneName ?? "";
-            restoredScene.Source = _savedSceneSource;
-            SceneInstance.SwapMain(restoredScene);
-            EditorSceneManager.CurrentScenePath = _savedScenePath;
-            return true;
-        }
-
-        EditorSceneManager.CreateAndLoadDefaultScene();
-        return false;
+        SceneInstance? world = _world;
+        _world = null;
+        if (world.IsValid()) world.Dispose();
+        EditorSceneManager.EditWorld.Activate();
+        EditorSceneManager.CurrentScenePath = _savedScenePath;
     }
 
-    private static void Cleanup(bool sceneRestored)
+    private static void Cleanup()
     {
         IsEditing = false;
         EditingPrefabGuid = Guid.Empty;
         EditingPrefabPath = null;
         OriginalSceneName = null;
-        _savedSceneState = null;
-        _savedSceneSource = null;
         _savedScenePath = null;
         _editingRoot = null;
 
-        // The scene's own history addresses its objects by identifier, and the restore brings those
-        // back, so the steps still resolve. If the scene could not be restored they address nothing.
+        // The edit world never changed underneath, so its own history still resolves.
         Undo.PopContext(_savedSceneUndo);
-        if (!sceneRestored) Undo.Clear();
         _savedSceneUndo = null;
 
         IsDirty = false;

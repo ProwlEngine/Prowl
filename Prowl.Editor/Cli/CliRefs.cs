@@ -34,7 +34,7 @@ public static class CliRefs
     private static readonly Regex s_componentSuffix = new(@":(?<type>[A-Za-z_][A-Za-z0-9_.]*)(\[(?<index>\d+)\])?$", RegexOptions.Compiled);
     private static readonly Regex s_indexedName = new(@"^(?<name>.*)\[(?<index>\d+)\]$", RegexOptions.Compiled);
 
-    public static SceneInstance Scene => SceneInstance.Main.IsValid() ? SceneInstance.Main : throw new CliException("No scene is open.");
+    public static SceneInstance Scene => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld : throw new CliException("No scene is open.");
 
     /// <summary> Resolves a ref to a GameObject, a component, or an asset. </summary>
     public static object Resolve(string text)
@@ -71,8 +71,8 @@ public static class CliRefs
 
     private static EngineObject? FindInScene(Guid id)
     {
-        if (SceneInstance.Main.IsNotValid()) return null;
-        EngineObject? found = SceneInstance.Main.FindObject<EngineObject>(id);
+        if (EditorSceneManager.EditedWorld.IsNotValid()) return null;
+        EngineObject? found = EditorSceneManager.EditedWorld.FindObject<EngineObject>(id);
         return found.IsValid() ? found : null;
     }
 

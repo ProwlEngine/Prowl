@@ -1060,11 +1060,11 @@ public class TerrainEditor : CustomEditor
     [OnSceneSaved]
     static void OnSceneSaved()
     {
-        if (SceneInstance.Main.IsNotValid()) return;
+        if (EditorSceneManager.EditedWorld.IsNotValid()) return;
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db == null) return;
 
-        foreach (GameObject go in SceneInstance.Main.Objects.Where(o => o.EnabledInHierarchy))
+        foreach (GameObject go in EditorSceneManager.EditedWorld.Objects.Where(o => o.EnabledInHierarchy))
         {
             TerrainComponent? terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
             if (terrain.IsNotValid()) continue;
@@ -1087,9 +1087,9 @@ public class TerrainEditor : CustomEditor
     [OnUndoRedo]
     static void OnUndoRedo()
     {
-        if (SceneInstance.Main.IsNotValid()) return;
+        if (EditorSceneManager.EditedWorld.IsNotValid()) return;
 
-        foreach (GameObject go in SceneInstance.Main.Objects.Where(o => o.EnabledInHierarchy))
+        foreach (GameObject go in EditorSceneManager.EditedWorld.Objects.Where(o => o.EnabledInHierarchy))
         {
             TerrainComponent? terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
             if (terrain.IsNotValid()) continue;

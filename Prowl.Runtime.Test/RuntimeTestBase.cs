@@ -98,6 +98,13 @@ public abstract class RuntimeTestBase : IDisposable
         return scene;
     }
 
+    /// <summary>Binds <paramref name="world"/> as Main, running, the way a host binds the world it shows.</summary>
+    protected static void Bind(SceneInstance world)
+    {
+        world.Activate();
+        SceneInstance.Main = world;
+    }
+
     /// <summary> Creates a tracked GameObject that will be disposed when the test ends. </summary>
     protected GameObject CreateGameObject(string name = "TestObject")
     {

@@ -78,7 +78,7 @@ public sealed class ProwlCall
 
         // Not `_target == null`: EngineObject's == is reference equality, so that test lets a
         // destroyed target through and reflection happily calls into the corpse. Common with objects
-        // whose lifetime differs from the scene holding the reference - a DontDestroyOnLoad object
+        // whose lifetime differs from the scene holding the reference - a persistent object
         // outliving the scene, or a scene object outliving nothing at all.
         if (_target.IsNotValid())
         {

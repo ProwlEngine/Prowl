@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Echo;
 using Prowl.Editor.GraphEditor;
 using Prowl.Editor.Theming;
@@ -903,7 +904,7 @@ internal sealed class AnimationGraphProbe : IGraphProbe
             return;
         }
 
-        SceneInstance? scene = SceneInstance.Main;
+        SceneInstance? scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         foreach (Animator animator in scene!.Animation.Animators)

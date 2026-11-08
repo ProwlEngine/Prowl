@@ -46,8 +46,7 @@ public class UndoTests : EditorTestHarness
         var go = new GameObject("GO");
         UndoComp comp = go.AddComponent<UndoComp>();
         scene.Add(go);
-        SceneInstance.SwapMain(scene);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(scene);
         return (scene, go, comp);
     }
 
@@ -86,8 +85,7 @@ public class UndoTests : EditorTestHarness
         var go = new GameObject("GO");
         AppliedComp comp = go.AddComponent<AppliedComp>();
         scene.Add(go);
-        SceneInstance.SwapMain(scene);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(scene);
 
         comp.Value = 10;
         comp.OnValidate();
@@ -176,8 +174,7 @@ public class UndoTests : EditorTestHarness
     public void RegisterCreatedObject_Undo_Destroys_Redo_Recreates()
     {
         var scene = new SceneInstance(SceneMode.Edit);
-        SceneInstance.SwapMain(scene);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(scene);
         Undo.Clear();
 
         var go = new GameObject("Created");
@@ -262,8 +259,7 @@ public class UndoTests : EditorTestHarness
         string whileMissing = source.ActiveSection.CaptureTree().WriteToString().Replace(nameof(UndoLinkComp), "Ghost_DoesNotExist");
 
         SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(whileMissing)), SceneMode.Edit);
-        SceneInstance.SwapMain(scene);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(scene);
         GameObject loadedHolder = scene.Objects.Single(g => g.Name == "Holder");
 
         Undo.DestroyObjectImmediate(loadedHolder);
@@ -282,8 +278,7 @@ public class UndoTests : EditorTestHarness
     public void RegisterDestroyObject_Undo_RestoresChildren()
     {
         var scene = new SceneInstance(SceneMode.Edit);
-        SceneInstance.SwapMain(scene);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(scene);
         Undo.Clear();
 
         var parent = new GameObject("Parent");
@@ -530,8 +525,7 @@ public class UndoTests : EditorTestHarness
     private static SceneInstance OpenScene()
     {
         var scene = new SceneInstance(SceneMode.Edit);
-        SceneInstance.SwapMain(scene);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(scene);
         Undo.ClearAll();
         EditorSceneManager.IsDirty = false;
         return scene;

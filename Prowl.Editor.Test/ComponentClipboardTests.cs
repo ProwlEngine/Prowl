@@ -124,8 +124,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         b = new GameObject("B");
         scene.Add(a);
         scene.Add(b);
-        SceneInstance.SwapMain(scene);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(scene);
         return scene;
     }
 
@@ -360,8 +359,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         var other = new SceneInstance(SceneMode.Edit);
         var host = new GameObject("Host");
         other.Add(host);
-        SceneInstance.SwapMain(other);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(other);
 
         var pasted = ComponentClipboard.PasteAsNew(host) as ClipRefComp;
 
@@ -387,8 +385,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         EchoObject echo = scene.ActiveSection.CaptureTree();
         SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
-        SceneInstance.SwapMain(restored);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(restored);
 
         GameObject restoredA = restored.Objects.First(g => g.Identifier == originalId);
         var host = new GameObject("Host");

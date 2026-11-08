@@ -124,7 +124,7 @@ public sealed class UISceneEditor : SceneTool
         // The scene view renders at viewport size, so that IS the screen size a canvas should lay out
         // against here - and it's the viewport's own business, not something to read back off the camera.
         Float2 viewport = ctx.ViewportSize;
-        SceneInput input = SceneInstance.Main.Input;
+        SceneInput input = EditorSceneManager.EditedWorld.Input;
         Float2? prevScreenOverride = input.ScreenSize;
         if (viewport.X > 0 && viewport.Y > 0)
             input.ScreenSize = viewport;

@@ -397,16 +397,16 @@ public class HotReloadSceneTests : EditorTestHarness
         Assert.Same(keeperV2, comps[0].GetType()); // the surviving one migrated to the new type
     }
 
-    // A user handler subscribed to an engine STATIC event (Scene.OnSceneLoaded) must be repointed to the
+    // A user handler subscribed to an engine STATIC event (SceneInstance.MainChanged) must be repointed to the
     // migrated component after a scene hot reload.
     [Fact]
     public void EngineStaticEvent_NamedHandler_RepointedToMigratedComponent()
     {
-        FieldInfo loaded = typeof(SceneInstance).GetField("OnSceneLoaded", BindingFlags.Static | BindingFlags.NonPublic)!;
+        FieldInfo loaded = typeof(SceneInstance).GetField("MainChanged", BindingFlags.Static | BindingFlags.NonPublic)!;
         Assert.NotNull(loaded);
 
         Assembly v1 = CompileGameAssembly("Sub.cs",
-            "using Prowl.Runtime; public class Sub : Component { public int Pings; public void OnPing(){ Pings++; } }");
+            "using Prowl.Runtime; using Prowl.Runtime.Resources; public class Sub : Component { public int Pings; public void OnPing(SceneInstance a, SceneInstance b){ Pings++; } }");
         Type subV1 = v1.GetType("Sub")!;
 
         var scene = new SceneInstance(SceneMode.Edit);
@@ -414,12 +414,12 @@ public class HotReloadSceneTests : EditorTestHarness
         Component oldSub = go.AddComponent(subV1);
         scene.Add(go);
 
-        var handler = (Action)Delegate.CreateDelegate(typeof(Action), oldSub, subV1.GetMethod("OnPing")!);
-        SceneInstance.OnSceneLoaded += handler;
+        var handler = (Action<SceneInstance?, SceneInstance?>)Delegate.CreateDelegate(typeof(Action<SceneInstance?, SceneInstance?>), oldSub, subV1.GetMethod("OnPing")!);
+        SceneInstance.MainChanged += handler;
         try
         {
             Assembly v2 = CompileGameAssembly("Sub.cs",
-                "using Prowl.Runtime; public class Sub : Component { public int Pings; public int Extra; public void OnPing(){ Pings++; } }");
+                "using Prowl.Runtime; using Prowl.Runtime.Resources; public class Sub : Component { public int Pings; public int Extra; public void OnPing(SceneInstance a, SceneInstance b){ Pings++; } }");
 
             SceneHotReload.Migrate(scene, v1, v2);
             Component newSub = go.GetComponents().Single();
@@ -449,8 +449,7 @@ public class HotReloadSceneTests : EditorTestHarness
         GameObject instance = GameObject.InstantiateDetached(GetPrefab(guid)!)!;
         var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(instance);
-        SceneInstance.SwapMain(scene);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(scene);
 
         // Warm the cache: this is what builds and holds the baseline tree.
         Prefabs.PrefabUtility.ReconcileInstance(instance);
@@ -493,8 +492,7 @@ public class HotReloadSceneTests : EditorTestHarness
         GameObject instance = GameObject.InstantiateDetached(GetPrefab(guid)!)!;
         var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(instance);
-        SceneInstance.SwapMain(scene);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(scene);
 
         // Warm the field cache against v1.
         Prefabs.PrefabUtility.ReconcileInstance(instance);

@@ -118,7 +118,7 @@ public class ProwlActionTests : RuntimeTestBase
         Assert.False(log.Logged("target of an invocation"), "The reflection wrapper is noise.");
     }
 
-    // The DontDestroyOnLoad trap. A saved reference to an object outside the scene's own graph is
+    // The persistent object trap. A saved reference to an object outside the scene's own graph is
     // written by value rather than as a link, so loading rebuilds it as a copy with no GameObject.
     // The call then fails somewhere inside the author's own method, with nothing pointing at the wiring.
     [Fact]

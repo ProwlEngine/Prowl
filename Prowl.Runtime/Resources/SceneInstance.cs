@@ -141,9 +141,6 @@ public class SceneInstance : EngineObject, ISerializable
         return world;
     }
 
-    /// <summary>Fires after a scene is loaded via Load(), inside that scene, so its handlers see it as <see cref="Active"/>.</summary>
-    public static event Action? OnSceneLoaded;
-
     private static readonly AsyncLocal<SceneInstance?> s_active = new();
 
     /// <summary>
@@ -305,41 +302,6 @@ public class SceneInstance : EngineObject, ISerializable
         Tick(deltaTime);
     }
 
-    private static SceneInstance? _pendingScene;
-
-    /// <summary>
-    /// Ends the async session at the next scene swap, between the outgoing scene's teardown and the incoming
-    /// scene's start. The editor sets it when entering and leaving play mode.
-    /// </summary>
-    internal static bool EndSessionOnSwap;
-
-    /// <summary>Whether a <see cref="Load(SceneInstance)"/> is queued and has not been applied yet, so <see cref="Main"/>
-    /// is still the outgoing scene.</summary>
-    public static bool IsLoadPending => !ReferenceEquals(_pendingScene, null);
-
-    /// <summary>
-    /// Queues a world to be bound as <see cref="Main"/> at the end of the frame, disposing the one bound now. The editor
-    /// moves between its worlds this way.
-    /// </summary>
-    internal static void SwapMain(SceneInstance scene)
-    {
-        MainThreadContext.AssertMainThread();
-        if (ReferenceEquals(scene, null))
-            throw new ArgumentNullException(nameof(scene));
-
-        DropPendingScene(except: scene);
-        _pendingScene = scene;
-    }
-
-    // A scene queued and then replaced before it became current belongs to nobody, and would stay live.
-    private static void DropPendingScene(SceneInstance? except)
-    {
-        SceneInstance? dropped = _pendingScene;
-        _pendingScene = null;
-        if (dropped.IsValid() && !ReferenceEquals(dropped, except) && !ReferenceEquals(dropped, _main))
-            dropped!.Dispose();
-    }
-
     /// <summary>Builds a dormant world holding detached content, without binding it anywhere. The content's objects move into it.</summary>
     public static SceneInstance Instantiate(SceneContent content, SceneMode mode = SceneMode.Game)
     {
@@ -464,32 +426,51 @@ public class SceneInstance : EngineObject, ISerializable
             section = world.ActiveSection;
             section.Source = load.Scene;
             section.Fill(content);
+            RaiseLoaded(section, additive: false);
         }
+        else if (load.Kind == SceneLoadKind.Load)
+            section = load.Target!.ReplaceContent(content, load.Scene.Name, load.Scene);
         else
-        {
-            SceneInstance world = load.Target!;
-            section = new SceneSection(world, load.Scene.Name, persistent: false) { Source = load.Scene };
-            if (load.Kind == SceneLoadKind.Load)
-            {
-                // Torn down while still active, so a death effect spawned in OnDisable goes with them.
-                List<SceneSection> leaving = [.. world._sections.Where(s => !s.IsPersistent)];
-                world.TearDownSections(leaving);
-                world._sections.Add(section);
-                world._activeSection = section;
-            }
-            else
-            {
-                world._sections.Add(section);
-            }
-            section.Fill(content, additive: load.Kind == SceneLoadKind.Additive);
-        }
-
-        Raise(Loaded, section.Instance, handler => handler(new SceneLoadedArgs(section, load.Kind == SceneLoadKind.Additive)), nameof(Loaded));
+            section = load.Target!.AddContent(content, load.Scene.Name, load.Scene);
 
         if (load.Options.UnloadUnusedAssets) AssetDatabase.UnloadUnused();
         else AssetDatabase.Walk();
         return section;
     }
+
+    /// <summary>
+    /// Tears down every section but <see cref="Persistent"/> and makes one from <paramref name="content"/> the active
+    /// section, at once. What a <see cref="Scene.Load"/> does at the safe point, and how the editor opens a scene.
+    /// </summary>
+    internal SceneSection ReplaceContent(SceneContent content, string name, Scene? source)
+    {
+        EnsureNotDisposed();
+        MainThreadContext.AssertOwner(this);
+        var section = new SceneSection(this, name, persistent: false) { Source = source };
+
+        // Torn down while still active, so a death effect spawned in OnDisable goes with them.
+        TearDownSections([.. _sections.Where(s => !s.IsPersistent)]);
+        _sections.Add(section);
+        _activeSection = section;
+        section.Fill(content);
+        RaiseLoaded(section, additive: false);
+        return section;
+    }
+
+    /// <summary>Adds a section made from <paramref name="content"/> after the others, at once, leaving the active section.</summary>
+    internal SceneSection AddContent(SceneContent content, string name, Scene? source)
+    {
+        EnsureNotDisposed();
+        MainThreadContext.AssertOwner(this);
+        var section = new SceneSection(this, name, persistent: false) { Source = source };
+        _sections.Add(section);
+        section.Fill(content, additive: true);
+        RaiseLoaded(section, additive: true);
+        return section;
+    }
+
+    private static void RaiseLoaded(SceneSection section, bool additive)
+        => Raise(Loaded, section.Instance, handler => handler(new SceneLoadedArgs(section, additive)), nameof(Loaded));
 
     private void ApplyUnload(SceneSection section)
     {
@@ -563,82 +544,10 @@ public class SceneInstance : EngineObject, ISerializable
 
 
     /// <summary>
-    /// Applies a queued <see cref="Load(SceneInstance)"/>. Driven once per frame by the game loop, right after the
-    /// destroy queue. Nothing is mid-callback at that point, so the outgoing scene is disposed
-    /// outright rather than queued for another frame.
+    /// Applies queued loads and unloads. Driven once per frame by the game loop, right after the destroy queue, where
+    /// nothing is mid callback.
     /// </summary>
-    internal static void ProcessPendingLoad()
-    {
-        ApplyQueue();
-        if (ReferenceEquals(_pendingScene, null)) return;
-
-        SceneInstance next = _pendingScene;
-        _pendingScene = null;
-
-        bool endSession = EndSessionOnSwap;
-        EndSessionOnSwap = false;
-
-        if (next._state is SceneState.Destroying or SceneState.Destroyed)
-        {
-            Debug.LogWarning("[Scene] The scene queued for loading was disposed before the frame ended, so it was skipped.");
-            if (endSession) MainThreadContext.Restart();
-            return;
-        }
-
-        // Loading the scene that is already current would dispose it and then enable the corpse.
-        if (ReferenceEquals(next, _main))
-        {
-            if (endSession) MainThreadContext.Restart();
-            return;
-        }
-
-        // Persistent objects leave before the outgoing world is disposed, and join the incoming one after it is
-        // activated, so they are never registered with a world being torn down.
-        List<GameObject> persistent = [];
-        if (!ReferenceEquals(_main, null) && !_main.IsDisposed && _main.Mode == SceneMode.Game && next.Mode == SceneMode.Game)
-        {
-            persistent.AddRange(_main.Persistent.LiveRoots);
-            foreach (GameObject go in persistent)
-                _main.Detach(go);
-        }
-
-        // A failure in either step below is reported and the swap carries on, so the incoming scene always
-        // becomes current and the session always ends when it was asked to, rather than leaving both half done.
-
-        // Everything the incoming scene uses is loaded before any of it enables, so OnEnable never sees an asset still loading.
-        try { AssetDatabase.LoadEverythingReached(); }
-        catch (Exception e) { Debug.LogException($"[Scene] Loading what '{next.Name}' uses threw", e); }
-
-        SceneInstance? outgoing = _main;
-        if (!ReferenceEquals(outgoing, null) && !outgoing.IsDisposed)
-        {
-            try { outgoing.Dispose(); }
-            catch (Exception e) { Debug.LogException($"[Scene] Tearing down '{outgoing.Name}' threw", e); }
-        }
-
-        // Between the two scenes, so the outgoing one's teardown belongs to its own session and the incoming
-        // one starts in a fresh one.
-        if (endSession) MainThreadContext.Restart();
-
-        // The game's output follows Main across the swap.
-        if (!ReferenceEquals(outgoing, null))
-        {
-            next.Present |= outgoing.Present;
-            next.RenderOrder = outgoing.RenderOrder;
-        }
-
-        Main = next;
-        next.Activate();
-
-        foreach (GameObject go in persistent)
-            next.Attach(go, next.Persistent);
-
-        // Assets only the outgoing scene used are unreached from here, and go once the grace period is over.
-        AssetDatabase.Walk();
-
-        using (_main.Enter())
-            OnSceneLoaded?.Invoke();
-    }
+    internal static void ProcessPendingLoad() => ApplyQueue();
 
     /// <summary>
     /// Disposes the current scene, so everything in it runs its teardown callbacks. Driven by the
@@ -646,7 +555,6 @@ public class SceneInstance : EngineObject, ISerializable
     /// </summary>
     internal static void Shutdown()
     {
-        _pendingScene = null;
         foreach (object entry in s_queue.ToArray())
             if (entry is SceneLoad load) load.Cancel();
         s_queue.Clear();
@@ -1429,54 +1337,6 @@ public class SceneInstance : EngineObject, ISerializable
             obj.SetParent(null);
         }
         RemoveObject(obj);
-    }
-
-    /// <summary>
-    /// Hands a GameObject tree over to another scene without running any lifecycle callback. Only the
-    /// registration moves: the scene's object list and, for each enabled component, the per-frame
-    /// dispatch slot. Used by <see cref="DontDestroyOnLoad"/>, where the object is not entering or
-    /// leaving the world, just changing which scene holds it.
-    /// </summary>
-    internal void Detach(GameObject obj)
-    {
-        if (obj.Parent.IsNotValid()) LeaveSection(obj);
-        foreach (GameObject child in obj.Children.ToArray())
-            Detach(child);
-
-        if (!_allObjSet.Remove(obj)) return;
-
-        _allObj.Remove(obj);
-
-        foreach (Component component in obj._components)
-        {
-            if (component.IsDisposed) continue;
-            _dispatcher.Unregister(component);
-            component.LeaveWorld(this);
-        }
-
-        obj.Scene = null;
-    }
-
-    /// <inheritdoc cref="Detach"/>
-    internal void Attach(GameObject obj, SceneSection? section = null)
-    {
-        if (obj.Parent.IsNotValid()) JoinSection(obj, section ?? ActiveSection);
-        if (_allObjSet.Add(obj))
-        {
-            _allObj.Add(obj);
-            obj.Scene = this;
-
-            if (_isActive && obj.EnabledInHierarchy)
-                foreach (Component component in obj._components)
-                {
-                    if (component.IsDisposed || !component.Enabled || !component.EnabledInHierarchy) continue;
-                    _dispatcher.Register(component);
-                    component.JoinWorld(this);
-                }
-        }
-
-        foreach (GameObject child in obj.Children.ToArray())
-            Attach(child);
     }
 
     // The whole tree joins, with OnAddedToScene, before any of it enables.

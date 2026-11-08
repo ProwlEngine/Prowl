@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json.Nodes;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Echo;
 using Prowl.Editor.Core;
 using Prowl.Editor.Importers;
@@ -47,7 +48,7 @@ public class InspectorPanel : DockPanel
     {
         if (state["selection"] is not System.Text.Json.Nodes.JsonArray arr) return;
 
-        SceneInstance scene = Runtime.Resources.SceneInstance.Main;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         bool first = true;

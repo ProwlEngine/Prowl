@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
@@ -166,7 +167,7 @@ public static class SelectorModal
 
     private static void DrawSceneTab(Paper paper, Prowl.Scribe.FontFile font, float height)
     {
-        SceneInstance scene = Runtime.Resources.SceneInstance.Main;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid())
         {
             EditorGUI.EmptyState(paper, "sel_scene_empty", Loc.Get("selector.no_scene"), font);

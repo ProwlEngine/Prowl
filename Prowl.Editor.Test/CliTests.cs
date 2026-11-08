@@ -373,8 +373,7 @@ public class CliEditorCommandTests : EditorTestHarness
 
         Undo.Clear();
         _scene = new SceneInstance(SceneMode.Edit);
-        SceneInstance.SwapMain(_scene);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(_scene);
     }
 
     public override void Dispose()
@@ -715,8 +714,7 @@ public class CliAssetCommandTests : EditorTestHarness
 
         Undo.Clear();
         _scene = new SceneInstance();
-        SceneInstance.SwapMain(_scene);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(_scene);
     }
 
     public override void Dispose()
@@ -869,8 +867,7 @@ public class CliGraphCommandTests : EditorTestHarness
                 CliCommands.Scan(method);
         Undo.Clear();
         var scene = new SceneInstance(SceneMode.Edit);
-        SceneInstance.SwapMain(scene);
-        SceneInstance.ProcessPendingLoad();
+        BindEditWorld(scene);
     }
 
     public override void Dispose()

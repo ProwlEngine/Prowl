@@ -21,6 +21,89 @@ namespace Prowl.Editor.GUI.SceneView;
 /// </summary>
 public static class EditorSceneManager
 {
+    private static SceneInstance? s_editWorld;
+    private static SceneInstance? s_playWorld;
+
+    /// <summary>
+    /// The world scenes are edited in. Bound as Main outside play mode, and dormant underneath during play and prefab
+    /// editing, so it comes back exactly as it was.
+    /// </summary>
+    public static SceneInstance EditWorld
+    {
+        get => s_editWorld.IsValid() ? s_editWorld : throw new InvalidOperationException("The editor has no edit world bound.");
+        internal set => s_editWorld = value;
+    }
+
+    /// <summary>The world built from the edit world for play mode, or null outside it.</summary>
+    public static SceneInstance? PlayWorld => s_playWorld.IsValid() ? s_playWorld : null;
+
+    /// <summary>The world panels act on: the prefab world while editing a prefab, otherwise Main, the edit world or the play world.</summary>
+    public static SceneInstance EditedWorld => PrefabEditingMode.World.IsValid() ? PrefabEditingMode.World : SceneInstance.Main;
+
+    /// <summary>
+    /// The play copy of the edit world: each section captured into a section of a new dormant game world, in the same
+    /// order and with the same active section, each keeping its source. Nothing changes if this throws.
+    /// </summary>
+    internal static SceneInstance BuildPlayWorld()
+    {
+        SceneInstance edit = EditWorld;
+        SceneInstance play = SceneInstance.Create(edit.Name, SceneMode.Game);
+        try
+        {
+            SceneSection? first = null;
+            foreach (SceneSection section in edit.Sections)
+            {
+                if (section.IsPersistent) continue;
+                SceneContent content = SceneContent.Read(section.CaptureTree(), ImportHelper.CreateTrackingContext(out _));
+                SceneSection copy = first == null
+                    ? play.ReplaceContent(content, section.Name, section.Source)
+                    : play.AddContent(content, section.Name, section.Source);
+                first ??= copy;
+                if (ReferenceEquals(section, edit.ActiveSection)) play.ActiveSection = copy;
+            }
+            return play;
+        }
+        catch
+        {
+            play.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Sends the edit world dormant, restarts the session and binds <paramref name="play"/> as Main, running.</summary>
+    internal static void EnterPlayWorld(SceneInstance play)
+    {
+        EditWorld.Deactivate();
+        Runtime.Tasks.MainThreadContext.Restart();
+        s_playWorld = play;
+        SceneInstance.Main = play;
+        play.Activate();
+    }
+
+    /// <summary>Destroys the play world, inside the session it ran in, and restarts the session.</summary>
+    internal static void DestroyPlayWorld()
+    {
+        SceneInstance? play = s_playWorld;
+        s_playWorld = null;
+        if (play.IsValid()) play.Dispose();
+        Runtime.Tasks.MainThreadContext.Restart();
+    }
+
+    /// <summary>Binds the edit world back as Main and runs it again. Nothing is deserialized, it never changed during play.</summary>
+    internal static void ReturnToEditWorld()
+    {
+        SceneInstance.Main = EditWorld;
+        EditWorld.Activate();
+    }
+
+    /// <summary>Replaces the edit world's content with <paramref name="content"/> as one active section named after the scene.</summary>
+    private static void ShowInEditWorld(SceneContent content, string name, Scene? source)
+    {
+        SceneInstance edit = EditWorld;
+        edit.Name = name;
+        edit.ReplaceContent(content, name, source);
+    }
+
     /// <summary>Path to the currently open scene file (relative to Assets/). Null for unsaved scenes.</summary>
     public static string? CurrentScenePath { get; internal set; }
 
@@ -43,7 +126,7 @@ public static class EditorSceneManager
     /// <summary>The save toast label for the open scene or prefab.</summary>
     public static string SaveLabel => PrefabEditingMode.IsEditing
         ? Rosetta.Loc.Get("save.prefab", new { name = Path.GetFileNameWithoutExtension(PrefabEditingMode.EditingPrefabPath) })
-        : Rosetta.Loc.Get("save.scene", new { name = SceneInstance.Main.IsValid() ? SceneInstance.Main.Name : "Untitled" });
+        : Rosetta.Loc.Get("save.scene", new { name = s_editWorld.IsValid() ? s_editWorld.Name : "Untitled" });
 
     /// <summary>Runs <paramref name="replace"/>, which swaps out the open scene, after asking to save the scene when it has changes.</summary>
     public static void ConfirmSceneChange(Action replace)
@@ -160,7 +243,7 @@ public static class EditorSceneManager
     /// </summary>
     public static void CreateAndLoadDefaultScene()
     {
-        SceneInstance.SwapMain(CreateDefaultScene());
+        ShowInEditWorld(CreateDefaultContent(), "Untitled Scene", null);
         Undo.Clear();
         Debug.Log("Created default scene.");
     }
@@ -194,10 +277,7 @@ public static class EditorSceneManager
             Migration.Releases.Release_1_0.SceneContentLayout(echo);
 
             SerializationContext ctx = ImportHelper.CreateTrackingContext(out _);
-            SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(echo, ctx), SceneMode.Edit);
-            scene.Name = Path.GetFileNameWithoutExtension(relativePath);
-            scene.Source = SceneAssetAt(relativePath);
-            SceneInstance.SwapMain(scene);
+            ShowInEditWorld(SceneContent.Read(echo, ctx), Path.GetFileNameWithoutExtension(relativePath), SceneAssetAt(relativePath));
             CurrentScenePath = relativePath;
             IsDirty = false;
             Undo.Clear();
@@ -279,19 +359,12 @@ public static class EditorSceneManager
 
     private static bool SaveTo(string relativePath)
     {
-        if (Project.Current == null || SceneInstance.Main.IsNotValid()) return false;
+        if (Project.Current == null || s_editWorld.IsNotValid()) return false;
         // The prefab session's scene holds the prefab and the editor-only viewing rig, which is not a
         // scene anyone means to save. Its own save goes through PrefabEditingMode.
         if (!GuardNotEditingPrefab("save a scene")) return false;
 
-        // Recognized by identity rather than by the flag, so a session that ended without its scene being
-        // swapped back cannot write the prefab and its editor-only rig over the user's scene file.
-        if (PrefabEditingMode.IsPrefabEditScene(SceneInstance.Main))
-        {
-            Debug.LogError($"The open scene is a prefab editing scene, so it was not saved over '{relativePath}'. " +
-                "Open a scene to get back to one.");
-            return false;
-        }
+        SceneInstance edit = EditWorld;
 
         string absolutePath = Path.Combine(Project.Current.AssetsPath, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
@@ -303,14 +376,14 @@ public static class EditorSceneManager
             // those edits the next time they are refreshed.
             PrefabUtility.ReconcileOpenScene();
 
-            EchoObject echo = SceneInstance.Main.ActiveSection.CaptureTree();
+            EchoObject echo = edit.ActiveSection.CaptureTree();
             File.WriteAllText(absolutePath, echo.WriteToString());
 
             // The stored scene takes what was written, so a build or a Scene.Load of it sees this save.
             Guid guid = EditorAssetBackend.Instance?.ImportFile(relativePath) ?? Guid.Empty;
-            if (guid != Guid.Empty) SceneInstance.Main.Source = AssetDatabase.Get<Scene>(guid);
+            if (guid != Guid.Empty) edit.Source = AssetDatabase.Get<Scene>(guid);
 
-            SceneInstance.Main.Name = Path.GetFileNameWithoutExtension(relativePath);
+            edit.Name = edit.ActiveSection.Name = Path.GetFileNameWithoutExtension(relativePath);
             IsDirty = false;
 
             // Notify listeners (e.g. terrain editor saves TerrainData assets)

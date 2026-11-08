@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
@@ -971,7 +972,7 @@ public static class GameObjectInspector
 
         private void MoveTo(int index)
         {
-            Runtime.Resources.SceneInstance scene = Runtime.Resources.SceneInstance.Main;
+            Runtime.Resources.SceneInstance scene = EditorSceneManager.EditedWorld;
             if (scene.IsNotValid()) return;
             Component? c = scene.FindObject<Component>(component);
             if (c.IsValid()) c.SetSiblingIndex(index);
@@ -1359,7 +1360,7 @@ public static class GameObjectInspector
 
         Origami.Button(paper, id, label, () =>
             {
-                Runtime.Resources.SceneInstance scene = Runtime.Resources.SceneInstance.Main;
+                Runtime.Resources.SceneInstance scene = EditorSceneManager.EditedWorld;
                 GameObject? live = scene.IsValid() ? scene.FindObject<GameObject>(rootId) : null;
                 if (live.IsValid()) act(live!);
             })

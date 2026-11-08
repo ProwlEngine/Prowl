@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Core;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Theming;
@@ -127,7 +128,7 @@ public class ComponentPopoutPanel : DockPanel
 
     private (GameObject? go, Component? comp) FindComponent()
     {
-        SceneInstance scene = SceneInstance.Main;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return (null, null);
 
         foreach (GameObject go in scene.Objects)

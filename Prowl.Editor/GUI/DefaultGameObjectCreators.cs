@@ -1,5 +1,6 @@
 using System.Linq;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects;
@@ -454,7 +455,7 @@ internal static class DefaultGameObjectCreators
 
     private static void EnsureEventSystem(SceneInstance? scene)
     {
-        if (scene.IsNotValid()) scene = SceneInstance.Main;
+        if (scene.IsNotValid()) scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
         foreach (EventSystem? es in scene.GetAll<EventSystem>(includeDisabled: true))
             if (es.IsValid()) return;
@@ -467,7 +468,7 @@ internal static class DefaultGameObjectCreators
         GameCanvas? canvas = parent.IsValid() ? parent.GetComponentInParent<GameCanvas>(includeSelf: true) : null;
         if (canvas.IsValid()) return parent!;
 
-        SceneInstance scene = SceneInstance.Main;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         if (scene.IsValid())
         {
             foreach (GameCanvas? c in scene.GetAll<GameCanvas>(includeDisabled: true))

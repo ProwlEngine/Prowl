@@ -57,7 +57,7 @@ public class EnvironmentPanel : DockPanel
 
         _bake.Poll();
 
-        SceneInstance scene = SceneInstance.Main;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid())
         {
             paper.Box("env_noscene").Height(30)
@@ -294,7 +294,7 @@ public class EnvironmentPanel : DockPanel
     }
 
     private static void RecordEnvironment(string name)
-        => Undo.RecordObject(() => SceneInstance.Main.IsValid() ? SceneInstance.Main.Environment : null, UndoOwner.OfCurrentScene, name);
+        => Undo.RecordObject(() => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.Environment : null, UndoOwner.OfCurrentScene, name);
 
     private static void Hint(Paper paper, string id, Scribe.FontFile font, string text)
         => paper.Box(id).Height(20).Margin(Origami.Current.Metrics.PaddingLarge, 0, 0, 0)
@@ -309,7 +309,7 @@ public class EnvironmentPanel : DockPanel
         // switching to a different scene while it's in flight must not show this scene as baking too.
         bool baking = _bake.IsBaking && _bake.TargetScene == scene;
         LightmapBakeSettings s = scene.LightmapBake;
-        void Record() => Undo.RecordObject(() => SceneInstance.Main.IsValid() ? SceneInstance.Main.LightmapBake : null, UndoOwner.OfCurrentScene, "Lightmap Settings");
+        void Record() => Undo.RecordObject(() => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.LightmapBake : null, UndoOwner.OfCurrentScene, "Lightmap Settings");
 
         EditorGUI.SectionHeader(paper, $"{id}_h_res", Loc.Get("game.resolution"), first: true);
 
