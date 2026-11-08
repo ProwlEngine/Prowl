@@ -330,13 +330,14 @@ void main()
     // comes in, never quite level
     float sunY = (_CloudToSun.y >= 0.0 ? 1.0 : -1.0) * max(abs(_CloudToSun.y), 0.01);
 
-    // A low sun's ray runs far through the layer, so it is kept within the cascade's limit either side of its plane. The
-    // ground curves away under far clouds, so the march reaches below the layer's base by as much
-    float limit = CloudShadowLimit(_CloudShadowBuild.w);
-    float across = length(plane.xz - cam.xz) + min(_CloudShape.y / abs(sunY), limit);
+    // A low sun's ray runs far through the layer. Behind the plane it is kept within the cascade's limit, toward the sun
+    // it runs the widest cascade's, as the cloud over a small cascade can lie far off toward a low sun. The ground curves
+    // away under far clouds, so the march reaches below the layer's base by as much
+    float limit = CloudShadowLimit(_CloudShadowBuild.w), sunward = CloudShadowLimit(1e12);
+    float across = length(plane.xz - cam.xz) + min(_CloudShape.y / abs(sunY), sunward);
     float top = _CloudShape.x + _CloudShape.y, bottom = _CloudShape.x - across * across / (2.0 * _CloudShape.w);
     float throughTop = (top - plane.y) / sunY, throughBottom = (bottom - plane.y) / sunY;
-    float from = min(max(throughTop, throughBottom), limit), to = max(min(throughTop, throughBottom), -limit);
+    float from = min(max(throughTop, throughBottom), sunward), to = max(min(throughTop, throughBottom), -limit);
     if (from <= to)
     {
         outColor = vec4(to, 0.0, 0.0, 0.0);
