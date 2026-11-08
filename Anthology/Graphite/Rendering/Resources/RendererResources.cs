@@ -206,10 +206,11 @@ internal sealed class RendererResources : IDisposable
     }
 
     // An RGBA8 texture from the library's data, in its stored row order, in every layer, mipmapped on the GPU when asked,
-    // its colour sRGB encoded when asked
-    internal static Texture LoadData(GraphicsDevice device, string file, uint width, uint height, bool mipmapped, uint layers = 1, bool srgb = false)
+    // its colour sRGB encoded when asked, its pixels changed by edit first when given
+    internal static Texture LoadData(GraphicsDevice device, string file, uint width, uint height, bool mipmapped, uint layers = 1, bool srgb = false, Action<byte[]>? edit = null)
     {
         byte[] pixels = ReadData(file, width * height * 4);
+        edit?.Invoke(pixels);
         uint mips = mipmapped ? (uint)Math.Log2(Math.Max(width, height)) + 1 : 1;
         PixelFormat format = srgb ? PixelFormat.R8_G8_B8_A8_UNorm_SRgb : PixelFormat.R8_G8_B8_A8_UNorm;
         Texture texture = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(width, height, mips, layers, format, TextureUsage.Sampled));
@@ -268,9 +269,9 @@ internal sealed class RendererResources : IDisposable
         NoSceneColor.Dispose();
         NoSceneDepth.Dispose();
         NoFogVolume.Dispose();
-        NoExposure.Dispose();
         NoCloudShadowMap.Dispose();
         NoCloudShadowData.Dispose();
+        NoExposure.Dispose();
         LinearClamp.Dispose();
         PointClamp.Dispose();
         LinearRepeat.Dispose();

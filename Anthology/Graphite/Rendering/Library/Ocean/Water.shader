@@ -66,7 +66,7 @@ Shader "Graphite/Ocean"
         _SubsurfaceFalloff("Subsurface Falloff", Float) = 5.0
         _RefractionStrength("Refraction Strength", Float) = 0.1
         _FoamColor("Foam Color", Color) = (1, 1, 1, 1)
-        _FoamScale("Foam Scale", Float) = 10
+        _FoamScale("Foam Scale", Float) = 3
         _FoamFeather("Foam Feather", Float) = 0.4
         _FoamLightScale("Foam Light Scale", Float) = 1.35 [Range(0, 2)]
         _FoamNormalStrength("Foam Normal Strength", Float) = 3.5 [Range(0, 30)]
@@ -157,16 +157,46 @@ Shader "Graphite/Ocean"
                 return fract(view.cameraHigh.xz * factor / span) + (view.cameraLow.xz + relative) * factor / span;
             }
 
-            // The white foam texture at an undisplaced point, its level's tap and the next's, drifting with time,
-            // averaged with a tap at 1.37 times the span with its axes swapped, so the texture's tiling does not show
-            float WhiteFoam(vec2 relative, float scale, float blend, float time, vec2 shift)
+            // A point relative to the camera in units of a span, turned by an angle, kept small far from the origin
+            vec2 TurnedUV(vec2 relative, float span, float angle)
             {
-                float span = max(_FoamScale, 1e-3) * scale / 25.0;
-                vec2 drift = vec2(time / 10.0);
-                float a = texture(_OceanFoamTexture, WorldUV(relative, 1.25, span) + (drift + shift) / span).r;
-                float b = texture(_OceanFoamTexture, WorldUV(relative, 1.25, span * 2.0) + (drift + shift) / (span * 2.0)).r;
-                float c = texture(_OceanFoamTexture, (WorldUV(relative, 1.25, span * 1.37) + (drift + shift) / (span * 1.37)).yx).r;
-                return 0.5 * (mix(a, b, blend) + c);
+                Graphite_ViewData view = Graphite_View();
+                mat2 turn = mat2(cos(angle), sin(angle), -sin(angle), cos(angle));
+                return fract(turn * view.cameraHigh.xz / span) + turn * (view.cameraLow.xz + relative) / span;
+            }
+
+            float FoamHash(vec2 cell)
+            {
+                cell = mod(cell, 64.0);
+                return fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+            }
+
+            // Smooth value noise repeating every 64 spans
+            float FoamNoise(vec2 relative, float span)
+            {
+                Graphite_ViewData view = Graphite_View();
+                vec2 at = mod(view.cameraHigh.xz / span, 64.0) + (view.cameraLow.xz + relative) / span;
+                vec2 cell = floor(at), f = at - cell;
+                f = f * f * (3.0 - 2.0 * f);
+                return mix(mix(FoamHash(cell), FoamHash(cell + vec2(1.0, 0.0)), f.x), mix(FoamHash(cell + vec2(0.0, 1.0)), FoamHash(cell + vec2(1.0, 1.0)), f.x), f.y);
+            }
+
+            // How the foam texture's taps mix at an undisplaced point
+            vec2 FoamMix(vec2 relative)
+            {
+                float span = max(_FoamScale, 1e-3);
+                return smoothstep(0.25, 0.75, vec2(FoamNoise(relative, span * 4.0), FoamNoise(relative + 1000.0, span * 6.0)));
+            }
+
+            // The white foam texture at an undisplaced point a fixed size in metres, three taps at unrelated spans and
+            // angles drifting apart over time, so the texture's tiling does not show
+            float WhiteFoam(vec2 relative, float time, vec2 weights)
+            {
+                float span = max(_FoamScale, 1e-3);
+                float a = texture(_OceanFoamTexture, TurnedUV(relative + vec2(0.1, 0.1) * time, span, 0.6)).r;
+                float b = texture(_OceanFoamTexture, TurnedUV(relative + vec2(-0.07, 0.05) * time, span * 1.37, 2.1)).r;
+                float c = texture(_OceanFoamTexture, TurnedUV(relative + vec2(0.04, -0.09) * time, span * 2.19, 4.0)).r;
+                return mix(mix(a, b, weights.x), c, 0.25 + 0.5 * weights.y);
             }
 
             // Two taps of the wave normal map scrolling nearly opposite ways at a speed in m/s, at one span in metres
@@ -330,7 +360,6 @@ Shader "Graphite/Ocean"
                 float amount = max(whitecaps, Ocean_ShoreFoam(shoreDepth));
                 amount *= clamp(contact / max(_ShorelineFoamMinDepth, 1e-3), 0.0, 1.0);
                 vec2 undisplaced = vRelativePos.xz + vBed - vLanded;
-                float detailScale = vRingScale, detailBlend = vLodAlpha;
                 float time = Graphite_View().time.x;
 
                 vec3 seen = Graphite_SampleSceneColor(refracted, 0.0);
@@ -360,19 +389,24 @@ Shader "Graphite/Ocean"
                     float reflected = sinIn >= 1.0 ? 1.0 : 0.02 + 0.98 * pow(1.0 - sqrt(1.0 - sinIn * sinIn), 5.0);
                     color = Graphite_SampleSceneColor(refracted, 0.0) * (1.0 - reflected) + scatter * reflected;
                 }
-                float threshold = clamp(1.0 - amount, 0.0, 1.0), feather = max(_FoamFeather, 1e-3);
-                float white = WhiteFoam(undisplaced, detailScale, detailBlend, time, vec2(0.0));
-                float foam = smoothstep(threshold, threshold + feather, white);
-                vec3 foamNormal = normal;
+                // Without foam its texture never reaches the threshold, so its taps are skipped
+                if (amount > 0.0)
+                {
+                    float threshold = clamp(1.0 - amount, 0.0, 1.0), feather = max(_FoamFeather, 1e-3);
+                    vec2 weights = FoamMix(undisplaced);
+                    float white = WhiteFoam(undisplaced, time, weights);
+                    float foam = smoothstep(threshold, threshold + feather, white);
+                    vec3 foamNormal = normal;
 #ifndef PBR_TIER_LITE
-                float nudge = 0.25 * far / 512.0 * max(_FoamScale, 1e-3) * detailScale / 25.0;
-                float foamX = smoothstep(threshold, threshold + feather, WhiteFoam(undisplaced, detailScale, detailBlend, time, vec2(nudge, 0.0) / 1.25));
-                float foamZ = smoothstep(threshold, threshold + feather, WhiteFoam(undisplaced, detailScale, detailBlend, time, vec2(0.0, nudge) / 1.25));
-                foamNormal = normalize(normal + _FoamNormalStrength * vec3(foam - foamX, 0.0, foam - foamZ));
+                    float nudge = max(0.25 * far / 512.0, 0.01) * max(_FoamScale, 1e-3);
+                    float foamX = smoothstep(threshold, threshold + feather, WhiteFoam(undisplaced + vec2(nudge, 0.0), time, weights));
+                    float foamZ = smoothstep(threshold, threshold + feather, WhiteFoam(undisplaced + vec2(0.0, nudge), time, weights));
+                    foamNormal = normalize(normal + _FoamNormalStrength * vec3(foam - foamX, 0.0, foam - foamZ));
 #endif
-                vec3 foamLit = _FoamColor.rgb * (sky + _FoamLightScale * sun * max(dot(foamNormal, toSun), 0.0) / GRAPHITE_PI);
-                foamLit += pow(max(dot(reflect(-view, foamNormal), toSun), 0.0), _FoamSpecularFalloff) * _FoamSpecularBoost * sun / GRAPHITE_PI;
-                color = mix(color, foamLit, foam * _FoamColor.a);
+                    vec3 foamLit = _FoamColor.rgb * (sky + _FoamLightScale * sun * max(dot(foamNormal, toSun), 0.0) / GRAPHITE_PI);
+                    foamLit += pow(max(dot(reflect(-view, foamNormal), toSun), 0.0), _FoamSpecularFalloff) * _FoamSpecularBoost * sun / GRAPHITE_PI;
+                    color = mix(color, foamLit, foam * _FoamColor.a);
+                }
 
                 color = mix(Graphite_SampleSceneColor(uv, 0.0), color, clamp(behind / 0.2, 0.0, 1.0));
                 fragColor = vec4(Graphite_SaturateHalf(Graphite_ApplyFog(color, vRelativePos)), 1.0);

@@ -61,7 +61,7 @@ public sealed class OceanSurface : RenderProvider, IDisposable
         Material.SetTexture("_OceanWhitecaps", ocean.Whitecaps);
         Material.SetTexture("_OceanRipples", ocean.Ripples);
         Material.SetTexture("_OceanState", ocean.State);
-        _foamTexture = RendererResources.LoadData(renderer.Device, "OceanFoam.bin", 512, 512, mipmapped: true);
+        _foamTexture = RendererResources.LoadData(renderer.Device, "OceanFoam.bin", 512, 512, mipmapped: true, edit: pixels => FlattenFoam(pixels, 512));
         _caustics = RendererResources.LoadData(renderer.Device, "OceanCaustics.bin", 630, 630, mipmapped: true, srgb: true);
         Material.SetTexture("_OceanFoamTexture", _foamTexture);
         _normals = RendererResources.LoadData(renderer.Device, "OceanNormals.bin", 1024, 1024, mipmapped: true);
@@ -204,6 +204,43 @@ public sealed class OceanSurface : RenderProvider, IDisposable
     private static float Phase(double centre, double snap) => (float)(Wrap(centre, 2.0 * snap) / (2.0 * snap));
 
     private static double Wrap(double value, double period) => value - Math.Floor(value / period) * period;
+
+    // Takes the foam texture's broad light and dark bands out of its red channel, a wrapping box blur subtracted,
+    // so only its small detail tiles
+    private static void FlattenFoam(byte[] pixels, int size)
+    {
+        const int Radius = 48;
+        float[] red = new float[size * size], across = new float[size * size];
+        double mean = 0;
+        for (int i = 0; i < red.Length; i++)
+            mean += red[i] = pixels[i * 4];
+        mean /= red.Length;
+
+        for (int y = 0; y < size; y++)
+        {
+            float sum = 0f;
+            for (int k = -Radius; k <= Radius; k++)
+                sum += red[y * size + (k + size) % size];
+            for (int x = 0; x < size; x++)
+            {
+                across[y * size + x] = sum;
+                sum += red[y * size + (x + Radius + 1) % size] - red[y * size + (x - Radius + size) % size];
+            }
+        }
+        float scale = 1f / ((2 * Radius + 1) * (2 * Radius + 1));
+        for (int x = 0; x < size; x++)
+        {
+            float sum = 0f;
+            for (int k = -Radius; k <= Radius; k++)
+                sum += across[(k + size) % size * size + x];
+            for (int y = 0; y < size; y++)
+            {
+                int i = y * size + x;
+                pixels[i * 4] = (byte)Math.Clamp(red[i] - sum * scale + mean, 0.0, 255.0);
+                sum += across[(y + Radius + 1) % size * size + x] - across[(y - Radius + size) % size * size + x];
+            }
+        }
+    }
 
     // A ring's grid from -2 to 2 tiles, quads per tile along each side. With a hole, the middle 2 by 2 tiles are left out
     // but for one row of quads around their edge, which covers the gap to the ring inside as each snaps to its own grid.
