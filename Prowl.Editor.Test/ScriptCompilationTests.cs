@@ -80,6 +80,33 @@ public class ScriptCompilationTests : EditorTestHarness
         finally { TryDeleteDir(outDir); }
     }
 
+    // The build's configuration reaches the game DLL it ships, not only the player host's publish
+    [Theory]
+    [InlineData(BuildConfiguration.Release)]
+    [InlineData(BuildConfiguration.Debug)]
+    public void Build_ShipsOptimizedGameScriptsOnlyInRelease(BuildConfiguration configuration)
+    {
+        WriteScript("PlayComponent.cs", "using Prowl.Runtime; public class PlayComponent : Component { }");
+        Assert.True(ScriptCompiler.CompileAll(Project).Success);
+        Guid scene = AuthorSceneWithComponent("PlayComponent");
+
+        // Opening a project doesn't reset Config, so a value left here would reach later tests' builds
+        BuildSettings settings = EditorRegistries.GetSettings<BuildSettings>();
+        BuildConfiguration wasConfig = settings.Config;
+        settings.Config = configuration;
+        try
+        {
+            string outDir = RunBuild(scene);
+            try
+            {
+                Assert.Equal(configuration == BuildConfiguration.Debug,
+                    IsJitOptimizerDisabled(Path.Combine(outDir, $"{Project.Name}.Game.dll")));
+            }
+            finally { TryDeleteDir(outDir); }
+        }
+        finally { settings.Config = wasConfig; }
+    }
+
     // A player is the shipped game, so its scripts see the player's defines and never PROWL_EDITOR.
     [Fact]
     public void PlayerCompile_UsesPlayerDefines_NotTheEditors()
@@ -102,7 +129,7 @@ public class ScriptCompilationTests : EditorTestHarness
 
         string outDir = Path.Combine(Project.RootPath, "Temp", "PlayerScripts");
         ScriptCompiler.PlayerCompileResult result = ScriptCompiler.CompileForPlayer(
-            Project, BuildPlatforms.Windows, ["PROWL", "MY_GAME_FLAG"], outDir);
+            Project, BuildPlatforms.Windows, ["PROWL", "MY_GAME_FLAG"], BuildConfiguration.Release, outDir);
         Assert.True(result.Result.Success, $"Compile failed:\n{result.Result.Errors}");
 
         ScriptCompiler.BuildAssembly game = Assert.Single(result.Assemblies);
@@ -122,10 +149,27 @@ public class ScriptCompilationTests : EditorTestHarness
         WriteScript("GameThing.cs", "public class GameThing { }");
 
         ScriptCompiler.PlayerCompileResult result = ScriptCompiler.CompileForPlayer(
-            Project, BuildPlatforms.Windows, ["PROWL"], Path.Combine(Project.RootPath, "Temp", "PlayerScripts"));
+            Project, BuildPlatforms.Windows, ["PROWL"], BuildConfiguration.Release, Path.Combine(Project.RootPath, "Temp", "PlayerScripts"));
         Assert.True(result.Result.Success, $"Compile failed:\n{result.Result.Errors}");
 
         Assert.Equal([$"{Project.Name}.Game"], result.Assemblies.Select(a => a.Name));
+    }
+
+    // A Release player ships optimized game code and a Debug one stays debuggable. Both builds use the
+    // same defines and folder here, so only the configuration keeps their cached compiles and files apart
+    [Fact]
+    public void PlayerCompile_OptimizesOnlyReleaseBuilds()
+    {
+        WriteScript("GameThing.cs", "public class GameThing { }");
+        string outDir = Path.Combine(Project.RootPath, "Temp", "PlayerScripts");
+
+        Assert.False(IsJitOptimizerDisabled(CompilePlayerScripts(BuildConfiguration.Release, outDir)));
+        Assert.True(IsJitOptimizerDisabled(CompilePlayerScripts(BuildConfiguration.Debug, outDir)));
+        Assert.False(IsJitOptimizerDisabled(CompilePlayerScripts(BuildConfiguration.Release, outDir)));
+
+        // The editor's own compile stays Debug
+        Assert.True(ScriptCompiler.CompileAll(Project).Success);
+        Assert.True(IsJitOptimizerDisabled(Project.GameAssemblyPath));
     }
 
     // Recompiling after an edit reflects the new source (the source-change half of hot-reload).
@@ -279,6 +323,19 @@ public class ScriptCompilationTests : EditorTestHarness
         var asm = Assembly.Load(File.ReadAllBytes(Project.GameAssemblyPath));
         return (string)asm.GetType("Versioned")!.GetMethod("Tag")!.Invoke(null, null)!;
     }
+
+    private string CompilePlayerScripts(BuildConfiguration configuration, string outDir)
+    {
+        ScriptCompiler.PlayerCompileResult result = ScriptCompiler.CompileForPlayer(
+            Project, BuildPlatforms.Windows, ["PROWL"], configuration, outDir);
+        Assert.True(result.Result.Success, $"Compile failed:\n{result.Result.Errors}");
+        return Assert.Single(result.Assemblies).DllPath;
+    }
+
+    // Roslyn marks a Debug assembly with a DebuggableAttribute that tells the JIT not to optimize it
+    private static bool IsJitOptimizerDisabled(string dllPath)
+        => Assembly.Load(File.ReadAllBytes(dllPath)).GetCustomAttribute<System.Diagnostics.DebuggableAttribute>()
+            is { IsJITOptimizerDisabled: true };
 
     private static bool DerivesFromDockPanel(Type t)
     {
