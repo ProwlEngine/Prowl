@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-using Prowl.Echo;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
@@ -147,7 +146,7 @@ public static class GameObjectInspector
 
             bool allEnabled = gos.All(g => g.Enabled);
             Origami.Checkbox(paper, "gim_enabled", allEnabled,
-                v => Undo.ApplyGameObjectChanges(gos, "Toggle Enabled", g => g.Enabled, (g, x) => g.Enabled = x, v))
+                v => { Undo.RecordObjects(gos, "Toggle Enabled"); foreach (GameObject g in gos) g.Enabled = v; })
                 .NoLabel().Show();
 
             paper.Box("gim_count").Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
@@ -157,7 +156,7 @@ public static class GameObjectInspector
 
             bool allStatic = gos.All(g => g.IsStatic);
             Origami.Checkbox(paper, "gim_static", allStatic,
-                v => Undo.ApplyGameObjectChanges(gos, "Toggle Static", g => g.IsStatic, (g, x) => g.IsStatic = x, v))
+                v => { Undo.RecordObjects(gos, "Toggle Static"); foreach (GameObject g in gos) g.IsStatic = v; })
                 .LabelRight(Loc.Get("inspector.static")).Show();
         }
 
@@ -171,8 +170,9 @@ public static class GameObjectInspector
                 Origami.Dropdown(paper, "gim_tag", tagIdx,
                     v =>
                     {
-                        if (v >= 0 && v < tagNames.Length)
-                            Undo.ApplyGameObjectChanges(gos, "Change Tag", g => g.Tag, (g, x) => g.Tag = x, tagNames[v]);
+                        if (v < 0 || v >= tagNames.Length) return;
+                        Undo.RecordObjects(gos, "Change Tag");
+                        foreach (GameObject g in gos) g.Tag = tagNames[v];
                     }, tagNames).Show());
 
             string[] allLayers = TagLayerManager.layers;
@@ -188,8 +188,9 @@ public static class GameObjectInspector
                 Origami.Dropdown(paper, "gim_layer", selLayer,
                     v =>
                     {
-                        if (v >= 0 && v < layerIndices.Count)
-                            Undo.ApplyGameObjectChanges(gos, "Change Layer", g => g.LayerIndex, (g, x) => g.LayerIndex = x, layerIndices[v]);
+                        if (v < 0 || v >= layerIndices.Count) return;
+                        Undo.RecordObjects(gos, "Change Layer");
+                        foreach (GameObject g in gos) g.LayerIndex = layerIndices[v];
                     }, layerNames.ToArray()).Show());
         }
     }
@@ -206,17 +207,26 @@ public static class GameObjectInspector
         bool posMixed = gos.Any(g => !g.Transform.LocalPosition.Equals(t0.LocalPosition));
         EditorGUI.Row(paper, "gim_pos", MixLabel(Loc.Get("inspector.position"), posMixed), () =>
             Origami.Float3Field(paper, "gim_pos_vf", t0.LocalPosition, v =>
-                Undo.ApplyGameObjectChanges(gos, "Change Position", g => g.Transform.LocalPosition, (g, x) => g.Transform.LocalPosition = x, v, coalesce: true)).Show());
+            {
+                Undo.RecordObjects(gos, "Change Position");
+                foreach (GameObject g in gos) g.Transform.LocalPosition = v;
+            }).Show());
 
         bool rotMixed = gos.Any(g => !g.Transform.LocalEulerAngles.Equals(t0.LocalEulerAngles));
         EditorGUI.Row(paper, "gim_rot", MixLabel(Loc.Get("inspector.rotation"), rotMixed), () =>
             Origami.Float3Field(paper, "gim_rot_vf", t0.LocalEulerAngles, v =>
-                Undo.ApplyGameObjectChanges(gos, "Change Rotation", g => g.Transform.LocalEulerAngles, (g, x) => g.Transform.LocalEulerAngles = x, v, coalesce: true)).Show());
+            {
+                Undo.RecordObjects(gos, "Change Rotation");
+                foreach (GameObject g in gos) g.Transform.LocalEulerAngles = v;
+            }).Show());
 
         bool scaleMixed = gos.Any(g => !g.Transform.LocalScale.Equals(t0.LocalScale));
         EditorGUI.Row(paper, "gim_scale", MixLabel(Loc.Get("inspector.scale"), scaleMixed), () =>
             Origami.Float3Field(paper, "gim_scale_vf", t0.LocalScale, v =>
-                Undo.ApplyGameObjectChanges(gos, "Change Scale", g => g.Transform.LocalScale, (g, x) => g.Transform.LocalScale = x, v, coalesce: true)).Show());
+            {
+                Undo.RecordObjects(gos, "Change Scale");
+                foreach (GameObject g in gos) g.Transform.LocalScale = v;
+            }).Show());
     }
 
     private static void DrawMultiComponents(Paper paper, Prowl.Scribe.FontFile font, IReadOnlyList<GameObject> gos)
@@ -258,18 +268,13 @@ public static class GameObjectInspector
                 Origami.Checkbox(paper, $"{compId}_en", allEn,
                     v =>
                     {
-                        var actions = new List<(Action, Action)>(instances.Count);
                         foreach (object o in instances)
                         {
                             var c = (Component)o;
-                            Guid cid = c.Identifier;
-                            bool old = c.Enabled;
-                            actions.Add((() => { Component? x = Undo.FindComponent(cid); if (x.IsValid()) { x.Enabled = old; x.OnValidate(); } },
-                                        () => { Component? x = Undo.FindComponent(cid); if (x.IsValid()) { x.Enabled = v; x.OnValidate(); } }
-                            ));
-                            c.Enabled = v; c.OnValidate();
+                            Undo.RecordObject(c, "Toggle Component");
+                            c.Enabled = v;
+                            c.OnValidate();
                         }
-                        Undo.RegisterActionGroup("Toggle Component", actions);
                     })
                     .NoLabel().Show();
 
@@ -304,14 +309,14 @@ public static class GameObjectInspector
             .Enter())
         {
             Origami.Checkbox(paper, "gi_enabled", go.Enabled,
-                v => { Undo.RecordGameObjectChange(go, "Toggle Enabled", go.Enabled, v, (g, x) => g.Enabled = x); go.Enabled = v; })
+                v => { Undo.RecordObject(go, "Toggle Enabled"); go.Enabled = v; })
                 .NoLabel().Show();
 
             Origami.TextField(paper, "gi_name", go.Name, v =>
                 {
                     if (!string.IsNullOrWhiteSpace(v))
                     {
-                        Undo.RecordGameObjectChange(go, "Change Name", go.Name, v, (g, x) => g.Name = x, coalesce: true);
+                        Undo.RecordObject(go, "Change Name");
                         go.Name = v;
                     }
                 })
@@ -322,7 +327,7 @@ public static class GameObjectInspector
                 idx =>
                 {
                     bool v = idx == 1;
-                    Undo.RecordGameObjectChange(go, "Toggle Static", go.IsStatic, v, (g, x) => g.IsStatic = x);
+                    Undo.RecordObject(go, "Toggle Static");
                     go.IsStatic = v;
 
                     // Offer to cascade the change to the whole subtree.
@@ -350,7 +355,7 @@ public static class GameObjectInspector
                     if (v >= 0 && v < tagNames.Length)
                     {
                         string newTag = tagNames[v];
-                        Undo.RecordGameObjectChange(go, "Change Tag", go.Tag, newTag, (g, x) => g.Tag = x);
+                        Undo.RecordObject(go, "Change Tag");
                         go.Tag = newTag;
                     }
                 }, tagNames).Inline(Loc.Get("inspector.tag")).Width(UnitValue.Stretch()).Height(26).Show();
@@ -369,7 +374,7 @@ public static class GameObjectInspector
                     if (v >= 0 && v < layerIndices.Count)
                     {
                         int newIdx = layerIndices[v];
-                        Undo.RecordGameObjectChange(go, "Change Layer", go.LayerIndex, newIdx, (g, x) => g.LayerIndex = x);
+                        Undo.RecordObject(go, "Change Layer");
                         go.LayerIndex = newIdx;
                     }
                 }, layerNames).Inline(Loc.Get("inspector.layer")).Width(UnitValue.Stretch()).Height(26).Show();
@@ -382,7 +387,7 @@ public static class GameObjectInspector
         foreach (GameObject child in go.GetChildrenDeep())
         {
             if (child.IsStatic == value) continue;
-            Undo.RecordGameObjectChange(child, "Toggle Static", child.IsStatic, value, (g, x) => g.IsStatic = x);
+            Undo.RecordObject(child, "Toggle Static");
             child.IsStatic = value;
         }
     }
@@ -428,27 +433,23 @@ public static class GameObjectInspector
         // Position
         Float3 pos = t.LocalPosition;
         EditorGUI.Row(paper, "gi_pos", Loc.Get("inspector.position"), () =>
-            Origami.Float3Field(paper, "gi_pos_vf", pos, v => { Undo.RecordGameObjectChange(go, "Change Position", t.LocalPosition, v, (g, x) => g.Transform.LocalPosition = x, coalesce: true); t.LocalPosition = v; }).Show());
+            Origami.Float3Field(paper, "gi_pos_vf", pos, v => { Undo.RecordObject(go, "Change Position"); t.LocalPosition = v; }).Show());
 
         // Rotation (as euler)
         Float3 euler = t.LocalEulerAngles;
         EditorGUI.Row(paper, "gi_rot", Loc.Get("inspector.rotation"), () =>
-            Origami.Float3Field(paper, "gi_rot_vf", euler, v => { Undo.RecordGameObjectChange(go, "Change Rotation", t.LocalEulerAngles, v, (g, x) => g.Transform.LocalEulerAngles = x, coalesce: true); t.LocalEulerAngles = v; }).Show());
+            Origami.Float3Field(paper, "gi_rot_vf", euler, v => { Undo.RecordObject(go, "Change Rotation"); t.LocalEulerAngles = v; }).Show());
 
         // Scale
         Float3 scale = t.LocalScale;
         EditorGUI.Row(paper, "gi_scale", Loc.Get("inspector.scale"), () =>
-            Origami.Float3Field(paper, "gi_scale_vf", scale, v => { Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x, coalesce: true); t.LocalScale = v; }).Show());
+            Origami.Float3Field(paper, "gi_scale_vf", scale, v => { Undo.RecordObject(go, "Change Scale"); t.LocalScale = v; }).Show());
     }
 
     private static void ResetTransform(GameObject go)
     {
         Transform t = go.Transform;
-        Guid goId = go.Identifier;
-        (Float3 oldP, Float3 oldR, Float3 oldS) = (t.LocalPosition, t.LocalEulerAngles, t.LocalScale);
-        Undo.RegisterAction("Reset Transform",
-            undo: () => { GameObject? g = Undo.FindGO(goId); if (g.IsValid()) { g.Transform.LocalPosition = oldP; g.Transform.LocalEulerAngles = oldR; g.Transform.LocalScale = oldS; } },
-            redo: () => { GameObject? g = Undo.FindGO(goId); if (g.IsValid()) { g.Transform.LocalPosition = Float3.Zero; g.Transform.LocalEulerAngles = Float3.Zero; g.Transform.LocalScale = Float3.One; } });
+        Undo.RecordObject(go, "Reset Transform");
         t.LocalPosition = Float3.Zero;
         t.LocalEulerAngles = Float3.Zero;
         t.LocalScale = Float3.One;
@@ -500,7 +501,7 @@ public static class GameObjectInspector
         {
             Origami.Float2Field(paper, "gi_rt_amin_vf", rt.AnchorMin, v =>
             {
-                Undo.Snapshot(rt);
+                Undo.RecordObject(rt, "Change Anchor Min");
                 SetAnchorsPreservingRect(rt, v, rt.AnchorMax);
             }).Show();
         });
@@ -509,7 +510,7 @@ public static class GameObjectInspector
         {
             Origami.Float2Field(paper, "gi_rt_amax_vf", rt.AnchorMax, v =>
             {
-                Undo.Snapshot(rt);
+                Undo.RecordObject(rt, "Change Anchor Max");
                 SetAnchorsPreservingRect(rt, rt.AnchorMin, v);
             }).Show();
         });
@@ -520,12 +521,7 @@ public static class GameObjectInspector
         {
             Origami.Float3Field(paper, "gi_rt_rot_vf", euler, v =>
             {
-                Undo.RecordGameObjectChange(go, "Change Rotation", t.LocalEulerAngles, v,
-                    (g, x) =>
-                    {
-                        g.Transform.LocalEulerAngles = x;
-                        rt.MarkLayoutDirty();
-                    }, coalesce: true);
+                Undo.RecordObject(go, "Change Rotation");
                 t.LocalEulerAngles = v;
                 rt.MarkLayoutDirty();
             }).Show();
@@ -536,12 +532,7 @@ public static class GameObjectInspector
         {
             Origami.Float3Field(paper, "gi_rt_scale_vf", scale, v =>
             {
-                Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) =>
-                    {
-                        g.Transform.LocalScale = x;
-                        rt.MarkLayoutDirty();
-                    },
-                    coalesce: true);
+                Undo.RecordObject(go, "Change Scale");
                 t.LocalScale = v;
                 rt.MarkLayoutDirty();
             }).Show();
@@ -606,20 +597,8 @@ public static class GameObjectInspector
                 RectTransform? r = capGo.RectTransform;
                 if (r.IsNotValid()) return;
 
-                // Changing the anchor preset re-parameterizes the rect but must keep it visually put,
-                // so it re-solves SizeDelta/AnchoredPosition. Snapshot the full solved state both ways
-                // so undo/redo restore the exact values rather than re-deriving them.
-                Float2 oldMin = r.AnchorMin; Float2 oldMax = r.AnchorMax;
-                Float2 oldSize = r.SizeDelta; Float2 oldPos = r.AnchoredPosition;
-
+                Undo.RecordObject(r, "Change Anchor Preset");
                 SetAnchorsPreservingRect(r, capMin, capMax);
-
-                Float2 newMin = r.AnchorMin; Float2 newMax = r.AnchorMax;
-                Float2 newSize = r.SizeDelta; Float2 newPos = r.AnchoredPosition;
-
-                Undo.RegisterAction("Change Anchor Preset",
-                    undo: () => { RectTransform? rr = capGo.RectTransform; if (rr.IsValid()) { rr.AnchorMin = oldMin; rr.AnchorMax = oldMax; rr.SizeDelta = oldSize; rr.AnchoredPosition = oldPos; } },
-                    redo: () => { RectTransform? rr = capGo.RectTransform; if (rr.IsValid()) { rr.AnchorMin = newMin; rr.AnchorMax = newMax; rr.SizeDelta = newSize; rr.AnchoredPosition = newPos; } });
             })
             .Enter())
         {
@@ -719,23 +698,13 @@ public static class GameObjectInspector
     private static void NumCell(Paper paper, string id, string label, System.Drawing.Color color, float value, Action<float> onChange)
         => Origami.NumericField<float>(paper, id, value, onChange).DraggableLabel(label, color, compact: true).Show();
 
-    private static void ApplyPosSize(GameObject g, (Float2 pos, Float2 size) v)
-    {
-        RectTransform? r = g.RectTransform;
-        if (r.IsNotValid()) return;
-        r.AnchoredPosition = v.pos;
-        r.SizeDelta = v.size;
-    }
-
-    // Writes a new value into one axis component of AnchoredPosition/SizeDelta, coalescing the undo so
-    // a scrub-drag collapses to a single step. Both are recorded together since a stretched-edge edit
-    // moves position and size at once.
-    private static void ApplyAxis(GameObject go, RectTransform rt, int axis, float newAnchored, float newSize, string desc)
+    // Writes a new value into one axis component of AnchoredPosition/SizeDelta.
+    private static void ApplyAxis(RectTransform rt, int axis, float newAnchored, float newSize, string desc)
     {
         Float2 pos = rt.AnchoredPosition, size = rt.SizeDelta;
         Float2 nPos = axis == 0 ? new Float2(newAnchored, pos.Y) : new Float2(pos.X, newAnchored);
         Float2 nSize = axis == 0 ? new Float2(newSize, size.Y) : new Float2(size.X, newSize);
-        Undo.RecordGameObjectChange(go, desc, (pos, size), (nPos, nSize), ApplyPosSize, coalesce: true);
+        Undo.RecordObject(rt, desc);
         rt.AnchoredPosition = nPos;
         rt.SizeDelta = nSize;
     }
@@ -756,22 +725,22 @@ public static class GameObjectInspector
             {
                 if (sx)
                     NumCell(paper, "gi_rt_pos_x", "Left", s_axisXColor, OffsetMin(p.X, s.X, pv.X), nv =>
-                    { SolveHoldMax(p.X, s.X, pv.X, nv, out float a, out float sz); ApplyAxis(go, rt, 0, a, sz, "Rect Left"); });
+                    { SolveHoldMax(p.X, s.X, pv.X, nv, out float a, out float sz); ApplyAxis(rt, 0, a, sz, "Rect Left"); });
                 else
                     NumCell(paper, "gi_rt_pos_x", "X", s_axisXColor, p.X, nv =>
-                        ApplyAxis(go, rt, 0, nv, rt.SizeDelta.X, "Rect PosX"));
+                        ApplyAxis(rt, 0, nv, rt.SizeDelta.X, "Rect PosX"));
 
                 if (sy)
                     NumCell(paper, "gi_rt_pos_y", "Top", s_axisYColor, -OffsetMax(p.Y, s.Y, pv.Y), nv =>
-                    { SolveHoldMin(p.Y, s.Y, pv.Y, -nv, out float a, out float sz); ApplyAxis(go, rt, 1, a, sz, "Rect Top"); });
+                    { SolveHoldMin(p.Y, s.Y, pv.Y, -nv, out float a, out float sz); ApplyAxis(rt, 1, a, sz, "Rect Top"); });
                 else
                     NumCell(paper, "gi_rt_pos_y", "Y", s_axisYColor, p.Y, nv =>
-                        ApplyAxis(go, rt, 1, nv, rt.SizeDelta.Y, "Rect PosY"));
+                        ApplyAxis(rt, 1, nv, rt.SizeDelta.Y, "Rect PosY"));
 
                 NumCell(paper, "gi_rt_pos_z", "Z", s_axisZColor, t.LocalPosition.Z, nv =>
                 {
                     var nl = new Float3(t.LocalPosition.X, t.LocalPosition.Y, nv);
-                    Undo.RecordGameObjectChange(go, "Rect PosZ", t.LocalPosition, nl, (g, x) => g.Transform.LocalPosition = x, coalesce: true);
+                    Undo.RecordObject(go, "Rect PosZ");
                     t.LocalPosition = nl;
                 });
             }
@@ -794,17 +763,17 @@ public static class GameObjectInspector
             {
                 if (sx)
                     NumCell(paper, "gi_rt_size_x", "Right", s_axisXColor, -OffsetMax(p.X, s.X, pv.X), nv =>
-                    { SolveHoldMin(p.X, s.X, pv.X, -nv, out float a, out float sz); ApplyAxis(go, rt, 0, a, sz, "Rect Right"); });
+                    { SolveHoldMin(p.X, s.X, pv.X, -nv, out float a, out float sz); ApplyAxis(rt, 0, a, sz, "Rect Right"); });
                 else
                     NumCell(paper, "gi_rt_size_x", "W", s_axisXColor, s.X, nv =>
-                        ApplyAxis(go, rt, 0, rt.AnchoredPosition.X, nv, "Rect Width"));
+                        ApplyAxis(rt, 0, rt.AnchoredPosition.X, nv, "Rect Width"));
 
                 if (sy)
                     NumCell(paper, "gi_rt_size_y", "Bottom", s_axisYColor, OffsetMin(p.Y, s.Y, pv.Y), nv =>
-                    { SolveHoldMax(p.Y, s.Y, pv.Y, nv, out float a, out float sz); ApplyAxis(go, rt, 1, a, sz, "Rect Bottom"); });
+                    { SolveHoldMax(p.Y, s.Y, pv.Y, nv, out float a, out float sz); ApplyAxis(rt, 1, a, sz, "Rect Bottom"); });
                 else
                     NumCell(paper, "gi_rt_size_y", "H", s_axisYColor, s.Y, nv =>
-                        ApplyAxis(go, rt, 1, rt.AnchoredPosition.Y, nv, "Rect Height"));
+                        ApplyAxis(rt, 1, rt.AnchoredPosition.Y, nv, "Rect Height"));
 
                 paper.Box("gi_rt_size_pad").Width(UnitValue.Stretch()).Height(1).IsNotInteractable();
             }
@@ -818,8 +787,7 @@ public static class GameObjectInspector
         {
             Origami.Float2Field(paper, "gi_rt_pivot_vf", rt.Pivot, v =>
             {
-                Undo.RecordGameObjectChange(go, "Change Pivot", rt.Pivot, v,
-                    (g, x) => { RectTransform? r = g.RectTransform; if (r.IsValid()) r.Pivot = x; }, coalesce: true);
+                Undo.RecordObject(rt, "Change Pivot");
                 rt.Pivot = v;
             }).Show();
         }, labelWidth: EditorTheme.LabelWidth / 2f);
@@ -853,7 +821,7 @@ public static class GameObjectInspector
                     using (paper.Box($"{compId}_en_wrap").Width(UnitValue.Auto).Height(UnitValue.Auto)
                         .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                         Origami.Checkbox(paper, $"{compId}_en", comp.Enabled,
-                            v => { bool old = comp.Enabled; Guid cId = comp.Identifier; Undo.RegisterAction("Toggle Component", () => { Component? c = Undo.FindComponent(cId); if (c.IsValid()) { c.Enabled = old; c.OnValidate(); } }, () => { Component? c = Undo.FindComponent(cId); if (c.IsValid()) { c.Enabled = v; c.OnValidate(); } }); comp.Enabled = v; comp.OnValidate(); })
+                            v => { Undo.RecordObject(comp, "Toggle Component"); comp.Enabled = v; comp.OnValidate(); })
                             .NoLabel().Show();
                 },
                 onDragStart: () => DragDrop.StartDrag(new ComponentDragPayload(go, comp)),
@@ -912,39 +880,7 @@ public static class GameObjectInspector
     }
 
     /// <summary>Take a component off its object, undoably, restoring it where it sat.</summary>
-    internal static void RemoveComponentWithUndo(Component comp)
-    {
-        GameObject go = comp.GameObject;
-        if (go.IsNotValid()) return;
-
-        EchoObject serialized = Echo.Serializer.Serialize(comp.GetType(), comp);
-        Type compType = comp.GetType();
-        Guid compId = comp.Identifier;
-        int compIndex = comp.GetSiblingIndex() ?? 0;
-        Guid goId = go.Identifier;
-
-        Undo.RegisterAction("Remove Component",
-            undo: () =>
-            {
-                GameObject? g = Undo.FindGO(goId);
-                if (g.IsNotValid()) return;
-                if (Echo.Serializer.Deserialize(serialized, compType) is not Component restored) return;
-
-                restored.Identifier = compId;
-                g.AddComponent(restored);
-                restored.SetSiblingIndex(compIndex);
-            },
-            redo: () =>
-            {
-                GameObject? g = Undo.FindGO(goId);
-                if (g.IsNotValid()) return;
-
-                Component? c = g!.GetComponentByIdentifier(compId);
-                if (c.IsValid()) g.RemoveComponent(c);
-            });
-
-        go.RemoveComponent(comp);
-    }
+    internal static void RemoveComponentWithUndo(Component comp) => Undo.DestroyObjectImmediate(comp);
 
     private static void AddRemoveComponentItem(ContextBuilder builder, GameObject go, Component comp)
     {
@@ -1004,27 +940,13 @@ public static class GameObjectInspector
 
         builder.Separator();
 
-        Guid moveCompId = comp.Identifier;
         builder.Item(Loc.Get("inspector.move_up"), () =>
         {
-            if (index > 0)
-            {
-                int oldIdx = index; int newIdx = index - 1;
-                Undo.RegisterAction("Move Component Up",
-                    () => { Component? c = Undo.FindComponent(moveCompId); if (c.IsValid()) c.SetSiblingIndex(oldIdx); },
-                    () => { Component? c = Undo.FindComponent(moveCompId); if (c.IsValid()) c.SetSiblingIndex(newIdx); });
-                comp.SetSiblingIndex(newIdx);
-            }
+            if (index > 0) MoveComponent(comp, index, index - 1, "Move Component Up");
         }, icon: EditorIcons.ArrowUp, enabled: index > 0);
 
-        builder.Item(Loc.Get("inspector.move_down"), () =>
-        {
-            int oldIdx = index; int newIdx = index + 1;
-            Undo.RegisterAction("Move Component Down",
-                () => { Component? c = Undo.FindComponent(moveCompId); if (c.IsValid()) c.SetSiblingIndex(oldIdx); },
-                () => { Component? c = Undo.FindComponent(moveCompId); if (c.IsValid()) c.SetSiblingIndex(newIdx); });
-            comp.SetSiblingIndex(newIdx);
-        }, icon: EditorIcons.ArrowDown);
+        builder.Item(Loc.Get("inspector.move_down"), () => MoveComponent(comp, index, index + 1, "Move Component Down"),
+            icon: EditorIcons.ArrowDown);
 
         builder.Separator();
 
@@ -1032,6 +954,28 @@ public static class GameObjectInspector
         {
             ComponentPopoutPanel.PopOut(go, comp);
         }, icon: EditorIcons.ArrowUpRightFromSquare);
+    }
+
+    private static void MoveComponent(Component comp, int oldIndex, int newIndex, string name)
+    {
+        comp.SetSiblingIndex(newIndex);
+        Undo.RegisterOperation(new ComponentOrderOperation(comp.Identifier, UndoOwner.Of(comp), oldIndex, newIndex, name));
+    }
+
+    private sealed class ComponentOrderOperation(Guid component, UndoOwner owner, int oldIndex, int newIndex, string name) : IUndoOperation
+    {
+        public string Name => name;
+        public IReadOnlyList<UndoOwner> Owners => [owner];
+        public void Undo() => MoveTo(oldIndex);
+        public void Redo() => MoveTo(newIndex);
+
+        private void MoveTo(int index)
+        {
+            Runtime.Resources.Scene scene = Runtime.Resources.Scene.Current;
+            if (scene.IsNotValid()) return;
+            Component? c = scene.FindObjectByIdentifier<Component>(component);
+            if (c.IsValid()) c.SetSiblingIndex(index);
+        }
     }
 
     // ================================================================
@@ -1408,7 +1352,8 @@ public static class GameObjectInspector
 
         Origami.Button(paper, id, label, () =>
             {
-                GameObject? live = Undo.FindGO(rootId);
+                Runtime.Resources.Scene scene = Runtime.Resources.Scene.Current;
+                GameObject? live = scene.IsValid() ? scene.FindObjectByIdentifier<GameObject>(rootId) : null;
                 if (live.IsValid()) act(live!);
             })
             .Small().Width(width).Height(EditorTheme.RowHeight).Ghost().Show();
@@ -1526,24 +1471,10 @@ public static class GameObjectInspector
     }
 
     /// <summary>
-    /// Adds a component of <paramref name="type"/> to <paramref name="go"/> and registers a matching
-    /// undo/redo step. Shared by the popup and the drag-a-script-onto-the-inspector path.
+    /// Adds a component of <paramref name="type"/> to <paramref name="go"/> with undo.
+    /// Shared by the popup and the drag-a-script-onto-the-inspector path.
     /// </summary>
-    public static Component? AddComponentWithUndo(GameObject go, Type type)
-    {
-        Component? addedComp = go.AddComponent(type);
-        if (addedComp.IsValid())
-        {
-            Guid compId = addedComp.Identifier;
-            Guid goId = go.Identifier;
-            EchoObject serialized = Echo.Serializer.Serialize(addedComp.GetType(), addedComp);
-            Type compType = addedComp.GetType();
-            Undo.RegisterAction("Add Component",
-                undo: () => { GameObject? g = Undo.FindGO(goId); if (g.IsNotValid()) return; Component? c = g.GetComponentByIdentifier(compId); if (c.IsValid()) g.RemoveComponent(c); },
-                redo: () => { GameObject? g = Undo.FindGO(goId); if (g.IsNotValid()) return; var c = Echo.Serializer.Deserialize(serialized, compType) as Component; if (c.IsValid()) { c.Identifier = compId; g.AddComponent(c); } });
-        }
-        return addedComp;
-    }
+    public static Component? AddComponentWithUndo(GameObject go, Type type) => Undo.AddComponent(go, type);
 
     private static List<MenuTreeEntry> GatherComponents()
     {

@@ -24,9 +24,6 @@ public class SkinnedMeshRendererEditor : CustomEditor
         FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // Snapshot the component state before any widget (default fields or sliders) mutates it.
-        Undo.Snapshot(renderer);
-
         // Default inspector (mesh, materials, bone paths, etc.).
         DrawDefaultInspector(paper, id, renderer);
 
@@ -47,12 +44,17 @@ public class SkinnedMeshRendererEditor : CustomEditor
 
             EditorGUI.Row(paper, $"{id}_bs_{index}", name, () =>
                 Origami.Slider(paper, $"{id}_bs_{index}_v", weight,
-                    v => renderer.SetBlendShapeWeight(index, v),
+                    v =>
+                    {
+                        Undo.RecordObject(renderer, "Change Blend Shape Weight");
+                        renderer.SetBlendShapeWeight(index, v);
+                    },
                     0f, 100f).Format("F1").Show());
         }
 
         Origami.Button(paper, $"{id}_bs_reset", "Reset Weights", () =>
         {
+            Undo.RecordObject(renderer, "Reset Blend Shape Weights");
             for (int i = 0; i < count; i++)
                 renderer.SetBlendShapeWeight(i, 0f);
         }).Show();

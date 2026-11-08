@@ -4,7 +4,6 @@
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.PropertyEditors;
-using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Navigation;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
@@ -26,10 +25,6 @@ public class NavMeshSurfaceEditor : CustomEditor
     {
         var surface = (NavMeshSurface)target;
 
-        // Pre-snapshot: captures entire component state before any widget mutates it, so
-        // default-grid edits, the Advanced fields, and the Reset button all undo uniformly.
-        Undo.Snapshot(surface);
-
         // Basic fields (agent type, collection, layers, geometry, data ref) via the default
         // grid; DefaultArea and the build overrides are [HideInInspector] and drawn below.
         DrawDefaultInspector(paper, $"{id}_def", target);
@@ -39,19 +34,19 @@ public class NavMeshSurfaceEditor : CustomEditor
         {
             NavMeshAreaPropertyEditor.DrawAreaField(paper, $"{id}_adv_area", "Default Area", surface.DefaultArea, v =>
             {
+                Undo.RecordObject(surface, "Change Default Area");
                 surface.DefaultArea = v;
-                EditorSceneManager.MarkDirty();
             });
 
             PropertyGridUtils.Draw(paper, $"{id}_adv_ovr", surface.BuildOverrides,
-                _ => EditorSceneManager.MarkDirty());
+                _ => EditorUtility.SetDirty(surface));
 
             paper.Box($"{id}_adv_reset_sp").Height(4);
             Origami.Button(paper, $"{id}_adv_reset", "Reset Advanced To Defaults", () =>
             {
+                Undo.RecordObject(surface, "Reset Advanced To Defaults");
                 surface.BuildOverrides = new NavMeshBuildOverrides();
                 surface.DefaultArea = NavMeshAreas.Walkable;
-                EditorSceneManager.MarkDirty();
             }).Show();
         });
 

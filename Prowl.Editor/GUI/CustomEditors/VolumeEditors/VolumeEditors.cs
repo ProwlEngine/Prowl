@@ -57,22 +57,45 @@ public class VolumeEditor : CustomEditor
     public override void OnGUI(Paper paper, string id, object target)
     {
         var volume = (Volume)target;
-        Undo.Snapshot(volume);
 
-        PropertyGridUtils.DrawField(paper, $"{id}_global", "Is Global", typeof(bool), volume.IsGlobal, v => volume.IsGlobal = (bool)v!);
+        PropertyGridUtils.DrawField(paper, $"{id}_global", "Is Global", typeof(bool), volume.IsGlobal, v =>
+        {
+            Undo.RecordObject(volume, "Change Is Global");
+            volume.IsGlobal = (bool)v!;
+        });
         if (!volume.IsGlobal)
         {
-            PropertyGridUtils.DrawField(paper, $"{id}_size", "Size", typeof(Vector.Float3), volume.Size, v => volume.Size = (Vector.Float3)v!);
-            PropertyGridUtils.DrawField(paper, $"{id}_blend", "Blend Distance", typeof(float), volume.BlendDistance, v => volume.BlendDistance = System.MathF.Max(0f, (float)v!));
+            PropertyGridUtils.DrawField(paper, $"{id}_size", "Size", typeof(Vector.Float3), volume.Size, v =>
+            {
+                Undo.RecordObject(volume, "Change Size");
+                volume.Size = (Vector.Float3)v!;
+            });
+            PropertyGridUtils.DrawField(paper, $"{id}_blend", "Blend Distance", typeof(float), volume.BlendDistance, v =>
+            {
+                Undo.RecordObject(volume, "Change Blend Distance");
+                volume.BlendDistance = System.MathF.Max(0f, (float)v!);
+            });
         }
-        EditorGUI.SliderRow(paper, $"{id}_weight", "Weight", volume.Weight, 0f, 1f, v => volume.Weight = v);
-        PropertyGridUtils.DrawField(paper, $"{id}_priority", "Priority", typeof(float), volume.Priority, v => volume.Priority = (float)v!);
+        EditorGUI.SliderRow(paper, $"{id}_weight", "Weight", volume.Weight, 0f, 1f, v =>
+        {
+            Undo.RecordObject(volume, "Change Weight");
+            volume.Weight = v;
+        });
+        PropertyGridUtils.DrawField(paper, $"{id}_priority", "Priority", typeof(float), volume.Priority, v =>
+        {
+            Undo.RecordObject(volume, "Change Priority");
+            volume.Priority = (float)v!;
+        });
 
-        VolumeProfileGUI.DrawProfileField(paper, $"{id}_profile", "Profile", volume.SharedProfile, volume.GameObject.Name, p => volume.SharedProfile = p);
+        VolumeProfileGUI.DrawProfileField(paper, $"{id}_profile", "Profile", volume.SharedProfile, volume.GameObject.Name, p =>
+        {
+            Undo.RecordObject(volume, "Change Profile");
+            volume.SharedProfile = p;
+        });
 
         VolumeProfile? profile = volume.SharedProfile;
         if (profile.IsNotValid()) return;
-        VolumeProfileGUI.DrawComponents(paper, $"{id}_list", profile, VolumeProfileGUI.ChangedFor(profile), volume);
+        VolumeProfileGUI.DrawComponents(paper, $"{id}_list", profile, volume);
         VolumeProfileAssetEditor.Shared.DrawPendingBar(paper, $"{id}_pending", profile);
     }
 }
@@ -94,14 +117,14 @@ public class CameraEditor : CustomEditor
         {
             Origami.Button(paper, $"{id}_base_new", $"{EditorIcons.Plus}  New", () =>
             {
-                Undo.Snapshot(camera);
+                Undo.RecordObject(camera, "New Profile");
                 camera.Profile = new VolumeProfile { Name = $"{camera.GameObject.Name} Profile" };
             }).Small().Show();
             if (profile.IsValid())
             {
                 Origami.Button(paper, $"{id}_base_clone", $"{EditorIcons.Clone}  Clone", () =>
                 {
-                    Undo.Snapshot(camera);
+                    Undo.RecordObject(camera, "Clone Profile");
                     VolumeProfile copy = profile.Clone();
                     copy.Name = $"{profile.Name} Copy";
                     camera.Profile = copy;
@@ -112,7 +135,7 @@ public class CameraEditor : CustomEditor
         }
 
         if (profile.IsNotValid()) return;
-        VolumeProfileGUI.DrawComponents(paper, $"{id}_base", profile, VolumeProfileGUI.ChangedFor(profile), camera);
+        VolumeProfileGUI.DrawComponents(paper, $"{id}_base", profile, camera);
         VolumeProfileAssetEditor.Shared.DrawPendingBar(paper, $"{id}_base_pending", profile);
     }
 }
