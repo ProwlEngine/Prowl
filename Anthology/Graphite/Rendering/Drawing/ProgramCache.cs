@@ -391,7 +391,8 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     // Colour takes the pass's blend. An opaque forward pass writes the G-buffer targets its fragment stage stores, so they
     // match the surface that won the depth test; ones it does not store keep their clear, and transparent, blended and
     // other passes leave them. Transmissive passes write motion and the reactive mask over them, which nothing else
-    // writes. The prepass writes no colour at all. Views with fewer targets ignore the extra states.
+    // writes. The prepass writes no colour, only the motion and normals its GRAPHITE_PREPASS variant stores. Views with
+    // fewer targets ignore the extra states.
     internal static BlendStateDescription SceneBlend(PassState state, bool forward, bool prepass, Func<uint, bool> stores, bool transmission = false)
     {
         BlendAttachmentDescription color = state.ToBlendState(BlendStateDescription.SingleOverrideBlend).AttachmentStates[0];
@@ -402,7 +403,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             color.ColorWriteMask = ColorWriteMask.None;
 
         BlendStateDescription blend = state.ToBlendState(BlendStateDescription.SingleOverrideBlend);
-        blend.AttachmentStates = [color, (gbuffer || transmission) && stores(1) ? target : masked, transmission && stores(2) ? target : masked, gbuffer && stores(3) ? target : masked, gbuffer && stores(4) ? target : masked];
+        blend.AttachmentStates = [color, (gbuffer || transmission || prepass) && stores(1) ? target : masked, transmission && stores(2) ? target : masked, (gbuffer || prepass) && stores(3) ? target : masked, gbuffer && stores(4) ? target : masked];
         return blend;
     }
 

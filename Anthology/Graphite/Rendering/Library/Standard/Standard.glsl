@@ -36,17 +36,27 @@
     #define GRAPHITE_STANDARD_LIT
 #endif
 
+// The prepass writes motion, and with NORMALS the surface's normal, while features before the opaque pass read them
+#if defined(GRAPHITE_PREPASS_MOTION) || defined(GRAPHITE_PREPASS_NORMALS)
+    #define GRAPHITE_STANDARD_PREPASS_MOTION
+#endif
+#if defined(GRAPHITE_PREPASS_NORMALS) && !defined(GRAPHITE_STANDARD_UNLIT)
+    #define GRAPHITE_STANDARD_PREPASS_NORMALS
+#endif
+
 #if defined(GRAPHITE_STANDARD_SHADOW) && (defined(_SURFACE_TRANSPARENT) || (!defined(GRAPHITE_STANDARD_UNLIT) && (defined(PBR_TRANSMISSION) || (defined(PBR_SUBSURFACE) && defined(PBR_THIN_WALLED)))))
     #define GRAPHITE_STANDARD_SHADOW_DITHER
 #endif
 
-// Passes whose fragments read the vertex colour and relative position: forward, back depth, dithered shadow casters, and the depth passes of cutout surfaces
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_BACK_DEPTH) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT)
+// Passes whose fragments read the vertex colour and relative position: forward, back depth, dithered shadow casters, the
+// depth passes of cutout surfaces and a prepass writing normals
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_BACK_DEPTH) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
     #define GRAPHITE_STANDARD_VERTEX_DATA
 #endif
 
-// Passes whose fragments read the tangent frame: lit ones, and under PBR parallax the depth passes reading the material
-#if defined(GRAPHITE_STANDARD_LIT) || (defined(PBR_PARALLAX) && !defined(GRAPHITE_STANDARD_UNLIT) && (defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)))
+// Passes whose fragments read the tangent frame: lit ones, a prepass writing normals, and under PBR parallax the depth
+// passes reading the material
+#if defined(GRAPHITE_STANDARD_LIT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS) || (defined(PBR_PARALLAX) && !defined(GRAPHITE_STANDARD_UNLIT) && (defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)))
     #define GRAPHITE_STANDARD_FRAME
 #endif
 
@@ -59,7 +69,7 @@
     #ifdef GRAPHITE_STANDARD_BACK_DEPTH
         #include "Graphite/SceneColor.glsl"
     #endif
-    #ifdef GRAPHITE_STANDARD_FORWARD
+    #if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_PREPASS_MOTION)
         #include "Graphite/Passes.glsl"
     #endif
     #ifdef GRAPHITE_STANDARD_DEBUG
@@ -68,7 +78,7 @@
 #endif
 
 // vUV and vUV1 are the mesh's two UV sets as they are, vLightmapUV the lightmap UV placed
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
 GRAPHITE_STANDARD_VARYING vec2 vUV;
 GRAPHITE_STANDARD_VARYING vec2 vUV1;
 #endif

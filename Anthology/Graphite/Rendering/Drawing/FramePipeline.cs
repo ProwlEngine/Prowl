@@ -375,7 +375,6 @@ internal sealed partial class FramePipeline : IDisposable
         if (view.Cut)
             camera.HasPrevious = false;
         camera.World = world;
-        camera.ResolveKeywords();
         camera.HostBuffers = world.World.Globals.BufferList;
         camera.Cubes = world.World.Reflections.SampledCubes();
         uint width = Math.Max(1u, (uint)MathF.Round(view.Target.Width * view.Viewport.Z * view.RenderScale));
@@ -390,6 +389,7 @@ internal sealed partial class FramePipeline : IDisposable
         (CascadeSlot[] _, string _) = CascadesOf(camera, view, camera.World);
         CameraShape shape = CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length, camera.Cubes.Length);
         camera.ShapeKey = shape;
+        camera.ResolveKeywords(shape.PrepassValue);
         ResolveScreenLighting(camera, shape, width, height);
         camera.ListSelectedPasses();
         Prepare(camera, view, world, time, width, height);

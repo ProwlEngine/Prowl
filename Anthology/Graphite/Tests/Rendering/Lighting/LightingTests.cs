@@ -3437,7 +3437,8 @@ public sealed partial class LightingTests : IDisposable
         Assert.Equal([ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: true, prepass: false, location => location == 1)));
         Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(blended, forward: true, prepass: false, _ => true)));
         Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: false, _ => true)));
-        Assert.Equal([ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: true, _ => true)));
+        Assert.Equal([ColorWriteMask.None, ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.All, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: true, _ => true)));
+        Assert.Equal([ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: true, _ => false)));
         Assert.Equal([ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(blended, forward: false, prepass: false, _ => true, transmission: true)));
         Assert.True(MaterialLayout.Stores(lit, 1) && MaterialLayout.Stores(lit, 3) && MaterialLayout.Stores(lit, 4));
         Assert.False(MaterialLayout.Stores(lit, 2));

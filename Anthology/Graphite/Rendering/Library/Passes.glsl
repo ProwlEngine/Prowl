@@ -1,8 +1,9 @@
 // Outputs of the built in pass types. The forward opaque pass writes the thin G-buffer next to its colour: screen
 // motion, the world normal, octahedral in a signed two channel target, and the top layer's specular reflectance and
-// perceptual roughness. Transmissive passes write motion and the reactive mask, how much of the pixel is what they
-// refract from behind, which temporal effects trust history less for. A view has only the targets its features read,
-// so writes to the others go nowhere.
+// perceptual roughness. The standard prepass writes motion, and the normal before decals, while the view's
+// GRAPHITE_PREPASS asks, so features before the opaque pass read them. Transmissive passes write motion and the
+// reactive mask, how much of the pixel is what they refract from behind, which temporal effects trust history less
+// for. A view has only the targets its features read, so writes to the others go nowhere.
 #pragma once
 
 #include "Graphite/Core.glsl"

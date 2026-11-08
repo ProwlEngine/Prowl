@@ -23,6 +23,12 @@ public sealed class GlobalAxis
     /// <summary>The standard surfaces' quality, FULL or LITE for mobile.</summary>
     public static readonly GlobalAxis PbrTier = Define("PBR_TIER", "FULL", "LITE");
 
+    /// <summary>
+    /// What the standard prepass writes besides depth, set by the renderer per view: MOTION while a feature between the
+    /// prepass and the opaque pass reads the motion target, NORMALS while one reads the normals, which writes motion too.
+    /// </summary>
+    public static readonly GlobalAxis Prepass = Define("GRAPHITE_PREPASS", "DEPTH", "MOTION", "NORMALS");
+
     /// <summary>On while a light of the world has a mask, set by the renderer.</summary>
     public static readonly GlobalAxis LightMasks = Toggle("GRAPHITE_LIGHT_MASKS");
 

@@ -6,7 +6,7 @@
 
 #ifdef GRAPHITE_FRAGMENT
 
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT)
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
 // The inputs from the varyings, the frame flipped on back faces, the UVs moved by PBR parallax. Depth passes keep the
 // frame at its defaults unless parallax needs it.
 Graphite_SurfaceData graphite_StandardInputs()
@@ -189,11 +189,11 @@ float graphite_ShadowCosine()
 }
 #endif
 
-// Prepass and shadow caster: depth only, cut out where the alpha test fails. Dithered casters then let their
-// transmittance through.
+// Prepass and shadow caster: depth, cut out where the alpha test fails. Dithered casters then let their transmittance
+// through. The prepass also writes motion and normals while its GRAPHITE_PREPASS variant asks.
 void Graphite_StandardFragment()
 {
-#if defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)
+#if defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
     Graphite_SurfaceData i = graphite_StandardInputs();
 #ifdef GRAPHITE_STANDARD_UNLIT
     Unlit_Params p = Unlit_MaterialParams(i);
@@ -213,7 +213,11 @@ void Graphite_StandardFragment()
     float cosine = graphite_ShadowCosine();
 #endif
     float mapVariance;
+#ifdef GRAPHITE_STANDARD_PREPASS_NORMALS
+    PBR_Params p = PBR_MaterialParams(i, vHasTangents > 0.5, mapVariance);
+#else
     PBR_Params p = PBR_MaterialParams(i, false, mapVariance);
+#endif
 #ifdef GRAPHITE_SURFACE_FUNCTION
     Surface(p, i);
 #endif
@@ -230,7 +234,15 @@ void Graphite_StandardFragment()
     if (graphite_ShadowDiscards(PBR_ShadowTransmittance(p, coverage, cosine)))
         discard;
 #endif
+#ifdef GRAPHITE_STANDARD_PREPASS_NORMALS
+    graphite_GBufferNormal = Graphite_OctEncode(normalize(p.geometryNormal));
 #endif
+#endif
+#endif
+#if defined(GRAPHITE_PREPASS_NORMALS) && defined(GRAPHITE_STANDARD_UNLIT)
+    Graphite_WriteGBuffer(vec3(0.0, 1.0, 0.0), vec3(0.0), 1.0);
+#elif defined(GRAPHITE_STANDARD_PREPASS_MOTION)
+    Graphite_WriteMotion(graphite_MotionCurrent, graphite_MotionPrevious);
 #endif
 }
 

@@ -2043,7 +2043,7 @@ internal sealed partial class FramePipeline
         camera.LastFrame = _frame;
         camera.Desc = view;
         camera.World = world;
-        camera.ResolveKeywords();
+        camera.ResolveKeywords(null);
         camera.Info = new FeatureView(view, size, size);
         camera.ResetPassLists();
         camera.ListFor(PassType.ShadowCaster);

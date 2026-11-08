@@ -638,6 +638,97 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0, 0, 0), Frame(View()));
     }
 
+    // Copies one scene target right after the prepass, for ShowPrepassCopy to show at the end of the view
+    private sealed class PrepassCopy(FullscreenProgram program, Sampler sampler, SceneTargets target) : RenderFeature(RenderSlot.AfterPrepass, sceneReads: target)
+    {
+        private sealed class State { public TextureHandle Copy; }
+
+        private readonly PropertySet _properties = new();
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.ReadScene();
+            State state = builder.GetViewState<State>();
+            state.Copy = builder.Temporary("Copy", view.Texture(PixelFormat.R32_G32_B32_A32_Float));
+            builder.Publish("PrepassCopy", state.Copy);
+        }
+
+        public override void Render(FeatureContext context)
+        {
+            _properties.SetTexture("_Target", target == SceneTargets.Motion ? context.Motion! : context.Normals!, sampler);
+            context.Fullscreen(program, context.Get(context.GetViewState<State>().Copy), _properties);
+        }
+    }
+
+    private sealed class ShowPrepassCopy(FullscreenProgram program, Sampler sampler) : RenderFeature(RenderSlot.HdrPost)
+    {
+        private sealed class State { public TextureHandle Copy; }
+
+        private readonly PropertySet _properties = new();
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.GetViewState<State>().Copy = builder.Read("PrepassCopy");
+            builder.WriteColor();
+        }
+
+        public override void Render(FeatureContext context)
+        {
+            _properties.SetTexture("_Copy", context.Get(context.GetViewState<State>().Copy).ColorTextures[0], sampler);
+            context.Fullscreen(program, _properties);
+        }
+    }
+
+    private void ShowingAfterPrepass(SceneTargets target, string decode)
+    {
+        Sampler point = _device.ResourceFactory.CreateSampler(SamplerDescription.Point);
+        _owned.Add(point);
+        _world.Features.Add(new PrepassCopy(Program($"#include \"Graphite/Octahedral.glsl\"\nuniform sampler2D _Target; void main() {{ vec4 t = texture(_Target, vUV); outColor = vec4({decode}, 1.0); }}"), point, target));
+        _world.Features.Add(new ShowPrepassCopy(Program("uniform sampler2D _Copy; void main() { outColor = texture(_Copy, vUV); }"), point));
+    }
+
+    // The test quad wound to face the camera for the standard shaders, which cull back faces, its normal toward it
+    private GpuMesh FacingQuad()
+    {
+        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
+        Float3[] normals = [new(0, 0, -1), new(0, 0, -1), new(0, 0, -1), new(0, 0, -1)];
+        GpuMesh mesh = _renderer.CreateMesh(new MeshData
+        {
+            VertexCount = 4,
+            Streams =
+            [
+                new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() },
+                new VertexStream { Semantic = VertexSemantic.Normal, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(normals.AsSpan()).ToArray() },
+            ],
+            Indices = new uint[] { 0, 2, 1, 0, 3, 2 },
+        });
+        _owned.Add(mesh);
+        return mesh;
+    }
+
+    [Fact]
+    public void MotionVectors_ReachFeaturesRightAfterThePrepass()
+    {
+        ShowingAfterPrepass(SceneTargets.Motion, "t.rg, 0.0");
+        Material material = _renderer.CreateMaterial(_renderer.Standard.Unlit);
+        RenderableHandle moving = _world.Add(new RenderableDesc { Mesh = FacingQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)), Flags = RenderableFlags.MotionVectors }, [material]);
+        Frame(View());
+
+        // Up a unit is a quarter of the view up in clip space, an eighth down the image in uv
+        _world.SetTransform(moving, Double4x4.CreateTranslation(new Double3(0, 1, 10)));
+        AssertAll(new Float3(0, -0.125f, 0), Frame(View()), i => i / Size >= 2);
+    }
+
+    [Fact]
+    public void Normals_ReachFeaturesRightAfterThePrepass()
+    {
+        ShowingAfterPrepass(SceneTargets.Normals, "Graphite_OctDecode(t.rg) * 0.5 + 0.5");
+        _world.Add(new RenderableDesc { Mesh = FacingQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) }, [_renderer.CreateMaterial(_renderer.Standard.Lit)]);
+
+        // The quad faces -Z, toward the camera
+        AssertAll(new Float3(0.5f, 0.5f, 0), Frame(View()), Centre);
+    }
+
     private Material Unlit(Float3 color)
     {
         Material material = _renderer.CreateMaterial(_unlit);
