@@ -2920,4 +2920,25 @@ public class PhysicsTests : RuntimeTestBase
         }
         finally { PhysicsWorld.Defaults = previous; }
     }
+
+    [Fact]
+    public void StaticPhysics_QueriesTheActiveScene()
+    {
+        Scene withBox = CreatePhysicsScene();
+        AddStaticBox(withBox, Float3.Zero, new Float3(2, 2, 2));
+        StepPhysics(withBox, 2);
+        Scene empty = CreatePhysicsScene();
+
+        using (withBox.Enter())
+        {
+            Assert.True(Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, out RaycastHit hit));
+            Assert.True(hit.Distance > 0);
+            Physics.Gravity = new Float3(0, -3, 0);
+        }
+        using (empty.Enter())
+            Assert.False(Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f));
+
+        Assert.Equal(new Float3(0, -3, 0), withBox.Physics.Gravity);
+        Assert.NotEqual(new Float3(0, -3, 0), empty.Physics.Gravity);
+    }
 }
