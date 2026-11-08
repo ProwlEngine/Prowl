@@ -231,7 +231,7 @@ internal static class RoslynScriptBackend
     internal static readonly ImmutableArray<DiagnosticAnalyzer> ScriptAnalyzers =
         ImmutableArray.Create<DiagnosticAnalyzer>(
             new ReloadDiagnosticAnalyzer(), new EngineObjectNullAnalyzer(), new ComponentConstructorAnalyzer(),
-            new BlockingWaitAnalyzer());
+            new BlockingWaitAnalyzer(), new SceneAnalyzer());
 
     /// <summary>Run the Prowl script-safety analyzers over the compilation and surface their diagnostics.</summary>
     private static IEnumerable<Diagnostic> RunScriptAnalyzers(CSharpCompilation compilation)

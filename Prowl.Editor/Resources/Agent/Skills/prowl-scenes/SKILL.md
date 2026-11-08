@@ -127,6 +127,7 @@ A destroyed engine object is still a live reference, so null checks miss it. Alw
 - When play stops or scripts reload, pending continuations are **dropped** without running their `finally`. Pass `DestroyCancellationToken` or `GameTask.SessionToken` and catch `OperationCanceledException` when you need to clean up.
 - Scene objects may only be touched on the main thread. Most writes throw off the main thread, but reads do not, so a wrong read from a worker fails silently.
 - Never block with `.Result`, `.Wait()` or `GetAwaiter().GetResult()` in a component (PROWLTH001). It deadlocks.
+- A live world never equals a scene asset: `GameObject.Scene == level` is a compile error (PROWLSC001). Compare `GameObject.Scene.Source == level`.
 
 ## Layers, tags and audio defaults
 
