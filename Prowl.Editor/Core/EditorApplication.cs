@@ -89,7 +89,6 @@ public class EditorApplication : Game
     private int _lastFocusedElement;
     private int _savedActiveTabIndex = -1;
     private DockNode? _savedActiveTabNode;
-    private TimeData? _savedEditorTime;
     private bool _maximizedForPlay; // play mode maximized the Game view, so stopping restores the layout
 
 
@@ -751,9 +750,9 @@ public class EditorApplication : Game
         if (s_pauseRequested)
         {
             s_pauseRequested = false;
-            if (Application.IsPlaying && !Application.IsPaused)
+            if (Application.IsPlaying && !IsPlayPaused)
             {
-                Application.IsPaused = true;
+                SceneInstance.Main.Paused = true;
                 Toasts.Warning(Loc.Get("play.paused_on_error"), Loc.Get("play.paused_on_error_msg"));
             }
         }
@@ -819,9 +818,9 @@ public class EditorApplication : Game
 
             ButtonBuilder pause = Origami.IconButton(paper, "btn_pause", EditorIcons.Pause_I,
                 () => { paper.ClearFocus(); TogglePause(); })
-                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPaused ? "game.resume" : "game.pause"), "Global/TogglePause"))
+                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(IsPlayPaused ? "game.resume" : "game.pause"), "Global/TogglePause"))
                 .Style(ButtonStyle.Ghost);
-            if (Application.IsPaused) pause.Warning();
+            if (IsPlayPaused) pause.Warning();
             pause.Show();
 
             Origami.IconButton(paper, "btn_step", EditorIcons.ForwardStep_I,
@@ -1929,7 +1928,7 @@ public class EditorApplication : Game
 
     private static void PauseOnLog(string message, DebugStackTrace? stackTrace, LogSeverity severity)
     {
-        if (!Application.IsPlaying || Application.IsPaused) return;
+        if (!Application.IsPlaying || IsPlayPaused) return;
         PauseOnLog mode = Preferences.Get<PlayModePreferences>().PauseOn;
         if (mode == GUI.Panels.PauseOnLog.ErrorsAndExceptions && severity is LogSeverity.Error or LogSeverity.Exception
             || mode == GUI.Panels.PauseOnLog.ExceptionsOnly && severity == LogSeverity.Exception)
@@ -1983,14 +1982,6 @@ public class EditorApplication : Game
 
         // Set play mode flags BEFORE loading so OnEnable/Start gates pass
         Application.IsPlaying = true;
-        Application.IsPaused = false;
-        Application.StepRequested = false;
-        ResetFixedTimeAccumulator();
-
-        // Push fresh play-mode time (game code sees Time.TimeSinceStartup = 0)
-        _savedEditorTime = Runtime.Time.CurrentTime;
-        Runtime.Time.TimeStack.Clear();
-        Runtime.Time.TimeStack.Push(new TimeData());
 
         // Push play-mode input handler (only forwards input when Game View focused)
         Input.PushHandler(new GameViewInputHandler(Input.Current));
@@ -2028,8 +2019,6 @@ public class EditorApplication : Game
 
         // Clear flags first
         Application.IsPlaying = false;
-        Application.IsPaused = false;
-        Application.StepRequested = false;
 
         // A session the game started belongs to play mode, just like everything else it set up, and so do the
         // handlers its code added, which would otherwise fire into the next play session.
@@ -2084,14 +2073,6 @@ public class EditorApplication : Game
             Input.PopHandler();
         GameViewInputHandler.ClearSuppressedKeys();
 
-        // Restore editor time
-        if (_savedEditorTime != null)
-        {
-            Runtime.Time.TimeStack.Clear();
-            Runtime.Time.TimeStack.Push(_savedEditorTime);
-            _savedEditorTime = null;
-        }
-
         // Only a maximize play mode made. One the user made before play is theirs to keep.
         if (_maximizedForPlay && _panelMaximizer.MaximizedPanel is GameViewPanel)
             _panelMaximizer.Restore();
@@ -2115,17 +2096,21 @@ public class EditorApplication : Game
         AssetDatabase.Walk();
     }
 
-    private void TogglePause()
+    /// <summary>Whether play mode is on and its world is paused.</summary>
+    internal static bool IsPlayPaused => Application.IsPlaying && SceneInstance.HasMain && SceneInstance.Main.Paused;
+
+    internal static void TogglePause()
     {
-        if (!Application.IsPlaying) return;
-        Application.IsPaused = !Application.IsPaused;
+        if (!Application.IsPlaying || !SceneInstance.HasMain) return;
+        SceneInstance.Main.Paused = !SceneInstance.Main.Paused;
     }
 
-    private void StepOneFrame()
+    /// <summary>Pauses the play world and runs exactly one frame of it.</summary>
+    internal static void StepOneFrame()
     {
-        if (!Application.IsPlaying) return;
-        Application.IsPaused = true;
-        Application.StepRequested = true;
+        if (!Application.IsPlaying || !SceneInstance.HasMain) return;
+        SceneInstance.Main.Paused = true;
+        SceneInstance.Main.RequestStep();
     }
 
     // ================================================================
@@ -2249,21 +2234,17 @@ public class EditorApplication : Game
         base.Closing();
     }
 
-    public override void OnUpdate(Runtime.Resources.SceneInstance? scene)
+    public override void OnUpdate()
     {
         using FrameStatScope stats = FrameStats.Editor.Scope();
 
         Tasks.EditorTask.Poll();
         PreviewWidget.ReleaseUndrawn();
 
-        // Always update lifecycle gating is per-component via ShouldExecuteGameplay.
-        // Components only run Start/Update/LateUpdate if IsPlaying or [ExecuteAlways].
-        if (Application.ShouldRunGameplay)
-            Application.IsGameplayExecuting = true;
-
-        if (scene.IsValid()) scene.Update();
-
-        Application.IsGameplayExecuting = false;
+        // The engine ticks the play world. The edit and prefab worlds are the editor's to tick, where only
+        // [ExecuteAlways] components run.
+        if (SceneInstance.HasMain && SceneInstance.Main is { Mode: SceneMode.Edit, State: SceneState.Running } edited)
+            edited.Tick(Runtime.Time.UnscaledDeltaTime);
 
         using (FrameStats.Navigation.Scope())
             Navigation.NavMeshBakeService.Instance.Poll();
@@ -2316,22 +2297,6 @@ public class EditorApplication : Game
         if (go.IsNotValid() || !s_selectedGizmoObjects.Add(go)) return;
         foreach (GameObject child in go.Children)
             CollectSelectedGizmoObjects(child);
-    }
-
-    /// <summary>
-    /// Editor does NOT auto-render the scene. SceneView handles it via EditorCamera.
-    /// </summary>
-    public override void OnRender(Runtime.Resources.SceneInstance? scene)
-    {
-        // Don't render SceneView panel renders the editor camera to its own RT.
-    }
-
-    /// <summary>
-    /// Editor does NOT call scene OnGui. Paper UI is driven by editor panels.
-    /// </summary>
-    public override void OnGui(Runtime.Resources.SceneInstance? scene, PaperUI.Paper paper)
-    {
-        // Don't call scene.OnGui editor controls all UI.
     }
 
     // ================================================================

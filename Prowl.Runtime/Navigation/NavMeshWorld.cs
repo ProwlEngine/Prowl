@@ -854,10 +854,12 @@ public sealed class NavMeshWorld
     /// processes a bounded slice of tile rebuilds per frame, amortizing carve cost off the
     /// critical path). Called by the scene's variable update.
     /// </summary>
-    public void Update(float deltaTime)
+    public void Update(float deltaTime) => Update(deltaTime, steer: true);
+
+    /// <summary>As <see cref="Update(float)"/>, steering crowds only when <paramref name="steer"/>, since steering is gameplay.</summary>
+    internal void Update(float deltaTime, bool steer)
     {
-        // Steering is gameplay and stops with it.
-        if (Application.ShouldRunGameplay)
+        if (steer)
         {
             PreUpdate?.Invoke(deltaTime);
             foreach (NavMeshCrowdEntry entry in _crowds.Values)

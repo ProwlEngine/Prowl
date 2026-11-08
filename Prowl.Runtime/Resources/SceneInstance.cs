@@ -163,6 +163,23 @@ public class SceneInstance : EngineObject, ISerializable
         }
     }
 
+    /// <summary>
+    /// <see cref="Active"/> without its checks, null when no world is bound or the one running has been destroyed. For
+    /// readers that must never throw, such as <see cref="Time"/> during deserialization or off the main thread.
+    /// </summary>
+    internal static SceneInstance? ActiveOrNull
+    {
+        get
+        {
+            SceneInstance? scene = s_active.Value;
+            if (ReferenceEquals(scene, null)) scene = _main;
+            return scene is { _state: not SceneState.Destroyed } ? scene : null;
+        }
+    }
+
+    /// <summary>The clock of <see cref="ActiveOrNull"/>, null when there is no world.</summary>
+    internal static SceneClock? ActiveClock => ActiveOrNull is { } world ? world.Clock : null;
+
     /// <summary>Makes this scene <see cref="Active"/> until the scope is disposed. Scopes nest.</summary>
     public SceneScope Enter() => Enter(this);
 
@@ -207,6 +224,85 @@ public class SceneInstance : EngineObject, ISerializable
 
     // Whether components here have had OnEnable delivered, which stays true while a destroy disables them.
     internal bool ComponentsEnabled => _isActive;
+
+    /// <summary>This world's time: scale, modifiers, scaled time and its fixed step accumulator.</summary>
+    public SceneClock Clock { get; } = new();
+
+    /// <summary>
+    /// Stops Start, Update, FixedUpdate, physics, animation and navigation. Lifecycle callbacks still run, so enabling
+    /// a HUD on a paused world works, and its clock stands still.
+    /// </summary>
+    public bool Paused { get; set; }
+
+    /// <summary>Whether the engine draws this world to the game's output while it runs, in <see cref="RenderOrder"/>.</summary>
+    public bool Present { get; set; }
+
+    /// <summary>Presented worlds draw lowest first, each one's cameras over the previous world.</summary>
+    public int RenderOrder { get; set; }
+
+    /// <summary>Set by a host that ticks and renders this world itself, so the engine skips it.</summary>
+    internal bool HostTicked { get; set; }
+
+    // One frame to run while paused, from the editor's step button.
+    private bool _stepRequested;
+
+    /// <summary>Runs exactly one frame of a paused world at its next tick.</summary>
+    internal void RequestStep() => _stepRequested = true;
+
+    /// <summary>Whether a step is still waiting to run.</summary>
+    internal bool IsStepPending => _stepRequested;
+
+    /// <summary>Whether the engine ticks this world: a running game world no host has claimed.</summary>
+    internal bool TicksWithEngine => Mode == SceneMode.Game && _state == SceneState.Running && !HostTicked;
+
+    // True while the engine or a host runs a world's frame, so Step refuses to reenter it.
+    [ThreadStatic] private static bool t_ticking;
+
+    /// <summary>
+    /// One full frame of this world: its clock advances, then the fixed steps the frame yields, then Update. A paused
+    /// world only drops what was destroyed and its time stands still. Fixed steps run only where gameplay plays.
+    /// </summary>
+    internal void Tick(float unscaledDelta)
+    {
+        if (IsDisposed || _state != SceneState.Running) return;
+        bool wasTicking = t_ticking;
+        t_ticking = true;
+        try
+        {
+            if (Paused && !_stepRequested)
+            {
+                Clock.Hold();
+                using (Enter(this)) Flush();
+                return;
+            }
+            _stepRequested = false;
+
+            bool wasExecuting = Application.IsGameplayExecuting;
+            Application.IsGameplayExecuting = IsPlaying;
+            try
+            {
+                Clock.Advance(unscaledDelta);
+                int steps = Clock.TakeFixedSteps();
+                if (IsPlaying)
+                    for (int i = 0; i < steps; i++)
+                        FixedUpdate();
+                Update();
+            }
+            finally { Application.IsGameplayExecuting = wasExecuting; }
+        }
+        finally { t_ticking = wasTicking; }
+    }
+
+    /// <summary>
+    /// Runs one full frame of a world nothing else ticks, such as a preview or a test world. Refused while a world's
+    /// frame is already running.
+    /// </summary>
+    public void Step(float deltaTime)
+    {
+        if (t_ticking) throw new InvalidOperationException($"'{Name}' cannot step while a world's frame is running.");
+        MainThreadContext.AssertOwner(this);
+        Tick(deltaTime);
+    }
 
     private static SceneInstance? _pendingScene;
 
@@ -376,7 +472,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// destroy queue. Nothing is mid-callback at that point, so the outgoing scene is disposed
     /// outright rather than queued for another frame.
     /// </summary>
-    public static void ProcessPendingLoad()
+    internal static void ProcessPendingLoad()
     {
         if (_pendingLoad is { IsReady: true } ready)
         {
@@ -429,6 +525,13 @@ public class SceneInstance : EngineObject, ISerializable
         // Between the two scenes, so the outgoing one's teardown belongs to its own session and the incoming
         // one starts in a fresh one.
         if (endSession) MainThreadContext.Restart();
+
+        // The game's output follows Main across the swap.
+        if (!ReferenceEquals(outgoing, null))
+        {
+            next.Present |= outgoing.Present;
+            next.RenderOrder = outgoing.RenderOrder;
+        }
 
         Main = next;
         next.Activate();
@@ -1063,38 +1166,38 @@ public class SceneInstance : EngineObject, ISerializable
     /// implement those callbacks and are enabled in an active scene), in execution order. Each call
     /// is still gated per-component by ShouldExecuteGameplay.
     /// </summary>
-    public void Update()
+    internal void Update()
     {
         if (IsDisposed) return;
         using FrameStatScope stats = FrameStats.Update.Scope();
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
         using SceneScope active = Enter(this);
 
-        // Paused play mode freezes every component, [ExecuteAlways] included, until a step or resume.
-        bool ticking = !Application.IsPlaying || Application.ShouldRunGameplay;
-        if (ticking) _dispatcher.RunStart();
+        _dispatcher.RunStart();
 
         // Navigation (crowd steering) advances on the variable update, before component Updates
         // so gameplay code sees fresh agent state. A crowd that blows up must not crash the frame,
         // and does so every frame, so it is reported once.
         using (FrameStats.Navigation.Scope())
         {
-            try { _navigation.Update(Time.DeltaTime); }
+            try { _navigation.Update(Time.DeltaTime, steer: IsPlaying); }
             catch (Exception ex) { Debug.LogErrorOnce("Navigation.UpdateThrew", $"[Navigation] Update threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
         }
 
         // Rigidbodies that moved get their Transform written before gameplay code reads it.
         Physics.WriteTransforms();
 
-        if (ticking) _dispatcher.RunUpdate();
+        _dispatcher.RunUpdate();
 
         // Animation sits between the two so gameplay code reaching in to override a bone in
         // LateUpdate finds the pose already written. An animator that blows up must not take the
         // frame with it, and the manager reports each one rather than rethrowing.
-        using (FrameStats.Animation.Scope())
-            _animation.Update(Time.DeltaTime);
+        // Animation is gameplay, so an edit world shows the pose it was left in.
+        if (IsPlaying)
+            using (FrameStats.Animation.Scope())
+                _animation.Update(Time.DeltaTime);
 
-        if (ticking) _dispatcher.RunLateUpdate();
+        _dispatcher.RunLateUpdate();
 
         Flush();
     }
@@ -1103,7 +1206,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// Executes physics update on all active GameObjects and their components.
     /// FixedUpdate is gated internally by each component's ShouldExecuteGameplay.
     /// </summary>
-    public void FixedUpdate()
+    internal void FixedUpdate()
     {
         if (IsDisposed) return;
         using FrameStatScope stats = FrameStats.Update.Scope();
@@ -1131,7 +1234,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// Collects render data from all active components for the given camera.
     /// Components add their renderables and lights to the provided lists.
     /// </summary>
-    public void DrawGizmos()
+    internal void DrawGizmos()
     {
         if (IsDisposed) return;
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
@@ -1145,7 +1248,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// Executes GUI update on all active GameObjects and their components.
     /// Calls OnGUI.
     /// </summary>
-    public void OnGui(Paper paper)
+    internal void OnGui(Paper paper)
     {
         if (IsDisposed) return;
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();

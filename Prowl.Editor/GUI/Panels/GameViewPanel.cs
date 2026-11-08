@@ -387,7 +387,7 @@ public class GameViewPanel : DockPanel
 
                 // The game's UI is gameplay, so it reads input the way the scene update does, simulated input included.
                 bool wasGameplay = Application.IsGameplayExecuting;
-                Application.IsGameplayExecuting = Application.ShouldRunGameplay;
+                Application.IsGameplayExecuting = scene.IsPlaying && !scene.Paused;
                 try
                 {
                     PaperInputBridge.Pump(_gamePaper!, pointerInRT, hovered && pointerInside);

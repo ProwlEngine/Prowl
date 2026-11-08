@@ -23,10 +23,6 @@ public class TimeSettings : ProjectSettingsBase
         Runtime.Time.FixedDeltaTime = FixedTimestep;
         Runtime.Time.MaxFixedIterations = MaxFixedIterations;
         Runtime.SceneClock.Defaults = new Runtime.SceneClockSettings { TimeScale = DefaultTimeScale };
-
-        // A running game owns its time scale. Entering play mode starts a new clock from the default.
-        if (!Runtime.Application.IsPlaying)
-            Runtime.Time.TimeScale = DefaultTimeScale;
     }
 
     public override void ResetToDefaults()

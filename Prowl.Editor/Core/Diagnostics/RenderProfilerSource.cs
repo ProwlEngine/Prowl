@@ -80,7 +80,7 @@ internal sealed class RenderProfilerSource : IRenderProfilerSource
         if (device == null)
             return null;
 
-        double frameMilliseconds = Time.CurrentTime.UnscaledDeltaTime * 1000.0;
+        double frameMilliseconds = Time.UnscaledDeltaTime * 1000.0;
         if (_captureRequest is { } mode && _capturing == null)
         {
             _captureRequest = null;

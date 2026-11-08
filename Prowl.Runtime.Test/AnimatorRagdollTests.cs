@@ -369,7 +369,6 @@ public class AnimatorRagdollTests : RuntimeTestBase
             return MathF.Atan2(forward.X, forward.Z) * 180f / MathF.PI;
         }
 
-        TimeData time = Time.CurrentTime;
         var random = new Random(7);
         float worst = 0f, shake = 0f, previous = 0f, beforeThat = 0f;
         int samples = 0;
@@ -377,17 +376,11 @@ public class AnimatorRagdollTests : RuntimeTestBase
         {
             for (int frame = 0; frame < 144 * 4; frame++)
             {
-                time.FrameCount++;
-                time.DeltaTime = (1f / 144f) * (0.5f + (float)random.NextDouble());
-                Time.FixedAccumulator += time.DeltaTime;
-                for (int steps = 0; Time.FixedAccumulator >= Time.FixedDeltaTime && steps < 3; steps++)
-                {
-                    scene.FixedUpdate();
-                    Time.FixedAccumulator -= Time.FixedDeltaTime;
-                }
-                scene.Update();
-                plain.Player.Transform.Position += new Float3(0f, 0f, speed * time.DeltaTime);
-                ragdolled.Player.Transform.Position += new Float3(0f, 0f, speed * time.DeltaTime);
+                float delta = (1f / 144f) * (0.5f + (float)random.NextDouble());
+                Time.AdvanceFrame(delta);
+                scene.Tick(delta);
+                plain.Player.Transform.Position += new Float3(0f, 0f, speed * delta);
+                ragdolled.Player.Transform.Position += new Float3(0f, 0f, speed * delta);
                 EngineObject.ProcessDestroyed();
                 if (frame < 144) continue;
 
@@ -401,10 +394,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
                 previous = error;
             }
         }
-        finally
-        {
-            Time.FixedAccumulator = 0f;
-        }
+        finally { }
         return (worst, shake / samples);
     }
 

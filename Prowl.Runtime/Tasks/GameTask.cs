@@ -64,12 +64,18 @@ public static class GameTask
         return loop.WaitFrames(() => --left <= 0, cancel);
     }
 
-    /// <summary>Waits for game time, so it slows with <see cref="Time.TimeScale"/> and stops while paused.</summary>
+    /// <summary>
+    /// Waits for game time of the world active where it was called, so it slows with that world's time scale and holds
+    /// while that world is paused.
+    /// </summary>
     public static Task Delay(float seconds, CancellationToken cancel = default)
     {
         MainThreadContext loop = Loop();
         if (seconds <= 0) return Task.CompletedTask;
-        return loop.WaitFrames(() => (seconds -= Time.DeltaTime) <= 0, cancel);
+        SceneClock? clock = Resources.SceneInstance.ActiveClock;
+        if (clock == null) return loop.WaitFrames(() => (seconds -= Time.UnscaledDeltaTime) <= 0, cancel);
+        double end = clock.TimeSinceStartup + seconds;
+        return loop.WaitFrames(() => clock.TimeSinceStartup >= end, cancel);
     }
 
     /// <summary>Waits for real time, ignoring time scale and pausing.</summary>

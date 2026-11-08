@@ -109,7 +109,7 @@ public static class CliEditorCommands
         scene = EditorSceneManager.CurrentScenePath,
         dirty = EditorSceneManager.IsDirty,
         isPlaying = Application.IsPlaying,
-        isPaused = Application.IsPaused,
+        isPaused = EditorApplication.IsPlayPaused,
         compiling = ScriptAssemblyManager.IsCompiling,
         lastCompile = ScriptAssemblyManager.LastCompile is { } c
             ? new { ok = c.Success, errors = c.Diagnostics.Count(d => d.Severity == "Error"), warnings = c.Diagnostics.Count(d => d.Severity == "Warning") }
@@ -1060,19 +1060,18 @@ public static class CliEditorCommands
                 break;
             case PlayAction.Pause:
                 RequirePlaying();
-                Application.IsPaused = true;
+                SceneInstance.Main.Paused = true;
                 break;
             case PlayAction.Resume:
                 RequirePlaying();
-                Application.IsPaused = false;
+                SceneInstance.Main.Paused = false;
                 break;
             case PlayAction.Step:
                 RequirePlaying();
                 for (int i = 0; i < Math.Clamp(frames, 1, 600); i++)
                 {
-                    Application.IsPaused = true;
-                    Application.StepRequested = true;
-                    if (!await CliServer.WaitUntil(() => !Application.StepRequested, TimeSpan.FromSeconds(10))) break;
+                    EditorApplication.StepOneFrame();
+                    if (!await CliServer.WaitUntil(() => !SceneInstance.HasMain || !SceneInstance.Main.IsStepPending, TimeSpan.FromSeconds(10))) break;
                 }
                 break;
             case PlayAction.Wait:
@@ -1084,7 +1083,7 @@ public static class CliEditorCommands
         return new
         {
             isPlaying = Application.IsPlaying,
-            isPaused = Application.IsPaused,
+            isPaused = EditorApplication.IsPlayPaused,
             frame = Time.FrameCount,
             errors = LogHistory.Since(since, s => s is LogSeverity.Error or LogSeverity.Exception, 50).Select(e => e.Message).ToList(),
         };

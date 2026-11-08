@@ -1453,7 +1453,7 @@ public class UndoTests : EditorTestHarness
         {
             GUI.Panels.ProjectSettingsPanel.TrackEdits(entry);
             time.MaxFixedIterations = original + 2;
-            Time.CurrentTime.Advance(0.016f);
+            Time.AdvanceFrame(0.016f);
             GUI.Panels.ProjectSettingsPanel.TrackEdits(entry);
             Undo.FlushUndoRecordObjects();
 
@@ -1480,9 +1480,9 @@ public class UndoTests : EditorTestHarness
         try
         {
             GUI.Panels.ProjectSettingsPanel.TrackEdits(entry);
-            Time.CurrentTime.Advance(0.016f);
+            Time.AdvanceFrame(0.016f);
             time.MaxFixedIterations = original + 2;
-            Time.CurrentTime.Advance(0.016f);
+            Time.AdvanceFrame(0.016f);
             GUI.Panels.ProjectSettingsPanel.TrackEdits(entry);
             Undo.FlushUndoRecordObjects();
 

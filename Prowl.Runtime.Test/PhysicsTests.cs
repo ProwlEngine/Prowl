@@ -2958,7 +2958,7 @@ public class WorldDefaultsTests : RuntimeTestBase
         try
         {
             SceneClock.Defaults = new SceneClockSettings { TimeScale = 0.5f };
-            Assert.Equal(0.5f, new TimeData().TimeScale);
+            Assert.Equal(0.5f, new SceneClock().TimeScale);
         }
         finally { SceneClock.Defaults = previous; }
     }

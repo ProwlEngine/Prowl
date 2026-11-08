@@ -22,8 +22,6 @@ public abstract class RuntimeTestBase : IDisposable
 {
     private readonly bool _prevIsPlaying;
     private readonly bool _prevIsEditor;
-    private readonly bool _prevIsPaused;
-    private readonly TimeData _time;
 
     private readonly List<SceneInstance> _scenes = [];
     private readonly List<GameObject> _gameObjects = [];
@@ -33,24 +31,21 @@ public abstract class RuntimeTestBase : IDisposable
         // Capture and override global state so each test starts from a known, play-mode setup.
         _prevIsPlaying = Application.IsPlaying;
         _prevIsEditor = Application.IsEditor;
-        _prevIsPaused = Application.IsPaused;
 
         Application.IsPlaying = true;
         Application.IsEditor = false;
-        Application.IsPaused = false;
-
-        // Push a deterministic time source so Time.DeltaTime is stable instead of being driven
-        // by a wall-clock stopwatch. Physics uses the static Time.FixedDeltaTime (default 1/60).
-        _time = new TimeData { DeltaTime = Time.FixedDeltaTime };
-        Time.TimeStack.Push(_time);
 
         SceneInstance main = SceneInstance.Create("Test");
+        main.Clock.Advance(FrameDelta);
         main.Activate();
         SceneInstance.Main = main;
     }
 
     /// <summary> The fixed timestep used by physics, mirrored from <see cref="Time.FixedDeltaTime"/>. </summary>
     protected static float FixedDeltaTime => Time.FixedDeltaTime;
+
+    /// <summary>The scaled time each frame the helpers run gives its world's clock, one fixed step unless a test changes it.</summary>
+    protected float FrameDelta = Time.FixedDeltaTime;
 
     /// <summary>
     /// Runs the block as an open editor with play mode off, so only components marked
@@ -96,6 +91,7 @@ public abstract class RuntimeTestBase : IDisposable
     protected SceneInstance CreateScene(bool enable = false)
     {
         var scene = new SceneInstance(_createMode);
+        scene.Clock.Advance(FrameDelta);
         _scenes.Add(scene);
         if (enable)
             scene.Activate();
@@ -119,6 +115,7 @@ public abstract class RuntimeTestBase : IDisposable
     {
         for (int i = 0; i < steps; i++)
         {
+            scene.Clock.Advance(FrameDelta);
             scene.FixedUpdate();
             scene.Update();
             EngineObject.ProcessDestroyed();
@@ -130,6 +127,7 @@ public abstract class RuntimeTestBase : IDisposable
     {
         for (int i = 0; i < frames; i++)
         {
+            scene.Clock.Advance(FrameDelta);
             scene.Update();
             EngineObject.ProcessDestroyed();
         }
@@ -210,13 +208,8 @@ public abstract class RuntimeTestBase : IDisposable
         }
         _gameObjects.Clear();
 
-        // Restore global state for any test that doesn't go through this base.
-        if (Time.TimeStack.Count > 0 && Time.TimeStack.Peek() == _time)
-            Time.TimeStack.Pop();
-
         Application.IsPlaying = _prevIsPlaying;
         Application.IsEditor = _prevIsEditor;
-        Application.IsPaused = _prevIsPaused;
 
         GC.SuppressFinalize(this);
     }

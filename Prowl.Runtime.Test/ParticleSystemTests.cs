@@ -40,10 +40,10 @@ public class ParticleSystemTests : RuntimeTestBase
 
     private void Run(SceneInstance scene, float seconds, float step = Frame)
     {
-        Time.CurrentTime.DeltaTime = step;
+        FrameDelta = step;
         int frames = (int)MathF.Round(seconds / step);
         Update(scene, frames);
-        Time.CurrentTime.DeltaTime = Frame;
+        FrameDelta = Frame;
     }
 
     /// <summary>The trail segment records the system writes this frame, <see cref="ParticleRenderProvider.RecordRows"/> rows each.</summary>
@@ -62,7 +62,7 @@ public class ParticleSystemTests : RuntimeTestBase
     {
         for (int i = 0; i < frames; i++)
         {
-            Time.CurrentTime.FrameCount++;
+            Time.AdvanceFrame(Time.UnscaledDeltaTime);
             beforeEach?.Invoke();
             Update(scene);
         }
@@ -602,7 +602,7 @@ public class ParticleSystemTests : RuntimeTestBase
         Assert.True(parent.ParticleCount > 5);
         Assert.True(child.ParticleCount > 5);
 
-        Time.CurrentTime.FrameCount += 5;
+        for (int i = 0; i < 5; i++) Time.AdvanceFrame(Time.UnscaledDeltaTime);
         Run(scene, Frame);
         Assert.Equal(0, parent.ParticleCount);
         Assert.Equal(0, child.ParticleCount);

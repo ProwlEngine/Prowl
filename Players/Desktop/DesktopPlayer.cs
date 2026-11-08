@@ -62,12 +62,6 @@ public sealed class DesktopPlayer : Game, IDisposable
         }
     }
 
-    public override void OnUpdate(SceneInstance? scene) => scene?.Update();
-
-    public override void OnRender(SceneInstance? scene) => scene?.Render();
-
-    public override void OnGui(SceneInstance? scene, Paper paper) => scene?.OnGui(paper);
-
     /// <summary>
     /// Closes the pak archives the backend holds open, once the game loop returns. The backend goes with
     /// it, so a late asset lookup during shutdown finds nothing rather than reading through a disposed archive.

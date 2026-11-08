@@ -202,6 +202,7 @@ public abstract class EditorTestHarness : IDisposable
     {
         for (int i = 0; i < steps; i++)
         {
+            scene.Clock.Advance(Time.FixedDeltaTime);
             scene.FixedUpdate();
             scene.Update();
         }
@@ -211,14 +212,16 @@ public abstract class EditorTestHarness : IDisposable
     protected static void UpdateScene(SceneInstance scene, int frames = 1)
     {
         for (int i = 0; i < frames; i++)
+        {
+            scene.Clock.Advance(Time.FixedDeltaTime);
             scene.Update();
+        }
     }
 
     protected sealed class PlayModeScope : IDisposable
     {
         private readonly bool _wasPlaying;
         private readonly bool _wasEditor;
-        private readonly TimeData _time;
 
         internal PlayModeScope()
         {
@@ -226,15 +229,10 @@ public abstract class EditorTestHarness : IDisposable
             _wasEditor = Application.IsEditor;
             Application.IsPlaying = true;
             Application.IsEditor = false;
-
-            _time = new TimeData { DeltaTime = Time.FixedDeltaTime };
-            Time.TimeStack.Push(_time);
         }
 
         public void Dispose()
         {
-            if (Time.TimeStack.Count > 0 && Time.TimeStack.Peek() == _time)
-                Time.TimeStack.Pop();
             Application.IsPlaying = _wasPlaying;
             Application.IsEditor = _wasEditor;
         }

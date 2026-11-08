@@ -22,18 +22,12 @@ public class HeadlessRunTests
         public CountingHeadlessGame(SceneInstance scene) => _scene = scene;
 
         public override void Initialize() => SceneInstance.Load(_scene);
-        public override void OnUpdate(SceneInstance? scene)
-        {
-            base.OnUpdate(scene);
-            UpdateCount++;
-        }
+        public override void OnUpdate() => UpdateCount++;
     }
 
     [Fact]
     public void RunHeadless_RunsRequestedFrames_ThenExits()
     {
-        var time = new TimeData();
-        Time.TimeStack.Push(time);
         try
         {
             var scene = new SceneInstance();
@@ -47,7 +41,6 @@ public class HeadlessRunTests
         }
         finally
         {
-            Time.TimeStack.Clear();
             Application.IsPlaying = false;
         }
     }
@@ -85,7 +78,7 @@ public class HeadlessRunTests
     {
         private readonly Action _onUpdate;
         public FlagProbeGame(Action onUpdate) => _onUpdate = onUpdate;
-        public override void OnUpdate(SceneInstance? scene) => _onUpdate();
+        public override void OnUpdate() => _onUpdate();
     }
 
     [Fact]
@@ -112,7 +105,7 @@ public class HeadlessRunTests
     private sealed class QuittingGame : Game
     {
         public int Frames;
-        public override void OnUpdate(SceneInstance? scene)
+        public override void OnUpdate()
         {
             Frames++;
             if (Frames >= 3) Application.Quit();
@@ -122,7 +115,7 @@ public class HeadlessRunTests
     private sealed class SelfStoppingGame : Game
     {
         public int Frames;
-        public override void OnUpdate(SceneInstance? scene)
+        public override void OnUpdate()
         {
             Frames++;
             if (Frames >= 3) RequestHeadlessQuit();

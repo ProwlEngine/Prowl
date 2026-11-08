@@ -307,14 +307,10 @@ public class UITests : RuntimeTestBase
         UIButton button = go.AddComponent<UIButton>();
         button.HighlightedColor = new Color(0.5f, 0.6f, 0.7f, 1f);
 
-        var paused = new TimeData { DeltaTime = 0f, UnscaledDeltaTime = 0.05f };
-        Time.TimeStack.Push(paused);
-        try
-        {
-            button.OnPointerEnter(new PointerEventData());
-            for (int i = 0; i < 4; i++) button.Update();
-        }
-        finally { Time.TimeStack.Pop(); }
+        SceneInstance.Main.Clock.Hold();
+        Time.AdvanceFrame(0.05f);
+        button.OnPointerEnter(new PointerEventData());
+        for (int i = 0; i < 4; i++) button.Update();
 
         Assert.Equal(button.HighlightedColor, image.Color);
     }

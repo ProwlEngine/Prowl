@@ -66,7 +66,7 @@ public class SceneGizmoVisibilityTests : IDisposable
         Application.IsPlaying = playing;
         using SceneInstance scene = CreateScene(out SceneGizmoProbe probe);
         var editor = new EditorApplication();
-        editor.OnUpdate(scene);
+        editor.OnUpdate();
         editor.BeginRender();
         Assert.Equal(0, probe.Draws);
 
@@ -122,9 +122,9 @@ public class SceneGizmoVisibilityTests : IDisposable
         new SceneViewPanel().DrawSceneGizmos(editor, scene);
         Assert.Equal(1, probe.Draws);
 
-        editor.OnUpdate(scene);
+        editor.OnUpdate();
         editor.BeginRender();
-        editor.OnUpdate(scene);
+        editor.OnUpdate();
         Assert.Equal(1, probe.Draws);
     }
 }

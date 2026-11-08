@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Echo.Logging;
 
@@ -31,8 +32,6 @@ public class EchoLogger : IEchoLogger
 
 public abstract class Game
 {
-    private TimeData time = new();
-
     private PaperRenderer _paperRenderer;
     private Paper _paper;
     private int frameCounter;
@@ -110,8 +109,8 @@ public abstract class Game
             BuiltInAssets.Initialize();
             AssetLoader.SetMainThread();
 
-            PushGameTime();
             Initialize();
+            BindMainIfUnbound();
         }
 
         Window.Update += (delta) =>
@@ -126,13 +125,13 @@ public abstract class Game
 
                 AudioContext.Update();
 
-                AdvanceTime();
+                Time.AdvanceFrame();
 
                 UpdateInputActions();
 
                 BeginUpdate();
 
-                SimulationStep(Time.DeltaTime);
+                SimulationStep();
 
                 EndUpdate();
 
@@ -153,11 +152,12 @@ public abstract class Game
         {
             try
             {
-                SceneInstance? currentScene = SceneInstance.HasMain ? SceneInstance.Main : null;
+                SceneInstance? main = SceneInstance.HasMain ? SceneInstance.Main : null;
 
                 BeginRender();
 
-                OnRender(currentScene);
+                RenderPresentedWorlds();
+                OnRender();
 
                 EndRender();
 
@@ -169,7 +169,9 @@ public abstract class Game
 
                     BeginGui(_paper);
 
-                    OnGui(currentScene, _paper);
+                    foreach (SceneInstance world in PresentedWorlds())
+                        world.OnGui(_paper);
+                    OnGui(_paper);
 
                     EndGui(_paper);
 
@@ -177,11 +179,11 @@ public abstract class Game
                 }
 
                 // After the GUI, since the editor renders its Game View, and with it the eyes, from there.
-                XR.RenderMissedEyes(currentScene);
+                XR.RenderMissedEyes(main);
                 XR.EndFrame();
 
                 // A point after every view and the GUI joined the frame, before it is submitted.
-                AfterGui(currentScene);
+                AfterGui();
 
                 RenderTexture.UpdatePool();
 
@@ -278,8 +280,8 @@ public abstract class Game
         // Registers built-in asset loaders (no GPU work happens until something resolves them).
         BuiltInAssets.Initialize();
         AssetLoader.SetMainThread();
-        PushGameTime();
         Initialize();
+        BindMainIfUnbound();
 
         Debug.LogSuccess("Headless initialization complete");
 
@@ -297,12 +299,12 @@ public abstract class Game
         {
             while (!_headlessQuitRequested)
             {
-                AdvanceTime();
+                Time.AdvanceFrame();
 
                 UpdateInputActions();
 
                 BeginUpdate();
-                SimulationStep(Time.DeltaTime);
+                SimulationStep();
                 EndUpdate();
 
                 // No render phase here, so the end of the simulation step is the end of the frame.
@@ -353,7 +355,7 @@ public abstract class Game
     {
         // Actions are gameplay input and their callbacks are gameplay code, so in the editor they read input the
         // way the scene update does: from the game view only, in its pixels, with simulated input included.
-        if (Application.ShouldRunGameplay)
+        if (SceneInstance.HasMain && SceneInstance.Main is { IsPlaying: true, Paused: false })
             Application.IsGameplayExecuting = true;
 
         // Input interaction timing (Hold/Tap/MultiTap windows) is real-world timing, so it uses
@@ -364,15 +366,12 @@ public abstract class Game
     }
 
     /// <summary>
-    /// Advances one simulation step: the fixed-update loop (when gameplay should run) followed by
+    /// Advances one frame of simulation: every running game world no host claimed, in creation order, then
     /// <see cref="OnUpdate"/>. Shared by the windowed and headless loops.
     /// </summary>
-    private void SimulationStep(float delta)
+    private void SimulationStep()
     {
-        SceneInstance? currentScene = SceneInstance.HasMain ? SceneInstance.Main : null;
-
-        // Before the scene runs, so a continuation resumed this frame sees the same world the rest of
-        // the frame will.
+        // Before the worlds run, so a continuation resumed this frame sees the same world the rest of the frame will.
         Tasks.MainThreadContext.Current?.Pump();
 
         // Assets that finished loading in the background join at the start of the frame, all at once.
@@ -382,41 +381,50 @@ public abstract class Game
         // over a frozen game. Only in the editor: pausing there is a debugging tool that freezes
         // everything, while a shipped game pausing itself is a design decision, and that one reaches
         // for AudioContext.Suspended when it wants the audio to stop too.
-        AudioContext.SuspendedByPause = Application.IsEditor && Application.IsPlaying && Application.IsPaused;
+        AudioContext.SuspendedByPause = Application.IsEditor && Application.IsPlaying && SceneInstance.HasMain && SceneInstance.Main.Paused;
 
-        // Fixed update loop only when gameplay should run
-        Time.FixedAccumulator += delta;
-        if (Application.ShouldRunGameplay)
+        foreach (SceneInstance world in SceneInstance.All)
         {
-            Application.IsGameplayExecuting = true;
-            int count = 0;
-            while (Time.FixedAccumulator >= Time.FixedDeltaTime && count++ < Time.MaxFixedIterations)
+            if (!world.TicksWithEngine) continue;
+            try
             {
-                if (currentScene.IsValid()) currentScene.FixedUpdate();
-                Time.FixedAccumulator -= Time.FixedDeltaTime;
+                world.Tick(Time.UnscaledDeltaTime);
+                if (DrawGizmos) world.DrawGizmos();
             }
-
-            // If the iteration cap was hit there is still a backlog; discard it rather than replaying
-            // it over the next frames (avoids post-hitch slow-motion and the spiral of death).
-            if (Time.FixedAccumulator >= Time.FixedDeltaTime)
-                Time.FixedAccumulator = 0f;
-
-            Application.IsGameplayExecuting = false;
+            catch (Exception e) { Debug.LogException($"[Scene] Ticking '{world.Name}' threw", e); }
         }
-        else
+
+        OnUpdate();
+    }
+
+    /// <summary>Every running world drawn to the game's output, lowest <see cref="SceneInstance.RenderOrder"/> first.</summary>
+    protected static List<SceneInstance> PresentedWorlds()
+    {
+        List<SceneInstance> worlds = [];
+        foreach (SceneInstance world in SceneInstance.All)
+            if (world.Present && world.State == SceneState.Running && !world.HostTicked)
+                worlds.Add(world);
+        worlds.Sort(static (a, b) => a.RenderOrder.CompareTo(b.RenderOrder));
+        return worlds;
+    }
+
+    private void RenderPresentedWorlds()
+    {
+        foreach (SceneInstance world in PresentedWorlds())
         {
-            // Clamp accumulator to prevent burst when unpausing/starting play
-            Time.FixedAccumulator = MathF.Min(Time.FixedAccumulator, Time.FixedDeltaTime);
+            try { world.Render(null, DrawGizmos); }
+            catch (Exception e) { Debug.LogException($"[Render] Drawing '{world.Name}' threw", e); }
         }
+    }
 
-        OnUpdate(currentScene);
-
-        // Consume step request re-pause after one frame
-        if (Application.StepRequested)
-        {
-            Application.StepRequested = false;
-            Application.IsPaused = true;
-        }
+    // A game always has a world: one that loaded nothing yet draws as an empty presented one.
+    private static void BindMainIfUnbound()
+    {
+        if (SceneInstance.HasMain) return;
+        SceneInstance main = SceneInstance.Create("Main");
+        main.Present = true;
+        main.Activate();
+        SceneInstance.Main = main;
     }
 
     public virtual void Initialize() { }
@@ -429,27 +437,16 @@ public abstract class Game
     public virtual void EndGui(Paper paper) { }
 
     /// <summary>Called after the GUI frame is submitted and before the backbuffer is swapped.</summary>
-    public virtual void AfterGui(SceneInstance? scene) { }
+    public virtual void AfterGui() { }
 
-    /// <summary>Called during update. Override to control scene update/gizmo behavior.</summary>
-    public virtual void OnUpdate(SceneInstance? scene)
-    {
-        if (scene.IsValid()) scene.Update();
-        if (DrawGizmos && scene.IsValid())
-            scene.DrawGizmos();
-    }
+    /// <summary>Called each frame after the engine ticked its worlds.</summary>
+    public virtual void OnUpdate() { }
 
-    /// <summary>Called during render. Override to control scene rendering.</summary>
-    public virtual void OnRender(SceneInstance? scene)
-    {
-        if (scene.IsValid()) scene.Render(null, DrawGizmos);
-    }
+    /// <summary>Called each frame after the presented worlds drew.</summary>
+    public virtual void OnRender() { }
 
-    /// <summary>Called during GUI phase. Override to control scene GUI rendering.</summary>
-    public virtual void OnGui(SceneInstance? scene, Paper paper)
-    {
-        if (scene.IsValid()) scene.OnGui(paper);
-    }
+    /// <summary>Called each frame after the presented worlds' GUI.</summary>
+    public virtual void OnGui(Paper paper) { }
 
     public virtual void Resize(int width, int height) { }
     public virtual void Closing() { }
@@ -492,24 +489,7 @@ public abstract class Game
         return new Float2(p.X * csFbWin / cs, p.Y * csFbWin / cs);
     }
 
-    // Before Initialize, so settings written to Time at startup land on the clock the loop advances.
-    private void PushGameTime()
-    {
-        if (Time.TimeStack.Count == 0) Time.TimeStack.Push(time);
-    }
-
-    // Advances whichever clock is current, so one pushed over the game's own (play mode) keeps running.
-    private void AdvanceTime()
-    {
-        time.Update();
-        if (!Time.TimeStack.TryPeek(out TimeData? current)) Time.TimeStack.Push(time);
-        else if (!ReferenceEquals(current, time)) current.Advance(time.UnscaledDeltaTime);
-    }
-
     private void UpdatePaperInput() => PaperInputBridge.Pump(_paper, GetPaperMousePosition());
-
-    /// <summary>Reset the fixed-update accumulator. Call when entering play mode to prevent a burst.</summary>
-    protected void ResetFixedTimeAccumulator() => Time.FixedAccumulator = 0f;
 
 
     /// <summary>Closes the window. In the editor this closes the editor itself, so gameplay code uses <see cref="Application.Quit"/>.</summary>

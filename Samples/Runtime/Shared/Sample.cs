@@ -208,7 +208,7 @@ public abstract class StationGame : Game
 
     public override void EndRender() => RenderStats.EndFrame();
 
-    public override void AfterGui(SceneInstance? scene)
+    public override void AfterGui()
     {
         if (!_captureNow) return;
         _captureNow = false;

@@ -191,29 +191,19 @@ public class ThreadingTests : RuntimeTestBase
     public void DelayCountsGameTimeAndStandsStillWhileTimeDoes()
     {
         using var loop = new LoopScope();
-        var time = new TimeData { DeltaTime = 0.1f, UnscaledDeltaTime = 0.1f };
-        Time.TimeStack.Push(time);
-        try
-        {
-            Task delay = GameTask.Delay(0.25f);
+        SceneClock clock = SceneInstance.Main.Clock;
+        Task delay = GameTask.Delay(0.25f);
 
-            loop.Pump();
-            loop.Pump();
-            Assert.False(delay.IsCompleted);
+        clock.Advance(0.1f); loop.Pump();
+        clock.Advance(0.1f); loop.Pump();
+        Assert.False(delay.IsCompleted);
 
-            time.DeltaTime = 0;
-            loop.Pump();
-            loop.Pump();
-            Assert.False(delay.IsCompleted);
+        clock.Hold(); loop.Pump();
+        clock.Hold(); loop.Pump();
+        Assert.False(delay.IsCompleted);
 
-            time.DeltaTime = 0.1f;
-            loop.Pump();
-            Assert.True(delay.IsCompletedSuccessfully);
-        }
-        finally
-        {
-            Time.TimeStack.Pop();
-        }
+        clock.Advance(0.1f); loop.Pump();
+        Assert.True(delay.IsCompletedSuccessfully);
     }
 
     [Fact]
@@ -1043,8 +1033,9 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void ReadingTimeFromAnotherThreadWhileTheLoopSwapsItNeverThrows()
     {
-        TimeData[] saved = [.. Time.TimeStack];
-        var frame = new TimeData { DeltaTime = 0.5f };
+        SceneInstance first = SceneInstance.Main;
+        SceneInstance second = SceneInstance.Create("Swapped");
+        second.Clock.Advance(0.5f);
         using var stop = new CancellationTokenSource();
 
         Task<Exception?> reader = Task.Run<Exception?>(() => Record.Exception(() =>
@@ -1061,15 +1052,15 @@ public class ThreadingTests : RuntimeTestBase
             var clock = Stopwatch.StartNew();
             while (clock.ElapsedMilliseconds < 200)
             {
-                Time.TimeStack.Clear();
-                Time.TimeStack.Push(frame);
+                SceneInstance.Main = second;
+                SceneInstance.Main = first;
             }
         }
         finally
         {
             stop.Cancel();
-            Time.TimeStack.Clear();
-            for (int i = saved.Length - 1; i >= 0; i--) Time.TimeStack.Push(saved[i]);
+            SceneInstance.Main = first;
+            second.Dispose();
         }
 
         Assert.Null(reader.GetAwaiter().GetResult());

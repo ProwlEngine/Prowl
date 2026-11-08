@@ -248,10 +248,11 @@ public class UpdateLoopTests : RuntimeTestBase
         GameObject go = CreateGameObject();
         ExecuteAlwaysCounter always = go.AddComponent<ExecuteAlwaysCounter>();
         scene.Add(go);
-        Application.IsPaused = true;
+        scene.Paused = true;
 
-        Update(scene, 3);
+        for (int i = 0; i < 3; i++) scene.Tick(FixedDeltaTime);
 
+        Assert.Equal(0f, scene.Clock.DeltaTime);
         Assert.Equal(0, comp.StartCount);
         Assert.Equal(0, comp.UpdateCount);
         Assert.Equal(0, comp.LateUpdateCount);
@@ -262,13 +263,12 @@ public class UpdateLoopTests : RuntimeTestBase
     public void Paused_StepRunsOneFrame()
     {
         (SceneInstance scene, CounterComponent comp) = MakeRunningCounter();
-        Application.IsPaused = true;
-        Update(scene);
+        scene.Paused = true;
+        scene.Tick(FixedDeltaTime);
 
-        Application.StepRequested = true;
-        Update(scene);
-        Application.StepRequested = false;
-        Update(scene);
+        scene.RequestStep();
+        scene.Tick(FixedDeltaTime);
+        scene.Tick(FixedDeltaTime);
 
         Assert.Equal(1, comp.StartCount);
         Assert.Equal(1, comp.UpdateCount);
@@ -279,11 +279,13 @@ public class UpdateLoopTests : RuntimeTestBase
     public void Unpaused_UpdatesResume()
     {
         (SceneInstance scene, CounterComponent comp) = MakeRunningCounter();
-        Application.IsPaused = true;
-        Update(scene, 2);
+        scene.Paused = true;
+        scene.Tick(FixedDeltaTime);
+        scene.Tick(FixedDeltaTime);
 
-        Application.IsPaused = false;
-        Update(scene, 2);
+        scene.Paused = false;
+        scene.Tick(FixedDeltaTime);
+        scene.Tick(FixedDeltaTime);
 
         Assert.Equal(1, comp.StartCount);
         Assert.Equal(2, comp.UpdateCount);
