@@ -51,10 +51,10 @@ public sealed class RenderingShowcaseGame : StationGame
 {
     private const float StationSpacing = 30f;
     private const int SurfaceStation = 1, DecalStation = 2, LightStation = 4, AreaLightStation = 5, ManyLightStation = 6;
-    private const int FogStation = 7, InstancingStation = 8, CloudStation = 10, OceanStation = 11, StationCount = 12;
+    private const int FogStation = 7, InstancingStation = 8, CloudStation = 10, OceanStation = 11, StationCount = 12, UnderwaterStation = 12;
 
     // The time of day each station is shown at, in hours.
-    private static readonly float[] StationHours = [14f, 15f, 13f, 13f, 22f, 22f, 22f, 23f, 11f, 14f, 16f, 17.5f];
+    private static readonly float[] StationHours = [14f, 15f, 13f, 13f, 22f, 22f, 22f, 23f, 11f, 14f, 16f, 17.5f, 12f];
 
     private DirectionalLight _sun = null!;
     private SceneEnvironment.VolumetricCloudsSettings _clouds = null!;
@@ -83,7 +83,6 @@ public sealed class RenderingShowcaseGame : StationGame
         Add(sun);
 
         SampleScene.Environment.VolumetricFog.Density = 0.02f;
-        SampleScene.Environment.VolumetricFog.Distance = 60f;
         _bloom = MainCamera.Profile!.Get<Bloom>()!;
         _tonemapping = MainCamera.Profile.Get<Tonemapping>()!;
         SampleScene.Environment.Fog.Mode = FogMode.Off;
@@ -104,6 +103,8 @@ public sealed class RenderingShowcaseGame : StationGame
         BuildRenderTextures(StationCenter(9));
         BuildClouds(StationCenter(10));
         BuildOcean(StationCenter(OceanStation));
+        AddStation("Underwater", "The ocean seen from under its surface. The water absorbs and tints the view with distance, the surface from below lets the sky through only overhead, and caustics play over what lies under it.",
+            StationCenter(OceanStation) + new Float3(0f, 0f, -90f), new Float3(0f, -8f, 8f), -5f);
     }
 
     protected override void OnStationChanged(int index)
