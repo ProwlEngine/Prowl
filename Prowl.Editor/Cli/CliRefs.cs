@@ -72,7 +72,7 @@ public static class CliRefs
     private static EngineObject? FindInScene(Guid id)
     {
         if (SceneInstance.Main.IsNotValid()) return null;
-        EngineObject? found = SceneInstance.Main.FindObjectByIdentifier<EngineObject>(id);
+        EngineObject? found = SceneInstance.Main.FindObject<EngineObject>(id);
         return found.IsValid() ? found : null;
     }
 
@@ -103,7 +103,7 @@ public static class CliRefs
     private static GameObject FindByPath(string path)
     {
         string[] segments = path.Trim('/').Split('/');
-        IEnumerable<GameObject> level = Scene.RootObjects;
+        IEnumerable<GameObject> level = Scene.Roots;
         GameObject? current = null;
 
         foreach (string segment in segments)
@@ -239,7 +239,7 @@ public static class CliRefs
         for (GameObject? current = go; current.IsValid(); current = current.Parent)
         {
             IEnumerable<GameObject> siblings = current.Parent.IsValid() ? current.Parent.Children
-                : current.Scene.IsValid() ? current.Scene.RootObjects : [current];
+                : current.Scene.IsValid() ? current.Scene.Roots : [current];
             var same = siblings.Where(s => s.Name == current.Name).ToList();
             names.Add(same.Count > 1 ? $"{current.Name}[{same.IndexOf(current)}]" : current.Name);
         }

@@ -252,8 +252,8 @@ public static class CliEditorCommands
         {
             path = EditorSceneManager.CurrentScenePath,
             dirty = EditorSceneManager.IsDirty,
-            objects = SceneInstance.Main.IsValid() ? SceneInstance.Main.AllObjects.Count() : 0,
-            roots = SceneInstance.Main.IsValid() ? SceneInstance.Main.RootObjects.Select(g => g.Name).ToList() : [],
+            objects = SceneInstance.Main.IsValid() ? SceneInstance.Main.Objects.Count() : 0,
+            roots = SceneInstance.Main.IsValid() ? SceneInstance.Main.Roots.Select(g => g.Name).ToList() : [],
         };
 
         static void RequirePath(string path)
@@ -274,7 +274,7 @@ public static class CliEditorCommands
         [CliArg("components", "List component types")] bool components = true,
         [CliArg("filter", "Name or component type to search for")] string filter = "")
     {
-        IEnumerable<GameObject> starts = root.Length > 0 ? [CliRefs.ResolveGameObject(root)] : CliRefs.Scene.RootObjects;
+        IEnumerable<GameObject> starts = root.Length > 0 ? [CliRefs.ResolveGameObject(root)] : CliRefs.Scene.Roots;
 
         if (filter.Length > 0)
         {
@@ -882,7 +882,7 @@ public static class CliEditorCommands
                 Guid rootId = root.Identifier;
                 int overrides = PrefabUtility.CountOverrides(root);
                     List<PrefabUtility.AdditionDescription> additions = PrefabUtility.DescribeAdditions(root);
-                GameObject? LiveRoot() => SceneInstance.Main.IsValid() ? SceneInstance.Main.FindObjectByIdentifier<GameObject>(rootId) : null;
+                GameObject? LiveRoot() => SceneInstance.Main.IsValid() ? SceneInstance.Main.FindObject<GameObject>(rootId) : null;
                 CliEdit.Run("Apply Prefab", () =>
                 {
                     PrefabUtility.ApplyOverrides(root);

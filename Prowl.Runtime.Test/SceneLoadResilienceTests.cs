@@ -57,7 +57,7 @@ public class SceneLoadResilienceTests : RuntimeTestBase
 
     private static SceneInstance Load(string text) => SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text), new SerializationContext()));
 
-    private static GameObject Find(SceneInstance scene, string name) => scene.AllObjects.Single(g => g.Name == name);
+    private static GameObject Find(SceneInstance scene, string name) => scene.Objects.Single(g => g.Name == name);
 
     [Fact]
     public void ThrowingOnBeforeSerialize_KeepsEveryObject()
@@ -69,7 +69,7 @@ public class SceneLoadResilienceTests : RuntimeTestBase
 
         SceneInstance loaded = Load(Save(scene));
 
-        Assert.Equal(5, loaded.AllObjects.Count());
+        Assert.Equal(5, loaded.Objects.Count());
     }
 
     [Fact]

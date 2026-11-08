@@ -170,7 +170,7 @@ public sealed class NavMeshBakeService
         SceneInstance? scene = surface.GameObject.Scene;
         if (scene.IsNotValid()) return assets;
 
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in scene.Objects)
             foreach (NavMeshSurface other in go.GetComponents<NavMeshSurface>())
                 if (!ReferenceEquals(other, surface) && other.NavMeshData is { IsFromDatabase: true } shared)
                     assets.Add(shared.AssetID);

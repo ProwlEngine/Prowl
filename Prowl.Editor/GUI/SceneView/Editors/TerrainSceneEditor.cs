@@ -539,7 +539,7 @@ internal sealed class TerrainDataUndo : IUndoOperation
 
         SceneInstance scene = SceneInstance.Main;
         if (scene.IsNotValid()) return null;
-        TerrainComponent? terrain = scene.FindObjectByIdentifier<TerrainComponent>(_terrainId);
+        TerrainComponent? terrain = scene.FindObject<TerrainComponent>(_terrainId);
         return terrain.IsValid() ? terrain.Data : null;
     }
 }

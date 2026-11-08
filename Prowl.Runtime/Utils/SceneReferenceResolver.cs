@@ -222,10 +222,10 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
         // its GameObject's id, so resolve the GameObject and hand back its Transform.
         if (typeof(Transform).IsAssignableFrom(targetType))
         {
-            GameObject owner = scene.FindObjectByIdentifier<GameObject>(id)!;
+            GameObject owner = scene.FindObject<GameObject>(id)!;
             return owner.IsValid() ? owner.Transform : null;
         }
 
-        return scene.FindObjectByIdentifier<EngineObject>(id);
+        return scene.FindObject<EngineObject>(id);
     }
 }

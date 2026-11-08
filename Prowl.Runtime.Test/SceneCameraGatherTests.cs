@@ -17,7 +17,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     /// <summary>The exact expression Scene.Render used before the camera list replaced it.</summary>
     private static List<Camera> LegacyGather(SceneInstance scene)
     {
-        var cameras = scene.ActiveObjects
+        var cameras = scene.Objects.Where(o => o.EnabledInHierarchy)
             .SelectMany(x => x.GetComponentsInChildren<Camera>())
             .Distinct()
             .ToList();

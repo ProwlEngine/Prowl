@@ -198,7 +198,7 @@ public abstract class StationGame : Game
     private void FixParticleSeeds()
     {
         uint seed = 1;
-        foreach (GameObject go in SampleScene.AllObjects)
+        foreach (GameObject go in SampleScene.Objects)
             foreach (ParticleSystemComponent particles in go.GetComponents<Prowl.Runtime.ParticleSystem.ParticleSystemComponent>())
             {
                 particles.AutoRandomSeed = false;

@@ -330,7 +330,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         src.TargetComp = target;
         src.TargetTransform = a.Transform;
 
-        int rootsBefore = scene.RootObjects.Count();
+        int rootsBefore = scene.Roots.Count();
 
         ComponentClipboard.Copy(src);
         var pasted = ComponentClipboard.PasteAsNew(b) as ClipRefComp;
@@ -341,7 +341,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         Assert.Same(a.Transform, pasted.TargetTransform);
 
         // The real point: no orphan clone of A was dragged into the scene by the paste.
-        Assert.Equal(rootsBefore, scene.RootObjects.Count());
+        Assert.Equal(rootsBefore, scene.Roots.Count());
     }
 
     [Fact]
@@ -390,7 +390,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         SceneInstance.Load(restored);
         SceneInstance.ProcessPendingLoad();
 
-        GameObject restoredA = restored.AllObjects.First(g => g.Identifier == originalId);
+        GameObject restoredA = restored.Objects.First(g => g.Identifier == originalId);
         var host = new GameObject("Host");
         restored.Add(host);
 
@@ -410,14 +410,14 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         ClipRefComp src = a.AddComponent<ClipRefComp>();
         src.TargetTransform = new Transform(); // never attached to a GameObject
 
-        int rootsBefore = scene.RootObjects.Count();
+        int rootsBefore = scene.Roots.Count();
 
         ComponentClipboard.Copy(src);
         var pasted = ComponentClipboard.PasteAsNew(b) as ClipRefComp;
 
         Assert.NotNull(pasted);
         Assert.Null(pasted!.TargetTransform);
-        Assert.Equal(rootsBefore, scene.RootObjects.Count());
+        Assert.Equal(rootsBefore, scene.Roots.Count());
     }
 
     [Fact]
@@ -434,7 +434,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         src.Targets.Add(c);
         src.Wrapper = new ClipNestedRefComp.RefBox { GO = c };
 
-        int rootsBefore = scene.RootObjects.Count();
+        int rootsBefore = scene.Roots.Count();
 
         ComponentClipboard.Copy(src);
         var pasted = ComponentClipboard.PasteAsNew(b) as ClipNestedRefComp;
@@ -444,7 +444,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         Assert.Same(a, pasted.Targets[0]);          // ref inside a List<>
         Assert.Same(c, pasted.Targets[1]);
         Assert.Same(c, pasted.Wrapper!.GO);         // ref inside a nested class
-        Assert.Equal(rootsBefore, scene.RootObjects.Count()); // nothing deep-cloned into the scene
+        Assert.Equal(rootsBefore, scene.Roots.Count()); // nothing deep-cloned into the scene
     }
 
     // ---- ISerializable components (custom Serialize/Deserialize) ----

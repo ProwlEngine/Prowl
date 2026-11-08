@@ -194,10 +194,10 @@ public class SerializationTests : RuntimeTestBase
         SceneInstance copy = SceneInstance.Instantiate(scene.Capture());
 
         Assert.Equal(
-            scene.AllObjects.Select(o => (o.Name, o.Identifier)).OrderBy(o => o.Name),
-            copy.AllObjects.Select(o => (o.Name, o.Identifier)).OrderBy(o => o.Name));
-        LinkComponent copied = copy.FindObjectByIdentifier<LinkComponent>(link.Identifier)!;
-        Assert.Same(copy.FindObjectByIdentifier<GameObject>(child.Identifier), copied.Target);
+            scene.Objects.Select(o => (o.Name, o.Identifier)).OrderBy(o => o.Name),
+            copy.Objects.Select(o => (o.Name, o.Identifier)).OrderBy(o => o.Name));
+        LinkComponent copied = copy.FindObject<LinkComponent>(link.Identifier)!;
+        Assert.Same(copy.FindObject<GameObject>(child.Identifier), copied.Target);
         Assert.Equal(3f, copy.Lighting.LightmapScale);
         Assert.Equal(7, copy.LightmapBake.Bounces);
     }
@@ -235,7 +235,7 @@ public class SerializationTests : RuntimeTestBase
         SceneInstance copy = SceneInstance.Instantiate(SceneContent.Read(tree));
 
         Assert.DoesNotContain("ForeignObject", tree.WriteToString());
-        Assert.Null(copy.RootObjects.Single().GetComponent<LinkComponent>()!.Target);
+        Assert.Null(copy.Roots.Single().GetComponent<LinkComponent>()!.Target);
     }
 
     // ---------------------------------------------------------------------
@@ -253,8 +253,8 @@ public class SerializationTests : RuntimeTestBase
 
         SceneInstance clone = RoundTrip(scene);
 
-        Assert.Equal(2, clone.Count);
-        GameObject cloneParent = clone.RootObjects.Single();
+        Assert.Equal(2, clone.ObjectCount);
+        GameObject cloneParent = clone.Roots.Single();
         Assert.Equal("Parent", cloneParent.Name);
         Assert.Single(cloneParent.Children);
         Assert.Same(clone, cloneParent.Children[0].Scene);
@@ -273,10 +273,10 @@ public class SerializationTests : RuntimeTestBase
 
         SceneInstance clone = RoundTrip(scene);
 
-        GameObject? cloneGo = clone.FindObjectByIdentifier<GameObject>(goId);
+        GameObject? cloneGo = clone.FindObject<GameObject>(goId);
         Assert.NotNull(cloneGo);
         Assert.Equal("Obj", cloneGo.Name);
-        Assert.NotNull(clone.FindObjectByIdentifier<SerializableComponent>(compId));
+        Assert.NotNull(clone.FindObject<SerializableComponent>(compId));
     }
 
     // A GameObject whose serialized Transform can't be restored (an unresolved forward $id reference,
@@ -316,10 +316,10 @@ public class SerializationTests : RuntimeTestBase
 
         SceneInstance clone = SceneInstance.Instantiate(SceneContent.Read(echo));
 
-        Assert.Equal(3, clone.AllObjects.Count());
-        Assert.Contains(clone.AllObjects, g => g.Name == "Healthy1");
-        Assert.Contains(clone.AllObjects, g => g.Name == "Healthy2");
-        Assert.All(clone.AllObjects, g => Assert.NotNull(g.Transform));
+        Assert.Equal(3, clone.Objects.Count());
+        Assert.Contains(clone.Objects, g => g.Name == "Healthy1");
+        Assert.Contains(clone.Objects, g => g.Name == "Healthy2");
+        Assert.All(clone.Objects, g => Assert.NotNull(g.Transform));
     }
 
     // ---------------------------------------------------------------------

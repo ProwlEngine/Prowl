@@ -557,7 +557,7 @@ public class SceneViewPanel : DockPanel
         GameObject? bestHit = null;
         float bestDist = float.MaxValue;
 
-        foreach (GameObject go in scene.ActiveObjects)
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy))
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 
@@ -656,7 +656,7 @@ public class SceneViewPanel : DockPanel
         bool additive = _handles.Shift || _handles.Ctrl;
         if (!additive) Selection.Clear();
 
-        foreach (GameObject go in scene.ActiveObjects)
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy))
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
             if (!TryGetSelectionAnchor(go, out Float3 anchor)) continue;
@@ -777,7 +777,7 @@ public class SceneViewPanel : DockPanel
         Float3 bestPos = Float3.Zero;
         bool hit = false;
 
-        foreach (GameObject go in scene.ActiveObjects)
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy))
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 

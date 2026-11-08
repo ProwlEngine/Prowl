@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -594,7 +595,7 @@ public class NavMeshSurface : Component
     }
 
     private IEnumerable<GameObject> CollectionObjects(SceneInstance scene)
-        => CollectObjects == NavMeshCollectObjects.Children ? EnumerateSelfAndChildren(GameObject) : scene.ActiveObjects;
+        => CollectObjects == NavMeshCollectObjects.Children ? EnumerateSelfAndChildren(GameObject) : scene.Objects.Where(o => o.EnabledInHierarchy);
 
     /// <summary>
     /// The scene to collect from and the world-space filter, composed with the Volume-mode extent

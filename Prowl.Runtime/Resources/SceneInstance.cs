@@ -566,6 +566,43 @@ public class SceneInstance : EngineObject, ISerializable
 
     #endregion
 
+    /// <summary>Every object in a world, enumerated without allocating.</summary>
+    public readonly struct SceneObjects : IEnumerable<GameObject>
+    {
+        private readonly List<GameObject> _objects;
+
+        internal SceneObjects(List<GameObject> objects) => _objects = objects;
+
+        public Enumerator GetEnumerator() => new(_objects);
+        IEnumerator<GameObject> IEnumerable<GameObject>.GetEnumerator() => GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+
+        public struct Enumerator : IEnumerator<GameObject>
+        {
+            private readonly List<GameObject> _objects;
+            private int _index;
+
+            internal Enumerator(List<GameObject> objects)
+            {
+                _objects = objects;
+                _index = -1;
+            }
+
+            public GameObject Current => _objects[_index];
+            object System.Collections.IEnumerator.Current => Current;
+
+            public bool MoveNext()
+            {
+                while (++_index < _objects.Count)
+                    if (!_objects[_index].IsDisposed) return true;
+                return false;
+            }
+
+            public void Reset() => _index = -1;
+            public void Dispose() { }
+        }
+    }
+
     [SerializeIgnore]
     private List<GameObject> _allObj = [];
     [SerializeIgnore]
@@ -623,6 +660,8 @@ public class SceneInstance : EngineObject, ISerializable
     /// </summary>
     internal void OnHotReload()
     {
+        ClearTypeIndices();
+        _identifiers.Clear();
         foreach (GameObject go in _allObj)
             if (!ReferenceEquals(go, null) && !go.IsDisposed)
                 go.OnHotReload();
@@ -682,14 +721,14 @@ public class SceneInstance : EngineObject, ISerializable
     [SerializeIgnore, NonSerialized]
     internal int BakedLightingVersion;
 
-    /// <summary> The number of registered, non-disposed objects. </summary>
-    public int Count { get { EnsureNotDisposed(); return _allObj.Count(o => !o.IsDisposed); } }
+    /// <summary>How many objects are in this world, children included.</summary>
+    public int ObjectCount { get { EnsureNotDisposed(); return _allObj.Count(o => !o.IsDisposed); } }
 
-    /// <summary> Enumerates all registered objects. </summary>
-    public IEnumerable<GameObject> AllObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed); } }
+    /// <summary>Every object in this world, children included, in the order they joined. Enumerating does not allocate.</summary>
+    public SceneObjects Objects { get { EnsureNotDisposed(); return new SceneObjects(_allObj); } }
 
-    /// <summary> Enumerates all registered objects that are currently active and saveable. </summary>
-    public IEnumerable<GameObject> SaveableObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && IsSaveable(o)); } }
+    /// <summary>Every object a save writes: not marked DontSave, and not under one that is.</summary>
+    internal IEnumerable<GameObject> SaveableObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && IsSaveable(o)); } }
 
     /// <summary>
     /// False for an object marked <see cref="HideFlags.DontSave"/> or <see cref="HideFlags.HideAndDontSave"/>,
@@ -703,17 +742,192 @@ public class SceneInstance : EngineObject, ISerializable
         return true;
     }
 
-    /// <summary> Enumerates all registered objects that are currently active. </summary>
-    public IEnumerable<GameObject> ActiveObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && o.EnabledInHierarchy); } }
+    /// <summary>The objects with no parent, in root order.</summary>
+    public IReadOnlyList<GameObject> Roots
+    {
+        get
+        {
+            EnsureNotDisposed();
+            List<GameObject> roots = [];
+            foreach (GameObject go in _allObj)
+                if (!go.IsDisposed && go.Parent.IsNotValid())
+                    roots.Add(go);
+            return roots;
+        }
+    }
 
-    /// <summary> Enumerates all root GameObjects, i.e. all GameObjects without a parent object. </summary>
-    public IEnumerable<GameObject> RootObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && o.Transform.Parent == null); } }
+    // One index per component type or interface ever queried, kept as components join. Leaving is lazy: a query drops
+    // what was destroyed or left, so no removal path has to know about the indices.
+    private readonly Dictionary<Type, TypeIndex> _typeIndices = [];
 
-    /// <summary> Enumerates all <see cref="RootObjects"/> that are currently active. </summary>
-    public IEnumerable<GameObject> ActiveRootObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && o.Transform.Parent == null && o.EnabledInHierarchy); } }
+    private sealed class TypeIndex
+    {
+        public readonly List<Component> Items = [];
+        public readonly HashSet<Component> Members = new(ReferenceEqualityComparer.Instance);
 
-    /// <summary> Returns whether this Scene is completely empty. </summary>
-    public bool IsEmpty { get { EnsureNotDisposed(); return !AllObjects.Any(); } }
+        public void Add(Component component)
+        {
+            if (Members.Add(component)) Items.Add(component);
+        }
+    }
+
+    // Identifiers of the objects and components in this world. Checked on every hit, since identifiers can change.
+    private readonly Dictionary<Guid, EngineObject> _identifiers = [];
+
+    /// <summary>Called by the engine when a component joins this world, before any gameplay gate.</summary>
+    internal void ComponentJoined(Component component)
+    {
+        foreach ((Type type, TypeIndex index) in _typeIndices)
+            if (type.IsInstanceOfType(component))
+                index.Add(component);
+        _identifiers[component.Identifier] = component;
+    }
+
+    /// <summary>Drops every type index, after a script reload changed what the types are.</summary>
+    internal void ClearTypeIndices() => _typeIndices.Clear();
+
+    private TypeIndex IndexFor(Type type)
+    {
+        if (_typeIndices.TryGetValue(type, out TypeIndex? index))
+        {
+            index.Items.RemoveAll(component =>
+            {
+                bool gone = component.IsDisposed || !ReferenceEquals(component.GameObject.Scene, this);
+                if (gone) index.Members.Remove(component);
+                return gone;
+            });
+            return index;
+        }
+
+        index = new TypeIndex();
+        foreach (GameObject go in _allObj)
+        {
+            if (go.IsDisposed) continue;
+            foreach (Component component in go._components)
+                if (!component.IsDisposed && type.IsInstanceOfType(component))
+                    index.Add(component);
+        }
+        _typeIndices[type] = index;
+        return index;
+    }
+
+    /// <summary>The first enabled component of type <typeparamref name="T"/> in this world, or null.</summary>
+    public T? Get<T>() where T : class
+    {
+        EnsureNotDisposed();
+        foreach (Component component in IndexFor(typeof(T)).Items)
+            if (component.EnabledInHierarchy)
+                return component as T;
+        return null;
+    }
+
+    /// <summary>Every component of type <typeparamref name="T"/> in this world, a class or an interface, as a snapshot.</summary>
+    public T[] GetAll<T>(bool includeDisabled = false) where T : class
+    {
+        List<T> results = [];
+        GetAll(results, includeDisabled);
+        return [.. results];
+    }
+
+    /// <summary>Copies every component of type <typeparamref name="T"/> in this world into <paramref name="results"/>, cleared first.</summary>
+    public void GetAll<T>(List<T> results, bool includeDisabled = false) where T : class
+    {
+        EnsureNotDisposed();
+        results.Clear();
+        foreach (Component component in IndexFor(typeof(T)).Items)
+            if (includeDisabled || component.EnabledInHierarchy)
+                results.Add((component as T)!);
+    }
+
+    /// <summary>The first object with this name, depth first through the roots.</summary>
+    public GameObject? FindObject(string name)
+    {
+        EnsureNotDisposed();
+        foreach (GameObject go in _allObj)
+            if (!go.IsDisposed && go.Name == name)
+                return go;
+        return null;
+    }
+
+    /// <summary>The object at a path of names from a root, like "Level/Props/Door".</summary>
+    public GameObject? FindObjectByPath(string path)
+    {
+        EnsureNotDisposed();
+        string[] names = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (names.Length == 0) return null;
+        foreach (GameObject root in Roots)
+        {
+            if (root.Name != names[0]) continue;
+            GameObject? found = root;
+            for (int i = 1; i < names.Length && found.IsValid(); i++)
+                found = found!.Children.FirstOrDefault(child => child.Name == names[i]);
+            if (found.IsValid()) return found;
+        }
+        return null;
+    }
+
+    /// <summary>The first object with this tag.</summary>
+    public GameObject? FindObjectWithTag(string tag)
+    {
+        EnsureNotDisposed();
+        foreach (GameObject go in _allObj)
+            if (!go.IsDisposed && go.Tag == tag)
+                return go;
+        return null;
+    }
+
+    /// <summary>Every object with this tag, copied into <paramref name="results"/>, cleared first.</summary>
+    public void FindObjectsWithTag(string tag, List<GameObject> results)
+    {
+        EnsureNotDisposed();
+        results.Clear();
+        foreach (GameObject go in _allObj)
+            if (!go.IsDisposed && go.Tag == tag)
+                results.Add(go);
+    }
+
+    /// <summary>The object or component in this world with this identifier, or null.</summary>
+    public EngineObject? FindObject(Guid identifier)
+    {
+        EnsureNotDisposed();
+        if (_identifiers.TryGetValue(identifier, out EngineObject? known))
+        {
+            if (IsHere(known, identifier)) return known;
+            _identifiers.Remove(identifier);
+        }
+
+        foreach (GameObject go in _allObj)
+        {
+            if (go.IsDisposed) continue;
+            if (go.Identifier == identifier) return _identifiers[identifier] = go;
+            foreach (Component component in go._components)
+                if (!component.IsDisposed && component.Identifier == identifier)
+                    return _identifiers[identifier] = component;
+        }
+        return null;
+    }
+
+    /// <summary>The object or component with this identifier when it is a <typeparamref name="T"/>, or null.</summary>
+    public T? FindObject<T>(Guid identifier) where T : EngineObject => FindObject(identifier) as T;
+
+    /// <summary>The object or component with this identifier, when it is a <typeparamref name="T"/>.</summary>
+    public bool TryFindObject<T>(Guid identifier, out T result) where T : EngineObject
+    {
+        if (FindObject(identifier) is T found)
+        {
+            result = found;
+            return true;
+        }
+        result = null!;
+        return false;
+    }
+
+    private bool IsHere(EngineObject candidate, Guid identifier) => candidate switch
+    {
+        GameObject go => !go.IsDisposed && go.Identifier == identifier && ReferenceEquals(go.Scene, this),
+        Component component => !component.IsDisposed && component.Identifier == identifier && ReferenceEquals(component.GameObject.Scene, this),
+        _ => false,
+    };
 
     /// <summary>Creates an empty, dormant world. <see cref="Create"/> is the same and raises <see cref="Created"/>.</summary>
     public SceneInstance(SceneMode mode = SceneMode.Game)
@@ -741,7 +955,7 @@ public class SceneInstance : EngineObject, ISerializable
         _isActive = true;
 
         // Create a copy to avoid collection modification during enumeration
-        List<GameObject> allObjectsCopy = [.. AllObjects];
+        List<GameObject> allObjectsCopy = [.. Objects];
 
         // Trigger OnEnable for all enabled components in the scene
         foreach (GameObject go in allObjectsCopy)
@@ -774,7 +988,7 @@ public class SceneInstance : EngineObject, ISerializable
         if (!_isActive) return; // already disabled, nothing to deliver
 
         // Create a copy to avoid collection modification during enumeration
-        List<GameObject> allObjectsCopy = [.. AllObjects];
+        List<GameObject> allObjectsCopy = [.. Objects];
 
         // Trigger OnDisable for all enabled components in the scene
         foreach (GameObject go in allObjectsCopy)
@@ -943,6 +1157,7 @@ public class SceneInstance : EngineObject, ISerializable
         {
             _allObj.Add(obj);
             obj.Scene = this;
+            _identifiers[obj.Identifier] = obj;
 
             IEnumerable<Component> components = obj.GetComponents<Component>();
 
@@ -950,6 +1165,7 @@ public class SceneInstance : EngineObject, ISerializable
             foreach (Component component in components)
             {
                 if (component.IsDisposed) continue;
+                ComponentJoined(component);
                 try { component.OnAddedToScene(); }
                 catch (Exception ex) { Debug.LogException($"[{obj.Name}/{component.GetType().Name}] OnAddedToScene() threw", ex); }
             }
@@ -1008,56 +1224,12 @@ public class SceneInstance : EngineObject, ISerializable
         }
     }
 
-    public T?[] FindObjectsOfType<T>() where T : EngineObject
-    {
-        EnsureNotDisposed();
-        List<T> objects = [];
-        foreach (GameObject go in AllObjects)
-        {
-            if (go is T t)
-                objects.Add(t);
-
-            foreach (Component comp in go.GetComponents<Component>())
-                if (comp is T t2)
-                    objects.Add(t2);
-        }
-        return [.. objects];
-    }
-
-    public T? FindObjectByID<T>(int id) where T : EngineObject
-    {
-        EnsureNotDisposed();
-        foreach (GameObject go in AllObjects)
-        {
-            if (go.InstanceID == id)
-                return go as T;
-            foreach (Component comp in go.GetComponents<Component>())
-                if (comp.InstanceID == id)
-                    return comp as T;
-        }
-        return null;
-    }
-
-    public T? FindObjectByIdentifier<T>(Guid identifier) where T : EngineObject
-    {
-        EnsureNotDisposed();
-        foreach (GameObject go in AllObjects)
-        {
-            if (go.Identifier == identifier)
-                return go as T;
-            foreach (Component comp in go.GetComponents<Component>())
-                if (comp.Identifier == identifier)
-                    return comp as T;
-        }
-        return null;
-    }
-
     /// <summary> Unregisters all GameObjects. </summary>
     public void Clear()
     {
         EnsureNotDisposed();
         // Create a copy to iterate over since RemoveObject modifies the collection
-        List<GameObject> rootObjects = [.. RootObjects];
+        List<GameObject> rootObjects = [.. Roots];
         foreach (GameObject obj in rootObjects)
         {
             Remove(obj);

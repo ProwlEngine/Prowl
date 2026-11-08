@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Linq;
 using System;
 using System.Collections.Generic;
 
@@ -1063,7 +1064,7 @@ public class TerrainEditor : CustomEditor
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db == null) return;
 
-        foreach (GameObject go in SceneInstance.Main.ActiveObjects)
+        foreach (GameObject go in SceneInstance.Main.Objects.Where(o => o.EnabledInHierarchy))
         {
             TerrainComponent? terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
             if (terrain.IsNotValid()) continue;
@@ -1088,7 +1089,7 @@ public class TerrainEditor : CustomEditor
     {
         if (SceneInstance.Main.IsNotValid()) return;
 
-        foreach (GameObject go in SceneInstance.Main.ActiveObjects)
+        foreach (GameObject go in SceneInstance.Main.Objects.Where(o => o.EnabledInHierarchy))
         {
             TerrainComponent? terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
             if (terrain.IsNotValid()) continue;

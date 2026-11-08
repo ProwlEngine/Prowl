@@ -346,7 +346,7 @@ public static partial class PrefabUtility
                 InvalidateSource(prefabGuid);
                 EditorAssetBackend.Instance?.Reimport(prefabGuid);
 
-                GameObject? live = SceneInstance.Main.IsValid() ? SceneInstance.Main!.FindObjectByIdentifier<GameObject>(instanceRootId) : null;
+                GameObject? live = SceneInstance.Main.IsValid() ? SceneInstance.Main!.FindObject<GameObject>(instanceRootId) : null;
                 if (instance != null && live.IsValid()) instance(live!);
                 RefreshAllInstances(prefabGuid);
             }
@@ -1194,7 +1194,7 @@ public static partial class PrefabUtility
             if (db.GetEntry(prefabGuid) != null) continue;
 
             // Keeping it is what lets instances go on recording overrides while the prefab is away.
-            if (scene.IsValid() && scene.AllObjects.Any(go => go.PrefabAssetId == prefabGuid)) continue;
+            if (scene.IsValid() && scene.Objects.Any(go => go.PrefabAssetId == prefabGuid)) continue;
 
             InvalidateSource(prefabGuid);
         }
@@ -1220,7 +1220,7 @@ public static partial class PrefabUtility
 
         // Collected before anything is refreshed, since a refresh adds and removes objects.
         var prefabs = new HashSet<Guid>();
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in scene.Objects)
             if (go.IsPrefabInstance && IsInstanceRoot(go))
                 prefabs.Add(go.PrefabAssetId);
 
@@ -1249,7 +1249,7 @@ public static partial class PrefabUtility
     public static void RefreshAllInstances(Guid prefabGuid)
     {
         SceneInstance? scene = SceneInstance.Main;
-        if (scene.IsValid()) RefreshInstancesOf(prefabGuid, scene.AllObjects);
+        if (scene.IsValid()) RefreshInstancesOf(prefabGuid, scene.Objects);
     }
 
     private static void RefreshInstancesOf(Guid prefabGuid, IEnumerable<GameObject> objects)
@@ -1279,7 +1279,7 @@ public static partial class PrefabUtility
     /// </summary>
     public static void RefreshInstancesIn(SceneInstance scene)
     {
-        if (scene.IsValid()) RefreshInstancesAmong(scene.AllObjects);
+        if (scene.IsValid()) RefreshInstancesAmong(scene.Objects);
     }
 
     /// <summary>
@@ -1839,11 +1839,11 @@ public static partial class PrefabUtility
 
         // Anything that drifted out of its instance is settled first, so what follows records overrides
         // for objects that can still say which prefab object they are.
-        foreach (Guid prefabGuid in scene.AllObjects.Where(go => go.IsPrefabInstance)
+        foreach (Guid prefabGuid in scene.Objects.Where(go => go.IsPrefabInstance)
                      .Select(go => go.PrefabAssetId).Distinct().ToList())
-            SettleStrayPrefabContent(prefabGuid, scene.AllObjects);
+            SettleStrayPrefabContent(prefabGuid, scene.Objects);
 
-        foreach (GameObject go in scene.AllObjects.ToList())
+        foreach (GameObject go in scene.Objects.ToList())
             if (IsInstanceRoot(go))
                 ReconcileInstance(go);
     }

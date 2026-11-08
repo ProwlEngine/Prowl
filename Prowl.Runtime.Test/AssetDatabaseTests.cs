@@ -819,7 +819,7 @@ public class AssetDatabaseTests : RuntimeTestBase
         SceneInstance.ProcessPendingLoad();
         try
         {
-            CrateHolder holder = SceneInstance.Main.AllObjects.Single().GetComponent<CrateHolder>()!;
+            CrateHolder holder = SceneInstance.Main.Objects.Single().GetComponent<CrateHolder>()!;
             Assert.Same(crate, holder.SeenOnEnable);
             Assert.True(holder.WasLoadedOnEnable);
         }

@@ -406,14 +406,14 @@ public class CliEditorCommandTests : EditorTestHarness
         JsonNode child = Ok("go", "create", "--name", "Gun", "--parent", "/Root", "--position", "[1, 2, 3]", "--components", "CliProbe")!;
 
         Assert.Equal("/Root/Gun", child["path"]!.GetValue<string>());
-        GameObject gun = _scene.AllObjects.Single(g => g.Name == "Gun");
+        GameObject gun = _scene.Objects.Single(g => g.Name == "Gun");
         Assert.Equal(new Float3(1, 2, 3), gun.Transform.LocalPosition);
         Assert.NotNull(gun.GetComponent<CliProbe>());
 
         Ok("undo");
-        Assert.DoesNotContain(_scene.AllObjects, g => g.Name == "Gun");
+        Assert.DoesNotContain(_scene.Objects, g => g.Name == "Gun");
         Ok("undo", "--redo");
-        Assert.NotNull(_scene.AllObjects.Single(g => g.Name == "Gun").GetComponent<CliProbe>());
+        Assert.NotNull(_scene.Objects.Single(g => g.Name == "Gun").GetComponent<CliProbe>());
     }
 
     [Fact]
@@ -436,7 +436,7 @@ public class CliEditorCommandTests : EditorTestHarness
     {
         Ok("go", "create", "--name", "Other");
         Ok("go", "create", "--name", "P", "--components", "CliProbe");
-        CliProbe probe = _scene.AllObjects.Single(g => g.Name == "P").GetComponent<CliProbe>()!;
+        CliProbe probe = _scene.Objects.Single(g => g.Name == "P").GetComponent<CliProbe>()!;
         int validatedBefore = probe.Validated;
 
         Ok("set", "/P:CliProbe", "--values", """{"Count": 5, "Speed": 2, "Label": "hello", "Offset": [1, 2, 3], "Numbers[1]": 9, "Settings.Radius": 2.5, "Target": "/Other"}""");
@@ -463,7 +463,7 @@ public class CliEditorCommandTests : EditorTestHarness
     {
         Ok("go", "create", "--name", "Other");
         Ok("go", "create", "--name", "P", "--components", "CliProbe");
-        CliProbe probe = _scene.AllObjects.Single(g => g.Name == "P").GetComponent<CliProbe>()!;
+        CliProbe probe = _scene.Objects.Single(g => g.Name == "P").GetComponent<CliProbe>()!;
         probe.Shapes.Add(new CliProbeBox());
 
         Ok("set", "/P:CliProbe", "--values", """{"Targets": ["/Other", "/P"], "Mode": "Fast", "Shapes[0].Depth": 4}""");
@@ -478,7 +478,7 @@ public class CliEditorCommandTests : EditorTestHarness
     public void SetRejectsUnknownFieldsBeforeWritingAnything()
     {
         Ok("go", "create", "--name", "P", "--components", "CliProbe");
-        CliProbe probe = _scene.AllObjects.Single(g => g.Name == "P").GetComponent<CliProbe>()!;
+        CliProbe probe = _scene.Objects.Single(g => g.Name == "P").GetComponent<CliProbe>()!;
 
         Assert.Contains("no field 'Nope'", Fails("set", "/P:CliProbe", "--values", """{"Count": 5, "Nope": 1}"""));
         Assert.Equal(0, probe.Count);
@@ -491,7 +491,7 @@ public class CliEditorCommandTests : EditorTestHarness
         JsonNode added = Ok("component", "add", "/P", "--type", "CliProbe", "--values", """{"Count": 7}""")!;
         Assert.Equal(7, added["fields"]!["Count"]!.GetValue<long>());
 
-        GameObject go = _scene.AllObjects.Single(g => g.Name == "P");
+        GameObject go = _scene.Objects.Single(g => g.Name == "P");
         Ok("component", "remove", "/P:CliProbe");
         Assert.Null(go.GetComponent<CliProbe>());
 
@@ -513,18 +513,18 @@ public class CliEditorCommandTests : EditorTestHarness
         Assert.Equal("/A/C", Ok("get", "/A/C")!["path"]!.GetValue<string>());
 
         Ok("go", "active", "--target", "/A/C", "--active", "false");
-        Assert.False(_scene.AllObjects.Single(g => g.Name == "C").Enabled);
+        Assert.False(_scene.Objects.Single(g => g.Name == "C").Enabled);
 
         Ok("go", "duplicate", "--target", "/A");
-        Assert.Equal(2, _scene.RootObjects.Count(g => g.Name.StartsWith('A')));
+        Assert.Equal(2, _scene.Roots.Count(g => g.Name.StartsWith('A')));
 
         Ok("go", "parent", "--target", "/A[0]/C", "--parent", "/");
         Assert.Contains("is A or inside it", Fails("go", "parent", "--target", "/A[0]", "--parent", "/A[0]"));
 
         Ok("go", "delete", "--target", "/C");
-        Assert.DoesNotContain(_scene.RootObjects, g => g.Name == "C");
+        Assert.DoesNotContain(_scene.Roots, g => g.Name == "C");
         Ok("undo");
-        Assert.Contains(_scene.RootObjects, g => g.Name == "C");
+        Assert.Contains(_scene.Roots, g => g.Name == "C");
     }
 
     [Fact]
@@ -563,7 +563,7 @@ public class CliEditorCommandTests : EditorTestHarness
         CliRunResponse second = CliServer.Execute(new CliRunRequest { Command = "set", Argv = ["/P:CliProbe", "Count", "2"] });
         Assert.Contains(first.Logs, l => l.Message.Contains("lost when play stops"));
         Assert.DoesNotContain(second.Logs, l => l.Message.Contains("lost when play stops"));
-        Assert.Equal(2, _scene.AllObjects.Single(g => g.Name == "P").GetComponent<CliProbe>()!.Count);
+        Assert.Equal(2, _scene.Objects.Single(g => g.Name == "P").GetComponent<CliProbe>()!.Count);
 
         Application.IsPlaying = false;
         CliServer.Execute(new CliRunRequest { Command = "set", Argv = ["/P:CliProbe", "Count", "3"] });
@@ -589,7 +589,7 @@ public class CliEditorCommandTests : EditorTestHarness
         JsonNode created = Ok("scene", "--action", "new")!;
 
         Assert.DoesNotContain(created["roots"]!.AsArray(), r => r!.GetValue<string>() == "OnlyInTheOldScene");
-        Assert.DoesNotContain(SceneInstance.Main.AllObjects, g => g.Name == "OnlyInTheOldScene");
+        Assert.DoesNotContain(SceneInstance.Main.Objects, g => g.Name == "OnlyInTheOldScene");
     }
 
     [Fact]
@@ -602,10 +602,10 @@ public class CliEditorCommandTests : EditorTestHarness
             Assert.True(tonemapping.Mode.Override);
         }
 
-        AssertTonemaps(Assert.Single(EditorSceneManager.CreateDefaultScene().FindObjectsOfType<Camera>())!);
+        AssertTonemaps(Assert.Single(EditorSceneManager.CreateDefaultScene().GetAll<Camera>(includeDisabled: true))!);
 
         typeof(GUI.DefaultGameObjectCreators).GetMethod("CreateCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, null);
-        AssertTonemaps(SceneInstance.Main.AllObjects.Single(g => g.Name == "Camera").GetComponent<Camera>()!);
+        AssertTonemaps(SceneInstance.Main.Objects.Single(g => g.Name == "Camera").GetComponent<Camera>()!);
     }
     // Runs a command the way the editor does, with this thread as the main thread pumping frames, while a drag is held
     // for the first frames and released after.
@@ -651,7 +651,7 @@ public class CliEditorCommandTests : EditorTestHarness
     public void AnEditDuringADrag_RunsAfterItAsItsOwnStep()
     {
         Ok("go", "create", "--name", "A");
-        GameObject a = _scene.AllObjects.Single(g => g.Name == "A");
+        GameObject a = _scene.Objects.Single(g => g.Name == "A");
         Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         CliRunResponse response = RunDuringADrag(a, "go", ["rename", "--target", "/A", "--name", "B"], run =>
@@ -671,21 +671,21 @@ public class CliEditorCommandTests : EditorTestHarness
     public void UndoDuringADrag_WaitsForItToEnd()
     {
         Ok("go", "create", "--name", "A");
-        GameObject a = _scene.AllObjects.Single(g => g.Name == "A");
+        GameObject a = _scene.Objects.Single(g => g.Name == "A");
         Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         CliRunResponse response = RunDuringADrag(a, "undo", [], run => Assert.False(run.IsCompleted));
 
         Assert.True(response.Ok, response.Error);
         Assert.Equal(Float3.Zero, a.Transform.LocalPosition);
-        Assert.Contains(_scene.AllObjects, g => g.Name == "A");
+        Assert.Contains(_scene.Objects, g => g.Name == "A");
     }
 
     [Fact]
     public void UndoWorksInPlayMode()
     {
         Ok("go", "create", "--name", "A");
-        GameObject a = _scene.AllObjects.Single(g => g.Name == "A");
+        GameObject a = _scene.Objects.Single(g => g.Name == "A");
         Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Application.IsPlaying = true;
 
@@ -802,14 +802,14 @@ public class CliAssetCommandTests : EditorTestHarness
         JsonNode made = Ok("prefab", "create", "/Probe", "--path", "Prefabs/Probe")!;
         Assert.Equal("Prefabs/Probe.prefab", made["prefab"]!["path"]!.GetValue<string>());
 
-        GameObject instance = _scene.AllObjects.Single(g => g.Name == "Probe");
+        GameObject instance = _scene.Objects.Single(g => g.Name == "Probe");
         Assert.True(instance.IsPrefabInstance);
 
         Ok("set", "/Probe:CliProbe", "Count", "4");
         Assert.Contains(Ok("prefab", "overrides", "/Probe")!["overrides"]!.AsArray(), o => o!["MemberName"]!.GetValue<string>() == "Count");
 
         Ok("prefab", "revert", "/Probe");
-        Assert.Equal(0, _scene.AllObjects.Single(g => g.Name == "Probe").GetComponent<CliProbe>()!.Count);
+        Assert.Equal(0, _scene.Objects.Single(g => g.Name == "Probe").GetComponent<CliProbe>()!.Count);
     }
 
     [Fact]

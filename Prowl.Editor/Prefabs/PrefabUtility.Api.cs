@@ -74,7 +74,7 @@ public static partial class PrefabUtility
 
     /// <summary>Every instance root of a prefab in a given scene, open or not.</summary>
     public static List<GameObject> FindInstancesOf(Guid prefabGuid, SceneInstance scene)
-        => scene.IsNotValid() ? [] : FindInstancesAmong(prefabGuid, scene.AllObjects);
+        => scene.IsNotValid() ? [] : FindInstancesAmong(prefabGuid, scene.Objects);
 
     private static List<GameObject> FindInstancesAmong(Guid prefabGuid, IEnumerable<GameObject> objects)
     {

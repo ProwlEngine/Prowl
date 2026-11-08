@@ -1058,7 +1058,7 @@ public class HierarchyPanel : DockPanel
 
     private List<GameObject> GetDisplayRoots(SceneInstance scene)
     {
-        return [.. scene.RootObjects
+        return [.. scene.Roots
             .Where(go => !go.HideFlags.HasFlag(HideFlags.Hide)
                       && !go.HideFlags.HasFlag(HideFlags.HideAndDontSave))];
     }
@@ -1099,7 +1099,7 @@ public class HierarchyPanel : DockPanel
     {
         SceneInstance scene = SceneInstance.Main;
         if (scene.IsNotValid()) return null;
-        return scene.AllObjects.FirstOrDefault(g => g.Identifier.ToString() == id);
+        return scene.Objects.FirstOrDefault(g => g.Identifier.ToString() == id);
     }
 
     /// <summary>
@@ -1108,7 +1108,7 @@ public class HierarchyPanel : DockPanel
     /// </summary>
     private static void FindGameObjectsWithGuid(SceneInstance scene, Guid guid, HashSet<GameObject> results)
     {
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in scene.Objects)
         {
             // Direct GO match (e.g. scene-view click -> Ping(go.Identifier))
             if (go.Identifier == guid)

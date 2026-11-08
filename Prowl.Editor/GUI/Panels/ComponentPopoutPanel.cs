@@ -130,7 +130,7 @@ public class ComponentPopoutPanel : DockPanel
         SceneInstance scene = SceneInstance.Main;
         if (scene.IsNotValid()) return (null, null);
 
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in scene.Objects)
         {
             if (go.Identifier != _goIdentifier) continue;
 

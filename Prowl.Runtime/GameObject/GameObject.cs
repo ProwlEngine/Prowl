@@ -431,21 +431,21 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="otherName">The name of the GameObject to find.</param>
     /// <param name="ignoreCase">If true, the search is case-insensitive.</param>
     /// <returns>The first GameObject with the given name, or null if not found.</returns>
-    public GameObject Find(string otherName, bool ignoreCase = false) => Scene.IsValid() ? Scene.AllObjects.FirstOrDefault(gameObject => gameObject.Name.Equals(otherName, ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) : null;
+    public GameObject Find(string otherName, bool ignoreCase = false) => Scene.IsValid() ? Scene.Objects.FirstOrDefault(gameObject => gameObject.Name.Equals(otherName, ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) : null;
 
     /// <summary>
     /// Finds a GameObject with the specified tag in the same scene.
     /// </summary>
     /// <param name="otherTag">The tag to search for.</param>
     /// <returns>The first GameObject with the given tag, or null if not found.</returns>
-    public GameObject FindGameObjectWithTag(string otherTag) => Scene.IsValid() ? Scene.AllObjects.FirstOrDefault(gameObject => gameObject.CompareTag(otherTag)) : null;
+    public GameObject FindGameObjectWithTag(string otherTag) => Scene.IsValid() ? Scene.Objects.FirstOrDefault(gameObject => gameObject.CompareTag(otherTag)) : null;
 
     /// <summary>
     /// Finds all GameObjects with the specified tag in the same scene.
     /// </summary>
     /// <param name="otherTag">The tag to search for.</param>
     /// <returns>An array of GameObjects with the given tag.</returns>
-    public GameObject[] FindGameObjectsWithTag(string otherTag) => Scene.IsValid() ? [.. Scene.AllObjects.Where(gameObject => gameObject.CompareTag(otherTag))] : [];
+    public GameObject[] FindGameObjectsWithTag(string otherTag) => Scene.IsValid() ? [.. Scene.Objects.Where(gameObject => gameObject.CompareTag(otherTag))] : [];
 
 
     /// <summary>
@@ -753,6 +753,7 @@ public partial class GameObject : EngineObject, ISerializable
         if (!scene.IsValid()) return;
         using SceneInstance.SceneScope active = Resources.SceneInstance.Enter(scene);
 
+        scene!.ComponentJoined(comp);
         try { comp.OnAddedToScene(); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{comp.GetType().Name}] OnAddedToScene() threw", ex); }
 

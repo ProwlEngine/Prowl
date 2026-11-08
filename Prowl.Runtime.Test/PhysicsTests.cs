@@ -1800,7 +1800,7 @@ public class PhysicsTests : RuntimeTestBase
 
         Assert.True(scene.Physics.CheckSphere(Float3.Zero, 0.2f));
 
-        Collider collider = scene.AllObjects.First(o => o.Name == "StaticBox").GetComponent<BoxCollider>()!;
+        Collider collider = scene.Objects.First(o => o.Name == "StaticBox").GetComponent<BoxCollider>()!;
         collider.Center = new Float3(10, 0, 0);
         StepPhysics(scene, 2);
 

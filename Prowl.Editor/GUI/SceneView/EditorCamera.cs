@@ -307,7 +307,7 @@ public class EditorCamera
     private static Camera? FindSceneCamera(SceneInstance scene)
     {
         // First try to find a camera tagged "Main Camera"
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in scene.Objects)
         {
             if (go.HideFlags.HasFlag(HideFlags.HideAndDontSave)) continue;
             if (!go.CompareTag("Main Camera")) continue;
@@ -317,7 +317,7 @@ public class EditorCamera
         }
 
         // Fallback: first visible Camera in the scene
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in scene.Objects)
         {
             if (go.HideFlags.HasFlag(HideFlags.HideAndDontSave)) continue;
 

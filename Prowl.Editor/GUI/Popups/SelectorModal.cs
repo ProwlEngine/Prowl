@@ -191,7 +191,7 @@ public static class SelectorModal
                 .OnClick(0, (_, _) => { _callback?.Invoke(null); Close(); });
 
             int idx = 0;
-            foreach (GameObject go in scene.AllObjects)
+            foreach (GameObject go in scene.Objects)
             {
                 if (go.HideFlags.HasFlag(HideFlags.Hide) || go.HideFlags.HasFlag(HideFlags.HideAndDontSave))
                     continue;

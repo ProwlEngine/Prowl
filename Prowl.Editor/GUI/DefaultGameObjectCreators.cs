@@ -456,7 +456,7 @@ internal static class DefaultGameObjectCreators
     {
         if (scene.IsNotValid()) scene = SceneInstance.Main;
         if (scene.IsNotValid()) return;
-        foreach (EventSystem? es in scene.FindObjectsOfType<EventSystem>())
+        foreach (EventSystem? es in scene.GetAll<EventSystem>(includeDisabled: true))
             if (es.IsValid()) return;
         GameObject esGo = HierarchyPanel.CreateGameObject("Event System", null, select: false, beginRename: false);
         esGo.AddComponent<EventSystem>();
@@ -470,7 +470,7 @@ internal static class DefaultGameObjectCreators
         SceneInstance scene = SceneInstance.Main;
         if (scene.IsValid())
         {
-            foreach (GameCanvas? c in scene.FindObjectsOfType<GameCanvas>())
+            foreach (GameCanvas? c in scene.GetAll<GameCanvas>(includeDisabled: true))
                 if (c.IsValid()) return c.GameObject;
         }
 

@@ -55,7 +55,7 @@ public class InspectorPanel : DockPanel
         {
             string? guidStr = node?.GetValue<string>();
             if (!Guid.TryParse(guidStr, out Guid guid)) continue;
-            GameObject? go = scene.FindObjectByIdentifier<GameObject>(guid);
+            GameObject? go = scene.FindObject<GameObject>(guid);
             if (go.IsNotValid()) continue;
 
             if (first) { Selection.Select(go); first = false; }

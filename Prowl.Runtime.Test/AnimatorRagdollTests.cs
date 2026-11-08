@@ -43,7 +43,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
     }
 
     private static GameObject? Puppet(SceneInstance scene)
-        => scene.AllObjects.FirstOrDefault(o => o.Name == "Character Ragdoll");
+        => scene.Objects.FirstOrDefault(o => o.Name == "Character Ragdoll");
 
     [Fact]
     public void ARagdollNode_BuildsAHiddenPuppet_AndLeavesTheBonesAlone()

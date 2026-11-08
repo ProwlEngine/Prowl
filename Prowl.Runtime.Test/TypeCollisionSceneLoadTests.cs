@@ -50,7 +50,7 @@ public class TypeCollisionSceneLoadTests : RuntimeTestBase
         SceneInstance? clone = SceneInstance.Instantiate(SceneContent.Read(echo));
 
         Assert.NotNull(clone);
-        var objs = clone.AllObjects.ToList();
+        var objs = clone.Objects.ToList();
         Assert.Equal(3, objs.Count);
         Assert.Contains(objs, g => g.Name == "Healthy");
         Assert.Contains(objs, g => g.Name == "HasBadComponent");

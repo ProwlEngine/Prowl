@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Linq;
+
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -413,7 +415,7 @@ public class Selectable : UIBehaviour,
         Selectable? wrap = null;
         float wrapScore = float.NegativeInfinity;
 
-        foreach (GameObject go in scene.ActiveObjects)
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy))
         {
             foreach (Selectable candidate in go.GetComponents<Selectable>())
             {

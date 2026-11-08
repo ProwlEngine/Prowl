@@ -1083,7 +1083,7 @@ public static class Undo
     private static GameObject? FindGO(Guid identifier)
     {
         SceneInstance scene = SceneInstance.Main;
-        return scene.IsValid() ? scene.FindObjectByIdentifier<GameObject>(identifier) : null;
+        return scene.IsValid() ? scene.FindObject<GameObject>(identifier) : null;
     }
 
     // ================================================================
@@ -1166,8 +1166,8 @@ public static class Undo
         {
             switch (_kind)
             {
-                case KeyKind.GameObject: return scene.IsValid() ? scene.FindObjectByIdentifier<GameObject>(_id) : null;
-                case KeyKind.Component: return scene.IsValid() ? scene.FindObjectByIdentifier<Component>(_id) : null;
+                case KeyKind.GameObject: return scene.IsValid() ? scene.FindObject<GameObject>(_id) : null;
+                case KeyKind.Component: return scene.IsValid() ? scene.FindObject<Component>(_id) : null;
                 case KeyKind.Asset: return AssetDatabase.Get(_id);
                 case KeyKind.Resolver: return _resolve!();
                 default:
@@ -1784,7 +1784,7 @@ public static class Undo
         public static List<Guid> Order(GameObject? parent, SceneInstance? scene)
         {
             if (parent.IsValid()) return [.. parent.Children.Select(c => c.Identifier)];
-            return scene.IsValid() ? [.. scene.RootObjects.Select(r => r.Identifier)] : [];
+            return scene.IsValid() ? [.. scene.Roots.Select(r => r.Identifier)] : [];
         }
 
         public override IEnumerable<UndoOwner> Owners => [UndoOwner.OfCurrentScene];
@@ -1976,7 +1976,7 @@ public static class Undo
         public EngineObject? Find(Guid id)
         {
             if (_built.TryGetValue(id, out EngineObject? built) && built.IsValid()) return built;
-            return Scene.IsValid() ? Scene.FindObjectByIdentifier<EngineObject>(id) : null;
+            return Scene.IsValid() ? Scene.FindObject<EngineObject>(id) : null;
         }
 
         public void AttachGameObject(Guid id, Placement placement, bool select)
@@ -2099,7 +2099,7 @@ public static class Undo
         public static void Rebind(SceneInstance scene, HashSet<Guid> recreated)
         {
             var live = new Dictionary<Guid, EngineObject>();
-            foreach (GameObject go in scene.AllObjects)
+            foreach (GameObject go in scene.Objects)
             {
                 if (recreated.Contains(go.Identifier)) live[go.Identifier] = go;
                 foreach (Component c in go._components)
@@ -2120,7 +2120,7 @@ public static class Undo
                 }
             }
 
-            foreach (GameObject go in scene.AllObjects.ToList())
+            foreach (GameObject go in scene.Objects.ToList())
                 foreach (Component c in go._components.ToList())
                 {
                     var visited = new HashSet<object>(ReferenceEqualityComparer.Instance) { c };

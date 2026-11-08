@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Linq;
 using System.Collections.Generic;
 
 using Prowl.Runtime;
@@ -41,7 +42,7 @@ internal static class UIPicker
         int bestSortOrder = int.MinValue;
         float bestT = float.PositiveInfinity;
 
-        foreach (GameObject go in scene.ActiveObjects)
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy))
         {
             GameCanvas? canvas = go.GetComponent<GameCanvas>();
             if (canvas.IsNotValid() || !canvas.EnabledInHierarchy) continue;

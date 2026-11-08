@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Linq;
 using System.Collections.Generic;
 
 using Prowl.Graphite.Rendering;
@@ -271,7 +272,7 @@ public sealed class SceneRendering : IDisposable
     private FogVolumeDesc[] FogVolumes(float density)
     {
         _fogVolumes.Clear();
-        foreach (GameObject go in _scene.ActiveObjects)
+        foreach (GameObject go in _scene.Objects.Where(o => o.EnabledInHierarchy))
         {
             FogVolume? volume = go.GetComponent<FogVolume>();
             if (volume.IsValid() && volume.EnabledInHierarchy && _fogVolumes.Count < EnvironmentDesc.MaxFogVolumes)

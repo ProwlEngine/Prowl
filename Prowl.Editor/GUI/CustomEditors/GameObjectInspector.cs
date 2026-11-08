@@ -973,7 +973,7 @@ public static class GameObjectInspector
         {
             Runtime.Resources.SceneInstance scene = Runtime.Resources.SceneInstance.Main;
             if (scene.IsNotValid()) return;
-            Component? c = scene.FindObjectByIdentifier<Component>(component);
+            Component? c = scene.FindObject<Component>(component);
             if (c.IsValid()) c.SetSiblingIndex(index);
         }
     }
@@ -1360,7 +1360,7 @@ public static class GameObjectInspector
         Origami.Button(paper, id, label, () =>
             {
                 Runtime.Resources.SceneInstance scene = Runtime.Resources.SceneInstance.Main;
-                GameObject? live = scene.IsValid() ? scene.FindObjectByIdentifier<GameObject>(rootId) : null;
+                GameObject? live = scene.IsValid() ? scene.FindObject<GameObject>(rootId) : null;
                 if (live.IsValid()) act(live!);
             })
             .Small().Width(width).Height(EditorTheme.RowHeight).Ghost().Show();

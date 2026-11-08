@@ -117,7 +117,7 @@ public class HotReloadSceneTests : EditorTestHarness
         string text = scene.CaptureTree().WriteToString();
         SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text)), SceneMode.Edit);
 
-        Component restoredLoot = restored.AllObjects
+        Component restoredLoot = restored.Objects
             .First(g => g.Name == "Chest")
             .GetComponents()
             .First(c => c.GetType().Name == "Loot");

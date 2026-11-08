@@ -38,7 +38,7 @@ public class UndoTests : EditorTestHarness
 {
     public UndoTests() => Undo.Clear(); // static history persists across tests
 
-    private static GameObject? FindGO(Guid id) => SceneInstance.Main.FindObjectByIdentifier<GameObject>(id);
+    private static GameObject? FindGO(Guid id) => SceneInstance.Main.FindObject<GameObject>(id);
 
     private (SceneInstance scene, GameObject go, UndoComp comp) MakeScene()
     {
@@ -264,7 +264,7 @@ public class UndoTests : EditorTestHarness
         SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(whileMissing)), SceneMode.Edit);
         SceneInstance.Load(scene);
         SceneInstance.ProcessPendingLoad();
-        GameObject loadedHolder = scene.AllObjects.Single(g => g.Name == "Holder");
+        GameObject loadedHolder = scene.Objects.Single(g => g.Name == "Holder");
 
         Undo.DestroyObjectImmediate(loadedHolder);
         Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
@@ -272,10 +272,10 @@ public class UndoTests : EditorTestHarness
 
         string saved = SceneInstance.Main.CaptureTree().WriteToString().Replace("Ghost_DoesNotExist", nameof(UndoLinkComp));
         SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(saved)), SceneMode.Edit);
-        UndoLinkComp restoredLink = restored.AllObjects.Single(g => g.Name == "Holder").GetComponent<UndoLinkComp>()!;
+        UndoLinkComp restoredLink = restored.Objects.Single(g => g.Name == "Holder").GetComponent<UndoLinkComp>()!;
 
         Assert.Equal(5, restoredLink.Value);
-        Assert.Same(restored.AllObjects.Single(g => g.Name == "Target"), restoredLink.Target);
+        Assert.Same(restored.Objects.Single(g => g.Name == "Target"), restoredLink.Target);
     }
 
     [Fact]
@@ -545,7 +545,7 @@ public class UndoTests : EditorTestHarness
         return go;
     }
 
-    private static T Live<T>(Guid id) where T : EngineObject => SceneInstance.Main.FindObjectByIdentifier<T>(id)!;
+    private static T Live<T>(Guid id) where T : EngineObject => SceneInstance.Main.FindObject<T>(id)!;
 
     [Fact]
     public void DestroyedTogether_ReferenceEachOthersLiveInstancesOnUndo()
@@ -606,7 +606,7 @@ public class UndoTests : EditorTestHarness
         Guid id = b.Identifier;
 
         Undo.DestroyObjectImmediate(b);
-        Assert.DoesNotContain(scene.AllObjects, g => g.Identifier == id);
+        Assert.DoesNotContain(scene.Objects, g => g.Identifier == id);
         Undo.FlushUndoRecordObjects();
         Undo.PerformUndo();
 
@@ -649,13 +649,13 @@ public class UndoTests : EditorTestHarness
 
         Undo.PerformUndo();
         Assert.Same(oldParent, Live<GameObject>(childId).Parent);
-        Assert.Null(scene.FindObjectByIdentifier<GameObject>(parentId));
+        Assert.Null(scene.FindObject<GameObject>(parentId));
 
         Undo.PerformRedo();
         GameObject liveParent = Live<GameObject>(parentId);
         Assert.Single(liveParent.Children);
         Assert.Empty(oldParent.Children);
-        Assert.Single(scene.AllObjects, g => g.Identifier == childId);
+        Assert.Single(scene.Objects, g => g.Identifier == childId);
     }
 
     [Fact]
@@ -678,7 +678,7 @@ public class UndoTests : EditorTestHarness
 
         GameObject liveChild = Live<GameObject>(childId);
         Assert.Same(liveChild, Live<GameObject>(parentId).GetComponent<UndoRefComp>()!.Target);
-        Assert.Single(scene.AllObjects, g => g.Identifier == childId);
+        Assert.Single(scene.Objects, g => g.Identifier == childId);
     }
 
     [Fact]
@@ -749,7 +749,7 @@ public class UndoTests : EditorTestHarness
         Undo.PerformUndo();
 
         Assert.Same(a, holder.Target);
-        Assert.Single(scene.AllObjects, g => g.Name == "A");
+        Assert.Single(scene.Objects, g => g.Name == "A");
     }
 
     [Fact]

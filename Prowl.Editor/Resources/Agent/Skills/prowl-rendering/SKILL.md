@@ -43,7 +43,7 @@ The built in `Standard` shader uses these property names. `material <ref>` lists
 ```csharp
 // prowl eval: bloom, tonemapping and FXAA on the main camera
 using Prowl.Runtime.Rendering;
-var camera = SceneInstance.Main.FindObjectsOfType<Camera>()[0]!;
+var camera = SceneInstance.Main.GetAll<Camera>(includeDisabled: true)[0]!;
 camera.Profile = VolumeProfile.CreateCameraDefault("Main Camera Profile");
 camera.Profile.Add<Bloom>().Intensity.Set(1f);
 camera.Profile.Get<Tonemapping>()!.Mode.Set(TonemappingMode.ACES);

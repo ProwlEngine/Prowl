@@ -41,8 +41,8 @@ public class SceneManagementTests : RuntimeTestBase
         scene.Add(go);
 
         Assert.Same(scene, go.Scene);
-        Assert.Equal(1, scene.Count);
-        Assert.Contains(go, scene.AllObjects);
+        Assert.Equal(1, scene.ObjectCount);
+        Assert.Contains(go, scene.Objects);
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public class SceneManagementTests : RuntimeTestBase
         scene.Add(go);
         scene.Add(go);
 
-        Assert.Equal(1, scene.Count);
+        Assert.Equal(1, scene.ObjectCount);
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class SceneManagementTests : RuntimeTestBase
 
         scene.Add(parent);
 
-        Assert.Equal(2, scene.Count);
+        Assert.Equal(2, scene.ObjectCount);
         Assert.Same(scene, child.Scene);
     }
 
@@ -81,7 +81,7 @@ public class SceneManagementTests : RuntimeTestBase
         scene.Remove(go);
 
         Assert.Null(go.Scene);
-        Assert.Equal(0, scene.Count);
+        Assert.Equal(0, scene.ObjectCount);
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class SceneManagementTests : RuntimeTestBase
 
         scene.Remove(parent);
 
-        Assert.Equal(0, scene.Count);
+        Assert.Equal(0, scene.ObjectCount);
         Assert.Null(child.Scene);
     }
 
@@ -110,8 +110,8 @@ public class SceneManagementTests : RuntimeTestBase
         scene2.Add(go);
 
         Assert.Same(scene2, go.Scene);
-        Assert.DoesNotContain(go, scene1.AllObjects);
-        Assert.Contains(go, scene2.AllObjects);
+        Assert.DoesNotContain(go, scene1.Objects);
+        Assert.Contains(go, scene2.Objects);
     }
 
     [Fact]
@@ -123,8 +123,8 @@ public class SceneManagementTests : RuntimeTestBase
 
         scene.Clear();
 
-        Assert.True(scene.IsEmpty);
-        Assert.Equal(0, scene.Count);
+        Assert.Equal(0, scene.ObjectCount);
+        Assert.Equal(0, scene.ObjectCount);
     }
 
     [Fact]
@@ -139,15 +139,15 @@ public class SceneManagementTests : RuntimeTestBase
         drop.Dispose();
         // Count and AllObjects both exclude disposed objects immediately (before Flush), so they
         // alone can't prove Flush does anything - verify Flush actually removes it from the scene.
-        Assert.Equal(1, scene.Count);
-        Assert.DoesNotContain(drop, scene.AllObjects);
+        Assert.Equal(1, scene.ObjectCount);
+        Assert.DoesNotContain(drop, scene.Objects);
         Assert.NotNull(drop.Scene); // still owned by the scene until flushed
 
         scene.Flush();
 
         Assert.Null(drop.Scene); // Flush detached it from the scene
-        Assert.Equal(1, scene.Count);
-        Assert.Contains(keep, scene.AllObjects);
+        Assert.Equal(1, scene.ObjectCount);
+        Assert.Contains(keep, scene.Objects);
     }
 
     [Fact]
@@ -158,11 +158,11 @@ public class SceneManagementTests : RuntimeTestBase
         GameObject b = CreateGameObject("B");
         scene.Add(a);
         scene.Add(b);
-        Assert.Equal(2, scene.Count);
+        Assert.Equal(2, scene.ObjectCount);
 
         a.Dispose();
 
-        Assert.Equal(1, scene.Count);
+        Assert.Equal(1, scene.ObjectCount);
     }
 
     // ---- Collection views ----
@@ -176,9 +176,9 @@ public class SceneManagementTests : RuntimeTestBase
         child.SetParent(parent);
         scene.Add(parent);
 
-        Assert.Single(scene.RootObjects);
-        Assert.Contains(parent, scene.RootObjects);
-        Assert.DoesNotContain(child, scene.RootObjects);
+        Assert.Single(scene.Roots);
+        Assert.Contains(parent, scene.Roots);
+        Assert.DoesNotContain(child, scene.Roots);
     }
 
     [Fact]
@@ -191,7 +191,7 @@ public class SceneManagementTests : RuntimeTestBase
         scene.Add(on);
         scene.Add(off);
 
-        var active = scene.ActiveObjects.ToList();
+        var active = scene.Objects.Where(o => o.EnabledInHierarchy).ToList();
 
         Assert.Contains(on, active);
         Assert.DoesNotContain(off, active);
@@ -217,41 +217,29 @@ public class SceneManagementTests : RuntimeTestBase
     public void IsEmpty_ReflectsContents()
     {
         SceneInstance scene = CreateScene();
-        Assert.True(scene.IsEmpty);
+        Assert.Equal(0, scene.ObjectCount);
 
         GameObject go = CreateGameObject();
         scene.Add(go);
-        Assert.False(scene.IsEmpty);
+        Assert.NotEqual(0, scene.ObjectCount);
 
         scene.Remove(go);
-        Assert.True(scene.IsEmpty);
+        Assert.Equal(0, scene.ObjectCount);
     }
 
     // ---- Find ----
 
     [Fact]
-    public void FindObjectsOfType_ReturnsGameObjectsAndComponents()
+    public void FindObject_FindsGameObjectAndComponent()
     {
         SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
         PlainComponent comp = go.AddComponent<PlainComponent>();
         scene.Add(go);
 
-        Assert.Contains(go, scene.FindObjectsOfType<GameObject>());
-        Assert.Contains(comp, scene.FindObjectsOfType<PlainComponent>());
-    }
-
-    [Fact]
-    public void FindObjectByID_FindsGameObjectAndComponent()
-    {
-        SceneInstance scene = CreateScene();
-        GameObject go = CreateGameObject();
-        PlainComponent comp = go.AddComponent<PlainComponent>();
-        scene.Add(go);
-
-        Assert.Same(go, scene.FindObjectByID<GameObject>(go.InstanceID));
-        Assert.Same(comp, scene.FindObjectByID<PlainComponent>(comp.InstanceID));
-        Assert.Null(scene.FindObjectByID<GameObject>(-12345));
+        Assert.Same(go, scene.FindObject<GameObject>(go.Identifier));
+        Assert.Same(comp, scene.FindObject<PlainComponent>(comp.Identifier));
+        Assert.Null(scene.FindObject(Guid.NewGuid()));
     }
 
     [Fact]
@@ -262,8 +250,8 @@ public class SceneManagementTests : RuntimeTestBase
         PlainComponent comp = go.AddComponent<PlainComponent>();
         scene.Add(go);
 
-        Assert.Same(go, scene.FindObjectByIdentifier<GameObject>(go.Identifier));
-        Assert.Same(comp, scene.FindObjectByIdentifier<PlainComponent>(comp.Identifier));
+        Assert.Same(go, scene.FindObject<GameObject>(go.Identifier));
+        Assert.Same(comp, scene.FindObject<PlainComponent>(comp.Identifier));
     }
 
     // ---- Static scene manager ----
@@ -276,6 +264,86 @@ public class SceneManagementTests : RuntimeTestBase
     {
         Assert.NotNull(SceneInstance.Main);
         Assert.False(SceneInstance.Main.IsDisposed);
+    }
+
+    private interface IProbe { }
+
+    private sealed class Probed : Component, IProbe { }
+
+    private sealed class OtherProbed : Component { }
+
+    // The index is built by the first query and then kept as components join, so later joins and destroyed members
+    // show up correctly without a rescan.
+    [Fact]
+    public void GetAll_TracksComponentsJoiningAndLeaving_ByClassAndInterface()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        GameObject a = CreateGameObject("A");
+        Probed first = a.AddComponent<Probed>();
+        world.Add(a);
+        Assert.Equal([first], world.GetAll<IProbe>());
+
+        GameObject b = CreateGameObject("B");
+        b.AddComponent<OtherProbed>();
+        world.Add(b);
+        Probed second = b.AddComponent<Probed>();
+        Assert.Equal([first, second], world.GetAll<Probed>());
+        Assert.Equal([first, second], world.GetAll<IProbe>());
+
+        second.Enabled = false;
+        Assert.Equal([first], world.GetAll<IProbe>());
+        Assert.Equal([first, second], world.GetAll<IProbe>(includeDisabled: true));
+
+        a.Dispose();
+        Assert.Equal([second], world.GetAll<Probed>(includeDisabled: true));
+        Assert.Null(world.Get<Probed>());
+
+        world.Remove(b);
+        Assert.Empty(world.GetAll<Probed>(includeDisabled: true));
+    }
+
+    [Fact]
+    public void FindObject_ByIdentifier_FollowsIdentifierChangesAndLeaving()
+    {
+        SceneInstance world = CreateScene();
+        GameObject go = CreateGameObject();
+        PlainComponent comp = go.AddComponent<PlainComponent>();
+        world.Add(go);
+
+        Assert.Same(go, world.FindObject(go.Identifier));
+        Assert.True(world.TryFindObject(comp.Identifier, out PlainComponent found));
+        Assert.Same(comp, found);
+
+        Guid old = go.Identifier, renewed = Guid.NewGuid();
+        go.SetIdentifier(renewed);
+        Assert.Null(world.FindObject(old));
+        Assert.Same(go, world.FindObject(renewed));
+
+        world.Remove(go);
+        Assert.Null(world.FindObject(renewed));
+    }
+
+    [Fact]
+    public void FindObject_ByNamePathAndTag()
+    {
+        SceneInstance world = CreateScene();
+        GameObject level = CreateGameObject("Level");
+        GameObject props = CreateGameObject("Props");
+        GameObject door = CreateGameObject("Door");
+        door.Tag = "Player";
+        props.SetParent(level);
+        door.SetParent(props);
+        world.Add(level);
+
+        Assert.Same(door, world.FindObject("Door"));
+        Assert.Same(door, world.FindObjectByPath("Level/Props/Door"));
+        Assert.Null(world.FindObjectByPath("Level/Door"));
+        Assert.Same(door, world.FindObjectWithTag("Player"));
+        var tagged = new List<GameObject>();
+        world.FindObjectsWithTag("Player", tagged);
+        Assert.Equal([door], tagged);
+        Assert.Equal([level], world.Roots);
+        Assert.Equal(3, world.ObjectCount);
     }
 
     [Fact]
@@ -538,7 +606,7 @@ public class SceneManagementTests : RuntimeTestBase
 
         Assert.False(keeper.IsDisposed);
         Assert.Same(second, keeper.Scene);
-        Assert.Contains(keeper, second.AllObjects);
+        Assert.Contains(keeper, second.Objects);
     }
 
     // The trap: after Load(), Scene.Current is still the outgoing scene, so adding there hands the
@@ -580,7 +648,7 @@ public class SceneManagementTests : RuntimeTestBase
 
         Assert.False(keeper.IsDisposed);
         Assert.Same(second, keeper.Scene);
-        Assert.Contains(keeper, second.AllObjects);
+        Assert.Contains(keeper, second.Objects);
         Assert.True(doomed.IsDisposed, "Anything not preserved goes with the old scene.");
     }
 
@@ -702,7 +770,7 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance.Load(second);
         SceneInstance.ProcessPendingLoad(); // must not throw or re-add the corpse
 
-        Assert.Empty(second.AllObjects);
+        Assert.Empty(second.Objects);
     }
 
     // Leaving play mode ends the preservation session. Without this the objects a play session kept
@@ -726,7 +794,7 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance.ProcessPendingLoad();
 
         Assert.True(keeper.IsDisposed);
-        Assert.Empty(restored.AllObjects);
+        Assert.Empty(restored.Objects);
     }
 
     // Queued like any other Destroy, so teardown lands at the end of the frame rather than under
@@ -773,7 +841,7 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance next = CreateScene();
         SceneInstance.Load(next);
         SceneInstance.ProcessPendingLoad();
-        Assert.Empty(next.AllObjects);
+        Assert.Empty(next.Objects);
     }
 
     [Fact]

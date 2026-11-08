@@ -84,7 +84,7 @@ public sealed class LightmapBakeService
         var occluders = new List<(BakeMesh mesh, Float4x4 transform)>();
         int matCounter = 0;
         int meshKey = 0;
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in scene.Objects)
         {
             if (!go.IsStatic || !go.EnabledInHierarchy) continue;
 
@@ -110,7 +110,7 @@ public sealed class LightmapBakeService
         }
 
         // --- Lights (by bake mode). ---
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in scene.Objects)
         {
             Light? light = go.GetComponent<Light>();
             if (light.IsNotValid() || !light.EnabledInHierarchy || light.BakeMode == LightBakeMode.Realtime) continue;
@@ -128,7 +128,7 @@ public sealed class LightmapBakeService
                     target.AddBakeInstance(om, ox).ReceivesLighting = false;
 
         // --- Probes. ---
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in scene.Objects)
         {
             LightProbeGroup? grp = go.GetComponent<LightProbeGroup>();
             if (grp.IsValid() && grp.EnabledInHierarchy) _probePositions.AddRange(grp.GetWorldPositions());

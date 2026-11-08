@@ -238,7 +238,7 @@ public static class PrefabEditingMode
 
         // A prefab has exactly one root, so anything else the user created at the top level is not
         // going to be saved. Say so rather than dropping it silently.
-        var strays = scene.RootObjects
+        var strays = scene.Roots
             .Where(go => !go.HideFlags.HasFlag(HideFlags.HideAndDontSave) && go != root)
             .Select(go => go.Name)
             .ToList();
