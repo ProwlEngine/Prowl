@@ -419,11 +419,11 @@ void main()
 
 #elif defined(CLOUD_MARCH)
 
+#include "Graphite/Probes.glsl"
+
 layout(location = 1) out vec4 outDistance;
 
 uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
-#include "Graphite/Probes.glsl"
-
 uniform vec2 _CloudFullResolution;
 uniform vec2 _CloudLowResolution;
 uniform vec3 _CloudCamera;          // the first layer's camera, absolute
@@ -658,15 +658,12 @@ void main()
         transmittance *= 1.0 - high.a;
     }
 
-    // Far clouds fade into the sky behind them as a whole, by how far the cloud the pixel shows is, so their shapes
-    // stay whole as they go rather than thinning out
-    float distance = weightSum > 1e-6 ? distSum / weightSum : 0.0;
-    float far = distance * _CloudHorizonFade;
-    float fade = exp(-far * far * far * far);
-    float alpha = (1.0 - transmittance) * fade;
-    color *= fade;
-    // How far the cloud the pixel shows is, 0 for clear sky
-    outColor = vec4(color, alpha);
+    // What lies behind is blocked as if the cloud were four times as thick, so the sun and bright HDR highlights do not
+    // shine through dense cloud, with its own light raised to match so it looks the same
+    float blocked = pow(transmittance, 4.0);
+    color *= (1.0 - blocked) / max(1.0 - transmittance, 1e-4);
+    transmittance = blocked;
+
     // Far clouds fade into the sky behind them as a whole, by how far the cloud the pixel shows is, so their shapes
     // stay whole as they go rather than thinning out. They fade to the captured sky, which has no sun disk, and still
     // block what lies behind them. The sky is read at least 1 degree above the horizon, so it never takes in the ground
@@ -686,12 +683,6 @@ void main()
     }
     // How far the cloud the pixel shows is, 0 for clear sky
     outColor = vec4(color, alpha);
-    // What lies behind is blocked as if the cloud were four times as thick, so the sun and bright HDR highlights do not
-    // shine through dense cloud, with its own light raised to match so it looks the same
-    float blocked = pow(transmittance, 4.0);
-    color *= (1.0 - blocked) / max(1.0 - transmittance, 1e-4);
-    transmittance = blocked;
-
     outDistance = vec4(alpha > 0.01 ? distance : 0.0, 0.0, 0.0, 0.0);
 }
 
