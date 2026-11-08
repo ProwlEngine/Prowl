@@ -23,36 +23,8 @@ public class InputActionMapEditor : AssetImporterEditor
     private string? _confirmDelete;
     private readonly InputBindingPopup _popup = new();
 
-    // ============================================================
-    // Pending changes
-    // ============================================================
-    // The map is edited live, so anything already bound to it reacts as you go. The base class measures
-    // whether that live object still matches the file on disk.
-
-    protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
-        => asset is InputActionMap map && map.IsValid() ? Serialize(map) : null;
-
-    protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
-        => asset is InputActionMap map && map.IsValid() && SaveMap(map, entry);
-
-    /// <summary>
-    /// Baselines against the imported form rather than the live object, so a map mutated outside this
-    /// inspector shows up as pending instead of being quietly adopted as the clean state.
-    /// </summary>
-    protected override EchoObject? CapturePersistedState(AssetEntry entry, EngineObject? asset)
-        => EditorAssetBackend.Instance?.ReadCachedEcho(entry.Guid) ?? CaptureState(entry, asset);
-
-    protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
-    {
-        if (asset is not InputActionMap map || map.IsNotValid()) return;
-
-        // Refilled in place, so anything already holding this map sees the revert.
-        _popup.Close();
-        EditorAssetBackend.Instance?.RevertToSaved(map);
-    }
-
-    /// <summary>Serializes the map as its file form.</summary>
-    private static EchoObject Serialize(InputActionMap map) => Serializer.Serialize(typeof(object), map);
+    // The map is edited live, so anything already bound to it reacts as you go. Each draw records the map, and
+    // the flush keeps a record only when something changed, which puts the map in the dirty asset set.
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
@@ -61,6 +33,7 @@ public class InputActionMapEditor : AssetImporterEditor
 
         if (_popup.IsOpen && _popup.Map != map) _popup.Close();
         OrigamiMetrics m = Origami.Current.Metrics;
+        if (!Origami.IsReadOnly) Core.Undo.RecordObject(map, "Edit Input Actions");
 
         using (paper.Row($"{id}_tools").Height(34).Gap(m.SpacingLarge)
             .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).Enter())
@@ -91,35 +64,12 @@ public class InputActionMapEditor : AssetImporterEditor
                 DrawAction(paper, $"{id}_a{map.IndexOf(action.Name)}", map, action, usage);
         }
 
-        DrawPendingFooter(paper, $"{id}_pending", entry, asset);
+        DrawSaveRevertBar(paper, $"{id}_pending", map);
     }
 
     public override void OnPanelOverlay(Paper paper, string id, float width, float height)
     {
         if (_popup.IsOpen) _popup.Draw(paper, id, width, height);
-    }
-
-    /// <summary>A bar under the list that says the map has unsaved edits, with Revert and Apply.</summary>
-    private void DrawPendingFooter(Paper paper, string id, AssetEntry entry, EngineObject? asset)
-    {
-        if (Origami.IsReadOnly || !HasPendingChanges(entry, asset)) return;
-        OrigamiMetrics m = Origami.Current.Metrics;
-
-        using (paper.Row(id).Height(48).Padding(14, 10, 0, 0).Gap(m.SpacingLarge)
-            .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge)
-            .Rounded(m.ContainerRounding).BackgroundColor(EditorTheme.Neutral400)
-            .BorderColor(EditorTheme.WithAlpha(EditorTheme.Amber400, 90)).BorderWidth(1).Enter())
-        {
-            paper.Box($"{id}_dot").Width(8).Height(8).Rounded(4).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-                .BackgroundColor(EditorTheme.Amber400).IsNotInteractable();
-            paper.Box($"{id}_t").Height(48)
-                .Text("Unsaved changes, already live in play mode", EditorTheme.FontMedium ?? EditorTheme.DefaultFont!)
-                .TextColor(EditorTheme.Amber400).FontSize(InputBindingDisplay.LabelSize + 1)
-                .Alignment(TextAlignment.MiddleLeft).TextTruncate().IsNotInteractable();
-            InputBindingDisplay.SmallButton(paper, $"{id}_revert", Prowl.Rosetta.Loc.Get("dialog.revert"), () => RevertPendingChanges(entry, asset));
-            InputBindingDisplay.SmallButton(paper, $"{id}_apply", $"{EditorIcons.FloppyDisk}  {Prowl.Rosetta.Loc.Get("dialog.apply")}",
-                () => ApplyPendingChanges(entry, asset), primary: true);
-        }
     }
 
     private bool Matches(InputAction action)
@@ -481,9 +431,6 @@ public class InputActionMapEditor : AssetImporterEditor
         map.InsertAction(map.IndexOf(action.Name) + 1, copy);
         _openAction = copy.Name;
     }
-
-    private static bool SaveMap(InputActionMap map, AssetEntry entry)
-        => EditorAssetBackend.Instance?.SaveAsset(entry.Guid, Serialize(map)) ?? false;
 
     private static string FindUniqueName(InputActionMap map, string baseName)
         => Utils.UniqueNames.MakeUnique(baseName, n => map.FindAction(n) != null,

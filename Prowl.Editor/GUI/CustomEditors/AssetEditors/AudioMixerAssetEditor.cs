@@ -54,33 +54,8 @@ public class AudioMixerAssetEditor : AssetImporterEditor
     // something anyone can see.
     private float _consoleWidth = 320.0f;
 
-    protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
-        => asset is AudioMixer mixer && mixer.IsValid() ? SerializePersisted(mixer) : null;
-
-    /// <summary>
-    /// Baselines against what was imported rather than the live object, so a mixer changed from a
-    /// script shows up as pending instead of being adopted as already saved.
-    /// </summary>
-    protected override EchoObject? CapturePersistedState(AssetEntry entry, EngineObject? asset)
-        => EditorAssetBackend.Instance?.ReadCachedEcho(entry.Guid) ?? CaptureState(entry, asset);
-
-    /// <summary>Serializes the mixer the way its import cache holds it, its groups by reference, so it compares against the cache.</summary>
-    private static EchoObject SerializePersisted(AudioMixer mixer) => Serializer.Serialize(typeof(object), mixer);
-
-    protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
-    {
-        if (asset is not AudioMixer mixer || mixer.IsNotValid()) return false;
-        EditorAssetBackend? db = EditorAssetBackend.Instance;
-        return db != null && db.SerializeForSave(mixer) is { } serialized && db.SaveAsset(entry.Guid, serialized);
-    }
-
-    protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
-    {
-        if (asset is not AudioMixer mixer || mixer.IsNotValid()) return;
-
-        // Refilled in place, groups too, so every source already routed to one hears the revert immediately.
-        EditorAssetBackend.Instance?.RevertToSaved(mixer);
-    }
+    // The mixer and its groups are edited live. Each draw records them, and the flush keeps a record only for
+    // what changed, which puts it in the dirty asset set.
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
@@ -96,6 +71,13 @@ public class AudioMixerAssetEditor : AssetImporterEditor
         // something is drawing meters. Asked for again every frame, and it lapses on its own.
         AudioMixerGroup.RequestMetering();
 
+        if (!Origami.IsReadOnly)
+        {
+            Core.Undo.RecordObject(mixer, "Edit Audio Mixer");
+            foreach (AudioMixerGroup group in mixer.Groups)
+                if (group.IsValid()) Core.Undo.RecordObject(group, "Edit Audio Mixer");
+        }
+
         List<Strip> strips = BuildStrips(mixer);
 
         paper.Box($"{id}_probe").Width(UnitValue.Stretch()).Height(0).IsNotInteractable()
@@ -106,7 +88,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
         DrawConsole(paper, id, mixer, strips);
         DrawSelected(paper, id, mixer);
 
-        DrawApplyRevertBar(paper, id, entry, asset);
+        DrawSaveRevertBar(paper, id, mixer);
     }
 
     /// <summary>A bus and how deep it sits, in the order the strips are laid out.</summary>
