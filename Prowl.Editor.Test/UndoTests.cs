@@ -1586,4 +1586,18 @@ public class UndoTests : EditorTestHarness
         Undo.PerformUndo();
         Assert.False(profile.Has(type));
     }
+
+    [Fact]
+    public void JumpToAStepThatIsGone_DoesNothing()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+        Undo.RecordObject(comp, "Edit"); comp.Value = 1; Undo.IncrementGroup();
+
+        Undo.PerformUndoTo(long.MaxValue);
+        Undo.PerformRedoTo(long.MaxValue);
+
+        Assert.Equal(1, comp.Value);
+        Assert.Single(Undo.UndoSteps);
+    }
 }
