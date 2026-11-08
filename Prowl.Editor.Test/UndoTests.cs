@@ -1620,4 +1620,24 @@ public class UndoTests : EditorTestHarness
         Assert.Equal(3, Load<Material>(material.AssetID)!.GetFloat("_Value"));
         Assert.Contains("3", File.ReadAllText(AssetAbsolutePath("M.mat")));
     }
+
+    [Fact]
+    public void NestedGridEdit_IsRecordedOnItsHolderComponent()
+    {
+        Scene scene = OpenScene();
+        GameObject target = Add(scene, "Target");
+        UndoRefComp holder = Add(scene, "Holder").AddComponent<UndoRefComp>();
+
+        Frame(edits: () =>
+        {
+            using (Undo.InspectorHolder(holder)) Undo.InspectorBaseline(holder.Nested);
+            holder.Nested.Target = target;
+            Undo.InspectorChanged(holder.Nested);
+        });
+        Frame();
+
+        Assert.True(EditorSceneManager.IsDirty);
+        Undo.PerformUndo();
+        Assert.True(ReferenceEquals(holder.Nested.Target, null));
+    }
 }

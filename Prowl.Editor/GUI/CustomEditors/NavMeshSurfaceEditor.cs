@@ -38,8 +38,8 @@ public class NavMeshSurfaceEditor : CustomEditor
                 surface.DefaultArea = v;
             });
 
-            PropertyGridUtils.Draw(paper, $"{id}_adv_ovr", surface.BuildOverrides,
-                _ => EditorUtility.SetDirty(surface));
+            using (Undo.InspectorHolder(surface))
+                PropertyGridUtils.Draw(paper, $"{id}_adv_ovr", surface.BuildOverrides, null);
 
             paper.Box($"{id}_adv_reset_sp").Height(4);
             Origami.Button(paper, $"{id}_adv_reset", "Reset Advanced To Defaults", () =>

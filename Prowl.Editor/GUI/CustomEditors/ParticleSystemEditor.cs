@@ -59,11 +59,10 @@ public class ParticleSystemComponentEditor : CustomEditor
         }, () => DrawModule(paper, $"{id}_{key}", ps, module));
 
     private static void DrawModule(Paper paper, string id, ParticleSystemComponent ps, ParticleSystemModule module)
-        => PropertyGridUtils.Draw(paper, $"{id}_grid", module, _ =>
-        {
-            ps.OnValidate();
-            EditorUtility.SetDirty(ps);
-        }, 1);
+    {
+        using (Undo.InspectorHolder(ps))
+            PropertyGridUtils.Draw(paper, $"{id}_grid", module, _ => ps.OnValidate(), 1);
+    }
 
     private static void DrawPlaybackControls(Paper paper, string id, ParticleSystemComponent ps, Prowl.Scribe.FontFile font)
     {

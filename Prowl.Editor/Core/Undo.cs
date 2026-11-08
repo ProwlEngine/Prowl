@@ -814,6 +814,9 @@ public static class Undo
         if (_inspectorBaselines.Count > 0)
             foreach (object key in _inspectorBaselines.Where(kv => kv.Value.Frame < _frame - 1).Select(kv => kv.Key).ToList())
                 _inspectorBaselines.Remove(key);
+        if (_inspectorRedirects.Count > 0)
+            foreach (object key in _inspectorRedirects.Where(kv => !_inspectorBaselines.ContainsKey(kv.Value)).Select(kv => kv.Key).ToList())
+                _inspectorRedirects.Remove(key);
     }
 
     /// <summary>
@@ -872,10 +875,34 @@ public static class Undo
     //  Inspector
     // ================================================================
 
+    private static EngineObject? _inspectorHolder;
+    private static readonly Dictionary<object, EngineObject> _inspectorRedirects = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// While open, a plain object the inspector draws as its own root is recorded as part of <paramref name="holder"/>,
+    /// so the record is keyed to the component and owned by its scene.
+    /// </summary>
+    internal static IDisposable InspectorHolder(EngineObject holder)
+    {
+        EngineObject? previous = _inspectorHolder;
+        _inspectorHolder = holder;
+        return new HolderScope(previous);
+    }
+
+    private sealed class HolderScope(EngineObject? previous) : IDisposable
+    {
+        public void Dispose() => _inspectorHolder = previous;
+    }
+
     /// <summary>The inspector's capture of a target before it draws. Not a record.</summary>
     internal static void InspectorBaseline(object target)
     {
         if (target == null) return;
+        if (target is not EngineObject && _inspectorHolder.IsValid())
+        {
+            _inspectorRedirects[target] = _inspectorHolder;
+            target = _inspectorHolder;
+        }
         if (target is EngineObject eo && eo.IsNotValid()) return;
         _inspectorBaselines[target] = (Capture.Of(target), _frame);
     }
@@ -883,6 +910,7 @@ public static class Undo
     /// <summary>The inspector changed a target. Records the keys that differ from its capture right now.</summary>
     internal static void InspectorChanged(object target, UndoOwner? owner = null)
     {
+        if (_inspectorRedirects.TryGetValue(target, out EngineObject? holder)) target = holder;
         if (!_inspectorBaselines.TryGetValue(target, out (Capture Capture, int Frame) baseline)) return;
         if (target is EngineObject eo && eo.IsNotValid()) return;
 
@@ -963,6 +991,7 @@ public static class Undo
     {
         _pending.Clear();
         _inspectorBaselines.Clear();
+        _inspectorRedirects.Clear();
         _isContinuous = false;
         _continuousStartState = null;
         _mouseHeld = false;
