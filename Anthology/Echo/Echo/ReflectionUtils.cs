@@ -114,6 +114,21 @@ internal readonly struct CachedFieldInfo
     }
 }
 
+/// <summary>One member Echo writes for an object, under the key it writes it with.</summary>
+public readonly struct SerializedMember
+{
+    private readonly CachedFieldInfo _info;
+
+    internal SerializedMember(CachedFieldInfo info) => _info = info;
+
+    /// <summary>The key the member is written under.</summary>
+    public string Key => _info.SerializedName;
+    public Type Type => _info.MemberType;
+    public MemberInfo Member => _info.Member;
+    public object? GetValue(object target) => _info.GetValue(target);
+    public void SetValue(object target, object? value) => _info.SetValue(target, value);
+}
+
 [RequiresUnreferencedCode("These methods use reflection and can't be statically analyzed.")]
 public static class ReflectionUtils
 {
@@ -239,6 +254,17 @@ public static class ReflectionUtils
             }
         }
         return null;
+    }
+
+    /// <summary>The members Echo writes for <paramref name="target"/>, in the order it writes them. Empty for an <see cref="ISerializable"/>.</summary>
+    public static SerializedMember[] GetSerializedMembers(object target)
+    {
+        if (target is ISerializable) return [];
+        CachedFieldInfo[] fields = target.GetSerializableFields();
+        var members = new SerializedMember[fields.Length];
+        for (int i = 0; i < fields.Length; i++)
+            members[i] = new SerializedMember(fields[i]);
+        return members;
     }
 
     internal static CachedFieldInfo[] GetSerializableFields(this object target)

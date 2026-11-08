@@ -275,12 +275,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
                     return thisBytes.SequenceEqual(otherBytes);
                 return _ref.Equals(other._ref);
 
-            case EchoType.Float:
-                return FloatValue == other.FloatValue;
-
-            case EchoType.Double:
-                return DoubleValue == other.DoubleValue;
-
+            // Floats compare by their bits, so NaN equals itself and a value read back always matches.
             default:
                 return _bits == other._bits;
         }

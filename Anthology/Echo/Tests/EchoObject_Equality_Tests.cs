@@ -257,9 +257,11 @@ public class EchoObject_Equality_Tests
         var infDouble = new EchoObject(double.PositiveInfinity);
         var negInfDouble = new EchoObject(double.NegativeInfinity);
 
-        Assert.False(nanDouble.Equals(new EchoObject(double.NaN))); // NaN should not equal NaN
+        Assert.True(nanDouble.Equals(new EchoObject(double.NaN))); // bitwise, so NaN equals itself
         Assert.True(infDouble.Equals(new EchoObject(double.PositiveInfinity)));
         Assert.True(negInfDouble.Equals(new EchoObject(double.NegativeInfinity)));
+        Assert.True(new EchoObject(float.NaN).Equals(new EchoObject(float.NaN)));
+        Assert.False(new EchoObject(0f).Equals(new EchoObject(-0f)));
     }
 
     [Fact]
