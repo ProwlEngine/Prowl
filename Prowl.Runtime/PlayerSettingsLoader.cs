@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -180,8 +180,10 @@ public static class PlayerSettingsLoader
             int maxIter = settings.TryGet("MaxFixedIterations", out EchoObject? mi) ? mi!.IntValue : 3;
 
             Time.FixedDeltaTime = fixedDt;
-            Time.TimeScale = timeScale;
             Time.MaxFixedIterations = maxIter;
+            SceneClock.Defaults = new SceneClockSettings { TimeScale = timeScale };
+            // The one global clock already exists, so it takes the default too.
+            Time.TimeScale = SceneClock.Defaults.TimeScale;
             Debug.Log("[PlayerSettings] Time applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply time: {ex.Message}"); }

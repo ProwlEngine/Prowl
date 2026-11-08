@@ -1985,7 +1985,7 @@ public class EditorApplication : Game
         // Push fresh play-mode time (game code sees Time.TimeSinceStartup = 0)
         _savedEditorTime = Runtime.Time.CurrentTime;
         Runtime.Time.TimeStack.Clear();
-        Runtime.Time.TimeStack.Push(new TimeData { TimeScale = EditorRegistries.GetSettings<TimeSettings>().DefaultTimeScale });
+        Runtime.Time.TimeStack.Push(new TimeData());
 
         // Push play-mode input handler (only forwards input when Game View focused)
         Input.PushHandler(new GameViewInputHandler(Input.Current));

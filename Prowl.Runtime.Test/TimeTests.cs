@@ -57,4 +57,16 @@ public class TimeTests
 
         Assert.Equal(time.UnscaledDeltaTime * 0.5f, time.DeltaTime, 6);
     }
+
+    [Fact]
+    public void ClockDefaults_ReachEveryNewClock()
+    {
+        SceneClockSettings previous = SceneClock.Defaults;
+        try
+        {
+            SceneClock.Defaults = new SceneClockSettings { TimeScale = 0.5f };
+            Assert.Equal(0.5f, new TimeData().TimeScale);
+        }
+        finally { SceneClock.Defaults = previous; }
+    }
 }
