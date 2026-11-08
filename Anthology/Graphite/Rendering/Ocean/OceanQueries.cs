@@ -20,6 +20,7 @@ public sealed class OceanQuery
         Normals = new Float3[count];
         Velocities = new float[count];
         Depths = new float[count];
+        Flows = new Float2[count];
     }
 
     /// <summary>The points' x and z in the world.</summary>
@@ -39,6 +40,9 @@ public sealed class OceanQuery
 
     /// <summary>How deep the water is under each point, very large in open sea.</summary>
     public float[] Depths { get; }
+
+    /// <summary>The current at each point, in m/s along x and z.</summary>
+    public Float2[] Flows { get; }
 
     /// <summary>Whether answers have arrived.</summary>
     public bool Ready { get; internal set; }
@@ -75,7 +79,7 @@ public sealed class OceanQueries : IDisposable
         _packed = new Float4[Capacity * 2];
         ResourceFactory factory = renderer.Device.ResourceFactory;
         _points = factory.CreateBuffer(new BufferDescription((uint)(Capacity * 32), BufferUsage.StructuredBufferReadOnly));
-        _results = factory.CreateBuffer(new BufferDescription((uint)(Capacity * 16), BufferUsage.StructuredBufferReadWrite));
+        _results = factory.CreateBuffer(new BufferDescription((uint)(Capacity * 32), BufferUsage.StructuredBufferReadWrite));
         _upload = new UploadFeature(this);
         _dispatch = new DispatchFeature(this, renderer.Effects.Compute("Internal/OceanQuery.glsl"), renderer.Resources.LinearRepeat, renderer.Resources.LinearClamp);
         Features = [_upload, _dispatch];
@@ -124,7 +128,7 @@ public sealed class OceanQueries : IDisposable
         (OceanQuery Query, int First)[] batch = [.. _batch];
         long asked = Stopwatch.GetTimestamp();
         double seaLevel = _ocean.SeaLevel, radius = _ocean.PlanetRadius;
-        _renderer.Readback(_results, result => Answer(result, batch, asked, viewer, seaLevel, radius), 0, (uint)(_count * 16));
+        _renderer.Readback(_results, result => Answer(result, batch, asked, viewer, seaLevel, radius), 0, (uint)(_count * 32));
     }
 
     private static void Answer(BufferReadback result, (OceanQuery Query, int First)[] batch, long asked, Double3 viewer, double seaLevel, double radius)
@@ -138,10 +142,11 @@ public sealed class OceanQueries : IDisposable
                 continue;
             double seconds = Stopwatch.GetElapsedTime(query.Asked, asked).TotalSeconds;
             bool timed = query.Ready && seconds > 1e-4;
-            int count = Math.Min(query.Points.Length, answers.Length - first);
+            int count = Math.Min(query.Points.Length, answers.Length / 2 - first);
             for (int i = 0; i < count; i++)
             {
-                Float4 answer = answers[first + i];
+                Float4 answer = answers[(first + i) * 2];
+                Float4 flow = answers[(first + i) * 2 + 1];
                 Double2 point = query.Points[i];
                 double dx = point.X - viewer.X, dz = point.Y - viewer.Z;
                 double drop = radius > 0 ? (dx * dx + dz * dz) / (2 * radius) : 0;
@@ -150,6 +155,7 @@ public sealed class OceanQueries : IDisposable
                 query.Heights[i] = height;
                 query.Normals[i] = Float3.Normalize(new Float3(answer.Y, 1f, answer.Z));
                 query.Depths[i] = answer.W;
+                query.Flows[i] = new Float2(flow.X, flow.Y);
             }
             query.Asked = asked;
             query.Ready = true;
@@ -188,6 +194,7 @@ public sealed class OceanQueries : IDisposable
             builder.Read(owner._ocean.Slopes);
             builder.Read(owner._ocean.Depth);
             builder.Read(owner._ocean.Levels);
+            builder.Read(owner._ocean.Flow);
             builder.Write(owner._results);
         }
 
@@ -198,6 +205,7 @@ public sealed class OceanQueries : IDisposable
             _properties.SetTexture("Ocean_Slopes", owner._ocean.Slopes, waves);
             _properties.SetTexture("Ocean_Depth", owner._ocean.Depth, slices);
             _properties.SetTexture("Ocean_Levels", owner._ocean.Levels, slices);
+            _properties.SetTexture("Ocean_Flow", owner._ocean.Flow, slices);
             _properties.SetBuffer("Ocean_Points", owner._points);
             _properties.SetBuffer("Ocean_Results", owner._results);
             cmd.SetComputeShader(program.Program);
