@@ -715,4 +715,90 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.Same(current, Scene.Current);
         Assert.False(current.IsDisposed);
     }
+
+    // ---- The ambient world ----
+
+    private sealed class ActiveProbe : Component
+    {
+        public Scene? AtEnable, AtStart, AtDispose;
+        public override void OnEnable() => AtEnable = Scene.Active;
+        public override void Start() => AtStart = Scene.Active;
+        protected override void OnDispose() { AtDispose = Scene.Active; base.OnDispose(); }
+    }
+
+    // Code in one scene enabling an object in another runs that object's callbacks in its own scene.
+    [Fact]
+    public void Active_IsTheComponentsScene_WhenAnotherScenesCodeEnablesIt()
+    {
+        Scene a = CreateScene(enable: true);
+        Scene b = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        ActiveProbe probe = go.AddComponent<ActiveProbe>();
+
+        using (a.Enter())
+            b.Add(go);
+
+        Assert.Same(b, probe.AtEnable);
+    }
+
+    [Fact]
+    public void Active_FlowsThroughAwait_AndScopesNest()
+    {
+        Scene a = CreateScene(enable: true);
+        Scene b = CreateScene(enable: true);
+
+        Scene? afterAwait;
+        using (a.Enter())
+        {
+            using (b.Enter())
+            {
+                afterAwait = AfterYield().GetAwaiter().GetResult();
+                Assert.Same(b, Scene.Active);
+            }
+            Assert.Same(a, Scene.Active);
+        }
+
+        Assert.Same(b, afterAwait);
+
+        static async Task<Scene> AfterYield()
+        {
+            await Task.Yield();
+            return Scene.Active;
+        }
+    }
+
+    [Fact]
+    public void SceneLoadedHandlers_RunInTheLoadedScene()
+    {
+        Scene loaded = CreateScene();
+        Scene? seen = null;
+        void Handler() => seen = Scene.Active;
+        Scene.OnSceneLoaded += Handler;
+        try
+        {
+            Scene.Load(loaded);
+            Scene.ProcessPendingLoad();
+        }
+        finally { Scene.OnSceneLoaded -= Handler; }
+
+        Assert.Same(loaded, seen);
+    }
+
+    // A scene stays Active for its own teardown, and code still holding it afterwards gets a clear error.
+    [Fact]
+    public void Active_IsTheSceneDuringItsTeardown_AndThrowsOnceItIsDestroyed()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        ActiveProbe probe = go.AddComponent<ActiveProbe>();
+        scene.Add(go);
+
+        using (scene.Enter())
+        {
+            scene.Dispose();
+            Assert.Throws<ObjectDisposedException>(() => Scene.Active);
+        }
+
+        Assert.Same(scene, probe.AtDispose);
+    }
 }

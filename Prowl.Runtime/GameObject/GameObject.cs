@@ -751,6 +751,7 @@ public partial class GameObject : EngineObject, ISerializable
     {
         Scene? scene = Scene;
         if (!scene.IsValid()) return;
+        using Scene.SceneScope active = Resources.Scene.Enter(scene);
 
         try { comp.OnAddedToScene(); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{comp.GetType().Name}] OnAddedToScene() threw", ex); }
@@ -1481,6 +1482,8 @@ public partial class GameObject : EngineObject, ISerializable
             Children.Add(child);
         }
     }
+
+    private protected override Scene? OwningScene => Scene;
 
     private void AddLoadedComponent(Component component)
     {

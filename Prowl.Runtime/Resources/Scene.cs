@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Prowl.Echo;
@@ -69,8 +70,62 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         }
     }
 
-    /// <summary>Fires after a scene is loaded via Load().</summary>
+    /// <summary>Fires after a scene is loaded via Load(), inside that scene, so its handlers see it as <see cref="Active"/>.</summary>
     public static event Action? OnSceneLoaded;
+
+    private static readonly AsyncLocal<Scene?> s_active = new();
+
+    /// <summary>
+    /// The ambient world: the one whose code is running right now. While the engine runs a callback on a component it
+    /// is that component's scene, inside <see cref="Enter"/> it is that scene, and across an await it is whatever was
+    /// active where the await started. Otherwise it is the current scene. Main thread only.
+    /// </summary>
+    public static Scene Active
+    {
+        get
+        {
+            MainThreadContext.AssertMainThread();
+            Scene? scene = s_active.Value;
+            if (ReferenceEquals(scene, null)) return Current;
+            if (scene._destroyed)
+                throw new ObjectDisposedException(scene.Name, $"The scene '{scene.Name}' this code was running in has been destroyed.");
+            return scene;
+        }
+    }
+
+    /// <summary>Makes this scene <see cref="Active"/> until the scope is disposed. Scopes nest.</summary>
+    public SceneScope Enter() => Enter(this);
+
+    // Writes the ambient world only when it changes, so a callback in the world already active pays one read.
+    internal static SceneScope Enter(Scene? scene)
+    {
+        if (ReferenceEquals(scene, null)) return default;
+        Scene? previous = s_active.Value;
+        if (ReferenceEquals(previous, scene)) return default;
+        s_active.Value = scene;
+        return new SceneScope(previous);
+    }
+
+    /// <summary>Puts the previous <see cref="Active"/> scene back when disposed.</summary>
+    public readonly struct SceneScope : IDisposable
+    {
+        private readonly Scene? _previous;
+        private readonly bool _changed;
+
+        internal SceneScope(Scene? previous)
+        {
+            _previous = previous;
+            _changed = true;
+        }
+
+        public void Dispose()
+        {
+            if (_changed) s_active.Value = _previous;
+        }
+    }
+
+    // Set once teardown has finished. A scene being torn down stays Active for its own teardown callbacks.
+    private bool _destroyed;
 
     private static Scene? _pendingScene;
 
@@ -294,7 +349,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Assets only the outgoing scene used are unreached from here, and go once the grace period is over.
         AssetDatabase.Walk();
 
-        OnSceneLoaded?.Invoke();
+        using (_current.Enter())
+            OnSceneLoaded?.Invoke();
     }
 
     /// <summary>
@@ -573,6 +629,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         EnsureNotDisposed();
         MainThreadContext.AssertMainThread();
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
+        using SceneScope active = Enter(this);
         if (_isActive) return; // already enabled, nothing to deliver
 
         _isActive = true;
@@ -607,6 +664,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         EnsureNotDisposed();
         MainThreadContext.AssertOwner(this);
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
+        using SceneScope active = Enter(this);
         if (!_isActive) return; // already disabled, nothing to deliver
 
         // Create a copy to avoid collection modification during enumeration
@@ -772,6 +830,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     private void AddObject(GameObject obj)
     {
+        using SceneScope active = Enter(this);
         if (_allObjSet.Add(obj))
         {
             _allObj.Add(obj);
@@ -807,6 +866,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     private void RemoveObject(GameObject obj)
     {
+        using SceneScope active = Enter(this);
         // Create a copy to avoid modification during enumeration
         List<GameObject> children = [.. obj.Children];
         foreach (GameObject child in children)
@@ -919,6 +979,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     protected override void OnDispose()
     {
+        using SceneScope active = Enter(this);
         base.OnDispose();
 
         // Drop the current-scene reference without going through the property, which would build a
@@ -954,6 +1015,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Remove all identifiers and reference to any possible gameobject that could hold a
         // user-defined script as it might leave the ALC alive
         serializeObj = null;
+        _destroyed = true;
     }
 
     public void OnBeforeSerialize()
@@ -993,6 +1055,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         if (IsDisposed) return;
         using FrameStatScope stats = FrameStats.Update.Scope();
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
+        using SceneScope active = Enter(this);
 
         // Paused play mode freezes every component, [ExecuteAlways] included, until a step or resume.
         bool ticking = !Application.IsPlaying || Application.ShouldRunGameplay;
@@ -1032,6 +1095,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         if (IsDisposed) return;
         using FrameStatScope stats = FrameStats.Update.Scope();
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
+        using SceneScope active = Enter(this);
         // Start must run before a component's first FixedUpdate. The loop runs FixedUpdate before
         // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
         _dispatcher.RunStart();
@@ -1058,6 +1122,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         if (IsDisposed) return;
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
+        using SceneScope active = Enter(this);
         _dispatcher.RunDrawGizmos();
 
         Flush();
@@ -1071,6 +1136,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         if (IsDisposed) return;
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
+        using SceneScope active = Enter(this);
         _dispatcher.RunOnGui(paper);
 
         Flush();
