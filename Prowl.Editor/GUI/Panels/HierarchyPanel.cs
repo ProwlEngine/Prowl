@@ -606,9 +606,9 @@ public class HierarchyPanel : DockPanel
                             Undo.SetTransformParent(dragged, null, true, "Reparent");
 
                         // Root reorder via Scene list
-                        int targetRootIdx = scene.GetRootIndex(target);
+                        int targetRootIdx = target.SiblingIndex;
                         if (dropPos == DropPosition.Below) targetRootIdx++;
-                        int dragRootIdx = scene.GetRootIndex(dragged);
+                        int dragRootIdx = dragged.SiblingIndex;
                         if (dragRootIdx >= 0 && dragRootIdx < targetRootIdx) targetRootIdx--;
                         Undo.SetSiblingIndex(dragged, Math.Max(0, targetRootIdx), "Reparent");
                     }
@@ -946,7 +946,7 @@ public class HierarchyPanel : DockPanel
         // hierarchy, so the wrapped objects stay where they were in the tree.
         GameObject anchor = targets[0];
         GameObject? anchorParent = anchor.Parent.IsValid() ? anchor.Parent : null;
-        int anchorIndex = anchorParent.IsValid() ? (anchor.GetSiblingIndex() ?? -1) : scene.GetRootIndex(anchor);
+        int anchorIndex = anchorParent.IsValid() ? (anchor.GetSiblingIndex() ?? -1) : anchor.SiblingIndex;
 
         Float3 centre = Float3.Zero;
         foreach (GameObject target in targets)
@@ -962,7 +962,7 @@ public class HierarchyPanel : DockPanel
         }
         else if (anchorIndex >= 0)
         {
-            scene.SetRootIndex(newParent, anchorIndex);
+            newParent.SiblingIndex = anchorIndex;
         }
         newParent.Transform.Position = centre;
 

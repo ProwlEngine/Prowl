@@ -58,7 +58,7 @@ public class MissingTypeReferenceGraphTests
         var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(root);
 
-        string text = scene.CaptureTree().WriteToString()
+        string text = scene.ActiveSection.CaptureTree().WriteToString()
             .Replace(nameof(MissRefComp), "GhostComp_DoesNotExist");
 
         // Mimic the editor: a caller-supplied context passed to the 3-arg Deserialize.
@@ -126,7 +126,7 @@ public class MissingTypeReferenceGraphTests
         var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(root);
 
-        string text = scene.CaptureTree().WriteToString();
+        string text = scene.ActiveSection.CaptureTree().WriteToString();
         text = text.Replace(nameof(MissRefComp), "GhostComp_DoesNotExist");
         SceneInstance loaded = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text)), SceneMode.Edit);
 

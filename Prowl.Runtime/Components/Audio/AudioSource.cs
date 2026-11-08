@@ -1192,9 +1192,9 @@ public sealed class AudioSource : Component
 
         SceneInstance scene = SceneInstance.Active;
 
-        if (scene.IsNotValid())
+        if (scene.IsNotValid() || scene.State == SceneState.Destroying)
         {
-            Debug.LogWarning("PlayClipAtPoint needs a loaded scene to place the sound in.");
+            Debug.LogError(scene.IsValid() ? $"PlayClipAtPoint: '{scene.Name}' is being destroyed, so the sound was not placed." : "PlayClipAtPoint needs a world to place the sound in.");
             return null;
         }
 

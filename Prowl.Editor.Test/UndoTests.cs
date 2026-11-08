@@ -259,7 +259,7 @@ public class UndoTests : EditorTestHarness
         link.Value = 5;
         source.Add(target);
         source.Add(holder);
-        string whileMissing = source.CaptureTree().WriteToString().Replace(nameof(UndoLinkComp), "Ghost_DoesNotExist");
+        string whileMissing = source.ActiveSection.CaptureTree().WriteToString().Replace(nameof(UndoLinkComp), "Ghost_DoesNotExist");
 
         SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(whileMissing)), SceneMode.Edit);
         SceneInstance.Load(scene);
@@ -270,7 +270,7 @@ public class UndoTests : EditorTestHarness
         Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Undo.PerformUndo();
 
-        string saved = SceneInstance.Main.CaptureTree().WriteToString().Replace("Ghost_DoesNotExist", nameof(UndoLinkComp));
+        string saved = SceneInstance.Main.ActiveSection.CaptureTree().WriteToString().Replace("Ghost_DoesNotExist", nameof(UndoLinkComp));
         SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(saved)), SceneMode.Edit);
         UndoLinkComp restoredLink = restored.Objects.Single(g => g.Name == "Holder").GetComponent<UndoLinkComp>()!;
 
@@ -610,7 +610,7 @@ public class UndoTests : EditorTestHarness
         Undo.FlushUndoRecordObjects();
         Undo.PerformUndo();
 
-        Assert.Equal(1, scene.GetRootIndex(Live<GameObject>(id)));
+        Assert.Equal(1, Live<GameObject>(id).SiblingIndex);
     }
 
     [Fact]

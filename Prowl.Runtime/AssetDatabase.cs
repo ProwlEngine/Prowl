@@ -28,7 +28,7 @@ public readonly record struct AssetResidency(
 
 /// <summary>
 /// Every asset by GUID, one object each for the whole session. Assets stay loaded while something reaches them:
-/// a live scene, an object kept with <see cref="SceneInstance.DontDestroyOnLoad"/>, a hold, a root, or a load group. A walk from
+/// a live world, a hold, a root, or a load group. A walk from
 /// those roots runs about once a second, and an asset nothing reached for <see cref="GracePeriod"/> has its payload
 /// freed, sooner when over <see cref="MemoryBudget"/>. Reading an unloaded asset loads it again.
 /// </summary>
@@ -764,8 +764,6 @@ public static class AssetDatabase
 
         foreach (SceneInstance scene in SceneInstance.Live)
             s_walker.Visit(scene);
-        foreach (GameObject preserved in SceneInstance.Preserved)
-            s_walker.Visit(preserved);
 
         lock (s_holdLock)
         {

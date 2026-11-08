@@ -165,6 +165,132 @@ public partial class GameObject : EngineObject, ISerializable
         internal set => _scene = new(value);
     }
 
+    // The section a root is in while in a world. Children are in their root's.
+    internal SceneSection? _section;
+
+    // The component an owned helper root belongs to, whose section it follows.
+    internal Component? _owner;
+
+    /// <summary>Whether this object is in a world.</summary>
+    public bool IsInWorld => Scene.IsValid();
+
+    /// <summary>The section this object is in, its root's, or null when it is in no world.</summary>
+    public SceneSection? Section
+    {
+        get
+        {
+            if (Scene.IsNotValid()) return null;
+            GameObject root = this;
+            while (root.Parent.IsValid()) root = root.Parent!;
+            return root._section;
+        }
+    }
+
+    /// <summary>
+    /// Whether this root survives loads, in its world's persistent section. Setting it moves the root and its owned
+    /// roots there, or back into the active section. Roots only, and only in a game world. Read on a child it answers
+    /// for its root.
+    /// </summary>
+    public bool Persistent
+    {
+        get => Section is { IsPersistent: true };
+        set
+        {
+            if (Parent.IsValid()) throw new InvalidOperationException($"'{Name}' is not a root, and only a whole tree can be persistent.");
+            SceneInstance world = Scene.IsValid() ? Scene! : throw new InvalidOperationException($"'{Name}' is in no world.");
+            if (world.Mode != SceneMode.Game) throw new InvalidOperationException("Only a game world has persistent objects.");
+            if (Persistent == value) return;
+            MoveTo(value ? world.Persistent : world.ActiveSection);
+        }
+    }
+
+    /// <summary>
+    /// The index of this object among its siblings: its parent's children, or for a root its section's roots. Setting
+    /// it moves the object there.
+    /// </summary>
+    public int SiblingIndex
+    {
+        get
+        {
+            if (Parent.IsValid()) return Parent!.Children.IndexOf(this);
+            return Section is { } section ? section.RootsList.IndexOf(this) : -1;
+        }
+        set => SetSiblingIndex(value);
+    }
+
+    /// <summary>
+    /// Moves this root, its children and its owned roots into another section of its world. An object whose identifier
+    /// the section already holds gets a fresh one.
+    /// </summary>
+    public void MoveTo(SceneSection section)
+    {
+        MainThreadContext.AssertOwner(this);
+        if (Parent.IsValid()) throw new InvalidOperationException($"'{Name}' is not a root. Move its root, or parent it into the section.");
+        if (!section.IsLoaded) throw new InvalidOperationException($"'{section.Name}' has been unloaded.");
+        if (section.IsPersistent && section.Instance.Mode != SceneMode.Game)
+            throw new InvalidOperationException("Only a game world has persistent objects.");
+
+        if (!ReferenceEquals(Scene, section.Instance))
+        {
+            MoveToWorld(section.Instance, section);
+            return;
+        }
+        if (ReferenceEquals(_section, section)) return;
+
+        SceneSection? from = _section;
+        GiveFreshIdentifiersAgainst(section);
+        section.Instance.JoinSection(this, section);
+        if (from is { IsPersistent: true } || section.IsPersistent)
+            Debug.Log($"[Scene] '{Name}' moved from '{from?.Name}' to '{section.Name}'.");
+
+        foreach (GameObject owned in OwnedRoots())
+            owned.MoveTo(section);
+    }
+
+    /// <summary>Moves this root, its children and its owned roots into another world's active section, with the full lifecycle on the way.</summary>
+    public void MoveTo(SceneInstance world) => MoveTo(world.ActiveSection);
+
+    private void MoveToWorld(SceneInstance world, SceneSection section)
+    {
+        List<GameObject> owned = [.. OwnedRoots()];
+        SceneInstance? from = Scene;
+        if (from.IsValid()) from!.Remove(this);
+        world.Add(this, section);
+        foreach (GameObject root in owned)
+            root.MoveTo(section);
+    }
+
+    // The helper roots owned by components of this tree, like a ragdoll's puppet.
+    private IEnumerable<GameObject> OwnedRoots()
+    {
+        SceneInstance? world = Scene;
+        if (world.IsNotValid()) yield break;
+        foreach (GameObject root in world!.Roots)
+            if (root._owner is { IsDisposed: false } owner && owner.GameObject.IsValid() && IsChildOrSameTransform(owner.GameObject, this) && !ReferenceEquals(root, this))
+                yield return root;
+    }
+
+    // An object moving into a section that already holds its identifier gets a fresh one, so identifiers stay unique per section.
+    private void GiveFreshIdentifiersAgainst(SceneSection section)
+    {
+        SceneInstance world = section.Instance;
+        Renew(this);
+
+        void Renew(GameObject go)
+        {
+            if (world.FindObject(section, go.Identifier) is { } clash && !ReferenceEquals(clash, go))
+            {
+                Debug.LogWarning($"[Scene] '{go.Name}' got a fresh identifier moving into '{section.Name}', which already holds {go.Identifier}.");
+                go.SetIdentifier(Guid.NewGuid());
+            }
+            foreach (Component component in go._components)
+                if (world.FindObject(section, component.Identifier) is { } taken && !ReferenceEquals(taken, component))
+                    component.Identifier = Guid.NewGuid();
+            foreach (GameObject child in go.Children)
+                Renew(child);
+        }
+    }
+
     /// <summary>
     /// What ties this object to a prefab, or null when it is not a prefab instance. Internal, along
     /// with everything below that writes to it: these values only mean anything as a set, and
@@ -319,10 +445,25 @@ public partial class GameObject : EngineObject, ISerializable
         // it) and the new one (it joined). Capture the old canvas before the parent pointer changes.
         GameCanvas? uiOldCanvas = GetComponentInParent<GameCanvas>();
 
-        SceneInstance newScene = (NewParent.IsValid()) ? NewParent.Scene : Scene;
+        SceneInstance? world = Scene;
+        if (world.IsValid() && NewParent.IsValid() && !ReferenceEquals(NewParent.Scene, world))
+            throw new InvalidOperationException(NewParent.Scene.IsValid()
+                ? $"'{NewParent.Name}' is in another world. Use MoveTo to move '{Name}' between worlds."
+                : $"'{NewParent.Name}' is in no world, so '{Name}' cannot be parented under it while it is in one.");
 
-        bool joinsScene = newScene != Scene && newScene.IsValid();
-        if (newScene != Scene && Scene.IsValid()) Scene.Remove(this);
+        SceneInstance? newScene = NewParent.IsValid() ? NewParent.Scene : world;
+        bool joinsScene = newScene.IsValid() && !ReferenceEquals(newScene, world);
+
+        // Section follows the root: becoming a child leaves the section's roots, becoming a root keeps the section it was in.
+        SceneSection? oldSection = world.IsValid() ? Section : null;
+        SceneSection? newSection = NewParent.IsValid() ? NewParent.Section : oldSection;
+        if (world.IsValid() && newSection != null && !ReferenceEquals(oldSection, newSection))
+        {
+            if (oldSection is { IsPersistent: true } || newSection.IsPersistent)
+                Debug.LogWarning($"[Scene] '{Name}' moved between '{oldSection?.Name}' and '{newSection.Name}' by being parented. A tree crossing into or out of the persistent section is almost always a mistake.");
+            GiveFreshIdentifiersAgainst(newSection);
+        }
+        if (world.IsValid() && Parent.IsNotValid() && NewParent.IsValid()) Resources.SceneInstance.LeaveSection(this);
 
         // Save world-space transform before reparenting
         Float3 worldPosition = new();
@@ -347,6 +488,9 @@ public partial class GameObject : EngineObject, ISerializable
 
             _parent = NewParent;
         }
+
+        if (world.IsValid() && NewParent.IsNotValid() && oldSection != null)
+            world!.JoinSection(this, oldSection);
 
         if (worldPositionStays)
         {
@@ -378,7 +522,7 @@ public partial class GameObject : EngineObject, ISerializable
 
         // Joining a scene last, so OnEnable sees the parent and the enabled state it has under it.
         HierarchyStateChanged();
-        if (joinsScene) newScene.Add(this);
+        if (joinsScene) newScene!.Add(this);
 
         // Draw order and layout are derived from the child tree at canvas build time, and a same-scene
         // reparent fires no OnAdded/Removed - so mark the affected canvas(es) dirty explicitly.
@@ -552,7 +696,15 @@ public partial class GameObject : EngineObject, ISerializable
     public void SetSiblingIndex(int index)
     {
         MainThreadContext.AssertOwner(this);
-        if (Parent.IsNotValid()) return;
+        if (Parent.IsNotValid())
+        {
+            if (_section is { } section && Scene.IsValid())
+            {
+                section.RootsList.Remove(this);
+                section.RootsList.Insert(Maths.Max(0, Maths.Min(index, section.RootsList.Count)), this);
+            }
+            return;
+        }
 
         // Remove this object from current position
         Parent.Children.Remove(this);

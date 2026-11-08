@@ -647,7 +647,7 @@ public partial class PrefabTests : EditorTestHarness
         root.AddComponent<OverrideComp>().A = 1;
         Guid g = CreatePrefabAsset(root, "Shelved.prefab");
 
-        EchoObject saved = LoadSceneWith(Inst(g)).CaptureTree();
+        EchoObject saved = LoadSceneWith(Inst(g)).ActiveSection.CaptureTree();
 
         // The prefab changes while that scene is not the one open, so what was saved is behind.
         LoadSceneWith(new GameObject("Elsewhere"));
@@ -673,7 +673,7 @@ public partial class PrefabTests : EditorTestHarness
         SceneInstance open = LoadSceneWith(instance);
         instance.GetComponent<OverrideComp>()!.B = 99;
         PrefabUtility.ReconcileInstance(instance);
-        EchoObject saved = open.CaptureTree();
+        EchoObject saved = open.ActiveSection.CaptureTree();
 
         LoadSceneWith(new GameObject("Elsewhere"));
         EditPrefabSource(g, "ShelvedOv.prefab", s => s.GetComponent<OverrideComp>()!.A = 77);
@@ -700,7 +700,7 @@ public partial class PrefabTests : EditorTestHarness
 
         var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(instance);
-        EchoObject echo = scene.CaptureTree();
+        EchoObject echo = scene.ActiveSection.CaptureTree();
 
         Assert.True(Build.BuildPipeline.StripEditorOnlyPrefabData(echo));
 
@@ -726,7 +726,7 @@ public partial class PrefabTests : EditorTestHarness
         var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(new GameObject("Plain"));
 
-        Assert.False(Build.BuildPipeline.StripEditorOnlyPrefabData(scene.CaptureTree()));
+        Assert.False(Build.BuildPipeline.StripEditorOnlyPrefabData(scene.ActiveSection.CaptureTree()));
     }
 
     // ---------------------------------------------------------------------
@@ -3523,7 +3523,7 @@ public partial class PrefabTests : EditorTestHarness
 
     private static SceneInstance SaveAndReload(SceneInstance scene)
     {
-        EchoObject echo = scene.CaptureTree();
+        EchoObject echo = scene.ActiveSection.CaptureTree();
         SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
         SceneInstance.Load(reloaded);
         SceneInstance.ProcessPendingLoad();
@@ -4069,7 +4069,7 @@ public partial class PrefabTests : EditorTestHarness
         GameObject instance = Inst(outer);
         SceneInstance scene = LoadSceneWith(instance);
 
-        EchoObject echo = scene.CaptureTree();
+        EchoObject echo = scene.ActiveSection.CaptureTree();
         SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
         SceneInstance.Load(reloaded);
         SceneInstance.ProcessPendingLoad();
@@ -4954,7 +4954,7 @@ public partial class PrefabTests : EditorTestHarness
             ScaleOffset = new Float4(0.5f, 0.5f, 0.25f, 0.75f)
         };
 
-        SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(scene.CaptureTree()), SceneMode.Edit);
+        SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(scene.ActiveSection.CaptureTree()), SceneMode.Edit);
         try
         {
             GameObject restored = reloaded.Roots.First(o => o.Name == "Baked");
@@ -5027,7 +5027,7 @@ public partial class PrefabTests : EditorTestHarness
         Guid childSource = instance.Children[0].GetComponent<OverrideComp>()!.SourceIdentifier;
         Assert.NotEqual(Guid.Empty, rootSource);
 
-        EchoObject saved = SceneInstance.Main.CaptureTree();
+        EchoObject saved = SceneInstance.Main.ActiveSection.CaptureTree();
         SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(saved), SceneMode.Edit);
         try
         {
@@ -5288,7 +5288,7 @@ public partial class PrefabTests : EditorTestHarness
         PrefabUtility.ReconcileInstance(instance);
         Assert.Single(instance.PrefabOverrides);
 
-        EchoObject saved = SceneInstance.Main.CaptureTree();
+        EchoObject saved = SceneInstance.Main.ActiveSection.CaptureTree();
 
         // A build reads a scene off disk while some other scene is open.
         LoadSceneWith(new GameObject("Elsewhere"));
@@ -5319,7 +5319,7 @@ public partial class PrefabTests : EditorTestHarness
         SceneInstance.Main!.Add(nested);
         nested.SetParent(outerInstance);
 
-        EchoObject echo = SceneInstance.Main.CaptureTree();
+        EchoObject echo = SceneInstance.Main.ActiveSection.CaptureTree();
         Build.BuildPipeline.StripEditorOnlyPrefabData(echo);
 
         // Both links survive: what an object is an instance of is observable at runtime, so a player

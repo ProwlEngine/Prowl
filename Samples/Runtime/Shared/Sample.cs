@@ -99,12 +99,12 @@ public abstract class StationGame : Game
         MainCamera.AntiAliasing = AntiAliasingMode.FXAA;
         CameraObject.AddComponent<FlyCamera>();
         CameraObject.AddComponent<PhysicsGrabber>().Game = this;
-        SampleScene.Add(CameraObject);
+        CameraObject.MoveTo(SampleScene);
 
         var hud = new GameObject("HUD");
         Hud = hud.AddComponent<SampleHud>();
         Hud.Game = this;
-        SampleScene.Add(hud);
+        hud.MoveTo(SampleScene);
         if (_captureFolder != null) Hud.Visible = false;
 
         Build();
@@ -170,7 +170,7 @@ public abstract class StationGame : Game
     /// <summary>Adds a root object to the sample scene and returns it.</summary>
     protected GameObject Add(GameObject go)
     {
-        SampleScene.Add(go);
+        go.MoveTo(SampleScene);
         return go;
     }
 

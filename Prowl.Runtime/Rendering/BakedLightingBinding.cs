@@ -18,16 +18,16 @@ internal static class BakedLightingBinding
     /// </summary>
     public static GLightmapBinding For(GameObject renderer)
     {
-        SceneInstance? scene = renderer.IsValid() ? renderer.Scene : null;
-        if (!scene.IsValid() || scene.Lighting.Placements.Count == 0) return GLightmapBinding.None;
+        SceneLighting? lighting = renderer.IsValid() ? renderer.Section?.Lighting : null;
+        if (lighting == null || lighting.Placements.Count == 0) return GLightmapBinding.None;
 
-        LightmapPlacement? placement = scene.Lighting.PlacementFor(renderer.Identifier);
-        if (placement is not { } p || p.Index < 0 || p.Index >= scene.Lighting.Lightmaps.Count)
+        LightmapPlacement? placement = lighting.PlacementFor(renderer.Identifier);
+        if (placement is not { } p || p.Index < 0 || p.Index >= lighting.Lightmaps.Count)
             return GLightmapBinding.None;
 
-        Texture2D? lightmap = scene.Lighting.Lightmaps[p.Index];
+        Texture2D? lightmap = lighting.Lightmaps[p.Index];
         if (lightmap.IsNotValid()) return GLightmapBinding.None;
         if (lightmap.State == AssetState.Unloaded) _ = lightmap.LoadAsync();
-        return new GLightmapBinding(lightmap.IsLoaded ? lightmap.GpuIfLoaded : null, p.ScaleOffset, scale: scene.Lighting.LightmapScale);
+        return new GLightmapBinding(lightmap.IsLoaded ? lightmap.GpuIfLoaded : null, p.ScaleOffset, scale: lighting.LightmapScale);
     }
 }

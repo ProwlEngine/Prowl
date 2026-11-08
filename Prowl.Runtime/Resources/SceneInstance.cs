@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -82,7 +82,6 @@ public class SceneInstance : EngineObject, ISerializable
         }
     }
 
-    internal static IReadOnlyList<GameObject> Preserved => _preserved;
 
     /// <summary>
     /// The game world. The host binds it: the player at startup, the editor to the world it edits or plays. Reading it
@@ -136,6 +135,7 @@ public class SceneInstance : EngineObject, ISerializable
     {
         MainThreadContext.AssertMainThread(nameof(Create));
         var world = new SceneInstance(mode) { Name = name };
+        world.ActiveSection.Name = name;
         Raise(Created, world, handler => handler(world), nameof(Created));
         return world;
     }
@@ -378,94 +378,18 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>Builds a live world holding detached content, without making it current. The content's objects move into it.</summary>
     public static SceneInstance Instantiate(SceneContent content, SceneMode mode = SceneMode.Game)
     {
-        var scene = new SceneInstance(mode)
-        {
-            Environment = content.Environment,
-            Lighting = content.Lighting,
-            LightmapBake = content.LightmapBake,
-        };
-        foreach (GameObject obj in content.Objects)
-            if (obj.IsValid()) scene.Add(obj);
+        var scene = new SceneInstance(mode);
+        scene.ActiveSection.Fill(content);
         return scene;
     }
 
-    /// <summary>The stored scene this one was instantiated from, if any. Not held, since a live scene no longer needs its stored form.</summary>
-    [NonSerialized, NotHeld] public Scene? Source;
-
-    private static readonly List<GameObject> _preserved = [];
-
-    /// <summary>
-    /// Keeps a GameObject alive across scene loads. It moves straight from the outgoing scene to the
-    /// incoming one when the swap applies, so it is never held by a scene that is about to be
-    /// disposed, and it is not disabled and re-enabled on the way.
-    /// <para/>
-    /// Only roots can be preserved, since half a hierarchy surviving a load is never what was meant.
-    /// Passing a child preserves its root instead.
-    /// </summary>
-    public static void DontDestroyOnLoad(GameObject go)
+    /// <summary>The scene the active section was loaded from, if any.</summary>
+    public Scene? Source
     {
-        MainThreadContext.AssertMainThread();
-        if (go.IsNotValid())
-        {
-            Debug.LogWarning("[Scene] DontDestroyOnLoad on a null or destroyed GameObject does nothing.");
-            return;
-        }
-
-        GameObject root = go;
-        while (root.Parent.IsValid())
-            root = root.Parent;
-
-        if (!ReferenceEquals(root, go))
-            Debug.LogWarning($"[Scene] '{go.Name}' is not a root object, so its root '{root.Name}' is preserved instead.");
-
-        if (!_preserved.Any(p => ReferenceEquals(p, root)))
-            _preserved.Add(root);
+        get => ActiveSection.Source;
+        set => ActiveSection.Source = value;
     }
 
-    /// <summary>
-    /// Stops preserving a GameObject. It stays in whatever scene it is in now, and goes with that
-    /// scene on the next load.
-    /// </summary>
-    public static void CancelDontDestroyOnLoad(GameObject go)
-    {
-        MainThreadContext.AssertMainThread();
-        _preserved.RemoveAll(p => ReferenceEquals(p, go));
-    }
-
-    /// <summary>
-    /// Destroys everything <see cref="DontDestroyOnLoad"/> is holding and empties the registry.
-    /// <para/>
-    /// Teardown is queued like any other <see cref="EngineObject.Destroy"/>, so it lands at the end of
-    /// the frame, which is before the scene swap and therefore before anything could be carried over.
-    /// Pass <paramref name="immediate"/> when no further frame will run, since nothing would be left
-    /// to drain the queue.
-    /// </summary>
-    internal static void DestroyPreserved(bool immediate = false)
-    {
-        foreach (GameObject go in _preserved)
-        {
-            if (go.IsNotValid()) continue;
-
-            if (immediate)
-                go.Dispose();
-            else
-                go.Destroy();
-        }
-
-        _preserved.Clear();
-    }
-
-    /// <summary>Whether this GameObject (or the root it belongs to) survives scene loads.</summary>
-    public static bool IsPreserved(GameObject go)
-    {
-        if (go.IsNotValid()) return false;
-
-        GameObject root = go;
-        while (root.Parent.IsValid())
-            root = root.Parent;
-
-        return _preserved.Any(p => ReferenceEquals(p, root));
-    }
 
     /// <summary>
     /// Applies a queued <see cref="Load(SceneInstance)"/>. Driven once per frame by the game loop, right after the
@@ -501,12 +425,15 @@ public class SceneInstance : EngineObject, ISerializable
             return;
         }
 
-        // Preserved objects leave before the outgoing scene is disposed, and join the incoming one
-        // after it is enabled, so they are never registered with a scene that is being torn down.
-        _preserved.RemoveAll(p => p.IsNotValid());
-        foreach (GameObject go in _preserved)
-            if (ReferenceEquals(go.Scene, _main))
-                _main!.Detach(go);
+        // Persistent objects leave before the outgoing world is disposed, and join the incoming one after it is
+        // activated, so they are never registered with a world being torn down.
+        List<GameObject> persistent = [];
+        if (!ReferenceEquals(_main, null) && !_main.IsDisposed && _main.Mode == SceneMode.Game && next.Mode == SceneMode.Game)
+        {
+            persistent.AddRange(_main.Persistent.LiveRoots);
+            foreach (GameObject go in persistent)
+                _main.Detach(go);
+        }
 
         // A failure in either step below is reported and the swap carries on, so the incoming scene always
         // becomes current and the session always ends when it was asked to, rather than leaving both half done.
@@ -536,8 +463,8 @@ public class SceneInstance : EngineObject, ISerializable
         Main = next;
         next.Activate();
 
-        foreach (GameObject go in _preserved)
-            _main.Attach(go);
+        foreach (GameObject go in persistent)
+            next.Attach(go, next.Persistent);
 
         // Assets only the outgoing scene used are unreached from here, and go once the grace period is over.
         AssetDatabase.Walk();
@@ -555,8 +482,6 @@ public class SceneInstance : EngineObject, ISerializable
         _pendingScene = null;
         _pendingLoad?.Cancel();
         _pendingLoad = null;
-
-        DestroyPreserved(immediate: true);
 
         SceneInstance? main = _main;
         _main = null;
@@ -691,12 +616,57 @@ public class SceneInstance : EngineObject, ISerializable
     [SerializeIgnore]
     private bool _isActive = false;
 
-    /// <summary>The scene's sky, ambient light and fog.</summary>
-    public SceneEnvironment Environment = new();
+    private readonly List<SceneSection> _sections = [];
+    private SceneSection _activeSection = null!;
 
-    public SceneLighting Lighting = new();
+    /// <summary>The world's sections: <see cref="Persistent"/> first, then in load order.</summary>
+    public IReadOnlyList<SceneSection> Sections => _sections;
 
-    public LightmapBakeSettings LightmapBake = new();
+    /// <summary>The section that survives every load. Never unloaded, never saved, never active.</summary>
+    public SceneSection Persistent => _sections[0];
+
+    /// <summary>
+    /// Where new objects go by default, and whose environment, lighting and bake settings the world shows. Never the
+    /// <see cref="Persistent"/> section.
+    /// </summary>
+    public SceneSection ActiveSection
+    {
+        get => _activeSection;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (!ReferenceEquals(value.Instance, this)) throw new InvalidOperationException($"'{value.Name}' is a section of another world.");
+            if (value.IsPersistent) throw new InvalidOperationException("The persistent section can never be the active one.");
+            if (!_sections.Contains(value)) throw new InvalidOperationException($"'{value.Name}' has been unloaded.");
+            if (ReferenceEquals(_activeSection, value)) return;
+            _activeSection = value;
+            InvalidateProbeVolume();
+        }
+    }
+
+    /// <summary>Adds an empty section after the others. It unloads like any other.</summary>
+    public SceneSection CreateSection(string name)
+    {
+        EnsureNotDisposed();
+        var section = new SceneSection(this, name, persistent: false);
+        _sections.Add(section);
+        return section;
+    }
+
+    internal void RemoveSection(SceneSection section)
+    {
+        _sections.Remove(section);
+        section.MarkUnloaded();
+    }
+
+    /// <summary>The active section's sky, ambient light and fog.</summary>
+    public SceneEnvironment Environment => _activeSection.Environment;
+
+    /// <summary>The active section's baked lighting.</summary>
+    public SceneLighting Lighting => _activeSection.Lighting;
+
+    /// <summary>The active section's lightmapper settings.</summary>
+    public LightmapBakeSettings LightmapBake => _activeSection.LightmapBake;
 
     [SerializeField, NotHeld]
     [NonSerialized] private LightProbeVolume? _probeVolume;
@@ -742,16 +712,15 @@ public class SceneInstance : EngineObject, ISerializable
         return true;
     }
 
-    /// <summary>The objects with no parent, in root order.</summary>
+    /// <summary>The objects with no parent: section order, then sibling order within a section.</summary>
     public IReadOnlyList<GameObject> Roots
     {
         get
         {
             EnsureNotDisposed();
             List<GameObject> roots = [];
-            foreach (GameObject go in _allObj)
-                if (!go.IsDisposed && go.Parent.IsNotValid())
-                    roots.Add(go);
+            foreach (SceneSection section in _sections)
+                roots.AddRange(section.LiveRoots);
             return roots;
         }
     }
@@ -886,25 +855,39 @@ public class SceneInstance : EngineObject, ISerializable
                 results.Add(go);
     }
 
-    /// <summary>The object or component in this world with this identifier, or null.</summary>
+    /// <summary>The object or component with this identifier, searching the sections in order, or null.</summary>
     public EngineObject? FindObject(Guid identifier)
     {
         EnsureNotDisposed();
-        if (_identifiers.TryGetValue(identifier, out EngineObject? known))
-        {
-            if (IsHere(known, identifier)) return known;
-            _identifiers.Remove(identifier);
-        }
+        if (_identifiers.TryGetValue(identifier, out EngineObject? known) && IsHere(known, identifier, null)) return known;
+        foreach (SceneSection section in _sections)
+            if (FindObject(section, identifier) is { } found)
+                return found;
+        _identifiers.Remove(identifier);
+        return null;
+    }
 
-        foreach (GameObject go in _allObj)
+    /// <summary>The object or component of <paramref name="section"/> with this identifier, or null. Exact even when another section holds the same identifier.</summary>
+    public EngineObject? FindObject(SceneSection section, Guid identifier)
+    {
+        EnsureNotDisposed();
+        if (_identifiers.TryGetValue(identifier, out EngineObject? known) && IsHere(known, identifier, section)) return known;
+        foreach (GameObject root in section.LiveRoots)
+            if (FindIn(root, identifier) is { } found)
+                return _identifiers[identifier] = found;
+        return null;
+
+        static EngineObject? FindIn(GameObject go, Guid identifier)
         {
-            if (go.IsDisposed) continue;
-            if (go.Identifier == identifier) return _identifiers[identifier] = go;
+            if (go.Identifier == identifier) return go;
             foreach (Component component in go._components)
                 if (!component.IsDisposed && component.Identifier == identifier)
-                    return _identifiers[identifier] = component;
+                    return component;
+            foreach (GameObject child in go.Children)
+                if (!child.IsDisposed && FindIn(child, identifier) is { } found)
+                    return found;
+            return null;
         }
-        return null;
     }
 
     /// <summary>The object or component with this identifier when it is a <typeparamref name="T"/>, or null.</summary>
@@ -922,17 +905,24 @@ public class SceneInstance : EngineObject, ISerializable
         return false;
     }
 
-    private bool IsHere(EngineObject candidate, Guid identifier) => candidate switch
+    private bool IsHere(EngineObject candidate, Guid identifier, SceneSection? section)
     {
-        GameObject go => !go.IsDisposed && go.Identifier == identifier && ReferenceEquals(go.Scene, this),
-        Component component => !component.IsDisposed && component.Identifier == identifier && ReferenceEquals(component.GameObject.Scene, this),
-        _ => false,
-    };
+        GameObject? go = candidate switch
+        {
+            GameObject g when g.Identifier == identifier => g,
+            Component c when c.Identifier == identifier && !c.IsDisposed => c.GameObject,
+            _ => null,
+        };
+        return go.IsValid() && ReferenceEquals(go!.Scene, this) && (section == null || ReferenceEquals(go.Section, section));
+    }
 
     /// <summary>Creates an empty, dormant world. <see cref="Create"/> is the same and raises <see cref="Created"/>.</summary>
     public SceneInstance(SceneMode mode = SceneMode.Game)
     {
         Mode = mode;
+        _sections.Add(new SceneSection(this, "Persistent", persistent: true));
+        _activeSection = new SceneSection(this, "Untitled", persistent: false);
+        _sections.Add(_activeSection);
         lock (s_live) s_live.Add(new WeakReference<SceneInstance>(this));
     }
 
@@ -1016,53 +1006,72 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>
     /// Registers a GameObject and all of its children.
     /// </summary>
-    public void Add(GameObject obj)
+    /// <summary>
+    /// Adds a detached root, or one from another world, with its children. A root goes into <paramref name="section"/>,
+    /// else its owner's section, else <see cref="ActiveSection"/>.
+    /// </summary>
+    internal void Add(GameObject obj, SceneSection? section = null)
     {
         EnsureNotDisposed();
         MainThreadContext.AssertOwner(this);
         MainThreadContext.AssertOwner(obj);
-        if (obj.Scene.IsValid() && obj.Scene != this) obj.Scene.Remove(obj);
+        if (_state == SceneState.Destroying)
+            throw new InvalidOperationException($"'{Name}' is being destroyed and takes no new objects.");
+        if (obj.Scene.IsValid() && obj.Scene != this) obj.Scene!.Remove(obj);
+        if (obj.Parent.IsNotValid())
+            JoinSection(obj, section ?? OwnerSection(obj) ?? ActiveSection);
         AddObject(obj);
     }
 
-    /// <summary>
-    /// Move a root-level GameObject to a specific index within the root object list.
-    /// Only works for root objects (no parent). Index is clamped to valid range.
-    /// </summary>
-    public void SetRootIndex(GameObject obj, int index)
+    // An owned helper root, like a ragdoll's puppet, follows the section of the component that owns it.
+    private SceneSection? OwnerSection(GameObject root)
+        => root._owner is { IsDisposed: false } owner && owner.GameObject.IsValid() && ReferenceEquals(owner.GameObject.Scene, this) ? owner.GameObject.Section : null;
+
+    internal void JoinSection(GameObject root, SceneSection section, int index = -1)
     {
-        EnsureNotDisposed();
-        MainThreadContext.AssertOwner(this);
-        if (obj.Scene != this || obj.Parent.IsValid()) return;
-        int current = _allObj.IndexOf(obj);
-        if (current < 0) return;
-        _allObj.RemoveAt(current);
-        // Collect root indices to map root-order index to list index
-        var rootIndices = new List<int>();
-        for (int i = 0; i < _allObj.Count; i++)
-            if (!_allObj[i].IsDisposed && _allObj[i].Transform.Parent == null)
-                rootIndices.Add(i);
-        index = Math.Max(0, Math.Min(index, rootIndices.Count));
-        int insertAt = index < rootIndices.Count ? rootIndices[index] : _allObj.Count;
-        _allObj.Insert(insertAt, obj);
+        if (!ReferenceEquals(section.Instance, this)) throw new InvalidOperationException($"'{section.Name}' is a section of another world.");
+        root._section?.RootsList.Remove(root);
+        root._section = section;
+        if (index < 0 || index >= section.RootsList.Count) section.RootsList.Add(root);
+        else section.RootsList.Insert(index, root);
+    }
+
+    internal static void LeaveSection(GameObject root)
+    {
+        root._section?.RootsList.Remove(root);
+        root._section = null;
     }
 
     /// <summary>
-    /// Get the index of a root-level GameObject among other root objects.
-    /// Returns -1 if not a root or not in this scene.
+    /// Makes a new live object. Under <paramref name="parent"/> it joins the parent's section, with
+    /// <paramref name="owner"/> it joins the owner's section and follows it, otherwise <see cref="ActiveSection"/>.
     /// </summary>
-    public int GetRootIndex(GameObject obj)
+    public GameObject Create(string name = "New GameObject", GameObject? parent = null, Component? owner = null)
     {
         EnsureNotDisposed();
-        if (obj.Scene != this || obj.Parent.IsValid()) return -1;
-        int rootIdx = 0;
-        foreach (GameObject go in _allObj)
+        if (_state == SceneState.Destroying)
+            throw new InvalidOperationException($"'{Name}' is being destroyed and takes no new objects.");
+        var go = new GameObject(name);
+        if (parent.IsValid())
         {
-            if (go.IsDisposed || go.Transform.Parent != null) continue;
-            if (go == obj) return rootIdx;
-            rootIdx++;
+            if (!ReferenceEquals(parent!.Scene, this)) throw new InvalidOperationException($"'{parent.Name}' is not in '{Name}'.");
+            go.SetParent(parent, worldPositionStays: false);
+            return go;
         }
-        return -1;
+        go._owner = owner;
+        Add(go);
+        return go;
+    }
+
+    /// <summary>Makes a new live root object in <paramref name="section"/>.</summary>
+    public GameObject Create(SceneSection section, string name = "New GameObject")
+    {
+        EnsureNotDisposed();
+        if (section.IsPersistent && Mode != SceneMode.Game)
+            throw new InvalidOperationException("Only a game world has persistent objects.");
+        var go = new GameObject(name);
+        Add(go, section);
+        return go;
     }
 
     /// <summary>
@@ -1072,7 +1081,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// Asking to remove something this scene does not hold is reported rather than ignored. It leaves the
     /// object ticking in whichever scene does hold it, which reads as the engine having ignored the call.
     /// </remarks>
-    public void Remove(GameObject obj)
+    internal void Remove(GameObject obj)
     {
         EnsureNotDisposed();
         MainThreadContext.AssertOwner(this);
@@ -1112,6 +1121,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// </summary>
     internal void Detach(GameObject obj)
     {
+        if (obj.Parent.IsNotValid()) LeaveSection(obj);
         foreach (GameObject child in obj.Children.ToArray())
             Detach(child);
 
@@ -1130,8 +1140,9 @@ public class SceneInstance : EngineObject, ISerializable
     }
 
     /// <inheritdoc cref="Detach"/>
-    internal void Attach(GameObject obj)
+    internal void Attach(GameObject obj, SceneSection? section = null)
     {
+        if (obj.Parent.IsNotValid()) JoinSection(obj, section ?? ActiveSection);
         if (_allObjSet.Add(obj))
         {
             _allObj.Add(obj);
@@ -1199,6 +1210,7 @@ public class SceneInstance : EngineObject, ISerializable
         if (_allObjSet.Remove(obj))
         {
             _allObj.Remove(obj);
+            if (ReferenceEquals(obj._section?.Instance, this)) LeaveSection(obj);
             IEnumerable<Component> components = obj.GetComponents<Component>();
 
             // Call OnDisable for currently enabled components (only if scene is active)
@@ -1225,7 +1237,7 @@ public class SceneInstance : EngineObject, ISerializable
     }
 
     /// <summary> Unregisters all GameObjects. </summary>
-    public void Clear()
+    internal void Clear()
     {
         EnsureNotDisposed();
         // Create a copy to iterate over since RemoveObject modifies the collection
@@ -1237,7 +1249,7 @@ public class SceneInstance : EngineObject, ISerializable
     }
 
     /// <summary> Unregisters all dead / disposed GameObjects </summary>
-    public void Flush()
+    internal void Flush()
     {
         if (IsDisposed || !_hasDisposedObjects) return;
         _hasDisposedObjects = false;
@@ -1252,7 +1264,10 @@ public class SceneInstance : EngineObject, ISerializable
         _allObjSet.RemoveWhere(obj => obj.IsDisposed);
 
         foreach (GameObject obj in removed)
+        {
+            LeaveSection(obj);
             obj.Scene = null;
+        }
     }
 
     private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(this, nameof(Dispose));
@@ -1314,18 +1329,6 @@ public class SceneInstance : EngineObject, ISerializable
         _state = SceneState.Destroyed;
     }
 
-    /// <summary>
-    /// The world's saveable objects and settings as stored content, read back as a detached copy with the same
-    /// identifiers. A reference to an object outside this world saves as null.
-    /// </summary>
-    public SceneContent Capture() => SceneContent.Read(CaptureTree());
-
-    /// <summary>What <see cref="Capture"/> reads back, written as a .scene file holds it.</summary>
-    internal EchoObject CaptureTree()
-    {
-        var content = new SceneContent { Objects = [.. SaveableObjects], Environment = Environment, Lighting = Lighting, LightmapBake = LightmapBake };
-        return Serializer.Serialize(typeof(object), content, new SerializationContext { ExternalReferences = SceneReferenceResolver.ForCapture(content.Objects) });
-    }
 
     void ISerializable.Serialize(ref EchoObject compound, SerializationContext ctx)
         => throw new NotSupportedException("A live world is never serialized. Capture() gives its content.");
@@ -1507,4 +1510,117 @@ public class SceneInstance : EngineObject, ISerializable
         return true;
     }
 
+}
+
+/// <summary>
+/// The content of one <see cref="Scene"/> loaded into a <see cref="SceneInstance"/>: its roots, with their children, and
+/// the settings it was loaded with. Unloading it removes exactly the objects it brought.
+/// </summary>
+public sealed class SceneSection
+{
+    private readonly CancellationTokenSource _unload = new();
+
+    internal SceneSection(SceneInstance instance, string name, bool persistent)
+    {
+        Instance = instance;
+        Name = name;
+        IsPersistent = persistent;
+    }
+
+    /// <summary>The world this section is in.</summary>
+    public SceneInstance Instance { get; }
+
+    /// <summary>The scene this section was loaded from, null for one made at runtime.</summary>
+    public Scene? Source { get; internal set; }
+
+    public string Name { get; set; }
+
+    /// <summary>Whether this is the world's persistent section, which survives every load.</summary>
+    public bool IsPersistent { get; }
+
+    /// <summary>Whether this is the world's <see cref="SceneInstance.ActiveSection"/>.</summary>
+    public bool IsActive => ReferenceEquals(Instance.ActiveSection, this);
+
+    /// <summary>Whether this section is still in its world.</summary>
+    public bool IsLoaded { get; private set; } = true;
+
+    internal readonly List<GameObject> RootsList = [];
+
+    /// <summary>This section's root objects in sibling order.</summary>
+    public IReadOnlyList<GameObject> Roots => [.. LiveRoots];
+
+    internal IEnumerable<GameObject> LiveRoots
+    {
+        get
+        {
+            foreach (GameObject root in RootsList)
+                if (!root.IsDisposed)
+                    yield return root;
+        }
+    }
+
+    private SceneEnvironment? _environment;
+
+    /// <summary>The sky, ambient light and fog this section was loaded with. The world shows the active section's.</summary>
+    public SceneEnvironment Environment
+    {
+        get => _environment ??= new SceneEnvironment();
+        internal set => _environment = value;
+    }
+
+    /// <summary>This section's baked lightmaps and probes.</summary>
+    public SceneLighting Lighting { get; internal set; } = new();
+
+    /// <summary>The lightmapper settings this section was saved with. Editor data, cleared in player builds.</summary>
+    public LightmapBakeSettings LightmapBake { get; internal set; } = new();
+
+    /// <summary>Cancelled when this section unloads, for awaits that must not outlive the level.</summary>
+    public CancellationToken UnloadToken => _unload.Token;
+
+    internal void MarkUnloaded()
+    {
+        IsLoaded = false;
+        try { _unload.Cancel(); }
+        catch (Exception e) { Debug.LogException($"[Scene] A cancellation callback of '{Name}' threw", e); }
+    }
+
+    /// <summary>Takes in detached content: its settings, and its objects as this section's.</summary>
+    internal void Fill(SceneContent content)
+    {
+        Environment = content.Environment;
+        Lighting = content.Lighting;
+        LightmapBake = content.LightmapBake;
+        foreach (GameObject obj in content.Objects)
+            if (obj.IsValid() && obj.Parent.IsNotValid())
+                Instance.Add(obj, this);
+        Instance.InvalidateProbeVolume();
+    }
+
+    /// <summary>
+    /// This section's saveable objects and settings as stored content, read back as a detached copy with the same
+    /// identifiers. A reference to anything outside this section saves as null. The persistent section is never saved.
+    /// </summary>
+    public SceneContent Capture() => SceneContent.Read(CaptureTree());
+
+    /// <summary>What <see cref="Capture"/> reads back, written as a .scene file holds it.</summary>
+    internal EchoObject CaptureTree()
+    {
+        if (IsPersistent) throw new InvalidOperationException("The persistent section is never saved.");
+        List<GameObject> objects = [];
+        foreach (GameObject root in LiveRoots)
+            Collect(root);
+        var content = new SceneContent { Objects = [.. objects], Environment = Environment, Lighting = Lighting, LightmapBake = LightmapBake };
+        return Serializer.Serialize(typeof(object), content, new SerializationContext { ExternalReferences = SceneReferenceResolver.ForCapture(content.Objects) });
+
+        void Collect(GameObject go)
+        {
+            if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0) return;
+            objects.Add(go);
+            foreach (GameObject child in go.Children)
+                if (!child.IsDisposed)
+                    Collect(child);
+        }
+    }
+
+    public override string ToString() => Name;
 }

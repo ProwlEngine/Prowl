@@ -128,7 +128,7 @@ public class HierarchyTests : RuntimeTestBase
     // ---- Cross-scene transfer ----
 
     [Fact]
-    public void SetParent_AcrossScenes_MovesChildToParentScene()
+    public void SetParent_AcrossWorlds_OrUnderADetachedParent_IsRefused_MoveToMoves()
     {
         SceneInstance scene1 = CreateScene();
         SceneInstance scene2 = CreateScene();
@@ -139,6 +139,11 @@ public class HierarchyTests : RuntimeTestBase
         GameObject parent = CreateGameObject("Parent");
         scene2.Add(parent);
 
+        Assert.Throws<InvalidOperationException>(() => child.SetParent(parent));
+        Assert.Throws<InvalidOperationException>(() => child.SetParent(CreateGameObject("Detached")));
+        Assert.Same(scene1, child.Scene);
+
+        child.MoveTo(scene2);
         child.SetParent(parent);
 
         Assert.Same(scene2, child.Scene);

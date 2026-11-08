@@ -559,7 +559,7 @@ public class AssetDatabaseTests : RuntimeTestBase
         scene.Add(go);
         go.AddComponent<CrateHolder>().Crate = crate;
         scene.Update();
-        scene.CaptureTree();
+        scene.ActiveSection.CaptureTree();
 
         scene.Remove(go);
         go.Dispose();
@@ -811,7 +811,7 @@ public class AssetDatabaseTests : RuntimeTestBase
         var go = new GameObject("Holder");
         authored.Add(go);
         go.AddComponent<CrateHolder>().Crate = crate;
-        var stored = new Scene { Data = authored.CaptureTree() };
+        var stored = new Scene { Data = authored.ActiveSection.CaptureTree() };
         authored.Dispose();
         Guid sceneId = _backend.Add(stored, "Level.scene");
 
@@ -857,7 +857,7 @@ public class AssetDatabaseTests : RuntimeTestBase
         var go = new GameObject("Holder");
         authored.Add(go);
         go.AddComponent<CrateHolder>().Crate = crate;
-        var stored = new Scene { Data = authored.CaptureTree() };
+        var stored = new Scene { Data = authored.ActiveSection.CaptureTree() };
         authored.Dispose();
         Scene level = AssetDatabase.Load<Scene>(_backend.Add(stored, "Level.scene"))!;
         crate.Load();

@@ -391,7 +391,7 @@ public static class Undo
         if (go.IsNotValid()) return;
         RegisterChildrenOrderUndo(go.Parent, go.Scene, name);
         if (go.Parent.IsValid()) go.SetSiblingIndex(index);
-        else if (go.Scene.IsValid()) go.Scene.SetRootIndex(go, index);
+        else if (go.Scene.IsValid()) go.SiblingIndex = index;
     }
 
     /// <summary>Records the order of a parent's children, or of the scene's roots when <paramref name="parent"/> is null.</summary>
@@ -1611,7 +1611,7 @@ public static class Undo
         public static Placement Of(GameObject go)
             => go.Parent.IsValid()
                 ? new Placement(go.Parent.Identifier, go.Parent.Children.IndexOf(go))
-                : new Placement(Guid.Empty, go.Scene.IsValid() ? go.Scene.GetRootIndex(go) : -1);
+                : new Placement(Guid.Empty, go.Scene.IsValid() ? go.SiblingIndex : -1);
     }
 
     private sealed class CreatedRecord : Record
@@ -1797,7 +1797,7 @@ public static class Undo
             {
                 if (restore.Find(order[i]) is not GameObject child) continue;
                 if (p.IsValid()) { if (ReferenceEquals(child.Parent, p)) child.SetSiblingIndex(i); }
-                else if (child.Parent.IsNotValid() && restore.Scene.IsValid()) restore.Scene.SetRootIndex(child, i);
+                else if (child.Parent.IsNotValid() && restore.Scene.IsValid()) child.SiblingIndex = i;
             }
         }
 
@@ -2028,7 +2028,7 @@ public static class Undo
                 go.RecomputeHierarchyState();
                 Scene.Add(go);
             }
-            if (placement.Index >= 0) Scene.SetRootIndex(go, placement.Index);
+            if (placement.Index >= 0) go.SiblingIndex = placement.Index;
         }
 
         public void DestroyGameObject(Guid id)

@@ -42,7 +42,7 @@ public class TypeCollisionSceneLoadTests : RuntimeTestBase
         GameObject alsoHealthy = CreateGameObject("AlsoHealthy");
         scene.Add(alsoHealthy);
 
-        EchoObject echo = scene.CaptureTree();
+        EchoObject echo = scene.ActiveSection.CaptureTree();
 
         // Give one object a component whose $type resolves to a non-Component (Jitter2.World).
         InjectBadComponent(echo, "HasBadComponent", JitterWorldName);

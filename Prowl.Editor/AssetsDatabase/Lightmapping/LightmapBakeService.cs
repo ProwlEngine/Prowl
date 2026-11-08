@@ -226,7 +226,7 @@ public sealed class LightmapBakeService
 
         // Everything the bake produced lives on the scene, so clearing is dropping it. Nothing has to be
         // walked and reset object by object.
-        scene.Lighting = new SceneLighting();
+        scene.ActiveSection.Lighting = new SceneLighting();
         scene.InvalidateProbeVolume();
 
         SaveBakeResult();

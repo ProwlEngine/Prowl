@@ -228,7 +228,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
         first.Add(keeper);
         SceneInstance.Load(first);
         SceneInstance.ProcessPendingLoad();
-        SceneInstance.DontDestroyOnLoad(keeper);
+        keeper.Persistent = true;
 
         SceneInstance second = CreateScene();
         SceneInstance.Load(second);
@@ -247,7 +247,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
         SceneInstance.Load(first);
         SceneInstance.ProcessPendingLoad();
         cam.Enabled = false;
-        SceneInstance.DontDestroyOnLoad(keeper);
+        keeper.Persistent = true;
 
         SceneInstance second = CreateScene();
         SceneInstance.Load(second);

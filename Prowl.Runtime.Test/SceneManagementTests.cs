@@ -346,6 +346,147 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.Equal(3, world.ObjectCount);
     }
 
+    // ---- Sections ----
+
+    [Fact]
+    public void ANewWorld_HasPersistentThenOneActiveSection()
+    {
+        SceneInstance world = SceneInstance.Create("Level");
+        try
+        {
+            Assert.Equal(2, world.Sections.Count);
+            Assert.True(world.Sections[0].IsPersistent);
+            Assert.Same(world.Sections[1], world.ActiveSection);
+            Assert.Equal("Level", world.ActiveSection.Name);
+            Assert.Throws<InvalidOperationException>(() => world.ActiveSection = world.Persistent);
+            Assert.Throws<InvalidOperationException>(() => world.Persistent.Capture());
+        }
+        finally { world.Dispose(); }
+    }
+
+    [Fact]
+    public void ObjectsJoinTheActiveSection_TheirParentsSection_OrTheirOwners()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+
+        GameObject inActive = world.Create("A");
+        GameObject inOther = world.Create(other, "B");
+        GameObject child = world.Create("Child", parent: inOther);
+        GameObject owned = world.Create("Puppet", owner: inOther.AddComponent<PlainComponent>());
+
+        Assert.Same(world.ActiveSection, inActive.Section);
+        Assert.Same(other, inOther.Section);
+        Assert.Same(other, child.Section);
+        Assert.Same(other, owned.Section);
+        Assert.Equal([inActive], world.ActiveSection.Roots);
+        Assert.Equal([inOther, owned], other.Roots);
+        Assert.Equal([inActive, inOther, owned], world.Roots);
+    }
+
+    [Fact]
+    public void SectionsOwnTheirSettings_AndTheWorldShowsTheActiveOnes()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        other.Lighting.LightmapScale = 5f;
+
+        Assert.NotEqual(5f, world.Lighting.LightmapScale);
+        world.ActiveSection = other;
+        Assert.Equal(5f, world.Lighting.LightmapScale);
+        Assert.Same(other.Environment, world.Environment);
+    }
+
+    [Fact]
+    public void ReparentingAcrossSections_MovesTheSubtree_AndSetParentNullKeepsTheSection()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        GameObject anchor = world.Create(other, "Anchor");
+        GameObject mover = world.Create("Mover");
+        GameObject moverChild = world.Create("MoverChild", parent: mover);
+
+        mover.SetParent(anchor);
+        Assert.Same(other, moverChild.Section);
+        Assert.DoesNotContain(mover, world.ActiveSection.Roots);
+
+        mover.SetParent(null!);
+        Assert.Same(other, mover.Section);
+        Assert.Equal([anchor, mover], other.Roots);
+    }
+
+    [Fact]
+    public void Capture_WritesOneSection_AndSavesReferencesIntoAnotherAsNull()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        GameObject target = world.Create(other, "TargetInOther");
+        GameObject holder = world.Create("Holder");
+        holder.AddComponent<SectionLink>().Target = target;
+
+        SceneContent content = world.ActiveSection.Capture();
+
+        GameObject saved = Assert.Single(content.Objects);
+        Assert.Equal("Holder", saved.Name);
+        Assert.Null(saved.GetComponent<SectionLink>()!.Target);
+    }
+
+    private sealed class SectionLink : Component
+    {
+        public GameObject? Target;
+    }
+
+    [Fact]
+    public void MovingIntoASectionThatHoldsTheIdentifier_GivesAFreshOne()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        GameObject first = world.Create(other, "First");
+        GameObject second = world.Create("Second");
+        second.SetIdentifier(first.Identifier);
+
+        second.MoveTo(other);
+
+        Assert.NotEqual(first.Identifier, second.Identifier);
+        Assert.Same(first, world.FindObject(other, first.Identifier));
+    }
+
+    [Fact]
+    public void SiblingIndex_OfARoot_IsItsIndexAmongItsSectionsRoots()
+    {
+        SceneInstance world = CreateScene();
+        GameObject a = world.Create("A");
+        GameObject b = world.Create("B");
+
+        b.SiblingIndex = 0;
+
+        Assert.Equal([b, a], world.ActiveSection.Roots);
+        Assert.Equal(1, a.SiblingIndex);
+    }
+
+    [Fact]
+    public void ADestroyingWorld_RefusesNewObjects()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        SpawnOnDisable spawner = go.AddComponent<SpawnOnDisable>();
+        world.Add(go);
+
+        world.Dispose();
+
+        Assert.True(spawner.Refused);
+    }
+
+    private sealed class SpawnOnDisable : Component
+    {
+        public bool Refused;
+        public override void OnDisable()
+        {
+            try { GameObject.Scene!.Create("Late"); }
+            catch (InvalidOperationException) { Refused = true; }
+        }
+    }
+
     [Fact]
     public void Main_IsNeverMadeOnTheFly_OnceItsWorldIsGone()
     {
@@ -640,7 +781,7 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance.Load(first);
         SceneInstance.ProcessPendingLoad();
 
-        SceneInstance.DontDestroyOnLoad(keeper);
+        keeper.Persistent = true;
 
         SceneInstance second = CreateScene();
         SceneInstance.Load(second);
@@ -661,7 +802,7 @@ public class SceneManagementTests : RuntimeTestBase
         first.Add(keeper);
         SceneInstance.Load(first);
         SceneInstance.ProcessPendingLoad();
-        SceneInstance.DontDestroyOnLoad(keeper);
+        keeper.Persistent = true;
 
         Update(first);
         Assert.Equal(1, comp.Updates);
@@ -683,7 +824,7 @@ public class SceneManagementTests : RuntimeTestBase
         first.Add(keeper);
         SceneInstance.Load(first);
         SceneInstance.ProcessPendingLoad();
-        SceneInstance.DontDestroyOnLoad(keeper);
+        keeper.Persistent = true;
         Assert.Equal([canvas], first.Canvases);
 
         SceneInstance second = CreateScene();
@@ -702,7 +843,7 @@ public class SceneManagementTests : RuntimeTestBase
         first.Add(keeper);
         SceneInstance.Load(first);
         SceneInstance.ProcessPendingLoad();
-        SceneInstance.DontDestroyOnLoad(keeper);
+        keeper.Persistent = true;
         int enables = comp.Enables;
 
         SceneInstance.Load(CreateScene());
@@ -713,7 +854,7 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
-    public void DontDestroyOnLoad_OnAChild_PreservesItsRootInstead()
+    public void Persistent_IsSetOnARoot_AndReadOnAChildForItsRoot()
     {
         SceneInstance first = CreateScene();
         GameObject root = CreateGameObject("Root");
@@ -723,7 +864,10 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance.Load(first);
         SceneInstance.ProcessPendingLoad();
 
-        SceneInstance.DontDestroyOnLoad(child);
+        Assert.Throws<InvalidOperationException>(() => child.Persistent = true);
+        root.Persistent = true;
+        Assert.True(child.Persistent);
+        Assert.Same(first.Persistent, child.Section);
 
         SceneInstance second = CreateScene();
         SceneInstance.Load(second);
@@ -745,8 +889,8 @@ public class SceneManagementTests : RuntimeTestBase
         SceneInstance.Load(first);
         SceneInstance.ProcessPendingLoad();
 
-        SceneInstance.DontDestroyOnLoad(go);
-        SceneInstance.CancelDontDestroyOnLoad(go);
+        go.Persistent = true;
+        go.Persistent = false;
 
         SceneInstance.Load(CreateScene());
         SceneInstance.ProcessPendingLoad();
@@ -762,7 +906,7 @@ public class SceneManagementTests : RuntimeTestBase
         first.Add(go);
         SceneInstance.Load(first);
         SceneInstance.ProcessPendingLoad();
-        SceneInstance.DontDestroyOnLoad(go);
+        go.Persistent = true;
 
         go.Dispose();
 
@@ -773,52 +917,15 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.Empty(second.Objects);
     }
 
-    // Leaving play mode ends the preservation session. Without this the objects a play session kept
-    // alive would ride the swap into the authoring scene the editor restores behind it, and stay there.
     [Fact]
-    public void DestroyPreserved_KeepsThemOutOfTheNextScene()
+    public void Persistent_IsRefusedOutsideAGameWorld()
     {
-        SceneInstance play = CreateScene(enable: true);
-        GameObject keeper = CreateGameObject("Keeper");
-        play.Add(keeper);
-        SceneInstance.Load(play);
-        SceneInstance.ProcessPendingLoad();
-        SceneInstance.DontDestroyOnLoad(keeper);
+        var edit = new SceneInstance(SceneMode.Edit);
+        GameObject go = CreateGameObject();
+        edit.Add(go);
 
-        SceneInstance.DestroyPreserved();
-
-        // Same order the game loop uses: the destroy queue drains, then the scene swap applies.
-        SceneInstance restored = CreateScene();
-        SceneInstance.Load(restored);
-        EngineObject.ProcessDestroyed();
-        SceneInstance.ProcessPendingLoad();
-
-        Assert.True(keeper.IsDisposed);
-        Assert.Empty(restored.Objects);
-    }
-
-    // Queued like any other Destroy, so teardown lands at the end of the frame rather than under
-    // whatever was running when the play button was clicked.
-    [Fact]
-    public void DestroyPreserved_TearsDownAtTheEndOfTheFrame()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        GameObject keeper = CreateGameObject("Keeper");
-        TickCounter comp = keeper.AddComponent<TickCounter>();
-        scene.Add(keeper);
-        SceneInstance.Load(scene);
-        SceneInstance.ProcessPendingLoad();
-        SceneInstance.DontDestroyOnLoad(keeper);
-
-        SceneInstance.DestroyPreserved();
-
-        Assert.False(keeper.IsDisposed);
-        Assert.Equal(0, comp.Disables);
-
-        EngineObject.ProcessDestroyed();
-
-        Assert.True(keeper.IsDisposed);
-        Assert.Equal(1, comp.Disables); // torn down properly, not just dropped from the registry
+        Assert.Throws<InvalidOperationException>(() => go.Persistent = true);
+        edit.Dispose();
     }
 
     [Fact]
@@ -829,7 +936,7 @@ public class SceneManagementTests : RuntimeTestBase
         scene.Add(keeper);
         SceneInstance.Load(scene);
         SceneInstance.ProcessPendingLoad();
-        SceneInstance.DontDestroyOnLoad(keeper);
+        keeper.Persistent = true;
 
         SceneInstance.Shutdown();
 

@@ -100,7 +100,7 @@ public static class EditorSceneManager
     public static SceneContent CreateDefaultContent()
     {
         SceneInstance world = CreateDefaultScene();
-        try { return world.Capture(); }
+        try { return world.ActiveSection.Capture(); }
         finally { world.Dispose(); }
     }
 
@@ -303,7 +303,7 @@ public static class EditorSceneManager
             // those edits the next time they are refreshed.
             PrefabUtility.ReconcileOpenScene();
 
-            EchoObject echo = SceneInstance.Main.CaptureTree();
+            EchoObject echo = SceneInstance.Main.ActiveSection.CaptureTree();
             File.WriteAllText(absolutePath, echo.WriteToString());
 
             // The stored scene takes what was written, so a build or a Scene.Load of it sees this save.

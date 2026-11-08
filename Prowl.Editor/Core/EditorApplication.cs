@@ -1968,7 +1968,7 @@ public class EditorApplication : Game
         _dirtyAssetCopies = EditorUtility.CopyDirtyAssets();
 
         // The edit world's content, captured whole: the play copy is built from it and stopping restores it
-        _savedEditorScene = scene.CaptureTree();
+        _savedEditorScene = scene.ActiveSection.CaptureTree();
         _savedEditorSceneName = scene.Name;
         _savedEditorSceneSource = scene.Source;
 
@@ -1985,8 +1985,6 @@ public class EditorApplication : Game
 
         // Push play-mode input handler (only forwards input when Game View focused)
         Input.PushHandler(new GameViewInputHandler(Input.Current));
-
-        Runtime.Resources.SceneInstance.DestroyPreserved();
 
         // The swap ends the edit scene's async session once its teardown has run, and the play scene starts
         // in a fresh one.
@@ -2035,8 +2033,6 @@ public class EditorApplication : Game
         Undo.PopContext(_savedEditUndo);
         _savedEditUndo = null;
         if (!Preferences.Get<PlayModePreferences>().KeepUndoHistory) Undo.Clear();
-
-        Runtime.Resources.SceneInstance.DestroyPreserved();
 
         // Restore the editor scene. Loading it is what disposes the play scene, at the end of the frame.
         if (_savedEditorScene != null)

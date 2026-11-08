@@ -56,7 +56,7 @@ public class SerializationTests : RuntimeTestBase
 {
     private static T RoundTrip<T>(T value) => Serializer.Deserialize<T>(Serializer.Serialize(value))!;
 
-    private static SceneInstance RoundTrip(SceneInstance scene) => SceneInstance.Instantiate(scene.Capture());
+    private static SceneInstance RoundTrip(SceneInstance scene) => SceneInstance.Instantiate(scene.ActiveSection.Capture());
 
     // ---------------------------------------------------------------------
     // GameObject (custom ISerializable: GameObject.Serialize/Deserialize)
@@ -191,7 +191,7 @@ public class SerializationTests : RuntimeTestBase
         scene.Lighting.LightmapScale = 3f;
         scene.LightmapBake.Bounces = 7;
 
-        SceneInstance copy = SceneInstance.Instantiate(scene.Capture());
+        SceneInstance copy = SceneInstance.Instantiate(scene.ActiveSection.Capture());
 
         Assert.Equal(
             scene.Objects.Select(o => (o.Name, o.Identifier)).OrderBy(o => o.Name),
@@ -209,7 +209,7 @@ public class SerializationTests : RuntimeTestBase
         GameObject go = CreateGameObject("Counted");
         go.AddComponent<LifecycleCounter>();
         scene.Add(go);
-        var stored = new Scene { Data = scene.CaptureTree() };
+        var stored = new Scene { Data = scene.ActiveSection.CaptureTree() };
         LifecycleCounter.Callbacks = 0;
 
         SceneContent content = stored.ReadContent();
@@ -231,7 +231,7 @@ public class SerializationTests : RuntimeTestBase
         holder.AddComponent<LinkComponent>().Target = foreign;
         scene.Add(holder);
 
-        EchoObject tree = scene.CaptureTree();
+        EchoObject tree = scene.ActiveSection.CaptureTree();
         SceneInstance copy = SceneInstance.Instantiate(SceneContent.Read(tree));
 
         Assert.DoesNotContain("ForeignObject", tree.WriteToString());
@@ -307,7 +307,7 @@ public class SerializationTests : RuntimeTestBase
         scene.Add(CreateGameObject("Broken"));
         scene.Add(CreateGameObject("Healthy2"));
 
-        EchoObject echo = scene.CaptureTree();
+        EchoObject echo = scene.ActiveSection.CaptureTree();
 
         // Drop the "Broken" object's Transform in the serialized array to simulate the unresolved ref.
         foreach (EchoObject el in StoredObjects(echo).List)

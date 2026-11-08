@@ -385,7 +385,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         ComponentClipboard.Copy(src);
         Guid originalId = a.Identifier;
 
-        EchoObject echo = scene.CaptureTree();
+        EchoObject echo = scene.ActiveSection.CaptureTree();
         SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
         SceneInstance.Load(restored);
         SceneInstance.ProcessPendingLoad();

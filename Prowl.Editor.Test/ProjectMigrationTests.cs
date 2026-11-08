@@ -667,7 +667,7 @@ public class ProjectMigrationTests : IDisposable
     // A scene as engines before SceneContent saved it: the live scene itself, with a flat serializeObj array.
     internal static EchoObject LegacyScene(SceneInstance scene)
     {
-        EchoObject echo = scene.CaptureTree();
+        EchoObject echo = scene.ActiveSection.CaptureTree();
         scene.Dispose();
         echo["$type"] = new EchoObject("Prowl.Runtime.Resources.Scene, Prowl.Runtime");
         echo["serializeObj"] = echo["Objects"].Clone();

@@ -230,7 +230,7 @@ public partial class GameObject
         clone.Transform.Rotation = rotation;
 
         SceneInstance? scene = original.Scene;
-        return AddToScene(clone, scene.IsValid() ? scene : Resources.SceneInstance.Active);
+        return scene.IsValid() ? AddToScene(clone, scene, original.Section) : AddToScene(clone, Resources.SceneInstance.Active);
     }
 
     /// <inheritdoc cref="Instantiate(PrefabAsset, GameObject?, bool)"/>
@@ -246,11 +246,12 @@ public partial class GameObject
         return clone;
     }
 
-    /// <summary>Copy an existing GameObject into a specific scene.</summary>
+    /// <summary>Copy an existing GameObject into a specific world, into the original's section when it is the original's world.</summary>
     public static GameObject? Instantiate(GameObject original, SceneInstance? scene)
     {
         GameObject? clone = Clone(original);
-        return clone.IsNotValid() ? null : AddToScene(clone, scene);
+        if (clone.IsNotValid()) return null;
+        return AddToScene(clone, scene, ReferenceEquals(scene, original.Scene) ? original.Section : null);
     }
 
     /// <summary>
@@ -276,18 +277,20 @@ public partial class GameObject
         }
     }
 
-    private static GameObject? AddToScene(GameObject instance, SceneInstance? scene)
+    private static GameObject? AddToScene(GameObject instance, SceneInstance? scene, SceneSection? section = null)
     {
-        if (scene.IsNotValid())
+        if (scene.IsNotValid() || scene!.State == SceneState.Destroying)
         {
-            // Handing back a live-looking object that is in no scene, gets no callbacks and never
-            // renders would be worse than saying so.
-            Debug.LogError($"[Instantiate] There is no scene to spawn '{instance.Name}' into.");
+            // Handing back a live-looking object that is in no world, gets no callbacks and never renders would be
+            // worse than saying so. A death effect spawned during teardown lands here too.
+            Debug.LogError(scene.IsValid()
+                ? $"[Instantiate] '{scene!.Name}' is being destroyed, so '{instance.Name}' was not spawned."
+                : $"[Instantiate] There is no world to spawn '{instance.Name}' into.");
             instance.Dispose();
             return null;
         }
 
-        scene.Add(instance);
+        scene.Add(instance, section != null && section.IsLoaded ? section : null);
         return instance;
     }
 }

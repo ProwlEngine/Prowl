@@ -124,7 +124,7 @@ public static class PrefabEditingMode
         {
             PrefabUtility.ReconcileOpenScene();
             OriginalSceneName = currentScene.Name;
-            _savedSceneState = currentScene.CaptureTree();
+            _savedSceneState = currentScene.ActiveSection.CaptureTree();
             _savedSceneSource = currentScene.Source;
             _savedScenePath = EditorSceneManager.CurrentScenePath;
         }

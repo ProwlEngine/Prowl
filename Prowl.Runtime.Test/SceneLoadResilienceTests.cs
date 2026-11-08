@@ -53,7 +53,7 @@ public class SceneLoadResilienceTests : RuntimeTestBase
 {
     private const string Ghost = "Ghost_DoesNotExist";
 
-    private static string Save(SceneInstance scene) => scene.CaptureTree().WriteToString();
+    private static string Save(SceneInstance scene) => scene.ActiveSection.CaptureTree().WriteToString();
 
     private static SceneInstance Load(string text) => SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text), new SerializationContext()));
 
@@ -212,9 +212,9 @@ public class SceneLoadResilienceTests : RuntimeTestBase
     {
         SceneInstance scene = CreateScene();
         var objects = Enumerable.Range(0, 3).Select(i => CreateGameObject("GO" + i)).ToList();
-        objects.ForEach(scene.Add);
+        objects.ForEach(go => scene.Add(go));
 
-        EchoObject echo = scene.CaptureTree();
+        EchoObject echo = scene.ActiveSection.CaptureTree();
         EchoObject array = StoredObjects(echo);
         array.ListAdd(EchoObject.ReadFromString(array[0].WriteToString()));
         SceneInstance loaded = Load(echo.WriteToString());
