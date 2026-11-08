@@ -1441,4 +1441,57 @@ public class UndoTests : EditorTestHarness
         Assert.False(Inspector.ImportSettingsEditor.Pending(material.AssetID)!.TryGet("Quality", out _));
         Assert.Single(Undo.RedoSteps);
     }
+
+    [Fact]
+    public void ProjectSettingsEdit_IsRecordedOnTheNextFrame()
+    {
+        OpenScene();
+        EditorRegistries.SettingsEntry entry = EditorRegistries.SettingsEntries.First(e => e.Type == typeof(Projects.Settings.TimeSettings));
+        var time = (Projects.Settings.TimeSettings)entry.Instance;
+        int original = time.MaxFixedIterations;
+        try
+        {
+            GUI.Panels.ProjectSettingsPanel.TrackEdits(entry);
+            time.MaxFixedIterations = original + 2;
+            Time.CurrentTime.Advance(0.016f);
+            GUI.Panels.ProjectSettingsPanel.TrackEdits(entry);
+            Undo.FlushUndoRecordObjects();
+
+            Assert.Equal("Undo Modify Time", Undo.UndoDescription);
+            Undo.PerformUndo();
+            Assert.Equal(original, time.MaxFixedIterations);
+            Undo.PerformRedo();
+            Assert.Equal(original + 2, time.MaxFixedIterations);
+        }
+        finally
+        {
+            time.MaxFixedIterations = original;
+            time.Apply();
+        }
+    }
+
+    [Fact]
+    public void ProjectSettingsChangedWhilePanelHidden_IsNotRecorded()
+    {
+        OpenScene();
+        EditorRegistries.SettingsEntry entry = EditorRegistries.SettingsEntries.First(e => e.Type == typeof(Projects.Settings.TimeSettings));
+        var time = (Projects.Settings.TimeSettings)entry.Instance;
+        int original = time.MaxFixedIterations;
+        try
+        {
+            GUI.Panels.ProjectSettingsPanel.TrackEdits(entry);
+            Time.CurrentTime.Advance(0.016f);
+            time.MaxFixedIterations = original + 2;
+            Time.CurrentTime.Advance(0.016f);
+            GUI.Panels.ProjectSettingsPanel.TrackEdits(entry);
+            Undo.FlushUndoRecordObjects();
+
+            Assert.False(Undo.CanUndo);
+        }
+        finally
+        {
+            time.MaxFixedIterations = original;
+            time.Apply();
+        }
+    }
 }

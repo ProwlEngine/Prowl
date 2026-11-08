@@ -34,23 +34,38 @@ public class ProjectSettingsPanel : DockPanel
         PropertyNameCaseInsensitive = true,
     };
 
-    /// <summary>
-    /// Register an undo record if <paramref name="instance"/> changed between the captured
-    /// JSON and its current state. Used by the panel to wrap a settings OnGUI call so any
-    /// widget mutation becomes undoable without each settings class needing to know
-    /// about Undo.
-    /// </summary>
-    private static void DiffAndRegisterUndo(EditorRegistries.SettingsEntry entry, string beforeJson)
+    private sealed class Snapshot(EditorRegistries.SettingsEntry entry, string json, long frame)
     {
-        if (Application.IsPlaying) return;
+        public EditorRegistries.SettingsEntry Entry = entry;
+        public string Json = json;
+        public long Frame = frame;
+    }
 
-        string afterJson;
-        try { afterJson = JsonSerializer.Serialize(entry.Instance, entry.Type, s_jsonOpts); }
-        catch { return; }
+    private static Snapshot? s_snapshot;
 
-        if (beforeJson == afterJson) return;
+    static ProjectSettingsPanel() => Undo.undoRedoPerformed += () => s_snapshot = null;
 
-        Undo.RegisterOperation(new SettingsOperation($"Modify {entry.Name}", entry.Type, beforeJson, afterJson));
+    /// <summary>
+    /// Records the change the last frame made to the entry it drew, then captures <paramref name="entry"/> for the next frame.
+    /// Paper callbacks run at the end of a frame, so an edit is only visible on the frame after it was drawn.
+    /// </summary>
+    internal static void TrackEdits(EditorRegistries.SettingsEntry? entry)
+    {
+        long frame = Time.FrameCount;
+        Snapshot? previous = s_snapshot;
+        s_snapshot = null;
+
+        if (previous != null && previous.Frame == frame - 1 && !Application.IsPlaying && Serialize(previous.Entry) is { } after && after != previous.Json)
+            Undo.RegisterOperation(new SettingsOperation($"Modify {previous.Entry.Name}", previous.Entry.Type, previous.Json, after));
+
+        if (entry is { } current && !Application.IsPlaying && Serialize(current) is { } json)
+            s_snapshot = new Snapshot(current, json, frame);
+    }
+
+    private static string? Serialize(EditorRegistries.SettingsEntry entry)
+    {
+        try { return JsonSerializer.Serialize(entry.Instance, entry.Type, s_jsonOpts); }
+        catch { return null; }
     }
 
     private sealed class SettingsOperation(string name, Type type, string beforeJson, string afterJson) : IUndoOperation
@@ -75,6 +90,7 @@ public class ProjectSettingsPanel : DockPanel
             if (loaded == null) return;
             EditorRegistries.CopySettingsFields(loaded, entry.Instance);
             entry.Instance.Apply();
+            if (s_snapshot != null && s_snapshot.Entry.Type == entry.Type && Serialize(entry) is { } applied) s_snapshot.Json = applied;
         }
         catch (Exception ex)
         {
@@ -119,24 +135,27 @@ public class ProjectSettingsPanel : DockPanel
             // TODO: Port to using Echo to serialize to match how Project Settings serialize
             float contentW = width - side - 1;
             EditorRegistries.SettingsEntry currentEntry = entries[_selectedIndex];
-            string? beforeJson = null;
-            if (!Application.IsPlaying)
-            {
-                try { beforeJson = JsonSerializer.Serialize(currentEntry.Instance, currentEntry.Type, s_jsonOpts); }
-                catch { beforeJson = null; }
-            }
+            TrackEdits(currentEntry);
 
             Origami.ScrollView(paper, "ps_scroll", contentW, height).Body(() =>
             {
                 using (paper.Column("ps_content").Height(UnitValue.Auto).Padding(0, 0, 8, 12).Enter())
                 {
                     EditorGUI.SectionHeader(paper, "ps_content_h", currentEntry.Name, first: true);
-                    currentEntry.Instance.OnGUI(paper, contentW);
+                    DrawEntry(paper, currentEntry, contentW);
                     paper.Box("ps_content_pad").Height(EditorTheme.Padding * 4);
                 }
             });
-
-            if (beforeJson != null) DiffAndRegisterUndo(currentEntry, beforeJson);
         }
+    }
+
+    // The panel records settings edits itself, so the property grid takes no inspector capture of its own.
+    private static void DrawEntry(Paper paper, EditorRegistries.SettingsEntry entry, float width)
+    {
+        PropertyGridConfig config = EditorApplication.PropertyGridConfig;
+        Action<object>? baseline = config.OnBeginRoot;
+        config.OnBeginRoot = null;
+        try { entry.Instance.OnGUI(paper, width); }
+        finally { config.OnBeginRoot = baseline; }
     }
 }

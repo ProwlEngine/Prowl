@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Widgets;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Projects.Settings;
@@ -284,6 +285,7 @@ public class ColorPropertyEditor : PropertyEditor
             {
                 if (idx >= 0 && idx < settings.ColorPalette.Count)
                 {
+                    RecordPalette(settings);
                     settings.ColorPalette.RemoveAt(idx);
                     EditorRegistries.SaveSettings();
                 }
@@ -291,6 +293,9 @@ public class ColorPropertyEditor : PropertyEditor
         };
         return s_palette;
     }
+
+    private static void RecordPalette(ProjectsEditorSettings settings)
+        => Undo.RecordObject(settings, UndoOwner.OfSettings(typeof(ProjectsEditorSettings)), "Edit Color Palette");
 
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
@@ -308,6 +313,7 @@ public class ColorPropertyEditor : PropertyEditor
             string hex = $"#{r:X2}{g:X2}{b:X2}";
             if (!settings.ColorPalette.Contains(hex))
             {
+                RecordPalette(settings);
                 settings.ColorPalette.Add(hex);
                 palette.Colors.Add(new Color(capturedColor.R, capturedColor.G, capturedColor.B, 1f));
                 EditorRegistries.SaveSettings();
