@@ -39,13 +39,13 @@ public static class VolumeProfileGUI
 
     /// <summary>
     /// Draws the profile's components. <paramref name="changed"/> runs after every edit, for the owner to mark its
-    /// scene or asset dirty.
+    /// scene or asset dirty. An embedded profile's edits are recorded as owned by <paramref name="holder"/>.
     /// </summary>
-    public static void DrawComponents(Paper paper, string id, VolumeProfile profile, Action? changed = null)
+    public static void DrawComponents(Paper paper, string id, VolumeProfile profile, Action? changed = null, EngineObject? holder = null)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null || profile.IsNotValid()) return;
-        Undo.Snapshot(profile);
+        Undo.Snapshot(profile, OwnerOf(profile, holder));
 
         List<VolumeComponent> components = [.. profile.Loaded.Where(c => c != null)];
         if (components.Count == 0)
@@ -244,6 +244,9 @@ public static class VolumeProfileGUI
     }
 
     /// <summary>Marks the open scene dirty after an edit to a profile it embeds; database profiles have their own Apply.</summary>
+    private static UndoOwner OwnerOf(VolumeProfile profile, EngineObject? holder)
+        => profile.IsFromDatabase || holder.IsNotValid() ? UndoOwner.Of(profile) : UndoOwner.Of(holder);
+
     public static Action ChangedFor(VolumeProfile? profile)
         => () => { if (profile.IsValid() && !profile.IsFromDatabase) EditorSceneManager.MarkDirty(); };
 }

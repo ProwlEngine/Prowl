@@ -996,6 +996,14 @@ public static class Undo
         RecordTarget(target, TargetKey.Weak(target), UndoOwner.None, "Modify Properties", legacy: true);
     }
 
+    /// <summary>As <see cref="Snapshot(object)"/>, for an object owned by something else, such as a runtime asset embedded in a component.</summary>
+    public static void Snapshot(object target, UndoOwner owner)
+    {
+        if (Application.IsPlaying || target == null || _isContinuous) return;
+        if (target is EngineObject eo && eo.IsNotValid()) return;
+        RecordTarget(target, TargetKey.For(target), owner, "Modify Properties", legacy: true);
+    }
+
     public static void RegisterAction(string description, Action undo, Action redo)
     {
         if (Application.IsPlaying) return;

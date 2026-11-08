@@ -1567,4 +1567,23 @@ public class UndoTests : EditorTestHarness
         Assert.Equal(0, comp.Value);
         Assert.False(Undo.CanUndo);
     }
+
+    [Fact]
+    public void EmbeddedProfileEdit_RecordsAndMarksTheHoldersScene()
+    {
+        Scene scene = OpenScene();
+        Runtime.Rendering.Volume volume = Add(scene, "V").AddComponent<Runtime.Rendering.Volume>();
+        var profile = new Runtime.Rendering.VolumeProfile { Name = "Embedded" };
+        volume.SharedProfile = profile;
+        Type type = Inspector.VolumeProfileGUI.ComponentTypes[0];
+        EditorSceneManager.IsDirty = false;
+
+        Undo.Snapshot(profile, UndoOwner.Of(volume));
+        profile.Add(type);
+        Undo.FlushUndoRecordObjects();
+        Assert.True(EditorSceneManager.IsDirty);
+
+        Undo.PerformUndo();
+        Assert.False(profile.Has(type));
+    }
 }

@@ -72,7 +72,7 @@ public class VolumeEditor : CustomEditor
 
         VolumeProfile? profile = volume.SharedProfile;
         if (profile.IsNotValid()) return;
-        VolumeProfileGUI.DrawComponents(paper, $"{id}_list", profile, VolumeProfileGUI.ChangedFor(profile));
+        VolumeProfileGUI.DrawComponents(paper, $"{id}_list", profile, VolumeProfileGUI.ChangedFor(profile), volume);
         VolumeProfileAssetEditor.Shared.DrawPendingBar(paper, $"{id}_pending", profile);
     }
 }
@@ -112,7 +112,7 @@ public class CameraEditor : CustomEditor
         }
 
         if (profile.IsNotValid()) return;
-        VolumeProfileGUI.DrawComponents(paper, $"{id}_base", profile, VolumeProfileGUI.ChangedFor(profile));
+        VolumeProfileGUI.DrawComponents(paper, $"{id}_base", profile, VolumeProfileGUI.ChangedFor(profile), camera);
         VolumeProfileAssetEditor.Shared.DrawPendingBar(paper, $"{id}_base_pending", profile);
     }
 }
