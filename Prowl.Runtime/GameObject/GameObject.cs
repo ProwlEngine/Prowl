@@ -321,11 +321,8 @@ public partial class GameObject : EngineObject, ISerializable
 
         Scene newScene = (NewParent.IsValid()) ? NewParent.Scene : Scene;
 
-        if (newScene != Scene)
-        {
-            if (Scene.IsValid()) Scene.Remove(this);
-            if (newScene.IsValid()) newScene.Add(this);
-        }
+        bool joinsScene = newScene != Scene && newScene.IsValid();
+        if (newScene != Scene && Scene.IsValid()) Scene.Remove(this);
 
         // Save world-space transform before reparenting
         Float3 worldPosition = new();
@@ -379,7 +376,9 @@ public partial class GameObject : EngineObject, ISerializable
         // and colliders that follow a body would otherwise go stale).
         Transform.MarkChanged();
 
+        // Joining a scene last, so OnEnable sees the parent and the enabled state it has under it.
         HierarchyStateChanged();
+        if (joinsScene) newScene.Add(this);
 
         // Draw order and layout are derived from the child tree at canvas build time, and a same-scene
         // reparent fires no OnAdded/Removed - so mark the affected canvas(es) dirty explicitly.
