@@ -21,7 +21,7 @@ public sealed class OceanInteractor
 
 public sealed partial class OceanFeature
 {
-    public const int RippleSlices = 3;
+    public const int RippleSlices = 5;
     private const float RippleRate = 60f;
     private const int MostRippleSteps = 4;
 
@@ -79,7 +79,7 @@ public sealed partial class OceanFeature
             Float3 velocity = interactor.Velocity;
             float submersion = Submersion(sphere.Y, sphere.W);
             if (submersion > 0f)
-                _interactions.Add(new Interaction(sphere, new Float4(velocity.X, velocity.Y, velocity.Z, 3.75f * interactor.Weight * submersion / 5f)));
+                _interactions.Add(new Interaction(sphere, new Float4(velocity.X, velocity.Y, velocity.Z, 3f * interactor.Weight * submersion)));
         }
     }
 
@@ -134,25 +134,36 @@ public sealed partial class OceanFeature
                 continue;
             foreach (Interaction interaction in _interactions)
             {
-                for (int slice = 0; slice < RippleSlices; slice++)
+                int slice = PushSlice(interaction.Sphere);
+                float texel = _depthSlices.X * MathF.Pow(2f, slice) / DepthResolution;
+                float reach = 3f * (interaction.Sphere.W + texel) + 12f * texel;
+                uint footprint = (uint)Math.Clamp(MathF.Ceiling(2f * reach / texel / 8f), 1f, groups);
+                RipplePush push = new()
                 {
-                    float texel = _depthSlices.X * MathF.Pow(2f, slice) / DepthResolution;
-                    float reach = interaction.Sphere.W + 12f * texel;
-                    uint footprint = (uint)Math.Clamp(MathF.Ceiling(2f * reach / texel / 8f), 1f, groups);
-                    RipplePush push = new()
-                    {
-                        Slices = new Float4(_depthSlices.X, DepthResolution, 1f, slice),
-                        Viewer = viewer,
-                        Step = step,
-                        Sphere = interaction.Sphere,
-                        Motion = interaction.Motion,
-                    };
-                    Dispatch(cmd, source, target, push, footprint, footprint, 1);
-                }
+                    Slices = new Float4(_depthSlices.X, DepthResolution, 1f, slice),
+                    Viewer = viewer,
+                    Step = step,
+                    Sphere = interaction.Sphere,
+                    Motion = interaction.Motion,
+                };
+                Dispatch(cmd, source, target, push, footprint, footprint, 1);
             }
         }
         _rippleSource = _viewerWrapped;
         _rippleSourceViewer = _rippleViewer;
+    }
+
+    // The finest slice holding all a sphere pushes, which alone takes the push so it is as strong at any distance
+    private int PushSlice(Float4 sphere)
+    {
+        float extent = MathF.Max(MathF.Abs(sphere.X), MathF.Abs(sphere.Z));
+        for (int slice = 0; slice < RippleSlices - 1; slice++)
+        {
+            float width = _depthSlices.X * MathF.Pow(2f, slice);
+            if (extent + 3f * (sphere.W + width / DepthResolution) < 0.4f * width)
+                return slice;
+        }
+        return RippleSlices - 1;
     }
 
     private void Dispatch(CommandBuffer cmd, int source, int target, in RipplePush push, uint x, uint y, uint z)

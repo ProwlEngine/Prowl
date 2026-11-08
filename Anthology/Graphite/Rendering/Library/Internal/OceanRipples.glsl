@@ -4,7 +4,9 @@
 // texels away, so the ripples stay still in the world as the viewer moves. Waves travel at the deep water speed of
 // the shortest wave a slice holds, held under a Courant number of 0.7, damp over time, fade into a sponge at the
 // slice's edge, die on land, decay in the shallows and drift with the current, read back along it each step. A force step pushes the water around a sphere moving through
-// it, a band limited push, over the texels near it.
+// it, a band limited push, over the texels near it. Moving across the water it pushes a shallow trough under itself
+// and a rise around it, so it sits a little low in the water with its wake standing up either side, balanced by a
+// wide shallow dip so it adds no water. A sphere pushes only the finest slice holding all it pushes.
 Compute
 {
     layout(local_size_x = 8, local_size_y = 8) in;
@@ -77,7 +79,7 @@ Compute
             speed = min(speed, 0.7 * size / dt);
         float velocity = here.y + dt * speed * speed / (size * size) * (left + right + down + up - 4.0 * here.x);
         velocity *= 1.0 - min(1.0, push.step.z * dt);
-        float height = here.x + dt * velocity;
+        float height = (here.x + dt * velocity) * (1.0 - min(1.0, push.step.z * dt));
 
         float depth = imageLoad(Ocean_Depth, id).r + imageLoad(Ocean_Level, id).r;
         float shallow = 1.0 - (1.0 - clamp(2.0 * depth / (2.0 * size), 0.0, 1.0)) * dt * 2.0;
@@ -101,12 +103,14 @@ Compute
         vec2 toTexel = position - push.sphere.xz;
         float reach = length(toTexel);
         float signedDistance = reach - push.sphere.w;
-        vec2 outward = reach > 1e-4 ? toTexel / reach : vec2(0.0);
 
         vec3 velocity = push.motion.xyz;
         float vertical = -velocity.y * Push(1.67 / shortest, signedDistance);
-        float sideways = signedDistance > 0.0 ? dot(outward, velocity.xz) * Push(1.43 / shortest, signedDistance) : 0.0;
-        float accel = push.motion.w * (vertical + sideways) * 0.2 / shortest;
+        float spread = push.sphere.w + size;
+        float x = reach * reach / (spread * spread);
+        float shape = (1.0 - x) * exp(-x) * (x < 1.0 ? 0.4 : 1.0) + 0.6 * exp(-1.0) / 4.0 * exp(-x / 4.0);
+        float sideways = -0.3 * push.sphere.w / spread * length(velocity.xz) * shape;
+        float accel = push.motion.w * (vertical * 0.2 / shortest + sideways * 0.4);
 
         vec4 state = imageLoad(Ocean_RippleTarget, id);
         state.y += accel * push.step.x;
