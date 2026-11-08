@@ -762,7 +762,7 @@ public class SceneManagementTests : RuntimeTestBase
 
         static async Task<Scene> AfterYield()
         {
-            await Task.Yield();
+            await Task.Delay(1).ConfigureAwait(false);
             return Scene.Active;
         }
     }
@@ -836,5 +836,48 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.False(b.Gizmos.IsEmpty);
         Debug.ClearGizmos();
         Assert.True(b.Gizmos.IsEmpty);
+    }
+
+    // ---- Teardown ----
+
+    private sealed class TeardownLog : Component
+    {
+        public static readonly List<string> Events = [];
+        public string Tag = "";
+        public bool ThrowOnDispose;
+        public override void OnDisable() => Events.Add($"disable {Tag}");
+        public override void OnRemovedFromScene() => Events.Add($"removed {Tag}");
+        protected override void OnDispose()
+        {
+            Events.Add($"dispose {Tag}");
+            base.OnDispose();
+            if (ThrowOnDispose) throw new InvalidOperationException("teardown test");
+        }
+    }
+
+    // A scene tears down in three passes, each object guarded, so one throwing OnDispose leaves the rest torn down.
+    [Fact]
+    public void Teardown_RunsThreePasses_AndContinuesPastAThrowingOnDispose()
+    {
+        TeardownLog.Events.Clear();
+        Scene scene = CreateScene(enable: true);
+        GameObject a = CreateGameObject("A");
+        TeardownLog first = a.AddComponent<TeardownLog>();
+        first.Tag = "A";
+        first.ThrowOnDispose = true;
+        GameObject b = CreateGameObject("B");
+        TeardownLog second = b.AddComponent<TeardownLog>();
+        second.Tag = "B";
+        scene.Add(a);
+        scene.Add(b);
+
+        scene.Dispose();
+
+        Assert.True(a.IsDisposed && b.IsDisposed && first.IsDisposed && second.IsDisposed);
+        int lastDisable = Math.Max(TeardownLog.Events.IndexOf("disable A"), TeardownLog.Events.IndexOf("disable B"));
+        int firstRemoved = Math.Min(TeardownLog.Events.IndexOf("removed A"), TeardownLog.Events.IndexOf("removed B"));
+        int lastRemoved = Math.Max(TeardownLog.Events.IndexOf("removed A"), TeardownLog.Events.IndexOf("removed B"));
+        int firstDispose = Math.Min(TeardownLog.Events.IndexOf("dispose A"), TeardownLog.Events.IndexOf("dispose B"));
+        Assert.True(lastDisable >= 0 && lastDisable < firstRemoved && lastRemoved < firstDispose, string.Join(", ", TeardownLog.Events));
     }
 }

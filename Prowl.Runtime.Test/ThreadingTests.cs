@@ -48,10 +48,15 @@ public sealed class SessionProbe : Component
     }
 }
 
+// Installs and uninstalls the process wide main thread loop, so nothing else may run alongside it.
+[CollectionDefinition(nameof(ThreadingTests), DisableParallelization = true)]
+public sealed class ThreadingTestsCollection { }
+
 /// <summary>
 /// The main thread model: async sessions on the main thread, moving between threads with GameTask, and the
 /// ownership checks that stop another thread from touching a running scene.
 /// </summary>
+[Collection(nameof(ThreadingTests))]
 public class ThreadingTests : RuntimeTestBase
 {
     /// <summary>

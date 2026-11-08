@@ -1164,7 +1164,10 @@ public partial class GameObject : EngineObject, ISerializable
     protected override void OnDispose()
     {
         for (int i = Children.Count - 1; i >= 0; i--)
-            Children[i].Dispose();
+        {
+            try { Children[i].Dispose(); }
+            catch (Exception ex) { Debug.LogException($"[{Children[i].Name}] Dispose threw, the rest of '{Name}' is still torn down", ex); }
+        }
 
         for (int i = _components.Count - 1; i >= 0; i--)
         {
@@ -1177,7 +1180,8 @@ public partial class GameObject : EngineObject, ISerializable
             if (component.HasBeenEnabled && component.EnabledInHierarchy && scene.IsValid() && scene.IsActive)
                 component.InternalOnDisable();
 
-            component.Dispose();
+            try { component.Dispose(); }
+            catch (Exception ex) { Debug.LogException($"[{Name}/{component.GetType().Name}] OnDispose threw, the rest of '{Name}' is still torn down", ex); }
         }
         _components.Clear();
 

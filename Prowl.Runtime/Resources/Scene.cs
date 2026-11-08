@@ -977,6 +977,12 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(this, nameof(Dispose));
 
+    private static void Guarded(EngineObject target, string step, Action action)
+    {
+        try { action(); }
+        catch (Exception ex) { Debug.LogException($"[{target.Name}/{target.GetType().Name}] {step} threw while its scene was torn down", ex); }
+    }
+
     protected override void OnDispose()
     {
         using SceneScope active = Enter(this);
@@ -997,12 +1003,23 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         _navigation.Clear();
         _animation.Clear();
 
-        // Dispose all GameObjects which will also remove them from the scene. Dispose() (not the raw
-        // OnDispose() body) sets IsDisposed and is idempotent, so the flat list's double-hits on
-        // already-disposed children are no-ops.
+        // Three passes, every object guarded on its own, so one that throws leaves the rest torn down: everything is
+        // disabled, then told it left the scene, then disposed. Dispose() is idempotent, so the flat list's
+        // double hits on children already disposed with their parent are no ops.
         List<GameObject> allObjects = [.. _allObj.Where(o => !o.IsDisposed)];
+        if (_isActive)
+        {
+            foreach (GameObject g in allObjects)
+                foreach (Component c in g._components.ToArray())
+                    if (!c.IsDisposed && c.HasBeenEnabled && c.EnabledInHierarchy)
+                        Guarded(c, "OnDisable", c.InternalOnDisable);
+            _isActive = false;
+        }
         foreach (GameObject g in allObjects)
-            g.Dispose();
+            foreach (Component c in g._components.ToArray())
+                if (!c.IsDisposed) Guarded(c, "OnRemovedFromScene", c.OnRemovedFromScene);
+        foreach (GameObject g in allObjects)
+            if (!g.IsDisposed) Guarded(g, "Dispose", g.Dispose);
 
         // Clear any remaining references
         _allObj.Clear();
