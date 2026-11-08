@@ -658,6 +658,12 @@ void main()
     color *= fade;
     // How far the cloud the pixel shows is, 0 for clear sky
     outColor = vec4(color, alpha);
+    // What lies behind is blocked as if the cloud were four times as thick, so the sun and bright HDR highlights do not
+    // shine through dense cloud, with its own light raised to match so it looks the same
+    float blocked = pow(transmittance, 4.0);
+    color *= (1.0 - blocked) / max(1.0 - transmittance, 1e-4);
+    transmittance = blocked;
+
     outDistance = vec4(alpha > 0.01 ? distance : 0.0, 0.0, 0.0, 0.0);
 }
 
