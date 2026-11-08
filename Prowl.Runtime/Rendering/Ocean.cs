@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using G = Prowl.Graphite.Rendering;
@@ -41,6 +42,12 @@ public sealed class Ocean : Component, IRenderSync
     /// <summary>The largest wave tile in metres. Each next one is a quarter of the one before.</summary>
     public float TileSize = 1024f;
 
+    /// <summary>Seconds before the waves repeat, 0 for never.</summary>
+    public float LoopPeriod = 600f;
+
+    /// <summary>Gravity in m/s2, which sets how fast waves of each length travel.</summary>
+    public float Gravity = 9.81f;
+
     /// <summary>The planet's radius in metres, which curves the water down toward the horizon. 0 is flat.</summary>
     [Header("Surface")]
     public float PlanetRadius = 6371000f;
@@ -48,27 +55,76 @@ public sealed class Ocean : Component, IRenderSync
     /// <summary>How many rings of tiles surround the camera.</summary>
     [Range(2, 12)] public int Rings = 7;
 
-    /// <summary>How smooth the water is up close and far away.</summary>
+    /// <summary>The smallest and largest a tile of the innermost ring gets in metres, near and high above the water.</summary>
+    public float MinTileScale = 8f;
+    public float MaxTileScale = 256f;
+
+    /// <summary>The distances each wave cascade fades out by, from the longest waves to the shortest.</summary>
+    public Float4 CascadeFade = new(1000000f, 6000f, 1500f, 400f);
+
+    /// <summary>How smooth the water is up close and far away, and the distance it reaches the far value.</summary>
     [Range(0f, 1f)] public float Roughness = 0.02f;
     [Range(0f, 1f)] public float FarRoughness = 0.12f;
+    public float FarRoughnessDistance = 2000f;
 
-    /// <summary>How fast the water absorbs red, green and blue light per metre. Higher is murkier.</summary>
-    public Color Absorption = new(0.3f, 0.22f, 0.3f, 1f);
+    /// <summary>A normal map of small waves over the surface, null for the library's, its size in metres and strength.</summary>
+    public Texture2D? NormalsTexture;
+    [Range(0.01f, 200f)] public float NormalsScale = 40f;
+    [Range(0f, 2f)] public float NormalsStrength = 0.36f;
 
-    /// <summary>The colour deep water scatters the sun and sky back in.</summary>
-    public Color ScatterColor = new(0.02f, 0.09f, 0.12f, 1f);
-
-    /// <summary>The glow through crests toward a sun behind them.</summary>
-    public Color SubsurfaceColor = new(0.1f, 0.5f, 0.45f, 1f);
-
-    /// <summary>Scales the absorption under water only. Lower sees further.</summary>
-    [Range(0f, 1f)] public float UnderwaterDensity = 0.3f;
+    /// <summary>Reflects what is on screen in the water.</summary>
+    public bool ScreenReflections = true;
 
     /// <summary>How much the view bends through the surface.</summary>
     [Range(0f, 1f)] public float Refraction = 0.1f;
 
-    /// <summary>How much of the crests foam, where the waves fold.</summary>
+    /// <summary>How fast the water absorbs red, green and blue light per metre. Higher is murkier.</summary>
+    [Header("Colour")]
+    public Color Absorption = new(0.3f, 0.22f, 0.3f, 1f);
+
+    /// <summary>Scales the absorption for sunlight reaching the floor.</summary>
+    [Range(0f, 2f)] public float DepthLightScale = 0.3f;
+
+    /// <summary>The colour deep water scatters the sun and sky back in.</summary>
+    public Color ScatterColor = new(0.02f, 0.09f, 0.12f, 1f);
+
+    /// <summary>The glow through crests toward a sun behind them, how bright and how tightly it gathers around the sun.</summary>
+    public Color SubsurfaceColor = new(0.1f, 0.5f, 0.45f, 1f);
+    [Range(0f, 10f)] public float SubsurfaceSun = 2f;
+    [Range(0f, 32f)] public float SubsurfaceFalloff = 5f;
+
+    /// <summary>Scales the absorption under water only. Lower sees further.</summary>
+    [Range(0f, 1f)] public float UnderwaterDensity = 0.3f;
+
+    /// <summary>How folded the crests must be before they foam: foam builds where the Jacobian falls under this.</summary>
+    [Header("Foam")]
     [Range(0f, 1.5f)] public float FoamCoverage = 0.55f;
+
+    /// <summary>How white the foam on folding crests is, 0 for none.</summary>
+    [Range(0f, 4f)] public float FoamStrength = 1f;
+
+    /// <summary>The share of foam that fades each second.</summary>
+    [Range(0f, 4f)] public float FoamFade = 0.8f;
+
+    /// <summary>How hard ripples and wakes pull the water toward their crests, folding them into foam.</summary>
+    [Range(0f, 4f)] public float RippleFoam = 1f;
+
+    /// <summary>The share of ripple motion lost each second.</summary>
+    [Range(0f, 1f)] public float RippleDamping = 0.05f;
+
+    /// <summary>A texture whose red channel shows through as foam thickens, null for the library's, the metres it spans and the foam's colour.</summary>
+    public Texture2D? FoamTexture;
+    [Range(0.1f, 50f)] public float FoamScale = 3f;
+    public Color FoamColor = new(1f, 1f, 1f, 1f);
+
+    /// <summary>How soft the foam's edges are.</summary>
+    [Range(0.01f, 1f)] public float FoamFeather = 0.4f;
+
+    /// <summary>How the foam takes the light: the sun's share, how far its texture bends its normal, its highlight's tightness and brightness.</summary>
+    [Range(0f, 2f)] public float FoamLightScale = 1.35f;
+    [Range(0f, 30f)] public float FoamNormalStrength = 3.5f;
+    [Range(1f, 512f)] public float FoamSpecularFalloff = 293f;
+    [Range(0f, 16f)] public float FoamSpecularBoost = 0.15f;
 
     /// <summary>The layers the floor is captured from, from straight above.</summary>
     [Header("Shore")]
@@ -80,14 +136,33 @@ public sealed class Ocean : Component, IRenderSync
     /// <summary>Texels along each side of the floor capture. More keeps thin walls and steep shores sharp.</summary>
     public int FloorCaptureResolution = 512;
 
+    /// <summary>The width in metres of the first depth slice kept around the camera, each next twice as wide.</summary>
+    public float DepthSliceSize = 64f;
+
     /// <summary>How much waves shrink in water shallower than half their length.</summary>
     [Range(0f, 1f)] public float ShallowAttenuation = 0.95f;
 
-    /// <summary>The water depth in metres shoreline foam reaches out to.</summary>
+    /// <summary>The water depth in metres shoreline foam reaches out to, and how thick it gets.</summary>
     public float ShorelineFoamDepth = 0.65f;
+    [Range(0f, 8f)] public float ShorelineFoamStrength = 2f;
+
+    /// <summary>How thick the water behind a pixel must be for its foam to show in full.</summary>
+    public float ShorelineFoamMinDepth = 0.27f;
+
+    /// <summary>A caustics texture, null for the library's, and the metres it spans.</summary>
+    [Header("Caustics")]
+    public Texture2D? CausticsTexture;
+    [Range(0.1f, 25f)] public float CausticsScale = 5f;
+
+    /// <summary>The caustics texture's average brightness, which neither lights nor darkens.</summary>
+    [Range(0f, 1f)] public float CausticsGreyPoint = 0.07f;
 
     /// <summary>How strongly the caustics light and darken what lies under the water.</summary>
     [Range(0f, 10f)] public float CausticsStrength = 3.2f;
+
+    /// <summary>The depth in metres the caustics are sharpest at, and how far either side they stay sharp.</summary>
+    [Range(0f, 250f)] public float CausticsFocalDepth = 2f;
+    public float CausticsDepthOfField = 0.33f;
 
     /// <summary>How far the wave normal map pushes the caustics about, and the metres it spans.</summary>
     [Range(0f, 0.25f)] public float CausticsDistortion = 0.1f;
@@ -182,7 +257,14 @@ public sealed class Ocean : Component, IRenderSync
         _feature.Spectrum.Multiplier = WaveScale;
         _feature.Spectrum.Chop = Chop;
         _feature.Spectrum.TimeScale = TimeScale;
+        _feature.LoopPeriod = LoopPeriod;
+        _feature.Gravity = Gravity;
+        _feature.RippleDamping = RippleDamping;
+        _feature.DepthSliceSize = DepthSliceSize;
         _feature.FoamCoverage = FoamCoverage;
+        _feature.FoamStrength = FoamStrength;
+        _feature.FoamFade = FoamFade;
+        _feature.RippleFoam = RippleFoam;
         _feature.SeaLevel = Transform.Position.Y;
         _feature.PlanetRadius = PlanetRadius;
         _feature.ShallowAttenuation = ShallowAttenuation;
@@ -205,20 +287,60 @@ public sealed class Ocean : Component, IRenderSync
 
         G.OceanSurface surface = _surface!;
         surface.Rings = Rings;
+        surface.MinScale = MinTileScale;
+        surface.MaxScale = MaxTileScale;
         surface.MaxVerticalDisplacement = 10f * WaveScale;
+        surface.CascadeFade = CascadeFade;
         surface.ShorelineFoamDepth = ShorelineFoamDepth;
+        surface.ShorelineFoamStrength = ShorelineFoamStrength;
+        surface.ShorelineFoamMinDepth = ShorelineFoamMinDepth;
+        surface.Absorption = Absorption.ToFloat4();
+        surface.DepthLightScale = DepthLightScale;
+        surface.ScatterColor = ScatterColor.ToFloat4();
+        surface.CausticsScale = CausticsScale;
+        surface.CausticsGreyPoint = CausticsGreyPoint;
         surface.CausticsStrength = CausticsStrength;
+        surface.CausticsFocalDepth = CausticsFocalDepth;
+        surface.CausticsDepthOfField = CausticsDepthOfField;
         surface.CausticsDistortion = CausticsDistortion;
         surface.CausticsDistortionScale = CausticsDistortionScale;
+        (Graphite.Texture? foam, Graphite.SamplerDescription foamSampler) = Gpu(FoamTexture);
+        surface.SetFoamTexture(foam, foamSampler);
+        (Graphite.Texture? caustics, Graphite.SamplerDescription causticsSampler) = Gpu(CausticsTexture);
+        surface.SetCausticsTexture(caustics, causticsSampler);
+        (Graphite.Texture? normals, Graphite.SamplerDescription normalsSampler) = Gpu(NormalsTexture);
+        surface.SetNormalsTexture(normals, normalsSampler);
         _underwater!.DensityFactor = UnderwaterDensity;
+
         G.Material material = surface.Material;
         material.SetFloat("_Roughness", Roughness);
         material.SetFloat("_FarRoughness", FarRoughness);
-        surface.Absorption = Absorption.ToFloat4();
-        surface.ScatterColor = ScatterColor.ToFloat4();
-        material.SetColor("_SubsurfaceColor", SubsurfaceColor.ToFloat4());
+        material.SetFloat("_FarRoughnessDistance", FarRoughnessDistance);
+        material.SetFloat("_NormalsScale", NormalsScale);
+        material.SetFloat("_NormalsStrength", NormalsStrength);
+        material.SetFloat("_ScreenReflections", ScreenReflections ? 1f : 0f);
         material.SetFloat("_RefractionStrength", Refraction);
+        material.SetColor("_SubsurfaceColor", SubsurfaceColor.ToFloat4());
+        material.SetFloat("_SubsurfaceSun", SubsurfaceSun);
+        material.SetFloat("_SubsurfaceFalloff", SubsurfaceFalloff);
+        material.SetColor("_FoamColor", FoamColor.ToFloat4());
+        material.SetFloat("_FoamScale", FoamScale);
+        material.SetFloat("_FoamFeather", FoamFeather);
+        material.SetFloat("_FoamLightScale", FoamLightScale);
+        material.SetFloat("_FoamNormalStrength", FoamNormalStrength);
+        material.SetFloat("_FoamSpecularFalloff", FoamSpecularFalloff);
+        material.SetFloat("_FoamSpecularBoost", FoamSpecularBoost);
         return false;
+    }
+
+    // A texture's GPU copy and sampler once loaded, starting its load when it has not
+    private static (Graphite.Texture?, Graphite.SamplerDescription) Gpu(Texture2D? texture)
+    {
+        if (!texture.IsValid())
+            return (null, Graphite.SamplerDescription.Linear);
+        if (texture.GpuIfLoaded == null && texture.State == AssetState.Unloaded)
+            _ = texture.LoadAsync();
+        return (texture.GpuIfLoaded, texture.SamplerUnchecked);
     }
 
     void IRenderSync.Detach(G.RenderWorld world)
