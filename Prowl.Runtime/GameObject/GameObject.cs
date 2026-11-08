@@ -48,7 +48,7 @@ public partial class GameObject : EngineObject, ISerializable
     private Transform _transform = new();
 
     [SerializeIgnore]
-    private WeakReference<Scene> _scene;
+    private WeakReference<SceneInstance> _scene;
 
     // Everything tying this object to a prefab, or null for the ordinary case. One reference rather
     // than a copy of each value on every GameObject in the scene.
@@ -123,7 +123,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <summary>Syncs this object's renderers and lights again next frame.</summary>
     internal void WakeRendering()
     {
-        Scene? scene = Scene;
+        SceneInstance? scene = Scene;
         if (!scene.IsValid() || scene.IsDisposed) return;
         foreach (Component component in _components)
             if (component is Rendering.IRenderSync member) scene.Rendering.Refresh(member);
@@ -155,13 +155,13 @@ public partial class GameObject : EngineObject, ISerializable
 
 
     /// <summary>
-    /// The GameObjects parent <see cref="Prowl.Runtime.Resources.Scene"/>. Each GameObject can belong to
-    /// exactly one Scene, or no Scene at all. To add or remove GameObjects to / from a Scene, use the <see cref="Prowl.Runtime.Resources.Scene.Add(GameObject)"/> and
-    /// <see cref="Prowl.Runtime.Resources.Scene.Remove(GameObject)"/> methods.
+    /// The GameObjects parent <see cref="Prowl.Runtime.Resources.SceneInstance"/>. Each GameObject can belong to
+    /// exactly one Scene, or no Scene at all. To add or remove GameObjects to / from a Scene, use the <see cref="Prowl.Runtime.Resources.SceneInstance.Add(GameObject)"/> and
+    /// <see cref="Prowl.Runtime.Resources.SceneInstance.Remove(GameObject)"/> methods.
     /// </summary>
-    public Scene? Scene
+    public SceneInstance? Scene
     {
-        get => _scene != null && _scene.TryGetTarget(out Scene? scene) ? scene : null;
+        get => _scene != null && _scene.TryGetTarget(out SceneInstance? scene) ? scene : null;
         internal set => _scene = new(value);
     }
 
@@ -319,7 +319,7 @@ public partial class GameObject : EngineObject, ISerializable
         // it) and the new one (it joined). Capture the old canvas before the parent pointer changes.
         GameCanvas? uiOldCanvas = GetComponentInParent<GameCanvas>();
 
-        Scene newScene = (NewParent.IsValid()) ? NewParent.Scene : Scene;
+        SceneInstance newScene = (NewParent.IsValid()) ? NewParent.Scene : Scene;
 
         bool joinsScene = newScene != Scene && newScene.IsValid();
         if (newScene != Scene && Scene.IsValid()) Scene.Remove(this);
@@ -749,9 +749,9 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     private void NotifyComponentAddedToScene(Component comp)
     {
-        Scene? scene = Scene;
+        SceneInstance? scene = Scene;
         if (!scene.IsValid()) return;
-        using Scene.SceneScope active = Resources.Scene.Enter(scene);
+        using SceneInstance.SceneScope active = Resources.SceneInstance.Enter(scene);
 
         try { comp.OnAddedToScene(); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{comp.GetType().Name}] OnAddedToScene() threw", ex); }
@@ -1176,7 +1176,7 @@ public partial class GameObject : EngineObject, ISerializable
 
             // Only call OnDisable if OnEnable previously ran, the component is enabled in hierarchy
             // and the scene is active, so it is never delivered twice after a scene deactivation.
-            Scene? scene = Scene;
+            SceneInstance? scene = Scene;
             if (component.HasBeenEnabled && component.EnabledInHierarchy && scene.IsValid() && scene.IsActive)
                 component.InternalOnDisable();
 
@@ -1198,7 +1198,7 @@ public partial class GameObject : EngineObject, ISerializable
 
     private protected override void OnDisposed()
     {
-        Scene? scene = Scene;
+        SceneInstance? scene = Scene;
         if (scene.IsValid()) scene.MarkObjectDisposed();
     }
 
@@ -1487,7 +1487,7 @@ public partial class GameObject : EngineObject, ISerializable
         }
     }
 
-    private protected override Scene? OwningScene => Scene;
+    private protected override SceneInstance? OwningScene => Scene;
 
     private void AddLoadedComponent(Component component)
     {

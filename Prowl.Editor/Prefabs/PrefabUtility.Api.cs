@@ -61,19 +61,19 @@ public static partial class PrefabUtility
     {
         if (go.IsNotValid() || !PrefabEditingMode.IsEditing) return false;
 
-        Scene? scene = go.Scene;
-        return scene.IsValid() && ReferenceEquals(scene, Scene.Current);
+        SceneInstance? scene = go.Scene;
+        return scene.IsValid() && ReferenceEquals(scene, SceneInstance.Current);
     }
 
     /// <summary>Every instance root of a prefab in the current scene.</summary>
     public static List<GameObject> FindInstancesOf(Guid prefabGuid)
     {
-        Scene scene = Scene.Current;
+        SceneInstance scene = SceneInstance.Current;
         return scene.IsNotValid() ? [] : FindInstancesOf(prefabGuid, scene);
     }
 
     /// <summary>Every instance root of a prefab in a given scene, open or not.</summary>
-    public static List<GameObject> FindInstancesOf(Guid prefabGuid, Scene scene)
+    public static List<GameObject> FindInstancesOf(Guid prefabGuid, SceneInstance scene)
     {
         if (scene.IsNotValid() || prefabGuid == Guid.Empty) return [];
 

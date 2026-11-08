@@ -57,7 +57,7 @@ public class EnvironmentPanel : DockPanel
 
         _bake.Poll();
 
-        Scene scene = Scene.Current;
+        SceneInstance scene = SceneInstance.Current;
         if (scene.IsNotValid())
         {
             paper.Box("env_noscene").Height(30)
@@ -96,7 +96,7 @@ public class EnvironmentPanel : DockPanel
         (BuiltInSky.Panorama, "env.sky_panorama"),
     ];
 
-    private void DrawSkySection(Paper paper, string id, Scribe.FontFile font, Scene scene)
+    private void DrawSkySection(Paper paper, string id, Scribe.FontFile font, SceneInstance scene)
     {
         SceneEnvironment env = scene.Environment;
 
@@ -161,7 +161,7 @@ public class EnvironmentPanel : DockPanel
                 Origami.IntSlider(paper, $"{id}_cap_int_v", capture.Interval, v => { capture.Interval = v; Capture(); }, 1, 30).Show());
     }
 
-    private void DrawFogSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
+    private void DrawFogSection(Paper paper, string id, Scribe.FontFile font, SceneInstance scene)
     {
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.fog"), first: true);
 
@@ -196,7 +196,7 @@ public class EnvironmentPanel : DockPanel
         }
     }
 
-    private void DrawCloudsSection(Paper paper, string id, Scene scene)
+    private void DrawCloudsSection(Paper paper, string id, SceneInstance scene)
     {
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.volumetric_clouds"));
 
@@ -228,7 +228,7 @@ public class EnvironmentPanel : DockPanel
         EditorGUI.SettingsToggle(paper, $"{id}_high", Loc.Get("env.high_layer"), clouds.HighLayer, v => { Record(); clouds.HighLayer = v; });
     }
 
-    private void DrawVolumetricFogSection(Paper paper, string id, Scene scene)
+    private void DrawVolumetricFogSection(Paper paper, string id, SceneInstance scene)
     {
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.volumetric_fog"));
 
@@ -258,7 +258,7 @@ public class EnvironmentPanel : DockPanel
             Origami.Slider(paper, $"{id}_temporal_v", fog.TemporalBlend, v => { fog.TemporalBlend = v; Apply(); }, 0f, 0.98f).Show());
     }
 
-    private void DrawAmbientSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
+    private void DrawAmbientSection(Paper paper, string id, Scribe.FontFile font, SceneInstance scene)
     {
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.ambient_lighting"), first: true);
 
@@ -294,7 +294,7 @@ public class EnvironmentPanel : DockPanel
     }
 
     private static void RecordEnvironment(string name)
-        => Undo.RecordObject(() => Scene.Current.IsValid() ? Scene.Current.Environment : null, UndoOwner.OfCurrentScene, name);
+        => Undo.RecordObject(() => SceneInstance.Current.IsValid() ? SceneInstance.Current.Environment : null, UndoOwner.OfCurrentScene, name);
 
     private static void Hint(Paper paper, string id, Scribe.FontFile font, string text)
         => paper.Box(id).Height(20).Margin(Origami.Current.Metrics.PaddingLarge, 0, 0, 0)
@@ -303,13 +303,13 @@ public class EnvironmentPanel : DockPanel
     private static void SmallButton(Paper paper, string id, string label, Action onClick)
         => Origami.Button(paper, id, label, onClick).Small().Show();
 
-    private void DrawLightmappingSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
+    private void DrawLightmappingSection(Paper paper, string id, Scribe.FontFile font, SceneInstance scene)
     {
         // IsBaking alone doesn't say WHICH scene it's for - only one bake can run at a time, so
         // switching to a different scene while it's in flight must not show this scene as baking too.
         bool baking = _bake.IsBaking && _bake.TargetScene == scene;
-        Scene.LightmapBakeSettings s = scene.LightmapBake;
-        void Record() => Undo.RecordObject(() => Scene.Current.IsValid() ? Scene.Current.LightmapBake : null, UndoOwner.OfCurrentScene, "Lightmap Settings");
+        LightmapBakeSettings s = scene.LightmapBake;
+        void Record() => Undo.RecordObject(() => SceneInstance.Current.IsValid() ? SceneInstance.Current.LightmapBake : null, UndoOwner.OfCurrentScene, "Lightmap Settings");
 
         EditorGUI.SectionHeader(paper, $"{id}_h_res", Loc.Get("game.resolution"), first: true);
 
@@ -341,8 +341,8 @@ public class EnvironmentPanel : DockPanel
         DrawBakeCard(paper, id, font, scene, s, baking);
     }
 
-    private void DrawBakeCard(Paper paper, string id, Scribe.FontFile font, Scene scene,
-        Scene.LightmapBakeSettings s, bool baking)
+    private void DrawBakeCard(Paper paper, string id, Scribe.FontFile font, SceneInstance scene,
+        LightmapBakeSettings s, bool baking)
     {
         OrigamiMetrics m = Origami.Current.Metrics;
         Scribe.FontFile semi = EditorTheme.FontSemiBold ?? font;

@@ -16,13 +16,13 @@ public class HeadlessRunTests
     /// <summary>A Game that loads a scene on Initialize and counts its update steps.</summary>
     private sealed class CountingHeadlessGame : Game
     {
-        private readonly Scene _scene;
+        private readonly SceneInstance _scene;
         public int UpdateCount;
 
-        public CountingHeadlessGame(Scene scene) => _scene = scene;
+        public CountingHeadlessGame(SceneInstance scene) => _scene = scene;
 
-        public override void Initialize() => Scene.Load(_scene);
-        public override void OnUpdate(Scene? scene)
+        public override void Initialize() => SceneInstance.Load(_scene);
+        public override void OnUpdate(SceneInstance? scene)
         {
             base.OnUpdate(scene);
             UpdateCount++;
@@ -36,7 +36,7 @@ public class HeadlessRunTests
         Time.TimeStack.Push(time);
         try
         {
-            var scene = new Scene();
+            var scene = new SceneInstance();
             var game = new CountingHeadlessGame(scene);
 
             game.RunHeadless(new HeadlessRunOptions { MaxFrames = 10, TargetFrameRate = 0 });
@@ -85,7 +85,7 @@ public class HeadlessRunTests
     {
         private readonly Action _onUpdate;
         public FlagProbeGame(Action onUpdate) => _onUpdate = onUpdate;
-        public override void OnUpdate(Scene? scene) => _onUpdate();
+        public override void OnUpdate(SceneInstance? scene) => _onUpdate();
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class HeadlessRunTests
     private sealed class QuittingGame : Game
     {
         public int Frames;
-        public override void OnUpdate(Scene? scene)
+        public override void OnUpdate(SceneInstance? scene)
         {
             Frames++;
             if (Frames >= 3) Application.Quit();
@@ -122,7 +122,7 @@ public class HeadlessRunTests
     private sealed class SelfStoppingGame : Game
     {
         public int Frames;
-        public override void OnUpdate(Scene? scene)
+        public override void OnUpdate(SceneInstance? scene)
         {
             Frames++;
             if (Frames >= 3) RequestHeadlessQuit();

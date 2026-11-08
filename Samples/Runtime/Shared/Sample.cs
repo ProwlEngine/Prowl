@@ -38,7 +38,7 @@ public abstract class StationGame : Game
 
     public sealed record Station(string Name, string Description, Float3 Center, Float3 View, float LookHeight);
 
-    protected Scene SampleScene = null!;
+    protected SceneInstance SampleScene = null!;
     protected GameObject CameraObject = null!;
     protected Camera MainCamera = null!;
     protected SampleHud Hud = null!;
@@ -87,7 +87,7 @@ public abstract class StationGame : Game
         // imported the first time something asks for them by path.
         AssetDatabase.Mount(new SourceAssetBackend(new FolderAssetSource(Path.Combine(AppContext.BaseDirectory, "Assets"))));
 
-        SampleScene = new Scene();
+        SampleScene = new SceneInstance();
 
         CameraObject = new GameObject("Main Camera") { Tag = "Main Camera" };
         MainCamera = CameraObject.AddComponent<Camera>();
@@ -111,7 +111,7 @@ public abstract class StationGame : Game
         if (_captureFolder != null) FixParticleSeeds();
 
         GoToStation(_captureStation == null ? 0 : Math.Max(Stations.FindIndex(s => s.Name.Equals(_captureStation, StringComparison.OrdinalIgnoreCase)), 0));
-        Scene.Load(SampleScene);
+        SceneInstance.Load(SampleScene);
     }
 
     /// <summary>Creates the sample's content. Called once, before the scene loads.</summary>
@@ -208,7 +208,7 @@ public abstract class StationGame : Game
 
     public override void EndRender() => RenderStats.EndFrame();
 
-    public override void AfterGui(Scene? scene)
+    public override void AfterGui(SceneInstance? scene)
     {
         if (!_captureNow) return;
         _captureNow = false;

@@ -133,7 +133,7 @@ public class EditorApplication : Game
         // Open windows and the selection keep what they show loaded, through their fields like a scene's objects.
         AssetDatabase.WalkingRoots += WalkEditorRoots;
         AssetDatabase.WalkingRoots += Undo.VisitResidents;
-        Runtime.Resources.Scene.OnSceneLoaded += Undo.OnSceneLoaded;
+        Runtime.Resources.SceneInstance.OnSceneLoaded += Undo.OnSceneLoaded;
 
         // If launched with --project arg, open the project and load assemblies
         // BEFORE registries scan so user types are visible to all registries
@@ -1140,7 +1140,7 @@ public class EditorApplication : Game
             string? scenePath = EditorSceneManager.CurrentScenePath;
             string sceneName = !string.IsNullOrEmpty(scenePath)
                 ? System.IO.Path.GetFileNameWithoutExtension(scenePath)
-                : (Runtime.Resources.Scene.Current.IsValid() ? Loc.Get("editor.untitled_scene") : Loc.Get("hierarchy.no_scene_loaded"));
+                : (Runtime.Resources.SceneInstance.Current.IsValid() ? Loc.Get("editor.untitled_scene") : Loc.Get("hierarchy.no_scene_loaded"));
             using (paper.Row("sb_scene").Width(UnitValue.Auto).Height(sh).Padding(pad, pad, 0, 0).Enter())
                 GlyphCell("sb_scene_cell", EditorIcons.Shapes, EditorTheme.Ink300, sceneName, EditorTheme.Ink400);
 
@@ -1589,7 +1589,7 @@ public class EditorApplication : Game
             if (EditorSceneManager.SaveAs(rel))
             {
                 Toasts.Success(Loc.Get("save.saved"),
-                    Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current.IsValid() ? Runtime.Resources.Scene.Current.Name : "Untitled" }));
+                    Loc.Get("save.scene", new { name = Runtime.Resources.SceneInstance.Current.IsValid() ? Runtime.Resources.SceneInstance.Current.Name : "Untitled" }));
                 onSaved?.Invoke();
             }
         }, Project.Current.AssetsPath,
@@ -1927,13 +1927,13 @@ public class EditorApplication : Game
 
         // Playing the prefab editing scene would run the editor-only camera/light rig, and stopping
         // restores it as the "editor scene", from where a save writes runtime state to the prefab.
-        if (PrefabEditingMode.IsEditing || PrefabEditingMode.IsPrefabEditScene(Runtime.Resources.Scene.Current))
+        if (PrefabEditingMode.IsEditing || PrefabEditingMode.IsPrefabEditScene(Runtime.Resources.SceneInstance.Current))
         {
             Runtime.Debug.LogWarning("Exit prefab editing mode before entering play mode.");
             return;
         }
 
-        Scene scene = Runtime.Resources.Scene.Current;
+        SceneInstance scene = Runtime.Resources.SceneInstance.Current;
         if (scene.IsNotValid()) return;
 
         PlayModePreferences prefs = Preferences.Get<PlayModePreferences>();
@@ -1968,7 +1968,7 @@ public class EditorApplication : Game
         // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
         // the frame, so a failure here leaves the editor scene loaded and the editor usable.
         SerializationContext playCtx = Importers.ImportHelper.CreateTrackingContext(out _);
-        Scene? playScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, playCtx);
+        SceneInstance? playScene = Echo.Serializer.Deserialize<Runtime.Resources.SceneInstance>(_savedEditorScene, playCtx);
         if (playScene.IsNotValid())
         {
             Runtime.Debug.LogError("Failed to deserialize play scene.");
@@ -1990,11 +1990,11 @@ public class EditorApplication : Game
         // Push play-mode input handler (only forwards input when Game View focused)
         Input.PushHandler(new GameViewInputHandler(Input.Current));
 
-        Runtime.Resources.Scene.DestroyPreserved();
+        Runtime.Resources.SceneInstance.DestroyPreserved();
 
         // The swap ends the edit scene's async session once its teardown has run, and the play scene starts
         // in a fresh one.
-        Runtime.Resources.Scene.EndSessionOnSwap = true;
+        Runtime.Resources.SceneInstance.EndSessionOnSwap = true;
 
         // Before the scene loads, so components choosing between a headset and a desktop setup in OnEnable see it running.
         XRSettings xr = EditorRegistries.GetSettings<XRSettings>();
@@ -2002,7 +2002,7 @@ public class EditorApplication : Game
         if (xr.StartInPlayMode) XR.Start(xr.TrackingOrigin);
 
         // Load with full lifecycle (Enable -> OnEnable/Start will fire)
-        Runtime.Resources.Scene.Load(playScene);
+        Runtime.Resources.SceneInstance.Load(playScene);
 
         if (prefs.GameViewOnPlay != GameViewOnPlay.Nothing)
             FocusPanel(typeof(GameViewPanel));
@@ -2042,7 +2042,7 @@ public class EditorApplication : Game
         _savedEditUndo = null;
         if (!Preferences.Get<PlayModePreferences>().KeepUndoHistory) Undo.Clear();
 
-        Runtime.Resources.Scene.DestroyPreserved();
+        Runtime.Resources.SceneInstance.DestroyPreserved();
 
         // Restore the editor scene. Loading it is what disposes the play scene, at the end of the frame.
         if (_savedEditorScene != null)
@@ -2052,22 +2052,22 @@ public class EditorApplication : Game
             _dirtyAssetCopies = [];
 
             SerializationContext ctx = Importers.ImportHelper.CreateTrackingContext(out _);
-            Scene? restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, ctx);
+            SceneInstance? restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.SceneInstance>(_savedEditorScene, ctx);
             if (restoredScene.IsValid())
             {
                 // Ends the play session at the swap, once the play scene's teardown has run, so nothing still
                 // awaiting can resume against the edit scene.
-                Runtime.Resources.Scene.EndSessionOnSwap = true;
-                Runtime.Resources.Scene.Load(restoredScene);
+                Runtime.Resources.SceneInstance.EndSessionOnSwap = true;
+                Runtime.Resources.SceneInstance.Load(restoredScene);
             }
             _savedEditorScene = null;
         }
 
         // Without a restore to swap to, the session still ends at a swap user code queued this frame, and
         // only with nothing queued does it end here.
-        if (!Runtime.Resources.Scene.EndSessionOnSwap)
+        if (!Runtime.Resources.SceneInstance.EndSessionOnSwap)
         {
-            if (Runtime.Resources.Scene.IsLoadPending) Runtime.Resources.Scene.EndSessionOnSwap = true;
+            if (Runtime.Resources.SceneInstance.IsLoadPending) Runtime.Resources.SceneInstance.EndSessionOnSwap = true;
             else Runtime.Tasks.MainThreadContext.Restart();
         }
 
@@ -2245,7 +2245,7 @@ public class EditorApplication : Game
         base.Closing();
     }
 
-    public override void OnUpdate(Runtime.Resources.Scene? scene)
+    public override void OnUpdate(Runtime.Resources.SceneInstance? scene)
     {
         using FrameStatScope stats = FrameStats.Editor.Scope();
 
@@ -2271,7 +2271,7 @@ public class EditorApplication : Game
     }
 
     /// <summary>Queues component gizmos once per rendered frame, on demand from a visible Scene view.</summary>
-    internal void DrawSceneGizmos(Runtime.Resources.Scene scene)
+    internal void DrawSceneGizmos(Runtime.Resources.SceneInstance scene)
     {
         if (_sceneGizmosDrawn || !scene.IsValid()) return;
         _sceneGizmosDrawn = true;
@@ -2317,7 +2317,7 @@ public class EditorApplication : Game
     /// <summary>
     /// Editor does NOT auto-render the scene. SceneView handles it via EditorCamera.
     /// </summary>
-    public override void OnRender(Runtime.Resources.Scene? scene)
+    public override void OnRender(Runtime.Resources.SceneInstance? scene)
     {
         // Don't render SceneView panel renders the editor camera to its own RT.
     }
@@ -2325,7 +2325,7 @@ public class EditorApplication : Game
     /// <summary>
     /// Editor does NOT call scene OnGui. Paper UI is driven by editor panels.
     /// </summary>
-    public override void OnGui(Runtime.Resources.Scene? scene, PaperUI.Paper paper)
+    public override void OnGui(Runtime.Resources.SceneInstance? scene, PaperUI.Paper paper)
     {
         // Don't call scene.OnGui editor controls all UI.
     }

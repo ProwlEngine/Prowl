@@ -12,17 +12,17 @@ namespace Prowl.Editor.Projects.Scripting;
 /// <summary>
 /// Migrates a live scene onto recompiled user types with the <see cref="ReloadEngine"/>: the engine, the editor
 /// and the scene are all in scope, so the walk migrates the whole graph in place (component fields, identity, and
-/// delegates to user methods all carry over), then <see cref="Scene.OnHotReload"/> re-derives per-frame membership
+/// delegates to user methods all carry over), then <see cref="SceneInstance.OnHotReload"/> re-derives per-frame membership
 /// from the new types. Both assemblies stay loaded, no unload required.
 /// </summary>
 public static class SceneHotReload
 {
     /// <summary>Migrate a scene across a single user-assembly swap.</summary>
-    public static void Migrate(Scene scene, Assembly previousAssembly, Assembly currentAssembly)
+    public static void Migrate(SceneInstance scene, Assembly previousAssembly, Assembly currentAssembly)
         => Migrate(scene, new[] { (previousAssembly, currentAssembly) });
 
     /// <summary>Migrate the scene across every previous to current swap in <paramref name="assemblyPairs"/>.</summary>
-    public static void Migrate(Scene scene, IReadOnlyCollection<(Assembly Previous, Assembly Current)> assemblyPairs)
+    public static void Migrate(SceneInstance scene, IReadOnlyCollection<(Assembly Previous, Assembly Current)> assemblyPairs)
     {
         if (assemblyPairs.Count == 0) return;
         var scripts = assemblyPairs.Select(p => p.Current.GetName().Name).ToHashSet();

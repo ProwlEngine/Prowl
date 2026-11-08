@@ -104,7 +104,7 @@ public sealed class UISceneEditor : SceneTool
     public override void OnSceneInput(SceneToolContext toolCtx)
     {
         HandleContext ctx = toolCtx.Handles;
-        Scene scene = toolCtx.Scene;
+        SceneInstance scene = toolCtx.Scene;
         if (_target.IsNotValid())
             return;
 

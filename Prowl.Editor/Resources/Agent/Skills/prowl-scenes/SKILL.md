@@ -81,7 +81,7 @@ Attributes: `[RequireComponent(typeof(A), typeof(B))]` (adds missing components 
 
 ## GameObject
 
-- `new GameObject("Name")` is not in any scene until you call `Scene.Current.Add(go)` or parent it under an object that is in a scene. Until then it never gets `OnEnable` or updates. `GameObject.Instantiate(...)` adds to the scene for you.
+- `new GameObject("Name")` is not in any scene until you call `SceneInstance.Current.Add(go)` or parent it under an object that is in a scene. Until then it never gets `OnEnable` or updates. `GameObject.Instantiate(...)` adds to the scene for you.
 - Components: `AddComponent<T>()`, `GetComponent<T>()`, `TryGetComponent<T>(out var c)`, `GetComponents<T>()`, `GetComponentInParent<T>()`, `GetComponentInChildren<T>()` (both include the object itself by default), `RemoveComponent(c)`. `AddComponent` returns null if the component can not be created.
 - Hierarchy: `SetParent(parent, worldPositionStays = true)`, pass `null` to detach. `Parent`, `Children`, `GetChildrenDeep()`.
 - `Name` (inside a component, `Name` is the component's own name, use `GameObject.Name`), `Tag`, `CompareTag` (ignores case), `Layer`, `Enabled`, `EnabledInHierarchy`, `Identifier` (stable Guid).
@@ -106,11 +106,11 @@ A destroyed engine object is still a live reference, so null checks miss it. Alw
 
 `Scene` is in `Prowl.Runtime.Resources`. There is no SceneManager.
 
-- `Scene.Current` is the live scene and is never null.
-- `Scene.Current.Add(go)`, `Remove(go)`, `RootObjects`, `AllObjects`, `FindObjectsOfType<T>()` (instance methods)
-- `Scene.Load(sceneAsset)` blocks, `await Scene.LoadAsync(sceneAsset)` loads in the background. Both swap at the end of the frame.
-- `Scene.DontDestroyOnLoad(go)` keeps a root object across loads.
-- `Scene.Current.Physics` has the raycasts (main thread only, see the prowl-physics skill). `Environment` holds the sky material, ambient light and fog.
+- `SceneInstance.Current` is the live world and is never null. `Scene` is the saved scene asset.
+- `SceneInstance.Current.Add(go)`, `Remove(go)`, `RootObjects`, `AllObjects`, `FindObjectsOfType<T>()` (instance methods)
+- `SceneInstance.Load(scene)` blocks, `await SceneInstance.LoadAsync(scene)` loads in the background. Both swap at the end of the frame.
+- `SceneInstance.DontDestroyOnLoad(go)` keeps a root object across loads.
+- `SceneInstance.Current.Physics` has the raycasts (main thread only, see the prowl-physics skill). `Environment` holds the sky material, ambient light and fog.
 
 ## Time, input, logging
 

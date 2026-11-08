@@ -35,8 +35,8 @@ public sealed class LightmapBakeService
     private readonly Dictionary<Guid, BakeTexture?> _texCache = []; // diffuse albedo, deduped per texture asset
     private int _bakeTexCounter;                                       // unique names for Photonic textures (its registry is name-keyed)
     private List<Float3> _probePositions = [];
-    private Scene? _scene;
-    private Scene.LightmapBakeSettings _settings = new();
+    private SceneInstance? _scene;
+    private LightmapBakeSettings _settings = new();
     private int _targetIterations;
 
     // TEMP perf diagnostics
@@ -51,10 +51,10 @@ public sealed class LightmapBakeService
     /// <summary>The scene the in-flight bake belongs to, or null when idle. Only one bake can run at
     /// a time; callers showing bake UI for a scene should compare this against their own scene
     /// rather than trusting <see cref="IsBaking"/> alone, which is true for any scene while baking.</summary>
-    public Scene? TargetScene => _scene;
+    public SceneInstance? TargetScene => _scene;
 
     /// <summary>Begin a bake of <paramref name="scene"/>. Returns false (with a logged reason) if there's nothing to bake.</summary>
-    public bool Start(Scene scene, Scene.LightmapBakeSettings settings)
+    public bool Start(SceneInstance scene, LightmapBakeSettings settings)
     {
         if (IsBaking) return false;
         _scene = scene;
@@ -204,13 +204,13 @@ public sealed class LightmapBakeService
     }
 
     /// <summary>Returns true if the scene currently has any baked lightmap pages or probes to clear.</summary>
-    public static bool HasBakedData(Scene scene) => scene.BakedLighting.HasLightmaps || scene.BakedLighting.HasProbes;
+    public static bool HasBakedData(SceneInstance scene) => scene.Lighting.HasLightmaps || scene.Lighting.HasProbes;
 
     /// <summary>
     /// Remove all baked lighting from the scene: delete the SceneName_lightmaps folder,
     /// clear the scene's baked data + probes, and reset every renderer's lightmap index. Marks the scene dirty.
     /// </summary>
-    public void Clear(Scene scene)
+    public void Clear(SceneInstance scene)
     {
         if (IsBaking) return;
 
@@ -226,7 +226,7 @@ public sealed class LightmapBakeService
 
         // Everything the bake produced lives on the scene, so clearing is dropping it. Nothing has to be
         // walked and reset object by object.
-        scene.BakedLighting = new Scene.BakedLightingData();
+        scene.Lighting = new SceneLighting();
         scene.InvalidateProbeVolume();
 
         SaveBakeResult();
@@ -235,14 +235,14 @@ public sealed class LightmapBakeService
     }
 
     /// <summary>The scene's ambient light reaching an upward surface, as a flat sky radiance for rays that miss.</summary>
-    private static Float3 SceneSkyRadiance(Scene scene) => scene.Rendering.Ambient(Float3.UnitY);
+    private static Float3 SceneSkyRadiance(SceneInstance scene) => scene.Rendering.Ambient(Float3.UnitY);
 
     private void FinalizeBake()
     {
         Status = "Writing lightmaps…";
         LightmapBaker baker = _baker!;
         AutoAtlasResult atlas = _atlas!;
-        Scene scene = _scene!;
+        SceneInstance scene = _scene!;
         baker.Cancel();        // stop the progressive job
         baker.Job?.Wait();     // ensure the worker stopped writing before we read the atlas buffers
 
@@ -292,12 +292,12 @@ public sealed class LightmapBakeService
         if (Directory.Exists(lmFolderAbs)) db.DeleteAssetFolder(lmFolderRel);
         if (!db.MoveFolder(stagingRel, lmFolderRel))
             Runtime.Debug.LogWarning($"[Lightmap] Could not move the new pages to '{lmFolderRel}', they stay in '{stagingRel}'.");
-        scene.BakedLighting.Lightmaps = lightmaps;
-        scene.BakedLighting.LightmapScale = scale;
+        scene.Lighting.Lightmaps = lightmaps;
+        scene.Lighting.LightmapScale = scale;
 
         // Record where each baked surface landed, against the object it is on. A rebake replaces the
         // whole set, so a renderer that is no longer baked simply has no placement.
-        scene.BakedLighting.Placements.Clear();
+        scene.Lighting.Placements.Clear();
         for (int i = 0; i < _renderers.Count && i < atlas.Instances.Length; i++)
         {
             if (_renderers[i] is not Component renderer || renderer.IsNotValid()) continue;
@@ -306,7 +306,7 @@ public sealed class LightmapBakeService
             if (owner.IsNotValid()) continue;
 
             BakeInstance inst = atlas.Instances[i];
-            scene.BakedLighting.Placements[owner.Identifier] = new Scene.LightmapPlacement
+            scene.Lighting.Placements[owner.Identifier] = new LightmapPlacement
             {
                 Index = atlas.Placements[i].AtlasIndex,
                 ScaleOffset = new Float4(inst.UVScale.X, inst.UVScale.Y, inst.UVOffset.X, inst.UVOffset.Y)
@@ -322,18 +322,18 @@ public sealed class LightmapBakeService
             for (int i = 0; i < sh.Length; i++) runtimeSH[i] = ConvertSH(sh[i]);
             ProbeTetrahedralizer.Result tet = ProbeTetrahedralizer.Build(_probePositions);
 
-            scene.BakedLighting.ProbePositions = [.. _probePositions];
-            scene.BakedLighting.ProbeSH = runtimeSH;
-            scene.BakedLighting.ProbeTetrahedra = tet.Tetrahedra;
-            scene.BakedLighting.ProbeTetNeighbours = tet.Neighbours;
+            scene.Lighting.ProbePositions = [.. _probePositions];
+            scene.Lighting.ProbeSH = runtimeSH;
+            scene.Lighting.ProbeTetrahedra = tet.Tetrahedra;
+            scene.Lighting.ProbeTetNeighbours = tet.Neighbours;
             scene.InvalidateProbeVolume();
         }
         else
         {
-            scene.BakedLighting.ProbePositions = [];
-            scene.BakedLighting.ProbeSH = [];
-            scene.BakedLighting.ProbeTetrahedra = [];
-            scene.BakedLighting.ProbeTetNeighbours = [];
+            scene.Lighting.ProbePositions = [];
+            scene.Lighting.ProbeSH = [];
+            scene.Lighting.ProbeTetrahedra = [];
+            scene.Lighting.ProbeTetNeighbours = [];
             scene.InvalidateProbeVolume();
         }
 

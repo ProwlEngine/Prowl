@@ -329,7 +329,7 @@ public static class XR
     /// Draws the headset's eyes from the scene's cameras when nothing else drew them this frame, as when the editor's
     /// Game View is hidden, so the headset never goes dark while the game runs.
     /// </summary>
-    internal static void RenderMissedEyes(Scene? scene)
+    internal static void RenderMissedEyes(SceneInstance? scene)
     {
         if (Session is not { ShouldRender: true } session || session.AnyEyeRendered || scene.IsNotValid()) return;
 

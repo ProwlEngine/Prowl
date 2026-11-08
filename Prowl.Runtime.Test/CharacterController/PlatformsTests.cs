@@ -17,9 +17,9 @@ public abstract class PlatformsTests(Gravity gravity) : ControllerTestBase(gravi
 {
     private const float PlatformTop = 1f;
 
-    private (Scene Scene, GameObject Platform, Walker Walker) StandOnPlatform(ColliderShape shape, Float3 offset = default, float size = 4f)
+    private (SceneInstance Scene, GameObject Platform, Walker Walker) StandOnPlatform(ColliderShape shape, Float3 offset = default, float size = 4f)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         GameObject platform = Box(scene, new Float3(0f, PlatformTop - 0.25f, 0f), new Float3(size, 0.5f, size), name: "Platform");
         Walker walker = Spawn(scene, new Float3(offset.X, PlatformTop, offset.Z), shape);
         Assert.True(walker.Grounded, "did not settle on the platform");
@@ -113,7 +113,7 @@ public abstract class PlatformsTests(Gravity gravity) : ControllerTestBase(gravi
     [InlineData(ColliderShape.Cylinder)]
     public void TouchingRollersHandTheControllerFromOneToTheNext(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         var rollers = new GameObject[2];
         for (int i = 0; i < 2; i++)
         {
@@ -140,7 +140,7 @@ public abstract class PlatformsTests(Gravity gravity) : ControllerTestBase(gravi
     [InlineData(ColliderShape.Cylinder)]
     public void APlatformCarryingTheControllerIntoAWallLeavesItAgainstTheWall(ColliderShape shape)
     {
-        (Scene scene, GameObject platform, Walker walker) = StandOnPlatform(shape);
+        (SceneInstance scene, GameObject platform, Walker walker) = StandOnPlatform(shape);
         Box(scene, new Float3(3f, PlatformTop + 1.5f, 0f), new Float3(0.5f, 2f, 8f), name: "Wall");
 
         walker.Run(Float3.Zero, 1.5f, () =>
@@ -171,7 +171,7 @@ public abstract class PlatformsTests(Gravity gravity) : ControllerTestBase(gravi
     [InlineData(ColliderShape.Cylinder)]
     public void AKinematicBodyDrivenByVelocityCarriesTheController(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         GameObject platform = Box(scene, new Float3(0f, PlatformTop - 0.25f, 0f), new Float3(4f, 0.5f, 4f), name: "Platform");
         Rigidbody3D body = platform.AddComponent<Rigidbody3D>();
         body.MotionType = Jitter2.Dynamics.MotionType.Kinematic;
@@ -211,7 +211,7 @@ public abstract class PlatformsTests(Gravity gravity) : ControllerTestBase(gravi
     [InlineData(ColliderShape.Cylinder)]
     public void AWallMovingIntoTheControllerPushesItAlong(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         GameObject wall = Box(scene, new Float3(-2f, 1.5f, 0f), new Float3(0.5f, 3f, 6f), name: "Pusher");
         Walker walker = Spawn(scene, Float3.Zero, shape);
 

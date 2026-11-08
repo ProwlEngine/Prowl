@@ -413,7 +413,7 @@ public sealed class MainThreadContext : SynchronizationContext
 
     /// <inheritdoc cref="AssertOwner(GameObject?, string)"/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static void AssertOwner(Scene? scene, [CallerMemberName] string member = "")
+    internal static void AssertOwner(SceneInstance? scene, [CallerMemberName] string member = "")
     {
         if (OnMainThread) return;
         if (scene is { IsDisposed: false, IsActive: true }) ThrowOffThread(member);

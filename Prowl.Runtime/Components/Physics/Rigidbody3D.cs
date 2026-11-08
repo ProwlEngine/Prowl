@@ -472,7 +472,7 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
     private void EnsureBody()
     {
         if (IsSimulated) return;
-        Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
+        SceneInstance? scene = GameObject.IsValid() ? GameObject.Scene : null;
         World? world = scene.IsValid() ? scene.Physics?.World : null;
         if (world != null) CreateBody(world);
     }
@@ -485,7 +485,7 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
         UpdateShapes(_body);
         UpdateTransform(_body);
         _lastSyncedTransformVersion = Transform.Version; // initial pose is already in the body
-        Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
+        SceneInstance? scene = GameObject.IsValid() ? GameObject.Scene : null;
         PhysicsWorld physics = scene.IsValid() ? scene.Physics : null;
         physics?.RegisterBody(this);
         physics?.RebindConstraints(this);

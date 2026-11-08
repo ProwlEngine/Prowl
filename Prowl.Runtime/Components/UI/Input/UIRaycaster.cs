@@ -27,7 +27,7 @@ internal static class UIRaycaster
         }
     }
 
-    public static bool TryPick(Scene? scene, Float2 screenPos, Float2 windowSize, out Hit hit)
+    public static bool TryPick(SceneInstance? scene, Float2 screenPos, Float2 windowSize, out Hit hit)
     {
         hit = default;
         if (scene.IsNotValid()) return false;
@@ -88,7 +88,7 @@ internal static class UIRaycaster
     /// scene's main camera, intersect each world canvas's plane, and keep the nearest canvas whose
     /// element sits under the resulting point. Only called when no screen-space canvas was hit.
     /// </summary>
-    private static void TryPickWorld(Scene scene, Float2 screenPos, Float2 windowSize,
+    private static void TryPickWorld(SceneInstance scene, Float2 screenPos, Float2 windowSize,
         ref GameObject? bestGO, ref GameCanvas? bestCanvas, ref Float2 bestDesign)
     {
         Camera? cam = ResolveMainCamera(scene);
@@ -97,7 +97,7 @@ internal static class UIRaycaster
     }
 
     /// <summary>Picks the nearest world space canvas element under a world space ray, such as a laser from a VR controller.</summary>
-    public static bool TryPickRay(Scene? scene, Ray ray, out Hit hit, out float distance)
+    public static bool TryPickRay(SceneInstance? scene, Ray ray, out Hit hit, out float distance)
     {
         hit = default;
         GameObject? go = null;
@@ -111,7 +111,7 @@ internal static class UIRaycaster
         return true;
     }
 
-    private static void PickWorld(Scene scene, Ray ray, ref GameObject? bestGO, ref GameCanvas? bestCanvas, ref Float2 bestDesign, out float bestT)
+    private static void PickWorld(SceneInstance scene, Ray ray, ref GameObject? bestGO, ref GameCanvas? bestCanvas, ref Float2 bestDesign, out float bestT)
     {
         bestT = float.MaxValue;
 
@@ -145,7 +145,7 @@ internal static class UIRaycaster
         }
     }
 
-    private static Camera? ResolveMainCamera(Scene scene) => scene.MainCamera;
+    private static Camera? ResolveMainCamera(SceneInstance scene) => scene.MainCamera;
 
     /// <summary>
     /// Intersects a world-space ray with a world canvas's plane (the design-pixel Z=0 plane mapped
@@ -184,7 +184,7 @@ internal static class UIRaycaster
         if (canvas.RenderMode == RenderMode.WorldSpace)
         {
             designPt = Float2.Zero;
-            Scene? scene = canvas.GameObject.Scene;
+            SceneInstance? scene = canvas.GameObject.Scene;
             if (scene.IsNotValid()) return false;
             Camera? cam = ResolveMainCamera(scene);
             if (cam.IsNotValid()) return false;

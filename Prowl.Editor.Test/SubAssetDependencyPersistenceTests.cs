@@ -91,7 +91,7 @@ public class SubAssetDependencyPersistenceTests : EditorTestHarness
         Type? compType = gameAsm.GetType("PersistCheckComponent");
         Assert.NotNull(compType);
 
-        var scene = new Scene();
+        var scene = new SceneInstance();
         var go = new GameObject("PersistChecker");
         Component comp = go.AddComponent(compType!);
         compType!.GetField("MySprite")!.SetValue(comp, AssetDatabase.Get<Sprite>(spriteGuid));

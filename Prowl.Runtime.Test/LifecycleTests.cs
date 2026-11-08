@@ -66,7 +66,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void AddComponent_ToObjectInActiveScene_FiresOnAddedToScene()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         scene.Add(go); // in the scene before the component is added
 
@@ -80,7 +80,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void FixedUpdate_RunsStartBeforeFirstFixedUpdate()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         StartOrderComponent comp = go.AddComponent<StartOrderComponent>();
         scene.Add(go);
@@ -99,7 +99,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void AddingGameObject_ToDisabledScene_CallsOnAddedToSceneOnly()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
 
@@ -116,7 +116,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void EnablingScene_CallsOnEnableForAllEnabledComponents()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
         scene.Add(go);
@@ -134,7 +134,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void AddingGameObject_ToEnabledScene_CallsOnAddedToSceneAndOnEnable()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
@@ -153,7 +153,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void TogglingComponentEnabled_CallsOnDisableAndOnEnable()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
@@ -179,7 +179,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void TogglingGameObjectEnabled_CallsOnDisableAndOnEnableForComponents()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
@@ -204,7 +204,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void DisablingScene_CallsOnDisableForAllEnabledComponents()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
@@ -223,7 +223,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void TogglingStates_InDisabledScene_DoesNotCallOnEnableOrOnDisable()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
         scene.Add(go);
@@ -245,7 +245,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void ReEnablingScene_CallsOnEnableForAllEnabledComponents()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
@@ -265,7 +265,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void ParentChildHierarchy_ChildFollowsParentEnabledState()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
 
         GameObject parent = CreateGameObject("Parent");
@@ -305,7 +305,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void RemovingGameObject_FromScene_CallsOnDisableAndOnRemovedFromScene()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
@@ -327,7 +327,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void DisposingGameObject_CallsOnDisableAndOnDispose()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
@@ -350,7 +350,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void DisposingGameObject_NeverEnabled_StillDisposes()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         // Scene is NOT enabled
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
@@ -372,7 +372,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void RemovingComponent_CallsOnDisableAndOnDispose()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
@@ -396,7 +396,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void RemovingComponent_NeverEnabled_StillDisposes()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         // Scene is NOT enabled
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
@@ -430,7 +430,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void OnEnable_CanAddAComponent()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         go.Enabled = false;
         go.AddComponent<AddsComponentOnEnable>();
@@ -444,7 +444,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void OnDisable_CanRemoveAComponent()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         RemovesComponentOnDisable driver = go.AddComponent<RemovesComponentOnDisable>();
         driver.Victim = go.AddComponent<PlainComponent>();
@@ -473,8 +473,8 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void MovingObject_BetweenEnabledScenes_CallsProperLifecycleSequence()
     {
-        Scene scene1 = CreateScene();
-        Scene scene2 = CreateScene();
+        SceneInstance scene1 = CreateScene();
+        SceneInstance scene2 = CreateScene();
         scene1.Enable();
         scene2.Enable();
 
@@ -501,7 +501,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void AddingToDisabledScene_ThenEnabling_CallsCorrectSequence()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
 
@@ -521,7 +521,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void DisabledGameObject_AddedToEnabledScene_CallsOnAddedToSceneOnly()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
         GameObject go = CreateGameObject();
         go.Enabled = false;
@@ -540,7 +540,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void EnablingDisabledGameObject_InActiveScene_CallsOnEnable()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
         GameObject go = CreateGameObject();
         go.Enabled = false;
@@ -560,7 +560,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void SceneCleanup_DisableAndDispose_CallsProperSequence()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
@@ -584,7 +584,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void SceneCleanup_NeverEnabled_StillDisposes()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         // Scene is NOT enabled
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
@@ -605,7 +605,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void DisabledComponent_OnEnabledGameObject_CallsOnAddedToSceneOnly()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
@@ -624,7 +624,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void MultipleComponents_AllReceiveLifecycleEvents()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp1 = go.AddComponent<TestLifecycleComponent>();
@@ -645,7 +645,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void ChildUnparented_StaysInScene()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
 
         GameObject parent = CreateGameObject("Parent");
@@ -672,7 +672,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void ChildExplicitlyRemoved_GetsOnDisableAndOnRemovedFromScene()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
 
         GameObject parent = CreateGameObject("Parent");
@@ -699,7 +699,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void EnablingAlreadyEnabledScene_DoesNotRepeatOnEnable()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
         scene.Add(go);
@@ -718,7 +718,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void DisablingAlreadyDisabledScene_DoesNotRepeatOnDisable()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
         TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
         scene.Add(go);
@@ -737,7 +737,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void ChildAddedToParentInScene_GetsLifecycleEvents()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Enable();
 
         GameObject parent = CreateGameObject("Parent");
@@ -761,7 +761,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void SetParent_DetachedIntoScene_OnEnableSeesTheParent()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject parent = CreateGameObject("Parent");
         scene.Add(parent);
         GameObject child = CreateGameObject("Child");
@@ -776,7 +776,7 @@ public class LifecycleTests : RuntimeTestBase
     [Fact]
     public void SetParent_DetachedUnderDisabledParent_FiresNoOnEnable()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject parent = CreateGameObject("Parent");
         scene.Add(parent);
         parent.Enabled = false;

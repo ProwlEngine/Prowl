@@ -74,7 +74,7 @@ public class PhysicsSettings : ProjectSettingsBase
             SpeculativeRelaxationFactor = SpeculativeRelaxationFactor,
         };
 
-        Runtime.Resources.Scene scene = Runtime.Resources.Scene.Current;
+        Runtime.Resources.SceneInstance scene = Runtime.Resources.SceneInstance.Current;
         if (scene.IsValid()) scene.Physics.ApplySettings(PhysicsWorld.Defaults);
 
         // The collision matrix is project wide, like layers.

@@ -97,7 +97,7 @@ public static class PlayerSettingsLoader
             };
 
             // Settings load before the first scene, but one already made gets them too.
-            Scene scene = Resources.Scene.Current;
+            SceneInstance scene = Resources.SceneInstance.Current;
             if (scene.IsValid()) scene.Physics.ApplySettings(PhysicsWorld.Defaults);
 
             // Collision matrix (uint[] serializes as a compound holding an "array" list)

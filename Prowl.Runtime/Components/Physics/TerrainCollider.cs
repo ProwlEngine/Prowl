@@ -159,7 +159,7 @@ public class TerrainCollider : Component, ITerrainHeightProvider
 
     private void RegisterWithPhysics()
     {
-        Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
+        SceneInstance? scene = GameObject.IsValid() ? GameObject.Scene : null;
         if (_isRegistered || scene.IsNotValid() || scene.Physics == null || _terrain.IsNotValid())
             return;
 
@@ -213,7 +213,7 @@ public class TerrainCollider : Component, ITerrainHeightProvider
         _registeredHeight = data.Height;
         RefreshPlacement();
 
-        Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
+        SceneInstance? scene = GameObject.IsValid() ? GameObject.Scene : null;
         if (scene.IsValid()) scene.Physics?.RefreshTerrain(_heightmapProxy);
     }
 
@@ -227,7 +227,7 @@ public class TerrainCollider : Component, ITerrainHeightProvider
 
     private void UnregisterFromPhysics()
     {
-        Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
+        SceneInstance? scene = GameObject.IsValid() ? GameObject.Scene : null;
         if (!_isRegistered || scene.IsNotValid() || scene.Physics == null)
             return;
 

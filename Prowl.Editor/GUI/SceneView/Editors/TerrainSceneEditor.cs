@@ -537,7 +537,7 @@ internal sealed class TerrainDataUndo : IUndoOperation
         if (_assetId != Guid.Empty)
             return AssetDatabase.TryGetExisting(_assetId, out Asset asset) && asset is TerrainData { IsLoaded: true } loaded ? loaded : null;
 
-        Scene scene = Scene.Current;
+        SceneInstance scene = SceneInstance.Current;
         if (scene.IsNotValid()) return null;
         TerrainComponent? terrain = scene.FindObjectByIdentifier<TerrainComponent>(_terrainId);
         return terrain.IsValid() ? terrain.Data : null;

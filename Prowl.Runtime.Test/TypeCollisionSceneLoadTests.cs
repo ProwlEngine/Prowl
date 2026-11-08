@@ -30,7 +30,7 @@ public class TypeCollisionSceneLoadTests : RuntimeTestBase
     [Fact]
     public void Scene_WithComponentTypeResolvingToNonComponent_StillLoadsEveryObject()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
 
         GameObject withGoodComp = CreateGameObject("Healthy");
         withGoodComp.AddComponent<CollisionProbeComponent>().Marker = 7;
@@ -47,7 +47,7 @@ public class TypeCollisionSceneLoadTests : RuntimeTestBase
         // Give one object a component whose $type resolves to a non-Component (Jitter2.World).
         InjectBadComponent(echo, "HasBadComponent", JitterWorldName);
 
-        Scene? clone = Serializer.Deserialize<Scene>(echo);
+        SceneInstance? clone = Serializer.Deserialize<SceneInstance>(echo);
 
         Assert.NotNull(clone);
         var objs = clone.AllObjects.ToList();

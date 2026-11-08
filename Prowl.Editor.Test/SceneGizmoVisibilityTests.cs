@@ -44,9 +44,9 @@ public class SceneGizmoVisibilityTests : IDisposable
         Application.IsEditor = _wasEditor;
     }
 
-    private static Scene CreateScene(out SceneGizmoProbe probe)
+    private static SceneInstance CreateScene(out SceneGizmoProbe probe)
     {
-        var scene = new Scene();
+        var scene = new SceneInstance();
         var go = new GameObject("Gizmo probe");
         probe = go.AddComponent<SceneGizmoProbe>();
         scene.Add(go);
@@ -60,7 +60,7 @@ public class SceneGizmoVisibilityTests : IDisposable
     public void UpdatesDoNotGenerateGizmosAndVisibleViewsRequestThemInEitherMode(bool playing)
     {
         Application.IsPlaying = playing;
-        using Scene scene = CreateScene(out SceneGizmoProbe probe);
+        using SceneInstance scene = CreateScene(out SceneGizmoProbe probe);
         var editor = new EditorApplication();
         editor.OnUpdate(scene);
         editor.BeginRender();
@@ -73,7 +73,7 @@ public class SceneGizmoVisibilityTests : IDisposable
     [Fact]
     public void MultipleVisibleViewsShareOneComponentGizmoPassPerRenderedFrame()
     {
-        using Scene scene = CreateScene(out SceneGizmoProbe probe);
+        using SceneInstance scene = CreateScene(out SceneGizmoProbe probe);
         Selection.Select(probe.GameObject);
         var editor = new EditorApplication();
         var first = new SceneViewPanel();
@@ -97,7 +97,7 @@ public class SceneGizmoVisibilityTests : IDisposable
     [Fact]
     public void DisabledGizmosDoNotConsumeThePassForAnotherVisibleView()
     {
-        using Scene scene = CreateScene(out SceneGizmoProbe probe);
+        using SceneInstance scene = CreateScene(out SceneGizmoProbe probe);
         var editor = new EditorApplication();
         var disabled = new SceneViewPanel();
         disabled.RestoreState(new JsonObject { ["gizmos"] = false });
@@ -112,7 +112,7 @@ public class SceneGizmoVisibilityTests : IDisposable
     [Fact]
     public void FramesWithoutADrawingSceneViewDoNotGenerateGizmos()
     {
-        using Scene scene = CreateScene(out SceneGizmoProbe probe);
+        using SceneInstance scene = CreateScene(out SceneGizmoProbe probe);
         var editor = new EditorApplication();
         editor.BeginRender();
         new SceneViewPanel().DrawSceneGizmos(editor, scene);

@@ -1059,11 +1059,11 @@ public class TerrainEditor : CustomEditor
     [OnSceneSaved]
     static void OnSceneSaved()
     {
-        if (Scene.Current.IsNotValid()) return;
+        if (SceneInstance.Current.IsNotValid()) return;
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db == null) return;
 
-        foreach (GameObject go in Scene.Current.ActiveObjects)
+        foreach (GameObject go in SceneInstance.Current.ActiveObjects)
         {
             TerrainComponent? terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
             if (terrain.IsNotValid()) continue;
@@ -1086,9 +1086,9 @@ public class TerrainEditor : CustomEditor
     [OnUndoRedo]
     static void OnUndoRedo()
     {
-        if (Scene.Current.IsNotValid()) return;
+        if (SceneInstance.Current.IsNotValid()) return;
 
-        foreach (GameObject go in Scene.Current.ActiveObjects)
+        foreach (GameObject go in SceneInstance.Current.ActiveObjects)
         {
             TerrainComponent? terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
             if (terrain.IsNotValid()) continue;

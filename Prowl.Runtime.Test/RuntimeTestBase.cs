@@ -25,7 +25,7 @@ public abstract class RuntimeTestBase : IDisposable
     private readonly bool _prevIsPaused;
     private readonly TimeData _time;
 
-    private readonly List<Scene> _scenes = [];
+    private readonly List<SceneInstance> _scenes = [];
     private readonly List<GameObject> _gameObjects = [];
 
     protected RuntimeTestBase()
@@ -78,11 +78,11 @@ public abstract class RuntimeTestBase : IDisposable
 
     /// <summary>
     /// Creates a tracked scene. Pass <paramref name="enable"/> to immediately enable it (play mode),
-    /// otherwise it starts disabled so component OnEnable is deferred until <see cref="Scene.Enable"/>.
+    /// otherwise it starts disabled so component OnEnable is deferred until <see cref="SceneInstance.Enable"/>.
     /// </summary>
-    protected Scene CreateScene(bool enable = false)
+    protected SceneInstance CreateScene(bool enable = false)
     {
-        var scene = new Scene();
+        var scene = new SceneInstance();
         _scenes.Add(scene);
         if (enable)
             scene.Enable();
@@ -98,11 +98,11 @@ public abstract class RuntimeTestBase : IDisposable
     }
 
     /// <summary>
-    /// Advances one full frame: steps physics (<see cref="Scene.FixedUpdate"/>) then runs the
-    /// per-frame update (<see cref="Scene.Update"/>). This mirrors the order the real game loop uses
+    /// Advances one full frame: steps physics (<see cref="SceneInstance.FixedUpdate"/>) then runs the
+    /// per-frame update (<see cref="SceneInstance.Update"/>). This mirrors the order the real game loop uses
     /// so components that read back physics state in Update (e.g. Rigidbody3D) stay in sync.
     /// </summary>
-    protected void Tick(Scene scene, int steps = 1)
+    protected void Tick(SceneInstance scene, int steps = 1)
     {
         for (int i = 0; i < steps; i++)
         {
@@ -112,8 +112,8 @@ public abstract class RuntimeTestBase : IDisposable
         }
     }
 
-    /// <summary> Runs <see cref="Scene.Update"/> the given number of times (no physics step). </summary>
-    protected void Update(Scene scene, int frames = 1)
+    /// <summary> Runs <see cref="SceneInstance.Update"/> the given number of times (no physics step). </summary>
+    protected void Update(SceneInstance scene, int frames = 1)
     {
         for (int i = 0; i < frames; i++)
         {
@@ -122,8 +122,8 @@ public abstract class RuntimeTestBase : IDisposable
         }
     }
 
-    /// <summary> Steps physics via <see cref="Scene.FixedUpdate"/> the given number of times. </summary>
-    protected void StepPhysics(Scene scene, int steps = 1)
+    /// <summary> Steps physics via <see cref="SceneInstance.FixedUpdate"/> the given number of times. </summary>
+    protected void StepPhysics(SceneInstance scene, int steps = 1)
     {
         for (int i = 0; i < steps; i++)
         {
@@ -144,9 +144,9 @@ public abstract class RuntimeTestBase : IDisposable
 
     /// <summary> A flat collider floor with its top surface at y=0, plus a surface configured
     /// for a fast bake. Pass <paramref name="bake"/> to bake and register it immediately. </summary>
-    protected (Scene scene, NavMeshSurface surface) CreateFloorScene(float size = 20f, bool bake = false)
+    protected (SceneInstance scene, NavMeshSurface surface) CreateFloorScene(float size = 20f, bool bake = false)
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
 
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
@@ -165,7 +165,7 @@ public abstract class RuntimeTestBase : IDisposable
 
     /// <summary> Tick until <paramref name="condition"/> holds — incremental cache updates
     /// process a bounded slice per frame. Returns the ticks taken, or -1 on timeout. </summary>
-    protected int TickUntil(Scene scene, Func<bool> condition, int maxTicks = 240)
+    protected int TickUntil(SceneInstance scene, Func<bool> condition, int maxTicks = 240)
     {
         for (int i = 0; i < maxTicks; i++)
         {
@@ -179,9 +179,9 @@ public abstract class RuntimeTestBase : IDisposable
     {
         // DontDestroyOnLoad is static state, so anything a test preserved would still be in the
         // registry for the next one. Immediate teardown: no frame follows to drain a destroy queue.
-        Scene.DestroyPreserved(immediate: true);
+        SceneInstance.DestroyPreserved(immediate: true);
 
-        foreach (Scene scene in _scenes)
+        foreach (SceneInstance scene in _scenes)
         {
             if (scene.IsDisposed) continue;
             if (scene.IsActive)

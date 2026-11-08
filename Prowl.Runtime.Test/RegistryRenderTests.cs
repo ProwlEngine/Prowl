@@ -23,7 +23,7 @@ public class RegistryRenderTests : RuntimeTestBase
     [Fact]
     public void DrawGizmos_InvokesRegisteredComponents()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         GizmoProbe probe = go.AddComponent<GizmoProbe>();
         scene.Add(go);
@@ -37,7 +37,7 @@ public class RegistryRenderTests : RuntimeTestBase
     public void DrawGizmos_RunsEvenWhenNotPlaying()
     {
         Application.IsPlaying = false;
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         GizmoProbe probe = go.AddComponent<GizmoProbe>();
         scene.Add(go);
@@ -50,7 +50,7 @@ public class RegistryRenderTests : RuntimeTestBase
     [Fact]
     public void DrawGizmos_SkipsNoGizmosHideFlag()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         GizmoProbe probe = go.AddComponent<GizmoProbe>();
         probe.HideFlags = HideFlags.NoGizmos;

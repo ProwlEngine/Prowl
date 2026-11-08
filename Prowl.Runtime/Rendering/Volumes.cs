@@ -434,7 +434,7 @@ public sealed class VolumeStack : IDisposable
     /// Blends the volumes of <paramref name="scene"/> on the layers of <paramref name="mask"/> at
     /// <paramref name="position"/>, over <paramref name="baseProfile"/>.
     /// </summary>
-    public void Resolve(Scene? scene, Float3 position, LayerMask mask, VolumeProfile? baseProfile)
+    public void Resolve(SceneInstance? scene, Float3 position, LayerMask mask, VolumeProfile? baseProfile)
     {
         foreach (Entry entry in _order) entry.Present = false;
 

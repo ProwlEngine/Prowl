@@ -153,7 +153,7 @@ public abstract class Game
         {
             try
             {
-                Scene? currentScene = Scene.Current;
+                SceneInstance? currentScene = SceneInstance.Current;
 
                 BeginRender();
 
@@ -193,7 +193,7 @@ public abstract class Game
 
                 // Then the scene swap, so a load requested this frame tears the outgoing scene down
                 // here rather than under whatever was still running.
-                Scene.ProcessPendingLoad();
+                SceneInstance.ProcessPendingLoad();
 
                 // Frees what nothing reaches any more, after rendering, so no draw in flight still uses it.
                 AssetDatabase.EndFrame();
@@ -238,7 +238,7 @@ public abstract class Game
             Tasks.MainThreadContext.Stop();
 
             // Dispose the current scene so everything in it runs its teardown callbacks.
-            Scene.Shutdown();
+            SceneInstance.Shutdown();
 
             // Asset payloads go while the audio and graphics they belong to are still up.
             AssetDatabase.Shutdown();
@@ -310,7 +310,7 @@ public abstract class Game
 
                 // Then the scene swap, so a load requested this frame tears the outgoing scene down
                 // here rather than under whatever was still running.
-                Scene.ProcessPendingLoad();
+                SceneInstance.ProcessPendingLoad();
 
                 // Frees what nothing reaches any more, after rendering, so no draw in flight still uses it.
                 AssetDatabase.EndFrame();
@@ -334,7 +334,7 @@ public abstract class Game
             try { Console.CancelKeyPress -= cancelHandler; } catch { }
             Closing();
             Tasks.MainThreadContext.Stop();
-            Scene.Shutdown();
+            SceneInstance.Shutdown();
             AssetDatabase.Shutdown();
             Tasks.MainThreadContext.Uninstall();
             Application.TargetFrameRate = 0; // and with it the finer system timer a limit holds
@@ -369,7 +369,7 @@ public abstract class Game
     /// </summary>
     private void SimulationStep(float delta)
     {
-        Scene? currentScene = Scene.Current;
+        SceneInstance? currentScene = SceneInstance.Current;
 
         // Before the scene runs, so a continuation resumed this frame sees the same world the rest of
         // the frame will.
@@ -429,10 +429,10 @@ public abstract class Game
     public virtual void EndGui(Paper paper) { }
 
     /// <summary>Called after the GUI frame is submitted and before the backbuffer is swapped.</summary>
-    public virtual void AfterGui(Scene? scene) { }
+    public virtual void AfterGui(SceneInstance? scene) { }
 
     /// <summary>Called during update. Override to control scene update/gizmo behavior.</summary>
-    public virtual void OnUpdate(Scene? scene)
+    public virtual void OnUpdate(SceneInstance? scene)
     {
         if (scene.IsValid()) scene.Update();
         if (DrawGizmos && scene.IsValid())
@@ -440,13 +440,13 @@ public abstract class Game
     }
 
     /// <summary>Called during render. Override to control scene rendering.</summary>
-    public virtual void OnRender(Scene? scene)
+    public virtual void OnRender(SceneInstance? scene)
     {
         if (scene.IsValid()) scene.Render(null, DrawGizmos);
     }
 
     /// <summary>Called during GUI phase. Override to control scene GUI rendering.</summary>
-    public virtual void OnGui(Scene? scene, Paper paper)
+    public virtual void OnGui(SceneInstance? scene, Paper paper)
     {
         if (scene.IsValid()) scene.OnGui(paper);
     }

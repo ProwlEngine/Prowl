@@ -14,7 +14,7 @@ namespace Prowl.Runtime.Test.Controller;
 public sealed class UprightOnlyTests() : ControllerTestBase(Gravity.Upright)
 {
     /// <summary>A controller with the component's own defaults, placed without being settled.</summary>
-    private Walker Place(Scene scene, Float3 at)
+    private Walker Place(SceneInstance scene, Float3 at)
     {
         GameObject go = CreateGameObject("Player");
         CharacterController controller = go.AddComponent<CharacterController>();
@@ -26,7 +26,7 @@ public sealed class UprightOnlyTests() : ControllerTestBase(Gravity.Upright)
     [Fact]
     public void AControllerWithNothingAroundItMovesTheWholeWay()
     {
-        Scene scene = World();
+        SceneInstance scene = World();
         Walker cc = Place(scene, new Float3(0, 10, 0));
 
         CharacterController.CollisionFlags flags = cc.Move(new Float3(0.5f, 0, 0));
@@ -38,7 +38,7 @@ public sealed class UprightOnlyTests() : ControllerTestBase(Gravity.Upright)
     [Fact]
     public void CastFindsWhatIsAheadWithoutMoving()
     {
-        Scene scene = World();
+        SceneInstance scene = World();
         Box(scene, new Float3(2, 0, 0), new Float3(1, 4, 8));
 
         Walker cc = Place(scene, new Float3(0, 0, 0));
@@ -54,7 +54,7 @@ public sealed class UprightOnlyTests() : ControllerTestBase(Gravity.Upright)
     [Fact]
     public void RidingCanBeSwitchedOff()
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         GameObject platform = Box(scene, new Float3(0f, 0.75f, 0f), new Float3(4f, 0.5f, 4f), name: "Platform");
         Walker walker = Spawn(scene, new Float3(0f, 1f, 0f));
         walker.Controller.RideMovingPlatforms = false;
@@ -67,7 +67,7 @@ public sealed class UprightOnlyTests() : ControllerTestBase(Gravity.Upright)
     [Fact]
     public void ACrateStoodOnIsTheGroundBody()
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         GameObject crate = Box(scene, new Float3(0f, 0.5f, 0f), new Float3(1.5f, 1f, 1.5f), name: "Crate");
         Rigidbody3D body = crate.AddComponent<Rigidbody3D>();
         Walker walker = Spawn(scene, new Float3(0.6f, 1f, 0f));
@@ -78,7 +78,7 @@ public sealed class UprightOnlyTests() : ControllerTestBase(Gravity.Upright)
     [Fact]
     public void ABrokenMotionOrUpIsIgnored()
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Walker walker = Spawn(scene, Float3.Zero);
         Float3 before = walker.Position;
 
@@ -94,7 +94,7 @@ public sealed class UprightOnlyTests() : ControllerTestBase(Gravity.Upright)
     [Fact]
     public void ATeleportForgetsThePlatformItStoodOn()
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         GameObject platform = Box(scene, new Float3(0f, 0.75f, 0f), new Float3(3f, 0.5f, 3f));
         Walker walker = Spawn(scene, new Float3(0f, 1f, 0f));
         walker.Teleport(new Float3(10f, 0f, 0f));
@@ -107,7 +107,7 @@ public sealed class UprightOnlyTests() : ControllerTestBase(Gravity.Upright)
     [Fact]
     public void IgnoredBodiesAreWalkedThroughUntilEnabledAgain()
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         GameObject crate = Box(scene, new Float3(0f, 1f, 2f), new Float3(2f, 2f, 1f));
         Rigidbody3D body = crate.AddComponent<Rigidbody3D>();
         body.MotionType = Jitter2.Dynamics.MotionType.Static;

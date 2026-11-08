@@ -28,10 +28,10 @@ internal static class UIPicker
         }
     }
 
-    public static GameObject? Pick(Scene? scene, Ray ray) =>
+    public static GameObject? Pick(SceneInstance? scene, Ray ray) =>
         TryPick(scene, ray, out Hit hit) ? hit.GameObject : null;
 
-    public static bool TryPick(Scene? scene, Ray ray, out Hit hit)
+    public static bool TryPick(SceneInstance? scene, Ray ray, out Hit hit)
     {
         hit = default;
         if (scene.IsNotValid()) return false;

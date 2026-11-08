@@ -612,7 +612,7 @@ public class ComponentTests : RuntimeTestBase
     [Fact]
     public void RemoveComponent_FromWrongGameObject_DoesNothing()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject owner = CreateGameObject("Owner");
         GameObject other = CreateGameObject("Other");
         PlainComponent comp = owner.AddComponent<PlainComponent>();
@@ -644,7 +644,7 @@ public class ComponentTests : RuntimeTestBase
     [Fact]
     public void AddComponent_Instance_SurvivesDisposalOfThePreviousGameObject()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject a = CreateGameObject("A");
         GameObject b = CreateGameObject("B");
         PlainComponent comp = a.AddComponent<PlainComponent>();

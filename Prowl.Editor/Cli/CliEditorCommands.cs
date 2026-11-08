@@ -246,14 +246,14 @@ public static class CliEditorCommands
         }
 
         // Opening or creating only queues the swap for the end of the frame. Commands run between frames, so it can happen now.
-        if (Scene.IsLoadPending) Scene.ProcessPendingLoad();
+        if (SceneInstance.IsLoadPending) SceneInstance.ProcessPendingLoad();
 
         return new
         {
             path = EditorSceneManager.CurrentScenePath,
             dirty = EditorSceneManager.IsDirty,
-            objects = Scene.Current.IsValid() ? Scene.Current.AllObjects.Count() : 0,
-            roots = Scene.Current.IsValid() ? Scene.Current.RootObjects.Select(g => g.Name).ToList() : [],
+            objects = SceneInstance.Current.IsValid() ? SceneInstance.Current.AllObjects.Count() : 0,
+            roots = SceneInstance.Current.IsValid() ? SceneInstance.Current.RootObjects.Select(g => g.Name).ToList() : [],
         };
 
         static void RequirePath(string path)
@@ -334,7 +334,7 @@ public static class CliEditorCommands
         [CliArg("index", "Sibling index for create and parent")] int index = -1)
     {
         await CliEdit.WaitForEditor();
-        Scene scene = CliRefs.Scene;
+        SceneInstance scene = CliRefs.Scene;
         switch (action)
         {
             case GoAction.Create:
@@ -882,7 +882,7 @@ public static class CliEditorCommands
                 Guid rootId = root.Identifier;
                 int overrides = PrefabUtility.CountOverrides(root);
                     List<PrefabUtility.AdditionDescription> additions = PrefabUtility.DescribeAdditions(root);
-                GameObject? LiveRoot() => Scene.Current.IsValid() ? Scene.Current.FindObjectByIdentifier<GameObject>(rootId) : null;
+                GameObject? LiveRoot() => SceneInstance.Current.IsValid() ? SceneInstance.Current.FindObjectByIdentifier<GameObject>(rootId) : null;
                 CliEdit.Run("Apply Prefab", () =>
                 {
                     PrefabUtility.ApplyOverrides(root);

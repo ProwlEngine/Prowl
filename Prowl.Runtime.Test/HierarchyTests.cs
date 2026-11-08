@@ -130,8 +130,8 @@ public class HierarchyTests : RuntimeTestBase
     [Fact]
     public void SetParent_AcrossScenes_MovesChildToParentScene()
     {
-        Scene scene1 = CreateScene();
-        Scene scene2 = CreateScene();
+        SceneInstance scene1 = CreateScene();
+        SceneInstance scene2 = CreateScene();
 
         GameObject child = CreateGameObject("Child");
         scene1.Add(child);

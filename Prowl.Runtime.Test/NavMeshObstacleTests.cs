@@ -23,7 +23,7 @@ namespace Prowl.Runtime.Test;
 /// </summary>
 public class NavMeshObstacleTests : RuntimeTestBase
 {
-    private static bool Walkable(Scene scene, Float3 position)
+    private static bool Walkable(SceneInstance scene, Float3 position)
         => scene.Navigation.SamplePosition(position, out _, 0.5f, NavMeshAreaMask.Everything);
 
     /// <summary>Echo stores an enum as its number, so reordering these members would repoint every
@@ -43,7 +43,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Surface_BakesQueriesAndRoundTrips()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
         Runtime.NavMeshData data = surface.NavMeshData!;
@@ -74,7 +74,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Bake_WithDefaultSettings_ProducesQueryableMesh()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
         floor.AddComponent<BoxCollider>().Size = new Float3(40, 1, 40);
@@ -102,7 +102,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Bake_ClampsTileSizeToLayerFormatLimit()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene(40f);
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene(40f);
         surface.BuildOverrides.OverrideTileSize = true;
         surface.BuildOverrides.TileSize = 1024;
 
@@ -122,7 +122,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Surface_WithoutPendingWork_IsNotPumped()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
         // Registration seeds every tile synchronously, so a fresh instance starts settled.
@@ -150,7 +150,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Obstacle_WritingCenter_MovesTheCarve()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -176,7 +176,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Obstacle_CarveSwitchedOnWithoutStationaryMode_CarvesWithoutMoving()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -205,7 +205,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Obstacle_RestingOnASampledPointOnASlope_StillCarves()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
 
         GameObject ramp = CreateGameObject("Ramp");
         scene.Add(ramp);
@@ -243,7 +243,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Obstacle_ScalingItsParent_ResizesTheCarve()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -275,7 +275,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Obstacle_CarvesHole_AndRemovalRestores()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
         Assert.True(Walkable(scene, new Float3(0, 0.2f, 0)));
@@ -317,7 +317,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Obstacle_CarveOnlyStationary_LiftsWhileMoving()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
         GameObject obstacleGo = CreateGameObject("Cart");
@@ -355,7 +355,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Obstacle_CarveTurnedOff_RemovesExistingHole()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
         GameObject obstacleGo = CreateGameObject("Ghost");
@@ -383,7 +383,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Obstacle_RotatedBox_CarvesOrientedFootprint()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
         GameObject obstacleGo = CreateGameObject("Barrier");
@@ -417,7 +417,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void RebuildTiles_ReflectsGeometry()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
         var path = new NavMeshPath();
@@ -448,7 +448,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void LayerRegeneration_PreservesExistingCarves()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
         // Carve a hole away from the wall line but inside the tile the wall rebuild touches.
@@ -490,7 +490,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void LayerRegeneration_ObstacleSpanningRebuiltAndUntouchedTiles()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
         // Tile columns split at x = 6 (origin -10, tile world size 16). The crate straddles it.
@@ -531,7 +531,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void LayerRegeneration_OnARuntimeBake_LandsOnTheDataItself()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Assert.Same(surface.NavMeshData, surface.RuntimeData);
 
@@ -565,7 +565,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void LayerRegeneration_OnAnAsset_MirrorsIntoACopyAndLeavesTheAsset()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
         // Stand in for an imported asset: what marks one is carrying a database id.
@@ -608,7 +608,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public async Task RebuildTilesAsync_AppliesLikeSyncPath()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
         GameObject wall = CreateGameObject("Wall");
@@ -631,7 +631,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     // back partial for reasons that have nothing to do with the swap.
     private static readonly Float3 s_wallTop = new(0, 4, 0);
 
-    private NavMeshSurface WalledFloor(Scene scene, NavMeshSurface surface, out GameObject wall)
+    private NavMeshSurface WalledFloor(SceneInstance scene, NavMeshSurface surface, out GameObject wall)
     {
         wall = CreateGameObject("Wall");
         scene.Add(wall);
@@ -640,7 +640,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
         return surface;
     }
 
-    private NavMeshObstacle Carver(Scene scene, out GameObject crate)
+    private NavMeshObstacle Carver(SceneInstance scene, out GameObject crate)
     {
         crate = CreateGameObject("Crate");
         scene.Add(crate);
@@ -659,7 +659,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public async Task ApplyRebuiltTiles_DuringAPendingCarve_LandsOnTheSettledFrame()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -693,7 +693,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public async Task ApplyRebuiltTiles_BehindACacheThatNeverSettles_StillLands()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -758,7 +758,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public async Task ApplyRebuiltTiles_HeldPastUnregistration_IsDropped()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -790,7 +790,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public async Task ApplyRebuiltTiles_HeldBatch_DoesNotOverwriteANewerRebuild()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -819,7 +819,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Agent_PathsAroundCarve()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
         GameObject obstacleGo = CreateGameObject("Crate");
@@ -863,7 +863,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Bake_ExcludesCarvingObstacleGeometry()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
 
         // Present at bake time, and short enough that no agent fits under it — so if its
         // geometry were collected it really would cut the floor.
@@ -896,7 +896,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [InlineData(false)]
     public void Bake_ExcludesObstacleGeometry(bool carve)
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
 
         GameObject crate = CreateGameObject("Crate");
         scene.Add(crate);
@@ -918,7 +918,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Bake_ExcludesObstacleGeometry_EvenWhileDisabled()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
 
         GameObject crate = CreateGameObject("Crate");
         scene.Add(crate);
@@ -934,7 +934,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void NonCarvingObstacle_OffNavMesh_WarnsItCannotBlock()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene(40f);
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene(40f);
         Assert.True(surface.BuildNavMesh());
 
         GameObject agentGo = CreateGameObject("Walker");
@@ -977,12 +977,12 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Obstacle_CarvesAndFollowsOutsidePlayMode()
     {
-        (Scene _, NavMeshSurface baker) = CreateFloorScene(bake: true);
+        (SceneInstance _, NavMeshSurface baker) = CreateFloorScene(bake: true);
         NavMeshData asset = baker.NavMeshData!;
 
         using (EditMode())
         {
-            Scene scene = CreateScene(enable: true);
+            SceneInstance scene = CreateScene(enable: true);
             GameObject surfaceGo = CreateGameObject("NavMeshSurface");
             NavMeshSurface surface = surfaceGo.AddComponent<NavMeshSurface>();
             surface.NavMeshData = asset;
@@ -1017,7 +1017,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Carve_ReportsEveryFrame_ButSettlesOnlyWhenDone()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene(40f);
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene(40f);
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -1067,7 +1067,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Carve_KeepsAgentsAFullRadiusClear()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -1112,7 +1112,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Carve_FinishingInOneUpdate_StillReportsTheChange()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 4); // settle, so nothing else is pending
 
@@ -1153,7 +1153,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void LiveTriangulation_ShowsTheCarve()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -1190,7 +1190,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void NonCarvingObstacle_DeflectsAgent_WithoutTouchingMesh()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene(40f);
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene(40f);
         Assert.True(surface.BuildNavMesh());
 
         GameObject crate = CreateGameObject("Cart");
@@ -1240,7 +1240,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void NonCarvingObstacle_FollowsAMovingObstacle()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene(40f);
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene(40f);
         Assert.True(surface.BuildNavMesh());
 
         GameObject agentGo = CreateGameObject("Walker");
@@ -1280,7 +1280,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void NonCarvingObstacle_StaysPutUnderPressure()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene(40f);
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene(40f);
         Assert.True(surface.BuildNavMesh());
 
         GameObject crate = CreateGameObject("Cart");
@@ -1320,7 +1320,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     [Fact]
     public void Obstacle_SwitchingCarveMode_LeavesNothingBehind()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
         GameObject agentGo = CreateGameObject("Walker");
@@ -1350,7 +1350,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
 
     /// <summary>1 when the obstacle has no blocker in the crowd, 2 when it has one — written as
     /// a count so a failure reports which side of the switch broke.</summary>
-    private static int BlockerCount(Scene scene, NavMeshObstacle obstacle)
+    private static int BlockerCount(SceneInstance scene, NavMeshObstacle obstacle)
     {
         Prowl.Recast.Detour.Crowd.DtCrowd? crowd = scene.Navigation.GetNativeCrowd();
         if (crowd == null) return 0;

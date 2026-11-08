@@ -20,7 +20,7 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
     [InlineData(ColliderShape.Cylinder)]
     public void WalkingIntoARoundPillarSlipsAroundIt(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Pillar(scene, new Float3(0f, 0f, 3f), 0.5f, 3f);
         Walker walker = Spawn(scene, new Float3(0.15f, 0f, 0f), shape);
 
@@ -34,7 +34,7 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
     [InlineData(ColliderShape.Cylinder)]
     public void ACorridorJustWideEnoughIsWalkedThrough(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         const float Gap = 0.86f;
         Box(scene, new Float3(-Gap * 0.5f - 0.5f, 1.5f, 6f), new Float3(1f, 3f, 6f));
         Box(scene, new Float3(Gap * 0.5f + 0.5f, 1.5f, 6f), new Float3(1f, 3f, 6f));
@@ -50,7 +50,7 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
     [InlineData(ColliderShape.Cylinder)]
     public void AGapNarrowerThanTheControllerIsNotSqueezedThrough(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         const float Gap = 0.6f;
         Box(scene, new Float3(-Gap * 0.5f - 0.5f, 1.5f, 3f), new Float3(1f, 3f, 1f));
         Box(scene, new Float3(Gap * 0.5f + 0.5f, 1.5f, 3f), new Float3(1f, 3f, 1f));
@@ -68,7 +68,7 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
     [InlineData(ColliderShape.Cylinder)]
     public void AHugeMoveDoesNotTunnelThroughAThinWall(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor(400f);
+        SceneInstance scene = WorldWithFloor(400f);
         Box(scene, new Float3(0f, 1.5f, 5f), new Float3(8f, 3f, 0.05f));
         Walker walker = Spawn(scene, Float3.Zero, shape);
 
@@ -83,7 +83,7 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
     [InlineData(ColliderShape.Cylinder)]
     public void TeleportedIntoTheMouthOfAWedgeItWorksItsWayOut(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         SlopedCeiling(scene, new Float3(0f, 0f, 0f), 2f, 25f);
         Walker walker = Spawn(scene, new Float3(0f, 0f, -3f), shape);
 
@@ -100,7 +100,7 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
     [InlineData(ColliderShape.Cylinder, 40f)]
     public void WalkingIntoAWallAtAShallowAngleKeepsTheSpeedAlongIt(ColliderShape shape, float angle)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(1f, 1.5f, 0f), new Float3(0.5f, 3f, 60f));
         Walker walker = Spawn(scene, new Float3(0f, 0f, -20f), shape);
 
@@ -116,7 +116,7 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
     [InlineData(ColliderShape.Cylinder)]
     public void AWallBuiltFromSeparateBlocksDoesNotSnag(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         for (int i = 0; i < 30; i++)
             Box(scene, new Float3(1f, 1.5f, -15f + i + 0.5f), new Float3(0.5f, 3f, 1f), name: "Block");
         Walker walker = Spawn(scene, new Float3(0f, 0f, -12f), shape);
@@ -134,7 +134,7 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
     [InlineData(ColliderShape.Cylinder, 0.01f)]
     public void AFloorOfTilesIsCrossedSmoothly(ColliderShape shape, float unevenness)
     {
-        Scene scene = World();
+        SceneInstance scene = World();
         for (int x = -3; x <= 6; x++)
             for (int z = -2; z < 20; z++)
                 Box(scene, new Float3(x, -0.5f + ((x + z) % 2 == 0 ? unevenness : 0f), z + 0.5f), new Float3(1f, 1f, 1f), name: "Tile");
@@ -150,7 +150,7 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
     [Fact]
     public void TheControllersOwnRotationDoesNotChangeHowItMoves()
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Walker walker = Spawn(scene, Float3.Zero);
         walker.Controller.GameObject.Transform.Rotation = Quaternion.FromEuler(0f, 133f, 0f);
 

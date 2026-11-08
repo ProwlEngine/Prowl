@@ -377,12 +377,12 @@ public static class Debug
     #region Gizmos
 
     // Draw calls land in the scene whose code is running, so a preview never draws the game's lines.
-    private static GizmoBuilder s_gizmoBuilder => Resources.Scene.Active.Gizmos;
+    private static GizmoBuilder s_gizmoBuilder => Resources.SceneInstance.Active.Gizmos;
 
     /// <summary>Clears every scene's gizmos for the next frame.</summary>
     public static void ClearGizmos()
     {
-        foreach (Resources.Scene scene in Resources.Scene.Live)
+        foreach (Resources.SceneInstance scene in Resources.SceneInstance.Live)
             scene.Gizmos.Clear();
     }
 
@@ -392,7 +392,7 @@ public static class Debug
     private static readonly Dictionary<RenderWorld, ulong> s_gizmosSubmitted = [];
 
     /// <summary>Draws a scene's gizmos for this frame into a world, once a frame, on the gizmo layer.</summary>
-    internal static void SubmitGizmos(Resources.Scene? scene, RenderWorld world)
+    internal static void SubmitGizmos(Resources.SceneInstance? scene, RenderWorld world)
     {
         if (scene.IsNotValid()) return;
         if (s_gizmosSubmitted.TryGetValue(world, out ulong frame) && frame == Graphics.FrameIndex) return;

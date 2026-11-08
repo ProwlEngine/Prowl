@@ -1190,7 +1190,7 @@ public sealed class AudioSource : Component
         if (!AudioContext.IsInitialized)
             return null;
 
-        Scene scene = Scene.Active;
+        SceneInstance scene = SceneInstance.Active;
 
         if (scene.IsNotValid())
         {

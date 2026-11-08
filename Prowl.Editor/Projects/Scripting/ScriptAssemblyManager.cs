@@ -461,7 +461,7 @@ public static class ScriptAssemblyManager
     {
         try
         {
-            Scene scene = Scene.Current;
+            SceneInstance scene = SceneInstance.Current;
             AssemblyLoadContext oldContext = s_scriptContext!;
             var oldAssemblies = s_scriptAssemblies.ToList();
 

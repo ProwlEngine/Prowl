@@ -88,7 +88,7 @@ public class HierarchyPanel : DockPanel
             _dragHoverNormalizedYNext = 0f;
         }
 
-        Scene scene = Scene.Current;
+        SceneInstance scene = SceneInstance.Current;
 
         using (paper.Column("hier_root")
             .Size(width, height)
@@ -437,7 +437,7 @@ public class HierarchyPanel : DockPanel
 
                 if (DragDrop.IsDropFrame && _assetDropTarget && DragDrop.Payload is AssetDragPayload assetDrop)
                 {
-                    if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
+                    if (assetDrop.AssetType == typeof(Runtime.Resources.SceneInstance))
                     {
                         AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(assetDrop.AssetGuid);
                         if (entry != null)
@@ -598,7 +598,7 @@ public class HierarchyPanel : DockPanel
                 case DropPosition.Below:
                     if (targetIsRoot)
                     {
-                        Scene scene = Scene.Current;
+                        SceneInstance scene = SceneInstance.Current;
                         if (scene.IsNotValid()) break;
 
                         // Unparent if needed
@@ -878,7 +878,7 @@ public class HierarchyPanel : DockPanel
     /// so they don't steal selection / rename focus from the object the user actually asked for.</param>
     internal static GameObject CreateGameObject(string name, GameObject? parent, bool select = true, bool beginRename = true)
     {
-        Scene scene = Scene.Current;
+        SceneInstance scene = SceneInstance.Current;
         if (scene.IsNotValid()) return new GameObject(name);
 
         var go = new GameObject(name);
@@ -920,7 +920,7 @@ public class HierarchyPanel : DockPanel
     /// </summary>
     internal static void CreateEmptyParent()
     {
-        Scene scene = Scene.Current;
+        SceneInstance scene = SceneInstance.Current;
         if (scene.IsNotValid()) return;
 
         // Only the top-level selection moves: an object whose ancestor is also selected already
@@ -939,7 +939,7 @@ public class HierarchyPanel : DockPanel
 
     private static void CreateEmptyParentCore(List<GameObject> targets)
     {
-        Scene scene = Scene.Current;
+        SceneInstance scene = SceneInstance.Current;
         if (scene.IsNotValid()) return;
 
         // The first selected object anchors the group: the new parent drops into its place in the
@@ -1046,7 +1046,7 @@ public class HierarchyPanel : DockPanel
 
     internal static void DeleteOneGameObject(GameObject go)
     {
-        Scene scene = Scene.Current;
+        SceneInstance scene = SceneInstance.Current;
         if (scene.IsNotValid()) return;
 
         Undo.DestroyObjectImmediate(go);
@@ -1056,7 +1056,7 @@ public class HierarchyPanel : DockPanel
     //  Helpers
     // ================================================================
 
-    private List<GameObject> GetDisplayRoots(Scene scene)
+    private List<GameObject> GetDisplayRoots(SceneInstance scene)
     {
         return [.. scene.RootObjects
             .Where(go => !go.HideFlags.HasFlag(HideFlags.Hide)
@@ -1097,7 +1097,7 @@ public class HierarchyPanel : DockPanel
 
     private GameObject? FindGOByIdentifier(string id)
     {
-        Scene scene = Scene.Current;
+        SceneInstance scene = SceneInstance.Current;
         if (scene.IsNotValid()) return null;
         return scene.AllObjects.FirstOrDefault(g => g.Identifier.ToString() == id);
     }
@@ -1106,7 +1106,7 @@ public class HierarchyPanel : DockPanel
     /// Search all GameObjects in the scene for any that reference the given GUID.
     /// Checks each component's AssetID and all AssetRef fields.
     /// </summary>
-    private static void FindGameObjectsWithGuid(Scene scene, Guid guid, HashSet<GameObject> results)
+    private static void FindGameObjectsWithGuid(SceneInstance scene, Guid guid, HashSet<GameObject> results)
     {
         foreach (GameObject go in scene.AllObjects)
         {
@@ -1146,7 +1146,7 @@ public class HierarchyPanel : DockPanel
 
     public static void SpawnAssetInScene(AssetDragPayload payload, GameObject? parent, Float3 position)
     {
-        Scene scene = Scene.Current;
+        SceneInstance scene = SceneInstance.Current;
         if (scene.IsNotValid()) return;
 
         Asset? asset = Runtime.AssetDatabase.Get(payload.AssetGuid);
@@ -1200,7 +1200,7 @@ public class HierarchyPanel : DockPanel
 
     /// <summary>Put a prefab into the scene, as an instance or as a copy of its contents with no link.</summary>
     private static void SpawnPrefab(AssetDragPayload payload, GameObject? parent, Float3 position,
-        Runtime.Resources.Scene scene, bool flatten)
+        Runtime.Resources.SceneInstance scene, bool flatten)
     {
         GameObject? instance = PrefabUtility.InstantiatePrefab(payload.AssetGuid);
         if (instance.IsNotValid()) return;

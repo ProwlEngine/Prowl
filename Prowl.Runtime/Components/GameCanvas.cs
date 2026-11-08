@@ -240,7 +240,7 @@ public class GameCanvas : Component, IRenderSync
         MarkDirty(UIDirtyFlags.All);   // first build is always dirty
     }
 
-    private Scene? _registeredScene;
+    private SceneInstance? _registeredScene;
 
     public override void OnEnable()
     {
@@ -248,7 +248,7 @@ public class GameCanvas : Component, IRenderSync
         MarkDirty(UIDirtyFlags.All);
     }
 
-    internal void RegisterIn(Scene? scene)
+    internal void RegisterIn(SceneInstance? scene)
     {
         _registeredScene = scene;
         if (scene.IsValid()) scene!.Canvases.Add(this);
@@ -256,13 +256,13 @@ public class GameCanvas : Component, IRenderSync
 
     public override void OnDisable() => LeaveScene(_registeredScene);
 
-    internal override void LeaveScene(Scene? scene)
+    internal override void LeaveScene(SceneInstance? scene)
     {
         if (_registeredScene.IsValid()) _registeredScene!.Canvases.Remove(this);
         _registeredScene = null;
     }
 
-    internal override void JoinScene(Scene? scene) => RegisterIn(scene);
+    internal override void JoinScene(SceneInstance? scene) => RegisterIn(scene);
 
     bool IRenderSync.Sync(RenderWorld world)
     {

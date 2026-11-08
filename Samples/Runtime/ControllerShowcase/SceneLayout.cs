@@ -17,7 +17,7 @@ public sealed record Landmark(string Name, string About, Float3 Position, float 
 public static class SceneLayout
 {
     /// <summary>Adds every object of the playground to <paramref name="scene"/> and returns the pieces the HUD names.</summary>
-    public static Landmark[] Spawn(Scene scene)
+    public static Landmark[] Spawn(SceneInstance scene)
     {
         Material stairs = GridMaterial(new Color(0.455f, 0.325f, 0.104f, 1f));
         Material tower = GridMaterial(new Color(0.156f, 0.325f, 0.52f, 1f));

@@ -167,7 +167,7 @@ public sealed class NavMeshBakeService
     private static HashSet<Guid> OtherSurfaceAssets(NavMeshSurface surface)
     {
         HashSet<Guid> assets = [];
-        Scene? scene = surface.GameObject.Scene;
+        SceneInstance? scene = surface.GameObject.Scene;
         if (scene.IsNotValid()) return assets;
 
         foreach (GameObject go in scene.AllObjects)
@@ -181,7 +181,7 @@ public sealed class NavMeshBakeService
     // case sensitively and Sanitize folds path separators.
     private static (string Folder, string Name) DefaultBakeName(NavMeshSurface surface)
     {
-        Scene? scene = surface.GameObject.Scene;
+        SceneInstance? scene = surface.GameObject.Scene;
         string sceneRel = scene.IsValid() && scene!.Source is { } source ? source.AssetPath : "";
         string sceneDir = string.IsNullOrEmpty(sceneRel) ? "" : (Path.GetDirectoryName(sceneRel) ?? "").Replace('\\', '/');
         string sceneName = string.IsNullOrEmpty(sceneRel) ? "Scene" : Path.GetFileNameWithoutExtension(sceneRel);

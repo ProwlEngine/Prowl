@@ -165,13 +165,13 @@ public class SerializationTests : RuntimeTestBase
     [Fact]
     public void Scene_RoundTrip_ReaddsObjectsAndHierarchy()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject parent = CreateGameObject("Parent");
         GameObject child = CreateGameObject("Child");
         child.SetParent(parent);
         scene.Add(parent);
 
-        Scene clone = RoundTrip(scene);
+        SceneInstance clone = RoundTrip(scene);
 
         Assert.Equal(2, clone.Count);
         GameObject cloneParent = clone.RootObjects.Single();
@@ -184,14 +184,14 @@ public class SerializationTests : RuntimeTestBase
     public void Scene_RoundTrip_RestoresIdentifiers()
     {
         // The parallel identifier arrays Scene maintains are the reason save/load keeps stable IDs.
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject("Obj");
         SerializableComponent comp = go.AddComponent<SerializableComponent>();
         scene.Add(go);
         Guid goId = go.Identifier;
         Guid compId = comp.Identifier;
 
-        Scene clone = RoundTrip(scene);
+        SceneInstance clone = RoundTrip(scene);
 
         GameObject? cloneGo = clone.FindObjectByIdentifier<GameObject>(goId);
         Assert.NotNull(cloneGo);
@@ -222,7 +222,7 @@ public class SerializationTests : RuntimeTestBase
     [Fact]
     public void Scene_RoundTrip_OneObjectWithUnresolvableTransform_DoesNotWipeScene()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Add(CreateGameObject("Healthy1"));
         scene.Add(CreateGameObject("Broken"));
         scene.Add(CreateGameObject("Healthy2"));
@@ -234,7 +234,7 @@ public class SerializationTests : RuntimeTestBase
             if (el.TryGet("Name", out EchoObject? n) && n!.StringValue == "Broken")
                 el.Remove("Transform");
 
-        Scene clone = Serializer.Deserialize<Scene>(echo)!;
+        SceneInstance clone = Serializer.Deserialize<SceneInstance>(echo)!;
 
         Assert.Equal(3, clone.AllObjects.Count());
         Assert.Contains(clone.AllObjects, g => g.Name == "Healthy1");

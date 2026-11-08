@@ -346,7 +346,7 @@ public static partial class PrefabUtility
                 InvalidateSource(prefabGuid);
                 EditorAssetBackend.Instance?.Reimport(prefabGuid);
 
-                GameObject? live = Scene.Current.IsValid() ? Scene.Current!.FindObjectByIdentifier<GameObject>(instanceRootId) : null;
+                GameObject? live = SceneInstance.Current.IsValid() ? SceneInstance.Current!.FindObjectByIdentifier<GameObject>(instanceRootId) : null;
                 if (instance != null && live.IsValid()) instance(live!);
                 RefreshAllInstances(prefabGuid);
             }
@@ -1162,7 +1162,7 @@ public static partial class PrefabUtility
 
             // Whether instances may be rebuilt right now is a separate question.
             if (s_refreshingFromApply || Application.IsPlaying) continue;
-            if (Scene.Current.IsNotValid() || PrefabEditingMode.IsEditing) continue;
+            if (SceneInstance.Current.IsNotValid() || PrefabEditingMode.IsEditing) continue;
 
             try
             {
@@ -1186,7 +1186,7 @@ public static partial class PrefabUtility
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db == null) return;
 
-        Scene? scene = Scene.Current;
+        SceneInstance? scene = SceneInstance.Current;
 
         // The entries are gone, so go by which cached prefabs the database can no longer resolve.
         foreach (Guid prefabGuid in s_sourceCache.Keys.ToList())
@@ -1215,7 +1215,7 @@ public static partial class PrefabUtility
         // The prefab editing scene holds the prefab itself, not instances of it.
         if (PrefabEditingMode.IsEditing) return;
 
-        Scene? scene = Scene.Current;
+        SceneInstance? scene = SceneInstance.Current;
         if (scene.IsNotValid()) return;
 
         // Collected before anything is refreshed, since a refresh adds and removes objects.
@@ -1248,11 +1248,11 @@ public static partial class PrefabUtility
     /// </summary>
     public static void RefreshAllInstances(Guid prefabGuid)
     {
-        Scene? scene = Scene.Current;
+        SceneInstance? scene = SceneInstance.Current;
         if (scene.IsValid()) RefreshInstancesOf(prefabGuid, scene);
     }
 
-    private static void RefreshInstancesOf(Guid prefabGuid, Scene scene)
+    private static void RefreshInstancesOf(Guid prefabGuid, SceneInstance scene)
     {
         SettleStrayPrefabContent(prefabGuid, scene);
 
@@ -1277,7 +1277,7 @@ public static partial class PrefabUtility
     /// the scene was saved. Open it and it catches up, but a build reads what is on disk, and nobody
     /// has to have opened a scene since the prefabs it uses last changed.
     /// </summary>
-    public static void RefreshInstancesIn(Scene scene)
+    public static void RefreshInstancesIn(SceneInstance scene)
     {
         if (scene.IsNotValid()) return;
 
@@ -1306,7 +1306,7 @@ public static partial class PrefabUtility
     /// still answers to a source identity, so the refresh recreates its counterpart and one override
     /// then lands on both. Its contents and place are kept; only the claim goes.
     /// </summary>
-    private static void SettleStrayPrefabContent(Guid prefabGuid, Scene scene)
+    private static void SettleStrayPrefabContent(Guid prefabGuid, SceneInstance scene)
     {
         List<GameObject> belonging = [.. scene.AllObjects.Where(go => go.IsValid() && go.PrefabAssetId == prefabGuid)];
 
@@ -1574,7 +1574,7 @@ public static partial class PrefabUtility
 
             // Scene.Remove unparents on the way out; a tree in no scene has to be told, or the deferred
             // destroy leaves the child in its parent's list for the rest of the operation.
-            Scene? childScene = child.Scene;
+            SceneInstance? childScene = child.Scene;
             if (childScene.IsValid()) childScene!.Remove(child);
             else child.SetParent(null!);
             child.Destroy();
@@ -1603,7 +1603,7 @@ public static partial class PrefabUtility
             component.OnValidate();
         }
 
-        Scene? scene = instance.Scene;
+        SceneInstance? scene = instance.Scene;
         int order = 0;
 
         foreach (GameObject sourceChild in source.Children)
@@ -1811,7 +1811,7 @@ public static partial class PrefabUtility
     /// </summary>
     public static void ReconcileOpenScene()
     {
-        Scene? scene = Scene.Current;
+        SceneInstance? scene = SceneInstance.Current;
         if (scene.IsNotValid()) return;
 
         // Anything that drifted out of its instance is settled first, so what follows records overrides

@@ -316,7 +316,7 @@ public sealed partial class VRShowcaseGame
         float day = Saturate((elevation + 2f) / 20f);
         _sunLight.Intensity = 100000f * day;
         _sunLight.Color = Lerp(new Color(1f, 0.45f, 0.2f, 1f), Color.White, Saturate(elevation / 30f));
-        Scene? scene = _sunLight.GameObject.Scene;
+        SceneInstance? scene = _sunLight.GameObject.Scene;
         if (scene.IsNotValid()) return;
         if (_ambientStrength <= 0f) _ambientStrength = scene.Environment.Ambient.Intensity;
         scene.Environment.Ambient.Intensity = _ambientStrength * (0.06f + 0.94f * day);

@@ -241,7 +241,7 @@ public class EditorCamera
     /// <summary>
     /// Render the scene from this camera's perspective.
     /// </summary>
-    public void Render(Scene scene, bool drawUI = true)
+    public void Render(SceneInstance scene, bool drawUI = true)
     {
         if (_renderTarget.IsNotValid()) return;
 
@@ -281,7 +281,7 @@ public class EditorCamera
 
     // The scene view resolves volumes itself; only the main camera's base profile, volume layers, HDR and anti aliasing
     // are borrowed, a new camera's default profile standing in without one
-    private void MirrorSceneCamera(Scene scene)
+    private void MirrorSceneCamera(SceneInstance scene)
     {
         _camera.PostProcessing = PostProcessing;
         Camera? sceneCamera = FindSceneCamera(scene);
@@ -304,7 +304,7 @@ public class EditorCamera
         _camera.Taa = sceneCamera.Taa;
     }
 
-    private static Camera? FindSceneCamera(Scene scene)
+    private static Camera? FindSceneCamera(SceneInstance scene)
     {
         // First try to find a camera tagged "Main Camera"
         foreach (GameObject go in scene.AllObjects)

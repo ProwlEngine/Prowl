@@ -657,14 +657,25 @@ public class ProjectMigrationTests : IDisposable
 
     private static EchoObject BakedScene(float lightmapScale)
     {
-        var scene = new Scene();
-        scene.BakedLighting.ProbePositions = [Float3.Zero];
-        scene.BakedLighting.ProbeSH = [new SphericalHarmonicsL2 { C0 = new Float3(1f, 2f, 3f), C8 = new Float3(0.5f, 0.5f, 0.5f) }];
-        scene.BakedLighting.LightmapScale = lightmapScale;
+        var scene = new SceneInstance();
+        scene.Lighting.ProbePositions = [Float3.Zero];
+        scene.Lighting.ProbeSH = [new SphericalHarmonicsL2 { C0 = new Float3(1f, 2f, 3f), C8 = new Float3(0.5f, 0.5f, 0.5f) }];
+        scene.Lighting.LightmapScale = lightmapScale;
+        return LegacyScene(scene);
+    }
+
+    private static EchoObject LegacyScene(SceneInstance scene)
+    {
         EchoObject echo = Serializer.Serialize(typeof(object), scene)!;
         scene.Dispose();
+        echo["$type"] = new EchoObject("Prowl.Runtime.Resources.Scene, Prowl.Runtime");
+        echo["BakedLighting"] = echo["Lighting"].Clone();
+        echo.Remove("Lighting");
         return echo;
     }
+
+    private static SceneLighting LightingOf(EchoObject scene)
+        => Serializer.Deserialize<SceneLighting>(scene.TryGet("Lighting", out EchoObject? lighting) ? lighting! : scene["BakedLighting"])!;
 
     [Fact]
     public void BakesFromBeforePhysicalLight_KeepTheirLook_AndOnlyUnscaledPhysicalOnesNeedARebake()
@@ -683,17 +694,14 @@ public class ProjectMigrationTests : IDisposable
 
         EchoObject migrated = EchoObject.ReadFromString(File.ReadAllText(oldPath));
         Assert.False(Release_1_0.NeedsRebake(migrated));
-        Scene scene = Serializer.Deserialize<Scene>(migrated)!;
-        Assert.Equal(Release_1_0.LegacyLuminance, scene.BakedLighting.LightmapScale);
-        Assert.Equal(new Float3(1f, 2f, 3f) * Release_1_0.LegacyLuminance, scene.BakedLighting.ProbeSH[0].C0);
-        Assert.Equal(new Float3(0.5f, 0.5f, 0.5f) * Release_1_0.LegacyLuminance, scene.BakedLighting.ProbeSH[0].C8);
-        Assert.Equal(Float3.Zero, scene.BakedLighting.ProbePositions[0]);
-        scene.Dispose();
+        SceneLighting lighting = LightingOf(migrated);
+        Assert.Equal(Release_1_0.LegacyLuminance, lighting.LightmapScale);
+        Assert.Equal(new Float3(1f, 2f, 3f) * Release_1_0.LegacyLuminance, lighting.ProbeSH[0].C0);
+        Assert.Equal(new Float3(0.5f, 0.5f, 0.5f) * Release_1_0.LegacyLuminance, lighting.ProbeSH[0].C8);
+        Assert.Equal(Float3.Zero, lighting.ProbePositions[0]);
 
         Assert.False(Release_1_0.NeedsRebake(BakedScene(3f)));
-        var empty = new Scene();
-        Assert.False(Release_1_0.NeedsRebake(Serializer.Serialize(typeof(object), empty)!));
-        empty.Dispose();
+        Assert.False(Release_1_0.NeedsRebake(LegacyScene(new SceneInstance())));
     }
 
     [Fact]

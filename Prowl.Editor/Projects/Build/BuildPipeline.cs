@@ -154,10 +154,10 @@ public abstract class BuildPipeline
 
     private static EchoObject? BringInstancesUpToDate(EchoObject echo, string scenePath)
     {
-        Runtime.Resources.Scene? scene = null;
+        Runtime.Resources.SceneInstance? scene = null;
         try
         {
-            scene = Serializer.Deserialize<Runtime.Resources.Scene>(echo);
+            scene = Serializer.Deserialize<Runtime.Resources.SceneInstance>(echo);
             if (scene.IsNotValid()) return null;
 
             EchoObject? before = Serializer.Serialize(typeof(object), scene);

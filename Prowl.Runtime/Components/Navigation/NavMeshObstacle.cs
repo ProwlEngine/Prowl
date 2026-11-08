@@ -130,7 +130,7 @@ public class NavMeshObstacle : Component
 
     public override void OnEnable()
     {
-        Scene? scene = Scene;
+        SceneInstance? scene = Scene;
         if (scene.IsValid())
         {
             _world = scene.Navigation;

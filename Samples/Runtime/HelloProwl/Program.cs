@@ -37,7 +37,7 @@ public sealed class HelloProwlGame : Game
 {
     public override void Initialize()
     {
-        var scene = new Scene();
+        var scene = new SceneInstance();
 
         // A light, angled down like an afternoon sun.
         var sun = new GameObject("Sun");
@@ -76,7 +76,7 @@ public sealed class HelloProwlGame : Game
         spawner.AddComponent<CubeSpawner>();
         scene.Add(spawner);
 
-        Scene.Load(scene);
+        SceneInstance.Load(scene);
     }
 
     public static Material MakeMaterial(Color color)

@@ -33,7 +33,7 @@ public sealed class VRBasicsGame : Game
 {
     public override void Initialize()
     {
-        var scene = new Scene();
+        var scene = new SceneInstance();
 
         var sun = new GameObject("Sun");
         DirectionalLight sunLight = sun.AddComponent<DirectionalLight>();
@@ -92,7 +92,7 @@ public sealed class VRBasicsGame : Game
         scene.Add(rig);
 
         XR.Start();
-        Scene.Load(scene);
+        SceneInstance.Load(scene);
     }
 
     public static Material Lit(Color color)

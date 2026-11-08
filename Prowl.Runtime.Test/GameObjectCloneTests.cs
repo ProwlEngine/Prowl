@@ -288,7 +288,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void Clone_IsDetachedFromAnyScene()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject source = Build("root", out _);
         scene.Add(source);
 
@@ -408,7 +408,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void CopyTo_LeavesTheTargetInItsScene()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject source = Build("source", out _);
         GameObject target = Build("target", out _);
         scene.Add(target);
@@ -547,9 +547,9 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void Instantiate_RunsTheLifecycleOnTheCopy()
     {
-        Scene scene = CreateScene();
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
+        SceneInstance scene = CreateScene();
+        SceneInstance.Load(scene);
+        SceneInstance.ProcessPendingLoad();
 
         var original = new GameObject("orig");
         original.AddComponent<Lifecycle>();
@@ -569,9 +569,9 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void Instantiate_IntoAParentPlacesItRelativeToThatParent()
     {
-        Scene scene = CreateScene();
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
+        SceneInstance scene = CreateScene();
+        SceneInstance.Load(scene);
+        SceneInstance.ProcessPendingLoad();
 
         var parent = new GameObject("parent");
         parent.Transform.LocalPosition = new Float3(10, 0, 0);

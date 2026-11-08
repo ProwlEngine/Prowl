@@ -97,7 +97,7 @@ public class NavMeshSurface : Component
     {
         get
         {
-            Scene? scene = Scene;
+            SceneInstance? scene = Scene;
             return scene.IsValid() ? scene.Navigation : null;
         }
     }
@@ -588,12 +588,12 @@ public class NavMeshSurface : Component
     internal List<NavMeshGeometrySource> CollectSources(AABB? filterBounds, float terrainVoxelSize)
     {
         List<NavMeshGeometrySource> sources = [];
-        if (TryGetCollectionScope(filterBounds, out Scene? scene, out AABB? bounds))
+        if (TryGetCollectionScope(filterBounds, out SceneInstance? scene, out AABB? bounds))
             NavMeshGeometryCollector.Collect(CollectionObjects(scene!), UseGeometry, Layers, terrainVoxelSize, DefaultArea, sources, bounds, AgentTypeId);
         return sources;
     }
 
-    private IEnumerable<GameObject> CollectionObjects(Scene scene)
+    private IEnumerable<GameObject> CollectionObjects(SceneInstance scene)
         => CollectObjects == NavMeshCollectObjects.Children ? EnumerateSelfAndChildren(GameObject) : scene.ActiveObjects;
 
     /// <summary>
@@ -601,7 +601,7 @@ public class NavMeshSurface : Component
     /// (the one bounds rule every collector shares). False when not in a scene or when the
     /// intersection is empty, so nothing can be collected.
     /// </summary>
-    private bool TryGetCollectionScope(AABB? filterBounds, out Scene? scene, out AABB? bounds)
+    private bool TryGetCollectionScope(AABB? filterBounds, out SceneInstance? scene, out AABB? bounds)
     {
         scene = Scene;
         bounds = filterBounds;
@@ -630,7 +630,7 @@ public class NavMeshSurface : Component
     public List<NavMeshAreaVolume> CollectVolumes(AABB? filterBounds = null)
     {
         List<NavMeshAreaVolume> volumes = [];
-        if (TryGetCollectionScope(filterBounds, out Scene? scene, out AABB? bounds))
+        if (TryGetCollectionScope(filterBounds, out SceneInstance? scene, out AABB? bounds))
             NavMeshGeometryCollector.CollectModifierVolumes(CollectionObjects(scene!), Layers, AgentTypeId, volumes, bounds);
         return volumes;
     }
@@ -644,7 +644,7 @@ public class NavMeshSurface : Component
     public List<NavMeshLinkSource> CollectLinks(AABB? filterBounds = null)
     {
         List<NavMeshLinkSource> links = [];
-        if (!TryGetCollectionScope(filterBounds, out Scene? scene, out AABB? bounds))
+        if (!TryGetCollectionScope(filterBounds, out SceneInstance? scene, out AABB? bounds))
             return links;
 
         // Scene-wide collection reads the world's registry rather than every GameObject: a link

@@ -76,10 +76,10 @@ public abstract class EditorTestHarness : IDisposable
     {
         if (source.Scene is null)
         {
-            var scene = new Scene();
+            var scene = new SceneInstance();
             scene.Add(source);
-            Scene.Load(scene);
-            Scene.ProcessPendingLoad();
+            SceneInstance.Load(scene);
+            SceneInstance.ProcessPendingLoad();
         }
 
         if (!Prefabs.PrefabUtility.SaveAsPrefabAssetAndConnect(source, relativePath, overwrite: true))
@@ -132,7 +132,7 @@ public abstract class EditorTestHarness : IDisposable
     protected PrefabAsset? GetPrefab(Guid guid) => AssetDatabase.Load<PrefabAsset>(guid);
 
     /// <summary>Persist a Scene as a .scene file, the way the editor saves one, and return its GUID.</summary>
-    protected Guid CreateSceneAsset(Scene scene, string relativePath = "Scene.scene")
+    protected Guid CreateSceneAsset(SceneInstance scene, string relativePath = "Scene.scene")
     {
         string abs = AssetAbsolutePath(relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(abs)!);
@@ -193,7 +193,7 @@ public abstract class EditorTestHarness : IDisposable
     protected static PlayModeScope EnterPlayMode() => new();
 
     /// <summary>Advances full frames: FixedUpdate then Update.</summary>
-    protected static void Tick(Scene scene, int steps = 1)
+    protected static void Tick(SceneInstance scene, int steps = 1)
     {
         for (int i = 0; i < steps; i++)
         {
@@ -203,7 +203,7 @@ public abstract class EditorTestHarness : IDisposable
     }
 
     /// <summary>Runs Scene.Update the given number of frames (no physics step).</summary>
-    protected static void UpdateScene(Scene scene, int frames = 1)
+    protected static void UpdateScene(SceneInstance scene, int frames = 1)
     {
         for (int i = 0; i < frames; i++)
             scene.Update();
@@ -254,7 +254,7 @@ public abstract class EditorTestHarness : IDisposable
     /// <summary>Author a scene containing a single empty GameObject and save it as Main.scene.</summary>
     protected Guid AuthorEmptyScene(string relativePath = "Main.scene")
     {
-        var scene = new Scene();
+        var scene = new SceneInstance();
         scene.Add(new GameObject("Root"));
         Guid guid = CreateSceneAsset(scene, relativePath);
         Assert.NotEqual(Guid.Empty, guid);
@@ -268,7 +268,7 @@ public abstract class EditorTestHarness : IDisposable
         Type type = gameAsm.GetType(componentTypeName)
             ?? throw new InvalidOperationException($"Type '{componentTypeName}' not found in the game assembly.");
 
-        var scene = new Scene();
+        var scene = new SceneInstance();
         var go = new GameObject("Root");
         go.AddComponent(type);
         scene.Add(go);
@@ -377,7 +377,7 @@ public abstract class EditorTestHarness : IDisposable
     public virtual void Dispose()
     {
         // Drop this test's scene so the next one starts from a fresh empty Scene.Current.
-        try { Scene.Shutdown(); } catch { }
+        try { SceneInstance.Shutdown(); } catch { }
 
         Assets.Dispose(); // stops the FileSystemWatcher and clears AssetDatabase.Current / Instance
         Project.CloseCurrent();

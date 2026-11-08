@@ -32,7 +32,7 @@ using Prowl.Runtime.Resources;
 public class Spawner : Component
 {
     public PrefabAsset Enemy;                // held and loaded with the scene
-    public AssetRef<SceneAsset> NextLevel;   // only a reference, loads when asked
+    public AssetRef<Scene> NextLevel;   // only a reference, loads when asked
     [NotHeld] public Texture2D DebugTex;     // referenced, but allowed to unload
 
     public override void Start()
@@ -78,7 +78,7 @@ Builds only ship the scenes in the build, everything they reference (plain field
 - Spawn a prefab with `GameObject.Instantiate(prefab)`, with overloads for position, rotation, parent and scene.
 - Prefabs do not nest. A prefab instance inside another prefab is flattened into plain objects when the outer prefab is saved.
 - The prefab a model imports as is read only. To change it, instantiate it, edit the instance, and save a new prefab with `prefab create`.
-- `SceneAsset` is the saved data of a scene. `Scene` is the live scene. `Scene.Load(sceneAsset)` blocks while it loads everything the scene uses. `Scene.LoadAsync(sceneAsset)` returns an awaitable `SceneLoad` with `Progress` and swaps the scene in at the end of a frame.
+- `Scene` is the saved scene asset. `SceneInstance` is the live world. `SceneInstance.Load(scene)` blocks while it loads everything the scene uses. `SceneInstance.LoadAsync(scene)` returns an awaitable `SceneLoad` with `Progress` and swaps the scene in at the end of a frame.
 
 ## Creating and saving assets (editor code only)
 

@@ -18,16 +18,16 @@ internal static class BakedLightingBinding
     /// </summary>
     public static GLightmapBinding For(GameObject renderer)
     {
-        Scene? scene = renderer.IsValid() ? renderer.Scene : null;
-        if (!scene.IsValid() || scene.BakedLighting.Placements.Count == 0) return GLightmapBinding.None;
+        SceneInstance? scene = renderer.IsValid() ? renderer.Scene : null;
+        if (!scene.IsValid() || scene.Lighting.Placements.Count == 0) return GLightmapBinding.None;
 
-        Scene.LightmapPlacement? placement = scene.BakedLighting.PlacementFor(renderer.Identifier);
-        if (placement is not { } p || p.Index < 0 || p.Index >= scene.BakedLighting.Lightmaps.Count)
+        LightmapPlacement? placement = scene.Lighting.PlacementFor(renderer.Identifier);
+        if (placement is not { } p || p.Index < 0 || p.Index >= scene.Lighting.Lightmaps.Count)
             return GLightmapBinding.None;
 
-        Texture2D? lightmap = scene.BakedLighting.Lightmaps[p.Index];
+        Texture2D? lightmap = scene.Lighting.Lightmaps[p.Index];
         if (lightmap.IsNotValid()) return GLightmapBinding.None;
         if (lightmap.State == AssetState.Unloaded) _ = lightmap.LoadAsync();
-        return new GLightmapBinding(lightmap.IsLoaded ? lightmap.GpuIfLoaded : null, p.ScaleOffset, scale: scene.BakedLighting.LightmapScale);
+        return new GLightmapBinding(lightmap.IsLoaded ? lightmap.GpuIfLoaded : null, p.ScaleOffset, scale: scene.Lighting.LightmapScale);
     }
 }

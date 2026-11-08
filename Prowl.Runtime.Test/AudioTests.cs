@@ -46,7 +46,7 @@ public class AudioTests : RuntimeTestBase
 
     private AudioSource CreateSource()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Speaker");
         AudioSource source = go.AddComponent<AudioSource>();
         scene.Add(go);
@@ -2063,7 +2063,7 @@ public class AudioTests : RuntimeTestBase
     [Fact]
     public void Effects_SurviveTheirSourceBeingCloned()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Speaker");
         AudioSource source = go.AddComponent<AudioSource>();
         scene.Add(go);
@@ -2309,7 +2309,7 @@ public class AudioTests : RuntimeTestBase
     {
         int before = AudioListener.ActiveCount;
 
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Ears");
         AudioListener listener = go.AddComponent<AudioListener>();
         scene.Add(go);
@@ -2381,7 +2381,7 @@ public class AudioTests : RuntimeTestBase
     {
         Assert.False(AudioContext.IsInitialized);
 
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Speaker");
         AudioSource source = go.AddComponent<AudioSource>();
         AudioListener listener = go.AddComponent<AudioListener>();
@@ -2446,7 +2446,7 @@ public class AudioTests : RuntimeTestBase
     {
         int before = DeviceClosingSubscribers();
 
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Speaker");
         go.AddComponent<AudioSource>();
         go.AddComponent<AudioListener>();

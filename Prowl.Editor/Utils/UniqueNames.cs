@@ -77,7 +77,7 @@ public static class UniqueNames
     /// against <paramref name="scene"/>'s root objects. Uses the <c>" (N)"</c> convention with
     /// strip-and-increment, so duplicating <c>"Cube (3)"</c> yields <c>"Cube (4)"</c>.
     /// </summary>
-    public static string ForGameObjectSibling(string desired, GameObject? parent, Scene scene)
+    public static string ForGameObjectSibling(string desired, GameObject? parent, SceneInstance scene)
     {
         ArgumentNullException.ThrowIfNull(scene);
 

@@ -361,7 +361,7 @@ public enum CliProbeMode { Slow, Fast }
 /// <summary> The built in editor commands, run through the same path the CLI uses, against a live scene. </summary>
 public class CliEditorCommandTests : EditorTestHarness
 {
-    private readonly Scene _scene;
+    private readonly SceneInstance _scene;
 
     public CliEditorCommandTests()
     {
@@ -372,9 +372,9 @@ public class CliEditorCommandTests : EditorTestHarness
                 CliCommands.Scan(method);
 
         Undo.Clear();
-        _scene = new Scene();
-        Scene.Load(_scene);
-        Scene.ProcessPendingLoad();
+        _scene = new SceneInstance();
+        SceneInstance.Load(_scene);
+        SceneInstance.ProcessPendingLoad();
     }
 
     public override void Dispose()
@@ -589,7 +589,7 @@ public class CliEditorCommandTests : EditorTestHarness
         JsonNode created = Ok("scene", "--action", "new")!;
 
         Assert.DoesNotContain(created["roots"]!.AsArray(), r => r!.GetValue<string>() == "OnlyInTheOldScene");
-        Assert.DoesNotContain(Scene.Current.AllObjects, g => g.Name == "OnlyInTheOldScene");
+        Assert.DoesNotContain(SceneInstance.Current.AllObjects, g => g.Name == "OnlyInTheOldScene");
     }
 
     [Fact]
@@ -605,7 +605,7 @@ public class CliEditorCommandTests : EditorTestHarness
         AssertTonemaps(Assert.Single(EditorSceneManager.CreateDefaultScene().FindObjectsOfType<Camera>())!);
 
         typeof(GUI.DefaultGameObjectCreators).GetMethod("CreateCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, null);
-        AssertTonemaps(Scene.Current.AllObjects.Single(g => g.Name == "Camera").GetComponent<Camera>()!);
+        AssertTonemaps(SceneInstance.Current.AllObjects.Single(g => g.Name == "Camera").GetComponent<Camera>()!);
     }
     // Runs a command the way the editor does, with this thread as the main thread pumping frames, while a drag is held
     // for the first frames and released after.
@@ -702,7 +702,7 @@ public class CliEditorCommandTests : EditorTestHarness
 /// <summary> Asset, prefab, script and import settings commands against a throwaway project. </summary>
 public class CliAssetCommandTests : EditorTestHarness
 {
-    private readonly Scene _scene;
+    private readonly SceneInstance _scene;
 
     public CliAssetCommandTests()
     {
@@ -714,9 +714,9 @@ public class CliAssetCommandTests : EditorTestHarness
                 CliCommands.Scan(method);
 
         Undo.Clear();
-        _scene = new Scene();
-        Scene.Load(_scene);
-        Scene.ProcessPendingLoad();
+        _scene = new SceneInstance();
+        SceneInstance.Load(_scene);
+        SceneInstance.ProcessPendingLoad();
     }
 
     public override void Dispose()
@@ -868,9 +868,9 @@ public class CliGraphCommandTests : EditorTestHarness
             foreach (MethodInfo method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
                 CliCommands.Scan(method);
         Undo.Clear();
-        var scene = new Scene();
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
+        var scene = new SceneInstance();
+        SceneInstance.Load(scene);
+        SceneInstance.ProcessPendingLoad();
     }
 
     public override void Dispose()

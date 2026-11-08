@@ -916,7 +916,7 @@ public class TerrainTests
 /// <summary>Terrain behaviour that needs a live scene: vegetation placement and the collider.</summary>
 public class TerrainSceneTests : RuntimeTestBase
 {
-    private TerrainComponent AddTerrain(Scene scene, TerrainData data, Float3 position)
+    private TerrainComponent AddTerrain(SceneInstance scene, TerrainData data, Float3 position)
     {
         GameObject go = CreateGameObject("Terrain");
         scene.Add(go);
@@ -944,7 +944,7 @@ public class TerrainSceneTests : RuntimeTestBase
                 data.SetDetailDensity(0, x, z, density);
     }
 
-    private static List<Float3> CollectMeshDetails(Scene scene, TerrainComponent terrain, Float3 cameraPosition)
+    private static List<Float3> CollectMeshDetails(SceneInstance scene, TerrainComponent terrain, Float3 cameraPosition)
     {
         var positions = new List<Float3>();
         foreach (var build in new TerrainMeshDetailRenderer().Collect(terrain.Data!, terrain, 0, cameraPosition))
@@ -956,7 +956,7 @@ public class TerrainSceneTests : RuntimeTestBase
     [Fact]
     public void MeshDetailsFollowTheTerrainTransform()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         TerrainData data = MeshDetailTerrain();
         PaintDetail(data, 30, 30, 33, 33, 1f);
         var origin = new Float3(1000f, 50f, -300f);
@@ -976,7 +976,7 @@ public class TerrainSceneTests : RuntimeTestBase
     [Fact]
     public void FaintCellsDoNotHideTheRestOfTheirRow()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         TerrainData data = MeshDetailTerrain();
 
         // Too faint for an instance at the first dither slot, followed by solid cells on the same row
@@ -992,7 +992,7 @@ public class TerrainSceneTests : RuntimeTestBase
     [Fact]
     public void MeshDetailsOverTheirBudgetKeepTheNearestToTheCamera()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         TerrainData data = MeshDetailTerrain();
 
         // Solid everywhere is far more instances than one prototype may place
@@ -1013,7 +1013,7 @@ public class TerrainSceneTests : RuntimeTestBase
     [Fact]
     public void MeshDetailsSkipHoles()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         TerrainData data = MeshDetailTerrain();
         PaintDetail(data, 30, 30, 33, 33, 1f);
 
@@ -1029,7 +1029,7 @@ public class TerrainSceneTests : RuntimeTestBase
     [Fact]
     public void OverlapQueries_ReportTerrain()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         var data = new TerrainData { Size = 64f, Height = 10f };
         data.ResizeHeightmap(33);
         TerrainComponent terrain = AddTerrain(scene, data, Float3.Zero);
@@ -1057,7 +1057,7 @@ public class TerrainSceneTests : RuntimeTestBase
     [Fact]
     public void Collision_AgainstTerrain_NamesTheTerrainOnBothSides()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         scene.Physics.UseMultithreading = false;
         var data = new TerrainData { Size = 64f, Height = 10f };
         data.ResizeHeightmap(33);
@@ -1084,7 +1084,7 @@ public class TerrainSceneTests : RuntimeTestBase
     [Fact]
     public void ColliderFollowsTheDataWhenItChanges()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         var data = new TerrainData { Size = 64f, Height = 10f };
         data.ResizeHeightmap(33);
         TerrainComponent terrain = AddTerrain(scene, data, Float3.Zero);

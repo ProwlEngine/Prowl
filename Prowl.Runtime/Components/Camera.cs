@@ -132,10 +132,10 @@ public class Camera : Component
     public int Depth = -1;
 
     /// <summary>
-    /// The main camera of <see cref="Scene.Active"/>, the scene whose code is running: the enabled camera with the
+    /// The main camera of <see cref="SceneInstance.Active"/>, the scene whose code is running: the enabled camera with the
     /// highest <see cref="Depth"/> that draws to the screen. Null when there is none.
     /// </summary>
-    public static Camera? Main => Resources.Scene.Active.MainCamera;
+    public static Camera? Main => Resources.SceneInstance.Active.MainCamera;
 
     /// <summary>
     /// The render texture asset this camera draws into. None means it draws wherever the render it takes part in is
@@ -202,7 +202,7 @@ public class Camera : Component
             disposable.Dispose();
     }
 
-    private Scene? _registeredScene;
+    private SceneInstance? _registeredScene;
 
     public override void OnAddedToScene() => JoinScene(GameObject.Scene);
 
@@ -214,13 +214,13 @@ public class Camera : Component
         if (_registeredScene.IsNotValid()) JoinScene(GameObject.Scene);
     }
 
-    internal override void JoinScene(Scene? scene)
+    internal override void JoinScene(SceneInstance? scene)
     {
         _registeredScene = scene;
         if (scene.IsValid()) scene!.Cameras.Add(this);
     }
 
-    internal override void LeaveScene(Scene? scene)
+    internal override void LeaveScene(SceneInstance? scene)
     {
         if (_registeredScene.IsValid()) _registeredScene!.Cameras.Remove(this);
         _registeredScene = null;
@@ -359,7 +359,7 @@ public class Camera : Component
     internal void RenderForward(in CameraRenderOptions options)
     {
         if (Graphics.Renderer == null || !GameObject.IsValid() || !GameObject.Scene.IsValid()) return;
-        Scene scene = GameObject.Scene;
+        SceneInstance scene = GameObject.Scene;
         scene.Rendering.Sync();
         RenderWorld? world = scene.Rendering.World;
         if (world == null) return;

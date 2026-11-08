@@ -53,7 +53,7 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
     /// has to say so, or its references resolve against whatever scene happens to be open and bind to
     /// the wrong objects or to nothing.
     /// </summary>
-    public Scene? ResolveIn { get; init; }
+    public SceneInstance? ResolveIn { get; init; }
 
     /// <summary>Context for writing a tree out by value, linking everything it references beyond itself.</summary>
     public static SerializationContext ContextForTree(GameObject root)
@@ -77,7 +77,7 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
     /// Context for reading data back, binding every link to the live object it names.
     /// </summary>
     /// <param name="scene">The scene to resolve in, or null for the open one.</param>
-    public static SerializationContext ContextForLinking(Scene? scene = null)
+    public static SerializationContext ContextForLinking(SceneInstance? scene = null)
         => new() { ExternalReferences = new SceneReferenceResolver { ResolveIn = scene } };
 
     /// <summary>
@@ -149,7 +149,7 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
 
     public object? ResolveReference(object key, Type targetType)
     {
-        Scene? target = ResolveIn.IsValid() ? ResolveIn : Scene.Current;
+        SceneInstance? target = ResolveIn.IsValid() ? ResolveIn : SceneInstance.Current;
         if (key is not Guid id || target is not { } scene) return null;
 
         // GameObject and Component share the FindObjectByIdentifier lookup; a Transform key is

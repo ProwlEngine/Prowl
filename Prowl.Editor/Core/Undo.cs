@@ -54,7 +54,7 @@ public readonly struct UndoOwner : IEquatable<UndoOwner>
 
     internal string DisplayName => Kind switch
     {
-        OwnerKind.CurrentScene => Scene.Current.IsValid() ? Scene.Current.Name : "Scene",
+        OwnerKind.CurrentScene => SceneInstance.Current.IsValid() ? SceneInstance.Current.Name : "Scene",
         OwnerKind.Asset or OwnerKind.AssetFile => AssetDatabase.Get(AssetId) is Asset a ? a.Name : AssetId.ToString(),
         OwnerKind.Settings => SettingsType?.Name ?? "Settings",
         _ => "",
@@ -395,9 +395,9 @@ public static class Undo
     }
 
     /// <summary>Records the order of a parent's children, or of the scene's roots when <paramref name="parent"/> is null.</summary>
-    public static void RegisterChildrenOrderUndo(GameObject? parent, string name) => RegisterChildrenOrderUndo(parent, Scene.Current, name);
+    public static void RegisterChildrenOrderUndo(GameObject? parent, string name) => RegisterChildrenOrderUndo(parent, SceneInstance.Current, name);
 
-    private static void RegisterChildrenOrderUndo(GameObject? parent, Scene? scene, string name)
+    private static void RegisterChildrenOrderUndo(GameObject? parent, SceneInstance? scene, string name)
     {
         MainThreadContext.AssertMainThread();
         NoteRecord();
@@ -731,7 +731,7 @@ public static class Undo
         foreach (Record r in records)
         {
             if (r is not ObjectRecord o) continue;
-            object? target = o.Key.Resolve(Scene.Current);
+            object? target = o.Key.Resolve(SceneInstance.Current);
             if (target == null) continue;
             foreach (string key in o.After.Keys)
                 modifications.Add(new UndoPropertyModification { Target = target, PropertyPath = key, PreviousValue = o.Before.GetValueOrDefault(key), CurrentValue = o.After[key] });
@@ -744,7 +744,7 @@ public static class Undo
         var result = new List<Record>(records.Count);
         foreach (Record r in records)
         {
-            if (r is ObjectRecord o && o.Key.Resolve(Scene.Current) is { } target)
+            if (r is ObjectRecord o && o.Key.Resolve(SceneInstance.Current) is { } target)
             {
                 foreach (string key in o.After.Keys.ToList())
                     if (!keep.Contains((target, key))) { o.After.Remove(key); o.Before.Remove(key); }
@@ -1082,7 +1082,7 @@ public static class Undo
 
     private static GameObject? FindGO(Guid identifier)
     {
-        Scene scene = Scene.Current;
+        SceneInstance scene = SceneInstance.Current;
         return scene.IsValid() ? scene.FindObjectByIdentifier<GameObject>(identifier) : null;
     }
 
@@ -1162,7 +1162,7 @@ public static class Undo
 
         public bool IsAsset => _kind == KeyKind.Asset;
 
-        public object? Resolve(Scene? scene)
+        public object? Resolve(SceneInstance? scene)
         {
             switch (_kind)
             {
@@ -1354,7 +1354,7 @@ public static class Undo
         public override bool Touches(Guid id) => Components.Any(c => c.Identifier == id);
     }
 
-    private sealed class PendingChildrenOrder(GameObject? parent, Scene? scene) : Entry
+    private sealed class PendingChildrenOrder(GameObject? parent, SceneInstance? scene) : Entry
     {
         private readonly Guid _parent = parent.IsValid() ? parent.Identifier : Guid.Empty;
         private readonly List<Guid> _before = ChildrenOrderRecord.Order(parent, scene);
@@ -1362,7 +1362,7 @@ public static class Undo
         public override Record? Finish(List<Entry> flushing)
         {
             GameObject? live = _parent == Guid.Empty ? null : FindGO(_parent);
-            List<Guid> after = ChildrenOrderRecord.Order(live, Scene.Current);
+            List<Guid> after = ChildrenOrderRecord.Order(live, SceneInstance.Current);
             return after.SequenceEqual(_before) ? null : new ChildrenOrderRecord(_parent, _before, after);
         }
 
@@ -1781,7 +1781,7 @@ public static class Undo
 
     private sealed class ChildrenOrderRecord(Guid parent, List<Guid> before, List<Guid> after) : Record
     {
-        public static List<Guid> Order(GameObject? parent, Scene? scene)
+        public static List<Guid> Order(GameObject? parent, SceneInstance? scene)
         {
             if (parent.IsValid()) return [.. parent.Children.Select(c => c.Identifier)];
             return scene.IsValid() ? [.. scene.RootObjects.Select(r => r.Identifier)] : [];
@@ -1900,7 +1900,7 @@ public static class Undo
     private sealed class Restore : IExternalReferenceResolver
     {
         public readonly bool IsUndo;
-        public readonly Scene? Scene = Runtime.Resources.Scene.Current;
+        public readonly SceneInstance? Scene = Runtime.Resources.SceneInstance.Current;
         public readonly List<object> Touched = [];
 
         private readonly Dictionary<Guid, EngineObject> _built = [];
@@ -2096,7 +2096,7 @@ public static class Undo
     // destruction gives the same object back to everything that held it.
     internal static class ReferenceRebinder
     {
-        public static void Rebind(Scene scene, HashSet<Guid> recreated)
+        public static void Rebind(SceneInstance scene, HashSet<Guid> recreated)
         {
             var live = new Dictionary<Guid, EngineObject>();
             foreach (GameObject go in scene.AllObjects)

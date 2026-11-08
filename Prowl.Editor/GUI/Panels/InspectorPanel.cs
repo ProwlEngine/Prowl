@@ -47,7 +47,7 @@ public class InspectorPanel : DockPanel
     {
         if (state["selection"] is not System.Text.Json.Nodes.JsonArray arr) return;
 
-        Scene scene = Runtime.Resources.Scene.Current;
+        SceneInstance scene = Runtime.Resources.SceneInstance.Current;
         if (scene.IsNotValid()) return;
 
         bool first = true;

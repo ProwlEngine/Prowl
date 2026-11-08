@@ -396,7 +396,7 @@ public class Selectable : UIBehaviour,
     /// </summary>
     public Selectable? FindSelectable(Float2 dir)
     {
-        Scene? scene = GameObject.Scene;
+        SceneInstance? scene = GameObject.Scene;
         if (scene.IsNotValid()) return null;
         if (!TryWorldCenter(this, out Float3 origin, out Float4x4 model)) return null;
 

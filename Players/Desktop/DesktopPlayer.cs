@@ -46,8 +46,8 @@ public sealed class DesktopPlayer : Game, IDisposable
         PlayerSettingsLoader.Apply(settingsDir);
 
         // Blocks until the scene and everything it uses is loaded, so the first frame shows all of it.
-        if (AssetDatabase.Get<SceneAsset>(_manifest.DefaultSceneGuid) is { IsMissing: false } scene)
-            Scene.Load(scene);
+        if (AssetDatabase.Get<Scene>(_manifest.DefaultSceneGuid) is { IsMissing: false } scene)
+            SceneInstance.Load(scene);
         else
             Debug.LogError($"[Player] Failed to load the default scene {_manifest.DefaultSceneGuid}.");
     }
@@ -62,11 +62,11 @@ public sealed class DesktopPlayer : Game, IDisposable
         }
     }
 
-    public override void OnUpdate(Scene? scene) => scene?.Update();
+    public override void OnUpdate(SceneInstance? scene) => scene?.Update();
 
-    public override void OnRender(Scene? scene) => scene?.Render();
+    public override void OnRender(SceneInstance? scene) => scene?.Render();
 
-    public override void OnGui(Scene? scene, Paper paper) => scene?.OnGui(paper);
+    public override void OnGui(SceneInstance? scene, Paper paper) => scene?.OnGui(paper);
 
     /// <summary>
     /// Closes the pak archives the backend holds open, once the game loop returns. The backend goes with

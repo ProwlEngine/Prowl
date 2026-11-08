@@ -238,7 +238,7 @@ public class PrefabTests : RuntimeTestBase
     public void Instantiate_InstanceCanBeAddedToScene()
     {
         PrefabAsset prefab = MakePrefab(CreateGameObject("Root"), Guid.NewGuid());
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
 
         GameObject instance = GameObject.InstantiateDetached(prefab)!;
         scene.Add(instance);

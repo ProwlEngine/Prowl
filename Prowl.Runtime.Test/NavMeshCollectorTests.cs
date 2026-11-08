@@ -27,7 +27,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void BoxCollider_CollectsAndBakesWalkableFloor()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
         BoxCollider box = floor.AddComponent<BoxCollider>();
@@ -55,7 +55,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Collect_RespectsLayerMask()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
         floor.AddComponent<BoxCollider>().Size = new Float3(10, 1, 10);
@@ -77,7 +77,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Collect_SkipsDisabledObjects()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
         floor.AddComponent<BoxCollider>().Size = new Float3(10, 1, 10);
@@ -92,7 +92,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void MeshRenderer_Collects_WithWorldTransform()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Plane");
         scene.Add(go);
         MeshRenderer renderer = go.AddComponent<MeshRenderer>();
@@ -119,7 +119,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void RotatedBoxCollider_BakesRotated()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject ramp = CreateGameObject("Floor");
         scene.Add(ramp);
         BoxCollider box = ramp.AddComponent<BoxCollider>();
@@ -150,7 +150,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Collect_SkipsAgentsAndTheirChildren()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
         floor.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
@@ -181,7 +181,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Bake_WithAgentStandingOnFloor_LeavesNoHole()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
         floor.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
@@ -219,7 +219,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     /// <summary> A terrain spanning 0..64 on both axes, at whatever the caller's transform says.
     /// <paramref name="normalizedHeight"/> takes world-space X and Z and returns 0..1; flat when
     /// omitted. </summary>
-    private TerrainComponent AddTerrain(Scene scene, Func<float, float, float>? normalizedHeight = null,
+    private TerrainComponent AddTerrain(SceneInstance scene, Func<float, float, float>? normalizedHeight = null,
         float height = TerrainHeight)
     {
         GameObject go = CreateGameObject("Terrain");
@@ -246,7 +246,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     private static float RollingHills(float x, float z)
         => 0.5f + 0.5f * MathF.Sin(x / TerrainSize * MathF.PI * 2f) * MathF.Cos(z / TerrainSize * MathF.PI * 2f);
 
-    private NavMeshWorld BakeTerrain(Scene scene, bool heightDetail = true)
+    private NavMeshWorld BakeTerrain(SceneInstance scene, bool heightDetail = true)
     {
         NavMeshBuildSettings settings = TestSettings();
         settings.Overrides.BuildHeightDetail = heightDetail;
@@ -274,7 +274,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     {
         using (EditMode())
         {
-            Scene scene = CreateScene(enable: true);
+            SceneInstance scene = CreateScene(enable: true);
             AddTerrain(scene);
 
             NavMeshWorld world = BakeTerrain(scene);
@@ -287,7 +287,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_BakesWhereItsTransformPutsIt()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         TerrainComponent terrain = AddTerrain(scene);
         terrain.Transform.Position = new Float3(-32, 25, -32);
         terrain.Transform.LocalScale = new Float3(2, 1, 2);
@@ -310,7 +310,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_NavMeshTracksTheSurfaceItCovers()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, RollingHills);
 
         NavMeshWorld world = BakeTerrain(scene);
@@ -348,7 +348,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_TriangulationTracksTheSurfaceItCovers()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, RollingHills);
 
         NavMeshTriangulation tri = BakeTerrain(scene).CalculateTriangulation();
@@ -382,7 +382,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_SteepBake_SurfaceIsContinuousGroundedAndSliverFree()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, RollingHills, height: 24f);
         AssertBakeIntegrity(BakeTerrain(scene), RollingHills, 24f);
     }
@@ -396,7 +396,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_SculptedPlateauBake_SurfaceIsContinuousGroundedAndSliverFree()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, WigglyPlateau, height: 24f);
         AssertBakeIntegrity(BakeTerrain(scene), WigglyPlateau, 24f);
     }
@@ -413,7 +413,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [InlineData(37f)] // rotated: the region's local box is not the world box with swapped axes
     public void Terrain_BoundedCollect_SamplesTheSameGridAndCoversTheRegion(float yawDegrees)
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         TerrainComponent terrain = AddTerrain(scene, RollingHills);
         terrain.Transform.LocalEulerAngles = new Float3(0, yawDegrees, 0);
 
@@ -460,7 +460,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_OneTileRebuild_DoesNotPayForTheWholeHeightmap()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, RollingHills);
 
         NavMeshBuildSettings settings = TestSettings();
@@ -502,7 +502,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_PartialRebuild_ReproducesTheSameSurface()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, RollingHills);
 
         GameObject surfaceGo = CreateGameObject("NavMeshSurface");
@@ -544,7 +544,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     /// <summary>Navmesh height directly under each probe, NaN where there is none. A generous
     /// radius is needed for hilly ground and lets a hit snap sideways onto a neighbouring polygon,
     /// so a hole would read as a surface at the wrong height — hence the XZ check.</summary>
-    private static List<float> SampleHeights(Scene scene, List<Float3> probes)
+    private static List<float> SampleHeights(SceneInstance scene, List<Float3> probes)
     {
         var heights = new List<float>(probes.Count);
         foreach (Float3 p in probes)
@@ -943,11 +943,11 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_WithoutHeightDetail_KeepsTheCoarsePolygons()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, RollingHills);
         NavMeshTriangulation detailed = BakeTerrain(scene).CalculateTriangulation();
 
-        Scene coarseScene = CreateScene(enable: true);
+        SceneInstance coarseScene = CreateScene(enable: true);
         AddTerrain(coarseScene, RollingHills);
         NavMeshTriangulation coarse = BakeTerrain(coarseScene, heightDetail: false).CalculateTriangulation();
 

@@ -20,7 +20,7 @@ namespace Prowl.Runtime.Test.Controller;
 public abstract class CoreTests(Gravity gravity) : ControllerTestBase(gravity)
 {
     /// <summary>A controller with the component's own defaults, placed without being settled.</summary>
-    private Walker Place(Scene scene, Float3 at)
+    private Walker Place(SceneInstance scene, Float3 at)
     {
         GameObject go = CreateGameObject("Player");
         CharacterController controller = go.AddComponent<CharacterController>();
@@ -38,7 +38,7 @@ public abstract class CoreTests(Gravity gravity) : ControllerTestBase(gravity)
     [Fact]
     public void AControllerStartingInsideGeometry_PushesItselfOutAndCanMove()
     {
-        Scene scene = World();
+        SceneInstance scene = World();
         Box(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
 
         // Sunk a little way into the floor, which is where a slope plus rounding leaves it.
@@ -64,7 +64,7 @@ public abstract class CoreTests(Gravity gravity) : ControllerTestBase(gravity)
     [Fact]
     public void WalkingIntoAWallReportsTheWallItHit()
     {
-        Scene scene = World();
+        SceneInstance scene = World();
         GameObject wall = Box(scene, new Float3(2, 0, 0), new Float3(1, 4, 8));
 
         Walker cc = Place(scene, new Float3(0, 0, 0));
@@ -88,7 +88,7 @@ public abstract class CoreTests(Gravity gravity) : ControllerTestBase(gravity)
     [Fact]
     public void StandingOnTheGroundReportsBelowAndTheSurfaceUnderIt()
     {
-        Scene scene = World();
+        SceneInstance scene = World();
         Box(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
 
         Walker cc = Place(scene, new Float3(0, 0, 0));
@@ -114,7 +114,7 @@ public abstract class CoreTests(Gravity gravity) : ControllerTestBase(gravity)
     [Fact]
     public void TeleportingIntoTheFloorLeavesTheControllerOutsideIt()
     {
-        Scene scene = World();
+        SceneInstance scene = World();
         Box(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
 
         Walker cc = Place(scene, new Float3(0, 10, 0));
@@ -131,7 +131,7 @@ public abstract class CoreTests(Gravity gravity) : ControllerTestBase(gravity)
     [Fact]
     public void BlockedMovementReportsTheDistanceActuallyTravelled()
     {
-        Scene scene = World();
+        SceneInstance scene = World();
         Box(scene, new Float3(2, 0, 0), new Float3(1, 4, 8));
 
         Walker cc = Place(scene, new Float3(0, 0, 0));
@@ -151,7 +151,7 @@ public abstract class CoreTests(Gravity gravity) : ControllerTestBase(gravity)
     [Fact]
     public void AControllerThatHasBeenWalkingCanWalkBack()
     {
-        Scene scene = World();
+        SceneInstance scene = World();
         Box(scene, new Float3(0, -0.5f, 0), new Float3(80, 1, 80));
         Walker cc = Place(scene, new Float3(0, 0.05f, 0));
 
@@ -167,7 +167,7 @@ public abstract class CoreTests(Gravity gravity) : ControllerTestBase(gravity)
     [Fact]
     public void AControllerPlacedExactlyOnTheFloorCanWalk()
     {
-        Scene scene = World();
+        SceneInstance scene = World();
         Box(scene, new Float3(0, -0.5f, 0), new Float3(40, 1, 40));
         Walker cc = Place(scene, Float3.Zero);
 
