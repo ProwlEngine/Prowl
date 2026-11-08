@@ -155,26 +155,9 @@ public static partial class PrefabUtility
         if (instanceRoot.IsNotValid()) return;
         if (!GuardNotPlaying("change prefab overrides")) return;
 
-        List<PropertyOverride> before = [.. instanceRoot.PrefabOverrides];
-        List<PropertyOverride> after = [.. modifications];
-        Guid rootId = instanceRoot.Identifier;
-
-        Apply(after);
-
-        Undo.RegisterAction("Set Prefab Overrides",
-            undo: () => Apply(before),
-            redo: () => Apply(after));
-
-        EditorSceneManager.MarkDirty();
-
-        void Apply(List<PropertyOverride> overrides)
-        {
-            GameObject? live = Undo.FindGO(rootId);
-            if (live.IsNotValid()) return;
-
-            live!.PrefabOverrides = [.. overrides];
-            RefreshOneInstance(live);
-        }
+        Undo.RegisterFullObjectHierarchyUndo(instanceRoot, "Set Prefab Overrides");
+        instanceRoot.PrefabOverrides = [.. modifications];
+        RefreshOneInstance(instanceRoot);
     }
 
     #endregion
@@ -198,7 +181,7 @@ public static partial class PrefabUtility
     // An instance records the values its objects hold, not the shape they are in, so deleting one of its
     // objects, moving one out, or dropping a component the prefab provides is a change with nowhere to be
     // written down. Rather than refuse, these say what will be lost and unlink on a yes. The break and
-    // the edit are two undo steps.
+    // the edit run in one group, so they are one undo step.
 
     /// <summary> Whether any of these objects is structure that its prefab provides. </summary>
     public static bool NeedsBreaking(IEnumerable<GameObject> targets)
@@ -285,7 +268,7 @@ public static partial class PrefabUtility
         GameObject? source = GetCachedPrefabSource(prefabGuid);
         if (source.IsNotValid()) return false;
 
-        List<PrefabState> previous = CapturePrefabState(go, go.PrefabAssetId);
+        Undo.RegisterFullObjectHierarchyUndo(go, "Connect To Prefab");
 
         var unmatched = new List<string>();
         AdoptSourceIdentities(go, source, prefabGuid, unmatched);
@@ -297,23 +280,6 @@ public static partial class PrefabUtility
             Runtime.Debug.LogWarning($"[Prefab] Connected, but {unmatched.Count} part(s) had no counterpart in the prefab " +
                 $"and will not track overrides: {string.Join(", ", unmatched)}");
 
-        // By identifier, and reading the prefab again on the way back: a redo can run long after the
-        // objects captured here were replaced by a refresh, and the cached source tree it matched
-        // against is dropped by every import in between.
-        Guid goId = go.Identifier;
-        Undo.RegisterAction("Connect To Prefab",
-            undo: () => RestorePrefabState(previous),
-            redo: () =>
-            {
-                GameObject? live = Undo.FindGO(goId);
-                GameObject? current = GetCachedPrefabSource(prefabGuid);
-                if (live.IsNotValid() || current.IsNotValid()) return;
-
-                AdoptSourceIdentities(live!, current, prefabGuid, []);
-                ReconcileInstance(live!);
-            });
-
-        EditorSceneManager.MarkDirty();
         return true;
     }
 
@@ -369,15 +335,7 @@ public static partial class PrefabUtility
     /// wrong for a tool generating assets from objects it then discards.
     /// </summary>
     public static bool SaveAsPrefabAsset(GameObject source, string relativeSavePath, bool overwrite = false)
-    {
-        List<PrefabState>? previous = source.IsValid() ? CapturePrefabState(source, source.PrefabAssetId) : null;
-
-        if (!SaveAsPrefabAssetAndConnect(source, relativeSavePath, overwrite)) return false;
-
-        // CreatePrefab links its argument to the asset it wrote; put it back the way it was.
-        if (previous != null) RestorePrefabState(previous);
-        return true;
-    }
+        => WritePrefabAsset(source, relativeSavePath, overwrite, out _, out _);
 
     #endregion
 }

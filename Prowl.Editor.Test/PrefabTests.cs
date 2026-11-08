@@ -1214,14 +1214,16 @@ public partial class PrefabTests : EditorTestHarness
         root.AddComponent<OverrideComp>();
         CreatePrefabAsset(root, "MadeUndo.prefab");
         Guid stampedSource = root.SourceIdentifier;
+        Guid rootId = root.Identifier;
         Assert.NotEqual(Guid.Empty, stampedSource);
 
         Undo.PerformUndo();
-        Assert.False(root.IsPrefabInstance);
+        Assert.False(Scene.Current!.FindObjectByIdentifier<GameObject>(rootId)!.IsPrefabInstance);
 
         Undo.PerformRedo();
-        Assert.True(root.IsPrefabInstance);
-        Assert.Equal(stampedSource, root.SourceIdentifier);
+        GameObject redone = Scene.Current!.FindObjectByIdentifier<GameObject>(rootId)!;
+        Assert.True(redone.IsPrefabInstance);
+        Assert.Equal(stampedSource, redone.SourceIdentifier);
     }
 
     [Fact]
@@ -1232,12 +1234,19 @@ public partial class PrefabTests : EditorTestHarness
         comp.A = 1;
         _ = CreatePrefabAsset(root, "MadeUnpack.prefab");
         Guid stampedSource = root.SourceIdentifier;
-        Undo.IncrementGroup(); // making the prefab and unpacking it are two separate edits
+        Guid rootId = root.Identifier;
+        // Making the prefab and unpacking it are two separate edits.
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
 
         PrefabUtility.UnpackPrefabInstance(root);
         Assert.False(root.IsPrefabInstance);
 
         Undo.PerformUndo();
+
+        // The undo rebuilds the tree with the same identifiers.
+        root = Scene.Current!.FindObjectByIdentifier<GameObject>(rootId)!;
+        comp = root.GetComponent<OverrideComp>()!;
 
         // Restoring the asset id alone would give back something that reads as an instance but can
         // no longer say which prefab object any of it came from.
