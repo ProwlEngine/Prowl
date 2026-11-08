@@ -140,13 +140,19 @@ public class SpriteEditorWindow : DockPanel
         if (!IsSingle || _texture is not Texture2D tex) return;
 
         if (_settings.Slices.Count == 0)
+        {
             _settings.Slices.Add(new SpriteSliceData { Id = Guid.NewGuid(), Name = tex.Name });
+            _target.Dirty = true;
+        }
 
         SpriteSliceData slice = _settings.Slices[0];
         var full = new SpriteRect(0, 0, _sourceW, _sourceH);
         if (slice.Rect.X != full.X || slice.Rect.Y != full.Y ||
             slice.Rect.Width != full.Width || slice.Rect.Height != full.Height)
+        {
             slice.Rect = full;
+            _target.Dirty = true;
+        }
 
         _selected = 0;
     }
@@ -166,6 +172,14 @@ public class SpriteEditorWindow : DockPanel
         public bool GenerateTightMesh;
         public float TightMeshDetail;
         public byte TightMeshAlphaThreshold;
+        public SpriteSlicingTool SlicingTool;
+        public SpriteAlignment GeneratedPivot;
+        public Int2 GridCellSize;
+        public Int2 GridCellCount;
+        public Int2 GridOffset;
+        public Int2 GridPadding;
+        public bool KeepEmptyRects;
+        public bool IsoIsAlternate;
     }
 
     // Id is carried through: an undo/redo that dropped it would re-mint the slice's identity and
@@ -188,6 +202,14 @@ public class SpriteEditorWindow : DockPanel
         GenerateTightMesh = _settings.GenerateTightMesh,
         TightMeshDetail = _settings.TightMeshDetail,
         TightMeshAlphaThreshold = _settings.TightMeshAlphaThreshold,
+        SlicingTool = _settings.SlicingTool,
+        GeneratedPivot = _settings.GeneratedPivot,
+        GridCellSize = _settings.GridCellSize,
+        GridCellCount = _settings.GridCellCount,
+        GridOffset = _settings.GridOffset,
+        GridPadding = _settings.GridPadding,
+        KeepEmptyRects = _settings.KeepEmptyRects,
+        IsoIsAlternate = _settings.IsoIsAlternate,
     };
 
     private static void Restore(Guid textureGuid, EditSnapshot s)
@@ -199,6 +221,14 @@ public class SpriteEditorWindow : DockPanel
         settings.GenerateTightMesh = s.GenerateTightMesh;
         settings.TightMeshDetail = s.TightMeshDetail;
         settings.TightMeshAlphaThreshold = s.TightMeshAlphaThreshold;
+        settings.SlicingTool = s.SlicingTool;
+        settings.GeneratedPivot = s.GeneratedPivot;
+        settings.GridCellSize = s.GridCellSize;
+        settings.GridCellCount = s.GridCellCount;
+        settings.GridOffset = s.GridOffset;
+        settings.GridPadding = s.GridPadding;
+        settings.KeepEmptyRects = s.KeepEmptyRects;
+        settings.IsoIsAlternate = s.IsoIsAlternate;
         target.Dirty = true;
     }
 
@@ -323,11 +353,11 @@ public class SpriteEditorWindow : DockPanel
     {
         EditorGUI.Row(paper, "sp_mode", "Mode", () =>
             Origami.EnumDropdown<SpriteSlicingTool>(paper, "sp_mode_v", _settings.SlicingTool,
-                v => { _settings.SlicingTool = v; _target.Dirty = true; }).Show());
+                v => Mutate("Edit Slicing Mode", () => _settings.SlicingTool = v)).Show());
 
         EditorGUI.Row(paper, "sp_pivot", "Generated Pivot", () =>
             Origami.EnumDropdown<SpriteAlignment>(paper, "sp_pivot_v", _settings.GeneratedPivot,
-                v => { _settings.GeneratedPivot = v; _target.Dirty = true; }).Show());
+                v => Mutate("Edit Generated Pivot", () => _settings.GeneratedPivot = v)).Show());
 
         switch (_settings.SlicingTool)
         {
@@ -357,11 +387,11 @@ public class SpriteEditorWindow : DockPanel
 
     private void Int2Row(Paper paper, string id, string label, Int2 value, Action<Int2> set)
         => EditorGUI.Row(paper, id, label, () =>
-            Origami.Int2Field(paper, $"{id}_v", value, v => { set(v); _target.Dirty = true; }).Show());
+            Origami.Int2Field(paper, $"{id}_v", value, v => Mutate($"Edit {label}", () => set(v))).Show());
 
     private void BoolRow(Paper paper, string id, string label, bool value, Action<bool> set)
         => EditorGUI.Row(paper, id, label, () =>
-            Origami.Checkbox(paper, $"{id}_v", value, v => { set(v); _target.Dirty = true; }).Show());
+            Origami.Checkbox(paper, $"{id}_v", value, v => Mutate($"Edit {label}", () => set(v))).Show());
 
     private void RunSliceCore()
     {
@@ -507,6 +537,7 @@ public class SpriteEditorWindow : DockPanel
                     s.CustomPivot = Sprite.PivotFromAlignment(s.Alignment);
                     s.PivotUnit = PivotUnitMode.Normalized;
                     s.Alignment = SpriteAlignment.Custom;
+                    _dragChanged = true;
                 }
                 _drag = DragMode.MovePivot;
                 return;

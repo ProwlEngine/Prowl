@@ -838,6 +838,22 @@ public class CliAssetCommandTests : EditorTestHarness
         string meta = File.ReadAllText(AssetAbsolutePath("Masks/M.mask") + ".meta");
         Assert.Contains("Fire", meta);
     }
+
+    [Fact]
+    public void ImportSettingsFromTheCliUndoAndRedoOnDisk()
+    {
+        Ok("asset", "create", "--path", "Masks/U", "--type", "AvatarMask");
+        string meta = AssetAbsolutePath("Masks/U.mask") + ".meta";
+        Ok("importer", "Masks/U.mask", "--values", """{"clips.Fire.loop": true}""");
+        Assert.Contains("Fire", File.ReadAllText(meta));
+
+        Ok("undo");
+        Assert.DoesNotContain("Fire", File.ReadAllText(meta));
+        Assert.False(Editor.Inspector.ImportSettingsEditor.Pending(CliRefs.ResolveAssetGuid("Masks/U.mask"))!.TryGet("clips", out _));
+
+        Ok("undo", "--redo");
+        Assert.Contains("Fire", File.ReadAllText(meta));
+    }
 }
 
 /// <summary> The graph command building a small state machine, the way an agent would. </summary>
@@ -943,6 +959,20 @@ public class CliGraphCommandTests : EditorTestHarness
         Ok("undo");
         Assert.DoesNotContain("Jump", File.ReadAllText(AssetAbsolutePath("Anim/U.animgraph")));
         Assert.Empty(Ok("graph", "Anim/U.animgraph")["parameters"]!.AsArray());
+    }
+
+    [Fact]
+    public void AGraphEditWithoutSaveStaysInMemoryDirtyAndUndoable()
+    {
+        Ok("asset", "create", "--path", "Anim/N", "--type", "AnimationGraph");
+        Ok("graph", "Anim/N.animgraph", "--action", "edit", "--save", "false", "--ops", """[{"op": "param", "name": "Jump", "kind": "Flag", "trigger": true}]""");
+
+        Assert.DoesNotContain("Jump", File.ReadAllText(AssetAbsolutePath("Anim/N.animgraph")));
+        Assert.Single(Ok("graph", "Anim/N.animgraph")["parameters"]!.AsArray());
+        Assert.True(EditorUtility.IsDirty((Asset)CliRefs.Resolve("Anim/N.animgraph")!));
+
+        Ok("undo");
+        Assert.Empty(Ok("graph", "Anim/N.animgraph")["parameters"]!.AsArray());
     }
 }
 

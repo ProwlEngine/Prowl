@@ -95,7 +95,7 @@ internal sealed class StateOutputNodeEditor : AnimationNodeEditor
 
     private static Action<NodeBodyContext> Gate(AnimationGraphEditing editing, GraphNodeRecord record, int pin) => ctx =>
     {
-        while (record.Inputs.Count <= pin) record.Inputs.Add(new GraphInputRecord { Flag = pin == 2 });
+        if (pin >= record.Inputs.Count) return;
         GraphInputRecord input = record.Inputs[pin];
         string name = pin == 1 ? "Enter" : "Exit";
 

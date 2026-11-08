@@ -208,7 +208,7 @@ public sealed class LightmapBakeService
 
     /// <summary>
     /// Remove all baked lighting from the scene: delete the SceneName_lightmaps folder,
-    /// clear the scene's baked data + probes, and reset every renderer's lightmap index. Saves the scene.
+    /// clear the scene's baked data + probes, and reset every renderer's lightmap index. Marks the scene dirty.
     /// </summary>
     public void Clear(Scene scene)
     {
@@ -229,7 +229,7 @@ public sealed class LightmapBakeService
         scene.BakedLighting = new Scene.BakedLightingData();
         scene.InvalidateProbeVolume();
 
-        EditorSceneManager.Save();
+        EditorSceneManager.MarkDirty();
         Status = "Cleared";
         Runtime.Debug.Log("[Lightmap] Cleared baked lighting.");
     }
@@ -260,10 +260,12 @@ public sealed class LightmapBakeService
         string sceneName = Path.GetFileNameWithoutExtension(scenePath);
         string lmFolderRel = (string.IsNullOrEmpty(sceneDir) ? "" : sceneDir + "/") + sceneName + "_lightmaps";
         string lmFolderAbs = Path.Combine(assetsRoot, lmFolderRel);
+        string stagingRel = lmFolderRel + "_baking";
+        string stagingAbs = Path.Combine(assetsRoot, stagingRel);
 
-        // Rebake replaces: clear the folder.
-        try { if (Directory.Exists(lmFolderAbs)) Directory.Delete(lmFolderAbs, true); } catch { }
-        Directory.CreateDirectory(lmFolderAbs);
+        // New pages go to a staging folder so the previous bake stays intact until all of them import.
+        if (Directory.Exists(stagingAbs)) db.DeleteAssetFolder(stagingRel);
+        Directory.CreateDirectory(stagingAbs);
 
         // Write + import each atlas page (RGBM PNG).
         (byte[][] pages, float scale) = EncodePages(atlas.Targets);
@@ -271,8 +273,8 @@ public sealed class LightmapBakeService
         for (int i = 0; i < atlas.Targets.Length; i++)
         {
             LightmapTarget t = atlas.Targets[i];
-            string rel = $"{lmFolderRel}/Lightmap-{i}.png";
-            string pageAbs = Path.Combine(lmFolderAbs, $"Lightmap-{i}.png");
+            string rel = $"{stagingRel}/Lightmap-{i}.png";
+            string pageAbs = Path.Combine(stagingAbs, $"Lightmap-{i}.png");
             WritePng(pageAbs, pages[i], t.Width, t.Height);
             WriteLightmapMeta(pageAbs);
             Guid guid = db.ImportFile(rel);
@@ -280,11 +282,16 @@ public sealed class LightmapBakeService
             {
                 // Placements address pages by index, so a missing page cannot be skipped.
                 Runtime.Debug.LogError($"[Lightmap] Could not import '{rel}', so the bake was not applied.");
+                db.DeleteAssetFolder(stagingRel);
                 Cleanup();
                 return;
             }
             lightmaps.Add(lightmap);
         }
+
+        if (Directory.Exists(lmFolderAbs)) db.DeleteAssetFolder(lmFolderRel);
+        if (!db.MoveFolder(stagingRel, lmFolderRel))
+            Runtime.Debug.LogWarning($"[Lightmap] Could not move the new pages to '{lmFolderRel}', they stay in '{stagingRel}'.");
         scene.BakedLighting.Lightmaps = lightmaps;
         scene.BakedLighting.LightmapScale = scale;
 
@@ -330,7 +337,7 @@ public sealed class LightmapBakeService
             scene.InvalidateProbeVolume();
         }
 
-        EditorSceneManager.Save();
+        EditorSceneManager.MarkDirty();
         Runtime.Debug.Log($"[Lightmap] Baked {lightmaps.Count} lightmap page(s), {_renderers.Count} renderer(s), {_probePositions.Count} probe(s).");
         Cleanup();
         Status = "Done";

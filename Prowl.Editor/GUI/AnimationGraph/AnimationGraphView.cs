@@ -38,7 +38,11 @@ public sealed class AnimationGraphDomain : GraphDomain<GraphNodeRecord>
 
     private static readonly Dictionary<NodePinKind, PortKind> s_kinds = [];
 
-    public AnimationGraphDomain(AnimationGraph graph) : base(graph) => Graph = graph;
+    public AnimationGraphDomain(AnimationGraph graph) : base(graph)
+    {
+        Graph = graph;
+        foreach (GraphNodeRecord record in graph.Nodes) Complete(record);
+    }
 
     public AnimationGraph Graph { get; }
 
@@ -58,6 +62,7 @@ public sealed class AnimationGraphDomain : GraphDomain<GraphNodeRecord>
         Graph.RootNode = restored.RootNode;
         Graph.Groups = restored.Groups;
         Graph.Notes = restored.Notes;
+        foreach (GraphNodeRecord record in Graph.Nodes) Complete(record);
         if (compiles) Graph.Invalidate();
         return true;
     }
@@ -264,6 +269,7 @@ public sealed class AnimationGraphDomain : GraphDomain<GraphNodeRecord>
         if (type != null)
         {
             for (int i = 0; i < type.Inputs.Count; i++) record.Inputs.Add(new GraphInputRecord());
+            Complete(record);
             AnimationNodeEditor.For(type).OnCreated(this, record);
         }
 
@@ -343,7 +349,19 @@ public sealed class AnimationGraphDomain : GraphDomain<GraphNodeRecord>
             for (int i = 0; i < described.Inputs.Count; i++) output.Inputs.Add(new GraphInputRecord());
 
         if (type == AnimationNodeIds.StateOutput) output.Inputs[2].Flag = true;
+        Complete(output);
         return output;
+    }
+
+    /// <summary>Stores a default for every setting a node's type has, and the Enter and Exit inputs of a state's output.</summary>
+    public static void Complete(GraphNodeRecord record)
+    {
+        if (AnimationNodeRegistry.Get(record.Type) is not { } type) return;
+        foreach (NodeSetting setting in type.Properties)
+            if (!record.Properties.ContainsKey(setting.Key)) record.Properties[setting.Key] = setting.CreateValue();
+
+        if (record.Type == AnimationNodeIds.StateOutput)
+            while (record.Inputs.Count < 3) record.Inputs.Add(new GraphInputRecord { Flag = record.Inputs.Count == 2 });
     }
 
     /// <summary>The ports a node has by name: exposed settings, and its type's named inputs.</summary>
@@ -365,7 +383,7 @@ public sealed class AnimationGraphDomain : GraphDomain<GraphNodeRecord>
     public static bool LeadsBack(AnimationGraph graph, AnimationGraph played)
         => ReferenceEquals(played, graph) || played.Runs(graph);
 
-    /// <summary>The stored value for a setting, created from its default on first touch.</summary>
+    /// <summary>The stored value for a setting. Nodes are completed when created or loaded, so the fallback only covers a record added some other way.</summary>
     public static NodeValue ValueOf(GraphNodeRecord record, NodeSetting setting)
     {
         if (record.Properties.TryGetValue(setting.Key, out NodeValue? value)) return value;

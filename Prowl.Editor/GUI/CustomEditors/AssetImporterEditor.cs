@@ -54,6 +54,9 @@ public abstract class AssetImporterEditor
     /// </summary>
     private static readonly Dictionary<Guid, EchoObject> s_baselines = [];
 
+    /// <summary>Drops an asset's clean baseline after its state was written elsewhere, so the next draw takes it again.</summary>
+    internal static void ForgetBaseline(Guid guid) => s_baselines.Remove(guid);
+
     /// <summary>
     /// This editor's current authored state as Echo, or null when it has nothing that can be applied.
     /// For an importer this is the <c>.meta</c> settings compound; for a content asset it is the live

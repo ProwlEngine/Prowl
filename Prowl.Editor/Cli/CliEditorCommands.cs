@@ -1248,9 +1248,38 @@ public static class CliEditorCommands
         foreach (JsonNode? op in list) CliGraph.Apply(copy, op as JsonObject ?? throw new CliException("Each op must be a JSON object."), dryIds);
 
         if (!AnimationGraphWindow.TryEditOpen(graph.AssetID, "CLI: Graph", Change, save))
-            CliEdit.EditAsset(graph, "Graph", Change);
+        {
+            if (save) CliEdit.EditAsset(graph, "Graph", Change);
+            else EditLoadedGraph(graph, Change);
+        }
 
         return new { results, graph = CliGraph.Describe(graph) };
+    }
+
+    /// <summary>Edits the loaded graph without saving it, as one undo step that marks the graph dirty.</summary>
+    private static void EditLoadedGraph(AnimationGraph graph, Action change)
+    {
+        var domain = new AnimationGraphDomain(graph);
+        EchoObject before = domain.Snapshot();
+        CliEdit.Run("Graph", () =>
+        {
+            change();
+            Undo.RegisterOperation(new LoadedGraphOperation(graph.AssetID, UndoOwner.Of(graph), before, domain.Snapshot()));
+        });
+    }
+
+    private sealed class LoadedGraphOperation(Guid graph, UndoOwner owner, EchoObject before, EchoObject after) : IUndoOperation
+    {
+        public string Name => "CLI: Graph";
+        public IReadOnlyList<UndoOwner> Owners { get; } = [owner];
+        public void Undo() => Restore(before);
+        public void Redo() => Restore(after);
+
+        private void Restore(EchoObject snapshot)
+        {
+            if (AssetDatabase.TryGetExisting(graph, out Asset asset) && asset is AnimationGraph { IsLoaded: true } loaded)
+                new AnimationGraphDomain(loaded).Restore(snapshot, true);
+        }
     }
 
     // ================================================================
@@ -1281,6 +1310,7 @@ public static class CliEditorCommands
         if (!File.Exists(metaPath)) throw new CliException($"'{entry.Path}' has no .meta file yet. Run 'asset --action import' first.");
 
         MetaFileData meta = MetaFile.Read(metaPath);
+        EchoObject? before = meta.Settings?.Clone();
         EchoObject settings = meta.Settings ?? Echo.EchoObject.NewCompound();
         EchoObject? defaults = EditorRegistries.CreateImporterByName(entry.ImporterType)?.DefaultSettings();
         if (defaults != null)
@@ -1291,10 +1321,12 @@ public static class CliEditorCommands
         if (changes.Count > 0)
         {
             foreach ((string? key, string? json) in changes) CliRefs.SetEchoPath(settings, key, json);
-            meta.Settings = settings;
-            MetaFile.Write(metaPath, meta);
-            ImportSettingsEditor.Forget(guid);
-            CliRefs.Assets.Reimport(guid);
+            EchoObject after = settings.Clone();
+            CliEdit.Run("Import Settings", () =>
+            {
+                WriteImportSettings(guid, after);
+                Undo.RegisterOperation(new ImportSettingsOperation(guid, before, after));
+            });
         }
 
         return new
@@ -1304,6 +1336,30 @@ public static class CliEditorCommands
             settings = CliRefs.EchoToJson(settings),
             subAssets = CliRefs.Assets.GetSubAssets(guid).Select(s => new { name = s.Name, type = s.Type?.Name, @ref = $"{entry.Path}#{s.Name}" }).ToList(),
         };
+    }
+
+    /// <summary>Writes an asset's import settings to its .meta, drops what the inspector cached of them, and reimports.</summary>
+    private static void WriteImportSettings(Guid guid, EchoObject? settings)
+    {
+        if (EditorAssetBackend.Instance is not EditorAssetBackend assets || Project.Current == null) return;
+        if (assets.GetEntry(guid) is not AssetEntry entry) return;
+        string metaPath = MetaFile.GetMetaPath(Path.Combine(Project.Current.AssetsPath, entry.Path));
+        if (!File.Exists(metaPath)) return;
+
+        MetaFileData meta = MetaFile.Read(metaPath);
+        meta.Settings = settings?.Clone();
+        MetaFile.Write(metaPath, meta);
+        ImportSettingsEditor.Forget(guid);
+        AssetImporterEditor.ForgetBaseline(guid);
+        assets.Reimport(guid);
+    }
+
+    private sealed class ImportSettingsOperation(Guid guid, EchoObject? before, EchoObject after) : IUndoOperation
+    {
+        public string Name => "CLI: Import Settings";
+        public IReadOnlyList<UndoOwner> Owners { get; } = [UndoOwner.OfAssetFile(guid)];
+        public void Undo() => WriteImportSettings(guid, before);
+        public void Redo() => WriteImportSettings(guid, after);
     }
 }
 

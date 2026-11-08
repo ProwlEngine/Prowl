@@ -50,8 +50,11 @@ public class AvatarEditorWindow : DockPanel
     private PreviewRenderer? _preview;
     private MotionSkeleton? _skeleton;
 
+    private static readonly List<AvatarEditorWindow> s_open = [];
+
     /// <summary>Humanoid bone to skeleton bone name. This is what gets written back.</summary>
     private readonly Dictionary<HumanBodyBone, string> _map = [];
+    private Dictionary<HumanBodyBone, string> _saved = [];
 
     /// <summary>Which skeleton bones are worth looking at, for a rig with more of them than fit.</summary>
     private enum BoneView { All, Unmapped, Mapped }
@@ -60,7 +63,8 @@ public class AvatarEditorWindow : DockPanel
     private int _hoveredBone = -1;
     private string _boneFilter = "";
     private BoneView _boneView;
-    private bool _dirty;
+
+    private bool Dirty => !SameMap(_map, _saved);
 
     // Where the preview image sits on screen this frame, so a click on a bone can be matched to it.
     private float _viewX, _viewY, _viewW, _viewH;
@@ -68,6 +72,24 @@ public class AvatarEditorWindow : DockPanel
     public override string Title => _modelName.Length > 0 ? $"Avatar: {_modelName}" : "Avatar Editor";
 
     public override string Icon => EditorIcons.Bone;
+
+    static AvatarEditorWindow()
+    {
+        SaveManager.OnSave += () =>
+        {
+            var saved = new List<string>();
+            foreach (AvatarEditorWindow window in s_open.ToArray())
+                if (window.Dirty && window.Save()) saved.Add(window._modelName);
+            return saved.Count == 0 ? null : "Avatar: " + string.Join(", ", saved);
+        };
+        SaveManager.CollectUnsaved += unsaved =>
+        {
+            foreach (AvatarEditorWindow window in s_open)
+                if (window.Dirty) unsaved.Add($"Avatar: {window._modelName}");
+        };
+    }
+
+    public AvatarEditorWindow() => s_open.Add(this);
 
     public static void OpenFor(Guid modelGuid)
     {
@@ -90,6 +112,7 @@ public class AvatarEditorWindow : DockPanel
 
     public override void OnClosed()
     {
+        s_open.Remove(this);
         _preview = null;
         _skeleton = null;
     }
@@ -98,8 +121,8 @@ public class AvatarEditorWindow : DockPanel
     {
         _modelGuid = modelGuid;
         _map.Clear();
+        _saved = [];
         _slot = null;
-        _dirty = false;
 
         AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(modelGuid);
         _modelName = entry != null ? Path.GetFileNameWithoutExtension(entry.Path) : "";
@@ -116,6 +139,7 @@ public class AvatarEditorWindow : DockPanel
         }
 
         ReadMapping(entry);
+        _saved = new Dictionary<HumanBodyBone, string>(_map);
     }
 
     /// <summary>Starts from the rig's current mapping.</summary>
@@ -211,13 +235,19 @@ public class AvatarEditorWindow : DockPanel
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
             EditorGUI.PillButton(paper, "avatar_auto", "Auto Map", false, AutoMap);
-            EditorGUI.PillButton(paper, "avatar_clear", "Clear", false, () => { _map.Clear(); _dirty = true; });
-            EditorGUI.PillButton(paper, "avatar_save", _dirty ? "Save and Reimport" : "Saved", _dirty, Save);
+            EditorGUI.PillButton(paper, "avatar_clear", "Clear", false, () => Edit("Clear Avatar Map", _map.Clear));
+            EditorGUI.PillButton(paper, "avatar_save", Dirty ? "Save and Reimport" : "Saved", Dirty, () => Save());
         }
     }
 
     /// <summary>Throws the hand made map away and takes whatever the auto mapper finds.</summary>
     private void AutoMap()
+    {
+        if (_skeleton == null) return;
+        Edit("Auto Map Avatar", FillAutomatic);
+    }
+
+    private void FillAutomatic()
     {
         if (_skeleton == null) return;
 
@@ -234,15 +264,49 @@ public class AvatarEditorWindow : DockPanel
 
         if (!report.IsHumanoid)
             Debug.LogWarning($"[Avatar] The auto mapper still could not recognise a humanoid. Missing: {string.Join(", ", report.UnmappedBones)}.");
-        _dirty = true;
     }
 
-    private void Save()
+    /// <summary>Changes the map as one undo step, restored in whichever window shows this model.</summary>
+    private void Edit(string name, Action change)
     {
-        if (!_dirty) return;
+        var before = new Dictionary<HumanBodyBone, string>(_map);
+        change();
+        if (SameMap(before, _map)) return;
+        Undo.RegisterOperation(new MapEdit(name, _modelGuid, before, new Dictionary<HumanBodyBone, string>(_map)));
+    }
+
+    private static bool SameMap(Dictionary<HumanBodyBone, string> a, Dictionary<HumanBodyBone, string> b)
+    {
+        if (a.Count != b.Count) return false;
+        foreach (KeyValuePair<HumanBodyBone, string> pair in a)
+            if (!b.TryGetValue(pair.Key, out string? other) || other != pair.Value) return false;
+        return true;
+    }
+
+    private sealed class MapEdit(string name, Guid model, Dictionary<HumanBodyBone, string> before, Dictionary<HumanBodyBone, string> after) : IUndoOperation
+    {
+        public string Name => name;
+        public IReadOnlyList<UndoOwner> Owners { get; } = [UndoOwner.OfAssetFile(model)];
+        public void Undo() => Restore(before);
+        public void Redo() => Restore(after);
+
+        private void Restore(Dictionary<HumanBodyBone, string> map)
+        {
+            foreach (AvatarEditorWindow window in s_open)
+            {
+                if (window._modelGuid != model) continue;
+                window._map.Clear();
+                foreach (KeyValuePair<HumanBodyBone, string> pair in map) window._map[pair.Key] = pair.Value;
+            }
+        }
+    }
+
+    private bool Save()
+    {
+        if (!Dirty) return false;
 
         AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(_modelGuid);
-        if (entry == null) return;
+        if (entry == null) return false;
 
         // Every humanoid bone is written, including the ones left empty: an empty entry is what clears a
         // bone the auto mapper claimed and should not have.
@@ -255,10 +319,12 @@ public class AvatarEditorWindow : DockPanel
 
         EchoObject settings = ReadSettings(entry);
         ModelImportOverrides.WriteHumanoidMap(settings, map);
-        if (!SaveSettings(entry, settings)) return;
+        if (!SaveSettings(entry, settings)) return false;
 
-        _dirty = false;
+        _saved = new Dictionary<HumanBodyBone, string>(_map);
+        ImportSettingsEditor.Forget(_modelGuid);
         EditorAssetBackend.Instance?.Reimport(_modelGuid);
+        return true;
     }
 
     // ---- viewport -----------------------------------------------------------------------------
@@ -369,8 +435,9 @@ public class AvatarEditorWindow : DockPanel
     {
         if (_skeleton == null || !_slot.HasValue) return;
 
-        _map[_slot.Value] = _skeleton.GetBoneID(bone).DebugName ?? "";
-        _dirty = true;
+        HumanBodyBone slot = _slot.Value;
+        string name = _skeleton.GetBoneID(bone).DebugName ?? "";
+        Edit("Map Avatar Bone", () => _map[slot] = name);
         _slot = NextSlotAfter(_slot.Value);
     }
 
@@ -537,7 +604,7 @@ public class AvatarEditorWindow : DockPanel
 
             if (mapped)
                 using (paper.Box($"{id}_clear_w").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(m.SpacingMedium, 0, 0, 0).Enter())
-                    Origami.IconButton(paper, $"{id}_clear", EditorIcons.Xmark_I, () => { _map.Remove(bone); _dirty = true; })
+                    Origami.IconButton(paper, $"{id}_clear", EditorIcons.Xmark_I, () => Edit("Unmap Avatar Bone", () => _map.Remove(bone)))
                         .Small().Width(22).Height(m.RowHeight).Ghost().Show();
         }
     }

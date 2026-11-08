@@ -1555,4 +1555,25 @@ public class UndoTests : EditorTestHarness
         Assert.Equal(ppu * 2, Importers.SpriteEditRegistry.Get(guid).Settings.PixelsPerUnit);
         Assert.Equal(ppu * 2, Importers.TextureSpriteMeta.ReadFrom(Inspector.ImportSettingsEditor.Pending(guid)).PixelsPerUnit);
     }
+
+    [Fact]
+    public void AnimationGraphNodesHoldEverySettingBeforeAnyDraw()
+    {
+        EditorRegistries.Initialize();
+        var graph = new AnimationGraph();
+        GraphNodeRecord loaded = graph.AddNode(AnimationNodeIds.Clip);
+        GraphNodeRecord legacyOutput = graph.AddNode(AnimationNodeIds.StateOutput);
+
+        var domain = new Inspector.AnimationGraphDomain(graph);
+        GraphNodeRecord created = domain.Create(AnimationNodeIds.Clip, Float2.Zero, "")!;
+
+        foreach (NodeSetting setting in AnimationNodeRegistry.Get(AnimationNodeIds.Clip)!.Properties)
+        {
+            Assert.True(loaded.Properties.ContainsKey(setting.Key));
+            Assert.True(created.Properties.ContainsKey(setting.Key));
+        }
+        Assert.Equal(3, legacyOutput.Inputs.Count);
+        Assert.False(legacyOutput.Inputs[1].Flag);
+        Assert.True(legacyOutput.Inputs[2].Flag);
+    }
 }

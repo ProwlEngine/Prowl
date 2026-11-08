@@ -30,6 +30,7 @@ public class TerrainSceneEditor : SceneTool
 
     private TerrainComponent? _terrain;
     private bool _isPainting;
+    private TerrainData? _strokeData;
     private bool _useTransformTool;
 
     // Temporary full snapshot taken at stroke start used to extract the changed region at stroke end
@@ -44,17 +45,29 @@ public class TerrainSceneEditor : SceneTool
     {
         GameObject? target = ctx.ActiveObject;
         if (target.IsNotValid()) return;
+        EndStroke();
         _terrain = target.GetComponent<TerrainComponent>();
         _useTransformTool = false;
-        _isPainting = false;
     }
 
     public override void OnDeactivated()
     {
+        EndStroke();
         if (!ReferenceEquals(_terrain, null))
             _terrain.BrushVisible = false;
         _terrain = null;
+    }
+
+    private void EndStroke()
+    {
+        if (!_isPainting) return;
         _isPainting = false;
+        if (_terrain.IsValid() && _strokeData.IsValid()) RegisterStrokeUndo(_terrain, _strokeData);
+        _strokeData = null;
+        _preStrokeHeights = null;
+        _preStrokeSplats = null;
+        _preStrokeHoles = null;
+        _preStrokeDetails = null;
     }
 
     public override bool OverridesToolStrip => true;
@@ -113,6 +126,9 @@ public class TerrainSceneEditor : SceneTool
     public override void OnSceneInput(SceneToolContext toolCtx)
     {
         HandleContext ctx = toolCtx.Handles;
+        if (_isPainting && (!ctx.PrimaryHeld || _useTransformTool || TerrainEditor.ActiveTab == TerrainTab.Settings))
+            EndStroke();
+
         if (_terrain.IsNotValid() || _useTransformTool)
         {
             if (_terrain.IsValid()) _terrain.BrushVisible = false;
@@ -167,6 +183,9 @@ public class TerrainSceneEditor : SceneTool
         bool shiftHeld = ctx.Shift;
         ctx.TryEndDrag(brush);
 
+        if (_isPainting && (isTreeTab || !ReferenceEquals(_strokeData, terrainData)))
+            EndStroke();
+
         if (isTreeTab)
         {
             // Trees: click to place/erase (not continuous drag)
@@ -203,7 +222,7 @@ public class TerrainSceneEditor : SceneTool
             if (leftPressed && !_isPainting)
             {
                 _isPainting = true;
-                // Snapshot arrays before stroke begins
+                _strokeData = terrainData;
                 SnapshotPreStroke(terrainData);
             }
 
@@ -220,10 +239,7 @@ public class TerrainSceneEditor : SceneTool
             }
 
             if (_isPainting && (leftReleased || !leftDown))
-            {
-                _isPainting = false;
-                RegisterStrokeUndo(_terrain, terrainData);
-            }
+                EndStroke();
         }
     }
 
