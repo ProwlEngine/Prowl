@@ -88,7 +88,7 @@ public sealed class EventSystem : Component
     /// <summary>The nearest world space canvas element under <paramref name="ray"/>, and how far along the ray it is.</summary>
     public static bool RaycastWorld(Ray ray, out GameObject? hit, out float distance)
     {
-        bool found = UIRaycaster.TryPickRay(Scene.Current, ray, out UIRaycaster.Hit result, out distance);
+        bool found = UIRaycaster.TryPickRay(Scene.Active, ray, out UIRaycaster.Hit result, out distance);
         hit = found ? result.GameObject : null;
         return found;
     }
@@ -298,7 +298,7 @@ public sealed class EventSystem : Component
 
     private void Tick(float currentTime)
     {
-        Scene? scene = Scene.Current;
+        Scene? scene = Scene.Active;
 
         // Source the pointer from the active host viewport when present; otherwise the OS window + mouse.
         if (WorldPointer is { } ray)

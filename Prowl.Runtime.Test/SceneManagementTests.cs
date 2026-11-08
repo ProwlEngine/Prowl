@@ -801,4 +801,40 @@ public class SceneManagementTests : RuntimeTestBase
 
         Assert.Same(scene, probe.AtDispose);
     }
+
+    [Fact]
+    public void CameraMain_IsTheActiveScenesCamera_AndANewCameraIsMainAtOnce()
+    {
+        Scene a = CreateScene(enable: true);
+        Scene b = CreateScene(enable: true);
+        GameObject camA = CreateGameObject("CamA");
+        Camera cameraA = camA.AddComponent<Camera>();
+        a.Add(camA);
+
+        using (b.Enter())
+        {
+            Assert.True(ReferenceEquals(Camera.Main, null));
+            GameObject camB = CreateGameObject("CamB");
+            Camera cameraB = camB.AddComponent<Camera>();
+            b.Add(camB);
+            Assert.Same(cameraB, Camera.Main);
+        }
+        using (a.Enter())
+            Assert.Same(cameraA, Camera.Main);
+    }
+
+    [Fact]
+    public void DebugDraws_LandInTheActiveScene()
+    {
+        Scene a = CreateScene(enable: true);
+        Scene b = CreateScene(enable: true);
+
+        using (b.Enter())
+            Debug.DrawLine(Vector.Float3.Zero, Vector.Float3.One, System.Drawing.Color.Red);
+
+        Assert.True(a.Gizmos.IsEmpty);
+        Assert.False(b.Gizmos.IsEmpty);
+        Debug.ClearGizmos();
+        Assert.True(b.Gizmos.IsEmpty);
+    }
 }

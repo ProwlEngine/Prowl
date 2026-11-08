@@ -145,18 +145,7 @@ internal static class UIRaycaster
         }
     }
 
-    /// <summary>The scene's primary rendering camera: the enabled camera with the highest Depth.</summary>
-    private static Camera? ResolveMainCamera(Scene scene)
-    {
-        Camera? best = null;
-        foreach (GameObject go in scene.ActiveObjects)
-        {
-            Camera? c = go.GetComponent<Camera>();
-            if (c.IsNotValid() || !c.EnabledInHierarchy) continue;
-            if (best.IsNotValid() || c.Depth > best.Depth) best = c;
-        }
-        return best;
-    }
+    private static Camera? ResolveMainCamera(Scene scene) => scene.MainCamera;
 
     /// <summary>
     /// Intersects a world-space ray with a world canvas's plane (the design-pixel Z=0 plane mapped

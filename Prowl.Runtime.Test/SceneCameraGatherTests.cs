@@ -343,7 +343,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
         scene.Add(low);
         scene.Add(high);
 
-        Assert.Same(expected, scene.FindMainCamera());
+        Assert.Same(expected, scene.MainCamera);
     }
 
     [Fact]
@@ -366,7 +366,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
         scene.Add(helper);
         off.Enabled = false;
 
-        Assert.Same(expected, scene.FindMainCamera());
+        Assert.Same(expected, scene.MainCamera);
     }
 
     [Fact]

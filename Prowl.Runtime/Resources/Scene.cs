@@ -1165,8 +1165,16 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         return cameras;
     }
 
-    /// <summary>The enabled camera drawing to the screen with the highest depth, or null. Same filter as <see cref="GatherActiveCameras"/>.</summary>
-    internal Camera? FindMainCamera()
+    /// <summary>
+    /// The enabled camera drawing to the screen with the highest depth, or null: no render texture target, a background
+    /// other than None, not an editor helper. Found on every call, so a camera added this frame is main at once.
+    /// </summary>
+    public Camera? MainCamera => FindMainCamera();
+
+    /// <summary>The lines and shapes <see cref="Debug"/> draw calls made in this scene this frame.</summary>
+    internal GizmoBuilder Gizmos { get; } = new();
+
+    private Camera? FindMainCamera()
     {
         Camera? main = null;
         foreach (Camera camera in Cameras)

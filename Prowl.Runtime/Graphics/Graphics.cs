@@ -412,7 +412,7 @@ public static class Graphics
         }
         mesh.Upload();
         if (mesh.GpuIfLoaded is not { } gpuMesh || material.GpuMaterial is not { } gpuMaterial) return;
-        if (scene.IsNotValid()) scene = Scene.Current;
+        if (scene.IsNotValid()) scene = Scene.Active;
         if (scene.Rendering.World is not { } world) return;
 
         var draw = new TransientDraw

@@ -164,12 +164,12 @@ public partial class GameObject
     [ThreadStatic]
     internal static bool PreservingIdentifiers;
 
-    /// <summary>Spawn a prefab into the current scene.</summary>
-    public static GameObject? Instantiate(PrefabAsset prefab) => Instantiate(prefab, Scene.Current);
+    /// <summary>Spawn a prefab into <see cref="Resources.Scene.Active"/>, the scene whose code is running.</summary>
+    public static GameObject? Instantiate(PrefabAsset prefab) => Instantiate(prefab, Resources.Scene.Active);
 
-    /// <summary>Spawn a prefab into the current scene at a world position and rotation.</summary>
+    /// <summary>Spawn a prefab into <see cref="Resources.Scene.Active"/> at a world position and rotation.</summary>
     public static GameObject? Instantiate(PrefabAsset prefab, Float3 position, Quaternion rotation)
-        => Instantiate(prefab, Scene.Current, position, rotation);
+        => Instantiate(prefab, Resources.Scene.Active, position, rotation);
 
     /// <summary>
     /// Spawn a prefab as a child of <paramref name="parent"/>, in that parent's scene.
@@ -180,7 +180,7 @@ public partial class GameObject
     /// than as an offset from the parent. Off by default, so the prefab lands where the parent is.</param>
     public static GameObject? Instantiate(PrefabAsset prefab, GameObject? parent, bool worldPositionStays = false)
     {
-        GameObject? instance = Instantiate(prefab, parent.IsValid() ? parent!.Scene : Scene.Current);
+        GameObject? instance = Instantiate(prefab, parent.IsValid() ? parent!.Scene : Resources.Scene.Active);
         if (instance.IsNotValid()) return null;
 
         if (parent.IsValid())
@@ -230,7 +230,7 @@ public partial class GameObject
         clone.Transform.Rotation = rotation;
 
         Scene? scene = original.Scene;
-        return AddToScene(clone, scene.IsValid() ? scene : Scene.Current);
+        return AddToScene(clone, scene.IsValid() ? scene : Resources.Scene.Active);
     }
 
     /// <inheritdoc cref="Instantiate(PrefabAsset, GameObject?, bool)"/>

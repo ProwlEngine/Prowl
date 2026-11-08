@@ -40,11 +40,11 @@ public sealed class NavMeshWorld
 
     public NavMeshWorld() => ApplySettings(s_defaultSettings);
 
-    /// <summary>Make <paramref name="settings"/> the defaults for new worlds and apply them to the current scene's world.</summary>
+    /// <summary>Make <paramref name="settings"/> the defaults for new worlds and apply them to the active scene's world.</summary>
     public static void ApplyProjectSettings(NavMeshWorldSettings settings)
     {
         DefaultSettings = settings;
-        Resources.Scene? scene = Resources.Scene.Current;
+        Resources.Scene? scene = Resources.Scene.Active;
         if (scene.IsValid())
             scene.Navigation.ApplySettings(settings);
     }
