@@ -28,7 +28,9 @@ public sealed class VolumetricFogFeature : RenderFeature
     internal VolumetricFogFeature(RendererResources resources) : base(RenderSlot.AfterPrepass, 0, FeatureGroup.VolumetricFog, ViewKinds.Cameras)
         => _resources = resources;
 
-    public override bool IsActive(in FeatureView view) => view.World?.Lighting.Environment.VolumetricFog.Enabled == true;
+    // Under the sea the ocean's underwater pass fogs the view instead
+    public override bool IsActive(in FeatureView view)
+        => view.World is { } world && world.Lighting.Environment.VolumetricFog.Enabled && world.Underwater?.Below(view.Position) != true;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
@@ -112,7 +114,9 @@ public sealed class VolumetricFogSkyFeature : RenderFeature
     internal VolumetricFogSkyFeature(RendererResources resources) : base(RenderSlot.Atmosphere, 1000, FeatureGroup.VolumetricFogSky, ViewKinds.Cameras)
         => _resources = resources;
 
-    public override bool IsActive(in FeatureView view) => view.World?.Lighting.Environment.VolumetricFog.Enabled == true;
+    // Under the sea the ocean's underwater pass fogs the view instead
+    public override bool IsActive(in FeatureView view)
+        => view.World is { } world && world.Lighting.Environment.VolumetricFog.Enabled && world.Underwater?.Below(view.Position) != true;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {

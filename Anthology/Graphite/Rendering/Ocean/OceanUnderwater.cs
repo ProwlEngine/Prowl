@@ -114,7 +114,21 @@ public sealed class OceanUnderwater : RenderFeature, IDisposable
     /// <summary>The world whose sun and sky light the water, set when the feature joins a world's features.</summary>
     public RenderWorld? World { get; set; }
 
-    internal override void Attach(object set) => World = ((ExtensionSet<RenderFeature>)set).World ?? World;
+    internal override void Attach(object set)
+    {
+        World = ((ExtensionSet<RenderFeature>)set).World ?? World;
+        if (World != null)
+            World.Underwater = this;
+    }
+
+    internal override void Detach(object set)
+    {
+        if (World?.Underwater == this)
+            World.Underwater = null;
+    }
+
+    /// <summary>Whether a camera is under the sea, where this pass fogs the view and the volumetric fog stands aside.</summary>
+    internal bool Below(Double3 camera) => camera.Y < _seaLevel;
 
     public override void Extract()
     {
@@ -184,4 +198,10 @@ public sealed class OceanUnderwater : RenderFeature, IDisposable
     }
 
     public void Dispose() => _program.Dispose();
+}
+
+public sealed partial class RenderWorld
+{
+    /// <summary>The ocean's view from under the water, which the volumetric fog stands aside for while a camera is under it.</summary>
+    internal OceanUnderwater? Underwater { get; set; }
 }
