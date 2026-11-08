@@ -136,7 +136,7 @@ public abstract class EditorTestHarness : IDisposable
     {
         string abs = AssetAbsolutePath(relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(abs)!);
-        File.WriteAllText(abs, Serializer.Serialize(typeof(object), scene).WriteToString());
+        File.WriteAllText(abs, scene.CaptureTree().WriteToString());
         return Assets.ImportFile(relativePath);
     }
 

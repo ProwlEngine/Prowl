@@ -664,11 +664,14 @@ public class ProjectMigrationTests : IDisposable
         return LegacyScene(scene);
     }
 
-    private static EchoObject LegacyScene(SceneInstance scene)
+    // A scene as engines before SceneContent saved it: the live scene itself, with a flat serializeObj array.
+    internal static EchoObject LegacyScene(SceneInstance scene)
     {
-        EchoObject echo = Serializer.Serialize(typeof(object), scene)!;
+        EchoObject echo = scene.CaptureTree();
         scene.Dispose();
         echo["$type"] = new EchoObject("Prowl.Runtime.Resources.Scene, Prowl.Runtime");
+        echo["serializeObj"] = echo["Objects"].Clone();
+        echo.Remove("Objects");
         echo["BakedLighting"] = echo["Lighting"].Clone();
         echo.Remove("Lighting");
         return echo;
@@ -702,6 +705,42 @@ public class ProjectMigrationTests : IDisposable
 
         Assert.False(Release_1_0.NeedsRebake(BakedScene(3f)));
         Assert.False(Release_1_0.NeedsRebake(LegacyScene(new SceneInstance())));
+    }
+
+    [Fact]
+    public void LegacyScenes_BecomeSceneContent_WithTheSameObjectsAndIdentifiers()
+    {
+        var world = new SceneInstance();
+        var parent = new GameObject("Parent");
+        var child = new GameObject("Child");
+        child.SetParent(parent);
+        world.Add(parent);
+        world.Lighting.LightmapScale = 2f;
+        world.LightmapBake.Bounces = 5;
+        (string, Guid)[] stored = [("Child", child.Identifier), ("Parent", parent.Identifier)];
+        string scene = WriteAsset("Main.scene", LegacyScene(world).WriteToString(), "SceneImporter");
+
+        EchoObject holder = EchoObject.NewCompound();
+        holder["$type"] = new EchoObject("Prowl.Runtime.Resources.SceneAsset, Prowl.Runtime");
+        holder["Placements"] = EchoObject.NewCompound();
+        holder["Placements"]["$type"] = new EchoObject("System.Collections.Generic.Dictionary`2[[System.Guid, System.Private.CoreLib],[Prowl.Runtime.Resources.Scene+LightmapPlacement, Prowl.Runtime]], System.Private.CoreLib");
+        string prefab = WriteAsset("Holder.prefab", holder.WriteToString(), "PrefabImporter");
+        WriteProwlFile("1.0", appliedSteps: ProjectMigration.StepCount(Project.CurrentVersion) - 1);
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject migrated = EchoObject.ReadFromString(File.ReadAllText(scene));
+        Assert.Equal("Prowl.Runtime.Resources.SceneContent, Prowl.Runtime", migrated["$type"].StringValue);
+        Assert.False(migrated.Contains("serializeObj"));
+        Assert.False(migrated.Contains("BakedLighting"));
+        SceneContent content = SceneContent.Read(migrated);
+        Assert.Equal(stored, content.Objects.Select(o => (o.Name, o.Identifier)).OrderBy(o => o.Item1));
+        Assert.Equal(2f, content.Lighting.LightmapScale);
+        Assert.Equal(5, content.LightmapBake.Bounces);
+
+        EchoObject renamed = EchoObject.ReadFromString(File.ReadAllText(prefab));
+        Assert.Equal("Prowl.Runtime.Resources.Scene, Prowl.Runtime", renamed["$type"].StringValue);
+        Assert.Contains("[Prowl.Runtime.Resources.LightmapPlacement, Prowl.Runtime]", renamed["Placements"]["$type"].StringValue);
     }
 
     [Fact]

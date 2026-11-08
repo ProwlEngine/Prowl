@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Prowl.Echo;
@@ -19,7 +20,7 @@ public sealed class Scene : Asset
 {
     [SerializeField] private EchoObject? _data;
 
-    /// <summary>The stored scene, a serialized <see cref="SceneInstance"/>.</summary>
+    /// <summary>The stored scene, a serialized <see cref="SceneContent"/>.</summary>
     public EchoObject? Data
     {
         get { EnsureLoaded(); return _data; }
@@ -32,8 +33,119 @@ public sealed class Scene : Asset
         get { EnsureLoaded(); return StoredTree.ReferencedAssets(_data); }
     }
 
+    /// <summary>
+    /// A detached copy of the stored scene, in no world, with its stored identifiers. Nothing in it gets
+    /// <c>OnAddedToScene</c>, <c>OnEnable</c> or any tick.
+    /// </summary>
+    public SceneContent ReadContent()
+    {
+        EchoObject? data = Data;
+        return data == null ? new SceneContent() : SceneContent.Read(data);
+    }
+
     // A stored scene is an Echo tree, which in memory takes several times what its file does.
     protected internal override long EstimateBytes() => Math.Max(256 * 1024, (AssetDatabase.Backend?.GetEstimatedSize(AssetID) ?? 0) * 4);
+}
+
+/// <summary>The stored payload of a <see cref="Scene"/>: its objects and settings, plain data in no world.</summary>
+public sealed class SceneContent : ISerializationCallbackReceiver
+{
+    /// <summary>
+    /// Every object, children included, so every stored identifier is restored. An array, since Echo reads one element
+    /// at a time and an object that fails to load leaves only its own slot empty.
+    /// </summary>
+    public GameObject[] Objects = [];
+    public SceneEnvironment Environment = new();
+    public SceneLighting Lighting = new();
+    public LightmapBakeSettings LightmapBake = new();
+
+    /// <summary>The objects with no parent, in stored order.</summary>
+    public IEnumerable<GameObject> Roots
+    {
+        get
+        {
+            foreach (GameObject obj in Objects)
+                if (obj.IsValid() && obj.Parent.IsNotValid())
+                    yield return obj;
+        }
+    }
+
+    /// <summary>Every object and component of this content by identifier, for resolving links in it.</summary>
+    public Dictionary<Guid, EngineObject> IdentifierMap()
+    {
+        var map = new Dictionary<Guid, EngineObject>();
+        foreach (GameObject obj in Objects)
+        {
+            if (obj.IsNotValid()) continue;
+            map.TryAdd(obj.Identifier, obj);
+            foreach (Component component in obj.GetComponents<Component>())
+                map.TryAdd(component.Identifier, component);
+        }
+        return map;
+    }
+
+    /// <summary>Reads a stored tree back with its stored identifiers.</summary>
+    public static SceneContent Read(EchoObject data, SerializationContext? context = null)
+        => GameObject.PreservingIdentifiersWhile(() => (context == null ? Serializer.Deserialize<SceneContent>(data) : Serializer.Deserialize<SceneContent>(data, context)) ?? new SceneContent());
+
+    /// <summary>Writes this content as a stored tree, as a .scene file holds it.</summary>
+    public EchoObject Write() => Serializer.Serialize(typeof(object), this);
+
+    /// <summary>Drops the objects destroyed since this content was read and adds the ones parented under it since.</summary>
+    internal void Resync()
+    {
+        var kept = new HashSet<GameObject>(ReferenceEqualityComparer.Instance);
+        var objects = new List<GameObject>(Objects.Length);
+        foreach (GameObject obj in Objects)
+            if (IsKept(obj) && kept.Add(obj))
+                objects.Add(obj);
+
+        foreach (GameObject root in objects.ToArray())
+            if (root.Parent.IsNotValid())
+                AddChildren(root);
+        Objects = [.. objects];
+
+        void AddChildren(GameObject parent)
+        {
+            foreach (GameObject child in parent.Children)
+            {
+                if (child.IsDestroyQueued) continue;
+                if (kept.Add(child)) objects.Add(child);
+                AddChildren(child);
+            }
+        }
+
+        static bool IsKept(GameObject obj)
+        {
+            for (GameObject? go = obj; go.IsValid(); go = go.Parent)
+                if (go.IsDestroyQueued) return false;
+            return obj.IsValid();
+        }
+    }
+
+    /// <summary>Disposes every object in this content.</summary>
+    internal void DisposeObjects()
+    {
+        foreach (GameObject root in Roots.ToArray())
+            root.Dispose();
+        Objects = [];
+    }
+
+    public void OnBeforeSerialize() { }
+
+    public void OnAfterDeserialize()
+    {
+        Objects = [.. Objects.Where(obj => !ReferenceEquals(obj, null))];
+        foreach (GameObject obj in Objects)
+        {
+            if (obj.LoadedIdentifier != Guid.Empty)
+                obj.SetIdentifier(obj.LoadedIdentifier);
+
+            foreach (Component comp in obj.GetComponents<Component>())
+                if (comp._loadedIdentifier != Guid.Empty)
+                    comp.Identifier = comp._loadedIdentifier;
+        }
+    }
 }
 
 /// <summary>Where one renderer's surface sits in the baked atlas.</summary>

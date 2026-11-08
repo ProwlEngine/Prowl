@@ -32,6 +32,7 @@ public static class PrefabEditingMode
     public static string? OriginalSceneName { get; private set; }
 
     private static EchoObject? _savedSceneState;
+    private static Scene? _savedSceneSource;
     private static string? _savedScenePath;
     // The scene's undo history, parked the same way. The session's own steps address objects that
     // stop existing when it ends, so the two histories cannot be one.
@@ -123,7 +124,8 @@ public static class PrefabEditingMode
         {
             PrefabUtility.ReconcileOpenScene();
             OriginalSceneName = currentScene.Name;
-            _savedSceneState = Serializer.Serialize(currentScene);
+            _savedSceneState = currentScene.CaptureTree();
+            _savedSceneSource = currentScene.Source;
             _savedScenePath = EditorSceneManager.CurrentScenePath;
         }
 
@@ -349,15 +351,12 @@ public static class PrefabEditingMode
     {
         if (_savedSceneState != null)
         {
-            SceneInstance? restoredScene = Serializer.Deserialize<SceneInstance>(_savedSceneState);
-            if (restoredScene.IsValid())
-            {
-                SceneInstance.Load(restoredScene);
-                EditorSceneManager.CurrentScenePath = _savedScenePath;
-                return true;
-            }
-
-            Debug.LogWarning("[Prefab] Failed to restore scene. Creating default.");
+            SceneInstance restoredScene = SceneInstance.Instantiate(SceneContent.Read(_savedSceneState));
+            restoredScene.Name = OriginalSceneName ?? "";
+            restoredScene.Source = _savedSceneSource;
+            SceneInstance.Load(restoredScene);
+            EditorSceneManager.CurrentScenePath = _savedScenePath;
+            return true;
         }
 
         EditorSceneManager.CreateAndLoadDefaultScene();
@@ -371,6 +370,7 @@ public static class PrefabEditingMode
         EditingPrefabPath = null;
         OriginalSceneName = null;
         _savedSceneState = null;
+        _savedSceneSource = null;
         _savedScenePath = null;
         _editingRoot = null;
 

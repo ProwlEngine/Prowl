@@ -80,6 +80,9 @@ public abstract class RuntimeTestBase : IDisposable
     /// Creates a tracked scene. Pass <paramref name="enable"/> to immediately enable it (play mode),
     /// otherwise it starts disabled so component OnEnable is deferred until <see cref="SceneInstance.Enable"/>.
     /// </summary>
+    /// <summary>The list of stored objects in a captured scene tree.</summary>
+    protected static Prowl.Echo.EchoObject StoredObjects(Prowl.Echo.EchoObject content) => content["Objects"]["array"];
+
     protected SceneInstance CreateScene(bool enable = false)
     {
         var scene = new SceneInstance();

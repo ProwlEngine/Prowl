@@ -42,12 +42,12 @@ public class TypeCollisionSceneLoadTests : RuntimeTestBase
         GameObject alsoHealthy = CreateGameObject("AlsoHealthy");
         scene.Add(alsoHealthy);
 
-        EchoObject echo = Serializer.Serialize(scene);
+        EchoObject echo = scene.CaptureTree();
 
         // Give one object a component whose $type resolves to a non-Component (Jitter2.World).
         InjectBadComponent(echo, "HasBadComponent", JitterWorldName);
 
-        SceneInstance? clone = Serializer.Deserialize<SceneInstance>(echo);
+        SceneInstance? clone = SceneInstance.Instantiate(SceneContent.Read(echo));
 
         Assert.NotNull(clone);
         var objs = clone.AllObjects.ToList();
@@ -67,7 +67,7 @@ public class TypeCollisionSceneLoadTests : RuntimeTestBase
 
     private static void InjectBadComponent(EchoObject sceneEcho, string goName, string typeName)
     {
-        foreach (EchoObject go in sceneEcho["serializeObj"]["array"].List)
+        foreach (EchoObject go in StoredObjects(sceneEcho).List)
         {
             if (!go.TryGet("Name", out EchoObject? n) || n!.StringValue != goName)
                 continue;

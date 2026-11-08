@@ -1249,14 +1249,14 @@ public static partial class PrefabUtility
     public static void RefreshAllInstances(Guid prefabGuid)
     {
         SceneInstance? scene = SceneInstance.Current;
-        if (scene.IsValid()) RefreshInstancesOf(prefabGuid, scene);
+        if (scene.IsValid()) RefreshInstancesOf(prefabGuid, scene.AllObjects);
     }
 
-    private static void RefreshInstancesOf(Guid prefabGuid, SceneInstance scene)
+    private static void RefreshInstancesOf(Guid prefabGuid, IEnumerable<GameObject> objects)
     {
-        SettleStrayPrefabContent(prefabGuid, scene);
+        SettleStrayPrefabContent(prefabGuid, objects);
 
-        List<GameObject> roots = FindInstancesOf(prefabGuid, scene);
+        List<GameObject> roots = FindInstancesAmong(prefabGuid, objects);
         if (roots.Count == 0) return;
 
         PrefabAsset? prefab = LoadPrefab(prefabGuid);
@@ -1279,18 +1279,41 @@ public static partial class PrefabUtility
     /// </summary>
     public static void RefreshInstancesIn(SceneInstance scene)
     {
-        if (scene.IsNotValid()) return;
+        if (scene.IsValid()) RefreshInstancesAmong(scene.AllObjects);
+    }
 
+    /// <summary>
+    /// Bring every prefab instance in detached content up to date, as <see cref="RefreshInstancesIn(SceneInstance)"/>
+    /// does for a world. Override references resolve against the content itself, and its object list follows what
+    /// the refresh added and removed.
+    /// </summary>
+    public static void RefreshInstancesIn(SceneContent content)
+    {
+        IReadOnlyDictionary<Guid, EngineObject>? previous = s_refreshingContent;
+        s_refreshingContent = content.IdentifierMap();
+        try { RefreshInstancesAmong(content.Objects); }
+        finally
+        {
+            s_refreshingContent = previous;
+            content.Resync();
+        }
+    }
+
+    // Override references in content outside any world resolve against this while it is refreshed.
+    [ThreadStatic] private static IReadOnlyDictionary<Guid, EngineObject>? s_refreshingContent;
+
+    private static void RefreshInstancesAmong(IEnumerable<GameObject> objects)
+    {
         var prefabs = new HashSet<Guid>();
-        foreach (GameObject go in scene.AllObjects)
-            if (go.IsPrefabInstance && IsInstanceRoot(go))
+        foreach (GameObject go in objects)
+            if (go.IsValid() && go.IsPrefabInstance && IsInstanceRoot(go))
                 prefabs.Add(go.PrefabAssetId);
 
         foreach (Guid prefabGuid in prefabs)
         {
             try
             {
-                RefreshInstancesOf(prefabGuid, scene);
+                RefreshInstancesOf(prefabGuid, objects);
             }
             catch (Exception ex)
             {
@@ -1306,9 +1329,9 @@ public static partial class PrefabUtility
     /// still answers to a source identity, so the refresh recreates its counterpart and one override
     /// then lands on both. Its contents and place are kept; only the claim goes.
     /// </summary>
-    private static void SettleStrayPrefabContent(Guid prefabGuid, SceneInstance scene)
+    private static void SettleStrayPrefabContent(Guid prefabGuid, IEnumerable<GameObject> objects)
     {
-        List<GameObject> belonging = [.. scene.AllObjects.Where(go => go.IsValid() && go.PrefabAssetId == prefabGuid)];
+        List<GameObject> belonging = [.. objects.Where(go => go.IsValid() && go.PrefabAssetId == prefabGuid)];
 
         // If nothing here stands for the prefab's root object then the asset was rewritten with fresh
         // identities, and none of these objects can be judged against it.
@@ -1818,7 +1841,7 @@ public static partial class PrefabUtility
         // for objects that can still say which prefab object they are.
         foreach (Guid prefabGuid in scene.AllObjects.Where(go => go.IsPrefabInstance)
                      .Select(go => go.PrefabAssetId).Distinct().ToList())
-            SettleStrayPrefabContent(prefabGuid, scene);
+            SettleStrayPrefabContent(prefabGuid, scene.AllObjects);
 
         foreach (GameObject go in scene.AllObjects.ToList())
             if (IsInstanceRoot(go))

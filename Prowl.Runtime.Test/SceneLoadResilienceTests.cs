@@ -53,9 +53,9 @@ public class SceneLoadResilienceTests : RuntimeTestBase
 {
     private const string Ghost = "Ghost_DoesNotExist";
 
-    private static string Save(SceneInstance scene) => Serializer.Serialize(typeof(object), scene).WriteToString();
+    private static string Save(SceneInstance scene) => scene.CaptureTree().WriteToString();
 
-    private static SceneInstance Load(string text) => Serializer.Deserialize<SceneInstance>(EchoObject.ReadFromString(text), new SerializationContext())!;
+    private static SceneInstance Load(string text) => SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text), new SerializationContext()));
 
     private static GameObject Find(SceneInstance scene, string name) => scene.AllObjects.Single(g => g.Name == name);
 
@@ -214,8 +214,8 @@ public class SceneLoadResilienceTests : RuntimeTestBase
         var objects = Enumerable.Range(0, 3).Select(i => CreateGameObject("GO" + i)).ToList();
         objects.ForEach(scene.Add);
 
-        EchoObject echo = Serializer.Serialize(typeof(object), scene);
-        EchoObject array = echo["serializeObj"]["array"];
+        EchoObject echo = scene.CaptureTree();
+        EchoObject array = StoredObjects(echo);
         array.ListAdd(EchoObject.ReadFromString(array[0].WriteToString()));
         SceneInstance loaded = Load(echo.WriteToString());
 

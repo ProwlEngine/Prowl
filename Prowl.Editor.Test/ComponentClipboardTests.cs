@@ -385,8 +385,8 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         ComponentClipboard.Copy(src);
         Guid originalId = a.Identifier;
 
-        EchoObject echo = Echo.Serializer.Serialize(scene);
-        SceneInstance restored = Echo.Serializer.Deserialize<SceneInstance>(echo)!;
+        EchoObject echo = scene.CaptureTree();
+        SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(echo));
         SceneInstance.Load(restored);
         SceneInstance.ProcessPendingLoad();
 

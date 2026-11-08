@@ -21,7 +21,7 @@ namespace Prowl.Runtime.Resources;
 /// instantiated from one, like the editor's edit copy and play copy.
 /// </summary>
 [CreateAssetMenu("Scene", Extension = ".scene", Order = 0)]
-public class SceneInstance : EngineObject, ISerializationCallbackReceiver
+public class SceneInstance : EngineObject, ISerializable
 {
     #region Scene Manager
 
@@ -192,10 +192,23 @@ public class SceneInstance : EngineObject, ISerializationCallbackReceiver
     public static SceneInstance Instantiate(Scene asset)
     {
         asset.Load();
-        SceneInstance? scene = asset.Data is { } data ? Serializer.Deserialize<SceneInstance>(data) : null;
-        if (scene.IsNotValid()) scene = new SceneInstance();
+        SceneInstance scene = Instantiate(asset.ReadContent());
         scene.Name = asset.Name;
         scene.Source = asset;
+        return scene;
+    }
+
+    /// <summary>Builds a live world holding detached content, without making it current. The content's objects move into it.</summary>
+    public static SceneInstance Instantiate(SceneContent content)
+    {
+        var scene = new SceneInstance
+        {
+            Environment = content.Environment,
+            Lighting = content.Lighting,
+            LightmapBake = content.LightmapBake,
+        };
+        foreach (GameObject obj in content.Objects)
+            if (obj.IsValid()) scene.Add(obj);
         return scene;
     }
 
@@ -378,10 +391,6 @@ public class SceneInstance : EngineObject, ISerializationCallbackReceiver
     }
 
     #endregion
-
-    // Staging for a save or load only. The live objects are in _allObj.
-    [SerializeField, NotHeld]
-    private GameObject[] serializeObj = null;
 
     [SerializeIgnore]
     private List<GameObject> _allObj = [];
@@ -952,38 +961,27 @@ public class SceneInstance : EngineObject, ISerializationCallbackReceiver
         _rendering?.Dispose();
         _rendering = null;
 
-        // Remove all identifiers and reference to any possible gameobject that could hold a
-        // user-defined script as it might leave the ALC alive
-        serializeObj = null;
         _destroyed = true;
     }
 
-    public void OnBeforeSerialize()
+    /// <summary>
+    /// The world's saveable objects and settings as stored content, read back as a detached copy with the same
+    /// identifiers. A reference to an object outside this world saves as null.
+    /// </summary>
+    public SceneContent Capture() => SceneContent.Read(CaptureTree());
+
+    /// <summary>What <see cref="Capture"/> reads back, written as a .scene file holds it.</summary>
+    internal EchoObject CaptureTree()
     {
-        serializeObj = [.. SaveableObjects];
+        var content = new SceneContent { Objects = [.. SaveableObjects], Environment = Environment, Lighting = Lighting, LightmapBake = LightmapBake };
+        return Serializer.Serialize(typeof(object), content, new SerializationContext { ExternalReferences = SceneReferenceResolver.ForCapture(content.Objects) });
     }
 
-    public void OnAfterDeserialize()
-    {
-        if (serializeObj == null) return;
+    void ISerializable.Serialize(ref EchoObject compound, SerializationContext ctx)
+        => throw new NotSupportedException("A live world is never serialized. Capture() gives its content.");
 
-        // GameObjects and components got fresh identifiers while loading, a scene keeps the stored ones.
-        foreach (GameObject obj in serializeObj)
-        {
-            // A GameObject that failed to deserialize leaves a null slot; skip it rather than lose the rest.
-            if (ReferenceEquals(obj, null)) continue;
-            if (obj.LoadedIdentifier != Guid.Empty)
-                obj.SetIdentifier(obj.LoadedIdentifier);
-
-            foreach (Component comp in obj.GetComponents<Component>())
-                if (comp._loadedIdentifier != Guid.Empty)
-                    comp.Identifier = comp._loadedIdentifier;
-        }
-
-        foreach (GameObject obj in serializeObj)
-            if (!ReferenceEquals(obj, null)) Add(obj);
-        serializeObj = null;
-    }
+    void ISerializable.Deserialize(EchoObject value, SerializationContext ctx)
+        => throw new NotSupportedException("A live world is never deserialized. Read a SceneContent and Instantiate it.");
 
     /// <summary>
     /// Runs Start, then Update, then LateUpdate for the scene's registered components (those that

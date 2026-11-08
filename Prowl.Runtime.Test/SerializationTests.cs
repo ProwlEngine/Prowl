@@ -31,6 +31,20 @@ public sealed class CrossRefComponent : Component
     public Component? Other;
 }
 
+public sealed class LinkComponent : Component
+{
+    public GameObject? Target;
+}
+
+public sealed class LifecycleCounter : Component
+{
+    public static int Callbacks;
+    public override void OnAddedToScene() => Callbacks++;
+    public override void OnEnable() => Callbacks++;
+    public override void Start() => Callbacks++;
+    public override void Update() => Callbacks++;
+}
+
 #endregion
 
 /// <summary>
@@ -41,6 +55,8 @@ public sealed class CrossRefComponent : Component
 public class SerializationTests : RuntimeTestBase
 {
     private static T RoundTrip<T>(T value) => Serializer.Deserialize<T>(Serializer.Serialize(value))!;
+
+    private static SceneInstance RoundTrip(SceneInstance scene) => SceneInstance.Instantiate(scene.Capture());
 
     // ---------------------------------------------------------------------
     // GameObject (custom ISerializable: GameObject.Serialize/Deserialize)
@@ -159,7 +175,71 @@ public class SerializationTests : RuntimeTestBase
     }
 
     // ---------------------------------------------------------------------
-    // Scene (ISerializationCallbackReceiver: OnBeforeSerialize/OnAfterDeserialize)
+    // Scene content: Capture, ReadContent and Instantiate
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void Capture_ThenInstantiate_KeepsEveryObjectAndIdentifier()
+    {
+        SceneInstance scene = CreateScene();
+        GameObject parent = CreateGameObject("Parent");
+        GameObject child = CreateGameObject("Child");
+        child.SetParent(parent);
+        LinkComponent link = parent.AddComponent<LinkComponent>();
+        link.Target = child;
+        scene.Add(parent);
+        scene.Lighting.LightmapScale = 3f;
+        scene.LightmapBake.Bounces = 7;
+
+        SceneInstance copy = SceneInstance.Instantiate(scene.Capture());
+
+        Assert.Equal(
+            scene.AllObjects.Select(o => (o.Name, o.Identifier)).OrderBy(o => o.Name),
+            copy.AllObjects.Select(o => (o.Name, o.Identifier)).OrderBy(o => o.Name));
+        LinkComponent copied = copy.FindObjectByIdentifier<LinkComponent>(link.Identifier)!;
+        Assert.Same(copy.FindObjectByIdentifier<GameObject>(child.Identifier), copied.Target);
+        Assert.Equal(3f, copy.Lighting.LightmapScale);
+        Assert.Equal(7, copy.LightmapBake.Bounces);
+    }
+
+    [Fact]
+    public void ReadContent_DeliversNoLifecycleCallback()
+    {
+        SceneInstance scene = CreateScene();
+        GameObject go = CreateGameObject("Counted");
+        go.AddComponent<LifecycleCounter>();
+        scene.Add(go);
+        var stored = new Scene { Data = scene.CaptureTree() };
+        LifecycleCounter.Callbacks = 0;
+
+        SceneContent content = stored.ReadContent();
+
+        Assert.Equal(0, LifecycleCounter.Callbacks);
+        GameObject read = Assert.Single(content.Objects);
+        Assert.Equal(go.Identifier, read.Identifier);
+        Assert.True(read.Scene.IsNotValid());
+    }
+
+    [Fact]
+    public void Capture_SavesAReferenceOutOfTheWorldAsNull_AndNeverCopiesItsTarget()
+    {
+        SceneInstance scene = CreateScene();
+        SceneInstance other = CreateScene();
+        GameObject foreign = CreateGameObject("ForeignObject");
+        other.Add(foreign);
+        GameObject holder = CreateGameObject("Holder");
+        holder.AddComponent<LinkComponent>().Target = foreign;
+        scene.Add(holder);
+
+        EchoObject tree = scene.CaptureTree();
+        SceneInstance copy = SceneInstance.Instantiate(SceneContent.Read(tree));
+
+        Assert.DoesNotContain("ForeignObject", tree.WriteToString());
+        Assert.Null(copy.RootObjects.Single().GetComponent<LinkComponent>()!.Target);
+    }
+
+    // ---------------------------------------------------------------------
+    // Scene round trips
     // ---------------------------------------------------------------------
 
     [Fact]
@@ -227,14 +307,14 @@ public class SerializationTests : RuntimeTestBase
         scene.Add(CreateGameObject("Broken"));
         scene.Add(CreateGameObject("Healthy2"));
 
-        EchoObject echo = Serializer.Serialize(scene);
+        EchoObject echo = scene.CaptureTree();
 
         // Drop the "Broken" object's Transform in the serialized array to simulate the unresolved ref.
-        foreach (EchoObject el in echo["serializeObj"]["array"].List)
+        foreach (EchoObject el in StoredObjects(echo).List)
             if (el.TryGet("Name", out EchoObject? n) && n!.StringValue == "Broken")
                 el.Remove("Transform");
 
-        SceneInstance clone = Serializer.Deserialize<SceneInstance>(echo)!;
+        SceneInstance clone = SceneInstance.Instantiate(SceneContent.Read(echo));
 
         Assert.Equal(3, clone.AllObjects.Count());
         Assert.Contains(clone.AllObjects, g => g.Name == "Healthy1");

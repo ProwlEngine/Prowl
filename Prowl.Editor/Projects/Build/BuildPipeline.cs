@@ -141,8 +141,7 @@ public abstract class BuildPipeline
     /// </summary>
     private static bool TryBringInstancesUpToDate(ref EchoObject echo, string scenePath)
     {
-        // A live scene is walked by the asset database and prefabs are refreshed through shared editor state, both of
-        // which belong to the main thread.
+        // Prefabs are loaded and refreshed through shared editor state, which belongs to the main thread.
         EchoObject original = echo;
         EchoObject? updated = null;
         Core.EditorApplication.RunOnMainThread(() => updated = BringInstancesUpToDate(original, scenePath));
@@ -154,17 +153,16 @@ public abstract class BuildPipeline
 
     private static EchoObject? BringInstancesUpToDate(EchoObject echo, string scenePath)
     {
-        Runtime.Resources.SceneInstance? scene = null;
+        Runtime.Resources.SceneContent? content = null;
         try
         {
-            scene = Serializer.Deserialize<Runtime.Resources.SceneInstance>(echo);
-            if (scene.IsNotValid()) return null;
+            content = Runtime.Resources.SceneContent.Read(echo);
 
-            EchoObject? before = Serializer.Serialize(typeof(object), scene);
-            Prefabs.PrefabUtility.RefreshInstancesIn(scene!);
-            EchoObject? after = Serializer.Serialize(typeof(object), scene);
+            EchoObject before = content.Write();
+            Prefabs.PrefabUtility.RefreshInstancesIn(content);
+            EchoObject after = content.Write();
 
-            return before == null || after == null || before.Equals(after) ? null : after;
+            return before.Equals(after) ? null : after;
         }
         catch (Exception ex)
         {
@@ -174,7 +172,7 @@ public abstract class BuildPipeline
         }
         finally
         {
-            if (scene.IsValid()) scene!.Dispose();
+            content?.DisposeObjects();
         }
     }
 
@@ -193,12 +191,18 @@ public abstract class BuildPipeline
             var echo = EchoObject.ReadFromBinary(new FileInfo(cachePath));
             if (echo == null) return null;
 
-            // A scene's cache is the SceneAsset, which carries the stored scene as its data.
+            // A scene's cache is the Scene asset, which carries the stored scene as its data.
             bool changed = false;
             if (entry.ImporterType == "SceneImporter" && echo.Get("_data") is { TagType: EchoType.Compound } sceneData)
             {
-                changed = TryBringInstancesUpToDate(ref sceneData, entry.Path);
-                if (changed) echo["_data"] = sceneData;
+                if (TryBringInstancesUpToDate(ref sceneData, entry.Path))
+                {
+                    echo["_data"] = sceneData;
+                    changed = true;
+                }
+
+                // Bake settings are editor data, a player never bakes.
+                changed |= sceneData.Remove("LightmapBake");
             }
 
             changed |= StripEditorOnlyPrefabData(echo);

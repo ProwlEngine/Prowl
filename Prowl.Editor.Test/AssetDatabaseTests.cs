@@ -746,6 +746,40 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.DoesNotContain(material.AssetID, entry.SoftDependencies);
     }
 
+    // A .scene copied in from an older project after it migrated is still a live scene on disk.
+    [Fact]
+    public void LegacyScene_ImportsAsContent_WithItsIdentifiers()
+    {
+        var world = new SceneInstance();
+        var parent = new GameObject("Parent");
+        var child = new GameObject("Child");
+        child.SetParent(parent);
+        world.Add(parent);
+        (string, Guid)[] stored = [("Child", child.Identifier), ("Parent", parent.Identifier)];
+        File.WriteAllText(AssetAbsolutePath("Old.scene"), ProjectMigrationTests.LegacyScene(world).WriteToString());
+
+        Guid guid = Assets.ImportFile("Old.scene");
+        SceneContent content = AssetDatabase.Load<Scene>(guid)!.ReadContent();
+
+        Assert.Equal(stored, content.Objects.Select(o => (o.Name, o.Identifier)).OrderBy(o => o.Item1));
+    }
+
+    [Fact]
+    public void SceneFields_StaySoft_InASavedScene()
+    {
+        Guid next = CreateScene("Next.scene");
+        var go = new GameObject("Door");
+        go.AddComponent<AssetRefComponent>().Ref = new AssetRef<Scene>(next);
+        var world = new SceneInstance();
+        world.Add(go);
+
+        Guid level = CreateSceneAsset(world, "Level.scene");
+
+        AssetEntry entry = Assets.GetEntry(level)!;
+        Assert.Contains(next, entry.SoftDependencies);
+        Assert.DoesNotContain(next, entry.Dependencies);
+    }
+
     [Fact]
     public void Prefab_TracksASoftDependency_ThroughAnAssetRef()
     {

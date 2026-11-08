@@ -58,11 +58,11 @@ public class MissingTypeReferenceGraphTests
         var scene = new SceneInstance();
         scene.Add(root);
 
-        string text = Serializer.Serialize(typeof(object), scene).WriteToString()
+        string text = scene.CaptureTree().WriteToString()
             .Replace(nameof(MissRefComp), "GhostComp_DoesNotExist");
 
         // Mimic the editor: a caller-supplied context passed to the 3-arg Deserialize.
-        SceneInstance loaded = Serializer.Deserialize<SceneInstance>(EchoObject.ReadFromString(text), new SerializationContext())!;
+        SceneInstance loaded = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text), new SerializationContext()));
 
         Assert.DoesNotContain(loaded.AllObjects, o => o.Name == "New GameObject"); // no phantom placeholders
         GameObject? loadedRoot = loaded.AllObjects.FirstOrDefault(o => o.Name == "Root");
@@ -126,9 +126,9 @@ public class MissingTypeReferenceGraphTests
         var scene = new SceneInstance();
         scene.Add(root);
 
-        string text = Serializer.Serialize(typeof(object), scene).WriteToString();
+        string text = scene.CaptureTree().WriteToString();
         text = text.Replace(nameof(MissRefComp), "GhostComp_DoesNotExist");
-        SceneInstance loaded = Serializer.Deserialize<SceneInstance>(EchoObject.ReadFromString(text))!;
+        SceneInstance loaded = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text)));
 
         GameObject? loadedRoot = loaded.AllObjects.FirstOrDefault(o => o.Name == "Root");
         string Structure(GameObject g, int d = 0) =>

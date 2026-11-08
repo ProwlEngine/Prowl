@@ -96,6 +96,14 @@ public static class EditorSceneManager
         SaveLastScenePath(null);
     }
 
+    /// <summary>The default scene's content, for writing a new .scene file.</summary>
+    public static SceneContent CreateDefaultContent()
+    {
+        SceneInstance world = CreateDefaultScene();
+        try { return world.Capture(); }
+        finally { world.Dispose(); }
+    }
+
     /// <summary>
     /// Build a new default scene with camera, light, floor, and cubes.
     /// </summary>
@@ -183,16 +191,10 @@ public static class EditorSceneManager
         {
             string text = File.ReadAllText(absolutePath);
             var echo = EchoObject.ReadFromString(text);
+            Migration.Releases.Release_1_0.SceneContentLayout(echo);
 
             SerializationContext ctx = ImportHelper.CreateTrackingContext(out _);
-            SceneInstance? scene = Serializer.Deserialize<SceneInstance>(echo, ctx);
-
-            if (scene.IsNotValid())
-            {
-                Debug.LogError($"Failed to deserialize scene: {relativePath}");
-                return false;
-            }
-
+            SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(echo, ctx));
             scene.Name = Path.GetFileNameWithoutExtension(relativePath);
             scene.Source = SceneAssetAt(relativePath);
             SceneInstance.Load(scene);
@@ -301,13 +303,7 @@ public static class EditorSceneManager
             // those edits the next time they are refreshed.
             PrefabUtility.ReconcileOpenScene();
 
-            EchoObject echo = Serializer.Serialize(typeof(object), SceneInstance.Current);
-            if (echo == null)
-            {
-                Debug.LogError("Failed to serialize scene.");
-                return false;
-            }
-
+            EchoObject echo = SceneInstance.Current.CaptureTree();
             File.WriteAllText(absolutePath, echo.WriteToString());
 
             // The stored scene takes what was written, so a build or a Scene.Load of it sees this save.

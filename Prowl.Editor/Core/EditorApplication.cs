@@ -74,6 +74,16 @@ public class EditorApplication : Game
 
     // Play mode state
     private Echo.EchoObject? _savedEditorScene;
+    private string _savedEditorSceneName = "";
+    private Runtime.Resources.Scene? _savedEditorSceneSource;
+
+    private SceneInstance RestoreSavedScene(SerializationContext context)
+    {
+        SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(_savedEditorScene!, context));
+        scene.Name = _savedEditorSceneName;
+        scene.Source = _savedEditorSceneSource;
+        return scene;
+    }
     private object? _savedEditUndo;
     private List<(Asset Asset, MemoryCopy Copy)> _dirtyAssetCopies = [];
     private int _lastFocusedElement;
@@ -1953,14 +1963,10 @@ public class EditorApplication : Game
         _savedEditUndo = Undo.PushContext();
         _dirtyAssetCopies = EditorUtility.CopyDirtyAssets();
 
-        // Serialize the current editor scene
-        _savedEditorScene = Echo.Serializer.Serialize(scene);
-        if (_savedEditorScene == null)
-        {
-            Runtime.Debug.LogError("Failed to serialize scene for play mode.");
-            Undo.PopContext(_savedEditUndo);
-            return;
-        }
+        // The edit world's content, captured whole: the play copy is built from it and stopping restores it
+        _savedEditorScene = scene.CaptureTree();
+        _savedEditorSceneName = scene.Name;
+        _savedEditorSceneSource = scene.Source;
 
         // Clear selection (references will be invalid)
         Selection.Clear();
@@ -1968,13 +1974,7 @@ public class EditorApplication : Game
         // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
         // the frame, so a failure here leaves the editor scene loaded and the editor usable.
         SerializationContext playCtx = Importers.ImportHelper.CreateTrackingContext(out _);
-        SceneInstance? playScene = Echo.Serializer.Deserialize<Runtime.Resources.SceneInstance>(_savedEditorScene, playCtx);
-        if (playScene.IsNotValid())
-        {
-            Runtime.Debug.LogError("Failed to deserialize play scene.");
-            Undo.PopContext(_savedEditUndo);
-            return;
-        }
+        SceneInstance playScene = RestoreSavedScene(playCtx);
 
         // Set play mode flags BEFORE loading so OnEnable/Start gates pass
         Application.IsPlaying = true;
@@ -2052,15 +2052,14 @@ public class EditorApplication : Game
             _dirtyAssetCopies = [];
 
             SerializationContext ctx = Importers.ImportHelper.CreateTrackingContext(out _);
-            SceneInstance? restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.SceneInstance>(_savedEditorScene, ctx);
-            if (restoredScene.IsValid())
-            {
-                // Ends the play session at the swap, once the play scene's teardown has run, so nothing still
-                // awaiting can resume against the edit scene.
-                Runtime.Resources.SceneInstance.EndSessionOnSwap = true;
-                Runtime.Resources.SceneInstance.Load(restoredScene);
-            }
+            SceneInstance restoredScene = RestoreSavedScene(ctx);
+
+            // Ends the play session at the swap, once the play scene's teardown has run, so nothing still
+            // awaiting can resume against the edit scene.
+            Runtime.Resources.SceneInstance.EndSessionOnSwap = true;
+            Runtime.Resources.SceneInstance.Load(restoredScene);
             _savedEditorScene = null;
+            _savedEditorSceneSource = null;
         }
 
         // Without a restore to swap to, the session still ends at a swap user code queued this frame, and

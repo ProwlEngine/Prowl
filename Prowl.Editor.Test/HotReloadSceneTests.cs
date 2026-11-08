@@ -114,8 +114,8 @@ public class HotReloadSceneTests : EditorTestHarness
         lootType.GetField("Gold")!.SetValue(loot, 777);
         scene.Add(go);
 
-        string text = Serializer.Serialize(scene).WriteToString();
-        SceneInstance restored = Serializer.Deserialize<SceneInstance>(EchoObject.ReadFromString(text))!;
+        string text = scene.CaptureTree().WriteToString();
+        SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text)));
 
         Component restoredLoot = restored.AllObjects
             .First(g => g.Name == "Chest")

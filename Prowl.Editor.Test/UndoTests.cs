@@ -259,9 +259,9 @@ public class UndoTests : EditorTestHarness
         link.Value = 5;
         source.Add(target);
         source.Add(holder);
-        string whileMissing = Echo.Serializer.Serialize(typeof(object), source).WriteToString().Replace(nameof(UndoLinkComp), "Ghost_DoesNotExist");
+        string whileMissing = source.CaptureTree().WriteToString().Replace(nameof(UndoLinkComp), "Ghost_DoesNotExist");
 
-        SceneInstance scene = Echo.Serializer.Deserialize<SceneInstance>(Echo.EchoObject.ReadFromString(whileMissing))!;
+        SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(whileMissing)));
         SceneInstance.Load(scene);
         SceneInstance.ProcessPendingLoad();
         GameObject loadedHolder = scene.AllObjects.Single(g => g.Name == "Holder");
@@ -270,8 +270,8 @@ public class UndoTests : EditorTestHarness
         Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Undo.PerformUndo();
 
-        string saved = Echo.Serializer.Serialize(typeof(object), SceneInstance.Current).WriteToString().Replace("Ghost_DoesNotExist", nameof(UndoLinkComp));
-        SceneInstance restored = Echo.Serializer.Deserialize<SceneInstance>(Echo.EchoObject.ReadFromString(saved))!;
+        string saved = SceneInstance.Current.CaptureTree().WriteToString().Replace("Ghost_DoesNotExist", nameof(UndoLinkComp));
+        SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(saved)));
         UndoLinkComp restoredLink = restored.AllObjects.Single(g => g.Name == "Holder").GetComponent<UndoLinkComp>()!;
 
         Assert.Equal(5, restoredLink.Value);

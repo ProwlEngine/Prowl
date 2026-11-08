@@ -33,7 +33,7 @@ public struct AssetMenuEntry
     public string Extension;
     public string Icon;
     public int Order;
-    public Func<EngineObject>? Factory;
+    public Func<object>? Factory;
 }
 
 /// <summary> Central registry that discovers and provides access to all editor extensions: custom editors, importers, property editors, scene tools, drop handlers, project settings, file icons, script templates, and asset menu entries. Scans loaded assemblies on initialization. </summary>
@@ -394,9 +394,9 @@ public static class EditorRegistries
     public static IReadOnlyList<AssetMenuEntry> AssetMenuEntries => _assetMenuEntries;
 
     /// <summary>Types whose "Create" menu entry needs more than a blank instance.</summary>
-    private static readonly Dictionary<Type, Func<EngineObject>> _assetFactories = new()
+    private static readonly Dictionary<Type, Func<object>> _assetFactories = new()
     {
-        [typeof(Runtime.Resources.SceneInstance)] = GUI.SceneView.EditorSceneManager.CreateDefaultScene,
+        [typeof(Runtime.Resources.SceneInstance)] = GUI.SceneView.EditorSceneManager.CreateDefaultContent,
     };
 
     private static void ScanAssetMenuEntry(Type type)

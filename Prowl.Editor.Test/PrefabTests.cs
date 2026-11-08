@@ -638,7 +638,7 @@ public partial class PrefabTests : EditorTestHarness
     /// What a build does with a scene it is shipping: read what was saved, without that scene ever
     /// being the open one.
     /// </summary>
-    private static SceneInstance ReadSavedScene(EchoObject saved) => Serializer.Deserialize<SceneInstance>(saved)!;
+    private static SceneInstance ReadSavedScene(EchoObject saved) => SceneInstance.Instantiate(SceneContent.Read(saved));
 
     [Fact]
     public void RefreshInstancesIn_BringsASceneThatWasNotOpenUpToDate()
@@ -647,7 +647,7 @@ public partial class PrefabTests : EditorTestHarness
         root.AddComponent<OverrideComp>().A = 1;
         Guid g = CreatePrefabAsset(root, "Shelved.prefab");
 
-        EchoObject saved = Serializer.Serialize(typeof(object), LoadSceneWith(Inst(g)));
+        EchoObject saved = LoadSceneWith(Inst(g)).CaptureTree();
 
         // The prefab changes while that scene is not the one open, so what was saved is behind.
         LoadSceneWith(new GameObject("Elsewhere"));
@@ -673,7 +673,7 @@ public partial class PrefabTests : EditorTestHarness
         SceneInstance open = LoadSceneWith(instance);
         instance.GetComponent<OverrideComp>()!.B = 99;
         PrefabUtility.ReconcileInstance(instance);
-        EchoObject saved = Serializer.Serialize(typeof(object), open);
+        EchoObject saved = open.CaptureTree();
 
         LoadSceneWith(new GameObject("Elsewhere"));
         EditPrefabSource(g, "ShelvedOv.prefab", s => s.GetComponent<OverrideComp>()!.A = 77);
@@ -700,7 +700,7 @@ public partial class PrefabTests : EditorTestHarness
 
         var scene = new SceneInstance();
         scene.Add(instance);
-        EchoObject echo = Serializer.Serialize(typeof(object), scene);
+        EchoObject echo = scene.CaptureTree();
 
         Assert.True(Build.BuildPipeline.StripEditorOnlyPrefabData(echo));
 
@@ -726,7 +726,7 @@ public partial class PrefabTests : EditorTestHarness
         var scene = new SceneInstance();
         scene.Add(new GameObject("Plain"));
 
-        Assert.False(Build.BuildPipeline.StripEditorOnlyPrefabData(Serializer.Serialize(typeof(object), scene)));
+        Assert.False(Build.BuildPipeline.StripEditorOnlyPrefabData(scene.CaptureTree()));
     }
 
     // ---------------------------------------------------------------------
@@ -3523,8 +3523,8 @@ public partial class PrefabTests : EditorTestHarness
 
     private static SceneInstance SaveAndReload(SceneInstance scene)
     {
-        EchoObject echo = Serializer.Serialize(typeof(object), scene);
-        SceneInstance reloaded = Serializer.Deserialize<SceneInstance>(echo)!;
+        EchoObject echo = scene.CaptureTree();
+        SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(echo));
         SceneInstance.Load(reloaded);
         SceneInstance.ProcessPendingLoad();
         return SceneInstance.Current!;
@@ -4069,8 +4069,8 @@ public partial class PrefabTests : EditorTestHarness
         GameObject instance = Inst(outer);
         SceneInstance scene = LoadSceneWith(instance);
 
-        EchoObject echo = Serializer.Serialize(typeof(object), scene);
-        SceneInstance reloaded = Serializer.Deserialize<SceneInstance>(echo)!;
+        EchoObject echo = scene.CaptureTree();
+        SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(echo));
         SceneInstance.Load(reloaded);
         SceneInstance.ProcessPendingLoad();
 
@@ -4954,7 +4954,7 @@ public partial class PrefabTests : EditorTestHarness
             ScaleOffset = new Float4(0.5f, 0.5f, 0.25f, 0.75f)
         };
 
-        SceneInstance reloaded = Serializer.Deserialize<SceneInstance>(Serializer.Serialize(typeof(object), scene)!)!;
+        SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(scene.CaptureTree()));
         try
         {
             GameObject restored = reloaded.RootObjects.First(o => o.Name == "Baked");
@@ -5027,8 +5027,8 @@ public partial class PrefabTests : EditorTestHarness
         Guid childSource = instance.Children[0].GetComponent<OverrideComp>()!.SourceIdentifier;
         Assert.NotEqual(Guid.Empty, rootSource);
 
-        EchoObject saved = Serializer.Serialize(typeof(object), SceneInstance.Current!)!;
-        SceneInstance reloaded = Serializer.Deserialize<SceneInstance>(saved)!;
+        EchoObject saved = SceneInstance.Current.CaptureTree();
+        SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(saved));
         try
         {
             GameObject restored = reloaded.RootObjects.First(go => go.PrefabAssetId == guid);
@@ -5288,11 +5288,11 @@ public partial class PrefabTests : EditorTestHarness
         PrefabUtility.ReconcileInstance(instance);
         Assert.Single(instance.PrefabOverrides);
 
-        EchoObject saved = Serializer.Serialize(typeof(object), SceneInstance.Current!)!;
+        EchoObject saved = SceneInstance.Current.CaptureTree();
 
         // A build reads a scene off disk while some other scene is open.
         LoadSceneWith(new GameObject("Elsewhere"));
-        SceneInstance copy = Serializer.Deserialize<SceneInstance>(saved)!;
+        SceneInstance copy = SceneInstance.Instantiate(SceneContent.Read(saved));
         try
         {
             PrefabUtility.RefreshInstancesIn(copy);
@@ -5319,12 +5319,12 @@ public partial class PrefabTests : EditorTestHarness
         SceneInstance.Current!.Add(nested);
         nested.SetParent(outerInstance);
 
-        EchoObject echo = Serializer.Serialize(typeof(object), SceneInstance.Current!)!;
+        EchoObject echo = SceneInstance.Current.CaptureTree();
         Build.BuildPipeline.StripEditorOnlyPrefabData(echo);
 
         // Both links survive: what an object is an instance of is observable at runtime, so a player
         // must not disagree with play mode about it.
-        SceneInstance reloaded = Serializer.Deserialize<SceneInstance>(echo)!;
+        SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(echo));
         try
         {
             Assert.Contains(reloaded.AllObjects, o => o.PrefabAssetId == outer);

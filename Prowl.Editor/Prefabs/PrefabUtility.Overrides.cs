@@ -148,7 +148,9 @@ public static partial class PrefabUtility
         // to another scene object from content to copy. Keyed by identifier, it re-links to the live
         // object, in the scene the instance belongs to rather than whichever happens to be open.
         object? deserialized = Serializer.Deserialize(value, member.MemberType,
-            SceneReferenceResolver.ContextForLinking(resolveIn));
+            resolveIn.IsNotValid() && s_refreshingContent != null
+                ? SceneReferenceResolver.ContextForLinking(s_refreshingContent)
+                : SceneReferenceResolver.ContextForLinking(resolveIn));
 
         // Null is a valid override for a reference field. Only skip it where the member cannot hold
         // null, which means deserialization failed rather than the value being null.
