@@ -776,7 +776,7 @@ public sealed class RenderingShowcaseGame : StationGame
 
     private void BuildOcean(Float3 c)
     {
-        AddStation("Ocean", "FFT waves in four cascades on repeating tiles, drawn as rings of tiles that grow with the camera's height and curve down with the planet. The water absorbs what is behind it with depth and foams where the crests fold.", c + new Float3(0f, 0f, -40f), new Float3(0f, 4f, 12f), 0f);
+        AddStation("Ocean", "FFT waves in four cascades on repeating tiles, drawn as rings of tiles that grow with the camera's height and curve down with the planet. The water absorbs what is behind it with depth and foams where the crests fold. The boat's wake ripples out behind it and foams where it runs steep, and the current carries the crates along with the waves.", c + new Float3(0f, 0f, -40f), new Float3(0f, 4f, 12f), 0f);
 
         var ocean = new GameObject("Ocean");
         ocean.Transform.Position = new Float3(StationSpacing * (StationCount - 1) * 0.5f, -3f, 0f);
@@ -824,6 +824,23 @@ public sealed class RenderingShowcaseGame : StationGame
             OceanWake wake = crate.AddComponent<OceanWake>();
             wake.Radius = 1.2f;
             wake.Weight = 4f;
+        }
+
+        // A boat circling through the current, pushing a wake from spheres along its hull
+        GameObject boat = Add(Model("Boat", Mesh.CreateCube(new Float3(2.5f, 1.6f, 7f)), Lit(new Color(0.85f, 0.85f, 0.8f, 1f), 0f, 0.5f), c + new Float3(45f, -3.2f, -85f)));
+        boat.LayerIndex = FloatingLayer;
+        Cruise cruise = boat.AddComponent<Cruise>();
+        cruise.Center = c + new Float3(25f, -3.2f, -85f);
+        cruise.Radius = 20f;
+        cruise.Speed = 7f;
+        for (int i = -1; i <= 1; i++)
+        {
+            var hull = new GameObject("Boat Wake");
+            hull.SetParent(boat, false);
+            hull.Transform.LocalPosition = new Float3(0f, 0f, i * 2.8f);
+            OceanWake hullWake = hull.AddComponent<OceanWake>();
+            hullWake.Radius = 1.3f;
+            hullWake.Weight = 3f;
         }
 
         // An open concrete box standing in the sea, kept dry inside by a clip box
@@ -958,6 +975,24 @@ public sealed class Pan : Component
 
     public override void Update()
         => Transform.LocalEulerAngles = new Float3(Pitch, Center + MathF.Sin(Time.TimeSinceStartup * 0.4f) * Range, 0f);
+}
+
+/// <summary>Drives around a horizontal circle at a speed in m/s, facing the way it goes.</summary>
+public sealed class Cruise : Component
+{
+    public Float3 Center;
+    public float Radius = 20f;
+    public float Speed = 7f;
+
+    private float _angle;
+
+    public override void Update()
+    {
+        _angle += Speed / MathF.Max(Radius, 0.1f) * Time.DeltaTime;
+        Float3 position = Center + new Float3(MathF.Cos(_angle), 0f, MathF.Sin(_angle)) * Radius;
+        Transform.Position = position;
+        Transform.LookAt(position + new Float3(-MathF.Sin(_angle), 0f, MathF.Cos(_angle)));
+    }
 }
 
 /// <summary>Slides back and forth between its origin and the origin plus an offset.</summary>
