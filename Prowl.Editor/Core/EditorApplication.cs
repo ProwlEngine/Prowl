@@ -75,6 +75,7 @@ public class EditorApplication : Game
     // Play mode state
     private Echo.EchoObject? _savedEditorScene;
     private object? _savedEditUndo;
+    private List<(Asset Asset, MemoryCopy Copy)> _dirtyAssetCopies = [];
     private int _lastFocusedElement;
     private int _savedActiveTabIndex = -1;
     private DockNode? _savedActiveTabNode;
@@ -1949,6 +1950,7 @@ public class EditorApplication : Game
 
         // An edit made this frame, typed or flushed, belongs to the edit history set aside here.
         _savedEditUndo = Undo.PushContext();
+        _dirtyAssetCopies = EditorUtility.CopyDirtyAssets();
 
         // Serialize the current editor scene
         _savedEditorScene = Echo.Serializer.Serialize(scene);
@@ -2047,6 +2049,8 @@ public class EditorApplication : Game
         if (_savedEditorScene != null)
         {
             RevertAssetsAfterPlay();
+            EditorUtility.RestoreDirtyAssets(_dirtyAssetCopies);
+            _dirtyAssetCopies = [];
 
             SerializationContext ctx = Importers.ImportHelper.CreateTrackingContext(out _);
             Scene? restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, ctx);

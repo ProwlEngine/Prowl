@@ -123,6 +123,29 @@ public static class EditorUtility
     internal static void MarkAssetDirty(Guid asset) => _dirtyAssets.Add(asset);
 
     internal static void ClearAssetDirty(Guid asset) => _dirtyAssets.Remove(asset);
+
+    /// <summary>In memory copies of every dirty asset, taken before play so the reload after play can put the edits back.</summary>
+    internal static List<(Asset Asset, MemoryCopy Copy)> CopyDirtyAssets()
+    {
+        var copies = new List<(Asset, MemoryCopy)>();
+        foreach (Guid id in _dirtyAssets)
+            if (AssetDatabase.TryGetExisting(id, out Asset asset) && asset.IsLoaded)
+            {
+                var ctx = new DependencySerializationContext { LinkRuntimeAssets = true, ExternalReferences = new SceneReferenceResolver(asset) };
+                copies.Add((asset, new MemoryCopy(Serializer.Serialize(typeof(object), asset, ctx), ctx.LinkedAssets)));
+            }
+        return copies;
+    }
+
+    /// <summary>Refills each asset from its copy, after play reloaded every asset from disk.</summary>
+    internal static void RestoreDirtyAssets(List<(Asset Asset, MemoryCopy Copy)> copies)
+    {
+        foreach ((Asset asset, MemoryCopy copy) in copies)
+        {
+            try { AssetDatabase.Refill(asset, copy.Data, ReloadReason.Undo); }
+            catch (Exception ex) { Runtime.Debug.LogException($"'{asset.Name}' lost its unsaved edits when play stopped", ex); }
+        }
+    }
 }
 
 /// <summary>
@@ -875,6 +898,21 @@ public static class Undo
         _pending.RemoveAll(e => e.Touches(id));
         if (dropsOpen) _currentGroup = ++_lastGroup;
         historyChanged?.Invoke();
+    }
+
+    /// <summary>Drops every step with a record owned by the asset, and its dirty mark. For an asset changed outside the editor.</summary>
+    internal static void DropAsset(Guid asset)
+    {
+        EditorUtility.ClearAssetDirty(asset);
+        bool Owned(Record r) => r.Owners.Any(o => o.AssetId == asset && o.Kind is UndoOwner.OwnerKind.Asset or UndoOwner.OwnerKind.AssetFile)
+                                || r is ObjectRecord { AssetId: { } id } && id == asset;
+        bool dropsOpen = OpenGroupHasStep && _undo[^1].Records.Any(Owned);
+        int removed = _undo.RemoveAll(s => s.Records.Any(Owned)) + _redo.RemoveAll(s => s.Records.Any(Owned));
+        foreach (UndoContext context in _contexts)
+            removed += context.Undo.RemoveAll(s => s.Records.Any(Owned)) + context.Redo.RemoveAll(s => s.Records.Any(Owned));
+        _pending.RemoveAll(e => e is PendingObject po && po.Key.IsAsset && po.Key.Id == asset);
+        if (dropsOpen) _currentGroup = ++_lastGroup;
+        if (removed > 0) historyChanged?.Invoke();
     }
 
     /// <summary>Drops edits that were captured but not yet recorded, keeping the undo and redo history.</summary>

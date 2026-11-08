@@ -1457,4 +1457,58 @@ public class UndoTests : EditorTestHarness
         Undo.PerformUndo();
         Assert.Equal(0, comp.Value);
     }
+    // ================================================================
+    //  Assets
+    // ================================================================
+
+    private Material CreateMaterial(string path, float value)
+    {
+        var material = new Material();
+        material.SetFloat("_Value", value);
+        Assets.CreateAsset(material, path);
+        Undo.ClearAll();
+        return material;
+    }
+
+    [Fact]
+    public void DatabaseAsset_UndoesWholeAndMarksTheAsset()
+    {
+        OpenScene();
+        Material material = CreateMaterial("M.mat", 1);
+
+        Undo.RecordObject(material, "Edit");
+        material.SetFloat("_Value", 2);
+        Undo.FlushUndoRecordObjects();
+        Assert.True(EditorUtility.IsDirty(material));
+        Assert.False(EditorSceneManager.IsDirty);
+
+        Undo.PerformUndo();
+        Assert.Equal(1, material.GetFloat("_Value"));
+        Undo.PerformRedo();
+        Assert.Equal(2, material.GetFloat("_Value"));
+    }
+
+    [Fact]
+    public void ExternalChange_DropsTheAssetsSteps_ButTheEditorsOwnSaveDoesNot()
+    {
+        OpenScene();
+        Material material = CreateMaterial("M.mat", 1);
+
+        Undo.RecordObject(material, "Edit");
+        material.SetFloat("_Value", 2);
+        Undo.IncrementGroup();
+        Assert.True(Assets.SaveAsset(material));
+        Assets.Refresh();
+        Assert.True(Undo.CanUndo);
+
+        var outside = new Material();
+        outside.SetFloat("_Value", 5);
+        string file = AssetAbsolutePath("M.mat");
+        File.WriteAllText(file, Echo.Serializer.Serialize(typeof(object), outside).WriteToString());
+        File.SetLastWriteTimeUtc(file, DateTime.UtcNow.AddMinutes(1));
+        Assets.Refresh();
+
+        Assert.False(Undo.CanUndo);
+        Assert.False(EditorUtility.IsDirty(material));
+    }
 }

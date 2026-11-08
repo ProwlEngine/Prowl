@@ -2156,6 +2156,11 @@ public class EditorAssetBackend : AssetBackend
     {
         RunImport(entry);
         imported.Add(entry.Path);
+
+        // Changed outside the editor, so undoing an earlier edit would refill the old state over the change.
+        Core.Undo.DropAsset(entry.Guid);
+        if (entry.SubAssets != null)
+            foreach (SubAssetEntry sub in entry.SubAssets) Core.Undo.DropAsset(sub.Guid);
     }
 
     /// <param name="force">Drain the watcher immediately instead of waiting out its debounce window.</param>
