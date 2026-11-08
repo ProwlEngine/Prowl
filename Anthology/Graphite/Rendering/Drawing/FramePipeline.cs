@@ -157,6 +157,11 @@ internal sealed partial class FramePipeline : IDisposable
             builder.Read(texture, TextureState.Sampled);
         if (camera.FogWritten && camera.FogVolume != null)
             builder.Read(graph.Import(camera.FogVolume), TextureState.Sampled);
+        if (camera.CloudShadowMap != null && camera.CloudShadowData != null)
+        {
+            builder.Read(graph.Import(camera.CloudShadowMap), TextureState.Sampled);
+            builder.Read(graph.Import(camera.CloudShadowData), BufferAccess.AllReads);
+        }
         if (screenVisibility && camera.ScreenVisibility != null)
             builder.Read(graph.Import(camera.ScreenVisibility), TextureState.Sampled, TextureState.Sampled);
         if (screenIrradiance && camera.ScreenIrradiance != null)
@@ -392,6 +397,7 @@ internal sealed partial class FramePipeline : IDisposable
         UpdateSceneDepth(camera, shape, width, height);
         UpdateBackDepth(camera, shape, width, height);
         camera.FogWritten = false;
+        (camera.CloudShadowMap, camera.CloudShadowData) = (null, null);
         if ((shape.Targets & SceneTargets.Reactive) != 0 && !DrawsTransmission(camera))
             camera.ShapeKey = shape with { Targets = shape.Targets & ~SceneTargets.Reactive };
         camera.View.PixelWidth = width;

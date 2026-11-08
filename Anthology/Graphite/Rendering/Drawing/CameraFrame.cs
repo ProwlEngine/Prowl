@@ -60,6 +60,10 @@ internal sealed class CameraFrame : IDisposable
     public Texture? FogLight, FogLightHistory, FogVolume;
     public bool FogWritten;
 
+    /// <summary>The world's cloud shadow map and its record, which the view's draws read this frame, or null without clouds.</summary>
+    public RenderTexture? CloudShadowMap;
+    public DeviceBuffer? CloudShadowData;
+
     /// <summary>Makes the fog's grid for a size, true when it was made anew and has no history. Render thread.</summary>
     public bool EnsureVolumetricFog(uint width, uint height, uint depth)
     {

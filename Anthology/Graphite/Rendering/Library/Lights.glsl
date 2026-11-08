@@ -16,6 +16,7 @@
 #include "Graphite/Shadows.glsl"
 #include "Graphite/Textures.glsl"
 #include "Graphite/Directional.glsl"
+#include "Graphite/CloudShadow.glsl"
 #include "Graphite/Ltc.glsl"
 
 // Contact hardening is compiled in while a light of the world uses it
@@ -561,12 +562,16 @@ bool Graphite_ContributeLocal(Graphite_LightSample L, Graphite_LightFrame f, boo
     return true;
 }
 
-// How much of a directional light reaches a surface past its shadow, 1 lit. index is its place in the world's buffer.
+// How much of a directional light reaches a surface past its shadow, 1 lit. index is its place in the world's buffer,
+// the sun first, which the clouds shade too.
 float Graphite_DirectionalLightShadow(Graphite_DirectionalLight d, uint index, vec3 relativePos, vec3 geomNormal)
 {
-    if (!d.shadow || !Graphite_ReceivesShadows())
+    if (!Graphite_ReceivesShadows())
         return 1.0;
-    return Graphite_DirectionalShadow(index, d.direction, d.shadowDepthBias, d.shadowNormalBias, d.shadowStrength, d.shadowFilter, d.sinRadius / max(d.cosRadius, 1e-4), relativePos, geomNormal);
+    float clouds = index == 0u ? Graphite_CloudShadow(relativePos) : 1.0;
+    if (!d.shadow || clouds <= 0.0)
+        return clouds;
+    return clouds * Graphite_DirectionalShadow(index, d.direction, d.shadowDepthBias, d.shadowNormalBias, d.shadowStrength, d.shadowFilter, d.sinRadius / max(d.cosRadius, 1e-4), relativePos, geomNormal);
 }
 
 // The sun's shadow, 1 lit

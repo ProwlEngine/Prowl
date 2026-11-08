@@ -436,8 +436,9 @@ uniform sampler2D _CloudShadowMap;
 uniform vec4 _CloudShadowCascade0, _CloudShadowCascade1, _CloudShadowCascade2, _CloudShadowCascade3; // centre, half width
 uniform vec4 _CloudShadowHeights;       // each cascade's half height toward the sun's side of the sky
 uniform vec4 _CloudShadowWindA, _CloudShadowWindB;  // how far the wind has carried the clouds since each was drawn
-uniform vec3 _CloudShadowRight;
-uniform vec3 _CloudShadowUp;
+uniform vec3 _CloudShadowRight0, _CloudShadowRight1, _CloudShadowRight2, _CloudShadowRight3;  // each cascade's axes as it was drawn
+uniform vec3 _CloudShadowUp0, _CloudShadowUp1, _CloudShadowUp2, _CloudShadowUp3;
+uniform vec3 _CloudShadowToSun0, _CloudShadowToSun1, _CloudShadowToSun2, _CloudShadowToSun3;
 uniform float _CloudShadowResolution;
 
 // How much cloud the sunlight crosses to reach p in one cascade of the shadow map, moved back by the wind since that
@@ -452,9 +453,12 @@ float CloudShadowCascade(int c, vec3 p, out float reach)
 {
     vec4 cascade = c == 0 ? _CloudShadowCascade0 : c == 1 ? _CloudShadowCascade1 : c == 2 ? _CloudShadowCascade2 : _CloudShadowCascade3;
     vec2 wind = c == 0 ? _CloudShadowWindA.xy : c == 1 ? _CloudShadowWindA.zw : c == 2 ? _CloudShadowWindB.xy : _CloudShadowWindB.zw;
-    vec3 rel = p - vec3(wind.x, 0.0, wind.y) - cascade.xyz + _CloudToSun * (4.0 * cascade.w / _CloudShadowResolution * max(_CloudToSun.y, 0.0));
-    vec2 local = vec2(dot(rel, _CloudShadowRight) / cascade.w, dot(rel, _CloudShadowUp) / _CloudShadowHeights[c]);
-    float along = dot(rel, _CloudToSun);
+    vec3 right = c == 0 ? _CloudShadowRight0 : c == 1 ? _CloudShadowRight1 : c == 2 ? _CloudShadowRight2 : _CloudShadowRight3;
+    vec3 up = c == 0 ? _CloudShadowUp0 : c == 1 ? _CloudShadowUp1 : c == 2 ? _CloudShadowUp2 : _CloudShadowUp3;
+    vec3 toSun = c == 0 ? _CloudShadowToSun0 : c == 1 ? _CloudShadowToSun1 : c == 2 ? _CloudShadowToSun2 : _CloudShadowToSun3;
+    vec3 rel = p - vec3(wind.x, 0.0, wind.y) - cascade.xyz + toSun * (4.0 * cascade.w / _CloudShadowResolution * max(toSun.y, 0.0));
+    vec2 local = vec2(dot(rel, right) / cascade.w, dot(rel, up) / _CloudShadowHeights[c]);
+    float along = dot(rel, toSun);
     reach = max(max(abs(local.x), abs(local.y)), abs(along) / CloudShadowLimit(cascade.w)) / 0.98;
     if (reach >= 1.0)
         return 0.0;

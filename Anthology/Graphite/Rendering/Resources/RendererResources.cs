@@ -82,6 +82,10 @@ internal sealed class RendererResources : IDisposable
         }
         NoFogVolume = factory.CreateTexture(TextureDescription.Texture3D(1, 1, 1, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
         device.UpdateTexture<ushort>(NoFogVolume, [0, 0, 0, 0x3C00], TextureRegion.Whole(NoFogVolume, 0, 0));
+        NoCloudShadowMap = factory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
+        device.UpdateTexture<ushort>(NoCloudShadowMap, [0, 0, 0, 0], TextureRegion.Whole(NoCloudShadowMap, 0, 0));
+        NoCloudShadowData = factory.CreateBuffer(new BufferDescription(CloudShadowRecord.Size, BufferUsage.StructuredBufferReadOnly));
+        device.UpdateBuffer(NoCloudShadowData, 0, new CloudShadowRecord());
         NoExposure = factory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_Float, TextureUsage.Sampled));
         device.UpdateTexture<float>(NoExposure, [0f], TextureRegion.Whole(NoExposure, 0, 0));
     }
@@ -146,6 +150,10 @@ internal sealed class RendererResources : IDisposable
 
     /// <summary>The fog volume a view without volumetric fog reads: no light and everything let through.</summary>
     public Texture NoFogVolume { get; }
+
+    /// <summary>What views without clouds read as the cloud shadow, which leaves the sun unshaded.</summary>
+    public Texture NoCloudShadowMap { get; }
+    public DeviceBuffer NoCloudShadowData { get; }
 
     /// <summary>What the exposure pass reads for a view an AutoExposure has not measured yet.</summary>
     public Texture NoExposure { get; }
@@ -261,6 +269,8 @@ internal sealed class RendererResources : IDisposable
         NoSceneDepth.Dispose();
         NoFogVolume.Dispose();
         NoExposure.Dispose();
+        NoCloudShadowMap.Dispose();
+        NoCloudShadowData.Dispose();
         LinearClamp.Dispose();
         PointClamp.Dispose();
         LinearRepeat.Dispose();

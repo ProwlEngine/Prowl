@@ -811,6 +811,26 @@ public sealed class FeatureBuilder
     }
 
     /// <summary>
+    /// The world's cloud shadow map and its record, which the view's draws read through Graphite/CloudShadow.glsl, written
+    /// here when the feature fills them this frame and read otherwise.
+    /// </summary>
+    internal void UseCloudShadow(RenderTexture map, DeviceBuffer data, bool writes)
+    {
+        View.Camera.CloudShadowMap = map;
+        View.Camera.CloudShadowData = data;
+        if (writes)
+        {
+            _graph.Write(FrameGraph.Import(map), TextureState.Attachment | TextureState.Sampled);
+            _graph.Write(FrameGraph.Import(data), BufferAccess.TransferWrite);
+        }
+        else
+        {
+            _graph.Read(FrameGraph.Import(map), TextureState.Sampled);
+            _graph.Read(FrameGraph.Import(data), BufferAccess.AllReads);
+        }
+    }
+
+    /// <summary>
     /// The view's back depth, which passes tagged "BackDepth" = "Read" read, for the BackDepth pass to be drawn into on
     /// frames <see cref="FeatureView.ReadsBackDepth"/>, as <see cref="TransmissionDepthFeature"/> does.
     /// </summary>
