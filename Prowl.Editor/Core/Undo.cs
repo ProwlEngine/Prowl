@@ -1586,7 +1586,16 @@ public static class Undo
                         }
                         int index = Array.FindIndex(members, m => m.Key == key);
                         if (index < 0) continue;
-                        try { members[index].SetValue(target, Serializer.Deserialize(value, members[index].Type, restore.LinkContext())); }
+                        try
+                        {
+                            object? restored = Serializer.Deserialize(value, members[index].Type, restore.LinkContext());
+                            if (DisposedAssetIn(restored) is Asset gone)
+                            {
+                                Runtime.Debug.LogWarning($"'{key}' on {target.GetType().Name} held '{gone.Name}', which no longer exists, so it was left as it is.");
+                                continue;
+                            }
+                            members[index].SetValue(target, restored);
+                        }
                         catch (Exception ex) { Runtime.Debug.LogWarning($"Undo could not restore '{key}' on {target.GetType().Name}: {ex.Message}"); }
                     }
                     break;
@@ -1597,6 +1606,16 @@ public static class Undo
                 try { eo.OnValidate(); }
                 catch (Exception ex) { Runtime.Debug.LogException($"OnValidate threw on {eo.GetType().Name}", ex); }
             }
+        }
+
+        // A runtime asset the record linked that has been disposed since, directly or in a collection.
+        private static Asset? DisposedAssetIn(object? value)
+        {
+            if (value is Asset { IsDisposed: true } asset) return asset;
+            if (value is IEnumerable items and not string)
+                foreach (object? item in items)
+                    if (item is Asset { IsDisposed: true } inner) return inner;
+            return null;
         }
 
         private static void WriteWhole(object target, EchoObject data, Restore restore)
@@ -2039,6 +2058,7 @@ public static class Undo
             Place(go, placement);
             _attached.Add(go);
             MarkRecreated(go);
+            Touched.Add(go);
             if (select) Selection.Select(go);
         }
 
@@ -2054,6 +2074,7 @@ public static class Undo
             go.AttachComponent(c, index);
             _attached.Add(c);
             _recreated.Add(c.Identifier);
+            Touched.Add(c);
         }
 
         // Puts a GameObject under its parent at its index, or among the scene's roots, without moving it in world space.

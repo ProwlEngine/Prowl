@@ -1530,4 +1530,22 @@ public class UndoTests : EditorTestHarness
         Assert.Equal(5, Inspector.ImportSettingsEditor.Pending(id)!["Quality"].IntValue);
         Assert.Equal(meta, File.ReadAllText(AssetAbsolutePath("M.mat") + ".meta"));
     }
+
+    [Fact]
+    public void RuntimeAssetDisposedSinceTheRecord_IsLeftAlone()
+    {
+        Scene scene = OpenScene();
+        MeshRenderer renderer = Add(scene, "R").AddComponent<MeshRenderer>();
+        var first = new Material { Name = "First" };
+        renderer.Material = first;
+
+        Undo.RecordObject(renderer, "Material");
+        var second = new Material { Name = "Second" };
+        renderer.Material = second;
+        Undo.FlushUndoRecordObjects();
+        first.Dispose();
+        Undo.PerformUndo();
+
+        Assert.Same(second, renderer.Material);
+    }
 }

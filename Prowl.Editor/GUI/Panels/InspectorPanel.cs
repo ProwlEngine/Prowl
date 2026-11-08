@@ -751,7 +751,10 @@ public class InspectorPanel : DockPanel
         if (Runtime.AssetDatabase.Load<Asset>(guid) is not { IsLoaded: true } asset) return;
 
         Origami.Header(paper, "insp_h_fields", Loc.Get("inspector.properties")).Underline().Show();
-        PropertyGridUtils.Draw(paper, "insp_asset_fields", asset, _ => _unsavedAssets.Add(guid));
+        bool readOnly = !Core.Undo.CanSave(asset);
+        if (readOnly) Origami.BeginReadOnly();
+        try { PropertyGridUtils.Draw(paper, "insp_asset_fields", asset, _ => _unsavedAssets.Add(guid)); }
+        finally { if (readOnly) Origami.EndReadOnly(); }
 
         if (Origami.IsReadOnly || !_unsavedAssets.Contains(guid)) return;
 
