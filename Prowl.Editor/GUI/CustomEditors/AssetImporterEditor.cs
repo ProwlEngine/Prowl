@@ -55,6 +55,12 @@ public abstract class AssetImporterEditor
     private static readonly Dictionary<Guid, EchoObject> s_baselines = [];
 
     /// <summary>Drops an asset's clean baseline after its state was written elsewhere, so the next draw takes it again.</summary>
+    /// <summary>Applies a change that was written to disk to the clean baseline too, so it does not show as pending.</summary>
+    internal static void PatchBaseline(Guid guid, Action<EchoObject> patch)
+    {
+        if (s_baselines.TryGetValue(guid, out EchoObject baseline)) patch(baseline);
+    }
+
     internal static void ForgetBaseline(Guid guid) => s_baselines.Remove(guid);
 
     /// <summary>

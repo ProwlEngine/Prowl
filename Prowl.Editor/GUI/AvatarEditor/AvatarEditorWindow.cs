@@ -322,7 +322,9 @@ public class AvatarEditorWindow : DockPanel
         if (!SaveSettings(entry, settings)) return false;
 
         _saved = new Dictionary<HumanBodyBone, string>(_map);
-        ImportSettingsEditor.Forget(_modelGuid);
+        // The map is on disk now: the inspector's pending settings and clean baseline take it, other unapplied edits stay.
+        if (ImportSettingsEditor.Pending(_modelGuid) is EchoObject pending) ModelImportOverrides.WriteHumanoidMap(pending, map);
+        AssetImporterEditor.PatchBaseline(_modelGuid, baseline => ModelImportOverrides.WriteHumanoidMap(baseline, map));
         EditorAssetBackend.Instance?.Reimport(_modelGuid);
         return true;
     }

@@ -1277,6 +1277,7 @@ public static class CliEditorCommands
 
         private void Restore(EchoObject snapshot)
         {
+            if (AnimationGraphWindow.TryRestoreOpen(graph, snapshot, true)) return;
             if (AssetDatabase.TryGetExisting(graph, out Asset asset) && asset is AnimationGraph { IsLoaded: true } loaded)
                 new AnimationGraphDomain(loaded).Restore(snapshot, true);
         }

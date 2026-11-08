@@ -431,6 +431,19 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
         public void Redo() => redo();
     }
 
+    /// <summary>Puts a snapshot onto the window showing that graph, so it redraws. False when no window shows it.</summary>
+    public static bool TryRestoreOpen(Guid asset, EchoObject snapshot, bool compiles)
+    {
+        TWindow? showing = OpenWindows.Find(window => window._assetGuid == asset);
+        if (showing == null) return false;
+        if (!showing.Apply(snapshot, compiles)) return true;
+
+        showing._unsaved = snapshot;
+        showing._dirty = true;
+        showing.ShareWithSiblings();
+        return true;
+    }
+
     private static void RestoreSnapshot(Guid asset, EchoObject snapshot, bool compiles, Func<Guid, GraphDomain?> open)
     {
         // The undo goes to whichever open window shows that graph.
