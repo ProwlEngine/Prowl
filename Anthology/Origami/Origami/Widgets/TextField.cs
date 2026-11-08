@@ -314,6 +314,7 @@ public sealed class TextFieldBuilder
                 rowHandle = _paper.CurrentParent;
                 int commitKey = rowHandle.Data.ID;
                 if (_commitOnEnter) TextFieldCommits.Seen(commitKey, _setter);
+                if (_paper.IsElementFocused(commitKey)) TextFieldCommits.SeenFocused();
 
                 // Leading slot ─────────────────────────────────────────
                 if (_isSearch)
@@ -703,7 +704,7 @@ public sealed class TextFieldBuilder
 }
 
 /// <summary>Edits of <see cref="TextFieldBuilder.CommitOnEnter"/> fields that are typed but not applied yet, by field row id.</summary>
-internal static class TextFieldCommits
+public static class TextFieldCommits
 {
     private sealed class Edit
     {
@@ -715,8 +716,25 @@ internal static class TextFieldCommits
 
     private static readonly Dictionary<int, Edit> s_edits = new();
     private static int s_frame;
+    private static int s_focusedFrame = -1;
 
-    public static void Change(int key, Action<string> setter, string original, string draft)
+    /// <summary>Whether a text field had keyboard focus in the last frame drawn.</summary>
+    public static bool AnyFocused => s_focusedFrame >= s_frame - 1;
+
+    /// <summary>Applies every typed edit now, as if each field lost focus.</summary>
+    public static void CommitAll()
+    {
+        if (s_edits.Count == 0) return;
+        foreach (int key in s_edits.Keys.ToArray())
+            Commit(key);
+    }
+
+    /// <summary>Drops every typed edit without applying it.</summary>
+    public static void DiscardAll() => s_edits.Clear();
+
+    internal static void SeenFocused() => s_focusedFrame = s_frame;
+
+    internal static void Change(int key, Action<string> setter, string original, string draft)
     {
         if (!s_edits.TryGetValue(key, out var edit))
             s_edits[key] = edit = new Edit { Setter = setter, Original = original, Seen = s_frame };
@@ -724,23 +742,23 @@ internal static class TextFieldCommits
     }
 
     // The latest setter wins, since it closes over this frame's target.
-    public static void Seen(int key, Action<string> setter)
+    internal static void Seen(int key, Action<string> setter)
     {
         if (!s_edits.TryGetValue(key, out var edit)) return;
         edit.Seen = s_frame;
         edit.Setter = setter;
     }
 
-    public static void Commit(int key)
+    internal static void Commit(int key)
     {
         if (!s_edits.Remove(key, out var edit)) return;
         if (edit.Draft != edit.Original) edit.Setter(edit.Draft);
     }
 
-    public static void Discard(int key) => s_edits.Remove(key);
+    internal static void Discard(int key) => s_edits.Remove(key);
 
     /// <summary>Applies the edits of fields that were not drawn this frame, such as after the selection changed.</summary>
-    public static void EndFrame()
+    internal static void EndFrame()
     {
         if (s_edits.Count > 0)
             foreach (var (key, edit) in s_edits.ToArray())

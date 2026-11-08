@@ -74,6 +74,35 @@ public class TextFieldTests
         Assert.Equal(0, scene.Sets);
     }
 
+    [Fact]
+    public void CommitAll_AppliesATypedEditWhileStillFocused()
+    {
+        using var scene = new FieldScene("Old", commit: true);
+        scene.Frame();
+        scene.Type("New");
+        Assert.True(TextFieldCommits.AnyFocused);
+
+        TextFieldCommits.CommitAll();
+
+        Assert.Equal("New", scene.Value);
+        Assert.Equal(1, scene.Sets);
+    }
+
+    [Fact]
+    public void DiscardAll_DropsATypedEdit()
+    {
+        using var scene = new FieldScene("Old", commit: true);
+        scene.Frame();
+        scene.Type("New");
+
+        TextFieldCommits.DiscardAll();
+        scene.Visible = false;
+        scene.Frame();
+
+        Assert.Equal("Old", scene.Value);
+        Assert.Equal(0, scene.Sets);
+    }
+
     private sealed class FieldScene : IDisposable
     {
         private readonly IDisposable _themeScope;
