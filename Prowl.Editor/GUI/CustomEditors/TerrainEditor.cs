@@ -58,8 +58,15 @@ public class TerrainEditor : CustomEditor
     public static bool TreeEraseMode = false;
 
     // Instance state
-    private bool _isDirty;
     private TerrainComponent? _terrain;
+
+    // A database TerrainData goes in the dirty asset set, embedded data marks the terrain's scene.
+    private void MarkDataDirty()
+    {
+        if (_terrain.IsNotValid()) return;
+        if (_terrain.Data.IsValid() && _terrain.Data.IsFromDatabase) EditorUtility.SetDirty(_terrain.Data);
+        else EditorUtility.SetDirty(_terrain);
+    }
 
     public override void OnGUI(Paper paper, string id, object target)
     {
@@ -82,7 +89,7 @@ public class TerrainEditor : CustomEditor
         }
 
         // Dirty banner with an inline save-to-asset action.
-        if (_isDirty)
+        if (terrainData.IsFromDatabase && EditorUtility.IsDirty(terrainData))
             DrawDirtyBanner(paper, $"{id}_dirty", font, terrainData);
 
         // Main card: a bordered, clipped panel laid out as [ rail | content ].
@@ -234,13 +241,13 @@ public class TerrainEditor : CustomEditor
             MiniButton(paper, $"{id}_add", EditorIcons.Plus_I, () =>
             {
                 data.AddLayer(new TerrainLayer());
-                _isDirty = true;
+                MarkDataDirty();
             }, enabled: data.LayerCount < TerrainData.kMaxLayers);
             MiniButton(paper, $"{id}_rem", EditorIcons.Trash_I, () =>
             {
                 data.RemoveLayer(PaintLayer);
                 PaintLayer = Math.Clamp(PaintLayer, 0, Math.Max(0, data.LayerCount - 1));
-                _isDirty = true;
+                MarkDataDirty();
             }, danger: true, enabled: data.LayerCount > 1);
         });
 
@@ -294,16 +301,16 @@ public class TerrainEditor : CustomEditor
             TerrainLayer sl = data.Layers[PaintLayer];
             EditorGUI.SectionHeader(paper, $"{id}_slh", $"Layer {PaintLayer}");
             PropertyGridUtils.DrawField(paper, $"{id}_alb", "Albedo", typeof(Texture2D), sl.Albedo,
-                v => { sl.Albedo = v as Texture2D; _isDirty = true; }, 0);
+                v => { sl.Albedo = v as Texture2D; MarkDataDirty(); }, 0);
             PropertyGridUtils.DrawField(paper, $"{id}_nrm", "Normal Map", typeof(Texture2D), sl.NormalMap,
-                v => { sl.NormalMap = v as Texture2D; _isDirty = true; }, 0);
+                v => { sl.NormalMap = v as Texture2D; MarkDataDirty(); }, 0);
             EditorGUI.Row(paper, $"{id}_til", "Tiling", () =>
                 Origami.NumericField<float>(paper, $"{id}_til_v", sl.Tiling,
-                    v => { sl.Tiling = MathF.Max(0.01f, v); _isDirty = true; }).Min(0.01f).Show());
+                    v => { sl.Tiling = MathF.Max(0.01f, v); MarkDataDirty(); }).Min(0.01f).Show());
             EditorGUI.Row(paper, $"{id}_rgh", "Roughness", () =>
-                Origami.Slider(paper, $"{id}_rgh_v", sl.Roughness, v => { sl.Roughness = v; _isDirty = true; }, 0f, 1f).Format("F2").Show());
+                Origami.Slider(paper, $"{id}_rgh_v", sl.Roughness, v => { sl.Roughness = v; MarkDataDirty(); }, 0f, 1f).Format("F2").Show());
             EditorGUI.Row(paper, $"{id}_met", "Metallic", () =>
-                Origami.Slider(paper, $"{id}_met_v", sl.Metallic, v => { sl.Metallic = v; _isDirty = true; }, 0f, 1f).Format("F2").Show());
+                Origami.Slider(paper, $"{id}_met_v", sl.Metallic, v => { sl.Metallic = v; MarkDataDirty(); }, 0f, 1f).Format("F2").Show());
         }
 
         DrawBrushBlock(paper, $"{id}_brush", font);
@@ -400,7 +407,7 @@ public class TerrainEditor : CustomEditor
         DrawSectionActions(paper, $"{id}_ph", "Tree Prototypes", () =>
         {
             MiniButton(paper, $"{id}_padd", EditorIcons.Plus_I,
-                () => { data.TreePrototypes.Add(new TreePrototype()); _isDirty = true; });
+                () => { data.TreePrototypes.Add(new TreePrototype()); MarkDataDirty(); });
             MiniButton(paper, $"{id}_prem", EditorIcons.Trash_I, () =>
             {
                 if (ActiveTreePrototype >= 0 && ActiveTreePrototype < data.TreePrototypes.Count)
@@ -417,7 +424,7 @@ public class TerrainEditor : CustomEditor
                             d => { d.TreePrototypes = new List<TreePrototype>(postProtos); d.Trees = new List<TreeInstance>(postTrees); });
 
                     ActiveTreePrototype = Math.Clamp(ActiveTreePrototype, 0, Math.Max(0, data.TreePrototypes.Count - 1));
-                    _isDirty = true;
+                    MarkDataDirty();
                 }
             }, danger: true, enabled: data.TreePrototypes.Count > 0);
         });
@@ -430,7 +437,7 @@ public class TerrainEditor : CustomEditor
                 return mesh.IsValid() ? mesh.Name : "Empty";
             },
             _ => EditorIcons.Leaf_I,
-            () => { data.TreePrototypes.Add(new TreePrototype()); _isDirty = true; },
+            () => { data.TreePrototypes.Add(new TreePrototype()); MarkDataDirty(); },
             i => data.TreePrototypes[i].Mesh.IsValid() ? data.TreePrototypes[i].Mesh.AssetID : Guid.Empty);
 
         if (data.TreePrototypes.Count > 0 && ActiveTreePrototype >= 0 && ActiveTreePrototype < data.TreePrototypes.Count)
@@ -438,10 +445,10 @@ public class TerrainEditor : CustomEditor
             TreePrototype proto = data.TreePrototypes[ActiveTreePrototype];
             EditorGUI.SectionHeader(paper, $"{id}_pth", "Prototype");
             PropertyGridUtils.DrawField(paper, $"{id}_mesh", "Mesh", typeof(Mesh), proto.Mesh,
-                v => { proto.Mesh = v as Mesh; _isDirty = true; }, 0);
+                v => { proto.Mesh = v as Mesh; MarkDataDirty(); }, 0);
             DrawPrototypeMaterials(paper, $"{id}_mats", "Materials", proto.Mesh, proto.Materials);
             EditorGUI.Row(paper, $"{id}_bend", "Bend Factor", () =>
-                Origami.Slider(paper, $"{id}_bend_v", proto.BendFactor, v => { proto.BendFactor = v; _isDirty = true; }, 0f, 2f).Format("F2").Show());
+                Origami.Slider(paper, $"{id}_bend_v", proto.BendFactor, v => { proto.BendFactor = v; MarkDataDirty(); }, 0f, 2f).Format("F2").Show());
         }
 
         EditorGUI.SectionHeader(paper, $"{id}_pbh", "Placement Brush");
@@ -463,12 +470,12 @@ public class TerrainEditor : CustomEditor
 
         EditorGUI.SectionHeader(paper, $"{id}_dh", "Dimensions");
         EditorGUI.Row(paper, $"{id}_size", "Terrain Size", () =>
-            Origami.NumericField<float>(paper, $"{id}_size_v", data.Size, v => { data.Size = MathF.Max(1f, v); _isDirty = true; }).Min(1f).Show());
+            Origami.NumericField<float>(paper, $"{id}_size_v", data.Size, v => { data.Size = MathF.Max(1f, v); MarkDataDirty(); }).Min(1f).Show());
         EditorGUI.Row(paper, $"{id}_height", "Terrain Height", () =>
-            Origami.NumericField<float>(paper, $"{id}_height_v", data.Height, v => { data.Height = MathF.Max(0.1f, v); _isDirty = true; }).Min(0.1f).Show());
+            Origami.NumericField<float>(paper, $"{id}_height_v", data.Height, v => { data.Height = MathF.Max(0.1f, v); MarkDataDirty(); }).Min(0.1f).Show());
         EditorGUI.Row(paper, $"{id}_interp", "Interpolation", () =>
             Origami.EnumDropdown(paper, $"{id}_interp_v", data.Interpolation,
-                v => { data.Interpolation = v; _isDirty = true; terrain.InvalidateDetailCache(); }).Show());
+                v => { data.Interpolation = v; MarkDataDirty(); terrain.InvalidateDetailCache(); }).Show());
 
         EditorGUI.SectionHeader(paper, $"{id}_rh", "Resolutions");
         string[] hmOptions = ["33", "65", "129", "257", "513", "1025", "2049", "4097"];
@@ -481,7 +488,7 @@ public class TerrainEditor : CustomEditor
                 if (newRes != data.HeightmapResolution)
                     Origami.Confirm("Reset Heightmap?",
                         $"Changing heightmap resolution to {newRes} will reset all height data.",
-                        () => { data.ResizeHeightmap(newRes); _isDirty = true; });
+                        () => { data.ResizeHeightmap(newRes); MarkDataDirty(); });
             }, hmOptions).Show());
 
         string[] smOptions = ["32", "64", "128", "256", "512", "1024"];
@@ -494,7 +501,7 @@ public class TerrainEditor : CustomEditor
                 if (newRes != data.SplatmapResolution)
                     Origami.Confirm("Reset Splatmap?",
                         $"Changing splatmap resolution to {newRes} will reset all splat data.",
-                        () => { data.ResizeSplatmap(newRes); _isDirty = true; });
+                        () => { data.ResizeSplatmap(newRes); MarkDataDirty(); });
             }, smOptions).Show());
 
         string[] dmOptions = ["64", "128", "256", "512", "1024", "2048"];
@@ -508,7 +515,7 @@ public class TerrainEditor : CustomEditor
                 {
                     // Resampled rather than reset, so painted detail survives the change
                     data.ResizeDetailMaps(newRes);
-                    _isDirty = true;
+                    MarkDataDirty();
                     terrain.InvalidateDetailCache();
                 }
             }, dmOptions).Show());
@@ -728,7 +735,7 @@ public class TerrainEditor : CustomEditor
                         {
                             var val = v as Material;
                             if (materials.Count == 0) materials.Add(val); else materials[0] = val;
-                            _isDirty = true; MarkDetailsDirty();
+                            MarkDataDirty(); MarkDetailsDirty();
                         }, 0);
                     return;
                 }
@@ -746,7 +753,7 @@ public class TerrainEditor : CustomEditor
                         v =>
                         {
                             materials[capturedIndex] = v as Material;
-                            _isDirty = true; MarkDetailsDirty();
+                            MarkDataDirty(); MarkDetailsDirty();
                         }, 0);
                 }
             }
@@ -900,8 +907,7 @@ public class TerrainEditor : CustomEditor
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db != null && data.AssetID != Guid.Empty)
         {
-            db.SaveAsset(data);
-            _isDirty = false;
+            if (db.SaveAsset(data)) EditorUtility.ClearAssetDirty(data.AssetID);
             Debug.Log("[TerrainEditor] Saved terrain data.");
         }
         else
@@ -1035,11 +1041,11 @@ public class TerrainEditor : CustomEditor
     }
 
     /// <summary>Mark the terrain data as dirty (called from TerrainSceneEditor after brush strokes).</summary>
-    public void MarkDirty() => _isDirty = true;
+    public void MarkDirty() => MarkDataDirty();
 
     private void MarkDetailsDirty()
     {
-        _isDirty = true;
+        MarkDataDirty();
         if (_terrain.IsValid()) _terrain.InvalidateDetailCache();
     }
 
@@ -1068,17 +1074,13 @@ public class TerrainEditor : CustomEditor
 
             try
             {
-                db.SaveAsset(terrainData);
+                if (db.SaveAsset(terrainData)) EditorUtility.ClearAssetDirty(terrainData.AssetID);
             }
             catch (Exception ex)
             {
                 Debug.LogWarning($"Failed to save TerrainData '{terrainData.Name}': {ex.Message}");
             }
         }
-
-        // Clear dirty flag on active editor
-        if (ActiveInstance != null)
-            ActiveInstance._isDirty = false;
     }
 
     /// <summary>Invalidate terrain caches after undo/redo so changes are visible.</summary>

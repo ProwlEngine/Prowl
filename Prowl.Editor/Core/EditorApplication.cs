@@ -286,6 +286,7 @@ public class EditorApplication : Game
         PropertyGridConfig.IsSimpleFieldType = fieldType => EditorRegistries.GetPropertyEditor(fieldType) != null;
 
         // Register save handlers
+        EditorUtility.RegisterSaveHooks();
         // The scene or prefab is written on every save, but only named in the toast when it had changes.
         SaveManager.OnSave += () =>
         {
