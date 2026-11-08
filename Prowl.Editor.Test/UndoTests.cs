@@ -1301,4 +1301,160 @@ public class UndoTests : EditorTestHarness
         Assert.Equal(0, back.Enables);
         Assert.False(back.EnabledInHierarchy);
     }
+    // ================================================================
+    //  Editor frame rules
+    // ================================================================
+
+    // One editor frame: flush, input, then the frame's edits, then the frame's end.
+    private static void Frame(bool mouseDown = false, bool mouseHeld = false, bool shortcut = false, Action? edits = null)
+    {
+        Undo.FlushFrame();
+        Undo.BeginFrameInput(mouseDown, mouseHeld || mouseDown, shortcut);
+        edits?.Invoke();
+        Undo.EndFrame(textFocused: false);
+    }
+
+    [Fact]
+    public void InspectorDrawWithNoEdit_RecordsNothing()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+
+        Frame(edits: () => Undo.InspectorBaseline(comp));
+        Frame();
+
+        Assert.False(Undo.CanUndo);
+        Assert.False(EditorSceneManager.IsDirty);
+    }
+
+    [Fact]
+    public void InspectorEdit_RecordsAndMarksDirty_WithoutWhatTheGameChangedAfter()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+
+        Frame(edits: () =>
+        {
+            Undo.InspectorBaseline(comp);
+            comp.Value = 4;
+            Undo.InspectorChanged(comp);
+            comp.Label = "game wrote this";
+        });
+        Frame();
+
+        Assert.True(EditorSceneManager.IsDirty);
+        Undo.PerformUndo();
+        Assert.Equal(0, comp.Value);
+        Assert.Equal("game wrote this", comp.Label);
+    }
+
+    [Fact]
+    public void InspectorCommitAFrameAfterTheFieldStoppedDrawing_StillRecords()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+
+        Frame(edits: () => Undo.InspectorBaseline(comp));
+        Frame(edits: () => { comp.Label = "committed"; Undo.InspectorChanged(comp); });
+        Frame();
+
+        Undo.PerformUndo();
+        Assert.Equal("", comp.Label);
+    }
+
+    [Fact]
+    public void Drag_IsOneStep_AndARenameBeforeItIsAnother()
+    {
+        Scene scene = OpenScene();
+        GameObject go = Add(scene, "GO");
+
+        Frame(edits: () => { Undo.RecordObject(go, "Rename"); go.Name = "Renamed"; });
+        Frame(mouseDown: true, edits: () => { Undo.RecordObject(go, "Move"); go.Transform.LocalPosition = new Float3(1, 0, 0); });
+        Frame(mouseHeld: true, edits: () => { Undo.RecordObject(go, "Move"); go.Transform.LocalPosition = new Float3(2, 0, 0); });
+        Frame(mouseHeld: true, edits: () => { Undo.RecordObject(go, "Move"); go.Transform.LocalPosition = new Float3(3, 0, 0); });
+        Frame();
+        Frame();
+
+        Undo.PerformUndo();
+        Assert.Equal(Float3.Zero, go.Transform.LocalPosition);
+        Assert.Equal("Renamed", go.Name);
+        Undo.PerformUndo();
+        Assert.Equal("GO", go.Name);
+    }
+
+    [Fact]
+    public void UndoDuringADrag_RevertsTheDrag_AndRedoDoesNothing()
+    {
+        Scene scene = OpenScene();
+        GameObject go = Add(scene, "GO");
+        Frame(edits: () => { Undo.RecordObject(go, "Rename"); go.Name = "Renamed"; });
+        Frame();
+
+        Frame(mouseDown: true, edits: () => { Undo.RecordObject(go, "Move"); go.Transform.LocalPosition = new Float3(1, 0, 0); });
+        Frame(mouseHeld: true, edits: () => { Undo.RecordObject(go, "Move"); go.Transform.LocalPosition = new Float3(2, 0, 0); });
+        Assert.True(Undo.InteractionActive);
+
+        Undo.PerformRedo();
+        Assert.Equal(new Float3(2, 0, 0), go.Transform.LocalPosition);
+
+        Undo.PerformUndo();
+        Assert.Equal(Float3.Zero, go.Transform.LocalPosition);
+        Assert.Equal("Renamed", go.Name);
+        Assert.Empty(Undo.RedoSteps);
+    }
+
+    [Fact]
+    public void UndoWhileTheMouseIsHeldAndNothingRecorded_IsIgnored()
+    {
+        Scene scene = OpenScene();
+        Frame(mouseDown: true);
+        Assert.True(Undo.IgnoresUndoInput);
+        Frame();
+        Assert.False(Undo.IgnoresUndoInput);
+    }
+
+    [Fact]
+    public void UndoDuringALegacyContinuousEdit_CancelsIt()
+    {
+        Scene scene = OpenScene();
+        GameObject go = Add(scene, "GO");
+        Frame(mouseDown: true, edits: () => Undo.BeginContinuous([go], "Move"));
+        go.Transform.LocalPosition = new Float3(5, 0, 0);
+
+        Assert.False(Undo.IgnoresUndoInput);
+        Undo.PerformUndo();
+
+        Assert.Equal(Float3.Zero, go.Transform.LocalPosition);
+        Assert.False(Undo.IsContinuous);
+    }
+
+    [Fact]
+    public void ContextClearedWhileSetAside_PopsBackEmpty()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+        Undo.RecordObject(comp, "Edit"); comp.Value = 1; Undo.FlushUndoRecordObjects();
+
+        object saved = Undo.PushContext();
+        Undo.ClearAll(); // a script reload during play or prefab editing
+        Undo.PopContext(saved);
+
+        Assert.False(Undo.CanUndo);
+    }
+
+    [Fact]
+    public void PushContext_FlushesAnEditMadeThatFrame()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+        Undo.RecordObject(comp, "Edit");
+        comp.Value = 1;
+
+        object saved = Undo.PushContext();
+        Assert.False(Undo.CanUndo);
+        Undo.PopContext(saved);
+
+        Undo.PerformUndo();
+        Assert.Equal(0, comp.Value);
+    }
 }

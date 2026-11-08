@@ -783,6 +783,25 @@ public static class Undo
     /// <summary>Whether Undo or Redo pressed now should be ignored: the mouse is held and nothing has recorded yet.</summary>
     internal static bool IgnoresUndoInput => _mouseHeld && !_interactionRecorded && !_isContinuous;
 
+    /// <summary>A scene loaded by play code ends the play history, as opening a scene ends the edit history.</summary>
+    internal static void OnSceneLoaded()
+    {
+        if (Application.IsPlaying) Clear();
+    }
+
+    /// <summary>Keeps dirty assets and assets the history records loaded, so a save or an undo never reloads them from disk.</summary>
+    internal static void VisitResidents(AssetWalker walker)
+    {
+        foreach (Guid id in EditorUtility.DirtyAssets)
+            if (AssetDatabase.TryGetExisting(id, out Asset asset)) walker.Visit(asset);
+
+        IEnumerable<Step> steps = _undo.Concat(_redo).Concat(_contexts.SelectMany(c => c.Undo.Concat(c.Redo)));
+        foreach (Step step in steps)
+            foreach (Record r in step.Records)
+                if (r is ObjectRecord { AssetId: { } id } && AssetDatabase.TryGetExisting(id, out Asset recorded))
+                    walker.Visit(recorded);
+    }
+
     // ================================================================
     //  Inspector
     // ================================================================
@@ -1157,6 +1176,8 @@ public static class Undo
 
         public Guid Id => _id;
 
+        public bool IsAsset => _kind == KeyKind.Asset;
+
         public object? Resolve(Scene? scene)
         {
             switch (_kind)
@@ -1435,6 +1456,8 @@ public static class Undo
         }
 
         public override IEnumerable<UndoOwner> Owners => [_owner];
+
+        public Guid? AssetId => Key.IsAsset ? Key.Id : null;
 
         public static ObjectRecord? Diff(object target, TargetKey key, UndoOwner owner, Capture before, Capture after)
         {

@@ -74,6 +74,8 @@ public class EditorApplication : Game
 
     // Play mode state
     private Echo.EchoObject? _savedEditorScene;
+    private object? _savedEditUndo;
+    private int _lastFocusedElement;
     private int _savedActiveTabIndex = -1;
     private DockNode? _savedActiveTabNode;
     private TimeData? _savedEditorTime;
@@ -129,6 +131,8 @@ public class EditorApplication : Game
 
         // Open windows and the selection keep what they show loaded, through their fields like a scene's objects.
         AssetDatabase.WalkingRoots += WalkEditorRoots;
+        AssetDatabase.WalkingRoots += Undo.VisitResidents;
+        Runtime.Resources.Scene.OnSceneLoaded += Undo.OnSceneLoaded;
 
         // If launched with --project arg, open the project and load assemblies
         // BEFORE registries scan so user types are visible to all registries
@@ -222,7 +226,7 @@ public class EditorApplication : Game
         OrigamiUI.BuiltInFieldDrawers.Register(PropertyGridConfig.Drawers);
         RangeSliderDrawer.Register(PropertyGridConfig.Drawers); // wraps the built-in float/int drawers
         BuiltInAttributeHandlers.Register(PropertyGridConfig.Handlers);
-        PropertyGridConfig.OnBeginRoot = target => Undo.Snapshot(target);
+        PropertyGridConfig.OnBeginRoot = Undo.InspectorBaseline;
         PropertyGridConfig.OnFieldChanged = target =>
         {
             var eo = target as Runtime.EngineObject;
@@ -235,6 +239,7 @@ public class EditorApplication : Game
             // Record the edit against the prefab it belongs to as it happens, rather than relying on
             // something drawing this object again later.
             PrefabUtility.NotifyEdited(target);
+            Undo.InspectorChanged(target);
         };
         PropertyGridConfig.OnBeforeDrawField = (fieldType, value) =>
         {
@@ -519,7 +524,17 @@ public class EditorApplication : Game
         // so mutations from OnValueChanged are now visible. FlushFrame compares the Snapshot
         // (taken last frame) against the current state to detect changes.
         using (FrameStats.Editor.Scope())
+        {
             Undo.FlushFrame();
+            bool mouseDown = paper.IsPointerPressed(PaperMouseBtn.Left) || paper.IsPointerPressed(PaperMouseBtn.Right) || paper.IsPointerPressed(PaperMouseBtn.Middle);
+            bool mouseHeld = paper.IsPointerDown(PaperMouseBtn.Left) || paper.IsPointerDown(PaperMouseBtn.Right) || paper.IsPointerDown(PaperMouseBtn.Middle);
+            Undo.BeginFrameInput(mouseDown, mouseHeld, ShortcutManager.AnyPressedExcept("Global/Undo", "Global/Redo"));
+            if (paper.FocusedElementId != _lastFocusedElement)
+            {
+                _lastFocusedElement = paper.FocusedElementId;
+                Undo.FocusChanged();
+            }
+        }
 
         // Escape always releases the cursor in editor.
         if (Input.GetKeyDown(KeyCode.Escape) && (Input.CursorLockState != CursorLockMode.None || !Input.CursorVisible))
@@ -543,12 +558,12 @@ public class EditorApplication : Game
             {
                 EditorSceneManager.ConfirmSceneChange(EditorSceneManager.NewScene);
             }
-            else if (ShortcutManager.IsPressed("Global/Undo"))
+            else if (ShortcutManager.IsPressed("Global/Undo") && !Undo.IgnoresUndoInput)
             {
                 using (FrameStats.Editor.Scope())
                     Undo.PerformUndo();
             }
-            else if (ShortcutManager.IsPressed("Global/Redo"))
+            else if (ShortcutManager.IsPressed("Global/Redo") && !Undo.IgnoresUndoInput)
             {
                 using (FrameStats.Editor.Scope())
                     Undo.PerformRedo();
@@ -914,6 +929,7 @@ public class EditorApplication : Game
 
         // Render all Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips)
         OrigamiUI.Origami.EndFrame(paper);
+        Undo.EndFrame(OrigamiUI.TextFieldCommits.AnyFocused);
 
         // Intro animation overlay
         if (_introTime < IntroDuration)
@@ -1931,11 +1947,15 @@ public class EditorApplication : Game
         // override first or the round trip through play mode is what drops it.
         PrefabUtility.ReconcileOpenScene();
 
+        // An edit made this frame, typed or flushed, belongs to the edit history set aside here.
+        _savedEditUndo = Undo.PushContext();
+
         // Serialize the current editor scene
         _savedEditorScene = Echo.Serializer.Serialize(scene);
         if (_savedEditorScene == null)
         {
             Runtime.Debug.LogError("Failed to serialize scene for play mode.");
+            Undo.PopContext(_savedEditUndo);
             return;
         }
 
@@ -1949,6 +1969,7 @@ public class EditorApplication : Game
         if (playScene.IsNotValid())
         {
             Runtime.Debug.LogError("Failed to deserialize play scene.");
+            Undo.PopContext(_savedEditUndo);
             return;
         }
 
@@ -1979,8 +2000,6 @@ public class EditorApplication : Game
 
         // Load with full lifecycle (Enable -> OnEnable/Start will fire)
         Runtime.Resources.Scene.Load(playScene);
-        if (prefs.KeepUndoHistory) Undo.ClearPending();
-        else Undo.Clear();
 
         // Apply physics settings to the new scene
         try { EditorRegistries.GetSettings<PhysicsSettings>().Apply(); } catch { }
@@ -2015,6 +2034,13 @@ public class EditorApplication : Game
         // Clear selection (play scene references)
         Selection.Clear();
 
+        // The play history goes with the play scene, and the edit history comes back unless the preference drops it.
+        OrigamiUI.TextFieldCommits.DiscardAll();
+        Undo.ClearPending();
+        Undo.PopContext(_savedEditUndo);
+        _savedEditUndo = null;
+        if (!Preferences.Get<PlayModePreferences>().KeepUndoHistory) Undo.Clear();
+
         Runtime.Resources.Scene.DestroyPreserved();
 
         // Restore the editor scene. Loading it is what disposes the play scene, at the end of the frame.
@@ -2031,8 +2057,6 @@ public class EditorApplication : Game
                 Runtime.Resources.Scene.EndSessionOnSwap = true;
                 Runtime.Resources.Scene.Load(restoredScene);
             }
-            if (Preferences.Get<PlayModePreferences>().KeepUndoHistory) Undo.ClearPending();
-            else Undo.Clear();
             _savedEditorScene = null;
         }
 

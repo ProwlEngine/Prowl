@@ -149,6 +149,14 @@ public static class ShortcutManager
         return true;
     }
 
+    /// <summary>Whether any shortcut other than the given ones was triggered this frame.</summary>
+    public static bool AnyPressedExcept(params string[] excluded)
+    {
+        foreach (string id in _shortcuts.Keys)
+            if (System.Array.IndexOf(excluded, id) < 0 && IsPressed(id)) return true;
+        return false;
+    }
+
     /// <summary>
     /// Like <see cref="IsPressed"/>, but also hides the key from gameplay until it's released. Shortcuts run
     /// in the GUI, after gameplay has updated, so without this the game reads the same press next frame.

@@ -378,10 +378,8 @@ public static class PrefabEditingMode
 
         // The scene's own history addresses its objects by identifier, and the restore brings those
         // back, so the steps still resolve. If the scene could not be restored they address nothing.
-        if (sceneRestored)
-            Undo.PopContext(_savedSceneUndo);
-        else
-            Undo.Clear();
+        Undo.PopContext(_savedSceneUndo);
+        if (!sceneRestored) Undo.Clear();
         _savedSceneUndo = null;
 
         EditorSceneManager.IsDirty = _savedSceneDirty;
