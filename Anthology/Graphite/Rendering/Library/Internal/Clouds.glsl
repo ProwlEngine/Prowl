@@ -308,14 +308,16 @@ uniform vec3 _CloudShadowRight;         // across the shadow map, both square to
 uniform vec3 _CloudShadowUp;
 uniform float _CloudShadowResolution;   // texels along each side of one cascade
 
-// The cloud's density at a point the shadow map's ray reaches, its detail at its average as the light reads it
+// The cloud's density at a point the shadow map's ray reaches: its shape with its lobes, both sizes of cell edges eating
+// into it at their average, so no 3D noise is read past the lobes
 float CloudShadowDensity(vec3 p, vec3 cam, float lod, float texel)
 {
     float g2;
     vec3 q = CloudWindPoint(p, cam, g2);
     float bite, h;
     float shape = CloudShape(q, texel, bite, h);
-    return shape > 0.0 ? CloudDensity(q, shape, bite, lod, true) : 0.0;
+    float density = min(shape - 0.7346 * bite, 1.0);
+    return shape > 0.0 && density > 0.0 ? density * smoothstep(0.0, 0.15, density) : 0.0;
 }
 
 // Marches the texel's ray from the sun down through the cloud layer, from a start that differs texel to texel so the
