@@ -2004,9 +2004,6 @@ public class EditorApplication : Game
         // Load with full lifecycle (Enable -> OnEnable/Start will fire)
         Runtime.Resources.Scene.Load(playScene);
 
-        // Apply physics settings to the new scene
-        try { EditorRegistries.GetSettings<PhysicsSettings>().Apply(); } catch { }
-
         if (prefs.GameViewOnPlay != GameViewOnPlay.Nothing)
             FocusPanel(typeof(GameViewPanel));
         if (prefs.GameViewOnPlay == GameViewOnPlay.Maximize && FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel gameView)

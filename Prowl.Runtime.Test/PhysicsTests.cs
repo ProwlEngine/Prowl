@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Reflection;
@@ -2900,5 +2900,24 @@ public class PhysicsTests : RuntimeTestBase
         }
 
         Assert.Empty(thrown);
+    }
+
+    [Fact]
+    public void PhysicsDefaults_ReachEveryNewWorld()
+    {
+        PhysicsWorldSettings previous = PhysicsWorld.Defaults;
+        try
+        {
+            PhysicsWorld.Defaults = new PhysicsWorldSettings { Gravity = new Float3(0, -1, 0), SolverIterations = 5, AllowSleep = false };
+
+            Scene scene = CreateScene();
+            var standalone = new PhysicsWorld();
+
+            Assert.Equal(new Float3(0, -1, 0), scene.Physics.Gravity);
+            Assert.Equal(5, scene.Physics.SolverIterations);
+            Assert.False(scene.Physics.AllowSleep);
+            Assert.Equal(new Float3(0, -1, 0), standalone.Gravity);
+        }
+        finally { PhysicsWorld.Defaults = previous; }
     }
 }
