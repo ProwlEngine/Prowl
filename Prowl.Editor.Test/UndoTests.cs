@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Editor.Core;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -20,7 +21,7 @@ public sealed class UndoComp : Component
 /// <summary>
 /// Tests for the editor <see cref="Undo"/> system - high stakes because a bug here means lost work.
 /// Covers property snapshots, action records, structural create/destroy (full restore), identifier
-/// survival across destroy/recreate, time-window coalescing, continuous (gizmo) operations, history
+/// survival across destroy/recreate, grouping, continuous (gizmo) operations, history
 /// trimming, and play-mode gating. Pending records are flushed via the public <see cref="Undo.IncrementGroup"/>
 /// (same path as the per-frame FlushFrame).
 /// </summary>
@@ -361,17 +362,17 @@ public class UndoTests : EditorTestHarness
     // ---- Coalescing ----
 
     [Fact]
-    public void ContinuousPropertyEdits_CoalesceIntoOneStep()
+    public void PropertyEditsInOneGroup_AreOneStep()
     {
         (Scene _, GameObject _, UndoComp? comp) = MakeScene();
         comp.Value = 0;
         Undo.Snapshot(comp);
         comp.Value = 1;
-        Undo.IncrementGroup(); // step: before 0, after 1
+        Undo.FlushUndoRecordObjects(); // one frame of a drag
 
         Undo.Snapshot(comp);
         comp.Value = 2;
-        Undo.IncrementGroup(); // coalesces (chain 1->2, same target, within window)
+        Undo.FlushUndoRecordObjects(); // the next frame joins the same group's step
 
         Undo.PerformUndo();
         Assert.Equal(0, comp.Value); // back to the original, single step
@@ -525,7 +526,7 @@ public class UndoTests : EditorTestHarness
     // ---- Coalescing boundaries ----
 
     [Fact]
-    public void PropertyEdits_OutsideTimeWindow_StayAsSeparateSteps()
+    public void PropertyEdits_InSeparateGroups_StayAsSeparateSteps()
     {
         (Scene _, GameObject _, UndoComp? comp) = MakeScene();
         comp.Value = 0;
@@ -533,13 +534,11 @@ public class UndoTests : EditorTestHarness
         comp.Value = 1;
         Undo.IncrementGroup();
 
-        System.Threading.Thread.Sleep(350); // exceed the 300ms coalesce window
-
         Undo.Snapshot(comp);
         comp.Value = 2;
         Undo.IncrementGroup();
 
-        // Two distinct steps - granular undo must survive a time gap, not collapse into one.
+        // Two groups, two steps.
         Undo.PerformUndo();
         Assert.Equal(1, comp.Value);
         Undo.PerformUndo();
@@ -547,15 +546,15 @@ public class UndoTests : EditorTestHarness
     }
 
     [Fact]
-    public void RegisterCoalescableAction_MergesAndKeepsOriginalUndoLatestRedo()
+    public void RegisterCoalescableAction_InOneGroup_KeepsOriginalUndoLatestRedo()
     {
         MakeScene();
         int x = 1;
         Undo.RegisterCoalescableAction("Edit", () => x = 0, () => x = 1);
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects();
 
         x = 2;
-        Undo.RegisterCoalescableAction("Edit", () => x = 0, () => x = 2); // coalesces inline with the top
+        Undo.RegisterCoalescableAction("Edit", () => x = 0, () => x = 2); // same group, same step
 
         Undo.PerformUndo();
         Assert.Equal(0, x);            // original undo
@@ -673,5 +672,633 @@ public class UndoTests : EditorTestHarness
 
         Undo.PopContext(null);
         Assert.False(Undo.CanUndo);
+    }
+    // ================================================================
+    //  Records, groups and the step restore
+    // ================================================================
+
+    [ExecuteAlways]
+    public sealed class UndoRefComp : Component
+    {
+        public GameObject? Target;
+        public UndoComp? Comp;
+        public List<GameObject> Targets = [];
+        public Dictionary<string, GameObject> Named = [];
+        public Transform? TargetTransform;
+        public UndoNested Nested = new();
+        public float Number;
+
+        [System.NonSerialized] public GameObject? TargetAtEnable;
+        [System.NonSerialized] public int Enables;
+        [System.NonSerialized] public int Disables;
+        [System.NonSerialized] public int Validates;
+
+        public override void OnEnable() { Enables++; TargetAtEnable = Target; }
+        public override void OnDisable() => Disables++;
+        public override void OnValidate() => Validates++;
+    }
+
+    public sealed class UndoNested
+    {
+        public GameObject? Target;
+    }
+
+    [ExecuteAlways]
+    public sealed class UndoEnableComp : Component
+    {
+        [System.NonSerialized] public int Enables;
+        [System.NonSerialized] public int Disables;
+        public override void OnEnable() => Enables++;
+        public override void OnDisable() => Disables++;
+    }
+
+    public sealed class UndoNeeded : Component { }
+
+    [RequireComponent(typeof(UndoNeeded))]
+    public sealed class UndoNeeds : Component { }
+
+    private static Scene OpenScene()
+    {
+        var scene = new Scene();
+        Scene.Load(scene);
+        Scene.ProcessPendingLoad();
+        Undo.ClearAll();
+        EditorSceneManager.IsDirty = false;
+        return scene;
+    }
+
+    private static GameObject Add(Scene scene, string name, GameObject? parent = null)
+    {
+        var go = new GameObject(name);
+        if (parent.IsValid()) go.SetParent(parent, worldPositionStays: false);
+        else scene.Add(go);
+        return go;
+    }
+
+    private static T Live<T>(Guid id) where T : EngineObject => Scene.Current.FindObjectByIdentifier<T>(id)!;
+
+    [Fact]
+    public void DestroyedTogether_ReferenceEachOthersLiveInstancesOnUndo()
+    {
+        Scene scene = OpenScene();
+        GameObject door = Add(scene, "Door");
+        GameObject sw = Add(scene, "Switch");
+        UndoRefComp doorRef = door.AddComponent<UndoRefComp>();
+        UndoRefComp swRef = sw.AddComponent<UndoRefComp>();
+        doorRef.Target = sw;
+        swRef.Target = door;
+        swRef.Targets.Add(door);
+        Guid doorId = door.Identifier, swId = sw.Identifier;
+
+        Undo.DestroyObjectImmediate(door);
+        Undo.DestroyObjectImmediate(sw);
+        Undo.FlushUndoRecordObjects();
+        Undo.PerformUndo();
+
+        GameObject liveDoor = Live<GameObject>(doorId), liveSwitch = Live<GameObject>(swId);
+        UndoRefComp liveSwitchRef = liveSwitch.GetComponent<UndoRefComp>()!;
+        Assert.Same(liveSwitch, liveDoor.GetComponent<UndoRefComp>()!.Target);
+        Assert.Same(liveDoor, liveSwitchRef.Target);
+        Assert.Same(liveDoor, liveSwitchRef.Targets[0]);
+        Assert.Same(liveDoor, liveSwitchRef.TargetAtEnable);
+        Assert.Equal(1, liveSwitchRef.Enables);
+    }
+
+    [Fact]
+    public void DestroyedChild_ComesBackAtItsSiblingIndexWithItsLocalTransform()
+    {
+        Scene scene = OpenScene();
+        GameObject parent = Add(scene, "Parent");
+        parent.Transform.LocalRotation = Quaternion.FromEuler(0, 90, 0);
+        Add(scene, "First", parent);
+        GameObject middle = Add(scene, "Middle", parent);
+        Add(scene, "Last", parent);
+        middle.Transform.LocalPosition = new Float3(1, 2, 3);
+        Guid id = middle.Identifier;
+
+        Undo.DestroyObjectImmediate(middle);
+        Undo.FlushUndoRecordObjects();
+        Undo.PerformUndo();
+
+        GameObject back = Live<GameObject>(id);
+        Assert.Same(parent, back.Parent);
+        Assert.Equal(1, parent.Children.IndexOf(back));
+        Assert.Equal(new Float3(1, 2, 3), back.Transform.LocalPosition);
+    }
+
+    [Fact]
+    public void DestroyedRoot_ComesBackAtItsRootIndex()
+    {
+        Scene scene = OpenScene();
+        Add(scene, "A");
+        GameObject b = Add(scene, "B");
+        Add(scene, "C");
+        Guid id = b.Identifier;
+
+        Undo.DestroyObjectImmediate(b);
+        Assert.DoesNotContain(scene.AllObjects, g => g.Identifier == id);
+        Undo.FlushUndoRecordObjects();
+        Undo.PerformUndo();
+
+        Assert.Equal(1, scene.GetRootIndex(Live<GameObject>(id)));
+    }
+
+    [Fact]
+    public void DestroyedComponent_ComesBackAtItsIndexWithOneOnEnable()
+    {
+        Scene scene = OpenScene();
+        GameObject go = Add(scene, "GO");
+        go.AddComponent<UndoComp>();
+        UndoEnableComp comp = go.AddComponent<UndoEnableComp>();
+        go.AddComponent<UndoNeeded>();
+        Guid id = comp.Identifier;
+
+        Undo.DestroyObjectImmediate(comp);
+        Undo.FlushUndoRecordObjects();
+        Undo.PerformUndo();
+
+        UndoEnableComp back = Live<UndoEnableComp>(id);
+        Assert.Equal(1, go._components.IndexOf(back));
+        Assert.Equal(1, back.Enables);
+    }
+
+    [Fact]
+    public void CreateEmptyParent_UndoAndRedo_LeaveOneChild()
+    {
+        Scene scene = OpenScene();
+        GameObject oldParent = Add(scene, "Old");
+        GameObject child = Add(scene, "Child", oldParent);
+        Guid childId = child.Identifier;
+
+        var parent = new GameObject("New Parent");
+        scene.Add(parent);
+        Guid parentId = parent.Identifier;
+        Undo.RegisterCreatedObjectUndo(parent, "Create Empty Parent");
+        Undo.SetTransformParent(child, parent, false, "Create Empty Parent");
+        Undo.FlushUndoRecordObjects();
+
+        Undo.PerformUndo();
+        Assert.Same(oldParent, Live<GameObject>(childId).Parent);
+        Assert.Null(scene.FindObjectByIdentifier<GameObject>(parentId));
+
+        Undo.PerformRedo();
+        GameObject liveParent = Live<GameObject>(parentId);
+        Assert.Single(liveParent.Children);
+        Assert.Empty(oldParent.Children);
+        Assert.Single(scene.AllObjects, g => g.Identifier == childId);
+    }
+
+    [Fact]
+    public void CreatedParent_WithAComponentReferencingTheMovedChild_RedoesWithTheLiveChild()
+    {
+        Scene scene = OpenScene();
+        GameObject child = Add(scene, "Child");
+        Guid childId = child.Identifier;
+
+        var parent = new GameObject("Parent");
+        scene.Add(parent);
+        Guid parentId = parent.Identifier;
+        parent.AddComponent<UndoRefComp>().Target = child;
+        Undo.RegisterCreatedObjectUndo(parent, "Create");
+        Undo.SetTransformParent(child, parent, false, "Create");
+        Undo.FlushUndoRecordObjects();
+
+        Undo.PerformUndo();
+        Undo.PerformRedo();
+
+        GameObject liveChild = Live<GameObject>(childId);
+        Assert.Same(liveChild, Live<GameObject>(parentId).GetComponent<UndoRefComp>()!.Target);
+        Assert.Single(scene.AllObjects, g => g.Identifier == childId);
+    }
+
+    [Fact]
+    public void ReparentThenDestroy_UndoesToTheOriginalParent()
+    {
+        Scene scene = OpenScene();
+        GameObject a = Add(scene, "A");
+        GameObject b = Add(scene, "B");
+        GameObject x = Add(scene, "X", a);
+        Guid xId = x.Identifier;
+
+        Undo.SetTransformParent(x, b, false, "Move");
+        Undo.DestroyObjectImmediate(x);
+        Undo.FlushUndoRecordObjects();
+        Undo.PerformUndo();
+
+        Assert.Same(a, Live<GameObject>(xId).Parent);
+    }
+
+    [Fact]
+    public void ComponentDisable_UndoFiresOnEnable()
+    {
+        Scene scene = OpenScene();
+        GameObject go = Add(scene, "GO");
+        UndoEnableComp comp = go.AddComponent<UndoEnableComp>();
+        comp.Enables = 0;
+
+        Undo.RecordObject(comp, "Disable");
+        comp.Enabled = false;
+        Undo.FlushUndoRecordObjects();
+        Undo.PerformUndo();
+
+        Assert.True(comp.Enabled);
+        Assert.True(comp.EnabledInHierarchy);
+        Assert.Equal(1, comp.Enables);
+    }
+
+    [Fact]
+    public void ComponentToggle_UndoFiresOnDisable()
+    {
+        Scene scene = OpenScene();
+        GameObject go = Add(scene, "GO");
+        UndoEnableComp comp = go.AddComponent<UndoEnableComp>();
+        comp.Enabled = false;
+
+        Undo.RecordObject(comp, "Enable");
+        comp.Enabled = true;
+        Undo.FlushUndoRecordObjects();
+        comp.Disables = 0;
+        Undo.PerformUndo();
+
+        Assert.False(comp.Enabled);
+        Assert.Equal(1, comp.Disables);
+    }
+
+    [Fact]
+    public void ReferenceField_UndoPointsAtTheSameLiveObject()
+    {
+        Scene scene = OpenScene();
+        GameObject a = Add(scene, "A");
+        GameObject b = Add(scene, "B");
+        UndoRefComp holder = Add(scene, "Holder").AddComponent<UndoRefComp>();
+        holder.Target = a;
+
+        Undo.RecordObject(holder, "Retarget");
+        holder.Target = b;
+        Undo.FlushUndoRecordObjects();
+        Undo.PerformUndo();
+
+        Assert.Same(a, holder.Target);
+        Assert.Single(scene.AllObjects, g => g.Name == "A");
+    }
+
+    [Fact]
+    public void RuntimeMaterialField_UndoIsTheSameMaterial()
+    {
+        Scene scene = OpenScene();
+        MeshRenderer renderer = Add(scene, "R").AddComponent<MeshRenderer>();
+        var first = new Material { Name = "First" };
+        renderer.Material = first;
+
+        Undo.RecordObject(renderer, "Material");
+        renderer.Material = new Material { Name = "Second" };
+        Undo.FlushUndoRecordObjects();
+        Undo.PerformUndo();
+
+        Assert.Same(first, renderer.Material);
+    }
+
+    [Fact]
+    public void OnlyChangedFieldsRestore_AnUnchangedSiblingSurvives()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+        comp.Value = 1;
+        comp.Label = "a";
+
+        Undo.RecordObject(comp, "Value");
+        comp.Value = 2;
+        Undo.FlushUndoRecordObjects();
+        comp.Label = "changed elsewhere";
+        Undo.PerformUndo();
+
+        Assert.Equal(1, comp.Value);
+        Assert.Equal("changed elsewhere", comp.Label);
+    }
+
+    [Fact]
+    public void UnchangedRecord_RecordsNothing_EvenWithNaN()
+    {
+        Scene scene = OpenScene();
+        UndoRefComp comp = Add(scene, "GO").AddComponent<UndoRefComp>();
+        comp.Number = float.NaN;
+
+        Undo.RecordObject(comp, "Nothing");
+        Undo.FlushUndoRecordObjects();
+
+        Assert.False(Undo.CanUndo);
+    }
+
+    [Fact]
+    public void DestroyedTarget_UndoRebindsEveryHolderToTheLiveInstance()
+    {
+        Scene scene = OpenScene();
+        GameObject target = Add(scene, "Target");
+        UndoComp targetComp = target.AddComponent<UndoComp>();
+        UndoRefComp holder = Add(scene, "Holder").AddComponent<UndoRefComp>();
+        holder.Target = target;
+        holder.Comp = targetComp;
+        holder.Targets.Add(target);
+        holder.Named["t"] = target;
+        holder.TargetTransform = target.Transform;
+        holder.Nested.Target = target;
+        Guid id = target.Identifier;
+
+        Undo.DestroyObjectImmediate(target);
+        Undo.FlushUndoRecordObjects();
+        holder.Validates = 0;
+        Undo.PerformUndo();
+
+        GameObject live = Live<GameObject>(id);
+        Assert.Same(live, holder.Target);
+        Assert.Same(live.GetComponent<UndoComp>(), holder.Comp);
+        Assert.Same(live, holder.Targets[0]);
+        Assert.Same(live, holder.Named["t"]);
+        Assert.Same(live.Transform, holder.TargetTransform);
+        Assert.Same(live, holder.Nested.Target);
+        Assert.Equal(1, holder.Validates);
+    }
+
+    [Fact]
+    public void TwoRecordsOnOneObjectInOneGroup_MergeIntoOne()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+        comp.Value = 0;
+
+        Undo.RecordObject(comp, "Edit");
+        comp.Value = 1;
+        Undo.RecordObject(comp, "Edit");
+        comp.Value = 2;
+        Undo.FlushUndoRecordObjects();
+        Undo.PerformUndo();
+
+        Assert.Equal(0, comp.Value);
+        Assert.False(Undo.CanUndo);
+        Undo.PerformRedo();
+        Assert.Equal(2, comp.Value);
+    }
+
+    [Fact]
+    public void DragStyleRecordsOverFrames_AreOneStep()
+    {
+        Scene scene = OpenScene();
+        GameObject go = Add(scene, "GO");
+
+        for (int frame = 1; frame <= 3; frame++)
+        {
+            Undo.RecordObject(go, "Move");
+            go.Transform.LocalPosition = new Float3(frame, 0, 0);
+            Undo.FlushUndoRecordObjects();
+        }
+        Undo.IncrementCurrentGroup();
+        Undo.PerformUndo();
+
+        Assert.Equal(Float3.Zero, go.Transform.LocalPosition);
+        Assert.False(Undo.CanUndo);
+    }
+
+    [Fact]
+    public void EditAfterUndo_KeepsRedoUntilItsGroupCloses_AndBlocksRedoMeanwhile()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+        Undo.RecordObject(comp, "A"); comp.Value = 1; Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+        Undo.PerformUndo();
+
+        Undo.RecordObject(comp, "B");
+        comp.Value = 5;
+        Undo.FlushUndoRecordObjects();
+        Assert.False(Undo.CanRedo);
+        Undo.PerformRedo();
+        Assert.Equal(5, comp.Value);
+
+        Undo.IncrementCurrentGroup();
+        Assert.Empty(Undo.RedoSteps);
+    }
+
+    [Fact]
+    public void OneFrameEditAfterUndo_ClearsRedoWhenItIsPushed()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+        Undo.RecordObject(comp, "A"); comp.Value = 1; Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+        Undo.PerformUndo();
+
+        Undo.RecordObject(comp, "B");
+        comp.Value = 5;
+        Undo.EndFrame(textFocused: false);
+        Undo.FlushFrame();
+
+        Assert.Empty(Undo.RedoSteps);
+    }
+
+    [Fact]
+    public void RevertAllInCurrentGroup_RestoresPopsAndKeepsRedo()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+        Undo.RecordObject(comp, "A"); comp.Value = 1; Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+        Undo.PerformUndo();
+
+        Undo.RecordObject(comp, "Drag"); comp.Value = 7; Undo.FlushUndoRecordObjects();
+        Undo.RecordObject(comp, "Drag"); comp.Value = 8;
+        Undo.RevertAllInCurrentGroup();
+
+        Assert.Equal(0, comp.Value);
+        Assert.Single(Undo.RedoSteps);
+        Assert.Empty(Undo.UndoSteps);
+    }
+
+    [Fact]
+    public void AddComponent_UndoRemovesRequiredComponentsToo_RedoBringsBackValuesSetAfter()
+    {
+        Scene scene = OpenScene();
+        GameObject go = Add(scene, "GO");
+
+        Undo.AddComponent<UndoNeeds>(go);
+        UndoComp comp = Undo.AddComponent<UndoComp>(go);
+        comp.Value = 9;
+        Guid compId = comp.Identifier;
+        Undo.FlushUndoRecordObjects();
+        Assert.NotNull(go.GetComponent<UndoNeeded>());
+
+        Undo.PerformUndo();
+        Assert.Null(go.GetComponent<UndoNeeds>());
+        Assert.Null(go.GetComponent<UndoNeeded>());
+        Assert.Null(go.GetComponent<UndoComp>());
+
+        Undo.PerformRedo();
+        Assert.NotNull(go.GetComponent<UndoNeeds>());
+        Assert.NotNull(go.GetComponent<UndoNeeded>());
+        Assert.Equal(9, Live<UndoComp>(compId).Value);
+    }
+
+    [Fact]
+    public void CreatedThenDestroyedInOneGroup_RecordsNothing()
+    {
+        Scene scene = OpenScene();
+        GameObject go = Add(scene, "Temp");
+        Undo.RegisterCreatedObjectUndo(go, "Create");
+        Undo.RecordObject(go, "Rename");
+        go.Name = "Renamed";
+        Undo.DestroyObjectImmediate(go);
+        Undo.FlushUndoRecordObjects();
+
+        Assert.False(Undo.CanUndo);
+    }
+
+    [Fact]
+    public void AddComponentThenDestroyInOneGroup_RecordsNothing()
+    {
+        Scene scene = OpenScene();
+        GameObject go = Add(scene, "GO");
+        UndoComp comp = Undo.AddComponent<UndoComp>(go);
+        Undo.DestroyObjectImmediate(comp);
+        Undo.FlushUndoRecordObjects();
+
+        Assert.False(Undo.CanUndo);
+    }
+
+    [Fact]
+    public void HierarchyRecord_UndoRemovesChildrenAddedAfterIt()
+    {
+        Scene scene = OpenScene();
+        GameObject root = Add(scene, "Root");
+        GameObject kept = Add(scene, "Kept", root);
+        Guid rootId = root.Identifier, keptId = kept.Identifier;
+
+        Undo.RegisterFullObjectHierarchyUndo(root, "Change");
+        Add(scene, "Added", root);
+        root.AddComponent<UndoComp>();
+        Undo.FlushUndoRecordObjects();
+        Undo.PerformUndo();
+
+        GameObject live = Live<GameObject>(rootId);
+        Assert.Single(live.Children);
+        Assert.Equal(keptId, live.Children[0].Identifier);
+        Assert.Null(live.GetComponent<UndoComp>());
+    }
+
+    [Fact]
+    public void Steps_MarkTheirOwners_OnPushAndUndo()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+
+        Undo.RecordObject(comp, "Edit");
+        comp.Value = 3;
+        Undo.FlushUndoRecordObjects();
+        Assert.True(EditorSceneManager.IsDirty);
+
+        EditorSceneManager.IsDirty = false;
+        Undo.PerformUndo();
+        Assert.True(EditorSceneManager.IsDirty);
+    }
+
+    [Fact]
+    public void DontSaveObjects_MarkNothing()
+    {
+        Scene scene = OpenScene();
+        GameObject go = Add(scene, "Hidden");
+        go.HideFlags = HideFlags.DontSave;
+
+        Undo.RecordObject(go, "Rename");
+        go.Name = "X";
+        Undo.FlushUndoRecordObjects();
+
+        Assert.False(EditorSceneManager.IsDirty);
+        Assert.True(Undo.CanUndo);
+    }
+
+    [Fact]
+    public void PostprocessModifications_FiltersKeys()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+        Undo.postprocessModifications = mods => [.. mods.Where(m => m.PropertyPath != nameof(UndoComp.Label))];
+        try
+        {
+            Undo.RecordObject(comp, "Edit");
+            comp.Value = 1;
+            comp.Label = "x";
+            Undo.FlushUndoRecordObjects();
+            Undo.PerformUndo();
+            Assert.Equal(0, comp.Value);
+            Assert.Equal("x", comp.Label);
+
+            Undo.ClearAll();
+            Undo.RecordObject(comp, "Label only");
+            comp.Label = "y";
+            Undo.FlushUndoRecordObjects();
+            Assert.False(Undo.CanUndo);
+        }
+        finally { Undo.postprocessModifications = null; }
+    }
+
+    [Fact]
+    public void PerformUndoTo_AndRedoTo_ApplyEveryStepBetween()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+        int changes = 0;
+        Undo.historyChanged += Count;
+        try
+        {
+            for (int i = 1; i <= 3; i++)
+            {
+                Undo.RecordObject(comp, $"Set {i}");
+                comp.Value = i;
+                Undo.FlushUndoRecordObjects();
+                Undo.IncrementCurrentGroup();
+            }
+            Assert.True(changes >= 3);
+
+            Undo.PerformUndoTo(Undo.UndoSteps[0].Id);
+            Assert.Equal(0, comp.Value);
+            Assert.Equal(3, Undo.RedoSteps.Count);
+
+            Undo.PerformRedoTo(Undo.RedoSteps[1].Id);
+            Assert.Equal(2, comp.Value);
+        }
+        finally { Undo.historyChanged -= Count; }
+
+        void Count() => changes++;
+    }
+
+    [Fact]
+    public void ComponentQueuedForDestroy_IsRebound()
+    {
+        Scene scene = OpenScene();
+        GameObject go = Add(scene, "GO");
+        UndoComp comp = go.AddComponent<UndoComp>();
+        UndoRefComp holder = Add(scene, "Holder").AddComponent<UndoRefComp>();
+        holder.Comp = comp;
+        Guid id = comp.Identifier;
+
+        Undo.DestroyObjectImmediate(comp);
+        Undo.FlushUndoRecordObjects();
+        Undo.PerformUndo();
+
+        Assert.Same(Live<UndoComp>(id), holder.Comp);
+    }
+
+    [Fact]
+    public void RecreatedUnderDisabledParent_GetsNoOnEnable()
+    {
+        Scene scene = OpenScene();
+        GameObject parent = Add(scene, "Parent");
+        GameObject child = Add(scene, "Child", parent);
+        UndoEnableComp comp = child.AddComponent<UndoEnableComp>();
+        Guid id = comp.Identifier;
+        parent.Enabled = false;
+
+        Undo.DestroyObjectImmediate(child);
+        Undo.FlushUndoRecordObjects();
+        Undo.PerformUndo();
+
+        UndoEnableComp back = Live<UndoEnableComp>(id);
+        Assert.Equal(0, back.Enables);
+        Assert.False(back.EnabledInHierarchy);
     }
 }

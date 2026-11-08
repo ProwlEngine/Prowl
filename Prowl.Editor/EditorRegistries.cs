@@ -684,6 +684,13 @@ public static class EditorRegistries
         foreach (SettingsEntry entry in _settingsEntries) SaveSettings(entry);
     }
 
+    /// <summary> Saves the registered settings entry of the given type, if there is one. </summary>
+    internal static void SaveSettings(Type type)
+    {
+        foreach (SettingsEntry entry in _settingsEntries)
+            if (entry.Type == type) { SaveSettings(entry); return; }
+    }
+
     /// <summary> Saves a single settings entry to a YAML file named after the entry in the project settings directory. </summary>
     public static void SaveSettings(SettingsEntry entry)
     {

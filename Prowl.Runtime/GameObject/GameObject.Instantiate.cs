@@ -148,6 +148,15 @@ public partial class GameObject
         }
     }
 
+    /// <summary>Runs a read with stored identifiers kept, for anything restored that must come back as the same object.</summary>
+    internal static T PreservingIdentifiersWhile<T>(Func<T> read)
+    {
+        bool previous = PreservingIdentifiers;
+        PreservingIdentifiers = true;
+        try { return read(); }
+        finally { PreservingIdentifiers = previous; }
+    }
+
     /// <summary>
     /// Set while <see cref="DeserializePreservingIdentifiers"/> runs. Thread-local, so a load on one
     /// thread cannot change what another thread's load does.

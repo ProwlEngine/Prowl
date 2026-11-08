@@ -1232,6 +1232,7 @@ public partial class PrefabTests : EditorTestHarness
         comp.A = 1;
         _ = CreatePrefabAsset(root, "MadeUnpack.prefab");
         Guid stampedSource = root.SourceIdentifier;
+        Undo.IncrementGroup(); // making the prefab and unpacking it are two separate edits
 
         PrefabUtility.UnpackPrefabInstance(root);
         Assert.False(root.IsPrefabInstance);

@@ -1489,6 +1489,33 @@ public partial class GameObject : EngineObject, ISerializable
     }
 
     /// <summary>
+    /// Attaches a component that was built and filled elsewhere at <paramref name="index"/>, then tells the scene.
+    /// No requirements are added, since whatever restored it restores what it needs too.
+    /// </summary>
+    internal void AttachComponent(Component component, int index)
+    {
+        MainThreadContext.AssertOwner(this, nameof(AttachComponent));
+        index = Math.Clamp(index, 0, _components.Count);
+        _components.Insert(index, component);
+        _componentCache.Add(component.GetType(), component);
+        component.AttachToGameObject(this);
+        NotifyComponentAddedToScene(component);
+    }
+
+    /// <summary>Marks this tree and its components disabled in the hierarchy, so the next recompute sees every change.</summary>
+    internal void ClearHierarchyState()
+    {
+        _enabledInHierarchy = false;
+        foreach (Component component in _components)
+            component._enabledInHierarchy = false;
+        foreach (GameObject child in Children)
+            child.ClearHierarchyState();
+    }
+
+    /// <summary>Recomputes enabled in hierarchy for this tree. Fires no callbacks while it is in no scene.</summary>
+    internal void RecomputeHierarchyState() => HierarchyStateChanged();
+
+    /// <summary>
     /// Attaches a bare component of the given type, for a copy to fill. Unlike <see cref="AddComponent(Type)"/> this
     /// does not pull in required components, since the object being copied already has whatever it needs. Null when
     /// the type's constructor throws, so one bad component is skipped rather than abandoning the whole copy.
