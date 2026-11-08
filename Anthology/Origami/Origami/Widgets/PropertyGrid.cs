@@ -1076,17 +1076,25 @@ public static class PropertyGridRenderer
     private static void SetFieldOnAllAndNotify(PropertyGridConfig config, FieldInfo field,
         IReadOnlyList<object> targets, object? value, Action<object>? rootOnChange)
     {
+        // A nested object edited in place belongs to the first target only, so the others keep their own instance.
+        bool inPlace = value != null && !value.GetType().IsValueType && value is not string && targets.Count > 1 && targets[0] != null
+            && ReferenceEquals(ResolveFieldOn(targets[0], field)?.GetValue(targets[0]), value);
+
         for (int i = 0; i < targets.Count; i++)
         {
             var t = targets[i];
             if (t == null) continue;
-            var f = t.GetType() == field.DeclaringType ? field : ResolveField(t.GetType(), field.Name);
+            var f = ResolveFieldOn(t, field);
             if (f == null) continue;
-            try { f.SetValue(t, value); } catch { continue; }
+            if (!(inPlace && i > 0))
+                try { f.SetValue(t, value); } catch { continue; }
             config.OnFieldChanged?.Invoke(t);
         }
         rootOnChange?.Invoke(targets[0]);
     }
+
+    private static FieldInfo? ResolveFieldOn(object target, FieldInfo field)
+        => target.GetType() == field.DeclaringType ? field : ResolveField(target.GetType(), field.Name);
 
     /// <summary>The serializable fields shared (by name and type) across every target.</summary>
     public static FieldInfo[] CommonSerializableFields(IReadOnlyList<object> targets)

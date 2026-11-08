@@ -261,7 +261,8 @@ public class EchoObject_Equality_Tests
         Assert.True(infDouble.Equals(new EchoObject(double.PositiveInfinity)));
         Assert.True(negInfDouble.Equals(new EchoObject(double.NegativeInfinity)));
         Assert.True(new EchoObject(float.NaN).Equals(new EchoObject(float.NaN)));
-        Assert.False(new EchoObject(0f).Equals(new EchoObject(-0f)));
+        Assert.True(new EchoObject(0f).Equals(new EchoObject(-0f)));
+        Assert.Equal(new EchoObject(0f).GetHashCode(), new EchoObject(-0f).GetHashCode());
     }
 
     [Fact]
