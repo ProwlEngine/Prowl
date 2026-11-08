@@ -35,35 +35,6 @@ public sealed class UISceneEditor : SceneTool
         AnchorBL, AnchorBR, AnchorTR, AnchorTL,
     }
 
-    /// <summary>Snapshot of the layout fields this editor mutates - used for undo.</summary>
-    private struct LayoutState
-    {
-        public Float2 AnchorMin, AnchorMax, Pivot, SizeDelta, AnchoredPosition;
-
-        public static LayoutState Capture(RectTransform rt) => new()
-        {
-            AnchorMin = rt.AnchorMin,
-            AnchorMax = rt.AnchorMax,
-            Pivot = rt.Pivot,
-            SizeDelta = rt.SizeDelta,
-            AnchoredPosition = rt.AnchoredPosition,
-        };
-
-        public readonly void ApplyTo(RectTransform rt)
-        {
-            rt.AnchorMin = AnchorMin;
-            rt.AnchorMax = AnchorMax;
-            rt.Pivot = Pivot;
-            rt.SizeDelta = SizeDelta;
-            rt.AnchoredPosition = AnchoredPosition;
-        }
-
-        public readonly bool Matches(LayoutState o) =>
-            AnchorMin.Equals(o.AnchorMin) && AnchorMax.Equals(o.AnchorMax) &&
-            Pivot.Equals(o.Pivot) && SizeDelta.Equals(o.SizeDelta) &&
-            AnchoredPosition.Equals(o.AnchoredPosition);
-    }
-
     // ================================================================
     //  Constants / colors
     // ================================================================
@@ -89,7 +60,6 @@ public sealed class UISceneEditor : SceneTool
     // Drag anchoring - captured the frame a handle is grabbed.
     private Float2 _dragStartDesign;
     private Rect _dragStartRect;
-    private LayoutState _dragStartState;
 
     // Move click-vs-drag: a press inside the rect body tentatively grabs Move; if the pointer doesn't
     // travel past ClickThreshold before release, it's treated as a plain selection click instead of a move.
@@ -239,7 +209,7 @@ public sealed class UISceneEditor : SceneTool
             // ---- Begin a drag ----
             if (_active == Handle.None && nearest != Handle.None && ctx.TryBeginDrag(nearestId))
             {
-                BeginDrag(nearest, designHit, cr, rt);
+                BeginDrag(nearest, designHit, cr);
                 _dragControl = nearestId;
 
                 // A press inside the body tentatively grabs Move; release decides whether it was a
@@ -265,9 +235,9 @@ public sealed class UISceneEditor : SceneTool
 
                     if (!(_active == Handle.Move && _moveIsClick))
                     {
+                        Undo.RecordObject(rt, "Modify UI Rect");
                         ApplyDrag(rt, parentRect, designHit);
                         canvas.RebuildIfDirty();
-                        EditorSceneManager.MarkDirty();
                     }
                 }
                 else if (_active == Handle.Move && _moveIsClick)
@@ -284,7 +254,6 @@ public sealed class UISceneEditor : SceneTool
                 }
                 else
                 {
-                    RegisterUndo(_target.GameObject, _dragStartState, LayoutState.Capture(rt));
                     EndDrag(ctx);
                 }
             }
@@ -593,12 +562,11 @@ public sealed class UISceneEditor : SceneTool
     //  Helpers
     // ================================================================
 
-    private void BeginDrag(Handle handle, Float2 designHit, Rect cr, RectTransform rt)
+    private void BeginDrag(Handle handle, Float2 designHit, Rect cr)
     {
         _active = handle;
         _dragStartDesign = designHit;
         _dragStartRect = cr;
-        _dragStartState = LayoutState.Capture(rt);
     }
 
     private void EndDrag(HandleContext ctx)
@@ -622,16 +590,4 @@ public sealed class UISceneEditor : SceneTool
             : null;
         return parent.IsValid() ? parent.ComputedRect : canvas.RootRect;
     }
-
-    private void RegisterUndo(GameObject go, LayoutState before, LayoutState after)
-    {
-        if (before.Matches(after))
-            return;
-
-        Guid id = go.Identifier;
-        Undo.RegisterAction("Modify UI Rect",
-            () => { GameObject? go = Undo.FindGO(id); RectTransform? rt = go.IsValid() ? go.RectTransform : null; if (rt.IsValid()) before.ApplyTo(rt); },
-            () => { GameObject? go = Undo.FindGO(id); RectTransform? rt = go.IsValid() ? go.RectTransform : null; if (rt.IsValid()) after.ApplyTo(rt); });
-    }
-
 }

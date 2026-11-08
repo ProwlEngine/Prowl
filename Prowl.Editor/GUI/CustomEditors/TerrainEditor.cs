@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.GUI.SceneView.Editors;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -70,11 +71,9 @@ public class TerrainEditor : CustomEditor
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        Undo.Snapshot(terrain);
-
         // Terrain Data asset ref (outside tabs - required before any tab content)
         PropertyGridUtils.DrawField(paper, $"{id}_data", "Terrain Data", typeof(TerrainData), terrain.Data,
-            v => terrain.Data = v as TerrainData, 0);
+            v => { Undo.RecordObject(terrain, "Terrain Data"); terrain.Data = v as TerrainData; }, 0);
 
         if (terrainData.IsNotValid())
         {
@@ -412,9 +411,10 @@ public class TerrainEditor : CustomEditor
                     var postProtos = new List<TreePrototype>(data.TreePrototypes);
                     var postTrees = new List<TreeInstance>(data.Trees);
 
-                    Undo.RegisterAction("Remove Tree Prototype",
-                        () => { data.TreePrototypes = new List<TreePrototype>(preProtos); data.Trees = new List<TreeInstance>(preTrees); },
-                        () => { data.TreePrototypes = new List<TreePrototype>(postProtos); data.Trees = new List<TreeInstance>(postTrees); });
+                    if (_terrain.IsValid())
+                        TerrainDataUndo.Register("Remove Tree Prototype", _terrain, data,
+                            d => { d.TreePrototypes = new List<TreePrototype>(preProtos); d.Trees = new List<TreeInstance>(preTrees); },
+                            d => { d.TreePrototypes = new List<TreePrototype>(postProtos); d.Trees = new List<TreeInstance>(postTrees); });
 
                     ActiveTreePrototype = Math.Clamp(ActiveTreePrototype, 0, Math.Max(0, data.TreePrototypes.Count - 1));
                     _isDirty = true;
@@ -457,9 +457,9 @@ public class TerrainEditor : CustomEditor
     {
         EditorGUI.SectionHeader(paper, $"{id}_mh", "Materials", first: true);
         PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(Material), terrain.Material,
-            v => terrain.Material = v as Material, 0);
+            v => { Undo.RecordObject(terrain, "Material"); terrain.Material = v as Material; }, 0);
         PropertyGridUtils.DrawField(paper, $"{id}_detailmat", "Detail Material", typeof(Material), terrain.DetailMaterial,
-            v => { terrain.DetailMaterial = v as Material; terrain.InvalidateDetailCache(); }, 0);
+            v => { Undo.RecordObject(terrain, "Detail Material"); terrain.DetailMaterial = v as Material; terrain.InvalidateDetailCache(); }, 0);
 
         EditorGUI.SectionHeader(paper, $"{id}_dh", "Dimensions");
         EditorGUI.Row(paper, $"{id}_size", "Terrain Size", () =>
@@ -518,36 +518,36 @@ public class TerrainEditor : CustomEditor
         if (meshCurrent < 0) meshCurrent = 0;
         EditorGUI.Row(paper, $"{id}_meshres", "Mesh", () =>
             Origami.Dropdown(paper, $"{id}_meshres_v", meshCurrent,
-                v => { terrain.MeshResolution = int.Parse(meshOptions[v]); }, meshOptions).Show());
+                v => { Undo.RecordObject(terrain, "Mesh Resolution"); terrain.MeshResolution = int.Parse(meshOptions[v]); }, meshOptions).Show());
 
         EditorGUI.SectionHeader(paper, $"{id}_lh", "Level of Detail");
         EditorGUI.Row(paper, $"{id}_lod", "Max LOD Levels", () =>
             Origami.NumericField<int>(paper, $"{id}_lod_v", terrain.MaxLODLevel,
-                v => { terrain.MaxLODLevel = Math.Clamp(v, 1, 8); }).Min(1).Max(8).Show());
+                v => { Undo.RecordObject(terrain, "Max LOD Levels"); terrain.MaxLODLevel = Math.Clamp(v, 1, 8); }).Min(1).Max(8).Show());
         EditorGUI.Row(paper, $"{id}_lodq", "LOD Quality", () =>
             Origami.Slider(paper, $"{id}_lodq_v", terrain.LODQuality,
-                v => { terrain.LODQuality = MathF.Max(0.1f, v); }, 0.1f, 5f).Format("F1").Show());
+                v => { Undo.RecordObject(terrain, "LOD Quality"); terrain.LODQuality = MathF.Max(0.1f, v); }, 0.1f, 5f).Format("F1").Show());
 
         EditorGUI.SectionHeader(paper, $"{id}_vh", "Vegetation");
         EditorGUI.Row(paper, $"{id}_detaildist", "Detail Distance", () =>
             Origami.Slider(paper, $"{id}_detaildist_v", terrain.DetailDistance,
-                v => { terrain.DetailDistance = MathF.Max(1f, v); }, 10f, 1000f).Format("F0").Show());
+                v => { Undo.RecordObject(terrain, "Detail Distance"); terrain.DetailDistance = MathF.Max(1f, v); }, 10f, 1000f).Format("F0").Show());
         EditorGUI.Row(paper, $"{id}_detaildensity", "Detail Density", () =>
             Origami.Slider(paper, $"{id}_detaildensity_v", terrain.DetailDensity,
-                v => { terrain.DetailDensity = MathF.Max(0.05f, v); }, 0.25f, 8f).Format("F2").Show());
+                v => { Undo.RecordObject(terrain, "Detail Density"); terrain.DetailDensity = MathF.Max(0.05f, v); }, 0.25f, 8f).Format("F2").Show());
         EditorGUI.Row(paper, $"{id}_detailcascades", "Detail Cascades", () =>
             Origami.IntSlider(paper, $"{id}_detailcascades_v", terrain.DetailCascades,
-                v => { terrain.DetailCascades = Math.Clamp(v, 1, TerrainDetailRenderer.kMaxCascades); },
+                v => { Undo.RecordObject(terrain, "Detail Cascades"); terrain.DetailCascades = Math.Clamp(v, 1, TerrainDetailRenderer.kMaxCascades); },
                 1, TerrainDetailRenderer.kMaxCascades).Show());
         EditorGUI.Row(paper, $"{id}_treedist", "Tree View Distance", () =>
             Origami.Slider(paper, $"{id}_treedist_v", terrain.TreeDistance,
-                v => { terrain.TreeDistance = MathF.Max(1f, v); }, 50f, 2000f).Format("F0").Show());
+                v => { Undo.RecordObject(terrain, "Tree View Distance"); terrain.TreeDistance = MathF.Max(1f, v); }, 50f, 2000f).Format("F0").Show());
 
         EditorGUI.SectionHeader(paper, $"{id}_shh", "Shadows");
         EditorGUI.Row(paper, $"{id}_cast", "Shadow Casting", () =>
-            Origami.EnumDropdown(paper, $"{id}_cast_v", terrain.ShadowCasting, v => terrain.ShadowCasting = v).Show());
+            Origami.EnumDropdown(paper, $"{id}_cast_v", terrain.ShadowCasting, v => { Undo.RecordObject(terrain, "Shadow Casting"); terrain.ShadowCasting = v; }).Show());
         EditorGUI.Row(paper, $"{id}_recv", "Receive Shadows", () =>
-            Origami.Checkbox(paper, $"{id}_recv_v", terrain.ReceiveShadows, v => terrain.ReceiveShadows = v).Show());
+            Origami.Checkbox(paper, $"{id}_recv_v", terrain.ReceiveShadows, v => { Undo.RecordObject(terrain, "Receive Shadows"); terrain.ReceiveShadows = v; }).Show());
     }
 
     /// <summary>Size / Strength / Falloff sliders (design .tr-brushrow).</summary>

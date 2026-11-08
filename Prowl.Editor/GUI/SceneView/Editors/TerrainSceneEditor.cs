@@ -52,11 +52,7 @@ public class TerrainSceneEditor : SceneTool
     public override void OnDeactivated()
     {
         if (!ReferenceEquals(_terrain, null))
-        {
             _terrain.BrushVisible = false;
-            if (_isPainting)
-                Undo.EndContinuous();
-        }
         _terrain = null;
         _isPainting = false;
     }
@@ -184,28 +180,20 @@ public class TerrainSceneEditor : SceneTool
                     if (removed > 0)
                     {
                         var postTreeList = new List<TreeInstance>(terrainData.Trees);
-                        TerrainData capturedData = terrainData;
-                        List<TreeInstance> pre = preTreeList;
-                        List<TreeInstance> post = postTreeList;
-                        Undo.RegisterAction("Remove Trees",
-                            () => { capturedData.Trees = new List<TreeInstance>(pre); },
-                            () => { capturedData.Trees = new List<TreeInstance>(post); });
+                        TerrainDataUndo.Register("Remove Trees", _terrain, terrainData,
+                            d => d.Trees = new List<TreeInstance>(preTreeList),
+                            d => d.Trees = new List<TreeInstance>(postTreeList));
                         TerrainEditor.ActiveInstance?.MarkDirty();
-                        EditorSceneManager.MarkDirty();
                     }
                 }
                 else
                 {
                     TerrainEditor.PlaceTrees(terrainData, terrainUV, terrainData.Size);
                     var postTreeList = new List<TreeInstance>(terrainData.Trees);
-                    TerrainData capturedData = terrainData;
-                    List<TreeInstance> pre = preTreeList;
-                    List<TreeInstance> post = postTreeList;
-                    Undo.RegisterAction("Place Trees",
-                        () => { capturedData.Trees = new List<TreeInstance>(pre); },
-                        () => { capturedData.Trees = new List<TreeInstance>(post); });
+                    TerrainDataUndo.Register("Place Trees", _terrain, terrainData,
+                        d => d.Trees = new List<TreeInstance>(preTreeList),
+                        d => d.Trees = new List<TreeInstance>(postTreeList));
                     TerrainEditor.ActiveInstance?.MarkDirty();
-                    EditorSceneManager.MarkDirty();
                 }
             }
         }
@@ -228,14 +216,13 @@ public class TerrainSceneEditor : SceneTool
                 {
                     if (hChanged || gChanged) _terrain.InvalidateDetailCache();
                     TerrainEditor.ActiveInstance?.MarkDirty();
-                    EditorSceneManager.MarkDirty();
                 }
             }
 
             if (_isPainting && (leftReleased || !leftDown))
             {
                 _isPainting = false;
-                RegisterStrokeUndo(terrainData);
+                RegisterStrokeUndo(_terrain, terrainData);
             }
         }
     }
@@ -268,7 +255,7 @@ public class TerrainSceneEditor : SceneTool
         }
     }
 
-    private void RegisterStrokeUndo(TerrainData data)
+    private void RegisterStrokeUndo(TerrainComponent terrain, TerrainData data)
     {
         if (_preStrokeHeights != null && data.Heights != null)
         {
@@ -282,10 +269,9 @@ public class TerrainSceneEditor : SceneTool
                 short[] preRect = CopyRect(_preStrokeHeights, res, minX, minZ, maxX, maxZ);
                 short[] postRect = CopyRect(data.Heights, res, minX, minZ, maxX, maxZ);
                 int cx = minX, cz = minZ, cxe = maxX, cze = maxZ, cres = res;
-                TerrainData capturedData = data;
-                Undo.RegisterAction("Terrain Height",
-                    () => { PasteRect(capturedData.Heights!, cres, cx, cz, cxe, cze, preRect); capturedData.SetHeightmapDirty(); },
-                    () => { PasteRect(capturedData.Heights!, cres, cx, cz, cxe, cze, postRect); capturedData.SetHeightmapDirty(); });
+                TerrainDataUndo.Register("Terrain Height", terrain, data,
+                    d => { PasteRect(d.Heights!, cres, cx, cz, cxe, cze, preRect); d.SetHeightmapDirty(); },
+                    d => { PasteRect(d.Heights!, cres, cx, cz, cxe, cze, postRect); d.SetHeightmapDirty(); });
             }
             _preStrokeHeights = null;
         }
@@ -301,17 +287,16 @@ public class TerrainSceneEditor : SceneTool
                 float[] preRect = CopyRectStride(_preStrokeSplats, res, stride, minX, minZ, maxX, maxZ);
                 float[] postRect = CopyRectStride(data.Splats, res, stride, minX, minZ, maxX, maxZ);
                 int cx = minX, cz = minZ, cxe = maxX, cze = maxZ, cres = res;
-                TerrainData capturedData = data;
 
                 // Skipped once a layer or resolution change has altered the pixel layout
-                void Paste(float[] rect)
+                void Paste(TerrainData d, float[] rect)
                 {
-                    if (capturedData.LayerCount != stride || capturedData.SplatmapResolution != cres) return;
-                    PasteRectStride(capturedData.Splats, cres, stride, cx, cz, cxe, cze, rect);
-                    capturedData.SetSplatmapDirty();
+                    if (d.LayerCount != stride || d.SplatmapResolution != cres) return;
+                    PasteRectStride(d.Splats, cres, stride, cx, cz, cxe, cze, rect);
+                    d.SetSplatmapDirty();
                 }
 
-                Undo.RegisterAction("Terrain Paint", () => Paste(preRect), () => Paste(postRect));
+                TerrainDataUndo.Register("Terrain Paint", terrain, data, d => Paste(d, preRect), d => Paste(d, postRect));
             }
             _preStrokeSplats = null;
         }
@@ -320,10 +305,9 @@ public class TerrainSceneEditor : SceneTool
             // Simple full-array undo for holes (byte array is small)
             byte[] pre = _preStrokeHoles;
             byte[] post = (byte[])data.Holes.Clone();
-            TerrainData capturedData = data;
-            Undo.RegisterAction("Terrain Holes",
-                () => { capturedData.Holes = (byte[])pre.Clone(); capturedData.SetHolesDirty(); },
-                () => { capturedData.Holes = (byte[])post.Clone(); capturedData.SetHolesDirty(); });
+            TerrainDataUndo.Register("Terrain Holes", terrain, data,
+                d => { d.Holes = (byte[])pre.Clone(); d.SetHolesDirty(); },
+                d => { d.Holes = (byte[])post.Clone(); d.SetHolesDirty(); });
             _preStrokeHoles = null;
         }
         else if (_preStrokeDetails != null)
@@ -342,10 +326,9 @@ public class TerrainSceneEditor : SceneTool
                     byte[] preRect = CopyRect(preArr, res, minX, minZ, maxX, maxZ);
                     byte[] postRect = CopyRect(postArr, res, minX, minZ, maxX, maxZ);
                     int cx = minX, cz = minZ, cxe = maxX, cze = maxZ, cres = res, cidx = idx;
-                    TerrainData capturedData = data;
-                    Undo.RegisterAction("Terrain Detail",
-                        () => { PasteRect(capturedData.DetailLayers[cidx], cres, cx, cz, cxe, cze, preRect); capturedData.SetDetailsDirty(); },
-                        () => { PasteRect(capturedData.DetailLayers[cidx], cres, cx, cz, cxe, cze, postRect); capturedData.SetDetailsDirty(); });
+                    TerrainDataUndo.Register("Terrain Detail", terrain, data,
+                        d => { PasteRect(d.DetailLayers[cidx], cres, cx, cz, cxe, cze, preRect); d.SetDetailsDirty(); },
+                        d => { PasteRect(d.DetailLayers[cidx], cres, cx, cz, cxe, cze, postRect); d.SetDetailsDirty(); });
                 }
             }
             _preStrokeDetails = null;
@@ -490,5 +473,57 @@ public class TerrainSceneEditor : SceneTool
     public override void OnDrawOverlay(SceneToolContext ctx, Quill.Canvas canvas)
     {
         // Could draw additional 2D brush info here in the future
+    }
+}
+
+/// <summary>
+/// An undo step that changes terrain data. Owned by the TerrainData asset, or by the open scene when the
+/// data is embedded. Finds the data again by asset id or by the terrain's identifier.
+/// </summary>
+internal sealed class TerrainDataUndo : IUndoOperation
+{
+    private readonly Guid _assetId;
+    private readonly Guid _terrainId;
+    private readonly Action<TerrainData> _undo;
+    private readonly Action<TerrainData> _redo;
+
+    public string Name { get; }
+    public IReadOnlyList<UndoOwner> Owners { get; }
+
+    private TerrainDataUndo(string name, TerrainComponent terrain, TerrainData data, Action<TerrainData> undo, Action<TerrainData> redo)
+    {
+        Name = name;
+        _terrainId = terrain.Identifier;
+        _assetId = data.IsFromDatabase ? data.AssetID : Guid.Empty;
+        Owners = [data.IsFromDatabase ? UndoOwner.Of(data) : UndoOwner.OfCurrentScene];
+        _undo = undo;
+        _redo = redo;
+    }
+
+    /// <summary>Records a change already made to <paramref name="data"/>.</summary>
+    public static void Register(string name, TerrainComponent terrain, TerrainData data, Action<TerrainData> undo, Action<TerrainData> redo)
+        => Core.Undo.RegisterOperation(new TerrainDataUndo(name, terrain, data, undo, redo));
+
+    public void Undo()
+    {
+        TerrainData? data = Resolve();
+        if (data.IsValid()) _undo(data);
+    }
+
+    public void Redo()
+    {
+        TerrainData? data = Resolve();
+        if (data.IsValid()) _redo(data);
+    }
+
+    private TerrainData? Resolve()
+    {
+        if (_assetId != Guid.Empty)
+            return AssetDatabase.TryGetExisting(_assetId, out Asset asset) && asset is TerrainData { IsLoaded: true } loaded ? loaded : null;
+
+        Scene scene = Scene.Current;
+        if (scene.IsNotValid()) return null;
+        TerrainComponent? terrain = scene.FindObjectByIdentifier<TerrainComponent>(_terrainId);
+        return terrain.IsValid() ? terrain.Data : null;
     }
 }

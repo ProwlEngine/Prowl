@@ -44,7 +44,6 @@ public class SceneViewPanel : DockPanel
     private Gizmo.TransformGizmo? _transformGizmo;
     private bool _wasGizmoActive;
     private bool _gizmoHasMoved;
-    private bool _gizmoDuplicated;
     private GameObject[]? _gizmoTargets;
     private GameObject[]? _gizmoSelection;
     private Gizmo.ViewManipulatorGizmo? _viewManipulator;
@@ -442,12 +441,11 @@ public class SceneViewPanel : DockPanel
                     foreach (GameObject go in HierarchyPanel.ExcludeNestedSelections([.. Selection.GetSelected<GameObject>()]))
                         HierarchyPanel.DeleteGameObject(go);
                     Selection.Clear();
-                    EditorSceneManager.MarkDirty();
                 }
                 else if (ShortcutManager.IsPressed("Scene/Duplicate"))
                 {
                     List<GameObject> dupes = GameObjectClipboard.Duplicate([.. Selection.GetSelected<GameObject>()]);
-                    foreach (GameObject d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
+                    foreach (GameObject d in dupes) Undo.RegisterCreatedObjectUndo(d, "Duplicate");
                 }
                 else if (ShortcutManager.IsPressed("Scene/Copy"))
                 {
@@ -456,7 +454,7 @@ public class SceneViewPanel : DockPanel
                 else if (ShortcutManager.IsPressed("Scene/Paste"))
                 {
                     List<GameObject> pasted = GameObjectClipboard.Paste();
-                    foreach (GameObject p in pasted) Undo.RegisterCreatedObject(p, "Paste");
+                    foreach (GameObject p in pasted) Undo.RegisterCreatedObjectUndo(p, "Paste");
                 }
 
                 // Gizmo tool switching
@@ -915,10 +913,6 @@ public class SceneViewPanel : DockPanel
 
     private void EndGizmoDrag()
     {
-        Undo.EndContinuous();
-        if (_gizmoDuplicated && _gizmoTargets is { } targets)
-            Undo.RegisterActionGroup("Duplicate", [.. targets.Where(go => go.IsValid()).Select(Undo.CaptureCreatedObject)]);
-        _gizmoDuplicated = false;
         _wasGizmoActive = false;
         _gizmoTargets = null;
         _gizmoSelection = null;
@@ -1009,7 +1003,7 @@ public class SceneViewPanel : DockPanel
 
         // Gizmo drawing happens in the viewport's DrawForeground callback (needs canvas)
 
-        // Continuous undo spans the whole drag. Keyed off control ownership rather than whether the
+        // The drag spans every frame the control is hot. Keyed off control ownership rather than whether the
         // gizmo produced a delta this frame - a sub-gizmo returns no result at degenerate view
         // angles, which would otherwise split one drag into two undo steps.
         bool dragging = _handles.IsHot(control);
@@ -1018,7 +1012,6 @@ public class SceneViewPanel : DockPanel
             _gizmoHasMoved = false;
             _gizmoSelection = [.. selectedObjects];
             _gizmoTargets = [.. GameObjectClipboard.FilterToRoots(_gizmoSelection)];
-            Undo.BeginContinuous(_gizmoTargets, "Transform");
         }
         _wasGizmoActive = dragging;
 
@@ -1037,7 +1030,6 @@ public class SceneViewPanel : DockPanel
                 _gizmoHasMoved = true;
                 if (_handles.Shift)
                 {
-                    Undo.EndContinuous();
                     List<GameObject> copies = GameObjectClipboard.Duplicate(targets);
                     if (copies.Count > 0)
                     {
@@ -1057,13 +1049,12 @@ public class SceneViewPanel : DockPanel
                             foreach (GameObject go in _gizmoSelection) Selection.AddToSelection(go);
                         }
                         _gizmoTargets = targets = [.. copies];
-                        _gizmoDuplicated = true;
+                        foreach (GameObject copy in copies) Undo.RegisterCreatedObjectUndo(copy, "Duplicate");
                     }
-                    // Copies are recorded at release; their final pose belongs to creation.
-                    Undo.BeginContinuous(_gizmoDuplicated ? [] : targets,
-                        _gizmoDuplicated ? "Duplicate" : "Transform");
                 }
             }
+
+            Undo.RecordObjects(targets, "Transform");
 
             if (r.TranslationDelta is { } delta)
             {
@@ -1076,17 +1067,15 @@ public class SceneViewPanel : DockPanel
             {
                 var rotDelta = Quaternion.AxisAngle(r.RotationAxis.Value, r.RotationDelta.Value);
                 foreach (GameObject go in targets)
-                    go.Transform.Rotation = rotDelta * go.Transform.Rotation;
+                    if (go.IsValid()) go.Transform.Rotation = rotDelta * go.Transform.Rotation;
             }
 
             // Apply scale
             if (r.ScaleDelta.HasValue)
             {
                 foreach (GameObject go in targets)
-                    go.Transform.LocalScale *= r.ScaleDelta.Value;
+                    if (go.IsValid()) go.Transform.LocalScale *= r.ScaleDelta.Value;
             }
-
-            EditorSceneManager.MarkDirty();
         }
 
         if (!_handles.IsHot(control) && _wasGizmoActive)

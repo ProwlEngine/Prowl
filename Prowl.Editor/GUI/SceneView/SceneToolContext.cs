@@ -104,32 +104,31 @@ public sealed class SceneToolContext
 }
 
 /// <summary>
-/// Groups an interactive operation into a single undo entry. Wraps
-/// <see cref="Undo.BeginContinuous"/> so a tool does not have to pair begin/end by hand across
-/// early returns.
+/// Records an interactive operation into the current undo group. Records the targets
+/// before the tool writes to them, so changes made inside the scope join the open step.
 /// </summary>
 public readonly struct ToolUndoScope : IDisposable
 {
-    private readonly bool _continuous;
+    private readonly bool _recorded;
 
     internal ToolUndoScope(string description, GameObject[] targets)
     {
-        _continuous = targets.Length > 0;
-        if (_continuous)
-            Undo.BeginContinuous(targets, description);
+        _recorded = targets.Length > 0;
+        if (_recorded)
+            Undo.RecordObjects(targets, description);
         else
-            Undo.IncrementGroup();
+        {
+            Undo.FlushUndoRecordObjects();
+            Undo.IncrementCurrentGroup();
+        }
     }
 
-    /// <summary>Abandon the operation, reverting anything recorded inside the scope.</summary>
+    /// <summary>Abandon the operation, reverting anything recorded in the current group.</summary>
     public void Cancel()
     {
-        if (_continuous) Undo.CancelContinuous();
+        if (_recorded) Undo.RevertAllInCurrentGroup();
     }
 
-    /// <summary> Commits the undo scope, ending the continuous undo recording. </summary>
-    public void Dispose()
-    {
-        if (_continuous) Undo.EndContinuous();
-    }
+    /// <summary>Ends the scope. The step closes with its group.</summary>
+    public void Dispose() { }
 }
