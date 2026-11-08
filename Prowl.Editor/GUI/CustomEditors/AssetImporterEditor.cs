@@ -138,6 +138,36 @@ public abstract class AssetImporterEditor
     // ============================================================
 
     /// <summary>
+    /// Save and Revert for an asset edited in memory, shown while it is in the dirty asset set. Revert is undoable.
+    /// </summary>
+    protected static void DrawSaveRevertBar(Paper paper, string id, Asset asset)
+    {
+        if (Origami.IsReadOnly || !Core.EditorUtility.IsDirty(asset)) return;
+        if (EditorAssetBackend.Instance is not EditorAssetBackend db) return;
+
+        OrigamiMetrics m = Origami.Current.Metrics;
+        using (paper.Row($"{id}_savebar").Height(UnitValue.Auto)
+            .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge)
+            .Gap(m.SpacingMedium).Enter())
+        {
+            paper.Box($"{id}_savebar_spacer").Height(1).IsNotInteractable();
+
+            Origami.Button(paper, $"{id}_revert", Prowl.Rosetta.Loc.Get("dialog.revert"), () =>
+            {
+                Core.Undo.RecordObject(asset, "Revert Asset");
+                db.RevertToSaved(asset);
+                Core.Undo.FlushUndoRecordObjects();
+                Core.EditorUtility.ClearAssetDirty(asset.AssetID);
+            }).Height(30).Show();
+
+            Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  {Prowl.Rosetta.Loc.Get("dialog.save")}", () =>
+            {
+                if (db.SaveAsset(asset)) Core.EditorUtility.ClearAssetDirty(asset.AssetID);
+            }).Primary().Height(30).Show();
+        }
+    }
+
+    /// <summary>
     /// Draws the Apply / Revert pair, and nothing at all when there is nothing to apply. Every asset
     /// editor calls this so the choice reads the same wherever it appears, and matches the prompt raised
     /// when navigating away from an asset with unwritten changes.

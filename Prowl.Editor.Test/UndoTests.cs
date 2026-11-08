@@ -1600,4 +1600,24 @@ public class UndoTests : EditorTestHarness
         Assert.Equal(1, comp.Value);
         Assert.Single(Undo.UndoSteps);
     }
+
+    [Fact]
+    public void SaveDirtyAssets_WritesEachDirtyAsset_ButNotDuringPlay()
+    {
+        OpenScene();
+        Material material = CreateMaterial("M.mat", 1);
+        Undo.RecordObject(material, "Edit");
+        material.SetFloat("_Value", 3);
+        Undo.FlushUndoRecordObjects();
+
+        Application.IsPlaying = true;
+        try { Assert.Null(EditorUtility.SaveDirtyAssets()); }
+        finally { Application.IsPlaying = false; }
+        Assert.True(EditorUtility.IsDirty(material));
+
+        Assert.NotNull(EditorUtility.SaveDirtyAssets());
+        Assert.False(EditorUtility.IsDirty(material));
+        Assert.Equal(3, Load<Material>(material.AssetID)!.GetFloat("_Value"));
+        Assert.Contains("3", File.ReadAllText(AssetAbsolutePath("M.mat")));
+    }
 }

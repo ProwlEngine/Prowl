@@ -740,8 +740,6 @@ public class InspectorPanel : DockPanel
     /// Draws an asset's own serialized fields for types that have no editor of their own, which is
     /// what makes a custom <see cref="EngineObject"/> asset editable without writing one.
     /// </summary>
-    private readonly HashSet<Guid> _unsavedAssets = [];
-
     private void DrawAssetFieldsFallback(Paper paper, ContentItem item, AssetEntry? entry)
     {
         if (entry?.MainAssetType == null) return;
@@ -753,10 +751,10 @@ public class InspectorPanel : DockPanel
         Origami.Header(paper, "insp_h_fields", Loc.Get("inspector.properties")).Underline().Show();
         bool readOnly = !Core.Undo.CanSave(asset);
         if (readOnly) Origami.BeginReadOnly();
-        try { PropertyGridUtils.Draw(paper, "insp_asset_fields", asset, _ => _unsavedAssets.Add(guid)); }
+        try { PropertyGridUtils.Draw(paper, "insp_asset_fields", asset, null); }
         finally { if (readOnly) Origami.EndReadOnly(); }
 
-        if (Origami.IsReadOnly || !_unsavedAssets.Contains(guid)) return;
+        if (Origami.IsReadOnly || !EditorUtility.IsDirty(asset)) return;
 
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db == null) return;
@@ -768,14 +766,16 @@ public class InspectorPanel : DockPanel
             Origami.Button(paper, "insp_asset_fields_save",
                 $"{EditorIcons.FloppyDisk}  {Loc.Get("inspector.save_and_reimport")}", () =>
                 {
-                    if (db.SaveAsset(asset)) _unsavedAssets.Remove(guid);
+                    if (db.SaveAsset(asset)) EditorUtility.ClearAssetDirty(guid);
                 }).Show();
 
             Origami.Button(paper, "insp_asset_fields_revert",
                 $"{EditorIcons.ArrowsRotate}  {Loc.Get("dialog.revert")}", () =>
                 {
+                    Core.Undo.RecordObject(asset, "Revert Asset");
                     Runtime.AssetDatabase.Refill(asset, ReloadReason.Revert);
-                    _unsavedAssets.Remove(guid);
+                    Core.Undo.FlushUndoRecordObjects();
+                    EditorUtility.ClearAssetDirty(guid);
                 }).Show();
         }
     }

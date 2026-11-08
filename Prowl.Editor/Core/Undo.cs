@@ -124,6 +124,34 @@ public static class EditorUtility
 
     internal static void ClearAssetDirty(Guid asset) => _dirtyAssets.Remove(asset);
 
+    /// <summary>Hooks the dirty asset set into Ctrl+S and the unsaved changes prompt.</summary>
+    internal static void RegisterSaveHooks()
+    {
+        Projects.SaveManager.OnSave += SaveDirtyAssets;
+        Projects.SaveManager.CollectUnsaved += unsaved =>
+        {
+            foreach (Guid id in _dirtyAssets)
+                if (AssetDatabase.TryGetExisting(id, out Asset asset)) unsaved.Add(asset.Name);
+        };
+    }
+
+    /// <summary>Writes every dirty asset through the asset backend. Nothing during play, since play code may have changed loaded assets.</summary>
+    internal static string? SaveDirtyAssets()
+    {
+        if (_dirtyAssets.Count == 0 || Application.IsPlaying) return null;
+        if (EditorAssetBackend.Instance is not EditorAssetBackend backend) return null;
+
+        var saved = new List<string>();
+        foreach (Guid id in _dirtyAssets.ToList())
+        {
+            if (!AssetDatabase.TryGetExisting(id, out Asset asset)) { _dirtyAssets.Remove(id); continue; }
+            if (!backend.SaveAsset(asset)) continue;
+            _dirtyAssets.Remove(id);
+            saved.Add(asset.Name);
+        }
+        return saved.Count == 0 ? null : string.Join(", ", saved);
+    }
+
     /// <summary>In memory copies of every dirty asset, taken before play so the reload after play can put the edits back.</summary>
     internal static List<(Asset Asset, MemoryCopy Copy)> CopyDirtyAssets()
     {
