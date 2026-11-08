@@ -1494,4 +1494,65 @@ public class UndoTests : EditorTestHarness
             time.Apply();
         }
     }
+
+    [Fact]
+    public void GenericImportSettingEdit_LandsOnThePendingSettingsAndUndoes()
+    {
+        OpenScene();
+        Material material = CreateMaterial("M.mat", 1);
+        Guid guid = material.AssetID;
+
+        Frame(mouseDown: true, edits: () => GUI.Panels.InspectorPanel.SetImportSetting(guid, "Quality", new Echo.EchoObject(7)));
+        Frame();
+
+        Assert.Equal(7, Inspector.ImportSettingsEditor.Pending(guid)!["Quality"].IntValue);
+        Assert.Single(Undo.UndoSteps);
+
+        Undo.PerformUndo();
+        Assert.False(Inspector.ImportSettingsEditor.Pending(guid)!.TryGet("Quality", out _));
+
+        Undo.PerformRedo();
+        Assert.Equal(7, Inspector.ImportSettingsEditor.Pending(guid)!["Quality"].IntValue);
+    }
+
+    [Fact]
+    public void GenericImportSettingSave_WritesThePendingSettingsToTheMeta()
+    {
+        OpenScene();
+        Material material = CreateMaterial("M.mat", 1);
+        Guid guid = material.AssetID;
+        string metaPath = MetaFile.GetMetaPath(AssetAbsolutePath(Assets.GetEntry(guid)!.Path));
+
+        Frame(mouseDown: true, edits: () => GUI.Panels.InspectorPanel.SetImportSetting(guid, "Quality", new Echo.EchoObject(7)));
+        GUI.Panels.InspectorPanel.SaveImportSettings(Assets, guid, metaPath);
+
+        Assert.Equal(7, MetaFile.Read(metaPath).Settings!["Quality"].IntValue);
+    }
+
+    [Fact]
+    public void SpriteSettingEdit_IsOneStepWithTheImportSettingsAndUndoRestoresTheSharedSprite()
+    {
+        OpenScene();
+        Material material = CreateMaterial("M.mat", 1);
+        Guid guid = material.AssetID;
+        Importers.SpriteEditTarget sprite = Importers.SpriteEditRegistry.Get(guid);
+        float ppu = sprite.Settings.PixelsPerUnit;
+
+        Frame(mouseDown: true, edits: () =>
+            Inspector.TextureAssetEditor.EditSprite(guid, sprite, "Pixels Per Unit", s => s.PixelsPerUnit = ppu * 2));
+        Frame();
+
+        Assert.Single(Undo.UndoSteps);
+        Assert.Equal(ppu * 2, Importers.TextureSpriteMeta.ReadFrom(Inspector.ImportSettingsEditor.Pending(guid)).PixelsPerUnit);
+
+        Undo.PerformUndo();
+        Importers.SpriteEditTarget restored = Importers.SpriteEditRegistry.Get(guid);
+        Assert.Equal(ppu, restored.Settings.PixelsPerUnit);
+        Assert.True(restored.Dirty);
+        Assert.False(Inspector.ImportSettingsEditor.Pending(guid)!.TryGet("sprite", out _));
+
+        Undo.PerformRedo();
+        Assert.Equal(ppu * 2, Importers.SpriteEditRegistry.Get(guid).Settings.PixelsPerUnit);
+        Assert.Equal(ppu * 2, Importers.TextureSpriteMeta.ReadFrom(Inspector.ImportSettingsEditor.Pending(guid)).PixelsPerUnit);
+    }
 }

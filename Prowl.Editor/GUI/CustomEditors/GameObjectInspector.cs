@@ -993,7 +993,14 @@ public static class GameObjectInspector
             if (method.GetParameters().Length > 0) continue; // Only parameterless methods
 
             string label = btnAttr.Label ?? PropertyGridUtils.NicifyName(method.Name);
-            Origami.Button(paper, $"{id}_{btnIdx++}", label, () => { try { method.Invoke(comp, null); } catch (Exception ex) { Runtime.Debug.LogError($"[Inspector] Button method {method.Name} on {comp.GetType().Name} threw: {ex.Message}"); } }).Show();
+            Origami.Button(paper, $"{id}_{btnIdx++}", label, () =>
+            {
+                if (comp.IsNotValid()) return;
+                Undo.RecordObject(comp, label);
+                try { method.Invoke(comp, null); }
+                catch (Exception ex) { Runtime.Debug.LogError($"[Inspector] Button method {method.Name} on {comp.GetType().Name} threw: {ex.Message}"); }
+                if (comp.IsValid()) PrefabUtility.NotifyEdited(comp);
+            }).Show();
         }
     }
 

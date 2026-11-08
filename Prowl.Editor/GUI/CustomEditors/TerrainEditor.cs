@@ -741,17 +741,16 @@ public class TerrainEditor : CustomEditor
                 }
 
                 int subCount = mesh.SubMeshCount;
-                // Grow the list so the user has one slot per submesh. Shrinking is left alone so user
-                // can still see (and clear) extra entries if they swap to a smaller mesh.
-                while (materials.Count < subCount) materials.Add(default);
-
+                // One slot per submesh is shown, and the list only grows when a missing slot is assigned.
                 for (int i = 0; i < subCount; i++)
                 {
                     int capturedIndex = i;
                     string slotLabel = subCount > 1 ? $"{label} [{i}]" : label;
-                    PropertyGridUtils.DrawField(paper, $"{id}_{i}", slotLabel, typeof(Material), materials[i],
+                    Material? current = i < materials.Count ? materials[i] : null;
+                    PropertyGridUtils.DrawField(paper, $"{id}_{i}", slotLabel, typeof(Material), current,
                         v =>
                         {
+                            while (materials.Count <= capturedIndex) materials.Add(null);
                             materials[capturedIndex] = v as Material;
                             MarkDataDirty(); MarkDetailsDirty();
                         }, 0);

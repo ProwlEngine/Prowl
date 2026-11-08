@@ -76,6 +76,10 @@ public class AudioMixerAssetEditor : AssetImporterEditor
             Core.Undo.RecordObject(mixer, "Edit Audio Mixer");
             foreach (AudioMixerGroup group in mixer.Groups)
                 if (group.IsValid()) Core.Undo.RecordObject(group, "Edit Audio Mixer");
+
+            // A transition started from here moves the mix over many frames, kept as the one step of its click.
+            if (ReferenceEquals(_transitioning, mixer) && mixer.IsTransitioning) Core.Undo.CollapseUndoOperations(_transitionGroup);
+            else _transitioning = null;
         }
 
         List<Strip> strips = BuildStrips(mixer);
@@ -182,6 +186,9 @@ public class AudioMixerAssetEditor : AssetImporterEditor
     /// <summary>How long a click on a snapshot takes to move the mixer there.</summary>
     private float _transitionSeconds = 0.5f;
 
+    private AudioMixer? _transitioning;
+    private int _transitionGroup;
+
     /// <summary>
     /// The recorded mixes, and the controls for taking and editing them.
     /// </summary>
@@ -217,6 +224,8 @@ public class AudioMixerAssetEditor : AssetImporterEditor
                 Origami.Button(paper, $"{id}_snap{i}", snapshot.Name, () =>
                 {
                     _snapshot = snapshot.Name;
+                    _transitioning = mixer;
+                    _transitionGroup = Core.Undo.GetCurrentGroup();
                     mixer.TransitionTo(snapshot, seconds);
                 }).Small().Style(active ? ButtonStyle.Filled : ButtonStyle.Outline)
                   .Tooltip($"Move the mixer to '{snapshot.Name}' over {seconds:0.##}s").Show();

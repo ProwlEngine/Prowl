@@ -511,13 +511,12 @@ public class InspectorPanel : DockPanel
 
             if (File.Exists(metaPath))
             {
-                MetaFileData meta = MetaFile.Read(metaPath);
                 AssetImporter? importer = EditorRegistries.CreateImporterByName(entry.ImporterType);
 
                 if (importer != null)
                 {
-                    // Ensure settings exist (use defaults if missing)
-                    EchoObject? settings = meta.Settings ?? importer.DefaultSettings();
+                    Guid guid = entry.Guid;
+                    EchoObject? settings = ImportSettingsEditor.Pending(guid);
                     if (settings != null && settings.TagType == Echo.EchoType.Compound)
                     {
                         Origami.Header(paper, "insp_h_settings", $"{EditorIcons.Gear}  {Loc.Get("inspector.import_settings")}").Underline().Show();
@@ -531,38 +530,34 @@ public class InspectorPanel : DockPanel
                             {
                                 case Echo.EchoType.Bool:
                                     Origami.Checkbox(paper, $"insp_set_{key}", val.BoolValue,
-                                            v => { settings[key] = new Echo.EchoObject(v); })
+                                            v => SetImportSetting(guid, key, new EchoObject(v)))
                                         .LabelRight(PropertyGridUtils.NicifyName(key)).Show();
                                     break;
 
                                 case Echo.EchoType.Int:
                                     EditorGUI.Row(paper, $"insp_set_{key}", PropertyGridUtils.NicifyName(key), () =>
                                         Origami.NumericField<int>(paper, $"insp_set_{key}_v", val.IntValue,
-                                            v => { settings[key] = new Echo.EchoObject(v); }).Show());
+                                            v => SetImportSetting(guid, key, new EchoObject(v))).Show());
                                     break;
 
                                 case Echo.EchoType.Float:
                                     EditorGUI.Row(paper, $"insp_set_{key}", PropertyGridUtils.NicifyName(key), () =>
                                         Origami.NumericField<float>(paper, $"insp_set_{key}_v", val.FloatValue,
-                                            v => { settings[key] = new Echo.EchoObject(v); }).Show());
+                                            v => SetImportSetting(guid, key, new EchoObject(v))).Show());
                                     break;
 
                                 case Echo.EchoType.String:
                                     EditorGUI.Row(paper, $"insp_set_{key}", PropertyGridUtils.NicifyName(key), () =>
                                         Origami.TextField(paper, $"insp_set_{key}_v", val.StringValue,
-                                            v => { settings[key] = new Echo.EchoObject(v); }).CommitOnEnter().Show());
+                                            v => SetImportSetting(guid, key, new EchoObject(v))).CommitOnEnter().Show());
                                     break;
                             }
                         }
 
                         // Save & Reimport button
                         paper.Box("insp_set_sp").Height(4);
-                        Origami.Button(paper, "insp_set_save", $"{EditorIcons.FloppyDisk}  {Loc.Get("inspector.save_and_reimport")}", () =>
-                        {
-                            meta.Settings = settings;
-                            MetaFile.Write(metaPath, meta);
-                            db.Reimport(entry.Guid);
-                        }).Width(150).Show();
+                        Origami.Button(paper, "insp_set_save", $"{EditorIcons.FloppyDisk}  {Loc.Get("inspector.save_and_reimport")}",
+                            () => SaveImportSettings(db, guid, metaPath)).Width(150).Show();
                     }
                 }
             }
@@ -574,6 +569,27 @@ public class InspectorPanel : DockPanel
         {
             Origami.Button(paper, "insp_reimport", $"{EditorIcons.ArrowsRotate}  {Loc.Get("inspector.reimport")}", () => db.Reimport(entry.Guid)).Show();
         }
+    }
+
+    internal static void SetImportSetting(Guid guid, string key, EchoObject value)
+    {
+        Undo.RegisterImporterUndo(guid, "Change Import Settings");
+        if (ImportSettingsEditor.Pending(guid) is EchoObject settings) settings[key] = value;
+    }
+
+    internal static void SaveImportSettings(EditorAssetBackend db, Guid guid, string metaPath)
+    {
+        if (ImportSettingsEditor.Pending(guid) is not EchoObject settings || !File.Exists(metaPath)) return;
+
+        MetaFileData meta = MetaFile.Read(metaPath);
+        EchoObject merged = meta.Settings ?? EchoObject.NewCompound();
+        foreach (KeyValuePair<string, EchoObject> kvp in settings.Tags)
+            merged[kvp.Key] = kvp.Value.Clone();
+
+        meta.Settings = merged;
+        MetaFile.Write(metaPath, meta);
+        ImportSettingsEditor.SetPending(guid, merged);
+        db.Reimport(guid);
     }
 
 

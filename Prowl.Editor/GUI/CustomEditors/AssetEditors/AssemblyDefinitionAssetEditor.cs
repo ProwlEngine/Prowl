@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
@@ -79,17 +80,19 @@ public class AssemblyDefinitionAssetEditor : AssetImporterEditor
         if (!File.Exists(absPath)) return;
 
         AssemblyDefinition def = Edits(entry, absPath);
+        UndoOwner owner = UndoOwner.OfAssetFile(entry.Guid);
+        void Record(string name) => Undo.RecordObject(def, owner, name);
 
         Origami.Header(paper, $"{id}_hdr", $"{EditorIcons.FileLines}  Assembly Definition").Show();
 
         EditorGUI.Row(paper, $"{id}_name", "Name", () =>
-            Origami.TextField(paper, $"{id}_name_v", def.Name, v => def.Name = v).CommitOnEnter().Show());
+            Origami.TextField(paper, $"{id}_name_v", def.Name, v => { Record("Rename Assembly"); def.Name = v; }).CommitOnEnter().Show());
 
-        Origami.Checkbox(paper, $"{id}_unsafe", def.AllowUnsafeCode, v => def.AllowUnsafeCode = v)
+        Origami.Checkbox(paper, $"{id}_unsafe", def.AllowUnsafeCode, v => { Record("Allow Unsafe Code"); def.AllowUnsafeCode = v; })
             .LabelRight("Allow Unsafe Code").Show();
-        Origami.Checkbox(paper, $"{id}_auto", def.AutoReferenced, v => def.AutoReferenced = v)
+        Origami.Checkbox(paper, $"{id}_auto", def.AutoReferenced, v => { Record("Auto Referenced"); def.AutoReferenced = v; })
             .LabelRight("Auto Referenced").Show();
-        Origami.Checkbox(paper, $"{id}_noeng", def.NoEngineReferences, v => def.NoEngineReferences = v)
+        Origami.Checkbox(paper, $"{id}_noeng", def.NoEngineReferences, v => { Record("No Engine References"); def.NoEngineReferences = v; })
             .LabelRight("No Engine References").Show();
 
         // References to other assembly definitions (checkbox per discovered asmdef).
@@ -111,6 +114,7 @@ public class AssemblyDefinitionAssetEditor : AssetImporterEditor
             bool referenced = def.References.Any(r => r.Equals(name, StringComparison.OrdinalIgnoreCase));
             Origami.Checkbox(paper, $"{id}_ref_{name}", referenced, v =>
                 {
+                    Record("Assembly References");
                     def.References.RemoveAll(r => r.Equals(name, StringComparison.OrdinalIgnoreCase));
                     if (v) def.References.Add(name);
                 })
@@ -125,6 +129,7 @@ public class AssemblyDefinitionAssetEditor : AssetImporterEditor
         bool anyPlatform = def.IncludePlatforms.Count == 0 && def.ExcludePlatforms.Count == 0;
         Origami.Checkbox(paper, $"{id}_any", anyPlatform, v =>
             {
+                Record("Any Platform");
                 def.ExcludePlatforms.Clear();
                 if (v) def.IncludePlatforms.Clear();
                 else if (def.IncludePlatforms.Count == 0) def.IncludePlatforms.AddRange(BuildPlatforms.All);
@@ -134,18 +139,19 @@ public class AssemblyDefinitionAssetEditor : AssetImporterEditor
         if (!anyPlatform)
         {
             foreach (string platform in BuildPlatforms.All)
-                IncludeToggle(paper, $"{id}_inc_{platform}", platform, def);
+                IncludeToggle(paper, $"{id}_inc_{platform}", platform, def, owner);
         }
 
         paper.Box($"{id}_sp3").Height(8);
         DrawApplyRevertBar(paper, id, entry, asset);
     }
 
-    private static void IncludeToggle(Paper paper, string id, string platform, AssemblyDefinition def)
+    private static void IncludeToggle(Paper paper, string id, string platform, AssemblyDefinition def, UndoOwner owner)
     {
         bool included = def.IncludePlatforms.Any(p => p.Equals(platform, StringComparison.OrdinalIgnoreCase));
         Origami.Checkbox(paper, id, included, v =>
             {
+                Undo.RecordObject(def, owner, "Include Platform");
                 def.IncludePlatforms.RemoveAll(p => p.Equals(platform, StringComparison.OrdinalIgnoreCase));
                 if (v) def.IncludePlatforms.Add(platform);
             })

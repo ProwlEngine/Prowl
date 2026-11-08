@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Echo;
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.Importers;
 using Prowl.Editor.Projects;
@@ -25,16 +27,16 @@ public class TextureAssetEditor : ImportSettingsEditor
     /// on a separate object (shared with the Sprite Editor window), so they have to reach the compound
     /// for the inspector's diff to see them - that compound is the single thing compared against disk.
     /// </summary>
-    private static void FoldSpriteSettings(AssetEntry entry, EchoObject settings)
+    private static void FoldSpriteSettings(Guid texture, EchoObject settings)
     {
-        Importers.SpriteEditTarget target = Importers.SpriteEditRegistry.Get(entry.Guid);
+        Importers.SpriteEditTarget target = Importers.SpriteEditRegistry.Get(texture);
         if (target.LoadFailed) return; // never write defaults over slicing we failed to read
 
         Importers.TextureSpriteMeta.WriteInto(settings, target.Settings);
         target.Dirty = false;
     }
 
-    protected override void OnBeforeApply(AssetEntry entry, EchoObject settings) => FoldSpriteSettings(entry, settings);
+    protected override void OnBeforeApply(AssetEntry entry, EchoObject settings) => FoldSpriteSettings(entry.Guid, settings);
 
     protected override void OnAfterRevert(AssetEntry entry, EchoObject settings)
     {
@@ -113,13 +115,13 @@ public class TextureAssetEditor : ImportSettingsEditor
 
         string texturePath = metaPath[..^".meta".Length];
         SpriteEditTarget spriteTarget = Importers.SpriteEditRegistry.Get(entry.Guid);
-        if (spriteTarget.Dirty) FoldSpriteSettings(entry, settings);
+        if (spriteTarget.Dirty) FoldSpriteSettings(entry.Guid, settings);
 
         TextureImportSettings current = TextureImportSettings.Read(settings, texturePath);
         TextureImportType type = current.Type;
 
         EditorGUI.Row(paper, $"{id}_type", "Texture Type", () =>
-            Origami.EnumDropdown(paper, $"{id}_type_v", type, v => ApplyType(settings, spriteTarget, v)).Show());
+            Origami.EnumDropdown(paper, $"{id}_type_v", type, v => ApplyType(entry, settings, spriteTarget, v)).Show());
 
         switch (type)
         {
@@ -206,18 +208,19 @@ public class TextureAssetEditor : ImportSettingsEditor
     private static void SpriteRows(Paper paper, string id, AssetEntry entry, SpriteEditTarget sprite)
     {
         SpriteImportSettings s = sprite.Settings;
+        Guid guid = entry.Guid;
         SpriteMode mode = s.Mode == SpriteMode.Multiple ? SpriteMode.Multiple : SpriteMode.Single;
 
         EditorGUI.Row(paper, $"{id}_spmode", "Sprite Mode", () =>
-            Origami.Dropdown(paper, $"{id}_spmode_v", mode, v => { s.Mode = v; sprite.Dirty = true; }, s_spriteModes).Show());
+            Origami.Dropdown(paper, $"{id}_spmode_v", mode, v => EditSprite(guid, sprite, "Sprite Mode", st => st.Mode = v), s_spriteModes).Show());
 
         EditorGUI.Row(paper, $"{id}_ppu", "Pixels Per Unit", () =>
             Origami.NumericField<float>(paper, $"{id}_ppu_v", s.PixelsPerUnit,
-                v => { s.PixelsPerUnit = MathF.Max(0.01f, v); sprite.Dirty = true; }).Show());
+                v => EditSprite(guid, sprite, "Pixels Per Unit", st => st.PixelsPerUnit = MathF.Max(0.01f, v))).Show());
 
         EditorGUI.Row(paper, $"{id}_mesh", "Mesh Type", () =>
             Origami.Dropdown(paper, $"{id}_mesh_v", s.GenerateTightMesh ? 1 : 0,
-                v => { s.GenerateTightMesh = v == 1; sprite.Dirty = true; }, s_meshTypes).Show());
+                v => EditSprite(guid, sprite, "Mesh Type", st => st.GenerateTightMesh = v == 1), s_meshTypes).Show());
 
         Origami.Button(paper, $"{id}_spopen", $"{EditorIcons.PenToSquare}  Open Sprite Editor",
             () => SpriteEditorWindow.OpenFor(entry.Guid)).Width(200).Show();
@@ -244,8 +247,9 @@ public class TextureAssetEditor : ImportSettingsEditor
     private static readonly string[] s_meshTypes = ["Full Rect", "Tight"];
 
     // Settings that follow the type are cleared, so the new type's defaults apply until set by hand.
-    private static void ApplyType(EchoObject settings, SpriteEditTarget sprite, TextureImportType type)
+    private static void ApplyType(AssetEntry entry, EchoObject settings, SpriteEditTarget sprite, TextureImportType type)
     {
+        Undo.RegisterImporterUndo(entry.Guid, "Change Import Settings");
         settings[TextureImportSettings.Keys.Type] = new EchoObject((int)type);
         foreach (string key in s_typeDefaults)
             settings.Remove(key);
@@ -253,9 +257,43 @@ public class TextureAssetEditor : ImportSettingsEditor
         SpriteMode mode = type != TextureImportType.Sprite ? SpriteMode.None
             : sprite.Settings.Mode == SpriteMode.None ? SpriteMode.Single : sprite.Settings.Mode;
         if (sprite.Settings.Mode != mode)
+            EditSprite(entry.Guid, sprite, "Texture Type", st => st.Mode = mode);
+    }
+
+    /// <summary>Edits the shared sprite settings, folds them into the pending import settings and records both.</summary>
+    internal static void EditSprite(Guid texture, SpriteEditTarget sprite, string name, Action<SpriteImportSettings> edit)
+    {
+        Undo.RegisterImporterUndo(texture, "Change Import Settings");
+        EchoObject before = SpriteSnapshot(sprite.Settings);
+        edit(sprite.Settings);
+        EchoObject after = SpriteSnapshot(sprite.Settings);
+        if (after.Equals(before)) return;
+
+        sprite.Dirty = true;
+        if (Pending(texture) is EchoObject settings) FoldSpriteSettings(texture, settings);
+        Undo.RegisterOperation(new SpriteSettingsUndo(texture, before, after, name));
+    }
+
+    private static EchoObject SpriteSnapshot(SpriteImportSettings settings)
+    {
+        EchoObject snapshot = EchoObject.NewCompound();
+        TextureSpriteMeta.WriteInto(snapshot, settings);
+        return snapshot;
+    }
+
+    // Restores the shared sprite settings and leaves them dirty, so the inspector folds them into the import settings again.
+    private sealed class SpriteSettingsUndo(Guid texture, EchoObject before, EchoObject after, string name) : IUndoOperation
+    {
+        public string Name => name;
+        public IReadOnlyList<UndoOwner> Owners => [UndoOwner.OfAssetFile(texture)];
+        public void Undo() => Restore(before);
+        public void Redo() => Restore(after);
+
+        private void Restore(EchoObject snapshot)
         {
-            sprite.Settings.Mode = mode;
-            sprite.Dirty = true;
+            SpriteEditTarget target = SpriteEditRegistry.Get(texture);
+            target.Settings = TextureSpriteMeta.ReadFrom(snapshot);
+            target.Dirty = true;
         }
     }
 

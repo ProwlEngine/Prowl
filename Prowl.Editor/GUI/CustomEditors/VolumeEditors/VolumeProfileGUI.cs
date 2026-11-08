@@ -46,13 +46,14 @@ public static class VolumeProfileGUI
         if (font == null || profile.IsNotValid()) return;
         UndoOwner owner = OwnerOf(profile, holder);
         Action<string> record = name => Undo.RecordObject(profile, owner, name);
+        EngineObject recordHolder = profile.IsFromDatabase || holder.IsNotValid() ? profile : holder!;
 
         List<VolumeComponent> components = [.. profile.Loaded.Where(c => c != null)];
         if (components.Count == 0)
             EditorGUI.Note(paper, $"{id}_empty", "No overrides yet. Add one to change how cameras in range draw.");
 
         foreach (VolumeComponent component in components)
-            DrawCard(paper, $"{id}_{component.GetType().Name}", profile, component, font, record);
+            DrawCard(paper, $"{id}_{component.GetType().Name}", profile, component, font, record, recordHolder);
 
         using (paper.Row($"{id}_add_row").Height(28).Padding(Origami.Current.Metrics.PaddingLarge, Origami.Current.Metrics.PaddingLarge, 0, 0)
             .Margin(0, 0, Origami.Current.Metrics.Spacing, Origami.Current.Metrics.SpacingLarge).Enter())
@@ -93,7 +94,7 @@ public static class VolumeProfileGUI
 
     private static string Leaf(string path) => path[(path.LastIndexOf('/') + 1)..];
 
-    private static void DrawCard(Paper paper, string id, VolumeProfile profile, VolumeComponent component, Scribe.FontFile font, Action<string> record)
+    private static void DrawCard(Paper paper, string id, VolumeProfile profile, VolumeComponent component, Scribe.FontFile font, Action<string> record, EngineObject recordHolder)
     {
         bool expanded = !s_collapsed.Contains(id);
         Scribe.FontFile semi = EditorTheme.FontSemiBold ?? font;
@@ -133,7 +134,11 @@ public static class VolumeProfileGUI
             using (paper.Column($"{id}_body").Height(UnitValue.Auto).Padding(0, 0, 2, Origami.Current.Metrics.Spacing).Enter())
             {
                 CustomEditor? custom = EditorRegistries.GetCustomEditor(component.GetType());
-                if (custom != null) custom.OnGUI(paper, $"{id}_custom", component);
+                if (custom != null)
+                {
+                    using (Undo.InspectorHolder(recordHolder))
+                        custom.OnGUI(paper, $"{id}_custom", component);
+                }
                 else DrawParameters(paper, id, component, record);
             }
         }
@@ -146,14 +151,14 @@ public static class VolumeProfileGUI
     }
 
     /// <summary>A row per parameter of <paramref name="component"/>, for custom component editors too.</summary>
-    public static void DrawParameters(Paper paper, string id, VolumeComponent component, Action<string>? record = null)
+    public static void DrawParameters(Paper paper, string id, VolumeComponent component, Action<string> record)
     {
         foreach (FieldInfo field in VolumeComponent.ParameterFields(component.GetType()))
             DrawParameter(paper, $"{id}_{field.Name}", component, field, record);
     }
 
     /// <summary>One parameter's row: its override checkbox, then its value, greyed out until overridden.</summary>
-    public static void DrawParameter(Paper paper, string id, VolumeComponent component, FieldInfo field, Action<string>? record = null)
+    public static void DrawParameter(Paper paper, string id, VolumeComponent component, FieldInfo field, Action<string> record)
     {
         if (field.GetValue(component) is not VolumeParameter parameter) return;
         if (field.GetCustomAttribute<HeaderAttribute>() is { } header)
@@ -164,7 +169,7 @@ public static class VolumeProfileGUI
         {
             using (paper.Box($"{id}_ov_wrap").Width(UnitValue.Auto).Height(m.RowHeight).Enter())
                 using (paper.Box($"{id}_ov_c").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
-                    Origami.Checkbox(paper, $"{id}_ov", parameter.Override, v => { record?.Invoke("Toggle Parameter Override"); parameter.Override = v; }).NoLabel().Show();
+                    Origami.Checkbox(paper, $"{id}_ov", parameter.Override, v => { record("Toggle Parameter Override"); parameter.Override = v; }).NoLabel().Show();
 
             using (paper.Column($"{id}_v").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
             {
@@ -175,7 +180,7 @@ public static class VolumeProfileGUI
         }
     }
 
-    private static void DrawValue(Paper paper, string id, string label, VolumeParameter parameter, FieldInfo field, Action<string>? record)
+    private static void DrawValue(Paper paper, string id, string label, VolumeParameter parameter, FieldInfo field, Action<string> record)
     {
         Type type = parameter.ValueType;
         RangeAttribute? range = field.GetCustomAttribute<RangeAttribute>();
@@ -185,7 +190,7 @@ public static class VolumeProfileGUI
         {
             PropertyGridUtils.DrawField(paper, id, label, type, parameter.BoxedValue, value =>
             {
-                record?.Invoke($"Change {label}");
+                record($"Change {label}");
                 parameter.BoxedValue = ranged ? Clamp(value, range!, type) : value;
             });
         }
