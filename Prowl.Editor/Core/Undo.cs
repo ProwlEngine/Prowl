@@ -387,6 +387,15 @@ public static class Undo
         _pending.Add(new PendingHierarchy(root) { Group = _currentGroup, Name = name });
     }
 
+    /// <summary>Records the asset's pending import settings. Undo and redo restore them and never write to disk.</summary>
+    public static void RegisterImporterUndo(Guid asset, string name)
+    {
+        MainThreadContext.AssertMainThread();
+        if (Inspector.ImportSettingsEditor.Pending(asset) is not EchoObject settings) return;
+        NoteRecord();
+        _pending.Add(new PendingImporter(asset, settings.Clone()) { Group = _currentGroup, Name = name });
+    }
+
     /// <summary>Records an operation for state no other call can express. It has already been done.</summary>
     public static void RegisterOperation(IUndoOperation operation)
     {
@@ -1434,6 +1443,17 @@ public static class Undo
         public override bool Touches(Guid id) => _before.Ids.Contains(id);
     }
 
+    private sealed class PendingImporter(Guid asset, EchoObject before) : Entry
+    {
+        public override Record? Finish(List<Entry> flushing)
+        {
+            if (Inspector.ImportSettingsEditor.Pending(asset) is not EchoObject after || after.Equals(before)) return null;
+            return new ImporterRecord(asset, before, after.Clone());
+        }
+
+        public override bool Touches(Guid id) => id == asset;
+    }
+
     // Children and components with their own structural record in the group, left out of a created object's capture.
     private static HashSet<Guid> StructuralIds(int group, List<Entry> flushing)
     {
@@ -1614,6 +1634,13 @@ public static class Undo
     {
         public override bool IsLegacy => true;
         public override void Apply(Restore restore) => (restore.IsUndo ? undo : redo)();
+    }
+
+    // Import settings are pending until Apply, so undo only moves the pending settings and the Apply bar shows the rest.
+    private sealed class ImporterRecord(Guid asset, EchoObject before, EchoObject after) : Record
+    {
+        public override void Apply(Restore restore) => Inspector.ImportSettingsEditor.SetPending(asset, (restore.IsUndo ? before : after).Clone());
+        public override bool Touches(Guid id) => id == asset;
     }
 
     private sealed class OperationRecord(IUndoOperation operation) : Record

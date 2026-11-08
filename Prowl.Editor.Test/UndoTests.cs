@@ -1511,4 +1511,23 @@ public class UndoTests : EditorTestHarness
         Assert.False(Undo.CanUndo);
         Assert.False(EditorUtility.IsDirty(material));
     }
+
+    [Fact]
+    public void ImporterRecord_RestoresPendingSettings_AndWritesNothing()
+    {
+        OpenScene();
+        Material material = CreateMaterial("M.mat", 1);
+        Guid id = material.AssetID;
+        string meta = File.ReadAllText(AssetAbsolutePath("M.mat") + ".meta");
+
+        Undo.RegisterImporterUndo(id, "Setting");
+        Inspector.ImportSettingsEditor.Pending(id)!["Quality"] = new Echo.EchoObject(5);
+        Undo.FlushUndoRecordObjects();
+
+        Undo.PerformUndo();
+        Assert.False(Inspector.ImportSettingsEditor.Pending(id)!.TryGet("Quality", out _));
+        Undo.PerformRedo();
+        Assert.Equal(5, Inspector.ImportSettingsEditor.Pending(id)!["Quality"].IntValue);
+        Assert.Equal(meta, File.ReadAllText(AssetAbsolutePath("M.mat") + ".meta"));
+    }
 }

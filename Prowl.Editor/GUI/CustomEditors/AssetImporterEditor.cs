@@ -115,8 +115,9 @@ public abstract class AssetImporterEditor
     /// <summary>Drops the pending edits, restoring the asset to what is on disk.</summary>
     public void RevertPendingChanges(AssetEntry entry, EngineObject? asset)
     {
-        if (s_baselines.TryGetValue(entry.Guid, out EchoObject baseline))
-            RevertState(entry, asset, baseline.Clone());
+        if (!s_baselines.TryGetValue(entry.Guid, out EchoObject baseline)) return;
+        if (this is ImportSettingsEditor) Core.Undo.RegisterImporterUndo(entry.Guid, "Revert Import Settings");
+        RevertState(entry, asset, baseline.Clone());
     }
 
     /// <summary>
