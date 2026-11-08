@@ -1,5 +1,6 @@
 using System;
 
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Theming;
 using Prowl.Runtime;
@@ -58,7 +59,9 @@ internal class MaterialDropHandler : ISceneDropHandler
         var mat = Runtime.AssetDatabase.Get(payload.AssetGuid) as Material;
         if (mat.IsNotValid()) return;
         MeshRenderer? meshRenderer = hitGO.GetComponent<MeshRenderer>();
-        if (meshRenderer.IsValid()) { meshRenderer.Material = mat; EditorSceneManager.MarkDirty(); }
+        if (meshRenderer.IsNotValid()) return;
+        Undo.RecordObject(meshRenderer, "Assign Material");
+        meshRenderer.Material = mat;
     }
 }
 
