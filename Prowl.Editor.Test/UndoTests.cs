@@ -1416,4 +1416,29 @@ public class UndoTests : EditorTestHarness
         Undo.PerformUndo();
         Assert.True(ReferenceEquals(holder.Nested.Target, null));
     }
+
+    private sealed class SettingsProbe : Inspector.ImportSettingsEditor
+    {
+        public override void OnGUI(PaperUI.Paper paper, string id, AssetEntry entry, EngineObject? asset) { }
+        public Echo.EchoObject Draw(AssetEntry entry) => Settings(entry);
+    }
+
+    [Fact]
+    public void ImportSettingsChangedInTheInspector_Undo()
+    {
+        OpenScene();
+        Material material = CreateMaterial("M.mat", 1);
+        AssetEntry entry = Assets.GetEntry(material.AssetID)!;
+        var editor = new SettingsProbe();
+
+        editor.Draw(entry)["Quality"] = new Echo.EchoObject(7);
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
+        editor.Draw(entry);
+        Undo.FlushUndoRecordObjects();
+
+        Undo.PerformUndo();
+        Assert.False(Inspector.ImportSettingsEditor.Pending(material.AssetID)!.TryGet("Quality", out _));
+        Assert.Single(Undo.RedoSteps);
+    }
 }

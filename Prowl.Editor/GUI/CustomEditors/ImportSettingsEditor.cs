@@ -31,11 +31,15 @@ public abstract class ImportSettingsEditor : AssetImporterEditor
     /// </summary>
     protected EchoObject Settings(AssetEntry entry)
     {
-        if (s_settings.TryGetValue(entry.Guid, out EchoObject cached)) return cached;
+        if (!s_settings.TryGetValue(entry.Guid, out EchoObject settings))
+        {
+            settings = ReadFromDisk(entry);
+            s_settings[entry.Guid] = settings;
+            Rebaseline(entry, null); // what is on disk is, by definition, the clean state
+        }
 
-        EchoObject settings = ReadFromDisk(entry);
-        s_settings[entry.Guid] = settings;
-        Rebaseline(entry, null); // what is on disk is, by definition, the clean state
+        // Drawn every frame, so an edit made from here is a pending settings record, kept only if something changed.
+        if (!OrigamiUI.Origami.IsReadOnly) Core.Undo.RegisterImporterUndo(entry.Guid, "Change Import Settings");
         return settings;
     }
 

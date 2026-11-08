@@ -408,6 +408,7 @@ public static class Undo
         MainThreadContext.AssertMainThread();
         if (Inspector.ImportSettingsEditor.Pending(asset) is not EchoObject settings) return;
         NoteRecord();
+        if (_pending.Any(e => e.Group == _currentGroup && e is PendingImporter && e.Touches(asset))) return;
         _pending.Add(new PendingImporter(asset, settings.Clone()) { Group = _currentGroup, Name = name });
     }
 
