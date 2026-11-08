@@ -200,9 +200,6 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
         OpenWindows.Remove((TWindow)this);
         Selection.OnSelectionChanged -= OnEditorSelectionChanged;
         ClearSelection();
-
-        // Another window on the same graph carries the unsaved edits on, otherwise they are saved here.
-        if (_dirty && !OpenWindows.Exists(other => other._assetGuid == _assetGuid)) Save();
     }
 
     /// <summary>Shows a graph in the first window not locked to something else.</summary>
@@ -235,12 +232,8 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
         if (state["graph"]?.GetValue<string>() is { } text && Guid.TryParse(text, out Guid guid)) Load(guid);
     }
 
-    /// <summary>Moves the window to another graph, saving unsaved edits first.</summary>
-    private void SwitchTo(Guid assetGuid)
-    {
-        if (_dirty) Save();
-        Load(assetGuid);
-    }
+    /// <summary>Moves the window to another graph. Unsaved edits stay on the asset, in the dirty asset set.</summary>
+    private void SwitchTo(Guid assetGuid) => Load(assetGuid);
 
     private void Load(Guid assetGuid)
     {
@@ -423,16 +416,17 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
         // Tied to the asset the edit was made on, which may no longer be the one showing.
         Guid asset = _assetGuid;
         Func<Guid, GraphDomain?> open = guid => LoadedAsset(guid) is { } loaded ? CreateDomain(loaded) : null;
-        Undo.RegisterOperation(new GraphEditOperation(description, asset,
+        UndoOwner owner = _asset.IsValid() ? UndoOwner.Of(_asset) : UndoOwner.OfAssetFile(asset);
+        Undo.RegisterOperation(new GraphEditOperation(description, owner,
             () => RestoreSnapshot(asset, before, compiles, open),
             () => RestoreSnapshot(asset, after, compiles, open)));
         Touch(rebuild, compiles);
     }
 
-    private sealed class GraphEditOperation(string name, Guid asset, Action undo, Action redo) : IUndoOperation
+    private sealed class GraphEditOperation(string name, UndoOwner owner, Action undo, Action redo) : IUndoOperation
     {
         public string Name => name;
-        public IReadOnlyList<UndoOwner> Owners { get; } = [UndoOwner.OfAssetFile(asset)];
+        public IReadOnlyList<UndoOwner> Owners { get; } = [owner];
         public void Undo() => undo();
         public void Redo() => redo();
     }
@@ -443,9 +437,8 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
         TWindow? showing = OpenWindows.Find(window => window._assetGuid == asset);
         if (showing == null)
         {
-            // Nothing shows the graph any more, and it was saved when it was left, so the undo is saved too.
+            // Nothing shows the graph, so the undo lands on the loaded asset, which the step marks dirty.
             open(asset)?.Restore(snapshot, compiles);
-            WriteToDisk(asset, snapshot);
             return;
         }
 
@@ -489,6 +482,7 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
         _dirty = false;
         _unsaved = null;
         _seenContent = _asset!.ContentVersion;
+        EditorUtility.ClearAssetDirty(_assetGuid);
         ShareWithSiblings();
     }
 
