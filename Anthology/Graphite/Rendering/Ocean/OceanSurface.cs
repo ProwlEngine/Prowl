@@ -24,10 +24,38 @@ public sealed class OceanSurface : RenderProvider, IDisposable
     private Double3 _depthViewer;
     private readonly float[] _sizes = new float[OceanFeature.Cascades];
     private readonly Texture _foamTexture, _caustics, _normals;
+    private Texture? _foamOverride, _causticsOverride, _normalsOverride;
 
     /// <summary>The caustics texture and wave normal map, for the underwater pass to light the floor with too.</summary>
-    internal Texture Caustics => _caustics;
-    internal Texture Normals => _normals;
+    internal Texture Caustics => _causticsOverride ?? _caustics;
+    internal Texture Normals => _normalsOverride ?? _normals;
+
+    /// <summary>Draws foam with a texture's red channel in place of the library's, the library's again with null.</summary>
+    public void SetFoamTexture(Texture? texture, SamplerDescription? sampler = null)
+    {
+        if (texture == _foamOverride)
+            return;
+        _foamOverride = texture;
+        Material.SetTexture("_OceanFoamTexture", texture ?? _foamTexture, texture == null ? null : sampler);
+    }
+
+    /// <summary>Lights the floor with a caustics texture in place of the library's, the library's again with null.</summary>
+    public void SetCausticsTexture(Texture? texture, SamplerDescription? sampler = null)
+    {
+        if (texture == _causticsOverride)
+            return;
+        _causticsOverride = texture;
+        Material.SetTexture("_OceanCaustics", texture ?? _caustics, texture == null ? null : sampler);
+    }
+
+    /// <summary>Details the waves with a normal map in place of the library's, the library's again with null.</summary>
+    public void SetNormalsTexture(Texture? texture, SamplerDescription? sampler = null)
+    {
+        if (texture == _normalsOverride)
+            return;
+        _normalsOverride = texture;
+        Material.SetTexture("_OceanNormals", texture ?? _normals, texture == null ? null : sampler);
+    }
 
     /// <summary>Sets the caustics' shader values through a setter, the surface's material's or the underwater pass's.</summary>
     internal void SetCaustics(Action<PropertyID, float> set)
