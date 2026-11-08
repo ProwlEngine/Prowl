@@ -2463,8 +2463,8 @@ public partial class PrefabTests : EditorTestHarness
 
         Undo.Clear();
         int value = 0;
-        Undo.RegisterAction("Scene Edit", () => value = 1, () => value = 2);
-        Undo.IncrementGroup();
+        Undo.RegisterOperation(new UndoTestOp("Scene Edit", () => value = 1, () => value = 2));
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         PrefabEditingMode.Enter(g);
         Scene.ProcessPendingLoad();

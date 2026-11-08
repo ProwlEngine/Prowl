@@ -652,7 +652,7 @@ public class CliEditorCommandTests : EditorTestHarness
     {
         Ok("go", "create", "--name", "A");
         GameObject a = _scene.AllObjects.Single(g => g.Name == "A");
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         CliRunResponse response = RunDuringADrag(a, "go", ["rename", "--target", "/A", "--name", "B"], run =>
         {
@@ -672,7 +672,7 @@ public class CliEditorCommandTests : EditorTestHarness
     {
         Ok("go", "create", "--name", "A");
         GameObject a = _scene.AllObjects.Single(g => g.Name == "A");
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         CliRunResponse response = RunDuringADrag(a, "undo", [], run => Assert.False(run.IsCompleted));
 
@@ -686,12 +686,12 @@ public class CliEditorCommandTests : EditorTestHarness
     {
         Ok("go", "create", "--name", "A");
         GameObject a = _scene.AllObjects.Single(g => g.Name == "A");
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Application.IsPlaying = true;
 
         Undo.RecordObject(a, "Rename");
         a.Name = "Renamed";
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Ok("undo");
 
         Assert.Equal("A", a.Name);

@@ -496,7 +496,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         ComponentClipboard.Copy(src);
         ComponentClipboard.PasteValues(dst);
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Assert.Equal(900, dst.Hidden);
 
@@ -567,7 +567,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         ComponentClipboard.Copy(src);
         ComponentClipboard.PasteAsNew(b);
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Assert.Single(b.GetComponents<ClipComp>());
 
@@ -590,7 +590,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         ComponentClipboard.Copy(src);
         ComponentClipboard.PasteAsNew(b);
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Undo.PerformUndo();
 
@@ -609,7 +609,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         ComponentClipboard.Copy(src);
         ComponentClipboard.PasteAsNew(b);
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         scene.Remove(b);
         b.Dispose();
@@ -630,7 +630,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         ComponentClipboard.Copy(src);
         ComponentClipboard.PasteValues(dst);
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         b.RemoveComponent(dst);
 
@@ -652,7 +652,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         ComponentClipboard.Copy(src);
         ComponentClipboard.PasteValues(dst);
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Assert.Equal(1, dst.Value);
 
@@ -680,7 +680,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         ComponentClipboard.Copy(src);
         ComponentClipboard.PasteValues(dst);
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Assert.Same(a, dst.TargetGO);
         Assert.Null(dst.TargetComp);

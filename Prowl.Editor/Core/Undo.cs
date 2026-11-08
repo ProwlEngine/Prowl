@@ -202,11 +202,6 @@ public static class Undo
     private static readonly Dictionary<object, (Capture Capture, int Frame)> _inspectorBaselines = new(ReferenceEqualityComparer.Instance);
     private static readonly HashSet<Type> _warnedTypes = [];
 
-    // The legacy continuous edit, kept until the gizmos move to records.
-    private static bool _isContinuous;
-    private static string _continuousDescription = "";
-    private static List<(Guid goId, Float3 pos, Quaternion rot, Float3 scale)>? _continuousStartState;
-
     /// <summary> Maximum number of undo steps kept in the undo stack. Defaults to 100. </summary>
     public static int MaxSteps { get; set; } = 100;
 
@@ -224,20 +219,12 @@ public static class Undo
     /// <summary>Filters the field changes of each flush. Only the returned modifications are recorded.</summary>
     public static PostprocessModifications? postprocessModifications;
 
-    /// <summary>Fires after an undo or redo. Same as <see cref="undoRedoPerformed"/>.</summary>
-    public static event Action? OnUndoRedo
-    {
-        add => undoRedoPerformed += value;
-        remove => undoRedoPerformed -= value;
-    }
-
     // ================================================================
     //  Queries
     // ================================================================
 
     public static bool CanUndo => _undo.Count > 0 || _pending.Count > 0;
     public static bool CanRedo => _redo.Count > 0 && !OpenGroupHasStep;
-    public static bool IsContinuous => _isContinuous;
     public static bool isProcessing => _isProcessing;
 
     /// <summary>A mouse hold that has recorded something. Its records form one step.</summary>
@@ -259,7 +246,7 @@ public static class Undo
     public static void RecordObject(EngineObject obj, string name)
     {
         if (obj.IsNotValid()) return;
-        RecordTarget(obj, TargetKey.For(obj), UndoOwner.Of(obj), name, legacy: false);
+        RecordTarget(obj, TargetKey.For(obj), UndoOwner.Of(obj), name);
     }
 
     public static void RecordObjects(IReadOnlyList<EngineObject> objs, string name)
@@ -270,8 +257,8 @@ public static class Undo
     /// <summary>Records a plain object with an explicit owner. It is found again by a weak reference.</summary>
     public static void RecordObject(object target, UndoOwner owner, string name)
     {
-        if (target is EngineObject eo) { if (eo.IsNotValid()) return; RecordTarget(eo, TargetKey.For(eo), owner, name, legacy: false); return; }
-        RecordTarget(target, TargetKey.Weak(target), owner, name, legacy: false);
+        if (target is EngineObject eo) { if (eo.IsNotValid()) return; RecordTarget(eo, TargetKey.For(eo), owner, name); return; }
+        RecordTarget(target, TargetKey.Weak(target), owner, name);
     }
 
     /// <summary>Records a plain object that is found again through <paramref name="resolve"/> when applied.</summary>
@@ -279,13 +266,13 @@ public static class Undo
     {
         T? target = resolve();
         if (target == null) return;
-        RecordTarget(target, TargetKey.Resolver(() => resolve()), owner, name, legacy: false);
+        RecordTarget(target, TargetKey.Resolver(() => resolve()), owner, name);
     }
 
     /// <summary>Records a full copy of the object now, compared whole at the flush.</summary>
     public static void RegisterCompleteObjectUndo(EngineObject obj, string name) => RecordObject(obj, name);
 
-    private static void RecordTarget(object target, TargetKey key, UndoOwner owner, string name, bool legacy)
+    private static void RecordTarget(object target, TargetKey key, UndoOwner owner, string name)
     {
         MainThreadContext.AssertMainThread();
         if (target is Asset { IsFromDatabase: true } asset && !CanSave(asset))
@@ -295,14 +282,13 @@ public static class Undo
         }
 
         int group = _currentGroup;
-        if (FindMergeablePending(key, group) != null) { if (!legacy) NoteRecord(); return; }
+        if (FindMergeablePending(key, group) != null) { NoteRecord(); return; }
 
         if (owner.Kind == UndoOwner.OwnerKind.None && target is EngineObject eo and not GameObject and not Component and not Asset { IsFromDatabase: true })
             WarnOnce(eo.GetType(), $"'{eo.GetType().Name}' is recorded with no owner, so undoing it marks nothing.");
 
-        // A legacy snapshot is a baseline, so it only counts for an interaction once it turns out to have changed.
-        if (!legacy) NoteRecord();
-        _pending.Add(new PendingObject(target, key, owner, Capture.Of(target), legacy) { Group = group, Name = name });
+        NoteRecord();
+        _pending.Add(new PendingObject(target, key, owner, Capture.Of(target)) { Group = group, Name = name });
     }
 
     // A pending capture of the same target in the same group with no structural change to it since.
@@ -528,7 +514,6 @@ public static class Undo
     public static void RevertAllInCurrentGroup()
     {
         MainThreadContext.AssertMainThread();
-        if (_isContinuous) CancelContinuous();
         FlushUndoRecordObjects();
         if (OpenGroupHasStep)
         {
@@ -571,7 +556,6 @@ public static class Undo
     public static void PerformUndo()
     {
         MainThreadContext.AssertMainThread();
-        if (_isContinuous) { CancelContinuous(); return; }
         if (InteractionActive) { RevertAllInCurrentGroup(); return; }
 
         FlushUndoRecordObjects();
@@ -592,7 +576,7 @@ public static class Undo
     public static void PerformRedo()
     {
         MainThreadContext.AssertMainThread();
-        if (_isContinuous || InteractionActive) return;
+        if (InteractionActive) return;
 
         FlushUndoRecordObjects();
         if (_redo.Count == 0 || OpenGroupHasStep) return;
@@ -656,13 +640,9 @@ public static class Undo
         List<Entry> entries = _pending;
         _pending = [];
 
-        // A group holding a legacy action keeps the action and drops the legacy property captures of the frame.
-        var legacyGroups = new HashSet<int>(entries.Where(e => e is ReadyEntry { Record: LegacyActionRecord }).Select(e => e.Group));
-
         var records = new List<Record>();
         foreach (Entry entry in entries)
         {
-            if (entry is PendingObject { Legacy: true } legacy && legacyGroups.Contains(legacy.Group)) continue;
             Record? record;
             try { record = entry.Finish(entries); }
             catch (Exception ex) { Runtime.Debug.LogException($"Recording '{entry.Name}' failed", ex); continue; }
@@ -723,8 +703,7 @@ public static class Undo
             TrimStack(_undo);
         }
 
-        if (!record.IsLegacy)
-            foreach (UndoOwner owner in record.Owners) Mark(owner);
+        foreach (UndoOwner owner in record.Owners) Mark(owner);
 
         if (record.Group != _currentGroup) _redo.Clear();
         return true;
@@ -768,10 +747,7 @@ public static class Undo
 
         if (mark && !Application.IsPlaying)
             foreach (Record r in step.Records)
-            {
-                if (r.IsLegacy) EditorSceneManager.MarkDirty();
-                else foreach (UndoOwner owner in r.Owners) Mark(owner);
-            }
+                foreach (UndoOwner owner in r.Owners) Mark(owner);
 
         foreach (object target in restore.Touched)
             if (target is EngineObject eo && eo.IsValid())
@@ -841,16 +817,11 @@ public static class Undo
     /// <summary>End of an editor frame: the group closes unless a drag is recording or a text field has focus.</summary>
     internal static void EndFrame(bool textFocused)
     {
-        if (_mouseHeld && !_interactionRecorded && _pending.Any(e => e is PendingObject { Legacy: true }))
-        {
-            FlushUndoRecordObjects();
-            if (OpenGroupHasStep) _interactionRecorded = true;
-        }
-        if (!InteractionActive && !textFocused && !_isContinuous) IncrementCurrentGroup();
+        if (!InteractionActive && !textFocused) IncrementCurrentGroup();
     }
 
     /// <summary>Whether Undo or Redo pressed now should be ignored: the mouse is held and nothing has recorded yet.</summary>
-    internal static bool IgnoresUndoInput => _mouseHeld && !_interactionRecorded && !_isContinuous;
+    internal static bool IgnoresUndoInput => _mouseHeld && !_interactionRecorded;
 
     /// <summary>A scene loaded by play code ends the play history, as opening a scene ends the edit history.</summary>
     internal static void OnSceneLoaded()
@@ -992,8 +963,6 @@ public static class Undo
         _pending.Clear();
         _inspectorBaselines.Clear();
         _inspectorRedirects.Clear();
-        _isContinuous = false;
-        _continuousStartState = null;
         _mouseHeld = false;
         _interactionRecorded = false;
     }
@@ -1041,183 +1010,10 @@ public static class Undo
         historyChanged?.Invoke();
     }
 
-    // ================================================================
-    //  Legacy API, rebuilt on records. Phase 2 moves every caller off it.
-    // ================================================================
-
-    /// <summary>Captures the object now and records it at the flush if it changed. Does nothing during play.</summary>
-    public static void Snapshot(object target)
-    {
-        if (Application.IsPlaying || target == null || _isContinuous) return;
-        if (target is EngineObject eo) { if (eo.IsNotValid()) return; RecordTarget(eo, TargetKey.For(eo), UndoOwner.Of(eo), "Modify Properties", legacy: true); return; }
-        RecordTarget(target, TargetKey.Weak(target), UndoOwner.None, "Modify Properties", legacy: true);
-    }
-
-    /// <summary>As <see cref="Snapshot(object)"/>, for an object owned by something else, such as a runtime asset embedded in a component.</summary>
-    public static void Snapshot(object target, UndoOwner owner)
-    {
-        if (Application.IsPlaying || target == null || _isContinuous) return;
-        if (target is EngineObject eo && eo.IsNotValid()) return;
-        RecordTarget(target, TargetKey.For(target), owner, "Modify Properties", legacy: true);
-    }
-
-    public static void RegisterAction(string description, Action undo, Action redo)
-    {
-        if (Application.IsPlaying) return;
-        NoteRecord();
-        _pending.Add(new ReadyEntry(new LegacyActionRecord(undo, redo)) { Group = _currentGroup, Name = description });
-    }
-
-    public static void RecordGameObjectChange<T>(GameObject go, string description, T oldValue, T newValue, Action<GameObject, T> apply, bool coalesce = false)
-    {
-        Guid id = go.Identifier;
-        RegisterAction(description,
-            () => { GameObject? g = FindGO(id); if (g.IsValid()) apply(g, oldValue); },
-            () => { GameObject? g = FindGO(id); if (g.IsValid()) apply(g, newValue); });
-    }
-
-    public static void RegisterCoalescableAction(string description, Action undo, Action redo) => RegisterAction(description, undo, redo);
-
-    public static void RegisterActionGroup(string description, IReadOnlyList<(Action undo, Action redo)> actions, bool coalesce = false)
-    {
-        if (Application.IsPlaying || actions == null) return;
-        foreach ((Action u, Action r) in actions) RegisterAction(description, u, r);
-    }
-
-    public static void ApplyGameObjectChanges<T>(IReadOnlyList<GameObject> gos, string description,
-        Func<GameObject, T> get, Action<GameObject, T> set, T newValue, bool coalesce = false)
-    {
-        if (Application.IsPlaying)
-        {
-            foreach (GameObject go in gos) set(go, newValue);
-            return;
-        }
-
-        var actions = new List<(Action undo, Action redo)>(gos.Count);
-        foreach (GameObject go in gos)
-        {
-            Guid id = go.Identifier;
-            T oldV = get(go);
-            T captured = newValue;
-            actions.Add((() => { GameObject? g = FindGO(id); if (g.IsValid()) set(g, oldV); },
-                         () => { GameObject? g = FindGO(id); if (g.IsValid()) set(g, captured); }));
-            set(go, newValue);
-        }
-        RegisterActionGroup(description, actions, coalesce);
-    }
-
-    public static void RegisterCreatedObject(GameObject go, string description)
-    {
-        if (Application.IsPlaying) return;
-        RegisterCreatedObjectUndo(go, description);
-    }
-
-    /// <summary>Records a GameObject the caller is about to destroy. Call before it leaves the scene.</summary>
-    public static void RegisterDestroyObject(GameObject go, string description)
-    {
-        if (Application.IsPlaying || go.IsNotValid()) return;
-        NoteRecord();
-        _pending.Add(new ReadyEntry(DestroyRecord.Of(go)) { Group = _currentGroup, Name = description });
-    }
-
-    /// <summary>
-    /// Builds the undo and redo pair for a just created GameObject without pushing it, for callers that hand it to
-    /// <see cref="RegisterActionGroup"/> with follow up actions. Captures now.
-    /// </summary>
-    public static (Action undo, Action redo) CaptureCreatedObject(GameObject go)
-    {
-        CreatedRecord record = CreatedRecord.Capture(go, []);
-        return (() => ApplyAlone(record, undo: true), () => ApplyAlone(record, undo: false));
-    }
-
-    private static void ApplyAlone(Record record, bool undo)
-    {
-        var restore = new Restore(undo);
-        record.CollectRecreations(restore);
-        restore.FillPrebuilt();
-        record.Apply(restore);
-        restore.Finish();
-    }
-
-    public static void BeginContinuous(GameObject[] targets, string description)
-    {
-        if (Application.IsPlaying || _isContinuous) return;
-
-        _isContinuous = true;
-        _continuousDescription = description;
-        _continuousStartState = [];
-        NoteRecord();
-
-        foreach (GameObject go in targets)
-            if (go.IsValid())
-                _continuousStartState.Add((go.Identifier, go.Transform.LocalPosition, go.Transform.LocalRotation, go.Transform.LocalScale));
-    }
-
-    public static void EndContinuous()
-    {
-        if (!_isContinuous || _continuousStartState == null) return;
-
-        foreach ((Guid goId, Float3 startPos, Quaternion startRot, Float3 startScale) in _continuousStartState)
-        {
-            GameObject? go = FindGO(goId);
-            if (go.IsNotValid()) continue;
-
-            Float3 endPos = go.Transform.LocalPosition;
-            Quaternion endRot = go.Transform.LocalRotation;
-            Float3 endScale = go.Transform.LocalScale;
-            if (startPos.Equals(endPos) && startRot == endRot && startScale.Equals(endScale)) continue;
-
-            Guid id = goId;
-            Float3 sPos = startPos; Quaternion sRot = startRot; Float3 sScale = startScale;
-            _pending.Add(new ReadyEntry(new LegacyActionRecord(
-                () => SetLocal(id, sPos, sRot, sScale),
-                () => SetLocal(id, endPos, endRot, endScale))) { Group = _currentGroup, Name = _continuousDescription });
-        }
-
-        _isContinuous = false;
-        _continuousStartState = null;
-        FlushUndoRecordObjects();
-    }
-
-    public static void CancelContinuous()
-    {
-        if (!_isContinuous || _continuousStartState == null) return;
-
-        foreach ((Guid goId, Float3 startPos, Quaternion startRot, Float3 startScale) in _continuousStartState)
-            SetLocal(goId, startPos, startRot, startScale);
-
-        _isContinuous = false;
-        _continuousStartState = null;
-    }
-
-    private static void SetLocal(Guid id, Float3 pos, Quaternion rot, Float3 scale)
-    {
-        GameObject? g = FindGO(id);
-        if (g.IsNotValid()) return;
-        g.Transform.LocalPosition = pos;
-        g.Transform.LocalRotation = rot;
-        g.Transform.LocalScale = scale;
-    }
-
-    /// <summary>Flushes, then starts a new group.</summary>
-    public static void IncrementGroup()
-    {
-        FlushUndoRecordObjects();
-        IncrementCurrentGroup();
-    }
-
-    /// <summary>Find a GameObject by identifier in the current scene.</summary>
-    public static GameObject? FindGO(Guid identifier)
+    private static GameObject? FindGO(Guid identifier)
     {
         Scene scene = Scene.Current;
         return scene.IsValid() ? scene.FindObjectByIdentifier<GameObject>(identifier) : null;
-    }
-
-    /// <summary>Find a component by identifier in the current scene.</summary>
-    public static Component? FindComponent(Guid identifier)
-    {
-        Scene scene = Scene.Current;
-        return scene.IsValid() ? scene.FindObjectByIdentifier<Component>(identifier) : null;
     }
 
     // ================================================================
@@ -1416,6 +1212,7 @@ public static class Undo
                 case "LocalRotation": go.Transform.LocalRotation = Serializer.Deserialize<Quaternion>(value); break;
                 case "LocalScale": go.Transform.LocalScale = Serializer.Deserialize<Float3>(value); break;
             }
+        if (go.RectTransform is RectTransform rect) rect.MarkLayoutDirty();
     }
 
     // ================================================================
@@ -1434,11 +1231,10 @@ public static class Undo
         public virtual bool Touches(Guid id) => false;
     }
 
-    private sealed class PendingObject(object target, TargetKey key, UndoOwner owner, Capture before, bool legacy) : Entry
+    private sealed class PendingObject(object target, TargetKey key, UndoOwner owner, Capture before) : Entry
     {
         public readonly object Target = target;
         public readonly TargetKey Key = key;
-        public readonly bool Legacy = legacy;
 
         public override Record? Finish(List<Entry> flushing)
         {
@@ -1555,7 +1351,6 @@ public static class Undo
         public string Name = "";
 
         public virtual IEnumerable<UndoOwner> Owners => [];
-        public virtual bool IsLegacy => false;
 
         /// <summary>Hands the objects this record brings back to the restore to build before anything applies.</summary>
         public virtual void CollectRecreations(Restore restore) { }
@@ -1720,13 +1515,6 @@ public static class Undo
         public override bool Touches(Guid id) => Key.ObjectId == id || (Key.ObjectId == Guid.Empty && Key.Id == id && id != Guid.Empty);
     }
 
-    private sealed class LegacyActionRecord(Action undo, Action redo) : Record
-    {
-        public override bool IsLegacy => true;
-        public override void Apply(Restore restore) => (restore.IsUndo ? undo : redo)();
-    }
-
-    // Import settings are pending until Apply, so undo only moves the pending settings and the Apply bar shows the rest.
     private sealed class ImporterRecord(Guid asset, EchoObject before, EchoObject after) : Record
     {
         public override void Apply(Restore restore) => Inspector.ImportSettingsEditor.SetPending(asset, (restore.IsUndo ? before : after).Clone());

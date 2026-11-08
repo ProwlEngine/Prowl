@@ -18,6 +18,15 @@ public sealed class UndoComp : Component
     public string Label = "";
 }
 
+/// <summary>An operation made of two actions, for tests of the stack itself.</summary>
+public sealed class UndoTestOp(string name, Action undo, Action redo) : IUndoOperation
+{
+    public string Name => name;
+    public IReadOnlyList<UndoOwner> Owners => [];
+    public void Undo() => undo();
+    public void Redo() => redo();
+}
+
 /// <summary>
 /// Tests for the editor <see cref="Undo"/> system - high stakes because a bug here means lost work.
 /// Covers property snapshots, action records, structural create/destroy (full restore), identifier
@@ -28,6 +37,8 @@ public sealed class UndoComp : Component
 public class UndoTests : EditorTestHarness
 {
     public UndoTests() => Undo.Clear(); // static history persists across tests
+
+    private static GameObject? FindGO(Guid id) => Scene.Current.FindObjectByIdentifier<GameObject>(id);
 
     private (Scene scene, GameObject go, UndoComp comp) MakeScene()
     {
@@ -80,10 +91,10 @@ public class UndoTests : EditorTestHarness
 
         comp.Value = 10;
         comp.OnValidate();
-        Undo.Snapshot(comp);
+        Undo.RecordObject(comp, "Edit");
         comp.Value = 20;
         comp.OnValidate();
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Undo.PerformUndo();
         Assert.Equal(10, comp.Value);
@@ -99,9 +110,9 @@ public class UndoTests : EditorTestHarness
     {
         (Scene _, GameObject _, UndoComp? comp) = MakeScene();
         comp.Value = 10;
-        Undo.Snapshot(comp);
+        Undo.RecordObject(comp, "Edit");
         comp.Value = 20;
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Assert.True(Undo.CanUndo);
         Undo.PerformUndo();
@@ -117,9 +128,9 @@ public class UndoTests : EditorTestHarness
     {
         (Scene _, GameObject _, UndoComp? comp) = MakeScene();
         comp.Value = 1; comp.Label = "a";
-        Undo.Snapshot(comp);
+        Undo.RecordObject(comp, "Edit");
         comp.Value = 2; comp.Label = "b";
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Undo.PerformUndo();
         Assert.Equal(1, comp.Value);
@@ -132,9 +143,9 @@ public class UndoTests : EditorTestHarness
     {
         (Scene _, GameObject _, UndoComp? comp) = MakeScene();
         comp.Value = 5;
-        Undo.Snapshot(comp);
+        Undo.RecordObject(comp, "Edit");
         // no mutation
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Assert.False(Undo.CanUndo);
     }
@@ -144,55 +155,20 @@ public class UndoTests : EditorTestHarness
     {
         (Scene _, GameObject _, UndoComp? comp) = MakeScene();
         comp.Value = 0;
-        Undo.Snapshot(comp);
+        Undo.RecordObject(comp, "Edit");
         comp.Value = 1;
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Undo.PerformUndo();
         Assert.True(Undo.CanRedo);
 
-        Undo.RegisterAction("New", () => { }, () => { });
-        Undo.IncrementGroup();
+        Undo.RegisterOperation(new UndoTestOp("New", () => { }, () => { }));
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Assert.False(Undo.CanRedo);
     }
 
     // ---- Generic actions ----
-
-    [Fact]
-    public void RegisterAction_Undo_Redo()
-    {
-        MakeScene();
-        int x = 1; // simulate the immediate write
-        Undo.RegisterAction("A", undo: () => x = 0, redo: () => x = 1);
-        Undo.IncrementGroup();
-
-        Undo.PerformUndo();
-        Assert.Equal(0, x);
-        Undo.PerformRedo();
-        Assert.Equal(1, x);
-    }
-
-    [Fact]
-    public void RegisterActionGroup_OneStep_UndoesAllInReverse()
-    {
-        MakeScene();
-        int x = 11; // both already applied
-        var actions = new List<(Action undo, Action redo)>
-        {
-            (() => x -= 1, () => x += 1),
-            (() => x -= 10, () => x += 10),
-        };
-        Undo.RegisterActionGroup("Group", actions);
-        Undo.IncrementGroup();
-
-        Undo.PerformUndo();
-        Assert.Equal(0, x); // one step undid both
-        Assert.False(Undo.CanUndo);
-
-        Undo.PerformRedo();
-        Assert.Equal(11, x);
-    }
 
     // ---- Structural: create ----
 
@@ -209,14 +185,14 @@ public class UndoTests : EditorTestHarness
         scene.Add(go);
         Guid goId = go.Identifier;
 
-        Undo.RegisterCreatedObject(go, "Create");
-        Undo.IncrementGroup();
+        Undo.RegisterCreatedObjectUndo(go, "Create");
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Undo.PerformUndo();
-        Assert.Null(Undo.FindGO(goId));
+        Assert.Null(FindGO(goId));
 
         Undo.PerformRedo();
-        GameObject? restored = Undo.FindGO(goId);
+        GameObject? restored = FindGO(goId);
         Assert.NotNull(restored);
         Assert.Equal(7, restored!.GetComponent<UndoComp>()!.Value);
     }
@@ -231,14 +207,13 @@ public class UndoTests : EditorTestHarness
         Guid goId = go.Identifier;
         Guid compId = comp.Identifier;
 
-        Undo.RegisterDestroyObject(go, "Delete");
-        DestroyGO(scene, go);
-        Undo.IncrementGroup();
+        Undo.DestroyObjectImmediate(go);
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
-        Assert.Null(Undo.FindGO(goId));
+        Assert.Null(FindGO(goId));
 
         Undo.PerformUndo();
-        GameObject? restored = Undo.FindGO(goId);
+        GameObject? restored = FindGO(goId);
         Assert.NotNull(restored);
         UndoComp rc = restored!.GetComponent<UndoComp>()!;
         Assert.Equal(42, rc.Value);
@@ -253,16 +228,15 @@ public class UndoTests : EditorTestHarness
         GiveRuntimeMaterial(go);
         Guid goId = go.Identifier;
 
-        Undo.RegisterDestroyObject(go, "Delete");
-        DestroyGO(scene, go);
-        Undo.IncrementGroup();
+        Undo.DestroyObjectImmediate(go);
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
 
         Undo.PerformUndo();
 
-        Assert.Equal("Runtime", Undo.FindGO(goId)!.GetComponent<MeshRenderer>()!.Material!.Name);
+        Assert.Equal("Runtime", FindGO(goId)!.GetComponent<MeshRenderer>()!.Material!.Name);
     }
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
@@ -292,9 +266,8 @@ public class UndoTests : EditorTestHarness
         Scene.ProcessPendingLoad();
         GameObject loadedHolder = scene.AllObjects.Single(g => g.Name == "Holder");
 
-        Undo.RegisterDestroyObject(loadedHolder, "Delete");
-        DestroyGO(scene, loadedHolder);
-        Undo.IncrementGroup();
+        Undo.DestroyObjectImmediate(loadedHolder);
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Undo.PerformUndo();
 
         string saved = Echo.Serializer.Serialize(typeof(object), Scene.Current).WriteToString().Replace("Ghost_DoesNotExist", nameof(UndoLinkComp));
@@ -323,12 +296,11 @@ public class UndoTests : EditorTestHarness
         Guid parentId = parent.Identifier;
         Guid childId = child.Identifier;
 
-        Undo.RegisterDestroyObject(parent, "Delete");
-        DestroyGO(scene, parent);
-        Undo.IncrementGroup();
+        Undo.DestroyObjectImmediate(parent);
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Undo.PerformUndo();
-        GameObject? rParent = Undo.FindGO(parentId);
+        GameObject? rParent = FindGO(parentId);
         Assert.NotNull(rParent);
         Assert.Single(rParent!.Children);
         GameObject rChild = rParent.Children[0];
@@ -341,17 +313,16 @@ public class UndoTests : EditorTestHarness
     {
         (Scene? scene, GameObject? go, UndoComp? comp) = MakeScene();
         comp.Value = 10;
-        Undo.Snapshot(comp);
+        Undo.RecordObject(comp, "Edit");
         comp.Value = 20;
-        Undo.IncrementGroup(); // property step (resolves comp by identifier)
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup(); // property step (resolves comp by identifier)
 
         Guid goId = go.Identifier;
-        Undo.RegisterDestroyObject(go, "Delete");
-        DestroyGO(scene, go);
-        Undo.IncrementGroup(); // destroy step
+        Undo.DestroyObjectImmediate(go);
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup(); // destroy step
 
         Undo.PerformUndo(); // undo destroy -> recreate go (same identifiers), comp.Value == 20
-        GameObject? restored = Undo.FindGO(goId);
+        GameObject? restored = FindGO(goId);
         Assert.NotNull(restored);
         Assert.Equal(20, restored!.GetComponent<UndoComp>()!.Value);
 
@@ -366,11 +337,11 @@ public class UndoTests : EditorTestHarness
     {
         (Scene _, GameObject _, UndoComp? comp) = MakeScene();
         comp.Value = 0;
-        Undo.Snapshot(comp);
+        Undo.RecordObject(comp, "Edit");
         comp.Value = 1;
         Undo.FlushUndoRecordObjects(); // one frame of a drag
 
-        Undo.Snapshot(comp);
+        Undo.RecordObject(comp, "Edit");
         comp.Value = 2;
         Undo.FlushUndoRecordObjects(); // the next frame joins the same group's step
 
@@ -391,8 +362,8 @@ public class UndoTests : EditorTestHarness
         {
             for (int i = 0; i < 5; i++)
             {
-                Undo.RegisterAction($"a{i}", () => { }, () => { });
-                Undo.IncrementGroup();
+                Undo.RegisterOperation(new UndoTestOp($"a{i}", () => { }, () => { }));
+                Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
             }
 
             int undos = 0;
@@ -406,7 +377,7 @@ public class UndoTests : EditorTestHarness
     public void Clear_EmptiesHistory()
     {
         (Scene _, GameObject _, UndoComp? comp) = MakeScene();
-        comp.Value = 0; Undo.Snapshot(comp); comp.Value = 1; Undo.IncrementGroup();
+        comp.Value = 0; Undo.RecordObject(comp, "Edit"); comp.Value = 1; Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Assert.True(Undo.CanUndo);
 
         Undo.Clear();
@@ -417,101 +388,9 @@ public class UndoTests : EditorTestHarness
 
     // ---- Continuous (gizmo drag) ----
 
-    [Fact]
-    public void Continuous_End_PushesOneStep_UndoRestoresStart_RedoReappliesEnd()
-    {
-        (Scene _, GameObject? go, UndoComp _) = MakeScene();
-        go.Transform.LocalPosition = new Float3(0, 0, 0);
-
-        Undo.BeginContinuous([go], "Move");
-        go.Transform.LocalPosition = new Float3(5, 0, 0);
-        Undo.EndContinuous();
-
-        Assert.True(Undo.CanUndo);
-        Undo.PerformUndo();
-        Assert.Equal(0, go.Transform.LocalPosition.X, 4);
-
-        Undo.PerformRedo();
-        Assert.Equal(5, go.Transform.LocalPosition.X, 4);
-    }
-
-    [Fact]
-    public void CancelContinuous_RestoresStart_NoStep()
-    {
-        (Scene _, GameObject? go, UndoComp _) = MakeScene();
-        go.Transform.LocalPosition = new Float3(0, 0, 0);
-
-        Undo.BeginContinuous([go], "Move");
-        go.Transform.LocalPosition = new Float3(5, 0, 0);
-        Undo.CancelContinuous();
-
-        Assert.Equal(0, go.Transform.LocalPosition.X, 4);
-        Assert.False(Undo.CanUndo);
-    }
-
-    [Fact]
-    public void PerformUndo_DuringContinuous_CancelsInsteadOfUndoing()
-    {
-        (Scene _, GameObject? go, UndoComp _) = MakeScene();
-        go.Transform.LocalPosition = new Float3(0, 0, 0);
-
-        Undo.BeginContinuous([go], "Move");
-        go.Transform.LocalPosition = new Float3(5, 0, 0);
-        Undo.PerformUndo(); // cancels the drag rather than popping the stack
-
-        Assert.Equal(0, go.Transform.LocalPosition.X, 4);
-        Assert.False(Undo.IsContinuous);
-        Assert.False(Undo.CanUndo);
-    }
-
-    [Fact]
-    public void Continuous_NoMovement_PushesNoStep()
-    {
-        (Scene _, GameObject? go, UndoComp _) = MakeScene();
-        Undo.BeginContinuous([go], "Move");
-        // no movement
-        Undo.EndContinuous();
-
-        Assert.False(Undo.CanUndo);
-    }
-
     // ---- Interaction between actions and snapshots ----
 
-    [Fact]
-    public void ActionAndSnapshotSameFrame_PropertySnapshotIsDiscarded()
-    {
-        (Scene _, GameObject _, UndoComp? comp) = MakeScene();
-        comp.Value = 10;
-        Undo.Snapshot(comp);
-        comp.Value = 20;
-        Undo.RegisterAction("Some Action", () => { }, () => { }); // an explicit action this frame
-        Undo.IncrementGroup();
-
-        // Only the action step exists; the property snapshot was dropped to avoid a duplicate record.
-        Undo.PerformUndo();
-        Assert.Equal(20, comp.Value); // property change was NOT tracked
-        Assert.False(Undo.CanUndo);   // exactly one step
-    }
-
     // ---- Play-mode gating ----
-
-    [Fact]
-    public void WhenPlaying_RecordingIsNoOp()
-    {
-        bool prev = Application.IsPlaying;
-        Application.IsPlaying = true;
-        try
-        {
-            (Scene _, GameObject _, UndoComp? comp) = MakeScene();
-            comp.Value = 10;
-            Undo.Snapshot(comp);
-            comp.Value = 20;
-            Undo.IncrementGroup();
-
-            Assert.False(Undo.CanUndo);
-        }
-        finally { Application.IsPlaying = prev; }
-    }
 
     [Fact]
     public void Undo_OnEmptyHistory_IsSafeNoOp()
@@ -530,13 +409,13 @@ public class UndoTests : EditorTestHarness
     {
         (Scene _, GameObject _, UndoComp? comp) = MakeScene();
         comp.Value = 0;
-        Undo.Snapshot(comp);
+        Undo.RecordObject(comp, "Edit");
         comp.Value = 1;
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
-        Undo.Snapshot(comp);
+        Undo.RecordObject(comp, "Edit");
         comp.Value = 2;
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         // Two groups, two steps.
         Undo.PerformUndo();
@@ -545,52 +424,7 @@ public class UndoTests : EditorTestHarness
         Assert.Equal(0, comp.Value);
     }
 
-    [Fact]
-    public void RegisterCoalescableAction_InOneGroup_KeepsOriginalUndoLatestRedo()
-    {
-        MakeScene();
-        int x = 1;
-        Undo.RegisterCoalescableAction("Edit", () => x = 0, () => x = 1);
-        Undo.FlushUndoRecordObjects();
-
-        x = 2;
-        Undo.RegisterCoalescableAction("Edit", () => x = 0, () => x = 2); // same group, same step
-
-        Undo.PerformUndo();
-        Assert.Equal(0, x);            // original undo
-        Assert.False(Undo.CanUndo);    // single coalesced step
-
-        Undo.PerformRedo();
-        Assert.Equal(2, x);            // latest redo value
-    }
-
     // ---- Multi-object helpers ----
-
-    [Fact]
-    public void ApplyGameObjectChanges_AppliesToAll_AsOneUndoStep()
-    {
-        var scene = new Scene();
-        var a = new GameObject("A");
-        var b = new GameObject("B");
-        scene.Add(a); scene.Add(b);
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
-        Undo.Clear();
-
-        Undo.ApplyGameObjectChanges(new[] { a, b }, "Rename", g => g.Name, (g, v) => g.Name = v, "Renamed");
-        Assert.Equal("Renamed", a.Name);
-        Assert.Equal("Renamed", b.Name);
-        Undo.IncrementGroup();
-
-        Undo.PerformUndo();
-        Assert.Equal("A", a.Name);
-        Assert.Equal("B", b.Name);
-        Assert.False(Undo.CanUndo); // single grouped step
-
-        Undo.PerformRedo();
-        Assert.Equal("Renamed", a.Name);
-        Assert.Equal("Renamed", b.Name);
-    }
 
     // ---- Robustness ----
 
@@ -599,38 +433,14 @@ public class UndoTests : EditorTestHarness
     {
         (Scene? scene, GameObject? go, UndoComp? comp) = MakeScene();
         comp.Value = 0;
-        Undo.Snapshot(comp);
+        Undo.RecordObject(comp, "Edit");
         comp.Value = 1;
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         DestroyGO(scene, go); // destroy without registering undo - the record's target is now gone
 
         Undo.PerformUndo(); // must not throw; resolves to null and no-ops
         Assert.True(Undo.CanRedo);
-    }
-
-    [Fact]
-    public void Continuous_MultipleTargets_RestoredTogether()
-    {
-        var scene = new Scene();
-        var a = new GameObject("A");
-        var b = new GameObject("B");
-        scene.Add(a); scene.Add(b);
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
-        Undo.Clear();
-        a.Transform.LocalPosition = Float3.Zero;
-        b.Transform.LocalPosition = Float3.Zero;
-
-        Undo.BeginContinuous([a, b], "Move");
-        a.Transform.LocalPosition = new Float3(5, 0, 0);
-        b.Transform.LocalPosition = new Float3(0, 7, 0);
-        Undo.EndContinuous();
-
-        Undo.PerformUndo();
-        Assert.Equal(0, a.Transform.LocalPosition.X, 4);
-        Assert.Equal(0, b.Transform.LocalPosition.Y, 4);
-        Assert.False(Undo.CanUndo); // one step for both targets
     }
 
     // ---------------------------------------------------------------------
@@ -641,16 +451,16 @@ public class UndoTests : EditorTestHarness
     public void PushContext_SetsTheHistoryAsideAndPopBringsItBack()
     {
         int value = 0;
-        Undo.RegisterAction("Scene Edit", () => value = 1, () => value = 2);
-        Undo.IncrementGroup();
+        Undo.RegisterOperation(new UndoTestOp("Scene Edit", () => value = 1, () => value = 2));
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Assert.True(Undo.CanUndo);
 
         object saved = Undo.PushContext();
         Assert.False(Undo.CanUndo); // the session starts with nothing behind it
 
         int sessionValue = 0;
-        Undo.RegisterAction("Session Edit", () => sessionValue = 1, () => sessionValue = 2);
-        Undo.IncrementGroup();
+        Undo.RegisterOperation(new UndoTestOp("Session Edit", () => sessionValue = 1, () => sessionValue = 2));
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Assert.True(Undo.CanUndo);
 
         Undo.PopContext(saved);
@@ -666,8 +476,8 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void PopContext_WithNothingSavedIsJustAClear()
     {
-        Undo.RegisterAction("Edit", () => { }, () => { });
-        Undo.IncrementGroup();
+        Undo.RegisterOperation(new UndoTestOp("Edit", () => { }, () => { }));
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Assert.True(Undo.CanUndo);
 
         Undo.PopContext(null);
@@ -1414,21 +1224,6 @@ public class UndoTests : EditorTestHarness
     }
 
     [Fact]
-    public void UndoDuringALegacyContinuousEdit_CancelsIt()
-    {
-        Scene scene = OpenScene();
-        GameObject go = Add(scene, "GO");
-        Frame(mouseDown: true, edits: () => Undo.BeginContinuous([go], "Move"));
-        go.Transform.LocalPosition = new Float3(5, 0, 0);
-
-        Assert.False(Undo.IgnoresUndoInput);
-        Undo.PerformUndo();
-
-        Assert.Equal(Float3.Zero, go.Transform.LocalPosition);
-        Assert.False(Undo.IsContinuous);
-    }
-
-    [Fact]
     public void ContextClearedWhileSetAside_PopsBackEmpty()
     {
         Scene scene = OpenScene();
@@ -1496,7 +1291,7 @@ public class UndoTests : EditorTestHarness
 
         Undo.RecordObject(material, "Edit");
         material.SetFloat("_Value", 2);
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Assert.True(Assets.SaveAsset(material));
         Assets.Refresh();
         Assert.True(Undo.CanUndo);
@@ -1550,25 +1345,6 @@ public class UndoTests : EditorTestHarness
     }
 
     [Fact]
-    public void CustomEditorSnapshotsOverADrag_AreOneStep_AndAHoldWithNoChangeIsNoInteraction()
-    {
-        Scene scene = OpenScene();
-        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
-
-        Frame(mouseDown: true, edits: () => Undo.Snapshot(comp));
-        Assert.False(Undo.InteractionActive);
-        Frame(mouseHeld: true, edits: () => { Undo.Snapshot(comp); comp.Value = 1; });
-        Frame(mouseHeld: true, edits: () => { Undo.Snapshot(comp); comp.Value = 2; });
-        Frame(mouseHeld: true, edits: () => { Undo.Snapshot(comp); comp.Value = 3; });
-        Frame();
-        Frame();
-
-        Undo.PerformUndo();
-        Assert.Equal(0, comp.Value);
-        Assert.False(Undo.CanUndo);
-    }
-
-    [Fact]
     public void EmbeddedProfileEdit_RecordsAndMarksTheHoldersScene()
     {
         Scene scene = OpenScene();
@@ -1578,7 +1354,7 @@ public class UndoTests : EditorTestHarness
         Type type = Inspector.VolumeProfileGUI.ComponentTypes[0];
         EditorSceneManager.IsDirty = false;
 
-        Undo.Snapshot(profile, UndoOwner.Of(volume));
+        Undo.RecordObject(profile, UndoOwner.Of(volume), "Add Override");
         profile.Add(type);
         Undo.FlushUndoRecordObjects();
         Assert.True(EditorSceneManager.IsDirty);
@@ -1592,7 +1368,7 @@ public class UndoTests : EditorTestHarness
     {
         Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
-        Undo.RecordObject(comp, "Edit"); comp.Value = 1; Undo.IncrementGroup();
+        Undo.RecordObject(comp, "Edit"); comp.Value = 1; Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         Undo.PerformUndoTo(long.MaxValue);
         Undo.PerformRedoTo(long.MaxValue);
