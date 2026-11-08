@@ -102,11 +102,14 @@ public sealed partial class OceanFeature : FrameFeature, IDisposable
     /// <summary>How folded the waves must be before they foam: foam builds where the Jacobian falls under this.</summary>
     public float FoamCoverage { get; set; } = 0.55f;
 
-    /// <summary>How quickly foam builds where waves fold.</summary>
+    /// <summary>How white the foam on folding wave crests is.</summary>
     public float FoamStrength { get; set; } = 1f;
 
     /// <summary>The share of foam that fades each second.</summary>
     public float FoamFade { get; set; } = 0.8f;
+
+    /// <summary>How hard ripples and wakes pull the water toward their crests, folding them into foam.</summary>
+    public float RippleFoam { get; set; } = 1f;
 
     /// <summary>The power in each octave of wavelength, and the chop and time scale.</summary>
     public OceanSpectrum Spectrum { get; } = new();

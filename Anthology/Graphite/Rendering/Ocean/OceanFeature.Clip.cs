@@ -136,6 +136,7 @@ public sealed partial class OceanFeature
             builder.Read(owner.Slopes);
             builder.Read(owner.Depth);
             builder.Read(owner.Levels);
+            builder.Read(owner.Ripples);
             builder.ExportToDraws(builder.Write(owner.Clip));
             builder.ExportToDraws(builder.Write(owner._whitecaps[0]));
             builder.Write(owner._whitecaps[1]);
@@ -151,6 +152,7 @@ public sealed partial class OceanFeature
             _properties.SetTexture("Ocean_Depth", owner.Depth, slices);
             _properties.SetTexture("Ocean_Levels", owner.Levels, slices);
             _properties.SetTexture("Ocean_Clip", owner.Clip);
+            _properties.SetTexture("Ocean_Ripples", owner.Ripples, slices);
             cmd.SetProperties(_properties);
             owner.RenderClip(cmd);
 

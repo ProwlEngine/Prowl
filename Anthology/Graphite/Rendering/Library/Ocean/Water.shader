@@ -325,7 +325,7 @@ Shader "Graphite/Ocean"
                 vec3 transmittance = exp(-_Absorption.rgb * behind);
                 float whitecaps = Ocean_Whitecaps(vBed);
                 if (whitecaps < 0.0)
-                    whitecaps = 5.0 * _OceanWhitecapRule.y * clamp(_OceanWhitecapRule.x - jacobian, 0.0, 1.0) / max(_OceanWhitecapRule.z, 0.01);
+                    whitecaps = 4.0 * _OceanWhitecapRule.y * (_OceanWhitecapRule.x - jacobian);
                 whitecaps = clamp(whitecaps, 0.0, 1.0);
                 float amount = max(whitecaps, Ocean_ShoreFoam(shoreDepth));
                 amount *= clamp(contact / max(_ShorelineFoamMinDepth, 1e-3), 0.0, 1.0);

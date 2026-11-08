@@ -49,9 +49,9 @@ public sealed partial class OceanFeature
         {
             Sizes = new Float4(CascadeSize(0), CascadeSize(1), CascadeSize(2), CascadeSize(3)),
             Depth = parameters,
-            Shore = new Float4(Math.Clamp(ShallowAttenuation, 0f, 1f), DepthSlices, 0f, Resolution),
+            Shore = new Float4(Math.Clamp(ShallowAttenuation, 0f, 1f), DepthSlices, RippleSlices, Resolution),
             Tile = new Float4((float)(viewer.X - Math.Floor(viewer.X / largest) * largest), (float)(viewer.Z - Math.Floor(viewer.Z / largest) * largest), previous.X, previous.Y),
-            Moved = new Float4(moved.X, moved.Y, 0f, 0f),
+            Moved = new Float4(moved.X, moved.Y, MathF.Max(RippleFoam, 0f), 0f),
             Rule = new Float4(0f, FoamCoverage, MathF.Max(FoamStrength, 0f), MathF.Max(FoamFade, 0f)),
         };
         _whitecapViewer = viewer;
@@ -70,7 +70,7 @@ public sealed partial class OceanFeature
             cmd.SetProperties(properties);
             WhitecapPush push = pass == 0
                 ? _whitecapBase with { Rule = _whitecapBase.Rule with { X = Math.Clamp(deltaTime, 0f, 0.1f) } }
-                : _whitecapBase with { Tile = _whitecapBase.Tile with { Z = _whitecapBase.Depth.X, W = _whitecapBase.Depth.Y }, Moved = Float4.Zero };
+                : _whitecapBase with { Tile = _whitecapBase.Tile with { Z = _whitecapBase.Depth.X, W = _whitecapBase.Depth.Y }, Moved = _whitecapBase.Moved with { X = 0f, Y = 0f } };
             cmd.SetPushConstants(push);
             cmd.Dispatch(groups, groups, DepthSlices);
             cmd.ComputeBarrier();
