@@ -229,7 +229,7 @@ public sealed class LightmapBakeService
         scene.BakedLighting = new Scene.BakedLightingData();
         scene.InvalidateProbeVolume();
 
-        EditorSceneManager.MarkDirty();
+        SaveBakeResult();
         Status = "Cleared";
         Runtime.Debug.Log("[Lightmap] Cleared baked lighting.");
     }
@@ -337,7 +337,7 @@ public sealed class LightmapBakeService
             scene.InvalidateProbeVolume();
         }
 
-        EditorSceneManager.MarkDirty();
+        SaveBakeResult();
         Runtime.Debug.Log($"[Lightmap] Baked {lightmaps.Count} lightmap page(s), {_renderers.Count} renderer(s), {_probePositions.Count} probe(s).");
         Cleanup();
         Status = "Done";
@@ -572,5 +572,12 @@ public sealed class LightmapBakeService
             Format = ImageFormat.Png,
             FlipVertically = true,
         });
+    }
+
+    // The old pages are deleted from disk, so a scene with a file is saved at once or it would point at them.
+    private static void SaveBakeResult()
+    {
+        EditorSceneManager.MarkDirty();
+        if (EditorSceneManager.CurrentScenePath != null) EditorSceneManager.Save();
     }
 }

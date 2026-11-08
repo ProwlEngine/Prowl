@@ -245,6 +245,7 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
         _unsaved = null;
         Scope = string.Empty;
         Resolve(keepPlace: false);
+        _dirty = _asset.IsValid() && EditorUtility.IsDirty(_asset!);
     }
 
     /// <summary>Loads the graph, and rebuilds the view after its content was refilled, carrying unsaved edits onto it.</summary>

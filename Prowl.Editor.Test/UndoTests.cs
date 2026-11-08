@@ -1576,4 +1576,85 @@ public class UndoTests : EditorTestHarness
         Assert.False(legacyOutput.Inputs[1].Flag);
         Assert.True(legacyOutput.Inputs[2].Flag);
     }
+
+    [Fact]
+    public void UndoOfAnEditInTheOpenGroup_DropsTheStaleRedoUnderIt()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+        Undo.RecordObject(comp, "A"); comp.Value = 1; Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+        Undo.PerformUndo();
+
+        Undo.RecordObject(comp, "B");
+        comp.Value = 5;
+        Undo.FlushUndoRecordObjects(); // pushed while its group is still open, as typing into a focused field does
+        Undo.PerformUndo();
+
+        Assert.Single(Undo.RedoSteps);
+        Undo.PerformRedo();
+        Assert.Equal(5, comp.Value);
+        Undo.PerformRedo();
+        Assert.Equal(5, comp.Value);
+    }
+
+    [Fact]
+    public void HierarchyRecordWithNoChange_IsNotAStep()
+    {
+        Scene scene = OpenScene();
+        GameObject root = Add(scene, "Root");
+        Add(scene, "Child", root);
+
+        Undo.RegisterFullObjectHierarchyUndo(root, "Revert");
+        Undo.FlushUndoRecordObjects();
+
+        Assert.False(Undo.CanUndo);
+        Assert.False(EditorSceneManager.IsDirty);
+    }
+
+    [Fact]
+    public void CurrentGroupName_NamesItsStep()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+
+        Undo.SetCurrentGroupName("Do The Thing");
+        Undo.RecordObject(comp, "Edit");
+        comp.Value = 1;
+        Undo.FlushUndoRecordObjects();
+
+        Assert.Equal("Do The Thing", Undo.UndoSteps[^1].Name);
+    }
+
+    [Fact]
+    public void ToolScopeOverManyFrames_IsOneStepFromFirstToLastState()
+    {
+        Scene scene = OpenScene();
+        GameObject go = Add(scene, "GO");
+        var scope = new ToolUndoScope("Tool", [go]);
+        for (int frame = 1; frame <= 3; frame++)
+        {
+            Frame(edits: () => go.Transform.LocalPosition = new Float3(frame, 0, 0));
+        }
+        scope.Dispose();
+        Frame();
+
+        Undo.PerformUndo();
+        Assert.Equal(Float3.Zero, go.Transform.LocalPosition);
+        Undo.PerformRedo();
+        Assert.Equal(new Float3(3, 0, 0), go.Transform.LocalPosition);
+    }
+
+    [Fact]
+    public void WatchedObject_RecordsOnlyRealChanges_AndIsNoInteraction()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+
+        Frame(mouseDown: true, edits: () => Undo.WatchObject(comp, "Watch"));
+        Assert.False(Undo.InteractionActive);
+        Frame(mouseHeld: true, edits: () => Undo.WatchObject(comp, "Watch"));
+        Frame();
+
+        Assert.False(Undo.CanUndo);
+    }
 }

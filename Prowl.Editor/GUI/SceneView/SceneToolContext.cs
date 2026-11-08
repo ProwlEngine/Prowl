@@ -104,18 +104,17 @@ public sealed class SceneToolContext
 }
 
 /// <summary>
-/// Records an interactive operation into the current undo group. Records the targets
-/// before the tool writes to them, so changes made inside the scope join the open step.
+/// Records an interactive operation as one undo step. The targets are recorded when the scope opens and the
+/// record stays open across frames, so every change the tool makes before the scope ends is in it.
 /// </summary>
-public readonly struct ToolUndoScope : IDisposable
+public sealed class ToolUndoScope : IDisposable
 {
-    private readonly bool _recorded;
+    private object? _held;
 
     internal ToolUndoScope(string description, GameObject[] targets)
     {
-        _recorded = targets.Length > 0;
-        if (_recorded)
-            Undo.RecordObjects(targets, description);
+        if (targets.Length > 0)
+            _held = Undo.HoldRecords(targets, description);
         else
         {
             Undo.FlushUndoRecordObjects();
@@ -123,12 +122,19 @@ public readonly struct ToolUndoScope : IDisposable
         }
     }
 
-    /// <summary>Abandon the operation, reverting anything recorded in the current group.</summary>
+    /// <summary>Abandon the operation, reverting what the targets went through inside the scope.</summary>
     public void Cancel()
     {
-        if (_recorded) Undo.RevertAllInCurrentGroup();
+        if (_held == null) return;
+        Undo.ReleaseRecords(_held, revert: true);
+        _held = null;
     }
 
-    /// <summary>Ends the scope. The step closes with its group.</summary>
-    public void Dispose() { }
+    /// <summary>Ends the scope. Its changes become a step at the next flush.</summary>
+    public void Dispose()
+    {
+        if (_held == null) return;
+        Undo.ReleaseRecords(_held, revert: false);
+        _held = null;
+    }
 }

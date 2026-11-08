@@ -33,7 +33,7 @@ public class InputActionMapEditor : AssetImporterEditor
 
         if (_popup.IsOpen && _popup.Map != map) _popup.Close();
         OrigamiMetrics m = Origami.Current.Metrics;
-        if (!Origami.IsReadOnly) Core.Undo.RecordObject(map, "Edit Input Actions");
+        if (!Origami.IsReadOnly) Core.Undo.WatchObject(map, "Edit Input Actions");
 
         using (paper.Row($"{id}_tools").Height(34).Gap(m.SpacingLarge)
             .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).Enter())

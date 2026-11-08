@@ -39,7 +39,7 @@ public abstract class ImportSettingsEditor : AssetImporterEditor
         }
 
         // Drawn every frame, so an edit made from here is a pending settings record, kept only if something changed.
-        if (!OrigamiUI.Origami.IsReadOnly) Core.Undo.RegisterImporterUndo(entry.Guid, "Change Import Settings");
+        if (!OrigamiUI.Origami.IsReadOnly) Core.Undo.WatchImporter(entry.Guid, "Change Import Settings");
         return settings;
     }
 

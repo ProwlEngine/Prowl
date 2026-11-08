@@ -272,7 +272,18 @@ public static class Undo
     /// <summary>Records a full copy of the object now, compared whole at the flush.</summary>
     public static void RegisterCompleteObjectUndo(EngineObject obj, string name) => RecordObject(obj, name);
 
-    private static void RecordTarget(object target, TargetKey key, UndoOwner owner, string name)
+    /// <summary>
+    /// A capture taken every time an editor draws, kept only when something changed by the next flush. Unlike
+    /// <see cref="RecordObject(EngineObject, string)"/> it is not an explicit record, so it never counts as an
+    /// interaction, and it is skipped during play so game code never becomes a step.
+    /// </summary>
+    internal static void WatchObject(EngineObject obj, string name)
+    {
+        if (Application.IsPlaying || obj.IsNotValid()) return;
+        RecordTarget(obj, TargetKey.For(obj), UndoOwner.Of(obj), name, explicitRecord: false);
+    }
+
+    private static void RecordTarget(object target, TargetKey key, UndoOwner owner, string name, bool explicitRecord = true)
     {
         MainThreadContext.AssertMainThread();
         if (target is Asset { IsFromDatabase: true } asset && !CanSave(asset))
@@ -282,12 +293,12 @@ public static class Undo
         }
 
         int group = _currentGroup;
-        if (FindMergeablePending(key, group) != null) { NoteRecord(); return; }
+        if (FindMergeablePending(key, group) != null) { if (explicitRecord) NoteRecord(); return; }
 
         if (owner.Kind == UndoOwner.OwnerKind.None && target is EngineObject eo and not GameObject and not Component and not Asset { IsFromDatabase: true })
             WarnOnce(eo.GetType(), $"'{eo.GetType().Name}' is recorded with no owner, so undoing it marks nothing.");
 
-        NoteRecord();
+        if (explicitRecord) NoteRecord();
         _pending.Add(new PendingObject(target, key, owner, Capture.Of(target)) { Group = group, Name = name });
     }
 
@@ -403,13 +414,55 @@ public static class Undo
     }
 
     /// <summary>Records the asset's pending import settings. Undo and redo restore them and never write to disk.</summary>
-    public static void RegisterImporterUndo(Guid asset, string name)
+    public static void RegisterImporterUndo(Guid asset, string name) => RegisterImporterUndo(asset, name, explicitRecord: true);
+
+    /// <summary>As <see cref="RegisterImporterUndo(Guid, string)"/>, for the capture an importer inspector takes every draw.</summary>
+    internal static void WatchImporter(Guid asset, string name) => RegisterImporterUndo(asset, name, explicitRecord: false);
+
+    private static void RegisterImporterUndo(Guid asset, string name, bool explicitRecord)
     {
         MainThreadContext.AssertMainThread();
         if (Inspector.ImportSettingsEditor.Pending(asset) is not EchoObject settings) return;
-        NoteRecord();
+        if (explicitRecord) NoteRecord();
         if (_pending.Any(e => e.Group == _currentGroup && e is PendingImporter && e.Touches(asset))) return;
         _pending.Add(new PendingImporter(asset, settings.Clone()) { Group = _currentGroup, Name = name });
+    }
+
+    /// <summary>
+    /// Records the objects now and keeps the records open across frames until <see cref="ReleaseRecords"/>, so a tool
+    /// that writes over many frames becomes one record from its first state to its last.
+    /// </summary>
+    internal static object HoldRecords(IReadOnlyList<EngineObject> objs, string name)
+    {
+        MainThreadContext.AssertMainThread();
+        var held = new List<PendingObject>();
+        foreach (EngineObject obj in objs)
+        {
+            if (obj.IsNotValid()) continue;
+            var entry = new PendingObject(obj, TargetKey.For(obj), UndoOwner.Of(obj), Capture.Of(obj)) { Group = _currentGroup, Name = name, Held = true };
+            _pending.Add(entry);
+            held.Add(entry);
+        }
+        NoteRecord();
+        return held;
+    }
+
+    /// <summary>Closes records opened by <see cref="HoldRecords"/>. They become a step at the next flush, or are reverted and dropped.</summary>
+    internal static void ReleaseRecords(object token, bool revert)
+    {
+        if (token is not List<PendingObject> held) return;
+        foreach (PendingObject entry in held) entry.Held = false;
+        if (!revert) return;
+
+        FlushUndoRecordObjects();
+        int group = held.Count > 0 ? held[0].Group : -1;
+        if (_undo.Count > 0 && _undo[^1].Groups.Contains(group))
+        {
+            Step step = _undo[^1];
+            _undo.RemoveAt(_undo.Count - 1);
+            Apply(step, undo: true, mark: false);
+            historyChanged?.Invoke();
+        }
     }
 
     /// <summary>Records an operation for state no other call can express. It has already been done.</summary>
@@ -477,7 +530,15 @@ public static class Undo
 
     public static string GetCurrentGroupName() => _groupNames.TryGetValue(_currentGroup, out string? n) ? n : "";
 
-    public static void SetCurrentGroupName(string name) => _groupNames[_currentGroup] = name;
+    public static void SetCurrentGroupName(string name)
+    {
+        _groupNames[_currentGroup] = name;
+        if (OpenGroupHasStep)
+        {
+            _undo[^1].Name = name;
+            historyChanged?.Invoke();
+        }
+    }
 
     /// <summary>Closes the current group and starts a new one. A step the closed group pushed clears redo.</summary>
     public static void IncrementCurrentGroup()
@@ -560,7 +621,8 @@ public static class Undo
         if (InteractionActive) { RevertAllInCurrentGroup(); return; }
 
         FlushUndoRecordObjects();
-        if (_undo.Count == 0) { IncrementCurrentGroup(); return; }
+        IncrementCurrentGroup();
+        if (_undo.Count == 0) return;
 
         Step step = _undo[^1];
         _undo.RemoveAt(_undo.Count - 1);
@@ -639,7 +701,9 @@ public static class Undo
         willFlushUndoRecord?.Invoke();
 
         List<Entry> entries = _pending;
-        _pending = [];
+        _pending = [.. entries.Where(e => e is PendingObject { Held: true })];
+        if (_pending.Count == entries.Count) return;
+        entries = [.. entries.Where(e => e is not PendingObject { Held: true })];
 
         var records = new List<Record>();
         foreach (Entry entry in entries)
@@ -698,7 +762,7 @@ public static class Undo
         if (top != null && top.Groups.Contains(record.Group)) top.Join(record);
         else
         {
-            top = new Step(_nextStepId++, record.Group, record.Name);
+            top = new Step(_nextStepId++, record.Group, _groupNames.TryGetValue(record.Group, out string? groupName) ? groupName : record.Name);
             top.Records.Add(record);
             _undo.Add(top);
             TrimStack(_undo);
@@ -839,8 +903,13 @@ public static class Undo
         IEnumerable<Step> steps = _undo.Concat(_redo).Concat(_contexts.SelectMany(c => c.Undo.Concat(c.Redo)));
         foreach (Step step in steps)
             foreach (Record r in step.Records)
+            {
                 if (r is ObjectRecord { AssetId: { } id } && AssetDatabase.TryGetExisting(id, out Asset recorded))
                     walker.Visit(recorded);
+                foreach (UndoOwner owner in r.Owners)
+                    if (owner.Kind == UndoOwner.OwnerKind.Asset && AssetDatabase.TryGetExisting(owner.AssetId, out Asset owned))
+                        walker.Visit(owned);
+            }
     }
 
     // ================================================================
@@ -1237,6 +1306,9 @@ public static class Undo
         public readonly object Target = target;
         public readonly TargetKey Key = key;
 
+        /// <summary>Kept pending across flushes until its owner releases it, for a tool spanning frames.</summary>
+        public bool Held;
+
         public override Record? Finish(List<Entry> flushing)
         {
             if (Target is EngineObject eo && eo.IsDisposed) return null;
@@ -1305,6 +1377,7 @@ public static class Undo
         {
             GameObject? live = FindGO(_before.RootId);
             HierarchyState? after = live.IsValid() ? HierarchyState.Capture(live) : null;
+            if (after != null && after.Data.Data.Equals(_before.Data.Data) && after.Placement == _before.Placement) return null;
             return new HierarchyRecord(_before, after);
         }
 

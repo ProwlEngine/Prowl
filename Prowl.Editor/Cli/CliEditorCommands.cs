@@ -930,11 +930,12 @@ public static class CliEditorCommands
     }
 
     [CliCommand("material", "Shows a material's shader properties, or sets them with --values and swaps the shader with --shader. One undo step")]
-    public static object MaterialCommand(
+    public static async Task<object> MaterialCommand(
         [CliArg("target", "Material asset ref")] string target,
         [CliArg("values", "JSON object of property name to value. Colors and vectors are arrays, textures are asset refs")] string values = "",
         [CliArg("shader", "Shader asset ref to switch to")] string shader = "")
     {
+        await CliEdit.WaitForEditor();
         if (CliRefs.Resolve(target) is not Material material) throw new CliException($"'{target}' is not a material.");
         List<(string Path, string Json)> changes = ParseValues(values);
 
@@ -1217,13 +1218,14 @@ public static class CliEditorCommands
     public enum GraphAction { Describe, Types, Edit }
 
     [CliCommand("graph", "Reads an animation graph, lists node types, or edits it with a JSON list of --ops. See the description of each op in 'graph --action types'")]
-    public static object Graph(
+    public static async Task<object> Graph(
         [CliArg("target", "Animation graph asset ref, not needed for types")] string target = "",
         [CliArg("action")] GraphAction action = GraphAction.Describe,
         [CliArg("ops", "JSON array of edits, applied in order as one undo step")] string ops = "",
         [CliArg("filter", "Text a node type must contain, for types")] string filter = "",
         [CliArg("save", "Save the graph after editing")] bool save = true)
     {
+        await CliEdit.WaitForEditor();
         if (action == GraphAction.Types) return CliGraph.Types(filter);
 
         if (CliRefs.Resolve(Require(target, "target")) is not AnimationGraph graph) throw new CliException($"'{target}' is not an animation graph.");
@@ -1301,10 +1303,11 @@ public static class CliEditorCommands
     }
 
     [CliCommand("importer", "Shows an asset's import settings, or merges --values into them and reimports. Nested keys use dots, such as clips.Fire.loop")]
-    public static object Importer(
+    public static async Task<object> Importer(
         [CliArg("target", "Asset ref")] string target,
         [CliArg("values", "JSON object of settings key to value")] string values = "")
     {
+        await CliEdit.WaitForEditor();
         Guid guid = CliRefs.ResolveAssetGuid(target);
         AssetEntry entry = CliRefs.Assets.GetEntry(guid) ?? throw new CliException($"'{target}' is a sub asset. Import settings belong to the file it came from.");
         string metaPath = MetaFile.GetMetaPath(Path.Combine(Project.Current!.AssetsPath, entry.Path));

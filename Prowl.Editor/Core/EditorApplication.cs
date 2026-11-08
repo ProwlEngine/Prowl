@@ -2039,6 +2039,7 @@ public class EditorApplication : Game
 
         // The play history goes with the play scene, and the edit history comes back unless the preference drops it.
         OrigamiUI.TextFieldCommits.DiscardAll();
+        PaperInstance?.ClearFocus();
         Undo.ClearPending();
         Undo.PopContext(_savedEditUndo);
         _savedEditUndo = null;

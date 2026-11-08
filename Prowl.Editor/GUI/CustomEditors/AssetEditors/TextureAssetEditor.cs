@@ -108,14 +108,16 @@ public class TextureAssetEditor : ImportSettingsEditor
         // No meta means nothing can be applied, so don't offer settings that can't be saved.
         if (MetaPathOf(entry) is not string metaPath || !File.Exists(metaPath)) return;
 
+        // A sprite edit folds into the pending settings before this draw captures them, so the fold never records.
+        SpriteEditTarget spriteTarget = Importers.SpriteEditRegistry.Get(entry.Guid);
+        if (spriteTarget.Dirty && Pending(entry.Guid) is EchoObject unfolded) FoldSpriteSettings(entry.Guid, unfolded);
+
         // Read once and kept live per asset by the base; edits stay put while you look at something else.
         EchoObject settings = Settings(entry);
 
         EditorGUI.SectionHeader(paper, $"{id}_settings_hdr", "Import Settings", first: tex.IsNotValid());
 
         string texturePath = metaPath[..^".meta".Length];
-        SpriteEditTarget spriteTarget = Importers.SpriteEditRegistry.Get(entry.Guid);
-        if (spriteTarget.Dirty) FoldSpriteSettings(entry.Guid, settings);
 
         TextureImportSettings current = TextureImportSettings.Read(settings, texturePath);
         TextureImportType type = current.Type;

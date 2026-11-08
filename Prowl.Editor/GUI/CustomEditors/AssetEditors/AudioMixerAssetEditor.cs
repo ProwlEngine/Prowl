@@ -81,9 +81,9 @@ public class AudioMixerAssetEditor : AssetImporterEditor
 
         if (!Origami.IsReadOnly && !mixer.IsTransitioning)
         {
-            Core.Undo.RecordObject(mixer, "Edit Audio Mixer");
+            Core.Undo.WatchObject(mixer, "Edit Audio Mixer");
             foreach (AudioMixerGroup group in mixer.Groups)
-                if (group.IsValid()) Core.Undo.RecordObject(group, "Edit Audio Mixer");
+                if (group.IsValid()) Core.Undo.WatchObject(group, "Edit Audio Mixer");
         }
 
         List<Strip> strips = BuildStrips(mixer);
