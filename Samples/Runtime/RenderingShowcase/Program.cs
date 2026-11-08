@@ -879,20 +879,62 @@ public sealed class RenderingShowcaseGame : StationGame
     private void OceanControls(Paper paper, FontFile font)
     {
         Header(paper, font, "Ocean");
-        Slider(paper, font, "Wind speed km/h", _ocean.WindSpeed, 1f, 150f, v => _ocean.WindSpeed = v, "0");
-        Slider(paper, font, "Wind direction", _ocean.WindDirection, 0f, 360f, v => _ocean.WindDirection = v, "0");
-        Slider(paper, font, "Turbulence", _ocean.Turbulence, 0f, 1f, v => _ocean.Turbulence = v);
-        Slider(paper, font, "Wave scale", _ocean.WaveScale, 0f, 4f, v => _ocean.WaveScale = v);
-        Slider(paper, font, "Chop", _ocean.Chop, 0f, 2f, v => _ocean.Chop = v);
-        Slider(paper, font, "Time scale", _ocean.TimeScale, 0f, 4f, v => _ocean.TimeScale = v);
-        Slider(paper, font, "Roughness", _ocean.Roughness, 0f, 0.3f, v => _ocean.Roughness = v, "0.000");
-        Slider(paper, font, "Refraction", _ocean.Refraction, 0f, 1f, v => _ocean.Refraction = v);
-        Slider(paper, font, "Foam coverage", _ocean.FoamCoverage, 0f, 1.5f, v => _ocean.FoamCoverage = v);
-        Slider(paper, font, "Caustics strength", _ocean.CausticsStrength, 0f, 10f, v => _ocean.CausticsStrength = v);
-        Slider(paper, font, "Caustics distortion", _ocean.CausticsDistortion, 0f, 0.25f, v => _ocean.CausticsDistortion = v, "0.000");
-        Slider(paper, font, "Distortion scale m", _ocean.CausticsDistortionScale, 1f, 100f, v => _ocean.CausticsDistortionScale = v, "0");
-        Slider(paper, font, "Shore foam depth", _ocean.ShorelineFoamDepth, 0f, 2f, v => _ocean.ShorelineFoamDepth = v);
-        Slider(paper, font, "Shallow attenuation", _ocean.ShallowAttenuation, 0f, 1f, v => _ocean.ShallowAttenuation = v);
+        if (Foldout(paper, font, "Waves", startOpen: true))
+        {
+            Slider(paper, font, "Wind speed km/h", _ocean.WindSpeed, 1f, 150f, v => _ocean.WindSpeed = v, "0");
+            Slider(paper, font, "Wind direction", _ocean.WindDirection, 0f, 360f, v => _ocean.WindDirection = v, "0");
+            Slider(paper, font, "Turbulence", _ocean.Turbulence, 0f, 1f, v => _ocean.Turbulence = v);
+            Slider(paper, font, "Wave scale", _ocean.WaveScale, 0f, 4f, v => _ocean.WaveScale = v);
+            Slider(paper, font, "Chop", _ocean.Chop, 0f, 2f, v => _ocean.Chop = v);
+            Slider(paper, font, "Time scale", _ocean.TimeScale, 0f, 4f, v => _ocean.TimeScale = v);
+            Slider(paper, font, "Gravity", _ocean.Gravity, 1f, 30f, v => _ocean.Gravity = v);
+        }
+        if (Foldout(paper, font, "Surface"))
+        {
+            Slider(paper, font, "Roughness", _ocean.Roughness, 0f, 0.3f, v => _ocean.Roughness = v, "0.000");
+            Slider(paper, font, "Far roughness", _ocean.FarRoughness, 0f, 0.5f, v => _ocean.FarRoughness = v, "0.000");
+            Slider(paper, font, "Normals scale m", _ocean.NormalsScale, 1f, 200f, v => _ocean.NormalsScale = v, "0");
+            Slider(paper, font, "Normals strength", _ocean.NormalsStrength, 0f, 2f, v => _ocean.NormalsStrength = v);
+            Slider(paper, font, "Refraction", _ocean.Refraction, 0f, 1f, v => _ocean.Refraction = v);
+            Toggle(paper, font, "Screen reflections", _ocean.ScreenReflections, v => _ocean.ScreenReflections = v);
+        }
+        if (Foldout(paper, font, "Colour"))
+        {
+            Slider(paper, font, "Depth light scale", _ocean.DepthLightScale, 0f, 2f, v => _ocean.DepthLightScale = v);
+            Slider(paper, font, "Subsurface sun", _ocean.SubsurfaceSun, 0f, 10f, v => _ocean.SubsurfaceSun = v);
+            Slider(paper, font, "Subsurface falloff", _ocean.SubsurfaceFalloff, 0f, 32f, v => _ocean.SubsurfaceFalloff = v, "0.0");
+            Slider(paper, font, "Underwater density", _ocean.UnderwaterDensity, 0f, 1f, v => _ocean.UnderwaterDensity = v);
+        }
+        if (Foldout(paper, font, "Foam"))
+        {
+            Slider(paper, font, "Coverage", _ocean.FoamCoverage, 0f, 1.5f, v => _ocean.FoamCoverage = v);
+            Slider(paper, font, "Strength", _ocean.FoamStrength, 0f, 4f, v => _ocean.FoamStrength = v);
+            Slider(paper, font, "Fade", _ocean.FoamFade, 0f, 4f, v => _ocean.FoamFade = v);
+            Slider(paper, font, "Ripple foam", _ocean.RippleFoam, 0f, 4f, v => _ocean.RippleFoam = v);
+            Slider(paper, font, "Ripple damping", _ocean.RippleDamping, 0f, 1f, v => _ocean.RippleDamping = v, "0.000");
+            Slider(paper, font, "Texture scale m", _ocean.FoamScale, 0.1f, 20f, v => _ocean.FoamScale = v);
+            Slider(paper, font, "Feather", _ocean.FoamFeather, 0.01f, 1f, v => _ocean.FoamFeather = v);
+            Slider(paper, font, "Light scale", _ocean.FoamLightScale, 0f, 2f, v => _ocean.FoamLightScale = v);
+            Slider(paper, font, "Normal strength", _ocean.FoamNormalStrength, 0f, 30f, v => _ocean.FoamNormalStrength = v, "0.0");
+            Slider(paper, font, "Specular boost", _ocean.FoamSpecularBoost, 0f, 16f, v => _ocean.FoamSpecularBoost = v);
+        }
+        if (Foldout(paper, font, "Shore"))
+        {
+            Slider(paper, font, "Shallow attenuation", _ocean.ShallowAttenuation, 0f, 1f, v => _ocean.ShallowAttenuation = v);
+            Slider(paper, font, "Shore foam depth", _ocean.ShorelineFoamDepth, 0f, 2f, v => _ocean.ShorelineFoamDepth = v);
+            Slider(paper, font, "Shore foam strength", _ocean.ShorelineFoamStrength, 0f, 8f, v => _ocean.ShorelineFoamStrength = v);
+            Slider(paper, font, "Foam min depth", _ocean.ShorelineFoamMinDepth, 0f, 2f, v => _ocean.ShorelineFoamMinDepth = v);
+        }
+        if (Foldout(paper, font, "Caustics"))
+        {
+            Slider(paper, font, "Caustics strength", _ocean.CausticsStrength, 0f, 10f, v => _ocean.CausticsStrength = v);
+            Slider(paper, font, "Caustics scale m", _ocean.CausticsScale, 0.1f, 25f, v => _ocean.CausticsScale = v);
+            Slider(paper, font, "Grey point", _ocean.CausticsGreyPoint, 0f, 1f, v => _ocean.CausticsGreyPoint = v, "0.000");
+            Slider(paper, font, "Focal depth m", _ocean.CausticsFocalDepth, 0f, 50f, v => _ocean.CausticsFocalDepth = v, "0.0");
+            Slider(paper, font, "Depth of field", _ocean.CausticsDepthOfField, 0.01f, 10f, v => _ocean.CausticsDepthOfField = v);
+            Slider(paper, font, "Distortion", _ocean.CausticsDistortion, 0f, 0.25f, v => _ocean.CausticsDistortion = v, "0.000");
+            Slider(paper, font, "Distortion scale m", _ocean.CausticsDistortionScale, 1f, 100f, v => _ocean.CausticsDistortionScale = v, "0");
+        }
         Slider(paper, font, "Flight speed", _cloudFlightSpeed, 7f, 3000f, v => { _cloudFlightSpeed = v; SetFlightSpeed(v); }, "0");
     }
 
