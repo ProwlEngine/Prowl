@@ -101,7 +101,8 @@ public sealed class AttributeHandlerRegistry
 /// </summary>
 public abstract class CustomObjectEditor
 {
-    public abstract void OnGUI(Paper paper, string id, object target);
+    /// <summary>Draws the object. Call <paramref name="onChange"/> after changing it, so the change reaches the root target.</summary>
+    public abstract void OnGUI(Paper paper, string id, object target, Action<object?> onChange);
 }
 
 /// <summary>Registry mapping types to their CustomObjectEditor.</summary>
@@ -409,6 +410,7 @@ public static class PropertyGridRenderer
                         try { method.Invoke(targets[t], null); }
                         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Button error: {ex.Message}"); }
                         config.OnFieldChanged?.Invoke(targets[t]);
+                        onChange?.Invoke(targets[t]);
                     }
                 }).Show();
             }
@@ -929,7 +931,7 @@ public static class PropertyGridRenderer
                         int capIdx = i;
                         var customEd = elem != null ? config.CustomEditors.GetEditor(elem.GetType()) : null;
                         if (customEd != null)
-                            customEd.OnGUI(paper, $"{id}_nce_{sk}", elem!);
+                            customEd.OnGUI(paper, $"{id}_nce_{sk}", elem!, changed => { list[capIdx] = changed; onChange(list); });
                         else if (elem != null)
                             Draw(paper, $"{id}_nbf_{sk}", elem, config, changed => { list[capIdx] = changed; onChange(list); }, null, depth + 1);
                         else
@@ -1029,7 +1031,10 @@ public static class PropertyGridRenderer
             if (declaredType.IsAbstract || declaredType.IsInterface)
                 config.DrawTypePicker?.Invoke(paper, $"{id}_pick", declaredType, value, onChange);
 
-            editor.OnGUI(paper, $"{id}_custom", value);
+            editor.OnGUI(paper, $"{id}_custom", value, changed =>
+            {
+                if (value.GetType().IsValueType) onChange(changed); else onChange(value);
+            });
         });
     }
 
