@@ -280,11 +280,33 @@ public sealed class SceneRendering : IDisposable
         return [.. _fogVolumes];
     }
 
+    private Graphite.Rendering.VolumetricCloudsFeature? _clouds;
+
+    // The scene's clouds in the world while they are on, their shadow pass ahead of every view's surfaces
+    private void SyncClouds(RenderWorld world)
+    {
+        SceneEnvironment.VolumetricCloudsSettings settings = _scene.Environment.VolumetricClouds;
+        if (!settings.Enabled || settings.Coverage <= 0f || Graphics.Renderer is not { } renderer)
+        {
+            if (_clouds != null)
+            {
+                world.Features.Remove(_clouds.ShadowPass);
+                world.Features.Remove(_clouds);
+            }
+            return;
+        }
+        _clouds ??= new Graphite.Rendering.VolumetricCloudsFeature(renderer);
+        settings.ApplyTo(_clouds, Time.DeltaTime);
+        world.Features.Add(_clouds.ShadowPass);
+        world.Features.Add(_clouds);
+    }
+
     private void SyncEnvironment(RenderWorld world)
     {
         EnvironmentDesc env = world.Environment;
         _scene.Environment.ApplyTo(env);
         env.FogVolumes = FogVolumes(_scene.Environment.VolumetricFog.Density);
+        SyncClouds(world);
 
         DirectionalLight? sun = null;
         foreach (DirectionalLight light in _directionals)
@@ -314,6 +336,8 @@ public sealed class SceneRendering : IDisposable
             _world.Dispose();
             _world = null;
         }
+        _clouds?.Dispose();
+        _clouds = null;
         _members.Clear();
         _memberSet.Clear();
         _parked.Clear();

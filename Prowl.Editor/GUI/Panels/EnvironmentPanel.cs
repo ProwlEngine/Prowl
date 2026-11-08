@@ -81,7 +81,7 @@ public class EnvironmentPanel : DockPanel
                         case "fog":      DrawFogSection(paper, "env_fog", font, scene); DrawVolumetricFogSection(paper, "env_vfog", scene); break;
                         case "ambient":  DrawAmbientSection(paper, "env_amb", font, scene); break;
                         case "lightmap": DrawLightmappingSection(paper, "env_lm", font, scene); break;
-                        default:         DrawSkySection(paper, "env_sky", font, scene); break;
+                        default:         DrawSkySection(paper, "env_sky", font, scene); DrawCloudsSection(paper, "env_clouds", scene); break;
                     }
                 }
             });
@@ -193,6 +193,38 @@ public class EnvironmentPanel : DockPanel
             EditorGUI.SettingsRow(paper, $"{id}_density", Loc.Get("env.density"), () =>
                 Origami.Slider(paper, $"{id}_density_v", fog.Density, v => { fog.Density = v; Dirty(); }, 0f, 0.1f).Format("F4").Show());
         }
+    }
+
+    private void DrawCloudsSection(Paper paper, string id, Scene scene)
+    {
+        EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.volumetric_clouds"));
+
+        SceneEnvironment.VolumetricCloudsSettings clouds = scene.Environment.VolumetricClouds;
+        static void Dirty() => EditorSceneManager.MarkDirty();
+
+        EditorGUI.SettingsToggle(paper, $"{id}_on", Loc.Get("env.enabled"), clouds.Enabled, v => { clouds.Enabled = v; Dirty(); });
+        if (!clouds.Enabled) return;
+
+        EditorGUI.SettingsRow(paper, $"{id}_coverage", Loc.Get("env.coverage"), () =>
+            Origami.Slider(paper, $"{id}_coverage_v", clouds.Coverage, v => { clouds.Coverage = v; Dirty(); }, 0f, 1f).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_density", Loc.Get("env.density"), () =>
+            Origami.Slider(paper, $"{id}_density_v", clouds.Density, v => { clouds.Density = v; Dirty(); }, 0f, 4f).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_altitude", Loc.Get("env.altitude"), () =>
+            Origami.NumericField<float>(paper, $"{id}_altitude_v", clouds.Altitude, v => { clouds.Altitude = v; Dirty(); }).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_thickness", Loc.Get("env.thickness"), () =>
+            Origami.NumericField<float>(paper, $"{id}_thickness_v", clouds.Thickness, v => { clouds.Thickness = MathF.Max(1f, v); Dirty(); }).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_wind", Loc.Get("env.wind_speed"), () =>
+            Origami.NumericField<float>(paper, $"{id}_wind_v", clouds.WindSpeed, v => { clouds.WindSpeed = v; Dirty(); }).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_winddir", Loc.Get("env.wind_direction"), () =>
+            Origami.Slider(paper, $"{id}_winddir_v", clouds.WindDirection, v => { clouds.WindDirection = v; Dirty(); }, 0f, 360f).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_sun", Loc.Get("env.sun_brightness"), () =>
+            Origami.Slider(paper, $"{id}_sun_v", clouds.SunBrightness, v => { clouds.SunBrightness = v; Dirty(); }, 0f, 6f).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_ambient", Loc.Get("env.ambient_brightness"), () =>
+            Origami.Slider(paper, $"{id}_ambient_v", clouds.AmbientBrightness, v => { clouds.AmbientBrightness = v; Dirty(); }, 0f, 4f).Show());
+        EditorGUI.SettingsToggle(paper, $"{id}_temporal", Loc.Get("env.temporal"), clouds.Temporal, v => { clouds.Temporal = v; Dirty(); });
+        EditorGUI.SettingsRow(paper, $"{id}_shadow", Loc.Get("env.shadow_resolution"), () =>
+            Origami.NumericField<int>(paper, $"{id}_shadow_v", clouds.ShadowResolution, v => { clouds.ShadowResolution = Math.Clamp(v, 64, 2048); Dirty(); }).Show());
+        EditorGUI.SettingsToggle(paper, $"{id}_high", Loc.Get("env.high_layer"), clouds.HighLayer, v => { clouds.HighLayer = v; Dirty(); });
     }
 
     private void DrawVolumetricFogSection(Paper paper, string id, Scene scene)
