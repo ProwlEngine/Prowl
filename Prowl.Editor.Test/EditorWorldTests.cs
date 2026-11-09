@@ -239,6 +239,25 @@ public class EditorWorldTests : EditorTestHarness
     }
 
     [Fact]
+    public void ApplyingTimeSettings_LeavesThePlayWorldsTimeScale()
+    {
+        SceneInstance play = EditorSceneManager.BuildPlayWorld();
+        try
+        {
+            play.Clock.TimeScale = 0f;
+            new Projects.Settings.TimeSettings { DefaultTimeScale = 2f }.Apply();
+
+            Assert.Equal(0f, play.Clock.TimeScale);
+            Assert.Equal(2f, EditorSceneManager.EditWorld.Clock.TimeScale);
+        }
+        finally
+        {
+            new Projects.Settings.TimeSettings().Apply();
+            play.Dispose();
+        }
+    }
+
+    [Fact]
     public void TheEditHistory_StillResolves_AfterPlay()
     {
         Marker marker = EditorSceneManager.EditWorld.Create("Thing").AddComponent<Marker>();
