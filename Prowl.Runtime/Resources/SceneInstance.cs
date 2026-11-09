@@ -57,7 +57,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>Every world that is not destroyed, in creation order. Held weakly: something else keeps a world alive.</summary>
     public static IReadOnlyList<SceneInstance> All => Snapshot(newestFirst: false);
 
-    /// <summary>Every scene not yet disposed, newest first: the current one, one waiting to load, previews and prefab editing.</summary>
+    /// <summary>Every world not yet disposed, newest first: Main, worlds code opened, previews and prefab editing.</summary>
     internal static SceneInstance[] Live => Snapshot(newestFirst: true);
 
     // One array of the live worlds, dropping the collected ones on the way.
@@ -141,7 +141,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>
     /// The ambient world: the one whose code is running right now. While the engine runs a callback on a component it
     /// is that component's scene, inside <see cref="Enter"/> it is that scene, and across an await it is whatever was
-    /// active where the await started. Otherwise it is the current scene. Main thread only.
+    /// active where the await started. Otherwise it is Main. Main thread only.
     /// </summary>
     public static SceneInstance Active
     {
@@ -1157,7 +1157,7 @@ public class SceneInstance : EngineObject, ISerializable
                 results.Add((component as T)!);
     }
 
-    /// <summary>The first object with this name, depth first through the roots.</summary>
+    /// <summary>The first object with this name, in the order objects joined the world.</summary>
     public GameObject? FindObject(string name)
     {
         EnsureLive();
@@ -1295,10 +1295,7 @@ public class SceneInstance : EngineObject, ISerializable
         lock (s_live) s_live.Add(new WeakReference<SceneInstance>(this));
     }
 
-    /// <summary>
-    /// Enables this scene, triggering OnEnable callbacks for its components.
-    /// For most use cases, prefer using Scene.Load() instead of calling Enable() directly.
-    /// </summary>
+    /// <summary>Wakes this world: it runs, and its components get OnEnable. A load or open activates the worlds it makes.</summary>
     public void Activate()
     {
         EnsureLive();
@@ -1336,10 +1333,7 @@ public class SceneInstance : EngineObject, ISerializable
         }
     }
 
-    /// <summary>
-    /// Disables this scene, triggering OnDisable callbacks for its components.
-    /// For most use cases, prefer using Scene.Unload() or Scene.Load() instead of calling Disable() directly.
-    /// </summary>
+    /// <summary>Sends this world dormant: its components get OnDisable and it stops running, keeping everything in it.</summary>
     public void Deactivate()
     {
         EnsureLive();
@@ -1374,9 +1368,6 @@ public class SceneInstance : EngineObject, ISerializable
     }
 
 
-    /// <summary>
-    /// Registers a GameObject and all of its children.
-    /// </summary>
     /// <summary>
     /// Adds a detached root, or one from another world, with its children. A root goes into <paramref name="section"/>,
     /// else its owner's section, else <see cref="ActiveSection"/>.

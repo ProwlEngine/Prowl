@@ -218,8 +218,7 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
         SceneInstance? target = ResolveIn.IsValid() ? ResolveIn : SceneInstance.HasMain ? SceneInstance.Main : null;
         if (key is not Guid id || target is not { } scene) return null;
 
-        // GameObject and Component share the FindObjectByIdentifier lookup; a Transform key is
-        // its GameObject's id, so resolve the GameObject and hand back its Transform.
+        // A Transform key is its GameObject's id, so this resolves the GameObject and hands back its Transform.
         if (typeof(Transform).IsAssignableFrom(targetType))
         {
             GameObject owner = scene.FindObject<GameObject>(id)!;

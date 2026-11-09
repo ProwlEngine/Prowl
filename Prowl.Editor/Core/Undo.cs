@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -631,7 +631,6 @@ public static class Undo
         _currentGroup = ++_lastGroup;
     }
 
-    // Marks the current interaction as having recorded, so its group stays open until the mouse is up.
     /// <summary>
     /// Moves a root into another open scene as one step. References that would cross scenes after the move, in either
     /// direction, are cleared in the same step and logged. An identifier the target scene already holds gets a fresh one,
@@ -732,6 +731,7 @@ public static class Undo
         }
     }
 
+    // Marks the current interaction as having recorded, so its group stays open until the mouse is up.
     private static void NoteRecord()
     {
         if (_mouseHeld && !_interactionRecorded) _interactionRecorded = true;
