@@ -187,6 +187,37 @@ public class MultiSceneTests : EditorTestHarness
     }
 
     [Fact]
+    public void UnloadingAScene_DropsItsPendingStructuralEdits()
+    {
+        Open(Author("A.scene", "a"));
+        OpenScene b = Additive(Author("B.scene", "b"));
+        Undo.DestroyObjectImmediate(Root(b));
+
+        EditorSceneManager.Unload(b, force: true);
+        SceneInstance.ProcessPendingLoad();
+        Undo.FlushUndoRecordObjects();
+
+        Assert.Empty(Undo.UndoSteps);
+    }
+
+    [Fact]
+    public void ARootReorder_BelongsToTheMovedRootsScene()
+    {
+        Open(Author("A.scene", "a"));
+        OpenScene b = Additive(Author("B.scene", "b1", "b2"));
+        GameObject second = b.Section!.Roots[1];
+
+        Undo.SetSiblingIndex(second, 0, "Reorder");
+        Undo.FlushUndoRecordObjects();
+        Assert.Equal("b2", b.Section.Roots[0].Name);
+        Assert.Single(Undo.UndoSteps);
+
+        EditorSceneManager.Unload(b, force: true);
+        SceneInstance.ProcessPendingLoad();
+        Assert.Empty(Undo.UndoSteps);
+    }
+
+    [Fact]
     public void AnEdit_MarksOnlyTheSceneOfWhatItChanged_AndNothingDuringPlay()
     {
         OpenScene a = Open(Author("A.scene", "a"));

@@ -415,19 +415,20 @@ public static class Undo
     public static void SetSiblingIndex(GameObject go, int index, string name)
     {
         if (go.IsNotValid()) return;
-        RegisterChildrenOrderUndo(go.Parent, go.Scene, name);
+        RegisterChildrenOrderUndo(go.Parent, go.Section, name);
         if (go.Parent.IsValid()) go.SetSiblingIndex(index);
         else if (go.Scene.IsValid()) go.SiblingIndex = index;
     }
 
     /// <summary>Records the order of a parent's children, or of the scene's roots when <paramref name="parent"/> is null.</summary>
-    public static void RegisterChildrenOrderUndo(GameObject? parent, string name) => RegisterChildrenOrderUndo(parent, EditorSceneManager.EditedWorld, name);
+    public static void RegisterChildrenOrderUndo(GameObject? parent, string name) => RegisterChildrenOrderUndo(parent, EditorSceneManager.EditedWorld.ActiveSection, name);
 
-    private static void RegisterChildrenOrderUndo(GameObject? parent, SceneInstance? scene, string name)
+    /// <summary>Records the order of a parent's children, or of <paramref name="section"/>'s roots when <paramref name="parent"/> is null.</summary>
+    public static void RegisterChildrenOrderUndo(GameObject? parent, SceneSection? section, string name)
     {
         MainThreadContext.AssertMainThread();
         NoteRecord();
-        _pending.Add(new PendingChildrenOrder(parent, scene) { Group = _currentGroup, Name = name });
+        _pending.Add(new PendingChildrenOrder(parent, section) { Group = _currentGroup, Name = name });
     }
 
     /// <summary>Records the whole tree, its structure and prefab data. Undo makes the tree match the record.</summary>
@@ -1156,10 +1157,10 @@ public static class Undo
     /// <summary>Drops every whole step that touches a scene, never part of one. For a scene that unloads or leaves the hierarchy.</summary>
     internal static void DropScene(OpenScene scene)
     {
-        bool Owned(Record r) => r.Owners.Any(o => o.Kind == UndoOwner.OwnerKind.Scene && ReferenceEquals(o.Scene, scene));
+        bool Owned(Record r) => r.Owners.Any(o => IsOfScene(o, scene));
         bool dropsOpen = OpenGroupHasStep && _undo[^1].Records.Any(Owned);
         int removed = _undo.RemoveAll(s => s.Records.Any(Owned)) + _redo.RemoveAll(s => s.Records.Any(Owned));
-        _pending.RemoveAll(e => e is PendingObject po && po.Owner.Kind == UndoOwner.OwnerKind.Scene && ReferenceEquals(po.Owner.Scene, scene));
+        _pending.RemoveAll(e => e.BelongsTo(scene));
         if (dropsOpen) _currentGroup = ++_lastGroup;
         if (removed > 0) historyChanged?.Invoke();
     }
@@ -1456,7 +1457,14 @@ public static class Undo
 
         /// <summary>Whether this entry changes the structure around the object with this identifier.</summary>
         public virtual bool Touches(Guid id) => false;
+
+        /// <summary>Whether this entry edits something in <paramref name="scene"/>, so it goes when the scene unloads.</summary>
+        public virtual bool BelongsTo(OpenScene scene) => false;
     }
+
+    private static bool IsOfScene(UndoOwner owner, OpenScene scene) => owner.Kind == UndoOwner.OwnerKind.Scene && ReferenceEquals(owner.Scene, scene);
+
+    private static bool IsInScene(GameObject? go, OpenScene scene) => go.IsValid() && ReferenceEquals(EditorSceneManager.SceneOf(go), scene);
 
     private sealed class PendingObject(object target, TargetKey key, UndoOwner owner, Capture before) : Entry
     {
@@ -1474,6 +1482,7 @@ public static class Undo
         }
 
         public override bool Touches(Guid id) => Key.ObjectId == id;
+        public override bool BelongsTo(OpenScene scene) => IsOfScene(Owner, scene);
     }
 
     private sealed class ReadyEntry(Record record) : Entry
@@ -1481,6 +1490,7 @@ public static class Undo
         public readonly Record Record = record;
         public override Record? Finish(List<Entry> flushing) => Record;
         public override bool Touches(Guid id) => Record.Touches(id);
+        public override bool BelongsTo(OpenScene scene) => Record.Owners.Any(o => IsOfScene(o, scene));
     }
 
     private sealed class PendingCreated(GameObject go) : Entry
@@ -1494,6 +1504,7 @@ public static class Undo
         }
 
         public override bool Touches(Guid id) => Go.IsValid() && Go.Identifier == id;
+        public override bool BelongsTo(OpenScene scene) => IsInScene(Go, scene);
     }
 
     private sealed class PendingAddComponent(GameObject go, List<Component> components) : Entry
@@ -1510,22 +1521,25 @@ public static class Undo
         }
 
         public override bool Touches(Guid id) => Components.Any(c => c.Identifier == id);
+        public override bool BelongsTo(OpenScene scene) => IsInScene(go, scene);
     }
 
-    private sealed class PendingChildrenOrder(GameObject? parent, SceneInstance? scene) : Entry
+    // A parent's children, or with no parent the roots of one section.
+    private sealed class PendingChildrenOrder(GameObject? parent, SceneSection? section) : Entry
     {
         private readonly Guid _parent = parent.IsValid() ? parent.Identifier : Guid.Empty;
-        private readonly UndoOwner _owner = parent.IsValid() ? UndoOwner.Of(parent) : UndoOwner.OfScene(EditorSceneManager.SceneOf(scene.IsValid() ? scene.ActiveSection : null));
-        private readonly List<Guid> _before = ChildrenOrderRecord.Order(parent, scene);
+        private readonly UndoOwner _owner = parent.IsValid() ? UndoOwner.Of(parent) : UndoOwner.OfScene(EditorSceneManager.SceneOf(section));
+        private readonly List<Guid> _before = ChildrenOrderRecord.Order(parent, section);
 
         public override Record? Finish(List<Entry> flushing)
         {
             GameObject? live = _parent == Guid.Empty ? null : FindGO(_parent);
-            List<Guid> after = ChildrenOrderRecord.Order(live, EditorSceneManager.EditedWorld);
+            List<Guid> after = ChildrenOrderRecord.Order(live, section);
             return after.SequenceEqual(_before) ? null : new ChildrenOrderRecord(_parent, _before, after) { Scenes = [_owner] };
         }
 
         public override bool Touches(Guid id) => id == _parent || _before.Contains(id);
+        public override bool BelongsTo(OpenScene scene) => IsOfScene(_owner, scene);
     }
 
     private sealed class PendingHierarchy(GameObject root) : Entry
@@ -1542,6 +1556,7 @@ public static class Undo
         }
 
         public override bool Touches(Guid id) => _before.Ids.Contains(id);
+        public override bool BelongsTo(OpenScene scene) => IsOfScene(_owner, scene);
     }
 
     private sealed class PendingImporter(Guid asset, EchoObject before) : Entry
@@ -1983,10 +1998,10 @@ public static class Undo
 
     private sealed class ChildrenOrderRecord(Guid parent, List<Guid> before, List<Guid> after) : Record
     {
-        public static List<Guid> Order(GameObject? parent, SceneInstance? scene)
+        public static List<Guid> Order(GameObject? parent, SceneSection? section)
         {
             if (parent.IsValid()) return [.. parent.Children.Select(c => c.Identifier)];
-            return scene.IsValid() ? [.. scene.Roots.Select(r => r.Identifier)] : [];
+            return section is { IsLoaded: true } ? [.. section.Roots.Select(r => r.Identifier)] : [];
         }
 
         public override void Apply(Restore restore)
