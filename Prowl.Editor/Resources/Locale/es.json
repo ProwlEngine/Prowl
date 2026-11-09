@@ -254,6 +254,8 @@
   "hierarchy.hide_in_scene_view": "Ocultar en la vista de escena",
   "hierarchy.show_in_scene_view": "Mostrar en la vista de escena",
   "hierarchy.scene_refused": "Escena sin cambios",
+  "hierarchy.reference_refused": "Referencia no asignada",
+  "hierarchy.reference_crosses": "'{{name}}' esta en la escena '{{scene}}', y una referencia entre escenas nunca se guarda.",
   "hierarchy.create": "Crear",
   "hierarchy.drop_to_spawn": "Soltar para crear aqui",
   "hierarchy.scene_empty": "La escena esta vacia",

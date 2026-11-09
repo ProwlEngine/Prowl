@@ -51,7 +51,7 @@ public class TransformPropertyEditor : PropertyEditor
             {
                 if (DragDrop.IsDragging || !paper.IsParentHovered || DragDrop.Payload is not GameObjectDragPayload drop) return;
                 if (drop.GameObjects.Length > 0 && EditorSceneManager.RefusesReference(holders, drop.GameObjects[0], out string why))
-                    Toasts.Warning(Rosetta.Loc.Get("hierarchy.scene_refused"), why);
+                    Toasts.Warning(Rosetta.Loc.Get("hierarchy.reference_refused"), why);
                 else if (drop.GameObjects.Length > 0) onChange(drop.GameObjects[0].Transform);
                 DragDrop.EndDrag();
             });

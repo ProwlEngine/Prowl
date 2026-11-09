@@ -60,7 +60,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
     {
         GameObject? go = picked switch { GameObject g => g, Component c => c.GameObject, Transform t => t.GameObject, _ => null };
         if (!EditorSceneManager.RefusesReference(holders, go, out string why)) return false;
-        Toasts.Warning(Rosetta.Loc.Get("hierarchy.scene_refused"), why);
+        Toasts.Warning(Rosetta.Loc.Get("hierarchy.reference_refused"), why);
         return true;
     }
 
@@ -83,7 +83,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
         {
             GameObject? go = goDrop.GameObjects.Length > 0 ? goDrop.GameObjects[0] : null;
             if (EditorSceneManager.RefusesReference(holder, go, out string why))
-                Toasts.Warning(Rosetta.Loc.Get("hierarchy.scene_refused"), why);
+                Toasts.Warning(Rosetta.Loc.Get("hierarchy.reference_refused"), why);
             else if (go.IsValid())
             {
                 if (typeof(GameObject).IsAssignableFrom(fieldType))
@@ -97,7 +97,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
         if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is ComponentDragPayload compDrop)
         {
             if (EditorSceneManager.RefusesReference(holder, compDrop.Component.GameObject, out string why))
-                Toasts.Warning(Rosetta.Loc.Get("hierarchy.scene_refused"), why);
+                Toasts.Warning(Rosetta.Loc.Get("hierarchy.reference_refused"), why);
             else if (fieldType.IsAssignableFrom(compDrop.Component.GetType()))
                 onChange(compDrop.Component);
             DragDrop.EndDrag();

@@ -254,6 +254,8 @@
   "hierarchy.hide_in_scene_view": "In der Szenenansicht ausblenden",
   "hierarchy.show_in_scene_view": "In der Szenenansicht einblenden",
   "hierarchy.scene_refused": "Szene nicht geaendert",
+  "hierarchy.reference_refused": "Referenz nicht gesetzt",
+  "hierarchy.reference_crosses": "'{{name}}' liegt in der Szene '{{scene}}', und eine Referenz zwischen Szenen wird nie gespeichert.",
   "hierarchy.create": "Erstellen",
   "hierarchy.drop_to_spawn": "Hier ablegen zum Erstellen",
   "hierarchy.scene_empty": "Szene ist leer",

@@ -223,7 +223,7 @@ public static class EditorSceneManager
         if (holder == null || target.IsNotValid()) return false;
         OpenScene? other = SceneOf(target);
         if (other == null || ReferenceEquals(other, holder)) return false;
-        reason = $"'{target.Name}' is in the scene '{other.Name}', and a reference between scenes is never saved.";
+        reason = Rosetta.Loc.Get("hierarchy.reference_crosses", new { name = target.Name, scene = other.Name });
         return true;
     }
 

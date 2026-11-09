@@ -254,6 +254,8 @@
   "hierarchy.hide_in_scene_view": "在场景视图中隐藏",
   "hierarchy.show_in_scene_view": "在场景视图中显示",
   "hierarchy.scene_refused": "场景未更改",
+  "hierarchy.reference_refused": "未设置引用",
+  "hierarchy.reference_crosses": "'{{name}}' 位于场景 '{{scene}}' 中，场景之间的引用永远不会被保存。",
   "hierarchy.create": "创建",
   "hierarchy.drop_to_spawn": "拖放到此处生成",
   "hierarchy.scene_empty": "场景为空",

@@ -38,6 +38,13 @@ public abstract class EditorTestHarness : IDisposable
     /// <summary>The live asset database for the project.</summary>
     protected EditorAssetBackend Assets { get; private set; }
 
+    // English text, as the editor shows it, so messages read the same in tests.
+    static EditorTestHarness() => Prowl.Rosetta.Loc.Configure(cfg => cfg
+        .SetFallbackLocale("en")
+        .AddProvider(new Prowl.Rosetta.EmbeddedResourceProvider(typeof(Prowl.Editor.Core.EditorApplication).Assembly, "Prowl.Editor.Resources.Locale"))
+        .SetLocale("en")
+        .OnMissingKey(Prowl.Rosetta.MissingKeyBehavior.ReturnKey));
+
     protected EditorTestHarness()
     {
         _prevIsEditor = Application.IsEditor;

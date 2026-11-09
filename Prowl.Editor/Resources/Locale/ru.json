@@ -254,6 +254,8 @@
   "hierarchy.hide_in_scene_view": "Скрыть в окне сцены",
   "hierarchy.show_in_scene_view": "Показать в окне сцены",
   "hierarchy.scene_refused": "Сцена не изменена",
+  "hierarchy.reference_refused": "Ссылка не задана",
+  "hierarchy.reference_crosses": "'{{name}}' находится в сцене '{{scene}}', а ссылка между сценами никогда не сохраняется.",
   "hierarchy.create": "Создать",
   "hierarchy.drop_to_spawn": "Перетащите для создания",
   "hierarchy.scene_empty": "Сцена пуста",

@@ -259,6 +259,8 @@
   "hierarchy.hide_in_scene_view": "Hide in Scene View",
   "hierarchy.show_in_scene_view": "Show in Scene View",
   "hierarchy.scene_refused": "Scene not changed",
+  "hierarchy.reference_refused": "Reference not set",
+  "hierarchy.reference_crosses": "'{{name}}' is in the scene '{{scene}}', and a reference between scenes is never saved.",
   "hierarchy.create": "Create",
   "hierarchy.drop_to_spawn": "Drop to spawn here",
   "hierarchy.scene_empty": "Scene is empty",

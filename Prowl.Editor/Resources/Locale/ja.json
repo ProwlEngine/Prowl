@@ -254,6 +254,8 @@
   "hierarchy.hide_in_scene_view": "シーンビューで非表示",
   "hierarchy.show_in_scene_view": "シーンビューで表示",
   "hierarchy.scene_refused": "シーンは変更されません",
+  "hierarchy.reference_refused": "参照は設定されません",
+  "hierarchy.reference_crosses": "'{{name}}' はシーン '{{scene}}' にあり、シーン間の参照は保存されません。",
   "hierarchy.create": "作成",
   "hierarchy.drop_to_spawn": "ここにドロップして生成",
   "hierarchy.scene_empty": "シーンは空です",

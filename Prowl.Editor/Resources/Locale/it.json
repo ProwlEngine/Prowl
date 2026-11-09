@@ -254,6 +254,8 @@
   "hierarchy.hide_in_scene_view": "Nascondi nella vista scena",
   "hierarchy.show_in_scene_view": "Mostra nella vista scena",
   "hierarchy.scene_refused": "Scena non modificata",
+  "hierarchy.reference_refused": "Riferimento non impostato",
+  "hierarchy.reference_crosses": "'{{name}}' si trova nella scena '{{scene}}', e un riferimento tra scene non viene mai salvato.",
   "hierarchy.create": "Crea",
   "hierarchy.drop_to_spawn": "Rilascia per creare qui",
   "hierarchy.scene_empty": "La scena e vuota",

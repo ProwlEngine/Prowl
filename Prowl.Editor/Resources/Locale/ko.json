@@ -254,6 +254,8 @@
   "hierarchy.hide_in_scene_view": "씬 뷰에서 숨기기",
   "hierarchy.show_in_scene_view": "씬 뷰에서 표시",
   "hierarchy.scene_refused": "씬이 변경되지 않음",
+  "hierarchy.reference_refused": "참조가 설정되지 않음",
+  "hierarchy.reference_crosses": "'{{name}}'은(는) '{{scene}}' 씬에 있으며, 씬 간 참조는 저장되지 않습니다.",
   "hierarchy.create": "만들기",
   "hierarchy.drop_to_spawn": "여기에 놓아서 생성",
   "hierarchy.scene_empty": "씬이 비어 있습니다",
