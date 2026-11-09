@@ -23,7 +23,7 @@ internal static class SplitFaceOp
 
         if (vert1 == vert2)
         {
-            Console.WriteLine("SplitFace: vertices must be different");
+            Console.Error.WriteLine("SplitFace: vertices must be different");
             return (null, null);
         }
 
@@ -31,14 +31,14 @@ internal static class SplitFaceOp
         var loop2 = face.GetLoop(vert2);
         if (loop1 == null || loop2 == null)
         {
-            Console.WriteLine("SplitFace: one or both vertices not found in face");
+            Console.Error.WriteLine("SplitFace: one or both vertices not found in face");
             return (null, null);
         }
 
         // Neighbouring corners already share an edge
         if (loop1.Next == loop2 || loop1.Prev == loop2)
         {
-            Console.WriteLine("SplitFace: vertices are adjacent in the face");
+            Console.Error.WriteLine("SplitFace: vertices are adjacent in the face");
             return (null, null);
         }
 
@@ -68,7 +68,7 @@ internal static class SplitFaceOp
         var second = mesh.AddFace(secondVerts.ToArray());
         if (first == null || second == null)
         {
-            Console.WriteLine($"SplitFace: Failed to create faces (first={first != null}, second={second != null})");
+            Console.Error.WriteLine($"SplitFace: Failed to create faces (first={first != null}, second={second != null})");
             return (first, second);
         }
 
