@@ -78,7 +78,7 @@ public sealed class DebugStackTrace
             if (field is not null)
                 return field;
 
-            var ranges = new List<Range>();
+            var ranges = new List<Range>(capacity: _stackTrace.FrameCount + 2);
             ReadOnlySpan<char> span = Text.AsSpan();
             int currentPos = 0;
             while (currentPos < span.Length)
@@ -180,8 +180,9 @@ public sealed class DebugStackTrace
     }
 
     /// <summary>
-    /// Gets the first existing source file location under the specified path prefix.
-    /// </summary>The path prefix used to locate an asset source file.The file path, line number, and column number, or <c>null</c> if no matching source file is found.
+    /// Gets the file path, line number, and column number, or <c>null</c> if no matching source file is found.
+    /// </summary>
+    /// <param name="assetsPath">The path prefix used to locate an asset source file.</param>
     public (string Path, int Line, int Column)? GetAssetSourceLocation(string assetsPath)
     {
         for (int i = 0; i < _stackTrace.FrameCount; i ++)
