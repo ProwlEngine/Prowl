@@ -176,7 +176,7 @@ public class ConsolePanel : DockPanel
             DrainPending();
             if (_messages.Count == 0) return null;
             LogEntry m = _messages[^1];
-            return (m.Severity, m.Message, SourceOf(m), m.Count);
+            return (m.Severity, m.Message, m.StackTrace?.TypeName, m.Count);
         }
     }
 
@@ -210,14 +210,17 @@ public class ConsolePanel : DockPanel
 
     private static void Append(string message, DebugStackTrace? stackTrace, LogSeverity severity, DateTime time)
     {
-        string firstLine = message.Contains('\n') ? message.Split('\n')[0] : message;
-
         if (_messages.Count > 0)
         {
-            int index = _messages.FindIndex(x => x.FullMessage == message && x.Severity == severity && string.Equals(x.StackTrace.ToString(), stackTrace?.ToString(), StringComparison.Ordinal));
+            // Search through the most recent N log entries to find an entry to collapse with.
+            const int CollapseSearchWindow = 16;
+            int index = _messages.FindLastIndex(
+                startIndex: _messages.Count - 1,
+                count: int.Min(CollapseSearchWindow, _messages.Count),
+                match: m => m.FullMessage == message && m.Severity == severity && string.Equals(m.StackTrace.ToString(), stackTrace?.ToString(), StringComparison.Ordinal));
             if (index != -1)
             {
-                var sameMessage = _messages[index];
+                LogEntry sameMessage = _messages[index];
                 sameMessage.Count += 1;
                 sameMessage.TimeString = time.ToString("HH:mm:ss");
                 sameMessage.StackTrace = stackTrace ?? sameMessage.StackTrace;
@@ -227,6 +230,10 @@ public class ConsolePanel : DockPanel
                 return;
             }
         }
+
+        // We can only display one line of the message.
+        int newLineIndex = message.IndexOfAny('\r', '\n');
+        string firstLine = newLineIndex >= 0 ? message.Substring(0, newLineIndex) : message;
 
         _messages.Add(new LogEntry
         {
@@ -383,7 +390,7 @@ public class ConsolePanel : DockPanel
                         if (SourceLocationOf(entry) is { } location)
                             menu.Item($"{Loc.Get("console.open_source")} {Path.GetFileName(location.Path)}:{location.Line}", () => OpenSource(location), icon: EditorIcons.Code);
                         menu.Item(Loc.Get("console.copy_message"), () => paper.SetClipboard(CopyText(entry, withStack: false)), icon: EditorIcons.Copy);
-                        if (entry.StackTrace is { StackFrames.Length: > 0 })
+                        if (entry.StackTrace is not null)
                             menu.Item(Loc.Get("console.copy_with_stack"), () => paper.SetClipboard(CopyText(entry, withStack: true)), icon: EditorIcons.Copy);
                     });
                 })
@@ -425,14 +432,7 @@ public class ConsolePanel : DockPanel
 
         if (entry.StackTrace is not { } trace || Projects.Project.Current is not { } project) return null;
         string assets = Path.GetFullPath(project.AssetsPath) + Path.DirectorySeparatorChar;
-        foreach (DebugStackFrame frame in trace.StackFrames)
-        {
-            if (string.IsNullOrEmpty(frame.FileName) || !Path.IsPathRooted(frame.FileName)) continue;
-            string full = Path.GetFullPath(frame.FileName);
-            if (full.StartsWith(assets, StringComparison.OrdinalIgnoreCase) && File.Exists(full))
-                return (full, frame.Line ?? 1, frame.Column ?? 1);
-        }
-        return null;
+        return trace.GetAssetSourceLocation(assets);
     }
 
     private static void OpenSource((string Path, int Line, int Column) location)
@@ -448,11 +448,8 @@ public class ConsolePanel : DockPanel
 
     internal static string CopyText(LogEntry entry, bool withStack)
     {
-        if (!withStack || entry.StackTrace is not { StackFrames.Length: > 0 } trace) return entry.FullMessage;
-        var text = new System.Text.StringBuilder(entry.FullMessage);
-        foreach (DebugStackFrame frame in trace.StackFrames)
-            text.Append('\n').Append(frame);
-        return text.ToString();
+        if (!withStack || entry.StackTrace is null) return entry.FullMessage;
+        return entry.StackTrace.ToString();
     }
 
     private void DrawRows(Paper paper, Canvas canvas, Rect r, FontFile font, float rowH, int first, int last)
@@ -547,7 +544,7 @@ public class ConsolePanel : DockPanel
                 rightCursor -= tw + gap;
             }
 
-            string? src = SourceOf(msg);
+            string? src = msg.StackTrace?.TypeName;
             if (!string.IsNullOrEmpty(src))
             {
                 msg.SourceLayout ??= Make($"[{src}]", mono, textSize);
@@ -572,9 +569,9 @@ public class ConsolePanel : DockPanel
                 _ellipsis ??= Make("...", mono, textSize);
                 msg.MessageLayout ??= Make(msg.Message, mono, textSize);
                 DrawMid(Fit(msg.MessageLayout, ref msg.MessageCut, ref msg.MessageCutWidth, msgWidth, mono), cursorX, line1, EditorTheme.Ink400);
-                if (_multiLine && msg.StackTrace is { StackFrames.Length: > 0 })
+                if (_multiLine && msg.StackTrace is not null)
                 {
-                    msg.StackLayout ??= Make(msg.StackTrace.StackFrames[0].ToString(), mono, textSize);
+                    msg.StackLayout ??= Make(msg.StackTrace.GetLine(0), mono, textSize);
                     DrawMid(Fit(msg.StackLayout, ref msg.StackCut, ref msg.StackCutWidth, msgWidth, mono), cursorX, line2, EditorTheme.InkDim);
                 }
             }
@@ -583,17 +580,6 @@ public class ConsolePanel : DockPanel
 
             _messages[msgIdx] = msg;
         }
-    }
-
-    // Class the log originated from (first captured frame's declaring type), for the source label.
-    private static string? SourceOf(LogEntry msg)
-    {
-        DebugStackFrame[]? frames = msg.StackTrace?.StackFrames;
-        if (frames == null || frames.Length == 0) return null;
-        string? method = frames[0].Method;
-        if (string.IsNullOrEmpty(method)) return null;
-        int dot = method.LastIndexOf('.');
-        return dot > 0 ? method[..dot] : method;
     }
 
     private static (IOrigamiIcon, Color, string) LevelOf(LogSeverity s) => s switch

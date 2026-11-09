@@ -5,12 +5,9 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 
 using Prowl.Graphite.Rendering;
@@ -34,53 +31,172 @@ public enum LogSeverity
 
 public delegate void OnLog(string message, DebugStackTrace? stackTrace, LogSeverity logSeverity);
 
-
-public record DebugStackFrame(string FileName, int? Line = null, int? Column = null, string? Method = null)
+/// <summary>
+/// Represents a stack trace, either for an exception or a point-in-time capture.
+/// </summary>
+public sealed class DebugStackTrace
 {
-    public override string ToString()
-    {
-        string locSuffix = Line != null ? Column != null ? $"({Line},{Column})" : $"({Line})" : "";
+    private readonly Exception? _exception;
+    private readonly StackTrace _stackTrace;    // When initialized from an exception, this is the inner-most exception.
 
-        if (!string.IsNullOrEmpty(Method))
-            return $"In {Method} at {FileName}{locSuffix}";
-        else
-            return $"At {FileName}{locSuffix}";
+    private DebugStackTrace(Exception? exception, StackTrace? stackTrace)
+    {
+        _exception = exception;
+        _stackTrace = stackTrace;
     }
 
-}
-
-
-public record DebugStackTrace(params DebugStackFrame[] StackFrames)
-{
-    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
-        Justification = "Diagnostic-only path: in a trimmed build, missing method metadata gracefully degrades to a stack frame without method info.")]
-    public static explicit operator DebugStackTrace(StackTrace stackTrace)
+    /// <summary>
+    /// Creates a <see cref="DebugStackTrace"/> from a <see cref="Exception"/>, returning <see langword="null"/> if
+    /// no info is available.
+    /// </summary>
+    internal static DebugStackTrace? FromException(Exception exception, out string message)
     {
-        DebugStackFrame[] stackFrames = new DebugStackFrame[stackTrace.FrameCount];
+        Exception baseException = exception.GetBaseException();
+        var result = new DebugStackTrace(exception: exception, stackTrace: new StackTrace(baseException, fNeedFileInfo: true));
+        message = result.Message;
+        return result._stackTrace.FrameCount == 0 ? null : result;
+    }
 
-        for (int i = 0; i < stackFrames.Length; i++)
+    /// <summary>
+    /// Creates a <see cref="DebugStackTrace"/> from a <see cref="StackTrace"/>, returning <see langword="null"/> if
+    /// no info is available.
+    /// </summary>
+    internal static DebugStackTrace? FromStackTrace(StackTrace stackTrace)
+    {
+        var result = new DebugStackTrace(exception: null, stackTrace: stackTrace);
+        return result._stackTrace.FrameCount == 0 ? null : result;
+    }
+
+    // A cached textual version of the stack trace.
+    private string Text => field ??= _exception?.ToString() ?? _stackTrace.ToString();
+
+    // A cached set of lines, one for each stack frame. Leading whitespace is skipped.
+    private Range[] Lines
+    {
+        get
         {
-            StackFrame srcFrame = stackTrace.GetFrame(i);
+            if (field is not null)
+                return field;
 
-            MethodBase? m = srcFrame.GetMethod();
-            string? method = m != null ? $"{m.DeclaringType?.Name}.{m.Name}" : null;
+            var ranges = new List<Range>();
+            ReadOnlySpan<char> span = Text.AsSpan();
+            int currentPos = 0;
+            while (currentPos < span.Length)
+            {
+                // Skip past whitespace.
+                while (currentPos < span.Length && char.IsWhiteSpace(span[currentPos]))
+                    currentPos++;
+                if (currentPos == span.Length)
+                    break;
 
-            stackFrames[i] = new DebugStackFrame(srcFrame.GetFileName(), srcFrame.GetFileLineNumber(), srcFrame.GetFileColumnNumber(), method);
+                // Slice the remaining text to search within
+                ReadOnlySpan<char> remaining = span.Slice(currentPos);
+                int indexInRemaining = remaining.IndexOfAny(['\r', '\n']);
+
+                // If no more line endings are found, the rest of the string is the last line.
+                if (indexInRemaining == -1)
+                {
+                    ranges.Add(new Range(currentPos, span.Length));
+                    break;
+                }
+
+                // Calculate the absolute position of the delimiter in the original string
+                int delimiterPos = currentPos + indexInRemaining;
+
+                // Add the range of the current line (excluding the delimiter)
+                ranges.Add(new Range(currentPos, delimiterPos));
+
+                // Start searching for whitespace just past the delimiter.
+                currentPos = delimiterPos + 1;
+            }
+
+            field = [.. ranges];
+            return field;
         }
-
-        return new DebugStackTrace(stackFrames);
     }
 
-
-    public override string ToString()
+    /// <summary>
+    /// Returns the number of lines of <see cref="Text"/> that comprise the exception message. Returns <c>0</c> if no
+    /// exception is available.
+    /// </summary>
+    private int MessageLineCount
     {
-        StringBuilder sb = new();
-
-        for (int i = 0; i < StackFrames.Length; i++)
-            sb.AppendLine($"\t{StackFrames[i]}");
-
-        return sb.ToString();
+        get
+        {
+            if (_exception is null)
+                return 0;
+            if (field != 0)
+                return field;
+            int result = 1;
+            for (int i = 1; i < Lines.Length; i++)
+            {
+                if (Text[Lines[i]].StartsWith("---> ", StringComparison.Ordinal))
+                    result++;
+                else
+                    break;
+            }
+            field = result;
+            return field;
+        }
     }
+
+    /// <summary>
+    /// The exception message, if this <see cref="DebugStackTrace "/> was initialized from an exception.
+    /// </summary>
+    private string Message
+    {
+        get
+        {
+            if (_exception is null)
+                return string.Empty;
+            return Text[new Range(Lines[0].Start, Lines[MessageLineCount - 1].End)];
+        }
+    }
+
+    /// <summary>
+    /// Gets the number of lines in the stack trace. This may not equal the number of frames when inner exceptions are
+    /// present.
+    /// </summary>
+    public int LineCount => Lines.Length - MessageLineCount;
+
+    /// <summary>
+    /// Gets the line of text to display.
+    /// </summary>
+    /// <param name="index"> The index of the line, from zero to <see cref="LineCount"/> - 1. </param>
+    /// <returns> The line of text. </returns>
+    public string GetLine(int index) => Text[Lines[index + MessageLineCount]];
+
+    /// <summary>
+    /// The class the stack trace originated from (the first captured frame's declaring type).
+    /// </summary>
+    public string? TypeName
+    {
+        get
+        {
+            string? typeName = DiagnosticMethodInfo.Create(_stackTrace.GetFrame(0))?.DeclaringTypeName;
+            if (typeName is null) return null;
+            return typeName[(typeName.LastIndexOf('.') + 1)..];
+        }
+    }
+
+    /// <summary>
+    /// Gets the first existing source file location under the specified path prefix.
+    /// </summary>The path prefix used to locate an asset source file.The file path, line number, and column number, or <c>null</c> if no matching source file is found.
+    public (string Path, int Line, int Column)? GetAssetSourceLocation(string assetsPath)
+    {
+        for (int i = 0; i < _stackTrace.FrameCount; i ++)
+        {
+            StackFrame frame = _stackTrace.GetFrame(i);
+            if (string.IsNullOrEmpty(frame.GetFileName()) || !System.IO.Path.IsPathRooted(frame.GetFileName())) continue;
+            string full = System.IO.Path.GetFullPath(frame.GetFileName());
+            if (full.StartsWith(assetsPath, StringComparison.OrdinalIgnoreCase) && System.IO.File.Exists(full))
+                return (full, frame.GetFileLineNumber(), frame.GetFileColumnNumber());
+        }
+        return null;
+    }
+
+    /// <summary>A textual representation of this object.</summary>
+    public override string ToString() => Text;
 }
 
 
@@ -248,33 +364,11 @@ public static class Debug
     /// </remarks>
     public static void LogException(string context, Exception exception)
     {
-        var builder = new StringBuilder();
+        // Capture the exception's stack trace.
+        DebugStackTrace? trace = DebugStackTrace.FromException(exception, out string message);
 
-        // Append context.
-        if (!string.IsNullOrEmpty(context))
-        {
-            builder.Append(context);
-            builder.Append(": ");
-        }
-
-        // Append the outer exception message.
-        builder.Append(exception.GetType().FullName);
-        builder.Append(": ");
-        builder.Append(exception.Message);
-
-        // Append any inner exception messages, separated by " --> ".
-        while (exception.InnerException != null)
-        {
-            exception = exception.InnerException;
-            builder.Append(" --> ");
-            builder.Append(exception.GetType().FullName);
-            builder.Append(": ");
-            builder.Append(exception.Message);
-        }
-
-        // Use the innermost exception's stack trace.
-        var trace = (DebugStackTrace)new StackTrace(exception, fNeedFileInfo: true);
-        LogCore(builder.ToString(), LogSeverity.Exception, trace);
+        // Log it.
+        LogCore(message, LogSeverity.Exception, trace);
     }
 
     /// <summary>
@@ -308,7 +402,7 @@ public static class Debug
         // NOTE : StackTrace is pretty fast on modern .NET, so it's nice to keep it on by default, since it gives useful line numbers for debugging purposes.
         // For reference, getting a stack trace on a modern machine takes around 15 μs at a depth of 15.
         // NOTE 2 : Assumes that the first two frames are this method and the public logging method, so the caller is at frame 2.
-        DebugStackTrace trace = customTrace ?? (DebugStackTrace)new StackTrace(skipFrames: 2, fNeedFileInfo: true);
+        DebugStackTrace? trace = customTrace ?? DebugStackTrace.FromStackTrace(new StackTrace(skipFrames: 2, fNeedFileInfo: true));
 
         if (LogToConsole)
         {

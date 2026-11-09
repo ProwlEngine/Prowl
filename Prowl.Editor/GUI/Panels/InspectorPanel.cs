@@ -857,19 +857,18 @@ public class InspectorPanel : DockPanel
             .FontSize(fs - 1);
 
         // Stack trace
-        if (log.StackTrace != null && log.StackTrace.StackFrames.Length > 0)
+        if (log.StackTrace is not null)
         {
             paper.Box("log_sp").Height(8);
             Origami.Header(paper, "log_st_hdr", Loc.Get("inspector.stack_trace")).Underline().Show();
 
-            for (int i = 0; i < log.StackTrace.StackFrames.Length; i++)
+            for (int i = 0; i < log.StackTrace.LineCount; i++)
             {
-                DebugStackFrame frame = log.StackTrace.StackFrames[i];
-                string frameText = frame.ToString();
+                string frameText = log.StackTrace.GetLine(i);
 
                 Color frameBg = i % 2 == 0
-                    ? System.Drawing.Color.FromArgb(8, 255, 255, 255)
-                    : System.Drawing.Color.Transparent;
+                    ? Color.FromArgb(8, 255, 255, 255)
+                    : Color.Transparent;
 
                 paper.Box($"log_frame_{i}")
                     .Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(18)

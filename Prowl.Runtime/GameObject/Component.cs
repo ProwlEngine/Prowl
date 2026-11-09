@@ -662,7 +662,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
         if (cancellation == null) return;
 
         try { cancellation.Cancel(); }
-        catch (AggregateException e) { Debug.LogError($"[{Name}/{GetType().Name}] A DestroyCancellationToken callback threw: {e.InnerException?.Message}\n{e.InnerException?.StackTrace}"); }
+        catch (AggregateException e) { Debug.LogException($"[{Name}/{GetType().Name}] A DestroyCancellationToken callback threw", e); }
     }
 
     /// <summary>
