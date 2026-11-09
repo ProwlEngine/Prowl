@@ -23,7 +23,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class RagdollGeneratorWindow : DockPanel
 {
     [MenuItem("Window/Tools/Ragdoll Generator", priority: 201)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(RagdollGeneratorWindow));
+    static void Open() => EditorApplication.Instance?.OpenPanel<RagdollGeneratorWindow>();
 
     private RagdollBuilder.Settings _settings = new();
 

@@ -29,7 +29,7 @@ namespace Prowl.Editor.Inspector;
 public class SpriteEditorWindow : DockPanel
 {
     [MenuItem("Window/Tools/Sprite Editor", priority: 200)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(SpriteEditorWindow));
+    static void Open() => EditorApplication.Instance?.OpenPanel<SpriteEditorWindow>();
 
     private enum DragMode { None, Create, Move, ResizeRect, MovePivot, MoveBorder }
 

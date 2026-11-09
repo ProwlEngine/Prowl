@@ -47,6 +47,7 @@ internal static class RoslynScriptBackend
         public CSharpCompilation? Compilation;
         public MetadataReference[] References = Array.Empty<MetadataReference>();
         public bool AllowUnsafe;
+        public OptimizationLevel Optimization;
 
         // Snapshot of the last SUCCESSFUL compile, used to decide the whole unit skip.
         public Dictionary<string, ulong> SuccessHashes = new(StringComparer.OrdinalIgnoreCase);
@@ -85,7 +86,7 @@ internal static class RoslynScriptBackend
                 if (!scripts.Contains(scriptPath, StringComparer.OrdinalIgnoreCase)) continue;
 
                 context = new ScriptContext(key.Substring(prefix.Length), state.References, scripts,
-                    BuildOptions(state.AllowUnsafe), EditorParseOptions);
+                    BuildOptions(state.AllowUnsafe, state.Optimization), EditorParseOptions);
                 return true;
             }
         }
@@ -99,13 +100,15 @@ internal static class RoslynScriptBackend
     }
 
     /// <summary>
-    /// Compile one unit. <paramref name="stateKey"/> uniquely identifies the unit across projects,
-    /// <paramref name="peerRefs"/> holds references to units compiled earlier this run, and
-    /// <paramref name="nugetDllPaths"/> is the resolved package set.
+    /// Compile one unit. <paramref name="stateKey"/> uniquely identifies the unit across projects and
+    /// always comes with the same <paramref name="optimization"/>. <paramref name="peerRefs"/> holds
+    /// references to units compiled earlier this run, and <paramref name="nugetDllPaths"/> is the
+    /// resolved package set.
     /// </summary>
     public static CompileOutcome Compile(
         string stateKey,
         CompilationUnit unit,
+        OptimizationLevel optimization,
         IReadOnlyDictionary<string, MetadataReference> peerRefs,
         IReadOnlyList<string> nugetDllPaths,
         CSharpParseOptions? parseOptions = null)
@@ -127,6 +130,11 @@ internal static class RoslynScriptBackend
 
             List<MetadataReference> references = BuildReferences(unit, peerRefs, nugetDllPaths);
             s_states.TryGetValue(stateKey, out UnitState? state);
+
+            // The reuse below never compares levels, so a key that switched level would hand back the old build
+            if (state != null && state.Optimization != optimization)
+                throw new InvalidOperationException(
+                    $"'{stateKey}' was compiled at {state.Optimization} and cannot be recompiled at {optimization}.");
 
             // 2. Whole unit skip: unchanged source + references since the last successful compile.
             if (state?.Image != null
@@ -178,7 +186,8 @@ internal static class RoslynScriptBackend
             }
             else
             {
-                compilation = CSharpCompilation.Create(unit.Name, newTrees.Values.Select(t => t.Tree), references, BuildOptions(unit));
+                compilation = CSharpCompilation.Create(unit.Name, newTrees.Values.Select(t => t.Tree), references,
+                    BuildOptions(unit.AllowUnsafe, optimization));
             }
 
             // 5. Emit with an embedded PDB.
@@ -206,6 +215,7 @@ internal static class RoslynScriptBackend
             state.Compilation = compilation;
             state.References = refArray;
             state.AllowUnsafe = unit.AllowUnsafe;
+            state.Optimization = optimization;
             state.Diagnostics = diagnostics;
 
             if (image != null)
@@ -252,12 +262,10 @@ internal static class RoslynScriptBackend
     /// <summary>Severity overrides from the project's code style, applied on top of the built in ones.</summary>
     public static KeyValuePair<string, ReportDiagnostic>[] DiagnosticOverrides { get; set; } = [];
 
-    private static CSharpCompilationOptions BuildOptions(CompilationUnit unit) => BuildOptions(unit.AllowUnsafe);
-
-    private static CSharpCompilationOptions BuildOptions(bool allowUnsafe) =>
+    private static CSharpCompilationOptions BuildOptions(bool allowUnsafe, OptimizationLevel optimization) =>
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
             .WithPlatform(Platform.AnyCpu)
-            .WithOptimizationLevel(OptimizationLevel.Debug)
+            .WithOptimizationLevel(optimization)
             .WithAllowUnsafe(allowUnsafe)
             .WithNullableContextOptions(NullableContextOptions.Annotations)
             .WithConcurrentBuild(true)

@@ -1161,7 +1161,7 @@ public static class CliEditorCommands
         RenderTexture? rt = view switch
         {
             ScreenshotView.Scene => SceneViewPanel.ActiveCamera?.RenderTarget,
-            _ => EditorApplication.Instance?.FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel game ? game.RenderTarget : null,
+            _ => EditorApplication.Instance?.FindOpenPanel<GameViewPanel>() is GameViewPanel game ? game.RenderTarget : null,
         };
         if (rt.IsNotValid() || rt!.MainTexture.IsNotValid())
             throw new CliException(view == ScreenshotView.Scene

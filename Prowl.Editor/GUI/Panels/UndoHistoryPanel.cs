@@ -21,7 +21,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class UndoHistoryPanel : DockPanel
 {
     [MenuItem("Window/General/Undo History", priority: 1)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(UndoHistoryPanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<UndoHistoryPanel>();
 
     public override string Title => Loc.Get("panel.undo_history");
     public override string Icon => EditorIcons.ClockRotateLeft;

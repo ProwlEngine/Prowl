@@ -391,7 +391,7 @@ public class DesktopBuildPipeline : BuildPipeline
 
         context.Log("Compiling game scripts for the player...");
         ScriptCompiler.PlayerCompileResult scripts = ScriptCompiler.CompileForPlayer(
-            _project, targetPlatform, PlayerDefines(_settings, this), Path.Combine(buildTempDir, "Scripts"));
+            _project, targetPlatform, PlayerDefines(_settings, this), request.Configuration, Path.Combine(buildTempDir, "Scripts"));
         if (!scripts.Result.Success)
             throw new InvalidOperationException($"Script compilation for the player failed:{Environment.NewLine}{scripts.Result.Errors}");
         List<ScriptCompiler.BuildAssembly> assemblies = scripts.Assemblies;
