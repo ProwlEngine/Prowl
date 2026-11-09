@@ -79,6 +79,8 @@ public class HierarchyPanel : DockPanel
     public override void OnGUI(Paper paper, float width, float height)
     {
         _paper = paper;
+        // A header's create menu only pins its scene while it is open.
+        if (!OrigamiUI.ContextMenu.IsOpen) MenuContext.ClearSection();
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
 
@@ -605,7 +607,9 @@ public class HierarchyPanel : DockPanel
                 .OnClick(0, (_, _) => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
                 {
                     b.Header(Loc.Get("hierarchy.create"));
-                    BuildCreateMenuForSelection(b);
+                    // Creates into this header's scene, whatever is selected.
+                    MenuContext.SetSection(header.Section);
+                    MenuItemAttribute.BuildContextMenu(b, "GameObject");
                 }));
         }
 
@@ -671,11 +675,12 @@ public class HierarchyPanel : DockPanel
     // ================================================================
 
     /// <summary>
-    /// The section a new object goes into: its parent's, else the selected object's scene, else the active scene.
+    /// The section a new object goes into: its parent's, else a scene header menu's, else the selected object's scene, else the active scene.
     /// </summary>
     internal static SceneSection SectionForNew(SceneInstance world, GameObject? parent)
     {
         if (parent.IsValid() && parent.Section is { } parentSection && ReferenceEquals(parentSection.Instance, world)) return parentSection;
+        if (MenuContext.Section is { IsLoaded: true } pinned && ReferenceEquals(pinned.Instance, world)) return pinned;
         GameObject? selected = Selection.GetSelected<GameObject>().FirstOrDefault(go => go.IsValid() && ReferenceEquals(go.Scene, world));
         if (selected.IsValid() && selected.Section is { IsPersistent: false } selectedSection) return selectedSection;
         return world.ActiveSection;

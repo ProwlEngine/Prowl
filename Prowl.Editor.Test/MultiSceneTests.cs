@@ -543,6 +543,10 @@ public class MultiSceneTests : EditorTestHarness
 
         Selection.Select(Root(b));
         Assert.Same(b.Section, GUI.Panels.HierarchyPanel.CreateGameObject("NextToSelection", null, beginRename: false).Section);
+
+        MenuContext.SetSection(a.Section);
+        try { Assert.Same(a.Section, GUI.Panels.HierarchyPanel.CreateGameObject("FromAHeader", null, beginRename: false).Section); }
+        finally { MenuContext.Clear(); }
     }
 
     [Fact]
