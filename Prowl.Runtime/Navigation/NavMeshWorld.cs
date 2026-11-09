@@ -40,13 +40,12 @@ public sealed class NavMeshWorld
 
     public NavMeshWorld() => ApplySettings(s_defaultSettings);
 
-    /// <summary>Make <paramref name="settings"/> the defaults for new worlds and apply them to the active scene's world.</summary>
+    /// <summary>Make <paramref name="settings"/> the defaults for new worlds and apply them to every world made already.</summary>
     public static void ApplyProjectSettings(NavMeshWorldSettings settings)
     {
         DefaultSettings = settings;
-        Resources.SceneInstance? scene = Resources.SceneInstance.Active;
-        if (scene.IsValid())
-            scene.Navigation.ApplySettings(settings);
+        foreach (Resources.SceneInstance world in Resources.SceneInstance.All)
+            world.Navigation.ApplySettings(settings);
     }
 
     /// <summary>Copy every tunable from <paramref name="settings"/>. Crowd radius and obstacle capacity

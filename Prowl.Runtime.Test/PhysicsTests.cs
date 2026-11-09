@@ -3003,6 +3003,25 @@ public class WorldDefaultsTests : RuntimeTestBase
     }
 
     [Fact]
+    public void NavigationProjectSettings_ReachEveryWorld()
+    {
+        NavMeshWorldSettings previous = NavMeshWorld.DefaultSettings;
+        try
+        {
+            SceneInstance first = CreateScene();
+            SceneInstance second = CreateScene();
+            NavMeshWorldSettings settings = previous.Clone();
+            settings.MaxPolyPath = previous.MaxPolyPath + 7;
+
+            NavMeshWorld.ApplyProjectSettings(settings);
+
+            Assert.Equal(settings.MaxPolyPath, first.Navigation.MaxPolyPath);
+            Assert.Equal(settings.MaxPolyPath, second.Navigation.MaxPolyPath);
+        }
+        finally { NavMeshWorld.DefaultSettings = previous; }
+    }
+
+    [Fact]
     public void PlayerTimeSettings_ReachWorldsMadeBeforeThem()
     {
         SceneClockSettings previous = SceneClock.Defaults;
