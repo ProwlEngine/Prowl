@@ -399,7 +399,9 @@ public class SceneInstance : EngineObject, ISerializable
             }
             if (!load.Advance())
             {
-                if (targeted) blocked.Add(world!);
+                // A load that failed just now holds nothing back.
+                if (load.IsFinished) s_queue.Remove(load);
+                else if (targeted) blocked.Add(world!);
                 continue;
             }
 
@@ -424,9 +426,18 @@ public class SceneInstance : EngineObject, ISerializable
         if (load.Kind == SceneLoadKind.Open)
         {
             SceneInstance world = Create(load.Scene.Name, load.OpenMode);
-            section = world.ActiveSection;
-            section.Source = load.Scene;
-            section.Fill(content);
+            try
+            {
+                section = world.ActiveSection;
+                section.Source = load.Scene;
+                section.Fill(content);
+            }
+            catch
+            {
+                // A world that never finished opening is not left behind.
+                world.Dispose();
+                throw;
+            }
             RaiseLoaded(section, additive: false);
         }
         else if (load.Kind == SceneLoadKind.Load)

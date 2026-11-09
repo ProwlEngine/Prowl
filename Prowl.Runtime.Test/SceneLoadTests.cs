@@ -158,6 +158,19 @@ public class SceneLoadTests : RuntimeTestBase
     }
 
     [Fact]
+    public void AFailedLoad_DoesNotHoldBackTheLoadsAfterIt()
+    {
+        Scene missing = AssetDatabase.Get<Scene>(Guid.NewGuid())!;
+        SceneLoad failed = missing.LoadAdditive();
+        SceneLoad next = Stored("Next", "n").LoadAdditive();
+
+        next.Wait();
+
+        Assert.Equal(SceneLoadPhase.Failed, failed.Phase);
+        Assert.Equal(SceneLoadPhase.Done, next.Phase);
+    }
+
+    [Fact]
     public void Cancel_CompletesTheHandleAsCancelled()
     {
         SceneLoad load = Stored("Level", "Door").Load(options: new LoadOptions { HoldActivation = true });
