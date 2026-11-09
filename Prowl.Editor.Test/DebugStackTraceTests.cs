@@ -30,6 +30,19 @@ public class DebugStackTraceTests
     }
 
     [Fact]
+    public void FromStackTrace_WithoutFileInfo()
+    {
+        DebugStackTrace? st = DebugStackTrace.FromStackTrace(new StackTrace(skipFrames: 0, fNeedFileInfo: false));
+        Assert.NotNull(st);
+        Assert.Equal(nameof(DebugStackTraceTests), st.TypeName);
+        Assert.True(st.LineCount >= 1);
+        Assert.StartsWith($"at Prowl.Editor.Test.DebugStackTraceTests.{nameof(FromStackTrace_WithoutFileInfo)}()", st.GetLine(0));
+        Assert.NotNull(st.GetLine(st.LineCount - 1));
+        Assert.Null(st.GetAssetSourceLocation(Path.GetDirectoryName(GetSourcePath())!));
+        Assert.StartsWith($"   at Prowl.Editor.Test.DebugStackTraceTests.{nameof(FromStackTrace_WithoutFileInfo)}()", st.ToString());
+    }
+
+    [Fact]
     public void FromException_HasExpectedProperties()
     {
         DebugStackTrace? st = null;
@@ -49,7 +62,7 @@ public class DebugStackTraceTests
         Assert.StartsWith($"at Prowl.Editor.Test.DebugStackTraceTests.{nameof(FromException_HasExpectedProperties)}()", st.GetLine(0));
         Assert.NotNull(st.GetLine(st.LineCount - 1));
         Assert.Null(st.GetAssetSourceLocation("Z:\\NonExistentDirectory\\"));
-        Assert.Equal((Path: GetSourcePath(), Line: 39, Column: 13), st.GetAssetSourceLocation(Path.GetDirectoryName(GetSourcePath())!));
+        Assert.Equal((Path: GetSourcePath(), Line: 52, Column: 13), st.GetAssetSourceLocation(Path.GetDirectoryName(GetSourcePath())!));
         Assert.StartsWith($"""
             System.InvalidOperationException: Test message
                at Prowl.Editor.Test.DebugStackTraceTests.{nameof(FromException_HasExpectedProperties)}()
