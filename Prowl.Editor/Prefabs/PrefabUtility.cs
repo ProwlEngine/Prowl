@@ -332,7 +332,7 @@ public static partial class PrefabUtility
         Guid instanceRootId, Action<GameObject>? undoInstance = null, Action<GameObject>? redoInstance = null) : IUndoOperation
     {
         public string Name => name;
-        public IReadOnlyList<UndoOwner> Owners => [UndoOwner.OfAssetFile(prefabGuid), UndoOwner.OfCurrentScene];
+        public IReadOnlyList<UndoOwner> Owners { get; } = [UndoOwner.OfAssetFile(prefabGuid), .. FindInstancesOf(prefabGuid).Select(UndoOwner.Of).Distinct()];
 
         public void Undo() => Restore(before, undoInstance);
         public void Redo() => Restore(after, redoInstance);

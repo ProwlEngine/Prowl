@@ -512,7 +512,7 @@ internal sealed class TerrainDataUndo : IUndoOperation
         Name = name;
         _terrainId = terrain.Identifier;
         _assetId = data.IsFromDatabase ? data.AssetID : Guid.Empty;
-        Owners = [data.IsFromDatabase ? UndoOwner.Of(data) : UndoOwner.OfCurrentScene];
+        Owners = [data.IsFromDatabase ? UndoOwner.Of(data) : UndoOwner.Of(terrain)];
         _undo = undo;
         _redo = redo;
     }

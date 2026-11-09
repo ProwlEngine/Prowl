@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,24 +16,29 @@ namespace Prowl.Editor.Core;
 /// <summary>What a record changes, for dirty marks and for dropping steps.</summary>
 public readonly struct UndoOwner : IEquatable<UndoOwner>
 {
-    internal enum OwnerKind { None, CurrentScene, Asset, AssetFile, Settings }
+    internal enum OwnerKind { None, Scene, Prefab, Asset, AssetFile, Settings }
 
     internal OwnerKind Kind { get; }
     internal Guid AssetId { get; }
     internal Type? SettingsType { get; }
+    internal OpenScene? Scene { get; }
 
-    private UndoOwner(OwnerKind kind, Guid asset = default, Type? settings = null)
+    private UndoOwner(OwnerKind kind, Guid asset = default, Type? settings = null, OpenScene? scene = null)
     {
         Kind = kind;
         AssetId = asset;
         SettingsType = settings;
+        Scene = scene;
     }
 
     /// <summary>Marks nothing.</summary>
     public static UndoOwner None => default;
 
-    /// <summary>The single open scene.</summary>
-    public static UndoOwner OfCurrentScene => new(OwnerKind.CurrentScene);
+    /// <summary>An open scene, for its objects and for the settings it owns: environment, lighting and bake settings.</summary>
+    public static UndoOwner OfScene(OpenScene? scene) => scene == null ? None : new(OwnerKind.Scene, scene: scene);
+
+    /// <summary>The prefab being edited, which keeps its own dirty flag.</summary>
+    internal static UndoOwner OfPrefabSession => new(OwnerKind.Prefab);
 
     /// <summary>A file written straight to disk. Keys a step for dropping and marks nothing.</summary>
     public static UndoOwner OfAssetFile(Guid asset) => new(OwnerKind.AssetFile, asset);
@@ -41,28 +46,36 @@ public readonly struct UndoOwner : IEquatable<UndoOwner>
     /// <summary>A project or editor settings object.</summary>
     public static UndoOwner OfSettings(Type settings) => new(OwnerKind.Settings, settings: settings);
 
-    /// <summary>A scene object's scene, or a database asset itself.</summary>
+    /// <summary>A scene object's open scene, the prefab session for an object in the prefab world, or a database asset itself.</summary>
     public static UndoOwner Of(EngineObject obj) => obj switch
     {
-        GameObject go => IsDontSave(go) ? None : OfCurrentScene,
-        Component c => c.GameObject.IsValid() && IsDontSave(c.GameObject) ? None : OfCurrentScene,
+        GameObject go => OfObjectIn(go),
+        Component c => c.GameObject.IsValid() ? OfObjectIn(c.GameObject) : None,
         Asset { IsFromDatabase: true } asset => new(OwnerKind.Asset, asset.AssetID),
         _ => None,
     };
+
+    private static UndoOwner OfObjectIn(GameObject go)
+    {
+        if (IsDontSave(go)) return None;
+        if (PrefabEditingMode.World.IsValid() && ReferenceEquals(go.Scene, PrefabEditingMode.World)) return OfPrefabSession;
+        return OfScene(EditorSceneManager.SceneOf(go));
+    }
 
     private static bool IsDontSave(GameObject go) => (go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0;
 
     internal string DisplayName => Kind switch
     {
-        OwnerKind.CurrentScene => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.Name : "Scene",
+        OwnerKind.Scene => Scene!.Name,
+        OwnerKind.Prefab => PrefabEditingMode.EditingPrefabPath is { } path ? System.IO.Path.GetFileNameWithoutExtension(path) : "Prefab",
         OwnerKind.Asset or OwnerKind.AssetFile => AssetDatabase.Get(AssetId) is Asset a ? a.Name : AssetId.ToString(),
         OwnerKind.Settings => SettingsType?.Name ?? "Settings",
         _ => "",
     };
 
-    public bool Equals(UndoOwner other) => Kind == other.Kind && AssetId == other.AssetId && SettingsType == other.SettingsType;
+    public bool Equals(UndoOwner other) => Kind == other.Kind && AssetId == other.AssetId && SettingsType == other.SettingsType && ReferenceEquals(Scene, other.Scene);
     public override bool Equals(object? obj) => obj is UndoOwner o && Equals(o);
-    public override int GetHashCode() => HashCode.Combine(Kind, AssetId, SettingsType);
+    public override int GetHashCode() => HashCode.Combine(Kind, AssetId, SettingsType, Scene);
 }
 
 /// <summary>An undo step for state no other recording call can express.</summary>
@@ -337,7 +350,7 @@ public static class Undo
             case GameObject go when go.IsValid():
                 if (DropCreatedInGroup(go)) { DestroyNow(go); return; }
                 NoteRecord();
-                _pending.Add(new ReadyEntry(DestroyRecord.Of(go)) { Group = _currentGroup, Name = $"Destroy {go.Name}" });
+                _pending.Add(new ReadyEntry(Owned(DestroyRecord.Of(go), go)) { Group = _currentGroup, Name = $"Destroy {go.Name}" });
                 DestroyNow(go);
                 break;
 
@@ -351,7 +364,7 @@ public static class Undo
                 if (!c.CanDestroy()) return;
                 if (DropAddedInGroup(c)) { DestroyComponentNow(c); return; }
                 NoteRecord();
-                _pending.Add(new ReadyEntry(DestroyComponentRecord.Of(c)) { Group = _currentGroup, Name = $"Remove {c.GetType().Name}" });
+                _pending.Add(new ReadyEntry(Owned(DestroyComponentRecord.Of(c), c)) { Group = _currentGroup, Name = $"Remove {c.GetType().Name}" });
                 DestroyComponentNow(c);
                 break;
         }
@@ -380,8 +393,10 @@ public static class Undo
         MainThreadContext.AssertMainThread();
         if (go.IsNotValid()) return;
         var record = new ParentRecord(go);
+        UndoOwner before = UndoOwner.Of(go);
         if (!go.SetParent(parent!, worldPositionStays)) return;
         record.CaptureAfter(go);
+        record.Scenes = [.. new[] { before, UndoOwner.Of(go) }.Distinct()];
         NoteRecord();
         _pending.Add(new ReadyEntry(record) { Group = _currentGroup, Name = name });
     }
@@ -829,7 +844,8 @@ public static class Undo
         if (Application.IsPlaying) return;
         switch (owner.Kind)
         {
-            case UndoOwner.OwnerKind.CurrentScene: EditorSceneManager.MarkDirty(); break;
+            case UndoOwner.OwnerKind.Scene: EditorSceneManager.MarkDirty(owner.Scene); break;
+            case UndoOwner.OwnerKind.Prefab when PrefabEditingMode.IsEditing: PrefabEditingMode.IsDirty = true; break;
             case UndoOwner.OwnerKind.Asset: EditorUtility.MarkAssetDirty(owner.AssetId); break;
             case UndoOwner.OwnerKind.Settings when owner.SettingsType != null: EditorRegistries.SaveSettings(owner.SettingsType); break;
         }
@@ -1010,6 +1026,23 @@ public static class Undo
         _pending.RemoveAll(e => e.Touches(id));
         if (dropsOpen) _currentGroup = ++_lastGroup;
         historyChanged?.Invoke();
+    }
+
+    private static T Owned<T>(T record, EngineObject target) where T : Record
+    {
+        record.Scenes = [UndoOwner.Of(target)];
+        return record;
+    }
+
+    /// <summary>Drops every whole step that touches a scene, never part of one. For a scene that unloads or leaves the hierarchy.</summary>
+    internal static void DropScene(OpenScene scene)
+    {
+        bool Owned(Record r) => r.Owners.Any(o => o.Kind == UndoOwner.OwnerKind.Scene && ReferenceEquals(o.Scene, scene));
+        bool dropsOpen = OpenGroupHasStep && _undo[^1].Records.Any(Owned);
+        int removed = _undo.RemoveAll(s => s.Records.Any(Owned)) + _redo.RemoveAll(s => s.Records.Any(Owned));
+        _pending.RemoveAll(e => e is PendingObject po && po.Owner.Kind == UndoOwner.OwnerKind.Scene && ReferenceEquals(po.Owner.Scene, scene));
+        if (dropsOpen) _currentGroup = ++_lastGroup;
+        if (removed > 0) historyChanged?.Invoke();
     }
 
     /// <summary>Drops every step with a record owned by the asset, and its dirty mark. For an asset changed outside the editor.</summary>
@@ -1305,6 +1338,7 @@ public static class Undo
     {
         public readonly object Target = target;
         public readonly TargetKey Key = key;
+        public readonly UndoOwner Owner = owner;
 
         /// <summary>Kept pending across flushes until its owner releases it, for a tool spanning frames.</summary>
         public bool Held;
@@ -1332,7 +1366,7 @@ public static class Undo
         public override Record? Finish(List<Entry> flushing)
         {
             if (Go.IsDisposed) return null;
-            return CreatedRecord.Capture(Go, StructuralIds(Group, flushing));
+            return Owned(CreatedRecord.Capture(Go, StructuralIds(Group, flushing)), Go);
         }
 
         public override bool Touches(Guid id) => Go.IsValid() && Go.Identifier == id;
@@ -1348,7 +1382,7 @@ public static class Undo
             foreach (Component c in Components)
                 if (c.IsValid() && go.IsValid())
                     added.Add((c.Identifier, go._components.IndexOf(c), WriteComponent(c)));
-            return added.Count == 0 ? null : new AddComponentRecord(go.Identifier, added);
+            return added.Count == 0 ? null : Owned(new AddComponentRecord(go.Identifier, added), go);
         }
 
         public override bool Touches(Guid id) => Components.Any(c => c.Identifier == id);
@@ -1357,13 +1391,14 @@ public static class Undo
     private sealed class PendingChildrenOrder(GameObject? parent, SceneInstance? scene) : Entry
     {
         private readonly Guid _parent = parent.IsValid() ? parent.Identifier : Guid.Empty;
+        private readonly UndoOwner _owner = parent.IsValid() ? UndoOwner.Of(parent) : UndoOwner.OfScene(EditorSceneManager.SceneOf(scene.IsValid() ? scene.ActiveSection : null));
         private readonly List<Guid> _before = ChildrenOrderRecord.Order(parent, scene);
 
         public override Record? Finish(List<Entry> flushing)
         {
             GameObject? live = _parent == Guid.Empty ? null : FindGO(_parent);
             List<Guid> after = ChildrenOrderRecord.Order(live, EditorSceneManager.EditedWorld);
-            return after.SequenceEqual(_before) ? null : new ChildrenOrderRecord(_parent, _before, after);
+            return after.SequenceEqual(_before) ? null : new ChildrenOrderRecord(_parent, _before, after) { Scenes = [_owner] };
         }
 
         public override bool Touches(Guid id) => id == _parent || _before.Contains(id);
@@ -1372,13 +1407,14 @@ public static class Undo
     private sealed class PendingHierarchy(GameObject root) : Entry
     {
         private readonly HierarchyState _before = HierarchyState.Capture(root);
+        private readonly UndoOwner _owner = UndoOwner.Of(root);
 
         public override Record? Finish(List<Entry> flushing)
         {
             GameObject? live = FindGO(_before.RootId);
             HierarchyState? after = live.IsValid() ? HierarchyState.Capture(live) : null;
             if (after != null && after.Data.Data.Equals(_before.Data.Data) && after.Placement == _before.Placement) return null;
-            return new HierarchyRecord(_before, after);
+            return new HierarchyRecord(_before, after) { Scenes = [_owner] };
         }
 
         public override bool Touches(Guid id) => _before.Ids.Contains(id);
@@ -1424,7 +1460,10 @@ public static class Undo
         public int Group;
         public string Name = "";
 
-        public virtual IEnumerable<UndoOwner> Owners => [];
+        public virtual IEnumerable<UndoOwner> Owners => Scenes;
+
+        /// <summary>The scenes a structural record changes, set where it is made.</summary>
+        public UndoOwner[] Scenes = [];
 
         /// <summary>Hands the objects this record brings back to the restore to build before anything applies.</summary>
         public virtual void CollectRecreations(Restore restore) { }
@@ -1635,8 +1674,6 @@ public static class Undo
             return new CreatedRecord(go.Identifier, data, Placement.Of(go), ids);
         }
 
-        public override IEnumerable<UndoOwner> Owners => [UndoOwner.OfCurrentScene];
-
         public override void CollectRecreations(Restore restore)
         {
             if (!restore.IsUndo) restore.Prebuild(_data.Data, typeof(GameObject));
@@ -1667,8 +1704,6 @@ public static class Undo
         }
 
         public static DestroyRecord Of(GameObject go) => new(go.Identifier, WriteTree(go, [], out HashSet<Guid> ids), Placement.Of(go), ids);
-
-        public override IEnumerable<UndoOwner> Owners => [UndoOwner.OfCurrentScene];
 
         public override void CollectRecreations(Restore restore)
         {
@@ -1701,8 +1736,6 @@ public static class Undo
 
         public static DestroyComponentRecord Of(Component c) => new(c.GameObject.Identifier, c.Identifier, c.GameObject._components.IndexOf(c), WriteComponent(c));
 
-        public override IEnumerable<UndoOwner> Owners => [UndoOwner.OfCurrentScene];
-
         public override void CollectRecreations(Restore restore)
         {
             if (restore.IsUndo) restore.Prebuild(_data.Data, typeof(Component));
@@ -1719,8 +1752,6 @@ public static class Undo
 
     private sealed class AddComponentRecord(Guid go, List<(Guid Id, int Index, MemoryCopy Data)> added) : Record
     {
-        public override IEnumerable<UndoOwner> Owners => [UndoOwner.OfCurrentScene];
-
         public override void CollectRecreations(Restore restore)
         {
             if (!restore.IsUndo)
@@ -1759,8 +1790,6 @@ public static class Undo
             _afterLocal = (go.Transform.LocalPosition, go.Transform.LocalRotation, go.Transform.LocalScale);
         }
 
-        public override IEnumerable<UndoOwner> Owners => [UndoOwner.OfCurrentScene];
-
         public override void Apply(Restore restore)
         {
             if (restore.Find(Id) is not GameObject go)
@@ -1786,8 +1815,6 @@ public static class Undo
             if (parent.IsValid()) return [.. parent.Children.Select(c => c.Identifier)];
             return scene.IsValid() ? [.. scene.Roots.Select(r => r.Identifier)] : [];
         }
-
-        public override IEnumerable<UndoOwner> Owners => [UndoOwner.OfCurrentScene];
 
         public override void Apply(Restore restore)
         {
@@ -1824,8 +1851,6 @@ public static class Undo
     // since are gone, ones removed since are back, and the prefab data matches.
     private sealed class HierarchyRecord(HierarchyState before, HierarchyState? after) : Record
     {
-        public override IEnumerable<UndoOwner> Owners => [UndoOwner.OfCurrentScene];
-
         public override void Apply(Restore restore)
         {
             HierarchyState? target = restore.IsUndo ? before : after;

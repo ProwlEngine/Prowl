@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 using Prowl.Aperture;
@@ -57,6 +58,12 @@ public sealed class LightmapBakeService
     public bool Start(SceneInstance scene, LightmapBakeSettings settings)
     {
         if (IsBaking) return false;
+        // A bake writes one scene's placements, so with several loaded it would put every scene's into one.
+        if (scene.Sections.Count(s => !s.IsPersistent) > 1)
+        {
+            Runtime.Debug.LogWarning("[Lightmap] Baking with more than one scene loaded is not supported yet. Unload the others first.");
+            return false;
+        }
         _scene = scene;
         _settings = settings;
         _renderers.Clear();
@@ -214,7 +221,7 @@ public sealed class LightmapBakeService
     {
         if (IsBaking) return;
 
-        string scenePath = EditorSceneManager.CurrentScenePath ?? "";
+        string scenePath = EditorSceneManager.ActiveScene.Path ?? "";
         if (!string.IsNullOrEmpty(scenePath) && Project.Current != null)
         {
             string assetsRoot = Project.Current.AssetsPath;
@@ -247,7 +254,7 @@ public sealed class LightmapBakeService
         baker.Job?.Wait();     // ensure the worker stopped writing before we read the atlas buffers
 
         EditorAssetBackend? db = EditorAssetBackend.Instance;
-        string scenePath = EditorSceneManager.CurrentScenePath ?? "";
+        string scenePath = EditorSceneManager.ActiveScene.Path ?? "";
         if (db == null || string.IsNullOrEmpty(scenePath))
         {
             Runtime.Debug.LogError("[Lightmap] Can't save baked data: no saved scene.");
@@ -577,7 +584,8 @@ public sealed class LightmapBakeService
     // The old pages are deleted from disk, so a scene with a file is saved at once or it would point at them.
     private static void SaveBakeResult()
     {
-        EditorSceneManager.MarkDirty();
-        if (EditorSceneManager.CurrentScenePath != null) EditorSceneManager.Save();
+        OpenScene scene = EditorSceneManager.ActiveScene;
+        EditorSceneManager.MarkDirty(scene);
+        if (scene.Path != null) EditorSceneManager.Save(scene);
     }
 }

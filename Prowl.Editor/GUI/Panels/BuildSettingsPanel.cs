@@ -259,30 +259,23 @@ public class BuildSettingsPanel : DockPanel
         scenes.Insert(to, v);
     }
 
+    // Adds every listed scene not in the build yet, in order, as Add Open Scenes does.
     private void AddOpenScene()
     {
-        EditorAssetBackend? db = EditorAssetBackend.Instance;
-        if (EditorSceneManager.CurrentScenePath == null && !Application.IsPlaying)
-        {
-            EditorApplication.PromptSaveAs(AddOpenScene);
-            return;
-        }
-
-        AssetEntry? entry = EditorSceneManager.CurrentScenePath != null ? db?.GetEntry(EditorSceneManager.CurrentScenePath) : null;
-        if (entry == null)
+        if (!EditorSceneManager.OpenScenes.Any(o => o.Scene.IsValid()))
         {
             Toasts.Warning(Loc.Get("build.toast_not_saved"), Loc.Get("build.toast_not_saved_msg"));
             return;
         }
 
-        if (_buildSettings.Scenes.Any(s => s.SceneGuid == entry.Guid))
+        if (EditorSceneManager.OpenScenes.All(o => o.Scene.IsNotValid() || _buildSettings.Scenes.Any(s => s.SceneGuid == o.Scene.AssetID)))
         {
             Toasts.Warning(Loc.Get("build.toast_already"), Loc.Get("build.toast_already_msg"));
             return;
         }
 
         Record("Add Build Scene");
-        _buildSettings.Scenes.Add(new SceneBuildEntry { Path = entry.Path, SceneGuid = entry.Guid });
+        BuildSettings.AddOpenScenes(_buildSettings.Scenes);
         EditorRegistries.SaveSettings();
     }
 

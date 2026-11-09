@@ -92,9 +92,6 @@ public sealed class SceneToolContext
             _state.Remove(key);
     }
 
-    /// <summary>Mark the scene dirty so the change is saved.</summary>
-    public void MarkDirty() => EditorSceneManager.MarkDirty();
-
     /// <summary>
     /// Scope a multi-frame interactive edit into one undo step. Dispose commits; call
     /// <see cref="ToolUndoScope.Cancel"/> to revert everything done inside it.

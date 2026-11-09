@@ -106,8 +106,8 @@ public static class CliEditorCommands
     {
         project = Project.Current?.Name,
         projectPath = Project.Current?.RootPath,
-        scene = EditorSceneManager.CurrentScenePath,
-        dirty = EditorSceneManager.IsDirty,
+        scenes = EditorSceneManager.OpenScenes.Select(o => o.Name).ToList(),
+        dirty = EditorSceneManager.HasDirtyScenes || (PrefabEditingMode.IsEditing && PrefabEditingMode.IsDirty),
         isPlaying = Application.IsPlaying,
         isPaused = EditorApplication.IsPlayPaused,
         compiling = ScriptAssemblyManager.IsCompiling,
@@ -228,27 +228,28 @@ public static class CliEditorCommands
         {
             case SceneAction.Open:
                 RequirePath(path);
-                RequireClean(force);
-                if (!EditorSceneManager.OpenScene(CliRefs.AssetPath(path))) throw new CliException($"Could not open '{path}'. See the logs.");
+                Guarded(() => EditorSceneManager.Open(SceneAt(path), force));
                 break;
             case SceneAction.New:
-                RequireClean(force);
-                EditorSceneManager.NewScene();
+                Guarded(() => EditorSceneManager.New(force: force));
                 break;
             case SceneAction.Save:
-                if (EditorSceneManager.CurrentScenePath == null) throw new CliException("The scene has never been saved. Use --action saveas --path Scenes/Name.scene.");
-                if (!EditorSceneManager.Save()) throw new CliException("Saving failed. See the logs.");
+                if (EditorSceneManager.ActiveScene.Path == null) throw new CliException("The scene has never been saved. Use --action saveas --path Scenes/Name.scene.");
+                if (!EditorSceneManager.Save(EditorSceneManager.ActiveScene)) throw new CliException("Saving failed. See the logs.");
                 break;
             case SceneAction.SaveAs:
                 RequirePath(path);
-                if (!EditorSceneManager.SaveAs(CliRefs.AssetPath(path))) throw new CliException("Saving failed. See the logs.");
+                if (!EditorSceneManager.SaveAs(EditorSceneManager.ActiveScene, CliRefs.AssetPath(path))) throw new CliException("Saving failed. See the logs.");
                 break;
         }
 
+        // Commands run between frames, where the safe point applies what was asked for at once.
+        SceneInstance.ProcessPendingLoad();
+
         return new
         {
-            path = EditorSceneManager.CurrentScenePath,
-            dirty = EditorSceneManager.IsDirty,
+            path = EditorSceneManager.ActiveScene.Path,
+            dirty = EditorSceneManager.ActiveScene.IsDirty,
             objects = EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.Objects.Count() : 0,
             roots = EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.Roots.Select(g => g.Name).ToList() : [],
         };
@@ -258,9 +259,16 @@ public static class CliEditorCommands
             if (path.Length == 0) throw new CliException("Give --path, relative to the Assets folder.");
         }
 
-        static void RequireClean(bool force)
+        static Scene SceneAt(string path)
         {
-            if (EditorSceneManager.IsDirty && !force) throw new CliException("The scene has unsaved changes. Save it first, or pass --force to discard them.");
+            Scene? scene = EditorSceneManager.SceneAt(CliRefs.AssetPath(path));
+            return scene.IsValid() ? scene : throw new CliException($"No scene at '{path}'.");
+        }
+
+        static void Guarded(Action action)
+        {
+            try { action(); }
+            catch (InvalidOperationException e) { throw new CliException(e.Message); }
         }
     }
 

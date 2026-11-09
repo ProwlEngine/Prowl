@@ -143,7 +143,7 @@ public class EnvironmentPanel : DockPanel
             {
                 Undo.InspectorBaseline(material);
                 foreach (MaterialProperty prop in shader.Properties)
-                    MaterialPropertyDrawer.DrawPropertyRow(paper, $"{id}_p_{prop.Name.Text()}", material, prop, () => Undo.InspectorChanged(material, UndoOwner.OfCurrentScene));
+                    MaterialPropertyDrawer.DrawPropertyRow(paper, $"{id}_p_{prop.Name.Text()}", material, prop, () => Undo.InspectorChanged(material, ActiveSceneOwner));
                 if (shader.Name == "Graphite/Sky/Procedural")
                     Hint(paper, $"{id}_sun", font, Loc.Get("env.sun_auto"));
             }
@@ -293,8 +293,15 @@ public class EnvironmentPanel : DockPanel
         }
     }
 
+    // Settings are the active section's, recorded against that section so an undo after the active scene changed still
+    // reaches and marks the right one.
+    private static UndoOwner ActiveSceneOwner => UndoOwner.OfScene(EditorSceneManager.SceneOf(EditorSceneManager.EditedWorld.ActiveSection));
+
     private static void RecordEnvironment(string name)
-        => Undo.RecordObject(() => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.Environment : null, UndoOwner.OfCurrentScene, name);
+    {
+        SceneSection section = EditorSceneManager.EditedWorld.ActiveSection;
+        Undo.RecordObject(() => section.IsLoaded ? section.Environment : null, ActiveSceneOwner, name);
+    }
 
     private static void Hint(Paper paper, string id, Scribe.FontFile font, string text)
         => paper.Box(id).Height(20).Margin(Origami.Current.Metrics.PaddingLarge, 0, 0, 0)
@@ -309,7 +316,8 @@ public class EnvironmentPanel : DockPanel
         // switching to a different scene while it's in flight must not show this scene as baking too.
         bool baking = _bake.IsBaking && _bake.TargetScene == scene;
         LightmapBakeSettings s = scene.LightmapBake;
-        void Record() => Undo.RecordObject(() => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.LightmapBake : null, UndoOwner.OfCurrentScene, "Lightmap Settings");
+        SceneSection section = scene.ActiveSection;
+        void Record() => Undo.RecordObject(() => section.IsLoaded ? section.LightmapBake : null, ActiveSceneOwner, "Lightmap Settings");
 
         EditorGUI.SectionHeader(paper, $"{id}_h_res", Loc.Get("game.resolution"), first: true);
 

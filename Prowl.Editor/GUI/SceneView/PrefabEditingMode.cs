@@ -27,12 +27,14 @@ public static class PrefabEditingMode
 
     /// <summary>Whether the prefab being edited has unsaved changes. Its own flag, so the scene's is left as it was.</summary>
     public static bool IsDirty { get; internal set; }
+
+    /// <summary>The save toast label for the prefab being edited.</summary>
+    public static string SaveLabel => Loc.Get("save.prefab", new { name = Path.GetFileNameWithoutExtension(EditingPrefabPath) });
     public static Guid EditingPrefabGuid { get; private set; }
     public static string? EditingPrefabPath { get; private set; }
     public static string? OriginalSceneName { get; private set; }
 
     private static SceneInstance? _world;
-    private static string? _savedScenePath;
     // The edit world's undo history, parked for the session. The session's own steps address objects that
     // stop existing when it ends, so the two histories cannot be one.
     private static object? _savedSceneUndo;
@@ -64,7 +66,7 @@ public static class PrefabEditingMode
 
         if (IsEditing)
         {
-            if (EditorSceneManager.IsDirty)
+            if (IsDirty)
             {
                 string name = EditingPrefabPath != null ? Path.GetFileNameWithoutExtension(EditingPrefabPath) : "prefab";
                 Origami.Confirm(
@@ -114,7 +116,6 @@ public static class PrefabEditingMode
         SceneInstance edit = EditorSceneManager.EditWorld;
         PrefabUtility.ReconcileOpenScene();
         OriginalSceneName = edit.Name;
-        _savedScenePath = EditorSceneManager.CurrentScenePath;
 
         SceneInstance editScene = SceneInstance.Create($"Editing: {prefab.Name}", SceneMode.Edit);
         _editScenes.AddOrUpdate(editScene, new object());
@@ -157,7 +158,6 @@ public static class PrefabEditingMode
 
         EditingPrefabGuid = prefabGuid;
         IsEditing = true;
-        EditorSceneManager.CurrentScenePath = null;
         IsDirty = false;
 
         Debug.Log($"[Prefab] Entered editing mode: {prefab.Name}");
@@ -246,7 +246,7 @@ public static class PrefabEditingMode
             PrefabUtility.RaisePrefabSaved(EditingPrefabGuid);
             EditorAssetBackend.Instance?.Reimport(EditingPrefabGuid);
 
-            EditorSceneManager.IsDirty = false;
+            IsDirty = false;
             Debug.Log($"[Prefab] Saved prefab: {EditingPrefabPath}");
             // Label reported via SaveManager.OnSave handler
             return true;
@@ -285,7 +285,7 @@ public static class PrefabEditingMode
     {
         if (!IsEditing) return;
 
-        if (EditorSceneManager.IsDirty)
+        if (IsDirty)
         {
             string name = EditingPrefabPath != null ? Path.GetFileNameWithoutExtension(EditingPrefabPath) : "prefab";
             Origami.Confirm(
@@ -320,7 +320,6 @@ public static class PrefabEditingMode
         _world = null;
         if (world.IsValid()) world.Dispose();
         EditorSceneManager.EditWorld.Activate();
-        EditorSceneManager.CurrentScenePath = _savedScenePath;
     }
 
     private static void Cleanup()
@@ -329,7 +328,6 @@ public static class PrefabEditingMode
         EditingPrefabGuid = Guid.Empty;
         EditingPrefabPath = null;
         OriginalSceneName = null;
-        _savedScenePath = null;
         _editingRoot = null;
 
         // The edit world never changed underneath, so its own history still resolves.

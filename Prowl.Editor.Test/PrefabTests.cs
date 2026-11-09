@@ -4749,8 +4749,7 @@ public partial class PrefabTests : EditorTestHarness
         PrefabEditingMode.Enter(guid);
         SceneInstance.ProcessPendingLoad();
 
-        Assert.False(EditorSceneManager.OpenScene("Anything.scene"));
-        EditorSceneManager.NewScene();
+        Assert.Throws<InvalidOperationException>(() => EditorSceneManager.New());
         SceneInstance.ProcessPendingLoad();
 
         // Still the prefab session's own scene, not a replacement.

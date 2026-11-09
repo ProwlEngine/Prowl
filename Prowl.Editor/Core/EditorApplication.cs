@@ -296,27 +296,39 @@ public class EditorApplication : Game
 
         // Register save handlers
         EditorUtility.RegisterSaveHooks();
-        // The scene or prefab is written on every save, but only named in the toast when it had changes.
+        // The prefab being edited is written on every save, but only named in the toast when it had changes. Scenes are
+        // written when dirty, and an untitled one asks for a path, never during an auto save.
         SaveManager.OnSave += () =>
         {
             if (Application.IsPlaying) return null;
-            bool changed = EditorSceneManager.IsDirty;
-            string label = EditorSceneManager.SaveLabel;
-
             if (PrefabEditingMode.IsEditing)
-                return PrefabEditingMode.Save() && changed ? label : null;
-            if (EditorSceneManager.CurrentScenePath != null)
-                return EditorSceneManager.Save() && changed ? label : null;
+            {
+                bool changed = PrefabEditingMode.IsDirty;
+                return PrefabEditingMode.Save() && changed ? PrefabEditingMode.SaveLabel : null;
+            }
 
-            // An untitled scene only asks for a path when it has something worth keeping, and never during an auto-save.
-            if (changed && !SaveManager.IsAutoSave)
-                PromptSaveAs(SaveManager.TakeAfterSaveAs());
-            return null;
+            List<string> saved = [];
+            foreach (OpenScene scene in EditorSceneManager.OpenScenes.ToArray())
+            {
+                if (!scene.IsDirty || !scene.IsLoaded) continue;
+                if (scene.Path != null)
+                {
+                    if (EditorSceneManager.Save(scene)) saved.Add(EditorSceneManager.LabelOf(scene));
+                }
+                else if (!SaveManager.IsAutoSave)
+                {
+                    PromptSaveAs(scene, SaveManager.TakeAfterSaveAs());
+                    break;
+                }
+            }
+            return saved.Count == 0 ? null : string.Join(", ", saved);
         };
         Runtime.Debug.OnLog += PauseOnLog;
         SaveManager.CollectUnsaved += unsaved =>
         {
-            if (EditorSceneManager.IsDirty) unsaved.Add(EditorSceneManager.SaveLabel);
+            if (PrefabEditingMode.IsEditing && PrefabEditingMode.IsDirty) unsaved.Add(PrefabEditingMode.SaveLabel);
+            foreach (OpenScene scene in EditorSceneManager.OpenScenes)
+                if (scene.IsDirty) unsaved.Add(EditorSceneManager.LabelOf(scene));
         };
         Window.CloseRequested = () =>
         {
@@ -567,7 +579,7 @@ public class EditorApplication : Game
             }
             else if (ShortcutManager.IsPressed("Global/NewScene"))
             {
-                EditorSceneManager.ConfirmSceneChange(EditorSceneManager.NewScene);
+                EditorSceneManager.NewWithPrompt();
             }
             else if (ShortcutManager.IsPressed("Global/Undo") && !Undo.IgnoresUndoInput)
             {
@@ -1142,10 +1154,9 @@ public class EditorApplication : Game
             Divider("sb_div1");
 
             // ---------- Column 2: current scene ----------
-            string? scenePath = EditorSceneManager.CurrentScenePath;
-            string sceneName = !string.IsNullOrEmpty(scenePath)
-                ? System.IO.Path.GetFileNameWithoutExtension(scenePath)
-                : (EditorSceneManager.EditedWorld.IsValid() ? Loc.Get("editor.untitled_scene") : Loc.Get("hierarchy.no_scene_loaded"));
+            string sceneName = EditorSceneManager.OpenScenes.Count == 0
+                ? Loc.Get("hierarchy.no_scene_loaded")
+                : string.Join(", ", EditorSceneManager.OpenScenes.Where(o => o.IsLoaded).Select(o => o.IsDirty ? o.Name + "*" : o.Name));
             using (paper.Row("sb_scene").Width(UnitValue.Auto).Height(sh).Padding(pad, pad, 0, 0).Enter())
                 GlyphCell("sb_scene_cell", EditorIcons.Shapes, EditorTheme.Ink300, sceneName, EditorTheme.Ink400);
 
@@ -1596,10 +1607,14 @@ public class EditorApplication : Game
     /// </summary>
     public bool IsPanelOpen<TPanel>() where TPanel : DockPanel => FindOpenPanel<TPanel>() != null;
 
-    /// <summary>Prompt for a scene file path and save the current scene there. <paramref name="onSaved"/> runs only if the save succeeds.</summary>
-    public static void PromptSaveAs(Action? onSaved = null)
+    /// <summary>
+    /// Prompt for a scene file path and save <paramref name="scene"/>, the active scene by default, there.
+    /// <paramref name="onSaved"/> runs only if the save succeeds.
+    /// </summary>
+    public static void PromptSaveAs(OpenScene? scene = null, Action? onSaved = null)
     {
-        if (Project.Current == null) return;
+        if (Project.Current == null || EditorSceneManager.OpenScenes.Count == 0) return;
+        scene ??= EditorSceneManager.ActiveScene;
         OpenFileDialog(FileDialogMode.Save, path =>
         {
             if (path == null || Project.Current == null) return;
@@ -1607,10 +1622,9 @@ public class EditorApplication : Game
                 System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
             if (!rel.EndsWith(".scene")) rel += ".scene";
 
-            if (EditorSceneManager.SaveAs(rel))
+            if (EditorSceneManager.SaveAs(scene, rel))
             {
-                Toasts.Success(Loc.Get("save.saved"),
-                    Loc.Get("save.scene", new { name = EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.Name : "Untitled" }));
+                Toasts.Success(Loc.Get("save.saved"), EditorSceneManager.LabelOf(scene));
                 onSaved?.Invoke();
             }
         }, Project.Current.AssetsPath,
@@ -1627,7 +1641,7 @@ public class EditorApplication : Game
         string edit = Loc.Get("menu.edit");
 
         // File menu
-        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.new_scene")}", () => EditorSceneManager.ConfirmSceneChange(EditorSceneManager.NewScene));
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.new_scene")}", EditorSceneManager.NewWithPrompt);
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.open_scene")}", () =>
         {
             EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
@@ -1635,14 +1649,14 @@ public class EditorApplication : Game
                 if (path == null || Project.Current == null) return;
                 string rel = EditorAssetBackend.NormalizePath(
                     System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
-                EditorSceneManager.ConfirmSceneChange(() => EditorSceneManager.OpenScene(rel));
+                EditorSceneManager.OpenWithPrompt(rel);
             }, Project.Current?.AssetsPath,
                ["*.scene"], [Loc.Get("editor.filter_scene")]);
         });
         MenuRegistry.RegisterSeparator(file);
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene")}", () =>
         {
-            if (!EditorSceneManager.Save())
+            if (EditorSceneManager.OpenScenes.Count > 0 && !EditorSceneManager.Save(EditorSceneManager.ActiveScene))
                 PromptSaveAs();
         });
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene_as")}", () => PromptSaveAs());
@@ -1955,8 +1969,8 @@ public class EditorApplication : Game
         }
 
         PlayModePreferences prefs = Preferences.Get<PlayModePreferences>();
-        if (prefs.SaveSceneOnPlay && EditorSceneManager.IsDirty && EditorSceneManager.CurrentScenePath != null)
-            EditorSceneManager.Save();
+        if (prefs.SaveSceneOnPlay && EditorSceneManager.HasDirtyScenes)
+            EditorSceneManager.SaveAll();
         if (prefs.ClearConsoleOnPlay) ConsolePanel.Clear();
 
         // Save active tab (to restore on stop)

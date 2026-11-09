@@ -472,6 +472,22 @@ public class SceneInstance : EngineObject, ISerializable
     private static void RaiseLoaded(SceneSection section, bool additive)
         => Raise(Loaded, section.Instance, handler => handler(new SceneLoadedArgs(section, additive)), nameof(Loaded));
 
+    /// <summary>Unloads <paramref name="section"/> at once, the way a queued unload applies at the safe point.</summary>
+    internal void UnloadNow(SceneSection section)
+    {
+        EnsureNotDisposed();
+        MainThreadContext.AssertOwner(this);
+        if (section.IsPersistent || !ReferenceEquals(section.Instance, this) || !section.IsLoaded) return;
+        ApplyUnload(section);
+    }
+
+    /// <summary>Moves a loaded section to <paramref name="index"/> among the sections, after <see cref="Persistent"/>.</summary>
+    internal void MoveSection(SceneSection section, int index)
+    {
+        if (section.IsPersistent || !_sections.Remove(section)) return;
+        _sections.Insert(Math.Clamp(index, 1, _sections.Count), section);
+    }
+
     private void ApplyUnload(SceneSection section)
     {
         bool wasActive = ReferenceEquals(_activeSection, section);
@@ -547,7 +563,15 @@ public class SceneInstance : EngineObject, ISerializable
     /// Applies queued loads and unloads. Driven once per frame by the game loop, right after the destroy queue, where
     /// nothing is mid callback.
     /// </summary>
-    internal static void ProcessPendingLoad() => ApplyQueue();
+    internal static void ProcessPendingLoad()
+    {
+        ApplyQueue();
+        try { SafePoint?.Invoke(); }
+        catch (Exception e) { Debug.LogException("[Scene] A safe point handler threw", e); }
+    }
+
+    /// <summary>Runs at the frame's safe point after queued loads apply, for a host with its own queued scene work, like the editor.</summary>
+    internal static event Action? SafePoint;
 
     /// <summary>
     /// Disposes the current scene, so everything in it runs its teardown callbacks. Driven by the

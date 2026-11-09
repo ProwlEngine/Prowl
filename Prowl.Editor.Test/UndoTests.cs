@@ -527,7 +527,7 @@ public class UndoTests : EditorTestHarness
         var scene = new SceneInstance(SceneMode.Edit);
         BindEditWorld(scene);
         Undo.ClearAll();
-        EditorSceneManager.IsDirty = false;
+        EditorSceneManager.ActiveScene.Dirty = false;
         return scene;
     }
 
@@ -993,11 +993,11 @@ public class UndoTests : EditorTestHarness
         Undo.RecordObject(comp, "Edit");
         comp.Value = 3;
         Undo.FlushUndoRecordObjects();
-        Assert.True(EditorSceneManager.IsDirty);
+        Assert.True(EditorSceneManager.ActiveScene.IsDirty);
 
-        EditorSceneManager.IsDirty = false;
+        EditorSceneManager.ActiveScene.Dirty = false;
         Undo.PerformUndo();
-        Assert.True(EditorSceneManager.IsDirty);
+        Assert.True(EditorSceneManager.ActiveScene.IsDirty);
     }
 
     [Fact]
@@ -1011,7 +1011,7 @@ public class UndoTests : EditorTestHarness
         go.Name = "X";
         Undo.FlushUndoRecordObjects();
 
-        Assert.False(EditorSceneManager.IsDirty);
+        Assert.False(EditorSceneManager.ActiveScene.IsDirty);
         Assert.True(Undo.CanUndo);
     }
 
@@ -1128,7 +1128,7 @@ public class UndoTests : EditorTestHarness
         Frame();
 
         Assert.False(Undo.CanUndo);
-        Assert.False(EditorSceneManager.IsDirty);
+        Assert.False(EditorSceneManager.ActiveScene.IsDirty);
     }
 
     [Fact]
@@ -1146,7 +1146,7 @@ public class UndoTests : EditorTestHarness
         });
         Frame();
 
-        Assert.True(EditorSceneManager.IsDirty);
+        Assert.True(EditorSceneManager.ActiveScene.IsDirty);
         Undo.PerformUndo();
         Assert.Equal(0, comp.Value);
         Assert.Equal("game wrote this", comp.Label);
@@ -1269,7 +1269,7 @@ public class UndoTests : EditorTestHarness
         material.SetFloat("_Value", 2);
         Undo.FlushUndoRecordObjects();
         Assert.True(EditorUtility.IsDirty(material));
-        Assert.False(EditorSceneManager.IsDirty);
+        Assert.False(EditorSceneManager.ActiveScene.IsDirty);
 
         Undo.PerformUndo();
         Assert.Equal(1, material.GetFloat("_Value"));
@@ -1346,12 +1346,12 @@ public class UndoTests : EditorTestHarness
         var profile = new Runtime.Rendering.VolumeProfile { Name = "Embedded" };
         volume.SharedProfile = profile;
         Type type = Inspector.VolumeProfileGUI.ComponentTypes[0];
-        EditorSceneManager.IsDirty = false;
+        EditorSceneManager.ActiveScene.Dirty = false;
 
         Undo.RecordObject(profile, UndoOwner.Of(volume), "Add Override");
         profile.Add(type);
         Undo.FlushUndoRecordObjects();
-        Assert.True(EditorSceneManager.IsDirty);
+        Assert.True(EditorSceneManager.ActiveScene.IsDirty);
 
         Undo.PerformUndo();
         Assert.False(profile.Has(type));
@@ -1406,7 +1406,7 @@ public class UndoTests : EditorTestHarness
         });
         Frame();
 
-        Assert.True(EditorSceneManager.IsDirty);
+        Assert.True(EditorSceneManager.ActiveScene.IsDirty);
         Undo.PerformUndo();
         Assert.True(ReferenceEquals(holder.Nested.Target, null));
     }
@@ -1602,7 +1602,7 @@ public class UndoTests : EditorTestHarness
         Undo.FlushUndoRecordObjects();
 
         Assert.False(Undo.CanUndo);
-        Assert.False(EditorSceneManager.IsDirty);
+        Assert.False(EditorSceneManager.ActiveScene.IsDirty);
     }
 
     [Fact]

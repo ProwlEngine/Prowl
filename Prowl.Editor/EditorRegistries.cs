@@ -99,7 +99,7 @@ public static class EditorRegistries
 
     private static readonly Dictionary<string, AssetDoubleClickHandler> _doubleClickHandlers = new(StringComparer.OrdinalIgnoreCase);
 
-    private static readonly List<Action> _sceneSavedCallbacks = [];
+    private static readonly List<Action<OpenScene>> _sceneSavedCallbacks = [];
     private static readonly List<Action> _undoRedoCallbacks = [];
 
     private static readonly List<MethodInfo> _initOnLoadMethods = [];
@@ -148,7 +148,7 @@ public static class EditorRegistries
         _defaultFileIcon = EditorIcons.File;
         _doubleClickHandlers.Clear();
 
-        foreach (Action del in _sceneSavedCallbacks) EditorSceneManager.OnSceneSaved -= del;
+        foreach (Action<OpenScene> del in _sceneSavedCallbacks) EditorSceneManager.SceneSaved -= del;
         _sceneSavedCallbacks.Clear();
         foreach (Action del in _undoRedoCallbacks) Undo.undoRedoPerformed -= del;
         _undoRedoCallbacks.Clear();
@@ -221,7 +221,7 @@ public static class EditorRegistries
         _dropHandlers.Sort((a, b) => a.Order.CompareTo(b.Order));
         _settingsEntries.Sort((a, b) => a.Order.CompareTo(b.Order));
 
-        foreach (Action del in _sceneSavedCallbacks) EditorSceneManager.OnSceneSaved += del;
+        foreach (Action<OpenScene> del in _sceneSavedCallbacks) EditorSceneManager.SceneSaved += del;
         foreach (Action del in _undoRedoCallbacks) Undo.undoRedoPerformed += del;
 
         foreach (MethodInfo m in _initOnLoadMethods)
@@ -480,7 +480,7 @@ public static class EditorRegistries
         if (method.GetCustomAttribute<OnSceneSavedAttribute>() != null)
         {
             var del = (Action)Delegate.CreateDelegate(typeof(Action), method);
-            _sceneSavedCallbacks.Add(del);
+            _sceneSavedCallbacks.Add(_ => del());
         }
         if (method.GetCustomAttribute<OnUndoRedoAttribute>() != null)
         {

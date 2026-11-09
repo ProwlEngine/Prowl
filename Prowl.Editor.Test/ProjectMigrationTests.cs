@@ -8,6 +8,7 @@ using Prowl.Echo;
 using Prowl.Editor.Migration;
 using Prowl.Editor.Migration.Releases;
 using Prowl.Editor.Projects;
+using Prowl.Editor.Projects.Settings;
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
 using Prowl.Runtime.ParticleSystem.Modules;
@@ -725,7 +726,7 @@ public class ProjectMigrationTests : IDisposable
         holder["Placements"] = EchoObject.NewCompound();
         holder["Placements"]["$type"] = new EchoObject("System.Collections.Generic.Dictionary`2[[System.Guid, System.Private.CoreLib],[Prowl.Runtime.Resources.Scene+LightmapPlacement, Prowl.Runtime]], System.Private.CoreLib");
         string prefab = WriteAsset("Holder.prefab", holder.WriteToString(), "PrefabImporter");
-        WriteProwlFile("1.0", appliedSteps: ProjectMigration.StepCount(Project.CurrentVersion) - 1);
+        WriteProwlFile("1.0", appliedSteps: Array.FindIndex(new Release_1_0().Steps, s => s.Name.StartsWith("Scenes stored as SceneContent")));
 
         ProjectMigration.Migrate(Project.Open(_root));
 
@@ -964,5 +965,31 @@ public class ProjectMigrationTests : IDisposable
         meta.Settings ??= EchoObject.NewCompound();
         edit(meta.Settings);
         MetaFile.Write(asset + ".meta", meta);
+    }
+
+    // The one remembered scene becomes a remembered setup holding it, which reads back into the settings.
+    [Fact]
+    public void LastScenePath_BecomesARememberedSetup()
+    {
+        string settingsFolder = Path.Combine(_root, "ProjectSettings");
+        Directory.CreateDirectory(settingsFolder);
+        var settings = EchoObject.NewCompound();
+        settings["$type"] = new EchoObject("Prowl.Editor.Projects.Settings.GeneralSettings, Prowl.Editor, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+        settings["ProductName"] = new EchoObject("Kept");
+        settings["LastScenePath"] = new EchoObject("Scenes/Level.scene");
+        string path = Path.Combine(settingsFolder, "General.yaml");
+        File.WriteAllText(path, settings.WriteToYaml());
+        WriteProwlFile("1.0", appliedSteps: Array.FindIndex(new Release_1_0().Steps, s => s.Name.StartsWith("The last opened scene")));
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject migrated = EchoObject.ReadFromYaml(File.ReadAllText(path));
+        Assert.False(migrated.TryGet("LastScenePath", out _));
+        var read = (GeneralSettings)Serializer.Deserialize(migrated, typeof(GeneralSettings))!;
+        Assert.Equal("Kept", read.ProductName);
+        GUI.SceneView.SceneSetup entry = Assert.Single(read.LastSetup);
+        Assert.Equal("Scenes/Level.scene", entry.Path);
+        Assert.True(entry.IsLoaded);
+        Assert.True(entry.IsActive);
     }
 }

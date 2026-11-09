@@ -29,7 +29,34 @@ internal sealed partial class Release_1_0 : MigrationRelease
         new("Scenes baked before baking used physical light units are listed for a rebake", WarnUnscaledBakes),
         new("Lights split into a component for each kind: directional, point, spot, rect, disk and tube", SplitLights),
         new("Scenes stored as SceneContent, SceneAsset renamed to Scene and the scene lighting types moved to top level", ctx => ctx.RewriteEchoAssets(SceneContentLayout)),
+        new("The last opened scene remembered as a scene setup of that one scene", ctx => ctx.RewriteProjectSettings(SceneSetupMemory)),
     ];
+
+    private const string GeneralSettingsType = "Prowl.Editor.Projects.Settings.GeneralSettings";
+
+    // The one remembered scene path becomes a remembered setup holding that scene, loaded and active.
+    internal static EchoObject? SceneSetupMemory(EchoObject settings)
+    {
+        if (settings.TagType != EchoType.Compound || TypeName(settings) != GeneralSettingsType) return null;
+        if (!settings.TryGet("LastScenePath", out EchoObject? path)) return null;
+        settings.Remove("LastScenePath");
+        if (settings.TryGet("LastSetup", out _)) return settings;
+
+        EchoObject list = EchoObject.NewList();
+        if (path!.TagType == EchoType.String && path.StringValue.Length > 0)
+        {
+            EchoObject entry = EchoObject.NewCompound();
+            entry["Asset"] = new EchoObject(Guid.Empty.ToString());
+            entry["Path"] = new EchoObject(path.StringValue);
+            entry["IsLoaded"] = new EchoObject(true);
+            entry["IsActive"] = new EchoObject(true);
+            list.ListAdd(entry);
+        }
+        EchoObject setup = EchoObject.NewCompound();
+        setup["$values"] = list;
+        settings["LastSetup"] = setup;
+        return settings;
+    }
 
     private const string CameraType = "Prowl.Runtime.Camera";
     private const string VolumeProfileType = "Prowl.Runtime.Rendering.VolumeProfile";

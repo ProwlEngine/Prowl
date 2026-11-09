@@ -574,7 +574,7 @@ public class CliEditorCommandTests : EditorTestHarness
     [Fact]
     public void SceneOpenRefusesToDropUnsavedChanges()
     {
-        EditorSceneManager.MarkDirty();
+        EditorSceneManager.MarkDirty(EditorSceneManager.ActiveScene);
         Assert.Contains("unsaved changes", Fails("scene", "--action", "new"));
         Assert.True(Ok("scene")!["dirty"]!.GetValue<bool>());
     }
@@ -583,7 +583,7 @@ public class CliEditorCommandTests : EditorTestHarness
     public void SceneNewReportsTheNewScene()
     {
         Ok("go", "create", "--name", "OnlyInTheOldScene");
-        EditorSceneManager.IsDirty = false;
+        EditorSceneManager.ActiveScene.Dirty = false;
 
         JsonNode created = Ok("scene", "--action", "new")!;
 

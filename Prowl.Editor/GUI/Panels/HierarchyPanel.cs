@@ -155,7 +155,7 @@ public class HierarchyPanel : DockPanel
             if (scene.IsNotValid())
             {
                 EditorGUI.EmptyState(paper, "hier_empty", Loc.Get("hierarchy.no_scene_loaded"), font);
-                Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => EditorSceneManager.CreateAndLoadDefaultScene()).Width(120).Show();
+                Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", EditorSceneManager.NewWithPrompt).Width(120).Show();
                 return;
             }
 
@@ -440,8 +440,8 @@ public class HierarchyPanel : DockPanel
                     if (assetDrop.AssetType == typeof(Runtime.Resources.SceneInstance))
                     {
                         AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(assetDrop.AssetGuid);
-                        if (entry != null)
-                            EditorSceneManager.ConfirmSceneChange(() => EditorSceneManager.OpenScene(entry.Path));
+                        if (entry != null && EditorSceneManager.SceneAt(entry.Path) is { } dropped && EditorSceneManager.CanEditScenes)
+                            EditorSceneManager.OpenAdditive(dropped, load: !Input.GetKey(KeyCode.AltLeft) && !Input.GetKey(KeyCode.AltRight));
                     }
                     else
                     {

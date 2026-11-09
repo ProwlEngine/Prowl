@@ -131,7 +131,7 @@ public sealed class NavMeshBakeService
 
             surface.NavMeshData = AssetDatabase.Get<NavMeshData>(guid);
             surface.RefreshRegistration();
-            EditorSceneManager.MarkDirty();
+            Core.EditorUtility.SetDirty(surface);
             Runtime.Debug.Log($"[Navigation] Baked navmesh saved to {fileRel} ({data.CacheLayers.Count} cache layers).");
             return true;
         }
