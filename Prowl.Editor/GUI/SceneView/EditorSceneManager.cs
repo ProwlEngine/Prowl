@@ -180,6 +180,7 @@ public static class EditorSceneManager
         if (!s_hooked)
         {
             SceneInstance.SafePoint += ApplyPending;
+            ReflectionProbe.BakedChanged += probe => Core.EditorUtility.SetDirty(probe);
             s_hooked = true;
         }
     }

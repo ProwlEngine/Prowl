@@ -181,8 +181,8 @@ public sealed class NavMeshBakeService
     // case sensitively and Sanitize folds path separators.
     private static (string Folder, string Name) DefaultBakeName(NavMeshSurface surface)
     {
-        SceneInstance? scene = surface.GameObject.Scene;
-        string sceneRel = scene.IsValid() && scene!.Source is { } source ? source.AssetPath : "";
+        // Beside the surface's own scene, which with several open is not always the active one.
+        string sceneRel = surface.GameObject.Section?.Source is { } source && source.IsValid() ? source.AssetPath : "";
         string sceneDir = string.IsNullOrEmpty(sceneRel) ? "" : (Path.GetDirectoryName(sceneRel) ?? "").Replace('\\', '/');
         string sceneName = string.IsNullOrEmpty(sceneRel) ? "Scene" : Path.GetFileNameWithoutExtension(sceneRel);
         string folderRel = (string.IsNullOrEmpty(sceneDir) ? "" : sceneDir + "/") + sceneName + "_navmesh";

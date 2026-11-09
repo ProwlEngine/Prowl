@@ -485,6 +485,8 @@
   "env.generate_lighting": "Beleuchtung generieren",
   "env.toast_bake_busy": "Backvorgang lauft",
   "env.toast_bake_busy_msg": "Eine andere Szene wird bereits gebacken. Warte, bis sie fertig ist, bevor du eine neue startest.",
+  "env.toast_bake_untitled": "Zuerst die Szene speichern",
+  "env.toast_bake_untitled_msg": "'{{name}}' hat noch keine Datei, und seine Lightmaps werden daneben gespeichert.",
 
   "pref.general": "Allgemein",
   "pref.language": "Sprache",

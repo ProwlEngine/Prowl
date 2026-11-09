@@ -485,6 +485,8 @@
   "env.generate_lighting": "Aydinlatma olustur",
   "env.toast_bake_busy": "Pisirme Devam Ediyor",
   "env.toast_bake_busy_msg": "Baska bir sahne zaten pisiriliyor. Baskasini baslatmadan once bitmesini bekleyin.",
+  "env.toast_bake_untitled": "Once sahneyi kaydet",
+  "env.toast_bake_untitled_msg": "'{{name}}' henuz bir dosyaya sahip degil, ve isik haritalari onun yanina yazilir.",
 
   "pref.general": "Genel",
   "pref.language": "Dil",

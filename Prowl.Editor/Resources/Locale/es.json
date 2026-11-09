@@ -485,6 +485,8 @@
   "env.generate_lighting": "Generar iluminacion",
   "env.toast_bake_busy": "Horneado en curso",
   "env.toast_bake_busy_msg": "Otra escena ya se esta horneando. Espera a que termine antes de iniciar otro.",
+  "env.toast_bake_untitled": "Guarda primero la escena",
+  "env.toast_bake_untitled_msg": "'{{name}}' aun no tiene archivo, y sus lightmaps se guardan junto a el.",
 
   "pref.general": "General",
   "pref.language": "Idioma",

@@ -485,6 +485,8 @@
   "env.generate_lighting": "Сгенерировать освещение",
   "env.toast_bake_busy": "Выполняется запекание",
   "env.toast_bake_busy_msg": "Другая сцена уже запекается. Дождитесь завершения, прежде чем запускать новое.",
+  "env.toast_bake_untitled": "Сначала сохраните сцену",
+  "env.toast_bake_untitled_msg": "У '{{name}}' еще нет файла, а ее лайтмапы записываются рядом с ним.",
 
   "pref.general": "Общие",
   "pref.language": "Язык",

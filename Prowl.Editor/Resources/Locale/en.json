@@ -511,6 +511,8 @@
   "env.generate_lighting": "Generate Lighting",
   "env.toast_bake_busy": "Bake In Progress",
   "env.toast_bake_busy_msg": "Another scene is already baking. Wait for it to finish before starting another.",
+  "env.toast_bake_untitled": "Save the scene first",
+  "env.toast_bake_untitled_msg": "'{{name}}' has no file yet, and its lightmaps are written beside it.",
 
   "pref.general": "General",
   "pref.language": "Language",

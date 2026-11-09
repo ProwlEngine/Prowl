@@ -485,6 +485,8 @@
   "env.generate_lighting": "生成光照",
   "env.toast_bake_busy": "正在烘焙",
   "env.toast_bake_busy_msg": "另一个场景已在烘焙中。请等待其完成后再开始另一个。",
+  "env.toast_bake_untitled": "请先保存场景",
+  "env.toast_bake_untitled_msg": "'{{name}}' 还没有文件，其光照贴图会写在文件旁边。",
 
   "pref.general": "通用",
   "pref.language": "语言",

@@ -391,6 +391,13 @@ public class EnvironmentPanel : DockPanel
                                 Toasts.Warning(Loc.Get("env.toast_bake_busy"), Loc.Get("env.toast_bake_busy_msg"));
                                 return;
                             }
+                            // A scene's pages go beside its file, so an untitled one is saved first.
+                            if (LightmapBakeService.UntitledScene(scene) is { } untitled)
+                            {
+                                Toasts.Warning(Loc.Get("env.toast_bake_untitled"), Loc.Get("env.toast_bake_untitled_msg", new { name = untitled.Name }));
+                                EditorApplication.PromptSaveAs(untitled, () => _bake.Start(scene, scene.LightmapBake));
+                                return;
+                            }
                             _bake.Start(scene, scene.LightmapBake);
                         }, grow: true, height: 34f);
                     if (hasBaked)

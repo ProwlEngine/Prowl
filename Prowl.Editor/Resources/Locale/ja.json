@@ -485,6 +485,8 @@
   "env.generate_lighting": "ライティングを生成",
   "env.toast_bake_busy": "ベイク実行中",
   "env.toast_bake_busy_msg": "別のシーンが既にベイク中です。完了するまで待ってから、もう一度実行してください。",
+  "env.toast_bake_untitled": "先にシーンを保存してください",
+  "env.toast_bake_untitled_msg": "'{{name}}' にはまだファイルがなく、ライトマップはその隣に書き込まれます。",
 
   "pref.general": "一般",
   "pref.language": "言語",

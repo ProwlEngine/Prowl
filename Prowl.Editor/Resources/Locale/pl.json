@@ -485,6 +485,8 @@
   "env.generate_lighting": "Generuj oswietlenie",
   "env.toast_bake_busy": "Trwa wypiekanie",
   "env.toast_bake_busy_msg": "Inna scena jest juz wypiekana. Poczekaj, az sie zakonczy, zanim rozpoczniesz kolejne.",
+  "env.toast_bake_untitled": "Najpierw zapisz scene",
+  "env.toast_bake_untitled_msg": "'{{name}}' nie ma jeszcze pliku, a jej lightmapy zapisuja sie obok niego.",
 
   "pref.general": "Ogolne",
   "pref.language": "Jezyk",

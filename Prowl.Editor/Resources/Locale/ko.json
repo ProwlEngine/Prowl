@@ -485,6 +485,8 @@
   "env.generate_lighting": "조명 생성",
   "env.toast_bake_busy": "베이크 진행 중",
   "env.toast_bake_busy_msg": "다른 씬이 이미 베이크 중입니다. 다른 베이크를 시작하기 전에 완료될 때까지 기다리세요.",
+  "env.toast_bake_untitled": "먼저 씬을 저장하세요",
+  "env.toast_bake_untitled_msg": "'{{name}}'에 아직 파일이 없으며, 라이트맵은 그 옆에 기록됩니다.",
 
   "pref.general": "일반",
   "pref.language": "언어",

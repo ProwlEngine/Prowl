@@ -485,6 +485,8 @@
   "env.generate_lighting": "Genera illuminazione",
   "env.toast_bake_busy": "Bake in corso",
   "env.toast_bake_busy_msg": "Un'altra scena e gia in fase di bake. Attendi che finisca prima di avviarne un altro.",
+  "env.toast_bake_untitled": "Salva prima la scena",
+  "env.toast_bake_untitled_msg": "'{{name}}' non ha ancora un file, e le sue lightmap vengono scritte accanto.",
 
   "pref.general": "Generale",
   "pref.language": "Lingua",
