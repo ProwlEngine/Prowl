@@ -268,8 +268,8 @@ public static class CliEditorCommands
             }
         }
 
-        // Commands run between frames, where the safe point applies what was asked for at once.
-        SceneInstance.ProcessPendingLoad();
+        // Commands run between frames, so the editor's queued scene changes apply at once.
+        EditorSceneManager.ApplyPendingNow();
 
         if (scene.Length > 0 && action != SceneAction.Remove)
         {
@@ -338,7 +338,6 @@ public static class CliEditorCommands
         if (root.Length > 0) return starts.Select(g => Node(g, Math.Max(0, depth), components)).ToList();
 
         SceneInstance world = CliRefs.Scene;
-        if (Prowl.Editor.GUI.SceneView.PrefabEditingMode.IsEditing) return world.Roots.Select(g => Node(g, Math.Max(0, depth), components)).ToList();
         return world.Sections
             .Where(s => !s.IsPersistent || s.Roots.Count > 0)
             .Select(s => new JsonObject
