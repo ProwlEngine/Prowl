@@ -262,7 +262,7 @@ public partial class GameObject : EngineObject, ISerializable
     }
 
     // The helper roots owned by components of this tree, like a ragdoll's puppet.
-    private IEnumerable<GameObject> OwnedRoots()
+    internal IEnumerable<GameObject> OwnedRoots()
     {
         SceneInstance? world = Scene;
         if (world.IsNotValid()) yield break;

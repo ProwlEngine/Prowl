@@ -648,7 +648,7 @@ public static class Undo
         ClearCrossSceneReferences(root, target, name);
 
         var before = new List<(EngineObject Object, Guid Id)>();
-        foreach (GameObject go in root.GetChildrenDeep().Prepend(root))
+        foreach (GameObject go in MovingTrees(root))
         {
             before.Add((go, go.Identifier));
             foreach (Component c in go._components) before.Add((c, c.Identifier));
@@ -669,12 +669,16 @@ public static class Undo
         _pending.Add(new ReadyEntry(record) { Group = _currentGroup, Name = name });
     }
 
+    // A moving root with its children, and its owned roots with theirs, which move along with it.
+    private static IEnumerable<GameObject> MovingTrees(GameObject root)
+        => root.OwnedRoots().Prepend(root).ToList().SelectMany(tree => tree.GetChildrenDeep().Prepend(tree));
+
     // Clears, as recorded edits, every reference from the moving tree into a scene other than the target, and every
     // reference from another scene into the moving tree.
     private static void ClearCrossSceneReferences(GameObject root, SceneSection target, string name)
     {
         var moving = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        foreach (GameObject go in root.GetChildrenDeep().Prepend(root))
+        foreach (GameObject go in MovingTrees(root))
         {
             moving.Add(go);
             moving.Add(go.Transform);

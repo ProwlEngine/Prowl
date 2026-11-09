@@ -418,6 +418,23 @@ public class MultiSceneTests : EditorTestHarness
     }
 
     [Fact]
+    public void AMove_TakesOwnedRootsAlong_AndClearsReferencesIntoThem()
+    {
+        OpenScene a = Open(Author("A.scene", "a"));
+        OpenScene b = Additive(Author("B.scene", "b"));
+        SceneInstance world = EditorSceneManager.EditWorld;
+        Marker holder = Root(a).GetComponent<Marker>()!;
+        GameObject character = world.Create(a.Section!, "Character");
+        GameObject helper = world.Create("Helper", owner: character.AddComponent<Marker>());
+        holder.Target = helper;
+
+        Undo.MoveGameObjectToScene(character, b, "Move");
+
+        Assert.Same(b.Section, helper.Section);
+        Assert.Null(holder.Target);
+    }
+
+    [Fact]
     public void SaveAs_KeepsTheHistoryValid()
     {
         Open(Author("A.scene", "a"));
