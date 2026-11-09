@@ -135,13 +135,17 @@ public class ComponentPopoutPanel : DockPanel
     {
         SceneInstance scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return (null, null);
-        if (_scene != null && (!EditorSceneManager.OpenScenes.Contains(_scene) || _scene.Section is not { IsLoaded: true } || !ReferenceEquals(_scene.Section.Instance, scene)))
-            return (null, null);
+        SceneSection? section = null;
+        if (_scene != null)
+        {
+            section = EditorSceneManager.OpenScenes.Contains(_scene) ? EditorSceneManager.SectionShowing(_scene) : null;
+            if (section == null || !ReferenceEquals(section.Instance, scene)) return (null, null);
+        }
 
         foreach (GameObject go in scene.Objects)
         {
             if (go.Identifier != _goIdentifier) continue;
-            if (_scene != null && !ReferenceEquals(go.Section, _scene.Section)) continue;
+            if (section != null && !ReferenceEquals(go.Section, section)) continue;
 
             foreach (Component comp in go.GetComponents<Component>())
             {

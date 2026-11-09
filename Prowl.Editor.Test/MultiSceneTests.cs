@@ -649,4 +649,24 @@ public class MultiSceneTests : EditorTestHarness
         Assert.Null(panel.FindComponent().comp);
         Assert.True(a.IsLoaded);
     }
+
+    [Fact]
+    public void APoppedOutComponent_ShowsItsPlayCopy_InPlay()
+    {
+        Open(Author("A.scene", "a"));
+        OpenScene copy = Additive(Duplicate("A.scene", "Copy.scene"));
+        var panel = GUI.Panels.ComponentPopoutPanel.For(Root(copy), Root(copy).GetComponent<Marker>()!);
+
+        SceneInstance play = EditorSceneManager.BuildPlayWorld();
+        using (EnterPlayMode())
+        {
+            EditorSceneManager.EnterPlayWorld(play);
+            Component? shown = panel.FindComponent().comp;
+            Assert.NotNull(shown);
+            Assert.Same(play, shown!.GameObject.Scene);
+            Assert.Equal("Copy", shown.GameObject.Section!.Name);
+            EditorSceneManager.DestroyPlayWorld();
+        }
+        EditorSceneManager.ReturnToEditWorld();
+    }
 }

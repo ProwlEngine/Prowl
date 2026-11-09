@@ -54,6 +54,7 @@ public static class EditorSceneManager
     {
         SceneInstance edit = EditWorld;
         SceneInstance play = SceneInstance.Create(edit.Name, SceneMode.Game);
+        s_playCopies.Clear();
         try
         {
             SceneSection? first = null;
@@ -65,6 +66,7 @@ public static class EditorSceneManager
                     ? play.ReplaceContent(content, section.Name, section.Source)
                     : play.AddContent(content, section.Name, section.Source);
                 first ??= copy;
+                s_playCopies[section] = copy;
                 if (ReferenceEquals(section, edit.ActiveSection)) play.ActiveSection = copy;
             }
             return play;
@@ -74,6 +76,17 @@ public static class EditorSceneManager
             play.Dispose();
             throw;
         }
+    }
+
+    // Each edit section and the play world section copied from it.
+    private static readonly Dictionary<SceneSection, SceneSection> s_playCopies = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>The section of the edited world that shows <paramref name="scene"/>: its own, or in play the copy made of it.</summary>
+    internal static SceneSection? SectionShowing(OpenScene scene)
+    {
+        if (scene.Section is not { IsLoaded: true } section) return null;
+        if (PlayWorld is not { } play) return section;
+        return s_playCopies.TryGetValue(section, out SceneSection? copy) && copy.IsLoaded && ReferenceEquals(copy.Instance, play) ? copy : null;
     }
 
     /// <summary>Sends the edit world dormant, restarts the session and binds <paramref name="play"/> as Main, running.</summary>
@@ -109,6 +122,7 @@ public static class EditorSceneManager
             catch (Exception e) { Debug.LogException($"[Play] Destroying '{world.Name}' threw", e); }
         }
         s_worldsBeforePlay = new();
+        s_playCopies.Clear();
         Runtime.Tasks.MainThreadContext.Restart();
     }
 
