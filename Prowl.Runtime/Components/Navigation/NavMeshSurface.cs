@@ -98,8 +98,7 @@ public class NavMeshSurface : Component
     {
         get
         {
-            SceneInstance? scene = Scene;
-            return scene.IsValid() ? scene.Navigation : null;
+            return IsInWorld ? Scene.Navigation : null;
         }
     }
 
@@ -604,7 +603,7 @@ public class NavMeshSurface : Component
     /// </summary>
     private bool TryGetCollectionScope(AABB? filterBounds, out SceneInstance? scene, out AABB? bounds)
     {
-        scene = Scene;
+        scene = IsInWorld ? Scene : null;
         bounds = filterBounds;
         if (scene.IsNotValid()) return false;
         if (CollectObjects != NavMeshCollectObjects.Volume) return true;

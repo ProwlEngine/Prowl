@@ -198,22 +198,17 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public bool EnabledInHierarchy => _enabledInHierarchy;
 
+    /// <summary>Whether this component's GameObject is in a world.</summary>
+    public bool IsInWorld => _go.IsValid() && _go.IsInWorld;
+
     /// <summary>
-    /// The parent <see cref="Prowl.Runtime.Resources.SceneInstance"/> to which this <see cref="Prowl.Runtime.Component"/> belongs.
-    ///
-    /// Note that this property is derived from the components <see cref="GameObject"/>, as a
-    /// <see cref="Prowl.Runtime.Component"/> itself cannot be part of a <see cref="Prowl.Runtime.Resources.SceneInstance"/> without a
-    /// <see cref="GameObject"/>.
+    /// The world this component is in. Throws while it is in none: on a detached object, on a prefab asset, and in
+    /// OnValidate and OnAfterDeserialize, which run detached. Check <see cref="IsInWorld"/> first where that can happen.
     /// </summary>
-    public SceneInstance? Scene
-    {
-        get
-        {
-            if (GameObject.IsNotValid()) return null;
-            SceneInstance? scene = GameObject.Scene;
-            return scene.IsValid() ? scene : null;
-        }
-    }
+    public SceneInstance Scene => IsInWorld
+        ? _go.Scene!
+        : throw new InvalidOperationException($"'{Name}' ({GetType().Name}) is not in a world. A detached object, a prefab asset, " +
+            "OnValidate and OnAfterDeserialize have none, so check IsInWorld first.");
 
     public Component() : base() { }
 

@@ -842,8 +842,7 @@ public class ParticleSystemComponent : Component, IRenderSync
         UpdateEmitterMotion(dt);
         ClaimSubEmitters();
         _collisionEvents.Clear();
-        SceneInstance? scene = Scene;
-        _physics = scene.IsValid() ? scene.Physics : null;
+        _physics = IsInWorld ? Scene.Physics : null;
         if (Wind.Enabled) Wind.BeginStep(this);
         if (Collision.Enabled) Collision.BeginStep();
 

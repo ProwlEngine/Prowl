@@ -89,12 +89,12 @@ public class Animator : Component
     {
         Rebind();
         _autoPlayPending = PlayAutomatically;
-        if (Scene.IsValid()) Scene!.Animation.Register(this);
+        if (IsInWorld) Scene.Animation.Register(this);
     }
 
     public override void OnDisable()
     {
-        if (Scene.IsValid()) Scene!.Animation.Unregister(this);
+        if (IsInWorld) Scene.Animation.Unregister(this);
         Rebind();
     }
 
@@ -525,13 +525,13 @@ public class Animator : Component
         point = default;
         normal = new Float3(0f, 1f, 0f);
 
-        if (Scene.IsNotValid()) return false;
+        if (!IsInWorld) return false;
 
         // The ragdoll stands where the feet are, so the probe would find it as the ground.
         var filter = new QueryFilter(GroundLayers);
         if (_ragdoll != null) filter = filter.Ignoring(_ragdoll.Bodies);
 
-        if (!Scene!.Physics.Raycast(origin, direction, maxDistance, out RaycastHit hit, filter))
+        if (!Scene.Physics.Raycast(origin, direction, maxDistance, out RaycastHit hit, filter))
             return false;
 
         point = hit.Point;

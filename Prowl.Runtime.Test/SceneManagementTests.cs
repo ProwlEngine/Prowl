@@ -900,4 +900,21 @@ public class SceneManagementTests : RuntimeTestBase
         first.Activate();
         Assert.Equal([zone], first.WindZones);
     }
+
+    // A component's Scene is its world, and reading it with none throws instead of handing back null.
+    [Fact]
+    public void ComponentScene_IsItsWorld_AndThrowsWhileDetached()
+    {
+        GameObject go = CreateGameObject("Loose");
+        TickCounter comp = go.AddComponent<TickCounter>();
+
+        Assert.False(comp.IsInWorld);
+        Assert.Throws<InvalidOperationException>(() => comp.Scene);
+
+        SceneInstance world = CreateScene(enable: true);
+        go.MoveTo(world);
+
+        Assert.True(comp.IsInWorld);
+        Assert.Same(world, comp.Scene);
+    }
 }
