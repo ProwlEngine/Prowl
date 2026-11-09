@@ -1092,6 +1092,27 @@ public partial class PrefabTests : EditorTestHarness
 
     /// <summary>A deleted prefab keeps its baseline, so edits made while it is away are still recorded.</summary>
     [Fact]
+    public void APrefabDeletedDuringPrefabEditing_KeepsTheBaselineOfItsEditWorldInstances()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 1;
+        Guid g = CreatePrefabAsset(root, "Gone.prefab");
+        Guid other = CreatePrefabAsset(new GameObject("Other"), "Other.prefab");
+        SetSceneCurrent(Inst(g));
+        GameObject live = EditorSceneManager.EditedWorld.Roots.First();
+        OverrideComp comp = live.GetComponent<OverrideComp>()!;
+        PrefabUtility.RecordComponentOverrides(live, comp);
+
+        PrefabEditingMode.Enter(other);
+        Assets.DeleteAsset("Gone.prefab");
+        PrefabEditingMode.Exit();
+
+        comp.A = 77;
+        PrefabUtility.RecordComponentOverrides(live, comp);
+        Assert.True(PrefabUtility.IsPropertyOverridden(live, PrefabUtility.GetOverridePath(live, comp, "A")));
+    }
+
+    [Fact]
     public void EditsMadeWhileThePrefabIsDeleted_SurviveItComingBack()
     {
         var root = new GameObject("Root");

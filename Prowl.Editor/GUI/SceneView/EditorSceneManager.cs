@@ -30,6 +30,8 @@ public static class EditorSceneManager
     /// The world scenes are edited in. Bound as Main outside play mode, and dormant underneath during play and prefab
     /// editing, so it comes back exactly as it was.
     /// </summary>
+    internal static SceneInstance? EditWorldOrNull => s_editWorld.IsValid() ? s_editWorld : null;
+
     public static SceneInstance EditWorld
     {
         get => s_editWorld.IsValid() ? s_editWorld : throw new InvalidOperationException("The editor has no edit world bound.");

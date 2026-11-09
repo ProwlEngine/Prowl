@@ -1208,7 +1208,8 @@ public static partial class PrefabUtility
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db == null) return;
 
-        SceneInstance? scene = EditorSceneManager.EditedWorld;
+        // The edit world counts too while play or prefab editing has it dormant, since its instances come back.
+        SceneInstance?[] worlds = [EditorSceneManager.EditedWorld, EditorSceneManager.EditWorldOrNull];
 
         // The entries are gone, so go by which cached prefabs the database can no longer resolve.
         foreach (Guid prefabGuid in s_sourceCache.Keys.ToList())
@@ -1216,7 +1217,7 @@ public static partial class PrefabUtility
             if (db.GetEntry(prefabGuid) != null) continue;
 
             // Keeping it is what lets instances go on recording overrides while the prefab is away.
-            if (scene.IsValid() && scene.Objects.Any(go => go.PrefabAssetId == prefabGuid)) continue;
+            if (worlds.Any(world => world.IsValid() && world.Objects.Any(go => go.PrefabAssetId == prefabGuid))) continue;
 
             InvalidateSource(prefabGuid);
         }
