@@ -214,15 +214,16 @@ public class ConsolePanel : DockPanel
 
         if (_messages.Count > 0)
         {
-            LogEntry last = _messages[^1];
-            if (last.FullMessage == message && last.Severity == severity)
+            int index = _messages.FindIndex(x => x.FullMessage == message && x.Severity == severity && string.Equals(x.StackTrace.ToString(), stackTrace?.ToString(), StringComparison.Ordinal));
+            if (index != -1)
             {
-                last.Count += 1;
-                last.TimeString = time.ToString("HH:mm:ss");
-                last.StackTrace = stackTrace ?? last.StackTrace;
-                last.TimeLayout = null;
-                last.CountLayout = null;
-                _messages[^1] = last;
+                var sameMessage = _messages[index];
+                sameMessage.Count += 1;
+                sameMessage.TimeString = time.ToString("HH:mm:ss");
+                sameMessage.StackTrace = stackTrace ?? sameMessage.StackTrace;
+                sameMessage.TimeLayout = null;
+                sameMessage.CountLayout = null;
+                _messages[index] = sameMessage;
                 return;
             }
         }
