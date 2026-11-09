@@ -66,6 +66,7 @@ public static class EditorSceneManager
                     ? play.ReplaceContent(content, section.Name, section.Source)
                     : play.AddContent(content, section.Name, section.Source);
                 first ??= copy;
+                copy.HiddenInSceneView = section.HiddenInSceneView;
                 s_playCopies[section] = copy;
                 if (ReferenceEquals(section, edit.ActiveSection)) play.ActiveSection = copy;
             }

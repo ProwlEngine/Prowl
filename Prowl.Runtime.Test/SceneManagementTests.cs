@@ -476,6 +476,27 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.Null(Rendering.BakedLightingBinding.Resolve(renderer, ref cache).Placement);
     }
 
+    private sealed class GizmoCounter : Component
+    {
+        public int Draws;
+        public override void DrawGizmos() => Draws++;
+    }
+
+    [Fact]
+    public void ASectionHiddenInTheSceneView_DrawsNoGizmos()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        SceneSection hidden = world.CreateSection("Hidden");
+        GizmoCounter shown = world.Create("Shown").AddComponent<GizmoCounter>();
+        GizmoCounter skipped = world.Create(hidden, "Skipped").AddComponent<GizmoCounter>();
+        hidden.HiddenInSceneView = true;
+
+        world.DrawGizmos();
+
+        Assert.Equal(1, shown.Draws);
+        Assert.Equal(0, skipped.Draws);
+    }
+
     [Fact]
     public void OwnedRoots_FollowAParentingIntoAnotherSection()
     {

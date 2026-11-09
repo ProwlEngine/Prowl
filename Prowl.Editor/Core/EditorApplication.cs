@@ -2280,8 +2280,11 @@ public class EditorApplication : Game
                 foreach (GameObject go in Selection.GetSelected<GameObject>())
                     CollectSelectedGizmoObjects(go);
                 foreach (GameObject go in s_selectedGizmoObjects)
+                {
+                    if (go.Section is { HiddenInSceneView: true }) continue;
                     foreach (Component comp in go.GetComponents())
                         comp.DrawGizmosSelected();
+                }
             }
         }
         finally

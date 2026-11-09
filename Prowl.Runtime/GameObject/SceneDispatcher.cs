@@ -377,6 +377,7 @@ internal sealed class SceneDispatcher
         {
             Component c = items[i];
             if (c.IsDisposed || !c.EnabledInHierarchy || (c.HideFlags & HideFlags.NoGizmos) != 0) continue;
+            if (c.GameObject.Section is { HiddenInSceneView: true }) continue;
 
             try { c.DrawGizmos(); }
             catch (Exception ex) { Report(c, nameof(Component.DrawGizmos), ex); }
