@@ -553,7 +553,7 @@ public static class EditorSceneManager
         {
             // Anything edited on a prefab instance without the inspector noticing is not in its override list yet, and a
             // save without it would lose those edits on the next refresh.
-            PrefabUtility.ReconcileOpenScene();
+            PrefabUtility.ReconcileSection(section);
 
             File.WriteAllText(absolutePath, section.CaptureTree().WriteToString());
 

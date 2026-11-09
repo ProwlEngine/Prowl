@@ -1860,19 +1860,24 @@ public static partial class PrefabUtility
     /// value on the objects and nothing else, so a round trip through serialized data would keep the
     /// value but lose the fact that it differs from the prefab, and the next refresh would drop it.
     /// </summary>
-    public static void ReconcileOpenScene()
+    public static void ReconcileOpenScene() => Reconcile(EditorSceneManager.EditedWorld, null);
+
+    /// <summary>As <see cref="ReconcileOpenScene"/>, for the instances of one section only, like the scene being saved.</summary>
+    internal static void ReconcileSection(SceneSection section) => Reconcile(section.Instance, section);
+
+    private static void Reconcile(SceneInstance? scene, SceneSection? section)
     {
-        SceneInstance? scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
+        List<GameObject> objects = [.. scene!.Objects.Where(go => section == null || ReferenceEquals(go.Section, section))];
 
         // Anything that drifted out of its instance is settled first, so what follows records overrides
         // for objects that can still say which prefab object they are.
-        foreach (Guid prefabGuid in scene.Objects.Where(go => go.IsPrefabInstance)
+        foreach (Guid prefabGuid in objects.Where(go => go.IsPrefabInstance)
                      .Select(go => go.PrefabAssetId).Distinct().ToList())
-            SettleStrayPrefabContent(prefabGuid, scene.Objects);
+            SettleStrayPrefabContent(prefabGuid, objects);
 
-        foreach (GameObject go in scene.Objects.ToList())
-            if (IsInstanceRoot(go))
+        foreach (GameObject go in objects)
+            if (go.IsValid() && IsInstanceRoot(go))
                 ReconcileInstance(go);
     }
 
