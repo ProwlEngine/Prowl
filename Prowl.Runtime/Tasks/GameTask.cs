@@ -66,16 +66,20 @@ public static class GameTask
 
     /// <summary>
     /// Waits for game time of the world active where it was called, so it slows with that world's time scale and holds
-    /// while that world is paused.
+    /// while that world is paused. Cancelled when that world is destroyed, since its time never moves again.
     /// </summary>
     public static Task Delay(float seconds, CancellationToken cancel = default)
     {
         MainThreadContext loop = Loop();
         if (seconds <= 0) return Task.CompletedTask;
-        SceneClock? clock = Resources.SceneInstance.ActiveClock;
-        if (clock == null) return loop.WaitFrames(() => (seconds -= Time.UnscaledDeltaTime) <= 0, cancel);
+        Resources.SceneInstance? world = Resources.SceneInstance.ActiveOrNull;
+        if (ReferenceEquals(world, null)) return loop.WaitFrames(() => (seconds -= Time.UnscaledDeltaTime) <= 0, cancel);
+        SceneClock clock = world.Clock;
         double end = clock.TimeSinceStartup + seconds;
-        return loop.WaitFrames(() => clock.TimeSinceStartup >= end, cancel);
+        var linked = CancellationTokenSource.CreateLinkedTokenSource(cancel, world.Token);
+        Task wait = loop.WaitFrames(() => clock.TimeSinceStartup >= end, linked.Token);
+        wait.ContinueWith(static (_, state) => ((CancellationTokenSource)state!).Dispose(), linked, TaskScheduler.Default);
+        return wait;
     }
 
     /// <summary>Waits for real time, ignoring time scale and pausing.</summary>

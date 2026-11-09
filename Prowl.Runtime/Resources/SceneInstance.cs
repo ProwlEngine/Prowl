@@ -793,17 +793,23 @@ public class SceneInstance : EngineObject, ISerializable
     {
         get
         {
-            if (_state is SceneState.Destroying or SceneState.Destroyed) return new CancellationToken(true);
-            MainThreadContext? session = MainThreadContext.Current;
-            if (_token == null || !ReferenceEquals(_tokenSession, session))
+            lock (_tokenLock)
             {
-                _token?.Dispose();
-                _tokenSession = session;
-                _token = session == null ? new CancellationTokenSource() : CancellationTokenSource.CreateLinkedTokenSource(session.SessionToken);
+                if (_state is SceneState.Destroying or SceneState.Destroyed) return new CancellationToken(true);
+                MainThreadContext? session = MainThreadContext.Current;
+                if (_token == null || !ReferenceEquals(_tokenSession, session))
+                {
+                    // Tokens handed out before belong to the session that is gone.
+                    CancelToken();
+                    _tokenSession = session;
+                    _token = session == null ? new CancellationTokenSource() : CancellationTokenSource.CreateLinkedTokenSource(session.SessionToken);
+                }
+                return _token.Token;
             }
-            return _token.Token;
         }
     }
+
+    private readonly object _tokenLock = new();
 
     private void CancelToken()
     {

@@ -192,6 +192,34 @@ public class ThreadingTests : RuntimeTestBase
     }
 
     [Fact]
+    public void ADelayInADestroyedWorld_IsCancelled()
+    {
+        using var loop = new LoopScope();
+        SceneInstance world = CreateScene(enable: true);
+        Task delay;
+        using (world.Enter()) delay = GameTask.Delay(5);
+
+        world.Dispose();
+        loop.Pump();
+
+        Assert.True(delay.IsCanceled);
+    }
+
+    [Fact]
+    public void AWorldTokenFromBeforeASession_IsCancelledWhenOneStarts()
+    {
+        MainThreadContext.Uninstall();
+        SceneInstance world = CreateScene();
+        CancellationToken before = world.Token;
+
+        using var loop = new LoopScope();
+        CancellationToken during = world.Token;
+
+        Assert.True(before.IsCancellationRequested);
+        Assert.False(during.IsCancellationRequested);
+    }
+
+    [Fact]
     public void WaitUntilChecksOncePerFrame()
     {
         using var loop = new LoopScope();
