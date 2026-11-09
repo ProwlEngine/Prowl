@@ -26,7 +26,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class HierarchyPanel : DockPanel
 {
     [MenuItem("Window/General/Hierarchy", priority: 2)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(HierarchyPanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<HierarchyPanel>();
 
     public override string Title => Loc.Get("panel.hierarchy");
     public override string Icon => EditorIcons.Sitemap;

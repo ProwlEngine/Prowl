@@ -24,7 +24,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class InspectorPanel : DockPanel
 {
     [MenuItem("Window/General/Inspector", priority: 3)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(InspectorPanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<InspectorPanel>();
 
     public override string Title => Loc.Get("panel.inspector");
     public override string Icon => EditorIcons.Sliders;

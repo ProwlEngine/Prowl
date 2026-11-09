@@ -33,7 +33,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class EnvironmentPanel : DockPanel
 {
     [MenuItem("Window/General/Environment", priority: 6)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(EnvironmentPanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<EnvironmentPanel>();
 
     public override string Title => Loc.Get("panel.environment");
     public override string Icon => EditorIcons.Sun;

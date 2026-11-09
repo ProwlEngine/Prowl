@@ -26,7 +26,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class ProjectPanel : DockPanel
 {
     [MenuItem("Window/General/Project", priority: 4)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(ProjectPanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<ProjectPanel>();
 
     public static ProjectPanel Instance;
     public override string Title => Loc.Get("panel.project");

@@ -897,7 +897,7 @@ public class EditorApplication : Game
             StatusChip(paper, "hs_ver", clH, versionText, font);
             StatusChip(paper, "hs_proj", clH, projectText, font);
 
-            Origami.IconButton(paper, "hs_cog", EditorIcons.Gear_I, () => OpenPanel(typeof(ProjectSettingsPanel)))
+            Origami.IconButton(paper, "hs_cog", EditorIcons.Gear_I, () => OpenPanel<ProjectSettingsPanel>())
                 .Width(clH).Height(clH).Ghost().Show();
         }
     }
@@ -1007,11 +1007,7 @@ public class EditorApplication : Game
                 .Hovered.TextColor(EditorTheme.Ink500).End()
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
                 .Tooltip(Loc.Get("header.theme_settings"))
-                .OnClick(0, (_, _) =>
-                {
-                    OpenPanel(typeof(GUI.Panels.PreferencesPanel));
-                    (FindOpenPanel(typeof(GUI.Panels.PreferencesPanel)) as GUI.Panels.PreferencesPanel)?.ShowTheme();
-                });
+                .OnClick(0, (_, _) => OpenPanel<PreferencesPanel>().ShowTheme());
         }
     }
 
@@ -1491,6 +1487,15 @@ public class EditorApplication : Game
     /// Find an open panel of the given type across all docked and floating nodes, including docked panels
     /// hidden behind a maximized one.
     /// </summary>
+    public TPanel? FindOpenPanel<TPanel>() where TPanel : DockPanel
+    {
+        return (TPanel?)FindOpenPanel(typeof(TPanel));
+    }
+
+    /// <summary>
+    /// Find an open panel of the given type across all docked and floating nodes, including docked panels
+    /// hidden behind a maximized one.
+    /// </summary>
     public DockPanel? FindOpenPanel(Type panelType)
     {
         return FindInNode(_panelMaximizer.LayoutRoot, panelType)
@@ -1543,22 +1548,24 @@ public class EditorApplication : Game
     /// <summary>
     /// Open a panel. If it's already open, focus it. Otherwise create a new instance as a floating window.
     /// </summary>
-    public void OpenPanel(Type panelType)
+    /// <returns> The existing panel instance, if one was found; otherwise, the newly created panel instance. </returns>
+    public TPanel OpenPanel<TPanel>() where TPanel : DockPanel, new()
     {
         // Check if already open
-        DockPanel? existing = FindOpenPanel(panelType);
+        TPanel? existing = FindOpenPanel<TPanel>();
         if (existing != null)
         {
             // Asking for a panel the maximized one is hiding brings the full layout back to show it.
             if (_panelMaximizer.IsHidden(existing))
                 _panelMaximizer.Restore();
-            FocusPanel(panelType);
-            return;
+            FocusPanel(typeof(TPanel));
+            return existing;
         }
 
         // Create new instance
-        if (Activator.CreateInstance(panelType) is not DockPanel panel) return;
-        OpenPanelInstance(panel);
+        var newPanel = Activator.CreateInstance<TPanel>();
+        OpenPanelInstance(newPanel);
+        return newPanel;
     }
 
     /// <summary>Open a pre-created panel instance as a floating window.</summary>
@@ -1574,6 +1581,11 @@ public class EditorApplication : Game
     /// Check if a panel of the given type is currently open.
     /// </summary>
     public bool IsPanelOpen(Type panelType) => FindOpenPanel(panelType) != null;
+
+    /// <summary>
+    /// Check if a panel of the given type is currently open.
+    /// </summary>
+    public bool IsPanelOpen<TPanel>() where TPanel : DockPanel => FindOpenPanel<TPanel>() != null;
 
     /// <summary>Prompt for a scene file path and save the current scene there. <paramref name="onSaved"/> runs only if the save succeeds.</summary>
     public static void PromptSaveAs(Action? onSaved = null)
@@ -1626,7 +1638,7 @@ public class EditorApplication : Game
         });
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene_as")}", () => PromptSaveAs());
         MenuRegistry.RegisterSeparator(file);
-        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.build_project")}", () => OpenPanel(typeof(BuildSettingsPanel)));
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.build_project")}", () => OpenPanel<BuildSettingsPanel>());
         MenuRegistry.RegisterSeparator(file);
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.exit")}", () => Game.Quit());
 
@@ -1638,10 +1650,10 @@ public class EditorApplication : Game
             isEnabled: () => Undo.CanRedo,
             dynamicLabel: () => Undo.RedoDescription);
         MenuRegistry.RegisterSeparator(edit);
-        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.project_settings")}", () => OpenPanel(typeof(ProjectSettingsPanel)));
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.project_settings")}", () => OpenPanel<ProjectSettingsPanel>());
         MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.save_layout")}", () => SaveProjectState());
         MenuRegistry.RegisterSeparator(edit);
-        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.preferences")}", () => OpenPanel(typeof(PreferencesPanel)));
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.preferences")}", () => OpenPanel<PreferencesPanel>());
 
         // All [MenuItem] methods: populates Assets/Create/*, Window/*, GameObject/*, and any custom roots
         MenuItemAttribute.PopulateMenuRegistry();
@@ -2006,7 +2018,7 @@ public class EditorApplication : Game
 
         if (prefs.GameViewOnPlay != GameViewOnPlay.Nothing)
             FocusPanel(typeof(GameViewPanel));
-        if (prefs.GameViewOnPlay == GameViewOnPlay.Maximize && FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel gameView)
+        if (prefs.GameViewOnPlay == GameViewOnPlay.Maximize && FindOpenPanel<GameViewPanel>() is GameViewPanel gameView)
             _maximizedForPlay = _panelMaximizer.Maximize(gameView);
 
         // The editor's vsync and frame limit are its preference, not the game's, so play starts

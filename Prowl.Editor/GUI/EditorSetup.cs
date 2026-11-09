@@ -38,7 +38,7 @@ public static class EditorSetup
         s_dialog.Button(Loc.Get("setup.preferences"), () =>
             {
                 Close();
-                EditorApplication.Instance?.OpenPanel(typeof(PreferencesPanel));
+                EditorApplication.Instance?.OpenPanel<PreferencesPanel>();
             })
             .Button(Loc.Get("setup.done"), Close, OrigamiVariant.Primary);
     }

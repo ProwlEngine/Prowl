@@ -27,7 +27,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class SceneViewPanel : DockPanel
 {
     [MenuItem("Window/General/Scene", priority: 5)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(SceneViewPanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<SceneViewPanel>();
 
     public override string Title => Loc.Get("panel.scene");
     public override string Icon => EditorIcons.Shapes;
