@@ -4,14 +4,12 @@
 using System;
 
 using Prowl.Echo;
+using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-/// <summary>
-/// Volumetric fog density region. Adds (or subtracts) fog density and color tint
-/// in a region of space. Sampled per ray-march step by the volumetric fog effect.
-/// </summary>
+/// <summary>The shape a <see cref="FogVolume"/> fills.</summary>
 public enum FogVolumeShape
 {
     /// <summary>Affects the entire scene uniformly. Equivalent to global fog.</summary>
@@ -33,11 +31,10 @@ public sealed class FogVolume : Component
 {
     [SerializeField] public FogVolumeShape Shape = FogVolumeShape.Sphere;
 
-    /// <summary>Density multiplier added on top of the effect's global density inside this volume.
-    /// Negative values can carve fog out (clamped to 0 at the final sample).</summary>
+    /// <summary>The density it adds inside, a multiple of the scene's volumetric fog density.</summary>
     [SerializeField] public float DensityMultiplier = 1.0f;
 
-    /// <summary>Color tint multiplied into scattering inside this volume.</summary>
+    /// <summary>The share of the light it takes out that it scatters, per colour.</summary>
     [SerializeField] public Color ColorTint = new(1f, 1f, 1f, 1f);
 
     /// <summary>Smooth falloff at the edges of the volume (0..1, fraction of the volume's extent).
@@ -46,6 +43,21 @@ public sealed class FogVolume : Component
 
     /// <summary>Cone half-angle in degrees. Only used when <see cref="Shape"/> = Cone.</summary>
     [SerializeField] public float ConeAngle = 30f;
+
+    /// <summary>The volume as the world's volumetric fog reads it, its density a multiple of the scene's.</summary>
+    internal Graphite.Rendering.FogVolumeDesc Describe(float density)
+    {
+        Float4x4 m = Transform.LocalToWorldMatrix;
+        return new Graphite.Rendering.FogVolumeDesc
+        {
+            Shape = (Graphite.Rendering.FogVolumeShape)Shape,
+            Transform = (Double4x4)m,
+            Density = Math.Max(DensityMultiplier * density, 0f),
+            Falloff = Math.Clamp(Falloff, 0.001f, 1f),
+            Albedo = ColorTint.ToFloat4(),
+            ConeAngle = ConeAngle,
+        };
+    }
 
     public override void DrawGizmos()
     {

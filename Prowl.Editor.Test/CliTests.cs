@@ -607,7 +607,97 @@ public class CliEditorCommandTests : EditorTestHarness
         typeof(GUI.DefaultGameObjectCreators).GetMethod("CreateCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, null);
         AssertTonemaps(Scene.Current.AllObjects.Single(g => g.Name == "Camera").GetComponent<Camera>()!);
     }
+    // Runs a command the way the editor does, with this thread as the main thread pumping frames, while a drag is held
+    // for the first frames and released after.
+    private static CliRunResponse RunDuringADrag(GameObject dragged, string command, string[] argv, Action<Task<CliRunResponse>> whileHeld)
+    {
+        SynchronizationContext? previous = SynchronizationContext.Current;
+        MainThreadContext.Install();
+        try
+        {
+            Undo.BeginFrameInput(mouseDown: true, mouseHeld: true, shortcut: false);
+            Undo.RecordObject(dragged, "Move");
+            dragged.Transform.LocalPosition = new Float3(1, 0, 0);
+            Assert.True(Undo.InteractionActive);
+
+            Task<CliRunResponse> run = Task.Run(() => CliServer.Execute(new CliRunRequest { Command = command, Argv = [.. argv], TimeoutSeconds = 30 }));
+            for (int i = 0; i < 20; i++) PumpFrame();
+            whileHeld(run);
+
+            Undo.FlushFrame();
+            Undo.BeginFrameInput(mouseDown: false, mouseHeld: false, shortcut: false);
+            Undo.EndFrame(textFocused: false);
+
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (!run.IsCompleted && clock.Elapsed < TimeSpan.FromSeconds(30)) PumpFrame();
+            Assert.True(run.IsCompleted);
+            return run.Result;
+        }
+        finally
+        {
+            MainThreadContext.Uninstall();
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        static void PumpFrame()
+        {
+            MainThreadContext.Current!.Pump();
+            CliServer.PumpContinuations();
+            Thread.Sleep(2);
+        }
+    }
+
+    [Fact]
+    public void AnEditDuringADrag_RunsAfterItAsItsOwnStep()
+    {
+        Ok("go", "create", "--name", "A");
+        GameObject a = _scene.AllObjects.Single(g => g.Name == "A");
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+
+        CliRunResponse response = RunDuringADrag(a, "go", ["rename", "--target", "/A", "--name", "B"], run =>
+        {
+            Assert.False(run.IsCompleted);
+            Assert.Equal("A", a.Name);
+        });
+
+        Assert.True(response.Ok, response.Error);
+        Assert.Equal("B", a.Name);
+        Undo.PerformUndo();
+        Assert.Equal("A", a.Name);
+        Assert.Equal(new Float3(1, 0, 0), a.Transform.LocalPosition);
+    }
+
+    [Fact]
+    public void UndoDuringADrag_WaitsForItToEnd()
+    {
+        Ok("go", "create", "--name", "A");
+        GameObject a = _scene.AllObjects.Single(g => g.Name == "A");
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+
+        CliRunResponse response = RunDuringADrag(a, "undo", [], run => Assert.False(run.IsCompleted));
+
+        Assert.True(response.Ok, response.Error);
+        Assert.Equal(Float3.Zero, a.Transform.LocalPosition);
+        Assert.Contains(_scene.AllObjects, g => g.Name == "A");
+    }
+
+    [Fact]
+    public void UndoWorksInPlayMode()
+    {
+        Ok("go", "create", "--name", "A");
+        GameObject a = _scene.AllObjects.Single(g => g.Name == "A");
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+        Application.IsPlaying = true;
+
+        Undo.RecordObject(a, "Rename");
+        a.Name = "Renamed";
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+        Ok("undo");
+
+        Assert.Equal("A", a.Name);
+    }
 }
+
 
 /// <summary> Asset, prefab, script and import settings commands against a throwaway project. </summary>
 public class CliAssetCommandTests : EditorTestHarness
@@ -748,6 +838,22 @@ public class CliAssetCommandTests : EditorTestHarness
         string meta = File.ReadAllText(AssetAbsolutePath("Masks/M.mask") + ".meta");
         Assert.Contains("Fire", meta);
     }
+
+    [Fact]
+    public void ImportSettingsFromTheCliUndoAndRedoOnDisk()
+    {
+        Ok("asset", "create", "--path", "Masks/U", "--type", "AvatarMask");
+        string meta = AssetAbsolutePath("Masks/U.mask") + ".meta";
+        Ok("importer", "Masks/U.mask", "--values", """{"clips.Fire.loop": true}""");
+        Assert.Contains("Fire", File.ReadAllText(meta));
+
+        Ok("undo");
+        Assert.DoesNotContain("Fire", File.ReadAllText(meta));
+        Assert.False(Editor.Inspector.ImportSettingsEditor.Pending(CliRefs.ResolveAssetGuid("Masks/U.mask"))!.TryGet("clips", out _));
+
+        Ok("undo", "--redo");
+        Assert.Contains("Fire", File.ReadAllText(meta));
+    }
 }
 
 /// <summary> The graph command building a small state machine, the way an agent would. </summary>
@@ -853,6 +959,20 @@ public class CliGraphCommandTests : EditorTestHarness
         Ok("undo");
         Assert.DoesNotContain("Jump", File.ReadAllText(AssetAbsolutePath("Anim/U.animgraph")));
         Assert.Empty(Ok("graph", "Anim/U.animgraph")["parameters"]!.AsArray());
+    }
+
+    [Fact]
+    public void AGraphEditWithoutSaveStaysInMemoryDirtyAndUndoable()
+    {
+        Ok("asset", "create", "--path", "Anim/N", "--type", "AnimationGraph");
+        Ok("graph", "Anim/N.animgraph", "--action", "edit", "--save", "false", "--ops", """[{"op": "param", "name": "Jump", "kind": "Flag", "trigger": true}]""");
+
+        Assert.DoesNotContain("Jump", File.ReadAllText(AssetAbsolutePath("Anim/N.animgraph")));
+        Assert.Single(Ok("graph", "Anim/N.animgraph")["parameters"]!.AsArray());
+        Assert.True(EditorUtility.IsDirty((Asset)CliRefs.Resolve("Anim/N.animgraph")!));
+
+        Ok("undo");
+        Assert.Empty(Ok("graph", "Anim/N.animgraph")["parameters"]!.AsArray());
     }
 }
 

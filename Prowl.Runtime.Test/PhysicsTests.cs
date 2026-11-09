@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Reflection;
@@ -2900,5 +2900,66 @@ public class PhysicsTests : RuntimeTestBase
         }
 
         Assert.Empty(thrown);
+    }
+
+
+    [Fact]
+    public void StaticPhysics_QueriesTheActiveScene()
+    {
+        Scene withBox = CreatePhysicsScene();
+        AddStaticBox(withBox, Float3.Zero, new Float3(2, 2, 2));
+        StepPhysics(withBox, 2);
+        Scene empty = CreatePhysicsScene();
+
+        using (withBox.Enter())
+        {
+            Assert.True(Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, out RaycastHit hit));
+            Assert.True(hit.Distance > 0);
+            Physics.Gravity = new Float3(0, -3, 0);
+        }
+        using (empty.Enter())
+            Assert.False(Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f));
+
+        Assert.Equal(new Float3(0, -3, 0), withBox.Physics.Gravity);
+        Assert.NotEqual(new Float3(0, -3, 0), empty.Physics.Gravity);
+    }
+}
+
+// Assigns the project wide defaults every new world copies, so nothing else may run alongside it.
+[CollectionDefinition(nameof(WorldDefaultsTests), DisableParallelization = true)]
+public sealed class WorldDefaultsTestsCollection { }
+
+[Collection(nameof(WorldDefaultsTests))]
+public class WorldDefaultsTests : RuntimeTestBase
+{
+    [Fact]
+    public void PhysicsDefaults_ReachEveryNewWorld()
+    {
+        PhysicsWorldSettings previous = PhysicsWorld.Defaults;
+        try
+        {
+            PhysicsWorld.Defaults = new PhysicsWorldSettings { Gravity = new Float3(0, -1, 0), SolverIterations = 5, AllowSleep = false };
+
+            Scene scene = CreateScene();
+            var standalone = new PhysicsWorld();
+
+            Assert.Equal(new Float3(0, -1, 0), scene.Physics.Gravity);
+            Assert.Equal(5, scene.Physics.SolverIterations);
+            Assert.False(scene.Physics.AllowSleep);
+            Assert.Equal(new Float3(0, -1, 0), standalone.Gravity);
+        }
+        finally { PhysicsWorld.Defaults = previous; }
+    }
+
+    [Fact]
+    public void ClockDefaults_ReachEveryNewClock()
+    {
+        SceneClockSettings previous = SceneClock.Defaults;
+        try
+        {
+            SceneClock.Defaults = new SceneClockSettings { TimeScale = 0.5f };
+            Assert.Equal(0.5f, new TimeData().TimeScale);
+        }
+        finally { SceneClock.Defaults = previous; }
     }
 }

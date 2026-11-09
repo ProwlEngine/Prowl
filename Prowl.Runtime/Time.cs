@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -7,6 +7,29 @@ using System.Collections.Generic;
 using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace Prowl.Runtime;
+
+/// <summary>The time settings every new clock starts with, from the project time settings.</summary>
+public sealed class SceneClockSettings
+{
+    public float TimeScale = 1f;
+
+    public SceneClockSettings Clone() => (SceneClockSettings)MemberwiseClone();
+}
+
+/// <summary>A world's clock. There is one global clock for now, so this holds only the defaults a new clock copies.</summary>
+public sealed class SceneClock
+{
+    private static SceneClockSettings s_defaults = new();
+
+    private SceneClock() { }
+
+    /// <summary>The project time settings. A new clock copies them.</summary>
+    public static SceneClockSettings Defaults
+    {
+        get => s_defaults;
+        set => s_defaults = (value ?? throw new System.ArgumentNullException(nameof(value))).Clone();
+    }
+}
 
 public class TimeData
 {
@@ -23,8 +46,8 @@ public class TimeData
 
     public long FrameCount;
 
-    /// <summary>The base time scale. Time runs at <see cref="EffectiveTimeScale"/>, this times every active modifier.</summary>
-    public float TimeScale = 1f;
+    /// <summary>The base time scale, starting at the project default. Time runs at <see cref="EffectiveTimeScale"/>, this times every active modifier.</summary>
+    public float TimeScale = SceneClock.Defaults.TimeScale;
     public float TimeSmoothFactor = .25f;
 
     private readonly List<TimeScaleModifier> _modifiers = [];

@@ -46,8 +46,6 @@ public class LightEditor : CustomEditor
         var light = (Light)target;
         if (EditorTheme.DefaultFont == null) return;
 
-        Undo.Snapshot(light);
-
         PresetRow(paper, id, light);
         IntensityRow(paper, id, light);
         ReadoutRow(paper, id, light);
@@ -330,9 +328,9 @@ public class LightEditor : CustomEditor
 
     private static void Edit(Light light, Action change)
     {
+        Undo.RecordObject(light, "Edit Light");
         change();
         PrefabUtility.NotifyEdited(light);
-        EditorSceneManager.MarkDirty();
     }
 
     // A change to the cone or the size that keeps the light's lumens while it is edited in lumens

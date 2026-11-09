@@ -376,11 +376,14 @@ public static class Debug
 
     #region Gizmos
 
-    private static readonly GizmoBuilder s_gizmoBuilder = new();
+    // Draw calls land in the scene whose code is running, so a preview never draws the game's lines.
+    private static GizmoBuilder s_gizmoBuilder => Resources.Scene.Active.Gizmos;
 
+    /// <summary>Clears every scene's gizmos for the next frame.</summary>
     public static void ClearGizmos()
     {
-        s_gizmoBuilder.Clear();
+        foreach (Resources.Scene scene in Resources.Scene.Live)
+            scene.Gizmos.Clear();
     }
 
     /// <summary>The layer gizmos draw on. Views showing gizmos include it, cameras never draw it otherwise.</summary>
@@ -388,15 +391,16 @@ public static class Debug
 
     private static readonly Dictionary<RenderWorld, ulong> s_gizmosSubmitted = [];
 
-    /// <summary>Draws this frame's gizmos into a world, once a frame, on the gizmo layer.</summary>
-    internal static void SubmitGizmos(RenderWorld world)
+    /// <summary>Draws a scene's gizmos for this frame into a world, once a frame, on the gizmo layer.</summary>
+    internal static void SubmitGizmos(Resources.Scene? scene, RenderWorld world)
     {
+        if (scene.IsNotValid()) return;
         if (s_gizmosSubmitted.TryGetValue(world, out ulong frame) && frame == Graphics.FrameIndex) return;
         s_gizmosSubmitted[world] = Graphics.FrameIndex;
         if (s_gizmosSubmitted.Count > 64)
             foreach (RenderWorld stale in s_gizmosSubmitted.Where(pair => pair.Value != Graphics.FrameIndex).Select(pair => pair.Key).ToList())
                 s_gizmosSubmitted.Remove(stale);
-        s_gizmoBuilder.Submit(world);
+        scene.Gizmos.Submit(world);
     }
 
     public static List<GizmoBuilder.IconDrawCall> GetGizmoIcons()
@@ -649,6 +653,9 @@ public class GizmoBuilder
     }
 
     private List<IconDrawCall> _icons = [];
+
+    /// <summary>Whether nothing was drawn into this builder since it was last cleared.</summary>
+    internal bool IsEmpty => _wireData.Vertices.Count == 0 && _solidData.Vertices.Count == 0 && _icons.Count == 0;
 
     private Stack<Float4x4> _matrix4X4s = new();
 

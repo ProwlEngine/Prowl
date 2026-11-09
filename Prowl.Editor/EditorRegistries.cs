@@ -150,7 +150,7 @@ public static class EditorRegistries
 
         foreach (Action del in _sceneSavedCallbacks) EditorSceneManager.OnSceneSaved -= del;
         _sceneSavedCallbacks.Clear();
-        foreach (Action del in _undoRedoCallbacks) Undo.OnUndoRedo -= del;
+        foreach (Action del in _undoRedoCallbacks) Undo.undoRedoPerformed -= del;
         _undoRedoCallbacks.Clear();
 
         _initOnLoadMethods.Clear();
@@ -222,7 +222,7 @@ public static class EditorRegistries
         _settingsEntries.Sort((a, b) => a.Order.CompareTo(b.Order));
 
         foreach (Action del in _sceneSavedCallbacks) EditorSceneManager.OnSceneSaved += del;
-        foreach (Action del in _undoRedoCallbacks) Undo.OnUndoRedo += del;
+        foreach (Action del in _undoRedoCallbacks) Undo.undoRedoPerformed += del;
 
         foreach (MethodInfo m in _initOnLoadMethods)
         {
@@ -682,6 +682,13 @@ public static class EditorRegistries
         if (project == null) return;
         Directory.CreateDirectory(project.ProjectSettingsPath);
         foreach (SettingsEntry entry in _settingsEntries) SaveSettings(entry);
+    }
+
+    /// <summary> Saves the registered settings entry of the given type, if there is one. </summary>
+    internal static void SaveSettings(Type type)
+    {
+        foreach (SettingsEntry entry in _settingsEntries)
+            if (entry.Type == type) { SaveSettings(entry); return; }
     }
 
     /// <summary> Saves a single settings entry to a YAML file named after the entry in the project settings directory. </summary>

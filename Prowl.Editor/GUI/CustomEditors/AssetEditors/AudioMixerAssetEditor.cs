@@ -54,33 +54,8 @@ public class AudioMixerAssetEditor : AssetImporterEditor
     // something anyone can see.
     private float _consoleWidth = 320.0f;
 
-    protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
-        => asset is AudioMixer mixer && mixer.IsValid() ? SerializePersisted(mixer) : null;
-
-    /// <summary>
-    /// Baselines against what was imported rather than the live object, so a mixer changed from a
-    /// script shows up as pending instead of being adopted as already saved.
-    /// </summary>
-    protected override EchoObject? CapturePersistedState(AssetEntry entry, EngineObject? asset)
-        => EditorAssetBackend.Instance?.ReadCachedEcho(entry.Guid) ?? CaptureState(entry, asset);
-
-    /// <summary>Serializes the mixer the way its import cache holds it, its groups by reference, so it compares against the cache.</summary>
-    private static EchoObject SerializePersisted(AudioMixer mixer) => Serializer.Serialize(typeof(object), mixer);
-
-    protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
-    {
-        if (asset is not AudioMixer mixer || mixer.IsNotValid()) return false;
-        EditorAssetBackend? db = EditorAssetBackend.Instance;
-        return db != null && db.SerializeForSave(mixer) is { } serialized && db.SaveAsset(entry.Guid, serialized);
-    }
-
-    protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
-    {
-        if (asset is not AudioMixer mixer || mixer.IsNotValid()) return;
-
-        // Refilled in place, groups too, so every source already routed to one hears the revert immediately.
-        EditorAssetBackend.Instance?.RevertToSaved(mixer);
-    }
+    // The mixer and its groups are edited live. Each draw records them, and the flush keeps a record only for
+    // what changed, which puts it in the dirty asset set.
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
@@ -96,6 +71,21 @@ public class AudioMixerAssetEditor : AssetImporterEditor
         // something is drawing meters. Asked for again every frame, and it lapses on its own.
         AudioMixerGroup.RequestMetering();
 
+        // A transition started from here moves the mix over many frames, and becomes one step when it ends.
+        if (ReferenceEquals(_transitioning, mixer) && !mixer.IsTransitioning)
+        {
+            Core.Undo.RegisterOperation(new MixerStateOperation("Transition Audio Mixer", mixer, _transitionBefore!, MixerState.Capture(mixer)));
+            _transitioning = null;
+            _transitionBefore = null;
+        }
+
+        if (!Origami.IsReadOnly && !mixer.IsTransitioning)
+        {
+            Core.Undo.WatchObject(mixer, "Edit Audio Mixer");
+            foreach (AudioMixerGroup group in mixer.Groups)
+                if (group.IsValid()) Core.Undo.WatchObject(group, "Edit Audio Mixer");
+        }
+
         List<Strip> strips = BuildStrips(mixer);
 
         paper.Box($"{id}_probe").Width(UnitValue.Stretch()).Height(0).IsNotInteractable()
@@ -106,7 +96,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
         DrawConsole(paper, id, mixer, strips);
         DrawSelected(paper, id, mixer);
 
-        DrawApplyRevertBar(paper, id, entry, asset);
+        DrawSaveRevertBar(paper, id, mixer);
     }
 
     /// <summary>A bus and how deep it sits, in the order the strips are laid out.</summary>
@@ -200,6 +190,37 @@ public class AudioMixerAssetEditor : AssetImporterEditor
     /// <summary>How long a click on a snapshot takes to move the mixer there.</summary>
     private float _transitionSeconds = 0.5f;
 
+    private AudioMixer? _transitioning;
+    private MixerState? _transitionBefore;
+
+    // The mixer and every group, each by asset id with its content, so an operation can refill them later.
+    private sealed class MixerState(List<(Guid Id, Echo.EchoObject Data)> assets)
+    {
+        public readonly List<(Guid Id, Echo.EchoObject Data)> Assets = assets;
+
+        public static MixerState Capture(AudioMixer mixer)
+        {
+            var assets = new List<(Guid, Echo.EchoObject)> { (mixer.AssetID, Echo.Serializer.Serialize(typeof(object), mixer)) };
+            foreach (AudioMixerGroup group in mixer.Groups)
+                if (group.IsValid() && group.IsFromDatabase) assets.Add((group.AssetID, Echo.Serializer.Serialize(typeof(object), group)));
+            return new MixerState(assets);
+        }
+
+        public void Restore()
+        {
+            foreach ((Guid id, Echo.EchoObject data) in Assets)
+                if (AssetDatabase.TryGetExisting(id, out Asset asset)) AssetDatabase.Refill(asset, data, ReloadReason.Undo);
+        }
+    }
+
+    private sealed class MixerStateOperation(string name, AudioMixer mixer, MixerState before, MixerState after) : Core.IUndoOperation
+    {
+        public string Name => name;
+        public IReadOnlyList<Core.UndoOwner> Owners { get; } = [Core.UndoOwner.Of(mixer)];
+        public void Undo() => before.Restore();
+        public void Redo() => after.Restore();
+    }
+
     /// <summary>
     /// The recorded mixes, and the controls for taking and editing them.
     /// </summary>
@@ -235,6 +256,19 @@ public class AudioMixerAssetEditor : AssetImporterEditor
                 Origami.Button(paper, $"{id}_snap{i}", snapshot.Name, () =>
                 {
                     _snapshot = snapshot.Name;
+                    // Settles this frame's capture before the mix starts moving, so no partial transition is recorded.
+                    Core.Undo.FlushUndoRecordObjects();
+                    if (seconds > 0.0f)
+                    {
+                        _transitioning = mixer;
+                        _transitionBefore = MixerState.Capture(mixer);
+                    }
+                    else
+                    {
+                        Core.Undo.RecordObject(mixer, "Apply Snapshot");
+                        foreach (AudioMixerGroup group in mixer.Groups)
+                            if (group.IsValid()) Core.Undo.RecordObject(group, "Apply Snapshot");
+                    }
                     mixer.TransitionTo(snapshot, seconds);
                 }).Small().Style(active ? ButtonStyle.Filled : ButtonStyle.Outline)
                   .Tooltip($"Move the mixer to '{snapshot.Name}' over {seconds:0.##}s").Show();

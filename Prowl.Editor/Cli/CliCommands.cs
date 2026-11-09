@@ -336,11 +336,12 @@ public static class CliCommands
     }
 
     [CliCommand("eval", "Compiles and runs C# on the editor main thread and returns the result. Accepts an expression or statements with a return, and await")]
-    public static Task<object?> Eval([CliArg("code", "C# expression or statements. Leading using directives are allowed")] string code)
+    public static async Task<object?> Eval([CliArg("code", "C# expression or statements. Leading using directives are allowed")] string code)
     {
         if (!EditorSettings.Instance.AllowCliEval)
             throw new CliException("eval is turned off in Editor Preferences > General > Command Line.");
-        return CliEval.Run(code);
+        await CliEdit.WaitForEditor();
+        return await CliEval.Run(code);
     }
 }
 

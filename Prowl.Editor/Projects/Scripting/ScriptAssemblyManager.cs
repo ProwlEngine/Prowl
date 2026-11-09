@@ -479,7 +479,7 @@ public static class ScriptAssemblyManager
 
             // Undo history holds closures + references captured against the old code; a recompile is a natural
             // boundary, so drop it. Do this before the walk so watching the editor doesn't migrate it needlessly.
-            try { Undo.Clear(); } catch { }
+            try { Undo.ClearAll(); } catch { }
 
             // Migrate the live scene onto the new types (both assemblies loaded, no unload needed). Do this
             // BEFORE committing the new context as active, so a mid-migration throw leaves the old assemblies

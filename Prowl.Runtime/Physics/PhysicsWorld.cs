@@ -726,8 +726,34 @@ public class PhysicsWorld
     /// </summary>
     public event Action<float> PreSubStep;
 
+    private static PhysicsWorldSettings s_defaults = new();
+
+    /// <summary>The project physics settings. Every new world copies them, so previews, opened worlds and tests get them too.</summary>
+    public static PhysicsWorldSettings Defaults
+    {
+        get => s_defaults;
+        set => s_defaults = (value ?? throw new ArgumentNullException(nameof(value))).Clone();
+    }
+
+    /// <summary>Copies every setting from <paramref name="settings"/>.</summary>
+    public void ApplySettings(PhysicsWorldSettings settings)
+    {
+        Gravity = settings.Gravity;
+        SolverIterations = settings.SolverIterations;
+        RelaxIterations = settings.RelaxIterations;
+        Substep = settings.Substep;
+        AllowSleep = settings.AllowSleep;
+        UseMultithreading = settings.UseMultithreading;
+        AutoSyncTransforms = settings.AutoSyncTransforms;
+        EnhancedDeterminism = settings.EnhancedDeterminism;
+        ThreadModel = settings.ThreadModel;
+        EnableAuxiliaryContactPoints = settings.EnableAuxiliaryContactPoints;
+        PersistentContactManifold = settings.PersistentContactManifold;
+        SpeculativeRelaxationFactor = settings.SpeculativeRelaxationFactor;
+    }
+
     /// <summary>
-    /// Initializes a new empty <see cref="PhysicsWorld"/>.
+    /// Initializes a new empty <see cref="PhysicsWorld"/> with the project <see cref="Defaults"/>.
     /// </summary>
     public PhysicsWorld()
     {
@@ -748,6 +774,8 @@ public class PhysicsWorld
         World.PreStep += OnPreStep;
         World.PostStep += OnPostStep;
         World.PreSubStep += OnPreSubStep;
+
+        ApplySettings(s_defaults);
     }
 
     /// <summary>
@@ -2579,4 +2607,23 @@ public class PhysicsWorld
     }
 
     #endregion
+}
+
+/// <summary>The settings a <see cref="PhysicsWorld"/> starts with, from the project physics settings.</summary>
+public sealed class PhysicsWorldSettings
+{
+    public Float3 Gravity = new(0, -9.81f, 0);
+    public int SolverIterations = 12;
+    public int RelaxIterations = 4;
+    public int Substep = 3;
+    public bool AllowSleep = true;
+    public bool UseMultithreading = true;
+    public bool AutoSyncTransforms = true;
+    public bool EnhancedDeterminism;
+    public PhysicsThreadModel ThreadModel = PhysicsThreadModel.Regular;
+    public bool EnableAuxiliaryContactPoints = true;
+    public bool PersistentContactManifold = true;
+    public float SpeculativeRelaxationFactor = 0.9f;
+
+    public PhysicsWorldSettings Clone() => (PhysicsWorldSettings)MemberwiseClone();
 }

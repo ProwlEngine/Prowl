@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 using Prowl.Echo;
 using Prowl.Editor.Core;
@@ -307,7 +308,8 @@ public static class CliRefs
         else
             CliEdit.Run("Set", () =>
             {
-                Undo.Snapshot(target);
+                if (target is EngineObject engineObject) Undo.RecordObject(engineObject, "CLI: Set");
+                else Undo.RecordObject(target, UndoOwner.None, "CLI: Set");
                 WriteFields(target, values);
             });
 
@@ -710,13 +712,27 @@ public static class CliEdit
     private static bool s_warnedThisPlay;
     private static bool s_wasPlaying;
 
+    /// <summary>
+    /// Waits for an editor interaction, such as a drag in the scene view, to end, so a command never splits or reverts it.
+    /// Commands wait before they resolve their targets. Simulated input is never held back, so a drag the CLI drives still ends.
+    /// </summary>
+    public static async Task WaitForEditor()
+    {
+        if (!await CliServer.WaitUntil(() => !Undo.InteractionActive, s_interactionTimeout))
+            throw new CliException("An editor interaction is in progress, such as a drag in the scene view. Try again once it ends.");
+    }
+
+    private static readonly TimeSpan s_interactionTimeout = TimeSpan.FromSeconds(20);
+
     public static void Run(string description, Action change)
     {
+        if (Undo.InteractionActive) throw new CliException("An editor interaction is in progress, such as a drag in the scene view. Try again once it ends.");
         WarnIfPlaying();
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
         change();
-        Undo.IncrementGroup();
-        if (!Application.IsPlaying) EditorSceneManager.MarkDirty();
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
     }
 
     public static T Run<T>(string description, Func<T> change)
@@ -742,14 +758,16 @@ public static class CliEdit
             change();
             EchoObject after = assets.SerializeForSave(owner) ?? throw new CliException($"'{owner.Name}' could not be serialized after the edit.");
             if (!assets.SaveAsset(ownerId, after)) throw new CliException($"'{owner.Name}' could not be saved. See the logs.");
-            Undo.RegisterAction($"CLI: {description}", () => assets.SaveAsset(ownerId, before), () => assets.SaveAsset(ownerId, after));
+            Undo.RegisterOperation(new AssetSaveOperation($"CLI: {description}", assets, ownerId, before, after));
         });
     }
 
-    /// <summary> Records a GameObject level change as its own undo step, looking the object up again by id on undo and redo. </summary>
-    public static void Record(string description, List<(Action undo, Action redo)> actions)
+    private sealed class AssetSaveOperation(string name, EditorAssetBackend assets, Guid fileId, EchoObject before, EchoObject after) : IUndoOperation
     {
-        if (actions.Count > 0) Undo.RegisterActionGroup($"CLI: {description}", actions);
+        public string Name => name;
+        public IReadOnlyList<UndoOwner> Owners { get; } = [UndoOwner.OfAssetFile(fileId)];
+        public void Undo() => assets.SaveAsset(fileId, before);
+        public void Redo() => assets.SaveAsset(fileId, after);
     }
 
     private static void WarnIfPlaying()
@@ -760,6 +778,6 @@ public static class CliEdit
 
         if (!playing || s_warnedThisPlay) return;
         s_warnedThisPlay = true;
-        Debug.LogWarning("[CLI] Play mode is running, so this change is not undoable and is lost when play stops. Stop play mode to make lasting edits.");
+        Debug.LogWarning("[CLI] Play mode is running, so this change is lost when play stops. Stop play mode to make lasting edits.");
     }
 }

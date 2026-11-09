@@ -651,6 +651,7 @@ public class ModelAssetEditor : ImportSettingsEditor
         Guid guid = Importers.ModelImportOverrides.ExtractMaterial(material!, path ?? "", slot.Name);
         if (guid == Guid.Empty) return;
 
+        Core.Undo.RegisterImporterUndo(entry.Guid, "Extract Material");
         Importers.ModelImportOverrides.SetExtractedMaterial(settings, slot.Name, guid);
     }
 

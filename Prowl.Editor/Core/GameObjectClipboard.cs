@@ -104,7 +104,6 @@ public static class GameObjectClipboard
                 Selection.Clear();
                 foreach (GameObject go in results)
                     Selection.AddToSelection(go);
-                EditorSceneManager.MarkDirty();
             }
         }
         catch (Exception ex)
@@ -163,7 +162,6 @@ public static class GameObjectClipboard
             Selection.Clear();
             foreach (GameObject go in results)
                 Selection.AddToSelection(go);
-            EditorSceneManager.MarkDirty();
         }
 
         return results;

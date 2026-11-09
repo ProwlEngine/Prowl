@@ -131,30 +131,11 @@ public class Camera : Component
     /// <summary>Cameras draw lowest depth first, each over the ones before.</summary>
     public int Depth = -1;
 
-    private static Camera? s_main;
-    private static Scene? s_mainScene;
-    private static long s_mainFrame = -1;
-
     /// <summary>
-    /// The camera shown on top: the enabled camera with the highest <see cref="Depth"/> in the current scene
-    /// that draws to the screen. Cameras drawing into a render texture, cameras stacked over others and editor helper
-    /// cameras are never main.
-    /// Found once per frame, null when there is none.
+    /// The main camera of <see cref="Scene.Active"/>, the scene whose code is running: the enabled camera with the
+    /// highest <see cref="Depth"/> that draws to the screen. Null when there is none.
     /// </summary>
-    public static Camera? Main
-    {
-        get
-        {
-            Scene scene = Scene.Current;
-            if (s_mainFrame != Time.FrameCount || s_mainScene != scene || (!ReferenceEquals(s_main, null) && s_main.IsNotValid()))
-            {
-                s_main = scene.FindMainCamera();
-                s_mainScene = scene;
-                s_mainFrame = Time.FrameCount;
-            }
-            return s_main;
-        }
-    }
+    public static Camera? Main => Resources.Scene.Active.MainCamera;
 
     /// <summary>
     /// The render texture asset this camera draws into. None means it draws wherever the render it takes part in is
@@ -409,7 +390,7 @@ public class Camera : Component
         view.Keywords = options.Keywords;
         if (options.DisplayGizmos)
         {
-            Debug.SubmitGizmos(world);
+            Debug.SubmitGizmos(GameObject.Scene, world);
             view.CullingMask |= Debug.GizmoLayerMask;
         }
         Graphics.AddView(view);

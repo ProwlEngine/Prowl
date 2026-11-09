@@ -1145,6 +1145,29 @@ public static class Sample
             .Alignment(TextAlignment.MiddleLeft);
     }
 
+    private static readonly HashSet<string> s_openFolds = new();
+
+    /// <summary>A header that opens and closes the controls under it on click, true while open.</summary>
+    public static bool Foldout(Paper paper, FontFile font, string text, bool startOpen = false, int id = 0)
+    {
+        string key = text + "#" + id;
+        if (startOpen && s_openFolds.Add(key + "#seen"))
+            s_openFolds.Add(key);
+        bool open = s_openFolds.Contains(key);
+        paper.Box("fold " + text, id).Height(26)
+            .BackgroundColor(SampleHud.Control).Rounded(6)
+            .Hovered.BackgroundColor(SampleHud.ControlHover).End()
+            .Text((open ? "-  " : "+  ") + text, font).FontSize(14).TextColor(SampleHud.Accent)
+            .Alignment(TextAlignment.MiddleLeft)
+            .Cursor(PaperCursor.Pointer)
+            .OnClick(_ =>
+            {
+                if (!s_openFolds.Remove(key))
+                    s_openFolds.Add(key);
+            });
+        return open;
+    }
+
     public static void Label(Paper paper, FontFile font, string text, int id = 0)
     {
         paper.Box("label " + text, id).Height(UnitValue.Auto)

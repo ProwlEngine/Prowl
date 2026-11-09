@@ -98,6 +98,8 @@ public class BuildSettingsPanel : DockPanel
                 SelectPlatform(0);
             }
         }
+        int selected = _buildPlatforms.FindIndex(p => p.BuildPipelineType.FullName == _buildSettings.SelectedPipeline);
+        if (selected >= 0) _selectedIndex = selected;
         Instance ??= this;
 
         // Dropped once finished so nothing holds on to the last build's log for the rest of the
@@ -190,7 +192,11 @@ public class BuildSettingsPanel : DockPanel
                 .Hovered.TextColor(EditorTheme.Ink500).End()
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
 
-            grip.OnDragStart(sk, (k, _) => paper.SetElementStorage(listEl, "dragSk", k))
+            grip.OnDragStart(sk, (k, _) =>
+                {
+                    Record("Reorder Build Scenes");
+                    paper.SetElementStorage(listEl, "dragSk", k);
+                })
                 .OnDragging(sk, (k, _) =>
                 {
                     int cur = scenes.FindIndex(s => s.SceneGuid.ToString() == k);
@@ -204,6 +210,7 @@ public class BuildSettingsPanel : DockPanel
                         float d = MathF.Abs(cys[t] - py);
                         if (d < best) { best = d; target = t; }
                     }
+                    Record("Reorder Build Scenes");
                     MoveScene(scenes, cur, target);
                 })
                 .OnDragEnd(_ =>
@@ -220,6 +227,7 @@ public class BuildSettingsPanel : DockPanel
             using (paper.Row($"bp_sc_{sk}_sww").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(4, 4, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                 Origami.Switch(paper, $"bp_sc_{sk}_sw", scene.Enabled, v =>
                 {
+                    Record("Toggle Build Scene");
                     scene.Enabled = v;
                     EditorRegistries.SaveSettings();
                 }).NoLabel().Show();
@@ -235,6 +243,7 @@ public class BuildSettingsPanel : DockPanel
                 .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(idx, (ci, _) =>
                 {
+                    Record("Remove Build Scene");
                     scenes.RemoveAt(ci);
                     EditorRegistries.SaveSettings();
                 });
@@ -272,6 +281,7 @@ public class BuildSettingsPanel : DockPanel
             return;
         }
 
+        Record("Add Build Scene");
         _buildSettings.Scenes.Add(new SceneBuildEntry { Path = entry.Path, SceneGuid = entry.Guid });
         EditorRegistries.SaveSettings();
     }
@@ -340,24 +350,24 @@ public class BuildSettingsPanel : DockPanel
 
                 EditorGUI.SettingsRow(paper, "bp_cfg_config", Loc.Get("build.configuration"), () =>
                     Origami.EnumDropdown(paper, "bp_cfg_config_v", _buildSettings.Config,
-                        v => { _buildSettings.Config = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
+                        v => { Record("Change Build Configuration"); _buildSettings.Config = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
 
                 EditorGUI.SettingsRow(paper, "bp_cfg_out", Loc.Get("build.output_dir"), () =>
                     Origami.TextField(paper, "bp_cfg_out_v", _buildSettings.OutputDirectory,
-                        v => { _buildSettings.OutputDirectory = v; EditorRegistries.SaveSettings(); }).CommitOnEnter().Show(), separator: false);
+                        v => { Record("Change Build Output Directory"); _buildSettings.OutputDirectory = v; EditorRegistries.SaveSettings(); }).CommitOnEnter().Show(), separator: false);
 
                 EditorGUI.SettingsRow(paper, "bp_cfg_pkg", Loc.Get("build.asset_packaging"), () =>
                     Origami.EnumDropdown(paper, "bp_cfg_pkg_v", _buildSettings.PackagingMode,
-                        v => { _buildSettings.PackagingMode = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
+                        v => { Record("Change Asset Packaging"); _buildSettings.PackagingMode = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
 
                 EditorGUI.SettingsRow(paper, "bp_cfg_asset", Loc.Get("build.asset_export"), () =>
                     Origami.EnumDropdown(paper, "bp_cfg_asset_v", _buildSettings.AssetMode,
-                        v => { _buildSettings.AssetMode = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
+                        v => { Record("Change Asset Export"); _buildSettings.AssetMode = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
 
                 if (_buildSettings.PackagingMode == AssetPackagingMode.ProwlPak)
                     EditorGUI.SettingsRow(paper, "bp_cfg_pak", Loc.Get("build.max_pak_size"), () =>
                         Origami.IntSlider(paper, "bp_cfg_pak_v", _buildSettings.MaxPakSizeMB,
-                            v => { _buildSettings.MaxPakSizeMB = v; EditorRegistries.SaveSettings(); },
+                            v => { Record("Change Max Pak Size"); _buildSettings.MaxPakSizeMB = v; EditorRegistries.SaveSettings(); },
                             256, 4096).Show(), separator: false);
 
                 paper.Box("bp_plat_pad").Height(12);
@@ -366,6 +376,8 @@ public class BuildSettingsPanel : DockPanel
     }
 
     private const float CardGap = 6f;
+
+    private void Record(string name) => Undo.RecordObject(_buildSettings, UndoOwner.OfSettings(typeof(BuildSettings)), name);
 
     private void SelectPlatform(int index)
     {
@@ -408,7 +420,11 @@ public class BuildSettingsPanel : DockPanel
 
         if (selectable)
             card.Hovered.BorderColor(sel ? EditorTheme.Accent : EditorTheme.BorderStrong).End()
-                .OnClick(slot.realIndex, (id, _) => SelectPlatform(id));
+                .OnClick(slot.realIndex, (id, _) =>
+                {
+                    Record("Select Build Platform");
+                    SelectPlatform(id);
+                });
         else
             card.IsNotInteractable();
 

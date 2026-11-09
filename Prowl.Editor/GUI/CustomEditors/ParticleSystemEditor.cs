@@ -2,7 +2,6 @@ using System;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
-using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -20,9 +19,6 @@ public class ParticleSystemComponentEditor : CustomEditor
         var ps = (ParticleSystemComponent)target;
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
-
-        // Pre-snapshot: captures entire component state before any widget mutates it
-        Undo.Snapshot(ps);
 
         DrawPlaybackControls(paper, $"{id}_play", ps, font);
         paper.Box($"{id}_sp0").Height(4);
@@ -58,16 +54,15 @@ public class ParticleSystemComponentEditor : CustomEditor
     private static void Module(Paper paper, string id, string key, string icon, string label, ParticleSystemComponent ps, ParticleSystemModule module)
         => EditorGUI.ModuleSection(paper, $"{id}_{key}", icon, label, module.Enabled, v =>
         {
+            Undo.RecordObject(ps, $"Toggle {label}");
             module.Enabled = v;
-            EditorSceneManager.MarkDirty();
         }, () => DrawModule(paper, $"{id}_{key}", ps, module));
 
     private static void DrawModule(Paper paper, string id, ParticleSystemComponent ps, ParticleSystemModule module)
-        => PropertyGridUtils.Draw(paper, $"{id}_grid", module, _ =>
-        {
-            ps.OnValidate();
-            EditorSceneManager.MarkDirty();
-        }, 1);
+    {
+        using (Undo.InspectorHolder(ps))
+            PropertyGridUtils.Draw(paper, $"{id}_grid", module, _ => ps.OnValidate(), 1);
+    }
 
     private static void DrawPlaybackControls(Paper paper, string id, ParticleSystemComponent ps, Prowl.Scribe.FontFile font)
     {

@@ -54,6 +54,15 @@ public abstract class AssetImporterEditor
     /// </summary>
     private static readonly Dictionary<Guid, EchoObject> s_baselines = [];
 
+    /// <summary>Drops an asset's clean baseline after its state was written elsewhere, so the next draw takes it again.</summary>
+    /// <summary>Applies a change that was written to disk to the clean baseline too, so it does not show as pending.</summary>
+    internal static void PatchBaseline(Guid guid, Action<EchoObject> patch)
+    {
+        if (s_baselines.TryGetValue(guid, out EchoObject baseline)) patch(baseline);
+    }
+
+    internal static void ForgetBaseline(Guid guid) => s_baselines.Remove(guid);
+
     /// <summary>
     /// This editor's current authored state as Echo, or null when it has nothing that can be applied.
     /// For an importer this is the <c>.meta</c> settings compound; for a content asset it is the live
@@ -115,8 +124,9 @@ public abstract class AssetImporterEditor
     /// <summary>Drops the pending edits, restoring the asset to what is on disk.</summary>
     public void RevertPendingChanges(AssetEntry entry, EngineObject? asset)
     {
-        if (s_baselines.TryGetValue(entry.Guid, out EchoObject baseline))
-            RevertState(entry, asset, baseline.Clone());
+        if (!s_baselines.TryGetValue(entry.Guid, out EchoObject baseline)) return;
+        if (this is ImportSettingsEditor) Core.Undo.RegisterImporterUndo(entry.Guid, "Revert Import Settings");
+        RevertState(entry, asset, baseline.Clone());
     }
 
     /// <summary>
@@ -135,6 +145,36 @@ public abstract class AssetImporterEditor
     // ============================================================
     // Shared UI
     // ============================================================
+
+    /// <summary>
+    /// Save and Revert for an asset edited in memory, shown while it is in the dirty asset set. Revert is undoable.
+    /// </summary>
+    protected static void DrawSaveRevertBar(Paper paper, string id, Asset asset)
+    {
+        if (Origami.IsReadOnly || !Core.EditorUtility.IsDirty(asset)) return;
+        if (EditorAssetBackend.Instance is not EditorAssetBackend db) return;
+
+        OrigamiMetrics m = Origami.Current.Metrics;
+        using (paper.Row($"{id}_savebar").Height(UnitValue.Auto)
+            .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge)
+            .Gap(m.SpacingMedium).Enter())
+        {
+            paper.Box($"{id}_savebar_spacer").Height(1).IsNotInteractable();
+
+            Origami.Button(paper, $"{id}_revert", Prowl.Rosetta.Loc.Get("dialog.revert"), () =>
+            {
+                Core.Undo.RecordObject(asset, "Revert Asset");
+                db.RevertToSaved(asset);
+                Core.Undo.FlushUndoRecordObjects();
+                Core.EditorUtility.ClearAssetDirty(asset.AssetID);
+            }).Height(30).Show();
+
+            Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  {Prowl.Rosetta.Loc.Get("dialog.save")}", () =>
+            {
+                if (db.SaveAsset(asset)) Core.EditorUtility.ClearAssetDirty(asset.AssetID);
+            }).Primary().Height(30).Show();
+        }
+    }
 
     /// <summary>
     /// Draws the Apply / Revert pair, and nothing at all when there is nothing to apply. Every asset

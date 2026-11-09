@@ -751,4 +751,43 @@ public class LifecycleTests : RuntimeTestBase
         Assert.Contains("OnAddedToScene", childComp.Events);
         Assert.Contains("OnEnable", childComp.Events);
     }
+    private sealed class ParentProbe : Component
+    {
+        public GameObject? ParentAtEnable;
+        public override void OnEnable() => ParentAtEnable = GameObject.Parent;
+    }
+
+    // A detached object joining a scene under a parent must already have that parent when OnEnable runs.
+    [Fact]
+    public void SetParent_DetachedIntoScene_OnEnableSeesTheParent()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject parent = CreateGameObject("Parent");
+        scene.Add(parent);
+        GameObject child = CreateGameObject("Child");
+        ParentProbe probe = child.AddComponent<ParentProbe>();
+
+        child.SetParent(parent, worldPositionStays: false);
+
+        Assert.Same(parent, probe.ParentAtEnable);
+    }
+
+    // An enabled detached tree moved under a disabled parent must not be enabled on the way in.
+    [Fact]
+    public void SetParent_DetachedUnderDisabledParent_FiresNoOnEnable()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject parent = CreateGameObject("Parent");
+        scene.Add(parent);
+        parent.Enabled = false;
+        GameObject child = CreateGameObject("Child");
+        TestLifecycleComponent comp = child.AddComponent<TestLifecycleComponent>();
+        comp.ClearEvents();
+
+        child.SetParent(parent, worldPositionStays: false);
+
+        Assert.DoesNotContain("OnEnable", comp.Events);
+        Assert.DoesNotContain("OnDisable", comp.Events);
+        Assert.False(comp.EnabledInHierarchy);
+    }
 }

@@ -103,9 +103,9 @@ public sealed class NavMeshBakeService
     /// <summary>Unregister and drop the surface's baked data reference. The .navmesh file is left on disk.</summary>
     public static void Clear(NavMeshSurface surface)
     {
+        Core.Undo.RecordObject(surface, "Clear NavMesh");
         surface.NavMeshData = null;
         surface.RefreshRegistration();
-        EditorSceneManager.MarkDirty();
     }
 
     /// <summary>Write <paramref name="data"/> over the surface's asset (or a new one), import it and assign it.</summary>

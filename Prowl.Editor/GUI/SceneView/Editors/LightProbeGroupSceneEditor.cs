@@ -76,12 +76,10 @@ public class LightProbeGroupSceneEditor : SceneTool
             Float3 before = centroid;
             bool moved = TransformHandles.PositionHandle(ctx, MoveHandleId, ref centroid, out handleHot);
 
-            if (ctx.IsHot(ctx.GetControlID(MoveHandleId)))
-                Undo.Snapshot(_group);
             if (moved)
             {
+                Undo.RecordObject(_group, "Move Light Probes");
                 ApplyWorldDelta(centroid - before);
-                EditorSceneManager.MarkDirty();
             }
         }
 
@@ -148,20 +146,19 @@ public class LightProbeGroupSceneEditor : SceneTool
     private void AddProbe()
     {
         if (_group.IsNotValid()) return;
-        Undo.Snapshot(_group);
+        Undo.RecordObject(_group, "Add Light Probe");
         Float3 world = _cam.IsValid()
             ? _cam.GameObject.Transform.Position + _cam.GameObject.Transform.Forward * 5f
             : _group.Transform.Position;
         _group.ProbePositions.Add(_group.Transform.InverseTransformPoint(world));
         _selection.Clear();
         _selection.Add(_group.ProbePositions.Count - 1);
-        EditorSceneManager.MarkDirty();
     }
 
     private void DeleteSelected()
     {
         if (_group.IsNotValid() || _selection.Count == 0) return;
-        Undo.Snapshot(_group);
+        Undo.RecordObject(_group, "Delete Light Probes");
         _selection.Sort();
         for (int k = _selection.Count - 1; k >= 0; k--)
         {
@@ -170,13 +167,12 @@ public class LightProbeGroupSceneEditor : SceneTool
                 _group.ProbePositions.RemoveAt(idx);
         }
         _selection.Clear();
-        EditorSceneManager.MarkDirty();
     }
 
     private void DuplicateSelected()
     {
         if (_group.IsNotValid() || _selection.Count == 0) return;
-        Undo.Snapshot(_group);
+        Undo.RecordObject(_group, "Duplicate Light Probes");
         var dup = new List<int>();
         var src = new List<int>(_selection);
         foreach (int i in src)
@@ -187,7 +183,6 @@ public class LightProbeGroupSceneEditor : SceneTool
         }
         _selection.Clear();
         _selection.AddRange(dup);
-        EditorSceneManager.MarkDirty();
     }
 
     private void SelectAll()

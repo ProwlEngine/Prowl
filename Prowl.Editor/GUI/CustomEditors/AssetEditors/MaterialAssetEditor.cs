@@ -24,64 +24,8 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(Material))]
 public class MaterialAssetEditor : AssetImporterEditor
 {
-
-    // Materials with edits not yet written to disk, keyed by asset GUID. Static rather than
-    // per-instance to have a behaviour more coherent with user expectations
-    private static readonly Dictionary<Guid, (Material Material, AssetEntry Entry)> _pending = [];
-
-    /// <summary>Used only to reach the instance members from the global save hook.</summary>
-    private static readonly MaterialAssetEditor s_saveHook = new();
-
-    static MaterialAssetEditor()
-    {
-        SaveManager.OnSave += () => s_saveHook.SavePending(showToast: false);
-        SaveManager.CollectUnsaved += unsaved =>
-        {
-            foreach ((Material _, AssetEntry entry) in _pending.Values)
-                unsaved.Add(Prowl.Rosetta.Loc.Get("save.material", new { name = Path.GetFileNameWithoutExtension(entry.Path) }));
-        };
-    }
-
-    // ============================================================
-    // Pending changes
-    // ============================================================
-    // A material is edited live, so the scene shows every tweak as it happens. What the base class
-    // measures is whether the live object still matches the .mat file on disk.
-
-    protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
-        => asset is Material material && material.IsValid() ? SerializePersisted(material) : null;
-
-    /// <summary>
-    /// Baselines against the imported form rather than the live object, so a material mutated outside
-    /// this inspector - by a script or tool holding the same instance - shows up as pending instead of
-    /// being quietly adopted as the clean state.
-    /// </summary>
-    protected override EchoObject? CapturePersistedState(AssetEntry entry, EngineObject? asset)
-        => EditorAssetBackend.Instance?.ReadCachedEcho(entry.Guid) ?? CaptureState(entry, asset);
-
-    /// <summary>Serializes a material the way its .mat file and cache entry are written.</summary>
-    private static EchoObject SerializePersisted(Material material) => Serializer.Serialize(typeof(object), material);
-
-    protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
-    {
-        if (asset is not Material material || material.IsNotValid()) return false;
-        // A failed write was logged and stays pending.
-        if (EditorAssetBackend.Instance?.SaveAsset(entry.Guid, SerializePersisted(material)) != true) return false;
-
-        _pending.Remove(entry.Guid);
-        return true;
-    }
-
-    protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
-    {
-        if (asset is not Material material || material.IsNotValid()) return;
-
-        // Refilled in place, so everything already referencing this material shows the revert immediately.
-        EditorAssetBackend.Instance?.RevertToSaved(material);
-
-        _pending.Remove(entry.Guid);
-        PreviewWidget.For(entry.Guid).Invalidate();
-    }
+    // A material is edited live, so the scene shows every tweak as it happens. Edits are undo records owned by
+    // the material, which put it in the dirty asset set that Ctrl+S writes.
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
@@ -99,11 +43,14 @@ public class MaterialAssetEditor : AssetImporterEditor
         Origami.Separator(paper, $"{id}_sep_shader").Show();
         DrawShaderPicker(paper, id, material, entry);
 
-        MaterialPropertyDrawer.DrawMaterial(paper, id, material, () => MarkDirty(material, entry));
+        Core.Undo.InspectorBaseline(material);
+        MaterialPropertyDrawer.DrawMaterial(paper, id, material, () =>
+        {
+            Core.Undo.InspectorChanged(material);
+            PreviewWidget.For(entry.Guid).Invalidate();
+        });
 
-        // Shown when the live material actually differs from its file, not merely because it was
-        // touched at some point. Ctrl+S still commits it too, via SaveManager.
-        DrawApplyRevertBar(paper, id, entry, asset);
+        DrawSaveRevertBar(paper, id, material);
 
         // 3D Preview
         Origami.Header(paper, $"{id}_h_preview", "Preview").Underline().Show();
@@ -174,8 +121,9 @@ public class MaterialAssetEditor : AssetImporterEditor
                             {
                                 if (picked.Tag is Guid guid && guid != current && AssetDatabase.Load<Shader>(guid) is { IsLoaded: true } pickedShader)
                                 {
+                                    Core.Undo.RecordObject(material, "Shader");
                                     material.Shader = pickedShader;
-                                    MarkDirty(material, entry);
+                                    PreviewWidget.For(entry.Guid).Invalidate();
                                 }
                                 CloseShaderPicker();
                             },
@@ -201,62 +149,4 @@ public class MaterialAssetEditor : AssetImporterEditor
     }
 
     private static void CloseShaderPicker() => _shaderPickerOwner = Guid.Empty;
-
-    /// <summary>Record that <paramref name="material"/> has edits not yet written to disk.</summary>
-    private void MarkDirty(Material material, AssetEntry entry)
-    {
-        _pending[entry.Guid] = (material, entry);
-        PreviewWidget.For(entry.Guid).Invalidate();
-    }
-
-    /// <summary>
-    /// Write every pending material to disk.
-    /// </summary>
-    private string? SavePending(bool showToast)
-    {
-        if (_pending.Count == 0) return null;
-
-        EditorAssetBackend? db = EditorAssetBackend.Instance;
-        if (db == null || Project.Current == null) return null;
-
-        var names = new List<string>();
-
-        foreach ((Guid guid, (Material Material, AssetEntry Entry) pending) in _pending.ToArray())
-        {
-            (Material? material, AssetEntry? entry) = pending;
-
-            // Pending edits that can never be written- drop them instead.
-            if (material.IsNotValid() || !ReferenceEquals(db.GetEntry(entry.Guid), entry))
-            {
-                _pending.Remove(guid);
-                continue;
-            }
-
-            // Touched at some point but since put back to what the file already holds.
-            if (!HasPendingChanges(entry, material))
-            {
-                _pending.Remove(guid);
-                continue;
-            }
-
-            ApplyPendingChanges(entry, material);
-
-            // A failed write stays pending (and was logged) so the next save retries it rather than
-            // silently discarding the user's edits.
-            if (_pending.ContainsKey(guid)) continue;
-
-            names.Add(Path.GetFileNameWithoutExtension(entry.Path));
-        }
-
-        if (names.Count == 0) return null;
-
-        names.Sort(StringComparer.OrdinalIgnoreCase);
-        string label = Prowl.Rosetta.Loc.Get("save.material", new { name = string.Join(", ", names) });
-
-        if (showToast)
-            Toasts.Success(Prowl.Rosetta.Loc.Get("save.saved"), label);
-
-        return label;
-    }
-
 }

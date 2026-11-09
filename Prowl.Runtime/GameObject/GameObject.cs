@@ -321,11 +321,8 @@ public partial class GameObject : EngineObject, ISerializable
 
         Scene newScene = (NewParent.IsValid()) ? NewParent.Scene : Scene;
 
-        if (newScene != Scene)
-        {
-            if (Scene.IsValid()) Scene.Remove(this);
-            if (newScene.IsValid()) newScene.Add(this);
-        }
+        bool joinsScene = newScene != Scene && newScene.IsValid();
+        if (newScene != Scene && Scene.IsValid()) Scene.Remove(this);
 
         // Save world-space transform before reparenting
         Float3 worldPosition = new();
@@ -379,7 +376,9 @@ public partial class GameObject : EngineObject, ISerializable
         // and colliders that follow a body would otherwise go stale).
         Transform.MarkChanged();
 
+        // Joining a scene last, so OnEnable sees the parent and the enabled state it has under it.
         HierarchyStateChanged();
+        if (joinsScene) newScene.Add(this);
 
         // Draw order and layout are derived from the child tree at canvas build time, and a same-scene
         // reparent fires no OnAdded/Removed - so mark the affected canvas(es) dirty explicitly.
@@ -752,6 +751,7 @@ public partial class GameObject : EngineObject, ISerializable
     {
         Scene? scene = Scene;
         if (!scene.IsValid()) return;
+        using Scene.SceneScope active = Resources.Scene.Enter(scene);
 
         try { comp.OnAddedToScene(); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{comp.GetType().Name}] OnAddedToScene() threw", ex); }
@@ -1164,7 +1164,10 @@ public partial class GameObject : EngineObject, ISerializable
     protected override void OnDispose()
     {
         for (int i = Children.Count - 1; i >= 0; i--)
-            Children[i].Dispose();
+        {
+            try { Children[i].Dispose(); }
+            catch (Exception ex) { Debug.LogException($"[{Children[i].Name}] Dispose threw, the rest of '{Name}' is still torn down", ex); }
+        }
 
         for (int i = _components.Count - 1; i >= 0; i--)
         {
@@ -1177,7 +1180,8 @@ public partial class GameObject : EngineObject, ISerializable
             if (component.HasBeenEnabled && component.EnabledInHierarchy && scene.IsValid() && scene.IsActive)
                 component.InternalOnDisable();
 
-            component.Dispose();
+            try { component.Dispose(); }
+            catch (Exception ex) { Debug.LogException($"[{Name}/{component.GetType().Name}] OnDispose threw, the rest of '{Name}' is still torn down", ex); }
         }
         _components.Clear();
 
@@ -1483,11 +1487,40 @@ public partial class GameObject : EngineObject, ISerializable
         }
     }
 
+    private protected override Scene? OwningScene => Scene;
+
     private void AddLoadedComponent(Component component)
     {
         _components.Add(component);
         _componentCache.Add(component.GetType(), component);
     }
+
+    /// <summary>
+    /// Attaches a component that was built and filled elsewhere at <paramref name="index"/>, then tells the scene.
+    /// No requirements are added, since whatever restored it restores what it needs too.
+    /// </summary>
+    internal void AttachComponent(Component component, int index)
+    {
+        MainThreadContext.AssertOwner(this, nameof(AttachComponent));
+        index = Math.Clamp(index, 0, _components.Count);
+        _components.Insert(index, component);
+        _componentCache.Add(component.GetType(), component);
+        component.AttachToGameObject(this);
+        NotifyComponentAddedToScene(component);
+    }
+
+    /// <summary>Marks this tree and its components disabled in the hierarchy, so the next recompute sees every change.</summary>
+    internal void ClearHierarchyState()
+    {
+        _enabledInHierarchy = false;
+        foreach (Component component in _components)
+            component._enabledInHierarchy = false;
+        foreach (GameObject child in Children)
+            child.ClearHierarchyState();
+    }
+
+    /// <summary>Recomputes enabled in hierarchy for this tree. Fires no callbacks while it is in no scene.</summary>
+    internal void RecomputeHierarchyState() => HierarchyStateChanged();
 
     /// <summary>
     /// Attaches a bare component of the given type, for a copy to fill. Unlike <see cref="AddComponent(Type)"/> this

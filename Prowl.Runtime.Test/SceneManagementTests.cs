@@ -715,4 +715,169 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.Same(current, Scene.Current);
         Assert.False(current.IsDisposed);
     }
+
+    // ---- The ambient world ----
+
+    private sealed class ActiveProbe : Component
+    {
+        public Scene? AtEnable, AtStart, AtDispose;
+        public override void OnEnable() => AtEnable = Scene.Active;
+        public override void Start() => AtStart = Scene.Active;
+        protected override void OnDispose() { AtDispose = Scene.Active; base.OnDispose(); }
+    }
+
+    // Code in one scene enabling an object in another runs that object's callbacks in its own scene.
+    [Fact]
+    public void Active_IsTheComponentsScene_WhenAnotherScenesCodeEnablesIt()
+    {
+        Scene a = CreateScene(enable: true);
+        Scene b = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        ActiveProbe probe = go.AddComponent<ActiveProbe>();
+
+        using (a.Enter())
+            b.Add(go);
+
+        Assert.Same(b, probe.AtEnable);
+    }
+
+    [Fact]
+    public void Active_FlowsThroughAwait_AndScopesNest()
+    {
+        Scene a = CreateScene(enable: true);
+        Scene b = CreateScene(enable: true);
+
+        Scene? afterAwait;
+        using (a.Enter())
+        {
+            using (b.Enter())
+            {
+                afterAwait = AfterYield().GetAwaiter().GetResult();
+                Assert.Same(b, Scene.Active);
+            }
+            Assert.Same(a, Scene.Active);
+        }
+
+        Assert.Same(b, afterAwait);
+
+        static async Task<Scene> AfterYield()
+        {
+            await Task.Delay(1).ConfigureAwait(false);
+            return Scene.Active;
+        }
+    }
+
+    [Fact]
+    public void SceneLoadedHandlers_RunInTheLoadedScene()
+    {
+        Scene loaded = CreateScene();
+        Scene? seen = null;
+        void Handler() => seen = Scene.Active;
+        Scene.OnSceneLoaded += Handler;
+        try
+        {
+            Scene.Load(loaded);
+            Scene.ProcessPendingLoad();
+        }
+        finally { Scene.OnSceneLoaded -= Handler; }
+
+        Assert.Same(loaded, seen);
+    }
+
+    // A scene stays Active for its own teardown, and code still holding it afterwards gets a clear error.
+    [Fact]
+    public void Active_IsTheSceneDuringItsTeardown_AndThrowsOnceItIsDestroyed()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        ActiveProbe probe = go.AddComponent<ActiveProbe>();
+        scene.Add(go);
+
+        using (scene.Enter())
+        {
+            scene.Dispose();
+            Assert.Throws<ObjectDisposedException>(() => Scene.Active);
+        }
+
+        Assert.Same(scene, probe.AtDispose);
+    }
+
+    [Fact]
+    public void CameraMain_IsTheActiveScenesCamera_AndANewCameraIsMainAtOnce()
+    {
+        Scene a = CreateScene(enable: true);
+        Scene b = CreateScene(enable: true);
+        GameObject camA = CreateGameObject("CamA");
+        Camera cameraA = camA.AddComponent<Camera>();
+        a.Add(camA);
+
+        using (b.Enter())
+        {
+            Assert.True(ReferenceEquals(Camera.Main, null));
+            GameObject camB = CreateGameObject("CamB");
+            Camera cameraB = camB.AddComponent<Camera>();
+            b.Add(camB);
+            Assert.Same(cameraB, Camera.Main);
+        }
+        using (a.Enter())
+            Assert.Same(cameraA, Camera.Main);
+    }
+
+    [Fact]
+    public void DebugDraws_LandInTheActiveScene()
+    {
+        Scene a = CreateScene(enable: true);
+        Scene b = CreateScene(enable: true);
+
+        using (b.Enter())
+            Debug.DrawLine(Vector.Float3.Zero, Vector.Float3.One, System.Drawing.Color.Red);
+
+        Assert.True(a.Gizmos.IsEmpty);
+        Assert.False(b.Gizmos.IsEmpty);
+        Debug.ClearGizmos();
+        Assert.True(b.Gizmos.IsEmpty);
+    }
+
+    // ---- Teardown ----
+
+    private sealed class TeardownLog : Component
+    {
+        public static readonly List<string> Events = [];
+        public string Tag = "";
+        public bool ThrowOnDispose;
+        public override void OnDisable() => Events.Add($"disable {Tag}");
+        public override void OnRemovedFromScene() => Events.Add($"removed {Tag}");
+        protected override void OnDispose()
+        {
+            Events.Add($"dispose {Tag}");
+            base.OnDispose();
+            if (ThrowOnDispose) throw new InvalidOperationException("teardown test");
+        }
+    }
+
+    // A scene tears down in three passes, each object guarded, so one throwing OnDispose leaves the rest torn down.
+    [Fact]
+    public void Teardown_RunsThreePasses_AndContinuesPastAThrowingOnDispose()
+    {
+        TeardownLog.Events.Clear();
+        Scene scene = CreateScene(enable: true);
+        GameObject a = CreateGameObject("A");
+        TeardownLog first = a.AddComponent<TeardownLog>();
+        first.Tag = "A";
+        first.ThrowOnDispose = true;
+        GameObject b = CreateGameObject("B");
+        TeardownLog second = b.AddComponent<TeardownLog>();
+        second.Tag = "B";
+        scene.Add(a);
+        scene.Add(b);
+
+        scene.Dispose();
+
+        Assert.True(a.IsDisposed && b.IsDisposed && first.IsDisposed && second.IsDisposed);
+        int lastDisable = Math.Max(TeardownLog.Events.IndexOf("disable A"), TeardownLog.Events.IndexOf("disable B"));
+        int firstRemoved = Math.Min(TeardownLog.Events.IndexOf("removed A"), TeardownLog.Events.IndexOf("removed B"));
+        int lastRemoved = Math.Max(TeardownLog.Events.IndexOf("removed A"), TeardownLog.Events.IndexOf("removed B"));
+        int firstDispose = Math.Min(TeardownLog.Events.IndexOf("dispose A"), TeardownLog.Events.IndexOf("dispose B"));
+        Assert.True(lastDisable >= 0 && lastDisable < firstRemoved && lastRemoved < firstDispose, string.Join(", ", TeardownLog.Events));
+    }
 }

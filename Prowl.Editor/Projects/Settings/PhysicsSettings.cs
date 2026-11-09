@@ -55,46 +55,31 @@ public class PhysicsSettings : ProjectSettingsBase
     /// <summary> Layer collision matrix stored as 32 bit-rows. Each row is a uint where bit j indicates whether layer i collides with layer j. </summary>
     public uint[] CollisionMatrixRows = CreateDefaultCollisionMatrix();
 
-    private static bool s_sceneHookRegistered;
-
-    /// <summary> Applies the current physics settings to the active scene and registers a hook to re-apply them to any scene loaded afterward. </summary>
+    /// <summary> Makes these settings the defaults every new physics world starts with, and applies them to the open scene. </summary>
     public override void Apply()
     {
-        ApplyToScene(Runtime.Resources.Scene.Current);
+        PhysicsWorld.Defaults = new PhysicsWorldSettings
+        {
+            Gravity = new Float3(GravityX, GravityY, GravityZ),
+            SolverIterations = SolverIterations,
+            RelaxIterations = RelaxIterations,
+            Substep = SubSteps,
+            AllowSleep = AllowSleep,
+            UseMultithreading = UseMultithreading,
+            AutoSyncTransforms = AutoSyncTransforms,
+            EnhancedDeterminism = EnhancedDeterminism,
+            ThreadModel = ThreadModel,
+            EnableAuxiliaryContactPoints = EnableAuxiliaryContactPoints,
+            PersistentContactManifold = PersistentContactManifold,
+            SpeculativeRelaxationFactor = SpeculativeRelaxationFactor,
+        };
 
-        // Apply collision matrix (this is global, not per-scene)
+        Runtime.Resources.Scene scene = Runtime.Resources.Scene.Current;
+        if (scene.IsValid()) scene.Physics.ApplySettings(PhysicsWorld.Defaults);
+
+        // The collision matrix is project wide, like layers.
         if (CollisionMatrixRows.Length == 32)
-        {
             CollisionMatrix.SetRows(CollisionMatrixRows);
-        }
-
-        // Re-apply to any scene that loads after this point
-        if (!s_sceneHookRegistered)
-        {
-            s_sceneHookRegistered = true;
-            Runtime.Resources.Scene.OnSceneLoaded += () =>
-            {
-                PhysicsSettings s = EditorRegistries.GetSettings<PhysicsSettings>();
-                s.ApplyToScene(Runtime.Resources.Scene.Current);
-            };
-        }
-    }
-
-    private void ApplyToScene(Runtime.Resources.Scene scene)
-    {
-        if (scene.IsNotValid()) return;
-        scene.Physics.Gravity = new Float3(GravityX, GravityY, GravityZ);
-        scene.Physics.SolverIterations = SolverIterations;
-        scene.Physics.RelaxIterations = RelaxIterations;
-        scene.Physics.Substep = SubSteps;
-        scene.Physics.AllowSleep = AllowSleep;
-        scene.Physics.UseMultithreading = UseMultithreading;
-        scene.Physics.AutoSyncTransforms = AutoSyncTransforms;
-        scene.Physics.EnhancedDeterminism = EnhancedDeterminism;
-        scene.Physics.ThreadModel = ThreadModel;
-        scene.Physics.EnableAuxiliaryContactPoints = EnableAuxiliaryContactPoints;
-        scene.Physics.PersistentContactManifold = PersistentContactManifold;
-        scene.Physics.SpeculativeRelaxationFactor = SpeculativeRelaxationFactor;
     }
 
     public override void ResetToDefaults()

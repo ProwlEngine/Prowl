@@ -110,8 +110,7 @@ public class RagdollGeneratorWindow : DockPanel
         foreach (Animator stripped in copy.GetComponentsInChildren<Animator>().ToList())
             stripped.GameObject.RemoveComponent(stripped);
 
-        Undo.RegisterCreatedObject(copy, "Generate Ragdoll");
+        Undo.RegisterCreatedObjectUndo(copy, "Generate Ragdoll");
         Selection.Select(copy);
-        EditorSceneManager.MarkDirty();
     }
 }
