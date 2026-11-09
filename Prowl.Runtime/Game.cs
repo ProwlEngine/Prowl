@@ -412,14 +412,17 @@ public abstract class Game
     protected virtual List<SceneInstance> InputWorlds() => PresentedWorlds();
 
     /// <summary>Every running world drawn to the game's output, lowest <see cref="SceneInstance.RenderOrder"/> first.</summary>
+    // Refilled on every call, so a caller iterates it before asking again.
+    private static readonly List<SceneInstance> s_presented = [];
+
     protected static List<SceneInstance> PresentedWorlds()
     {
-        List<SceneInstance> worlds = [];
+        s_presented.Clear();
         foreach (SceneInstance world in SceneInstance.All)
             if (world.Present && world.State == SceneState.Running && !world.HostTicked)
-                worlds.Add(world);
-        worlds.Sort(static (a, b) => a.RenderOrder.CompareTo(b.RenderOrder));
-        return worlds;
+                s_presented.Add(world);
+        s_presented.Sort(static (a, b) => a.RenderOrder.CompareTo(b.RenderOrder));
+        return s_presented;
     }
 
     private void RenderPresentedWorlds()

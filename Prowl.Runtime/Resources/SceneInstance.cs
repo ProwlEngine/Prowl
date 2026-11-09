@@ -56,31 +56,24 @@ public class SceneInstance : EngineObject, ISerializable
     private static readonly List<WeakReference<SceneInstance>> s_live = [];
 
     /// <summary>Every world that is not destroyed, in creation order. Held weakly: something else keeps a world alive.</summary>
-    public static IReadOnlyList<SceneInstance> All
-    {
-        get
-        {
-            SceneInstance[] live = Live;
-            Array.Reverse(live);
-            return live;
-        }
-    }
+    public static IReadOnlyList<SceneInstance> All => Snapshot(newestFirst: false);
 
-    /// <summary>Every scene not yet disposed: the current one, one waiting to load, previews and prefab editing.</summary>
-    internal static SceneInstance[] Live
+    /// <summary>Every scene not yet disposed, newest first: the current one, one waiting to load, previews and prefab editing.</summary>
+    internal static SceneInstance[] Live => Snapshot(newestFirst: true);
+
+    // One array of the live worlds, dropping the collected ones on the way.
+    private static SceneInstance[] Snapshot(bool newestFirst)
     {
-        get
+        lock (s_live)
         {
-            lock (s_live)
-            {
-                var live = new List<SceneInstance>(s_live.Count);
-                for (int i = s_live.Count - 1; i >= 0; i--)
-                {
-                    if (s_live[i].TryGetTarget(out SceneInstance? scene)) live.Add(scene);
-                    else s_live.RemoveAt(i);
-                }
-                return [.. live];
-            }
+            s_live.RemoveAll(static entry => !entry.TryGetTarget(out _));
+            var worlds = new SceneInstance[s_live.Count];
+            int count = 0;
+            for (int i = 0; i < s_live.Count; i++)
+                if (s_live[i].TryGetTarget(out SceneInstance? world))
+                    worlds[newestFirst ? worlds.Length - 1 - count++ : count++] = world;
+            if (count == worlds.Length) return worlds;
+            return newestFirst ? worlds[^count..] : worlds[..count];
         }
     }
 
@@ -1045,12 +1038,19 @@ public class SceneInstance : EngineObject, ISerializable
     {
         if (_typeIndices.TryGetValue(type, out TypeIndex? index))
         {
-            index.Items.RemoveAll(component =>
+            List<Component> items = index.Items;
+            int kept = 0;
+            for (int i = 0; i < items.Count; i++)
             {
-                bool gone = component.IsDisposed || !ReferenceEquals(component.GameObject.Scene, this);
-                if (gone) index.Members.Remove(component);
-                return gone;
-            });
+                Component component = items[i];
+                if (component.IsDisposed || !ReferenceEquals(component.GameObject.Scene, this))
+                {
+                    index.Members.Remove(component);
+                    continue;
+                }
+                items[kept++] = component;
+            }
+            items.RemoveRange(kept, items.Count - kept);
             return index;
         }
 
@@ -1079,8 +1079,12 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>Every component of type <typeparamref name="T"/> in this world, a class or an interface, as a snapshot.</summary>
     public T[] GetAll<T>(bool includeDisabled = false) where T : class
     {
-        List<T> results = [];
-        GetAll(results, includeDisabled);
+        EnsureLive();
+        List<Component> items = IndexFor(typeof(T)).Items;
+        var results = new List<T>(items.Count);
+        foreach (Component component in items)
+            if (includeDisabled || component.EnabledInHierarchy)
+                results.Add((component as T)!);
         return [.. results];
     }
 
