@@ -217,6 +217,9 @@ internal sealed class CameraFrame : IDisposable
     public CullFrustum ShadowCull;
     public CasterFilter ShadowFilter;
 
+    /// <summary>The flags that keep a caster out of this shadow view: those of the view it is drawn for, for a view's own cascades.</summary>
+    public RenderableFlags ShadowHidden = RenderableFlags.Hidden;
+
     /// <summary>Whether this is one of the renderer's own shadow views, drawing its casters alone.</summary>
     public bool IsShadowView { get; init; }
 

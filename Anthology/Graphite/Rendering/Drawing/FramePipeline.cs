@@ -908,7 +908,7 @@ internal sealed partial class FramePipeline : IDisposable
         Array.Fill(camera.Roots, SpatialRoots.None);
         if (shadow)
         {
-            world.Buckets.Cull(frustum, view.CullingMask, camera.ShadowFilter);
+            world.Buckets.Cull(frustum, view.CullingMask, camera.ShadowFilter, camera.ShadowHidden);
             if (camera.ShadowFilter == CasterFilter.StaticOnly)
                 camera.Sink.Begin(camera, world, frustum, 0);
             else

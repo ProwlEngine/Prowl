@@ -2019,7 +2019,8 @@ internal sealed partial class FramePipeline
     }
 
     // A shadow view's casters culled against the given frustum for a tile of the given size, its draw lists ready to record
-    private void DrawShadowView(CameraFrame camera, WorldFrame world, int tile, in ViewLayer layer, in CullFrustum cull, float near, float far, CasterFilter filter, Keyword[]? keywords = null)
+    private void DrawShadowView(CameraFrame camera, WorldFrame world, int tile, in ViewLayer layer, in CullFrustum cull, float near, float far, CasterFilter filter, Keyword[]? keywords = null,
+        RenderableFlags hidden = RenderableFlags.Hidden)
     {
         ViewDesc view = new()
         {
@@ -2034,6 +2035,7 @@ internal sealed partial class FramePipeline
         view.Layers[0] = layer;
         camera.ShadowCull = cull;
         camera.ShadowFilter = filter;
+        camera.ShadowHidden = hidden;
         ShadowViewsDrawn++;
         PrepareShadowView(camera, view, world, (uint)tile);
     }
@@ -2195,7 +2197,8 @@ internal sealed partial class FramePipeline
                 cascade.DepthRange = radius + reach;
                 ShadowTile whole = new(0, 0, (int)resolution);
                 ViewLayer layer = new() { View = rotation, Projection = projection, Position = cascade.Center };
-                DrawShadowView(cascade.Camera!, camera.World, (int)resolution, layer, new CullFrustum(cascade.Shape, cascade.Center, nearPlane: false), -reach, radius, CasterFilter.All, camera.Desc.Keywords);
+                DrawShadowView(cascade.Camera!, camera.World, (int)resolution, layer, new CullFrustum(cascade.Shape, cascade.Center, nearPlane: false), -reach, radius, CasterFilter.All, camera.Desc.Keywords,
+                    RenderableFlagsExtensions.HiddenIn(camera.Desc.Kind));
                 cascade.Draws.Add(new ShadowDraw(cascade.Camera!, whole, Clear: true, cascadeLight.Light, c, Cascade: true));
             }
 

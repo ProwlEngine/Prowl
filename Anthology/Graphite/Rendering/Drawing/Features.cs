@@ -1699,7 +1699,7 @@ public sealed class DrawItemSink
     internal void Begin(CameraFrame camera, WorldFrame world, in CullFrustum frustum, uint cullingMask, bool shadowView = false)
     {
         _shadowView = shadowView;
-        _hidden = shadowView ? RenderableFlags.Hidden : RenderableFlagsExtensions.HiddenIn(camera.Info.Kind);
+        _hidden = shadowView ? camera.ShadowHidden : RenderableFlagsExtensions.HiddenIn(camera.Info.Kind);
         _camera = camera;
         _world = world;
         _frustum = frustum;
