@@ -260,6 +260,23 @@ public class GameViewPanel : DockPanel
         EditorRegistries.SaveSettings();
     }
 
+    /// <summary>
+    /// The worlds the game view draws and feeds input, lowest render order first: Main, and in play every running
+    /// world play code presented over it.
+    /// </summary>
+    internal static List<SceneInstance> HostedWorlds()
+    {
+        List<SceneInstance> worlds = [];
+        if (!SceneInstance.HasMain) return worlds;
+        SceneInstance main = SceneInstance.Main;
+        worlds.Add(main);
+        if (!Application.IsPlaying) return worlds;
+        foreach (SceneInstance world in SceneInstance.All)
+            if (world.Present && world.State == SceneState.Running && !ReferenceEquals(world, main))
+                worlds.Add(world);
+        return [.. worlds.OrderBy(world => world.RenderOrder)];
+    }
+
     private void DrawGameView(Paper paper, Scribe.FontFile font, float width, float height)
     {
         using (paper.Box("gv_game").Clip().Enter())
@@ -310,19 +327,22 @@ public class GameViewPanel : DockPanel
 
             EnsureRT(rtW, rtH);
 
-            // Render all cameras.
-            List<Camera> cameras = scene.GatherActiveCameras();
-            cameras.RemoveAll(c => c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave));
-
-            foreach (Camera cam in cameras)
+            List<SceneInstance> hosted = HostedWorlds();
+            foreach (SceneInstance world in hosted)
             {
-                try
+                List<Camera> cameras = world.GatherActiveCameras();
+                cameras.RemoveAll(c => c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave));
+
+                foreach (Camera cam in cameras)
                 {
-                    cam.Render(new CameraRenderOptions { FallbackTarget = _rt, Kind = Prowl.Graphite.Rendering.ViewKind.Game });
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"[GameView] Camera '{cam.GameObject.Name}' render threw and was skipped: {ex.Message}");
+                    try
+                    {
+                        cam.Render(new CameraRenderOptions { FallbackTarget = _rt, Kind = Prowl.Graphite.Rendering.ViewKind.Game });
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"[GameView] Camera '{cam.GameObject.Name}' render threw and was skipped: {ex.Message}");
+                    }
                 }
             }
             RenderStats.EndFrame();
@@ -363,8 +383,8 @@ public class GameViewPanel : DockPanel
                 // Camera.PixelWidth/Height), so picking works from the editor like a standalone build.
                 GameViewInputHandler.Viewport = new GameViewInputHandler.GameViewport(origin, size, new Int2(rtW, rtH));
 
-                if (SceneInstance.HasMain)
-                    SceneInstance.Main.Input.Viewport = new RuntimeEventSystem.HostViewport
+                foreach (SceneInstance world in hosted)
+                    world.Input.Viewport = new RuntimeEventSystem.HostViewport
                     {
                         ReferenceSize = new Float2(rtW, rtH),
                         PointerPosition = pointerInRT,
@@ -374,8 +394,8 @@ public class GameViewPanel : DockPanel
             else
             {
                 GameViewInputHandler.Viewport = null;
-                if (SceneInstance.HasMain)
-                    SceneInstance.Main.Input.Viewport = null;
+                foreach (SceneInstance world in hosted)
+                    world.Input.Viewport = null;
             }
 
             // Render game UI into the RT
@@ -396,7 +416,8 @@ public class GameViewPanel : DockPanel
                     using (FrameStats.UI.Scope())
                     {
                         _gamePaper!.BeginFrame(Time.UnscaledDeltaTime, -1f);
-                        scene.OnGui(_gamePaper);
+                        foreach (SceneInstance world in hosted)
+                            world.OnGui(_gamePaper);
                         _gamePaper.EndFrame();
                     }
                 }

@@ -128,6 +128,26 @@ public class EditorWorldTests : EditorTestHarness
     }
 
     [Fact]
+    public void TheGameView_HostsWorldsPlayPresents_AboveThePlayWorld()
+    {
+        SceneInstance play = EditorSceneManager.BuildPlayWorld();
+        using (EnterPlayMode())
+        {
+            EditorSceneManager.EnterPlayWorld(play);
+            SceneInstance overlay = SceneInstance.Create("Overlay", SceneMode.Game);
+            overlay.Present = true;
+            overlay.RenderOrder = 10;
+            overlay.Activate();
+
+            Assert.Equal([play, overlay], GUI.Panels.GameViewPanel.HostedWorlds());
+            EditorSceneManager.DestroyPlayWorld();
+        }
+        EditorSceneManager.ReturnToEditWorld();
+
+        Assert.Equal([EditorSceneManager.EditWorld], GUI.Panels.GameViewPanel.HostedWorlds());
+    }
+
+    [Fact]
     public void TheEditHistory_StillResolves_AfterPlay()
     {
         Marker marker = EditorSceneManager.EditWorld.Create("Thing").AddComponent<Marker>();

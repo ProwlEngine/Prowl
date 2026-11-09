@@ -157,7 +157,7 @@ public abstract class Game
 
                 BeginRender();
 
-                RenderPresentedWorlds();
+                if (PresentsWorlds) RenderPresentedWorlds();
                 OnRender();
 
                 EndRender();
@@ -170,8 +170,9 @@ public abstract class Game
 
                     BeginGui(_paper);
 
-                    foreach (SceneInstance world in PresentedWorlds())
-                        world.OnGui(_paper);
+                    if (PresentsWorlds)
+                        foreach (SceneInstance world in PresentedWorlds())
+                            world.OnGui(_paper);
                     OnGui(_paper);
 
                     EndGui(_paper);
@@ -388,7 +389,7 @@ public abstract class Game
         AudioContext.SuspendedByPause = Application.IsEditor && Application.IsPlaying && SceneInstance.HasMain && SceneInstance.Main.Paused;
 
         // Before any world's event system ticks, so a menu drawn over the game takes the pointer from it.
-        UI.SceneInput.Arbitrate(PresentedWorlds());
+        UI.SceneInput.Arbitrate(InputWorlds());
 
         foreach (SceneInstance world in SceneInstance.All)
         {
@@ -403,6 +404,12 @@ public abstract class Game
 
         OnUpdate();
     }
+
+    /// <summary>Whether presented worlds draw to the window. A host that draws them itself, like the editor, turns it off.</summary>
+    protected virtual bool PresentsWorlds => true;
+
+    /// <summary>The worlds whose UI input is arbitrated each frame, lowest render order first.</summary>
+    protected virtual List<SceneInstance> InputWorlds() => PresentedWorlds();
 
     /// <summary>Every running world drawn to the game's output, lowest <see cref="SceneInstance.RenderOrder"/> first.</summary>
     protected static List<SceneInstance> PresentedWorlds()

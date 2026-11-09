@@ -102,6 +102,11 @@ public class EditorApplication : Game
         return edit;
     }
 
+    // The game view draws and feeds the presented worlds, never the editor window.
+    protected override bool PresentsWorlds => false;
+
+    protected override List<SceneInstance> InputWorlds() => GameViewPanel.HostedWorlds();
+
     /// <summary> Initializes the editor: sets the singleton instance, loads fonts and settings, initializes the dock space, localization, registries, menus, and the PropertyGrid config. Opens a project if one was provided via --project, otherwise shows the project launcher. </summary>
     public override void Initialize()
     {
@@ -601,8 +606,8 @@ public class EditorApplication : Game
         GameViewInputHandler.IsGameViewFocused = false;
 
         // Keeps the editor view outside of UI input's reach, to prevent false positives when clicking around
-        if (SceneInstance.HasMain)
-            SceneInstance.Main.Input.Viewport = new Runtime.UI.EventSystem.HostViewport { ReceivesInput = false };
+        foreach (SceneInstance world in GameViewPanel.HostedWorlds())
+            world.Input.Viewport = new Runtime.UI.EventSystem.HostViewport { ReceivesInput = false };
 
         float w = paper.ScreenRect.Size.X;
         float h = paper.ScreenRect.Size.Y;
