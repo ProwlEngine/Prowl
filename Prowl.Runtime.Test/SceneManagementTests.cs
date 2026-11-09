@@ -477,6 +477,21 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
+    public void DestroyingMain_RaisesMainChangedToNothing()
+    {
+        SceneInstance world = SceneInstance.Create("Bound");
+        SceneInstance.Main = world;
+        (SceneInstance? From, SceneInstance? To)? changed = null;
+        void Handler(SceneInstance? from, SceneInstance? to) => changed = (from, to);
+        SceneInstance.MainChanged += Handler;
+        try { world.Dispose(); }
+        finally { SceneInstance.MainChanged -= Handler; }
+
+        Assert.Equal((world, null), changed);
+        Assert.False(SceneInstance.HasMain);
+    }
+
+    [Fact]
     public void CreatingIntoAnUnloadedSection_IsRefused()
     {
         SceneInstance world = CreateScene();

@@ -243,8 +243,8 @@ public abstract class Game
             // on are refused rather than run alongside the shutdown.
             Tasks.MainThreadContext.Stop();
 
-            // Dispose the current scene so everything in it runs its teardown callbacks.
-            SceneInstance.Shutdown();
+            // Dispose every world so everything in them runs its teardown callbacks.
+            SceneInstance.Shutdown(everyWorld: true);
 
             // Asset payloads go while the audio and graphics they belong to are still up.
             AssetDatabase.Shutdown();
@@ -341,7 +341,7 @@ public abstract class Game
             try { Console.CancelKeyPress -= cancelHandler; } catch { }
             Closing();
             Tasks.MainThreadContext.Stop();
-            SceneInstance.Shutdown();
+            SceneInstance.Shutdown(everyWorld: true);
             AssetDatabase.Shutdown();
             Tasks.MainThreadContext.Uninstall();
             Application.TargetFrameRate = 0; // and with it the finer system timer a limit holds

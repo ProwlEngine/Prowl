@@ -98,14 +98,16 @@ public class SceneInstance : EngineObject, ISerializable
                 throw new InvalidOperationException("No world is bound as SceneInstance.Main. The host binds it: the player at startup, the editor to the world it edits, a test through its test base.");
             return main;
         }
-        set
-        {
-            MainThreadContext.AssertMainThread(nameof(Main));
-            SceneInstance? previous = _main;
-            if (ReferenceEquals(previous, value)) return;
-            _main = value;
-            Raise(MainChanged, value, handler => handler(previous, value), nameof(MainChanged));
-        }
+        set => Bind(value);
+    }
+
+    private static void Bind(SceneInstance? value)
+    {
+        MainThreadContext.AssertMainThread(nameof(Main));
+        SceneInstance? previous = _main;
+        if (ReferenceEquals(previous, value)) return;
+        _main = value;
+        Raise(MainChanged, value, handler => handler(previous, value), nameof(MainChanged));
     }
 
     /// <summary>Whether a world is bound as <see cref="Main"/>.</summary>
@@ -600,19 +602,26 @@ public class SceneInstance : EngineObject, ISerializable
     internal static event Action? SafePoint;
 
     /// <summary>
-    /// Disposes the current scene, so everything in it runs its teardown callbacks. Driven by the
-    /// game loop on the way out. Reading <see cref="Main"/> afterwards creates a fresh empty scene.
+    /// Cancels queued loads, unbinds and disposes <see cref="Main"/>, and with <paramref name="everyWorld"/> every other
+    /// live world too, so everything runs its teardown callbacks. The game loop passes it on the way out. Nothing is
+    /// bound as Main afterwards.
     /// </summary>
-    internal static void Shutdown()
+    internal static void Shutdown(bool everyWorld = false)
     {
         foreach (object entry in s_queue.ToArray())
             if (entry is SceneLoad load) load.Cancel();
         s_queue.Clear();
 
         SceneInstance? main = _main;
-        _main = null;
+        Bind(null);
         if (!ReferenceEquals(main, null) && !main.IsDisposed)
             main.Dispose();
+        if (!everyWorld) return;
+        foreach (SceneInstance world in Live)
+        {
+            try { if (!world.IsDisposed) world.Dispose(); }
+            catch (Exception e) { Debug.LogException($"[Scene] Destroying '{world.Name}' threw", e); }
+        }
     }
 
     #endregion
@@ -1542,7 +1551,7 @@ public class SceneInstance : EngineObject, ISerializable
         Raise(Destroying, this, handler => handler(this), nameof(Destroying));
 
         if (ReferenceEquals(_main, this))
-            _main = null;
+            Bind(null);
 
         lock (s_live) s_live.RemoveAll(entry => !entry.TryGetTarget(out SceneInstance? scene) || ReferenceEquals(scene, this));
 
