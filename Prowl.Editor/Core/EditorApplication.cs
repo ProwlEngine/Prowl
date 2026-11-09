@@ -1967,9 +1967,8 @@ public class EditorApplication : Game
     {
         if (Application.IsPlaying) return;
 
-        // Playing the prefab editing scene would run the editor-only camera/light rig, and stopping
-        // restores it as the "editor scene", from where a save writes runtime state to the prefab.
-        if (PrefabEditingMode.IsEditing || PrefabEditingMode.IsPrefabEditScene(Runtime.Resources.SceneInstance.Main))
+        // Play copies the edit world, which is dormant under prefab editing.
+        if (PrefabEditingMode.IsEditing)
         {
             Runtime.Debug.LogWarning("Exit prefab editing mode before entering play mode.");
             return;

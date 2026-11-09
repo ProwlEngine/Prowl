@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 
 using Prowl.Echo;
 using Prowl.Editor.Core;
@@ -42,15 +41,9 @@ public static class PrefabEditingMode
     // editor-only camera/light/etc. that we add for visibility.
     private static GameObject? _editingRoot;
 
-    // Every scene a session has built, so one can still be recognized after the session that made it
-    // ended. A prefab and its editor-only rig is not a scene anyone means to save over their own.
-    private static readonly ConditionalWeakTable<SceneInstance, object> _editScenes = [];
-
     /// <summary>The world the prefab is edited in, with its viewing camera and light, while a session runs.</summary>
     public static SceneInstance? World => _world.IsValid() ? _world : null;
 
-    /// <summary>Whether <paramref name="scene"/> was built to edit a prefab in, rather than opened as a scene.</summary>
-    public static bool IsPrefabEditScene(SceneInstance? scene) => !ReferenceEquals(scene, null) && _editScenes.TryGetValue(scene, out _);
 
     /// <summary>
     /// Enter prefab editing mode. If another prefab is already being edited with unsaved
@@ -146,8 +139,6 @@ public static class PrefabEditingMode
     // Fills the prefab world with the prefab and the viewing rig, then swaps it in over the edit world.
     private static void Build(SceneInstance editScene, GameObject go, SceneInstance edit, Guid prefabGuid)
     {
-        _editScenes.AddOrUpdate(editScene, new object());
-
         // We're editing the source, not an instance, so drop this prefab's own instance data. Nested
         // instances of other prefabs keep theirs, otherwise saving would flatten them permanently.
         // The objects keep their record of which source object each one is, which is what Save writes
@@ -222,14 +213,10 @@ public static class PrefabEditingMode
         if (scene.IsNotValid()) return false;
 
         // The tracked prefab root, and only that: it is what skips the editor-only camera and light.
-        // If it is no longer the session's own object then something replaced the scene underneath us,
-        // and whatever is in the scene now is not this prefab. Writing it would overwrite the asset
-        // with an unrelated object, so this refuses instead.
         GameObject? root = _editingRoot;
         if (root.IsNotValid() || root!.Scene != scene)
         {
-            Debug.LogError("[Prefab] The prefab being edited is no longer in the open scene, so there is " +
-                "nothing to save. Exit prefab editing mode; the asset has been left untouched.");
+            Debug.LogError("[Prefab] The prefab root was destroyed or moved out of the prefab world, so there is nothing to save.");
             return false;
         }
 
