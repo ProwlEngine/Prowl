@@ -288,7 +288,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void Clone_IsDetachedFromAnyScene()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject source = Build("root", out _);
         scene.Add(source);
 
@@ -408,7 +408,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void CopyTo_LeavesTheTargetInItsScene()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject source = Build("source", out _);
         GameObject target = Build("target", out _);
         scene.Add(target);
@@ -547,9 +547,8 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void Instantiate_RunsTheLifecycleOnTheCopy()
     {
-        Scene scene = CreateScene();
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
+        SceneInstance scene = CreateScene();
+        Bind(scene);
 
         var original = new GameObject("orig");
         original.AddComponent<Lifecycle>();
@@ -569,9 +568,8 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void Instantiate_IntoAParentPlacesItRelativeToThatParent()
     {
-        Scene scene = CreateScene();
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
+        SceneInstance scene = CreateScene();
+        Bind(scene);
 
         var parent = new GameObject("parent");
         parent.Transform.LocalPosition = new Float3(10, 0, 0);
@@ -589,4 +587,30 @@ public class GameObjectCloneTests : RuntimeTestBase
     }
 
     #endregion
+    private sealed class ParentAtEnable : Component
+    {
+        public GameObject? Seen;
+        public SceneSection? Section;
+        public override void OnEnable()
+        {
+            Seen = GameObject.Parent;
+            Section = GameObject.Section;
+        }
+    }
+
+    [Fact]
+    public void InstantiateUnderAParent_JoinsTheParentsSection_WithTheParentInOnEnable()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        GameObject player = world.Create("Player");
+        player.Persistent = true;
+        var weapon = new GameObject("Weapon");
+        weapon.AddComponent<ParentAtEnable>();
+
+        GameObject clone = GameObject.Instantiate(weapon, player)!;
+
+        ParentAtEnable probe = clone.GetComponent<ParentAtEnable>()!;
+        Assert.Same(player, probe.Seen);
+        Assert.Same(world.Persistent, probe.Section);
+    }
 }

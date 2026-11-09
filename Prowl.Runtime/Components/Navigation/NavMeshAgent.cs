@@ -347,8 +347,8 @@ public class NavMeshAgent : Component
 
     public override void OnEnable()
     {
-        Scene? scene = Scene;
-        if (scene.IsNotValid()) return;
+        if (!IsInWorld) return;
+        SceneInstance scene = Scene;
 
         _world = scene.Navigation;
         _world.InstanceRegistered += OnInstanceRegistered;

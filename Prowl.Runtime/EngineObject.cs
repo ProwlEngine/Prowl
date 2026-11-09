@@ -60,13 +60,13 @@ public abstract class EngineObject : IDisposable
 
         // Explicit disposal means a finalizer (if this type has one) has nothing left to do.
         GC.SuppressFinalize(this);
-        using Resources.Scene.SceneScope active = Resources.Scene.Enter(OwningScene);
+        using Resources.SceneInstance.SceneScope active = Resources.SceneInstance.Enter(OwningScene);
         try { OnDispose(); }
         finally { OnDisposed(); }
     }
 
     /// <summary>The scene this object's teardown callbacks run in, as the ambient world.</summary>
-    private protected virtual Resources.Scene? OwningScene => null;
+    private protected virtual Resources.SceneInstance? OwningScene => null;
 
     /// <summary>Runs after <see cref="OnDispose"/> even when an override skips base or throws.</summary>
     private protected virtual void OnDisposed() { }

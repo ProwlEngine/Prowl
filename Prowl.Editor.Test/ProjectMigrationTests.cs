@@ -8,6 +8,7 @@ using Prowl.Echo;
 using Prowl.Editor.Migration;
 using Prowl.Editor.Migration.Releases;
 using Prowl.Editor.Projects;
+using Prowl.Editor.Projects.Settings;
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
 using Prowl.Runtime.ParticleSystem.Modules;
@@ -170,6 +171,20 @@ public class ProjectMigrationTests : IDisposable
         EchoObject items = Item(scene);
         Assert.True(items[0].TryGet("ShadowCasting", out _));
         Assert.Equal(3f * Release_1_0.LegacyLight, items[1]["intensity"].FloatValue);
+    }
+
+    [Fact]
+    public void CameraBackgroundDepthAndTarget_MoveBehindTheirProperties()
+    {
+        string scene = WriteAsset("Cam.scene", Scene(OldComponent("Camera", Guid.NewGuid(), ("Depth", new EchoObject(3L)), ("Background", new EchoObject(2L)))), "SceneImporter");
+        WriteProwlFile("1.0", appliedSteps: ProjectMigration.StepCount(Project.CurrentVersion) - 1);
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject camera = Item(scene)[0];
+        Assert.Equal(3L, camera["depth"].LongValue);
+        Assert.Equal(2L, camera["background"].LongValue);
+        Assert.False(camera.TryGet("Depth", out _));
     }
 
     [Fact]
@@ -657,14 +672,28 @@ public class ProjectMigrationTests : IDisposable
 
     private static EchoObject BakedScene(float lightmapScale)
     {
-        var scene = new Scene();
-        scene.BakedLighting.ProbePositions = [Float3.Zero];
-        scene.BakedLighting.ProbeSH = [new SphericalHarmonicsL2 { C0 = new Float3(1f, 2f, 3f), C8 = new Float3(0.5f, 0.5f, 0.5f) }];
-        scene.BakedLighting.LightmapScale = lightmapScale;
-        EchoObject echo = Serializer.Serialize(typeof(object), scene)!;
+        var scene = new SceneInstance(SceneMode.Edit);
+        scene.Lighting.ProbePositions = [Float3.Zero];
+        scene.Lighting.ProbeSH = [new SphericalHarmonicsL2 { C0 = new Float3(1f, 2f, 3f), C8 = new Float3(0.5f, 0.5f, 0.5f) }];
+        scene.Lighting.LightmapScale = lightmapScale;
+        return LegacyScene(scene);
+    }
+
+    // A scene as engines before SceneContent saved it: the live scene itself, with a flat serializeObj array.
+    internal static EchoObject LegacyScene(SceneInstance scene)
+    {
+        EchoObject echo = scene.ActiveSection.CaptureTree();
         scene.Dispose();
+        echo["$type"] = new EchoObject("Prowl.Runtime.Resources.Scene, Prowl.Runtime");
+        echo["serializeObj"] = echo["Objects"].Clone();
+        echo.Remove("Objects");
+        echo["BakedLighting"] = echo["Lighting"].Clone();
+        echo.Remove("Lighting");
         return echo;
     }
+
+    private static SceneLighting LightingOf(EchoObject scene)
+        => Serializer.Deserialize<SceneLighting>(scene.TryGet("Lighting", out EchoObject? lighting) ? lighting! : scene["BakedLighting"])!;
 
     [Fact]
     public void BakesFromBeforePhysicalLight_KeepTheirLook_AndOnlyUnscaledPhysicalOnesNeedARebake()
@@ -683,17 +712,50 @@ public class ProjectMigrationTests : IDisposable
 
         EchoObject migrated = EchoObject.ReadFromString(File.ReadAllText(oldPath));
         Assert.False(Release_1_0.NeedsRebake(migrated));
-        Scene scene = Serializer.Deserialize<Scene>(migrated)!;
-        Assert.Equal(Release_1_0.LegacyLuminance, scene.BakedLighting.LightmapScale);
-        Assert.Equal(new Float3(1f, 2f, 3f) * Release_1_0.LegacyLuminance, scene.BakedLighting.ProbeSH[0].C0);
-        Assert.Equal(new Float3(0.5f, 0.5f, 0.5f) * Release_1_0.LegacyLuminance, scene.BakedLighting.ProbeSH[0].C8);
-        Assert.Equal(Float3.Zero, scene.BakedLighting.ProbePositions[0]);
-        scene.Dispose();
+        SceneLighting lighting = LightingOf(migrated);
+        Assert.Equal(Release_1_0.LegacyLuminance, lighting.LightmapScale);
+        Assert.Equal(new Float3(1f, 2f, 3f) * Release_1_0.LegacyLuminance, lighting.ProbeSH[0].C0);
+        Assert.Equal(new Float3(0.5f, 0.5f, 0.5f) * Release_1_0.LegacyLuminance, lighting.ProbeSH[0].C8);
+        Assert.Equal(Float3.Zero, lighting.ProbePositions[0]);
 
         Assert.False(Release_1_0.NeedsRebake(BakedScene(3f)));
-        var empty = new Scene();
-        Assert.False(Release_1_0.NeedsRebake(Serializer.Serialize(typeof(object), empty)!));
-        empty.Dispose();
+        Assert.False(Release_1_0.NeedsRebake(LegacyScene(new SceneInstance(SceneMode.Edit))));
+    }
+
+    [Fact]
+    public void LegacyScenes_BecomeSceneContent_WithTheSameObjectsAndIdentifiers()
+    {
+        var world = new SceneInstance(SceneMode.Edit);
+        var parent = new GameObject("Parent");
+        var child = new GameObject("Child");
+        child.SetParent(parent);
+        world.Add(parent);
+        world.Lighting.LightmapScale = 2f;
+        world.LightmapBake.Bounces = 5;
+        (string, Guid)[] stored = [("Child", child.Identifier), ("Parent", parent.Identifier)];
+        string scene = WriteAsset("Main.scene", LegacyScene(world).WriteToString(), "SceneImporter");
+
+        EchoObject holder = EchoObject.NewCompound();
+        holder["$type"] = new EchoObject("Prowl.Runtime.Resources.SceneAsset, Prowl.Runtime");
+        holder["Placements"] = EchoObject.NewCompound();
+        holder["Placements"]["$type"] = new EchoObject("System.Collections.Generic.Dictionary`2[[System.Guid, System.Private.CoreLib],[Prowl.Runtime.Resources.Scene+LightmapPlacement, Prowl.Runtime]], System.Private.CoreLib");
+        string prefab = WriteAsset("Holder.prefab", holder.WriteToString(), "PrefabImporter");
+        WriteProwlFile("1.0", appliedSteps: Array.FindIndex(new Release_1_0().Steps, s => s.Name.StartsWith("Scenes stored as SceneContent")));
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject migrated = EchoObject.ReadFromString(File.ReadAllText(scene));
+        Assert.Equal("Prowl.Runtime.Resources.SceneContent, Prowl.Runtime", migrated["$type"].StringValue);
+        Assert.False(migrated.Contains("serializeObj"));
+        Assert.False(migrated.Contains("BakedLighting"));
+        SceneContent content = SceneContent.Read(migrated);
+        Assert.Equal(stored, content.Objects.Select(o => (o.Name, o.Identifier)).OrderBy(o => o.Item1));
+        Assert.Equal(2f, content.Lighting.LightmapScale);
+        Assert.Equal(5, content.LightmapBake.Bounces);
+
+        EchoObject renamed = EchoObject.ReadFromString(File.ReadAllText(prefab));
+        Assert.Equal("Prowl.Runtime.Resources.Scene, Prowl.Runtime", renamed["$type"].StringValue);
+        Assert.Contains("[Prowl.Runtime.Resources.LightmapPlacement, Prowl.Runtime]", renamed["Placements"]["$type"].StringValue);
     }
 
     [Fact]
@@ -917,5 +979,31 @@ public class ProjectMigrationTests : IDisposable
         meta.Settings ??= EchoObject.NewCompound();
         edit(meta.Settings);
         MetaFile.Write(asset + ".meta", meta);
+    }
+
+    // The one remembered scene becomes a remembered setup holding it, which reads back into the settings.
+    [Fact]
+    public void LastScenePath_BecomesARememberedSetup()
+    {
+        string settingsFolder = Path.Combine(_root, "ProjectSettings");
+        Directory.CreateDirectory(settingsFolder);
+        var settings = EchoObject.NewCompound();
+        settings["$type"] = new EchoObject("Prowl.Editor.Projects.Settings.GeneralSettings, Prowl.Editor, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+        settings["ProductName"] = new EchoObject("Kept");
+        settings["LastScenePath"] = new EchoObject("Scenes/Level.scene");
+        string path = Path.Combine(settingsFolder, "General.yaml");
+        File.WriteAllText(path, settings.WriteToYaml());
+        WriteProwlFile("1.0", appliedSteps: Array.FindIndex(new Release_1_0().Steps, s => s.Name.StartsWith("The last opened scene")));
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject migrated = EchoObject.ReadFromYaml(File.ReadAllText(path));
+        Assert.False(migrated.TryGet("LastScenePath", out _));
+        var read = (GeneralSettings)Serializer.Deserialize(migrated, typeof(GeneralSettings))!;
+        Assert.Equal("Kept", read.ProductName);
+        GUI.SceneView.SceneSetup entry = Assert.Single(read.LastSetup);
+        Assert.Equal("Scenes/Level.scene", entry.Path);
+        Assert.True(entry.IsLoaded);
+        Assert.True(entry.IsActive);
     }
 }

@@ -33,7 +33,7 @@ public struct AssetMenuEntry
     public string Extension;
     public string Icon;
     public int Order;
-    public Func<EngineObject>? Factory;
+    public Func<object>? Factory;
 }
 
 /// <summary> Central registry that discovers and provides access to all editor extensions: custom editors, importers, property editors, scene tools, drop handlers, project settings, file icons, script templates, and asset menu entries. Scans loaded assemblies on initialization. </summary>
@@ -99,7 +99,7 @@ public static class EditorRegistries
 
     private static readonly Dictionary<string, AssetDoubleClickHandler> _doubleClickHandlers = new(StringComparer.OrdinalIgnoreCase);
 
-    private static readonly List<Action> _sceneSavedCallbacks = [];
+    private static readonly List<Action<OpenScene>> _sceneSavedCallbacks = [];
     private static readonly List<Action> _undoRedoCallbacks = [];
 
     private static readonly List<MethodInfo> _initOnLoadMethods = [];
@@ -148,7 +148,7 @@ public static class EditorRegistries
         _defaultFileIcon = EditorIcons.File;
         _doubleClickHandlers.Clear();
 
-        foreach (Action del in _sceneSavedCallbacks) EditorSceneManager.OnSceneSaved -= del;
+        foreach (Action<OpenScene> del in _sceneSavedCallbacks) EditorSceneManager.SceneSaved -= del;
         _sceneSavedCallbacks.Clear();
         foreach (Action del in _undoRedoCallbacks) Undo.undoRedoPerformed -= del;
         _undoRedoCallbacks.Clear();
@@ -221,7 +221,7 @@ public static class EditorRegistries
         _dropHandlers.Sort((a, b) => a.Order.CompareTo(b.Order));
         _settingsEntries.Sort((a, b) => a.Order.CompareTo(b.Order));
 
-        foreach (Action del in _sceneSavedCallbacks) EditorSceneManager.OnSceneSaved += del;
+        foreach (Action<OpenScene> del in _sceneSavedCallbacks) EditorSceneManager.SceneSaved += del;
         foreach (Action del in _undoRedoCallbacks) Undo.undoRedoPerformed += del;
 
         foreach (MethodInfo m in _initOnLoadMethods)
@@ -394,9 +394,9 @@ public static class EditorRegistries
     public static IReadOnlyList<AssetMenuEntry> AssetMenuEntries => _assetMenuEntries;
 
     /// <summary>Types whose "Create" menu entry needs more than a blank instance.</summary>
-    private static readonly Dictionary<Type, Func<EngineObject>> _assetFactories = new()
+    private static readonly Dictionary<Type, Func<object>> _assetFactories = new()
     {
-        [typeof(Runtime.Resources.Scene)] = GUI.SceneView.EditorSceneManager.CreateDefaultScene,
+        [typeof(Runtime.Resources.Scene)] = GUI.SceneView.EditorSceneManager.CreateDefaultContent,
     };
 
     private static void ScanAssetMenuEntry(Type type)
@@ -480,7 +480,7 @@ public static class EditorRegistries
         if (method.GetCustomAttribute<OnSceneSavedAttribute>() != null)
         {
             var del = (Action)Delegate.CreateDelegate(typeof(Action), method);
-            _sceneSavedCallbacks.Add(del);
+            _sceneSavedCallbacks.Add(_ => del());
         }
         if (method.GetCustomAttribute<OnUndoRedoAttribute>() != null)
         {

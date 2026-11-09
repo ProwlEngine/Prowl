@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Linq;
 using System.Collections.Generic;
 
 using Prowl.Runtime;
@@ -28,10 +29,10 @@ internal static class UIPicker
         }
     }
 
-    public static GameObject? Pick(Scene? scene, Ray ray) =>
+    public static GameObject? Pick(SceneInstance? scene, Ray ray) =>
         TryPick(scene, ray, out Hit hit) ? hit.GameObject : null;
 
-    public static bool TryPick(Scene? scene, Ray ray, out Hit hit)
+    public static bool TryPick(SceneInstance? scene, Ray ray, out Hit hit)
     {
         hit = default;
         if (scene.IsNotValid()) return false;
@@ -41,7 +42,7 @@ internal static class UIPicker
         int bestSortOrder = int.MinValue;
         float bestT = float.PositiveInfinity;
 
-        foreach (GameObject go in scene.ActiveObjects)
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy && o.Section is not { HiddenInSceneView: true }))
         {
             GameCanvas? canvas = go.GetComponent<GameCanvas>();
             if (canvas.IsNotValid() || !canvas.EnabledInHierarchy) continue;

@@ -96,9 +96,9 @@ public static class PlayerSettingsLoader
                 SpeculativeRelaxationFactor = specRelax,
             };
 
-            // Settings load before the first scene, but one already made gets them too.
-            Scene scene = Resources.Scene.Current;
-            if (scene.IsValid()) scene.Physics.ApplySettings(PhysicsWorld.Defaults);
+            // Settings load before the first scene, but worlds already made get them too.
+            foreach (SceneInstance world in SceneInstance.All)
+                world.Physics.ApplySettings(PhysicsWorld.Defaults);
 
             // Collision matrix (uint[] serializes as a compound holding an "array" list)
             if (settings.TryGet("CollisionMatrixRows", out EchoObject? cmProp) && cmProp!.TryGet("array", out EchoObject? rows)
@@ -182,8 +182,8 @@ public static class PlayerSettingsLoader
             Time.FixedDeltaTime = fixedDt;
             Time.MaxFixedIterations = maxIter;
             SceneClock.Defaults = new SceneClockSettings { TimeScale = timeScale };
-            // The one global clock already exists, so it takes the default too.
-            Time.TimeScale = SceneClock.Defaults.TimeScale;
+            foreach (SceneInstance world in SceneInstance.All)
+                world.Clock.TimeScale = timeScale;
             Debug.Log("[PlayerSettings] Time applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply time: {ex.Message}"); }

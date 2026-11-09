@@ -10,19 +10,22 @@ using Prowl.Runtime.Resources;
 namespace Prowl.Editor.Projects.Scripting;
 
 /// <summary>
-/// Migrates a live scene onto recompiled user types with the <see cref="ReloadEngine"/>: the engine, the editor
+/// Migrates the live worlds onto recompiled user types with the <see cref="ReloadEngine"/>: the engine, the editor
 /// and the scene are all in scope, so the walk migrates the whole graph in place (component fields, identity, and
-/// delegates to user methods all carry over), then <see cref="Scene.OnHotReload"/> re-derives per-frame membership
+/// delegates to user methods all carry over), then <see cref="SceneInstance.OnHotReload"/> re-derives per-frame membership
 /// from the new types. Both assemblies stay loaded, no unload required.
 /// </summary>
 public static class SceneHotReload
 {
-    /// <summary>Migrate a scene across a single user-assembly swap.</summary>
-    public static void Migrate(Scene scene, Assembly previousAssembly, Assembly currentAssembly)
-        => Migrate(scene, new[] { (previousAssembly, currentAssembly) });
+    /// <summary>Migrate a world across a single user-assembly swap.</summary>
+    public static void Migrate(SceneInstance scene, Assembly previousAssembly, Assembly currentAssembly)
+        => Migrate([scene], new[] { (previousAssembly, currentAssembly) });
 
-    /// <summary>Migrate the scene across every previous to current swap in <paramref name="assemblyPairs"/>.</summary>
-    public static void Migrate(Scene scene, IReadOnlyCollection<(Assembly Previous, Assembly Current)> assemblyPairs)
+    /// <summary>
+    /// Migrate every world across every previous to current swap in <paramref name="assemblyPairs"/>, as the roots of one
+    /// walk, so previews and a dormant edit world never keep old types.
+    /// </summary>
+    public static void Migrate(IReadOnlyCollection<SceneInstance> worlds, IReadOnlyCollection<(Assembly Previous, Assembly Current)> assemblyPairs)
     {
         if (assemblyPairs.Count == 0) return;
         var scripts = assemblyPairs.Select(p => p.Current.GetName().Name).ToHashSet();
@@ -56,7 +59,7 @@ public static class SceneHotReload
                 options.Scope.Include(previous); // user statics live on the previous assembly
         });
 
-        ReloadRequest.Builder request = ReloadRequest.Create().Root(scene);
+        ReloadRequest.Builder request = ReloadRequest.Create().Roots(worlds);
         foreach ((Assembly? previous, Assembly? current) in assemblyPairs)
             request.Replace(previous, current);
 
@@ -70,7 +73,9 @@ public static class SceneHotReload
 
         Summarize(report);
 
-        scene.OnHotReload(); // re-derive per-frame membership and rebuild GameObject lookups from the new types
+        // Re-derive per-frame membership, registries and lookups from the new types.
+        foreach (SceneInstance world in worlds)
+            if (!world.IsDisposed) world.OnHotReload();
     }
 
     private static void Log(ReloadDiagnostic diagnostic, HashSet<string?> scripts)

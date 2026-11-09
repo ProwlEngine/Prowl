@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Linq;
 using System.Collections.Generic;
 
 using Prowl.Graphite.Rendering;
@@ -40,7 +41,7 @@ public interface IRenderSync
 /// </summary>
 public sealed class SceneRendering : IDisposable
 {
-    private readonly Scene _scene;
+    private readonly SceneInstance _scene;
     private readonly List<IRenderSync> _members = [];
     private readonly HashSet<IRenderSync> _memberSet = [];
 
@@ -67,7 +68,7 @@ public sealed class SceneRendering : IDisposable
     private ulong _syncedFrame = ulong.MaxValue;
     private readonly List<DirectionalLight> _directionals = [];
 
-    internal SceneRendering(Scene scene)
+    internal SceneRendering(SceneInstance scene)
     {
         _scene = scene;
         _onMeshChanged = _changedMeshes.Enqueue;
@@ -208,7 +209,7 @@ public sealed class SceneRendering : IDisposable
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         int synced = _members.Count;
 
-        bool playing = Application.IsPlaying;
+        bool playing = _scene.IsPlaying;
         if (!playing && _parked.Count > 0)
             UnparkAll();
         WakeChanged();
@@ -231,37 +232,37 @@ public sealed class SceneRendering : IDisposable
         RenderStats.AddSceneSync(System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds, synced, _parked.Count);
     }
 
-    private Scene.BakedLightingData? _probesFrom;
+    private SceneInstance.ProbeSet? _probesFrom;
     private int _probesVersion = -1;
 
     private void SyncProbes(RenderWorld world)
     {
-        Scene.BakedLightingData baked = _scene.BakedLighting;
+        SceneInstance.ProbeSet? baked = _scene.Probes;
         if (baked == _probesFrom && _scene.BakedLightingVersion == _probesVersion) return;
         _probesFrom = baked;
         _probesVersion = _scene.BakedLightingVersion;
 
-        if (baked == null || !baked.HasProbes)
+        if (baked == null)
         {
             world.SetLightProbes(null);
             return;
         }
 
-        var positions = new Double3[baked.ProbePositions.Length];
+        var positions = new Double3[baked.Positions.Length];
         for (int i = 0; i < positions.Length; i++)
-            positions[i] = new Double3(baked.ProbePositions[i].X, baked.ProbePositions[i].Y, baked.ProbePositions[i].Z);
-        var coefficients = new Graphite.Rendering.SphericalHarmonicsL2[baked.ProbeSH.Length];
+            positions[i] = new Double3(baked.Positions[i].X, baked.Positions[i].Y, baked.Positions[i].Z);
+        var coefficients = new Graphite.Rendering.SphericalHarmonicsL2[baked.SH.Length];
         for (int i = 0; i < coefficients.Length; i++)
         {
-            SphericalHarmonicsL2 sh = baked.ProbeSH[i];
+            SphericalHarmonicsL2 sh = baked.SH[i];
             coefficients[i] = new Graphite.Rendering.SphericalHarmonicsL2 { C0 = sh.C0, C1 = sh.C1, C2 = sh.C2, C3 = sh.C3, C4 = sh.C4, C5 = sh.C5, C6 = sh.C6, C7 = sh.C7, C8 = sh.C8 };
         }
         world.SetLightProbes(new LightProbeData
         {
             Positions = positions,
             Coefficients = coefficients,
-            Tetrahedra = baked.ProbeTetrahedra,
-            Neighbours = baked.ProbeTetNeighbours,
+            Tetrahedra = baked.Tetrahedra,
+            Neighbours = baked.Neighbours,
         });
     }
 
@@ -271,7 +272,7 @@ public sealed class SceneRendering : IDisposable
     private FogVolumeDesc[] FogVolumes(float density)
     {
         _fogVolumes.Clear();
-        foreach (GameObject go in _scene.ActiveObjects)
+        foreach (GameObject go in _scene.Objects.Where(o => o.EnabledInHierarchy))
         {
             FogVolume? volume = go.GetComponent<FogVolume>();
             if (volume.IsValid() && volume.EnabledInHierarchy && _fogVolumes.Count < EnvironmentDesc.MaxFogVolumes)
@@ -296,7 +297,7 @@ public sealed class SceneRendering : IDisposable
             return;
         }
         _clouds ??= new Graphite.Rendering.VolumetricCloudsFeature(renderer);
-        settings.ApplyTo(_clouds, Time.DeltaTime);
+        settings.ApplyTo(_clouds, _scene.Clock.DeltaTime);
         world.Features.Add(_clouds.ShadowPass);
         world.Features.Add(_clouds);
     }

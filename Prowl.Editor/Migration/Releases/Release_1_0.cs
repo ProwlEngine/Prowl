@@ -28,7 +28,41 @@ internal sealed partial class Release_1_0 : MigrationRelease
         new("Light spot cones saved as an angle and softness, ranges made automatic, colours kept off colour temperature", LightConesAndTemperature),
         new("Scenes baked before baking used physical light units are listed for a rebake", WarnUnscaledBakes),
         new("Lights split into a component for each kind: directional, point, spot, rect, disk and tube", SplitLights),
+        new("Scenes stored as SceneContent, SceneAsset renamed to Scene and the scene lighting types moved to top level", ctx => ctx.RewriteEchoAssets(SceneContentLayout)),
+        new("The last opened scene remembered as a scene setup of that one scene", ctx => ctx.RewriteProjectSettings(SceneSetupMemory)),
+        new("Camera background, depth and target saved behind properties", ctx => RenameSettings(ctx, s_cameraRenames)),
     ];
+
+    private static readonly Dictionary<string, (string From, string To)[]> s_cameraRenames = new()
+    {
+        [CameraType] = Camel("Background", "Depth", "Target"),
+    };
+
+    private const string GeneralSettingsType = "Prowl.Editor.Projects.Settings.GeneralSettings";
+
+    // The one remembered scene path becomes a remembered setup holding that scene, loaded and active.
+    internal static EchoObject? SceneSetupMemory(EchoObject settings)
+    {
+        if (settings.TagType != EchoType.Compound || TypeName(settings) != GeneralSettingsType) return null;
+        if (!settings.TryGet("LastScenePath", out EchoObject? path)) return null;
+        settings.Remove("LastScenePath");
+        if (settings.TryGet("LastSetup", out _)) return settings;
+
+        EchoObject list = EchoObject.NewList();
+        if (path!.TagType == EchoType.String && path.StringValue.Length > 0)
+        {
+            EchoObject entry = EchoObject.NewCompound();
+            entry["Asset"] = new EchoObject(Guid.Empty.ToString());
+            entry["Path"] = new EchoObject(path.StringValue);
+            entry["IsLoaded"] = new EchoObject(true);
+            entry["IsActive"] = new EchoObject(true);
+            list.ListAdd(entry);
+        }
+        EchoObject setup = EchoObject.NewCompound();
+        setup["$values"] = list;
+        settings["LastSetup"] = setup;
+        return settings;
+    }
 
     private const string CameraType = "Prowl.Runtime.Camera";
     private const string VolumeProfileType = "Prowl.Runtime.Rendering.VolumeProfile";
@@ -725,5 +759,63 @@ internal sealed partial class Release_1_0 : MigrationRelease
                 found.Add($"{old} is now {now}");
         }
         return found;
+    }
+
+    private const string SceneContentType = "Prowl.Runtime.Resources.SceneContent, Prowl.Runtime";
+
+    // Old type names inside a $type, then what they are now. The live scene's own name is now the asset's, so only a
+    // file's root is ever read as a live scene.
+    private static readonly (string Old, string Now)[] s_sceneTypeRenames =
+    [
+        ("Prowl.Runtime.Resources.SceneAsset", "Prowl.Runtime.Resources.Scene"),
+        ("Prowl.Runtime.Resources.Scene+BakedLightingData", "Prowl.Runtime.Resources.SceneLighting"),
+        ("Prowl.Runtime.Resources.Scene+LightmapBakeSettings", "Prowl.Runtime.Resources.LightmapBakeSettings"),
+        ("Prowl.Runtime.Resources.Scene+LightmapPlacement", "Prowl.Runtime.Resources.LightmapPlacement"),
+    ];
+
+    /// <summary>
+    /// A .scene saved as a live scene becomes a SceneContent: the flat object array is its Objects and the baked
+    /// lighting its Lighting. In every asset, the scene asset and lighting type names move to their new names.
+    /// </summary>
+    internal static EchoObject? SceneContentLayout(EchoObject echo)
+    {
+        bool changed = ConvertLegacyScene(echo);
+        ForEachCompound(echo, tag =>
+        {
+            if (!tag.TryGet("$type", out EchoObject? type) || type!.TagType != EchoType.String) return;
+            string renamed = RenameSceneTypes(type.StringValue);
+            if (renamed == type.StringValue) return;
+            tag["$type"] = new EchoObject(renamed);
+            changed = true;
+        });
+        return changed ? echo : null;
+    }
+
+    /// <summary>Rewrites a root saved as a live scene into the SceneContent layout. False when it is not one.</summary>
+    internal static bool ConvertLegacyScene(EchoObject root)
+    {
+        if (root.TagType != EchoType.Compound || TypeName(root) != SceneType) return false;
+
+        root["$type"] = new EchoObject(SceneContentType);
+
+        if (root.TryGet("serializeObj", out EchoObject? objects))
+        {
+            root.Remove("serializeObj");
+            root["Objects"] = objects!;
+        }
+
+        if (root.TryGet("BakedLighting", out EchoObject? lighting))
+        {
+            root.Remove("BakedLighting");
+            if (!root.TryGet("Lighting", out _)) root["Lighting"] = lighting!;
+        }
+        return true;
+    }
+
+    private static string RenameSceneTypes(string typeName)
+    {
+        foreach ((string old, string now) in s_sceneTypeRenames)
+            typeName = Regex.Replace(typeName, Regex.Escape(old) + @"(?=[,\]]|$)", now);
+        return typeName;
     }
 }

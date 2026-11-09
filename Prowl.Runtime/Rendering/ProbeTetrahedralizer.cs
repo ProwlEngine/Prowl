@@ -3,10 +3,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 using Prowl.Vector;
 
-namespace Prowl.Editor.Lightmapping;
+namespace Prowl.Runtime.Rendering;
 
 /// <summary>
 /// 3D Delaunay tetrahedralization (Bowyer-Watson) of light-probe positions. Produces the tetra
@@ -34,7 +35,7 @@ public static class ProbeTetrahedralizer
     }
 
     /// <summary>Tetrahedralize <paramref name="points"/>. Returns empty arrays when fewer than 4 points.</summary>
-    public static Result Build(IReadOnlyList<Float3> points)
+    public static Result Build(IReadOnlyList<Float3> points, CancellationToken cancel = default)
     {
         int n = points.Count;
         if (n < 4) return new Result { Tetrahedra = [], Neighbours = [] };
@@ -70,6 +71,7 @@ public static class ProbeTetrahedralizer
         var badFaces = new List<(int v0, int v1, int v2)>();
         for (int ip = 0; ip < n; ip++)
         {
+            cancel.ThrowIfCancellationRequested();
             Double3 p = verts[ip];
             badFaces.Clear();
 

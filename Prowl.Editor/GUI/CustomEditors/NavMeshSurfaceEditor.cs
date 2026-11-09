@@ -100,11 +100,10 @@ public class NavMeshSurfaceEditor : CustomEditor
     /// surfaces are excluded: they have no registration to lose.</summary>
     private static NavMeshSurface? FindRival(NavMeshSurface surface)
     {
-        Scene? scene = surface.Scene;
-        if (!scene.IsValid() || !surface.EnabledInHierarchy) return null;
+        if (!surface.IsInWorld || !surface.EnabledInHierarchy) return null;
 
         int key = RegistrationKey(surface);
-        foreach (NavMeshSurface other in scene!.Navigation.Surfaces)
+        foreach (NavMeshSurface other in surface.Scene.Navigation.Surfaces)
             if (!ReferenceEquals(other, surface) && RegistrationKey(other) == key)
                 return other;
         return null;

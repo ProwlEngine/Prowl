@@ -285,7 +285,8 @@ internal static class AssetLoader
             s_running = true;
             int generation = s_generation;
             s_thread = new Thread(() => Loop(generation)) { IsBackground = true, Name = "Prowl Asset Loader" };
-            s_thread.Start();
+            // Without the caller's execution context, so the loader never holds on to the world active where it started.
+            s_thread.UnsafeStart();
         }
     }
 

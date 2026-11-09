@@ -81,7 +81,7 @@ Attributes: `[RequireComponent(typeof(A), typeof(B))]` (adds missing components 
 
 ## GameObject
 
-- `new GameObject("Name")` is not in any scene until you call `Scene.Current.Add(go)` or parent it under an object that is in a scene. Until then it never gets `OnEnable` or updates. `GameObject.Instantiate(...)` adds to the scene for you.
+- `new GameObject("Name")` is in no world until you call `go.MoveTo(world)` or parent it under an object that is in one. Until then it never gets `OnEnable` or updates. `world.Create("Name")` makes a live object directly, and `GameObject.Instantiate(...)` spawns into the world for you.
 - Components: `AddComponent<T>()`, `GetComponent<T>()`, `TryGetComponent<T>(out var c)`, `GetComponents<T>()`, `GetComponentInParent<T>()`, `GetComponentInChildren<T>()` (both include the object itself by default), `RemoveComponent(c)`. `AddComponent` returns null if the component can not be created.
 - Hierarchy: `SetParent(parent, worldPositionStays = true)`, pass `null` to detach. `Parent`, `Children`, `GetChildrenDeep()`.
 - `Name` (inside a component, `Name` is the component's own name, use `GameObject.Name`), `Tag`, `CompareTag` (ignores case), `Layer`, `Enabled`, `EnabledInHierarchy`, `Identifier` (stable Guid).
@@ -106,11 +106,14 @@ A destroyed engine object is still a live reference, so null checks miss it. Alw
 
 `Scene` is in `Prowl.Runtime.Resources`. There is no SceneManager.
 
-- `Scene.Current` is the live scene and is never null.
-- `Scene.Current.Add(go)`, `Remove(go)`, `RootObjects`, `AllObjects`, `FindObjectsOfType<T>()` (instance methods)
-- `Scene.Load(sceneAsset)` blocks, `await Scene.LoadAsync(sceneAsset)` loads in the background. Both swap at the end of the frame.
-- `Scene.DontDestroyOnLoad(go)` keeps a root object across loads.
-- `Scene.Current.Physics` has the raycasts (main thread only, see the prowl-physics skill). `Environment` holds the sky material, ambient light and fog.
+- `SceneInstance.Main` is the game world. Inside a component use its own `Scene` property, elsewhere `SceneInstance.Active`, the world whose code is running. `Scene` is the saved scene asset.
+- A component's `Scene` throws while it is in no world: on a detached object, a prefab asset, and in `OnValidate` and `OnAfterDeserialize`. Check `IsInWorld` first there.
+- A world has sections: `Persistent` first, then one per loaded scene. `ActiveSection` is where new objects go and whose environment shows.
+- Queries: `world.Create(name)`, `Roots`, `Objects`, `ObjectCount`, `Get<T>()`, `GetAll<T>()`, `FindObject(name)`, `FindObjectByPath("A/B")`, `FindObjectWithTag(tag)`, `FindObject(guid)`.
+- `level.Load()` replaces the world's sections with the level, `level.LoadAdditive()` adds one, `section.Unload()` removes one. All apply at the end of the frame and return or take effect through a `SceneLoad` you can await.
+- `go.Persistent = true` on a root keeps it, and what it owns, across loads (game worlds only).
+- `world.Paused` stops the world's updates, physics, animation and navigation. `world.Clock` is its time scale and time.
+- `SceneInstance.Main.Physics` has the raycasts (main thread only, see the prowl-physics skill). `Environment` holds the sky material, ambient light and fog.
 
 ## Time, input, logging
 
@@ -127,6 +130,7 @@ A destroyed engine object is still a live reference, so null checks miss it. Alw
 - When play stops or scripts reload, pending continuations are **dropped** without running their `finally`. Pass `DestroyCancellationToken` or `GameTask.SessionToken` and catch `OperationCanceledException` when you need to clean up.
 - Scene objects may only be touched on the main thread. Most writes throw off the main thread, but reads do not, so a wrong read from a worker fails silently.
 - Never block with `.Result`, `.Wait()` or `GetAwaiter().GetResult()` in a component (PROWLTH001). It deadlocks.
+- A live world never equals a scene asset: `GameObject.Scene == level` is a compile error (PROWLSC001). Compare `GameObject.Scene.Source == level`.
 
 ## Layers, tags and audio defaults
 

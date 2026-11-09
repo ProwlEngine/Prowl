@@ -59,12 +59,12 @@ public class AnimatorTests : RuntimeTestBase
         return AnimationClip.FromSkeletal(clip, avatar, "Slide");
     }
 
-    private (Scene Scene, Animator Animator, GameObject Root) Setup(float distance = 2f, Transform3D? rootMotionEnd = null)
+    private (SceneInstance Scene, Animator Animator, GameObject Root) Setup(float distance = 2f, Transform3D? rootMotionEnd = null)
     {
         MotionSkeleton skeleton = BuildSkeleton();
         Avatar avatar = Avatar.CreateGeneric(skeleton, 0, "Rig");
 
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = BuildHierarchy(CreateGameObject("Rig"));
         scene.Add(root);
 
@@ -72,7 +72,7 @@ public class AnimatorTests : RuntimeTestBase
         animator.Avatar = avatar;
         animator.Clips = [SlideClip(skeleton, avatar, distance, rootMotionEnd)];
 
-        scene.Enable();
+        scene.Activate();
         return (scene, animator, root);
     }
 
@@ -81,7 +81,7 @@ public class AnimatorTests : RuntimeTestBase
     [Fact]
     public void ItBindsTheRigToTheHierarchy()
     {
-        (Scene scene, Animator animator, _) = Setup();
+        (SceneInstance scene, Animator animator, _) = Setup();
 
         Update(scene);
 
@@ -93,7 +93,7 @@ public class AnimatorTests : RuntimeTestBase
     [Fact]
     public void ABoneIsFoundUnderItsParent_NotByAnObjectSharingItsName()
     {
-        (Scene scene, Animator animator, GameObject root) = Setup();
+        (SceneInstance scene, Animator animator, GameObject root) = Setup();
         Transform spine = Spine(root);
         var props = new GameObject("Props");
         var decoy = new GameObject("Spine");
@@ -112,7 +112,7 @@ public class AnimatorTests : RuntimeTestBase
     [Fact]
     public void ItPlaysTheFirstClipAndDrivesTheBones()
     {
-        (Scene scene, Animator animator, GameObject root) = Setup();
+        (SceneInstance scene, Animator animator, GameObject root) = Setup();
         animator.Speed = 0f; // hold at the start so the assertion is about binding, not timing
 
         Update(scene);
@@ -125,7 +125,7 @@ public class AnimatorTests : RuntimeTestBase
     [Fact]
     public void ItAdvancesTheClipOverTime()
     {
-        (Scene scene, _, GameObject root) = Setup();
+        (SceneInstance scene, _, GameObject root) = Setup();
 
         Update(scene, 31); // 1/60 per frame
 
@@ -136,7 +136,7 @@ public class AnimatorTests : RuntimeTestBase
     [Fact]
     public void ItLeavesItsOwnTransformAlone()
     {
-        (Scene scene, _, GameObject root) = Setup();
+        (SceneInstance scene, _, GameObject root) = Setup();
         root.Transform.Position = new Float3(5f, 0f, 0f);
 
         Update(scene, 10);
@@ -148,7 +148,7 @@ public class AnimatorTests : RuntimeTestBase
     public void RootMotionMovesTheGameObject()
     {
         Transform3D end = new(new Float3(0f, 0f, 4f), Quaternion.Identity, Float3.One);
-        (Scene scene, Animator animator, GameObject root) = Setup(rootMotionEnd: end);
+        (SceneInstance scene, Animator animator, GameObject root) = Setup(rootMotionEnd: end);
         animator.ApplyRootMotion = true;
 
         Update(scene, 61);
@@ -161,7 +161,7 @@ public class AnimatorTests : RuntimeTestBase
     public void RootMotionUnderAScaledParent_TravelsTheScaledDistance()
     {
         Transform3D end = new(new Float3(0f, 0f, 4f), Quaternion.Identity, Float3.One);
-        (Scene scene, Animator animator, GameObject root) = Setup(rootMotionEnd: end);
+        (SceneInstance scene, Animator animator, GameObject root) = Setup(rootMotionEnd: end);
         GameObject parent = CreateGameObject("Scaled");
         parent.Transform.LocalScale = new Float3(2f, 2f, 2f);
         scene.Add(parent);
@@ -177,7 +177,7 @@ public class AnimatorTests : RuntimeTestBase
     public void RootMotionStaysPutWhenItIsTurnedOff()
     {
         Transform3D end = new(new Float3(0f, 0f, 4f), Quaternion.Identity, Float3.One);
-        (Scene scene, _, GameObject root) = Setup(rootMotionEnd: end);
+        (SceneInstance scene, _, GameObject root) = Setup(rootMotionEnd: end);
 
         Update(scene, 61);
 
@@ -187,7 +187,7 @@ public class AnimatorTests : RuntimeTestBase
     [Fact]
     public void PlayByNameFindsAClipInTheList()
     {
-        (Scene scene, Animator animator, GameObject root) = Setup();
+        (SceneInstance scene, Animator animator, GameObject root) = Setup();
         Update(scene);
 
         animator.Play("Slide");
@@ -201,7 +201,7 @@ public class AnimatorTests : RuntimeTestBase
     [Fact]
     public void ADisabledAnimatorStopsBeingDriven()
     {
-        (Scene scene, Animator animator, GameObject root) = Setup();
+        (SceneInstance scene, Animator animator, GameObject root) = Setup();
         Update(scene, 31);
         double held = Spine(root).LocalPosition.Y;
 
@@ -215,7 +215,7 @@ public class AnimatorTests : RuntimeTestBase
     [Fact]
     public void LateUpdateSeesThePoseAlreadyWritten()
     {
-        (Scene scene, _, GameObject root) = Setup();
+        (SceneInstance scene, _, GameObject root) = Setup();
         SpineObserver observer = root.AddComponent<SpineObserver>();
         observer.Spine = Spine(root);
 

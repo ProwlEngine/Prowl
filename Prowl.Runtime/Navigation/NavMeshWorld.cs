@@ -19,8 +19,8 @@ namespace Prowl.Runtime;
 
 /// <summary>
 /// Per-scene navigation state: the registered navmeshes, the query API over them, and (once
-/// agents register) the crowd simulation. Owned by <see cref="Resources.Scene.Navigation"/> the
-/// same way physics state is owned by <see cref="Resources.Scene.Physics"/>.
+/// agents register) the crowd simulation. Owned by <see cref="Resources.SceneInstance.Navigation"/> the
+/// same way physics state is owned by <see cref="Resources.SceneInstance.Physics"/>.
 /// <para/>
 /// Queries are thread-safe: each takes a pooled Detour query under a read lock, so gameplay
 /// code may path-find from worker threads. Tile mutations take the write lock and invalidate
@@ -40,13 +40,12 @@ public sealed class NavMeshWorld
 
     public NavMeshWorld() => ApplySettings(s_defaultSettings);
 
-    /// <summary>Make <paramref name="settings"/> the defaults for new worlds and apply them to the active scene's world.</summary>
+    /// <summary>Make <paramref name="settings"/> the defaults for new worlds and apply them to every world made already.</summary>
     public static void ApplyProjectSettings(NavMeshWorldSettings settings)
     {
         DefaultSettings = settings;
-        Resources.Scene? scene = Resources.Scene.Active;
-        if (scene.IsValid())
-            scene.Navigation.ApplySettings(settings);
+        foreach (Resources.SceneInstance world in Resources.SceneInstance.All)
+            world.Navigation.ApplySettings(settings);
     }
 
     /// <summary>Copy every tunable from <paramref name="settings"/>. Crowd radius and obstacle capacity
@@ -854,10 +853,12 @@ public sealed class NavMeshWorld
     /// processes a bounded slice of tile rebuilds per frame, amortizing carve cost off the
     /// critical path). Called by the scene's variable update.
     /// </summary>
-    public void Update(float deltaTime)
+    public void Update(float deltaTime) => Update(deltaTime, steer: true);
+
+    /// <summary>As <see cref="Update(float)"/>, steering crowds only when <paramref name="steer"/>, since steering is gameplay.</summary>
+    internal void Update(float deltaTime, bool steer)
     {
-        // Steering is gameplay and stops with it.
-        if (Application.ShouldRunGameplay)
+        if (steer)
         {
             PreUpdate?.Invoke(deltaTime);
             foreach (NavMeshCrowdEntry entry in _crowds.Values)

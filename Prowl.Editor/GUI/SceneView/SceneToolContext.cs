@@ -32,7 +32,7 @@ public sealed class SceneToolContext
     public SceneDrawList Draw => Handles.Draw;
 
     /// <summary> The scene being edited in this viewport. </summary>
-    public Scene Scene { get; private set; } = null!;
+    public SceneInstance Scene { get; private set; } = null!;
 
     /// <summary> The camera used to render the viewport. </summary>
     public Camera Camera => Handles.Camera;
@@ -64,7 +64,7 @@ public sealed class SceneToolContext
     /// <summary> All currently selected GameObjects. </summary>
     public IReadOnlyList<GameObject> SelectedObjects => [.. Selection.GetSelected<GameObject>()];
 
-    internal void Begin(Scene scene, object view)
+    internal void Begin(SceneInstance scene, object view)
     {
         Scene = scene;
         View = view;
@@ -91,9 +91,6 @@ public sealed class SceneToolContext
         foreach ((Type tool, Type state) key in _state.Keys.Where(k => k.tool == tool.GetType()).ToList())
             _state.Remove(key);
     }
-
-    /// <summary>Mark the scene dirty so the change is saved.</summary>
-    public void MarkDirty() => EditorSceneManager.MarkDirty();
 
     /// <summary>
     /// Scope a multi-frame interactive edit into one undo step. Dispose commits; call

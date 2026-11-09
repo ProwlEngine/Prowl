@@ -2,9 +2,12 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Popups;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -24,6 +27,12 @@ public class TransformPropertyEditor : PropertyEditor
     {
         GameObject? go = (value as Transform)?.GameObject;
         bool hasValue = go.IsValid();
+        OpenScene? holder = EditorSceneManager.DrawingScene;
+        IReadOnlyList<OpenScene> holders = EditorSceneManager.DrawingScenes;
+        Action<object?> pick = picked =>
+        {
+            if (!EngineObjectPropertyEditor.RefusedFor(holders, picked)) onChange(picked);
+        };
 
         PropertyGridUtils.ObjectField(paper, id, label,
             hasValue ? EditorIcons.ArrowsUpDownLeftRight : EditorIcons.Circle,
@@ -35,17 +44,19 @@ public class TransformPropertyEditor : PropertyEditor
             onDoubleClick: () =>
             {
                 if (go.IsValid()) Selection.Select(go!);
-                else OpenSelector(onChange);
+                else OpenSelector(pick, holder);
             },
-            onPick: () => OpenSelector(onChange),
+            onPick: () => OpenSelector(pick, holder),
             acceptDrops: () =>
             {
                 if (DragDrop.IsDragging || !paper.IsParentHovered || DragDrop.Payload is not GameObjectDragPayload drop) return;
-                if (drop.GameObjects.Length > 0) onChange(drop.GameObjects[0].Transform);
+                if (drop.GameObjects.Length > 0 && EditorSceneManager.RefusesReference(holders, drop.GameObjects[0], out string why))
+                    Toasts.Warning(Rosetta.Loc.Get("hierarchy.reference_refused"), why);
+                else if (drop.GameObjects.Length > 0) onChange(drop.GameObjects[0].Transform);
                 DragDrop.EndDrag();
             });
     }
 
-    private static void OpenSelector(Action<object?> onChange)
-        => SelectorModal.Open("Select Transform", typeof(Transform), SelectorTabs.Scene, onChange);
+    private static void OpenSelector(Action<object?> onChange, OpenScene? holder)
+        => SelectorModal.Open("Select Transform", typeof(Transform), SelectorTabs.Scene, onChange, holder);
 }

@@ -27,7 +27,7 @@ public class SceneRenderingTests : RuntimeTestBase
     [Fact]
     public void Enable_Adds_And_Destroy_Removes()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         scene.Add(go);
 
@@ -44,7 +44,7 @@ public class SceneRenderingTests : RuntimeTestBase
     [Fact]
     public void Disable_Removes_And_Reenable_Readds()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         scene.Add(go);
 
@@ -61,7 +61,7 @@ public class SceneRenderingTests : RuntimeTestBase
     [Fact]
     public void RemoveComponent_Removes()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         scene.Add(go);
 
@@ -77,7 +77,7 @@ public class SceneRenderingTests : RuntimeTestBase
     [Fact]
     public void Scene_Remove_Removes()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         scene.Add(go);
 
@@ -93,7 +93,7 @@ public class SceneRenderingTests : RuntimeTestBase
     [Fact]
     public void SpriteRenderer_ComponentDestroy_Removes()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         scene.Add(go);
 
@@ -110,7 +110,7 @@ public class SceneRenderingTests : RuntimeTestBase
     [Fact]
     public void MeshRenderer_GameObjectDestroy_Removes()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         scene.Add(go);
 
@@ -125,7 +125,7 @@ public class SceneRenderingTests : RuntimeTestBase
     }
 
     // A renderer synced and left alone, as a play mode sync that found it wholly in the world leaves it
-    private static MeshRenderer Settled(Scene scene, GameObject go, Mesh? mesh = null)
+    private static MeshRenderer Settled(SceneInstance scene, GameObject go, Mesh? mesh = null)
     {
         MeshRenderer renderer = go.AddComponent<MeshRenderer>();
         renderer.Mesh = mesh;
@@ -137,7 +137,7 @@ public class SceneRenderingTests : RuntimeTestBase
     [Fact]
     public void ParkedRenderers_WakeWhenTheirTransformMoves()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         scene.Add(go);
         MeshRenderer renderer = Settled(scene, go);
@@ -149,7 +149,7 @@ public class SceneRenderingTests : RuntimeTestBase
     [Fact]
     public void ParkedRenderers_WakeWhenAnAncestorMoves()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject parent = CreateGameObject();
         scene.Add(parent);
         GameObject child = CreateGameObject();
@@ -165,7 +165,7 @@ public class SceneRenderingTests : RuntimeTestBase
     [Fact]
     public void ParkedRenderers_WakeOnTheirSettings_AndTheirObjectsLayer()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         scene.Add(go);
         MeshRenderer renderer = Settled(scene, go);
@@ -181,7 +181,7 @@ public class SceneRenderingTests : RuntimeTestBase
     [Fact]
     public void ParkedRenderers_WakeWhenTheMeshTheyDrawIsEdited()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         scene.Add(go);
         Mesh mesh = new() { Vertices = [new(0, 0, 0), new(1, 0, 0), new(0, 1, 0)] };
@@ -204,7 +204,7 @@ public class SceneRenderingTests : RuntimeTestBase
     [Fact]
     public void ParkedRenderers_SharingAMesh_StillWakeOnItsEdit_AfterOneMoves()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject first = CreateGameObject();
         scene.Add(first);
         GameObject second = CreateGameObject();
@@ -230,7 +230,7 @@ public class SceneRenderingTests : RuntimeTestBase
     [Fact]
     public void ParkedRenderers_WakeOnTheirNewMesh_AfterASwap()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         scene.Add(go);
         Mesh before = new() { Vertices = [new(0, 0, 0), new(1, 0, 0), new(0, 1, 0)] };

@@ -48,7 +48,7 @@ public partial class GameObject : EngineObject, ISerializable
     private Transform _transform = new();
 
     [SerializeIgnore]
-    private WeakReference<Scene> _scene;
+    private WeakReference<SceneInstance> _scene;
 
     // Everything tying this object to a prefab, or null for the ordinary case. One reference rather
     // than a copy of each value on every GameObject in the scene.
@@ -123,7 +123,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <summary>Syncs this object's renderers and lights again next frame.</summary>
     internal void WakeRendering()
     {
-        Scene? scene = Scene;
+        SceneInstance? scene = Scene;
         if (!scene.IsValid() || scene.IsDisposed) return;
         foreach (Component component in _components)
             if (component is Rendering.IRenderSync member) scene.Rendering.Refresh(member);
@@ -155,14 +155,143 @@ public partial class GameObject : EngineObject, ISerializable
 
 
     /// <summary>
-    /// The GameObjects parent <see cref="Prowl.Runtime.Resources.Scene"/>. Each GameObject can belong to
-    /// exactly one Scene, or no Scene at all. To add or remove GameObjects to / from a Scene, use the <see cref="Prowl.Runtime.Resources.Scene.Add(GameObject)"/> and
-    /// <see cref="Prowl.Runtime.Resources.Scene.Remove(GameObject)"/> methods.
+    /// The GameObjects parent <see cref="Prowl.Runtime.Resources.SceneInstance"/>. Each GameObject can belong to
+    /// exactly one Scene, or no Scene at all. To add or remove GameObjects to / from a Scene, use the <see cref="Prowl.Runtime.Resources.SceneInstance.Add(GameObject)"/> and
+    /// <see cref="Prowl.Runtime.Resources.SceneInstance.Remove(GameObject)"/> methods.
     /// </summary>
-    public Scene? Scene
+    public SceneInstance? Scene
     {
-        get => _scene != null && _scene.TryGetTarget(out Scene? scene) ? scene : null;
+        get => _scene != null && _scene.TryGetTarget(out SceneInstance? scene) ? scene : null;
         internal set => _scene = new(value);
+    }
+
+    // The section a root is in while in a world. Children are in their root's.
+    internal SceneSection? _section;
+
+    // The component an owned helper root belongs to, whose section it follows.
+    internal Component? _owner;
+
+    /// <summary>Whether this object is in a world.</summary>
+    public bool IsInWorld => Scene.IsValid();
+
+    /// <summary>The section this object is in, its root's, or null when it is in no world.</summary>
+    public SceneSection? Section
+    {
+        get
+        {
+            if (Scene.IsNotValid()) return null;
+            GameObject root = this;
+            while (root.Parent.IsValid()) root = root.Parent!;
+            return root._section;
+        }
+    }
+
+    /// <summary>
+    /// Whether this root survives loads, in its world's persistent section. Setting it moves the root and its owned
+    /// roots there, or back into the active section. Roots only, and only in a game world. Read on a child it answers
+    /// for its root.
+    /// </summary>
+    public bool Persistent
+    {
+        get => Section is { IsPersistent: true };
+        set
+        {
+            if (Parent.IsValid()) throw new InvalidOperationException($"'{Name}' is not a root, and only a whole tree can be persistent.");
+            SceneInstance world = Scene.IsValid() ? Scene! : throw new InvalidOperationException($"'{Name}' is in no world.");
+            if (world.Mode != SceneMode.Game) throw new InvalidOperationException("Only a game world has persistent objects.");
+            if (Persistent == value) return;
+            MoveTo(value ? world.Persistent : world.ActiveSection);
+        }
+    }
+
+    /// <summary>
+    /// The index of this object among its siblings: its parent's children, or for a root its section's roots. Setting
+    /// it moves the object there.
+    /// </summary>
+    public int SiblingIndex
+    {
+        get
+        {
+            if (Parent.IsValid()) return Parent!.Children.IndexOf(this);
+            return Section is { } section ? section.LiveRoots.ToList().IndexOf(this) : -1;
+        }
+        set => SetSiblingIndex(value);
+    }
+
+    /// <summary>
+    /// Moves this root, its children and its owned roots into another section of its world. An object whose identifier
+    /// the section already holds gets a fresh one.
+    /// </summary>
+    public void MoveTo(SceneSection section)
+    {
+        MainThreadContext.AssertOwner(this);
+        if (Parent.IsValid()) throw new InvalidOperationException($"'{Name}' is not a root. Move its root, or parent it into the section.");
+        if (!section.IsLoaded) throw new InvalidOperationException($"'{section.Name}' has been unloaded.");
+        if (section.IsPersistent && section.Instance.Mode != SceneMode.Game)
+            throw new InvalidOperationException("Only a game world has persistent objects.");
+
+        if (!ReferenceEquals(Scene, section.Instance))
+        {
+            MoveToWorld(section.Instance, section);
+            return;
+        }
+        if (ReferenceEquals(_section, section)) return;
+
+        SceneSection? from = _section;
+        GiveFreshIdentifiersAgainst(section);
+        section.Instance.JoinSection(this, section);
+        if (from is { IsPersistent: true } || section.IsPersistent)
+            Debug.Log($"[Scene] '{Name}' moved from '{from?.Name}' to '{section.Name}'.");
+
+        foreach (GameObject owned in OwnedRoots())
+            owned.MoveTo(section);
+    }
+
+    /// <summary>Moves this root, its children and its owned roots into another world's active section, with the full lifecycle on the way.</summary>
+    public void MoveTo(SceneInstance world) => MoveTo(world.ActiveSection);
+
+    private void MoveToWorld(SceneInstance world, SceneSection section)
+    {
+        List<GameObject> owned = [.. OwnedRoots()];
+        SceneInstance? from = Scene;
+        GiveFreshIdentifiersAgainst(section);
+        if (from.IsValid()) from!.Remove(this);
+        world.Add(this, section);
+        foreach (GameObject root in owned)
+            root.MoveTo(section);
+    }
+
+    // The helper roots owned by components of this tree, like a ragdoll's puppet. A list, so moving them is safe.
+    internal List<GameObject> OwnedRoots()
+    {
+        List<GameObject> owned = [];
+        SceneInstance? world = Scene;
+        if (world.IsNotValid()) return owned;
+        foreach (GameObject root in world!.Roots)
+            if (root._owner is { IsDisposed: false } owner && owner.GameObject.IsValid() && IsChildOrSameTransform(owner.GameObject, this) && !ReferenceEquals(root, this))
+                owned.Add(root);
+        return owned;
+    }
+
+    // An object moving into a section that already holds its identifier gets a fresh one, so identifiers stay unique per section.
+    private void GiveFreshIdentifiersAgainst(SceneSection section)
+    {
+        HashSet<Guid> taken = section.Instance.IdentifiersIn(section);
+        Renew(this);
+
+        void Renew(GameObject go)
+        {
+            if (taken.Contains(go.Identifier))
+            {
+                Debug.LogWarning($"[Scene] '{go.Name}' got a fresh identifier moving into '{section.Name}', which already holds {go.Identifier}.");
+                go.SetIdentifier(Guid.NewGuid());
+            }
+            foreach (Component component in go._components)
+                if (taken.Contains(component.Identifier))
+                    component.Identifier = Guid.NewGuid();
+            foreach (GameObject child in go.Children)
+                Renew(child);
+        }
     }
 
     /// <summary>
@@ -319,10 +448,28 @@ public partial class GameObject : EngineObject, ISerializable
         // it) and the new one (it joined). Capture the old canvas before the parent pointer changes.
         GameCanvas? uiOldCanvas = GetComponentInParent<GameCanvas>();
 
-        Scene newScene = (NewParent.IsValid()) ? NewParent.Scene : Scene;
+        SceneInstance? world = Scene;
+        if (world.IsValid() && NewParent.IsValid() && !ReferenceEquals(NewParent.Scene, world))
+            throw new InvalidOperationException(NewParent.Scene.IsValid()
+                ? $"'{NewParent.Name}' is in another world. Use MoveTo to move '{Name}' between worlds."
+                : $"'{NewParent.Name}' is in no world, so '{Name}' cannot be parented under it while it is in one.");
 
-        bool joinsScene = newScene != Scene && newScene.IsValid();
-        if (newScene != Scene && Scene.IsValid()) Scene.Remove(this);
+        SceneInstance? newScene = NewParent.IsValid() ? NewParent.Scene : world;
+        bool joinsScene = newScene.IsValid() && !ReferenceEquals(newScene, world);
+        if (joinsScene && NewParent!.Section is { } joining) GiveFreshIdentifiersAgainst(joining);
+
+        // Section follows the root: becoming a child leaves the section's roots, becoming a root keeps the section it was in.
+        SceneSection? oldSection = world.IsValid() ? Section : null;
+        SceneSection? newSection = NewParent.IsValid() ? NewParent.Section : oldSection;
+        List<GameObject>? owned = null;
+        if (world.IsValid() && newSection != null && !ReferenceEquals(oldSection, newSection))
+        {
+            owned = [.. OwnedRoots()];
+            if (oldSection is { IsPersistent: true } || newSection.IsPersistent)
+                Debug.LogWarning($"[Scene] '{Name}' moved between '{oldSection?.Name}' and '{newSection.Name}' by being parented. A tree crossing into or out of the persistent section is almost always a mistake.");
+            GiveFreshIdentifiersAgainst(newSection);
+        }
+        if (world.IsValid() && Parent.IsNotValid() && NewParent.IsValid()) Resources.SceneInstance.LeaveSection(this);
 
         // Save world-space transform before reparenting
         Float3 worldPosition = new();
@@ -347,6 +494,9 @@ public partial class GameObject : EngineObject, ISerializable
 
             _parent = NewParent;
         }
+
+        if (world.IsValid() && NewParent.IsNotValid() && oldSection != null && !IsDisposed)
+            world!.JoinSection(this, oldSection);
 
         if (worldPositionStays)
         {
@@ -378,7 +528,10 @@ public partial class GameObject : EngineObject, ISerializable
 
         // Joining a scene last, so OnEnable sees the parent and the enabled state it has under it.
         HierarchyStateChanged();
-        if (joinsScene) newScene.Add(this);
+        if (joinsScene) newScene!.Add(this);
+        if (owned != null)
+            foreach (GameObject root in owned)
+                if (root.Parent.IsNotValid() && root.Section is { } section && !ReferenceEquals(section, newSection)) root.MoveTo(newSection!);
 
         // Draw order and layout are derived from the child tree at canvas build time, and a same-scene
         // reparent fires no OnAdded/Removed - so mark the affected canvas(es) dirty explicitly.
@@ -431,21 +584,21 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="otherName">The name of the GameObject to find.</param>
     /// <param name="ignoreCase">If true, the search is case-insensitive.</param>
     /// <returns>The first GameObject with the given name, or null if not found.</returns>
-    public GameObject Find(string otherName, bool ignoreCase = false) => Scene.IsValid() ? Scene.AllObjects.FirstOrDefault(gameObject => gameObject.Name.Equals(otherName, ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) : null;
+    public GameObject Find(string otherName, bool ignoreCase = false) => Scene.IsValid() ? Scene.Objects.FirstOrDefault(gameObject => gameObject.Name.Equals(otherName, ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) : null;
 
     /// <summary>
     /// Finds a GameObject with the specified tag in the same scene.
     /// </summary>
     /// <param name="otherTag">The tag to search for.</param>
     /// <returns>The first GameObject with the given tag, or null if not found.</returns>
-    public GameObject FindGameObjectWithTag(string otherTag) => Scene.IsValid() ? Scene.AllObjects.FirstOrDefault(gameObject => gameObject.CompareTag(otherTag)) : null;
+    public GameObject FindGameObjectWithTag(string otherTag) => Scene.IsValid() ? Scene.Objects.FirstOrDefault(gameObject => gameObject.CompareTag(otherTag)) : null;
 
     /// <summary>
     /// Finds all GameObjects with the specified tag in the same scene.
     /// </summary>
     /// <param name="otherTag">The tag to search for.</param>
     /// <returns>An array of GameObjects with the given tag.</returns>
-    public GameObject[] FindGameObjectsWithTag(string otherTag) => Scene.IsValid() ? [.. Scene.AllObjects.Where(gameObject => gameObject.CompareTag(otherTag))] : [];
+    public GameObject[] FindGameObjectsWithTag(string otherTag) => Scene.IsValid() ? [.. Scene.Objects.Where(gameObject => gameObject.CompareTag(otherTag))] : [];
 
 
     /// <summary>
@@ -552,7 +705,19 @@ public partial class GameObject : EngineObject, ISerializable
     public void SetSiblingIndex(int index)
     {
         MainThreadContext.AssertOwner(this);
-        if (Parent.IsNotValid()) return;
+        if (Parent.IsNotValid())
+        {
+            if (_section is { } section && Scene.IsValid())
+            {
+                // The index counts live roots only, so roots disposed this frame do not shift it.
+                List<GameObject> live = [.. section.LiveRoots.Where(root => !ReferenceEquals(root, this))];
+                index = Maths.Max(0, Maths.Min(index, live.Count));
+                section.RootsList.Remove(this);
+                int at = index < live.Count ? section.RootsList.IndexOf(live[index]) : section.RootsList.Count;
+                section.RootsList.Insert(at, this);
+            }
+            return;
+        }
 
         // Remove this object from current position
         Parent.Children.Remove(this);
@@ -749,14 +914,15 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     private void NotifyComponentAddedToScene(Component comp)
     {
-        Scene? scene = Scene;
+        SceneInstance? scene = Scene;
         if (!scene.IsValid()) return;
-        using Scene.SceneScope active = Resources.Scene.Enter(scene);
+        using SceneInstance.SceneScope active = Resources.SceneInstance.Enter(scene);
 
+        scene!.ComponentJoined(comp);
         try { comp.OnAddedToScene(); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{comp.GetType().Name}] OnAddedToScene() threw", ex); }
 
-        if (scene.IsActive && comp.EnabledInHierarchy)
+        if (scene.ComponentsEnabled && comp.EnabledInHierarchy)
             comp.InternalOnEnable();
     }
 
@@ -816,7 +982,7 @@ public partial class GameObject : EngineObject, ISerializable
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
 
-        if (!Application.IsPlaying && IsPrefabInstance && component.SourceIdentifier != Guid.Empty)
+        if (!(Scene.IsValid() ? Scene!.IsPlaying : Application.IsPlaying) && IsPrefabInstance && component.SourceIdentifier != Guid.Empty)
         {
             Debug.LogWarning($"[Prefab] '{component.GetType().Name}' on '{Name}' comes from a prefab, " +
                 "so removing it means breaking the connection to that prefab first.");
@@ -1176,8 +1342,8 @@ public partial class GameObject : EngineObject, ISerializable
 
             // Only call OnDisable if OnEnable previously ran, the component is enabled in hierarchy
             // and the scene is active, so it is never delivered twice after a scene deactivation.
-            Scene? scene = Scene;
-            if (component.HasBeenEnabled && component.EnabledInHierarchy && scene.IsValid() && scene.IsActive)
+            SceneInstance? scene = Scene;
+            if (component.HasBeenEnabled && component.EnabledInHierarchy && scene.IsValid() && scene.ComponentsEnabled)
                 component.InternalOnDisable();
 
             try { component.Dispose(); }
@@ -1198,7 +1364,7 @@ public partial class GameObject : EngineObject, ISerializable
 
     private protected override void OnDisposed()
     {
-        Scene? scene = Scene;
+        SceneInstance? scene = Scene;
         if (scene.IsValid()) scene.MarkObjectDisposed();
     }
 
@@ -1487,7 +1653,7 @@ public partial class GameObject : EngineObject, ISerializable
         }
     }
 
-    private protected override Scene? OwningScene => Scene;
+    private protected override SceneInstance? OwningScene => Scene;
 
     private void AddLoadedComponent(Component component)
     {

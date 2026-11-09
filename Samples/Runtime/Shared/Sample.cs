@@ -38,7 +38,7 @@ public abstract class StationGame : Game
 
     public sealed record Station(string Name, string Description, Float3 Center, Float3 View, float LookHeight);
 
-    protected Scene SampleScene = null!;
+    protected SceneInstance SampleScene = null!;
     protected GameObject CameraObject = null!;
     protected Camera MainCamera = null!;
     protected SampleHud Hud = null!;
@@ -87,7 +87,7 @@ public abstract class StationGame : Game
         // imported the first time something asks for them by path.
         AssetDatabase.Mount(new SourceAssetBackend(new FolderAssetSource(Path.Combine(AppContext.BaseDirectory, "Assets"))));
 
-        SampleScene = new Scene();
+        SampleScene = SceneInstance.Main;
 
         CameraObject = new GameObject("Main Camera") { Tag = "Main Camera" };
         MainCamera = CameraObject.AddComponent<Camera>();
@@ -99,19 +99,18 @@ public abstract class StationGame : Game
         MainCamera.AntiAliasing = AntiAliasingMode.FXAA;
         CameraObject.AddComponent<FlyCamera>();
         CameraObject.AddComponent<PhysicsGrabber>().Game = this;
-        SampleScene.Add(CameraObject);
+        CameraObject.MoveTo(SampleScene);
 
         var hud = new GameObject("HUD");
         Hud = hud.AddComponent<SampleHud>();
         Hud.Game = this;
-        SampleScene.Add(hud);
+        hud.MoveTo(SampleScene);
         if (_captureFolder != null) Hud.Visible = false;
 
         Build();
         if (_captureFolder != null) FixParticleSeeds();
 
         GoToStation(_captureStation == null ? 0 : Math.Max(Stations.FindIndex(s => s.Name.Equals(_captureStation, StringComparison.OrdinalIgnoreCase)), 0));
-        Scene.Load(SampleScene);
     }
 
     /// <summary>Creates the sample's content. Called once, before the scene loads.</summary>
@@ -170,7 +169,7 @@ public abstract class StationGame : Game
     /// <summary>Adds a root object to the sample scene and returns it.</summary>
     protected GameObject Add(GameObject go)
     {
-        SampleScene.Add(go);
+        go.MoveTo(SampleScene);
         return go;
     }
 
@@ -198,7 +197,7 @@ public abstract class StationGame : Game
     private void FixParticleSeeds()
     {
         uint seed = 1;
-        foreach (GameObject go in SampleScene.AllObjects)
+        foreach (GameObject go in SampleScene.Objects)
             foreach (ParticleSystemComponent particles in go.GetComponents<Prowl.Runtime.ParticleSystem.ParticleSystemComponent>())
             {
                 particles.AutoRandomSeed = false;
@@ -208,7 +207,7 @@ public abstract class StationGame : Game
 
     public override void EndRender() => RenderStats.EndFrame();
 
-    public override void AfterGui(Scene? scene)
+    public override void AfterGui()
     {
         if (!_captureNow) return;
         _captureNow = false;

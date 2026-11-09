@@ -57,7 +57,7 @@ Prowl is currently in **1.0 Preview 5**, which brings a new Vulkan renderer, ani
     - Roslyn analyzers that catch common scripting mistakes (component constructors, blocking waits, `?.` on engine objects)
     - Serialization via [Prowl.Echo](https://github.com/ProwlEngine/Anthology)
     - Tags & Layers System
-    - Scenes with `Scene.Environment` (sky, ambient, fog), async loading and `DontDestroyOnLoad`
+    - Scenes with `Scene.Environment` (sky, ambient, fog), async load handles, additive sections and persistent objects
     - Prefabs
         - Apply, Revert, Break Instance & Override Tracking
     - Input Action System with Composites & Processors

@@ -8,16 +8,16 @@ using Xunit;
 namespace Prowl.Runtime.Test;
 
 /// <summary>
-/// Guards <see cref="Scene.GatherActiveCameras"/>, which replaced a per-object
+/// Guards <see cref="SceneInstance.GatherActiveCameras"/>, which replaced a per-object
 /// <c>GetComponentsInChildren</c> recursion in Scene.Render. The camera list must return exactly what
 /// the old recursive-plus-Distinct expression returned, for every hierarchy shape.
 /// </summary>
 public class SceneCameraGatherTests : RuntimeTestBase
 {
     /// <summary>The exact expression Scene.Render used before the camera list replaced it.</summary>
-    private static List<Camera> LegacyGather(Scene scene)
+    private static List<Camera> LegacyGather(SceneInstance scene)
     {
-        var cameras = scene.ActiveObjects
+        var cameras = scene.Objects.Where(o => o.EnabledInHierarchy)
             .SelectMany(x => x.GetComponentsInChildren<Camera>())
             .Distinct()
             .ToList();
@@ -25,7 +25,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
         return cameras;
     }
 
-    private static void AssertMatchesLegacy(Scene scene)
+    private static void AssertMatchesLegacy(SceneInstance scene)
     {
         List<Camera> expected = LegacyGather(scene);
         List<Camera> actual = scene.GatherActiveCameras();
@@ -39,7 +39,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void EmptyScene_ReturnsNoCameras()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         Assert.Empty(scene.GatherActiveCameras());
         AssertMatchesLegacy(scene);
     }
@@ -47,7 +47,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void RootCamera_IsFound()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Cam");
         go.AddComponent<Camera>();
         scene.Add(go);
@@ -61,7 +61,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     {
         // The bug the old Distinct() existed to paper over: a camera nested under N active
         // ancestors was collected N+1 times by the recursion.
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject root = CreateGameObject("Root");
         GameObject mid = CreateGameObject("Mid");
         GameObject leaf = CreateGameObject("Leaf");
@@ -78,7 +78,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void DisabledGameObject_IsSkipped()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Cam");
         go.AddComponent<Camera>();
         scene.Add(go);
@@ -91,7 +91,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void CameraUnderDisabledParent_IsSkipped()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject parent = CreateGameObject("Parent");
         GameObject child = CreateGameObject("Child");
         child.SetParent(parent);
@@ -107,7 +107,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void MultipleCamerasOnOneGameObject_AreAllReturned()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Rig");
         go.AddComponent<Camera>();
         go.AddComponent<Camera>();
@@ -120,7 +120,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void CamerasAreSortedByDepth()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject a = CreateGameObject("A");
         GameObject b = CreateGameObject("B");
         GameObject c = CreateGameObject("C");
@@ -141,7 +141,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void DisabledCameraComponent_IsSkipped()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Cam");
         Camera cam = go.AddComponent<Camera>();
         scene.Add(go);
@@ -153,7 +153,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void ReenabledCamera_IsFoundOnce()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Cam");
         Camera cam = go.AddComponent<Camera>();
         scene.Add(go);
@@ -170,7 +170,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void CameraAddedToAnObjectInTheScene_IsFound()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Cam");
         scene.Add(go);
 
@@ -183,7 +183,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void RemovedCamera_IsGone()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Cam");
         Camera cam = go.AddComponent<Camera>();
         scene.Add(go);
@@ -197,7 +197,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void CameraOnAnObjectRemovedFromTheScene_IsGone()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Cam");
         go.AddComponent<Camera>();
         scene.Add(go);
@@ -208,53 +208,37 @@ public class SceneCameraGatherTests : RuntimeTestBase
         AssertMatchesLegacy(scene);
     }
 
+    // A dormant world's registries are empty, and fill as it activates.
     [Fact]
-    public void CameraInASceneThatIsNotActive_IsFound()
+    public void CameraInADormantWorld_IsListedOnceItActivates()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject("Cam");
         go.AddComponent<Camera>();
         scene.Add(go);
 
+        Assert.Empty(scene.GatherActiveCameras());
+        scene.Activate();
         Assert.Single(scene.GatherActiveCameras());
     }
 
     [Fact]
-    public void Camera_MovesWithDontDestroyOnLoad()
+    public void PersistentCamera_StaysListedAcrossALoad_AndADisabledOneOnceEnabled()
     {
-        Scene first = CreateScene();
-        GameObject keeper = CreateGameObject("Keeper");
+        SceneInstance main = SceneInstance.Main;
+        GameObject keeper = main.Create("Keeper");
         keeper.AddComponent<Camera>();
-        first.Add(keeper);
-        Scene.Load(first);
-        Scene.ProcessPendingLoad();
-        Scene.DontDestroyOnLoad(keeper);
+        GameObject idle = main.Create("Idle");
+        Camera idleCam = idle.AddComponent<Camera>();
+        idleCam.Enabled = false;
+        keeper.Persistent = true;
+        idle.Persistent = true;
 
-        Scene second = CreateScene();
-        Scene.Load(second);
-        Scene.ProcessPendingLoad();
+        main.ReplaceContent(new SceneContent(), "Next", null);
+        Assert.Single(main.GatherActiveCameras());
 
-        Assert.Single(second.GatherActiveCameras());
-    }
-
-    [Fact]
-    public void DisabledCamera_MovedWithDontDestroyOnLoad_IsFoundOnceEnabled()
-    {
-        Scene first = CreateScene();
-        GameObject keeper = CreateGameObject("Keeper");
-        Camera cam = keeper.AddComponent<Camera>();
-        first.Add(keeper);
-        Scene.Load(first);
-        Scene.ProcessPendingLoad();
-        cam.Enabled = false;
-        Scene.DontDestroyOnLoad(keeper);
-
-        Scene second = CreateScene();
-        Scene.Load(second);
-        Scene.ProcessPendingLoad();
-        cam.Enabled = true;
-
-        Assert.Single(second.GatherActiveCameras());
+        idleCam.Enabled = true;
+        Assert.Equal(2, main.GatherActiveCameras().Count);
     }
 
     private sealed class MainCameraReader : Component
@@ -268,7 +252,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void Main_IsFoundByAnOnEnableThatRunsBeforeTheCameras()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject first = CreateGameObject("First");
         MainCameraReader reader = first.AddComponent<MainCameraReader>();
         GameObject second = CreateGameObject("Second");
@@ -276,8 +260,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
         scene.Add(first);
         scene.Add(second);
 
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
+        scene.Activate();
 
         Assert.Same(cam, reader.Seen);
     }
@@ -289,7 +272,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
         // sizes) worth of LINQ/iterator garbage EVERY frame - ~6 MB on a 10k-object tilemap, which
         // dominated the engine's gen0 churn. The camera list allocates only the result, so cost must
         // stay flat as the scene grows.
-        static long MeasureGather(Scene scene)
+        static long MeasureGather(SceneInstance scene)
         {
             scene.GatherActiveCameras(); // warm up
             long before = GC.GetAllocatedBytesForCurrentThread();
@@ -298,8 +281,8 @@ public class SceneCameraGatherTests : RuntimeTestBase
             return (GC.GetAllocatedBytesForCurrentThread() - before) / 10;
         }
 
-        Scene small = BuildTileMap(5, 5);     // 31 objects
-        Scene large = BuildTileMap(60, 60);   // 3661 objects
+        SceneInstance small = BuildTileMap(5, 5);     // 31 objects
+        SceneInstance large = BuildTileMap(60, 60);   // 3661 objects
 
         long smallBytes = MeasureGather(small);
         long largeBytes = MeasureGather(large);
@@ -310,9 +293,9 @@ public class SceneCameraGatherTests : RuntimeTestBase
             "Something reintroduced a per-object walk.");
     }
 
-    private Scene BuildTileMap(int rows, int cols)
+    private SceneInstance BuildTileMap(int rows, int cols)
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject map = CreateGameObject("Map");
 
         for (int r = 0; r < rows; r++)
@@ -334,7 +317,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void FindMainCamera_PicksHighestDepth()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject low = CreateGameObject("Low");
         GameObject high = CreateGameObject("High");
         low.AddComponent<Camera>().Depth = 0;
@@ -349,7 +332,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void FindMainCamera_SkipsDisabledCamerasAndEditorHelpers()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject game = CreateGameObject("Game");
         Camera expected = game.AddComponent<Camera>();
 
@@ -372,9 +355,8 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void Main_ReadsTheCurrentScene_AndForgetsADestroyedCamera()
     {
-        Scene scene = CreateScene();
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
+        SceneInstance scene = CreateScene();
+        Bind(scene);
 
         GameObject first = CreateGameObject("First");
         Camera firstCam = first.AddComponent<Camera>();
@@ -394,7 +376,7 @@ public class SceneCameraGatherTests : RuntimeTestBase
     [Fact]
     public void MixedHierarchy_MatchesLegacyExactly()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
 
         GameObject map = CreateGameObject("Map");
         for (int r = 0; r < 5; r++)

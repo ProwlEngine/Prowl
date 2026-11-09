@@ -220,7 +220,7 @@ public class ScriptCompilationTests : EditorTestHarness
             public class MyTestWindow : DockPanel
             {
                 [MenuItem("Test/MyTestWindow")]
-                static void Open() => EditorApplication.Instance?.OpenPanel(typeof(MyTestWindow));
+                static void Open() => EditorApplication.Instance?.OpenPanel<MyTestWindow>();
 
                 public override string Title => "My Test Window";
                 public override string Icon => "?";

@@ -297,6 +297,8 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
         return world;
     }
 
+    private BakedLightingBinding.Cache _lightmapCache;
+
     bool IRenderSync.Sync(RenderWorld world)
     {
         Mesh? mesh = SharedMesh;
@@ -347,7 +349,7 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
             Flags = RenderableState.FlagsFor(GameObject, false, ReceiveShadows, motionVectors: true) | ShadowCasting.ToFlags(),
             LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
             ObjectId = (uint)InstanceID,
-            Lightmap = BakedLightingBinding.For(GameObject),
+            Lightmap = BakedLightingBinding.For(GameObject, ref _lightmapCache),
             Bounds = bounds,
         });
 

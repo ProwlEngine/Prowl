@@ -188,7 +188,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
 
     public override void Update()
     {
-        if (!Application.IsPlaying || _content.IsNotValid()) return;
+        if (!IsInPlayingWorld || _content.IsNotValid()) return;
 
         // Auto-hide / expand scrollbars based on whether each axis needs to scroll (play mode only; in
         // edit mode the authored layout with both bars shown is kept).

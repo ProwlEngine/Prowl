@@ -281,8 +281,6 @@ public sealed class VolumeProfile : Asset
 [ExecuteAlways]
 public sealed class Volume : Component
 {
-    private static readonly List<Volume> s_active = [];
-
     /// <summary>Applies everywhere rather than in its box.</summary>
     public bool IsGlobal = true;
 
@@ -304,9 +302,6 @@ public sealed class Volume : Component
 
     private bool IsLocal => !IsGlobal;
 
-    /// <summary>The enabled volumes, for the cameras resolving them.</summary>
-    internal static IReadOnlyList<Volume> ActiveVolumes => s_active;
-
     /// <summary>
     /// This volume's own copy of its profile, made from <see cref="SharedProfile"/> on first use so runtime changes
     /// never reach the asset or other volumes.
@@ -327,16 +322,15 @@ public sealed class Volume : Component
     /// <summary>The profile blending reads: the instance when one was made, else the shared profile.</summary>
     public VolumeProfile? EffectiveProfile => _instance.IsValid() ? _instance : SharedProfile;
 
-    public override void OnEnable()
+    internal override void JoinWorld(SceneInstance world)
     {
-        if (!s_active.Contains(this)) s_active.Add(this);
+        if (!world.VolumeList.Contains(this)) world.VolumeList.Add(this);
     }
 
-    public override void OnDisable() => s_active.Remove(this);
+    internal override void LeaveWorld(SceneInstance world) => world.VolumeList.Remove(this);
 
     protected override void OnDispose()
     {
-        s_active.Remove(this);
         if (_instance.IsValid() && !_instance.IsFromDatabase) _instance.Dispose();
         _instance = null;
         base.OnDispose();
@@ -434,7 +428,7 @@ public sealed class VolumeStack : IDisposable
     /// Blends the volumes of <paramref name="scene"/> on the layers of <paramref name="mask"/> at
     /// <paramref name="position"/>, over <paramref name="baseProfile"/>.
     /// </summary>
-    public void Resolve(Scene? scene, Float3 position, LayerMask mask, VolumeProfile? baseProfile)
+    public void Resolve(SceneInstance? scene, Float3 position, LayerMask mask, VolumeProfile? baseProfile)
     {
         foreach (Entry entry in _order) entry.Present = false;
 
@@ -442,11 +436,11 @@ public sealed class VolumeStack : IDisposable
             MarkPresent(baseProfile);
 
         _contributing.Clear();
-        IReadOnlyList<Volume> volumes = Volume.ActiveVolumes;
+        IReadOnlyList<Volume> volumes = scene.IsValid() ? scene.VolumeList : [];
         for (int i = 0; i < volumes.Count; i++)
         {
             Volume volume = volumes[i];
-            if (volume.IsNotValid() || !volume.EnabledInHierarchy || !ReferenceEquals(volume.GameObject.Scene, scene)) continue;
+            if (volume.IsNotValid() || !volume.EnabledInHierarchy) continue;
             if (!mask.HasLayer(volume.GameObject.LayerIndex)) continue;
             VolumeProfile? profile = volume.EffectiveProfile;
             if (profile.IsNotValid()) continue;

@@ -18,12 +18,12 @@ namespace Prowl.Runtime.Test;
 /// <summary>The Ragdoll node's puppet: how it is made, how closely what it shows follows the animation, and how it stays whole.</summary>
 public class AnimatorRagdollTests : RuntimeTestBase
 {
-    private (Scene Scene, Animator Animator, GameObject Root) SetupRagdoll(bool controller = false, float active = 1f, bool chest = true)
+    private (SceneInstance Scene, Animator Animator, GameObject Root) SetupRagdoll(bool controller = false, float active = 1f, bool chest = true)
     {
         (MotionSkeleton skeleton, GameObject root) = TestHumanoid.Build(chest);
         Avatar avatar = Avatar.CreateAutomatic(skeleton, out _, "Character");
 
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Add(root);
         if (controller) root.AddComponent<CharacterController>();
 
@@ -38,17 +38,17 @@ public class AnimatorRagdollTests : RuntimeTestBase
         Animator animator = root.AddComponent<Animator>();
         animator.Avatar = avatar;
         animator.Graph = graph;
-        scene.Enable();
+        scene.Activate();
         return (scene, animator, root);
     }
 
-    private static GameObject? Puppet(Scene scene)
-        => scene.AllObjects.FirstOrDefault(o => o.Name == "Character Ragdoll");
+    private static GameObject? Puppet(SceneInstance scene)
+        => scene.Objects.FirstOrDefault(o => o.Name == "Character Ragdoll");
 
     [Fact]
     public void ARagdollNode_BuildsAHiddenPuppet_AndLeavesTheBonesAlone()
     {
-        (Scene scene, _, GameObject root) = SetupRagdoll();
+        (SceneInstance scene, _, GameObject root) = SetupRagdoll();
         Tick(scene, 3);
 
         GameObject? puppet = Puppet(scene);
@@ -62,11 +62,22 @@ public class AnimatorRagdollTests : RuntimeTestBase
         Assert.All(bodies, b => Assert.Equal(Jitter2.Dynamics.MotionType.Dynamic, b.MotionType));
     }
 
+    [Fact]
+    public void ThePuppet_FollowsItsCharacterIntoThePersistentSection()
+    {
+        (SceneInstance scene, _, GameObject root) = SetupRagdoll();
+        Tick(scene, 3);
+
+        root.Persistent = true;
+
+        Assert.True(Puppet(scene)!.Persistent);
+    }
+
     // Chest is an optional humanoid bone, and without one the chest's body sits on the spine.
     [Fact]
     public void ARigWithoutAChest_GetsItsRagdoll()
     {
-        (Scene scene, Animator animator, _) = SetupRagdoll(chest: false);
+        (SceneInstance scene, Animator animator, _) = SetupRagdoll(chest: false);
         Assert.False(animator.Avatar!.Runtime!.Humanoid!.HasBone(HumanBodyBone.Chest));
 
         Tick(scene, 3);
@@ -78,7 +89,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
     [Fact]
     public void TheCharacterControllerIgnoresThePuppet()
     {
-        (Scene scene, _, GameObject root) = SetupRagdoll(controller: true);
+        (SceneInstance scene, _, GameObject root) = SetupRagdoll(controller: true);
         Tick(scene, 3);
         Assert.NotNull(Puppet(scene));
 
@@ -89,7 +100,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
     [Fact]
     public void ALimpRagdoll_KeepsItsJoints()
     {
-        (Scene scene, _, _) = SetupRagdoll(active: 0f);
+        (SceneInstance scene, _, _) = SetupRagdoll(active: 0f);
         scene.Physics.UseMultithreading = false;
         Tick(scene, 90);
 
@@ -105,7 +116,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
     [Fact]
     public void ALimpRagdoll_ComesToRest_AndSleeps()
     {
-        (Scene scene, Animator animator, _) = SetupRagdoll(active: 0f);
+        (SceneInstance scene, Animator animator, _) = SetupRagdoll(active: 0f);
         scene.Physics.UseMultithreading = false;
         var floor = new GameObject("Floor");
         floor.Transform.Position = new Float3(0f, -0.5f, 0f);
@@ -121,7 +132,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
     [Fact]
     public void ALimpRagdoll_KeepsItsLegsFromPassingThroughEachOther()
     {
-        (Scene scene, Animator animator, _) = SetupRagdoll(active: 0f);
+        (SceneInstance scene, Animator animator, _) = SetupRagdoll(active: 0f);
         scene.Physics.UseMultithreading = false;
         var floor = new GameObject("Floor");
         floor.Transform.Position = new Float3(0f, -0.5f, 0f);
@@ -139,7 +150,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
     [Fact]
     public void AnActiveRagdoll_KeepsPaceWithAMovingCharacter()
     {
-        (Scene scene, _, GameObject root) = SetupRagdoll();
+        (SceneInstance scene, _, GameObject root) = SetupRagdoll();
         scene.Physics.UseMultithreading = false;
         Tick(scene, 3);
 
@@ -183,11 +194,11 @@ public class AnimatorRagdollTests : RuntimeTestBase
 
     // A character standing on a floor, its graph pose, then optionally Foot Grounding, then a Ragdoll
     // whose Active reads the "Active" parameter.
-    private (Scene Scene, Animator Animator, GameObject Root) SetupStandingRagdoll(bool footGrounding = false)
+    private (SceneInstance Scene, Animator Animator, GameObject Root) SetupStandingRagdoll(bool footGrounding = false)
     {
         (MotionSkeleton skeleton, GameObject root) = TestHumanoid.Build();
         Avatar avatar = Avatar.CreateAutomatic(skeleton, out _, "Character");
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Add(root);
 
         GameObject floor = CreateGameObject("Floor");
@@ -215,12 +226,12 @@ public class AnimatorRagdollTests : RuntimeTestBase
         Animator animator = root.AddComponent<Animator>();
         animator.Avatar = avatar;
         animator.Graph = graph;
-        scene.Enable();
+        scene.Activate();
         scene.Physics.UseMultithreading = false;
         return (scene, animator, root);
     }
 
-    private static Transform PuppetPart(Scene scene, string name) => Puppet(scene)!.Children.First(g => g.Name == name).Transform;
+    private static Transform PuppetPart(SceneInstance scene, string name) => Puppet(scene)!.Children.First(g => g.Name == name).Transform;
 
     private static float Degrees(Quaternion a, Quaternion b) => Quaternion.Angle(a, b) * Maths.Rad2Deg;
 
@@ -228,7 +239,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
     [Fact]
     public void FootGrounding_DoesNotStandOnTheRagdoll()
     {
-        (Scene scene, Animator animator, GameObject root) = SetupStandingRagdoll(footGrounding: true);
+        (SceneInstance scene, Animator animator, GameObject root) = SetupStandingRagdoll(footGrounding: true);
         Tick(scene, 5);
 
         float worst = 0f;
@@ -245,7 +256,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
     [Fact]
     public void ATeleportedCharacter_TakesItsRagdollAlong()
     {
-        (Scene scene, _, GameObject root) = SetupStandingRagdoll();
+        (SceneInstance scene, _, GameObject root) = SetupStandingRagdoll();
         Tick(scene, 30);
 
         root.Transform.Position += new Float3(20f, 0f, 0f);
@@ -260,7 +271,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
     [Fact]
     public void ARagdollSnappedBackToActive_StandsBackUpInOnePiece()
     {
-        (Scene scene, Animator animator, GameObject root) = SetupStandingRagdoll();
+        (SceneInstance scene, Animator animator, GameObject root) = SetupStandingRagdoll();
         Tick(scene, 5);
         animator.GraphInstance!.SetFloat("Active", 0f);
         Tick(scene, 3);
@@ -311,7 +322,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
     private (float Worst, float Shake) RagdollFollowing(Func<MotionSkeleton, Avatar, AnimationClip> makeClip, float speed, float muscle, float pin,
         RagdollPinning pinning = RagdollPinning.All)
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject floor = CreateGameObject("Floor");
         floor.Transform.Position = new Float3(0f, -0.5f, 0f);
         floor.AddComponent<BoxCollider>().Size = new Float3(400f, 1f, 400f);
@@ -360,7 +371,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
 
         (GameObject Player, Dictionary<string, Transform> Bones) plain = Spawn(-3f, false);
         (GameObject Player, Dictionary<string, Transform> Bones) ragdolled = Spawn(3f, true);
-        scene.Enable();
+        scene.Activate();
         scene.Physics.UseMultithreading = false;
 
         static float Yaw(Quaternion q)
@@ -369,7 +380,6 @@ public class AnimatorRagdollTests : RuntimeTestBase
             return MathF.Atan2(forward.X, forward.Z) * 180f / MathF.PI;
         }
 
-        TimeData time = Time.CurrentTime;
         var random = new Random(7);
         float worst = 0f, shake = 0f, previous = 0f, beforeThat = 0f;
         int samples = 0;
@@ -377,17 +387,11 @@ public class AnimatorRagdollTests : RuntimeTestBase
         {
             for (int frame = 0; frame < 144 * 4; frame++)
             {
-                time.FrameCount++;
-                time.DeltaTime = (1f / 144f) * (0.5f + (float)random.NextDouble());
-                Time.FixedAccumulator += time.DeltaTime;
-                for (int steps = 0; Time.FixedAccumulator >= Time.FixedDeltaTime && steps < 3; steps++)
-                {
-                    scene.FixedUpdate();
-                    Time.FixedAccumulator -= Time.FixedDeltaTime;
-                }
-                scene.Update();
-                plain.Player.Transform.Position += new Float3(0f, 0f, speed * time.DeltaTime);
-                ragdolled.Player.Transform.Position += new Float3(0f, 0f, speed * time.DeltaTime);
+                float delta = (1f / 144f) * (0.5f + (float)random.NextDouble());
+                Time.AdvanceFrame(delta);
+                scene.Tick(delta);
+                plain.Player.Transform.Position += new Float3(0f, 0f, speed * delta);
+                ragdolled.Player.Transform.Position += new Float3(0f, 0f, speed * delta);
                 EngineObject.ProcessDestroyed();
                 if (frame < 144) continue;
 
@@ -401,10 +405,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
                 previous = error;
             }
         }
-        finally
-        {
-            Time.FixedAccumulator = 0f;
-        }
+        finally { }
         return (worst, shake / samples);
     }
 
@@ -458,7 +459,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
     [Fact]
     public void DisablingTheAnimator_RemovesThePuppet()
     {
-        (Scene scene, Animator animator, _) = SetupRagdoll();
+        (SceneInstance scene, Animator animator, _) = SetupRagdoll();
         Tick(scene, 3);
 
         animator.Enabled = false;

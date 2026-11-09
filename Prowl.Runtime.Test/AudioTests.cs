@@ -46,7 +46,7 @@ public class AudioTests : RuntimeTestBase
 
     private AudioSource CreateSource()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Speaker");
         AudioSource source = go.AddComponent<AudioSource>();
         scene.Add(go);
@@ -2063,7 +2063,7 @@ public class AudioTests : RuntimeTestBase
     [Fact]
     public void Effects_SurviveTheirSourceBeingCloned()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Speaker");
         AudioSource source = go.AddComponent<AudioSource>();
         scene.Add(go);
@@ -2301,32 +2301,28 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(1f, restored.Pan);
     }
 
-    // Spatial audio is only defined with exactly one listener, so the count has to track enable and
-    // disable exactly or the warnings that lean on it are noise. It counts enabled components, not
-    // native listeners, which is what makes it answerable in a run with no device at all.
+    // The world's listener tracks enable, disable and destroy exactly, or the no listener warning is noise. It lists
+    // enabled components, not native listeners, which is what makes it answerable in a run with no device at all.
     [Fact]
-    public void ListenerCount_TracksEnableAndDisable()
+    public void WorldListener_TracksEnableAndDisable()
     {
-        int before = AudioListener.ActiveCount;
-
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Ears");
         AudioListener listener = go.AddComponent<AudioListener>();
         scene.Add(go);
 
-        Assert.Equal(before + 1, AudioListener.ActiveCount);
+        Assert.Same(listener, scene.AudioListener);
 
         listener.Enabled = false;
-        Assert.Equal(before, AudioListener.ActiveCount);
+        Assert.Null(scene.AudioListener);
 
         listener.Enabled = true;
-        Assert.Equal(before + 1, AudioListener.ActiveCount);
+        Assert.Same(listener, scene.AudioListener);
 
-        // Destroying an enabled listener has to give its count back the same way disabling one does.
         go.Destroy();
         EngineObject.ProcessDestroyed();
 
-        Assert.Equal(before, AudioListener.ActiveCount);
+        Assert.Null(scene.AudioListener);
     }
 
     // One shots layer on pooled voices now, so none of this may touch the main playback or throw when
@@ -2381,7 +2377,7 @@ public class AudioTests : RuntimeTestBase
     {
         Assert.False(AudioContext.IsInitialized);
 
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Speaker");
         AudioSource source = go.AddComponent<AudioSource>();
         AudioListener listener = go.AddComponent<AudioListener>();
@@ -2446,7 +2442,7 @@ public class AudioTests : RuntimeTestBase
     {
         int before = DeviceClosingSubscribers();
 
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Speaker");
         go.AddComponent<AudioSource>();
         go.AddComponent<AudioListener>();

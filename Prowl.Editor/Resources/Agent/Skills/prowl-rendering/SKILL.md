@@ -43,7 +43,7 @@ The built in `Standard` shader uses these property names. `material <ref>` lists
 ```csharp
 // prowl eval: bloom, tonemapping and FXAA on the main camera
 using Prowl.Runtime.Rendering;
-var camera = Scene.Current.FindObjectsOfType<Camera>()[0]!;
+var camera = SceneInstance.Main.GetAll<Camera>(includeDisabled: true)[0]!;
 camera.Profile = VolumeProfile.CreateCameraDefault("Main Camera Profile");
 camera.Profile.Add<Bloom>().Intensity.Set(1f);
 camera.Profile.Get<Tonemapping>()!.Mode.Set(TonemappingMode.ACES);
@@ -80,7 +80,7 @@ The viewmodel camera is a child of the world camera, and the arms and gun object
 
 ## Environment
 
-`Scene.Current.Environment` holds the sky, ambient light and fog. `SkyMaterial` is a Material whose shader has a Sky pass, usually from `SceneEnvironment.CreateSkyMaterial(BuiltInSky.Procedural)` (also Gradient, Cubemap, Panorama, SixSided), null shows `SkyColor`. `Ambient` (Mode Uniform, Hemisphere or Sky, Intensity, colours) and `Fog` (Mode Off, Linear, Exponential, ExponentialSquared, Color, Density, Start, End, UseSky) are struct fields: set them directly, for example `Scene.Current.Environment.Fog.Mode = FogMode.Off` (FogMode and AmbientMode are in Prowl.Graphite.Rendering). Copying one into a local and changing the local does nothing. Fog is on by default (exponential squared, density 0.01).
+`SceneInstance.Main.Environment` holds the sky, ambient light and fog. `SkyMaterial` is a Material whose shader has a Sky pass, usually from `SceneEnvironment.CreateSkyMaterial(BuiltInSky.Procedural)` (also Gradient, Cubemap, Panorama, SixSided), null shows `SkyColor`. `Ambient` (Mode Uniform, Hemisphere or Sky, Intensity, colours) and `Fog` (Mode Off, Linear, Exponential, ExponentialSquared, Color, Density, Start, End, UseSky) are struct fields: set them directly, for example `SceneInstance.Main.Environment.Fog.Mode = FogMode.Off` (FogMode and AmbientMode are in Prowl.Graphite.Rendering). Copying one into a local and changing the local does nothing. Fog is on by default (exponential squared, density 0.01).
 
 ## Lights and lightmaps
 

@@ -10,12 +10,12 @@ using Prowl.Vector;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// Physics queries and collision filtering against <see cref="Resources.Scene.Active"/>, the scene whose code is running.
+/// Physics queries and collision filtering against <see cref="Resources.SceneInstance.Active"/>, the scene whose code is running.
 /// Every call forwards to that scene's <see cref="PhysicsWorld"/>, so it never drifts from the instance API. Main thread only.
 /// </summary>
 public static class Physics
 {
-    private static PhysicsWorld World => Resources.Scene.Active.Physics;
+    private static PhysicsWorld World => Resources.SceneInstance.Active.Physics;
 
     /// <summary>The active scene's gravity.</summary>
     public static Float3 Gravity

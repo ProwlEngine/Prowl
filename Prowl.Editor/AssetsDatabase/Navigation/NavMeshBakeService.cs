@@ -131,7 +131,7 @@ public sealed class NavMeshBakeService
 
             surface.NavMeshData = AssetDatabase.Get<NavMeshData>(guid);
             surface.RefreshRegistration();
-            EditorSceneManager.MarkDirty();
+            Core.EditorUtility.SetDirty(surface);
             Runtime.Debug.Log($"[Navigation] Baked navmesh saved to {fileRel} ({data.CacheLayers.Count} cache layers).");
             return true;
         }
@@ -167,10 +167,10 @@ public sealed class NavMeshBakeService
     private static HashSet<Guid> OtherSurfaceAssets(NavMeshSurface surface)
     {
         HashSet<Guid> assets = [];
-        Scene? scene = surface.GameObject.Scene;
+        SceneInstance? scene = surface.GameObject.Scene;
         if (scene.IsNotValid()) return assets;
 
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in scene.Objects)
             foreach (NavMeshSurface other in go.GetComponents<NavMeshSurface>())
                 if (!ReferenceEquals(other, surface) && other.NavMeshData is { IsFromDatabase: true } shared)
                     assets.Add(shared.AssetID);
@@ -181,8 +181,8 @@ public sealed class NavMeshBakeService
     // case sensitively and Sanitize folds path separators.
     private static (string Folder, string Name) DefaultBakeName(NavMeshSurface surface)
     {
-        Scene? scene = surface.GameObject.Scene;
-        string sceneRel = scene.IsValid() && scene!.Source is { } source ? source.AssetPath : "";
+        // Beside the surface's own scene, which with several open is not always the active one.
+        string sceneRel = surface.GameObject.Section?.Source is { } source && source.IsValid() ? source.AssetPath : "";
         string sceneDir = string.IsNullOrEmpty(sceneRel) ? "" : (Path.GetDirectoryName(sceneRel) ?? "").Replace('\\', '/');
         string sceneName = string.IsNullOrEmpty(sceneRel) ? "Scene" : Path.GetFileNameWithoutExtension(sceneRel);
         string folderRel = (string.IsNullOrEmpty(sceneDir) ? "" : sceneDir + "/") + sceneName + "_navmesh";

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json.Nodes;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Echo;
 using Prowl.Editor.Core;
 using Prowl.Editor.Importers;
@@ -47,7 +48,7 @@ public class InspectorPanel : DockPanel
     {
         if (state["selection"] is not System.Text.Json.Nodes.JsonArray arr) return;
 
-        Scene scene = Runtime.Resources.Scene.Current;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         bool first = true;
@@ -55,7 +56,7 @@ public class InspectorPanel : DockPanel
         {
             string? guidStr = node?.GetValue<string>();
             if (!Guid.TryParse(guidStr, out Guid guid)) continue;
-            GameObject? go = scene.FindObjectByIdentifier<GameObject>(guid);
+            GameObject? go = scene.FindObject<GameObject>(guid);
             if (go.IsNotValid()) continue;
 
             if (first) { Selection.Select(go); first = false; }

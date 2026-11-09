@@ -33,21 +33,6 @@ public sealed class GameplayHook : Component
     public override void Update() => OnUpdate?.Invoke();
 }
 
-/// <summary>Records which async session its enable and disable callbacks ran in.</summary>
-public sealed class SessionProbe : Component
-{
-    public CancellationToken EnabledIn, DisabledIn;
-    public bool DisabledInEndedSession;
-
-    public override void OnEnable() => EnabledIn = GameTask.SessionToken;
-
-    public override void OnDisable()
-    {
-        DisabledIn = GameTask.SessionToken;
-        DisabledInEndedSession = DisabledIn.IsCancellationRequested;
-    }
-}
-
 // Installs and uninstalls the process wide main thread loop, so nothing else may run alongside it.
 [CollectionDefinition(nameof(ThreadingTests), DisableParallelization = true)]
 public sealed class ThreadingTestsCollection { }
@@ -97,9 +82,9 @@ public class ThreadingTests : RuntimeTestBase
 
     private static void OffThread(Action work) => Task.Run(work).GetAwaiter().GetResult();
 
-    private (Scene scene, GameObject go) LiveObject()
+    private (SceneInstance scene, GameObject go) LiveObject()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Live");
         scene.Add(go);
         return (scene, go);
@@ -191,29 +176,47 @@ public class ThreadingTests : RuntimeTestBase
     public void DelayCountsGameTimeAndStandsStillWhileTimeDoes()
     {
         using var loop = new LoopScope();
-        var time = new TimeData { DeltaTime = 0.1f, UnscaledDeltaTime = 0.1f };
-        Time.TimeStack.Push(time);
-        try
-        {
-            Task delay = GameTask.Delay(0.25f);
+        SceneClock clock = SceneInstance.Main.Clock;
+        Task delay = GameTask.Delay(0.25f);
 
-            loop.Pump();
-            loop.Pump();
-            Assert.False(delay.IsCompleted);
+        clock.Advance(0.1f); loop.Pump();
+        clock.Advance(0.1f); loop.Pump();
+        Assert.False(delay.IsCompleted);
 
-            time.DeltaTime = 0;
-            loop.Pump();
-            loop.Pump();
-            Assert.False(delay.IsCompleted);
+        clock.Hold(); loop.Pump();
+        clock.Hold(); loop.Pump();
+        Assert.False(delay.IsCompleted);
 
-            time.DeltaTime = 0.1f;
-            loop.Pump();
-            Assert.True(delay.IsCompletedSuccessfully);
-        }
-        finally
-        {
-            Time.TimeStack.Pop();
-        }
+        clock.Advance(0.1f); loop.Pump();
+        Assert.True(delay.IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public void ADelayInADestroyedWorld_IsCancelled()
+    {
+        using var loop = new LoopScope();
+        SceneInstance world = CreateScene(enable: true);
+        Task delay;
+        using (world.Enter()) delay = GameTask.Delay(5);
+
+        world.Dispose();
+        loop.Pump();
+
+        Assert.True(delay.IsCanceled);
+    }
+
+    [Fact]
+    public void AWorldTokenFromBeforeASession_IsCancelledWhenOneStarts()
+    {
+        MainThreadContext.Uninstall();
+        SceneInstance world = CreateScene();
+        CancellationToken before = world.Token;
+
+        using var loop = new LoopScope();
+        CancellationToken during = world.Token;
+
+        Assert.True(before.IsCancellationRequested);
+        Assert.False(during.IsCancellationRequested);
     }
 
     [Fact]
@@ -269,6 +272,26 @@ public class ThreadingTests : RuntimeTestBase
 
         for (int i = 0; i < 5; i++) loop.Pump();
         Assert.False(resumed);
+    }
+
+    // A world's token ends with its session, a world that outlives the restart gets a fresh one, and destroying ends it.
+    [Fact]
+    public void WorldToken_EndsWithTheSession_AndWithTheWorld()
+    {
+        using var loop = new LoopScope();
+        SceneInstance world = CreateScene(enable: true);
+        CancellationToken first = world.Token;
+
+        MainThreadContext.Restart();
+
+        Assert.True(first.IsCancellationRequested);
+        CancellationToken second = world.Token;
+        Assert.False(second.IsCancellationRequested);
+
+        world.Dispose();
+
+        Assert.True(second.IsCancellationRequested);
+        Assert.True(world.Token.IsCancellationRequested);
     }
 
     [Fact]
@@ -438,7 +461,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void WorkStartedFromAComponentStaysBoundToItsSession()
     {
-        (Scene? scene, GameObject? go) = LiveObject();
+        (SceneInstance? scene, GameObject? go) = LiveObject();
         go.AddComponent<GameplayHook>();
         using var loop = new LoopScope();
         var release = new ManualResetEventSlim(false);
@@ -537,7 +560,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void AfterTheLoopStopsWorkersAreRefusedUntilItIsUninstalled()
     {
-        (Scene _, GameObject? go) = LiveObject();
+        (SceneInstance _, GameObject? go) = LiveObject();
         using var loop = new LoopScope();
         MainThreadContext.Stop();
         bool ran = false, posted = false;
@@ -733,61 +756,12 @@ public class ThreadingTests : RuntimeTestBase
         Assert.Equal(Environment.CurrentManagedThreadId, ranOn);
     }
 
-    /// <summary>
-    /// The editor ends the session at the scene swap, so the outgoing scene's teardown runs in the session it
-    /// belongs to, and the incoming scene starts in the next one.
-    /// </summary>
-    [Fact]
-    public void EndingTheSessionAtASwapSplitsTheTwoScenesBetweenSessions()
-    {
-        using var loop = new LoopScope();
-
-        Scene first = CreateScene();
-        GameObject oldObject = CreateGameObject("Old");
-        first.Add(oldObject);
-        SessionProbe outgoing = oldObject.AddComponent<SessionProbe>();
-        Scene.Load(first);
-        Scene.ProcessPendingLoad();
-        CancellationToken firstSession = GameTask.SessionToken;
-
-        Scene second = CreateScene();
-        GameObject newObject = CreateGameObject("New");
-        second.Add(newObject);
-        SessionProbe incoming = newObject.AddComponent<SessionProbe>();
-        Scene.EndSessionOnSwap = true;
-        Scene.Load(second);
-        Scene.ProcessPendingLoad();
-
-        Assert.Equal(firstSession, outgoing.DisabledIn);
-        Assert.False(outgoing.DisabledInEndedSession);
-        Assert.True(firstSession.IsCancellationRequested);
-        Assert.NotEqual(firstSession, incoming.EnabledIn);
-        Assert.False(incoming.EnabledIn.IsCancellationRequested);
-        Assert.False(Scene.EndSessionOnSwap);
-    }
-
-    [Fact]
-    public void ASkippedSwapStillEndsTheSession()
-    {
-        using var loop = new LoopScope();
-        CancellationToken session = GameTask.SessionToken;
-        Scene doomed = CreateScene();
-
-        Scene.EndSessionOnSwap = true;
-        Scene.Load(doomed);
-        doomed.Dispose();
-        Scene.ProcessPendingLoad();
-
-        Assert.True(session.IsCancellationRequested);
-        Assert.False(Scene.EndSessionOnSwap);
-    }
-
     // ---- ownership checks ---------------------------------------------------------------------------
 
     [Fact]
     public void DisposingALiveComponentFromAnotherThreadThrowsBeforeTearingAnythingDown()
     {
-        (Scene _, GameObject? go) = LiveObject();
+        (SceneInstance _, GameObject? go) = LiveObject();
         PhysicsListener listener = go.AddComponent<PhysicsListener>();
         CancellationToken token = listener.DestroyCancellationToken;
         using var loop = new LoopScope();
@@ -802,7 +776,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void DisposingALiveObjectFromAnotherThreadThrowsBeforeTearingAnythingDown()
     {
-        (Scene? scene, GameObject? root) = LiveObject();
+        (SceneInstance? scene, GameObject? root) = LiveObject();
         GameObject child = CreateGameObject("Child");
         scene.Add(child);
         child.SetParent(root);
@@ -821,7 +795,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void DisposingALiveSceneFromAnotherThreadThrows()
     {
-        (Scene? scene, GameObject _) = LiveObject();
+        (SceneInstance? scene, GameObject _) = LiveObject();
         using var loop = new LoopScope();
 
         Assert.Throws<InvalidOperationException>(() => OffThread(scene.Dispose));
@@ -829,22 +803,20 @@ public class ThreadingTests : RuntimeTestBase
     }
 
     [Fact]
-    public void ReadingTheCurrentSceneFromAnotherThreadCannotLeaveAnInactiveOneBehind()
+    public void BindingMainFromAnotherThreadIsRefused()
     {
-        Scene.Shutdown();
+        SceneInstance world = SceneInstance.Create("Other");
         using var loop = new LoopScope();
 
-        Assert.Throws<InvalidOperationException>(() => OffThread(() => Scene.Current));
-
-        Scene current = Scene.Current;
-        Assert.True(current.IsActive);
-        current.Dispose();
+        Assert.Throws<InvalidOperationException>(() => OffThread(() => SceneInstance.Main = world));
+        Assert.NotSame(world, SceneInstance.Main);
+        world.Dispose();
     }
 
     [Fact]
     public void PhysicsAndAnimationComponentsOnALiveObjectAreChecked()
     {
-        (Scene _, GameObject? go) = LiveObject();
+        (SceneInstance _, GameObject? go) = LiveObject();
         Rigidbody3D body = go.AddComponent<Rigidbody3D>();
         BoxCollider box = go.AddComponent<BoxCollider>();
         Animator animator = go.AddComponent<Animator>();
@@ -865,7 +837,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void MovingALiveObjectFromAnotherThreadThrowsAndChangesNothing()
     {
-        (Scene _, GameObject? go) = LiveObject();
+        (SceneInstance _, GameObject? go) = LiveObject();
         using var loop = new LoopScope();
 
         InvalidOperationException error = Assert.Throws<InvalidOperationException>(() => OffThread(() => go.Transform.Position = new Float3(5, 0, 0)));
@@ -877,11 +849,10 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void EveryStructuralChangeToALiveSceneIsChecked()
     {
-        (Scene? scene, GameObject? go) = LiveObject();
+        (SceneInstance? scene, GameObject? go) = LiveObject();
         GameObject other = CreateGameObject("Other");
         scene.Add(other);
         GameObject loose = CreateGameObject("Loose");
-        Scene next = CreateScene();
         using var loop = new LoopScope();
 
         Assert.Throws<InvalidOperationException>(() => OffThread(() => go.Transform.LocalScale = new Float3(2)));
@@ -893,7 +864,6 @@ public class ThreadingTests : RuntimeTestBase
         Assert.Throws<InvalidOperationException>(() => OffThread(() => go.AddComponent<PhysicsListener>()));
         Assert.Throws<InvalidOperationException>(() => OffThread(() => scene.Add(loose)));
         Assert.Throws<InvalidOperationException>(() => OffThread(() => scene.Remove(go)));
-        Assert.Throws<InvalidOperationException>(() => OffThread(() => Scene.Load(next)));
 
         Assert.True(go.Enabled);
         Assert.Null(go.Parent);
@@ -904,7 +874,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void AComponentOnALiveObjectCannotBeToggledFromAnotherThread()
     {
-        (Scene _, GameObject? go) = LiveObject();
+        (SceneInstance _, GameObject? go) = LiveObject();
         PhysicsListener listener = go.AddComponent<PhysicsListener>();
         using var loop = new LoopScope();
 
@@ -916,7 +886,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void ObjectsBuiltOffSceneOnAWorkerCanJoinTheSceneOnTheMainThread()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         using var loop = new LoopScope();
 
         GameObject built = OffThread(() =>
@@ -940,7 +910,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void DestroyFromAnotherThreadIsQueuedForTheMainThread()
     {
-        (Scene _, GameObject? go) = LiveObject();
+        (SceneInstance _, GameObject? go) = LiveObject();
         using var loop = new LoopScope();
 
         OffThread(go.Destroy);
@@ -953,7 +923,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void ReadingWorldTransformsFromAnotherThreadGivesTheRightAnswer()
     {
-        (Scene? scene, GameObject? parent) = LiveObject();
+        (SceneInstance? scene, GameObject? parent) = LiveObject();
         GameObject child = CreateGameObject("Child");
         scene.Add(child);
         child.SetParent(parent);
@@ -980,7 +950,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void PhysicsQueriesFromAnotherThreadThrow()
     {
-        (Scene? scene, GameObject _) = LiveObject();
+        (SceneInstance? scene, GameObject _) = LiveObject();
         using var loop = new LoopScope();
         var hits = new List<RaycastHit>();
 
@@ -993,7 +963,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void WithoutALoopOtherThreadsAreNotStopped()
     {
-        (Scene _, GameObject? go) = LiveObject();
+        (SceneInstance _, GameObject? go) = LiveObject();
 
         OffThread(() => go.Transform.Position = new Float3(3, 0, 0));
 
@@ -1005,7 +975,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void DestroyCancellationTokenCancelsWhenTheComponentIsDestroyed()
     {
-        (Scene _, GameObject? go) = LiveObject();
+        (SceneInstance _, GameObject? go) = LiveObject();
         PhysicsListener listener = go.AddComponent<PhysicsListener>();
         CancellationToken token = listener.DestroyCancellationToken;
 
@@ -1020,7 +990,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void DestroyCancellationTokenCancelsWithItsGameObject()
     {
-        (Scene _, GameObject? go) = LiveObject();
+        (SceneInstance _, GameObject? go) = LiveObject();
         CancellationToken token = go.AddComponent<PhysicsListener>().DestroyCancellationToken;
 
         go.Dispose();
@@ -1031,7 +1001,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void DestroyCancellationTokenCancelsEvenWhenOnDisposeSkipsBase()
     {
-        (Scene _, GameObject? go) = LiveObject();
+        (SceneInstance _, GameObject? go) = LiveObject();
         ForgetsBaseDispose careless = go.AddComponent<ForgetsBaseDispose>();
         CancellationToken token = careless.DestroyCancellationToken;
 
@@ -1045,8 +1015,9 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void ReadingTimeFromAnotherThreadWhileTheLoopSwapsItNeverThrows()
     {
-        TimeData[] saved = [.. Time.TimeStack];
-        var frame = new TimeData { DeltaTime = 0.5f };
+        SceneInstance first = SceneInstance.Main;
+        SceneInstance second = SceneInstance.Create("Swapped");
+        second.Clock.Advance(0.5f);
         using var stop = new CancellationTokenSource();
 
         Task<Exception?> reader = Task.Run<Exception?>(() => Record.Exception(() =>
@@ -1063,15 +1034,15 @@ public class ThreadingTests : RuntimeTestBase
             var clock = Stopwatch.StartNew();
             while (clock.ElapsedMilliseconds < 200)
             {
-                Time.TimeStack.Clear();
-                Time.TimeStack.Push(frame);
+                SceneInstance.Main = second;
+                SceneInstance.Main = first;
             }
         }
         finally
         {
             stop.Cancel();
-            Time.TimeStack.Clear();
-            for (int i = saved.Length - 1; i >= 0; i--) Time.TimeStack.Push(saved[i]);
+            SceneInstance.Main = first;
+            second.Dispose();
         }
 
         Assert.Null(reader.GetAwaiter().GetResult());

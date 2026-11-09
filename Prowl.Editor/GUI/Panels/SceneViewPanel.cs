@@ -266,7 +266,7 @@ public class SceneViewPanel : DockPanel
         uint rtHeight = (uint)MathF.Max(1, height);
         _editorCamera.EnsureRenderTarget(rtWidth, rtHeight);
 
-        Scene scene = Scene.Current;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         RenderTexture? rt = _editorCamera.RenderTarget;
 
         if (scene.IsNotValid())
@@ -291,7 +291,7 @@ public class SceneViewPanel : DockPanel
                     .Enter())
                 {
                     paper.Box("sv_btn_spacer_l");
-                    Origami.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => EditorSceneManager.CreateAndLoadDefaultScene()).Width(120).Show();
+                    Origami.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", EditorSceneManager.NewWithPrompt).Width(120).Show();
                     paper.Box("sv_btn_spacer_r");
                 }
 
@@ -550,14 +550,14 @@ public class SceneViewPanel : DockPanel
         return false;
     }
 
-    internal static GameObject? PickObjectAt(Scene scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    internal static GameObject? PickObjectAt(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
     {
         Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
 
         GameObject? bestHit = null;
         float bestDist = float.MaxValue;
 
-        foreach (GameObject go in scene.ActiveObjects)
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy && o.Section is not { HiddenInSceneView: true }))
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 
@@ -603,7 +603,7 @@ public class SceneViewPanel : DockPanel
     /// click-select, a press that drags out a rectangle is a box-select. Registered as the default
     /// control, so it only runs when no handle anywhere in the viewport claimed the cursor.
     /// </summary>
-    private void UpdatePickControl(Scene scene, Float2 panelSize)
+    private void UpdatePickControl(SceneInstance scene, Float2 panelSize)
     {
         ControlID pick = _handles.GetControlID(PickControl);
         _handles.AddDefaultControl(pick);
@@ -647,7 +647,7 @@ public class SceneViewPanel : DockPanel
     /// Select everything whose screen-projected bounds centre falls inside the marquee. Shift adds to
     /// the selection, Ctrl toggles, plain replaces.
     /// </summary>
-    private void ApplyMarquee(Scene scene, Float2 panelSize)
+    private void ApplyMarquee(SceneInstance scene, Float2 panelSize)
     {
         Float2 a = _marqueeStart, b = _handles.MousePosition;
         float minX = MathF.Min(a.X, b.X), maxX = MathF.Max(a.X, b.X);
@@ -656,7 +656,7 @@ public class SceneViewPanel : DockPanel
         bool additive = _handles.Shift || _handles.Ctrl;
         if (!additive) Selection.Clear();
 
-        foreach (GameObject go in scene.ActiveObjects)
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy && o.Section is not { HiddenInSceneView: true }))
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
             if (!TryGetSelectionAnchor(go, out Float3 anchor)) continue;
@@ -695,7 +695,7 @@ public class SceneViewPanel : DockPanel
         return true;
     }
 
-    private void PickObject(Scene scene, Float2 screenPos, Float2 panelSize)
+    private void PickObject(SceneInstance scene, Float2 screenPos, Float2 panelSize)
     {
         GameObject? bestHit = PickObjectAt(scene, _editorCamera!, screenPos, panelSize);
 
@@ -768,7 +768,7 @@ public class SceneViewPanel : DockPanel
     /// <summary>
     /// Raycast into the scene to find a drop position. Falls back to the XZ plane at Y=0.
     /// </summary>
-    internal static Float3 GetDropPosition(Scene scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    internal static Float3 GetDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
     {
         Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
 
@@ -777,7 +777,7 @@ public class SceneViewPanel : DockPanel
         Float3 bestPos = Float3.Zero;
         bool hit = false;
 
-        foreach (GameObject go in scene.ActiveObjects)
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy && o.Section is not { HiddenInSceneView: true }))
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 
@@ -809,7 +809,7 @@ public class SceneViewPanel : DockPanel
     }
 
     /// <summary>Called only by views that are drawing; disabled gizmos do not consume the frame's shared pass.</summary>
-    internal void DrawSceneGizmos(EditorApplication? editor, Scene scene)
+    internal void DrawSceneGizmos(EditorApplication? editor, SceneInstance scene)
     {
         if (!ShowGizmos) return;
         editor?.DrawSceneGizmos(scene);

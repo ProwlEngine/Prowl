@@ -17,7 +17,7 @@ public abstract class StairsTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder, 0.25f, 0.35f)]
     public void WalksUpAStaircase(ColliderShape shape, float rise, float run)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Stairs(scene, new Float3(0f, 0f, 2f), 10, rise, run);
         Box(scene, new Float3(0f, rise * 10f * 0.5f, 2f + run * 10f + 10f), new Float3(3f, rise * 10f, 20f));
         Walker walker = Spawn(scene, Float3.Zero, shape);
@@ -40,7 +40,7 @@ public abstract class StairsTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void WalkingDownStairsStaysOnThem(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, 1.25f, -3f), new Float3(3f, 2.5f, 6f));
         Stairs(scene, new Float3(0f, 0f, 3.3f), 10, 0.25f, 0.33f, yaw: 180f);
         Walker walker = Spawn(scene, new Float3(0f, 2.5f, -2f), shape);
@@ -58,7 +58,7 @@ public abstract class StairsTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void ClimbsStairsApproachedAtAnAngle(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Stairs(scene, new Float3(0f, 0f, 2f), 8, 0.2f, 0.4f, width: 12f);
         Box(scene, new Float3(0f, 0.8f, 2f + 3.2f + 3f), new Float3(12f, 1.6f, 6f));
         Walker walker = Spawn(scene, new Float3(-3f, 0f, 0f), shape);
@@ -75,7 +75,7 @@ public abstract class StairsTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void ABlockTallerThanTheStepSizeIsAWall(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, 0.225f, 4f), new Float3(6f, 0.45f, 4f));
         Walker walker = Spawn(scene, Float3.Zero, shape);
         walker.Controller.StepSize = 0.3f;
@@ -92,7 +92,7 @@ public abstract class StairsTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void AZeroStepSizeClimbsNothing(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, 0.1f, 4f), new Float3(6f, 0.2f, 4f));
         Walker walker = Spawn(scene, Float3.Zero, shape);
         walker.Controller.StepSize = 0f;
@@ -107,7 +107,7 @@ public abstract class StairsTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void AStepUpDoesNotPushIntoALowCeilingAboveIt(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, 0.125f, 4f), new Float3(6f, 0.25f, 4f));
         Box(scene, new Float3(0f, 0.25f + 1.6f + 0.5f, 4f), new Float3(6f, 1f, 4f));
         Walker walker = Spawn(scene, Float3.Zero, shape);
@@ -123,7 +123,7 @@ public abstract class StairsTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void AStepDoesNotLeadOntoASlopeTooSteepToStandOn(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0.2f, 3f), 70f, 6f);
         Box(scene, new Float3(0f, 0.1f, 2.5f), new Float3(6f, 0.2f, 1f));
         Walker walker = Spawn(scene, Float3.Zero, shape);
@@ -142,7 +142,7 @@ public abstract class StairsTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void WalkingAlongTheEdgeOfAStepStaysOnTheFloor(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(1.5f, 0.15f, 0f), new Float3(2f, 0.3f, 20f));
         // Its side just brushes the step's edge at x 0.5.
         Walker walker = Spawn(scene, new Float3(0.12f, 0f, -6f), shape);
@@ -164,7 +164,7 @@ public abstract class StairsTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder, 0.3f, 60f)]
     public void AStepRightAtTheStepSizeIsClimbed(ColliderShape shape, float height, float approach)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, height * 0.5f, 6f), new Float3(30f, height, 8f));
         float radians = approach * MathF.PI / 180f;
         Float3 direction = new(MathF.Sin(radians), 0f, MathF.Cos(radians));

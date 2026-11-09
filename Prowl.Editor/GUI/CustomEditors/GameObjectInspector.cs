@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
@@ -854,7 +855,8 @@ public static class GameObjectInspector
                     CustomEditor? customEditor = EditorRegistries.GetCustomEditor(comp.GetType());
                     if (customEditor != null)
                     {
-                        customEditor.OnGUI(paper, compId, comp);
+                        using (EditorSceneManager.DrawingFor([comp]))
+                            customEditor.OnGUI(paper, compId, comp);
                         // The PropertyGrid draws [Button] methods itself, a custom editor does not.
                         DrawButtonMethods(paper, $"{compId}_btns", comp);
                     }
@@ -971,9 +973,9 @@ public static class GameObjectInspector
 
         private void MoveTo(int index)
         {
-            Runtime.Resources.Scene scene = Runtime.Resources.Scene.Current;
+            Runtime.Resources.SceneInstance scene = EditorSceneManager.EditedWorld;
             if (scene.IsNotValid()) return;
-            Component? c = scene.FindObjectByIdentifier<Component>(component);
+            Component? c = scene.FindObject<Component>(component);
             if (c.IsValid()) c.SetSiblingIndex(index);
         }
     }
@@ -1359,8 +1361,8 @@ public static class GameObjectInspector
 
         Origami.Button(paper, id, label, () =>
             {
-                Runtime.Resources.Scene scene = Runtime.Resources.Scene.Current;
-                GameObject? live = scene.IsValid() ? scene.FindObjectByIdentifier<GameObject>(rootId) : null;
+                Runtime.Resources.SceneInstance scene = EditorSceneManager.EditedWorld;
+                GameObject? live = scene.IsValid() ? scene.FindObject<GameObject>(rootId) : null;
                 if (live.IsValid()) act(live!);
             })
             .Small().Width(width).Height(EditorTheme.RowHeight).Ghost().Show();

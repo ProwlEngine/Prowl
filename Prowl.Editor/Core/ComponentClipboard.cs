@@ -158,7 +158,7 @@ public static class ComponentClipboard
     private static void ApplyState(Component target, EchoObject data)
     {
         bool attached = target.GameObject.IsValid();
-        bool inActiveScene = attached && target.Scene.IsValid() && target.Scene!.IsActive;
+        bool inActiveScene = attached && target.IsInWorld && target.Scene.State == Runtime.Resources.SceneState.Running;
         bool wasLive = inActiveScene && target.HasBeenEnabled && target.EnabledInHierarchy;
 
         if (wasLive) target.InternalOnDisable();

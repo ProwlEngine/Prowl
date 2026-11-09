@@ -58,7 +58,7 @@ public static class PlayModeSpotlight
         Dim(paper, "pms_r", hx + hw, hy, W - (hx + hw), hh, back);
 
         // Accent ring (amber while paused) on the window's own edge.
-        Color ringC = Runtime.Application.IsPaused ? EditorTheme.Amber400 : EditorTheme.Accent;
+        Color ringC = Core.EditorApplication.IsPlayPaused ? EditorTheme.Amber400 : EditorTheme.Accent;
         paper.Box("pms_ring").PositionType(PositionType.SelfDirected).Position(hx, hy).Size(hw, hh)
             .Rounded(Origami.Current.Metrics.ContainerRounding).IsNotInteractable()
             .BorderColor(Color.FromArgb((int)(230 * appear), ringC)).BorderWidth(2)

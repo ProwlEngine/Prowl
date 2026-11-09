@@ -200,7 +200,7 @@ public class AnimationGraphTests : RuntimeTestBase
 
     // ---- a graph that actually animates -----------------------------------------------------------
 
-    private (Scene Scene, Animator Animator, GameObject Root) BlendGraph(float parameter)
+    private (SceneInstance Scene, Animator Animator, GameObject Root) BlendGraph(float parameter)
     {
         MotionSkeleton skeleton = BuildSkeleton();
         Avatar avatar = Avatar.CreateGeneric(skeleton, 0, "Rig");
@@ -226,9 +226,9 @@ public class AnimationGraphTests : RuntimeTestBase
         return Rigged(asset, avatar);
     }
 
-    private (Scene Scene, Animator Animator, GameObject Root) Rigged(AnimationGraph asset, Avatar avatar)
+    private (SceneInstance Scene, Animator Animator, GameObject Root) Rigged(AnimationGraph asset, Avatar avatar)
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject("Rig");
         var hips = new GameObject("Hips");
         var spine = new GameObject("Spine");
@@ -240,7 +240,7 @@ public class AnimationGraphTests : RuntimeTestBase
         animator.Avatar = avatar;
         animator.Graph = asset;
 
-        scene.Enable();
+        scene.Activate();
         return (scene, animator, root);
     }
 
@@ -265,7 +265,7 @@ public class AnimationGraphTests : RuntimeTestBase
         HeldClipNode(plugged, skeleton, avatar, "held", 3f);
         plugged.RootNode = "held";
 
-        (Scene scene, Animator animator, GameObject root) = Rigged(host, avatar);
+        (SceneInstance scene, Animator animator, GameObject root) = Rigged(host, avatar);
         animator.SetGraphSlot("Upper", plugged);
         Update(scene, 2);
 
@@ -276,7 +276,7 @@ public class AnimationGraphTests : RuntimeTestBase
     [Fact]
     public void EveryKindOfParameter_IsReadBeforeBinding_AndCarriedAcrossARebind()
     {
-        (Scene scene, Animator animator, _) = BlendGraph(0f);
+        (SceneInstance scene, Animator animator, _) = BlendGraph(0f);
         AnimationGraph asset = animator.Graph!;
         asset.Parameters.Add(new GraphParameterRecord { Name = "Aim", Kind = NodeValueKind.Target });
         asset.Parameters.Add(new GraphParameterRecord { Name = "Tag", Kind = NodeValueKind.Id });
@@ -311,7 +311,7 @@ public class AnimationGraphTests : RuntimeTestBase
         clip.Properties["Clip"] = NodeValue.FromClip(AssetDatabase.Get<AnimationClip>(Guid.NewGuid()));
         asset.RootNode = clip.Id;
 
-        (Scene scene, Animator animator, _) = Rigged(asset, avatar);
+        (SceneInstance scene, Animator animator, _) = Rigged(asset, avatar);
         Update(scene, 1);
 
         Assert.True(animator.IsGraph);
@@ -350,7 +350,7 @@ public class AnimationGraphTests : RuntimeTestBase
         HeldClipNode(plugged, skeleton, avatar, "held", 3f);
         plugged.RootNode = "held";
 
-        (Scene scene, Animator animator, GameObject root) = Rigged(host, avatar);
+        (SceneInstance scene, Animator animator, GameObject root) = Rigged(host, avatar);
         animator.SetGraphSlot("Upper", plugged);
         Update(scene, 2);
         Assert.Equal(3f, Spine(root).LocalPosition.Y, 1);
@@ -382,7 +382,7 @@ public class AnimationGraphTests : RuntimeTestBase
         external.Properties["Name"] = NodeValue.FromText("Hit");
         asset.RootNode = external.Id;
 
-        (Scene scene, Animator animator, GameObject root) = Rigged(asset, avatar);
+        (SceneInstance scene, Animator animator, GameObject root) = Rigged(asset, avatar);
         Update(scene, 1);
 
         Assert.Null(animator.GetExternalPose("Missing"));
@@ -410,7 +410,7 @@ public class AnimationGraphTests : RuntimeTestBase
     [InlineData(1f, 3f)]
     public void AGraphBlendsBetweenClipsByParameter(float parameter, float expected)
     {
-        (Scene scene, Animator animator, GameObject root) = BlendGraph(parameter);
+        (SceneInstance scene, Animator animator, GameObject root) = BlendGraph(parameter);
 
         Update(scene, 2);
 
@@ -421,7 +421,7 @@ public class AnimationGraphTests : RuntimeTestBase
     [Fact]
     public void ScriptCanDriveTheParameterAfterBinding()
     {
-        (Scene scene, Animator animator, GameObject root) = BlendGraph(0f);
+        (SceneInstance scene, Animator animator, GameObject root) = BlendGraph(0f);
         Update(scene, 2);
 
         animator.SetFloat("Speed", 1f);
@@ -438,7 +438,7 @@ public class AnimationGraphTests : RuntimeTestBase
     [Fact]
     public void AnEditReachesAnAnimatorAlreadyRunningTheGraph()
     {
-        (Scene scene, Animator animator, GameObject root) = BlendGraph(1f);
+        (SceneInstance scene, Animator animator, GameObject root) = BlendGraph(1f);
         Update(scene, 2);
         Assert.Equal(3.0, Spine(root).LocalPosition.Y, 1);
 
@@ -456,7 +456,7 @@ public class AnimationGraphTests : RuntimeTestBase
     [Fact]
     public void PickingUpAnEditKeepsTheParametersTheGameSet()
     {
-        (Scene scene, Animator animator, GameObject root) = BlendGraph(1f);
+        (SceneInstance scene, Animator animator, GameObject root) = BlendGraph(1f);
         Update(scene, 2);
 
         animator.SetFloat("Speed", 0f);
@@ -481,7 +481,7 @@ public class AnimationGraphTests : RuntimeTestBase
     [Fact]
     public void AnAnimatorFollowsTheGraphWhenItIsReplaced()
     {
-        (Scene scene, Animator animator, GameObject root) = BlendGraph(1f);
+        (SceneInstance scene, Animator animator, GameObject root) = BlendGraph(1f);
         Update(scene, 2);
 
         AnimationGraph old = animator.Graph!;
@@ -497,7 +497,7 @@ public class AnimationGraphTests : RuntimeTestBase
     [Fact]
     public void AnEditStillBeingMadeDoesNotRebindEveryFrame()
     {
-        (Scene scene, Animator animator, GameObject _) = BlendGraph(1f);
+        (SceneInstance scene, Animator animator, GameObject _) = BlendGraph(1f);
         Update(scene, 2);
         AnimationGraphInstance? before = animator.GraphInstance;
 
@@ -511,7 +511,7 @@ public class AnimationGraphTests : RuntimeTestBase
     [Fact]
     public void AParameterSetBeforeBindingStillLands()
     {
-        (Scene scene, Animator animator, GameObject root) = BlendGraph(0f);
+        (SceneInstance scene, Animator animator, GameObject root) = BlendGraph(0f);
 
         animator.SetFloat("Speed", 1f);
         Update(scene, 2);
@@ -599,7 +599,7 @@ public class AnimationGraphTests : RuntimeTestBase
     [Fact]
     public void AValueNodeReadsBackOnlyWhenItRan()
     {
-        (Scene scene, Animator animator, GameObject _) = BlendGraph(0.5f);
+        (SceneInstance scene, Animator animator, GameObject _) = BlendGraph(0.5f);
         Update(scene, 2);
 
         AnimationGraph asset = animator.Graph!;
@@ -888,7 +888,7 @@ public class AnimationGraphTests : RuntimeTestBase
     [Fact]
     public void TheLastWriteBeforeBindingIsTheOneThatLands()
     {
-        (Scene scene, Animator animator, GameObject root) = BlendGraph(0f);
+        (SceneInstance scene, Animator animator, GameObject root) = BlendGraph(0f);
 
         animator.SetFloat("Speed", 0.5f);
         animator.SetFloat("Speed", 1f);
@@ -900,7 +900,7 @@ public class AnimationGraphTests : RuntimeTestBase
     [Fact]
     public void ABlendReportsTheShareEachInputCarries()
     {
-        (Scene scene, Animator animator, GameObject _) = BlendGraph(0.25f);
+        (SceneInstance scene, Animator animator, GameObject _) = BlendGraph(0.25f);
         Update(scene, 2);
 
         AnimationGraph asset = animator.Graph!;

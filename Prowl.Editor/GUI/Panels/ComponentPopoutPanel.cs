@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Core;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Theming;
@@ -22,6 +23,10 @@ public class ComponentPopoutPanel : DockPanel
     private readonly Guid _compIdentifier;
     private readonly string _compTypeName;
     private string _displayTitle;
+
+    // The open scene the component was popped out of, so a duplicate in another scene never stands in for it and
+    // closing that scene leaves the panel empty. Null outside the edit world.
+    private OpenScene? _scene;
 
     public override string Title => _displayTitle;
     public override string Icon => EditorIcons.ArrowUpRightFromSquare;
@@ -109,7 +114,8 @@ public class ComponentPopoutPanel : DockPanel
                 CustomEditor? customEditor = EditorRegistries.GetCustomEditor(comp.GetType());
                 if (customEditor != null)
                 {
-                    customEditor.OnGUI(paper, compId, comp);
+                    using (EditorSceneManager.DrawingFor([comp]))
+                        customEditor.OnGUI(paper, compId, comp);
                     // The PropertyGrid draws [Button] methods itself, a custom editor does not.
                     GameObjectInspector.DrawButtonMethods(paper, $"{compId}_btns", comp);
                 }
@@ -125,14 +131,21 @@ public class ComponentPopoutPanel : DockPanel
         });
     }
 
-    private (GameObject? go, Component? comp) FindComponent()
+    internal (GameObject? go, Component? comp) FindComponent()
     {
-        Scene scene = Scene.Current;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return (null, null);
+        SceneSection? section = null;
+        if (_scene != null)
+        {
+            section = EditorSceneManager.OpenScenes.Contains(_scene) ? EditorSceneManager.SectionShowing(_scene) : null;
+            if (section == null || !ReferenceEquals(section.Instance, scene)) return (null, null);
+        }
 
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in scene.Objects)
         {
             if (go.Identifier != _goIdentifier) continue;
+            if (section != null && !ReferenceEquals(go.Section, section)) continue;
 
             foreach (Component comp in go.GetComponents<Component>())
             {
@@ -150,7 +163,9 @@ public class ComponentPopoutPanel : DockPanel
     /// </summary>
     public static void PopOut(GameObject go, Component comp)
     {
-        var panel = new ComponentPopoutPanel(go.Identifier, comp.Identifier, comp.GetType().Name);
-        EditorApplication.Instance?.OpenPanelInstance(panel, 350, 400);
+        EditorApplication.Instance?.OpenPanelInstance(For(go, comp), 350, 400);
     }
+
+    internal static ComponentPopoutPanel For(GameObject go, Component comp)
+        => new(go.Identifier, comp.Identifier, comp.GetType().Name) { _scene = EditorSceneManager.SceneOf(go) };
 }

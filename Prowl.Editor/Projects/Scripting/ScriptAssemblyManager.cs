@@ -461,7 +461,7 @@ public static class ScriptAssemblyManager
     {
         try
         {
-            Scene scene = Scene.Current;
+            List<SceneInstance> worlds = [.. SceneInstance.All];
             AssemblyLoadContext oldContext = s_scriptContext!;
             var oldAssemblies = s_scriptAssemblies.ToList();
 
@@ -481,11 +481,11 @@ public static class ScriptAssemblyManager
             // boundary, so drop it. Do this before the walk so watching the editor doesn't migrate it needlessly.
             try { Undo.ClearAll(); } catch { }
 
-            // Migrate the live scene onto the new types (both assemblies loaded, no unload needed). Do this
+            // Migrate every live world onto the new types (both assemblies loaded, no unload needed). Do this
             // BEFORE committing the new context as active, so a mid-migration throw leaves the old assemblies
             // as the active set - the editor then keeps running on the old code. The walk also migrates the
             // editor's own references into the scene (selection, inspector, hierarchy), so no repointing needed.
-            if (scene.IsValid())
+            if (worlds.Count > 0)
             {
                 var pairs = new List<(Assembly, Assembly)>();
                 foreach (Assembly? oldAsm in oldAssemblies)
@@ -496,7 +496,7 @@ public static class ScriptAssemblyManager
                         pairs.Add((oldAsm, match));
                 }
                 if (pairs.Count > 0)
-                    SceneHotReload.Migrate(scene, pairs);
+                    SceneHotReload.Migrate(worlds, pairs);
             }
 
             // Migration succeeded: the new assemblies become the active set that registries scan.

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
@@ -44,6 +45,7 @@ public static class SelectorModal
     private static SelectorTabs _activeTab;
     private static Action<object?>? _callback;
     private static string _searchText = "";
+    private static OpenScene? _onlyScene;
 
     public static bool IsOpen => _handle.IsOpen;
 
@@ -54,8 +56,10 @@ public static class SelectorModal
     /// <param name="targetType">The type being selected (e.g. typeof(Transform), typeof(Mesh), typeof(Rigidbody3D)).</param>
     /// <param name="tabs">Which tabs to show.</param>
     /// <param name="onSelect">Callback with the selected value, or null for "None".</param>
-    public static void Open(string title, Type targetType, SelectorTabs tabs, Action<object?> onSelect)
+    /// <param name="scene">The open scene holding the field, whose objects are the only ones listed, since a saved reference never crosses scenes.</param>
+    public static void Open(string title, Type targetType, SelectorTabs tabs, Action<object?> onSelect, OpenScene? scene = null)
     {
+        _onlyScene = scene;
         _title = title;
         _targetType = targetType;
         _tabs = tabs;
@@ -166,7 +170,7 @@ public static class SelectorModal
 
     private static void DrawSceneTab(Paper paper, Prowl.Scribe.FontFile font, float height)
     {
-        Scene scene = Runtime.Resources.Scene.Current;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid())
         {
             EditorGUI.EmptyState(paper, "sel_scene_empty", Loc.Get("selector.no_scene"), font);
@@ -191,9 +195,11 @@ public static class SelectorModal
                 .OnClick(0, (_, _) => { _callback?.Invoke(null); Close(); });
 
             int idx = 0;
-            foreach (GameObject go in scene.AllObjects)
+            foreach (GameObject go in scene.Objects)
             {
                 if (go.HideFlags.HasFlag(HideFlags.Hide) || go.HideFlags.HasFlag(HideFlags.HideAndDontSave))
+                    continue;
+                if (_onlyScene != null && !ReferenceEquals(EditorSceneManager.SceneOf(go), _onlyScene))
                     continue;
 
                 if (isTransform || isGameObject)

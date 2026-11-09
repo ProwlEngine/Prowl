@@ -35,9 +35,8 @@ public class GameCanvas : Component, IRenderSync
     //   private void BuildChildren(...)             // replaced by BuildRecursive
     // ============================================================
 
-    /// <summary>When set, GameCanvas uses this size instead of the window framebuffer size.
-    /// Used by the editor to render into off-screen render textures.</summary>
-    public static Float2? ScreenSizeOverride { get; set; }
+    // The size its world's renderer or pick set, else none and the canvas uses the window framebuffer.
+    private Float2? ScreenSizeOverride => GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Input.ScreenSize : null;
 
     /// <summary>
     /// When true, every canvas lays out and maps to world using its <b>world-space</b> representation
@@ -240,29 +239,14 @@ public class GameCanvas : Component, IRenderSync
         MarkDirty(UIDirtyFlags.All);   // first build is always dirty
     }
 
-    private Scene? _registeredScene;
+    public override void OnEnable() => MarkDirty(UIDirtyFlags.All);
 
-    public override void OnEnable()
+    internal override void JoinWorld(SceneInstance world)
     {
-        RegisterIn(GameObject.Scene);
-        MarkDirty(UIDirtyFlags.All);
+        if (!world.Canvases.Contains(this)) world.Canvases.Add(this);
     }
 
-    internal void RegisterIn(Scene? scene)
-    {
-        _registeredScene = scene;
-        if (scene.IsValid()) scene!.Canvases.Add(this);
-    }
-
-    public override void OnDisable() => LeaveScene(_registeredScene);
-
-    internal override void LeaveScene(Scene? scene)
-    {
-        if (_registeredScene.IsValid()) _registeredScene!.Canvases.Remove(this);
-        _registeredScene = null;
-    }
-
-    internal override void JoinScene(Scene? scene) => RegisterIn(scene);
+    internal override void LeaveWorld(SceneInstance world) => world.Canvases.Remove(this);
 
     bool IRenderSync.Sync(RenderWorld world)
     {
@@ -274,11 +258,11 @@ public class GameCanvas : Component, IRenderSync
 
     // Update() is intentionally not overridden. ScaleFactor must be computed against the
     // active render-target size, which is only known inside RebuildIfDirty (where the
-    // pipeline has pushed GameCanvas.ScreenSizeOverride). Computing it here would use the
+    // pipeline has pushed the world's screen size). Computing it here would use the
     // stale framebuffer size and fight the per-camera value.
 
     /// <summary>Resolves the effective screen-pixel size for this canvas, in real pixels.</summary>
-    private static Float2 ResolveScreenSize() => new Float2(
+    private Float2 ResolveScreenSize() => new Float2(
         ScreenSizeOverride?.X ?? Window.InternalWindow.FramebufferSize.X,
         ScreenSizeOverride?.Y ?? Window.InternalWindow.FramebufferSize.Y);
 
@@ -295,7 +279,7 @@ public class GameCanvas : Component, IRenderSync
     {
         // Detect a render-target size change (window resize, editor viewport change, switch
         // between cameras with different RT sizes). The pipeline pushes the active surface size
-        // via GameCanvas.ScreenSizeOverride before calling here, so a mismatch forces a rebuild.
+        // to the world's input before calling here, so a mismatch forces a rebuild.
         // The glyph atlas is rewritten (and every glyph UV rescaled) as new glyphs are rasterized, which
         // silently invalidates already-baked text meshes. Checked here rather than from
         // TextComponent.Update so it holds in edit mode, where Update does not run. Read without forcing
@@ -323,7 +307,7 @@ public class GameCanvas : Component, IRenderSync
         _rebake.Clear(); // the full rebuild below re-bakes everything that's dirty
 
         // Recompute scale factor against the current screen size *before* layout - Update()
-        // can't do this reliably because it runs without ScreenSizeOverride set. Assign the backing
+        // can't do this reliably because it runs without the screen size set. Assign the backing
         // field directly: going through the property setter would MarkDirty(Layout) and re-trigger
         // this rebuild every frame in ScaleWithScreenSize mode.
         _scaleFactor = ComputeScaleFactor();
@@ -336,7 +320,8 @@ public class GameCanvas : Component, IRenderSync
         _isDirty = false;
         GeometryVersion++;
 
-        LayoutUtility.InvalidateCache();
+        SceneInstance? layoutWorld = GameObject.Scene;
+        LayoutUtility.InvalidateCache(layoutWorld);
         Tree.Clear();
 
         Rect rootRect = ComputeRootRect();
@@ -348,7 +333,7 @@ public class GameCanvas : Component, IRenderSync
         Tree.SortHierarchical();
 
         // The memo keys on GameObject, so holding it between rebuilds would keep destroyed objects alive.
-        LayoutUtility.InvalidateCache();
+        LayoutUtility.InvalidateCache(layoutWorld);
 
         // Stay dirty while anything is still streaming in, so it gets rebuilt with the real asset.
         _isDirty |= _contentPending;

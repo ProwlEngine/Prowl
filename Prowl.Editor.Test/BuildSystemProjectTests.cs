@@ -57,7 +57,7 @@ public class BuildSystemProjectTests : EditorTestHarness
     [Fact]
     public void EachBuild_TakesItsOwnFolderAndLeavesTheRestAlone()
     {
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(new GameObject("Root"));
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
 
@@ -169,7 +169,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         Type? compType = gameAsm.GetType("ParentRefComponent");
         Assert.NotNull(compType);
 
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Root");
         Component comp = go.AddComponent(compType!);
         compType!.GetField("MyTexture")!.SetValue(comp, AssetDatabase.Get<Texture2D>(texGuidA));
@@ -235,7 +235,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         Type? compType = gameAsm.GetType("EditorTexRefComponent");
         Assert.NotNull(compType);
 
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Root");
         Component comp = go.AddComponent(compType!);
         compType!.GetField("MyTexture")!.SetValue(comp, AssetDatabase.Get<Texture2D>(texGuid));
@@ -430,7 +430,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         Assert.NotNull(compType);
 
         // 5. Author a scene that uses the component and save it as an asset.
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Logger");
         Component comp = go.AddComponent(compType!);
         compType!.GetField("MyTexture")!.SetValue(comp, AssetDatabase.Get<Texture2D>(texGuid));
@@ -572,7 +572,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         Type? compType = gameAsm.GetType("AsyncVoidComponent");
         Assert.NotNull(compType);
 
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Async");
         go.AddComponent(compType!);
         scene.Add(go);
@@ -616,7 +616,7 @@ public class BuildSystemProjectTests : EditorTestHarness
     [Fact]
     public void SelfContainedBuild_KeepsTheFrameworkInTheRootAndRuns()
     {
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(new GameObject("Root"));
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
 
@@ -696,7 +696,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         var gameAsm = Assembly.Load(File.ReadAllBytes(Project.GameAssemblyPath));
         Type compType = gameAsm.GetType("AotComponent")!;
 
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Aot");
         Component comp = go.AddComponent(compType);
         compType.GetField("MyTexture")!.SetValue(comp, AssetDatabase.Get<Texture2D>(texGuid));
@@ -756,7 +756,7 @@ public class BuildSystemProjectTests : EditorTestHarness
 
     private Guid CreateScene()
     {
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(new GameObject("Root"));
         return CreateSceneAsset(scene, "Main.scene");
     }
@@ -910,7 +910,7 @@ public class BuildSystemProjectTests : EditorTestHarness
 
     private BuildSettings SettingsFor(PlatformTarget target)
     {
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(new GameObject("Root"));
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
 

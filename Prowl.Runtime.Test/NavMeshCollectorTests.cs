@@ -27,7 +27,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void BoxCollider_CollectsAndBakesWalkableFloor()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
         BoxCollider box = floor.AddComponent<BoxCollider>();
@@ -35,7 +35,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
         floor.Transform.Position = new Float3(0, -0.5f, 0); // top surface at y=0
 
         List<NavMeshGeometrySource> sources = [];
-        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
             LayerMask.Everything, TestSettings().EffectiveVoxelSize, NavMeshAreas.Walkable, sources);
 
         Assert.Single(sources);
@@ -55,7 +55,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Collect_RespectsLayerMask()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
         floor.AddComponent<BoxCollider>().Size = new Float3(10, 1, 10);
@@ -64,12 +64,12 @@ public class NavMeshCollectorTests : RuntimeTestBase
         List<NavMeshGeometrySource> sources = [];
         LayerMask without5 = LayerMask.Everything;
         without5.RemoveLayer(5);
-        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
             without5, 0.25f, NavMeshAreas.Walkable, sources);
         Assert.Empty(sources);
 
         LayerMask with5 = LayerMask.Everything;
-        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
             with5, 0.25f, NavMeshAreas.Walkable, sources);
         Assert.Single(sources);
     }
@@ -77,14 +77,14 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Collect_SkipsDisabledObjects()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
         floor.AddComponent<BoxCollider>().Size = new Float3(10, 1, 10);
         floor.Enabled = false;
 
         List<NavMeshGeometrySource> sources = [];
-        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
             LayerMask.Everything, 0.25f, NavMeshAreas.Walkable, sources);
         Assert.Empty(sources);
     }
@@ -92,7 +92,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void MeshRenderer_Collects_WithWorldTransform()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Plane");
         scene.Add(go);
         MeshRenderer renderer = go.AddComponent<MeshRenderer>();
@@ -100,7 +100,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
         go.Transform.Position = new Float3(100, 0, 100);
 
         List<NavMeshGeometrySource> sources = [];
-        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.RenderMeshes,
+        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.RenderMeshes,
             LayerMask.Everything, 0.25f, NavMeshAreas.Walkable, sources);
         Assert.Single(sources);
 
@@ -119,7 +119,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void RotatedBoxCollider_BakesRotated()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject ramp = CreateGameObject("Floor");
         scene.Add(ramp);
         BoxCollider box = ramp.AddComponent<BoxCollider>();
@@ -128,7 +128,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
         ramp.Transform.Rotation = Quaternion.FromEuler(new Float3(0, 45f, 0));
 
         List<NavMeshGeometrySource> sources = [];
-        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
             LayerMask.Everything, 0.25f, NavMeshAreas.Walkable, sources);
         NavMeshData? data = NavMeshBuilder.Build(TestSettings(), sources);
         Assert.NotNull(data);
@@ -150,7 +150,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Collect_SkipsAgentsAndTheirChildren()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
         floor.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
@@ -168,7 +168,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
         visual.AddComponent<BoxCollider>().Size = new Float3(1, 2, 1);
 
         List<NavMeshGeometrySource> sources = [];
-        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
             LayerMask.Everything, 0.25f, NavMeshAreas.Walkable, sources);
 
         Assert.Single(sources); // the floor only
@@ -181,7 +181,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Bake_WithAgentStandingOnFloor_LeavesNoHole()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
         floor.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
@@ -196,7 +196,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
         body.Size = new Float3(2, 2, 2);
 
         List<NavMeshGeometrySource> sources = [];
-        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
             LayerMask.Everything, TestSettings().EffectiveVoxelSize, NavMeshAreas.Walkable, sources);
         NavMeshData? data = NavMeshBuilder.Build(TestSettings(), sources);
         Assert.NotNull(data);
@@ -219,7 +219,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     /// <summary> A terrain spanning 0..64 on both axes, at whatever the caller's transform says.
     /// <paramref name="normalizedHeight"/> takes world-space X and Z and returns 0..1; flat when
     /// omitted. </summary>
-    private TerrainComponent AddTerrain(Scene scene, Func<float, float, float>? normalizedHeight = null,
+    private TerrainComponent AddTerrain(SceneInstance scene, Func<float, float, float>? normalizedHeight = null,
         float height = TerrainHeight)
     {
         GameObject go = CreateGameObject("Terrain");
@@ -246,13 +246,13 @@ public class NavMeshCollectorTests : RuntimeTestBase
     private static float RollingHills(float x, float z)
         => 0.5f + 0.5f * MathF.Sin(x / TerrainSize * MathF.PI * 2f) * MathF.Cos(z / TerrainSize * MathF.PI * 2f);
 
-    private NavMeshWorld BakeTerrain(Scene scene, bool heightDetail = true)
+    private NavMeshWorld BakeTerrain(SceneInstance scene, bool heightDetail = true)
     {
         NavMeshBuildSettings settings = TestSettings();
         settings.Overrides.BuildHeightDetail = heightDetail;
 
         List<NavMeshGeometrySource> sources = [];
-        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
             LayerMask.Everything, settings.EffectiveVoxelSize, NavMeshAreas.Walkable, sources);
         Assert.Single(sources);
 
@@ -274,7 +274,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     {
         using (EditMode())
         {
-            Scene scene = CreateScene(enable: true);
+            SceneInstance scene = CreateScene(enable: true);
             AddTerrain(scene);
 
             NavMeshWorld world = BakeTerrain(scene);
@@ -287,7 +287,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_BakesWhereItsTransformPutsIt()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         TerrainComponent terrain = AddTerrain(scene);
         terrain.Transform.Position = new Float3(-32, 25, -32);
         terrain.Transform.LocalScale = new Float3(2, 1, 2);
@@ -310,7 +310,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_NavMeshTracksTheSurfaceItCovers()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, RollingHills);
 
         NavMeshWorld world = BakeTerrain(scene);
@@ -348,7 +348,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_TriangulationTracksTheSurfaceItCovers()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, RollingHills);
 
         NavMeshTriangulation tri = BakeTerrain(scene).CalculateTriangulation();
@@ -382,7 +382,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_SteepBake_SurfaceIsContinuousGroundedAndSliverFree()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, RollingHills, height: 24f);
         AssertBakeIntegrity(BakeTerrain(scene), RollingHills, 24f);
     }
@@ -396,7 +396,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_SculptedPlateauBake_SurfaceIsContinuousGroundedAndSliverFree()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, WigglyPlateau, height: 24f);
         AssertBakeIntegrity(BakeTerrain(scene), WigglyPlateau, 24f);
     }
@@ -413,7 +413,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [InlineData(37f)] // rotated: the region's local box is not the world box with swapped axes
     public void Terrain_BoundedCollect_SamplesTheSameGridAndCoversTheRegion(float yawDegrees)
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         TerrainComponent terrain = AddTerrain(scene, RollingHills);
         terrain.Transform.LocalEulerAngles = new Float3(0, yawDegrees, 0);
 
@@ -421,14 +421,14 @@ public class NavMeshCollectorTests : RuntimeTestBase
         // then there is no phase to get wrong): 2 units over 0.5-unit cells strides by 4.
         const float voxelSize = 2f;
         List<NavMeshGeometrySource> whole = [];
-        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
             LayerMask.Everything, voxelSize, NavMeshAreas.Walkable, whole);
         Assert.Single(whole);
 
         // A world-space region well inside the terrain, whatever the yaw is.
         var region = new AABB(new Float3(20, -8, 20), new Float3(28, 16, 28));
         List<NavMeshGeometrySource> bounded = [];
-        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
             LayerMask.Everything, voxelSize, NavMeshAreas.Walkable, bounded, region);
         Assert.Single(bounded);
 
@@ -460,12 +460,12 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_OneTileRebuild_DoesNotPayForTheWholeHeightmap()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, RollingHills);
 
         NavMeshBuildSettings settings = TestSettings();
         List<NavMeshGeometrySource> whole = [];
-        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
             LayerMask.Everything, settings.EffectiveVoxelSize, NavMeshAreas.Walkable, whole);
         NavMeshData? data = NavMeshBuilder.Build(settings, whole);
         Assert.NotNull(data);
@@ -474,7 +474,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
         long Rebuild()
         {
             List<NavMeshGeometrySource> sources = [];
-            NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+            NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
                 LayerMask.Everything, settings.EffectiveVoxelSize, NavMeshAreas.Walkable, sources, region);
             List<NavMeshTileRebuild> tiles =
                 NavMeshBuilder.BuildTilesInBounds(data!, sources, region.Min, region.Max);
@@ -502,7 +502,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_PartialRebuild_ReproducesTheSameSurface()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, RollingHills);
 
         GameObject surfaceGo = CreateGameObject("NavMeshSurface");
@@ -544,7 +544,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     /// <summary>Navmesh height directly under each probe, NaN where there is none. A generous
     /// radius is needed for hilly ground and lets a hit snap sideways onto a neighbouring polygon,
     /// so a hole would read as a surface at the wrong height — hence the XZ check.</summary>
-    private static List<float> SampleHeights(Scene scene, List<Float3> probes)
+    private static List<float> SampleHeights(SceneInstance scene, List<Float3> probes)
     {
         var heights = new List<float>(probes.Count);
         foreach (Float3 p in probes)
@@ -943,11 +943,11 @@ public class NavMeshCollectorTests : RuntimeTestBase
     [Fact]
     public void Terrain_WithoutHeightDetail_KeepsTheCoarsePolygons()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         AddTerrain(scene, RollingHills);
         NavMeshTriangulation detailed = BakeTerrain(scene).CalculateTriangulation();
 
-        Scene coarseScene = CreateScene(enable: true);
+        SceneInstance coarseScene = CreateScene(enable: true);
         AddTerrain(coarseScene, RollingHills);
         NavMeshTriangulation coarse = BakeTerrain(coarseScene, heightDetail: false).CalculateTriangulation();
 

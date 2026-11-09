@@ -41,6 +41,9 @@ public class PhysicsWorld
     /// <summary>Enabled character controllers in this world. They have no body, so trigger volumes test them directly.</summary>
     internal readonly List<CharacterController> Characters = [];
 
+    /// <summary>The wheels hanging from each body, so each shares the body's mass with the others.</summary>
+    internal readonly Dictionary<Rigidbody3D, List<WheelCollider>> WheelsOnBody = [];
+
     /// <summary>
     /// Stops two rigidbodies colliding with each other, on top of whatever the layer matrix says. The
     /// pair is scoped to this world and is dropped when the world is cleared.
@@ -888,6 +891,7 @@ public class PhysicsWorld
 
         // Clear the static rigidbodies dictionary - they will be recreated as needed
         _staticRigidbodiesByLayer.Clear();
+        WheelsOnBody.Clear();
 
         // World.Clear removed every body, so the per-body registries hold nothing worth visiting.
         // The components re-register when they recreate their bodies.

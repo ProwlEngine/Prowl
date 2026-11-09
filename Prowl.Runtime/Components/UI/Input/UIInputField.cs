@@ -138,7 +138,7 @@ public class UIInputField : Selectable,
     {
         get
         {
-            EventSystem? es = EventSystem.Current;
+            EventSystem? es = EventSystem.Of(GameObject);
             return ReferenceEquals(es.IsValid() ? es.Selected : null, GameObject) && IsInteractable();
         }
     }
@@ -201,7 +201,7 @@ public class UIInputField : Selectable,
         if (!IsInteractable()) return;
         try { OnSubmitted?.Invoke(_text); }
         catch (Exception ex) { Debug.LogException($"[UIInputField] OnSubmitted on '{Name}' threw", ex); }
-        EventSystem? es = EventSystem.Current;
+        EventSystem? es = EventSystem.Of(GameObject);
         if (es.IsValid()) es.SetSelected(null); // ends editing (fires OnDeselect -> EndEdit)
     }
 
@@ -260,7 +260,7 @@ public class UIInputField : Selectable,
     public override void Update()
     {
         base.Update(); // Selectable tint lerp
-        if (!Application.IsPlaying) return;
+        if (!IsInPlayingWorld) return;
 
         // Keep the label in sync every frame so the text shows regardless of how it was set.
         UpdateDisplay();

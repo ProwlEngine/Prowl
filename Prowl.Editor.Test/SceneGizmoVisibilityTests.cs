@@ -35,22 +35,26 @@ public class SceneGizmoVisibilityTests : IDisposable
         Application.IsEditor = true;
         Application.IsPlaying = false;
         Selection.Clear();
+        SceneInstance edited = SceneInstance.Create("Untitled", SceneMode.Edit);
+        edited.Activate();
+        SceneInstance.Main = edited;
     }
 
     public void Dispose()
     {
         Selection.Clear();
+        SceneInstance.Shutdown();
         Application.IsPlaying = _wasPlaying;
         Application.IsEditor = _wasEditor;
     }
 
-    private static Scene CreateScene(out SceneGizmoProbe probe)
+    private static SceneInstance CreateScene(out SceneGizmoProbe probe)
     {
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Gizmo probe");
         probe = go.AddComponent<SceneGizmoProbe>();
         scene.Add(go);
-        scene.Enable();
+        scene.Activate();
         return scene;
     }
 
@@ -60,9 +64,9 @@ public class SceneGizmoVisibilityTests : IDisposable
     public void UpdatesDoNotGenerateGizmosAndVisibleViewsRequestThemInEitherMode(bool playing)
     {
         Application.IsPlaying = playing;
-        using Scene scene = CreateScene(out SceneGizmoProbe probe);
+        using SceneInstance scene = CreateScene(out SceneGizmoProbe probe);
         var editor = new EditorApplication();
-        editor.OnUpdate(scene);
+        editor.OnUpdate();
         editor.BeginRender();
         Assert.Equal(0, probe.Draws);
 
@@ -73,7 +77,7 @@ public class SceneGizmoVisibilityTests : IDisposable
     [Fact]
     public void MultipleVisibleViewsShareOneComponentGizmoPassPerRenderedFrame()
     {
-        using Scene scene = CreateScene(out SceneGizmoProbe probe);
+        using SceneInstance scene = CreateScene(out SceneGizmoProbe probe);
         Selection.Select(probe.GameObject);
         var editor = new EditorApplication();
         var first = new SceneViewPanel();
@@ -97,7 +101,7 @@ public class SceneGizmoVisibilityTests : IDisposable
     [Fact]
     public void DisabledGizmosDoNotConsumeThePassForAnotherVisibleView()
     {
-        using Scene scene = CreateScene(out SceneGizmoProbe probe);
+        using SceneInstance scene = CreateScene(out SceneGizmoProbe probe);
         var editor = new EditorApplication();
         var disabled = new SceneViewPanel();
         disabled.RestoreState(new JsonObject { ["gizmos"] = false });
@@ -112,15 +116,15 @@ public class SceneGizmoVisibilityTests : IDisposable
     [Fact]
     public void FramesWithoutADrawingSceneViewDoNotGenerateGizmos()
     {
-        using Scene scene = CreateScene(out SceneGizmoProbe probe);
+        using SceneInstance scene = CreateScene(out SceneGizmoProbe probe);
         var editor = new EditorApplication();
         editor.BeginRender();
         new SceneViewPanel().DrawSceneGizmos(editor, scene);
         Assert.Equal(1, probe.Draws);
 
-        editor.OnUpdate(scene);
+        editor.OnUpdate();
         editor.BeginRender();
-        editor.OnUpdate(scene);
+        editor.OnUpdate();
         Assert.Equal(1, probe.Draws);
     }
 }

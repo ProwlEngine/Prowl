@@ -243,7 +243,7 @@ public static class VolumeProfileGUI
         if (!Directory.Exists(absolute)) return;
         string name = AssetCreateMenu.FindUniqueName(absolute, string.IsNullOrWhiteSpace(profile.Name) ? "Volume Profile" : profile.Name, ".volume");
         backend.CreateAsset(profile, string.IsNullOrEmpty(folder) ? name : $"{folder}/{name}");
-        EditorSceneManager.MarkDirty();
+        foreach (OpenScene scene in EditorSceneManager.OpenScenes) EditorSceneManager.MarkDirty(scene);
     }
 
     /// <summary>An embedded profile's edits belong to the holder's scene, a database profile's to the profile itself.</summary>

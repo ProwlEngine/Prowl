@@ -117,15 +117,14 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         base.Dispose();
     }
 
-    private static Scene MakeScene(out GameObject a, out GameObject b)
+    private static SceneInstance MakeScene(out GameObject a, out GameObject b)
     {
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         a = new GameObject("A");
         b = new GameObject("B");
         scene.Add(a);
         scene.Add(b);
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
+        BindEditWorld(scene);
         return scene;
     }
 
@@ -323,14 +322,14 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
     [Fact]
     public void SceneReferences_ResolveToOriginalObjects_NotClones()
     {
-        Scene scene = MakeScene(out GameObject? a, out GameObject? b);
+        SceneInstance scene = MakeScene(out GameObject? a, out GameObject? b);
         ClipComp target = a.AddComponent<ClipComp>();
         ClipRefComp src = a.AddComponent<ClipRefComp>();
         src.TargetGO = a;
         src.TargetComp = target;
         src.TargetTransform = a.Transform;
 
-        int rootsBefore = scene.RootObjects.Count();
+        int rootsBefore = scene.Roots.Count();
 
         ComponentClipboard.Copy(src);
         var pasted = ComponentClipboard.PasteAsNew(b) as ClipRefComp;
@@ -341,7 +340,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         Assert.Same(a.Transform, pasted.TargetTransform);
 
         // The real point: no orphan clone of A was dragged into the scene by the paste.
-        Assert.Equal(rootsBefore, scene.RootObjects.Count());
+        Assert.Equal(rootsBefore, scene.Roots.Count());
     }
 
     [Fact]
@@ -357,11 +356,10 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         ComponentClipboard.Copy(src);
 
         // Swap to an unrelated scene, as entering/leaving prefab mode does.
-        var other = new Scene();
+        var other = new SceneInstance(SceneMode.Edit);
         var host = new GameObject("Host");
         other.Add(host);
-        Scene.Load(other);
-        Scene.ProcessPendingLoad();
+        BindEditWorld(other);
 
         var pasted = ComponentClipboard.PasteAsNew(host) as ClipRefComp;
 
@@ -378,19 +376,18 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         // Prefab editing mode serializes the scene away and deserializes it back; identifiers are
         // restored by Scene.OnBefore/OnAfterDeserialize, so an identifier captured before the
         // round-trip must still resolve after it.
-        Scene scene = MakeScene(out GameObject? a, out _);
+        SceneInstance scene = MakeScene(out GameObject? a, out _);
         ClipRefComp src = a.AddComponent<ClipRefComp>();
         src.TargetGO = a;
 
         ComponentClipboard.Copy(src);
         Guid originalId = a.Identifier;
 
-        EchoObject echo = Echo.Serializer.Serialize(scene);
-        Scene restored = Echo.Serializer.Deserialize<Scene>(echo)!;
-        Scene.Load(restored);
-        Scene.ProcessPendingLoad();
+        EchoObject echo = scene.ActiveSection.CaptureTree();
+        SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
+        BindEditWorld(restored);
 
-        GameObject restoredA = restored.AllObjects.First(g => g.Identifier == originalId);
+        GameObject restoredA = restored.Objects.First(g => g.Identifier == originalId);
         var host = new GameObject("Host");
         restored.Add(host);
 
@@ -406,18 +403,18 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         // A Transform with no GameObject can't be anchored to an id. It must still be linked rather
         // than serialized by value - otherwise paste produces an orphan Transform with a null
         // GameObject that NREs the first time anything touches it. It resolves to null on paste.
-        Scene scene = MakeScene(out GameObject? a, out GameObject? b);
+        SceneInstance scene = MakeScene(out GameObject? a, out GameObject? b);
         ClipRefComp src = a.AddComponent<ClipRefComp>();
         src.TargetTransform = new Transform(); // never attached to a GameObject
 
-        int rootsBefore = scene.RootObjects.Count();
+        int rootsBefore = scene.Roots.Count();
 
         ComponentClipboard.Copy(src);
         var pasted = ComponentClipboard.PasteAsNew(b) as ClipRefComp;
 
         Assert.NotNull(pasted);
         Assert.Null(pasted!.TargetTransform);
-        Assert.Equal(rootsBefore, scene.RootObjects.Count());
+        Assert.Equal(rootsBefore, scene.Roots.Count());
     }
 
     [Fact]
@@ -425,7 +422,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
     {
         // The payoff of Echo owning the traversal: references nested inside a list or a plain data
         // class are linked too, which the old top-level-only tokenizer could not reach.
-        Scene scene = MakeScene(out GameObject? a, out GameObject? b);
+        SceneInstance scene = MakeScene(out GameObject? a, out GameObject? b);
         var c = new GameObject("C");
         scene.Add(c);
 
@@ -434,7 +431,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         src.Targets.Add(c);
         src.Wrapper = new ClipNestedRefComp.RefBox { GO = c };
 
-        int rootsBefore = scene.RootObjects.Count();
+        int rootsBefore = scene.Roots.Count();
 
         ComponentClipboard.Copy(src);
         var pasted = ComponentClipboard.PasteAsNew(b) as ClipNestedRefComp;
@@ -444,7 +441,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         Assert.Same(a, pasted.Targets[0]);          // ref inside a List<>
         Assert.Same(c, pasted.Targets[1]);
         Assert.Same(c, pasted.Wrapper!.GO);         // ref inside a nested class
-        Assert.Equal(rootsBefore, scene.RootObjects.Count()); // nothing deep-cloned into the scene
+        Assert.Equal(rootsBefore, scene.Roots.Count()); // nothing deep-cloned into the scene
     }
 
     // ---- ISerializable components (custom Serialize/Deserialize) ----
@@ -585,7 +582,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
     {
         // The redo lambda looks its GameObject back up by identifier rather than capturing it, so a
         // redo whose target no longer exists must no-op instead of throwing out of the undo stack.
-        Scene scene = MakeScene(out GameObject? a, out GameObject? b);
+        SceneInstance scene = MakeScene(out GameObject? a, out GameObject? b);
         ClipComp src = a.AddComponent<ClipComp>();
 
         ComponentClipboard.Copy(src);
@@ -604,7 +601,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
     [Fact]
     public void PasteAsNew_Undo_AfterTargetDeleted_FailsGracefully()
     {
-        Scene scene = MakeScene(out GameObject? a, out GameObject? b);
+        SceneInstance scene = MakeScene(out GameObject? a, out GameObject? b);
         ClipComp src = a.AddComponent<ClipComp>();
 
         ComponentClipboard.Copy(src);

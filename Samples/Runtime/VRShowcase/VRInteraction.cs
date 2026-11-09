@@ -622,7 +622,7 @@ public sealed class UIPointer : Component
     public override void Update()
     {
         _laser.Points.Clear();
-        EventSystem? events = EventSystem.Current;
+        EventSystem? events = EventSystem.Of(GameObject);
         if (events.IsNotValid() || !XR.IsRunning)
         {
             if (events.IsValid()) events.WorldPointer = null;

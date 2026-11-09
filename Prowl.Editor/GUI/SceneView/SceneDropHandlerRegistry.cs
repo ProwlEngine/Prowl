@@ -20,7 +20,7 @@ public class SceneDropHandlerAttribute : Attribute
 
 public struct SceneDropContext
 {
-    public Scene Scene;
+    public SceneInstance Scene;
     public EditorCamera Camera;
     public Float2 MouseLocal;
     public Float2 PanelSize;
@@ -44,7 +44,7 @@ internal class SceneAssetDropHandler : ISceneDropHandler
     public void Handle(AssetDragPayload payload, SceneDropContext context)
     {
         AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(payload.AssetGuid);
-        if (entry != null) EditorSceneManager.ConfirmSceneChange(() => EditorSceneManager.OpenScene(entry.Path));
+        if (entry != null) EditorSceneManager.OpenWithPrompt(entry.Path);
     }
 }
 

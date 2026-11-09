@@ -37,13 +37,13 @@ public sealed class HelloProwlGame : Game
 {
     public override void Initialize()
     {
-        var scene = new Scene();
+        SceneInstance scene = SceneInstance.Main;
 
         // A light, angled down like an afternoon sun.
         var sun = new GameObject("Sun");
         sun.AddComponent<DirectionalLight>();
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
-        scene.Add(sun);
+        sun.MoveTo(scene);
 
         // The camera the game renders through. The "Main Camera" tag marks it as the one to use.
         var cameraObject = new GameObject("Main Camera") { Tag = "Main Camera" };
@@ -52,7 +52,7 @@ public sealed class HelloProwlGame : Game
         camera.AntiAliasing = AntiAliasingMode.FXAA;
         cameraObject.Transform.Position = new Float3(0f, 3f, -8f);
         cameraObject.Transform.LookAt(new Float3(0f, 1f, 0f));
-        scene.Add(cameraObject);
+        cameraObject.MoveTo(scene);
 
         // A floor with a collider, so dropped cubes have something to land on.
         var floor = new GameObject("Floor");
@@ -61,7 +61,7 @@ public sealed class HelloProwlGame : Game
         floorRenderer.Material = MakeMaterial(new Color(0.06f, 0.065f, 0.075f, 1f));
         floor.AddComponent<BoxCollider>().Size = new Float3(80f, 0.2f, 80f);
         floor.Transform.Position = new Float3(0f, -0.1f, 0f);
-        scene.Add(floor);
+        floor.MoveTo(scene);
 
         // The star of the show, with our own component on it.
         var cube = new GameObject("Spinning Cube");
@@ -70,13 +70,12 @@ public sealed class HelloProwlGame : Game
         cubeRenderer.Material = MakeMaterial(new Color(0.9f, 0.22f, 0.03f, 1f));
         cube.AddComponent<Spinner>();
         cube.Transform.Position = new Float3(0f, 1.5f, 0f);
-        scene.Add(cube);
+        cube.MoveTo(scene);
 
         var spawner = new GameObject("Spawner");
         spawner.AddComponent<CubeSpawner>();
-        scene.Add(spawner);
+        spawner.MoveTo(scene);
 
-        Scene.Load(scene);
     }
 
     public static Material MakeMaterial(Color color)
@@ -143,7 +142,7 @@ public sealed class CubeSpawner : Component
             cube.AddComponent<Rigidbody3D>();
             cube.Transform.Position = new Float3(Sample.Rng.NextSingle() * 4f - 2f, 6f, Sample.Rng.NextSingle() * 4f - 2f);
             cube.Transform.LocalEulerAngles = new Float3(Sample.Rng.NextSingle() * 360f, Sample.Rng.NextSingle() * 360f, 0f);
-            GameObject.Scene!.Add(cube);
+            cube.MoveTo(GameObject.Scene!);
             _spawned.Add(cube);
         }
 

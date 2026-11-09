@@ -20,7 +20,7 @@ namespace Prowl.Editor.Inspector;
 /// Inspector for a Scene asset: shows what the scene references as a searchable, virtualized
 /// dependency table (icon + name + type, click a row to ping it in the project)
 /// </summary>
-[CustomAssetEditor(typeof(SceneAsset))]
+[CustomAssetEditor(typeof(Scene))]
 public class SceneAssetEditor : AssetImporterEditor
 {
     // Resolved, de-duplicated list of true top-level asset references (cached per scene).

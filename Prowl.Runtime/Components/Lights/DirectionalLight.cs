@@ -25,7 +25,7 @@ public sealed class DirectionalLight : Light
     public float CascadeBlend { get => cascadeBlend; set { cascadeBlend = value; Wake(); } }
     [SerializeField, Range(0f, 1f)] private float cascadeBlend = 0.1f;
 
-    [System.NonSerialized, NotHeld] private Scene? _sunScene;
+    [System.NonSerialized, NotHeld] private SceneInstance? _sunScene;
 
     private static readonly LightPreset[] s_presets =
     [

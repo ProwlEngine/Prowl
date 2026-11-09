@@ -332,7 +332,7 @@ public static partial class PrefabUtility
         Guid instanceRootId, Action<GameObject>? undoInstance = null, Action<GameObject>? redoInstance = null) : IUndoOperation
     {
         public string Name => name;
-        public IReadOnlyList<UndoOwner> Owners => [UndoOwner.OfAssetFile(prefabGuid), UndoOwner.OfCurrentScene];
+        public IReadOnlyList<UndoOwner> Owners { get; } = [UndoOwner.OfAssetFile(prefabGuid), .. FindInstancesOf(prefabGuid).Select(UndoOwner.Of).Distinct()];
 
         public void Undo() => Restore(before, undoInstance);
         public void Redo() => Restore(after, redoInstance);
@@ -346,7 +346,7 @@ public static partial class PrefabUtility
                 InvalidateSource(prefabGuid);
                 EditorAssetBackend.Instance?.Reimport(prefabGuid);
 
-                GameObject? live = Scene.Current.IsValid() ? Scene.Current!.FindObjectByIdentifier<GameObject>(instanceRootId) : null;
+                GameObject? live = EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.FindObject<GameObject>(instanceRootId) : null;
                 if (instance != null && live.IsValid()) instance(live!);
                 RefreshAllInstances(prefabGuid);
             }
@@ -1142,6 +1142,23 @@ public static partial class PrefabUtility
     // notification would refresh the instances a second time, replacing every object again.
     private static bool s_refreshingFromApply;
 
+    // Prefabs imported during play or prefab editing, whose edit world instances refresh once it is back.
+    private static readonly HashSet<Guid> s_staleInstances = [];
+
+    internal static void MarkInstancesStale(Guid prefabGuid) => s_staleInstances.Add(prefabGuid);
+
+    /// <summary>Refreshes the edit world instances of every prefab imported while they could not be.</summary>
+    internal static void RefreshStaleInstances()
+    {
+        Guid[] stale = [.. s_staleInstances];
+        s_staleInstances.Clear();
+        foreach (Guid prefabGuid in stale)
+        {
+            try { RefreshAllInstances(prefabGuid); }
+            catch (Exception ex) { Runtime.Debug.LogError($"[Prefab] Failed to refresh instances of {prefabGuid}: {ex.Message}"); }
+        }
+    }
+
     /// <summary>
     /// Bring open-scene instances up to date after their prefab asset was imported. Covers a prefab
     /// edited outside the editor, one arriving from source control, and a model whose import settings
@@ -1161,8 +1178,13 @@ public static partial class PrefabUtility
             InvalidateSource(entry.Guid);
 
             // Whether instances may be rebuilt right now is a separate question.
-            if (s_refreshingFromApply || Application.IsPlaying) continue;
-            if (Scene.Current.IsNotValid() || PrefabEditingMode.IsEditing) continue;
+            if (s_refreshingFromApply) continue;
+            if (Application.IsPlaying || PrefabEditingMode.IsEditing)
+            {
+                s_staleInstances.Add(entry.Guid);
+                continue;
+            }
+            if (EditorSceneManager.EditedWorld.IsNotValid()) continue;
 
             try
             {
@@ -1186,7 +1208,8 @@ public static partial class PrefabUtility
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db == null) return;
 
-        Scene? scene = Scene.Current;
+        // The edit world counts too while play or prefab editing has it dormant, since its instances come back.
+        SceneInstance?[] worlds = [EditorSceneManager.EditedWorld, EditorSceneManager.EditWorldOrNull];
 
         // The entries are gone, so go by which cached prefabs the database can no longer resolve.
         foreach (Guid prefabGuid in s_sourceCache.Keys.ToList())
@@ -1194,7 +1217,7 @@ public static partial class PrefabUtility
             if (db.GetEntry(prefabGuid) != null) continue;
 
             // Keeping it is what lets instances go on recording overrides while the prefab is away.
-            if (scene.IsValid() && scene.AllObjects.Any(go => go.PrefabAssetId == prefabGuid)) continue;
+            if (worlds.Any(world => world.IsValid() && world.Objects.Any(go => go.PrefabAssetId == prefabGuid))) continue;
 
             InvalidateSource(prefabGuid);
         }
@@ -1209,18 +1232,23 @@ public static partial class PrefabUtility
     /// prefab used to have, and <see cref="ReconcileInstance"/>, which every scene save runs, then
     /// reads each of those differences as an edit the instance made and pins it as an override.
     /// </summary>
+    internal static void OnSectionLoaded(SceneLoadedArgs args)
+    {
+        if (ReferenceEquals(args.Section.Instance, SceneInstance.Main)) OnSceneLoaded();
+    }
+
     internal static void OnSceneLoaded()
     {
         if (Application.IsPlaying) return;
         // The prefab editing scene holds the prefab itself, not instances of it.
         if (PrefabEditingMode.IsEditing) return;
 
-        Scene? scene = Scene.Current;
+        SceneInstance? scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         // Collected before anything is refreshed, since a refresh adds and removes objects.
         var prefabs = new HashSet<Guid>();
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in scene.Objects)
             if (go.IsPrefabInstance && IsInstanceRoot(go))
                 prefabs.Add(go.PrefabAssetId);
 
@@ -1248,15 +1276,15 @@ public static partial class PrefabUtility
     /// </summary>
     public static void RefreshAllInstances(Guid prefabGuid)
     {
-        Scene? scene = Scene.Current;
-        if (scene.IsValid()) RefreshInstancesOf(prefabGuid, scene);
+        SceneInstance? scene = EditorSceneManager.EditedWorld;
+        if (scene.IsValid()) RefreshInstancesOf(prefabGuid, scene.Objects);
     }
 
-    private static void RefreshInstancesOf(Guid prefabGuid, Scene scene)
+    private static void RefreshInstancesOf(Guid prefabGuid, IEnumerable<GameObject> objects)
     {
-        SettleStrayPrefabContent(prefabGuid, scene);
+        SettleStrayPrefabContent(prefabGuid, objects);
 
-        List<GameObject> roots = FindInstancesOf(prefabGuid, scene);
+        List<GameObject> roots = FindInstancesAmong(prefabGuid, objects);
         if (roots.Count == 0) return;
 
         PrefabAsset? prefab = LoadPrefab(prefabGuid);
@@ -1277,20 +1305,43 @@ public static partial class PrefabUtility
     /// the scene was saved. Open it and it catches up, but a build reads what is on disk, and nobody
     /// has to have opened a scene since the prefabs it uses last changed.
     /// </summary>
-    public static void RefreshInstancesIn(Scene scene)
+    public static void RefreshInstancesIn(SceneInstance scene)
     {
-        if (scene.IsNotValid()) return;
+        if (scene.IsValid()) RefreshInstancesAmong(scene.Objects);
+    }
 
+    /// <summary>
+    /// Bring every prefab instance in detached content up to date, as <see cref="RefreshInstancesIn(SceneInstance)"/>
+    /// does for a world. Override references resolve against the content itself, and its object list follows what
+    /// the refresh added and removed.
+    /// </summary>
+    public static void RefreshInstancesIn(SceneContent content)
+    {
+        IReadOnlyDictionary<Guid, EngineObject>? previous = s_refreshingContent;
+        s_refreshingContent = content.IdentifierMap();
+        try { RefreshInstancesAmong(content.Objects); }
+        finally
+        {
+            s_refreshingContent = previous;
+            content.Resync();
+        }
+    }
+
+    // Override references in content outside any world resolve against this while it is refreshed.
+    [ThreadStatic] private static IReadOnlyDictionary<Guid, EngineObject>? s_refreshingContent;
+
+    private static void RefreshInstancesAmong(IEnumerable<GameObject> objects)
+    {
         var prefabs = new HashSet<Guid>();
-        foreach (GameObject go in scene.AllObjects)
-            if (go.IsPrefabInstance && IsInstanceRoot(go))
+        foreach (GameObject go in objects)
+            if (go.IsValid() && go.IsPrefabInstance && IsInstanceRoot(go))
                 prefabs.Add(go.PrefabAssetId);
 
         foreach (Guid prefabGuid in prefabs)
         {
             try
             {
-                RefreshInstancesOf(prefabGuid, scene);
+                RefreshInstancesOf(prefabGuid, objects);
             }
             catch (Exception ex)
             {
@@ -1306,9 +1357,9 @@ public static partial class PrefabUtility
     /// still answers to a source identity, so the refresh recreates its counterpart and one override
     /// then lands on both. Its contents and place are kept; only the claim goes.
     /// </summary>
-    private static void SettleStrayPrefabContent(Guid prefabGuid, Scene scene)
+    private static void SettleStrayPrefabContent(Guid prefabGuid, IEnumerable<GameObject> objects)
     {
-        List<GameObject> belonging = [.. scene.AllObjects.Where(go => go.IsValid() && go.PrefabAssetId == prefabGuid)];
+        List<GameObject> belonging = [.. objects.Where(go => go.IsValid() && go.PrefabAssetId == prefabGuid)];
 
         // If nothing here stands for the prefab's root object then the asset was rewritten with fresh
         // identities, and none of these objects can be judged against it.
@@ -1574,7 +1625,7 @@ public static partial class PrefabUtility
 
             // Scene.Remove unparents on the way out; a tree in no scene has to be told, or the deferred
             // destroy leaves the child in its parent's list for the rest of the operation.
-            Scene? childScene = child.Scene;
+            SceneInstance? childScene = child.Scene;
             if (childScene.IsValid()) childScene!.Remove(child);
             else child.SetParent(null!);
             child.Destroy();
@@ -1603,7 +1654,7 @@ public static partial class PrefabUtility
             component.OnValidate();
         }
 
-        Scene? scene = instance.Scene;
+        SceneInstance? scene = instance.Scene;
         int order = 0;
 
         foreach (GameObject sourceChild in source.Children)
@@ -1809,19 +1860,24 @@ public static partial class PrefabUtility
     /// value on the objects and nothing else, so a round trip through serialized data would keep the
     /// value but lose the fact that it differs from the prefab, and the next refresh would drop it.
     /// </summary>
-    public static void ReconcileOpenScene()
+    public static void ReconcileOpenScene() => Reconcile(EditorSceneManager.EditedWorld, null);
+
+    /// <summary>As <see cref="ReconcileOpenScene"/>, for the instances of one section only, like the scene being saved.</summary>
+    internal static void ReconcileSection(SceneSection section) => Reconcile(section.Instance, section);
+
+    private static void Reconcile(SceneInstance? scene, SceneSection? section)
     {
-        Scene? scene = Scene.Current;
         if (scene.IsNotValid()) return;
+        List<GameObject> objects = [.. scene!.Objects.Where(go => section == null || ReferenceEquals(go.Section, section))];
 
         // Anything that drifted out of its instance is settled first, so what follows records overrides
         // for objects that can still say which prefab object they are.
-        foreach (Guid prefabGuid in scene.AllObjects.Where(go => go.IsPrefabInstance)
+        foreach (Guid prefabGuid in objects.Where(go => go.IsPrefabInstance)
                      .Select(go => go.PrefabAssetId).Distinct().ToList())
-            SettleStrayPrefabContent(prefabGuid, scene);
+            SettleStrayPrefabContent(prefabGuid, objects);
 
-        foreach (GameObject go in scene.AllObjects.ToList())
-            if (IsInstanceRoot(go))
+        foreach (GameObject go in objects)
+            if (go.IsValid() && IsInstanceRoot(go))
                 ReconcileInstance(go);
     }
 

@@ -56,7 +56,7 @@ public class WindModule : ParticleSystemModule
         // Zones follow global time so gusts stay in step with grass, the swirls follow the system's own
         // clock so pausing, speed and scrubbing affect them. Wrapped to keep float precision.
         _turbulenceDrift = (float)(system.SimulationTime * TurbulenceSpeed % 65536.0);
-        _zone = WindZone.GetNearest(system.Transform.Position);
+        _zone = WindZone.GetNearest(system.GameObject.Scene, system.Transform.Position);
     }
 
     internal void Apply(ParticleSystemComponent system, ref Particle particle, float deltaTime)

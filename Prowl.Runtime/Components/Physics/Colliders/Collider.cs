@@ -121,7 +121,7 @@ public abstract class Collider : Component
     /// </summary>
     private void AttachToStatic()
     {
-        Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
+        SceneInstance? scene = GameObject.IsValid() ? GameObject.Scene : null;
         if (scene.IsNotValid() || scene.Physics == null)
             return;
 
@@ -222,7 +222,7 @@ public abstract class Collider : Component
 
         if (_attachedShapes != null)
         {
-            Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
+            SceneInstance? scene = GameObject.IsValid() ? GameObject.Scene : null;
             _registeredWorld = scene.IsValid() ? scene.Physics : null;
 
             foreach (RigidBodyShape shape in _attachedShapes)
@@ -239,7 +239,7 @@ public abstract class Collider : Component
         // refreshes it on a rescale. Every other collider is checked by the physics world when a transform
         // moves it, and once now, as a transform already woken this sync won't wake it again.
         bool onOwnBody = _attachedRigidbody3D.IsValid() && _attachedRigidbody3D.GameObject == GameObject;
-        Scene? owner = GameObject.IsValid() ? GameObject.Scene : null;
+        SceneInstance? owner = GameObject.IsValid() ? GameObject.Scene : null;
         if (!onOwnBody && owner.IsValid() && owner.Physics != null)
         {
             _watchingWorld = owner.Physics;

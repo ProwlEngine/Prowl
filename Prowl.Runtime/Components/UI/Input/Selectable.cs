@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Linq;
+
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -212,7 +214,7 @@ public class Selectable : UIBehaviour,
     /// <summary>Drives the color lerp toward the current state's target. Called every frame.</summary>
     public override void Update()
     {
-        if (!Application.IsPlaying) return;
+        if (!IsInPlayingWorld) return;
         if (_transition != SelectableTransition.ColorTint) return;
         if (TargetGraphic.IsNotValid()) return;
 
@@ -351,10 +353,10 @@ public class Selectable : UIBehaviour,
     // Navigation
     // ============================================================
 
-    /// <summary>Gives this widget keyboard focus through the active <see cref="EventSystem"/>.</summary>
+    /// <summary>Gives this widget keyboard focus through its world's <see cref="EventSystem"/>.</summary>
     public void Select()
     {
-        EventSystem? es = EventSystem.Current;
+        EventSystem? es = EventSystem.Of(GameObject);
         if (es.IsValid()) es.SetSelected(GameObject);
     }
 
@@ -396,7 +398,7 @@ public class Selectable : UIBehaviour,
     /// </summary>
     public Selectable? FindSelectable(Float2 dir)
     {
-        Scene? scene = GameObject.Scene;
+        SceneInstance? scene = GameObject.Scene;
         if (scene.IsNotValid()) return null;
         if (!TryWorldCenter(this, out Float3 origin, out Float4x4 model)) return null;
 
@@ -413,7 +415,7 @@ public class Selectable : UIBehaviour,
         Selectable? wrap = null;
         float wrapScore = float.NegativeInfinity;
 
-        foreach (GameObject go in scene.ActiveObjects)
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy))
         {
             foreach (Selectable candidate in go.GetComponents<Selectable>())
             {

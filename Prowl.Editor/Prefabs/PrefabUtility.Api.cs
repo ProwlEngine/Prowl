@@ -61,23 +61,26 @@ public static partial class PrefabUtility
     {
         if (go.IsNotValid() || !PrefabEditingMode.IsEditing) return false;
 
-        Scene? scene = go.Scene;
-        return scene.IsValid() && ReferenceEquals(scene, Scene.Current);
+        SceneInstance? scene = go.Scene;
+        return scene.IsValid() && ReferenceEquals(scene, PrefabEditingMode.World);
     }
 
     /// <summary>Every instance root of a prefab in the current scene.</summary>
     public static List<GameObject> FindInstancesOf(Guid prefabGuid)
     {
-        Scene scene = Scene.Current;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         return scene.IsNotValid() ? [] : FindInstancesOf(prefabGuid, scene);
     }
 
     /// <summary>Every instance root of a prefab in a given scene, open or not.</summary>
-    public static List<GameObject> FindInstancesOf(Guid prefabGuid, Scene scene)
-    {
-        if (scene.IsNotValid() || prefabGuid == Guid.Empty) return [];
+    public static List<GameObject> FindInstancesOf(Guid prefabGuid, SceneInstance scene)
+        => scene.IsNotValid() ? [] : FindInstancesAmong(prefabGuid, scene.Objects);
 
-        List<GameObject> belonging = [.. scene.AllObjects.Where(go => go.PrefabAssetId == prefabGuid)];
+    private static List<GameObject> FindInstancesAmong(Guid prefabGuid, IEnumerable<GameObject> objects)
+    {
+        if (prefabGuid == Guid.Empty) return [];
+
+        List<GameObject> belonging = [.. objects.Where(go => go.IsValid() && go.PrefabAssetId == prefabGuid)];
         List<GameObject> roots = [.. belonging.Where(IsInstanceRoot)];
         if (roots.Count > 0) return roots;
 

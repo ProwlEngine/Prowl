@@ -22,7 +22,7 @@ public class UITests : RuntimeTestBase
         public void OnPointerDown(PointerEventData e) => Presses++;
     }
 
-    private GameObject CreateUIObject(string name, Scene scene, GameObject? parent = null)
+    private GameObject CreateUIObject(string name, SceneInstance scene, GameObject? parent = null)
     {
         GameObject go = CreateGameObject(name);
         go.EnsureRectTransform();
@@ -35,7 +35,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void ButtonClick_DoesNotBubbleToEnclosingClickable()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject outer = CreateUIObject("Outer", scene);
         ClickCounter counter = outer.AddComponent<ClickCounter>();
         GameObject item = CreateUIObject("Item", scene, outer);
@@ -69,7 +69,7 @@ public class UITests : RuntimeTestBase
         system.UpdateButton(e, MouseButton.Left, false, true, false, releaseOn, null, moved, Float2.Zero, Float2.Zero, Float2.One, 0.2f);
     }
 
-    private (GameObject buttonGo, GameObject labelGo, Func<int> clicks) CreateButtonWithLabel(Scene scene, GameObject? parent)
+    private (GameObject buttonGo, GameObject labelGo, Func<int> clicks) CreateButtonWithLabel(SceneInstance scene, GameObject? parent)
     {
         GameObject buttonGo = CreateUIObject("Button", scene, parent);
         buttonGo.AddComponent<UIImage>();
@@ -84,7 +84,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Click_SurvivesSmallMoveWhenNothingDrags()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         (GameObject? buttonGo, GameObject _, Func<int>? clicks) = CreateButtonWithLabel(scene, null);
 
         PressMoveRelease(buttonGo, buttonGo);
@@ -95,7 +95,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Click_FiresWhenPressedOnLabelAndReleasedOnButton()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         (GameObject? buttonGo, GameObject? labelGo, Func<int>? clicks) = CreateButtonWithLabel(scene, null);
 
         PressMoveRelease(labelGo, buttonGo);
@@ -106,7 +106,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void LayoutIntrinsicSize_IgnoresSizeDeltaOnStretchedAxes()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject fixedGo = CreateUIObject("Fixed", scene);
         fixedGo.RectTransform!.SizeDelta = new Float2(50f, 30f);
 
@@ -116,7 +116,7 @@ public class UITests : RuntimeTestBase
         rt.AnchorMax = new Float2(1f, 0.5f);
         rt.SizeDelta = new Float2(-16f, 30f);
 
-        LayoutUtility.InvalidateCache();
+        LayoutUtility.InvalidateCache(scene);
         Assert.Equal(new Float2(50f, 30f), LayoutUtility.GetPreferredSize(fixedGo));
         Assert.Equal(new Float2(0f, 30f), LayoutUtility.GetPreferredSize(stretchedGo));
     }
@@ -124,19 +124,19 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void TextPreferredSize_FollowsTextAndWrapsAtWidth()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateUIObject("Text", scene);
         TextComponent text = go.AddComponent<TextComponent>();
         text.Text = "Some words that wrap";
 
-        LayoutUtility.InvalidateCache();
+        LayoutUtility.InvalidateCache(scene);
         Float2 unwrapped = LayoutUtility.GetPreferredSize(go);
         Assert.True(unwrapped.X > 0f && unwrapped.Y > 0f);
 
         // Narrower than the text, so the wrapped height is taller than one line.
         RectTransform rt = go.RectTransform!;
         rt.ComputedRect = new Rect(0f, 0f, unwrapped.X * 0.4f, unwrapped.Y);
-        LayoutUtility.InvalidateCache();
+        LayoutUtility.InvalidateCache(scene);
         Assert.True(LayoutUtility.GetPreferredSize(go).Y > unwrapped.Y);
     }
 
@@ -149,39 +149,34 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void MaskCull_KeepsChildrenOfAnElementOutsideTheMask()
     {
-        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
-        GameCanvas.ScreenSizeOverride = new Float2(1000f, 1000f);
-        try
-        {
-            Scene scene = CreateScene(enable: true);
-            GameObject canvasGo = CreateGameObject("Canvas");
-            scene.Add(canvasGo);
-            GameCanvas canvas = canvasGo.AddComponent<GameCanvas>();
+        SceneInstance scene = CreateScene(enable: true);
+        scene.Input.ScreenSize = new Float2(1000f, 1000f);
+        GameObject canvasGo = CreateGameObject("Canvas");
+        scene.Add(canvasGo);
+        GameCanvas canvas = canvasGo.AddComponent<GameCanvas>();
 
-            GameObject mask = CreateUIObject("Mask", scene, canvasGo);
-            mask.AddComponent<RectMask>();
+        GameObject mask = CreateUIObject("Mask", scene, canvasGo);
+        mask.AddComponent<RectMask>();
 
-            GameObject holder = CreateUIObject("Holder", scene, mask);
-            holder.RectTransform!.SizeDelta = Float2.Zero;
-            holder.RectTransform.AnchoredPosition = new Float2(300f, 0f);
+        GameObject holder = CreateUIObject("Holder", scene, mask);
+        holder.RectTransform!.SizeDelta = Float2.Zero;
+        holder.RectTransform.AnchoredPosition = new Float2(300f, 0f);
 
-            GameObject inside = CreateUIObject("Inside", scene, holder);
-            inside.RectTransform!.SizeDelta = new Float2(50f, 50f);
-            inside.RectTransform.AnchoredPosition = new Float2(-300f, 0f);
-            Box box = inside.AddComponent<Box>();
+        GameObject inside = CreateUIObject("Inside", scene, holder);
+        inside.RectTransform!.SizeDelta = new Float2(50f, 50f);
+        inside.RectTransform.AnchoredPosition = new Float2(-300f, 0f);
+        Box box = inside.AddComponent<Box>();
 
-            canvas.RebuildIfDirty();
+        canvas.RebuildIfDirty();
 
-            Assert.Contains(canvas.Tree.Items, item => ReferenceEquals(item.Owner, box));
-        }
-        finally { GameCanvas.ScreenSizeOverride = prevOverride; }
+        Assert.Contains(canvas.Tree.Items, item => ReferenceEquals(item.Owner, box));
     }
 
     [Fact]
     public void Canvases_AreListedByTheSceneTheyAreEnabledIn()
     {
-        Scene first = CreateScene(enable: true);
-        Scene second = CreateScene(enable: true);
+        SceneInstance first = CreateScene(enable: true);
+        SceneInstance second = CreateScene(enable: true);
         GameObject canvasGo = CreateGameObject("Canvas");
         first.Add(canvasGo);
         GameCanvas canvas = canvasGo.AddComponent<GameCanvas>();
@@ -207,38 +202,33 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Raycast_FollowsRotatedMask()
     {
-        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
-        GameCanvas.ScreenSizeOverride = new Float2(1000f, 1000f);
-        try
-        {
-            Scene scene = CreateScene(enable: true);
-            GameObject canvasGo = CreateGameObject("Canvas");
-            scene.Add(canvasGo);
-            canvasGo.AddComponent<GameCanvas>();
+        SceneInstance scene = CreateScene(enable: true);
+        scene.Input.ScreenSize = new Float2(1000f, 1000f);
+        GameObject canvasGo = CreateGameObject("Canvas");
+        scene.Add(canvasGo);
+        canvasGo.AddComponent<GameCanvas>();
 
-            GameObject mask = CreateUIObject("Mask", scene, canvasGo);
-            mask.AddComponent<RectMask>();
-            mask.RectTransform!.LocalRotation = Quaternion.AxisAngle(Float3.UnitZ, MathF.PI / 4f);
+        GameObject mask = CreateUIObject("Mask", scene, canvasGo);
+        mask.AddComponent<RectMask>();
+        mask.RectTransform!.LocalRotation = Quaternion.AxisAngle(Float3.UnitZ, MathF.PI / 4f);
 
-            GameObject content = CreateUIObject("Content", scene, mask);
-            content.RectTransform!.SizeDelta = new Float2(300f, 300f);
-            content.AddComponent<Box>();
+        GameObject content = CreateUIObject("Content", scene, mask);
+        content.RectTransform!.SizeDelta = new Float2(300f, 300f);
+        content.AddComponent<Box>();
 
-            Float2 window = new(1000f, 1000f);
-            // Inside the unrotated 100x100 rect around (500, 500) but outside the diamond.
-            Assert.False(UIRaycaster.TryPick(scene, new Float2(545f, 455f), window, out _));
-            // Outside the unrotated rect but inside the diamond.
-            Assert.True(UIRaycaster.TryPick(scene, new Float2(565f, 500f), window, out UIRaycaster.Hit hit));
-            Assert.Same(content, hit.GameObject);
-        }
-        finally { GameCanvas.ScreenSizeOverride = prevOverride; }
+        Float2 window = new(1000f, 1000f);
+        // Inside the unrotated 100x100 rect around (500, 500) but outside the diamond.
+        Assert.False(UIRaycaster.TryPick(scene, new Float2(545f, 455f), window, out _));
+        // Outside the unrotated rect but inside the diamond.
+        Assert.True(UIRaycaster.TryPick(scene, new Float2(565f, 500f), window, out UIRaycaster.Hit hit));
+        Assert.Same(content, hit.GameObject);
     }
 
     // Children the group doesn't control keep their own width, and alignment centers the run.
     [Fact]
     public void HorizontalGroup_RespectsChildControlWidthAndAlignment()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject row = CreateUIObject("Row", scene);
         HorizontalLayoutGroup group = row.AddComponent<HorizontalLayoutGroup>();
         group.ChildControlWidth = false;
@@ -250,7 +240,7 @@ public class UITests : RuntimeTestBase
         GameObject b = CreateUIObject("B", scene, row);
         b.RectTransform!.SizeDelta = new Float2(50f, 20f);
 
-        LayoutUtility.InvalidateCache();
+        LayoutUtility.InvalidateCache(scene);
         group.Arrange(new Rect(0f, 0f, 400f, 100f));
 
         Assert.Equal(new Rect(150f, 0f, 200f, 100f), a.RectTransform.ComputedRect);
@@ -271,50 +261,41 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void ColorChange_RebakesWithoutRelayout()
     {
-        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
-        GameCanvas.ScreenSizeOverride = new Float2(1000f, 1000f);
-        try
-        {
-            Scene scene = CreateScene(enable: true);
-            GameObject canvasGo = CreateGameObject("Canvas");
-            scene.Add(canvasGo);
-            GameCanvas canvas = canvasGo.AddComponent<GameCanvas>();
-            GameObject panel = CreateUIObject("Panel", scene, canvasGo);
-            ArrangeCounter counter = panel.AddComponent<ArrangeCounter>();
-            GameObject boxGo = CreateUIObject("Box", scene, panel);
-            boxGo.RectTransform!.SizeDelta = new Float2(50f, 50f);
-            Box box = boxGo.AddComponent<Box>();
+        SceneInstance scene = CreateScene(enable: true);
+        scene.Input.ScreenSize = new Float2(1000f, 1000f);
+        GameObject canvasGo = CreateGameObject("Canvas");
+        scene.Add(canvasGo);
+        GameCanvas canvas = canvasGo.AddComponent<GameCanvas>();
+        GameObject panel = CreateUIObject("Panel", scene, canvasGo);
+        ArrangeCounter counter = panel.AddComponent<ArrangeCounter>();
+        GameObject boxGo = CreateUIObject("Box", scene, panel);
+        boxGo.RectTransform!.SizeDelta = new Float2(50f, 50f);
+        Box box = boxGo.AddComponent<Box>();
 
-            canvas.RebuildIfDirty();
-            int arranges = counter.Arranges;
+        canvas.RebuildIfDirty();
+        int arranges = counter.Arranges;
 
-            box.Color = new Color(1f, 0f, 0f, 1f);
-            canvas.RebuildIfDirty();
+        box.Color = new Color(1f, 0f, 0f, 1f);
+        canvas.RebuildIfDirty();
 
-            Assert.Equal(arranges, counter.Arranges);
-            Assert.Equal(new Color32(255, 0, 0, 255), box.CachedMesh!.Colors32[0]);
-        }
-        finally { GameCanvas.ScreenSizeOverride = prevOverride; }
+        Assert.Equal(arranges, counter.Arranges);
+        Assert.Equal(new Color32(255, 0, 0, 255), box.CachedMesh!.Colors32[0]);
     }
 
     // A pause menu runs at a time scale of 0, and its buttons still have to show hover.
     [Fact]
     public void SelectableTint_AdvancesWhileGameIsPaused()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateUIObject("Button", scene);
         UIImage image = go.AddComponent<UIImage>();
         UIButton button = go.AddComponent<UIButton>();
         button.HighlightedColor = new Color(0.5f, 0.6f, 0.7f, 1f);
 
-        var paused = new TimeData { DeltaTime = 0f, UnscaledDeltaTime = 0.05f };
-        Time.TimeStack.Push(paused);
-        try
-        {
-            button.OnPointerEnter(new PointerEventData());
-            for (int i = 0; i < 4; i++) button.Update();
-        }
-        finally { Time.TimeStack.Pop(); }
+        SceneInstance.Main.Clock.Hold();
+        Time.AdvanceFrame(0.05f);
+        button.OnPointerEnter(new PointerEventData());
+        for (int i = 0; i < 4; i++) button.Update();
 
         Assert.Equal(button.HighlightedColor, image.Color);
     }
@@ -323,7 +304,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Click_IsCancelledWhenAnAncestorDrags()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject scroll = CreateUIObject("Scroll", scene);
         scroll.AddComponent<DragCatcher>();
         (GameObject? buttonGo, GameObject _, Func<int>? clicks) = CreateButtonWithLabel(scene, scroll);
@@ -336,7 +317,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Slider_SetValueWithoutNotify_ChangesValueSilently()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         UISlider slider = CreateUIObject("Slider", scene).AddComponent<UISlider>();
         int changes = 0;
         slider.OnValueChanged += _ => changes++;
@@ -352,7 +333,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Dropdown_SetValueWithoutNotify_ChangesValueSilently()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         UIDropdown dropdown = CreateUIObject("Dropdown", scene).AddComponent<UIDropdown>();
         dropdown.SetOptions(["A", "B", "C"]);
         int changes = 0;
@@ -367,7 +348,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Toggle_Click_FlipsAndNotifies_AndDrivesTheCheckmark()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateUIObject("Toggle", scene);
         UIToggle toggle = go.AddComponent<UIToggle>();
         UIImage check = CreateUIObject("Checkmark", scene, go).AddComponent<UIImage>();
@@ -389,7 +370,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Toggle_NotInteractable_IgnoresClicks()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         UIToggle toggle = CreateUIObject("Toggle", scene).AddComponent<UIToggle>();
         toggle.Interactable = false;
 
@@ -401,50 +382,69 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void WorldPointer_ClicksAWorldSpaceButtonAlongItsRay()
     {
-        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
-        GameCanvas.ScreenSizeOverride = new Float2(1000f, 1000f);
-        try
+        SceneInstance scene = CreateScene(enable: true);
+        scene.Input.ScreenSize = new Float2(1000f, 1000f);
+        GameObject canvasGo = CreateGameObject("Canvas");
+        canvasGo.Transform.Position = new Float3(0f, 0f, 2f);
+        canvasGo.Transform.LocalScale = new Float3(0.01f);
+        scene.Add(canvasGo);
+        GameCanvas canvas = canvasGo.AddComponent<GameCanvas>();
+        canvas.RenderMode = RenderMode.WorldSpace;
+        canvas.ReferenceResolution = new Float2(200f, 100f);
+
+        GameObject button = CreateUIObject("Button", scene, canvasGo);
+        RectTransform rect = button.RectTransform!;
+        rect.AnchorMin = rect.AnchorMax = rect.Pivot = Float2.Zero;
+        rect.AnchoredPosition = new Float2(50f, 25f);
+        rect.SizeDelta = new Float2(100f, 50f);
+        button.AddComponent<Box>();
+        ClickCounter counter = button.AddComponent<ClickCounter>();
+
+        GameObject systemGo = CreateGameObject("Event System");
+        scene.Add(systemGo);
+        EventSystem system = systemGo.AddComponent<EventSystem>();
+
+        void Point(Float3 from, bool pressed)
         {
-            Scene scene = CreateScene(enable: true);
-            GameObject canvasGo = CreateGameObject("Canvas");
-            canvasGo.Transform.Position = new Float3(0f, 0f, 2f);
-            canvasGo.Transform.LocalScale = new Float3(0.01f);
-            scene.Add(canvasGo);
-            GameCanvas canvas = canvasGo.AddComponent<GameCanvas>();
-            canvas.RenderMode = RenderMode.WorldSpace;
-            canvas.ReferenceResolution = new Float2(200f, 100f);
-
-            GameObject button = CreateUIObject("Button", scene, canvasGo);
-            RectTransform rect = button.RectTransform!;
-            rect.AnchorMin = rect.AnchorMax = rect.Pivot = Float2.Zero;
-            rect.AnchoredPosition = new Float2(50f, 25f);
-            rect.SizeDelta = new Float2(100f, 50f);
-            button.AddComponent<Box>();
-            ClickCounter counter = button.AddComponent<ClickCounter>();
-
-            GameObject systemGo = CreateGameObject("Event System");
-            scene.Add(systemGo);
-            EventSystem system = systemGo.AddComponent<EventSystem>();
-
-            void Point(Float3 from, bool pressed)
-            {
-                system.WorldPointer = new EventSystem.RayPointer { Ray = new Ray(from, Float3.UnitZ), Pressed = pressed };
-                system.Update();
-            }
-
-            // Beside the button the canvas has nothing to hit.
-            Point(new Float3(0.1f, 0.5f, 0f), false);
-            Assert.Null(system.WorldPointerDistance);
-
-            Point(new Float3(1f, 0.5f, 0f), false);
-            Point(new Float3(1f, 0.5f, 0f), true);
-            Point(new Float3(1f, 0.5f, 0f), false);
-
-            Assert.Equal(1, counter.Presses);
-            Assert.Equal(1, counter.Clicks);
-            Assert.Same(button, system.Hovered);
-            Assert.Equal(2f, system.WorldPointerDistance!.Value, 3);
+            system.WorldPointer = new EventSystem.RayPointer { Ray = new Ray(from, Float3.UnitZ), Pressed = pressed };
+            system.Update();
         }
-        finally { GameCanvas.ScreenSizeOverride = prevOverride; }
+
+        // Beside the button the canvas has nothing to hit.
+        Point(new Float3(0.1f, 0.5f, 0f), false);
+        Assert.Null(system.WorldPointerDistance);
+
+        Point(new Float3(1f, 0.5f, 0f), false);
+        Point(new Float3(1f, 0.5f, 0f), true);
+        Point(new Float3(1f, 0.5f, 0f), false);
+
+        Assert.Equal(1, counter.Presses);
+        Assert.Equal(1, counter.Clicks);
+        Assert.Same(button, system.Hovered);
+        Assert.Equal(2f, system.WorldPointerDistance!.Value, 3);
+    }
+
+    // A world drawn over another takes the pointer when its UI is under it, and the worlds below see no hit.
+    [Fact]
+    public void PointerArbitration_TheTopWorldWithUiUnderThePointerBlocksTheOnesBelow()
+    {
+        SceneInstance game = CreateScene(enable: true);
+        SceneInstance menu = CreateScene(enable: true);
+        foreach (SceneInstance world in new[] { game, menu })
+        {
+            world.Input.Viewport = new EventSystem.HostViewport { ReferenceSize = new Float2(1000f, 1000f), PointerPosition = new Float2(500f, 500f), ReceivesInput = true };
+            world.Create("Events").AddComponent<EventSystem>();
+        }
+        GameObject canvasGo = menu.Create("Canvas");
+        canvasGo.AddComponent<GameCanvas>();
+        CreateUIObject("Button", menu, canvasGo).AddComponent<Box>();
+
+        SceneInput.Arbitrate([game, menu]);
+        Assert.True(game.Input.PointerBlocked);
+        Assert.False(menu.Input.PointerBlocked);
+
+        menu.Input.Viewport = new EventSystem.HostViewport { ReferenceSize = new Float2(1000f, 1000f), PointerPosition = new Float2(10f, 10f), ReceivesInput = true };
+        SceneInput.Arbitrate([game, menu]);
+        Assert.False(game.Input.PointerBlocked);
     }
 }

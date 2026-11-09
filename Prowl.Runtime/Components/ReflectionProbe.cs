@@ -126,10 +126,14 @@ public class ReflectionProbe : Component, IRenderSync
     [Button("Bake")]
     public void Bake() { _bakeRequested = true; Wake(); }
 
+    /// <summary>Fires when a probe's baked capture arrives or is cleared, so the editor can mark its scene.</summary>
+    internal static event Action<ReflectionProbe>? BakedChanged;
+
     internal void SetBaked(BakedCubemap? baked)
     {
         _baked = baked;
         Wake();
+        BakedChanged?.Invoke(this);
     }
 
     // Syncs it again next frame, for a setting that changed

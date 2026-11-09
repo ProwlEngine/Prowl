@@ -20,9 +20,9 @@ public class NavMeshLinkTests : RuntimeTestBase
 {
     /// <summary>Two 8-wide floor islands separated by a 4-unit void gap (A: x -10..-2,
     /// B: x 2..10), with a surface ready to bake. Nothing walkable connects them.</summary>
-    private (Scene scene, NavMeshSurface surface) CreateGapScene()
+    private (SceneInstance scene, NavMeshSurface surface) CreateGapScene()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
 
         GameObject islandA = CreateGameObject("IslandA");
         scene.Add(islandA);
@@ -41,7 +41,7 @@ public class NavMeshLinkTests : RuntimeTestBase
         return (scene, surface);
     }
 
-    private NavMeshLink AddLink(Scene scene, float width = 0f)
+    private NavMeshLink AddLink(SceneInstance scene, float width = 0f)
     {
         GameObject linkGo = CreateGameObject("Link");
         scene.Add(linkGo);
@@ -60,7 +60,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_Id_IsDistinctPerComponentAndStable()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         NavMeshLink a = AddLink(scene);
         NavMeshLink b = AddLink(scene);
 
@@ -85,7 +85,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     {
         using (EditMode())
         {
-            (Scene scene, NavMeshSurface surface) = CreateGapScene();
+            (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
             AddLink(scene);
 
             Assert.True(surface.BuildNavMesh());
@@ -105,7 +105,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_ReportsTheConnectionTheMeshActuallyHolds()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         NavMeshLink link = AddLink(scene);
         link.Bidirectional = false;
         Assert.True(surface.BuildNavMesh());
@@ -147,7 +147,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Links_ChangedInOneFrame_RebuildInOnePass()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         var links = new List<NavMeshLink>();
         for (int i = 0; i < 6; i++)
             links.Add(AddLink(scene));
@@ -180,7 +180,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Links_MarkedFromAChangeHandler_SurviveTheDrain()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         NavMeshLink first = AddLink(scene);
         NavMeshLink second = AddLink(scene);
         Assert.True(surface.BuildNavMesh());
@@ -216,15 +216,15 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_ResolvesOnlyWithinItsOwnScene()
     {
-        Scene home = CreateScene(enable: true);
-        Scene other = CreateScene(enable: true);
+        SceneInstance home = CreateScene(enable: true);
+        SceneInstance other = CreateScene(enable: true);
         NavMeshLink link = AddLink(home);
 
         Assert.Same(link, home.Navigation.FindLink(link.LinkId));
         Assert.Null(other.Navigation.FindLink(link.LinkId));
     }
 
-    private static NavMeshPathStatus PathStatus(Scene scene, Float3 from, Float3 to, NavMeshAreaMask areaMask = default)
+    private static NavMeshPathStatus PathStatus(SceneInstance scene, Float3 from, Float3 to, NavMeshAreaMask areaMask = default)
     {
         var path = new NavMeshPath();
         return scene.Navigation.CalculatePath(from, to, path, areaMask) ? path.Status : NavMeshPathStatus.PathInvalid;
@@ -235,7 +235,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_BridgesGap_AndActivatedOffDoesNot()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
 
         Assert.True(surface.BuildNavMesh());
         Assert.Equal(NavMeshPathStatus.PathPartial, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
@@ -258,7 +258,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_SurvivesObstacleCarve()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         AddLink(scene);
         Assert.True(surface.BuildNavMesh());
         Assert.Equal(NavMeshPathStatus.PathComplete, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
@@ -285,7 +285,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_AddedAtRuntime()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         Assert.True(surface.BuildNavMesh());
         Assert.Equal(NavMeshPathStatus.PathPartial, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
 
@@ -300,7 +300,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_DisabledAtRuntime()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         NavMeshLink link = AddLink(scene);
         Assert.True(surface.BuildNavMesh());
         Assert.Equal(NavMeshPathStatus.PathComplete, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
@@ -322,7 +322,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_TurnedOffWhileTheNavMeshWasOffline_IsRemovedOnRegistration()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         NavMeshLink disabled = AddLink(scene);
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
@@ -350,7 +350,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_EditedWhileTheNavMeshWasOffline_IsRebuiltOnRegistration()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         NavMeshLink link = AddLink(scene);
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
@@ -368,7 +368,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_NotWalkableArea_IsNeverTraversable()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         NavMeshLink link = AddLink(scene);
         link.Area = NavMeshAreas.NotWalkable;
         Assert.True(surface.BuildNavMesh());
@@ -401,7 +401,7 @@ public class NavMeshLinkTests : RuntimeTestBase
                 new NavMeshAgentType { Id = 3, Name = "Scout", Radius = 0.4f },
             ]);
 
-            (Scene scene, NavMeshSurface surface) = CreateGapScene(); // agent type 0
+            (SceneInstance scene, NavMeshSurface surface) = CreateGapScene(); // agent type 0
             NavMeshLink link = AddLink(scene);
             Assert.True(surface.BuildNavMesh());
             Assert.Equal(NavMeshPathStatus.PathComplete, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
@@ -427,7 +427,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_RoundTripsOnAsset()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         AddLink(scene);
         Assert.True(surface.BuildNavMesh());
 
@@ -450,7 +450,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_OneDirectional_WorksOneWayOnly()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         NavMeshLink link = AddLink(scene);
         link.Bidirectional = false;
         Assert.True(surface.BuildNavMesh());
@@ -463,7 +463,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_AreaMask_ExcludingLinkAreaSeversRoute()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         AddLink(scene); // Area = Jump by default
         Assert.True(surface.BuildNavMesh());
 
@@ -494,7 +494,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_Width_EmitsParallelConnections()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         NavMeshLink link = AddLink(scene, width: 3f); // agent radius 0.5 → 3 connections
         Assert.True(surface.BuildNavMesh());
         Assert.Equal(3, CountOffMeshPolys(surface));
@@ -510,7 +510,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Agent_StoppedBesideALink_NeverEntersIt()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         AddLink(scene);
         Assert.True(surface.BuildNavMesh());
 
@@ -562,7 +562,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Agent_CrossesLink_AndReportsOffMeshState()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         NavMeshLink link = AddLink(scene);
         Assert.True(surface.BuildNavMesh());
 
@@ -603,7 +603,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_RuntimeToggle_RebuildsAffectedTiles()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         NavMeshLink link = AddLink(scene);
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
@@ -627,7 +627,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Agent_MidHop_NeverReportsArrival()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         AddLink(scene);
         Assert.True(surface.BuildNavMesh());
 
@@ -680,7 +680,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_EnabledBeforeSurfaceRegisters_CatchesUpOnStaleBake()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         NavMeshLink link = AddLink(scene);
 
         // Bake WITHOUT the link, then take the navmesh offline.
@@ -705,7 +705,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_BakedIn_ReregistrationTriggersNoRebuild()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         AddLink(scene);
         Assert.True(surface.BuildNavMesh()); // link baked in
         Tick(scene, 2);
@@ -729,7 +729,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     [Fact]
     public void Link_AutoUpdatePosition_FollowsTransform()
     {
-        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        (SceneInstance scene, NavMeshSurface surface) = CreateGapScene();
         NavMeshLink link = AddLink(scene);
         link.AutoUpdatePosition = true;
         Assert.True(surface.BuildNavMesh());

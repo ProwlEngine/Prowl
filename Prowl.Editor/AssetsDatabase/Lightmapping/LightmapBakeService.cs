@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 using Prowl.Aperture;
@@ -21,48 +22,82 @@ using Prowl.Vector;
 namespace Prowl.Editor.Lightmapping;
 
 /// <summary>
-/// Drives a lightmap bake for the open scene with Prowl.Photonic: gathers lightmap-static renderers
-/// + lights + probes, runs the CPU baker on its background thread, then (on the main thread) writes
-/// the atlas pages as RGBM PNGs into a SceneName_lightmaps folder, assigns per-renderer
-/// lightmap index/scale-offset, bakes + tetrahedralizes light probes, and saves the scene.
+/// Drives one lightmap bake over every loaded scene of the edit world with Prowl.Photonic, so shadows and bounced light
+/// cross between scenes. Each scene gets its own atlas pages in a SceneName_lightmaps folder beside its file, its own
+/// placements and its own light probes, and is marked dirty. A bake never saves a scene.
 /// </summary>
 public sealed class LightmapBakeService
 {
+    // One loaded scene's share of a bake: its renderers, its pages and its probes.
+    private sealed class SceneBake(OpenScene scene, SceneSection section)
+    {
+        public readonly OpenScene Scene = scene;
+        public readonly SceneSection Section = section;
+        public readonly List<(BakeMesh Mesh, Float4x4 Transform)> Meshes = [];
+        public readonly List<object> Renderers = [];   // MeshRenderer / SkinnedMeshRenderer, parallel to the atlas placements
+        public readonly List<Float3> Probes = [];
+        public AutoAtlasResult? Atlas;
+    }
+
     private LightmapBaker? _baker;
     private Job? _job;
-    private AutoAtlasResult? _atlas;
-    private readonly List<object> _renderers = [];    // MeshRenderer / SkinnedMeshRenderer, parallel to _atlas placements
+    private readonly List<SceneBake> _scenes = [];
     private readonly Dictionary<Guid, BakeTexture?> _texCache = []; // diffuse albedo, deduped per texture asset
     private int _bakeTexCounter;                                       // unique names for Photonic textures (its registry is name-keyed)
-    private List<Float3> _probePositions = [];
-    private Scene? _scene;
-    private Scene.LightmapBakeSettings _settings = new();
+    private SceneInstance? _world;
+    private LightmapBakeSettings _settings = new();
     private int _targetIterations;
-
-    // TEMP perf diagnostics
-    private System.Diagnostics.Stopwatch? _iterTimer;
-    private double _lastIterMs;
-    private int _lastIterCount;
-    private bool _statsReported;
 
     public bool IsBaking => _job != null;
     public float Progress { get; private set; }
     public string Status { get; private set; } = "Idle";
-    /// <summary>The scene the in-flight bake belongs to, or null when idle. Only one bake can run at
-    /// a time; callers showing bake UI for a scene should compare this against their own scene
-    /// rather than trusting <see cref="IsBaking"/> alone, which is true for any scene while baking.</summary>
-    public Scene? TargetScene => _scene;
 
-    /// <summary>Begin a bake of <paramref name="scene"/>. Returns false (with a logged reason) if there's nothing to bake.</summary>
-    public bool Start(Scene scene, Scene.LightmapBakeSettings settings)
+    /// <summary>The world the in-flight bake belongs to, or null when idle. Only one bake runs at a time.</summary>
+    public SceneInstance? TargetScene => _world;
+
+    /// <summary>The loaded scenes of <paramref name="world"/> a bake covers, in order. Empty outside the edit world.</summary>
+    public static List<OpenScene> BakedScenes(SceneInstance world)
+        => [.. EditorSceneManager.OpenScenes.Where(o => o.Section is { IsLoaded: true } s && ReferenceEquals(s.Instance, world))];
+
+    /// <summary>A loaded scene with no file yet, which blocks a bake since its pages would have nowhere to go.</summary>
+    public static OpenScene? UntitledScene(SceneInstance world) => BakedScenes(world).FirstOrDefault(o => o.Path == null);
+
+    /// <summary>
+    /// Begin one bake of every loaded scene of <paramref name="world"/> with the active scene's
+    /// <paramref name="settings"/>. Returns false, with a logged reason, when there is nothing to bake or a scene is untitled.
+    /// </summary>
+    public bool Start(SceneInstance world, LightmapBakeSettings settings)
     {
         if (IsBaking) return false;
-        _scene = scene;
+        if (Application.IsPlaying)
+        {
+            Runtime.Debug.LogWarning("[Lightmap] Leave play mode before baking.");
+            return false;
+        }
+        List<OpenScene> baked = BakedScenes(world);
+        if (baked.Count == 0)
+        {
+            Runtime.Debug.LogWarning("[Lightmap] Only the scenes open in the editor can be baked.");
+            return false;
+        }
+        if (baked.FirstOrDefault(o => o.Path == null) is { } untitled)
+        {
+            Runtime.Debug.LogWarning($"[Lightmap] Save '{untitled.Name}' before baking, so its lightmaps have a folder next to its file.");
+            return false;
+        }
+
+        _world = world;
         _settings = settings;
-        _renderers.Clear();
+        _scenes.Clear();
         _texCache.Clear();
         _bakeTexCounter = 0;
-        _probePositions = [];
+        var bySection = new Dictionary<SceneSection, SceneBake>(ReferenceEqualityComparer.Instance);
+        foreach (OpenScene open in baked)
+        {
+            var share = new SceneBake(open, open.Section!);
+            _scenes.Add(share);
+            bySection[share.Section] = share;
+        }
 
         var baker = new LightmapBaker();
         baker.Options.Bounces = settings.Bounces;
@@ -73,20 +108,18 @@ public sealed class LightmapBakeService
         baker.Options.SparseStride = Math.Max(1, settings.SparseStride);
         baker.Options.Diagnostics.IgnoreAlbedo = settings.IgnoreAlbedo;
         if (settings.BakeSkyLighting)
-            baker.Options.SkyColor = SceneSkyRadiance(scene);
+            baker.Options.SkyColor = SceneSkyRadiance(world);
 
-        BakeScene bake = baker.BeginScene(scene.Name ?? "Scene");
+        BakeScene bake = baker.BeginScene(world.Name ?? "Scene");
 
-        // --- Gather static renderers. Meshes with a usable lightmap UV (UV2, or UV0 as a fallback)
-        // get their own lightmap; the rest are added as occluders so they still cast shadows and
-        // bounce colour into lightmaps + probes (all static geometry contributes to the bake). ---
-        var meshes = new List<(BakeMesh mesh, Float4x4 transform)>();
-        var occluders = new List<(BakeMesh mesh, Float4x4 transform)>();
+        // Static renderers of every loaded scene. Meshes with a usable lightmap UV (UV2, or UV0 as a fallback) get a
+        // lightmap in their own scene's pages, the rest are occluders that still cast shadows and bounce colour.
+        var occluders = new List<(BakeMesh Mesh, Float4x4 Transform)>();
         int matCounter = 0;
         int meshKey = 0;
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in world.Objects)
         {
-            if (!go.IsStatic || !go.EnabledInHierarchy) continue;
+            if (!go.IsStatic || !go.EnabledInHierarchy || go.Section is not { } section || !bySection.TryGetValue(section, out SceneBake? share)) continue;
 
             Mesh? mesh;
             IReadOnlyList<Material> mats;
@@ -99,39 +132,42 @@ public sealed class LightmapBakeService
                 continue;
 
             Float4x4 xform = go.Transform.LocalToWorldMatrix;
-            if (hasLightmapUV) { meshes.Add((bm, xform)); _renderers.Add(renderer); }
+            if (hasLightmapUV) { share.Meshes.Add((bm, xform)); share.Renderers.Add(renderer); }
             else occluders.Add((bm, xform));
         }
 
-        if (meshes.Count == 0)
+        if (_scenes.All(share => share.Meshes.Count == 0))
         {
             Runtime.Debug.LogWarning("[Lightmap] No static renderers with UVs to lightmap. Mark objects Static (UV2 is used if present, otherwise the primary UVs).");
+            Cleanup();
             return false;
         }
 
-        // --- Lights (by bake mode). ---
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in world.Objects)
         {
             Light? light = go.GetComponent<Light>();
             if (light.IsNotValid() || !light.EnabledInHierarchy || light.BakeMode == LightBakeMode.Realtime) continue;
+            if (go.Section is not { } section || !bySection.ContainsKey(section)) continue;
             AddLight(bake, light);
         }
 
-        // --- Pack atlases. ---
-        _atlas = AutoAtlasPacker.Pack(baker, meshes, settings.AtlasSize, settings.AtlasSize, settings.TexelsPerUnit, padding: 2, bakeUVLayer: "UV1");
+        // Each scene packs into pages of its own. Photonic traces every page's instances together, so shadows and bounces
+        // still cross between scenes.
+        foreach (SceneBake share in _scenes)
+            if (share.Meshes.Count > 0)
+                share.Atlas = AutoAtlasPacker.Pack(baker, share.Meshes, settings.AtlasSize, settings.AtlasSize, settings.TexelsPerUnit, padding: 2, bakeUVLayer: "UV1");
 
-        // --- Occluders: present in the ray-traced scene (shadows + colour bounce) but never written
-        // into an atlas page. ReceivesLighting=false keeps them out of rasterization. ---
-        if (_atlas.Targets.Length > 0)
-            foreach (LightmapTarget target in _atlas.Targets)
-                foreach ((BakeMesh? om, Float4x4 ox) in occluders)
-                    target.AddBakeInstance(om, ox).ReceivesLighting = false;
+        // Occluders: in the traced scene (shadows and colour bounce) but never written into a page. One page is enough,
+        // since the trace sees every page's instances.
+        if (baker.Targets.Count > 0)
+            foreach ((BakeMesh om, Float4x4 ox) in occluders)
+                baker.Targets[0].AddBakeInstance(om, ox).ReceivesLighting = false;
 
-        // --- Probes. ---
-        foreach (GameObject go in scene.AllObjects)
+        foreach (GameObject go in world.Objects)
         {
             LightProbeGroup? grp = go.GetComponent<LightProbeGroup>();
-            if (grp.IsValid() && grp.EnabledInHierarchy) _probePositions.AddRange(grp.GetWorldPositions());
+            if (grp.IsNotValid() || !grp.EnabledInHierarchy || go.Section is not { } section || !bySection.TryGetValue(section, out SceneBake? share)) continue;
+            share.Probes.AddRange(grp.GetWorldPositions());
         }
 
         bake.End();
@@ -139,13 +175,7 @@ public sealed class LightmapBakeService
         _targetIterations = Math.Max(1, settings.Samples);
         _job = baker.Start();
         Progress = 0f;
-        Status = "Baking…";
-
-        // TEMP perf diagnostics: scene/atlas shape so we can compare against the demo.
-        _iterTimer = System.Diagnostics.Stopwatch.StartNew();
-        _lastIterMs = 0; _lastIterCount = 0; _statsReported = false;
-        Runtime.Debug.Log($"[LM perf] lightmapped={meshes.Count} occluders={occluders.Count} atlasPages={_atlas.Targets.Length} " +
-            $"atlasSize={settings.AtlasSize} texels/unit={settings.TexelsPerUnit} bounces={settings.Bounces} targetSamples={settings.Samples} threads={System.Environment.ProcessorCount}");
+        Status = "Baking...";
         return true;
     }
 
@@ -163,35 +193,24 @@ public sealed class LightmapBakeService
         }
 
         Progress = Math.Clamp(_job.IterationCount / (float)_targetIterations, 0f, 1f);
-        Status = $"Baking… {_job.IterationCount}/{_targetIterations}";
+        Status = $"Baking... {_job.IterationCount}/{_targetIterations}";
+        if (_job.IterationCount < _targetIterations) return;
 
-        // TEMP perf diagnostics: covered-texel count (once) + ms per iteration.
-        if (_atlas != null && _iterTimer != null && _job.IterationCount > _lastIterCount)
+        // The result marks the scenes it changed, which play mode never does, so it waits for play to end.
+        if (Application.IsPlaying)
         {
-            if (!_statsReported)
-            {
-                long covered = 0, total = 0;
-                foreach (LightmapTarget t in _atlas.Targets)
-                {
-                    ReadOnlySpan<byte> cov = t.Coverage;
-                    for (int i = 0; i < cov.Length; i++) if (cov[i] != 0) covered++;
-                    total += (long)t.Width * t.Height;
-                }
-                if (total > 0)
-                {
-                    Runtime.Debug.Log($"[LM perf] coveredTexels={covered:N0}/{total:N0} ({100.0 * covered / total:F0}% over {_atlas.Targets.Length} page(s)) each iteration shoots ~{covered:N0} primary rays x {_settings.Bounces} bounces");
-                    _statsReported = true;
-                }
-            }
-            double now = _iterTimer.Elapsed.TotalMilliseconds;
-            int it = _job.IterationCount;
-            double msPerIter = (now - _lastIterMs) / Math.Max(1, it - _lastIterCount);
-            Runtime.Debug.Log($"[LM perf] iter {it}: {msPerIter:F0} ms/iter");
-            _lastIterMs = now; _lastIterCount = it;
+            Status = "Waiting for play mode to end";
+            return;
         }
 
-        if (_job.IterationCount >= _targetIterations)
-            FinalizeBake();
+        try { FinalizeBake(); }
+        catch (Exception e)
+        {
+            Runtime.Debug.LogException("[Lightmap] Writing the bake threw", e);
+            DeleteStaging();
+            Cleanup();
+            Status = "Failed";
+        }
     }
 
     /// <summary> Cancels the current bake, if any, and resets the service to idle. </summary>
@@ -203,144 +222,163 @@ public sealed class LightmapBakeService
         Status = "Cancelled";
     }
 
-    /// <summary>Returns true if the scene currently has any baked lightmap pages or probes to clear.</summary>
-    public static bool HasBakedData(Scene scene) => scene.BakedLighting.HasLightmaps || scene.BakedLighting.HasProbes;
+    /// <summary>Whether any loaded scene of the world has baked lightmap pages or probes to clear.</summary>
+    public static bool HasBakedData(SceneInstance world)
+        => world.Sections.Any(s => !s.IsPersistent && (s.Lighting.HasLightmaps || s.Lighting.HasProbes));
+
+    // The folder a scene's pages live in, beside its file.
+    private static string LightmapFolderOf(string scenePath)
+    {
+        string sceneDir = Path.GetDirectoryName(scenePath)?.Replace('\\', '/') ?? "";
+        string sceneName = Path.GetFileNameWithoutExtension(scenePath);
+        return (string.IsNullOrEmpty(sceneDir) ? "" : sceneDir + "/") + sceneName + "_lightmaps";
+    }
 
     /// <summary>
-    /// Remove all baked lighting from the scene: delete the SceneName_lightmaps folder,
-    /// clear the scene's baked data + probes, and reset every renderer's lightmap index. Marks the scene dirty.
+    /// Removes every loaded scene's baked lighting: deletes each one's lightmaps folder and drops its pages, placements
+    /// and probes, marking each dirty. Unloaded scenes keep theirs. Saves nothing.
     /// </summary>
-    public void Clear(Scene scene)
+    public void Clear(SceneInstance world)
     {
         if (IsBaking) return;
+        EditorAssetBackend? db = EditorAssetBackend.Instance;
 
-        string scenePath = EditorSceneManager.CurrentScenePath ?? "";
-        if (!string.IsNullOrEmpty(scenePath) && Project.Current != null)
+        foreach (OpenScene open in BakedScenes(world))
         {
-            string assetsRoot = Project.Current.AssetsPath;
-            string sceneDir = Path.GetDirectoryName(scenePath)?.Replace('\\', '/') ?? "";
-            string sceneName = Path.GetFileNameWithoutExtension(scenePath);
-            string lmFolderAbs = Path.Combine(assetsRoot, (string.IsNullOrEmpty(sceneDir) ? "" : sceneDir + "/") + sceneName + "_lightmaps");
-            try { if (Directory.Exists(lmFolderAbs)) Directory.Delete(lmFolderAbs, true); } catch { }
+            if (open.Path is { } path && db != null && Project.Current != null && Directory.Exists(Path.Combine(Project.Current.AssetsPath, LightmapFolderOf(path))))
+                db.DeleteAssetFolder(LightmapFolderOf(path));
+            open.Section!.Lighting = new SceneLighting();
+            EditorSceneManager.MarkDirty(open);
         }
+        world.InvalidateProbeVolume();
 
-        // Everything the bake produced lives on the scene, so clearing is dropping it. Nothing has to be
-        // walked and reset object by object.
-        scene.BakedLighting = new Scene.BakedLightingData();
-        scene.InvalidateProbeVolume();
-
-        SaveBakeResult();
         Status = "Cleared";
         Runtime.Debug.Log("[Lightmap] Cleared baked lighting.");
     }
 
     /// <summary>The scene's ambient light reaching an upward surface, as a flat sky radiance for rays that miss.</summary>
-    private static Float3 SceneSkyRadiance(Scene scene) => scene.Rendering.Ambient(Float3.UnitY);
+    private static Float3 SceneSkyRadiance(SceneInstance scene) => scene.Rendering.Ambient(Float3.UnitY);
 
     private void FinalizeBake()
     {
-        Status = "Writing lightmaps…";
+        Status = "Writing lightmaps...";
         LightmapBaker baker = _baker!;
-        AutoAtlasResult atlas = _atlas!;
-        Scene scene = _scene!;
+        SceneInstance world = _world!;
         baker.Cancel();        // stop the progressive job
         baker.Job?.Wait();     // ensure the worker stopped writing before we read the atlas buffers
 
         EditorAssetBackend? db = EditorAssetBackend.Instance;
-        string scenePath = EditorSceneManager.CurrentScenePath ?? "";
-        if (db == null || string.IsNullOrEmpty(scenePath))
+        if (db == null || Project.Current == null)
         {
-            Runtime.Debug.LogError("[Lightmap] Can't save baked data: no saved scene.");
+            Runtime.Debug.LogError("[Lightmap] Can't save baked data: no project is open.");
             Cleanup();
             return;
         }
 
-        string assetsRoot = Project.Current!.AssetsPath;
-        string sceneDir = Path.GetDirectoryName(scenePath)?.Replace('\\', '/') ?? "";
-        string sceneName = Path.GetFileNameWithoutExtension(scenePath);
-        string lmFolderRel = (string.IsNullOrEmpty(sceneDir) ? "" : sceneDir + "/") + sceneName + "_lightmaps";
-        string lmFolderAbs = Path.Combine(assetsRoot, lmFolderRel);
-        string stagingRel = lmFolderRel + "_baking";
-        string stagingAbs = Path.Combine(assetsRoot, stagingRel);
-
-        // New pages go to a staging folder so the previous bake stays intact until all of them import.
-        if (Directory.Exists(stagingAbs)) db.DeleteAssetFolder(stagingRel);
-        Directory.CreateDirectory(stagingAbs);
-
-        // Write + import each atlas page (RGBM PNG).
-        (byte[][] pages, float scale) = EncodePages(atlas.Targets);
-        var lightmaps = new List<Texture2D>();
-        for (int i = 0; i < atlas.Targets.Length; i++)
+        // Every scene's new pages go to a staging folder first, so the previous bake stays intact until all of them import.
+        var written = new List<(SceneBake Share, string Folder, string Staging, List<Texture2D> Pages, float Scale)>();
+        foreach (SceneBake share in _scenes)
         {
-            LightmapTarget t = atlas.Targets[i];
-            string rel = $"{stagingRel}/Lightmap-{i}.png";
-            string pageAbs = Path.Combine(stagingAbs, $"Lightmap-{i}.png");
-            WritePng(pageAbs, pages[i], t.Width, t.Height);
-            WriteLightmapMeta(pageAbs);
-            Guid guid = db.ImportFile(rel);
-            if (AssetDatabase.Get<Texture2D>(guid) is not { } lightmap)
+            if (!share.Section.IsLoaded || share.Scene.Path is not { } path) continue;
+            string folder = LightmapFolderOf(path);
+            string staging = folder + "_baking";
+            var pages = new List<Texture2D>();
+            float scale = 1f;
+            if (share.Atlas is { Targets.Length: > 0 } atlas)
             {
-                // Placements address pages by index, so a missing page cannot be skipped.
-                Runtime.Debug.LogError($"[Lightmap] Could not import '{rel}', so the bake was not applied.");
-                db.DeleteAssetFolder(stagingRel);
-                Cleanup();
-                return;
+                string stagingAbs = Path.Combine(Project.Current.AssetsPath, staging);
+                if (Directory.Exists(stagingAbs)) db.DeleteAssetFolder(staging);
+                Directory.CreateDirectory(stagingAbs);
+
+                (byte[][] encoded, scale) = EncodePages(atlas.Targets);
+                for (int i = 0; i < atlas.Targets.Length; i++)
+                {
+                    LightmapTarget t = atlas.Targets[i];
+                    string pageAbs = Path.Combine(stagingAbs, $"Lightmap-{i}.png");
+                    WritePng(pageAbs, encoded[i], t.Width, t.Height);
+                    WriteLightmapMeta(pageAbs);
+                    if (AssetDatabase.Get<Texture2D>(db.ImportFile($"{staging}/Lightmap-{i}.png")) is not { } page)
+                    {
+                        // Placements address pages by index, so a missing page cannot be skipped.
+                        Runtime.Debug.LogError($"[Lightmap] Could not import '{staging}/Lightmap-{i}.png', so the bake was not applied.");
+                        foreach ((SceneBake _, string _, string done, List<Texture2D> _, float _) in written) db.DeleteAssetFolder(done);
+                        db.DeleteAssetFolder(staging);
+                        Cleanup();
+                        return;
+                    }
+                    pages.Add(page);
+                }
             }
-            lightmaps.Add(lightmap);
+            written.Add((share, folder, staging, pages, scale));
         }
 
-        if (Directory.Exists(lmFolderAbs)) db.DeleteAssetFolder(lmFolderRel);
-        if (!db.MoveFolder(stagingRel, lmFolderRel))
-            Runtime.Debug.LogWarning($"[Lightmap] Could not move the new pages to '{lmFolderRel}', they stay in '{stagingRel}'.");
-        scene.BakedLighting.Lightmaps = lightmaps;
-        scene.BakedLighting.LightmapScale = scale;
+        // Every probe bakes in one pass against the whole traced scene, then each scene keeps and tetrahedralizes its own.
+        Status = "Baking probes...";
+        List<Float3> allProbes = [.. written.SelectMany(w => w.Share.Probes)];
+        Sh9Rgb[] sh = allProbes.Count > 0 ? baker.BakeProbes(allProbes, _settings.ProbeSamples, _settings.Bounces) : [];
 
-        // Record where each baked surface landed, against the object it is on. A rebake replaces the
-        // whole set, so a renderer that is no longer baked simply has no placement.
-        scene.BakedLighting.Placements.Clear();
-        for (int i = 0; i < _renderers.Count && i < atlas.Instances.Length; i++)
+        int probeStart = 0;
+        foreach ((SceneBake share, string folder, string staging, List<Texture2D> pages, float scale) in written)
         {
-            if (_renderers[i] is not Component renderer || renderer.IsNotValid()) continue;
+            if (Directory.Exists(Path.Combine(Project.Current.AssetsPath, folder))) db.DeleteAssetFolder(folder);
+            if (pages.Count > 0 && !db.MoveFolder(staging, folder))
+                Runtime.Debug.LogWarning($"[Lightmap] Could not move the new pages to '{folder}', they stay in '{staging}'.");
 
-            GameObject owner = renderer.GameObject;
-            if (owner.IsNotValid()) continue;
+            SceneLighting lighting = share.Section.Lighting;
+            lighting.Lightmaps = pages;
+            lighting.LightmapScale = scale;
 
-            BakeInstance inst = atlas.Instances[i];
-            scene.BakedLighting.Placements[owner.Identifier] = new Scene.LightmapPlacement
+            // Where each baked surface landed, against the object it is on. A rebake replaces the whole set, so a renderer
+            // that is no longer baked simply has no placement.
+            lighting.Placements.Clear();
+            if (share.Atlas is { } atlas)
             {
-                Index = atlas.Placements[i].AtlasIndex,
-                ScaleOffset = new Float4(inst.UVScale.X, inst.UVScale.Y, inst.UVOffset.X, inst.UVOffset.Y)
-            };
-        }
+                for (int i = 0; i < share.Renderers.Count && i < atlas.Instances.Length; i++)
+                {
+                    if (share.Renderers[i] is not Component renderer || renderer.IsNotValid() || renderer.GameObject.IsNotValid()) continue;
+                    BakeInstance inst = atlas.Instances[i];
+                    lighting.Placements[renderer.GameObject.Identifier] = new LightmapPlacement
+                    {
+                        Index = atlas.Placements[i].AtlasIndex,
+                        ScaleOffset = new Float4(inst.UVScale.X, inst.UVScale.Y, inst.UVOffset.X, inst.UVOffset.Y),
+                    };
+                }
+            }
 
-        // Probes: bake SH + tetrahedralize.
-        if (_probePositions.Count > 0)
-        {
-            Status = "Baking probes…";
-            Sh9Rgb[] sh = baker.BakeProbes(_probePositions, _settings.ProbeSamples, _settings.Bounces);
-            var runtimeSH = new SphericalHarmonicsL2[sh.Length];
-            for (int i = 0; i < sh.Length; i++) runtimeSH[i] = ConvertSH(sh[i]);
-            ProbeTetrahedralizer.Result tet = ProbeTetrahedralizer.Build(_probePositions);
+            lighting.MarkChanged();
 
-            scene.BakedLighting.ProbePositions = [.. _probePositions];
-            scene.BakedLighting.ProbeSH = runtimeSH;
-            scene.BakedLighting.ProbeTetrahedra = tet.Tetrahedra;
-            scene.BakedLighting.ProbeTetNeighbours = tet.Neighbours;
-            scene.InvalidateProbeVolume();
-        }
-        else
-        {
-            scene.BakedLighting.ProbePositions = [];
-            scene.BakedLighting.ProbeSH = [];
-            scene.BakedLighting.ProbeTetrahedra = [];
-            scene.BakedLighting.ProbeTetNeighbours = [];
-            scene.InvalidateProbeVolume();
-        }
+            int count = share.Probes.Count;
+            var probeSH = new SphericalHarmonicsL2[count];
+            for (int i = 0; i < count; i++) probeSH[i] = ConvertSH(sh[probeStart + i]);
+            probeStart += count;
+            ProbeTetrahedralizer.Result tet = count > 0 ? ProbeTetrahedralizer.Build(share.Probes) : new ProbeTetrahedralizer.Result { Tetrahedra = [], Neighbours = [] };
+            lighting.ProbePositions = [.. share.Probes];
+            lighting.ProbeSH = probeSH;
+            lighting.ProbeTetrahedra = tet.Tetrahedra;
+            lighting.ProbeTetNeighbours = tet.Neighbours;
 
-        SaveBakeResult();
-        Runtime.Debug.Log($"[Lightmap] Baked {lightmaps.Count} lightmap page(s), {_renderers.Count} renderer(s), {_probePositions.Count} probe(s).");
+            EditorSceneManager.MarkDirty(share.Scene);
+        }
+        world.InvalidateProbeVolume();
+
+        Runtime.Debug.Log($"[Lightmap] Baked {written.Count} scene(s): {written.Sum(w => w.Pages.Count)} lightmap page(s), "
+            + $"{_scenes.Sum(share => share.Renderers.Count)} renderer(s), {allProbes.Count} probe(s). Save the scenes to keep the result.");
         Cleanup();
         Status = "Done";
+    }
+
+    // Drops the staging folders a bake that failed while writing left behind.
+    private void DeleteStaging()
+    {
+        EditorAssetBackend? db = EditorAssetBackend.Instance;
+        if (db == null || Project.Current == null) return;
+        foreach (SceneBake share in _scenes)
+        {
+            if (share.Scene.Path is not { } path) continue;
+            string staging = LightmapFolderOf(path) + "_baking";
+            try { if (Directory.Exists(Path.Combine(Project.Current.AssetsPath, staging))) db.DeleteAssetFolder(staging); }
+            catch (Exception e) { Runtime.Debug.LogWarning($"[Lightmap] Could not remove '{staging}': {e.Message}"); }
+        }
     }
 
     private void Cleanup()
@@ -348,8 +386,8 @@ public sealed class LightmapBakeService
         _baker?.Dispose();
         _baker = null;
         _job = null;
-        _atlas = null;
-        _renderers.Clear();
+        _world = null;
+        _scenes.Clear();
         _texCache.Clear();
         Progress = 0f;
     }
@@ -572,12 +610,5 @@ public sealed class LightmapBakeService
             Format = ImageFormat.Png,
             FlipVertically = true,
         });
-    }
-
-    // The old pages are deleted from disk, so a scene with a file is saved at once or it would point at them.
-    private static void SaveBakeResult()
-    {
-        EditorSceneManager.MarkDirty();
-        if (EditorSceneManager.CurrentScenePath != null) EditorSceneManager.Save();
     }
 }

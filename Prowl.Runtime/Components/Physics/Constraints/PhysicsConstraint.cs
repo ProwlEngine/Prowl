@@ -83,7 +83,7 @@ public abstract class PhysicsConstraint : Component
 
     public override void OnEnable()
     {
-        Resources.Scene scene = GameObject.Scene;
+        Resources.SceneInstance scene = GameObject.Scene;
         _registeredWorld = scene.IsValid() ? scene.Physics : null;
         _registeredWorld?.RegisterConstraint(this);
         RecreateConstraint();
@@ -200,7 +200,7 @@ public abstract class PhysicsConstraint : Component
 
         // Reached from property setters as well as the lifecycle, so the scene can be mid-teardown
         // here; Scene.Physics throws once the scene is disposed.
-        Resources.Scene scene = GameObject.IsValid() ? GameObject.Scene : null;
+        Resources.SceneInstance scene = GameObject.IsValid() ? GameObject.Scene : null;
         World world = scene.IsValid() ? scene.Physics?.World : null;
         if (world == null) return;
 
@@ -226,7 +226,7 @@ public abstract class PhysicsConstraint : Component
 
     private void ApplyCollideConnected()
     {
-        Resources.Scene scene = GameObject.IsValid() ? GameObject.Scene : null;
+        Resources.SceneInstance scene = GameObject.IsValid() ? GameObject.Scene : null;
         if (scene.IsNotValid() || scene.Physics == null) return;
 
         foreach (Constraint constraint in GetConstraints())

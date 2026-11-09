@@ -11,4 +11,6 @@ PROWLCO004 | Correctness | Error | ComponentConstructorAnalyzer
 PROWLEO001 | Correctness | Error | EngineObjectNullAnalyzer
 PROWLEO002 | Correctness | Error | EngineObjectNullAnalyzer
 PROWLEO003 | Correctness | Error | EngineObjectNullAnalyzer
+PROWLSC001 | Correctness | Error | SceneAnalyzer
+PROWLSC002 | Usage | Warning | SceneAnalyzer
 PROWLTH001 | Reliability | Warning | BlockingWaitAnalyzer
