@@ -447,6 +447,27 @@ public class MultiSceneTests : EditorTestHarness
     }
 
     [Fact]
+    public void DuplicateAndPaste_KeepTheCopyInItsSourcesScene()
+    {
+        Open(Author("A.scene", "a"));
+        OpenScene b = Additive(Author("B.scene", "b"));
+        GameObject source = Root(b);
+
+        GameObject duplicate = Assert.Single(GUI.GameObjectClipboard.Duplicate([source]));
+        Assert.Same(b.Section, duplicate.Section);
+
+        Input.PushHandler(new FakeClipboardInput());
+        try
+        {
+            Selection.Select(source);
+            GUI.GameObjectClipboard.Copy([source]);
+            GameObject pasted = Assert.Single(GUI.GameObjectClipboard.Paste());
+            Assert.Same(b.Section, pasted.Section);
+        }
+        finally { Input.PopHandler(); }
+    }
+
+    [Fact]
     public void AReferenceField_RefusesAnObjectFromAnotherScene_NamingIt()
     {
         OpenScene a = Open(Author("A.scene", "a"));
