@@ -2192,8 +2192,7 @@ public static class Undo
         public EngineObject? Find(Guid id)
         {
             if (_built.TryGetValue(id, out EngineObject? built) && built.IsValid()) return built;
-            EngineObject? found = Within != null ? FindIn(Scene, Within, id) : null;
-            return found.IsValid() ? found : FindIn(Scene, null, id);
+            return FindIn(Scene, Within, id);
         }
 
         public void AttachGameObject(Guid id, Placement placement, bool select)
