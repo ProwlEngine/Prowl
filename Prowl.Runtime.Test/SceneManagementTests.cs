@@ -4,6 +4,7 @@
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.UI;
+using Prowl.Vector;
 
 using Xunit;
 
@@ -576,6 +577,42 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.Equal(SceneState.Destroyed, world.State);
         Assert.DoesNotContain(world, SceneInstance.All);
         Assert.ThrowsAny<InvalidOperationException>(world.Activate);
+    }
+
+    [Fact]
+    public void Destroy_UnloadsEverySection()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        SceneSection level = world.ActiveSection;
+        List<SceneSection> unloading = [];
+        void Handler(SceneSection s) => unloading.Add(s);
+        SceneInstance.Unloading += Handler;
+        try { world.Dispose(); }
+        finally { SceneInstance.Unloading -= Handler; }
+
+        Assert.False(level.IsLoaded);
+        Assert.True(level.UnloadToken.IsCancellationRequested);
+        Assert.Contains(level, unloading);
+        Assert.Throws<InvalidOperationException>(() => new GameObject("Late").MoveTo(level));
+    }
+
+    private sealed class RaycastOnDisable : Component
+    {
+        public bool Hit;
+        public override void OnDisable() => Hit = Physics.Raycast(new Float3(0, 0, -5), new Float3(0, 0, 1), 10f);
+    }
+
+    [Fact]
+    public void Destroy_KeepsPhysicsUntilEverythingIsDisabled()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        RaycastOnDisable probe = world.Create("Probe").AddComponent<RaycastOnDisable>();
+        world.Create("Wall").AddComponent<BoxCollider>();
+        Tick(world, 1);
+
+        world.Dispose();
+
+        Assert.True(probe.Hit);
     }
 
     [Fact]

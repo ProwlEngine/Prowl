@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Runtime.CompilerServices;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -449,7 +450,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// </summary>
     internal SceneSection ReplaceContent(SceneContent content, string name, Scene? source)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         MainThreadContext.AssertOwner(this);
         var section = new SceneSection(this, name, persistent: false) { Source = source };
 
@@ -465,7 +466,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>Adds a section made from <paramref name="content"/> after the others, at once, leaving the active section.</summary>
     internal SceneSection AddContent(SceneContent content, string name, Scene? source)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         MainThreadContext.AssertOwner(this);
         var section = new SceneSection(this, name, persistent: false) { Source = source };
         _sections.Add(section);
@@ -480,7 +481,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>Unloads <paramref name="section"/> at once, the way a queued unload applies at the safe point.</summary>
     internal void UnloadNow(SceneSection section)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         MainThreadContext.AssertOwner(this);
         if (section.IsPersistent || !ReferenceEquals(section.Instance, this) || !section.IsLoaded) return;
         if (_sections.Count(s => !s.IsPersistent) <= 1) throw new InvalidOperationException($"'{section.Name}' is the last section of '{Name}'.");
@@ -517,7 +518,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// OnRemovedFromScene, then every dispose, each object guarded on its own. Anything created into a section while
     /// it tears down, or destroyed meanwhile, goes in the same passes. Then the sections leave the world.
     /// </summary>
-    private void TearDownSections(List<SceneSection> sections)
+    private void TearDownSections(List<SceneSection> sections, bool rebuildProbes = true)
     {
         using SceneScope active = Enter(this);
         foreach (SceneSection section in sections)
@@ -538,10 +539,11 @@ public class SceneInstance : EngineObject, ISerializable
                         if (!c.IsDisposed && c.HasBeenEnabled && c.EnabledInHierarchy)
                             Guarded(c, "OnDisable", c.InternalOnDisable);
 
-                // An object OnDisable moved out, like one made persistent, stays and enables again.
+                // An object OnDisable moved out, like one made persistent, stays and enables again. One moved to
+                // another world already went through its lifecycle there.
                 var kept = objects.FindAll(g => !g.IsDisposed && g.Section is { } s && !sections.Contains(s)).ToHashSet();
                 objects.RemoveAll(kept.Contains);
-                foreach (GameObject g in kept)
+                foreach (GameObject g in kept.Where(g => ReferenceEquals(g.Scene, this)))
                     foreach (Component c in g._components.ToArray())
                         if (!c.IsDisposed && c.EnabledInHierarchy)
                             Guarded(c, "OnEnable", c.InternalOnEnable);
@@ -564,7 +566,7 @@ public class SceneInstance : EngineObject, ISerializable
 
         foreach (SceneSection section in sections)
             RemoveSection(section);
-        RebuildProbes(keepPrevious: false);
+        if (rebuildProbes) RebuildProbes(keepPrevious: false);
     }
 
     /// <summary>The scene the active section was loaded from, if any.</summary>
@@ -659,7 +661,7 @@ public class SceneInstance : EngineObject, ISerializable
     [NotHeld]
     private PhysicsWorld _physics = new();
 
-    public PhysicsWorld Physics { get { EnsureNotDisposed(); return _physics; } }
+    public PhysicsWorld Physics { get { EnsureLive(); return _physics; } }
 
     [SerializeIgnore, NotHeld]
     private readonly NavMeshWorld _navigation = new();
@@ -667,10 +669,10 @@ public class SceneInstance : EngineObject, ISerializable
     private readonly SceneAnimation _animation = new();
 
     /// <summary>This scene's navigation state (registered navmeshes, queries, crowd).</summary>
-    public NavMeshWorld Navigation { get { EnsureNotDisposed(); return _navigation; } }
+    public NavMeshWorld Navigation { get { EnsureLive(); return _navigation; } }
 
     /// <summary>Every animator in the scene, advanced once per frame in its own phase.</summary>
-    public SceneAnimation Animation { get { EnsureNotDisposed(); return _animation; } }
+    public SceneAnimation Animation { get { EnsureLive(); return _animation; } }
 
     // Rebuilds lazily, so it can still list removed components.
     [SerializeIgnore, NotHeld]
@@ -726,7 +728,7 @@ public class SceneInstance : EngineObject, ISerializable
     private SceneRendering? _rendering;
 
     /// <summary>The scene's link to Graphite: its render world and what keeps state in it.</summary>
-    public SceneRendering Rendering { get { EnsureNotDisposed(); return _rendering ??= new SceneRendering(this); } }
+    public SceneRendering Rendering { get { EnsureLive(); return _rendering ??= new SceneRendering(this); } }
 
     /// <summary>
     /// Called once after a hot reload has migrated the scene graph in place: each GameObject drops removed
@@ -827,7 +829,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>Adds an empty section after the others. It unloads like any other.</summary>
     public SceneSection CreateSection(string name)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         var section = new SceneSection(this, name, persistent: false);
         _sections.Add(section);
         return section;
@@ -890,7 +892,7 @@ public class SceneInstance : EngineObject, ISerializable
     {
         get
         {
-            EnsureNotDisposed();
+            EnsureLive();
             ProbeSet? probes = Probes;
             if (_probeVolume == null && probes != null)
                 _probeVolume = new LightProbeVolume(probes.Positions, probes.SH, probes.Tetrahedra, probes.Neighbours);
@@ -905,7 +907,7 @@ public class SceneInstance : EngineObject, ISerializable
     // of an unloaded level never light the next one.
     internal void RebuildProbes(bool keepPrevious)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         CancelProbeRebuild();
 
         List<SceneLighting> baked = [];
@@ -958,13 +960,13 @@ public class SceneInstance : EngineObject, ISerializable
     internal int BakedLightingVersion;
 
     /// <summary>How many objects are in this world, children included.</summary>
-    public int ObjectCount { get { EnsureNotDisposed(); return _allObj.Count(o => !o.IsDisposed); } }
+    public int ObjectCount { get { EnsureLive(); return _allObj.Count(o => !o.IsDisposed); } }
 
     /// <summary>Every object in this world, children included, in the order they joined. Enumerating does not allocate.</summary>
-    public SceneObjects Objects { get { EnsureNotDisposed(); return new SceneObjects(_allObj); } }
+    public SceneObjects Objects { get { EnsureLive(); return new SceneObjects(_allObj); } }
 
     /// <summary>Every object a save writes: not marked DontSave, and not under one that is.</summary>
-    internal IEnumerable<GameObject> SaveableObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && IsSaveable(o)); } }
+    internal IEnumerable<GameObject> SaveableObjects { get { EnsureLive(); return _allObj.Where(o => !o.IsDisposed && IsSaveable(o)); } }
 
     /// <summary>
     /// False for an object marked <see cref="HideFlags.DontSave"/> or <see cref="HideFlags.HideAndDontSave"/>,
@@ -983,7 +985,7 @@ public class SceneInstance : EngineObject, ISerializable
     {
         get
         {
-            EnsureNotDisposed();
+            EnsureLive();
             List<GameObject> roots = [];
             foreach (SceneSection section in _sections)
                 roots.AddRange(section.LiveRoots);
@@ -1049,7 +1051,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>The first enabled component of type <typeparamref name="T"/> in this world, or null.</summary>
     public T? Get<T>() where T : class
     {
-        EnsureNotDisposed();
+        EnsureLive();
         foreach (Component component in IndexFor(typeof(T)).Items)
             if (component.EnabledInHierarchy)
                 return component as T;
@@ -1067,7 +1069,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>Copies every component of type <typeparamref name="T"/> in this world into <paramref name="results"/>, cleared first.</summary>
     public void GetAll<T>(List<T> results, bool includeDisabled = false) where T : class
     {
-        EnsureNotDisposed();
+        EnsureLive();
         results.Clear();
         foreach (Component component in IndexFor(typeof(T)).Items)
             if (includeDisabled || component.EnabledInHierarchy)
@@ -1077,7 +1079,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>The first object with this name, depth first through the roots.</summary>
     public GameObject? FindObject(string name)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         foreach (GameObject go in _allObj)
             if (!go.IsDisposed && go.Name == name)
                 return go;
@@ -1087,7 +1089,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>The object at a path of names from a root, like "Level/Props/Door".</summary>
     public GameObject? FindObjectByPath(string path)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         string[] names = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (names.Length == 0) return null;
         foreach (GameObject root in Roots)
@@ -1104,7 +1106,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>The first object with this tag.</summary>
     public GameObject? FindObjectWithTag(string tag)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         foreach (GameObject go in _allObj)
             if (!go.IsDisposed && go.Tag == tag)
                 return go;
@@ -1114,7 +1116,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>Every object with this tag, copied into <paramref name="results"/>, cleared first.</summary>
     public void FindObjectsWithTag(string tag, List<GameObject> results)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         results.Clear();
         foreach (GameObject go in _allObj)
             if (!go.IsDisposed && go.Tag == tag)
@@ -1124,7 +1126,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>The object or component with this identifier, searching the sections in order, or null.</summary>
     public EngineObject? FindObject(Guid identifier)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         if (_identifiers.TryGetValue(identifier, out EngineObject? known) && IsHere(known, identifier, null)) return known;
         foreach (SceneSection section in _sections)
             if (FindObject(section, identifier) is { } found)
@@ -1136,7 +1138,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>The object or component of <paramref name="section"/> with this identifier, or null. Exact even when another section holds the same identifier.</summary>
     public EngineObject? FindObject(SceneSection section, Guid identifier)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         if (_identifiers.TryGetValue(identifier, out EngineObject? known) && IsHere(known, identifier, section)) return known;
         foreach (GameObject root in section.LiveRoots)
             if (FindIn(root, identifier) is { } found)
@@ -1198,7 +1200,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// </summary>
     public void Activate()
     {
-        EnsureNotDisposed();
+        EnsureLive();
         MainThreadContext.AssertMainThread();
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
         using SceneScope active = Enter(this);
@@ -1237,7 +1239,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// </summary>
     public void Deactivate()
     {
-        EnsureNotDisposed();
+        EnsureLive();
         MainThreadContext.AssertOwner(this);
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
         using SceneScope active = Enter(this);
@@ -1278,7 +1280,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// </summary>
     internal void Add(GameObject obj, SceneSection? section = null)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         MainThreadContext.AssertOwner(this);
         MainThreadContext.AssertOwner(obj);
         if (_state == SceneState.Destroying)
@@ -1314,7 +1316,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// </summary>
     public GameObject Create(string name = "New GameObject", GameObject? parent = null, Component? owner = null)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         if (_state == SceneState.Destroying)
             throw new InvalidOperationException($"'{Name}' is being destroyed and takes no new objects.");
         var go = new GameObject(name);
@@ -1332,7 +1334,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>Makes a new live root object in <paramref name="section"/>.</summary>
     public GameObject Create(SceneSection section, string name = "New GameObject")
     {
-        EnsureNotDisposed();
+        EnsureLive();
         if (section.IsPersistent && Mode != SceneMode.Game)
             throw new InvalidOperationException("Only a game world has persistent objects.");
         var go = new GameObject(name);
@@ -1349,7 +1351,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// </remarks>
     internal void Remove(GameObject obj)
     {
-        EnsureNotDisposed();
+        EnsureLive();
         MainThreadContext.AssertOwner(this);
 
         if (object.ReferenceEquals(obj, null))
@@ -1454,7 +1456,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary> Unregisters all GameObjects. </summary>
     internal void Clear()
     {
-        EnsureNotDisposed();
+        EnsureLive();
         // Create a copy to iterate over since RemoveObject modifies the collection
         List<GameObject> rootObjects = [.. Roots];
         foreach (GameObject obj in rootObjects)
@@ -1493,6 +1495,12 @@ public class SceneInstance : EngineObject, ISerializable
         catch (Exception ex) { Debug.LogException($"[{target.Name}/{target.GetType().Name}] {step} threw while its scene was torn down", ex); }
     }
 
+    // A world reads as disposed from the start of its teardown, but still answers while it tears down.
+    private void EnsureLive([CallerMemberName] string? member = null)
+    {
+        if (_state != SceneState.Destroying) EnsureNotDisposed(member);
+    }
+
     protected override void OnDispose()
     {
         using SceneScope active = Enter(this);
@@ -1511,30 +1519,16 @@ public class SceneInstance : EngineObject, ISerializable
 
         CancelProbeRebuild();
 
-        // Clear the physics world
-        _physics.Clear();
+        // Every section unloads in the same passes a level unload uses, while physics and navigation still answer.
+        TearDownSections([.. _sections], rebuildProbes: false);
+        _isActive = false;
+        foreach (GameObject g in _allObj.ToArray())
+            if (!g.IsDisposed) Guarded(g, "Dispose", g.Dispose);
 
-        // Clear the navigation world (waits out in-flight queries)
+        _physics.Clear();
+        // Waits out in flight queries.
         _navigation.Clear();
         _animation.Clear();
-
-        // Three passes, every object guarded on its own, so one that throws leaves the rest torn down: everything is
-        // disabled, then told it left the scene, then disposed. Dispose() is idempotent, so the flat list's
-        // double hits on children already disposed with their parent are no ops.
-        List<GameObject> allObjects = [.. _allObj.Where(o => !o.IsDisposed)];
-        if (_isActive)
-        {
-            foreach (GameObject g in allObjects)
-                foreach (Component c in g._components.ToArray())
-                    if (!c.IsDisposed && c.HasBeenEnabled && c.EnabledInHierarchy)
-                        Guarded(c, "OnDisable", c.InternalOnDisable);
-            _isActive = false;
-        }
-        foreach (GameObject g in allObjects)
-            foreach (Component c in g._components.ToArray())
-                if (!c.IsDisposed) Guarded(c, "OnRemovedFromScene", c.OnRemovedFromScene);
-        foreach (GameObject g in allObjects)
-            if (!g.IsDisposed) Guarded(g, "Dispose", g.Dispose);
 
         // Clear any remaining references
         _allObj.Clear();
