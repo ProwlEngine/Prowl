@@ -148,6 +148,26 @@ public class EditorWorldTests : EditorTestHarness
     }
 
     [Fact]
+    public void ASelectionSnapshot_RestoresTheSameObjects_AndAssets()
+    {
+        SceneInstance edit = EditorSceneManager.EditWorld;
+        GameObject first = edit.Create("First");
+        GameObject second = edit.Create("Second");
+        GameObject gone = edit.Create("Gone");
+        Selection.Select(gone);
+        Selection.AddToSelection(first);
+        Selection.AddToSelection(second);
+        Selection.Snapshot snapshot = Selection.TakeSnapshot();
+        Selection.Clear();
+        gone.Dispose();
+
+        Selection.RestoreSnapshot(snapshot);
+
+        Assert.Equal([first, second], Selection.Selected);
+        Assert.Same(second, Selection.GetActiveAs<GameObject>());
+    }
+
+    [Fact]
     public void TheEditHistory_StillResolves_AfterPlay()
     {
         Marker marker = EditorSceneManager.EditWorld.Create("Thing").AddComponent<Marker>();

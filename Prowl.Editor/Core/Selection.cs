@@ -139,79 +139,28 @@ public static class Selection
 
     #region Snapshots
 
-    /// <summary>
-    /// An opaque structure that can be used to restore the selection from a snapshotted state.
-    /// </summary>
-    internal readonly struct Snapshot
+    /// <summary>The selection at one point, restored with whatever of it still exists.</summary>
+    internal readonly struct Snapshot(object[] objects, object? active)
     {
-        private record struct SerializedReference(Func<object, object?> Decoder, object Value);
-        private readonly List<SerializedReference> _state;
-        private readonly int _activeIndex;
-
-        /// <summary>
-        /// Initializes a new selection snapshot. Don't call this directly; instead call <see cref="TakeSnapshot"/>.
-        /// </summary>
-        public Snapshot()
-        {
-            _state = new(capacity: _selected.Count);
-            foreach (object selectedObject in _selected)
-            {
-                // TODO: consider some sort of extensible system to serialize references...
-                SerializedReference? state = selectedObject switch
-                {
-                    // GameObjects are restored via their identifying GUID.
-                    GameObject go => new SerializedReference(static val => GUI.SceneView.EditorSceneManager.EditedWorld.FindObject<GameObject>((Guid)val), go.Identifier),
-
-                    // ContentItem is used by the Project panel. It contains no scene-related references.
-                    ContentItem => new SerializedReference(static val => val, selectedObject),
-
-                    // Other objects may contain scene references.
-                    _ => null,
-                };
-                if (state is not null)
-                {
-                    if (ReferenceEquals(selectedObject, _activeObject))
-                        _activeIndex = _state.Count;
-                    _state.Add(state.Value);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Restores the snapshot, overwriting the current selection state. Don't call this directly; instead call
-        /// <see cref="RestoreSnapshot"/>.
-        /// </summary>
-        public readonly void Restore()
+        public void Restore()
         {
             _selected.Clear();
             _lastClickedIndex = -1;
             _activeObject = null;
-            int index = 0;
-            foreach (SerializedReference state in _state)
+            foreach (object obj in objects)
             {
-                object? selectedObject = state.Decoder(state.Value);
-                if (selectedObject is not null)
-                {
-                    if (index == _activeIndex)
-                        _activeObject = selectedObject;
-                    _selected.Add(selectedObject);
-                }
-                index++;
+                if (obj is EngineObject eo && eo.IsNotValid()) continue;
+                _selected.Add(obj);
+                if (ReferenceEquals(obj, active)) _activeObject = obj;
             }
             OnSelectionChanged?.Invoke();
         }
     }
 
-    /// <summary>
-    /// Takes a snapshot of the current selection, and returns it.
-    /// </summary>
-    /// <returns> An opaque structure that represents a point-in-time view of the selection state. </returns>
-    internal static Snapshot TakeSnapshot() => new();
+    /// <summary>The current selection, to put back later. The edit world never changes during play, so its objects come back as they were.</summary>
+    internal static Snapshot TakeSnapshot() => new([.. _selected], _activeObject);
 
-    /// <summary>
-    /// Restores the given snapshot, overwriting the current selection state.
-    /// </summary>
-    /// <param name="snapshot"> The selection state, as returned by <see cref="TakeSnapshot"/>. </param>
+    /// <summary>Restores <paramref name="snapshot"/>, dropping objects destroyed since.</summary>
     internal static void RestoreSnapshot(Snapshot snapshot) => snapshot.Restore();
 
     #endregion

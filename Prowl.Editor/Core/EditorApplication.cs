@@ -1573,7 +1573,7 @@ public class EditorApplication : Game
     /// <summary>
     /// Open a panel. If it's already open, focus it. Otherwise create a new instance as a floating window.
     /// </summary>
-    /// <returns> The existing panel instance, if one was found; otherwise, the newly created panel instance. </returns>
+    /// <returns>The open panel, or the new one.</returns>
     public TPanel OpenPanel<TPanel>() where TPanel : DockPanel, new()
     {
         // Check if already open
@@ -1998,7 +1998,7 @@ public class EditorApplication : Game
         _savedEditUndo = Undo.PushContext();
         _dirtyAssetCopies = EditorUtility.CopyDirtyAssets();
 
-        // The play world holds copies, so selected edit objects are put back on exit by identifier.
+        // The edit world sleeps untouched through play, so its selection comes back on exit.
         _savedSelection = Selection.TakeSnapshot();
         Selection.Clear();
 
@@ -2041,9 +2041,7 @@ public class EditorApplication : Game
         XR.Stop();
         XR.ForgetHandlers();
 
-        // The selection might contain game objects from the play mode scene that is being torn down, so clear the
-        // selection to defend against this. The edit mode selection will be restored later from a snapshot, after
-        // the editor scene finishes loading.
+        // Play objects go with the play world. The edit selection comes back once the edit world is bound again.
         Selection.Clear();
 
         // The play history goes with the play scene, and the edit history comes back unless the preference drops it.
