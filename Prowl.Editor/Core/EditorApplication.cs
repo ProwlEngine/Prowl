@@ -1983,6 +1983,9 @@ public class EditorApplication : Game
         // Save active tab (to restore on stop)
         SaveActiveTab();
 
+        // Scene changes queued this frame land before the copy is made.
+        EditorSceneManager.ApplyPendingNow();
+
         // An edit the inspector never saw is only a raw value on the objects. Record it as an override first, so the
         // play copy carries it as one.
         PrefabUtility.ReconcileOpenScene();

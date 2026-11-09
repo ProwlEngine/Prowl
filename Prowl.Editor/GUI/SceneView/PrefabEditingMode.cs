@@ -113,6 +113,7 @@ public static class PrefabEditingMode
         // Reconciled first: the edit world refreshes its instances when the session saves, which would otherwise
         // drop any edit nothing had recorded yet.
         SceneInstance edit = EditorSceneManager.EditWorld;
+        EditorSceneManager.ApplyPendingNow();
         PrefabUtility.ReconcileOpenScene();
 
         SceneInstance editScene = SceneInstance.Create($"Editing: {prefab.Name}", SceneMode.Edit);

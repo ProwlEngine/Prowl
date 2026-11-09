@@ -246,8 +246,15 @@ public static class EditorSceneManager
         }
     }
 
-    // Loads and unloads asked for during a frame apply at the safe point, in the order they were asked for.
+    // Loads and unloads asked for during a frame apply at the safe point, in the order they were asked for. During play
+    // or prefab editing they wait, since the edit world is dormant.
     private static void ApplyPending()
+    {
+        if (CanEditScenes) ApplyPendingNow();
+    }
+
+    /// <summary>Applies the queued scene changes at once, before play or prefab editing sends the edit world dormant.</summary>
+    internal static void ApplyPendingNow()
     {
         while (s_pending.Count > 0)
         {
