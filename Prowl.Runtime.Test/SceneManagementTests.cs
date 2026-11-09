@@ -455,6 +455,20 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
+    public void OwnedRoots_FollowAParentingIntoAnotherSection()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        GameObject character = world.Create("Character");
+        GameObject helper = world.Create("Helper", owner: character.AddComponent<SectionLink>());
+        GameObject anchor = world.Create(other, "Anchor");
+
+        character.SetParent(anchor);
+
+        Assert.Same(other, helper.Section);
+    }
+
+    [Fact]
     public void MovingToAnotherWorld_GivesAFreshIdentifierOnAClash()
     {
         SceneInstance from = CreateScene();

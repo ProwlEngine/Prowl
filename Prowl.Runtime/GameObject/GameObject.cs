@@ -459,8 +459,10 @@ public partial class GameObject : EngineObject, ISerializable
         // Section follows the root: becoming a child leaves the section's roots, becoming a root keeps the section it was in.
         SceneSection? oldSection = world.IsValid() ? Section : null;
         SceneSection? newSection = NewParent.IsValid() ? NewParent.Section : oldSection;
+        List<GameObject>? owned = null;
         if (world.IsValid() && newSection != null && !ReferenceEquals(oldSection, newSection))
         {
+            owned = [.. OwnedRoots()];
             if (oldSection is { IsPersistent: true } || newSection.IsPersistent)
                 Debug.LogWarning($"[Scene] '{Name}' moved between '{oldSection?.Name}' and '{newSection.Name}' by being parented. A tree crossing into or out of the persistent section is almost always a mistake.");
             GiveFreshIdentifiersAgainst(newSection);
@@ -525,6 +527,9 @@ public partial class GameObject : EngineObject, ISerializable
         // Joining a scene last, so OnEnable sees the parent and the enabled state it has under it.
         HierarchyStateChanged();
         if (joinsScene) newScene!.Add(this);
+        if (owned != null)
+            foreach (GameObject root in owned)
+                if (root.Parent.IsNotValid() && root.Section is { } section && !ReferenceEquals(section, newSection)) root.MoveTo(newSection!);
 
         // Draw order and layout are derived from the child tree at canvas build time, and a same-scene
         // reparent fires no OnAdded/Removed - so mark the affected canvas(es) dirty explicitly.
