@@ -499,6 +499,18 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
+    public void Step_RefusesADormantWorld_AndRunsOneFrameOfAPausedOne()
+    {
+        SceneInstance dormant = CreateScene();
+        Assert.Throws<InvalidOperationException>(() => dormant.Step(0.1f));
+
+        SceneInstance paused = CreateScene(enable: true);
+        paused.Paused = true;
+        paused.Step(0.1f);
+        Assert.Equal(0.1f, paused.Clock.DeltaTime, 3);
+    }
+
+    [Fact]
     public void DestroyingMain_RaisesMainChangedToNothing()
     {
         SceneInstance world = SceneInstance.Create("Bound");

@@ -419,7 +419,7 @@ public abstract class Game
     {
         s_presented.Clear();
         foreach (SceneInstance world in SceneInstance.All)
-            if (world.Present && world.State == SceneState.Running && !world.HostTicked)
+            if (world.Present && world.State == SceneState.Running)
                 s_presented.Add(world);
         s_presented.Sort(static (a, b) => a.RenderOrder.CompareTo(b.RenderOrder));
         return s_presented;

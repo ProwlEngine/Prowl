@@ -234,9 +234,6 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>Presented worlds draw lowest first, each one's cameras over the previous world.</summary>
     public int RenderOrder { get; set; }
 
-    /// <summary>Set by a host that ticks and renders this world itself, so the engine skips it.</summary>
-    internal bool HostTicked { get; set; }
-
     // One frame to run while paused, from the editor's step button.
     private bool _stepRequested;
 
@@ -246,8 +243,8 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>Whether a step is still waiting to run.</summary>
     internal bool IsStepPending => _stepRequested;
 
-    /// <summary>Whether the engine ticks this world: a running game world no host has claimed.</summary>
-    internal bool TicksWithEngine => Mode == SceneMode.Game && _state == SceneState.Running && !HostTicked;
+    /// <summary>Whether the engine ticks this world: a running game world.</summary>
+    internal bool TicksWithEngine => Mode == SceneMode.Game && _state == SceneState.Running;
 
     // True while the engine or a host runs a world's frame, so Step refuses to reenter it.
     [ThreadStatic] private static bool t_ticking;
@@ -295,6 +292,9 @@ public class SceneInstance : EngineObject, ISerializable
     {
         if (t_ticking) throw new InvalidOperationException($"'{Name}' cannot step while a world's frame is running.");
         MainThreadContext.AssertOwner(this);
+        if (_state != SceneState.Running) throw new InvalidOperationException($"'{Name}' is not running. Activate it first.");
+        // A paused world steps exactly one frame, as asked.
+        if (Paused) RequestStep();
         Tick(deltaTime);
     }
 
@@ -1767,6 +1767,7 @@ public class SceneInstance : EngineObject, ISerializable
     public bool Render(RenderTexture? target = null, bool displayGizmos = false)
     {
         if (IsDisposed) return false;
+        if (t_ticking) throw new InvalidOperationException($"'{Name}' cannot render while a world's frame is running.");
         using SceneScope active = Enter(this);
 
         List<Camera> cameras = GatherActiveCameras();
