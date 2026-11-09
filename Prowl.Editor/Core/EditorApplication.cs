@@ -241,11 +241,7 @@ public class EditorApplication : Game
         OrigamiUI.BuiltInFieldDrawers.Register(PropertyGridConfig.Drawers);
         RangeSliderDrawer.Register(PropertyGridConfig.Drawers); // wraps the built-in float/int drawers
         BuiltInAttributeHandlers.Register(PropertyGridConfig.Handlers);
-        PropertyGridConfig.OnBeginRoot = root =>
-        {
-            EditorSceneManager.DrawingRoot = root;
-            Undo.InspectorBaseline(root);
-        };
+        PropertyGridConfig.OnBeginRoot = Undo.InspectorBaseline;
         PropertyGridConfig.OnFieldChanged = target =>
         {
             var eo = target as Runtime.EngineObject;

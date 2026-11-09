@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -112,6 +114,7 @@ public static class PropertyGridUtils
     /// <summary>Draw a full property grid for an object.</summary>
     public static void Draw(Paper paper, string id, object target, Action<object>? onChanged = null, int depth = 0)
     {
+        using EditorSceneManager.DrawingScope? scope = target is GameObject or Component ? EditorSceneManager.DrawingFor([target]) : null;
         Origami.PropertyGrid(paper, id, target, EditorApplication.PropertyGridConfig)
             .OnChanged(onChanged ?? (_ => { }))
             .Overrides(OverriddenFields)
@@ -123,6 +126,7 @@ public static class PropertyGridUtils
     /// values are flagged as mixed and edits apply to every target).</summary>
     public static void DrawMulti(Paper paper, string id, IReadOnlyList<object> targets, Action<object>? onChanged = null, int depth = 0)
     {
+        using EditorSceneManager.DrawingScope? scope = targets.Any(t => t is GameObject or Component) ? EditorSceneManager.DrawingFor(targets) : null;
         Origami.PropertyGrid(paper, id, targets, EditorApplication.PropertyGridConfig)
             .OnChanged(onChanged ?? (_ => { }))
             .Overrides(OverriddenFields)

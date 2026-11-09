@@ -575,7 +575,26 @@ public class MultiSceneTests : EditorTestHarness
         Assert.False(EditorSceneManager.RefusesReference(a, Root(a), out _));
         Assert.True(EditorSceneManager.RefusesReference(a, Root(b), out string reason));
         Assert.Contains("'B'", reason);
-        Assert.False(EditorSceneManager.RefusesReference(null, Root(b), out _));
+        Assert.False(EditorSceneManager.RefusesReference((OpenScene?)null, Root(b), out _));
+    }
+
+    [Fact]
+    public void DrawingObjectsFromTwoScenes_RefusesAReferenceIntoEither()
+    {
+        OpenScene a = Open(Author("A.scene", "a"));
+        OpenScene b = Additive(Author("B.scene", "b"));
+        Marker inA = Root(a).GetComponent<Marker>()!;
+        Marker inB = Root(b).GetComponent<Marker>()!;
+
+        using (EditorSceneManager.DrawingFor([inA, inB]))
+        {
+            Assert.Null(EditorSceneManager.DrawingScene);
+            Assert.True(EditorSceneManager.RefusesReference(EditorSceneManager.DrawingScenes, Root(b), out _));
+            Assert.True(EditorSceneManager.RefusesReference(EditorSceneManager.DrawingScenes, Root(a), out _));
+        }
+        using (EditorSceneManager.DrawingFor([inA]))
+            Assert.False(EditorSceneManager.RefusesReference(EditorSceneManager.DrawingScenes, Root(a), out _));
+        Assert.Empty(EditorSceneManager.DrawingScenes);
     }
 
     [Fact]

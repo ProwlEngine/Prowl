@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Popups;
@@ -7,6 +9,7 @@ using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
+using Prowl.Vector;
 
 namespace Prowl.Editor.GUI.PropertyEditors;
 
@@ -28,6 +31,11 @@ public class EngineObjectPropertyEditor : PropertyEditor
         bool isAsset = asset is { IsFromDatabase: true };
         bool missing = asset is { IsMissing: true };
         OpenScene? holder = EditorSceneManager.DrawingScene;
+        IReadOnlyList<OpenScene> holders = EditorSceneManager.DrawingScenes;
+        Action<object?> pick = picked =>
+        {
+            if (!RefusedFor(holders, picked)) onChange(picked);
+        };
 
         PropertyGridUtils.ObjectField(paper, id, label,
             eo.IsValid() ? EditorIcons.Cube : EditorIcons.Circle,
@@ -38,13 +46,22 @@ public class EngineObjectPropertyEditor : PropertyEditor
             // Click pings what is assigned or opens the selector when empty, double click selects what is assigned.
             onClick: () =>
             {
-                if (eo.IsNotValid()) OpenAssetSelector(fieldType, onChange, holder);
+                if (eo.IsNotValid()) OpenAssetSelector(fieldType, pick, holder);
                 else if (isAsset) Selection.Ping(asset!.AssetID);
                 else if (PingTarget(eo) is { } go) Selection.Ping(go.Identifier);
             },
             onDoubleClick: () => { if (eo.IsValid()) Selection.Select(eo); },
-            onPick: () => OpenAssetSelector(fieldType, onChange, holder),
-            acceptDrops: () => HandleDrops(paper, fieldType, onChange, holder));
+            onPick: () => OpenAssetSelector(fieldType, pick, holder),
+            acceptDrops: () => HandleDrops(paper, fieldType, onChange, holders));
+    }
+
+    // Shows why a picked scene object cannot be held here, true when it was refused.
+    internal static bool RefusedFor(IReadOnlyList<OpenScene> holders, object? picked)
+    {
+        GameObject? go = picked switch { GameObject g => g, Component c => c.GameObject, Transform t => t.GameObject, _ => null };
+        if (!EditorSceneManager.RefusesReference(holders, go, out string why)) return false;
+        Toasts.Warning(Rosetta.Loc.Get("hierarchy.scene_refused"), why);
+        return true;
     }
 
     // A scene object field pings the GameObject in the Hierarchy.
@@ -55,7 +72,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
         _ => null,
     };
 
-    private static void HandleDrops(Paper paper, Type fieldType, Action<object?> onChange, OpenScene? holder)
+    private static void HandleDrops(Paper paper, Type fieldType, Action<object?> onChange, IReadOnlyList<OpenScene> holder)
     {
         AssetDragPayload? assetDrop = DragDrop.AcceptDrop<AssetDragPayload>(paper.IsParentHovered,
             dp => dp.AssetType != null && fieldType.IsAssignableFrom(dp.AssetType));

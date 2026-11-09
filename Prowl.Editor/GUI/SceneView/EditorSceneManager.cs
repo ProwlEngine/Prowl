@@ -163,16 +163,39 @@ public static class EditorSceneManager
         return null;
     }
 
-    /// <summary>The object whose fields the property grid draws, so a reference field knows which scene holds it.</summary>
-    internal static object? DrawingRoot { get; set; }
+    private static readonly List<OpenScene[]> s_drawing = [];
 
-    /// <summary>The open scene of the object whose fields are drawn, or null outside the edit world.</summary>
-    internal static OpenScene? DrawingScene => DrawingRoot switch
+    /// <summary>The open scenes of the objects whose fields are drawn now, so a reference field knows where it is held.</summary>
+    internal static IReadOnlyList<OpenScene> DrawingScenes => s_drawing.Count > 0 ? s_drawing[^1] : [];
+
+    /// <summary>The one open scene the drawn objects are in, or null when there is none or several.</summary>
+    internal static OpenScene? DrawingScene => DrawingScenes.Count == 1 ? DrawingScenes[0] : null;
+
+    /// <summary>Marks <paramref name="roots"/> as the objects whose fields are drawn until the scope ends.</summary>
+    internal static DrawingScope DrawingFor(IEnumerable<object> roots)
     {
-        GameObject go => SceneOf(go),
-        Component c => c.GameObject.IsValid() ? SceneOf(c.GameObject) : null,
-        _ => null,
-    };
+        s_drawing.Add([.. roots.Select(root => root switch
+        {
+            GameObject go => SceneOf(go),
+            Component c => c.GameObject.IsValid() ? SceneOf(c.GameObject) : null,
+            _ => null,
+        }).OfType<OpenScene>().Distinct()]);
+        return new DrawingScope();
+    }
+
+    internal readonly struct DrawingScope : IDisposable
+    {
+        public void Dispose() => s_drawing.RemoveAt(s_drawing.Count - 1);
+    }
+
+    /// <summary>Whether a reference field held in every one of <paramref name="holders"/> refuses <paramref name="target"/>.</summary>
+    internal static bool RefusesReference(IReadOnlyList<OpenScene> holders, GameObject? target, out string reason)
+    {
+        reason = "";
+        foreach (OpenScene holder in holders)
+            if (RefusesReference(holder, target, out reason)) return true;
+        return false;
+    }
 
     /// <summary>
     /// Whether a reference field in <paramref name="holder"/> refuses <paramref name="target"/>. In edit mode a saved
