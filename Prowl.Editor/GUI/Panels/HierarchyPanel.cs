@@ -410,7 +410,7 @@ public class HierarchyPanel : DockPanel
 
                 if (DragDrop.IsDropFrame && _assetDropTarget && DragDrop.Payload is AssetDragPayload assetDrop)
                 {
-                    if (assetDrop.AssetType == typeof(Runtime.Resources.SceneInstance))
+                    if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
                     {
                         AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(assetDrop.AssetGuid);
                         if (entry != null && EditorSceneManager.SceneAt(entry.Path) is { } dropped && EditorSceneManager.CanEditScenes)

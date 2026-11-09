@@ -37,7 +37,7 @@ public interface ISceneDropHandler
 //  Built-in scene drop handlers
 // ================================================================
 
-[SceneDropHandler(typeof(SceneInstance), Order = 0)]
+[SceneDropHandler(typeof(Scene), Order = 0)]
 internal class SceneAssetDropHandler : ISceneDropHandler
 {
     public string DropHint => $"{EditorIcons.ArrowDown}  Drop to open scene";

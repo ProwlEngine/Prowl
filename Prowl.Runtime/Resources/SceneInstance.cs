@@ -45,7 +45,6 @@ public enum SceneState
 /// A live world of GameObjects. Its stored form is a <see cref="Scene"/>, and any number of scenes can be
 /// instantiated from one, like the editor's edit copy and play copy.
 /// </summary>
-[CreateAssetMenu("Scene", Extension = ".scene", Order = 0)]
 public class SceneInstance : EngineObject, ISerializable
 {
     #region Scene Manager

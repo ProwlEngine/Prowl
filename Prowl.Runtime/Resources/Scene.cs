@@ -19,6 +19,7 @@ namespace Prowl.Runtime.Resources;
 /// A scene as stored in a .scene file. Holding one keeps only its stored data loaded, not what the scene uses:
 /// <see cref="Load"/> and <see cref="AssetDatabase.Preload"/> load that.
 /// </summary>
+[CreateAssetMenu("Scene", Extension = ".scene", Order = 0)]
 public sealed class Scene : Asset
 {
     [SerializeField] private EchoObject? _data;

@@ -812,6 +812,17 @@ public class CliAssetCommandTests : EditorTestHarness
     }
 
     [Fact]
+    public void ASceneCreatedFromTheMenu_OpensWithTheDefaultContent()
+    {
+        JsonNode created = Ok("asset", "create", "--path", "Levels/First", "--type", "Scene")!;
+        Assert.Equal("Levels/First.scene", created["path"]!.GetValue<string>());
+        Assert.IsType<Scene>(AssetDatabase.Get(Assets.PathToGuid("Levels/First.scene")));
+
+        Ok("scene", "--action", "open", "--path", "Levels/First.scene");
+        Assert.Contains(EditorSceneManager.EditWorld.ActiveSection.Roots, go => go.GetComponent<Camera>() != null);
+    }
+
+    [Fact]
     public void AssetsAreCopiedUnderFreshGuids()
     {
         Ok("asset", "create", "--path", "Masks/Upper", "--type", "AvatarMask");

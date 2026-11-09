@@ -396,7 +396,7 @@ public static class EditorRegistries
     /// <summary>Types whose "Create" menu entry needs more than a blank instance.</summary>
     private static readonly Dictionary<Type, Func<object>> _assetFactories = new()
     {
-        [typeof(Runtime.Resources.SceneInstance)] = GUI.SceneView.EditorSceneManager.CreateDefaultContent,
+        [typeof(Runtime.Resources.Scene)] = GUI.SceneView.EditorSceneManager.CreateDefaultContent,
     };
 
     private static void ScanAssetMenuEntry(Type type)
