@@ -251,6 +251,8 @@
   "hierarchy.unload_scene": "Выгрузить сцену",
   "hierarchy.remove_scene": "Удалить сцену",
   "hierarchy.select_scene_asset": "Выбрать ассет сцены",
+  "hierarchy.hide_in_scene_view": "Скрыть в окне сцены",
+  "hierarchy.show_in_scene_view": "Показать в окне сцены",
   "hierarchy.scene_refused": "Сцена не изменена",
   "hierarchy.create": "Создать",
   "hierarchy.drop_to_spawn": "Перетащите для создания",

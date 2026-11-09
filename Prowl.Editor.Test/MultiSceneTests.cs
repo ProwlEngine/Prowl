@@ -417,4 +417,27 @@ public class MultiSceneTests : EditorTestHarness
         Assert.Contains("'B'", reason);
         Assert.False(EditorSceneManager.RefusesReference(null, Root(b), out _));
     }
+
+    [Fact]
+    public void HidingInTheSceneView_KeepsAcrossAReload_AndFlagsItsRenderers()
+    {
+        Open(Author("A.scene", "a"));
+        OpenScene b = Additive(Author("B.scene", "b"));
+        GameObject inB = Root(b);
+
+        b.IsHiddenInSceneView = true;
+        Assert.Equal(Graphite.Rendering.RenderableFlags.SceneViewHidden, Runtime.Rendering.RenderableState.ViewFlagsFor(inB));
+
+        EditorSceneManager.Unload(b);
+        SceneInstance.ProcessPendingLoad();
+        EditorSceneManager.Load(b);
+        SceneInstance.ProcessPendingLoad();
+
+        Assert.True(b.Section!.HiddenInSceneView);
+        Assert.Equal(Graphite.Rendering.RenderableFlags.SceneViewHidden, Runtime.Rendering.RenderableState.ViewFlagsFor(Root(b)));
+
+        SceneInstance play = EditorSceneManager.BuildPlayWorld();
+        try { Assert.All(play.Sections, s => Assert.False(s.HiddenInSceneView)); }
+        finally { play.Dispose(); }
+    }
 }

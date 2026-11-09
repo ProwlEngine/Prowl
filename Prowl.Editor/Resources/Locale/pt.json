@@ -251,6 +251,8 @@
   "hierarchy.unload_scene": "Descarregar cena",
   "hierarchy.remove_scene": "Remover cena",
   "hierarchy.select_scene_asset": "Selecionar asset da cena",
+  "hierarchy.hide_in_scene_view": "Ocultar na vista de cena",
+  "hierarchy.show_in_scene_view": "Mostrar na vista de cena",
   "hierarchy.scene_refused": "Cena nao alterada",
   "hierarchy.create": "Criar",
   "hierarchy.drop_to_spawn": "Solte para criar aqui",

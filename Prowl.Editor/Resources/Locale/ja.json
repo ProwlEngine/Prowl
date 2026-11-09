@@ -251,6 +251,8 @@
   "hierarchy.unload_scene": "シーンをアンロード",
   "hierarchy.remove_scene": "シーンを削除",
   "hierarchy.select_scene_asset": "シーンアセットを選択",
+  "hierarchy.hide_in_scene_view": "シーンビューで非表示",
+  "hierarchy.show_in_scene_view": "シーンビューで表示",
   "hierarchy.scene_refused": "シーンは変更されません",
   "hierarchy.create": "作成",
   "hierarchy.drop_to_spawn": "ここにドロップして生成",

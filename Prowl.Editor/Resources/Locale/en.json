@@ -256,6 +256,8 @@
   "hierarchy.unload_scene": "Unload Scene",
   "hierarchy.remove_scene": "Remove Scene",
   "hierarchy.select_scene_asset": "Select Scene Asset",
+  "hierarchy.hide_in_scene_view": "Hide in Scene View",
+  "hierarchy.show_in_scene_view": "Show in Scene View",
   "hierarchy.scene_refused": "Scene not changed",
   "hierarchy.create": "Create",
   "hierarchy.drop_to_spawn": "Drop to spawn here",

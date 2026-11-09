@@ -535,9 +535,10 @@ public class HierarchyPanel : DockPanel
             .Width(18).Height(EditorTheme.RowHeight).IsNotInteractable()
             .Icon(paper, EditorIcons.Shapes_I, active ? EditorTheme.Amber400 : loaded ? EditorTheme.Ink400 : EditorTheme.Ink300, size: 14f);
 
+        bool hidden = header.Open is { IsHiddenInSceneView: true };
         paper.Box("hier_scene_name")
             .Width(UnitValue.StretchOne).Height(EditorTheme.RowHeight).PaddingLeft(4)
-            .Text(HeaderName(header), font)
+            .Text(hidden ? $"{HeaderName(header)}  {EditorIcons.EyeSlash}" : HeaderName(header), font)
             .TextColor(loaded ? EditorTheme.Ink500 : EditorTheme.Ink300)
             .FontSize(EditorTheme.FontSizeSmall)
             .Alignment(TextAlignment.MiddleLeft);
@@ -585,12 +586,17 @@ public class HierarchyPanel : DockPanel
             else
                 builder.Item(Loc.Get("hierarchy.load_scene"), () => Guarded(() => EditorSceneManager.Load(open)));
             builder.Item(Loc.Get("hierarchy.remove_scene"), () => EditorSceneManager.ConfirmClosing(() => Guarded(() => EditorSceneManager.Remove(open, force: true)), [open]));
+            builder.Separator();
             if (open.Scene.IsValid())
             {
-                builder.Separator();
                 Guid asset = open.Scene.AssetID;
                 builder.Item(Loc.Get("hierarchy.select_scene_asset"), () => Selection.Ping(asset));
             }
+            builder.Item(Loc.Get(open.IsHiddenInSceneView ? "hierarchy.show_in_scene_view" : "hierarchy.hide_in_scene_view"), () =>
+            {
+                open.IsHiddenInSceneView = !open.IsHiddenInSceneView;
+                EditorSceneManager.RememberSetup();
+            });
         });
     }
 

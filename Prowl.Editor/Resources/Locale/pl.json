@@ -251,6 +251,8 @@
   "hierarchy.unload_scene": "Zwolnij scene",
   "hierarchy.remove_scene": "Usun scene",
   "hierarchy.select_scene_asset": "Zaznacz zasob sceny",
+  "hierarchy.hide_in_scene_view": "Ukryj w widoku sceny",
+  "hierarchy.show_in_scene_view": "Pokaz w widoku sceny",
   "hierarchy.scene_refused": "Scena bez zmian",
   "hierarchy.create": "Utworz",
   "hierarchy.drop_to_spawn": "Upusc aby utworzyc tutaj",

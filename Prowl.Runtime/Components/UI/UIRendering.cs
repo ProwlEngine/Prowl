@@ -274,6 +274,7 @@ internal static class UIRendering
                     Custom1 = new Float4(item.ClipRadius, item.ClipSoftness, item.HasClip ? 1f : 0f, 0f),
                     ObjectId = (uint)item.Owner.InstanceID,
                     LayerMask = RenderableState.LayerBit(item.Owner.GameObject.LayerIndex),
+                    ViewFlags = RenderableState.ViewFlagsFor(item.Owner.GameObject),
                 });
 
                 AABB itemBounds = mesh.bounds.TransformBy(item.Model);
@@ -393,6 +394,7 @@ internal static class UIRendering
         public Float4 Custom0, Custom1;
         public uint ObjectId;
         public uint LayerMask;
+        public RenderableFlags ViewFlags;
     }
 
     private readonly record struct CanvasRange(Double3 Center, float Radius, int First, int Count, bool SceneViewOnly);
@@ -441,7 +443,7 @@ internal static class UIRendering
                         Custom1 = item.Custom1,
                         LayerMask = item.LayerMask,
                         ObjectId = item.ObjectId,
-                        Flags = RenderableFlags.None,
+                        Flags = item.ViewFlags,
                         SortDepth = BitConverter.UInt32BitsToSingle(bits + (uint)(canvas.Count - 1 - i)),
                     };
                     sink.Add(item.Mesh, 0, item.Material, draw);

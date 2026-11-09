@@ -18,6 +18,9 @@ public class GeneralSettings : ProjectSettingsBase
     /// <summary>The scenes open when the project was last used, restored on project open.</summary>
     public List<GUI.SceneView.SceneSetup> LastSetup = [];
 
+    /// <summary>The scenes hidden in the scene view, restored with the setup.</summary>
+    public List<System.Guid> HiddenScenes = [];
+
     /// <summary> Draws the General settings panel in the Project Settings window. </summary>
     public override void OnGUI(Paper paper, float width)
     {

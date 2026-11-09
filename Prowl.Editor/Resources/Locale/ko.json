@@ -251,6 +251,8 @@
   "hierarchy.unload_scene": "씬 언로드",
   "hierarchy.remove_scene": "씬 제거",
   "hierarchy.select_scene_asset": "씬 에셋 선택",
+  "hierarchy.hide_in_scene_view": "씬 뷰에서 숨기기",
+  "hierarchy.show_in_scene_view": "씬 뷰에서 표시",
   "hierarchy.scene_refused": "씬이 변경되지 않음",
   "hierarchy.create": "만들기",
   "hierarchy.drop_to_spawn": "여기에 놓아서 생성",

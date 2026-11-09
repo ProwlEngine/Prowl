@@ -1735,6 +1735,9 @@ public sealed class SceneSection
     /// <summary>The scene this section was loaded from, null for one made at runtime.</summary>
     public Scene? Source { get; internal set; }
 
+    /// <summary>Editor state, never saved: the section's objects are not drawn or picked in scene views. Play and game views are unaffected.</summary>
+    public bool HiddenInSceneView { get; set; }
+
     public string Name { get; set; }
 
     /// <summary>Whether this is the world's persistent section, which survives every load.</summary>

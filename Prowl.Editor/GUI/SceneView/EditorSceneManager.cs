@@ -285,6 +285,7 @@ public static class EditorSceneManager
         {
             if (!s_open.Contains(open)) return;
             open.Section = EditWorld.ReplaceContent(content, open.Name, open.Scene);
+            open.Section.HiddenInSceneView = open.IsHiddenInSceneView;
             open.ActivatesOnLoad = false;
             open.Dirty = false;
             SceneLoaded?.Invoke(open);
@@ -309,6 +310,7 @@ public static class EditorSceneManager
             if (!s_open.Contains(open) || open.IsLoaded) return;
             SceneInstance edit = EditWorld;
             open.Section = edit.AddContent(content, open.Name, open.Scene);
+            open.Section.HiddenInSceneView = open.IsHiddenInSceneView;
             edit.MoveSection(open.Section, SectionIndexOf(open));
             SceneLoaded?.Invoke(open);
         });
@@ -633,6 +635,8 @@ public static class EditorSceneManager
                 try
                 {
                     RestoreSetup([.. general.LastSetup], force: true);
+                    foreach (OpenScene open in s_open)
+                        if (open.Scene.IsValid() && general.HiddenScenes.Contains(open.Scene.AssetID)) open.IsHiddenInSceneView = true;
                     return;
                 }
                 catch (InvalidOperationException e) { Debug.LogWarning($"[Scene] The remembered scenes could not be restored: {e.Message}"); }
@@ -650,8 +654,10 @@ public static class EditorSceneManager
         {
             GeneralSettings general = EditorRegistries.GetSettings<GeneralSettings>();
             SceneSetup[] setup = GetSetup();
-            if (general.LastSetup.SequenceEqual(setup)) return;
+            Guid[] hidden = [.. s_open.Where(o => o.IsHiddenInSceneView && o.Scene.IsValid()).Select(o => o.Scene!.AssetID)];
+            if (general.LastSetup.SequenceEqual(setup) && general.HiddenScenes.SequenceEqual(hidden)) return;
             general.LastSetup = [.. setup];
+            general.HiddenScenes = [.. hidden];
             EditorRegistries.SaveSettings();
         }
         catch (Exception e) { Debug.LogWarning($"[Scene] Remembering the open scenes failed: {e.Message}"); }
@@ -758,6 +764,19 @@ public sealed class OpenScene
     public bool IsActive => Section is { IsLoaded: true } section && ReferenceEquals(section, section.Instance.ActiveSection);
 
     public bool IsDirty => Dirty;
+
+    private bool _hidden;
+
+    /// <summary>Whether its objects are left out of the scene view and its picking. Editor state, kept across loads and sessions.</summary>
+    public bool IsHiddenInSceneView
+    {
+        get => _hidden;
+        set
+        {
+            _hidden = value;
+            if (Section != null) Section.HiddenInSceneView = value;
+        }
+    }
 
     internal bool Dirty;
     internal bool LoadPending;

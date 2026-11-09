@@ -251,6 +251,8 @@
   "hierarchy.unload_scene": "Descargar escena",
   "hierarchy.remove_scene": "Quitar escena",
   "hierarchy.select_scene_asset": "Seleccionar recurso de escena",
+  "hierarchy.hide_in_scene_view": "Ocultar en la vista de escena",
+  "hierarchy.show_in_scene_view": "Mostrar en la vista de escena",
   "hierarchy.scene_refused": "Escena sin cambios",
   "hierarchy.create": "Crear",
   "hierarchy.drop_to_spawn": "Soltar para crear aqui",

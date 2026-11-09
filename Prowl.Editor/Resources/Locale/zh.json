@@ -251,6 +251,8 @@
   "hierarchy.unload_scene": "卸载场景",
   "hierarchy.remove_scene": "移除场景",
   "hierarchy.select_scene_asset": "选择场景资源",
+  "hierarchy.hide_in_scene_view": "在场景视图中隐藏",
+  "hierarchy.show_in_scene_view": "在场景视图中显示",
   "hierarchy.scene_refused": "场景未更改",
   "hierarchy.create": "创建",
   "hierarchy.drop_to_spawn": "拖放到此处生成",

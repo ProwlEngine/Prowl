@@ -42,7 +42,7 @@ internal static class UIPicker
         int bestSortOrder = int.MinValue;
         float bestT = float.PositiveInfinity;
 
-        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy))
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy && o.Section is not { HiddenInSceneView: true }))
         {
             GameCanvas? canvas = go.GetComponent<GameCanvas>();
             if (canvas.IsNotValid() || !canvas.EnabledInHierarchy) continue;

@@ -251,6 +251,8 @@
   "hierarchy.unload_scene": "Sahneyi bosalt",
   "hierarchy.remove_scene": "Sahneyi kaldir",
   "hierarchy.select_scene_asset": "Sahne varligini sec",
+  "hierarchy.hide_in_scene_view": "Sahne gorunumunde gizle",
+  "hierarchy.show_in_scene_view": "Sahne gorunumunde goster",
   "hierarchy.scene_refused": "Sahne degismedi",
   "hierarchy.create": "Olustur",
   "hierarchy.drop_to_spawn": "Olusturmak icin birakin",
