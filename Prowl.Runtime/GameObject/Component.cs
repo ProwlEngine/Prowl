@@ -477,7 +477,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     public virtual void OnCharacterExit(CharacterController character) { }
 
     // Makes this component's scene the ambient world for the callback, so it holds even when another scene's code calls in.
-    private SceneInstance.SceneScope EnterOwnWorld() => SceneInstance.Enter(ReferenceEquals(_go, null) ? null : _go.Scene);
+    private protected SceneInstance.SceneScope EnterOwnWorld() => SceneInstance.Enter(ReferenceEquals(_go, null) ? null : _go.Scene);
 
     private protected override SceneInstance? OwningScene => ReferenceEquals(_go, null) ? null : _go.Scene;
 

@@ -1722,6 +1722,7 @@ public class SceneInstance : EngineObject, ISerializable
     public bool Render(RenderTexture? target = null, bool displayGizmos = false)
     {
         if (IsDisposed) return false;
+        using SceneScope active = Enter(this);
 
         List<Camera> cameras = GatherActiveCameras();
         if (cameras.Count == 0)

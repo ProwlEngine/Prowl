@@ -297,7 +297,7 @@ public sealed class SceneRendering : IDisposable
             return;
         }
         _clouds ??= new Graphite.Rendering.VolumetricCloudsFeature(renderer);
-        settings.ApplyTo(_clouds, Time.DeltaTime);
+        settings.ApplyTo(_clouds, _scene.Clock.DeltaTime);
         world.Features.Add(_clouds.ShadowPass);
         world.Features.Add(_clouds);
     }

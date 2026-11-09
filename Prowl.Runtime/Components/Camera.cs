@@ -314,6 +314,7 @@ public class Camera : Component
     /// </summary>
     public void Render(in CameraRenderOptions options = default)
     {
+        using SceneInstance.SceneScope active = EnterOwnWorld();
         using Diagnostics.FrameStatScope stats = Diagnostics.FrameStats.Render.Scope();
         Graphics.CameraPipeline.Render(this, options);
     }
