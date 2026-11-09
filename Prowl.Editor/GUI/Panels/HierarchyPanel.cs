@@ -431,8 +431,14 @@ public class HierarchyPanel : DockPanel
                 {
                     if (_dragHoverHeader != null)
                     {
-                        MoveToScene(ExcludeNestedSelections(goDrop.GameObjects), _dragHoverHeader);
+                        List<GameObject> dragged = [.. ExcludeNestedSelections(goDrop.GameObjects)];
+                        SceneHeader header = _dragHoverHeader;
                         DragDrop.EndDrag();
+                        // Unparenting a child a prefab provides breaks the instance first, as a row drop does.
+                        if (PrefabUtility.NeedsBreaking(dragged))
+                            PrefabUtility.BreakThenRun(dragged, () => MoveToScene(dragged, header));
+                        else
+                            MoveToScene(dragged, header);
                     }
                     else if (_dragHoverTarget.IsValid() && _dragHoverTargetId != null)
                     {
