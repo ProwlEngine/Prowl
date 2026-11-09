@@ -93,6 +93,32 @@ public class MultiSceneBakeTests : EditorTestHarness
     }
 
     [Fact]
+    public void ABakeReadyDuringPlay_WaitsForPlayToEnd()
+    {
+        (OpenScene a, _) = OpenBoth(Author("A.scene", Float3.Zero, sun: true), Author("B.scene", new Float3(4, 0, 0)));
+        var service = new LightmapBakeService();
+        Assert.True(service.Start(EditorSceneManager.EditWorld, Quick()));
+
+        using (EnterPlayMode())
+        {
+            Assert.False(service.Start(EditorSceneManager.EditWorld, Quick()));
+            var clock = Stopwatch.StartNew();
+            while (service.Progress < 1f && clock.Elapsed.TotalSeconds < 120)
+            {
+                service.Poll();
+                Thread.Sleep(10);
+            }
+            service.Poll();
+            Assert.True(service.IsBaking);
+            Assert.False(a.Section!.Lighting.HasLightmaps);
+        }
+
+        BakeToEnd(service);
+        Assert.True(a.Section!.Lighting.HasLightmaps);
+        Assert.True(a.IsDirty);
+    }
+
+    [Fact]
     public void AnUntitledScene_BlocksTheBake_AndAnUnloadedOneKeepsItsData()
     {
         (OpenScene a, OpenScene b) = OpenBoth(Author("A.scene", Float3.Zero), Author("B.scene", new Float3(4, 0, 0)));

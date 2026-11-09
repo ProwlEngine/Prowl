@@ -313,8 +313,9 @@ public class EnvironmentPanel : DockPanel
     private void DrawLightmappingSection(Paper paper, string id, Scribe.FontFile font, SceneInstance scene)
     {
         // IsBaking alone doesn't say WHICH scene it's for - only one bake can run at a time, so
-        // switching to a different scene while it's in flight must not show this scene as baking too.
-        bool baking = _bake.IsBaking && _bake.TargetScene == scene;
+        // switching to a different scene while it's in flight must not show this scene as baking too. During play the
+        // bake of the edit world still shows, with its progress and Cancel.
+        bool baking = _bake.IsBaking && (_bake.TargetScene == scene || (Application.IsPlaying && _bake.TargetScene == EditorSceneManager.EditWorld));
         LightmapBakeSettings s = scene.LightmapBake;
         SceneSection section = scene.ActiveSection;
         void Record() => Undo.RecordObject(() => section.IsLoaded ? section.LightmapBake : null, ActiveSceneOwner, "Lightmap Settings");

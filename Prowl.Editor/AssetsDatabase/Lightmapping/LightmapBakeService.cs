@@ -69,6 +69,11 @@ public sealed class LightmapBakeService
     public bool Start(SceneInstance world, LightmapBakeSettings settings)
     {
         if (IsBaking) return false;
+        if (Application.IsPlaying)
+        {
+            Runtime.Debug.LogWarning("[Lightmap] Leave play mode before baking.");
+            return false;
+        }
         List<OpenScene> baked = BakedScenes(world);
         if (baked.Count == 0)
         {
@@ -170,7 +175,7 @@ public sealed class LightmapBakeService
         _targetIterations = Math.Max(1, settings.Samples);
         _job = baker.Start();
         Progress = 0f;
-        Status = "Baking…";
+        Status = "Baking...";
         return true;
     }
 
@@ -188,10 +193,24 @@ public sealed class LightmapBakeService
         }
 
         Progress = Math.Clamp(_job.IterationCount / (float)_targetIterations, 0f, 1f);
-        Status = $"Baking… {_job.IterationCount}/{_targetIterations}";
+        Status = $"Baking... {_job.IterationCount}/{_targetIterations}";
+        if (_job.IterationCount < _targetIterations) return;
 
-        if (_job.IterationCount >= _targetIterations)
-            FinalizeBake();
+        // The result marks the scenes it changed, which play mode never does, so it waits for play to end.
+        if (Application.IsPlaying)
+        {
+            Status = "Waiting for play mode to end";
+            return;
+        }
+
+        try { FinalizeBake(); }
+        catch (Exception e)
+        {
+            Runtime.Debug.LogException("[Lightmap] Writing the bake threw", e);
+            DeleteStaging();
+            Cleanup();
+            Status = "Failed";
+        }
     }
 
     /// <summary> Cancels the current bake, if any, and resets the service to idle. </summary>
@@ -242,7 +261,7 @@ public sealed class LightmapBakeService
 
     private void FinalizeBake()
     {
-        Status = "Writing lightmaps…";
+        Status = "Writing lightmaps...";
         LightmapBaker baker = _baker!;
         SceneInstance world = _world!;
         baker.Cancel();        // stop the progressive job
@@ -294,7 +313,7 @@ public sealed class LightmapBakeService
         }
 
         // Every probe bakes in one pass against the whole traced scene, then each scene keeps and tetrahedralizes its own.
-        Status = "Baking probes…";
+        Status = "Baking probes...";
         List<Float3> allProbes = [.. written.SelectMany(w => w.Share.Probes)];
         Sh9Rgb[] sh = allProbes.Count > 0 ? baker.BakeProbes(allProbes, _settings.ProbeSamples, _settings.Bounces) : [];
 
@@ -346,6 +365,20 @@ public sealed class LightmapBakeService
             + $"{_scenes.Sum(share => share.Renderers.Count)} renderer(s), {allProbes.Count} probe(s). Save the scenes to keep the result.");
         Cleanup();
         Status = "Done";
+    }
+
+    // Drops the staging folders a bake that failed while writing left behind.
+    private void DeleteStaging()
+    {
+        EditorAssetBackend? db = EditorAssetBackend.Instance;
+        if (db == null || Project.Current == null) return;
+        foreach (SceneBake share in _scenes)
+        {
+            if (share.Scene.Path is not { } path) continue;
+            string staging = LightmapFolderOf(path) + "_baking";
+            try { if (Directory.Exists(Path.Combine(Project.Current.AssetsPath, staging))) db.DeleteAssetFolder(staging); }
+            catch (Exception e) { Runtime.Debug.LogWarning($"[Lightmap] Could not remove '{staging}': {e.Message}"); }
+        }
     }
 
     private void Cleanup()
