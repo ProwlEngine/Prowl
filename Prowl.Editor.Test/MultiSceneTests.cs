@@ -21,6 +21,11 @@ public class MultiSceneTests : EditorTestHarness
         public GameObject? Target;
     }
 
+    public sealed class Keyed : Component
+    {
+        public Dictionary<GameObject, int> Scores = [];
+    }
+
     // A second file with the same content, so every identifier in it is shared with the first.
     private Scene Duplicate(string from, string to)
     {
@@ -463,6 +468,22 @@ public class MultiSceneTests : EditorTestHarness
 
         Assert.Same(b.Section, helper.Section);
         Assert.Null(holder.Target);
+    }
+
+    [Fact]
+    public void AMove_DropsADictionaryEntryKeyedByAnObjectInAnotherScene()
+    {
+        OpenScene a = Open(Author("A.scene", "a"));
+        OpenScene b = Additive(Author("B.scene", "b"));
+        GameObject stays = Root(b);
+        GameObject mover = EditorSceneManager.EditWorld.Create(b.Section!, "Mover");
+        Keyed keyed = stays.AddComponent<Keyed>();
+        keyed.Scores[mover] = 1;
+        keyed.Scores[stays] = 2;
+
+        Undo.MoveGameObjectToScene(mover, a, "Move");
+
+        Assert.Equal([stays], keyed.Scores.Keys);
     }
 
     [Fact]

@@ -2362,7 +2362,7 @@ public static class Undo
                 if (replaced)
                 {
                     try { member.SetValue(owner, rewritten); }
-                    catch { }
+                    catch (Exception e) { Runtime.Debug.LogWarning($"[Undo] Could not write '{member.Key}' on {owner.GetType().Name}: {e.Message}"); }
                 }
             }
             return changed;
@@ -2410,19 +2410,21 @@ public static class Undo
 
                 case IDictionary dict:
                 {
-                    var entries = new List<(object Key, object? Value)>();
+                    var entries = new List<(object? Key, object? Value)>();
                     bool any = false;
                     foreach (DictionaryEntry e in dict)
                     {
-                        object k = Rewrite(e.Key, map, visited, ref changed, out bool rk)!;
+                        object? k = Rewrite(e.Key, map, visited, ref changed, out bool rk);
                         object? v = Rewrite(e.Value, map, visited, ref changed, out bool rv);
                         any |= rk || rv;
                         entries.Add((k, v));
                     }
                     if (any)
                     {
+                        // An entry whose key mapped to null has no key left, so it goes.
                         dict.Clear();
-                        foreach ((object k, object? v) in entries) dict[k] = v;
+                        foreach ((object? k, object? v) in entries)
+                            if (k != null) dict[k] = v;
                     }
                     return value;
                 }
