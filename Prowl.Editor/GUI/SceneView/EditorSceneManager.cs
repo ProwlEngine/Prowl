@@ -91,7 +91,7 @@ public static class EditorSceneManager
         return s_playCopies.TryGetValue(section, out SceneSection? copy) && copy.IsLoaded && ReferenceEquals(copy.Instance, play) ? copy : null;
     }
 
-    /// <summary>Sends the edit world dormant, restarts the session and binds <paramref name="play"/> as Main, running.</summary>
+    /// <summary>Binds <paramref name="play"/> as Main, running, sending the edit world dormant first when it is still awake.</summary>
     internal static void EnterPlayWorld(SceneInstance play)
     {
         s_worldsBeforePlay = new();
@@ -101,11 +101,31 @@ public static class EditorSceneManager
             .Where(entry => entry.Enabled)
             .Select(entry => AssetDatabase.Get<Scene>(entry.SceneGuid))
             .Where(scene => scene.IsValid())!);
-        EditWorld.Deactivate();
-        Runtime.Tasks.MainThreadContext.Restart();
+        if (EditWorld.State == SceneState.Running) SleepEditWorld();
         s_playWorld = play;
         SceneInstance.Main = play;
         play.Activate();
+    }
+
+    /// <summary>
+    /// Sends the edit world dormant, restarts the session, and builds the play copy in the new session, so work the copy
+    /// starts as it fills belongs to play. A failed build wakes the edit world again and rethrows.
+    /// </summary>
+    internal static SceneInstance PreparePlayWorld()
+    {
+        SleepEditWorld();
+        try { return BuildPlayWorld(); }
+        catch
+        {
+            EditWorld.Activate();
+            throw;
+        }
+    }
+
+    private static void SleepEditWorld()
+    {
+        EditWorld.Deactivate();
+        Runtime.Tasks.MainThreadContext.Restart();
     }
 
     // The worlds that existed when play started. Every other world is play's own and goes when it stops.

@@ -167,6 +167,32 @@ public class EditorWorldTests : EditorTestHarness
         Assert.Same(second, Selection.GetActiveAs<GameObject>());
     }
 
+    public sealed class WaitsWhenAdded : Component
+    {
+        public Task? Wait;
+        public override void OnAddedToScene() => Wait = GameTask.Frames(100);
+    }
+
+    [Fact]
+    public void WorkThePlayCopyStartsAsItFills_BelongsToPlay()
+    {
+        MainThreadContext.Install();
+        try
+        {
+            EditorSceneManager.EditWorld.Create("Thing").AddComponent<WaitsWhenAdded>();
+            SceneInstance play = EditorSceneManager.PreparePlayWorld();
+            using (EnterPlayMode())
+            {
+                EditorSceneManager.EnterPlayWorld(play);
+                Task wait = play.Get<WaitsWhenAdded>()!.Wait!;
+                Assert.False(wait.IsCanceled);
+                EditorSceneManager.DestroyPlayWorld();
+            }
+            EditorSceneManager.ReturnToEditWorld();
+        }
+        finally { MainThreadContext.Uninstall(); }
+    }
+
     [Fact]
     public void TheEditHistory_StillResolves_AfterPlay()
     {

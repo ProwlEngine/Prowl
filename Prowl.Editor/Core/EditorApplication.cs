@@ -1989,9 +1989,9 @@ public class EditorApplication : Game
         // play copy carries it as one.
         PrefabUtility.ReconcileOpenScene();
 
-        // Built before anything changes, so a failure leaves the edit world as it was and the editor usable.
+        // Built before anything else changes, so a failure leaves the edit world awake and the editor usable.
         SceneInstance playWorld;
-        try { playWorld = EditorSceneManager.BuildPlayWorld(); }
+        try { playWorld = EditorSceneManager.PreparePlayWorld(); }
         catch (Exception e)
         {
             Runtime.Debug.LogException("[Play] Building the play world threw, so play mode did not start", e);
