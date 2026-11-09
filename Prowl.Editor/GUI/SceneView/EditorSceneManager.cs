@@ -94,11 +94,15 @@ public static class EditorSceneManager
         Runtime.Tasks.MainThreadContext.Restart();
     }
 
-    /// <summary>Binds the edit world back as Main and runs it again. Nothing is deserialized, it never changed during play.</summary>
+    /// <summary>
+    /// Binds the edit world back as Main and runs it again. Nothing is deserialized, it never changed during play, but
+    /// instances of prefabs imported meanwhile refresh.
+    /// </summary>
     internal static void ReturnToEditWorld()
     {
         SceneInstance.Main = EditWorld;
         EditWorld.Activate();
+        PrefabUtility.RefreshStaleInstances();
     }
 
     // ================================================================

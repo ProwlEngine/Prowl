@@ -1142,6 +1142,23 @@ public static partial class PrefabUtility
     // notification would refresh the instances a second time, replacing every object again.
     private static bool s_refreshingFromApply;
 
+    // Prefabs imported during play or prefab editing, whose edit world instances refresh once it is back.
+    private static readonly HashSet<Guid> s_staleInstances = [];
+
+    internal static void MarkInstancesStale(Guid prefabGuid) => s_staleInstances.Add(prefabGuid);
+
+    /// <summary>Refreshes the edit world instances of every prefab imported while they could not be.</summary>
+    internal static void RefreshStaleInstances()
+    {
+        Guid[] stale = [.. s_staleInstances];
+        s_staleInstances.Clear();
+        foreach (Guid prefabGuid in stale)
+        {
+            try { RefreshAllInstances(prefabGuid); }
+            catch (Exception ex) { Runtime.Debug.LogError($"[Prefab] Failed to refresh instances of {prefabGuid}: {ex.Message}"); }
+        }
+    }
+
     /// <summary>
     /// Bring open-scene instances up to date after their prefab asset was imported. Covers a prefab
     /// edited outside the editor, one arriving from source control, and a model whose import settings
@@ -1161,8 +1178,13 @@ public static partial class PrefabUtility
             InvalidateSource(entry.Guid);
 
             // Whether instances may be rebuilt right now is a separate question.
-            if (s_refreshingFromApply || Application.IsPlaying) continue;
-            if (EditorSceneManager.EditedWorld.IsNotValid() || PrefabEditingMode.IsEditing) continue;
+            if (s_refreshingFromApply) continue;
+            if (Application.IsPlaying || PrefabEditingMode.IsEditing)
+            {
+                s_staleInstances.Add(entry.Guid);
+                continue;
+            }
+            if (EditorSceneManager.EditedWorld.IsNotValid()) continue;
 
             try
             {

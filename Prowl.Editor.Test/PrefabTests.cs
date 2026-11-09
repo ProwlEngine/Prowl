@@ -1062,8 +1062,8 @@ public partial class PrefabTests : EditorTestHarness
             Application.IsPlaying = false;
         }
 
-        // Leaving play reloads the scene, which is what brings its instances up to date.
-        PrefabUtility.RefreshAllInstances(g);
+        // The edit world coming back is what brings its instances up to date.
+        EditorSceneManager.ReturnToEditWorld();
         GameObject live = EditorSceneManager.EditedWorld.Roots.First();
         Assert.Equal(42, live.GetComponent<OverrideComp>()!.A);
 
@@ -1071,6 +1071,23 @@ public partial class PrefabTests : EditorTestHarness
         // override the instance made.
         PrefabUtility.ReconcileOpenScene();
         Assert.Empty(live.PrefabOverrides);
+    }
+
+    [Fact]
+    public void APrefabChangedWhileAnotherIsEdited_RefreshesItsInstancesOnExit()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 1;
+        Guid changed = CreatePrefabAsset(root, "Changed.prefab");
+        Guid edited = CreatePrefabAsset(new GameObject("Edited"), "Edited.prefab");
+        SetSceneCurrent(Inst(changed));
+
+        PrefabEditingMode.Enter(edited);
+        EditPrefabSource(changed, "Changed.prefab", s => s.GetComponent<OverrideComp>()!.A = 42);
+        PrefabEditingMode.Exit();
+
+        GameObject live = EditorSceneManager.EditedWorld.Roots.First();
+        Assert.Equal(42, live.GetComponent<OverrideComp>()!.A);
     }
 
     /// <summary>A deleted prefab keeps its baseline, so edits made while it is away are still recorded.</summary>

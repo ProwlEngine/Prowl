@@ -268,11 +268,8 @@ public static class PrefabEditingMode
         }
 
         Save();
-        Guid prefabGuid = EditingPrefabGuid;
-
+        PrefabUtility.MarkInstancesStale(EditingPrefabGuid);
         Close();
-        PrefabUtility.RefreshAllInstances(prefabGuid);
-
         Cleanup();
         Debug.Log("[Prefab] Saved and exited editing mode.");
     }
@@ -313,13 +310,14 @@ public static class PrefabEditingMode
         Debug.Log("[Prefab] Exited editing mode.");
     }
 
-    // Destroys the prefab world and wakes the edit world underneath, as it was.
+    // Destroys the prefab world and wakes the edit world underneath, refreshing instances of prefabs imported meanwhile.
     private static void Close()
     {
         SceneInstance? world = _world;
         _world = null;
         if (world.IsValid()) world.Dispose();
         EditorSceneManager.EditWorld.Activate();
+        PrefabUtility.RefreshStaleInstances();
     }
 
     private static void Cleanup()
