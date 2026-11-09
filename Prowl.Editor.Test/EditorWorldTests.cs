@@ -178,9 +178,11 @@ public class EditorWorldTests : EditorTestHarness
         Guid prefab = CreatePrefabAsset(authored, "Crate.prefab");
         SceneInstance edit = EditorSceneManager.EditWorld;
         GameObject sceneObject = edit.Create("InTheScene");
+        Selection.Select(sceneObject);
 
         PrefabEditingMode.Enter(prefab);
 
+        Assert.Equal(0, Selection.Count);
         SceneInstance prefabWorld = PrefabEditingMode.World!;
         Assert.NotSame(edit, prefabWorld);
         Assert.Same(prefabWorld, EditorSceneManager.EditedWorld);

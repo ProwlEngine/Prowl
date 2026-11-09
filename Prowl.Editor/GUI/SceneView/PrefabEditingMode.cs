@@ -102,7 +102,6 @@ public static class PrefabEditingMode
 
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         AssetEntry? entry = db?.GetEntry(prefabGuid);
-        EditingPrefabPath = entry?.Path;
 
         var go = GameObject.InstantiateDetached(prefab);
         if (go.IsNotValid())
@@ -115,9 +114,37 @@ public static class PrefabEditingMode
         // drop any edit nothing had recorded yet.
         SceneInstance edit = EditorSceneManager.EditWorld;
         PrefabUtility.ReconcileOpenScene();
-        OriginalSceneName = edit.Name;
 
         SceneInstance editScene = SceneInstance.Create($"Editing: {prefab.Name}", SceneMode.Edit);
+        try
+        {
+            Build(editScene, go, edit, prefabGuid);
+        }
+        catch (Exception e)
+        {
+            // Nothing of the session is left behind: the edit world wakes as it was.
+            Debug.LogException("[Prefab] Entering prefab editing threw", e);
+            if (editScene.IsValid()) editScene.Dispose();
+            if (!go.IsDisposed) go.Dispose();
+            _editingRoot = null;
+            if (edit.State == SceneState.Dormant) edit.Activate();
+            return;
+        }
+
+        _world = editScene;
+        _savedSceneUndo = Undo.PushContext();
+        OriginalSceneName = edit.Name;
+        EditingPrefabPath = entry?.Path;
+        EditingPrefabGuid = prefabGuid;
+        IsEditing = true;
+        IsDirty = false;
+
+        Debug.Log($"[Prefab] Entered editing mode: {prefab.Name}");
+    }
+
+    // Fills the prefab world with the prefab and the viewing rig, then swaps it in over the edit world.
+    private static void Build(SceneInstance editScene, GameObject go, SceneInstance edit, Guid prefabGuid)
+    {
         _editScenes.AddOrUpdate(editScene, new object());
 
         // We're editing the source, not an instance, so drop this prefab's own instance data. Nested
@@ -151,16 +178,10 @@ public static class PrefabEditingMode
         lightGo.AddComponent<DirectionalLight>();
         editScene.Add(lightGo);
 
+        // Objects of the dormant edit world must not stay selected, where the inspector or Delete would reach them.
+        Selection.Clear();
         edit.Deactivate();
         editScene.Activate();
-        _world = editScene;
-        _savedSceneUndo = Undo.PushContext();
-
-        EditingPrefabGuid = prefabGuid;
-        IsEditing = true;
-        IsDirty = false;
-
-        Debug.Log($"[Prefab] Entered editing mode: {prefab.Name}");
     }
 
     /// <summary>
