@@ -564,6 +564,14 @@ public class SceneInstance : EngineObject, ISerializable
             }
         }
 
+        // Whatever still keeps spawning after every round goes without its callbacks.
+        foreach (SceneSection section in sections)
+            foreach (GameObject root in section.LiveRoots.ToArray())
+            {
+                Debug.LogWarning($"[Scene] '{root.Name}' was still being made while '{section.Name}' tore down, so it was disposed without its callbacks.");
+                Guarded(root, "Dispose", root.Dispose);
+            }
+
         foreach (SceneSection section in sections)
             RemoveSection(section);
         if (rebuildProbes) RebuildProbes(keepPrevious: false);
@@ -1319,6 +1327,7 @@ public class SceneInstance : EngineObject, ISerializable
     internal void JoinSection(GameObject root, SceneSection section, int index = -1)
     {
         if (!ReferenceEquals(section.Instance, this)) throw new InvalidOperationException($"'{section.Name}' is a section of another world.");
+        if (!section.IsLoaded) throw new InvalidOperationException($"'{section.Name}' has been unloaded.");
         root._section?.RootsList.Remove(root);
         root._section = section;
         if (index < 0 || index >= section.RootsList.Count) section.RootsList.Add(root);

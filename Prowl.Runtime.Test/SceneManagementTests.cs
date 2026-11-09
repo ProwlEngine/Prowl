@@ -477,6 +477,18 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
+    public void CreatingIntoAnUnloadedSection_IsRefused()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection level = world.CreateSection("Level");
+        level.Unload();
+        SceneInstance.ProcessPendingLoad();
+
+        Assert.Throws<InvalidOperationException>(() => world.Create(level, "Late"));
+        Assert.DoesNotContain(world.Objects, go => go.Name == "Late");
+    }
+
+    [Fact]
     public void AnUnloadedAnimator_LeavesTheWorldsAnimation()
     {
         SceneInstance world = CreateScene(enable: true);
