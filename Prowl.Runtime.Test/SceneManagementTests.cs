@@ -629,6 +629,28 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
+    public void MainCamera_FollowsHidingAndATargetGoingAway()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        Camera low = world.Create("Low").AddComponent<Camera>();
+        Camera high = world.Create("High").AddComponent<Camera>();
+        low.Depth = 0;
+        high.Depth = 1;
+        Assert.Same(high, world.MainCamera);
+
+        high.GameObject.HideFlags = HideFlags.HideAndDontSave;
+        Assert.Same(low, world.MainCamera);
+        high.GameObject.HideFlags = HideFlags.None;
+        Assert.Same(high, world.MainCamera);
+
+        var target = new RenderTexture(4, 4, false, [TextureFormat.RGBA8]);
+        high.Target = target;
+        Assert.Same(low, world.MainCamera);
+        target.Dispose();
+        Assert.Same(high, world.MainCamera);
+    }
+
+    [Fact]
     public void Roots_WalkEverySectionInOrder_WithoutAllocating()
     {
         SceneInstance world = CreateScene();

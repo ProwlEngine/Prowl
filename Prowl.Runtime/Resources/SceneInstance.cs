@@ -1852,7 +1852,8 @@ public class SceneInstance : EngineObject, ISerializable
 
     /// <summary>
     /// The enabled camera drawing to the screen with the highest depth, or null: no render texture target, a background
-    /// other than None, not an editor helper. Found on every call, so a camera added this frame is main at once.
+    /// other than None, not an editor helper. Found again only after a change that could pick another, so a camera added this
+    /// frame is main at once.
     /// </summary>
     public Camera? MainCamera
     {

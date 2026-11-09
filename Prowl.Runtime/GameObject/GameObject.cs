@@ -80,7 +80,18 @@ public partial class GameObject : EngineObject, ISerializable
     }
 
     /// <summary> The Hide Flags of this GameObject, Used to hide the GameObject from a variety of places like Serializing, Inspector or Hierarchy </summary>
-    [HideInInspector] public HideFlags HideFlags = HideFlags.None;
+    public HideFlags HideFlags
+    {
+        get => _hideFlags;
+        set
+        {
+            if (value == _hideFlags) return;
+            _hideFlags = value;
+            Camera.MainCameraChanged();
+        }
+    }
+
+    private HideFlags _hideFlags = HideFlags.None;
 
     /// <summary> Gets whether or not this gameobject is enabled explicitly </summary>
     public bool Enabled
