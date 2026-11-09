@@ -102,7 +102,7 @@ public static class FormatSizeHelpers
             case PixelFormat.ETC2_R8_G8_B8_A1_UNorm:
             case PixelFormat.ETC2_R8_G8_B8_A8_UNorm:
             case var astc when FormatHelpers.IsAstcFormat(astc):
-                Debug.Fail("GetSizeInBytes should not be used on a compressed format.");
+                // GetSizeInBytes should not be used on a compressed format.
                 throw Illegal.Value<PixelFormat>();
             default: throw Illegal.Value<PixelFormat>();
         }

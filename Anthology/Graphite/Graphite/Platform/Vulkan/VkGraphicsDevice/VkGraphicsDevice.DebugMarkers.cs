@@ -1,11 +1,9 @@
 using System;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using Silk.NET.Core;
 using Silk.NET.Vulkan;
-using Silk.NET.Vulkan.Extensions.EXT;
 
 namespace Prowl.Graphite.Vk;
 
@@ -23,7 +21,7 @@ internal unsafe partial class VkGraphicsDevice
         if (DebugUtils == null)
             return;
 
-        System.Diagnostics.Debug.WriteLine("Enabling Vulkan Debug callbacks.");
+        Console.WriteLine("Enabling Vulkan debug callbacks.");
         DebugUtilsMessengerCreateInfoEXT createInfo = new(sType: StructureType.DebugUtilsMessengerCreateInfoExt)
         {
             MessageSeverity = severity,

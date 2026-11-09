@@ -408,7 +408,7 @@ public static class PropertyGridRenderer
                     {
                         if (targets[t] == null) continue;
                         try { method.Invoke(targets[t], null); }
-                        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Button error: {ex.Message}"); }
+                        catch (Exception ex) { Console.Error.WriteLine($"Button error: {ex.Message}"); }
                         config.OnFieldChanged?.Invoke(targets[t]);
                         onChange?.Invoke(targets[t]);
                     }

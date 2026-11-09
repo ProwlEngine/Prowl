@@ -1,8 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 
 namespace Prowl.Vector.Geometry.Operators;
 
@@ -23,7 +23,7 @@ internal static class SplitFaceOp
 
         if (vert1 == vert2)
         {
-            Debug.WriteLine("SplitFace: vertices must be different");
+            Console.Error.WriteLine("SplitFace: vertices must be different");
             return (null, null);
         }
 
@@ -31,14 +31,14 @@ internal static class SplitFaceOp
         var loop2 = face.GetLoop(vert2);
         if (loop1 == null || loop2 == null)
         {
-            Debug.WriteLine("SplitFace: one or both vertices not found in face");
+            Console.Error.WriteLine("SplitFace: one or both vertices not found in face");
             return (null, null);
         }
 
         // Neighbouring corners already share an edge
         if (loop1.Next == loop2 || loop1.Prev == loop2)
         {
-            Debug.WriteLine("SplitFace: vertices are adjacent in the face");
+            Console.Error.WriteLine("SplitFace: vertices are adjacent in the face");
             return (null, null);
         }
 
@@ -68,7 +68,7 @@ internal static class SplitFaceOp
         var second = mesh.AddFace(secondVerts.ToArray());
         if (first == null || second == null)
         {
-            Debug.WriteLine($"SplitFace: Failed to create faces (first={first != null}, second={second != null})");
+            Console.Error.WriteLine($"SplitFace: Failed to create faces (first={first != null}, second={second != null})");
             return (first, second);
         }
 

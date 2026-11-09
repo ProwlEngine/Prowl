@@ -125,16 +125,9 @@ public struct Ray : IEquatable<Ray>, IFormattable
 
         // 3. Calculate the inverse of the combined view-projection matrix
         Float4x4 viewProjectionMatrix = projectionMatrix * viewMatrix;
-        Float4x4 inverseViewProjectionMatrix;
-        try
-        {
-            inverseViewProjectionMatrix = viewProjectionMatrix.Invert();
-        }
-        catch (ArgumentException ex)
-        {
-            System.Diagnostics.Debug.WriteLine("ScreenPointToRay Error: View-Projection matrix is singular. " + ex.Message);
-            return new Ray(Float3.Zero, new Float3(0.0f, 0.0f, -1.0f)); // Fallback ray
-        }
+
+        // TODO: handle Invert() returning NaNs if the matrix is singular.
+        Float4x4 inverseViewProjectionMatrix = viewProjectionMatrix.Invert();
 
         // 4. Transform NDC points to world space
         Float4 nearPointWorld = inverseViewProjectionMatrix * nearPointNDC;
@@ -176,16 +169,9 @@ public struct Ray : IEquatable<Ray>, IFormattable
         Float4 farPointNDC = new Float4(ndcX, ndcY, 1.0f, 1.0f);
 
         Float4x4 viewProjectionMatrix = projectionMatrix * viewMatrix;
-        Float4x4 inverseViewProjectionMatrix;
-        try
-        {
-            inverseViewProjectionMatrix = viewProjectionMatrix.Invert();
-        }
-        catch (ArgumentException ex)
-        {
-            System.Diagnostics.Debug.WriteLine("ScreenPointToRayFromCamera Error: View-Projection matrix is singular. " + ex.Message);
-            return new Ray(cameraWorldPosition, new Float3(0.0f, 0.0f, -1.0f)); // Fallback ray
-        }
+
+        // TODO: handle Invert() returning NaNs if the matrix is singular.
+        Float4x4 inverseViewProjectionMatrix = viewProjectionMatrix.Invert();
 
         Float4 farPointWorldH = inverseViewProjectionMatrix * farPointNDC;
 
