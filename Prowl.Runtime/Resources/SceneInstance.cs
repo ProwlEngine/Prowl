@@ -389,6 +389,11 @@ public class SceneInstance : EngineObject, ISerializable
             if (load.IsFinished) { s_queue.Remove(load); continue; }
             SceneInstance? world = load.Target;
             bool targeted = !ReferenceEquals(world, null);
+            if (load.IsApplying)
+            {
+                if (targeted) blocked.Add(world!);
+                continue;
+            }
             if (targeted && blocked.Contains(world!)) continue;
             if (targeted && world!._state is SceneState.Destroying or SceneState.Destroyed)
             {

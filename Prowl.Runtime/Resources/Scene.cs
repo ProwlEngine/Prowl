@@ -334,10 +334,10 @@ public sealed class SceneLoad
     // The detached objects from instantiating until activation, a root of the asset walk.
     internal GameObject[]? PendingObjects => _content?.Objects;
 
-    /// <summary>Cancels the load unless it is done. Its detached objects go away.</summary>
+    /// <summary>Cancels the load unless it is done or activating. Its detached objects go away.</summary>
     public void Cancel()
     {
-        if (IsFinished) return;
+        if (IsFinished || IsApplying) return;
         Phase = SceneLoadPhase.Cancelled;
         Release();
         _cancel.Cancel();
@@ -405,6 +405,7 @@ public sealed class SceneLoad
 
     internal void Complete(SceneSection section)
     {
+        if (IsFinished) return;
         Section = section;
         Phase = SceneLoadPhase.Done;
         Release();

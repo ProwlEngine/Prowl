@@ -254,6 +254,42 @@ public class SceneLoadTests : RuntimeTestBase
     }
 
     [Fact]
+    public void WaitingOnTheLoadBeingActivated_LeavesItsActivationAlone()
+    {
+        SceneLoad? first = null;
+        void Handler(SceneLoadedArgs args) => first!.Wait();
+        SceneInstance.Loaded += Handler;
+        try
+        {
+            first = Stored("First", "f").Load();
+            first.Wait();
+        }
+        finally { SceneInstance.Loaded -= Handler; }
+
+        Assert.Equal(SceneLoadPhase.Done, first.Phase);
+        Assert.Null(first.Error);
+        Assert.Equal("f", Assert.Single(SceneInstance.Main.ActiveSection.Roots).Name);
+    }
+
+    [Fact]
+    public void CancellingTheLoadBeingActivated_LeavesItDone()
+    {
+        SceneLoad? first = null;
+        void Handler(SceneLoadedArgs args) => first!.Cancel();
+        SceneInstance.Loaded += Handler;
+        try
+        {
+            first = Stored("First", "f").Load();
+            first.Wait();
+        }
+        finally { SceneInstance.Loaded -= Handler; }
+
+        Assert.Equal(SceneLoadPhase.Done, first.Phase);
+        Assert.Same(first.Section, first.GetAwaiter().GetResult());
+        Assert.Equal("f", Assert.Single(SceneInstance.Main.ActiveSection.Roots).Name);
+    }
+
+    [Fact]
     public void Loaded_FiresInsideTheWorld_WithTheSection()
     {
         SceneLoadedArgs? seen = null;
