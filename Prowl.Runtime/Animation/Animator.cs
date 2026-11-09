@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 
 using Prowl.Motion;
 using Prowl.Runtime.AnimationNodes;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
@@ -85,16 +86,22 @@ public class Animator : Component
 
     public SampledEventsBuffer? Events => _graph?.Events;
 
+    // The world this animator is registered with, kept so it leaves even during teardown, when it no longer reads as in one.
+    private SceneInstance? _registeredIn;
+
     public override void OnEnable()
     {
         Rebind();
         _autoPlayPending = PlayAutomatically;
-        if (IsInWorld) Scene.Animation.Register(this);
+        if (!IsInWorld) return;
+        _registeredIn = Scene;
+        _registeredIn.Animation.Register(this);
     }
 
     public override void OnDisable()
     {
-        if (IsInWorld) Scene.Animation.Unregister(this);
+        if (!ReferenceEquals(_registeredIn, null)) _registeredIn.Animation.Unregister(this);
+        _registeredIn = null;
         Rebind();
     }
 

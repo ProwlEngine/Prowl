@@ -476,6 +476,23 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.Null(Rendering.BakedLightingBinding.Resolve(renderer, ref cache).Placement);
     }
 
+    [Fact]
+    public void AnUnloadedAnimator_LeavesTheWorldsAnimation()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        SceneSection level = world.CreateSection("Level");
+        Animator animator = world.Create(level, "Character").AddComponent<Animator>();
+        Assert.Contains(animator, world.Animation.Animators);
+
+        level.Unload();
+        SceneInstance.ProcessPendingLoad();
+        Assert.DoesNotContain(animator, world.Animation.Animators);
+
+        Animator destroyed = world.Create("Other").AddComponent<Animator>();
+        destroyed.GameObject.Dispose();
+        Assert.DoesNotContain(destroyed, world.Animation.Animators);
+    }
+
     private sealed class GizmoCounter : Component
     {
         public int Draws;
