@@ -313,19 +313,15 @@ public class EditorApplication : Game
             }
 
             List<string> saved = [];
+            OpenScene? untitled = null;
             foreach (OpenScene scene in EditorSceneManager.OpenScenes.ToArray())
             {
                 if (!scene.IsDirty || !scene.IsLoaded) continue;
-                if (scene.Path != null)
-                {
-                    if (EditorSceneManager.Save(scene)) saved.Add(EditorSceneManager.LabelOf(scene));
-                }
-                else if (!SaveManager.IsAutoSave)
-                {
-                    PromptSaveAs(scene, SaveManager.TakeAfterSaveAs());
-                    break;
-                }
+                if (scene.Path == null) untitled ??= scene;
+                else if (EditorSceneManager.Save(scene)) saved.Add(EditorSceneManager.LabelOf(scene));
             }
+            // Every titled scene saves first, then the first untitled one asks for a path.
+            if (untitled != null && !SaveManager.IsAutoSave) PromptSaveAs(untitled, SaveManager.TakeAfterSaveAs());
             return saved.Count == 0 ? null : string.Join(", ", saved);
         };
         Runtime.Debug.OnLog += PauseOnLog;
