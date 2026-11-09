@@ -18,6 +18,14 @@ public class MultiSceneTests : EditorTestHarness
     public sealed class Marker : Component
     {
         public int Value;
+        public GameObject? Target;
+    }
+
+    // A second file with the same content, so every identifier in it is shared with the first.
+    private Scene Duplicate(string from, string to)
+    {
+        File.Copy(AssetAbsolutePath(from), AssetAbsolutePath(to));
+        return AssetDatabase.Get<Scene>(Assets.ImportFile(to))!;
     }
 
     private Scene Author(string path, params string[] roots)
@@ -283,5 +291,105 @@ public class MultiSceneTests : EditorTestHarness
 
         Assert.True(a.IsDirty);
         Assert.False(b.IsDirty);
+    }
+
+    [Fact]
+    public void DuplicatedScenes_NeverResolveToEachOther()
+    {
+        OpenScene a = Open(Author("A.scene", "a"));
+        OpenScene copy = Additive(Duplicate("A.scene", "Copy.scene"));
+        Marker inA = Root(a).GetComponent<Marker>()!;
+        Marker inCopy = Root(copy).GetComponent<Marker>()!;
+        Assert.Equal(inA.Identifier, inCopy.Identifier);
+
+        Undo.RecordObject(inCopy, "Edit Copy");
+        inCopy.Value = 7;
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+        inA.Value = 5;
+
+        Undo.PerformUndo();
+
+        Assert.Equal(0, inCopy.Value);
+        Assert.Equal(5, inA.Value);
+    }
+
+    [Fact]
+    public void MovingARootBetweenScenes_IsOneStep_ThatGivesItsOldIdentifierBack()
+    {
+        OpenScene a = Open(Author("A.scene", "a"));
+        OpenScene copy = Additive(Duplicate("A.scene", "Copy.scene"));
+        GameObject moving = Root(copy);
+        Guid original = moving.Identifier;
+
+        Undo.MoveGameObjectToScene(moving, a, "Move");
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+        Guid fresh = moving.Identifier;
+        Assert.NotEqual(original, fresh);
+        Assert.Same(a.Section, moving.Section);
+        Assert.True(copy.IsDirty);
+        Assert.True(a.IsDirty);
+
+        Undo.PerformUndo();
+        Assert.Same(copy.Section, moving.Section);
+        Assert.Equal(original, moving.Identifier);
+
+        Undo.PerformRedo();
+        Assert.Same(a.Section, moving.Section);
+        Assert.Equal(fresh, moving.Identifier);
+    }
+
+    [Fact]
+    public void ReparentingUnderAnObjectInAnotherScene_MovesIt_AndUndoesAsOneStep()
+    {
+        OpenScene a = Open(Author("A.scene", "a"));
+        OpenScene b = Additive(Author("B.scene", "b"));
+        GameObject child = Root(b);
+        GameObject parent = Root(a);
+
+        Undo.SetTransformParent(child, parent, true, "Parent");
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+        Assert.Same(parent, child.Parent);
+        Assert.Same(a.Section, child.Section);
+
+        Undo.PerformUndo();
+        Assert.False(child.Parent.IsValid());
+        Assert.Same(b.Section, child.Section);
+        Assert.Single(Undo.RedoSteps);
+    }
+
+    [Fact]
+    public void AMove_ClearsReferencesThatWouldCrossScenes_AndUndoBringsThemBack()
+    {
+        var world = new SceneInstance(SceneMode.Edit);
+        GameObject door = world.Create("door");
+        world.Create("holder").AddComponent<Marker>().Target = door;
+        OpenScene a = Open(AssetDatabase.Get<Scene>(CreateSceneAsset(world, "A.scene"))!);
+        OpenScene b = Additive(Author("B.scene", "b"));
+        Marker holder = a.Section!.Roots.Single(r => r.Name == "holder").GetComponent<Marker>()!;
+        GameObject liveDoor = holder.Target!;
+
+        Undo.MoveGameObjectToScene(liveDoor, b, "Move");
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+        Assert.False(holder.Target.IsValid());
+
+        Undo.PerformUndo();
+        Assert.Same(liveDoor, holder.Target);
+        Assert.Same(a.Section, liveDoor.Section);
+    }
+
+    [Fact]
+    public void SaveAs_KeepsTheHistoryValid()
+    {
+        Open(Author("A.scene", "a"));
+        OpenScene b = Additive(Author("B.scene", "b"));
+        Marker marker = Root(b).GetComponent<Marker>()!;
+        Undo.RecordObject(marker, "Edit");
+        marker.Value = 4;
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+
+        Assert.True(EditorSceneManager.SaveAs(b, "Renamed.scene"));
+        Undo.PerformUndo();
+
+        Assert.Equal(0, marker.Value);
     }
 }

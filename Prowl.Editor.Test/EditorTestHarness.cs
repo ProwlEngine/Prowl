@@ -59,6 +59,7 @@ public abstract class EditorTestHarness : IDisposable
 
         // After the database, since a new world loads its default sky.
         BindEditWorld(SceneInstance.Create("Untitled", SceneMode.Edit));
+        Core.Undo.ClearAll();
     }
 
     /// <summary>Binds <paramref name="world"/> as the editor's edit world and as Main, running, as the editor does at startup.</summary>
