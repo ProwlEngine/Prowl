@@ -309,6 +309,36 @@ public class MultiSceneTests : EditorTestHarness
     }
 
     [Fact]
+    public void ChangingTheActiveScene_IsRemembered()
+    {
+        Open(Author("A.scene", "a"));
+        OpenScene b = Additive(Author("B.scene", "b"));
+
+        EditorSceneManager.SetActive(b);
+
+        SceneSetup remembered = Assert.Single(EditorRegistries.GetSettings<Projects.Settings.GeneralSettings>().LastSetup, s => s.IsActive);
+        Assert.Equal(b.Scene!.AssetID, remembered.Asset);
+    }
+
+    [Fact]
+    public void ASetup_WithAnUnreadableScene_ListsItUnloaded()
+    {
+        Scene aAsset = Author("A.scene", "a");
+        Scene bAsset = Author("B.scene", "b");
+        Open(aAsset);
+        Additive(bAsset);
+        SceneSetup[] setup = EditorSceneManager.GetSetup();
+        Open(Author("Other.scene", "o"));
+        File.WriteAllText(AssetAbsolutePath("B.scene"), "{ not a scene");
+
+        EditorSceneManager.RestoreSetup(setup);
+        SceneInstance.ProcessPendingLoad();
+
+        Assert.Equal(["A", "B"], EditorSceneManager.OpenScenes.Select(o => o.Name));
+        Assert.Equal([true, false], EditorSceneManager.OpenScenes.Select(o => o.IsLoaded));
+    }
+
+    [Fact]
     public void AnAdditiveNewScene_IsEmpty()
     {
         Open(Author("A.scene", "a"));

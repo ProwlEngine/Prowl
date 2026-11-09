@@ -267,6 +267,7 @@ public static class EditorSceneManager
         s_open.Add(open);
         SceneOpened?.Invoke(open);
         if (load) Load(open);
+        SetupChanged();
         return open;
     }
 
@@ -396,6 +397,7 @@ public static class EditorSceneManager
         }
         else SceneClosing?.Invoke(scene);
         s_open.Remove(scene);
+        SetupChanged();
     }
 
     private static void Close(OpenScene scene)
@@ -430,6 +432,7 @@ public static class EditorSceneManager
         RequireEditing("change the active scene");
         if (scene.Section is not { IsLoaded: true } section) throw new InvalidOperationException($"'{scene.Name}' is not loaded.");
         EditWorld.ActiveSection = section;
+        SetupChanged();
     }
 
     /// <summary>Moves a scene to <paramref name="index"/> in the hierarchy, and its section with it.</summary>
@@ -439,6 +442,7 @@ public static class EditorSceneManager
         if (!s_open.Remove(scene)) return;
         s_open.Insert(Math.Clamp(index, 0, s_open.Count), scene);
         if (scene.IsLoaded) EditWorld.MoveSection(scene.Section!, SectionIndexOf(scene));
+        SetupChanged();
     }
 
     /// <summary>Whether a scene has changes its file does not.</summary>
@@ -519,6 +523,7 @@ public static class EditorSceneManager
             scene.Dirty = false;
 
             SceneSaved?.Invoke(scene);
+            SetupChanged();
             Debug.Log($"Saved scene: {relativePath}");
             return true;
         }
@@ -556,7 +561,13 @@ public static class EditorSceneManager
                 continue;
             }
             if (entries.Any(e => ReferenceEquals(e.Scene, scene))) continue;
-            entries.Add((scene, entry, entry.IsLoaded ? ReadContent(scene) : null));
+            SceneContent? content = null;
+            if (entry.IsLoaded)
+            {
+                try { content = ReadContent(scene); }
+                catch (Exception e) { Debug.LogWarning($"[Scene] '{scene.Name}' could not be read, so it was restored unloaded: {e.Message}"); }
+            }
+            entries.Add((scene, entry, content));
         }
         if (!entries.Any(e => e.Content != null))
             throw new InvalidOperationException("None of the scenes to restore can be loaded.");
@@ -681,11 +692,25 @@ public static class EditorSceneManager
                         if (open.Scene.IsValid() && general.HiddenScenes.Contains(open.Scene.AssetID)) open.IsHiddenInSceneView = true;
                     return;
                 }
-                catch (InvalidOperationException e) { Debug.LogWarning($"[Scene] The remembered scenes could not be restored: {e.Message}"); }
+                catch (InvalidOperationException e)
+                {
+                    Debug.LogWarning($"[Scene] The remembered scenes could not be restored: {e.Message}");
+                    // Listed unloaded under the new scene, so the remembered setup is not lost.
+                    New(force: true);
+                    foreach (SceneSetup entry in general.LastSetup)
+                        if (Resolve(entry) is { } scene && scene.IsValid()) OpenAdditive(scene, load: false);
+                    return;
+                }
             }
         }
 
         New(force: true);
+    }
+
+    // Remembered now, or once the queued changes apply.
+    internal static void SetupChanged()
+    {
+        if (s_pending.Count == 0) RememberSetup();
     }
 
     // The setup is remembered whenever it changes, so the next session reopens it.
@@ -817,6 +842,7 @@ public sealed class OpenScene
         {
             _hidden = value;
             if (Section != null) Section.HiddenInSceneView = value;
+            EditorSceneManager.SetupChanged();
         }
     }
 
