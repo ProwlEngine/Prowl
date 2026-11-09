@@ -1137,6 +1137,24 @@ public class SceneInstance : EngineObject, ISerializable
     }
 
     /// <summary>The object or component of <paramref name="section"/> with this identifier, or null. Exact even when another section holds the same identifier.</summary>
+    // Every identifier of a live object or component in the section, gathered in one walk.
+    internal HashSet<Guid> IdentifiersIn(SceneSection section)
+    {
+        HashSet<Guid> identifiers = [];
+        foreach (GameObject root in section.LiveRoots)
+            Gather(root);
+        return identifiers;
+
+        void Gather(GameObject go)
+        {
+            identifiers.Add(go.Identifier);
+            foreach (Component component in go._components)
+                if (!component.IsDisposed) identifiers.Add(component.Identifier);
+            foreach (GameObject child in go.Children)
+                if (!child.IsDisposed) Gather(child);
+        }
+    }
+
     public EngineObject? FindObject(SceneSection section, Guid identifier)
     {
         EnsureLive();

@@ -455,6 +455,25 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
+    public void MovingToAnotherWorld_GivesAFreshIdentifierOnAClash()
+    {
+        SceneInstance from = CreateScene();
+        SceneInstance to = CreateScene();
+        GameObject mover = from.Create("Mover");
+        GameObject holder = to.Create("Holder");
+        Guid shared = holder.Identifier;
+        mover.SetIdentifier(shared);
+        SectionLink link = mover.AddComponent<SectionLink>();
+        link.Identifier = holder.AddComponent<SectionLink>().Identifier;
+
+        mover.MoveTo(to);
+
+        Assert.NotEqual(shared, mover.Identifier);
+        Assert.NotEqual(holder.GetComponent<SectionLink>()!.Identifier, link.Identifier);
+        Assert.Same(holder, to.FindObject(to.ActiveSection, shared));
+    }
+
+    [Fact]
     public void SiblingIndex_OfARoot_IsItsIndexAmongItsSectionsRoots()
     {
         SceneInstance world = CreateScene();

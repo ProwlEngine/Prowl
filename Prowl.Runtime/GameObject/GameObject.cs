@@ -254,6 +254,7 @@ public partial class GameObject : EngineObject, ISerializable
     {
         List<GameObject> owned = [.. OwnedRoots()];
         SceneInstance? from = Scene;
+        GiveFreshIdentifiersAgainst(section);
         if (from.IsValid()) from!.Remove(this);
         world.Add(this, section);
         foreach (GameObject root in owned)
@@ -273,18 +274,18 @@ public partial class GameObject : EngineObject, ISerializable
     // An object moving into a section that already holds its identifier gets a fresh one, so identifiers stay unique per section.
     private void GiveFreshIdentifiersAgainst(SceneSection section)
     {
-        SceneInstance world = section.Instance;
+        HashSet<Guid> taken = section.Instance.IdentifiersIn(section);
         Renew(this);
 
         void Renew(GameObject go)
         {
-            if (world.FindObject(section, go.Identifier) is { } clash && !ReferenceEquals(clash, go))
+            if (taken.Contains(go.Identifier))
             {
                 Debug.LogWarning($"[Scene] '{go.Name}' got a fresh identifier moving into '{section.Name}', which already holds {go.Identifier}.");
                 go.SetIdentifier(Guid.NewGuid());
             }
             foreach (Component component in go._components)
-                if (world.FindObject(section, component.Identifier) is { } taken && !ReferenceEquals(taken, component))
+                if (taken.Contains(component.Identifier))
                     component.Identifier = Guid.NewGuid();
             foreach (GameObject child in go.Children)
                 Renew(child);
@@ -453,6 +454,7 @@ public partial class GameObject : EngineObject, ISerializable
 
         SceneInstance? newScene = NewParent.IsValid() ? NewParent.Scene : world;
         bool joinsScene = newScene.IsValid() && !ReferenceEquals(newScene, world);
+        if (joinsScene && NewParent!.Section is { } joining) GiveFreshIdentifiersAgainst(joining);
 
         // Section follows the root: becoming a child leaves the section's roots, becoming a root keeps the section it was in.
         SceneSection? oldSection = world.IsValid() ? Section : null;
