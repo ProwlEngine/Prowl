@@ -24,6 +24,9 @@ public class SceneAnalyzerTests : EditorTestHarness
     [Theory]
     [InlineData("bool N(Scene level) => GameObject.Scene == level;")]
     [InlineData("bool N(Scene level, SceneInstance world) => level != world;")]
+    [InlineData("bool N(Scene level, SceneInstance world) => ReferenceEquals(world, level);")]
+    [InlineData("bool N(Scene level, SceneInstance world) => world.Equals(level);")]
+    [InlineData("bool N(Scene level, SceneInstance world) => object.Equals(level, world);")]
     public void RefusesComparingAWorldWithAnAsset(string members)
     {
         ScriptCompiler.CompileResult result = Compile(members);
@@ -34,6 +37,8 @@ public class SceneAnalyzerTests : EditorTestHarness
     [Theory]
     [InlineData("public Scene? NextLevel;")]
     [InlineData("[Prowl.Echo.SerializeField] private Scene? _next;")]
+    [InlineData("public Scene[] Levels = [];")]
+    [InlineData("public System.Collections.Generic.List<Scene> Levels = [];")]
     public void WarnsOnAComponentFieldHoldingASceneAsset(string members)
     {
         ScriptCompiler.CompileResult result = Compile(members);
@@ -45,6 +50,7 @@ public class SceneAnalyzerTests : EditorTestHarness
     [InlineData("bool N(Scene level) => GameObject.Scene.IsValid() && GameObject.Scene.Source == level;")]
     [InlineData("bool N(SceneInstance a, SceneInstance b) => a == b;")]
     [InlineData("public AssetRef<Scene> NextLevel;")]
+    [InlineData("public System.Collections.Generic.List<AssetRef<Scene>> Levels = [];")]
     [InlineData("private Scene? _cached;")]
     [InlineData("[System.NonSerialized] public Scene? Loaded;")]
     public void LeavesTheRightFormsAlone(string members)

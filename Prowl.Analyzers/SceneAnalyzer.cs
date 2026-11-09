@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -66,6 +68,21 @@ public sealed class SceneAnalyzer : DiagnosticAnalyzer
                     worldSide.Syntax.ToString(), assetSide.Syntax.ToString()));
             }, OperationKind.Binary);
 
+            // ReferenceEquals and Equals compile for any two objects, so they say nothing a world and an asset could share either.
+            start.RegisterOperationAction(ctx =>
+            {
+                var call = (IInvocationOperation)ctx.Operation;
+                if (call.TargetMethod.Name is not ("ReferenceEquals" or "Equals")) return;
+                List<IOperation> sides = [.. call.Arguments.Select(a => Unwrap(a.Value))];
+                if (call.Instance is { } instance && call.TargetMethod.Name == "Equals") sides.Insert(0, Unwrap(instance));
+                if (sides.Count != 2) return;
+                IOperation? worldSide = sides.FirstOrDefault(s => DerivesFrom(s.Type, world));
+                IOperation? assetSide = sides.FirstOrDefault(s => DerivesFrom(s.Type, scene));
+                if (worldSide is null || assetSide is null) return;
+                ctx.ReportDiagnostic(Diagnostic.Create(s_worldComparedWithAsset, worldSide.Syntax.GetLocation(),
+                    worldSide.Syntax.ToString(), assetSide.Syntax.ToString()));
+            }, OperationKind.Invocation);
+
             INamedTypeSymbol? component = start.Compilation.GetTypeByMetadataName(ComponentMetadataName);
             INamedTypeSymbol? serializeField = start.Compilation.GetTypeByMetadataName(SerializeFieldMetadataName);
             if (component is null) return;
@@ -74,7 +91,7 @@ public sealed class SceneAnalyzer : DiagnosticAnalyzer
             {
                 var field = (IFieldSymbol)ctx.Symbol;
                 if (field.IsStatic || field.IsConst || field.IsImplicitlyDeclared) return;
-                if (!SymbolEqualityComparer.Default.Equals(field.Type.OriginalDefinition, scene)) return;
+                if (!HoldsScene(field.Type, scene)) return;
                 if (!DerivesFrom(field.ContainingType, component)) return;
                 bool serialized = field.DeclaredAccessibility == Accessibility.Public
                     || (serializeField is not null && HasAttribute(field, serializeField));
@@ -84,6 +101,16 @@ public sealed class SceneAnalyzer : DiagnosticAnalyzer
                     ctx.ReportDiagnostic(Diagnostic.Create(s_hardSceneField, location, field.Name));
             }, SymbolKind.Field);
         });
+    }
+
+    // The scene asset itself, or an array or collection of it. An AssetRef only names a scene, so it never counts.
+    private static bool HoldsScene(ITypeSymbol type, INamedTypeSymbol scene)
+    {
+        if (SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, scene)) return true;
+        if (type is IArrayTypeSymbol array) return HoldsScene(array.ElementType, scene);
+        if (type is INamedTypeSymbol { IsGenericType: true } generic && generic.Name != "AssetRef")
+            return generic.TypeArguments.Any(argument => HoldsScene(argument, scene));
+        return false;
     }
 
     private static IOperation Unwrap(IOperation operand)
