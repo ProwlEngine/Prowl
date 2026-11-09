@@ -382,17 +382,38 @@ public static class CliRefs
         object temp = Serializer.Deserialize(root, type, SceneReferenceResolver.ContextForLinking())
             ?? throw new CliException($"Echo could not read the edited {type.Name} back.");
 
-        foreach (string topField in topFields)
-        {
-            FieldInfo field = FindField(type, topField) ?? throw new CliException($"{type.Name} has no field '{topField}'.");
+        var fields = topFields.Select(name => FindField(type, name) ?? throw new CliException($"{type.Name} has no field '{name}'.")).ToList();
+        if (target is Component holder && EditorSceneManager.SceneOf(holder.GameObject) is { } scene)
+            foreach (FieldInfo field in fields)
+                foreach (GameObject referenced in ReferencedObjects(field.GetValue(temp)))
+                    if (EditorSceneManager.RefusesReference(scene, referenced, out string why))
+                        throw new CliException(why);
+
+        foreach (FieldInfo field in fields)
             field.SetValue(target, field.GetValue(temp));
-        }
 
         if (target is EngineObject eo && eo.IsValid())
         {
             try { eo.OnValidate(); }
             catch (Exception ex) { Debug.LogException($"OnValidate threw on {type.Name}", ex); }
             PrefabUtility.NotifyEdited(target);
+        }
+    }
+
+    // The scene objects a field value points at, directly or as items of a collection.
+    private static IEnumerable<GameObject> ReferencedObjects(object? value)
+    {
+        switch (value)
+        {
+            case GameObject go: yield return go; break;
+            case Component c when c.GameObject.IsValid(): yield return c.GameObject; break;
+            case Transform t when t.GameObject.IsValid(): yield return t.GameObject; break;
+            case string: break;
+            case IEnumerable items:
+                foreach (object? item in items)
+                    foreach (GameObject inner in ReferencedObjects(item))
+                        yield return inner;
+                break;
         }
     }
 

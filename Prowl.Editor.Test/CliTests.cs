@@ -611,6 +611,20 @@ public class CliEditorCommandTests : EditorTestHarness
     }
 
     [Fact]
+    public void Set_RefusesAReferenceIntoAnotherScene()
+    {
+        CreateSceneAsset(new SceneInstance(SceneMode.Edit), "First.scene");
+        CreateSceneAsset(new SceneInstance(SceneMode.Edit), "Second.scene");
+        Ok("scene", "--action", "open", "--path", "First.scene");
+        Ok("scene", "--action", "openadditive", "--path", "Second.scene");
+        Ok("go", "create", "--name", "P", "--components", "CliProbe", "--scene", "First");
+        Ok("go", "create", "--name", "InSecond", "--scene", "Second");
+
+        Assert.Contains("'Second'", Fails("set", "scene:First:/P:CliProbe", "Target", "scene:Second:/InSecond"));
+        Assert.Contains("'Second'", Fails("set", "scene:First:/P:CliProbe", "--values", """{"Targets": ["scene:Second:/InSecond"]}"""));
+    }
+
+    [Fact]
     public void NewScenesAndTheCameraMenu_GiveCamerasTonemapping()
     {
         static void AssertTonemaps(Camera camera)
