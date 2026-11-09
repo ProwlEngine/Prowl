@@ -286,9 +286,11 @@ public static class EditorSceneManager
 
         s_open.Add(open);
         open.ActivatesOnLoad = true;
+        open.LoadPending = true;
         SceneOpened?.Invoke(open);
         s_pending.Add(() =>
         {
+            open.LoadPending = false;
             if (!s_open.Contains(open)) return;
             open.Section = EditWorld.ReplaceContent(content, open.Name, open.Scene);
             open.Section.HiddenInSceneView = open.IsHiddenInSceneView;
@@ -303,7 +305,7 @@ public static class EditorSceneManager
     public static void Load(OpenScene scene)
     {
         RequireEditing("load a scene");
-        if (!s_open.Contains(scene) || scene.IsLoaded || scene.LoadPending) return;
+        if (!s_open.Contains(scene) || (scene.IsLoaded && !scene.UnloadPending) || scene.LoadPending) return;
         Queue(scene, scene.Scene.IsValid() ? ReadContent(scene.Scene) : new SceneContent());
     }
 
@@ -312,6 +314,7 @@ public static class EditorSceneManager
         open.LoadPending = true;
         s_pending.Add(() =>
         {
+            if (!open.LoadPending) return;
             open.LoadPending = false;
             if (!s_open.Contains(open) || open.IsLoaded) return;
             SceneInstance edit = EditWorld;
@@ -334,7 +337,16 @@ public static class EditorSceneManager
         return index;
     }
 
-    private static int LoadedCount => s_open.Count(o => o.IsLoaded || o.LoadPending);
+    // Scenes loaded once the queued changes apply.
+    private static int LoadedCount => s_open.Count(WillBeLoaded);
+
+    private static bool WillBeLoaded(OpenScene scene) => (scene.IsLoaded && !scene.UnloadPending) || scene.LoadPending;
+
+    private static void RefuseClosing(OpenScene scene)
+    {
+        if (LoadedCount <= 1) throw new InvalidOperationException($"'{scene.Name}' is the last loaded scene. Open another scene to replace it.");
+        if (scene.ActivatesOnLoad && scene.LoadPending) throw new InvalidOperationException($"'{scene.Name}' is still opening.");
+    }
 
     /// <summary>
     /// Unloads a scene's section and keeps it listed. Refused when it is dirty unless <paramref name="force"/> is set,
@@ -343,8 +355,8 @@ public static class EditorSceneManager
     public static void Unload(OpenScene scene, bool force = false)
     {
         RequireEditing("unload a scene");
-        if (!s_open.Contains(scene) || !(scene.IsLoaded || scene.LoadPending)) return;
-        if (LoadedCount <= 1) throw new InvalidOperationException($"'{scene.Name}' is the last loaded scene. Open another scene to replace it.");
+        if (!s_open.Contains(scene) || !WillBeLoaded(scene)) return;
+        RefuseClosing(scene);
         RefuseDirty([scene], force);
         Close(scene);
     }
@@ -354,9 +366,9 @@ public static class EditorSceneManager
     {
         RequireEditing("remove a scene");
         if (!s_open.Contains(scene)) return;
-        if (scene.IsLoaded || scene.LoadPending)
+        if (WillBeLoaded(scene))
         {
-            if (LoadedCount <= 1) throw new InvalidOperationException($"'{scene.Name}' is the last loaded scene. Open another scene to replace it.");
+            RefuseClosing(scene);
             RefuseDirty([scene], force);
             Close(scene);
         }
@@ -381,8 +393,10 @@ public static class EditorSceneManager
             if (selected is GameObject go && (!go.IsValid() || ReferenceEquals(go.Section, section)))
                 Selection.RemoveFromSelection(selected);
         Undo.DropScene(scene);
+        scene.UnloadPending = true;
         s_pending.Add(() =>
         {
+            scene.UnloadPending = false;
             if (section.IsLoaded) EditWorld.UnloadNow(section);
             if (ReferenceEquals(scene.Section, section)) scene.Section = null;
         });
@@ -499,7 +513,7 @@ public static class EditorSceneManager
         {
             Asset = o.Scene!.AssetID,
             Path = o.Path ?? "",
-            IsLoaded = o.IsLoaded || o.LoadPending,
+            IsLoaded = WillBeLoaded(o),
             IsActive = ReferenceEquals(o, ActiveScene),
         })];
 
@@ -786,6 +800,7 @@ public sealed class OpenScene
 
     internal bool Dirty;
     internal bool LoadPending;
+    internal bool UnloadPending;
     internal bool ActivatesOnLoad;
 
     public override string ToString() => Name;

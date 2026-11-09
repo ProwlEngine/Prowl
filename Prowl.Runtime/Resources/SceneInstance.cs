@@ -483,6 +483,7 @@ public class SceneInstance : EngineObject, ISerializable
         EnsureNotDisposed();
         MainThreadContext.AssertOwner(this);
         if (section.IsPersistent || !ReferenceEquals(section.Instance, this) || !section.IsLoaded) return;
+        if (_sections.Count(s => !s.IsPersistent) <= 1) throw new InvalidOperationException($"'{section.Name}' is the last section of '{Name}'.");
         ApplyUnload(section);
     }
 

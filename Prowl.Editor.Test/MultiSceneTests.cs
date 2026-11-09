@@ -130,6 +130,46 @@ public class MultiSceneTests : EditorTestHarness
     }
 
     [Fact]
+    public void TwoUnloadsInOneFrame_StillLeaveOneSceneLoaded()
+    {
+        OpenScene a = Open(Author("A.scene", "a"));
+        OpenScene b = Additive(Author("B.scene", "b"));
+
+        EditorSceneManager.Unload(a);
+        Assert.Throws<InvalidOperationException>(() => EditorSceneManager.Unload(b));
+        SceneInstance.ProcessPendingLoad();
+
+        Assert.True(b.IsLoaded);
+        Assert.True(b.IsActive);
+    }
+
+    [Fact]
+    public void UnloadingAPendingLoad_NeverLoadsIt()
+    {
+        Open(Author("A.scene", "a"));
+        OpenScene b = EditorSceneManager.OpenAdditive(Author("B.scene", "b"));
+
+        EditorSceneManager.Unload(b);
+        SceneInstance.ProcessPendingLoad();
+
+        Assert.False(b.IsLoaded);
+        Assert.DoesNotContain(EditorSceneManager.EditWorld.Objects, go => go.Name == "b");
+    }
+
+    [Fact]
+    public void ASceneStillOpening_CountsAsLoaded_AndCannotBeRemoved()
+    {
+        Open(Author("A.scene", "a"));
+        OpenScene b = EditorSceneManager.Open(Author("B.scene", "b"));
+
+        Assert.Throws<InvalidOperationException>(() => EditorSceneManager.Remove(b));
+        SceneInstance.ProcessPendingLoad();
+
+        Assert.True(b.IsLoaded);
+        Assert.Equal("b", Root(b).Name);
+    }
+
+    [Fact]
     public void DirtyScenes_AreRefusedUnlessForced()
     {
         OpenScene a = Open(Author("A.scene", "a"));
