@@ -174,6 +174,20 @@ public class ProjectMigrationTests : IDisposable
     }
 
     [Fact]
+    public void CameraBackgroundDepthAndTarget_MoveBehindTheirProperties()
+    {
+        string scene = WriteAsset("Cam.scene", Scene(OldComponent("Camera", Guid.NewGuid(), ("Depth", new EchoObject(3L)), ("Background", new EchoObject(2L)))), "SceneImporter");
+        WriteProwlFile("1.0", appliedSteps: ProjectMigration.StepCount(Project.CurrentVersion) - 1);
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject camera = Item(scene)[0];
+        Assert.Equal(3L, camera["depth"].LongValue);
+        Assert.Equal(2L, camera["background"].LongValue);
+        Assert.False(camera.TryGet("Depth", out _));
+    }
+
+    [Fact]
     public void PrefabOverridesOnRenamedSettings_FollowTheRename()
     {
         Guid light = Guid.NewGuid(), renderer = Guid.NewGuid(), unrelated = Guid.NewGuid();

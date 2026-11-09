@@ -817,6 +817,7 @@ public class SceneInstance : EngineObject, ISerializable
     {
         Canvases.Clear();
         Cameras.Clear();
+        _mainCamera = null;
         WindZoneList.Clear();
         VolumeList.Clear();
         AudioListeners.Clear();
@@ -1847,7 +1848,21 @@ public class SceneInstance : EngineObject, ISerializable
     /// The enabled camera drawing to the screen with the highest depth, or null: no render texture target, a background
     /// other than None, not an editor helper. Found on every call, so a camera added this frame is main at once.
     /// </summary>
-    public Camera? MainCamera => FindMainCamera();
+    public Camera? MainCamera
+    {
+        get
+        {
+            if (_mainCameraVersion != Camera.MainVersion || (_mainCamera.IsValid() && !_mainCamera.EnabledInHierarchy))
+            {
+                _mainCamera = FindMainCamera();
+                _mainCameraVersion = Camera.MainVersion;
+            }
+            return _mainCamera.IsValid() ? _mainCamera : null;
+        }
+    }
+
+    [NotHeld] private Camera? _mainCamera;
+    private int _mainCameraVersion = -1;
 
     /// <summary>The lines and shapes <see cref="Debug"/> draw calls made in this scene this frame.</summary>
     internal GizmoBuilder Gizmos { get; } = new();

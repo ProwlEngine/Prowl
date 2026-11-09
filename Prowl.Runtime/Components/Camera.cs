@@ -106,7 +106,15 @@ public class Camera : Component
     private bool UsesTaa => AntiAliasing == AntiAliasingMode.TAA;
     private bool UsesBackgroundColor => Background == CameraBackground.Color;
 
-    public CameraBackground Background = CameraBackground.Skybox;
+    [SerializeField] private CameraBackground background = CameraBackground.Skybox;
+
+    /// <summary>What the camera clears to before drawing. None draws over what is there and is never the main camera.</summary>
+    public CameraBackground Background
+    {
+        get => background;
+        set { background = value; MainCameraChanged(); }
+    }
+
     [ShowIf(nameof(UsesBackgroundColor))] public Color BackgroundColor = new(0f, 0f, 0f, 1f);
     public LayerMask CullingMask = LayerMask.Everything;
 
@@ -128,8 +136,14 @@ public class Camera : Component
     /// <summary>The part of the target the camera draws into, as x, y, width and height from 0 to 1, y down from the top.</summary>
     public Float4 ViewportRect = new(0, 0, 1, 1);
 
+    [SerializeField] private int depth = -1;
+
     /// <summary>Cameras draw lowest depth first, each over the ones before.</summary>
-    public int Depth = -1;
+    public int Depth
+    {
+        get => depth;
+        set { depth = value; MainCameraChanged(); }
+    }
 
     /// <summary>
     /// The main camera of <see cref="SceneInstance.Active"/>, the scene whose code is running: the enabled camera with the
@@ -148,7 +162,22 @@ public class Camera : Component
     /// emission_luminance to the screen's brightness, about 200 to 1000 nits, which reads dim in daylight as a real one does.
     /// </para>
     /// </summary>
-    public RenderTexture? Target;
+    public RenderTexture? Target
+    {
+        get => target;
+        set { target = value; MainCameraChanged(); }
+    }
+
+    [SerializeField] private RenderTexture? target;
+
+    // Moves whenever which camera is main could have changed, so each world finds it again only then.
+    internal static int MainVersion { get; private set; }
+
+    internal static void MainCameraChanged() => MainVersion++;
+
+    public override void OnValidate() => MainCameraChanged();
+
+    public override void OnAfterDeserialize() => MainCameraChanged();
 
     /// <summary>Resolution the camera renders at against its target, presented scaled to fit, times the quality level's.</summary>
     public float RenderScale = 1.0f;
@@ -205,9 +234,14 @@ public class Camera : Component
     internal override void JoinWorld(SceneInstance world)
     {
         if (!world.Cameras.Contains(this)) world.Cameras.Add(this);
+        MainCameraChanged();
     }
 
-    internal override void LeaveWorld(SceneInstance world) => world.Cameras.Remove(this);
+    internal override void LeaveWorld(SceneInstance world)
+    {
+        world.Cameras.Remove(this);
+        MainCameraChanged();
+    }
 
     protected override void OnDispose()
     {

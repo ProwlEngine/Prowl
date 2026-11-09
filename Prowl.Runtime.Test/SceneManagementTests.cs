@@ -609,6 +609,26 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
+    public void MainCamera_FollowsDepthTargetBackgroundAndEnabling()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        Camera low = world.Create("Low").AddComponent<Camera>();
+        Camera high = world.Create("High").AddComponent<Camera>();
+        low.Depth = 0;
+        high.Depth = 1;
+        Assert.Same(high, world.MainCamera);
+
+        high.Background = CameraBackground.None;
+        Assert.Same(low, world.MainCamera);
+        high.Background = CameraBackground.Skybox;
+        high.GameObject.Enabled = false;
+        Assert.Same(low, world.MainCamera);
+        high.GameObject.Enabled = true;
+        low.Depth = 5;
+        Assert.Same(low, world.MainCamera);
+    }
+
+    [Fact]
     public void Roots_WalkEverySectionInOrder_WithoutAllocating()
     {
         SceneInstance world = CreateScene();
