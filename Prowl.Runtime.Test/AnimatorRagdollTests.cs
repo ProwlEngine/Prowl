@@ -62,6 +62,17 @@ public class AnimatorRagdollTests : RuntimeTestBase
         Assert.All(bodies, b => Assert.Equal(Jitter2.Dynamics.MotionType.Dynamic, b.MotionType));
     }
 
+    [Fact]
+    public void ThePuppet_FollowsItsCharacterIntoThePersistentSection()
+    {
+        (SceneInstance scene, _, GameObject root) = SetupRagdoll();
+        Tick(scene, 3);
+
+        root.Persistent = true;
+
+        Assert.True(Puppet(scene)!.Persistent);
+    }
+
     // Chest is an optional humanoid bone, and without one the chest's body sits on the spine.
     [Fact]
     public void ARigWithoutAChest_GetsItsRagdoll()

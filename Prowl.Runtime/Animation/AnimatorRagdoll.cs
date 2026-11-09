@@ -130,8 +130,8 @@ internal sealed class AnimatorRagdoll
     private void Make(Dictionary<HumanBodyBone, Transform> bones, float totalMass, bool handsAndFeet)
     {
         // Flat, so no body is ever moved by another body's transform.
-        _puppet = new GameObject($"{_animator.GameObject.Name} Ragdoll") { HideFlags = HideFlags.HideAndDontSave };
-        _animator.Scene.Add(_puppet);
+        _puppet = _animator.Scene!.Create($"{_animator.GameObject.Name} Ragdoll", owner: _animator);
+        _puppet.HideFlags = HideFlags.HideAndDontSave;
         var puppetBones = new Dictionary<HumanBodyBone, Transform>(bones.Count);
         foreach ((HumanBodyBone bone, Transform source) in bones)
         {
