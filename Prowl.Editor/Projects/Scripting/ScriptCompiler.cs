@@ -99,7 +99,9 @@ public static class ScriptCompiler
             return RestorePackagesOnly(project, units);
 
         Directory.CreateDirectory(project.ScriptAssemblyPath);
-        return CompileUnits(project, compileUnits, RoslynScriptBackend.EditorParseOptions, "", unit => unit.OutputDllPath);
+        // Debug keeps breakpoints working and matches the code Ember's hot reload is tested against
+        return CompileUnits(project, compileUnits, RoslynScriptBackend.EditorParseOptions,
+            Microsoft.CodeAnalysis.OptimizationLevel.Debug, "", unit => unit.OutputDllPath);
     }
 
     /// <summary>The result of compiling the game assemblies a player ships.</summary>
@@ -107,11 +109,19 @@ public static class ScriptCompiler
 
     /// <summary>
     /// Compiles the game assemblies a player for <paramref name="targetPlatform"/> ships, with the player's
-    /// <paramref name="defines"/> instead of the editor's, into <paramref name="outputDir"/>. The editor's own
-    /// assemblies are left alone.
+    /// <paramref name="defines"/> instead of the editor's, into <paramref name="outputDir"/>. A Release
+    /// <paramref name="configuration"/> compiles them optimized. The editor's own assemblies are left alone.
     /// </summary>
-    public static PlayerCompileResult CompileForPlayer(Project project, string targetPlatform, IReadOnlyCollection<string> defines, string outputDir)
+    public static PlayerCompileResult CompileForPlayer(Project project, string targetPlatform, IReadOnlyCollection<string> defines,
+        BuildConfiguration configuration, string outputDir)
     {
+        Microsoft.CodeAnalysis.OptimizationLevel optimization = configuration switch
+        {
+            BuildConfiguration.Debug => Microsoft.CodeAnalysis.OptimizationLevel.Debug,
+            BuildConfiguration.Release => Microsoft.CodeAnalysis.OptimizationLevel.Release,
+            _ => throw new ArgumentOutOfRangeException(nameof(configuration), configuration, "Unknown build configuration."),
+        };
+
         (List<CompilationUnit>? units, string? error) = BuildPlan(project, defines);
         if (error != null)
             return new(new CompileResult { Success = false, Errors = error }, []);
@@ -123,19 +133,27 @@ public static class ScriptCompiler
         if (shipped.Count == 0)
             return new(new CompileResult { Success = true, Output = "No scripts to compile." }, []);
 
+        string DllPath(CompilationUnit unit) => Path.Combine(outputDir, $"{unit.Name}.dll");
+
         Directory.CreateDirectory(outputDir);
-        CompileResult result = CompileUnits(project, shipped, RoslynScriptBackend.ParseOptions(defines),
-            "::player:" + string.Join(';', defines.Order(StringComparer.Ordinal)), unit => Path.Combine(outputDir, $"{unit.Name}.dll"));
+        // An unchanged unit only writes its file when it is missing, and a compile for another
+        // configuration or define set may have left its own copy here
+        foreach (CompilationUnit unit in shipped)
+            File.Delete(DllPath(unit));
+
+        CompileResult result = CompileUnits(project, shipped, RoslynScriptBackend.ParseOptions(defines), optimization,
+            $"::player:{configuration}:{string.Join(';', defines.Order(StringComparer.Ordinal))}", DllPath);
 
         List<BuildAssembly> assemblies = result.Success
-            ? [.. shipped.Select(u => new BuildAssembly(u.Name, Path.Combine(outputDir, $"{u.Name}.dll")))]
+            ? [.. shipped.Select(u => new BuildAssembly(u.Name, DllPath(u)))]
             : [];
         return new(result, assemblies);
     }
 
     // Compiles units in dependency order, so each can reference the ones before it.
     private static CompileResult CompileUnits(Project project, List<CompilationUnit> compileUnits,
-        Microsoft.CodeAnalysis.CSharp.CSharpParseOptions parseOptions, string stateSuffix, Func<CompilationUnit, string> outputPath)
+        Microsoft.CodeAnalysis.CSharp.CSharpParseOptions parseOptions, Microsoft.CodeAnalysis.OptimizationLevel optimization,
+        string stateSuffix, Func<CompilationUnit, string> outputPath)
     {
         // Resolve NuGet references once (restores only when Directory.Build.props changed).
         Dictionary<string, List<string>> nugetRefs = NuGetReferenceResolver.Resolve(project, compileUnits);
@@ -149,7 +167,7 @@ public static class ScriptCompiler
         foreach (CompilationUnit? unit in compileUnits)
         {
             string stateKey = $"{project.RootPath}::{unit.Name}{stateSuffix}";
-            RoslynScriptBackend.CompileOutcome outcome = RoslynScriptBackend.Compile(stateKey, unit, peerRefs,
+            RoslynScriptBackend.CompileOutcome outcome = RoslynScriptBackend.Compile(stateKey, unit, optimization, peerRefs,
                 nugetRefs.TryGetValue(unit.Name, out List<string>? pkgs) ? pkgs : Array.Empty<string>(), parseOptions);
 
             foreach (Microsoft.CodeAnalysis.Diagnostic d in outcome.Diagnostics)
