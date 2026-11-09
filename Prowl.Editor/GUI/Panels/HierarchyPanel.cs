@@ -797,6 +797,9 @@ public class HierarchyPanel : DockPanel
                             Undo.SetTransformParent(dragged, null, true, "Reparent");
                         if (EditorSceneManager.SceneOf(target) is { } targetScene && !ReferenceEquals(EditorSceneManager.SceneOf(dragged), targetScene))
                             Undo.MoveGameObjectToScene(dragged, targetScene, "Reparent");
+                        // In play the sections are copies with no open scene of their own, so the root moves straight over.
+                        else if (target.Section is { } targetSection && !ReferenceEquals(dragged.Section, targetSection))
+                            dragged.MoveTo(targetSection);
 
                         // Root reorder via Scene list
                         int targetRootIdx = target.SiblingIndex;
