@@ -531,10 +531,20 @@ public class SceneInstance : EngineObject, ISerializable
             if (objects.Count == 0) break;
 
             if (_isActive)
+            {
                 foreach (GameObject g in objects)
                     foreach (Component c in g._components.ToArray())
                         if (!c.IsDisposed && c.HasBeenEnabled && c.EnabledInHierarchy)
                             Guarded(c, "OnDisable", c.InternalOnDisable);
+
+                // An object OnDisable moved out, like one made persistent, stays and enables again.
+                var kept = objects.FindAll(g => !g.IsDisposed && g.Section is { } s && !sections.Contains(s)).ToHashSet();
+                objects.RemoveAll(kept.Contains);
+                foreach (GameObject g in kept)
+                    foreach (Component c in g._components.ToArray())
+                        if (!c.IsDisposed && c.EnabledInHierarchy)
+                            Guarded(c, "OnEnable", c.InternalOnEnable);
+            }
             foreach (GameObject g in objects)
                 foreach (Component c in g._components.ToArray())
                     if (!c.IsDisposed) Guarded(c, "OnRemovedFromScene", c.OnRemovedFromScene);

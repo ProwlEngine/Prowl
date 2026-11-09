@@ -49,6 +49,13 @@ public class SceneLoadTests : RuntimeTestBase
 
     private static GameObject Only(SceneSection section) => Assert.Single(section.Roots);
 
+    private sealed class KeepOnDisable : Component
+    {
+        public int Enables;
+        public override void OnEnable() => Enables++;
+        public override void OnDisable() { if (GameObject.Parent.IsNotValid()) GameObject.Persistent = true; }
+    }
+
     [Fact]
     public void Load_ReplacesEverythingButPersistent_AndMakesTheLevelActive()
     {
@@ -71,6 +78,21 @@ public class SceneLoadTests : RuntimeTestBase
         Assert.Equal(1, Only(load.Section!).GetComponent<Counted>()!.Enables);
         Assert.Equal([main.Persistent, load.Section], main.Sections);
         Assert.True(load.GetAwaiter().IsCompleted);
+    }
+
+    [Fact]
+    public void MadePersistentWhileALoadDisablesIt_TheObjectSurvivesEnabled()
+    {
+        SceneInstance main = SceneInstance.Main;
+        GameObject keeper = main.Create("Keeper");
+        KeepOnDisable keep = keeper.AddComponent<KeepOnDisable>();
+
+        Stored("Level", "Door").Load().Wait();
+
+        Assert.False(keeper.IsDisposed);
+        Assert.True(keeper.Persistent);
+        Assert.Equal(2, keep.Enables);
+        Assert.Contains(keeper, main.Persistent.Roots);
     }
 
     [Fact]
