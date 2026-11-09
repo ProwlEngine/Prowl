@@ -180,13 +180,9 @@ public partial class GameObject
     /// than as an offset from the parent. Off by default, so the prefab lands where the parent is.</param>
     public static GameObject? Instantiate(PrefabAsset prefab, GameObject? parent, bool worldPositionStays = false)
     {
-        GameObject? instance = Instantiate(prefab, parent.IsValid() ? parent!.Scene : Resources.SceneInstance.Active);
-        if (instance.IsNotValid()) return null;
-
-        if (parent.IsValid())
-            instance.SetParent(parent!, worldPositionStays);
-
-        return instance;
+        if (parent.IsNotValid()) return Instantiate(prefab, Resources.SceneInstance.Active);
+        GameObject? instance = InstantiateDetached(prefab);
+        return instance.IsNotValid() ? null : AddUnder(instance!, parent!, worldPositionStays);
     }
 
     /// <summary>Spawn a prefab into a specific scene.</summary>
@@ -236,14 +232,9 @@ public partial class GameObject
     /// <inheritdoc cref="Instantiate(PrefabAsset, GameObject?, bool)"/>
     public static GameObject? Instantiate(GameObject original, GameObject? parent, bool worldPositionStays = false)
     {
-        SceneInstance? target = parent.IsValid() ? parent!.Scene : (original.IsValid() ? original.Scene : null);
-        GameObject? clone = Instantiate(original, target);
-        if (clone.IsNotValid()) return null;
-
-        if (parent.IsValid())
-            clone.SetParent(parent!, worldPositionStays);
-
-        return clone;
+        if (parent.IsNotValid()) return Instantiate(original, original.IsValid() ? original.Scene : null);
+        GameObject? clone = Clone(original);
+        return clone.IsNotValid() ? null : AddUnder(clone!, parent!, worldPositionStays);
     }
 
     /// <summary>Copy an existing GameObject into a specific world, into the original's section when it is the original's world.</summary>
@@ -277,7 +268,22 @@ public partial class GameObject
         }
     }
 
+    // Parented while still detached, so it joins the parent's world and section once, with its parent already set.
+    private static GameObject? AddUnder(GameObject instance, GameObject parent, bool worldPositionStays)
+    {
+        if (!CanSpawnInto(instance, parent.Scene)) return null;
+        instance.SetParent(parent, worldPositionStays);
+        return instance;
+    }
+
     private static GameObject? AddToScene(GameObject instance, SceneInstance? scene, SceneSection? section = null)
+    {
+        if (!CanSpawnInto(instance, scene)) return null;
+        scene!.Add(instance, section != null && section.IsLoaded ? section : null);
+        return instance;
+    }
+
+    private static bool CanSpawnInto(GameObject instance, SceneInstance? scene)
     {
         if (scene.IsNotValid() || scene!.State == SceneState.Destroying)
         {
@@ -287,10 +293,8 @@ public partial class GameObject
                 ? $"[Instantiate] '{scene!.Name}' is being destroyed, so '{instance.Name}' was not spawned."
                 : $"[Instantiate] There is no world to spawn '{instance.Name}' into.");
             instance.Dispose();
-            return null;
+            return false;
         }
-
-        scene.Add(instance, section != null && section.IsLoaded ? section : null);
-        return instance;
+        return true;
     }
 }

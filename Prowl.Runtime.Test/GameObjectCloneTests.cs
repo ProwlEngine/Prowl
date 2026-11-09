@@ -587,4 +587,30 @@ public class GameObjectCloneTests : RuntimeTestBase
     }
 
     #endregion
+    private sealed class ParentAtEnable : Component
+    {
+        public GameObject? Seen;
+        public SceneSection? Section;
+        public override void OnEnable()
+        {
+            Seen = GameObject.Parent;
+            Section = GameObject.Section;
+        }
+    }
+
+    [Fact]
+    public void InstantiateUnderAParent_JoinsTheParentsSection_WithTheParentInOnEnable()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        GameObject player = world.Create("Player");
+        player.Persistent = true;
+        var weapon = new GameObject("Weapon");
+        weapon.AddComponent<ParentAtEnable>();
+
+        GameObject clone = GameObject.Instantiate(weapon, player)!;
+
+        ParentAtEnable probe = clone.GetComponent<ParentAtEnable>()!;
+        Assert.Same(player, probe.Seen);
+        Assert.Same(world.Persistent, probe.Section);
+    }
 }
