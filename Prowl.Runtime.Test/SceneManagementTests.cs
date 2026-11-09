@@ -597,6 +597,24 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
+    public void SiblingIndex_CountsOnlyLiveRoots()
+    {
+        SceneInstance world = CreateScene();
+        GameObject gone = world.Create("Gone");
+        GameObject a = world.Create("A");
+        GameObject b = world.Create("B");
+        GameObject parent = world.Create("Parent");
+        GameObject child = world.Create("Child", parent);
+        gone.Dispose();
+        parent.Dispose();
+
+        Assert.Equal(1, b.SiblingIndex);
+        b.SiblingIndex = 0;
+        Assert.Equal(["B", "A"], world.ActiveSection.Roots.Select(r => r.Name));
+        Assert.DoesNotContain(child, world.ActiveSection.RootsList);
+    }
+
+    [Fact]
     public void SiblingIndex_OfARoot_IsItsIndexAmongItsSectionsRoots()
     {
         SceneInstance world = CreateScene();

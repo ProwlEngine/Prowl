@@ -213,7 +213,7 @@ public partial class GameObject : EngineObject, ISerializable
         get
         {
             if (Parent.IsValid()) return Parent!.Children.IndexOf(this);
-            return Section is { } section ? section.RootsList.IndexOf(this) : -1;
+            return Section is { } section ? section.LiveRoots.ToList().IndexOf(this) : -1;
         }
         set => SetSiblingIndex(value);
     }
@@ -493,7 +493,7 @@ public partial class GameObject : EngineObject, ISerializable
             _parent = NewParent;
         }
 
-        if (world.IsValid() && NewParent.IsNotValid() && oldSection != null)
+        if (world.IsValid() && NewParent.IsNotValid() && oldSection != null && !IsDisposed)
             world!.JoinSection(this, oldSection);
 
         if (worldPositionStays)
@@ -707,8 +707,12 @@ public partial class GameObject : EngineObject, ISerializable
         {
             if (_section is { } section && Scene.IsValid())
             {
+                // The index counts live roots only, so roots disposed this frame do not shift it.
+                List<GameObject> live = [.. section.LiveRoots.Where(root => !ReferenceEquals(root, this))];
+                index = Maths.Max(0, Maths.Min(index, live.Count));
                 section.RootsList.Remove(this);
-                section.RootsList.Insert(Maths.Max(0, Maths.Min(index, section.RootsList.Count)), this);
+                int at = index < live.Count ? section.RootsList.IndexOf(live[index]) : section.RootsList.Count;
+                section.RootsList.Insert(at, this);
             }
             return;
         }

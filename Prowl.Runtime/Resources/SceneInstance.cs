@@ -1360,14 +1360,13 @@ public class SceneInstance : EngineObject, ISerializable
     private SceneSection? OwnerSection(GameObject root)
         => root._owner is { IsDisposed: false } owner && owner.GameObject.IsValid() && ReferenceEquals(owner.GameObject.Scene, this) ? owner.GameObject.Section : null;
 
-    internal void JoinSection(GameObject root, SceneSection section, int index = -1)
+    internal void JoinSection(GameObject root, SceneSection section)
     {
         if (!ReferenceEquals(section.Instance, this)) throw new InvalidOperationException($"'{section.Name}' is a section of another world.");
         if (!section.IsLoaded) throw new InvalidOperationException($"'{section.Name}' has been unloaded.");
         root._section?.RootsList.Remove(root);
         root._section = section;
-        if (index < 0 || index >= section.RootsList.Count) section.RootsList.Add(root);
-        else section.RootsList.Insert(index, root);
+        section.RootsList.Add(root);
     }
 
     internal static void LeaveSection(GameObject root)
