@@ -615,6 +615,35 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.True(probe.Hit);
     }
 
+    private sealed class JoinCounter : Component
+    {
+        public int Joins, Leaves;
+        internal override void JoinWorld(SceneInstance world) => Joins++;
+        internal override void LeaveWorld(SceneInstance world) => Leaves++;
+    }
+
+    private sealed class DisableOther : Component
+    {
+        public GameObject? Other;
+        public override void OnEnable() => Other!.Enabled = false;
+    }
+
+    [Fact]
+    public void ActivatingAWorld_JoinsEachComponentOnce_AndLeavesOnesDisabledBeforeTheirTurn()
+    {
+        SceneInstance world = CreateScene();
+        GameObject first = world.Create("First");
+        GameObject second = world.Create("Second");
+        JoinCounter counted = first.AddComponent<JoinCounter>();
+        JoinCounter skipped = second.AddComponent<JoinCounter>();
+        first.AddComponent<DisableOther>().Other = second;
+
+        world.Activate();
+
+        Assert.Equal(1, counted.Joins);
+        Assert.Equal(skipped.Joins, skipped.Leaves);
+    }
+
     [Fact]
     public void EnableAndDisable_AreIdempotent()
     {

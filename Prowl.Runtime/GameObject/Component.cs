@@ -392,6 +392,24 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// <summary>The other half of <see cref="JoinWorld"/>, as the component disables or leaves the world.</summary>
     internal virtual void LeaveWorld(SceneInstance world) { }
 
+    // The world whose registries this component is in, so it joins and leaves each one once.
+    internal SceneInstance? _joinedWorld;
+
+    internal void Join(SceneInstance world)
+    {
+        if (ReferenceEquals(_joinedWorld, world)) return;
+        if (!ReferenceEquals(_joinedWorld, null)) Leave(_joinedWorld);
+        _joinedWorld = world;
+        JoinWorld(world);
+    }
+
+    internal void Leave(SceneInstance world)
+    {
+        if (!ReferenceEquals(_joinedWorld, world)) return;
+        _joinedWorld = null;
+        LeaveWorld(world);
+    }
+
     /// <summary>
     /// Called before the first frame update.
     /// </summary>
@@ -515,7 +533,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
             {
                 scene.Dispatcher.Register(this);
                 if (this is Rendering.IRenderSync render) scene.Rendering.Add(render);
-                JoinWorld(scene);
+                Join(scene);
             }
         }
         if (!ShouldExecuteGameplay) return;
@@ -537,7 +555,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
             {
                 scene.Dispatcher.Unregister(this);
                 if (this is Rendering.IRenderSync render) scene.Rendering.Remove(render);
-                LeaveWorld(scene);
+                Leave(scene);
             }
         }
         if (!_gameplayEnabled) return;

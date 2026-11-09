@@ -759,7 +759,8 @@ public class SceneInstance : EngineObject, ISerializable
                 if (ReferenceEquals(comp, null) || comp.IsDisposed || !comp.EnabledInHierarchy) continue;
                 comp._countedCollisionListener = false;
                 _dispatcher.Register(comp);
-                comp.JoinWorld(this);
+                comp._joinedWorld = null;
+                comp.Join(this);
             }
         }
     }
@@ -1227,10 +1228,12 @@ public class SceneInstance : EngineObject, ISerializable
     private void Enable(List<Component> enabling)
     {
         foreach (Component component in enabling)
-            component.JoinWorld(this);
+            component.Join(this);
         foreach (Component component in enabling)
-            if (!component.IsDisposed && component.EnabledInHierarchy)
-                component.InternalOnEnable();
+        {
+            if (!component.IsDisposed && component.EnabledInHierarchy) component.InternalOnEnable();
+            else component.Leave(this);
+        }
     }
 
     /// <summary>
