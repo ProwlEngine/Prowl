@@ -230,14 +230,15 @@ public class HierarchyPanel : DockPanel
                     _pingedGameObjects.Clear();
                     FindGameObjectsWithGuid(scene, Selection.PingedGuid, _pingedGameObjects);
 
-                    // Collect parent IDs to force-expand so pinged GOs are visible
+                    // Collect parent and scene header IDs to force-expand so pinged GOs are visible
                     _forceExpandedIds.Clear();
                     foreach (GameObject pinged in _pingedGameObjects)
                     {
+                        _forceExpandedIds.Add(HeaderId(SectionKey(pinged.Section)));
                         GameObject? parent = pinged.Parent;
                         while (parent.IsValid())
                         {
-                            _forceExpandedIds.Add(parent.Identifier.ToString());
+                            _forceExpandedIds.Add(NodeId(parent));
                             parent = parent.Parent;
                         }
                     }
@@ -265,11 +266,7 @@ public class HierarchyPanel : DockPanel
                 // scroll view so the yellow highlight is actually visible.
                 if (pingIsNew)
                 {
-                    int pingIndex = -1;
-                    for (int i = 0; i < treeNodes.Count; i++)
-                    {
-                        if (IsPingedNode(treeNodes[i])) { pingIndex = i; break; }
-                    }
+                    int pingIndex = VisibleRowOf(treeNodes, IsPingedNode);
                     if (pingIndex >= 0)
                     {
                         float rowTotal = EditorTheme.RowHeight + 2f; // row + vertical spacing
@@ -331,7 +328,7 @@ public class HierarchyPanel : DockPanel
                         }
                         if (n.UserData is not GameObject go) return;
                         _dragHoverTargetNext = go;
-                        _dragHoverTargetIdNext = go.Identifier.ToString();
+                        _dragHoverTargetIdNext = NodeId(go);
                         _dragHoverNormalizedYNext = normY;
                     })
                     .CustomRowContent((paper, node, isSel, isExp) =>
@@ -510,7 +507,8 @@ public class HierarchyPanel : DockPanel
             header.Section = section is { IsLoaded: true } ? section : null;
             List<GameObject> roots = header.Section != null ? GetDisplayRoots(header.Section.Roots) : [];
             TreeNode node = header.Node;
-            node.Id = $"hier_scene_{RuntimeHelpers.GetHashCode(header)}";
+            node.Id = HeaderId(header.Open is { } open ? SceneKey(open) : SectionKey(section));
+            node.OverrideExpanded = _forceExpandedIds.Contains(node.Id) ? true : null;
             node.UserData = header;
             node.Label = HeaderName(header);
             node.Depth = 0;
@@ -521,6 +519,38 @@ public class HierarchyPanel : DockPanel
             foreach (GameObject root in roots)
                 BuildNodeList(root, 1, nodes, flatObjects);
         }
+    }
+
+    // A scene's key in node ids: its asset, else its name. The same in edit and play, so expand state carries over.
+    private static string SceneKey(OpenScene open) => open.Scene.IsValid() ? open.Scene.AssetID.ToString("N") : open.Name;
+
+    private static string SectionKey(SceneSection? section)
+    {
+        if (section == null) return "";
+        if (section.IsPersistent) return "persistent";
+        return section.Source.IsValid() ? section.Source.AssetID.ToString("N") : section.Name;
+    }
+
+    private static string HeaderId(string sceneKey) => $"hier_scene_{sceneKey}";
+
+    // Unique per scene, so rows of duplicated scenes never share state.
+    private static string NodeId(GameObject go) => $"{SectionKey(go.Section)}/{go.Identifier}";
+
+    // The row a node shows on, counting only rows whose parents are expanded. -1 when none matches.
+    private int VisibleRowOf(List<TreeNode> nodes, Func<TreeNode, bool> match)
+    {
+        int row = 0;
+        int collapsedDepth = int.MaxValue;
+        foreach (TreeNode node in nodes)
+        {
+            if (node.Depth > collapsedDepth) continue;
+            collapsedDepth = int.MaxValue;
+            if (match(node)) return row;
+            row++;
+            bool expanded = node.OverrideExpanded ?? (_expandState.TryGetValue(node.Id, out bool e) ? e : node.DefaultExpanded);
+            if (!expanded) collapsedDepth = node.Depth;
+        }
+        return -1;
     }
 
     // A pinged object row, or the header of a scene whose asset is pinged.
@@ -676,7 +706,8 @@ public class HierarchyPanel : DockPanel
             && !go.GetChildrenDeep().Any(c => EditorUtils.MatchesSearch(c.Name, _searchText)))
             return;
 
-        TreeNode node = _nodeCache.GetValue(go, static g => new TreeNode { Id = g.Identifier.ToString(), UserData = g });
+        TreeNode node = _nodeCache.GetValue(go, static g => new TreeNode { UserData = g });
+        node.Id = NodeId(go);
         string goId = node.Id;
         bool hasVisibleChildren = go.Children.Count > 0
             && go.Children.Any(c => !c.HideFlags.HasFlag(HideFlags.Hide) && !c.HideFlags.HasFlag(HideFlags.HideAndDontSave));
@@ -1064,7 +1095,7 @@ public class HierarchyPanel : DockPanel
     {
         Selection.FastPing(go.Identifier);
         // Enter rename via global overlay
-        string goIdStr = go.Identifier.ToString();
+        string goIdStr = NodeId(go);
         RenameOverlay.Begin(goIdStr, go.Name, newName =>
         {
             string oldName = go.Name;
@@ -1169,7 +1200,7 @@ public class HierarchyPanel : DockPanel
     private void StartRenameGO(GameObject primary, IEnumerable<GameObject> allTargets)
     {
         var targets = allTargets.ToList();
-        string goId = primary.Identifier.ToString();
+        string goId = NodeId(primary);
         RenameOverlay.Begin(goId, primary.Name, newName =>
         {
             if (targets.All(g => g.Name == newName)) return;
@@ -1255,13 +1286,6 @@ public class HierarchyPanel : DockPanel
         return go.Children.Count > 0
             ? (EditorIcons.ObjectGroup_I, EditorTheme.Ink300)
             : (EditorIcons.Cube_I, EditorTheme.InkDim);
-    }
-
-    private GameObject? FindGOByIdentifier(string id)
-    {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
-        if (scene.IsNotValid()) return null;
-        return scene.Objects.FirstOrDefault(g => g.Identifier.ToString() == id);
     }
 
     /// <summary>
