@@ -1691,6 +1691,7 @@ public sealed class DrawItemSink
     private CullFrustum _frustum;
     private uint _cullingMask;
     private bool _shadowView;
+    private RenderableFlags _hidden = RenderableFlags.Hidden;
 
     /// <summary>Indirect items whose instance count is copied from the provider's buffer into the view's commands.</summary>
     internal readonly List<(BucketSet.ItemDraw Item, DrawList List, RenderResourceID Source, uint Offset)> Counts = new();
@@ -1698,6 +1699,7 @@ public sealed class DrawItemSink
     internal void Begin(CameraFrame camera, WorldFrame world, in CullFrustum frustum, uint cullingMask, bool shadowView = false)
     {
         _shadowView = shadowView;
+        _hidden = shadowView ? RenderableFlags.Hidden : RenderableFlagsExtensions.HiddenIn(camera.Info.Kind);
         _camera = camera;
         _world = world;
         _frustum = frustum;
@@ -1801,7 +1803,7 @@ public sealed class DrawItemSink
         uint? firstObject = null)
     {
         ArgumentNullException.ThrowIfNull(material);
-        if ((item.LayerMask & _cullingMask) == 0 || (item.Flags & RenderableFlags.Hidden) != 0)
+        if ((item.LayerMask & _cullingMask) == 0 || (item.Flags & _hidden) != 0)
             return;
         if (material.IsDisposed || material.Draw is not { } draw || material.Table == null)
             return;

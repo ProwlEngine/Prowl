@@ -28,6 +28,16 @@ public enum RenderableFlags : ushort
     MotionVectors = 1 << 3,
     Hidden = 1 << 4,
     ShadowsOnly = 1 << 5,
+
+    /// <summary>Not drawn in scene views, the way an editor hides some of its objects there. Every other view still draws it.</summary>
+    SceneViewHidden = 1 << 6,
+}
+
+public static class RenderableFlagsExtensions
+{
+    /// <summary>The flags that keep a renderable out of a view of <paramref name="kind"/>.</summary>
+    public static RenderableFlags HiddenIn(ViewKind kind)
+        => kind == ViewKind.SceneView ? RenderableFlags.Hidden | RenderableFlags.SceneViewHidden : RenderableFlags.Hidden;
 }
 
 /// <summary>

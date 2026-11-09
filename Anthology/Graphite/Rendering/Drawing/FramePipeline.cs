@@ -927,7 +927,7 @@ internal sealed partial class FramePipeline : IDisposable
         }
         else
         {
-            world.Buckets.Cull(frustum, view.CullingMask);
+            world.Buckets.Cull(frustum, view.CullingMask, hidden: RenderableFlagsExtensions.HiddenIn(view.Kind));
             CullProviders(camera, view, world, frustum);
             DrawItemSink sink = camera.Sink;
             world.Buckets.Build(0, frustum, camera.Prepass, sink.For(camera.Prepass));

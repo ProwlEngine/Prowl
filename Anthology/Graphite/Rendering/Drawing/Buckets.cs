@@ -971,9 +971,9 @@ internal sealed class BucketSet
     /// with their sphere in the frustum. Which passes an object draws in is decided by its buckets. Deforming objects it
     /// sees deform this frame.
     /// </summary>
-    public void Cull(in CullFrustum frustum, uint cullingMask, CasterFilter filter = CasterFilter.All)
+    public void Cull(in CullFrustum frustum, uint cullingMask, CasterFilter filter = CasterFilter.All, RenderableFlags hidden = RenderableFlags.Hidden)
     {
-        CullObjects(frustum, cullingMask, filter);
+        CullObjects(frustum, cullingMask, filter, hidden);
         foreach (int index in _world.Deforming)
         {
             if (index < _visible.Length && _visible[index])
@@ -981,7 +981,7 @@ internal sealed class BucketSet
         }
     }
 
-    private void CullObjects(in CullFrustum frustum, uint cullingMask, CasterFilter filter = CasterFilter.All)
+    private void CullObjects(in CullFrustum frustum, uint cullingMask, CasterFilter filter = CasterFilter.All, RenderableFlags hidden = RenderableFlags.Hidden)
     {
         if (_visible.Length < _world.Capacity)
         {
@@ -999,7 +999,7 @@ internal sealed class BucketSet
         foreach (int index in _candidates)
         {
             if (_world.Alive[index]
-                && (_world.Flags[index] & RenderableFlags.Hidden) == 0
+                && (_world.Flags[index] & hidden) == 0
                 && (filter == CasterFilter.All || ((_world.Flags[index] & RenderableFlags.Static) != 0) == (filter == CasterFilter.StaticOnly))
                 && (_world.LayerMask[index] & cullingMask) != 0
                 && frustum.Sphere(_world.WorldCenter[index], _world.WorldRadius[index]))
