@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 using Prowl.Echo;
 using Prowl.Editor.Core;
@@ -78,6 +79,9 @@ public static class EditorSceneManager
     /// <summary>Sends the edit world dormant, restarts the session and binds <paramref name="play"/> as Main, running.</summary>
     internal static void EnterPlayWorld(SceneInstance play)
     {
+        s_worldsBeforePlay = new();
+        foreach (SceneInstance world in SceneInstance.Live)
+            if (!ReferenceEquals(world, play)) s_worldsBeforePlay.Add(world, null);
         EditWorld.Deactivate();
         Runtime.Tasks.MainThreadContext.Restart();
         s_playWorld = play;
@@ -85,12 +89,22 @@ public static class EditorSceneManager
         play.Activate();
     }
 
-    /// <summary>Destroys the play world, inside the session it ran in, and restarts the session.</summary>
+    // The worlds that existed when play started. Every other world is play's own and goes when it stops.
+    private static ConditionalWeakTable<SceneInstance, object?> s_worldsBeforePlay = new();
+
+    /// <summary>Destroys the play world and every world play opened, inside the session they ran in, and restarts the session.</summary>
     internal static void DestroyPlayWorld()
     {
         SceneInstance? play = s_playWorld;
         s_playWorld = null;
         if (play.IsValid()) play.Dispose();
+        foreach (SceneInstance world in SceneInstance.Live)
+        {
+            if (s_worldsBeforePlay.TryGetValue(world, out _) || world.IsDisposed) continue;
+            try { world.Dispose(); }
+            catch (Exception e) { Debug.LogException($"[Play] Destroying '{world.Name}' threw", e); }
+        }
+        s_worldsBeforePlay = new();
         Runtime.Tasks.MainThreadContext.Restart();
     }
 

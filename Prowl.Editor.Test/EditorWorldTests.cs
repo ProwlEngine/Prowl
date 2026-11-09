@@ -84,6 +84,26 @@ public class EditorWorldTests : EditorTestHarness
     }
 
     [Fact]
+    public void StoppingPlay_DestroysEveryWorldPlayOpened()
+    {
+        SceneInstance before = SceneInstance.Create("Before", SceneMode.Game);
+        SceneInstance play = EditorSceneManager.BuildPlayWorld();
+        SceneInstance opened;
+        using (EnterPlayMode())
+        {
+            EditorSceneManager.EnterPlayWorld(play);
+            opened = SceneInstance.Create("Overlay", SceneMode.Game);
+            opened.Activate();
+            EditorSceneManager.DestroyPlayWorld();
+        }
+        EditorSceneManager.ReturnToEditWorld();
+
+        Assert.True(opened.IsDisposed);
+        Assert.False(before.IsDisposed);
+        before.Dispose();
+    }
+
+    [Fact]
     public void TheEditHistory_StillResolves_AfterPlay()
     {
         Marker marker = EditorSceneManager.EditWorld.Create("Thing").AddComponent<Marker>();
