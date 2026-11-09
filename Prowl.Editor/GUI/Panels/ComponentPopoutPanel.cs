@@ -24,6 +24,10 @@ public class ComponentPopoutPanel : DockPanel
     private readonly string _compTypeName;
     private string _displayTitle;
 
+    // The open scene the component was popped out of, so a duplicate in another scene never stands in for it and
+    // closing that scene leaves the panel empty. Null outside the edit world.
+    private OpenScene? _scene;
+
     public override string Title => _displayTitle;
     public override string Icon => EditorIcons.ArrowUpRightFromSquare;
 
@@ -126,14 +130,17 @@ public class ComponentPopoutPanel : DockPanel
         });
     }
 
-    private (GameObject? go, Component? comp) FindComponent()
+    internal (GameObject? go, Component? comp) FindComponent()
     {
         SceneInstance scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return (null, null);
+        if (_scene != null && (!EditorSceneManager.OpenScenes.Contains(_scene) || _scene.Section is not { IsLoaded: true } || !ReferenceEquals(_scene.Section.Instance, scene)))
+            return (null, null);
 
         foreach (GameObject go in scene.Objects)
         {
             if (go.Identifier != _goIdentifier) continue;
+            if (_scene != null && !ReferenceEquals(go.Section, _scene.Section)) continue;
 
             foreach (Component comp in go.GetComponents<Component>())
             {
@@ -151,7 +158,9 @@ public class ComponentPopoutPanel : DockPanel
     /// </summary>
     public static void PopOut(GameObject go, Component comp)
     {
-        var panel = new ComponentPopoutPanel(go.Identifier, comp.Identifier, comp.GetType().Name);
-        EditorApplication.Instance?.OpenPanelInstance(panel, 350, 400);
+        EditorApplication.Instance?.OpenPanelInstance(For(go, comp), 350, 400);
     }
+
+    internal static ComponentPopoutPanel For(GameObject go, Component comp)
+        => new(go.Identifier, comp.Identifier, comp.GetType().Name) { _scene = EditorSceneManager.SceneOf(go) };
 }

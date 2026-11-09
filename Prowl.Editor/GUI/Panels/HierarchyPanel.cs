@@ -241,7 +241,7 @@ public class HierarchyPanel : DockPanel
                             parent = parent.Parent;
                         }
                     }
-                    pingIsNew = _pingedGameObjects.Count > 0;
+                    pingIsNew = _pingedGameObjects.Count > 0 || EditorSceneManager.OpenScenes.Any(IsPingedScene);
                 }
                 if (Selection.PingedGuid == Guid.Empty)
                 {
@@ -268,7 +268,7 @@ public class HierarchyPanel : DockPanel
                     int pingIndex = -1;
                     for (int i = 0; i < treeNodes.Count; i++)
                     {
-                        if (treeNodes[i].UserData is GameObject pinged && _pingedGameObjects.Contains(pinged)) { pingIndex = i; break; }
+                        if (IsPingedNode(treeNodes[i])) { pingIndex = i; break; }
                     }
                     if (pingIndex >= 0)
                     {
@@ -390,7 +390,7 @@ public class HierarchyPanel : DockPanel
                         // Per-GameObject right-click menu
                         BuildGameObjectContextMenu(paper, "hier_go_ctx");
                     })
-                    .IsPinged(n => n.UserData is GameObject g && _pingedGameObjects.Contains(g) && Selection.PingedGuid != Guid.Empty)
+                    .IsPinged(n => IsPingedNode(n) && Selection.PingedGuid != Guid.Empty)
                     .PingAlpha(() => Selection.GetPingAlpha())
                     .ExpandStateSink(_expandState)
                     .EmptyMessage(Loc.Get("hierarchy.scene_empty"))
@@ -516,6 +516,16 @@ public class HierarchyPanel : DockPanel
                 BuildNodeList(root, 1, nodes, flatObjects);
         }
     }
+
+    // A pinged object row, or the header of a scene whose asset is pinged.
+    private static bool IsPingedNode(TreeNode node) => node.UserData switch
+    {
+        GameObject go => _pingedGameObjects.Contains(go),
+        SceneHeader { Open: { } open } => IsPingedScene(open),
+        _ => false,
+    };
+
+    private static bool IsPingedScene(OpenScene open) => open.Scene.IsValid() && open.Scene.AssetID == Selection.PingedGuid;
 
     private static string HeaderName(SceneHeader header)
     {

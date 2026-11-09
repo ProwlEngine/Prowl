@@ -234,7 +234,12 @@ public static class EditorSceneManager
     {
         RequireEditing("open a scene");
         OpenScene? listed = s_open.FirstOrDefault(o => ReferenceEquals(o.Scene, scene));
-        if (listed != null) return listed;
+        if (listed != null)
+        {
+            // Points the hierarchy at its header instead.
+            Selection.Ping(scene.AssetID);
+            return listed;
+        }
 
         var open = new OpenScene(scene, scene.Name);
         s_open.Add(open);

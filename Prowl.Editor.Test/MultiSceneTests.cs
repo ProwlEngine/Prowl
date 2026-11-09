@@ -440,4 +440,34 @@ public class MultiSceneTests : EditorTestHarness
         try { Assert.All(play.Sections, s => Assert.False(s.HiddenInSceneView)); }
         finally { play.Dispose(); }
     }
+
+    [Fact]
+    public void OpeningAListedSceneAgain_PingsItsHeader()
+    {
+        Scene bAsset = Author("B.scene", "b");
+        Open(Author("A.scene", "a"));
+        Additive(bAsset);
+
+        Additive(bAsset);
+
+        Assert.Equal(bAsset.AssetID, Selection.PingedGuid);
+        Assert.Equal(2, EditorSceneManager.OpenScenes.Count);
+    }
+
+    [Fact]
+    public void APoppedOutComponent_StaysWithItsScene_AndEmptiesWhenItUnloads()
+    {
+        OpenScene a = Open(Author("A.scene", "a"));
+        OpenScene copy = Additive(Duplicate("A.scene", "Copy.scene"));
+        Marker inCopy = Root(copy).GetComponent<Marker>()!;
+        var panel = GUI.Panels.ComponentPopoutPanel.For(Root(copy), inCopy);
+
+        Assert.Same(inCopy, panel.FindComponent().comp);
+
+        EditorSceneManager.Unload(copy, force: true);
+        SceneInstance.ProcessPendingLoad();
+
+        Assert.Null(panel.FindComponent().comp);
+        Assert.True(a.IsLoaded);
+    }
 }
