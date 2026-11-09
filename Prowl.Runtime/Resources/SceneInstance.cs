@@ -892,8 +892,12 @@ public class SceneInstance : EngineObject, ISerializable
                 {
                     // Tokens handed out before belong to the session that is gone.
                     CancelToken();
-                    _tokenSession = session;
-                    _token = session == null ? new CancellationTokenSource() : CancellationTokenSource.CreateLinkedTokenSource(session.SessionToken);
+                    // A cancel callback that read Token already made the fresh one.
+                    if (_token == null)
+                    {
+                        _tokenSession = session;
+                        _token = session == null ? new CancellationTokenSource() : CancellationTokenSource.CreateLinkedTokenSource(session.SessionToken);
+                    }
                 }
                 return _token.Token;
             }
@@ -904,10 +908,12 @@ public class SceneInstance : EngineObject, ISerializable
 
     private void CancelToken()
     {
-        try { _token?.Cancel(); }
-        catch (AggregateException e) { Debug.LogException($"[Scene] A callback on the token of '{Name}' threw", e); }
-        _token?.Dispose();
+        CancellationTokenSource? old = _token;
         _token = null;
+        if (old == null) return;
+        try { old.Cancel(); }
+        catch (AggregateException e) { Debug.LogException($"[Scene] A callback on the token of '{Name}' threw", e); }
+        old.Dispose();
     }
 
     /// <summary>The world's sections: <see cref="Persistent"/> first, then in load order.</summary>
