@@ -26,7 +26,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class PreferencesPanel : DockPanel
 {
     [MenuItem("Window/General/Preferences", priority: 7)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(PreferencesPanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<PreferencesPanel>();
 
     public override string Title => Loc.Get("panel.preferences");
     public override string Icon => EditorIcons.Sliders;

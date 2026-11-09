@@ -18,7 +18,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class ProjectSettingsPanel : DockPanel
 {
     [MenuItem("Window/General/Project Settings", priority: 8)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(ProjectSettingsPanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<ProjectSettingsPanel>();
 
     public override string Title => Loc.Get("panel.project_settings");
     public override string Icon => EditorIcons.Gear;

@@ -69,7 +69,7 @@ internal sealed class RenderProfilerSource : IRenderProfilerSource
         get
         {
             EditorApplication? editor = EditorApplication.Instance;
-            return editor != null && (editor.IsPanelOpen(typeof(LiveProfilerPanel)) || editor.IsPanelOpen(typeof(SnapshotViewerPanel)));
+            return editor != null && (editor.IsPanelOpen<LiveProfilerPanel>() || editor.IsPanelOpen<SnapshotViewerPanel>());
         }
     }
 

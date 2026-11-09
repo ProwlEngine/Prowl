@@ -38,7 +38,7 @@ public sealed class ConsolePreferences : EditorPreferences
 public class ConsolePanel : DockPanel
 {
     [MenuItem("Window/General/Console", priority: 0)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(ConsolePanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<ConsolePanel>();
 
     public override string Title => Loc.Get("panel.console");
     public override string Icon => EditorIcons.Terminal;

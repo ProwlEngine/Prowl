@@ -63,7 +63,7 @@ public enum GameViewScale { Fit, PixelPerfect, Zoom }
 public class GameViewPanel : DockPanel
 {
     [MenuItem("Window/General/Game", priority: 1)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(GameViewPanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<GameViewPanel>();
 
     public override string Title => Loc.Get("panel.game");
     public override string Icon => EditorIcons.Gamepad;
