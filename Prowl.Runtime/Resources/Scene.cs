@@ -465,7 +465,23 @@ public static class SceneBuild
         foreach (Scene scene in s_list)
             if (string.Equals(scene.Name, nameOrPath, StringComparison.OrdinalIgnoreCase))
                 return scene;
+
+        string wanted = WithoutExtension(nameOrPath);
+        foreach (Scene scene in s_list)
+        {
+            if (AssetDatabase.GetAssetPath(scene.AssetID) is not { } path) continue;
+            string stored = WithoutExtension(path);
+            if (stored.Equals(wanted, StringComparison.OrdinalIgnoreCase)
+                || stored.EndsWith("/" + wanted, StringComparison.OrdinalIgnoreCase))
+                return scene;
+        }
         return null;
+    }
+
+    private static string WithoutExtension(string path)
+    {
+        path = path.Replace('\\', '/');
+        return path.EndsWith(".scene", StringComparison.OrdinalIgnoreCase) ? path[..^".scene".Length] : path;
     }
 
     /// <summary>Where a scene is in the build list, -1 when it is not in it.</summary>

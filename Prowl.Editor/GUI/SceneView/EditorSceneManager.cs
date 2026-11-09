@@ -82,6 +82,10 @@ public static class EditorSceneManager
         s_worldsBeforePlay = new();
         foreach (SceneInstance world in SceneInstance.Live)
             if (!ReferenceEquals(world, play)) s_worldsBeforePlay.Add(world, null);
+        SceneBuild.Set(EditorRegistries.GetSettings<BuildSettings>().Scenes
+            .Where(entry => entry.Enabled)
+            .Select(entry => AssetDatabase.Get<Scene>(entry.SceneGuid))
+            .Where(scene => scene.IsValid())!);
         EditWorld.Deactivate();
         Runtime.Tasks.MainThreadContext.Restart();
         s_playWorld = play;

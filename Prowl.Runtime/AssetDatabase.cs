@@ -233,7 +233,7 @@ public static class AssetDatabase
     public static Type? GetAssetType(Guid assetId)
         => BuiltInAssets.Entries.TryGetValue(assetId, out BuiltInAssets.BuiltInEntry builtIn) ? builtIn.AssetType : SourceOf(assetId)?.GetAssetType(assetId);
 
-    private static string? GetAssetPath(Guid assetId)
+    internal static string? GetAssetPath(Guid assetId)
         => BuiltInAssets.Entries.TryGetValue(assetId, out BuiltInAssets.BuiltInEntry builtIn) ? builtIn.Path : SourceOf(assetId)?.GetAssetPath(assetId);
 
     public static bool IsBuiltIn(Asset asset) => BuiltInAssets.IsBuiltIn(asset.AssetID);

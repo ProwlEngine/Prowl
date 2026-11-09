@@ -96,6 +96,22 @@ public class SceneLoadTests : RuntimeTestBase
     }
 
     [Fact]
+    public void SceneBuildFind_MatchesANameOrTheEndOfAPath()
+    {
+        Scene forest = Stored("Levels/Forest", "f");
+        Scene other = Stored("Old/Forest", "o");
+        SceneBuild.Set([forest, other]);
+        try
+        {
+            Assert.Same(forest, SceneBuild.Find("Forest"));
+            Assert.Same(other, SceneBuild.Find("Old/Forest"));
+            Assert.Same(other, SceneBuild.Find("old/forest.scene"));
+            Assert.Null(SceneBuild.Find("ld/Forest"));
+        }
+        finally { SceneBuild.Set([]); }
+    }
+
+    [Fact]
     public void LoadAdditive_AddsASection_AndLeavesTheActiveOneAlone()
     {
         SceneInstance main = SceneInstance.Main;

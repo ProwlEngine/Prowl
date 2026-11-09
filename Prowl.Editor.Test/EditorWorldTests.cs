@@ -104,6 +104,30 @@ public class EditorWorldTests : EditorTestHarness
     }
 
     [Fact]
+    public void PlayMode_ListsTheEnabledBuildScenes()
+    {
+        var world = new SceneInstance(SceneMode.Edit);
+        Guid on = CreateSceneAsset(world, "On.scene");
+        Guid off = CreateSceneAsset(world, "Off.scene");
+        world.Dispose();
+        Projects.Settings.BuildSettings build = EditorRegistries.GetSettings<Projects.Settings.BuildSettings>();
+        List<Projects.Settings.SceneBuildEntry> previous = build.Scenes;
+        build.Scenes = [new() { Path = "On.scene", SceneGuid = on }, new() { Path = "Off.scene", SceneGuid = off, Enabled = false }];
+        try
+        {
+            SceneInstance play = EditorSceneManager.BuildPlayWorld();
+            using (EnterPlayMode())
+            {
+                EditorSceneManager.EnterPlayWorld(play);
+                Assert.Equal([on], SceneBuild.List.Select(s => s.AssetID));
+                EditorSceneManager.DestroyPlayWorld();
+            }
+            EditorSceneManager.ReturnToEditWorld();
+        }
+        finally { build.Scenes = previous; }
+    }
+
+    [Fact]
     public void TheEditHistory_StillResolves_AfterPlay()
     {
         Marker marker = EditorSceneManager.EditWorld.Create("Thing").AddComponent<Marker>();
