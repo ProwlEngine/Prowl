@@ -72,9 +72,11 @@ public abstract class EditorTestHarness : IDisposable
     /// <summary>Binds <paramref name="world"/> as the editor's edit world and as Main, running, as the editor does at startup.</summary>
     protected static void BindEditWorld(SceneInstance world)
     {
+        SceneInstance? previous = GUI.SceneView.EditorSceneManager.EditWorldOrNull;
         world.Activate();
         GUI.SceneView.EditorSceneManager.EditWorld = world;
         SceneInstance.Main = world;
+        if (previous.IsValid() && !ReferenceEquals(previous, world)) previous!.Dispose();
     }
 
     /// <summary>The asset with this GUID, loaded.</summary>
