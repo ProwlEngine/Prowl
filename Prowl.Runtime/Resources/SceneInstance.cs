@@ -750,6 +750,7 @@ public class SceneInstance : EngineObject, ISerializable
     {
         ClearTypeIndices();
         _identifiers.Clear();
+        _sectionHits.Clear();
         foreach (GameObject go in _allObj)
             if (!ReferenceEquals(go, null) && !go.IsDisposed)
                 go.OnHotReload();
@@ -850,6 +851,15 @@ public class SceneInstance : EngineObject, ISerializable
     {
         _sections.Remove(section);
         section.MarkUnloaded();
+        PruneSectionHits();
+    }
+
+    private void PruneSectionHits()
+    {
+        if (_sectionHits.Count == 0) return;
+        foreach (((SceneSection section, Guid identifier) key, EngineObject hit) in _sectionHits.ToArray())
+            if (!key.section.IsLoaded || !IsHere(hit, key.identifier, key.section))
+                _sectionHits.Remove(key);
     }
 
     /// <summary>The active section's sky, ambient light and fog.</summary>
@@ -1022,13 +1032,23 @@ public class SceneInstance : EngineObject, ISerializable
     // Identifiers of the objects and components in this world. Checked on every hit, since identifiers can change.
     private readonly Dictionary<Guid, EngineObject> _identifiers = [];
 
+    // Hits of lookups within one section, kept apart so they never decide what a world wide lookup answers.
+    private readonly Dictionary<(SceneSection, Guid), EngineObject> _sectionHits = [];
+
     /// <summary>Called by the engine when a component joins this world, before any gameplay gate.</summary>
     internal void ComponentJoined(Component component)
     {
         foreach ((Type type, TypeIndex index) in _typeIndices)
             if (type.IsInstanceOfType(component))
                 index.Add(component);
-        _identifiers[component.Identifier] = component;
+        Remember(component.Identifier, component);
+    }
+
+    // A later object with the same identifier never replaces one still here, so a world wide lookup does not change with join order.
+    private void Remember(Guid identifier, EngineObject obj)
+    {
+        if (!_identifiers.TryGetValue(identifier, out EngineObject? known) || !IsHere(known, identifier, null))
+            _identifiers[identifier] = obj;
     }
 
     /// <summary>Drops every type index, after a script reload changed what the types are.</summary>
@@ -1043,7 +1063,7 @@ public class SceneInstance : EngineObject, ISerializable
             for (int i = 0; i < items.Count; i++)
             {
                 Component component = items[i];
-                if (component.IsDisposed || !ReferenceEquals(component.GameObject.Scene, this))
+                if (component.IsDisposed || component.IsDestroyQueued || !ReferenceEquals(component.GameObject.Scene, this))
                 {
                     index.Members.Remove(component);
                     continue;
@@ -1070,6 +1090,7 @@ public class SceneInstance : EngineObject, ISerializable
     public T? Get<T>() where T : class
     {
         EnsureLive();
+        if (!_isActive) return null;
         foreach (Component component in IndexFor(typeof(T)).Items)
             if (component.EnabledInHierarchy)
                 return component as T;
@@ -1083,7 +1104,7 @@ public class SceneInstance : EngineObject, ISerializable
         List<Component> items = IndexFor(typeof(T)).Items;
         var results = new List<T>(items.Count);
         foreach (Component component in items)
-            if (includeDisabled || component.EnabledInHierarchy)
+            if (includeDisabled || (_isActive && component.EnabledInHierarchy))
                 results.Add((component as T)!);
         return [.. results];
     }
@@ -1094,7 +1115,7 @@ public class SceneInstance : EngineObject, ISerializable
         EnsureLive();
         results.Clear();
         foreach (Component component in IndexFor(typeof(T)).Items)
-            if (includeDisabled || component.EnabledInHierarchy)
+            if (includeDisabled || (_isActive && component.EnabledInHierarchy))
                 results.Add((component as T)!);
     }
 
@@ -1145,7 +1166,7 @@ public class SceneInstance : EngineObject, ISerializable
                 results.Add(go);
     }
 
-    /// <summary>The object or component with this identifier, searching the sections in order, or null.</summary>
+    /// <summary>The object or component with this identifier, or null. With several holding it, the one that joined first while it stays, else the first in section order.</summary>
     public EngineObject? FindObject(Guid identifier)
     {
         EnsureLive();
@@ -1157,7 +1178,6 @@ public class SceneInstance : EngineObject, ISerializable
         return null;
     }
 
-    /// <summary>The object or component of <paramref name="section"/> with this identifier, or null. Exact even when another section holds the same identifier.</summary>
     // Every identifier of a live object or component in the section, gathered in one walk.
     internal HashSet<Guid> IdentifiersIn(SceneSection section)
     {
@@ -1176,13 +1196,16 @@ public class SceneInstance : EngineObject, ISerializable
         }
     }
 
+    /// <summary>The object or component of <paramref name="section"/> with this identifier, or null. Exact even when another section holds the same identifier.</summary>
     public EngineObject? FindObject(SceneSection section, Guid identifier)
     {
         EnsureLive();
         if (_identifiers.TryGetValue(identifier, out EngineObject? known) && IsHere(known, identifier, section)) return known;
+        if (_sectionHits.TryGetValue((section, identifier), out EngineObject? hit) && IsHere(hit, identifier, section)) return hit;
         foreach (GameObject root in section.LiveRoots)
             if (FindIn(root, identifier) is { } found)
-                return _identifiers[identifier] = found;
+                return _sectionHits[(section, identifier)] = found;
+        _sectionHits.Remove((section, identifier));
         return null;
 
         static EngineObject? FindIn(GameObject go, Guid identifier)
@@ -1439,7 +1462,7 @@ public class SceneInstance : EngineObject, ISerializable
         {
             _allObj.Add(obj);
             obj.Scene = this;
-            _identifiers[obj.Identifier] = obj;
+            Remember(obj.Identifier, obj);
 
             foreach (Component component in obj._components.ToArray())
             {
@@ -1528,6 +1551,7 @@ public class SceneInstance : EngineObject, ISerializable
             LeaveSection(obj);
             obj.Scene = null;
         }
+        PruneSectionHits();
     }
 
     private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(this, nameof(Dispose));

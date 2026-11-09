@@ -477,6 +477,28 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
+    public void Lookups_SkipRemovedComponents_DormantWorlds_AndIgnoreSectionLookupHistory()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        GameObject holder = world.Create("Holder");
+        SectionLink removed = holder.AddComponent<SectionLink>();
+        holder.RemoveComponent(removed);
+        Assert.DoesNotContain(removed, world.GetAll<SectionLink>(includeDisabled: true));
+
+        SceneSection other = world.CreateSection("Other");
+        GameObject first = world.Create("First");
+        GameObject twin = world.Create(other, "Twin");
+        twin.SetIdentifier(first.Identifier);
+        Assert.Same(twin, world.FindObject(other, first.Identifier));
+        Assert.Same(first, world.FindObject(first.Identifier));
+
+        SceneInstance dormant = CreateScene();
+        dormant.Create("Cam").AddComponent<SectionLink>();
+        Assert.Null(dormant.Get<SectionLink>());
+        Assert.Single(dormant.GetAll<SectionLink>(includeDisabled: true));
+    }
+
+    [Fact]
     public void DestroyingMain_RaisesMainChangedToNothing()
     {
         SceneInstance world = SceneInstance.Create("Bound");

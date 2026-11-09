@@ -136,7 +136,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// Gets the identifier for this Component.
     /// Generally shouldnt be set manually
     /// </summary>
-    public Guid Identifier { get => _identifier; set => _identifier = value; }
+    public Guid Identifier { get => _identifier; internal set => _identifier = value; }
 
     /// <summary>
     /// The identifier of the component in the prefab this one came from, or Guid.Empty when it is not
