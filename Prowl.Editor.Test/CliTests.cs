@@ -611,6 +611,21 @@ public class CliEditorCommandTests : EditorTestHarness
     }
 
     [Fact]
+    public void SceneRefs_NameDuplicatesByPath_AndIdsCarryTheirScene()
+    {
+        CreateSceneAsset(new SceneInstance(SceneMode.Edit), "Level.scene");
+        CreateSceneAsset(new SceneInstance(SceneMode.Edit), "Sub/Level.scene");
+        Ok("scene", "--action", "open", "--path", "Level.scene");
+        Ok("scene", "--action", "openadditive", "--path", "Sub/Level.scene");
+        Ok("go", "create", "--name", "Thing", "--scene", "Sub/Level.scene");
+
+        Assert.Contains("Several open scenes", Fails("get", "scene:Level:/Thing"));
+        JsonNode thing = Ok("get", "scene:Sub/Level.scene:/Thing")!;
+        Assert.StartsWith("scene:Sub/Level.scene:#", thing["id"]!.GetValue<string>());
+        Assert.Equal("Thing", Ok("get", thing["id"]!.GetValue<string>())!["name"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void Set_RefusesAReferenceIntoAnotherScene()
     {
         CreateSceneAsset(new SceneInstance(SceneMode.Edit), "First.scene");

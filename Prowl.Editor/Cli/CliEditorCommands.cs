@@ -409,8 +409,7 @@ public static class CliEditorCommands
                     }
                     else go = new GameObject(name.Length > 0 ? name : "GameObject");
 
-                    SceneSection? section = inScene.Length > 0 ? CliRefs.OpenSceneNamed(inScene).Section : null;
-                    if (inScene.Length > 0 && section == null) throw new CliException($"'{inScene}' is not loaded.");
+                    SceneSection? section = inScene.Length > 0 ? CliRefs.SectionOf(CliRefs.OpenSceneNamed(inScene)) : null;
                     scene.Add(go, section);
                     if (parent.Length > 0 && parent != "/") go.SetParent(CliRefs.ResolveGameObject(parent), worldPositionStays: false);
                     if (index >= 0) go.SetSiblingIndex(index);

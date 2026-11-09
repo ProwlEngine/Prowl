@@ -40,11 +40,29 @@ public static class CliRefs
     // The section a scene: prefix narrowed the lookup to, while the rest of that ref resolves.
     [ThreadStatic] private static SceneSection? t_section;
 
-    /// <summary>An open scene by name or path relative to Assets.</summary>
+    /// <summary>An open scene by path relative to Assets, or by name when only one open scene has it.</summary>
     public static OpenScene OpenSceneNamed(string name)
-        => EditorSceneManager.OpenScenes.FirstOrDefault(o => string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase)
-                                                          || string.Equals(o.Path, AssetPath(name), StringComparison.OrdinalIgnoreCase))
-           ?? throw new CliException($"No open scene '{name}'. Open: {string.Join(", ", EditorSceneManager.OpenScenes.Select(o => o.Name))}.");
+    {
+        OpenScene? byPath = EditorSceneManager.OpenScenes.FirstOrDefault(o => string.Equals(o.Path, AssetPath(name), StringComparison.OrdinalIgnoreCase));
+        if (byPath != null) return byPath;
+        List<OpenScene> byName = [.. EditorSceneManager.OpenScenes.Where(o => string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase))];
+        if (byName.Count > 1)
+            throw new CliException($"Several open scenes are named '{name}'. Name one by its path: {string.Join(", ", byName.Select(o => o.Path ?? o.Name))}.");
+        return byName.Count == 1 ? byName[0]
+            : throw new CliException($"No open scene '{name}'. Open: {string.Join(", ", EditorSceneManager.OpenScenes.Select(o => o.Name))}.");
+    }
+
+    /// <summary>The section showing <paramref name="open"/> in the edited world: its own, or its play copy during play.</summary>
+    public static SceneSection SectionOf(OpenScene open)
+        => EditorSceneManager.SectionShowing(open) ?? throw new CliException($"'{open.Name}' is not loaded.");
+
+    // How a scene: prefix names a scene: its name when no other open scene shares it, else its path.
+    private static string SceneKey(OpenScene open)
+        => EditorSceneManager.OpenScenes.Count(o => string.Equals(o.Name, open.Name, StringComparison.OrdinalIgnoreCase)) > 1 && open.Path != null ? open.Path : open.Name;
+
+    // A ref narrowed to its scene when several scenes are open, so a duplicated scene's twin never answers it.
+    private static string Qualified(GameObject go, string reference)
+        => EditorSceneManager.SceneOf(go) is { } open && EditorSceneManager.OpenScenes.Count > 1 ? $"scene:{SceneKey(open)}:{reference}" : reference;
 
     /// <summary> Resolves a ref to a GameObject, a component, or an asset. </summary>
     public static object Resolve(string text)
@@ -54,12 +72,15 @@ public static class CliRefs
 
         if (text.StartsWith("scene:", StringComparison.Ordinal))
         {
-            int split = text.IndexOf(':', "scene:".Length);
+            // The scene part ends where the object part starts, so a scene name may hold a colon.
+            int byPath = text.IndexOf(":/", "scene:".Length, StringComparison.Ordinal);
+            int byId = text.IndexOf(":#", "scene:".Length, StringComparison.Ordinal);
+            int split = byPath < 0 ? byId : byId < 0 ? byPath : Math.Min(byPath, byId);
             if (split < 0) throw new CliException($"'{text}' names a scene but no object. Write scene:Name:#guid or scene:Name:/Path.");
             OpenScene open = OpenSceneNamed(text["scene:".Length..split]);
-            if (open.Section == null) throw new CliException($"'{open.Name}' is not loaded.");
+            SceneSection section = SectionOf(open);
             SceneSection? previous = t_section;
-            t_section = open.Section;
+            t_section = section;
             try { return Resolve(text[(split + 1)..]); }
             finally { t_section = previous; }
         }
@@ -272,11 +293,11 @@ public static class CliRefs
     public static JsonObject Summary(object value) => value switch
     {
         GameObject go => EditorSceneManager.SceneOf(go) is { } open && EditorSceneManager.OpenScenes.Count > 1
-            ? new JsonObject { ["id"] = "#" + go.Identifier, ["path"] = PathOf(go), ["name"] = go.Name, ["scene"] = open.Name }
+            ? new JsonObject { ["id"] = Qualified(go, "#" + go.Identifier), ["path"] = PathOf(go), ["name"] = go.Name, ["scene"] = open.Name }
             : new JsonObject { ["id"] = "#" + go.Identifier, ["path"] = PathOf(go), ["name"] = go.Name },
         Component mb => new JsonObject
         {
-            ["id"] = "#" + mb.Identifier,
+            ["id"] = mb.GameObject.IsValid() ? Qualified(mb.GameObject, "#" + mb.Identifier) : "#" + mb.Identifier,
             ["ref"] = ComponentRef(mb),
             ["type"] = mb.GetType().Name,
             ["enabled"] = mb.Enabled,
