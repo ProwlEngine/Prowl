@@ -27,7 +27,8 @@ namespace Prowl.Editor;
 /// A ref is <c>@selection</c>, <c>@active</c>, <c>#guid</c> (a scene object or an asset), a hierarchy path like
 /// <c>/Player/Camera</c> (<c>Name[1]</c> picks among same named siblings), or an asset path relative to Assets like
 /// <c>Guns/Rifle.fbx</c> (<c>Rifle.fbx#Fire</c> for a sub asset). A scene ref takes <c>:Type</c> or <c>:Type[1]</c>
-/// to address one of its components.
+/// to address one of its components, and a <c>scene:Name:</c> prefix to look in one open scene, like
+/// <c>scene:Level2:#guid</c> or <c>scene:Level2:/Player</c>.
 /// </summary>
 public static class CliRefs
 {
@@ -36,11 +37,32 @@ public static class CliRefs
 
     public static SceneInstance Scene => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld : throw new CliException("No scene is open.");
 
+    // The section a scene: prefix narrowed the lookup to, while the rest of that ref resolves.
+    [ThreadStatic] private static SceneSection? t_section;
+
+    /// <summary>An open scene by name or path relative to Assets.</summary>
+    public static OpenScene OpenSceneNamed(string name)
+        => EditorSceneManager.OpenScenes.FirstOrDefault(o => string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase)
+                                                          || string.Equals(o.Path, AssetPath(name), StringComparison.OrdinalIgnoreCase))
+           ?? throw new CliException($"No open scene '{name}'. Open: {string.Join(", ", EditorSceneManager.OpenScenes.Select(o => o.Name))}.");
+
     /// <summary> Resolves a ref to a GameObject, a component, or an asset. </summary>
     public static object Resolve(string text)
     {
         text = text.Trim();
         if (text.Length == 0) throw new CliException("Empty ref.");
+
+        if (text.StartsWith("scene:", StringComparison.Ordinal))
+        {
+            int split = text.IndexOf(':', "scene:".Length);
+            if (split < 0) throw new CliException($"'{text}' names a scene but no object. Write scene:Name:#guid or scene:Name:/Path.");
+            OpenScene open = OpenSceneNamed(text["scene:".Length..split]);
+            if (open.Section == null) throw new CliException($"'{open.Name}' is not loaded.");
+            SceneSection? previous = t_section;
+            t_section = open.Section;
+            try { return Resolve(text[(split + 1)..]); }
+            finally { t_section = previous; }
+        }
 
         Match suffix = s_componentSuffix.Match(text);
         if (suffix.Success && LooksLikeSceneRef(text[..suffix.Index]))
@@ -72,7 +94,7 @@ public static class CliRefs
     private static EngineObject? FindInScene(Guid id)
     {
         if (EditorSceneManager.EditedWorld.IsNotValid()) return null;
-        EngineObject? found = EditorSceneManager.EditedWorld.FindObject<EngineObject>(id);
+        EngineObject? found = t_section != null ? t_section.Instance.FindObject(t_section, id) : EditorSceneManager.EditedWorld.FindObject<EngineObject>(id);
         return found.IsValid() ? found : null;
     }
 
@@ -103,7 +125,7 @@ public static class CliRefs
     private static GameObject FindByPath(string path)
     {
         string[] segments = path.Trim('/').Split('/');
-        IEnumerable<GameObject> level = Scene.Roots;
+        IEnumerable<GameObject> level = t_section != null ? t_section.Roots : Scene.Roots;
         GameObject? current = null;
 
         foreach (string segment in segments)
@@ -249,7 +271,9 @@ public static class CliRefs
 
     public static JsonObject Summary(object value) => value switch
     {
-        GameObject go => new JsonObject { ["id"] = "#" + go.Identifier, ["path"] = PathOf(go), ["name"] = go.Name },
+        GameObject go => EditorSceneManager.SceneOf(go) is { } open && EditorSceneManager.OpenScenes.Count > 1
+            ? new JsonObject { ["id"] = "#" + go.Identifier, ["path"] = PathOf(go), ["name"] = go.Name, ["scene"] = open.Name }
+            : new JsonObject { ["id"] = "#" + go.Identifier, ["path"] = PathOf(go), ["name"] = go.Name },
         Component mb => new JsonObject
         {
             ["id"] = "#" + mb.Identifier,

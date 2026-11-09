@@ -107,6 +107,7 @@ A destroyed engine object is still a live reference, so null checks miss it. Alw
 `Scene` is in `Prowl.Runtime.Resources`. There is no SceneManager.
 
 - `SceneInstance.Main` is the game world. Inside a component use its own `Scene` property, elsewhere `SceneInstance.Active`, the world whose code is running. `Scene` is the saved scene asset.
+- A component's `Scene` throws while it is in no world: on a detached object, a prefab asset, and in `OnValidate` and `OnAfterDeserialize`. Check `IsInWorld` first there.
 - A world has sections: `Persistent` first, then one per loaded scene. `ActiveSection` is where new objects go and whose environment shows.
 - Queries: `world.Create(name)`, `Roots`, `Objects`, `ObjectCount`, `Get<T>()`, `GetAll<T>()`, `FindObject(name)`, `FindObjectByPath("A/B")`, `FindObjectWithTag(tag)`, `FindObject(guid)`.
 - `level.Load()` replaces the world's sections with the level, `level.LoadAdditive()` adds one, `section.Unload()` removes one. All apply at the end of the frame and return or take effect through a `SceneLoad` you can await.

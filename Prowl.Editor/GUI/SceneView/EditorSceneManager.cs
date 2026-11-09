@@ -141,6 +141,31 @@ public static class EditorSceneManager
         return null;
     }
 
+    /// <summary>The object whose fields the property grid draws, so a reference field knows which scene holds it.</summary>
+    internal static object? DrawingRoot { get; set; }
+
+    /// <summary>The open scene of the object whose fields are drawn, or null outside the edit world.</summary>
+    internal static OpenScene? DrawingScene => DrawingRoot switch
+    {
+        GameObject go => SceneOf(go),
+        Component c => c.GameObject.IsValid() ? SceneOf(c.GameObject) : null,
+        _ => null,
+    };
+
+    /// <summary>
+    /// Whether a reference field in <paramref name="holder"/> refuses <paramref name="target"/>. In edit mode a saved
+    /// reference never crosses scenes. The reason names the target's scene.
+    /// </summary>
+    internal static bool RefusesReference(OpenScene? holder, GameObject? target, out string reason)
+    {
+        reason = "";
+        if (holder == null || target.IsNotValid()) return false;
+        OpenScene? other = SceneOf(target);
+        if (other == null || ReferenceEquals(other, holder)) return false;
+        reason = $"'{target.Name}' is in the scene '{other.Name}', and a reference between scenes is never saved.";
+        return true;
+    }
+
     /// <summary>The open scene <paramref name="go"/> is in, or null outside the edit world.</summary>
     public static OpenScene? SceneOf(GameObject? go) => go.IsValid() ? SceneOf(go.Section) : null;
 

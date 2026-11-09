@@ -32,7 +32,6 @@ public class HierarchyPanel : DockPanel
     public override string Icon => EditorIcons.Sitemap;
 
     private string _searchText = "";
-    private bool _sceneExpanded = true;
     private Paper? _paper;
     // Rename state is managed by RenameOverlay
 
@@ -49,6 +48,18 @@ public class HierarchyPanel : DockPanel
     private GameObject? _dragHoverTargetNext;
     private string? _dragHoverTargetIdNext;
     private float _dragHoverNormalizedYNext;
+    private SceneHeader? _dragHoverHeader;
+    private SceneHeader? _dragHoverHeaderNext;
+
+    // A header row: an open scene of the edit world, or a section of the play world.
+    private sealed class SceneHeader
+    {
+        public OpenScene? Open;
+        public SceneSection? Section;
+        public readonly TreeNode Node = new() { DefaultExpanded = true };
+    }
+
+    private readonly ConditionalWeakTable<object, SceneHeader> _headers = [];
 
     // Ping state which GOs in the hierarchy match the pinged GUID
     private static Guid _lastHierarchyPingGuid;
@@ -83,9 +94,11 @@ public class HierarchyPanel : DockPanel
             _dragHoverTarget = _dragHoverTargetNext;
             _dragHoverTargetId = _dragHoverTargetIdNext;
             _dragHoverNormalizedY = _dragHoverNormalizedYNext;
+            _dragHoverHeader = _dragHoverHeaderNext;
             _dragHoverTargetNext = null;
             _dragHoverTargetIdNext = null;
             _dragHoverNormalizedYNext = 0f;
+            _dragHoverHeaderNext = null;
         }
 
         SceneInstance scene = EditorSceneManager.EditedWorld;
@@ -158,59 +171,6 @@ public class HierarchyPanel : DockPanel
                 Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", EditorSceneManager.NewWithPrompt).Width(120).Show();
                 return;
             }
-
-            // Scene section header (collapsible, open by default)
-            using (paper.Row("hier_scene_hdr")
-                .Height(EditorTheme.RowHeight)
-                .Margin(6, 6, 0, 2)
-                .Rounded(EditorTheme.Roundness).Padding(8, 8, 0, 0).Gap(6)
-                .BackgroundColor(EditorTheme.Glass)
-                .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                .OnClick(0, (_, _) => _sceneExpanded = !_sceneExpanded)
-                .Enter())
-            {
-                paper.Box("hier_scene_caret")
-                    .Width(10).Height(EditorTheme.RowHeight).IsNotInteractable()
-                    .Text(_sceneExpanded ? EditorIcons.ChevronDown : EditorIcons.ChevronRight, font)
-                    .TextColor(EditorTheme.Ink300)
-                    .FontSize(9f).Alignment(TextAlignment.MiddleCenter);
-
-                paper.Box("hier_scene_icon")
-                    .Width(16).Height(EditorTheme.RowHeight).IsNotInteractable()
-                    .Icon(paper, EditorIcons.Shapes_I, EditorTheme.Amber400, size: 14f);
-
-                paper.Box("hier_scene_name_text")
-                    .Width(UnitValue.StretchOne).Height(EditorTheme.RowHeight)
-                    .Text(scene.Name, font)
-                    .TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSizeSmall)
-                    .Alignment(TextAlignment.MiddleLeft);
-
-                // Create menu without having to hunt for empty space to right-click. It fills the
-                // header row bar a pixel each side, so its hover fill sits inside the row instead of
-                // against the border, and the glyph is sized to the button so the plus reads at a
-                // glance. Stops propagation so clicking it doesn't also collapse the scene section.
-                float addSize = EditorTheme.RowHeight - 2f;
-                paper.Box("hier_scene_add")
-                    .Width(addSize).Height(addSize).Rounded(EditorTheme.Roundness)
-                    .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-                    .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                    .Text(EditorIcons.Plus, font)
-                    .TextColor(EditorTheme.Ink400)
-                    .Hovered.TextColor(EditorTheme.Ink500).End()
-                    .FontSize(addSize).Alignment(TextAlignment.MiddleCenter)
-                    .Tooltip(Loc.Get("hierarchy.create"))
-                    .StopEventPropagation()
-                    .OnClick(0, (_, _) => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
-                    {
-                        b.Header(Loc.Get("hierarchy.create"));
-                        BuildCreateMenuForSelection(b);
-                    }));
-            }
-
-            if (!_sceneExpanded)
-                return;
 
             using (paper.Box("hier_bg").Enter())
             {
@@ -290,18 +250,16 @@ public class HierarchyPanel : DockPanel
                     _forceExpandedIds.Clear();
                 }
 
-                // Account for toolbar + scene name header + margins + optional prefab breadcrumb
-                float usedHeight = ToolbarHeight + EditorTheme.RowHeight + 12; // toolbar + scene header + margins
+                // Account for toolbar + margins + optional prefab breadcrumb
+                float usedHeight = ToolbarHeight + 8;
                 if (PrefabEditingMode.IsEditing)
                     usedHeight += 28; // prefab breadcrumb row + margins
                 float scrollHeight = height - usedHeight;
-                List<GameObject> roots = GetDisplayRoots(scene);
                 List<TreeNode> treeNodes = _treeNodes;
                 List<object> flatObjects = _flatObjects;
                 treeNodes.Clear();
                 flatObjects.Clear();
-                foreach (GameObject root in roots)
-                    BuildNodeList(root, 0, treeNodes, flatObjects);
+                BuildSceneNodes(scene, treeNodes, flatObjects);
 
                 // Scroll-to-ping: when a newly-pinged GO lives in the scene, center its row in the
                 // scroll view so the yellow highlight is actually visible.
@@ -310,7 +268,7 @@ public class HierarchyPanel : DockPanel
                     int pingIndex = -1;
                     for (int i = 0; i < treeNodes.Count; i++)
                     {
-                        if (_pingedGameObjects.Contains((GameObject)treeNodes[i].UserData!)) { pingIndex = i; break; }
+                        if (treeNodes[i].UserData is GameObject pinged && _pingedGameObjects.Contains(pinged)) { pingIndex = i; break; }
                     }
                     if (pingIndex >= 0)
                     {
@@ -325,23 +283,30 @@ public class HierarchyPanel : DockPanel
                     .Nodes(treeNodes)
                     .MultiSelect()
                     .Reorderable()
-                    .IsSelected(n => Selection.IsSelected((GameObject)n.UserData!))
+                    .IsSelected(n => n.UserData is GameObject g && Selection.IsSelected(g))
                     .OnSelectModified((e, ctrl, shift) =>
                     {
                         if (DragDrop.IsDragging || DragDrop.IsDropFrame) return;
-                        var go = (GameObject)e.Node.UserData!;
+                        if (e.Node.UserData is not GameObject go) return;
                         Selection.HandleListClick(go, (IReadOnlyList<object>)flatObjects, e.Index, ctrl, shift);
+                        foreach (object picked in Selection.Selected.ToArray())
+                            if (picked is SceneHeader) Selection.RemoveFromSelection(picked);
                     })
                     .OnDoubleClick(e =>
                     {
+                        if (e.Node.UserData is SceneHeader { Open: { IsLoaded: false } unloaded })
+                        {
+                            if (EditorSceneManager.CanEditScenes) EditorSceneManager.Load(unloaded);
+                            return;
+                        }
                         // Focus the scene view camera on the double-clicked object
-                        var go = (GameObject)e.Node.UserData!;
+                        if (e.Node.UserData is not GameObject go) return;
                         Selection.Select(go);
                         SceneViewPanel.ActiveCamera?.FocusSelection();
                     })
                     .OnRightClick(e =>
                     {
-                        var go = (GameObject)e.Node.UserData!;
+                        if (e.Node.UserData is not GameObject go) return;
                         // Select the object with Right click as well if we're not performing a multiple selection action
                         if (!paper.IsKeyDown(PaperKey.LeftControl) && !paper.IsKeyDown(PaperKey.LeftShift))
                             Selection.Select(go);
@@ -349,8 +314,7 @@ public class HierarchyPanel : DockPanel
                     })
                     .OnDragStart(n =>
                     {
-                        if (DragDrop.IsDragging) return;
-                        var go = (GameObject)n.UserData!;
+                        if (DragDrop.IsDragging || n.UserData is not GameObject go) return;
                         GameObject[] selected = [.. Selection.GetSelected<GameObject>()];
                         if (selected.Length > 0 && Selection.IsSelected(go))
                             DragDrop.StartDrag(new GameObjectDragPayload(selected));
@@ -360,7 +324,12 @@ public class HierarchyPanel : DockPanel
                     .OnHover((n, normY) =>
                     {
                         if (!DragDrop.IsDragging || DragDrop.Payload is not GameObjectDragPayload) return;
-                        var go = (GameObject)n.UserData!;
+                        if (n.UserData is SceneHeader header)
+                        {
+                            _dragHoverHeaderNext = header;
+                            return;
+                        }
+                        if (n.UserData is not GameObject go) return;
                         _dragHoverTargetNext = go;
                         _dragHoverTargetIdNext = go.Identifier.ToString();
                         _dragHoverNormalizedYNext = normY;
@@ -368,7 +337,12 @@ public class HierarchyPanel : DockPanel
                     .CustomRowContent((paper, node, isSel, isExp) =>
                     {
                         if (font == null) return;
-                        var go = (GameObject)node.UserData!;
+                        if (node.UserData is SceneHeader header)
+                        {
+                            DrawSceneHeader(paper, font, header);
+                            return;
+                        }
+                        if (node.UserData is not GameObject go) return;
                         string goId = node.Id;
 
                         // Rows are their own elements, so these ids only need to be unique within the row.
@@ -416,7 +390,7 @@ public class HierarchyPanel : DockPanel
                         // Per-GameObject right-click menu
                         BuildGameObjectContextMenu(paper, "hier_go_ctx");
                     })
-                    .IsPinged(n => _pingedGameObjects.Contains((GameObject)n.UserData!) && Selection.PingedGuid != Guid.Empty)
+                    .IsPinged(n => n.UserData is GameObject g && _pingedGameObjects.Contains(g) && Selection.PingedGuid != Guid.Empty)
                     .PingAlpha(() => Selection.GetPingAlpha())
                     .ExpandStateSink(_expandState)
                     .EmptyMessage(Loc.Get("hierarchy.scene_empty"))
@@ -455,7 +429,12 @@ public class HierarchyPanel : DockPanel
                 // Only process drops that land inside the hierarchy panel
                 if (DragDrop.IsDropFrame && bgHovered && DragDrop.Payload is GameObjectDragPayload goDrop)
                 {
-                    if (_dragHoverTarget.IsValid() && _dragHoverTargetId != null)
+                    if (_dragHoverHeader != null)
+                    {
+                        MoveToScene(ExcludeNestedSelections(goDrop.GameObjects), _dragHoverHeader);
+                        DragDrop.EndDrag();
+                    }
+                    else if (_dragHoverTarget.IsValid() && _dragHoverTargetId != null)
                     {
                         // Dropped on a GO row use normalized Y to determine Above/Into/Below
                         DropPosition dropPos;
@@ -486,9 +465,168 @@ public class HierarchyPanel : DockPanel
 
                     _dragHoverTarget = null;
                     _dragHoverTargetId = null;
+                    _dragHoverHeader = null;
                 }
             }
         }
+    }
+
+    // ================================================================
+    //  Scene headers
+    // ================================================================
+
+    // One header per open scene in the edit world, per section in the play world (Persistent once it holds anything),
+    // and none in the prefab world, which is one prefab.
+    private void BuildSceneNodes(SceneInstance world, List<TreeNode> nodes, List<object> flatObjects)
+    {
+        if (PrefabEditingMode.IsEditing)
+        {
+            foreach (GameObject root in GetDisplayRoots(world.Roots))
+                BuildNodeList(root, 0, nodes, flatObjects);
+            return;
+        }
+
+        if (EditorSceneManager.PlayWorld.IsNotValid() && ReferenceEquals(world, EditorSceneManager.EditWorld))
+        {
+            foreach (OpenScene open in EditorSceneManager.OpenScenes)
+                AddScene(_headers.GetValue(open, static o => new SceneHeader { Open = (OpenScene)o }), open.Section);
+            return;
+        }
+
+        foreach (SceneSection section in world.Sections)
+        {
+            if (section.IsPersistent && section.Roots.Count == 0) continue;
+            AddScene(_headers.GetValue(section, static s => new SceneHeader { Section = (SceneSection)s }), section);
+        }
+
+        void AddScene(SceneHeader header, SceneSection? section)
+        {
+            header.Section = section is { IsLoaded: true } ? section : null;
+            List<GameObject> roots = header.Section != null ? GetDisplayRoots(header.Section.Roots) : [];
+            TreeNode node = header.Node;
+            node.Id = $"hier_scene_{RuntimeHelpers.GetHashCode(header)}";
+            node.UserData = header;
+            node.Label = HeaderName(header);
+            node.Depth = 0;
+            node.HasChildren = roots.Count > 0;
+            node.DropIndicator = DragDrop.IsDragging && ReferenceEquals(_dragHoverHeader, header) ? TreeDropPosition.Into : null;
+            nodes.Add(node);
+            flatObjects.Add(header);
+            foreach (GameObject root in roots)
+                BuildNodeList(root, 1, nodes, flatObjects);
+        }
+    }
+
+    private static string HeaderName(SceneHeader header)
+    {
+        if (header.Open is { } open) return open.IsDirty ? open.Name + "*" : open.Name;
+        return header.Section is { IsPersistent: true } ? Loc.Get("hierarchy.persistent") : header.Section?.Name ?? "";
+    }
+
+    private static bool IsActiveHeader(SceneHeader header)
+        => header.Open?.IsActive ?? header.Section is { } s && ReferenceEquals(s, s.Instance.ActiveSection);
+
+    private void DrawSceneHeader(Paper paper, Scribe.FontFile font, SceneHeader header)
+    {
+        bool loaded = header.Section != null;
+        bool active = IsActiveHeader(header);
+
+        paper.Box("hier_scene_icon")
+            .Width(18).Height(EditorTheme.RowHeight).IsNotInteractable()
+            .Icon(paper, EditorIcons.Shapes_I, active ? EditorTheme.Amber400 : loaded ? EditorTheme.Ink400 : EditorTheme.Ink300, size: 14f);
+
+        paper.Box("hier_scene_name")
+            .Width(UnitValue.StretchOne).Height(EditorTheme.RowHeight).PaddingLeft(4)
+            .Text(HeaderName(header), font)
+            .TextColor(loaded ? EditorTheme.Ink500 : EditorTheme.Ink300)
+            .FontSize(EditorTheme.FontSizeSmall)
+            .Alignment(TextAlignment.MiddleLeft);
+
+        // The create menu on the active scene, without hunting for empty space to right click.
+        if (loaded && active)
+        {
+            float addSize = EditorTheme.RowHeight - 2f;
+            paper.Box("hier_scene_add")
+                .Width(addSize).Height(addSize).Rounded(EditorTheme.Roundness)
+                .Hovered.BackgroundColor(EditorTheme.Hover).End()
+                .Text(EditorIcons.Plus, font)
+                .TextColor(EditorTheme.Ink400)
+                .Hovered.TextColor(EditorTheme.Ink500).End()
+                .FontSize(addSize).Alignment(TextAlignment.MiddleCenter)
+                .Tooltip(Loc.Get("hierarchy.create"))
+                .StopEventPropagation()
+                .OnClick(0, (_, _) => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+                {
+                    b.Header(Loc.Get("hierarchy.create"));
+                    BuildCreateMenuForSelection(b);
+                }));
+        }
+
+        if (header.Open is { } open && EditorSceneManager.CanEditScenes)
+            BuildSceneHeaderMenu(paper, open);
+    }
+
+    private static void BuildSceneHeaderMenu(Paper paper, OpenScene open)
+    {
+        Origami.RightClickMenu(paper, "hier_scene_ctx", builder =>
+        {
+            builder.Title(open.Name, iconDraw: EditorIcons.Shapes_I);
+            if (open.IsLoaded && !open.IsActive)
+                builder.Item(Loc.Get("hierarchy.set_active_scene"), () => Guarded(() => EditorSceneManager.SetActive(open)));
+            if (open.IsLoaded)
+            {
+                builder.Item(Loc.Get("hierarchy.save_scene"), () => { if (!EditorSceneManager.Save(open)) EditorApplication.PromptSaveAs(open); });
+                builder.Item(Loc.Get("hierarchy.save_scene_as"), () => EditorApplication.PromptSaveAs(open));
+            }
+            builder.Item(Loc.Get("hierarchy.save_all"), () => Projects.SaveManager.RequestSave());
+            builder.Separator();
+            if (open.IsLoaded)
+                builder.Item(Loc.Get("hierarchy.unload_scene"), () => EditorSceneManager.ConfirmClosing(() => Guarded(() => EditorSceneManager.Unload(open, force: true)), [open]));
+            else
+                builder.Item(Loc.Get("hierarchy.load_scene"), () => Guarded(() => EditorSceneManager.Load(open)));
+            builder.Item(Loc.Get("hierarchy.remove_scene"), () => EditorSceneManager.ConfirmClosing(() => Guarded(() => EditorSceneManager.Remove(open, force: true)), [open]));
+            if (open.Scene.IsValid())
+            {
+                builder.Separator();
+                Guid asset = open.Scene.AssetID;
+                builder.Item(Loc.Get("hierarchy.select_scene_asset"), () => Selection.Ping(asset));
+            }
+        });
+    }
+
+    // A refusal from a menu, like unloading the last loaded scene, is told rather than thrown into the frame.
+    private static void Guarded(Action action)
+    {
+        try { action(); }
+        catch (InvalidOperationException e) { Toasts.Warning(Loc.Get("hierarchy.scene_refused"), e.Message); }
+    }
+
+    // Dragged roots onto a scene header: each moves into that scene as one undo step with its unparent.
+    private static void MoveToScene(List<GameObject> dragged, SceneHeader header)
+    {
+        if (header.Section == null) return;
+        foreach (GameObject go in dragged)
+        {
+            if (go.IsNotValid() || ReferenceEquals(go.Section, header.Section)) continue;
+            if (go.Parent.IsValid()) Undo.SetTransformParent(go, null, true, "Move To Scene");
+            if (header.Open != null) Undo.MoveGameObjectToScene(go, header.Open, "Move To Scene");
+            else go.MoveTo(header.Section);
+        }
+    }
+
+    // ================================================================
+    //  Where new objects go
+    // ================================================================
+
+    /// <summary>
+    /// The section a new object goes into: its parent's, else the selected object's scene, else the active scene.
+    /// </summary>
+    internal static SceneSection SectionForNew(SceneInstance world, GameObject? parent)
+    {
+        if (parent.IsValid() && parent.Section is { } parentSection && ReferenceEquals(parentSection.Instance, world)) return parentSection;
+        GameObject? selected = Selection.GetSelected<GameObject>().FirstOrDefault(go => go.IsValid() && ReferenceEquals(go.Scene, world));
+        if (selected.IsValid() && selected.Section is { IsPersistent: false } selectedSection) return selectedSection;
+        return world.ActiveSection;
     }
 
     private void DrawToolbar(Paper paper, Scribe.FontFile font, float width)
@@ -601,9 +739,11 @@ public class HierarchyPanel : DockPanel
                         SceneInstance scene = EditorSceneManager.EditedWorld;
                         if (scene.IsNotValid()) break;
 
-                        // Unparent if needed
+                        // Unparent if needed, then into the target's scene
                         if (dragged.Parent.IsValid())
                             Undo.SetTransformParent(dragged, null, true, "Reparent");
+                        if (EditorSceneManager.SceneOf(target) is { } targetScene && !ReferenceEquals(EditorSceneManager.SceneOf(dragged), targetScene))
+                            Undo.MoveGameObjectToScene(dragged, targetScene, "Reparent");
 
                         // Root reorder via Scene list
                         int targetRootIdx = target.SiblingIndex;
@@ -882,7 +1022,7 @@ public class HierarchyPanel : DockPanel
         if (scene.IsNotValid()) return new GameObject(name);
 
         var go = new GameObject(name);
-        scene.Add(go);
+        scene.Add(go, SectionForNew(scene, parent));
         if (parent.IsValid())
             go.SetParent(parent);
         if (select)
@@ -954,7 +1094,7 @@ public class HierarchyPanel : DockPanel
         centre /= targets.Count;
 
         var newParent = new GameObject("GameObject");
-        scene.Add(newParent);
+        scene.Add(newParent, anchorParent.IsValid() ? SectionForNew(scene, anchorParent) : anchor.Section ?? scene.ActiveSection);
         if (anchorParent.IsValid())
         {
             newParent.SetParent(anchorParent);
@@ -1056,9 +1196,9 @@ public class HierarchyPanel : DockPanel
     //  Helpers
     // ================================================================
 
-    private List<GameObject> GetDisplayRoots(SceneInstance scene)
+    private static List<GameObject> GetDisplayRoots(IEnumerable<GameObject> roots)
     {
-        return [.. scene.Roots
+        return [.. roots
             .Where(go => !go.HideFlags.HasFlag(HideFlags.Hide)
                       && !go.HideFlags.HasFlag(HideFlags.HideAndDontSave))];
     }
@@ -1161,7 +1301,7 @@ public class HierarchyPanel : DockPanel
             MeshRenderer renderer = go.AddComponent<MeshRenderer>();
             renderer.Mesh = mesh;
             renderer.Material = new Material(Shader.LoadDefault(DefaultShader.Lit));
-            scene.Add(go);
+            scene.Add(go, SectionForNew(scene, parent));
             if (parent.IsValid()) go.SetParent(parent);
             Selection.Select(go);
             Undo.RegisterCreatedObjectUndo(go, "Spawn Mesh");
@@ -1172,7 +1312,7 @@ public class HierarchyPanel : DockPanel
             go.Transform.Position = position;
             SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
             renderer.Sprite = sprite;
-            scene.Add(go);
+            scene.Add(go, SectionForNew(scene, parent));
             if (parent.IsValid()) go.SetParent(parent);
             Selection.Select(go);
             Undo.RegisterCreatedObjectUndo(go, "Spawn Sprite");
@@ -1208,7 +1348,7 @@ public class HierarchyPanel : DockPanel
         if (flatten) PrefabUtility.DropPrefabLink(instance);
 
         instance.Transform.Position = position;
-        scene.Add(instance);
+        scene.Add(instance, SectionForNew(scene, parent));
         if (parent.IsValid()) instance.SetParent(parent);
         Selection.Select(instance);
         Undo.RegisterCreatedObjectUndo(instance, flatten ? "Add Prefab Contents" : "Spawn Prefab");

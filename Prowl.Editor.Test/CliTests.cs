@@ -532,10 +532,10 @@ public class CliEditorCommandTests : EditorTestHarness
         Ok("go", "create", "--name", "Root");
         Ok("go", "create", "--name", "Gun", "--parent", "/Root", "--components", "CliProbe");
 
-        JsonArray tree = Ok("tree")!.AsArray();
+        JsonArray tree = Ok("tree")!.AsArray().Single()!["roots"]!.AsArray();
         Assert.True(tree.Count == 1, tree.ToJsonString());
         Assert.Equal("Gun", tree.Single()!["children"]![0]!["name"]!.GetValue<string>());
-        Assert.Equal(1, Ok("tree", "--depth", "0")!.AsArray().Single()!["childCount"]!.GetValue<long>());
+        Assert.Equal(1, Ok("tree", "--depth", "0")!.AsArray().Single()!["roots"]!.AsArray().Single()!["childCount"]!.GetValue<long>());
         Assert.Equal("/Root/Gun", Ok("tree", "--filter", "CliProbe")!["matches"]![0]!["path"]!.GetValue<string>());
     }
 
@@ -576,7 +576,7 @@ public class CliEditorCommandTests : EditorTestHarness
     {
         EditorSceneManager.MarkDirty(EditorSceneManager.ActiveScene);
         Assert.Contains("unsaved changes", Fails("scene", "--action", "new"));
-        Assert.True(Ok("scene")!["dirty"]!.GetValue<bool>());
+        Assert.True(Ok("scene")!["scenes"]![0]!["dirty"]!.GetValue<bool>());
     }
 
     [Fact]
@@ -587,8 +587,27 @@ public class CliEditorCommandTests : EditorTestHarness
 
         JsonNode created = Ok("scene", "--action", "new")!;
 
-        Assert.DoesNotContain(created["roots"]!.AsArray(), r => r!.GetValue<string>() == "OnlyInTheOldScene");
+        Assert.Equal("Untitled", created["scenes"]!.AsArray().Single()!["name"]!.GetValue<string>());
         Assert.DoesNotContain(SceneInstance.Main.Objects, g => g.Name == "OnlyInTheOldScene");
+    }
+
+    [Fact]
+    public void ScenesOpenAdditively_GroupTheTree_AndUnloadByName()
+    {
+        CreateSceneAsset(new SceneInstance(SceneMode.Edit), "First.scene");
+        CreateSceneAsset(new SceneInstance(SceneMode.Edit), "Second.scene");
+        Ok("scene", "--action", "open", "--path", "First.scene");
+        Ok("scene", "--action", "openadditive", "--path", "Second.scene");
+        Ok("go", "create", "--name", "InSecond", "--scene", "Second");
+
+        JsonArray groups = Ok("tree")!.AsArray();
+        Assert.Equal(["First", "Second"], groups.Select(g => g!["scene"]!.GetValue<string>()));
+        Assert.Equal("InSecond", groups[1]!["roots"]![0]!["name"]!.GetValue<string>());
+        Assert.Equal("InSecond", Ok("get", "scene:Second:/InSecond")!["name"]!.GetValue<string>());
+
+        Assert.Contains("unsaved changes", Fails("scene", "--action", "unload", "--scene", "Second"));
+        JsonNode result = Ok("scene", "--action", "unload", "--scene", "Second", "--force")!;
+        Assert.False(result["loaded"]!.GetValue<bool>());
     }
 
     [Fact]

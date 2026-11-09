@@ -392,4 +392,29 @@ public class MultiSceneTests : EditorTestHarness
 
         Assert.Equal(0, marker.Value);
     }
+
+    [Fact]
+    public void ANewObject_GoesIntoTheSelectedObjectsScene_ElseTheActiveOne()
+    {
+        OpenScene a = Open(Author("A.scene", "a"));
+        OpenScene b = Additive(Author("B.scene", "b"));
+
+        Selection.Clear();
+        Assert.Same(a.Section, GUI.Panels.HierarchyPanel.CreateGameObject("InActive", null, beginRename: false).Section);
+
+        Selection.Select(Root(b));
+        Assert.Same(b.Section, GUI.Panels.HierarchyPanel.CreateGameObject("NextToSelection", null, beginRename: false).Section);
+    }
+
+    [Fact]
+    public void AReferenceField_RefusesAnObjectFromAnotherScene_NamingIt()
+    {
+        OpenScene a = Open(Author("A.scene", "a"));
+        OpenScene b = Additive(Author("B.scene", "b"));
+
+        Assert.False(EditorSceneManager.RefusesReference(a, Root(a), out _));
+        Assert.True(EditorSceneManager.RefusesReference(a, Root(b), out string reason));
+        Assert.Contains("'B'", reason);
+        Assert.False(EditorSceneManager.RefusesReference(null, Root(b), out _));
+    }
 }

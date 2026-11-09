@@ -95,7 +95,7 @@ public static class CliEditorCommands
     public enum LogFilter { All, Warning, Error }
     public enum GoAction { Create, Delete, Duplicate, Rename, Parent, Active, Transform }
     public enum ComponentAction { Add, Remove, List }
-    public enum SceneAction { Info, Open, Save, SaveAs, New }
+    public enum SceneAction { Info, Open, OpenAdditive, New, Load, Unload, Remove, SetActive, Save, SaveAs }
 
     // ================================================================
     //  Editor
@@ -218,52 +218,94 @@ public static class CliEditorCommands
     //  Scene and hierarchy
     // ================================================================
 
-    [CliCommand("scene", "Shows, opens, saves or creates the scene. Opening or creating refuses to drop unsaved changes unless --force")]
+    [CliCommand("scene", "Lists the open scenes, and opens, adds, loads, unloads, removes, activates, saves or creates them. Closing one with unsaved changes is refused unless --force")]
     public static object SceneCommand(
         [CliArg("action")] SceneAction action = SceneAction.Info,
-        [CliArg("path", "Scene path relative to Assets, for open and saveas")] string path = "",
+        [CliArg("path", "Scene path relative to Assets, for open, openadditive and saveas")] string path = "",
+        [CliArg("scene", "An open scene's name or path, for load, unload, remove, setactive, save, saveas and info")] string scene = "",
         [CliArg("force", "Discard unsaved changes")] bool force = false)
     {
         switch (action)
         {
             case SceneAction.Open:
-                RequirePath(path);
-                Guarded(() => EditorSceneManager.Open(SceneAt(path), force));
+                Guarded(() => EditorSceneManager.Open(SceneAt(Require(path, "path")), force));
+                break;
+            case SceneAction.OpenAdditive:
+                Guarded(() => EditorSceneManager.OpenAdditive(SceneAt(Require(path, "path"))));
                 break;
             case SceneAction.New:
                 Guarded(() => EditorSceneManager.New(force: force));
                 break;
+            case SceneAction.Load:
+                Guarded(() => EditorSceneManager.Load(Listed(scene)));
+                break;
+            case SceneAction.Unload:
+                Guarded(() => EditorSceneManager.Unload(Listed(scene), force));
+                break;
+            case SceneAction.Remove:
+                Guarded(() => EditorSceneManager.Remove(Listed(scene), force));
+                break;
+            case SceneAction.SetActive:
+                Guarded(() => EditorSceneManager.SetActive(Listed(scene)));
+                break;
+            case SceneAction.Save when scene.Length > 0:
+            {
+                OpenScene listed = Listed(scene);
+                if (listed.Path == null) throw new CliException($"'{listed.Name}' has never been saved. Use --action saveas --scene \"{listed.Name}\" --path Scenes/Name.scene.");
+                if (!EditorSceneManager.Save(listed)) throw new CliException("Saving failed. See the logs.");
+                break;
+            }
             case SceneAction.Save:
-                if (EditorSceneManager.ActiveScene.Path == null) throw new CliException("The scene has never been saved. Use --action saveas --path Scenes/Name.scene.");
-                if (!EditorSceneManager.Save(EditorSceneManager.ActiveScene)) throw new CliException("Saving failed. See the logs.");
+                if (EditorSceneManager.OpenScenes.FirstOrDefault(o => o.IsDirty && o.Path == null) is { } untitled)
+                    throw new CliException($"'{untitled.Name}' has never been saved. Use --action saveas --scene \"{untitled.Name}\" --path Scenes/Name.scene.");
+                if (!EditorSceneManager.SaveAll()) throw new CliException("Saving failed. See the logs.");
                 break;
             case SceneAction.SaveAs:
-                RequirePath(path);
-                if (!EditorSceneManager.SaveAs(EditorSceneManager.ActiveScene, CliRefs.AssetPath(path))) throw new CliException("Saving failed. See the logs.");
+            {
+                OpenScene listed = scene.Length > 0 ? Listed(scene) : EditorSceneManager.ActiveScene;
+                if (!EditorSceneManager.SaveAs(listed, CliRefs.AssetPath(Require(path, "path")))) throw new CliException("Saving failed. See the logs.");
                 break;
+            }
         }
 
         // Commands run between frames, where the safe point applies what was asked for at once.
         SceneInstance.ProcessPendingLoad();
 
-        return new
+        if (scene.Length > 0 && action != SceneAction.Remove)
         {
-            path = EditorSceneManager.ActiveScene.Path,
-            dirty = EditorSceneManager.ActiveScene.IsDirty,
-            objects = EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.Objects.Count() : 0,
-            roots = EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.Roots.Select(g => g.Name).ToList() : [],
-        };
-
-        static void RequirePath(string path)
-        {
-            if (path.Length == 0) throw new CliException("Give --path, relative to the Assets folder.");
+            OpenScene listed = Listed(scene);
+            return Describe(listed, roots: true);
         }
+        return new { scenes = EditorSceneManager.OpenScenes.Select(o => Describe(o, roots: false)).ToList() };
+
+        static JsonObject Describe(OpenScene open, bool roots)
+        {
+            var node = new JsonObject
+            {
+                ["name"] = open.Name,
+                ["path"] = open.Path,
+                ["loaded"] = open.IsLoaded,
+                ["active"] = open.IsActive,
+                ["dirty"] = open.IsDirty,
+            };
+            if (open.Section != null)
+            {
+                node["objects"] = open.Section.Roots.Sum(r => 1 + r.GetChildrenDeep().Count());
+                if (roots) node["roots"] = new JsonArray(open.Section.Roots.Select(g => (JsonNode)JsonValue.Create(g.Name)!).ToArray());
+            }
+            return node;
+        }
+
+        static string Require(string value, string arg)
+            => value.Length > 0 ? value : throw new CliException($"Give --{arg}{(arg == "path" ? ", relative to the Assets folder" : "")}.");
 
         static Scene SceneAt(string path)
         {
-            Scene? scene = EditorSceneManager.SceneAt(CliRefs.AssetPath(path));
-            return scene.IsValid() ? scene : throw new CliException($"No scene at '{path}'.");
+            Scene? asset = EditorSceneManager.SceneAt(CliRefs.AssetPath(path));
+            return asset.IsValid() ? asset : throw new CliException($"No scene at '{path}'.");
         }
+
+        static OpenScene Listed(string name) => CliRefs.OpenSceneNamed(Require(name, "scene"));
 
         static void Guarded(Action action)
         {
@@ -272,7 +314,7 @@ public static class CliEditorCommands
         }
     }
 
-    [CliCommand("tree", "The scene hierarchy, or part of it. --filter lists every object whose name or component type contains the text")]
+    [CliCommand("tree", "The hierarchy grouped by scene, or part of it. --filter lists every object whose name or component type contains the text")]
     public static object Tree(
         [CliArg("root", "Start here instead of the scene root")] string root = "",
         [CliArg("depth", "Levels to descend")] int depth = 3,
@@ -293,7 +335,19 @@ public static class CliEditorCommands
             return new { count = matches.Count, matches };
         }
 
-        return starts.Select(g => Node(g, Math.Max(0, depth), components)).ToList();
+        if (root.Length > 0) return starts.Select(g => Node(g, Math.Max(0, depth), components)).ToList();
+
+        SceneInstance world = CliRefs.Scene;
+        if (Prowl.Editor.GUI.SceneView.PrefabEditingMode.IsEditing) return world.Roots.Select(g => Node(g, Math.Max(0, depth), components)).ToList();
+        return world.Sections
+            .Where(s => !s.IsPersistent || s.Roots.Count > 0)
+            .Select(s => new JsonObject
+            {
+                ["scene"] = s.IsPersistent ? "Persistent" : s.Name,
+                ["active"] = ReferenceEquals(s, world.ActiveSection),
+                ["roots"] = new JsonArray(s.Roots.Select(g => (JsonNode)Node(g, Math.Max(0, depth), components)).ToArray()),
+            })
+            .ToList();
     }
 
     private static JsonObject Node(GameObject go, int depth, bool components)
@@ -336,7 +390,8 @@ public static class CliEditorCommands
         [CliArg("scale", "[x, y, z]")] string scale = "",
         [CliArg("world", "Position and rotation are in world space instead of relative to the parent")] bool world = false,
         [CliArg("active", "For active: whether the objects are active")] bool active = true,
-        [CliArg("index", "Sibling index for create and parent")] int index = -1)
+        [CliArg("index", "Sibling index for create and parent")] int index = -1,
+        [CliArg("scene", "For create without a parent: the open scene to create in, the active scene by default")] string inScene = "")
     {
         await CliEdit.WaitForEditor();
         SceneInstance scene = CliRefs.Scene;
@@ -355,7 +410,9 @@ public static class CliEditorCommands
                     }
                     else go = new GameObject(name.Length > 0 ? name : "GameObject");
 
-                    scene.Add(go);
+                    SceneSection? section = inScene.Length > 0 ? CliRefs.OpenSceneNamed(inScene).Section : null;
+                    if (inScene.Length > 0 && section == null) throw new CliException($"'{inScene}' is not loaded.");
+                    scene.Add(go, section);
                     if (parent.Length > 0 && parent != "/") go.SetParent(CliRefs.ResolveGameObject(parent), worldPositionStays: false);
                     if (index >= 0) go.SetSiblingIndex(index);
                     foreach (string typeName in CliRefs.SplitList(components))

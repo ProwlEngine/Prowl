@@ -2,6 +2,7 @@ using System;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Popups;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -26,6 +27,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
         var asset = eo as Asset;
         bool isAsset = asset is { IsFromDatabase: true };
         bool missing = asset is { IsMissing: true };
+        OpenScene? holder = EditorSceneManager.DrawingScene;
 
         PropertyGridUtils.ObjectField(paper, id, label,
             eo.IsValid() ? EditorIcons.Cube : EditorIcons.Circle,
@@ -36,13 +38,13 @@ public class EngineObjectPropertyEditor : PropertyEditor
             // Click pings what is assigned or opens the selector when empty, double click selects what is assigned.
             onClick: () =>
             {
-                if (eo.IsNotValid()) OpenAssetSelector(fieldType, onChange);
+                if (eo.IsNotValid()) OpenAssetSelector(fieldType, onChange, holder);
                 else if (isAsset) Selection.Ping(asset!.AssetID);
                 else if (PingTarget(eo) is { } go) Selection.Ping(go.Identifier);
             },
             onDoubleClick: () => { if (eo.IsValid()) Selection.Select(eo); },
-            onPick: () => OpenAssetSelector(fieldType, onChange),
-            acceptDrops: () => HandleDrops(paper, fieldType, onChange));
+            onPick: () => OpenAssetSelector(fieldType, onChange, holder),
+            acceptDrops: () => HandleDrops(paper, fieldType, onChange, holder));
     }
 
     // A scene object field pings the GameObject in the Hierarchy.
@@ -53,7 +55,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
         _ => null,
     };
 
-    private static void HandleDrops(Paper paper, Type fieldType, Action<object?> onChange)
+    private static void HandleDrops(Paper paper, Type fieldType, Action<object?> onChange, OpenScene? holder)
     {
         AssetDragPayload? assetDrop = DragDrop.AcceptDrop<AssetDragPayload>(paper.IsParentHovered,
             dp => dp.AssetType != null && fieldType.IsAssignableFrom(dp.AssetType));
@@ -63,7 +65,9 @@ public class EngineObjectPropertyEditor : PropertyEditor
         if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is GameObjectDragPayload goDrop)
         {
             GameObject? go = goDrop.GameObjects.Length > 0 ? goDrop.GameObjects[0] : null;
-            if (go.IsValid())
+            if (EditorSceneManager.RefusesReference(holder, go, out string why))
+                Toasts.Warning(Rosetta.Loc.Get("hierarchy.scene_refused"), why);
+            else if (go.IsValid())
             {
                 if (typeof(GameObject).IsAssignableFrom(fieldType))
                     onChange(go);
@@ -75,7 +79,9 @@ public class EngineObjectPropertyEditor : PropertyEditor
 
         if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is ComponentDragPayload compDrop)
         {
-            if (fieldType.IsAssignableFrom(compDrop.Component.GetType()))
+            if (EditorSceneManager.RefusesReference(holder, compDrop.Component.GameObject, out string why))
+                Toasts.Warning(Rosetta.Loc.Get("hierarchy.scene_refused"), why);
+            else if (fieldType.IsAssignableFrom(compDrop.Component.GetType()))
                 onChange(compDrop.Component);
             DragDrop.EndDrag();
         }
@@ -88,12 +94,12 @@ public class EngineObjectPropertyEditor : PropertyEditor
     [ThreadStatic] private static Type? _lastFieldType;
     public static void SetFieldType(Type type) => _lastFieldType = type;
 
-    internal static void OpenAssetSelector(Type type, Action<object?> onChange)
+    internal static void OpenAssetSelector(Type type, Action<object?> onChange, OpenScene? holder = null)
     {
         // Scene types (GameObject, Component subclasses) -> Scene tab
         // Asset types (Mesh, Material, etc.) -> Assets tab
         bool isSceneType = typeof(GameObject).IsAssignableFrom(type) || typeof(Component).IsAssignableFrom(type);
         SelectorTabs tabs = isSceneType ? SelectorTabs.Scene : SelectorTabs.Assets;
-        SelectorModal.Open($"Select {type.Name}", type, tabs, onChange);
+        SelectorModal.Open($"Select {type.Name}", type, tabs, onChange, holder);
     }
 }
