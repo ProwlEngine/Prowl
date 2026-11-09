@@ -2054,13 +2054,20 @@ public class EditorApplication : Game
 
         // The play world tears down in its own session, which then ends, so nothing still awaiting resumes against
         // the edit world. Assets go back to what they were before the edit world wakes again.
-        EditorSceneManager.DestroyPlayWorld();
-        RevertAssetsAfterPlay();
-        EditorUtility.RestoreDirtyAssets(_dirtyAssetCopies);
+        // Each step guarded, so one that throws never keeps the edit world from coming back.
+        Guarded("Destroying the play world", EditorSceneManager.DestroyPlayWorld);
+        Guarded("Reverting assets play changed", RevertAssetsAfterPlay);
+        Guarded("Restoring dirty assets", () => EditorUtility.RestoreDirtyAssets(_dirtyAssetCopies));
         _dirtyAssetCopies = [];
         EditorSceneManager.ReturnToEditWorld();
         if (_savedSelection is { } selection) Selection.RestoreSnapshot(selection);
         _savedSelection = null;
+
+        static void Guarded(string what, Action step)
+        {
+            try { step(); }
+            catch (Exception e) { Runtime.Debug.LogException($"[Play] {what} threw", e); }
+        }
 
         // Don't inherit cursor state the game left behind
         Input.CursorLockState = CursorLockMode.None;
