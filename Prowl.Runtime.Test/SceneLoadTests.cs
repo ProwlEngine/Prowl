@@ -393,6 +393,27 @@ public class SceneLoadTests : RuntimeTestBase
     }
 
     [Fact]
+    public void UnloadingASectionWithoutProbes_KeepsTheMergedSet()
+    {
+        StoredWithProbes("A", Float3.Zero).Load().Wait();
+        StoredWithProbes("B", new Float3(10f, 0f, 0f)).LoadAdditive().Wait();
+        SceneLoad empty = Stored("Empty", "e").LoadAdditive();
+        empty.Wait();
+        SceneInstance main = SceneInstance.Main;
+        main.ProbeRebuild!.Wait();
+        SceneInstance.ProbeSet merged = main.Probes!;
+        int version = main.BakedLightingVersion;
+
+        main.ActiveSection = empty.Section!;
+        empty.Section!.Unload();
+        SceneInstance.ProcessPendingLoad();
+
+        Assert.Null(main.ProbeRebuild);
+        Assert.Same(merged, main.Probes);
+        Assert.Equal(version, main.BakedLightingVersion);
+    }
+
+    [Fact]
     public void Load_DropsTheOldProbesAtOnce()
     {
         StoredWithProbes("Lit", Float3.Zero).Load().Wait();

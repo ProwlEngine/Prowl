@@ -840,7 +840,6 @@ public class SceneInstance : EngineObject, ISerializable
             if (!_sections.Contains(value)) throw new InvalidOperationException($"'{value.Name}' has been unloaded.");
             if (ReferenceEquals(_activeSection, value)) return;
             _activeSection = value;
-            BakedLightingVersion++;
         }
     }
 
@@ -899,6 +898,7 @@ public class SceneInstance : EngineObject, ISerializable
     {
         get
         {
+            StartProbeRebuild();
             if (_probeRebuild is { IsCompleted: true } done)
             {
                 _probeRebuild = null;
@@ -912,7 +912,14 @@ public class SceneInstance : EngineObject, ISerializable
     }
 
     /// <summary>The rebuild merging several sections' probes while one runs, so a caller can wait for it.</summary>
-    internal Task? ProbeRebuild => _probeRebuild;
+    internal Task? ProbeRebuild
+    {
+        get
+        {
+            StartProbeRebuild();
+            return _probeRebuild;
+        }
+    }
 
     /// <summary>Runtime probe sampler over <see cref="Probes"/> (lazy). Null when no section has baked probes.</summary>
     public LightProbeVolume? ProbeVolume
@@ -928,18 +935,35 @@ public class SceneInstance : EngineObject, ISerializable
     }
 
     /// <summary>Takes the sections' probes again, after a bake changed them.</summary>
-    public void InvalidateProbeVolume() => RebuildProbes(keepPrevious: false);
+    public void InvalidateProbeVolume() => RebuildProbes(keepPrevious: false, force: true);
 
     // Only an additive load keeps the previous set while a rebuild runs. Everything else drops it at once, so the probes
     // of an unloaded level never light the next one.
-    internal void RebuildProbes(bool keepPrevious)
+    // Nothing happens when the sections with probes are the same ones as before, unless forced after a bake.
+    internal void RebuildProbes(bool keepPrevious, bool force = false)
     {
         EnsureLive();
-        CancelProbeRebuild();
-
         List<SceneLighting> baked = [];
         foreach (SceneSection section in _sections)
             if (section.Lighting.HasProbes) baked.Add(section.Lighting);
+        if (!force && !_probesDirty && baked.SequenceEqual(_probeSources, ReferenceEqualityComparer.Instance)) return;
+
+        CancelProbeRebuild();
+        _probeSources = baked;
+        _probesDirty = true;
+        if (!keepPrevious && _probes != null) SetProbes(null);
+    }
+
+    // The sections' lighting the probes are built from, and whether a build of them is still to start.
+    [NotHeld] private List<SceneLighting> _probeSources = [];
+    private bool _probesDirty;
+
+    // Started on first use rather than on each change, so loading several sections in a row builds once.
+    private void StartProbeRebuild()
+    {
+        if (!_probesDirty) return;
+        _probesDirty = false;
+        List<SceneLighting> baked = _probeSources;
 
         if (baked.Count <= 1)
         {
@@ -952,8 +976,6 @@ public class SceneInstance : EngineObject, ISerializable
             });
             return;
         }
-
-        if (!keepPrevious) SetProbes(null);
 
         // Section order, since the tetrahedralization depends on point order.
         Float3[] positions = [.. baked.SelectMany(lighting => lighting.ProbePositions)];
