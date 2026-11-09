@@ -609,6 +609,24 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
+    public void Roots_WalkEverySectionInOrder_WithoutAllocating()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        world.Create("A");
+        world.Create(other, "B");
+        world.Create("Gone").Dispose();
+        Assert.Equal(["A", "B"], world.Roots.Select(r => r.Name));
+        Assert.True(world.Persistent.Roots.IsEmpty);
+
+        int count = 0;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        foreach (GameObject root in world.Roots) count++;
+        Assert.Equal(before, GC.GetAllocatedBytesForCurrentThread());
+        Assert.Equal(2, count);
+    }
+
+    [Fact]
     public void SiblingIndex_CountsOnlyLiveRoots()
     {
         SceneInstance world = CreateScene();

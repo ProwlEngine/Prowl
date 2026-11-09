@@ -210,11 +210,11 @@ public class MultiSceneTests : EditorTestHarness
     {
         Open(Author("A.scene", "a"));
         OpenScene b = Additive(Author("B.scene", "b1", "b2"));
-        GameObject second = b.Section!.Roots[1];
+        GameObject second = b.Section!.Roots.ElementAt(1);
 
         Undo.SetSiblingIndex(second, 0, "Reorder");
         Undo.FlushUndoRecordObjects();
-        Assert.Equal("b2", b.Section.Roots[0].Name);
+        Assert.Equal("b2", b.Section.Roots.First().Name);
         Assert.Single(Undo.UndoSteps);
 
         EditorSceneManager.Unload(b, force: true);

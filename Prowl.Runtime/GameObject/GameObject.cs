@@ -261,14 +261,16 @@ public partial class GameObject : EngineObject, ISerializable
             root.MoveTo(section);
     }
 
-    // The helper roots owned by components of this tree, like a ragdoll's puppet.
-    internal IEnumerable<GameObject> OwnedRoots()
+    // The helper roots owned by components of this tree, like a ragdoll's puppet. A list, so moving them is safe.
+    internal List<GameObject> OwnedRoots()
     {
+        List<GameObject> owned = [];
         SceneInstance? world = Scene;
-        if (world.IsNotValid()) yield break;
+        if (world.IsNotValid()) return owned;
         foreach (GameObject root in world!.Roots)
             if (root._owner is { IsDisposed: false } owner && owner.GameObject.IsValid() && IsChildOrSameTransform(owner.GameObject, this) && !ReferenceEquals(root, this))
-                yield return root;
+                owned.Add(root);
+        return owned;
     }
 
     // An object moving into a section that already holds its identifier gets a fresh one, so identifiers stay unique per section.

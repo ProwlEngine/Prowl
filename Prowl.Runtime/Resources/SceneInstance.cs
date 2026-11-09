@@ -629,6 +629,86 @@ public class SceneInstance : EngineObject, ISerializable
 
     #endregion
 
+    /// <summary>The live roots of a world's sections, or of one section, enumerated without allocating.</summary>
+    public readonly struct RootObjects : IEnumerable<GameObject>
+    {
+        private readonly List<SceneSection>? _sections;
+        private readonly SceneSection? _section;
+
+        internal RootObjects(List<SceneSection>? sections, SceneSection? section)
+        {
+            _sections = sections;
+            _section = section;
+        }
+
+        public Enumerator GetEnumerator() => new(_sections, _section);
+
+        /// <summary>Whether there is no live root.</summary>
+        public bool IsEmpty => !GetEnumerator().MoveNext();
+
+        IEnumerator<GameObject> IEnumerable<GameObject>.GetEnumerator() => GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+
+        public struct Enumerator : IEnumerator<GameObject>
+        {
+            private readonly List<SceneSection>? _sections;
+            private readonly SceneSection? _section;
+            private List<GameObject>? _roots;
+            private int _sectionIndex;
+            private int _rootIndex;
+
+            internal Enumerator(List<SceneSection>? sections, SceneSection? section)
+            {
+                _sections = sections;
+                _section = section;
+                _roots = null;
+                _sectionIndex = -1;
+                _rootIndex = -1;
+                Current = null!;
+            }
+
+            public GameObject Current { get; private set; }
+            readonly object System.Collections.IEnumerator.Current => Current;
+
+            public bool MoveNext()
+            {
+                while (true)
+                {
+                    if (_roots != null)
+                    {
+                        while (++_rootIndex < _roots.Count)
+                        {
+                            GameObject root = _roots[_rootIndex];
+                            if (root.IsDisposed) continue;
+                            Current = root;
+                            return true;
+                        }
+                        _roots = null;
+                    }
+
+                    _sectionIndex++;
+                    if (_section != null)
+                    {
+                        if (_sectionIndex > 0) return false;
+                        _roots = _section.RootsList;
+                    }
+                    else if (_sections != null && _sectionIndex < _sections.Count) _roots = _sections[_sectionIndex].RootsList;
+                    else return false;
+                    _rootIndex = -1;
+                }
+            }
+
+            public void Reset()
+            {
+                _roots = null;
+                _sectionIndex = -1;
+                _rootIndex = -1;
+            }
+
+            public readonly void Dispose() { }
+        }
+    }
+
     /// <summary>Every object in a world, enumerated without allocating.</summary>
     public readonly struct SceneObjects : IEnumerable<GameObject>
     {
@@ -1039,16 +1119,16 @@ public class SceneInstance : EngineObject, ISerializable
         return true;
     }
 
-    /// <summary>The objects with no parent: section order, then sibling order within a section.</summary>
-    public IReadOnlyList<GameObject> Roots
+    /// <summary>
+    /// The objects with no parent: section order, then sibling order within a section. Enumerating does not allocate,
+    /// so take a copy with ToArray before moving or reparenting roots while walking them.
+    /// </summary>
+    public RootObjects Roots
     {
         get
         {
             EnsureLive();
-            List<GameObject> roots = [];
-            foreach (SceneSection section in _sections)
-                roots.AddRange(section.LiveRoots);
-            return roots;
+            return new RootObjects(_sections, null);
         }
     }
 
@@ -1858,18 +1938,10 @@ public sealed class SceneSection
 
     internal readonly List<GameObject> RootsList = [];
 
-    /// <summary>This section's root objects in sibling order.</summary>
-    public IReadOnlyList<GameObject> Roots => [.. LiveRoots];
+    /// <summary>This section's root objects in sibling order. Enumerating does not allocate.</summary>
+    public SceneInstance.RootObjects Roots => new(null, this);
 
-    internal IEnumerable<GameObject> LiveRoots
-    {
-        get
-        {
-            foreach (GameObject root in RootsList)
-                if (!root.IsDisposed)
-                    yield return root;
-        }
-    }
+    internal SceneInstance.RootObjects LiveRoots => new(null, this);
 
     private SceneEnvironment? _environment;
 

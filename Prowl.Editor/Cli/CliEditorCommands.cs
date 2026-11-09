@@ -339,7 +339,7 @@ public static class CliEditorCommands
 
         SceneInstance world = CliRefs.Scene;
         return world.Sections
-            .Where(s => !s.IsPersistent || s.Roots.Count > 0)
+            .Where(s => !s.IsPersistent || !s.Roots.IsEmpty)
             .Select(s => new JsonObject
             {
                 ["scene"] = s.IsPersistent ? "Persistent" : s.Name,

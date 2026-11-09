@@ -144,7 +144,7 @@ public class MultiSceneBakeTests : EditorTestHarness
     public void ANavMeshSurface_StoresBesideItsOwnScene()
     {
         (OpenScene _, OpenScene b) = OpenBoth(Author("A.scene", Float3.Zero), Author("Levels/B.scene", new Float3(4, 0, 0)));
-        NavMeshSurface surface = b.Section!.Roots[0].AddComponent<NavMeshSurface>();
+        NavMeshSurface surface = b.Section!.Roots.First().AddComponent<NavMeshSurface>();
 
         Assert.StartsWith("Levels/B_navmesh/", NavMeshBakeService.BakePath(surface));
     }
@@ -153,7 +153,7 @@ public class MultiSceneBakeTests : EditorTestHarness
     public void AReflectionProbeBake_MarksItsOwnScene()
     {
         (OpenScene a, OpenScene b) = OpenBoth(Author("A.scene", Float3.Zero), Author("B.scene", new Float3(4, 0, 0)));
-        ReflectionProbe probe = b.Section!.Roots[0].AddComponent<ReflectionProbe>();
+        ReflectionProbe probe = b.Section!.Roots.First().AddComponent<ReflectionProbe>();
         a.Dirty = false;
         b.Dirty = false;
 

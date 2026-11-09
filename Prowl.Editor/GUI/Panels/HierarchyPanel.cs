@@ -500,7 +500,7 @@ public class HierarchyPanel : DockPanel
 
         foreach (SceneSection section in world.Sections)
         {
-            if (section.IsPersistent && section.Roots.Count == 0) continue;
+            if (section.IsPersistent && section.Roots.IsEmpty) continue;
             AddScene(_headers.GetValue(section, static s => new SceneHeader { Section = (SceneSection)s }), section);
         }
 
