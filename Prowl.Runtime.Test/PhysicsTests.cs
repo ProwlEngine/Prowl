@@ -4,6 +4,7 @@
 using System.Reflection;
 
 using Jitter2.Collision.Shapes;
+using Prowl.Echo;
 
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Utils;
@@ -2999,5 +3000,29 @@ public class WorldDefaultsTests : RuntimeTestBase
             Assert.Equal(0.5f, new SceneClock().TimeScale);
         }
         finally { SceneClock.Defaults = previous; }
+    }
+
+    [Fact]
+    public void PlayerTimeSettings_ReachWorldsMadeBeforeThem()
+    {
+        SceneClockSettings previous = SceneClock.Defaults;
+        string dir = Path.Combine(Path.GetTempPath(), "prowl-timesettings", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            SceneInstance scene = CreateScene();
+            EchoObject time = EchoObject.NewCompound();
+            time["DefaultTimeScale"] = new EchoObject(0.25f);
+            File.WriteAllText(Path.Combine(dir, PlayerSettingsFiles.Time + ".yaml"), time.WriteToYaml());
+
+            PlayerSettingsLoader.Apply(dir);
+
+            Assert.Equal(0.25f, scene.Clock.TimeScale);
+        }
+        finally
+        {
+            SceneClock.Defaults = previous;
+            Directory.Delete(dir, true);
+        }
     }
 }

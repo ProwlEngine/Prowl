@@ -182,6 +182,8 @@ public static class PlayerSettingsLoader
             Time.FixedDeltaTime = fixedDt;
             Time.MaxFixedIterations = maxIter;
             SceneClock.Defaults = new SceneClockSettings { TimeScale = timeScale };
+            foreach (SceneInstance world in SceneInstance.All)
+                world.Clock.TimeScale = timeScale;
             Debug.Log("[PlayerSettings] Time applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply time: {ex.Message}"); }
