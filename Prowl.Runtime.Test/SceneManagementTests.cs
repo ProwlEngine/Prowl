@@ -455,6 +455,28 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
+    public void ALightmapPlacement_StaysWithAMovedRenderer_AndFollowsARebake()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        GameObject renderer = world.Create("Renderer");
+        SceneLighting lighting = world.ActiveSection.Lighting;
+        lighting.Placements[renderer.Identifier] = new LightmapPlacement { Index = 0 };
+        lighting.MarkChanged();
+        var cache = new Rendering.BakedLightingBinding.Cache();
+        Assert.Equal(0, Rendering.BakedLightingBinding.Resolve(renderer, ref cache).Placement?.Index);
+
+        renderer.MoveTo(other);
+        renderer.SetIdentifier(Guid.NewGuid());
+        Assert.Same(lighting, Rendering.BakedLightingBinding.Resolve(renderer, ref cache).Lighting);
+        Assert.Equal(0, Rendering.BakedLightingBinding.Resolve(renderer, ref cache).Placement?.Index);
+
+        lighting.Placements.Clear();
+        lighting.MarkChanged();
+        Assert.Null(Rendering.BakedLightingBinding.Resolve(renderer, ref cache).Placement);
+    }
+
+    [Fact]
     public void OwnedRoots_FollowAParentingIntoAnotherSection()
     {
         SceneInstance world = CreateScene();

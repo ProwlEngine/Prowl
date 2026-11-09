@@ -214,7 +214,14 @@ public sealed class SceneLighting
     {
         Lightmaps.Clear();
         Placements.Clear();
+        MarkChanged();
     }
+
+    // Bumped when the pages or placements change, so renderers resolve their placement again.
+    internal int Version { get; private set; }
+
+    /// <summary>Tells renderers that already resolved a placement that the pages or placements changed, like after a rebake.</summary>
+    public void MarkChanged() => Version++;
 }
 
 /// <summary>

@@ -326,6 +326,8 @@ public sealed class LightmapBakeService
                 }
             }
 
+            lighting.MarkChanged();
+
             int count = share.Probes.Count;
             var probeSH = new SphericalHarmonicsL2[count];
             for (int i = 0; i < count; i++) probeSH[i] = ConvertSH(sh[probeStart + i]);

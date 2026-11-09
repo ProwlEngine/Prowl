@@ -102,6 +102,8 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
     /// <summary>Syncs the renderer again next frame, for a change its setters cannot see, like a material list edited in place.</summary>
     public void MarkVisuallyDirty() => Wake();
 
+    private BakedLightingBinding.Cache _lightmapCache;
+
     bool IRenderSync.Sync(RenderWorld world)
     {
         Mesh? mesh = Mesh;
@@ -114,7 +116,7 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
         mesh.Upload();
 
         Float4x4 matrix = Transform.LocalToWorldMatrix;
-        LightmapBinding lightmap = BakedLightingBinding.For(GameObject);
+        LightmapBinding lightmap = BakedLightingBinding.For(GameObject, ref _lightmapCache);
         _renderable.Sync(world, new RenderableState.Desc
         {
             Mesh = mesh.GpuIfLoaded,

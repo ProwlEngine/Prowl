@@ -1805,7 +1805,18 @@ public sealed class SceneSection
     }
 
     /// <summary>This section's baked lightmaps and probes.</summary>
-    public SceneLighting Lighting { get; internal set; } = new();
+    public SceneLighting Lighting
+    {
+        get => _lighting;
+        internal set
+        {
+            // Renderers still on the replaced lighting resolve their placement again.
+            _lighting.MarkChanged();
+            _lighting = value;
+        }
+    }
+
+    private SceneLighting _lighting = new();
 
     /// <summary>The lightmapper settings this section was saved with. Editor data, cleared in player builds.</summary>
     public LightmapBakeSettings LightmapBake { get; internal set; } = new();
