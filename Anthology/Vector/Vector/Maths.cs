@@ -1513,6 +1513,498 @@ public static partial class Maths
 
     #endregion
 
+    #region Smoothing
+
+    /// <summary>
+    /// Gradually moves the current value towards a target value, over a specified time and at a specified velocity.
+    /// </summary>
+    /// <param name="current"> The current value. </param>
+    /// <param name="target"> The target value. </param>
+    /// <param name="currentVelocity"> The initial velocity to move the <paramref name="current"/> value towards the
+    /// <paramref name="target"/> value. This method updates <paramref name="currentVelocity"/> based on the initial
+    /// speed and and the damping. </param>
+    /// <param name="smoothTime"> The approximate time it takes for the current value to reach the target value. The
+    /// lower the <paramref name="smoothTime"/>, the faster the current value reaches the target value. The minimum
+    /// <paramref name="smoothTime"/> is <c>0.0001</c>. If a lower value is specified, it is clamped to the minimum value. </param>
+    /// <param name="maxSpeed"> Specifies a maximum velocity. To specify "no limit", set this parameter to
+    /// <see cref="float.PositiveInfinity"/>. The minimum value is zero; negative values are clamped. </param>
+    /// <param name="deltaTime"> The time since this method was last called. </param>
+    /// <remarks>
+    /// Uses the closed-form analytical solution to the critically damped spring equation, ensuring unconditional
+    /// numerical stability regardless of the time step.
+    /// </remarks>
+    public static float SmoothDamp(float current, float target, ref float currentVelocity, float smoothTime, float maxSpeed, float deltaTime)
+    {
+        // Based on Game Programming Gems 4, Chapter 1.10.
+        float initialTarget = target;
+        smoothTime = Max(smoothTime, 0.0001f);
+        float omega = 2f / smoothTime;
+        float delta = current - target;
+
+        // Honour maxSpeed.
+        float maxDelta = Max(maxSpeed, 0) * smoothTime;
+        delta = Clamp(delta, -maxDelta, maxDelta);
+        target = current - delta;
+
+        // This approximation of e^-x is only accurate for x >= 0.
+        // Approximate 10x faster than float.Exp(-x).
+        float x = omega * deltaTime;
+        float exp = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+
+        float temp = (currentVelocity + omega * delta) * deltaTime;
+        currentVelocity = (currentVelocity - omega * temp) * exp;
+        float result = target + (delta + temp) * exp;
+
+        // Prevent overshooting.
+        if (initialTarget == current || (initialTarget > current) == (result > initialTarget))
+        {
+            result = initialTarget;
+            currentVelocity = 0;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gradually moves the current value towards a target value, over a specified time and at a specified velocity.
+    /// </summary>
+    /// <param name="current"> The current value. </param>
+    /// <param name="target"> The target value. </param>
+    /// <param name="currentVelocity"> The initial velocity to move the <paramref name="current"/> value towards the
+    /// <paramref name="target"/> value. This method updates <paramref name="currentVelocity"/> based on the initial
+    /// speed and and the damping. </param>
+    /// <param name="smoothTime"> The approximate time it takes for the current value to reach the target value. The
+    /// lower the <paramref name="smoothTime"/>, the faster the current value reaches the target value. The minimum
+    /// <paramref name="smoothTime"/> is <c>0.0001</c>. If a lower value is specified, it is clamped to the minimum value. </param>
+    /// <param name="maxSpeed"> Specifies a maximum velocity. To specify "no limit", set this parameter to
+    /// <see cref="float.PositiveInfinity"/>. The minimum value is zero; negative values are clamped. </param>
+    /// <param name="deltaTime"> The time since this method was last called. </param>
+    /// <remarks>
+    /// Uses the closed-form analytical solution to the critically damped spring equation, ensuring unconditional
+    /// numerical stability regardless of the time step.
+    /// </remarks>
+    public static Float2 SmoothDamp(Float2 current, Float2 target, ref Float2 currentVelocity, float smoothTime, float maxSpeed, float deltaTime)
+    {
+        // Based on Game Programming Gems 4, Chapter 1.10.
+        Float2 initialTarget = target;
+        smoothTime = Max(smoothTime, 0.0001f);
+        float omega = 2f / smoothTime;
+        Float2 delta = current - target;
+
+        // Honour maxSpeed.
+        float maxDelta = Max(maxSpeed, 0) * smoothTime;
+        float deltaLength = Float2.Length(delta);
+        if (deltaLength > maxDelta)
+            delta *= maxDelta / deltaLength;
+        target = current - delta;
+
+        // This approximation of e^-x is only accurate for x >= 0.
+        // Approximate 10x faster than float.Exp(-x).
+        float x = omega * deltaTime;
+        float exp = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+
+        Float2 temp = (currentVelocity + omega * delta) * deltaTime;
+        currentVelocity = (currentVelocity - omega * temp) * exp;
+        Float2 result = target + (delta + temp) * exp;
+
+        // Prevent overshooting.
+        if (Float2.Dot(initialTarget - current, result - initialTarget) >= 0)
+        {
+            result = initialTarget;
+            currentVelocity = Float2.Zero;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gradually moves the current value towards a target value, over a specified time and at a specified velocity.
+    /// </summary>
+    /// <param name="current"> The current value. </param>
+    /// <param name="target"> The target value. </param>
+    /// <param name="currentVelocity"> The initial velocity to move the <paramref name="current"/> value towards the
+    /// <paramref name="target"/> value. This method updates <paramref name="currentVelocity"/> based on the initial
+    /// speed and and the damping. </param>
+    /// <param name="smoothTime"> The approximate time it takes for the current value to reach the target value. The
+    /// lower the <paramref name="smoothTime"/>, the faster the current value reaches the target value. The minimum
+    /// <paramref name="smoothTime"/> is <c>0.0001</c>. If a lower value is specified, it is clamped to the minimum value. </param>
+    /// <param name="maxSpeed"> Specifies a maximum velocity. To specify "no limit", set this parameter to
+    /// <see cref="float.PositiveInfinity"/>. The minimum value is zero; negative values are clamped. </param>
+    /// <param name="deltaTime"> The time since this method was last called. </param>
+    /// <remarks>
+    /// Uses the closed-form analytical solution to the critically damped spring equation, ensuring unconditional
+    /// numerical stability regardless of the time step.
+    /// </remarks>
+    public static Float3 SmoothDamp(Float3 current, Float3 target, ref Float3 currentVelocity, float smoothTime, float maxSpeed, float deltaTime)
+    {
+        // Based on Game Programming Gems 4, Chapter 1.10.
+        Float3 initialTarget = target;
+        smoothTime = Max(smoothTime, 0.0001f);
+        float omega = 2f / smoothTime;
+        Float3 delta = current - target;
+
+        // Honour maxSpeed.
+        float maxDelta = Max(maxSpeed, 0) * smoothTime;
+        float deltaLength = Float3.Length(delta);
+        if (deltaLength > maxDelta)
+            delta *= maxDelta / deltaLength;
+        target = current - delta;
+
+        // This approximation of e^-x is only accurate for x >= 0.
+        // Approximate 10x faster than float.Exp(-x).
+        float x = omega * deltaTime;
+        float exp = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+
+        Float3 temp = (currentVelocity + omega * delta) * deltaTime;
+        currentVelocity = (currentVelocity - omega * temp) * exp;
+        Float3 result = target + (delta + temp) * exp;
+
+        // Prevent overshooting.
+        if (Float3.Dot(initialTarget - current, result - initialTarget) >= 0)
+        {
+            result = initialTarget;
+            currentVelocity = Float3.Zero;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gradually moves the current value towards a target value, over a specified time and at a specified velocity.
+    /// </summary>
+    /// <param name="current"> The current value. </param>
+    /// <param name="target"> The target value. </param>
+    /// <param name="currentVelocity"> The initial velocity to move the <paramref name="current"/> value towards the
+    /// <paramref name="target"/> value. This method updates <paramref name="currentVelocity"/> based on the initial
+    /// speed and and the damping. </param>
+    /// <param name="smoothTime"> The approximate time it takes for the current value to reach the target value. The
+    /// lower the <paramref name="smoothTime"/>, the faster the current value reaches the target value. The minimum
+    /// <paramref name="smoothTime"/> is <c>0.0001</c>. If a lower value is specified, it is clamped to the minimum value. </param>
+    /// <param name="maxSpeed"> Specifies a maximum velocity. To specify "no limit", set this parameter to
+    /// <see cref="float.PositiveInfinity"/>. The minimum value is zero; negative values are clamped. </param>
+    /// <param name="deltaTime"> The time since this method was last called. </param>
+    /// <remarks>
+    /// Uses the closed-form analytical solution to the critically damped spring equation, ensuring unconditional
+    /// numerical stability regardless of the time step.
+    /// </remarks>
+    public static Float4 SmoothDamp(Float4 current, Float4 target, ref Float4 currentVelocity, float smoothTime, float maxSpeed, float deltaTime)
+    {
+        // Based on Game Programming Gems 4, Chapter 1.10.
+        Float4 initialTarget = target;
+        smoothTime = Max(smoothTime, 0.0001f);
+        float omega = 2f / smoothTime;
+        Float4 delta = current - target;
+
+        // Honour maxSpeed.
+        float maxDelta = Max(maxSpeed, 0) * smoothTime;
+        float deltaLength = Float4.Length(delta);
+        if (deltaLength > maxDelta)
+            delta *= maxDelta / deltaLength;
+        target = current - delta;
+
+        // This approximation of e^-x is only accurate for x >= 0.
+        // Approximate 10x faster than float.Exp(-x).
+        float x = omega * deltaTime;
+        float exp = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+
+        Float4 temp = (currentVelocity + omega * delta) * deltaTime;
+        currentVelocity = (currentVelocity - omega * temp) * exp;
+        Float4 result = target + (delta + temp) * exp;
+
+        // Prevent overshooting.
+        if (Float4.Dot(initialTarget - current, result - initialTarget) >= 0)
+        {
+            result = initialTarget;
+            currentVelocity = Float4.Zero;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gradually moves the current value towards a target value, over a specified time and at a specified velocity.
+    /// </summary>
+    /// <param name="current"> The current value. </param>
+    /// <param name="target"> The target value. </param>
+    /// <param name="currentVelocity"> The initial velocity to move the <paramref name="current"/> value towards the
+    /// <paramref name="target"/> value. This method updates <paramref name="currentVelocity"/> based on the initial
+    /// speed and and the damping. </param>
+    /// <param name="smoothTime"> The approximate time it takes for the current value to reach the target value. The
+    /// lower the <paramref name="smoothTime"/>, the faster the current value reaches the target value. The minimum
+    /// <paramref name="smoothTime"/> is <c>0.0001</c>. If a lower value is specified, it is clamped to the minimum value. </param>
+    /// <param name="maxSpeed"> Specifies a maximum velocity. To specify "no limit", set this parameter to
+    /// <see cref="float.PositiveInfinity"/>. The minimum value is zero; negative values are clamped. </param>
+    /// <param name="deltaTime"> The time since this method was last called. </param>
+    /// <remarks>
+    /// Uses the closed-form analytical solution to the critically damped spring equation, ensuring unconditional
+    /// numerical stability regardless of the time step.
+    /// </remarks>
+    public static double SmoothDamp(double current, double target, ref double currentVelocity, double smoothTime, double maxSpeed, double deltaTime)
+    {
+        // Based on Game Programming Gems 4, Chapter 1.10.
+        double initialTarget = target;
+        smoothTime = Max(smoothTime, 0.0001f);
+        double omega = 2f / smoothTime;
+        double delta = current - target;
+
+        // Honour maxSpeed.
+        double maxDelta = Max(maxSpeed, 0) * smoothTime;
+        delta = Clamp(delta, -maxDelta, maxDelta);
+        target = current - delta;
+
+        // This approximation of e^-x is only accurate for x >= 0.
+        // Approximate 10x faster than float.Exp(-x).
+        double x = omega * deltaTime;
+        double exp = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+
+        double temp = (currentVelocity + omega * delta) * deltaTime;
+        currentVelocity = (currentVelocity - omega * temp) * exp;
+        double result = target + (delta + temp) * exp;
+
+        // Prevent overshooting.
+        if (initialTarget == current || (initialTarget > current) == (result > initialTarget))
+        {
+            result = initialTarget;
+            currentVelocity = 0;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gradually moves the current value towards a target value, over a specified time and at a specified velocity.
+    /// </summary>
+    /// <param name="current"> The current value. </param>
+    /// <param name="target"> The target value. </param>
+    /// <param name="currentVelocity"> The initial velocity to move the <paramref name="current"/> value towards the
+    /// <paramref name="target"/> value. This method updates <paramref name="currentVelocity"/> based on the initial
+    /// speed and and the damping. </param>
+    /// <param name="smoothTime"> The approximate time it takes for the current value to reach the target value. The
+    /// lower the <paramref name="smoothTime"/>, the faster the current value reaches the target value. The minimum
+    /// <paramref name="smoothTime"/> is <c>0.0001</c>. If a lower value is specified, it is clamped to the minimum value. </param>
+    /// <param name="maxSpeed"> Specifies a maximum velocity. To specify "no limit", set this parameter to
+    /// <see cref="float.PositiveInfinity"/>. The minimum value is zero; negative values are clamped. </param>
+    /// <param name="deltaTime"> The time since this method was last called. </param>
+    /// <remarks>
+    /// Uses the closed-form analytical solution to the critically damped spring equation, ensuring unconditional
+    /// numerical stability regardless of the time step.
+    /// </remarks>
+    public static Double2 SmoothDamp(Double2 current, Double2 target, ref Double2 currentVelocity, double smoothTime, double maxSpeed, double deltaTime)
+    {
+        // Based on Game Programming Gems 4, Chapter 1.10.
+        Double2 initialTarget = target;
+        smoothTime = Max(smoothTime, 0.0001f);
+        double omega = 2f / smoothTime;
+        Double2 delta = current - target;
+
+        // Honour maxSpeed.
+        double maxDelta = Max(maxSpeed, 0) * smoothTime;
+        double deltaLength = Double2.Length(delta);
+        if (deltaLength > maxDelta)
+            delta *= maxDelta / deltaLength;
+        target = current - delta;
+
+        // This approximation of e^-x is only accurate for x >= 0.
+        // Approximate 10x faster than float.Exp(-x).
+        double x = omega * deltaTime;
+        double exp = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+
+        Double2 temp = (currentVelocity + omega * delta) * deltaTime;
+        currentVelocity = (currentVelocity - omega * temp) * exp;
+        Double2 result = target + (delta + temp) * exp;
+
+        // Prevent overshooting.
+        if (Double2.Dot(initialTarget - current, result - initialTarget) >= 0)
+        {
+            result = initialTarget;
+            currentVelocity = Double2.Zero;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gradually moves the current value towards a target value, over a specified time and at a specified velocity.
+    /// </summary>
+    /// <param name="current"> The current value. </param>
+    /// <param name="target"> The target value. </param>
+    /// <param name="currentVelocity"> The initial velocity to move the <paramref name="current"/> value towards the
+    /// <paramref name="target"/> value. This method updates <paramref name="currentVelocity"/> based on the initial
+    /// speed and and the damping. </param>
+    /// <param name="smoothTime"> The approximate time it takes for the current value to reach the target value. The
+    /// lower the <paramref name="smoothTime"/>, the faster the current value reaches the target value. The minimum
+    /// <paramref name="smoothTime"/> is <c>0.0001</c>. If a lower value is specified, it is clamped to the minimum value. </param>
+    /// <param name="maxSpeed"> Specifies a maximum velocity. To specify "no limit", set this parameter to
+    /// <see cref="float.PositiveInfinity"/>. The minimum value is zero; negative values are clamped. </param>
+    /// <param name="deltaTime"> The time since this method was last called. </param>
+    /// <remarks>
+    /// Uses the closed-form analytical solution to the critically damped spring equation, ensuring unconditional
+    /// numerical stability regardless of the time step.
+    /// </remarks>
+    public static Double3 SmoothDamp(Double3 current, Double3 target, ref Double3 currentVelocity, double smoothTime, double maxSpeed, double deltaTime)
+    {
+        // Based on Game Programming Gems 4, Chapter 1.10.
+        Double3 initialTarget = target;
+        smoothTime = Max(smoothTime, 0.0001f);
+        double omega = 2f / smoothTime;
+        Double3 delta = current - target;
+
+        // Honour maxSpeed.
+        double maxDelta = Max(maxSpeed, 0) * smoothTime;
+        double deltaLength = Double3.Length(delta);
+        if (deltaLength > maxDelta)
+            delta *= maxDelta / deltaLength;
+        target = current - delta;
+
+        // This approximation of e^-x is only accurate for x >= 0.
+        // Approximate 10x faster than float.Exp(-x).
+        double x = omega * deltaTime;
+        double exp = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+
+        Double3 temp = (currentVelocity + omega * delta) * deltaTime;
+        currentVelocity = (currentVelocity - omega * temp) * exp;
+        Double3 result = target + (delta + temp) * exp;
+
+        // Prevent overshooting.
+        if (Double3.Dot(initialTarget - current, result - initialTarget) >= 0)
+        {
+            result = initialTarget;
+            currentVelocity = Double3.Zero;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gradually moves the current value towards a target value, over a specified time and at a specified velocity.
+    /// </summary>
+    /// <param name="current"> The current value. </param>
+    /// <param name="target"> The target value. </param>
+    /// <param name="currentVelocity"> The initial velocity to move the <paramref name="current"/> value towards the
+    /// <paramref name="target"/> value. This method updates <paramref name="currentVelocity"/> based on the initial
+    /// speed and and the damping. </param>
+    /// <param name="smoothTime"> The approximate time it takes for the current value to reach the target value. The
+    /// lower the <paramref name="smoothTime"/>, the faster the current value reaches the target value. The minimum
+    /// <paramref name="smoothTime"/> is <c>0.0001</c>. If a lower value is specified, it is clamped to the minimum value. </param>
+    /// <param name="maxSpeed"> Specifies a maximum velocity. To specify "no limit", set this parameter to
+    /// <see cref="float.PositiveInfinity"/>. The minimum value is zero; negative values are clamped. </param>
+    /// <param name="deltaTime"> The time since this method was last called. </param>
+    /// <remarks>
+    /// Uses the closed-form analytical solution to the critically damped spring equation, ensuring unconditional
+    /// numerical stability regardless of the time step.
+    /// </remarks>
+    public static Double4 SmoothDamp(Double4 current, Double4 target, ref Double4 currentVelocity, double smoothTime, double maxSpeed, double deltaTime)
+    {
+        // Based on Game Programming Gems 4, Chapter 1.10.
+        Double4 initialTarget = target;
+        smoothTime = Max(smoothTime, 0.0001f);
+        double omega = 2f / smoothTime;
+        Double4 delta = current - target;
+
+        // Honour maxSpeed.
+        double maxDelta = Max(maxSpeed, 0) * smoothTime;
+        double deltaLength = Double4.Length(delta);
+        if (deltaLength > maxDelta)
+            delta *= maxDelta / deltaLength;
+        target = current - delta;
+
+        // This approximation of e^-x is only accurate for x >= 0.
+        // Approximate 10x faster than float.Exp(-x).
+        double x = omega * deltaTime;
+        double exp = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+
+        Double4 temp = (currentVelocity + omega * delta) * deltaTime;
+        currentVelocity = (currentVelocity - omega * temp) * exp;
+        Double4 result = target + (delta + temp) * exp;
+
+        // Prevent overshooting.
+        if (Double4.Dot(initialTarget - current, result - initialTarget) >= 0)
+        {
+            result = initialTarget;
+            currentVelocity = Double4.Zero;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gradually changes an angle given in degrees towards a desired goal angle over time.
+    /// </summary>
+    /// <param name="current"> The current angle, in degrees. </param>
+    /// <param name="target"> The target angle, in degrees. </param>
+    /// <param name="currentVelocity"> The initial angular velocity, in degrees per second, to move the
+    /// <paramref name="current"/> value towards the <paramref name="target"/> value. This method updates
+    /// <paramref name="currentVelocity"/> based on the initial angular velocity and and the damping. </param>
+    /// <param name="smoothTime"> The approximate time it takes for the current value to reach the target value. The
+    /// lower the <paramref name="smoothTime"/>, the faster the current value reaches the target value. The minimum
+    /// <paramref name="smoothTime"/> is <c>0.0001</c>. If a lower value is specified, it is clamped to the minimum value. </param>
+    /// <param name="maxSpeed"> Specifies a maximum angular speed. To specify "no limit", set this parameter to
+    /// <see cref="float.PositiveInfinity"/>. The minimum value is zero; negative values are clamped. </param>
+    /// <param name="deltaTime"> The time since this method was last called, in seconds. </param>
+    public static float SmoothDampRadians(float current, float target, ref float currentVelocity, float smoothTime, float maxSpeed, float deltaTime)
+    {
+        // Re-express current as the equivalent angle nearest to target,
+        // so SmoothDamp takes the shortest path around the circle.
+        float angleDelta = current - target;
+        angleDelta %= TwoPI;
+        if (angleDelta > PI)
+            angleDelta -= TwoPI;
+        else if (angleDelta <= -PI)
+            angleDelta += TwoPI;
+        return SmoothDamp(target + angleDelta, target, ref currentVelocity, smoothTime, maxSpeed, deltaTime);
+    }
+
+    /// <summary>
+    /// Gradually changes an angle given in degrees towards a desired goal angle over time.
+    /// </summary>
+    /// <param name="current"> The current angle, in degrees. </param>
+    /// <param name="target"> The target angle, in degrees. </param>
+    /// <param name="currentVelocity"> The initial angular velocity, in degrees per second, to move the
+    /// <paramref name="current"/> value towards the <paramref name="target"/> value. This method updates
+    /// <paramref name="currentVelocity"/> based on the initial angular velocity and and the damping. </param>
+    /// <param name="smoothTime"> The approximate time it takes for the current value to reach the target value. The
+    /// lower the <paramref name="smoothTime"/>, the faster the current value reaches the target value. The minimum
+    /// <paramref name="smoothTime"/> is <c>0.0001</c>. If a lower value is specified, it is clamped to the minimum value. </param>
+    /// <param name="maxSpeed"> Specifies a maximum angular speed. To specify "no limit", set this parameter to
+    /// <see cref="float.PositiveInfinity"/>. The minimum value is zero; negative values are clamped. </param>
+    /// <param name="deltaTime"> The time since this method was last called, in seconds. </param>
+    public static float SmoothDampDegrees(float current, float target, ref float currentVelocity, float smoothTime, float maxSpeed, float deltaTime)
+    {
+        // Re-express current as the equivalent angle nearest to target,
+        // so SmoothDamp takes the shortest path around the circle.
+        float angleDelta = current - target;
+        angleDelta %= 360f;
+        if (angleDelta > 180f)
+            angleDelta -= 360f;
+        else if (angleDelta <= -180f)
+            angleDelta += 360f;
+        return SmoothDamp(target + angleDelta, target, ref currentVelocity, smoothTime, maxSpeed, deltaTime);
+    }
+
+    /// <summary>
+    /// Gradually changes a rotation towards a desired goal rotation over time.
+    /// </summary>
+    /// <param name="current"> The current rotation, as a quaternion. </param>
+    /// <param name="target"> The target rotation, as a quaternion. </param>
+    /// <param name="currentVelocity"> The initial angular velocity, in radians per second, to move the
+    /// <paramref name="current"/> value towards the <paramref name="target"/> value. This method updates
+    /// <paramref name="currentVelocity"/> based on the initial angular velocity and and the damping. </param>
+    /// <param name="smoothTime"> The approximate time it takes for the current value to reach the target value. The
+    /// lower the <paramref name="smoothTime"/>, the faster the current value reaches the target value. The minimum
+    /// <paramref name="smoothTime"/> is <c>0.0001</c>. If a lower value is specified, it is clamped to the minimum value. </param>
+    /// <param name="maxSpeed"> Specifies a maximum angular speed. To specify "no limit", set this parameter to
+    /// <see cref="float.PositiveInfinity"/>. The minimum value is zero; negative values are clamped. </param>
+    /// <param name="deltaTime"> The time since this method was last called, in seconds. </param>
+    public static Quaternion SmoothDamp(Quaternion current, Quaternion target, ref Float3 currentVelocity, float smoothTime, float maxSpeed, float deltaTime)
+    {
+        // Error rotation as a rotation vector; the target becomes the origin.
+        Float3 error = Quaternion.ToRotationVector(current * Quaternion.Inverse(target));
+        Float3 smoothed = SmoothDamp(error, Float3.Zero, ref currentVelocity, smoothTime, maxSpeed, deltaTime);
+        return Quaternion.Normalize(Quaternion.FromRotationVector(smoothed) * target);
+    }
+
+    #endregion
+
 
     /// <summary>Converts radians to degrees.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

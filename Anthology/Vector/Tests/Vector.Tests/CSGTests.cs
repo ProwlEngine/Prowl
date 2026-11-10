@@ -10,7 +10,7 @@ using Prowl.Vector.Geometry;
 
 using Xunit;
 
-namespace Vector.Tests;
+namespace Prowl.Vector.Tests;
 
 /// <summary>
 /// Covers <see cref="CSGScene"/>, <see cref="GeometryGenerator.ConvexFromPlanes"/> and
