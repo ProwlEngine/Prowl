@@ -7,4 +7,9 @@
     <ItemGroup>
         <ProjectReference Include="../Shared/Shared.csproj" />
     </ItemGroup>
+
+    <ItemGroup>
+        <None Include="Cat_cat.png" CopyToOutputDirectory="PreserveNewest" />
+        <None Include="Shader.glsl" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
 </Project>
