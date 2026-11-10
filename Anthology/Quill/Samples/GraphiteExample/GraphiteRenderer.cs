@@ -97,12 +97,12 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         using GlslShaderCompiler compiler = new();
 
         ShaderDefinition canvasDef = ShaderParser.Parse(ReadShaderSource("Shader.shader"));
-        canvasDef.Create(_gl, compiler, new Variant(), CompileMode.All);
+        canvasDef.Create(_gl, compiler);
         _canvasPass = canvasDef.Passes![0];
         _canvasProgram = CreateCanvasProgram(_canvasPass);
 
         ShaderDefinition blurDef = ShaderParser.Parse(ReadShaderSource("Blur.shader"));
-        blurDef.Create(_gl, compiler, new Variant(), CompileMode.All);
+        blurDef.Create(_gl, compiler);
         _blurPass = blurDef.Passes![0];
     }
 
@@ -112,7 +112,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     // so the reflected VertexLayouts are replaced by hand here.
     private GraphicsProgram CreateCanvasProgram(ShaderPass pass)
     {
-        if (!pass.GetVariant(0).TryGetDescription(_gl.BackendType, out ShaderDescription description))
+        if (!pass.GetVariant().TryGetDescription(_gl.BackendType, out ShaderDescription description))
             throw new InvalidOperationException($"Canvas shader was not compiled for backend {_gl.BackendType}.");
 
         description.VertexLayouts =

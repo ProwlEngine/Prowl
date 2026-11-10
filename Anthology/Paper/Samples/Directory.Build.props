@@ -1,5 +1,8 @@
 <Project>
 
+  <!-- Inherit build settings from the parent Directory.Build.props file. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <OutputType>Exe</OutputType>

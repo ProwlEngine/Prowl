@@ -1,6 +1,6 @@
 <Project>
 
-    <!-- Inherit the monorepo-wide settings (unified version, MIT license, repo) then add local config. -->
+    <!-- Inherit build settings from the parent Directory.Build.props file. -->
     <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
     <PropertyGroup>

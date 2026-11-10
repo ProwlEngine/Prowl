@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
+    <TargetFramework>$(ProwlTestTargetFramework)</TargetFramework>
     <IsPackable>false</IsPackable>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
