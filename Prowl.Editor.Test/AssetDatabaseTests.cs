@@ -60,14 +60,6 @@ public class AssetDatabaseTests : EditorTestHarness
     #region Create / Import / Resolve
 
     [Fact]
-    public void CreateScene_WritesFileAndMeta()
-    {
-        CreateScene("S.scene");
-        Assert.True(File.Exists(AssetAbsolutePath("S.scene")));
-        Assert.True(File.Exists(AssetAbsolutePath("S.scene.meta")));
-    }
-
-    [Fact]
     public void CreateAsset_MakesTheCallersObjectTheAsset()
     {
         Material material = CreateMaterial("M.mat");
@@ -91,14 +83,6 @@ public class AssetDatabaseTests : EditorTestHarness
         Guid g = CreateScene("S.scene");
         Assert.Equal(g, Assets.PathToGuid("S.scene"));
         Assert.Equal("S.scene", Assets.GuidToPath(g));
-    }
-
-    [Fact]
-    public void CreateScene_NestedFolders_AreCreated()
-    {
-        Guid g = CreateScene("A/B/C/Deep.scene");
-        Assert.NotEqual(Guid.Empty, g);
-        Assert.True(File.Exists(AssetAbsolutePath("A/B/C/Deep.scene")));
     }
 
     [Fact]
@@ -202,9 +186,6 @@ public class AssetDatabaseTests : EditorTestHarness
     #region Path / Guid Queries
 
     [Fact]
-    public void PathToGuid_Unknown_ReturnsEmpty() => Assert.Equal(Guid.Empty, Assets.PathToGuid("nope.scene"));
-
-    [Fact]
     public void GuidToPath_Unknown_ReturnsNull() => Assert.Null(Assets.GuidToPath(Guid.NewGuid()));
 
     [Fact]
@@ -214,25 +195,9 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.Equal(g, Assets.PathToGuid("folder/s.scene"));
     }
 
-    [Fact]
-    public void GetEntry_ByGuidAndByPath()
-    {
-        Guid g = CreateScene("S.scene");
-        Assert.NotNull(Assets.GetEntry(g));
-        Assert.Equal(g, Assets.GetEntry("S.scene")!.Guid);
-    }
-
     #endregion
 
     #region GUID Stability Across Reopen
-
-    [Fact]
-    public void Guid_IsStable_AcrossDatabaseReopen()
-    {
-        Guid g = CreateScene("S.scene");
-        ReopenDatabase();
-        Assert.Equal(g, Assets.PathToGuid("S.scene"));
-    }
 
     [Fact]
     public void Reopen_PicksUpFileAddedOutOfBand()

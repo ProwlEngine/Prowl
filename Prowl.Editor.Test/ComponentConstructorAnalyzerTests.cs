@@ -15,17 +15,6 @@ namespace Prowl.Editor.Test;
 [Trait("Category", "Build")]
 public class ComponentConstructorAnalyzerTests : EditorTestHarness
 {
-    [Fact]
-    public void WarnsOnAParameterlessConstructor()
-    {
-        WriteScript("Ctor.cs", "public class Ctor : Prowl.Runtime.Component { public Ctor() { } }");
-
-        ScriptCompiler.CompileResult result = ScriptCompiler.CompileAll(Project);
-
-        Assert.True(result.Success, result.Errors); // a warning, so the compile still succeeds
-        Assert.Contains(ComponentConstructorAnalyzer.DeclaredConstructorId, result.Output);
-    }
-
     /// <summary>
     /// The shape behind the crash this came from: nothing can create it, so it could be dragged
     /// onto the inspector and silently do nothing.

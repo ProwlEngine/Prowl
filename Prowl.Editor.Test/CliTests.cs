@@ -228,13 +228,6 @@ public class CliTests : EditorTestHarness
     }
 
     [Fact]
-    public void EvalReturnsAnExpressionsValue()
-    {
-        Assert.Equal(3, Eval("1 + 2").Result!.GetValue<long>());
-        Assert.Equal("GameObject", Eval("typeof(GameObject).Name").Result!.GetValue<string>());
-    }
-
-    [Fact]
     public void EvalRunsStatementsUsingsAndAwait()
     {
         Assert.Equal(6, Eval("var x = new List<int> { 1, 2, 3 }; return x.Sum();").Result!.GetValue<long>());

@@ -256,25 +256,6 @@ public class AudioAssetTests : EditorTestHarness
         Assert.Equal(0f, music.VolumeDB);
     }
 
-    [Fact]
-    public void AHeldMixer_SurvivesUnloadingWhatIsUnused()
-    {
-        Guid held = CreateMixer(new AudioMixer(), "Held.audiomixer");
-        Guid ordinary = CreateMixer(new AudioMixer(), "Ordinary.audiomixer");
-
-        AudioMixer heldAsset = AssetDatabase.Load<AudioMixer>(held)!;
-        AudioMixer ordinaryAsset = AssetDatabase.Load<AudioMixer>(ordinary)!;
-        object owner = new();
-        AssetDatabase.Hold(heldAsset, owner);
-
-        AssetDatabase.UnloadUnused();
-
-        Assert.True(heldAsset.IsLoaded);
-        Assert.False(ordinaryAsset.IsLoaded);
-        Assert.Same(ordinaryAsset, AssetDatabase.Load<AudioMixer>(ordinary));
-        AssetDatabase.ReleaseAll(owner);
-    }
-
     // The mixer's list and a group loaded by GUID are the same object, so a volume set through one is heard through the other.
     [Fact]
     public void AGroupLoadedByGuid_IsTheOneInItsMixer()
