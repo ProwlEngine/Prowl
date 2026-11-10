@@ -142,7 +142,7 @@ public sealed class Stabber : Component
         float back = Length + 0.05f;
         Float3 from = tip - axis * back;
         QueryFilter filter = QueryFilter.Default.Ignoring(Body);
-        if (!GameObject.Scene.Physics.Raycast(from, axis, out RaycastHit hit, back, filter)) return 0f;
+        if (!GameObject.Scene.Physics.Raycast(from, axis, back, out RaycastHit hit, filter)) return 0f;
         if (hit.Collider.IsNotValid() || hit.Collider.AttachedRigidbody != target) return 0f;
         return MathF.Max(0f, back - hit.Distance);
     }
