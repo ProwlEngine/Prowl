@@ -180,9 +180,9 @@ public class ConsolePanel : DockPanel
         }
     }
 
-    private static void OnLogMessage(string message, DebugStackTrace? stackTrace, LogSeverity severity)
+    private static void OnLogMessage(LogEvent e)
     {
-        s_pending.Enqueue((message, stackTrace, severity, DateTime.Now));
+        s_pending.Enqueue((e.Message, e.StackTrace, e.Severity, DateTime.Now));
         while (s_pending.Count > MaxPending && s_pending.TryDequeue(out _)) { }
     }
 

@@ -687,9 +687,9 @@ public class NavMeshBuildTests
         Assert.NotNull(data);
 
         var warnings = new List<string>();
-        void Capture(string message, DebugStackTrace? trace, LogSeverity severity)
+        void Capture(LogEvent e)
         {
-            if (severity == LogSeverity.Warning && message.Contains("NavMeshLink")) warnings.Add(message);
+            if (e.Severity == LogSeverity.Warning && e.Message.Contains("NavMeshLink")) warnings.Add(e.Message);
         }
 
         Debug.OnLog += Capture;
@@ -770,12 +770,12 @@ public class NavMeshBuildTests
         List<string> warnings = [];
         List<string> errors = [];
         object gate = new();
-        void Capture(string message, DebugStackTrace? trace, LogSeverity severity)
+        void Capture(LogEvent e)
         {
             lock (gate)
             {
-                if (severity == LogSeverity.Warning) warnings.Add(message);
-                if (severity == LogSeverity.Error) errors.Add(message);
+                if (e.Severity == LogSeverity.Warning) warnings.Add(e.Message);
+                if (e.Severity == LogSeverity.Error) errors.Add(e.Message);
             }
         }
 

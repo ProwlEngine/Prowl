@@ -166,11 +166,11 @@ public class HotReloadSceneTests : EditorTestHarness
         Assembly v1 = CompileGameAssembly("W.cs", "public class E { public int Id; }");
         Assembly v2 = CompileGameAssembly("W.cs", "public class E { public int Id; public int X; }");
 
-        var logs = new System.Collections.Generic.List<string>();
-        void Capture(string m, DebugStackTrace? _, LogSeverity s)
+        var logs = new List<string>();
+        void Capture(LogEvent e)
         {
-            if (s is LogSeverity.Error or LogSeverity.Warning)
-                lock (logs) logs.Add(m);
+            if (e.Severity is LogSeverity.Error or LogSeverity.Warning)
+                lock (logs) logs.Add(e.Message);
         }
 
         Debug.OnLog += Capture;

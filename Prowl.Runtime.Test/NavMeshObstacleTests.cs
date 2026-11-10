@@ -943,9 +943,9 @@ public class NavMeshObstacleTests : RuntimeTestBase
         Tick(scene, 2);
 
         List<string> warnings = [];
-        void Capture(string message, DebugStackTrace? trace, LogSeverity severity)
+        void Capture(LogEvent e)
         {
-            if (severity == LogSeverity.Warning && message.Contains("FloatingCrate")) warnings.Add(message);
+            if (e.Severity == LogSeverity.Warning && e.Message.Contains("FloatingCrate")) warnings.Add(e.Message);
         }
 
         Debug.OnLog += Capture;

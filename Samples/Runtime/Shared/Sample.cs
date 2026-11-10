@@ -240,9 +240,9 @@ public abstract class StationGame : Game
             _captureStation = args[station + 1];
 
         // Warnings and errors land in the capture's log, so a capture that looks wrong says why
-        Prowl.Runtime.Debug.OnLog += (message, _, severity) =>
+        Prowl.Runtime.Debug.OnLog += (e) =>
         {
-            if (severity >= LogSeverity.Warning) Console.WriteLine($"{severity}: {message}");
+            if (e.Severity >= LogSeverity.Warning) Console.WriteLine($"{e.Severity}: {e.Message}");
         };
 
         Time.LockedDeltaTime = 1f / 60f;

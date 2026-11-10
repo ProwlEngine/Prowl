@@ -960,10 +960,10 @@ public class ProjectMigrationTests : IDisposable
 
         string shader = WriteAsset("Custom.shader", source, "ShaderImporter");
         var warnings = new List<string>();
-        void Collect(string message, DebugStackTrace? trace, LogSeverity severity)
+        void Collect(LogEvent e)
         {
-            if (severity == LogSeverity.Warning && message.Contains("Custom.shader", StringComparison.Ordinal))
-                lock (warnings) warnings.Add(message);
+            if (e.Severity == LogSeverity.Warning && e.Message.Contains("Custom.shader", StringComparison.Ordinal))
+                lock (warnings) warnings.Add(e.Message);
         }
         Prowl.Runtime.Debug.OnLog += Collect;
         try { ProjectMigration.Migrate(Project.Open(_root)); }

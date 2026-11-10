@@ -233,10 +233,10 @@ public class NavMeshQueryTests
         Assert.NotNull(first);
 
         List<string> warnings = [];
-        void Capture(string message, DebugStackTrace? trace, LogSeverity severity)
+        void Capture(LogEvent e)
         {
-            if (severity == LogSeverity.Warning && message.Contains("is ignored"))
-                warnings.Add(message);
+            if (e.Severity == LogSeverity.Warning && e.Message.Contains("is ignored"))
+                warnings.Add(e.Message);
         }
 
         Debug.OnLog += Capture;

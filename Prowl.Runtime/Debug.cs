@@ -28,8 +28,28 @@ public enum LogSeverity
     Exception = 1 << 4
 }
 
+/// <summary>
+/// Represents a logged event with a message, severity, and optional stack trace.
+/// </summary>
+public readonly struct LogEvent
+{
+    /// <summary>
+    /// The log message.
+    /// </summary>
+    public required string Message { get; init; }
 
-public delegate void OnLog(string message, DebugStackTrace? stackTrace, LogSeverity logSeverity);
+    /// <summary>
+    /// The severity of the message (info, warning, etc).
+    /// </summary>
+    public required LogSeverity Severity { get; init; }
+
+    /// <summary>
+    /// The stack trace, or <see langword="null"/> if no stack trace is available.
+    /// </summary>
+    public DebugStackTrace? StackTrace { get; init; }
+}
+
+public delegate void OnLog(LogEvent e);
 
 /// <summary>
 /// Represents a stack trace, either for an exception or a point-in-time capture.
@@ -424,7 +444,12 @@ public static class Debug
             }
         }
 
-        OnLog?.Invoke(message, trace, logSeverity);
+        OnLog?.Invoke(new LogEvent
+        {
+            Message = message,
+            Severity = logSeverity,
+            StackTrace = trace,
+        });
     }
 
     public static void If(bool condition, string message = "")

@@ -1954,12 +1954,12 @@ public class EditorApplication : Game
     // Logs can come from any thread, so the pause itself waits for the next frame.
     private static volatile bool s_pauseRequested;
 
-    private static void PauseOnLog(string message, DebugStackTrace? stackTrace, LogSeverity severity)
+    private static void PauseOnLog(LogEvent e)
     {
         if (!Application.IsPlaying || IsPlayPaused) return;
         PauseOnLog mode = Preferences.Get<PlayModePreferences>().PauseOn;
-        if (mode == GUI.Panels.PauseOnLog.ErrorsAndExceptions && severity is LogSeverity.Error or LogSeverity.Exception
-            || mode == GUI.Panels.PauseOnLog.ExceptionsOnly && severity == LogSeverity.Exception)
+        if (mode == GUI.Panels.PauseOnLog.ErrorsAndExceptions && e.Severity is LogSeverity.Error or LogSeverity.Exception
+            || mode == GUI.Panels.PauseOnLog.ExceptionsOnly && e.Severity == LogSeverity.Exception)
             s_pauseRequested = true;
     }
 

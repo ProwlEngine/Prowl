@@ -48,7 +48,7 @@ public class ProwlActionTests : RuntimeTestBase
 
         public LogCapture() => Debug.OnLog += Record;
 
-        private void Record(string message, DebugStackTrace? trace, LogSeverity severity) => _messages.Add(message);
+        private void Record(LogEvent e) => _messages.Add(e.Message);
 
         public bool Logged(string text) => _messages.Exists(m => m.Contains(text, StringComparison.Ordinal));
 
