@@ -49,8 +49,6 @@ public readonly struct LogEvent
     public DebugStackTrace? StackTrace { get; init; }
 }
 
-public delegate void OnLog(LogEvent e);
-
 /// <summary>
 /// Represents a stack trace, either for an exception or a point-in-time capture.
 /// </summary>
@@ -226,7 +224,7 @@ public static class Debug
     /// <summary>
     /// Triggered when a message is logged.
     /// </summary>
-    public static event OnLog? OnLog;
+    public static event Action<LogEvent>? OnLog;
 
     /// <summary>
     /// Logs a message at normal severity.
