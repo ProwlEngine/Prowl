@@ -13,6 +13,12 @@ public class MathsTests
         float currentVelocity = 0;
         Assert.Equal(4.129158f, Maths.SmoothDamp(current: 0, target: 100, ref currentVelocity, smoothTime: 1, maxSpeed: float.PositiveInfinity, deltaTime: 0.16f), precision: 4);
         Assert.Equal(46.48283f, currentVelocity, precision: 4);
+        Assert.Equal(57.46621f, Maths.SmoothDamp(current: 50, target: 100, ref currentVelocity, smoothTime: 1, maxSpeed: float.PositiveInfinity, deltaTime: 0.16f), precision: 4);
+        Assert.Equal(46.19836f, currentVelocity, precision: 4);
+        Assert.Equal(7.207428f, Maths.SmoothDamp(current: 0, target: 100, ref currentVelocity, smoothTime: 10, maxSpeed: float.PositiveInfinity, deltaTime: 0.16f), precision: 4);
+        Assert.Equal(43.93225f, currentVelocity, precision: 4);
+        Assert.Equal(21.77090f, Maths.SmoothDamp(current: 0, target: 100, ref currentVelocity, smoothTime: 1, maxSpeed: float.PositiveInfinity, deltaTime: 0.33f), precision: 4);
+        Assert.Equal(75.87174f, currentVelocity, precision: 4);
     }
 
     [Fact]
