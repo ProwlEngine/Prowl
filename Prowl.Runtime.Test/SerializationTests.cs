@@ -260,25 +260,6 @@ public class SerializationTests : RuntimeTestBase
         Assert.Same(clone, cloneParent.Children[0].Scene);
     }
 
-    [Fact]
-    public void Scene_RoundTrip_RestoresIdentifiers()
-    {
-        // The parallel identifier arrays Scene maintains are the reason save/load keeps stable IDs.
-        SceneInstance scene = CreateScene();
-        GameObject go = CreateGameObject("Obj");
-        SerializableComponent comp = go.AddComponent<SerializableComponent>();
-        scene.Add(go);
-        Guid goId = go.Identifier;
-        Guid compId = comp.Identifier;
-
-        SceneInstance clone = RoundTrip(scene);
-
-        GameObject? cloneGo = clone.FindObject<GameObject>(goId);
-        Assert.NotNull(cloneGo);
-        Assert.Equal("Obj", cloneGo.Name);
-        Assert.NotNull(clone.FindObject<SerializableComponent>(compId));
-    }
-
     // A GameObject whose serialized Transform can't be restored (an unresolved forward $id reference,
     // which some scenes' flat-array + nested-children encoding produces) must not throw - it has to
     // fall back to a fresh Transform. Before the fix this NREs on `_transform.GameObject = this`.

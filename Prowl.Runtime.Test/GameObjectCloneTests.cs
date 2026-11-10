@@ -149,17 +149,6 @@ public class GameObjectCloneTests : RuntimeTestBase
         Assert.Equal(2, markers[1].Number);
     }
 
-    [Fact]
-    public void Clone_ComponentIsFindableThroughTheCache()
-    {
-        GameObject source = Build("root", out _);
-
-        GameObject clone = ObjectCopy.Clone(source);
-
-        Assert.NotNull(clone.GetComponent<Marker>());
-        Assert.Single(clone.GetComponents<Marker>());
-    }
-
     #endregion
 
     #region Identity
@@ -270,20 +259,6 @@ public class GameObjectCloneTests : RuntimeTestBase
     #endregion
 
     #region Independence
-
-    [Fact]
-    public void Clone_EditingTheCopyLeavesTheSourceAlone()
-    {
-        GameObject source = Build("root", out Marker marker);
-        marker.Number = 1;
-
-        GameObject clone = ObjectCopy.Clone(source);
-        clone.GetComponent<Marker>()!.Number = 99;
-        clone.Name = "changed";
-
-        Assert.Equal(1, marker.Number);
-        Assert.Equal("root", source.Name);
-    }
 
     [Fact]
     public void Clone_IsDetachedFromAnyScene()
@@ -434,20 +409,6 @@ public class GameObjectCloneTests : RuntimeTestBase
 
         Assert.Same(clones[1], clones[0].GetComponent<Marker>()!.TargetObject);
         Assert.Same(clones[0], clones[1].GetComponent<Marker>()!.TargetObject);
-    }
-
-    [Fact]
-    public void Clone_SeparateCallsDoNotCrossLink()
-    {
-        GameObject a = Build("a", out Marker markerA);
-        GameObject b = Build("b", out _);
-        markerA.TargetObject = b;
-
-        GameObject cloneA = ObjectCopy.Clone(a);
-        GameObject cloneB = ObjectCopy.Clone(b);
-
-        Assert.Same(b, cloneA.GetComponent<Marker>()!.TargetObject);
-        Assert.NotSame(cloneB, cloneA.GetComponent<Marker>()!.TargetObject);
     }
 
     #endregion

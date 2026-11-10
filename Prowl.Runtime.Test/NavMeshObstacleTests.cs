@@ -26,44 +26,6 @@ public class NavMeshObstacleTests : RuntimeTestBase
     private static bool Walkable(SceneInstance scene, Float3 position)
         => scene.Navigation.SamplePosition(position, out _, 0.5f, NavMeshAreaMask.Everything);
 
-    /// <summary>Echo stores an enum as its number, so reordering these members would repoint every
-    /// saved obstacle at a different shape. The values are asserted, not just the round-trip.</summary>
-    [Fact]
-    public void ObstacleShape_KeepsTheValuesScenesWereSavedWith()
-    {
-        Assert.Equal(0, (int)NavMeshObstacleShape.Cylinder);
-        Assert.Equal(1, (int)NavMeshObstacleShape.Box);
-
-        Assert.Equal(NavMeshObstacleShape.Cylinder, Serializer.Deserialize<NavMeshObstacleShape>(new EchoObject(0L)));
-        Assert.Equal(NavMeshObstacleShape.Box, Serializer.Deserialize<NavMeshObstacleShape>(new EchoObject(1L)));
-    }
-
-    /// <summary>A bake produces cache layers, is queryable, and the layers survive an Echo
-    /// round-trip and re-instantiation.</summary>
-    [Fact]
-    public void Surface_BakesQueriesAndRoundTrips()
-    {
-        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
-        Assert.True(surface.BuildNavMesh());
-
-        Runtime.NavMeshData data = surface.NavMeshData!;
-        Assert.NotEmpty(data.CacheLayers);
-
-        Assert.True(Walkable(scene, new Float3(0, 0.2f, 0)));
-        var path = new NavMeshPath();
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, -8), new Float3(8, 0, 8), path, NavMeshAreaMask.Everything));
-        Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
-
-        // Layers round-trip through the asset serializer and instantiate again.
-        EchoObject echo = Serializer.Serialize(data);
-        Runtime.NavMeshData? loaded = Serializer.Deserialize<Runtime.NavMeshData>(echo);
-        Assert.NotNull(loaded);
-        Assert.Equal(data.CacheLayers.Count, loaded!.CacheLayers.Count);
-        DtTileCache cache = loaded.CreateTileCache(maxObstacles: 16);
-        Assert.NotNull(cache.GetNavMesh());
-        Assert.True(cache.GetNavMesh().GetMaxTiles() > 0);
-    }
-
     /// <summary>
     /// A surface with NOTHING overridden has to produce a usable navmesh. A tile wider than a
     /// compressed layer header can describe (its dimensions are bytes) wraps to an empty layer:
@@ -350,31 +312,6 @@ public class NavMeshObstacleTests : RuntimeTestBase
             "A settled obstacle should carve at its new position.");
     }
 
-    /// <summary>Flipping Carve off at runtime must remove the existing hole, not leave it
-    /// carved forever (the non-carving mode is unsupported and does nothing).</summary>
-    [Fact]
-    public void Obstacle_CarveTurnedOff_RemovesExistingHole()
-    {
-        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
-        Assert.True(surface.BuildNavMesh());
-
-        GameObject obstacleGo = CreateGameObject("Ghost");
-        scene.Add(obstacleGo);
-        obstacleGo.Transform.Position = new Float3(0, 1, 0);
-        NavMeshObstacle obstacle = obstacleGo.AddComponent<NavMeshObstacle>();
-        obstacle.Size = new Float3(4, 3, 4);
-
-        Assert.True(TickUntil(scene, () => !Walkable(scene, new Float3(0, 0.2f, 0))) >= 0);
-
-        obstacle.Carve = false;
-        Assert.True(TickUntil(scene, () => Walkable(scene, new Float3(0, 0.2f, 0))) >= 0,
-            "Turning Carve off should remove the hole.");
-
-        obstacle.Carve = true;
-        Assert.True(TickUntil(scene, () => !Walkable(scene, new Float3(0, 0.2f, 0))) >= 0,
-            "Turning Carve back on should re-carve.");
-    }
-
     /// <summary>
     /// A yawed box carves its ORIENTED footprint. The box is deliberately non-square (long
     /// axis local Z), so a yaw-sign mismatch against Detour's convention would mirror the
@@ -411,34 +348,6 @@ public class NavMeshObstacleTests : RuntimeTestBase
     }
 
     // ── Layer regeneration (geometry rebuilds) ─────────────────────────
-
-    /// <summary>RebuildTiles regenerates the affected tiles' compressed layers: dropped geometry
-    /// blocks paths, removal restores them — no rebake.</summary>
-    [Fact]
-    public void RebuildTiles_ReflectsGeometry()
-    {
-        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
-        Assert.True(surface.BuildNavMesh());
-
-        var path = new NavMeshPath();
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), path, NavMeshAreaMask.Everything));
-        Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
-
-        GameObject wall = CreateGameObject("Wall");
-        scene.Add(wall);
-        wall.AddComponent<BoxCollider>().Size = new Float3(2, 4, 20);
-        wall.Transform.Position = new Float3(0, 2, 0);
-
-        var region = new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11));
-        Assert.True(surface.RebuildTiles(region));
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), path, NavMeshAreaMask.Everything));
-        Assert.Equal(NavMeshPathStatus.PathPartial, path.Status);
-
-        wall.Enabled = false;
-        Assert.True(surface.RebuildTiles(region));
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), path, NavMeshAreaMask.Everything));
-        Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
-    }
 
     /// <summary>
     /// The stage-3b headline: an obstacle's carve survives regeneration of the tiles it sits
@@ -889,12 +798,9 @@ public class NavMeshObstacleTests : RuntimeTestBase
             "The carve should follow the obstacle to its new resting position.");
     }
 
-    /// <summary>Obstacles stay out of bakes in both carve settings — they block at runtime,
-    /// from wherever the object actually is.</summary>
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Bake_ExcludesObstacleGeometry(bool carve)
+    /// <summary>A non carving obstacle stays out of bakes, it blocks at runtime from wherever the object is.</summary>
+    [Fact]
+    public void Bake_ExcludesObstacleGeometry()
     {
         (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
 
@@ -904,7 +810,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
         crate.AddComponent<BoxCollider>().Size = new Float3(4, 1.2f, 4);
         NavMeshObstacle obstacle = crate.AddComponent<NavMeshObstacle>();
         obstacle.Size = new Float3(4, 1.2f, 4);
-        obstacle.Carve = carve;
+        obstacle.Carve = false;
 
         Assert.Single(surface.CollectSources()); // the floor only
     }

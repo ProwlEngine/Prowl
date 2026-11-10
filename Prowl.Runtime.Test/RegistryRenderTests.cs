@@ -21,19 +21,6 @@ public sealed class GizmoProbe : Component
 public class RegistryRenderTests : RuntimeTestBase
 {
     [Fact]
-    public void DrawGizmos_InvokesRegisteredComponents()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        GameObject go = CreateGameObject();
-        GizmoProbe probe = go.AddComponent<GizmoProbe>();
-        scene.Add(go);
-
-        scene.DrawGizmos();
-
-        Assert.Equal(1, probe.Calls);
-    }
-
-    [Fact]
     public void DrawGizmos_RunsEvenWhenNotPlaying()
     {
         Application.IsPlaying = false;

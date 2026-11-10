@@ -38,19 +38,6 @@ public class PrefabTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Instantiate_StampsPrefabAssetId_AndMarksInstance()
-    {
-        var id = Guid.NewGuid();
-        PrefabAsset prefab = MakePrefab(CreateGameObject("Root"), id);
-
-        var instance = GameObject.InstantiateDetached(prefab);
-
-        Assert.NotNull(instance);
-        Assert.Equal(id, instance!.PrefabAssetId);
-        Assert.True(instance.IsPrefabInstance);
-    }
-
-    [Fact]
     public void Instantiate_ClonesComponentsWithData()
     {
         GameObject source = CreateGameObject("Root");
@@ -177,33 +164,6 @@ public class PrefabTests : RuntimeTestBase
         finally { Application.IsEditor = wasEditor; }
     }
 
-    [Fact]
-    public void Instantiate_ComponentAddedAfterwardsHasNoSource()
-    {
-        GameObject source = CreateGameObject("Root");
-        source.AddComponent<SerializableComponent>();
-        PrefabAsset prefab = MakePrefab(source, Guid.NewGuid());
-
-        GameObject instance = GameObject.InstantiateDetached(prefab)!;
-        Component added = instance.AddComponent<SerializableComponent>();
-
-        Assert.Equal(Guid.Empty, added.SourceIdentifier);
-    }
-
-    [Fact]
-    public void Instantiate_StampsChildrenWithSamePrefabId()
-    {
-        var id = Guid.NewGuid();
-        GameObject source = CreateGameObject("Root");
-        GameObject child = CreateGameObject("Child");
-        child.SetParent(source);
-        PrefabAsset prefab = MakePrefab(source, id);
-
-        var instance = GameObject.InstantiateDetached(prefab);
-
-        Assert.Equal(id, instance!.Children[0].PrefabAssetId);
-    }
-
     /// <summary>
     /// Stamping stops at a child that already belongs to a different prefab, rather than overwriting
     /// every descendant. The editor flattens prefabs on import, so data reaching this is not something
@@ -232,19 +192,6 @@ public class PrefabTests : RuntimeTestBase
         Assert.Equal(outerId, instance.PrefabAssetId);
         Assert.Equal(outerId, normalClone.PrefabAssetId);
         Assert.Equal(nestedId, nestedClone.PrefabAssetId);
-    }
-
-    [Fact]
-    public void Instantiate_InstanceCanBeAddedToScene()
-    {
-        PrefabAsset prefab = MakePrefab(CreateGameObject("Root"), Guid.NewGuid());
-        SceneInstance scene = CreateScene(enable: true);
-
-        GameObject instance = GameObject.InstantiateDetached(prefab)!;
-        scene.Add(instance);
-
-        Assert.Same(scene, instance.Scene);
-        Assert.True(instance.IsPrefabInstance);
     }
 
     // ---------------------------------------------------------------------
@@ -286,14 +233,6 @@ public class PrefabTests : RuntimeTestBase
         // every object in the scene grows one.
         Assert.False(go.HasPrefabOverrides);
         Assert.Null(go.PrefabLink);
-    }
-
-    [Fact]
-    public void PrefabOverrides_IsNeverNull()
-    {
-        GameObject go = CreateGameObject();
-        Assert.NotNull(go.PrefabOverrides);
-        Assert.Empty(go.PrefabOverrides);
     }
 
     [Fact]

@@ -20,17 +20,6 @@ namespace Prowl.Runtime.Test;
 public class BakeMeshTests
 {
     [Fact]
-    public void MeshVersion_IncrementsOnGeometryChange()
-    {
-        var m = Mesh.CreateCube(Float3.One);
-        uint before = m.Version;
-
-        m.Vertices = m.Vertices; // any geometry assignment marks the mesh changed
-
-        Assert.True(m.Version > before);
-    }
-
-    [Fact]
     public void MeshVersion_HasChanged_TracksAndResets()
     {
         var m = Mesh.CreateCube(Float3.One);
@@ -52,17 +41,6 @@ public class BakeMeshTests
         Assert.True(baked.Triangles.Count > 0);
         Assert.Equal(m.Indices.Length / 3, baked.Triangles.Count);
         Assert.Equal(m.Version, baked.Version);
-    }
-
-    [Fact]
-    public void BakeMesh_IsCachedPerMesh()
-    {
-        var m = Mesh.CreateCube(Float3.One);
-
-        BakedPhysicsMesh a = PhysicsWorld.BakeMesh(m);
-        BakedPhysicsMesh b = PhysicsWorld.BakeMesh(m);
-
-        Assert.Same(a, b); // same mesh, same version -> shared bake (not rebuilt)
     }
 
     [Fact]

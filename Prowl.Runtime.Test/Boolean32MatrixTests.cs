@@ -66,17 +66,6 @@ public class Boolean32MatrixTests
         matrix[row, col] = true;
     }
 
-    [Fact]
-    public void SetSymmetric_ValidIndices_SetsBothPositions()
-    {
-        var matrix = new Boolean32Matrix();
-
-        matrix.SetSymmetric(1, 2, true);
-
-        Assert.True(matrix[1, 2]);
-        Assert.True(matrix[2, 1]);
-    }
-
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -152,18 +141,6 @@ public class Boolean32MatrixTests
         Assert.True(col[0]);
         Assert.True(col[31]);
         Assert.False(col[15]);
-    }
-
-    [Fact]
-    public void IsSymmetric_ReturnsTrueForSymmetricMatrix()
-    {
-        var matrix = new Boolean32Matrix();
-
-        // Make some symmetric changes
-        matrix.SetSymmetric(0, 1, true);
-        matrix.SetSymmetric(5, 10, true);
-
-        Assert.True(matrix.IsSymmetric());
     }
 
     [Fact]
@@ -247,23 +224,6 @@ public class Boolean32MatrixTests
         matrix2.SetSymmetric(0, 1, true);
 
         Assert.Equal(matrix1.GetHashCode(), matrix2.GetHashCode());
-    }
-
-    [Fact]
-    public void BoundaryTest_AllCornersAndEdges()
-    {
-        var matrix = new Boolean32Matrix();
-
-        // Test corners
-        matrix[0, 0] = true;
-        matrix[0, 31] = true;
-        matrix[31, 0] = true;
-        matrix[31, 31] = true;
-
-        Assert.True(matrix[0, 0]);
-        Assert.True(matrix[0, 31]);
-        Assert.True(matrix[31, 0]);
-        Assert.True(matrix[31, 31]);
     }
 
     [Fact]

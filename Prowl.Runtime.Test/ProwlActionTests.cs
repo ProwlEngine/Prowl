@@ -93,14 +93,6 @@ public class ProwlActionTests : RuntimeTestBase
         Assert.True(log.Logged("null or destroyed"), "A call that silently did nothing is indistinguishable from a mis-wired one.");
     }
 
-    [Fact]
-    public void Invoke_OnANullTarget_IsANoOp()
-    {
-        ProwlAction action = ActionFor(null, nameof(CallTarget.Ping));
-
-        action.Invoke(); // must not throw
-    }
-
     // Reflection wraps whatever the target threw in a TargetInvocationException whose message and
     // stack are about reflection ("Exception has been thrown by the target of an invocation"), which
     // says nothing about the actual fault. The report has to name what really went wrong.

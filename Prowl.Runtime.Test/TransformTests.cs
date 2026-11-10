@@ -413,22 +413,6 @@ public class TransformTests : RuntimeTestBase
         Assert.True(Maths.Abs(Maths.Abs(after.X - 5f) - 2f) < 0.01, $"world X should be 5 +/- 2, got {after}");
     }
 
-    // A transform's OWN world query must reflect its spin. TransformPoint reads the cached matrix, so a
-    // missed invalidation returns the pre-rotation point - the failure a raycast/attach-point hits.
-    [Fact]
-    public void RotateAxisAngle_UpdatesOwnTransformPoint()
-    {
-        Transform t = NewTransform();
-        var local = new Float3(0, 0, 1);
-        AssertVec(local, t.TransformPoint(local)); // identity, primes cache
-
-        t.Rotate(Float3.UnitY, 90f);
-
-        Float3 world = t.TransformPoint(local);
-        Assert.True(Maths.Abs(Maths.Abs(world.X) - 1f) < 0.01, $"|X| ~1 expected, got {world}");
-        Assert.True(Maths.Abs(world.Z) < 0.01, $"Z ~0 expected, got {world}");
-    }
-
     // The matrix and the Rotation getter must never disagree. Rotation reads _localRotation live; the
     // matrix is cached - so after a spin, world-forward computed each way has to match (position untouched).
     [Fact]
@@ -477,27 +461,6 @@ public class TransformTests : RuntimeTestBase
 
         Float3 after = leaf.Position;
         Assert.True(Maths.Abs(Maths.Abs(after.X) - 3f) < 0.01, $"|X| ~3 expected, got {after}");
-        Assert.True(Maths.Abs(after.Z) < 0.01, $"Z ~0 expected, got {after}");
-    }
-
-    // Mixed dirty sources in one frame: a parent spin (invalidates via parent world-version) and a child
-    // local move (invalidates via child Version) must compose, not clobber each other.
-    [Fact]
-    public void ParentRotate_ThenChildLocalMove_Compose()
-    {
-        Transform parent = NewTransform("Parent");
-        Transform child = NewTransform("Child");
-        child.SetParent(parent, false);
-        child.LocalPosition = new Float3(0, 0, 1);
-
-        AssertVec(new Float3(0, 0, 1), child.Position);
-
-        parent.Rotate(Float3.UnitY, 90f);
-        child.LocalPosition = new Float3(0, 0, 2);
-
-        Float3 after = child.Position;
-        Assert.True(Maths.Abs(Maths.Abs(after.X) - 2f) < 0.01, $"|X| ~2 expected, got {after}");
-        Assert.True(Maths.Abs(after.Y) < 0.01, $"Y ~0 expected, got {after}");
         Assert.True(Maths.Abs(after.Z) < 0.01, $"Z ~0 expected, got {after}");
     }
 

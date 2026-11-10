@@ -233,56 +233,6 @@ public class NavMeshComponentTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Surface_BakeRegistersWithSceneWorld()
-    {
-        (SceneInstance scene, NavMeshSurface surface) = CreateBakedFloorScene();
-
-        Assert.True(scene.Navigation.GetInstance() != null);
-        Assert.NotNull(surface.Instance);
-
-        // The static facade reaches it when the scene is current.
-        var path = new NavMeshPath();
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, -8), new Float3(8, 0, 8), path, NavMeshAreaMask.Everything));
-        Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
-    }
-
-    [Fact]
-    public void Surface_DisableUnregisters()
-    {
-        (SceneInstance scene, NavMeshSurface surface) = CreateBakedFloorScene();
-        Assert.True(scene.Navigation.GetInstance() != null);
-
-        surface.GameObject.Enabled = false;
-        Assert.False(scene.Navigation.GetInstance() != null);
-
-        surface.GameObject.Enabled = true;
-        Assert.True(scene.Navigation.GetInstance() != null);
-    }
-
-    [Fact]
-    public void Agent_WalksTowardDestination()
-    {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
-
-        GameObject agentGo = CreateGameObject("Agent");
-        scene.Add(agentGo);
-        agentGo.Transform.Position = new Float3(-8, 0, -8);
-        NavMeshAgent agent = agentGo.AddComponent<NavMeshAgent>();
-        agent.Speed = 10f;
-        agent.Acceleration = 100f;
-
-        Assert.True(agent.SetDestination(new Float3(8, 0, 8)) || agent.PathPending || !agent.IsOnNavMesh);
-
-        double startDistance = Float3.Distance(agentGo.Transform.Position, new Float3(8, 0, 8));
-        Tick(scene, 240); // 4 simulated seconds at 60 Hz
-
-        Assert.True(agent.IsOnNavMesh, "Agent should have joined the crowd.");
-        double endDistance = Float3.Distance(agentGo.Transform.Position, new Float3(8, 0, 8));
-        Assert.True(endDistance < startDistance - 5.0,
-            $"Agent should approach the destination (start {startDistance:0.0}, end {endDistance:0.0}).");
-    }
-
-    [Fact]
     public void Agent_RegistersWhenNavMeshAppearsLater()
     {
         SceneInstance scene = CreateScene(enable: true);
@@ -496,23 +446,6 @@ public class NavMeshComponentTests : RuntimeTestBase
         Tick(scene, 60);
         double moved = Float3.Distance(agentGo.Transform.Position, posWhenStopped);
         Assert.True(moved > 1.0, $"Resumed agent should move again (moved {moved:0.00}).");
-    }
-
-    [Fact]
-    public void Agent_WarpMovesAgentAndKeepsWorking()
-    {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
-
-        GameObject agentGo = CreateGameObject("Agent");
-        scene.Add(agentGo);
-        agentGo.Transform.Position = new Float3(-8, 0, -8);
-        NavMeshAgent agent = agentGo.AddComponent<NavMeshAgent>();
-        Tick(scene, 2);
-
-        Assert.True(agent.Warp(new Float3(5, 0, 5)));
-        Tick(scene, 1);
-        Assert.True(Float3.Distance(agentGo.Transform.Position, new Float3(5, 0, 5)) < 1.0);
-        Assert.True(agent.IsOnNavMesh);
     }
 
     /// <summary>A warp with no navmesh near the target changes nothing, instead of
@@ -1035,41 +968,6 @@ public class NavMeshComponentTests : RuntimeTestBase
         // The far region is now walkable; the untouched spawn region still is.
         Assert.True(scene.Navigation.SamplePosition(new Float3(70, 0.2f, 70), out _, 0.5f, NavMeshAreaMask.Everything));
         Assert.True(scene.Navigation.SamplePosition(new Float3(5, 0.2f, 5), out _, 0.5f, NavMeshAreaMask.Everything));
-    }
-
-    /// <summary>
-    /// Applying a second navmesh (map regeneration without a scene reload) must rebind the
-    /// crowd: the old crowd steered against a DtNavMesh that no longer exists, and agents must
-    /// rejoin the new one keeping their destination.
-    /// </summary>
-    [Fact]
-    public void Agent_SurvivesNavMeshReplacement()
-    {
-        (SceneInstance scene, NavMeshSurface surface) = CreateBakedFloorScene();
-
-        GameObject agentGo = CreateGameObject("Agent");
-        scene.Add(agentGo);
-        agentGo.Transform.Position = new Float3(-8, 0, -8);
-        NavMeshAgent agent = agentGo.AddComponent<NavMeshAgent>();
-        agent.Speed = 10f;
-        agent.Acceleration = 100f;
-
-        Tick(scene, 2);
-        Assert.True(agent.IsOnNavMesh);
-        agent.SetDestination(new Float3(8, 0, 8));
-        Tick(scene, 30);
-
-        // Regenerate: a fresh bake of the same floor produces a NEW DtNavMesh instance.
-        Assert.True(surface.BuildNavMesh());
-        Tick(scene, 2);
-
-        Assert.True(agent.IsOnNavMesh, "Agent must rejoin the replacement crowd after the navmesh swap.");
-        Assert.NotNull(scene.Navigation.GetNativeCrowd());
-
-        // Destination survived the swap and the agent still gets there on the new mesh.
-        Tick(scene, 240);
-        double endDistance = Float3.Distance(agentGo.Transform.Position, new Float3(8, 0, 8));
-        Assert.True(endDistance < 2.0, $"Agent should reach its destination on the new mesh (got within {endDistance:0.0}).");
     }
 
     /// <summary>

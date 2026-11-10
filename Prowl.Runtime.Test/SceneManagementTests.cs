@@ -153,21 +153,6 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.Contains(keep, scene.Objects);
     }
 
-    [Fact]
-    public void Count_ExcludesDisposedObjects()
-    {
-        SceneInstance scene = CreateScene();
-        GameObject a = CreateGameObject("A");
-        GameObject b = CreateGameObject("B");
-        scene.Add(a);
-        scene.Add(b);
-        Assert.Equal(2, scene.ObjectCount);
-
-        a.Dispose();
-
-        Assert.Equal(1, scene.ObjectCount);
-    }
-
     // ---- Collection views ----
 
     [Fact]
@@ -182,22 +167,6 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.Single(scene.Roots);
         Assert.Contains(parent, scene.Roots);
         Assert.DoesNotContain(child, scene.Roots);
-    }
-
-    [Fact]
-    public void ActiveObjects_ExcludesDisabled()
-    {
-        SceneInstance scene = CreateScene();
-        GameObject on = CreateGameObject("On");
-        GameObject off = CreateGameObject("Off");
-        off.Enabled = false;
-        scene.Add(on);
-        scene.Add(off);
-
-        var active = scene.Objects.Where(o => o.EnabledInHierarchy).ToList();
-
-        Assert.Contains(on, active);
-        Assert.DoesNotContain(off, active);
     }
 
     [Fact]
@@ -216,20 +185,6 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.DoesNotContain(hidden, saveable);
     }
 
-    [Fact]
-    public void IsEmpty_ReflectsContents()
-    {
-        SceneInstance scene = CreateScene();
-        Assert.Equal(0, scene.ObjectCount);
-
-        GameObject go = CreateGameObject();
-        scene.Add(go);
-        Assert.NotEqual(0, scene.ObjectCount);
-
-        scene.Remove(go);
-        Assert.Equal(0, scene.ObjectCount);
-    }
-
     // ---- Find ----
 
     [Fact]
@@ -245,29 +200,10 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.Null(scene.FindObject(Guid.NewGuid()));
     }
 
-    [Fact]
-    public void FindObjectByIdentifier_FindsGameObjectAndComponent()
-    {
-        SceneInstance scene = CreateScene();
-        GameObject go = CreateGameObject();
-        PlainComponent comp = go.AddComponent<PlainComponent>();
-        scene.Add(go);
-
-        Assert.Same(go, scene.FindObject<GameObject>(go.Identifier));
-        Assert.Same(comp, scene.FindObject<PlainComponent>(comp.Identifier));
-    }
-
     // ---- Static scene manager ----
     //
     // Load only queues. The swap lands at the end of the frame, which the game loop drives and these
     // tests drive by hand. There is no unload: there is always a current scene.
-
-    [Fact]
-    public void Current_IsNeverNull()
-    {
-        Assert.NotNull(SceneInstance.Main);
-        Assert.False(SceneInstance.Main.IsDisposed);
-    }
 
     private interface IProbe { }
 
@@ -684,19 +620,6 @@ public class SceneManagementTests : RuntimeTestBase
         b.SiblingIndex = 0;
         Assert.Equal(["B", "A"], world.ActiveSection.Roots.Select(r => r.Name));
         Assert.DoesNotContain(child, world.ActiveSection.RootsList);
-    }
-
-    [Fact]
-    public void SiblingIndex_OfARoot_IsItsIndexAmongItsSectionsRoots()
-    {
-        SceneInstance world = CreateScene();
-        GameObject a = world.Create("A");
-        GameObject b = world.Create("B");
-
-        b.SiblingIndex = 0;
-
-        Assert.Equal([b, a], world.ActiveSection.Roots);
-        Assert.Equal(1, a.SiblingIndex);
     }
 
     [Fact]

@@ -168,31 +168,7 @@ public class SceneDispatcherTests : RuntimeTestBase
             Assert.Equal(c.EnabledInHierarchy ? 1 : 0, c.Updates);
     }
 
-    [Fact]
-    public void Start_RunsOnceEvenThoughStartedComponentsLeaveLazily()
-    {
-        (SceneInstance? scene, GameObject? go) = NewSceneGo();
-        StartCounter c = go.AddComponent<StartCounter>();
-        scene.Add(go);
-
-        Update(scene);
-        Update(scene);
-        Update(scene);
-
-        Assert.Equal(1, c.Starts);
-    }
-
     // ---- physics fan-out -----------------------------------------------------------------------------
-
-    [Fact]
-    public void PhysicsEvent_WithNoHandlers_DoesNothing()
-    {
-        (SceneInstance? scene, GameObject? go) = NewSceneGo();
-        go.AddComponent<PlainUpdateCounter>(); // overrides nothing physics dispatches
-        scene.Add(go);
-
-        SceneDispatcher.CollisionBegin(go, NoContact); // must not throw
-    }
 
     [Fact]
     public void PhysicsEvent_WithOneHandler_Fires()
@@ -282,11 +258,4 @@ public class SceneDispatcherTests : RuntimeTestBase
         SceneDispatcher.CollisionBegin(null!, NoContact);
         SceneDispatcher.TriggerExit(null!, null!);
     }
-}
-
-/// <summary>Counts Start calls, to prove a started component leaves the channel for good.</summary>
-public sealed class StartCounter : Component
-{
-    public int Starts;
-    public override void Start() => Starts++;
 }

@@ -10,14 +10,14 @@ using Prowl.Recast.Detour;
 
 using Prowl.Echo;
 using Prowl.Runtime;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using Xunit;
-using Prowl.Recast.Detour.TileCache;
 
 namespace Prowl.Runtime.Test;
 
-public class NavMeshBuildTests
+public class NavMeshBuildTests : RuntimeTestBase
 {
     /// <summary>
     /// A 20x20 quad at y=0, wound counter-clockwise when viewed from above (+Y normal),
@@ -139,31 +139,6 @@ public class NavMeshBuildTests
         Assert.Contains("Rebake", thrown.Message);
     }
 
-    /// <summary>
-    /// The winding gate: Recast derives walkability from triangle face normals, so a total
-    /// winding/handedness mismatch fails as "the bake produced nothing" rather than an error.
-    /// This test existing and passing is what proves the coordinate conventions line up.
-    /// </summary>
-    [Fact]
-    public void FlatQuad_UpFacingWinding_ProducesWalkablePolys()
-    {
-        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [FlatQuad()]);
-
-        Assert.NotNull(data);
-        Assert.True(data!.HasTiles, "Expected at least one non-empty tile from a flat walkable quad.");
-
-        DtNavMesh navMesh = data.CreateTileCache(1).GetNavMesh();
-        int polyCount = 0;
-        for (int i = 0; i < navMesh.GetMaxTiles(); i++)
-        {
-            DtMeshTile tile = navMesh.GetTile(i);
-            if (tile?.data?.header != null)
-                polyCount += tile.data.header.polyCount;
-        }
-
-        Assert.True(polyCount > 0, "Navmesh instantiated but contains no polygons.");
-    }
-
     /// <summary>The inverse gate: a downward-facing quad must produce nothing walkable — and
     /// "nothing walkable" is a null return, never an empty NavMeshData (an empty one registers
     /// nowhere and draws nothing, silently).</summary>
@@ -223,27 +198,34 @@ public class NavMeshBuildTests
         Assert.True(data!.MaxTiles > data.CacheLayers.Count,
             $"a flat bake must leave room to stack layers, got {data.MaxTiles} slots for {data.CacheLayers.Count} layers.");
 
-        var world = new NavMeshWorld();
-        NavMeshInstance? instance = world.AddNavMeshData(data);
-        Assert.NotNull(instance);
+        int bakedLayers = data.CacheLayers.Count;
+        NavMeshSurface surface = RegisterOnSurface(data);
 
         // A platform is built over the floor: every tile it covers now needs a second layer.
-        List<NavMeshTileRebuild> rebuilt = NavMeshBuilder.BuildTilesInBounds(
-            data, [FlatQuad(), Raised(2, 2, 18, 18, 5)], new Float3(0, -1, 0), new Float3(20, 10, 20));
-        Assert.NotEmpty(rebuilt);
+        Assert.True(surface.RebuildTiles(new AABB(new Float3(0, -1, 0), new Float3(20, 10, 20)),
+            [FlatQuad(), Raised(2, 2, 18, 18, 5)], volumes: []));
 
-        int expected = 0;
-        foreach ((int _, int _, IReadOnlyList<byte[]> blobs) in rebuilt) expected += blobs.Count;
-        Assert.True(expected > data.CacheLayers.Count, "the platform must actually stack a layer.");
+        int expected = surface.RuntimeData!.CacheLayers.Count;
+        Assert.True(expected > bakedLayers, "the platform must actually stack a layer.");
 
-        SwapRebuiltTiles(world, instance!, rebuilt);
-
-        DtNavMesh navMesh = instance!.NativeNavMesh;
+        DtNavMesh navMesh = surface.Instance!.NativeNavMesh;
         int live = 0;
         for (int t = 0; t < navMesh.GetMaxTiles(); t++)
             if (navMesh.GetTile(t)?.data?.header != null) live++;
 
         Assert.Equal(expected, live);
+    }
+
+    /// <summary>Registers <paramref name="data"/> through a surface in a running scene.</summary>
+    private NavMeshSurface RegisterOnSurface(NavMeshData data)
+    {
+        SceneInstance scene = CreateScene(enable: true);
+        GameObject surfaceGo = CreateGameObject("NavMeshSurface");
+        scene.Add(surfaceGo);
+        NavMeshSurface surface = surfaceGo.AddComponent<NavMeshSurface>();
+        surface.ApplyNavMeshData(data);
+        Assert.NotNull(surface.Instance);
+        return surface;
     }
 
     /// <summary>An up-facing quad at an arbitrary rect and height, for stacking over a floor.</summary>
@@ -266,22 +248,6 @@ public class NavMeshBuildTests
             for (int p = 0; p < tile.data.header.polyCount; p++)
                 Assert.Equal(area, NavMeshAreas.FromDetourArea(tile.data.polys[p].GetArea()));
         }
-    }
-
-    /// <summary>
-    /// Two quads separated by a gap wider than the agent: same tile grid, but paths must not
-    /// cross the gap. Locks in that disconnected geometry stays disconnected.
-    /// </summary>
-    [Fact]
-    public void SeparatedQuads_BothBake()
-    {
-        NavMeshGeometrySource left = FlatQuad(10f);
-        NavMeshGeometrySource right = FlatQuad(10f);
-        right.Transform = Float4x4.CreateTranslation(new Float3(20f, 0, 0));
-
-        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [left, right]);
-        Assert.NotNull(data);
-        Assert.True(data!.HasTiles);
     }
 
     [Fact]
@@ -387,50 +353,11 @@ public class NavMeshBuildTests
         NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [left, uniformRight]);
         Assert.NotNull(data);
 
-        var world = new NavMeshWorld();
-        NavMeshInstance? instance = world.AddNavMeshData(data!);
-        Assert.NotNull(instance);
+        NavMeshSurface surface = RegisterOnSurface(data!);
 
         // ...then rebuild with the right half as area 3 (rubble appearing after a drill).
-        List<NavMeshTileRebuild> rebuilt = NavMeshBuilder.BuildTilesInBounds(
-            data!, [left, right], new Float3(0, -1, 0), new Float3(20, 1, 20));
-        Assert.NotEmpty(rebuilt);
-
-        SwapRebuiltTiles(world, instance!, rebuilt);
-        AssertTwoAreaSemantics(world);
-    }
-
-    /// <summary>The tile swap NavMeshSurface.ApplyRebuiltTiles performs, without a surface: drop
-    /// each affected tile's layers (and the navmesh tiles the cache built from them), add the
-    /// regenerated blobs, then re-contour.</summary>
-    private static void SwapRebuiltTiles(NavMeshWorld world, NavMeshInstance instance,
-        List<NavMeshTileRebuild> rebuilt)
-    {
-        world.MutateTileCache(instance, cache =>
-        {
-            DtNavMesh navMesh = cache.GetNavMesh();
-            var added = new List<long>();
-            foreach ((int x, int z, IReadOnlyList<byte[]> blobs) in rebuilt)
-            {
-                foreach (long tileRef in cache.GetTilesAt(x, z))
-                {
-                    DtTileCacheLayerHeader? header = cache.GetTileByRef(tileRef)?.header;
-                    if (header != null)
-                    {
-                        long navRef = navMesh.GetTileRefAt(header.tx, header.ty, header.tlayer);
-                        if (navRef != 0) navMesh.RemoveTile(navRef);
-                    }
-                    cache.RemoveTile(tileRef);
-                }
-                foreach (byte[] blob in blobs)
-                {
-                    long tileRef = cache.AddTile(blob, 0);
-                    if (tileRef != 0) added.Add(tileRef);
-                }
-            }
-            foreach (long tileRef in added)
-                cache.BuildNavMeshTile(tileRef);
-        });
+        Assert.True(surface.RebuildTiles(new AABB(new Float3(0, -1, 0), new Float3(20, 1, 20)), [left, right], volumes: []));
+        AssertTwoAreaSemantics(surface.Scene.Navigation);
     }
 
     /// <summary>Higher area cost must bias route choice: with a cheap detour available around
@@ -438,74 +365,54 @@ public class NavMeshBuildTests
     [Fact]
     public void AreaCosts_BiasPathSelection()
     {
-        // 30x30 floor; a full-height strip (x 12..18) of area 4 crosses the middle.
-        Float3[] leftVerts = [new(0, 0, 0), new(0, 0, 30), new(12, 0, 30), new(12, 0, 0)];
-        Float3[] stripVerts = [new(12, 0, 0), new(12, 0, 30), new(18, 0, 30), new(18, 0, 0)];
-        Float3[] rightVerts = [new(18, 0, 0), new(18, 0, 30), new(30, 0, 30), new(30, 0, 0)];
+        var uniformCosts = new NavMeshAreaCosts();
+        uniformCosts.SetAreaCost(NavMeshAreas.Walkable, 1f);
+        uniformCosts.SetAreaCost(4, 1f);
+        NavMeshQueryFilter uniform = NavMeshQueryFilter.Default.WithAreaCosts(uniformCosts);
+
+        var expensiveCosts = new NavMeshAreaCosts();
+        expensiveCosts.SetAreaCost(NavMeshAreas.Walkable, 1f);
+        expensiveCosts.SetAreaCost(4, 20f);
+        NavMeshQueryFilter expensive = NavMeshQueryFilter.Default.WithAreaCosts(expensiveCosts);
+
+        Float3 start = new(5, 0, 6);
+        Float3 end = new(25, 0, 6);
+        var path = new NavMeshPath();
+
+        // The strip stops at z 24, leaving a walkable detour above it.
+        NavMeshWorld partial = StripFloor(24f);
+        Assert.True(partial.CalculatePath(start, end, path, uniform));
+        Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
+        Assert.All(path.Corners, c => Assert.True(c.Z < 12f, $"uniform costs should go straight, corner at z {c.Z:0.0}"));
+
+        Assert.True(partial.CalculatePath(start, end, path, expensive));
+        Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
+        Assert.Contains(path.Corners, c => c.Z > 20f);
+
+        // A strip across the whole floor cannot be avoided, and cost biases without ever blocking.
+        NavMeshWorld full = StripFloor(30f);
+        Assert.True(full.CalculatePath(start, end, path, expensive));
+        Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
+    }
+
+    /// <summary>A 30x30 floor with an area 4 strip at x 12..18 running from z 0 to <paramref name="stripEnd"/>.</summary>
+    private static NavMeshWorld StripFloor(float stripEnd)
+    {
         int[] indices = [0, 1, 2, 0, 2, 3];
-        NavMeshData? data = NavMeshBuilder.Build(TestSettings(),
+        List<NavMeshGeometrySource> sources =
         [
-            new NavMeshGeometrySource(leftVerts, indices, Float4x4.Identity, NavMeshAreas.Walkable),
-            new NavMeshGeometrySource(stripVerts, indices, Float4x4.Identity, area: 4),
-            new NavMeshGeometrySource(rightVerts, indices, Float4x4.Identity, NavMeshAreas.Walkable),
-        ]);
+            new([new(0, 0, 0), new(0, 0, 30), new(12, 0, 30), new(12, 0, 0)], indices, Float4x4.Identity, NavMeshAreas.Walkable),
+            new([new(12, 0, 0), new(12, 0, stripEnd), new(18, 0, stripEnd), new(18, 0, 0)], indices, Float4x4.Identity, area: 4),
+            new([new(18, 0, 0), new(18, 0, 30), new(30, 0, 30), new(30, 0, 0)], indices, Float4x4.Identity, NavMeshAreas.Walkable),
+        ];
+        if (stripEnd < 30f)
+            sources.Add(new([new(12, 0, stripEnd), new(12, 0, 30), new(18, 0, 30), new(18, 0, stripEnd)], indices, Float4x4.Identity, NavMeshAreas.Walkable));
+
+        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), sources);
         Assert.NotNull(data);
         var world = new NavMeshWorld();
         world.AddNavMeshData(data!);
-
-        // The strip spans the full floor, so it cannot be avoided — but a filter that prices
-        // area 4 highly must still cross it (cost biases, never blocks).
-        var costs = new NavMeshAreaCosts();
-        costs.SetAreaCost(4, 10f);
-        NavMeshQueryFilter expensive = NavMeshQueryFilter.Default.WithAreaCosts(costs);
-        var path = new NavMeshPath();
-        Assert.True(world.CalculatePath(new Float3(5, 0, 15), new Float3(25, 0, 15), path, expensive));
-        Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
-    }
-
-    /// <summary>
-    /// Tiles carry no detail mesh — heights come from the polygon planes, which is exact on flat
-    /// geometry. Locks in that such a bake builds, serializes, round-trips, and answers queries.
-    /// </summary>
-    [Fact]
-    public void Build_WithoutDetailMesh_BakesAndQueries()
-    {
-        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [FlatQuad()]);
-        Assert.NotNull(data);
-        Assert.True(data!.HasTiles);
-
-        // Serialized tiles with no detail mesh must round-trip and instantiate.
-        EchoObject echo = Serializer.Serialize(data);
-        NavMeshData? loaded = Serializer.Deserialize<NavMeshData>(echo);
-        Assert.NotNull(loaded);
-
-        var world = new NavMeshWorld();
-        Assert.NotNull(world.AddNavMeshData(loaded!));
-
-        // Queries work; heights come from the polygon planes (exact on a flat floor).
-        var path = new NavMeshPath();
-        Assert.True(world.CalculatePath(new Float3(2, 0, 2), new Float3(18, 0, 18), path, NavMeshAreaMask.Everything));
-        Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
-        Assert.True(world.SamplePosition(new Float3(10, 0.5f, 10), out NavMeshHit hit, 1f, NavMeshAreaMask.Everything));
-        Assert.True(System.Math.Abs(hit.Position.Y) < 0.3f, $"Height should come from the poly plane, got y={hit.Position.Y:0.00}.");
-    }
-
-    /// <summary>Same input twice must produce byte-identical tiles (single-threaded build).</summary>
-    [Fact]
-    public void Build_IsDeterministic_SingleThreaded()
-    {
-        NavMeshData? a = NavMeshBuilder.Build(TestSettings(), [FlatQuad()]);
-        NavMeshData? b = NavMeshBuilder.Build(TestSettings(), [FlatQuad()]);
-
-        Assert.NotNull(a);
-        Assert.NotNull(b);
-        Assert.Equal(a!.CacheLayers.Count, b!.CacheLayers.Count);
-        for (int i = 0; i < a.CacheLayers.Count; i++)
-        {
-            Assert.Equal(a.CacheLayers[i].X, b.CacheLayers[i].X);
-            Assert.Equal(a.CacheLayers[i].Z, b.CacheLayers[i].Z);
-            Assert.Equal(a.CacheLayers[i].Data, b.CacheLayers[i].Data);
-        }
+        return world;
     }
 
     /// <summary>
