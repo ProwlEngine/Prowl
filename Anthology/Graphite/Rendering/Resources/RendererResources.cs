@@ -41,6 +41,8 @@ internal sealed class RendererResources : IDisposable
         FogBlendProgram = InternalShaders.Compute(device, compiler, "Internal/VolumetricFogBlend.glsl", policy, lit: true);
         FogIntegrateProgram = InternalShaders.Compute(device, compiler, "Internal/VolumetricFogIntegrate.glsl", policy, lit: true);
         FogSkyProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("VolumetricFogSky"), "Graphite/VolumetricFogSky", lit: true, policy: policy);
+        HiZProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("HiZBuild"), "Graphite/HiZBuild", source: false, policy: policy);
+        HiZPackProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("HiZBuild"), "Graphite/HiZBuild", source: false, variant: "#define HIZ_PACK 1\n", policy: policy);
 
         SamplerDescription clamp = SamplerDescription.Linear with
         {
@@ -190,6 +192,10 @@ internal sealed class RendererResources : IDisposable
     public InternalCompute FogIntegrateProgram { get; }
     public FullscreenProgram FogSkyProgram { get; }
 
+    /// <summary>A level of a view's depth pyramid from the one below, and the copy of a level into its packed texture. See <see cref="HiZFeature"/>.</summary>
+    public FullscreenProgram HiZProgram { get; }
+    public FullscreenProgram HiZPackProgram { get; }
+
     private static GraphicsProgram Fullscreen(GraphicsDevice device, PassVariants variants)
     {
         ShaderDescription description = variants.Require();
@@ -262,6 +268,8 @@ internal sealed class RendererResources : IDisposable
         FogBlendProgram.Dispose();
         FogIntegrateProgram.Dispose();
         FogSkyProgram.Dispose();
+        HiZProgram.Dispose();
+        HiZPackProgram.Dispose();
         Textures.Dispose();
         Noise.Dispose();
         SmaaArea.Dispose();

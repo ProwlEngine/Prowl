@@ -556,12 +556,13 @@ internal sealed partial class FramePipeline : IDisposable
         }
     }
 
-    // Whether the view's transparent list or a feature's pass list reads the scene colour this frame. Returns whether its
+    // Whether the view's transparent list or a feature's pass list reads the scene colour this frame, or a feature keeps
+    // it. Returns whether its
     // copy was just made, which adds the copy to the view's graph; the lists keep their order through that rebuild, so
     // what Prepare uploaded holds.
     private void UpdateSceneColor(CameraFrame camera, CameraShape shape, uint width, uint height)
     {
-        bool used = ListsRead(camera, static (shader, pass) => shader.PassReadsSceneColor(pass));
+        bool used = ListsRead(camera, static (shader, pass) => shader.PassReadsSceneColor(pass)) || camera.Selected.Exists(static feature => feature.KeepsSceneColor);
         camera.SceneColorUsed = used;
         if (used)
             camera.EnsureSceneColor(width, height, (uint)shape.Layers, camera.Build.ColorFormatOf(shape));

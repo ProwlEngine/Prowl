@@ -547,6 +547,7 @@ public sealed class Gtao : ScreenLightingFeature
 /// </summary>
 public sealed class ScreenSpaceReflections : PostEffect
 {
+    private static readonly PropertyID s_hiZ = "_HiZ";
     private static readonly PropertyID s_cameraDepthTexture = "_CameraDepthTexture", s_cameraNormalsTexture = "_CameraNormalsTexture",
         s_materialTexture = "_MaterialTexture", s_cameraMotionVectorsTexture = "_CameraMotionVectorsTexture", s_noise = "_Noise",
         s_noiseSize = "_NoiseSize", s_jitterSizeAndOffset = "_JitterSizeAndOffset", s_resolveSize = "_ResolveSize", s_screenSize = "_ScreenSize",
@@ -566,7 +567,7 @@ public sealed class ScreenSpaceReflections : PostEffect
 
     private sealed class ViewState
     {
-        public TextureHandle Source, Combined, ReflectionHistory, RayData, Reflection;
+        public TextureHandle Source, Combined, ReflectionHistory, RayData, Reflection, HiZ;
         public readonly TextureHandle[] Pyramid = new TextureHandle[4];
         public readonly TextureHandle[] Scratch = new TextureHandle[4];
     }
@@ -581,6 +582,8 @@ public sealed class ScreenSpaceReflections : PostEffect
         _combine = Program("Ssr", lit: true, defines: "#define SSR_COMBINE 1\n");
         _copy = Program("Ssr", "", source: false);
     }
+
+    public override bool ReadsHiZ => true;
 
     /// <summary>The resolution rays are traced at.</summary>
     public EffectResolution RayResolution { get; set; } = EffectResolution.Half;
@@ -649,6 +652,7 @@ public sealed class ScreenSpaceReflections : PostEffect
             }
         }
         state.RayData = builder.Temporary("Rays", view.Texture(Hdr, _declared.Scale));
+        state.HiZ = builder.Read(RendererOutputs.HiZ);
         state.Reflection = builder.Temporary("Reflection", view.Texture(Hdr));
     }
 
@@ -663,6 +667,7 @@ public sealed class ScreenSpaceReflections : PostEffect
         Float2 raySize = new(rays.ColorTextures[0].Width, rays.ColorTextures[0].Height);
 
         _properties.SetTexture(s_cameraDepthTexture, context.Depth!, PointClamp);
+        _properties.SetTexture(s_hiZ, context.Get(state.HiZ).ColorTextures[0], PointClamp);
         _properties.SetTexture(s_cameraNormalsTexture, context.Normals!, PointClamp);
         _properties.SetTexture(s_materialTexture, context.Material!, PointClamp);
         _properties.SetTexture(s_cameraMotionVectorsTexture, context.Motion!, PointClamp);

@@ -99,8 +99,12 @@ public readonly struct FeatureView
     internal FeatureView AtOutput() => this with { Width = OutputWidth, Height = OutputHeight, RenderScale = 1, Upscaled = true };
 
     /// <summary>The view once it is culled, with what its draws read this frame.</summary>
-    internal FeatureView Culled(bool sceneColor, bool sceneDepth, bool backDepth, bool cascades)
-        => this with { ReadsSceneColor = sceneColor, ReadsSceneDepth = sceneDepth, ReadsBackDepth = backDepth, HasCascades = cascades };
+    internal FeatureView Culled(bool sceneColor, bool sceneDepth, bool backDepth, bool cascades, bool hiZBeforeOpaques, bool hiZAfterOpaques)
+        => this with
+        {
+            ReadsSceneColor = sceneColor, ReadsSceneDepth = sceneDepth, ReadsBackDepth = backDepth, HasCascades = cascades,
+            ReadsHiZBeforeOpaques = hiZBeforeOpaques, ReadsHiZAfterOpaques = hiZAfterOpaques,
+        };
 
     public RenderWorld World { get; }
     public ViewKind Kind { get; }
@@ -153,6 +157,13 @@ public readonly struct FeatureView
     /// <summary>Whether the view has directional cascades this frame. Known from HasWork on, not in IsActive.</summary>
     public bool HasCascades { get; private init; }
 
+    /// <summary>Whether a feature of the view reads its depth pyramid this frame. Known from HasWork on, not in IsActive.</summary>
+    public bool ReadsHiZ => ReadsHiZBeforeOpaques || ReadsHiZAfterOpaques;
+
+    // Readers before the opaque colour take the pyramid of the prepass depth, later ones that of the opaque depth
+    internal bool ReadsHiZBeforeOpaques { get; private init; }
+    internal bool ReadsHiZAfterOpaques { get; private init; }
+
     /// <summary>A texture sized as a part of the colour's resolution, an array on layered views.</summary>
     public GraphTextureDesc Texture(PixelFormat format, float scale = 1)
         => SharedTexture(format, scale) with { ArrayLayers = LayerCount > 1 ? (uint)LayerCount : 0 };
@@ -199,7 +210,7 @@ public sealed class FeatureGroup(string name)
     public static readonly FeatureGroup SceneClear = new("SceneClear"), Cascades = new("Cascades"), Prepass = new("Prepass"),
         Opaque = new("Opaque"), Sky = new("Sky"), SceneColor = new("SceneColor"), SceneDepth = new("SceneDepth"),
         BackDepth = new("BackDepth"), Transparent = new("Transparent"), Present = new("Present"), VolumetricFog = new("VolumetricFog"),
-        VolumetricFogSky = new("VolumetricFogSky");
+        VolumetricFogSky = new("VolumetricFogSky"), HiZ = new("HiZ"), HiZAfterOpaques = new("HiZAfterOpaques");
 
     /// <summary>The stock effects' groups, of which a view runs one each.</summary>
     public static readonly FeatureGroup ScreenLighting = new("ScreenLighting"), Tonemap = new("Tonemap"), AntiAliasing = new("AntiAliasing");
@@ -329,6 +340,16 @@ public abstract class RenderFeature : RenderExtension
 
     /// <summary>The scene targets past colour and depth the feature reads, so its views have them.</summary>
     public SceneTargets SceneReads { get; }
+
+    /// <summary>Whether the view copies its opaque colour every frame for it, read before the copy as last frame's.</summary>
+    internal virtual bool KeepsSceneColor => false;
+
+    /// <summary>
+    /// Whether the feature reads the view's depth pyramid, published as <see cref="RendererOutputs.HiZ"/>, which the view
+    /// builds once for every feature reading it: after the prepass for features before the opaque colour, after the
+    /// opaques for the rest. See Graphite/HiZ.glsl.
+    /// </summary>
+    public virtual bool ReadsHiZ => false;
 
     /// <summary>
     /// The pass types the feature draws through <see cref="FeatureContext.DrawPass"/>, the shader passes tagged
@@ -1501,6 +1522,75 @@ public sealed class SceneColorFeature : RenderFeature
 }
 
 /// <summary>
+/// Builds the view's nearest depth pyramid and publishes it as <see cref="RendererOutputs.HiZ"/> on frames a feature of
+/// the view reads it. One runs after the prepass for readers before the opaque colour, another at the start of the
+/// opaque colour for the rest, as surfaces without a prepass write their depth in between. See Graphite/HiZ.glsl.
+/// </summary>
+public sealed class HiZFeature : RenderFeature
+{
+    private const int LevelCount = 5;
+    private static readonly PropertyID s_source = "_Source", s_hiZOffset = "_HiZOffset";
+    private readonly RendererResources _resources;
+    private readonly PropertySet _properties = new();
+    private readonly bool _afterOpaques;
+
+    private sealed class State
+    {
+        public readonly TextureHandle[] Levels = new TextureHandle[LevelCount];
+        public TextureHandle Packed;
+    }
+
+    internal HiZFeature(RendererResources resources, bool afterOpaques)
+        : base(afterOpaques ? RenderSlot.OpaqueColor : RenderSlot.AfterPrepass, -1000, afterOpaques ? FeatureGroup.HiZAfterOpaques : FeatureGroup.HiZ, ViewKinds.All)
+    {
+        _resources = resources;
+        _afterOpaques = afterOpaques;
+    }
+
+    public override bool HasWork(in FeatureView view) => _afterOpaques ? view.ReadsHiZAfterOpaques : view.ReadsHiZBeforeOpaques;
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
+    {
+        builder.ReadScene();
+        State state = builder.GetViewState<State>();
+        int width = (int)view.Width, height = (int)view.Height;
+        for (int level = 0; level < LevelCount; level++)
+        {
+            width = (width + 1) / 2;
+            height = (height + 1) / 2;
+            state.Levels[level] = builder.Temporary("Level", level, view.Texture(PixelFormat.R32_Float) with { Width = width, Height = height });
+        }
+        int padded = ((int)view.Width + 31) & ~31;
+        state.Packed = builder.Temporary("Packed", view.Texture(PixelFormat.R32_Float) with { Width = padded, Height = (((int)view.Height + 31) & ~31) / 2 });
+        builder.Publish(RendererOutputs.HiZ, state.Packed);
+    }
+
+    // The levels built one from the last, then laid side by side in one texture so a reader takes any with one fetch
+    public override void Render(FeatureContext context)
+    {
+        State state = context.GetViewState<State>();
+        Texture source = context.Depth!;
+        for (int level = 0; level < LevelCount; level++)
+        {
+            RenderTexture target = context.Get(state.Levels[level]);
+            _properties.SetTexture(s_source, source, _resources.PointClamp);
+            context.Fullscreen(_resources.HiZProgram, target, _properties);
+            source = target.ColorTextures[0];
+        }
+        RenderTexture packed = context.Get(state.Packed);
+        int padded = (int)packed.Desc.Width;
+        for (int level = 0; level < LevelCount; level++)
+        {
+            RenderTexture target = context.Get(state.Levels[level]);
+            int offset = padded - (padded >> level);
+            _properties.SetTexture(s_source, target.ColorTextures[0], _resources.PointClamp);
+            _properties.SetInt(s_hiZOffset, offset);
+            context.Fullscreen(_resources.HiZPackProgram, packed, offset, 0, (int)target.Desc.Width, (int)target.Desc.Height, _properties);
+        }
+    }
+}
+
+/// <summary>
 /// Copies the view's depth after the opaque surfaces into its scene depth, for passes tagged "SceneDepth" = "Read" to
 /// fetch through Graphite/SceneDepth.glsl. Adds its pass on frames such a pass is in the view's transparent list. Group
 /// <see cref="FeatureGroup.SceneDepth"/>.
@@ -1566,8 +1656,10 @@ internal static class FeatureSelection
             new VolumetricFogFeature(resources),
             new VolumetricFogSkyFeature(resources),
             new DrawPassFeature(PassType.Prepass, RenderSlot.Prepass, group: FeatureGroup.Prepass, runsOn: ViewKinds.All),
+            new HiZFeature(resources, afterOpaques: false),
             new DrawPassFeature(PassType.Forward, RenderSlot.Opaque, group: FeatureGroup.Opaque, runsOn: ViewKinds.All),
             new DrawPassFeature(PassType.Sky, RenderSlot.Sky, group: FeatureGroup.Sky, runsOn: ViewKinds.All),
+            new HiZFeature(resources, afterOpaques: true),
             new SceneColorFeature(),
             new SceneDepthFeature(),
             new TransmissionDepthFeature(),

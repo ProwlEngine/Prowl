@@ -33,6 +33,9 @@ public static class RendererOutputs
 
     /// <summary>A texture of the view's cascade depth, once its cascades are drawn.</summary>
     public const string Cascades = "Graphite.Cascades";
+
+    /// <summary>The view's nearest depth pyramid, built after its prepass while a feature reads it. See Graphite/HiZ.glsl.</summary>
+    public const string HiZ = "Graphite.HiZ";
 }
 
 /// <summary>Fills the new deformed copies and deforms the ones whose bones or blend shape weights changed. Group <see cref="FeatureGroup.Deform"/>.</summary>
