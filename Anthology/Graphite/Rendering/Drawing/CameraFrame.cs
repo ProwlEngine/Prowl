@@ -143,7 +143,7 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>Makes the screen lighting for this frame's size, or drops it when no producer runs. Render thread.</summary>
     public void EnsureScreenLighting(bool wanted, bool irradiance, uint width, uint height, uint layers)
     {
-        ScreenVisibility = EnsureScreen(ScreenVisibility, wanted, width, height, layers, PixelFormat.R8_UNorm, "Graphite.ScreenVisibility");
+        ScreenVisibility = EnsureScreen(ScreenVisibility, wanted, width, height, layers, PixelFormat.R16_Float, "Graphite.ScreenVisibility");
         ScreenIrradiance = EnsureScreen(ScreenIrradiance, wanted && irradiance, width, height, layers, PixelFormat.R16_G16_B16_A16_Float, "Graphite.ScreenIrradiance");
     }
 
@@ -222,6 +222,9 @@ internal sealed class CameraFrame : IDisposable
 
     /// <summary>Whether this is one of the renderer's own shadow views, drawing its casters alone.</summary>
     public bool IsShadowView { get; init; }
+
+    /// <summary>The voxel volume a world's voxel view draws into, null for every other view.</summary>
+    public DeviceBuffer? VoxelTarget;
 
     /// <summary>This frame's instance counts copied from providers' buffers into the view's commands, as byte offsets.</summary>
     public readonly List<(RenderResourceID Source, uint Offset, uint Destination)> Counts = new();

@@ -208,7 +208,8 @@ internal unsafe partial class VkGraphicsDevice
             TextureCompressionAstcLdr = supported.TextureCompressionAstcLdr,
             ImageCubeArray = supported.ImageCubeArray,
             ShaderStorageImageWriteWithoutFormat = supported.ShaderStorageImageWriteWithoutFormat,
-            ShaderStorageImageReadWithoutFormat = supported.ShaderStorageImageReadWithoutFormat
+            ShaderStorageImageReadWithoutFormat = supported.ShaderStorageImageReadWithoutFormat,
+            FragmentStoresAndAtomics = supported.FragmentStoresAndAtomics
         };
 
         Vk.GetPhysicalDeviceMemoryProperties(PhysicalDevice, out PhysicalDeviceMemProperties);

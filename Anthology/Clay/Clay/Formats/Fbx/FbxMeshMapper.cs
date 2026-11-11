@@ -211,17 +211,19 @@ internal static class FbxMeshMapper
                     {
                         mesh.Tangents ??= new List<Float4>();
                         var t = unpackedTangents[pv];
-                        float w = 1f;
+                        // The bitangent follows +V, which the flip below turns over
+                        float w = -1f;
                         if (unpackedBinormals is not null && unpackedNormals is not null)
-                            w = Float3.Dot(Float3.Cross(unpackedNormals[pv], t), unpackedBinormals[pv]) < 0f ? -1f : 1f;
+                            w = Float3.Dot(Float3.Cross(unpackedNormals[pv], t), unpackedBinormals[pv]) < 0f ? 1f : -1f;
                         mesh.Tangents.Add(new Float4(t.X, t.Y, t.Z, w));
                     }
                     for (int uv = 0; uv < Prowl.Clay.Mesh.MaxUVChannels; uv++)
                     {
                         var src = unpackedUVsPerChannel[uv];
                         if (src is null) continue;
+                        // FBX puts V = 0 at the image's bottom, Clay at its top as glTF does
                         mesh.UVs[uv] ??= new List<Float2>();
-                        mesh.UVs[uv]!.Add(src[pv]);
+                        mesh.UVs[uv]!.Add(new Float2(src[pv].X, 1f - src[pv].Y));
                     }
                     if (unpackedColors is not null)
                     {

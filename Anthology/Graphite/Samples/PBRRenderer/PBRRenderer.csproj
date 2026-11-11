@@ -9,6 +9,7 @@
     <ItemGroup>
         <ProjectReference Include="../Shared/Shared.csproj" />
         <ProjectReference Include="../../../Clay/Clay/Clay.csproj" />
+        <ProjectReference Include="../../../Aperture/Aperture/Aperture.csproj" />
     </ItemGroup>
 
     <ItemGroup>

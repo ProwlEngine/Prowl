@@ -24,12 +24,16 @@ internal sealed class Demo : IDisposable
 
         Taa = new TemporalAntiAliasing(Renderer);
         AutoExposure = new AutoExposure(Renderer);
-        Bloom = new Bloom(Renderer) { Threshold = 1.2f, SoftKnee = 0.42f, Clamp = 64, Iterations = 3, Scatter = 0.7f, Intensity = 0.6f };
+        Bloom = new Bloom(Renderer) { Threshold = 1.2f, SoftKnee = 0.42f, Clamp = 64, Iterations = 4, Scatter = 0.7f, Intensity = 0.3f };
         Tonemap = new Tonemapper(Renderer) { Operator = TonemapOperator.Aces };
         Post.Add(Taa);
         Post.Add(AutoExposure);
         Post.Add(Bloom);
         Post.Add(Tonemap);
+        Gi = new WorldGI(Renderer) { Enabled = false };
+        Post.Add(Gi);
+        Voxels = new VoxelDebug(Renderer) { Enabled = false };
+        Post.Add(Voxels);
     }
 
     public GraphicsDevice Device { get; }
@@ -44,6 +48,8 @@ internal sealed class Demo : IDisposable
     public AutoExposure AutoExposure { get; }
     public Bloom Bloom { get; }
     public Tonemapper Tonemap { get; }
+    public VoxelDebug Voxels { get; }
+    public WorldGI Gi { get; }
 
     /// <summary>A Graphite/PBR material, on <see cref="Surface"/> when it shows a grid.</summary>
     public Material CreatePbr(Float3 color, float metallic = 0f, float roughness = 0.6f, Float3 emission = default, float grid = 0f)

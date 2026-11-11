@@ -692,6 +692,10 @@ internal sealed class WorldLighting
     private bool[] _lightAlive = new bool[16];
     private readonly List<int> _directionalLights = new();
     private bool _lightMembership = true;
+    private int _sun = -1;
+
+    /// <summary>The sun as of the last world record, the first directional light in shader order, or null for none.</summary>
+    public LightDesc? Sun => _sun >= 0 && _lightAlive[_sun] ? _lights[_sun] : null;
 
     /// <summary>Live lights with a cookie or profile, and live lights with contact hardening shadows.</summary>
     public int MaskedLights { get; private set; }
@@ -1109,6 +1113,7 @@ internal sealed class WorldLighting
         if (env.Sun.IsValid && (uint)env.Sun.Index < (uint)_lights.Length && _lightAlive[env.Sun.Index]
             && _lightGeneration[env.Sun.Index] == env.Sun.Generation && _lights[env.Sun.Index].Type == LightType.Directional)
             sun = env.Sun.Index;
+        _sun = sun;
 
         SkyInputs = HashCode.Combine(sun >= 0 ? _lights[sun].Direction : default, sun >= 0 ? _lights[sun].Color * _lights[sun].Intensity : default, env.SkyColor, env.CaptureEV100);
 

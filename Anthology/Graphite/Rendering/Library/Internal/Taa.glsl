@@ -72,13 +72,11 @@ vec4 Taa_SampleHistory(vec2 uv, vec2 texelSize)
     return max(result, vec4(0.0));
 }
 
-vec3 Taa_ToYCoCg(vec3 rgb) { return vec3(0.25 * rgb.r + 0.5 * rgb.g + 0.25 * rgb.b, 0.5 * rgb.r - 0.5 * rgb.b, -0.25 * rgb.r + 0.5 * rgb.g - 0.25 * rgb.b); }
-vec3 Taa_FromYCoCg(vec3 c) { return vec3(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z); }
 
 // NaN or infinite input would otherwise live forever in the history
 vec3 Taa_Sanitize(vec3 c) { return any(isnan(c)) || any(isinf(c)) ? vec3(0.0) : max(c, vec3(0.0)); }
 
-vec3 Taa_Current(vec2 uv) { return Taa_ToYCoCg(Taa_Tonemap(Taa_Sanitize(Graphite_SampleSource(uv).rgb))); }
+vec3 Taa_Current(vec2 uv) { return Graphite_ToYCoCg(Taa_Tonemap(Taa_Sanitize(Graphite_SampleSource(uv).rgb))); }
 
 // The motion of the nearest surface around the pixel, reversed Z so the nearest is the largest depth; the sky's from its direction
 vec2 Taa_Motion(vec2 uv, vec2 texelSize)
@@ -132,11 +130,11 @@ void main()
     vec2 historyUV = vUV - motion;
     if (_HistoryValid < 0.5 || any(lessThan(historyUV, vec2(0.0))) || any(greaterThan(historyUV, vec2(1.0))))
     {
-        outColor = vec4(Taa_InverseTonemap(max(Taa_FromYCoCg(current), vec3(0.0))), Graphite_SampleSource(vUV).a);
+        outColor = vec4(Taa_InverseTonemap(max(Graphite_FromYCoCg(current), vec3(0.0))), Graphite_SampleSource(vUV).a);
         return;
     }
 
-    vec3 history = Taa_ToYCoCg(Taa_Tonemap(Taa_Sanitize(Taa_SampleHistory(historyUV, texelSize).rgb * Graphite_PostExposureRatio(Graphite_PostView()))));
+    vec3 history = Graphite_ToYCoCg(Taa_Tonemap(Taa_Sanitize(Taa_SampleHistory(historyUV, texelSize).rgb * Graphite_PostExposureRatio(Graphite_PostView()))));
     m1 /= 9.0;
     m2 /= 9.0;
     vec3 sigma = sqrt(max(m2 - m1 * m1, vec3(0.0)));
@@ -155,7 +153,7 @@ void main()
 #ifdef TAA_REACTIVE
     blendFactor = mix(blendFactor, min(blendFactor, _ReactiveBlendFactor), Graphite_Sample(_Reactive, vUV).r);
 #endif
-    vec3 result = Taa_FromYCoCg(mix(current, history, blendFactor));
+    vec3 result = Graphite_FromYCoCg(mix(current, history, blendFactor));
     outColor = vec4(Taa_InverseTonemap(max(result, vec3(0.0))), Graphite_SampleSource(vUV).a);
 }
 #endif

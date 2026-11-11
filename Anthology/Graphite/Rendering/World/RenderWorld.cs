@@ -363,7 +363,7 @@ public sealed partial class RenderWorld : IDisposable
         _owner = owner;
         _device = device;
         Features = new ExtensionSet<RenderFeature>(this);
-        FrameFeatures = new ExtensionSet<FrameFeature>(this) { new LightProbeFeature(), new LocalShadowFeature(), new CaptureFillFeature() };
+        FrameFeatures = new ExtensionSet<FrameFeature>(this) { new LightProbeFeature(), new LocalShadowFeature(), new VoxelizationFeature(), new CaptureFillFeature() };
         int id = System.Threading.Interlocked.Increment(ref s_nextId);
         Id = id;
         Name = $"World {id}";
@@ -372,6 +372,7 @@ public sealed partial class RenderWorld : IDisposable
         _tables = new TableHost(device, store, $"Graphite.World{id}");
         Lighting = new WorldLighting(_tables.Scope("Lighting"), resources ?? NoMaterialResources.Instance, report);
         Probes = new WorldProbes(_tables.Scope("Probes"));
+        Voxels = new WorldVoxels(_tables.Scope("Voxels"));
         Reflections = new WorldReflections(_tables.Scope("Reflections"), resources ?? NoMaterialResources.Instance, report, reflections ?? ReflectionSettings.Default);
         _render = new RenderSide(_tables.Scope("Render"), Probes, report);
         Grow(64);
@@ -667,6 +668,7 @@ public sealed partial class RenderWorld : IDisposable
         _dirty.Clear();
         _render.EndExtract();
         ExtractLighting();
+        ExtractVoxels();
         _hostSets.AddRange(_newHostSets);
         _newHostSets.Clear();
         foreach (Action extract in _hostSetExtracts)

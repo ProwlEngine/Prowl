@@ -12,6 +12,14 @@ float Graphite_SpecularOcclusion(float NdotV, float ao, float alpha)
     return clamp(pow(NdotV + ao, exp2(-16.0 * alpha - 1.0)) - 1.0 + ao, 0.0, 1.0);
 }
 
+// The share of the sky's reflection the view's screen occlusion leaves, over what a lobe's own ambient occlusion
+// leaves. Captured probes already hold what covers them, so only the sky takes it.
+float Graphite_SkyReflectionOcclusion(float NdotV, float ao, float screen, float alpha)
+{
+    float own = Graphite_SpecularOcclusion(NdotV, ao, alpha);
+    return own > 0.0 ? Graphite_SpecularOcclusion(NdotV, ao * screen, alpha) / own : 0.0;
+}
+
 // How much of a reflection along R stays above the geometric surface, so normal maps never reflect from below it
 float Graphite_HorizonOcclusion(vec3 R, vec3 geomNormal)
 {

@@ -2,14 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-using ImageMagick;
-
 using Prowl.Clay;
 using Prowl.Clay.Importer;
 using Prowl.Graphite.Rendering;
 using Prowl.Vector;
 
+using ApertureImage = Prowl.Aperture.Image;
+using ApertureFormat = Prowl.Aperture.PixelFormat;
 using ClayMaterial = Prowl.Clay.Material;
+using DecodeOptions = Prowl.Aperture.DecodeOptions;
 using ClayMesh = Prowl.Clay.Mesh;
 using ClayTexture = Prowl.Clay.Texture;
 using Material = Prowl.Graphite.Rendering.Material;
@@ -340,20 +341,27 @@ internal sealed class PbrModel : IDisposable
         if (_decoded.TryGetValue((index, srgb, occlusionStrength), out Texture? existing))
             return existing;
 
+        // A texture the file names but does not ship decodes as one white texel, as glTF reads an absent texture
         ClayTexture source = _model.Textures[index];
-        byte[] bytes = source.EncodedBytes ?? System.IO.File.ReadAllBytes(source.SourcePath ?? throw new InvalidOperationException($"Texture {index} has no source"));
-        using MagickImage image = new(bytes);
-        image.Alpha(AlphaAction.Set);
-        image.Depth = 8;
-        using IUnsafePixelCollection<ushort> pixels = image.GetPixelsUnsafe();
-        byte[] rgba = pixels.ToByteArray(PixelMapping.RGBA) ?? throw new InvalidOperationException($"Texture {index} did not decode");
+        byte[] rgba = [255, 255, 255, 255];
+        uint width = 1, height = 1;
+        byte[]? bytes = source.EncodedBytes ?? (source.SourcePath is { } path && System.IO.File.Exists(path) ? System.IO.File.ReadAllBytes(path) : null);
+        if (bytes != null)
+        {
+            using ApertureImage image = ApertureImage.Load(bytes, new DecodeOptions { TargetPixelFormat = ApertureFormat.Rgba8 });
+            rgba = image.RootFrame.Pixels.ToArray();
+            (width, height) = ((uint)image.RootFrame.Width, (uint)image.RootFrame.Height);
+        }
+        else
+        {
+            Console.WriteLine($"Texture {index} ({source.SourcePath ?? "unnamed"}) is missing, white in its place");
+        }
         if (occlusionStrength != 1f)
         {
             for (int i = 0; i < rgba.Length; i += 4)
                 rgba[i] = (byte)MathF.Round(255f - occlusionStrength * (255 - rgba[i]));
         }
 
-        uint width = image.Width, height = image.Height;
         uint mips = 1 + (uint)Math.Floor(Math.Log2(Math.Max(width, height)));
         PixelFormat format = srgb ? PixelFormat.R8_G8_B8_A8_UNorm_SRgb : PixelFormat.R8_G8_B8_A8_UNorm;
         GraphicsDevice device = _demo.Device;

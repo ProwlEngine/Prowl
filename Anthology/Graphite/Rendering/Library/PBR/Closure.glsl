@@ -578,19 +578,24 @@ vec3 PBR_ShadeLights(PBR_Closure c)
 }
 
 #ifdef GRAPHITE_FRAGMENT
-// How much of the base specular lobe's reflection reaches the surface: specular occlusion from its own and the view's
-// screen occlusion, and horizon occlusion against the geometric normal
+// How much of the base specular lobe's reflection reaches the surface: specular occlusion from its own occlusion, and
+// horizon occlusion against the geometric normal. The view's screen occlusion dims only the sky, see PBR_OccludedSky.
 float PBR_BaseSpecularOcclusion(PBR_Closure c)
 {
-    float ao = c.occlusion * Graphite_ScreenOcclusion();
-    return Graphite_SpecularOcclusion(c.NdotV, ao, sqrt(c.alpha2)) * Graphite_HorizonOcclusion(reflect(-c.view, c.normal), c.geomNormal);
+    return Graphite_SpecularOcclusion(c.NdotV, c.occlusion, sqrt(c.alpha2)) * Graphite_HorizonOcclusion(reflect(-c.view, c.normal), c.geomNormal);
+}
+
+// The probes with the sky's share dimmed by the view's screen occlusion for a lobe
+Graphite_ProbeSet PBR_OccludedSky(Graphite_ProbeSet probes, float NdotV, float occlusion, float alpha)
+{
+    probes.sky *= Graphite_SkyReflectionOcclusion(NdotV, occlusion, Graphite_ScreenOcclusion(), alpha);
+    return probes;
 }
 
 #ifdef PBR_COAT
 float PBR_CoatSpecularOcclusion(PBR_Closure c)
 {
-    float ao = c.occlusion * Graphite_ScreenOcclusion();
-    return Graphite_SpecularOcclusion(c.coatNdotV, ao, sqrt(c.coatAlpha2)) * Graphite_HorizonOcclusion(reflect(-c.view, c.coatNormal), c.geomNormal);
+    return Graphite_SpecularOcclusion(c.coatNdotV, c.occlusion, sqrt(c.coatAlpha2)) * Graphite_HorizonOcclusion(reflect(-c.view, c.coatNormal), c.geomNormal);
 }
 #endif
 
@@ -616,9 +621,11 @@ PBR_Indirect PBR_GatherIndirect(PBR_Closure c, vec2 lightmapUV, Graphite_ProbeSe
 #endif
     if (Graphite_ReflectionProbesReady())
     {
-        i.specular = Graphite_ProbeRadiance(probes, c.normal, c.view, sqrt(c.alpha2)) * PBR_BaseSpecularOcclusion(c);
+        float alpha = sqrt(c.alpha2);
+        i.specular = Graphite_ProbeRadiance(PBR_OccludedSky(probes, c.NdotV, c.occlusion, alpha), c.normal, c.view, alpha) * PBR_BaseSpecularOcclusion(c);
 #ifdef PBR_COAT
-        i.coat = Graphite_ProbeRadiance(probes, c.coatNormal, c.view, sqrt(c.coatAlpha2)) * PBR_CoatSpecularOcclusion(c);
+        float coatAlpha = sqrt(c.coatAlpha2);
+        i.coat = Graphite_ProbeRadiance(PBR_OccludedSky(probes, c.coatNdotV, c.occlusion, coatAlpha), c.coatNormal, c.view, coatAlpha) * PBR_CoatSpecularOcclusion(c);
 #endif
     }
     return i;

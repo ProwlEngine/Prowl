@@ -185,7 +185,9 @@ internal static class FbxTextureMapper
         if (p.TryGetVec3("Rotation", out _, out _, out double rz))
             rotation = (float)(rz * Math.PI / 180.0); // FBX stores rotation in degrees, we want radians
 
-        return (offset, scale, rotation);
+        // The transform as it applies to UVs with V flipped to start at the top: mirroring V turns the rotation over
+        // and moves the offset to where the flipped image's V range lands
+        return (new Float2(offset.X, 1f - scale.Y - offset.Y), scale, -rotation);
     }
 
     /// <summary>

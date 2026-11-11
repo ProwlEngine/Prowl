@@ -18,6 +18,9 @@ public static class RendererOutputs
     public static readonly RenderResourceID ShadowPages = RenderResourceID.Intern("Graphite.Shadows.Pages");
     public static readonly RenderResourceID ShadowFaces = RenderResourceID.Intern("Graphite.Shadows.Faces");
 
+    /// <summary>A world's voxel volume, see Graphite/VoxelData.glsl.</summary>
+    public static readonly RenderResourceID Voxels = RenderResourceID.Intern("Graphite.Voxels");
+
     /// <summary>A world's prefiltered probe cubes and its sky ambient harmonics.</summary>
     public static readonly RenderResourceID CaptureCubes = RenderResourceID.Intern("Graphite.Captures.Cubes");
     public static readonly RenderResourceID SkyAmbient = RenderResourceID.Intern("Graphite.Captures.SkyAmbient");
@@ -30,6 +33,9 @@ public static class RendererOutputs
 
     /// <summary>A texture of the view's cascade depth, once its cascades are drawn.</summary>
     public const string Cascades = "Graphite.Cascades";
+
+    /// <summary>The view's nearest depth pyramid, built after its prepass while a feature reads it. See Graphite/HiZ.glsl.</summary>
+    public const string HiZ = "Graphite.HiZ";
 }
 
 /// <summary>Fills the new deformed copies and deforms the ones whose bones or blend shape weights changed. Group <see cref="FeatureGroup.Deform"/>.</summary>
@@ -84,6 +90,24 @@ public sealed class LocalShadowFeature : FrameFeature
         ShadowPasses.Add(frame, frame.Graph, world!);
         frame.Exports.Provide(RendererOutputs.ShadowPages, world.World);
         frame.Exports.Provide(RendererOutputs.ShadowFaces, world.World);
+    }
+}
+
+/// <summary>Fills a world's voxel volume while it has one, see <see cref="RenderWorld.SetVoxelVolume"/>. Group <see cref="FeatureGroup.Voxelization"/>.</summary>
+public sealed class VoxelizationFeature : FrameFeature
+{
+    internal VoxelizationFeature() : base(FrameSlot.Shadows, order: 100, group: FeatureGroup.Voxelization) { }
+
+    internal override bool IsBuiltIn => true;
+
+    public override void Setup(FrameBuilder builder) => throw new NotSupportedException();
+
+    public override void Render(FrameContext context) => throw new NotSupportedException();
+
+    internal override void AddBuiltIn(FramePipeline frame, WorldFrame? world)
+    {
+        frame.AddVoxels(world!);
+        frame.Exports.Provide(RendererOutputs.Voxels, world!.World);
     }
 }
 

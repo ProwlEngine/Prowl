@@ -451,6 +451,13 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             description.DepthStencilState = DepthStencilStateDescription.DepthOnlyGreaterEqual;
             raster.CullMode = FaceCullMode.Front;
         }
+        // Voxelize writes the voxel buffer alone, every triangle from both sides and whatever is in front of it
+        if (ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Voxelize.Name))
+        {
+            description.BlendState = BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [BlendAttachmentDescription.OverrideBlend with { ColorWriteMask = ColorWriteMask.None }] };
+            description.DepthStencilState = DepthStencilStateDescription.Disabled;
+            raster = RasterizerStateDescription.CullNone;
+        }
         description.RasterizerState = raster;
 
         GraphicsProgram built = device.ResourceFactory.CreateGraphicsProgram(description);

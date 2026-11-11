@@ -12,8 +12,8 @@ namespace Prowl.Clay.PostProcess;
 /// <see cref="IntermediateMesh.Tangents"/> are negated, since the bitangent follows +V.
 /// </summary>
 /// <remarks>
-/// Use when the source's UV origin convention doesn't match the engine's. glTF authors V starting
-/// at the top, OBJ and FBX usually at the bottom - the realtime preset enables this for glTF.
+/// Use when the source's UV origin convention doesn't match the engine's. Clay's convention is glTF's,
+/// V starting at the top, and the FBX reader flips to it on import. OBJ keeps V starting at the bottom.
 /// </remarks>
 internal sealed class FlipUVsStep : IPostProcess
 {

@@ -39,6 +39,8 @@ internal sealed class DemoWindow
     private bool _noTonemap;
     private bool _noVsync;
     private int _debugView = -1;
+    private int _voxelView = -1;
+    private bool _gi;
     private PassTimer? _timer;
     private Texture? _shotTexture;
     private Framebuffer? _shotTarget;
@@ -65,6 +67,10 @@ internal sealed class DemoWindow
                 _timer = new PassTimer();
             else if (args[i] == "--debug" && i + 1 < args.Length)
                 _debugView = Array.IndexOf(DebugViews, args[++i].ToUpperInvariant());
+            else if (args[i] == "--gi")
+                _gi = true;
+            else if (args[i] == "--voxels" && i + 1 < args.Length)
+                _voxelView = (int)Enum.Parse<VoxelDebugMode>(args[++i], ignoreCase: true);
             else if (args[i] == "--freeze")
                 _freeze = true;
             else if (args[i] == "--frames" && i + 1 < args.Length)
@@ -171,6 +177,8 @@ internal sealed class DemoWindow
             case Key.Number4: SelectScene(3); break;
             case Key.Number5: SelectScene(4); break;
             case Key.F: _debugView = _debugView + 1 < DebugViews.Length ? _debugView + 1 : -1; break;
+            case Key.G: _voxelView = _voxelView + 1 < Enum.GetValues<VoxelDebugMode>().Length ? _voxelView + 1 : -1; break;
+            case Key.I: _gi = !_gi; break;
             case Key.Space: _paused = !_paused; break;
             case Key.B: _demo.Bloom.Enabled = !_demo.Bloom.Enabled; break;
             case Key.V: _device.SyncToVerticalBlank = !_device.SyncToVerticalBlank; break;
@@ -203,6 +211,10 @@ internal sealed class DemoWindow
         view.EV100 = _scene.StartEV100;
         view.Camera = _camera.Camera;
         view.Keywords = _debugView < 0 ? null : [GlobalAxis.Debug[DebugViews[_debugView]]];
+        _demo.Voxels.Enabled = _voxelView >= 0;
+        _demo.Voxels.Mode = (VoxelDebugMode)Math.Max(_voxelView, 0);
+        _demo.Gi.Enabled = _gi;
+        _scene.World.SetVoxelVolume(_voxelView < 0 && !_gi ? null : new VoxelVolumeDesc { Center = _camera.Position });
 
         _demo.Renderer.SubmitFrame(new FrameDesc
         {
@@ -216,7 +228,7 @@ internal sealed class DemoWindow
         if (_titleTimer >= 0.5)
         {
             _timer?.Print(100);
-            _window.Title = $"Graphite Renderer - {_scene.Name} - {_scene.Status} - {_titleFrames / _titleTimer:0} fps - 1 to 5 scene, B bloom, T tonemap, X TAA, V vsync, +/- exposure, space pause, {_scene.Controls}{(_debugView < 0 ? "" : $" - debug {DebugViews[_debugView]}")}";
+            _window.Title = $"Graphite Renderer - {_scene.Name} - {_scene.Status} - {_titleFrames / _titleTimer:0} fps - 1 to 5 scene, B bloom, T tonemap, X TAA, V vsync, +/- exposure, space pause, {_scene.Controls}{(_debugView < 0 ? "" : $" - debug {DebugViews[_debugView]}")}, G voxels, I GI{(_voxelView < 0 ? "" : $" - voxels {(VoxelDebugMode)_voxelView}")}{(_gi ? " - GI" : "")}";
             _titleTimer = 0;
             _titleFrames = 0;
         }

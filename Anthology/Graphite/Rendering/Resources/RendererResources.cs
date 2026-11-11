@@ -41,6 +41,8 @@ internal sealed class RendererResources : IDisposable
         FogBlendProgram = InternalShaders.Compute(device, compiler, "Internal/VolumetricFogBlend.glsl", policy, lit: true);
         FogIntegrateProgram = InternalShaders.Compute(device, compiler, "Internal/VolumetricFogIntegrate.glsl", policy, lit: true);
         FogSkyProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("VolumetricFogSky"), "Graphite/VolumetricFogSky", lit: true, policy: policy);
+        HiZProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("HiZBuild"), "Graphite/HiZBuild", source: false, policy: policy);
+        HiZPackProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("HiZBuild"), "Graphite/HiZBuild", source: false, variant: "#define HIZ_PACK 1\n", policy: policy);
 
         SamplerDescription clamp = SamplerDescription.Linear with
         {
@@ -86,6 +88,11 @@ internal sealed class RendererResources : IDisposable
         device.UpdateTexture<ushort>(NoCloudShadowMap, [0, 0, 0, 0], TextureRegion.Whole(NoCloudShadowMap, 0, 0));
         NoCloudShadowData = factory.CreateBuffer(new BufferDescription(CloudShadowRecord.Size, BufferUsage.StructuredBufferReadOnly));
         device.UpdateBuffer(NoCloudShadowData, 0, new CloudShadowRecord());
+        NoVoxels = factory.CreateBuffer(new BufferDescription(VoxelHeader.Size + 4, BufferUsage.StructuredBufferReadWrite));
+        device.UpdateBuffer(NoVoxels, 0, new VoxelHeader());
+        NoCube = factory.CreateTexture(TextureDescription.CreateCube(1, 1, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
+        for (uint face = 0; face < 6; face++)
+            device.UpdateTexture<ushort>(NoCube, [0, 0, 0, 0x3C00], TextureRegion.Whole(NoCube, 0, face));
         NoExposure = factory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_Float, TextureUsage.Sampled));
         device.UpdateTexture<float>(NoExposure, [0f], TextureRegion.Whole(NoExposure, 0, 0));
     }
@@ -155,6 +162,12 @@ internal sealed class RendererResources : IDisposable
     public Texture NoCloudShadowMap { get; }
     public DeviceBuffer NoCloudShadowData { get; }
 
+    /// <summary>What views other than a world's voxel view bind as the voxel volume, empty.</summary>
+    public DeviceBuffer NoVoxels { get; }
+
+    /// <summary>A black cube for passes reading a sky capture a world does not have yet.</summary>
+    public Texture NoCube { get; }
+
     /// <summary>What the exposure pass reads for a view an AutoExposure has not measured yet.</summary>
     public Texture NoExposure { get; }
 
@@ -178,6 +191,10 @@ internal sealed class RendererResources : IDisposable
     public InternalCompute FogBlendProgram { get; }
     public InternalCompute FogIntegrateProgram { get; }
     public FullscreenProgram FogSkyProgram { get; }
+
+    /// <summary>A level of a view's depth pyramid from the one below, and the copy of a level into its packed texture. See <see cref="HiZFeature"/>.</summary>
+    public FullscreenProgram HiZProgram { get; }
+    public FullscreenProgram HiZPackProgram { get; }
 
     private static GraphicsProgram Fullscreen(GraphicsDevice device, PassVariants variants)
     {
@@ -251,6 +268,8 @@ internal sealed class RendererResources : IDisposable
         FogBlendProgram.Dispose();
         FogIntegrateProgram.Dispose();
         FogSkyProgram.Dispose();
+        HiZProgram.Dispose();
+        HiZPackProgram.Dispose();
         Textures.Dispose();
         Noise.Dispose();
         SmaaArea.Dispose();
@@ -271,6 +290,8 @@ internal sealed class RendererResources : IDisposable
         NoFogVolume.Dispose();
         NoCloudShadowMap.Dispose();
         NoCloudShadowData.Dispose();
+        NoVoxels.Dispose();
+        NoCube.Dispose();
         NoExposure.Dispose();
         LinearClamp.Dispose();
         PointClamp.Dispose();

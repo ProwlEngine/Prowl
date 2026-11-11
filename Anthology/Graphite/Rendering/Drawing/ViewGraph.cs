@@ -117,7 +117,9 @@ internal sealed class ViewGraph
         Current = Scene = default;
         CurrentIsScene = true;
         CurrentWritten = SceneWritten = ScreenVisibilityWritten = ScreenIrradianceWritten = Upscaled = false;
-        Camera.Info = Camera.Info.Culled(Camera.SceneColorUsed, Camera.SceneDepthUsed, Camera.BackDepthUsed, Camera.Shadows.FirstCascade() != null);
+        Camera.Info = Camera.Info.Culled(Camera.SceneColorUsed, Camera.SceneDepthUsed, Camera.BackDepthUsed, Camera.Shadows.FirstCascade() != null,
+            Camera.Selected.Exists(static feature => feature.ReadsHiZ && feature.Slot < RenderSlot.OpaqueColor),
+            Camera.Selected.Exists(static feature => feature.ReadsHiZ && feature.Slot >= RenderSlot.OpaqueColor));
         View = Camera.Info;
 
         bool adopted = false;

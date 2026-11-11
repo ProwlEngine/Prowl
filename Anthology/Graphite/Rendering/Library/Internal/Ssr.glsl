@@ -22,6 +22,7 @@ vec3 SsrCameraToSurface(Graphite_ViewData view, vec2 uv, vec3 viewPos)
 
 #if defined(SSR_RAYCAST)
 uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
+uniform GRAPHITE_SCREEN_TEXTURE _HiZ;
 uniform GRAPHITE_SCREEN_TEXTURE _CameraNormalsTexture;
 uniform GRAPHITE_SCREEN_TEXTURE _MaterialTexture;
 uniform sampler2D _Noise;
@@ -54,51 +55,38 @@ vec3 TangentToView(vec3 n, vec3 h)
     return t * h.x + b * h.y + n * h.z;
 }
 
-// uv and reversed depth of a view space position
-vec3 ProjectToScreen(vec3 viewPos)
-{
-    vec4 clip = ssr_View.projection * vec4(viewPos, 1.0);
-    vec3 ndc = clip.xyz / clip.w;
-    return vec3(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5, ndc.z);
-}
+#include "Graphite/HiZ.glsl"
 
-// Steps in screen space until the ray passes behind the depth, then refines by halving
+#define SSR_REACH 100.0             // view space units a ray reaches, clipped short of the camera plane
+
+// Marches the view's depth pyramid from the surface along the reflected ray to the first pixel it passes behind,
+// which is the hit unless that pixel is the sky. jitter moves the start a few pixels out so the ray leaves its surface.
 bool Trace(vec3 startScreen, vec3 reflViewDir, float jitter, out vec2 hitUV)
 {
-    vec3 startView = Graphite_PostViewPosition(ssr_View, startScreen.xy, startScreen.z);
-    vec3 endScreen = ProjectToScreen(startView + reflViewDir * 100.0);
-    vec3 delta = endScreen - startScreen;
     hitUV = startScreen.xy;
-    if (length(delta.xy) < 1e-4)
+    vec3 startView = Graphite_PostViewPosition(ssr_View, startScreen.xy, startScreen.z);
+    float reach = SSR_REACH;
+    vec4 c0 = ssr_View.projection * vec4(startView, 1.0);
+    vec4 c1 = ssr_View.projection * vec4(startView + reflViewDir * reach, 1.0);
+    if (c0.w <= 0.0)
         return false;
-    float steps = min(max(abs(delta.x) * _ScreenSize.x, abs(delta.y) * _ScreenSize.y), _NumSteps);
-    vec3 step = delta / max(steps, 1.0);
-    vec3 cur = startScreen + step * (1.0 + jitter);
-    bool crossed = false;
-    for (float i = 1.0; i < steps; i += 1.0)
+    if (c1.w < 0.1 * c0.w)
     {
-        if (cur.x < 0.0 || cur.x > 1.0 || cur.y < 0.0 || cur.y > 1.0)
-            return false;
-        float sceneDepth = Graphite_Sample(_CameraDepthTexture, cur.xy).r;
-        if (sceneDepth > 0.0 && cur.z < sceneDepth - 0.0001)
-        {
-            crossed = true;
-            break;
-        }
-        cur += step;
+        reach *= (0.9 * c0.w) / (c0.w - c1.w);
+        c1 = ssr_View.projection * vec4(startView + reflViewDir * reach, 1.0);
     }
-    if (!crossed)
+    vec3 n0 = c0.xyz / c0.w, n1 = c1.xyz / c1.w;
+    vec2 p0 = vec2(n0.x * 0.5 + 0.5, 0.5 - n0.y * 0.5) * _ScreenSize;
+    vec2 p1 = vec2(n1.x * 0.5 + 0.5, 0.5 - n1.y * 0.5) * _ScreenSize;
+    float pixels = length(p1 - p0);
+    if (pixels < 1.0)
         return false;
-    vec3 lo = cur - step, hi = cur;
-    for (int j = 0; j < 5; j++)
-    {
-        vec3 mid = (lo + hi) * 0.5;
-        if (mid.z < Graphite_Sample(_CameraDepthTexture, mid.xy).r)
-            hi = mid;
-        else
-            lo = mid;
-    }
-    hitUV = hi.xy;
+    float t = (1.0 + jitter * _NumSteps) / pixels;
+    ivec2 pixel;
+    float nearest;
+    if (!Graphite_HiZMarch(_CameraDepthTexture, _HiZ, _ScreenSize, p0, p1, n0.z, n1.z, int(_NumSteps), t, pixel, nearest) || nearest == 0.0)
+        return false;
+    hitUV = (vec2(pixel) + 0.5) / _ScreenSize;
     return true;
 }
 
@@ -304,13 +292,15 @@ void main()
 }
 #elif defined(SSR_COMBINE)
 #include "Graphite/Probes.glsl"
+#include "Graphite/Ambient.glsl"
 
 uniform GRAPHITE_SCREEN_TEXTURE _ReflectionBuffer;
 uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
 uniform GRAPHITE_SCREEN_TEXTURE _CameraNormalsTexture;
 uniform GRAPHITE_SCREEN_TEXTURE _MaterialTexture;
 
-// The scene shaded the top lobe with reflectance times the probes, so the trace takes the probes' place by its confidence
+// The scene shaded the top lobe with reflectance times the probes, its sky dimmed by the screen occlusion, so the trace
+// takes the probes' place by its confidence
 void main()
 {
     Graphite_ViewData view = Graphite_PostView();
@@ -330,7 +320,11 @@ void main()
         float depth = max(Graphite_Sample(_CameraDepthTexture, vUV).r, 1e-7);
         vec3 relative = Graphite_RelativeFromDepth(view, vUV, depth);
         vec3 N = Graphite_OctDecode(Graphite_Sample(_CameraNormalsTexture, vUV).xy);
-        probes = Graphite_ProbeRadiance(Graphite_FindProbes(relative), N, Graphite_ViewDir(relative), material.a * material.a);
+        vec3 V = Graphite_ViewDir(relative);
+        float alpha = material.a * material.a;
+        Graphite_ProbeSet set = Graphite_FindProbes(relative);
+        set.sky *= Graphite_SkyReflectionOcclusion(clamp(dot(N, V), 0.0, 1.0), 1.0, Graphite_ScreenOcclusion(), alpha);
+        probes = Graphite_ProbeRadiance(set, N, V, alpha);
     }
     outColor = vec4(max(scene.rgb + material.rgb * (reflection.rgb - probes) * confidence, vec3(0.0)), scene.a);
 }
