@@ -60,7 +60,7 @@ public sealed class TableBuilder
     private readonly string _id;
     private readonly OrigamiTheme _theme;
     private readonly int _selected;
-    private readonly Action<int> _onSelect;
+    private readonly Action<int>? _onSelect;
 
     private readonly List<(string Header, float Flex, bool Sortable, TextAlignment Align)> _columns = new();
     private readonly List<TableRow> _rows = new();
@@ -85,8 +85,10 @@ public sealed class TableBuilder
     // the table behaves as the simple single-select data grid.
     private bool _multiSelect;
     private Func<int, bool>? _isSelected;
+    private Action<int, bool, bool>? _onSelectPreview;  // (row, ctrl, shift)
     private Action<int, bool, bool>? _onSelectModified;  // (row, ctrl, shift)
     private Action<int>? _onRowDragStart;
+    private Action<int>? _onRowDragEnd;
     private Action<int, float>? _onRowHover;              // (row, normalizedY)
     private Func<int, bool>? _isPinged;
     private Func<float>? _pingAlpha;
@@ -95,7 +97,7 @@ public sealed class TableBuilder
 
     private float _rowHeight = 30f;
 
-    internal TableBuilder(Paper paper, string id, int selected, Action<int> onSelect, OrigamiTheme theme)
+    internal TableBuilder(Paper paper, string id, int selected, Action<int>? onSelect, OrigamiTheme theme)
     {
         _paper = paper;
         _id = id;
@@ -167,11 +169,17 @@ public sealed class TableBuilder
     /// <summary>Predicate deciding whether a row renders selected (overrides the constructor's selected index).</summary>
     public TableBuilder IsSelected(Func<int, bool> predicate) { _isSelected = predicate; return this; }
 
+    /// <summary>Pressed handler carrying the ctrl/shift modifiers, for range/toggle selection.</summary>
+    public TableBuilder OnSelectPreview(Action<int, bool, bool> handler) { _onSelectPreview = handler; return this; }
+
     /// <summary>Click handler carrying the ctrl/shift modifiers, for range/toggle selection.</summary>
     public TableBuilder OnSelectModified(Action<int, bool, bool> handler) { _onSelectModified = handler; return this; }
 
     /// <summary>Start a drag from a row.</summary>
     public TableBuilder OnRowDragStart(Action<int> handler) { _onRowDragStart = handler; return this; }
+
+    /// <summary>End a drag from a row.</summary>
+    public TableBuilder OnRowDragEnd(Action<int> handler) { _onRowDragEnd = handler; return this; }
 
     /// <summary>Hover callback (row index + normalized Y), e.g. for drop-target tracking.</summary>
     public TableBuilder OnRowHover(Action<int, float> handler) { _onRowHover = handler; return this; }
@@ -363,21 +371,30 @@ public sealed class TableBuilder
                     .Hovered.BackgroundColor(selected ? accDim : hover).End();
                 if (_bordered && isLast) rowBuilder.RoundedBottom(m.ContainerRounding);
 
+                if (_multiSelect && _onSelectPreview != null)
+                    rowBuilder.OnPress(idx, (ci, e) =>
+                    {
+                        e.StopPropagation();  // don't let the press bubble
+                        bool ctrl = _paper.IsCommandDown();
+                        bool shift = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
+                        _onSelectPreview(ci, ctrl, shift);
+                    });
                 if (_multiSelect && _onSelectModified != null)
                     rowBuilder.OnClick(idx, (ci, e) =>
                     {
-                        e.StopPropagation();  // don't let the click bubble to a container that clears selection
+                        e.StopPropagation();  // don't let the click bubble
                         bool ctrl = _paper.IsCommandDown();
                         bool shift = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
-                        _onSelectModified!(ci, ctrl, shift);
+                        _onSelectModified(ci, ctrl, shift);
                     });
-                else
+                if (!_multiSelect && _onSelect is not null)
                     rowBuilder.OnClick(idx, (ci, e) => { e.StopPropagation(); _onSelect(ci); });
 
-                if (_onActivate != null) rowBuilder.OnDoubleClick(idx, (ci, _) => _onActivate!(ci));
-                if (_onContext != null) rowBuilder.OnRightClick(idx, (ci, _) => _onContext!(ci));
-                if (_onRowDragStart != null) rowBuilder.OnDragStart(idx, (ci, _) => _onRowDragStart!(ci));
-                if (_onRowHover != null) rowBuilder.OnHover(idx, (ci, e) => _onRowHover!(ci, (float)e.NormalizedPosition.Y));
+                if (_onActivate != null) rowBuilder.OnDoubleClick(idx, (ci, _) => _onActivate(ci));
+                if (_onContext != null) rowBuilder.OnRightClick(idx, (ci, _) => _onContext(ci));
+                if (_onRowDragStart != null) rowBuilder.OnDragStart(idx, (ci, _) => _onRowDragStart(ci));
+                if (_onRowDragEnd != null) rowBuilder.OnDragEnd(idx, (ci, _) => _onRowDragEnd(ci));
+                if (_onRowHover != null) rowBuilder.OnHover(idx, (ci, e) => _onRowHover(ci, (float)e.NormalizedPosition.Y));
 
                 bool pinged = _isPinged != null && _isPinged(i);
                 if (selected || pinged)

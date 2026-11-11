@@ -163,6 +163,7 @@ public sealed class TreeBuilder
     // Selection (external state)
     private Func<TreeNode, bool>? _isSelected;
     private Action<TreeNodeEvent>? _onSelect;
+    private Action<TreeNodeEvent, bool, bool>? _onSelectPreview; // (node, ctrl, shift)
     private Action<TreeNodeEvent, bool, bool>? _onSelectModified; // (node, ctrl, shift)
 
     // Expand/collapse
@@ -184,6 +185,7 @@ public sealed class TreeBuilder
     // Drag-drop
     private Func<TreeNode, bool>? _canDrag;
     private Action<TreeNode>? _onDragStart;
+    private Action<TreeNode>? _onDragEnd;
     private Func<TreeNode, bool>? _canDrop;
     private Action<TreeDropEvent>? _onDrop;
 
@@ -256,6 +258,9 @@ public sealed class TreeBuilder
     /// <summary>Called on plain click (no modifiers). Single-select behavior.</summary>
     public TreeBuilder OnSelect(Action<TreeNodeEvent> handler) { _onSelect = handler; return this; }
 
+    /// <summary>Called on mouse down with modifier key info. For multi-select trees.</summary>
+    public TreeBuilder OnSelectPreview(Action<TreeNodeEvent, bool, bool> handler) { _onSelectPreview = handler; return this; }
+
     /// <summary>Called on click with modifier key info. For multi-select trees.</summary>
     public TreeBuilder OnSelectModified(Action<TreeNodeEvent, bool, bool> handler) { _onSelectModified = handler; return this; }
 
@@ -284,6 +289,7 @@ public sealed class TreeBuilder
 
     public TreeBuilder CanDrag(Func<TreeNode, bool> predicate) { _canDrag = predicate; return this; }
     public TreeBuilder OnDragStart(Action<TreeNode> handler) { _onDragStart = handler; return this; }
+    public TreeBuilder OnDragEnd(Action<TreeNode> handler) { _onDragEnd = handler; return this; }
     public TreeBuilder CanDrop(Func<TreeNode, bool> predicate) { _canDrop = predicate; return this; }
     public TreeBuilder OnDrop(Action<TreeDropEvent> handler) { _onDrop = handler; return this; }
 
@@ -652,7 +658,17 @@ public sealed class TreeBuilder
         // Click handling
         if (!disabled)
         {
-            if (_onSelectModified != null && _multiSelect)
+            if (_multiSelect && _onSelectPreview != null)
+            {
+                row.OnPress(e =>
+                {
+                    e.StopPropagation();
+                    bool ctrl = _paper.IsCommandDown();
+                    bool shift = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
+                    _onSelectPreview(new TreeNodeEvent(capturedNode, capturedIndex), ctrl, shift);
+                });
+            }
+            if (_multiSelect && _onSelectModified != null)
             {
                 row.OnClick(e =>
                 {
@@ -662,7 +678,7 @@ public sealed class TreeBuilder
                     _onSelectModified(new TreeNodeEvent(capturedNode, capturedIndex), ctrl, shift);
                 });
             }
-            else if (_onSelect != null)
+            if (!_multiSelect && _onSelect != null)
             {
                 row.OnClick(e =>
                 {
@@ -691,6 +707,8 @@ public sealed class TreeBuilder
             // Drag
             if (_onDragStart != null && (_canDrag == null || _canDrag(node)))
                 row.OnDragStart(_ => _onDragStart(capturedNode)).CursorDragging(PaperCursor.Grabbing);
+            if (_onDragEnd != null)
+                row.OnDragStart(_ => _onDragEnd(capturedNode));
 
             // Hover (for drag-drop position tracking)
             if (_onHover != null)
