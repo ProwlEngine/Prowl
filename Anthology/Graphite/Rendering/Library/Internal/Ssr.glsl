@@ -292,13 +292,15 @@ void main()
 }
 #elif defined(SSR_COMBINE)
 #include "Graphite/Probes.glsl"
+#include "Graphite/Ambient.glsl"
 
 uniform GRAPHITE_SCREEN_TEXTURE _ReflectionBuffer;
 uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
 uniform GRAPHITE_SCREEN_TEXTURE _CameraNormalsTexture;
 uniform GRAPHITE_SCREEN_TEXTURE _MaterialTexture;
 
-// The scene shaded the top lobe with reflectance times the probes, so the trace takes the probes' place by its confidence
+// The scene shaded the top lobe with reflectance times the probes, its sky dimmed by the screen occlusion, so the trace
+// takes the probes' place by its confidence
 void main()
 {
     Graphite_ViewData view = Graphite_PostView();
@@ -318,7 +320,11 @@ void main()
         float depth = max(Graphite_Sample(_CameraDepthTexture, vUV).r, 1e-7);
         vec3 relative = Graphite_RelativeFromDepth(view, vUV, depth);
         vec3 N = Graphite_OctDecode(Graphite_Sample(_CameraNormalsTexture, vUV).xy);
-        probes = Graphite_ProbeRadiance(Graphite_FindProbes(relative), N, Graphite_ViewDir(relative), material.a * material.a);
+        vec3 V = Graphite_ViewDir(relative);
+        float alpha = material.a * material.a;
+        Graphite_ProbeSet set = Graphite_FindProbes(relative);
+        set.sky *= Graphite_SkyReflectionOcclusion(clamp(dot(N, V), 0.0, 1.0), 1.0, Graphite_ScreenOcclusion(), alpha);
+        probes = Graphite_ProbeRadiance(set, N, V, alpha);
     }
     outColor = vec4(max(scene.rgb + material.rgb * (reflection.rgb - probes) * confidence, vec3(0.0)), scene.a);
 }
