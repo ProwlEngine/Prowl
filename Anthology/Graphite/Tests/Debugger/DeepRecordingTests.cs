@@ -65,7 +65,7 @@ public class DeepRecordingTests
         return deep;
     }
 
-    [SkippableFact]
+    [Fact]
     public void Pass_RecordsCommandsReferencesAndUpdateBlobs()
     {
         using GraphicsDevice device = CreateDevice();
@@ -85,7 +85,7 @@ public class DeepRecordingTests
         Assert.Single(deep.Recording.Groups);
     }
 
-    [SkippableTheory]
+    [Theory]
     [InlineData(DeepMode.Full)]
     [InlineData(DeepMode.ReplayOnly)]
     public void Copies_AreTakenOncePerVersion(DeepMode mode)
@@ -109,7 +109,7 @@ public class DeepRecordingTests
         Assert.All(copies, c => Assert.Contains(deep.Blobs, b => b.Ref == c.Blob));
     }
 
-    [SkippableFact]
+    [Fact]
     public void EchoRoundTrip_ComparesEqual()
     {
         using GraphicsDevice device = CreateDevice();
@@ -203,7 +203,7 @@ public class DeepRecordingTests
         Assert.Equal(group, loadedGroup);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Replay_ReproducesAfterPassCopies()
     {
         using GraphicsDevice device = CreateDevice();
@@ -231,7 +231,7 @@ public class DeepRecordingTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void HistoryResources_RecordRingSlotAndValidity()
     {
         using GraphicsDevice device = CreateDevice();

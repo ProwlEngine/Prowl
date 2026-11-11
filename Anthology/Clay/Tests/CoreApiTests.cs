@@ -55,7 +55,7 @@ public sealed class CoreApiTests
         // The minimal valid glTF 2.0 document: just the required asset block.
         using var ms = new MemoryStream(Encoding.UTF8.GetBytes("{\"asset\":{\"version\":\"2.0\"}}"));
 
-        var model = ModelImporter.Load(ms, "gltf");
+        var model = ModelImporter.Load(ms, "gltf", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(model);
         Assert.Equal("gltf", model.Metadata.Format);

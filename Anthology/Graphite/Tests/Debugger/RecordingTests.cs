@@ -28,7 +28,7 @@ public class RecordingTests
 {
     private static GraphicsDevice CreateDevice() => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
 
-    [SkippableFact]
+    [Fact]
     public void Recording_HoldsExactlyOneExecutionWithItsGroupTree()
     {
         using GraphicsDevice device = CreateDevice();

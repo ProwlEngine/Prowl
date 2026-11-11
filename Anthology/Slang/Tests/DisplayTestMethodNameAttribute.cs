@@ -3,17 +3,17 @@
 
 using System.Reflection;
 
-using Xunit.Sdk;
+using Xunit.v3;
 
 
 class DisplayTestMethodNameAttribute : BeforeAfterTestAttribute
 {
-    public override void Before(MethodInfo methodUnderTest)
+    public override void Before(MethodInfo methodUnderTest, IXunitTest test)
     {
         Console.WriteLine($"Begin test '{methodUnderTest.Name}'");
     }
 
-    public override void After(MethodInfo methodUnderTest)
+    public override void After(MethodInfo methodUnderTest, IXunitTest test)
     {
         Console.WriteLine($"Complete test '{methodUnderTest.Name}'");
     }

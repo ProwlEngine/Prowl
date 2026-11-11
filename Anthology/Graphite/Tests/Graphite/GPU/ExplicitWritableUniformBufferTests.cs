@@ -8,7 +8,7 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
     private const uint Side = 16;
     private const uint Count = Side * Side;
 
-    [SkippableFact]
+    [Fact]
     public void CallerOwnedBuffer_IsBoundAsIs_LooseUniformsNeverWriteIntoIt()
     {
         ComputeProgram program = CreateProgram(TwoFields());

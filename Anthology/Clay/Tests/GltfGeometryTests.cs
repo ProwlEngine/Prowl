@@ -18,7 +18,7 @@ public sealed class GltfGeometryTests
     [Fact]
     public void Box_Glb_LoadsAsUnitCube_WithExpectedTopology()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/Box/glTF-Binary/Box.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/Box/glTF-Binary/Box.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("glb", model.Metadata.Format);
         Assert.Equal("2.0", model.Metadata.FormatVersion);
@@ -45,11 +45,11 @@ public sealed class GltfGeometryTests
     {
         string path = TestModels.Gltf("2.0/Box/glTF-Binary/Box.glb");
 
-        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw);
+        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw, cancellationToken: TestContext.Current.CancellationToken);
         var converted = ModelImporter.Load(path, ModelImporterSettings.Raw with
         {
             PostProcess = PostProcessFlags.ConvertCoordinateSystem,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         var rawMesh = raw.Meshes[0];
         var convMesh = converted.Meshes[0];
@@ -66,7 +66,7 @@ public sealed class GltfGeometryTests
     [Fact]
     public void Glb_EmbeddedTexture_LandsInEncodedBytes_NotSourcePath()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/BoxTextured/glTF-Binary/BoxTextured.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/BoxTextured/glTF-Binary/BoxTextured.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(model.Textures);
         var tex = model.Textures[0];
@@ -82,7 +82,7 @@ public sealed class GltfGeometryTests
     [Fact]
     public void Gltf_ExternalTexture_LandsInSourcePath_NotEncodedBytes()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/BoxTextured/glTF/BoxTextured.gltf"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/BoxTextured/glTF/BoxTextured.gltf"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(model.Textures);
         var tex = model.Textures[0];
@@ -94,7 +94,7 @@ public sealed class GltfGeometryTests
     [Fact]
     public void DamagedHelmet_PopulatesAllFivePbrTextureSlots()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(model.Materials);
         Assert.Equal(5, model.Textures.Count);

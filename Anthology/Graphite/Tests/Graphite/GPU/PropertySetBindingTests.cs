@@ -9,7 +9,7 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
     private const uint Side = 16;
     private const uint Count = Side * Side;
 
-    [SkippableFact]
+    [Fact]
     public void ReadOnlyUniformBuffer_FeedsContentsAndIgnoresScalarWrites()
     {
 
@@ -30,7 +30,7 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
         AssertCopiedSource(result);
     }
 
-    [SkippableFact]
+    [Fact]
     public void LooseUniforms_StayBoundAcrossComputeShaderSwitch()
     {
         ComputeProgram first = CreateBasicComputeProgram();
@@ -46,7 +46,7 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
         AssertCopiedSource(result);
     }
 
-    [SkippableFact]
+    [Fact]
     public void LooseUniforms_SetBeforeComputeShader_ReachTheDispatch()
     {
         float[] result = RunCompute(SetCopyProperties, (cl, program, props) =>

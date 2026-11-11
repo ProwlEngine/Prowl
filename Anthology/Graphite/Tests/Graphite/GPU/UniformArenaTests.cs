@@ -7,7 +7,7 @@ namespace Prowl.Graphite.Tests;
 // execution
 public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
-    [SkippableFact]
+    [Fact]
     public void SharedPropertySet_AcrossSeparatePassesInOneExecution_EachPassCorrect()
     {
 
@@ -39,7 +39,7 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void SetPropertiesSecondSet_SwapsInSameValueViaDifferentEntryObject_StillDispatchesCorrectly()
     {
 

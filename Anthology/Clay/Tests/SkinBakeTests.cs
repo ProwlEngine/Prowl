@@ -222,7 +222,7 @@ public sealed class SkinBakeTests
         """;
 
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
-        var ex = Assert.Throws<ImportException>(() => ModelImporter.Load(stream, "gltf", ModelImporterSettings.Raw));
+        var ex = Assert.Throws<ImportException>(() => ModelImporter.Load(stream, "gltf", ModelImporterSettings.Raw, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Contains("Body", ex.Message);
         Assert.Contains("99", ex.Message);
@@ -243,7 +243,7 @@ public sealed class SkinBakeTests
         """;
 
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
-        var ex = Assert.Throws<ImportException>(() => ModelImporter.Load(stream, "gltf", ModelImporterSettings.Raw));
+        var ex = Assert.Throws<ImportException>(() => ModelImporter.Load(stream, "gltf", ModelImporterSettings.Raw, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal("gltf", ex.Format);
     }

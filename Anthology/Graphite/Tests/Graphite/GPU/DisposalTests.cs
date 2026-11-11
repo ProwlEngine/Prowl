@@ -38,10 +38,10 @@ public abstract class DisposalTests<T> : GraphicsDeviceTestBase<T> where T : Gra
         public Float4 D;
     }
 
-    [SkippableFact]
+    [Fact]
     public void GraphicsPrograms_WithSameShader_ShareDescriptorCache()
     {
-        Skip.IfNot(GD.BackendType == GraphicsBackend.Vulkan);
+        Assert.SkipUnless(GD.BackendType == GraphicsBackend.Vulkan, "This test only applies to Vulkan.");
 
         ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "VertexLayoutTestShader.glsl");
         ShaderDescription description = new(stages)

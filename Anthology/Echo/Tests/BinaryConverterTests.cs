@@ -3,8 +3,6 @@
 
 using System.Diagnostics;
 
-using Xunit.Abstractions;
-
 namespace Prowl.Echo.Test;
 
 

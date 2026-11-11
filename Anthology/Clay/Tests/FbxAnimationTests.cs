@@ -18,7 +18,7 @@ public sealed class FbxAnimationTests
     [Fact]
     public void AnimationWithSkeleton_PopulatesValidSkinAndNormalizedWeights()
     {
-        var model = ModelImporter.Load(TestModels.Fbx("animation_with_skeleton.fbx"));
+        var model = ModelImporter.Load(TestModels.Fbx("animation_with_skeleton.fbx"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(model.Skins);
         Assert.NotEmpty(model.AnimationClips);
@@ -44,7 +44,7 @@ public sealed class FbxAnimationTests
     [Fact]
     public void AnimationWithSkeleton_AnimationBindings_TargetValidNodes()
     {
-        var model = ModelImporter.Load(TestModels.Fbx("animation_with_skeleton.fbx"));
+        var model = ModelImporter.Load(TestModels.Fbx("animation_with_skeleton.fbx"), cancellationToken: TestContext.Current.CancellationToken);
         var clip = model.AnimationClips[0];
 
         Assert.True(clip.Duration > 0f);
@@ -57,7 +57,7 @@ public sealed class FbxAnimationTests
     public void StaticFbx_ProducesNoSkinsAndNoAnimations()
     {
         // spider.fbx is rigid geometry only - no clusters, no AnimationStack.
-        var model = ModelImporter.Load(TestModels.Fbx("spider.fbx"));
+        var model = ModelImporter.Load(TestModels.Fbx("spider.fbx"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(model.Skins);
         Assert.Empty(model.AnimationClips);

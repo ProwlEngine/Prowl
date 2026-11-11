@@ -17,7 +17,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
 {
     // ---- Compute: two sets, each with a loose-uniform UBO plus a structured output ----
 
-    [SkippableFact]
+    [Fact]
     public void ManyDispatches_OneRecording_EachSeesItsOwnLooseUniforms()
     {
 
@@ -51,7 +51,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void AlternatingUniforms_OneRecording_EachDispatchCorrect()
     {
 
@@ -279,7 +279,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         Assert.Equal(new Color(0.1f, 0.5f, 0.9f, 1f), pixel, ColorFuzzyComparer.Instance);
     }
 
-    [SkippableFact]
+    [Fact]
     public void LastSetOnlyChanges_OneRecording_EachDispatchCorrect()
     {
 
@@ -314,7 +314,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void AlternatingPrograms_OneRecording_BothProduceCorrectResults()
     {
 

@@ -17,7 +17,7 @@ public sealed class FbxGeometryTests
     [Fact]
     public void Box_BinaryFbx_LoadsAsTriangulatedCube()
     {
-        var model = ModelImporter.Load(TestModels.Fbx("box.fbx"));
+        var model = ModelImporter.Load(TestModels.Fbx("box.fbx"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("fbx", model.Metadata.Format);
         Assert.Equal("7400", model.Metadata.FormatVersion);
@@ -40,7 +40,7 @@ public sealed class FbxGeometryTests
     [Fact]
     public void PhongCube_PopulatesNonBlackBaseColor()
     {
-        var model = ModelImporter.Load(TestModels.Fbx("phong_cube.fbx"));
+        var model = ModelImporter.Load(TestModels.Fbx("phong_cube.fbx"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(model.Materials);
         var c = model.Materials[0].BaseColor;
@@ -50,7 +50,7 @@ public sealed class FbxGeometryTests
     [Fact]
     public void Spider_LoadsAsHierarchyWithMultipleMaterials()
     {
-        var model = ModelImporter.Load(TestModels.Fbx("spider.fbx"));
+        var model = ModelImporter.Load(TestModels.Fbx("spider.fbx"), cancellationToken: TestContext.Current.CancellationToken);
 
         // Spider's known authoring: 19 sub-meshes split across 4 named materials.
         Assert.Equal(19, model.Meshes.Count);
@@ -66,7 +66,7 @@ public sealed class FbxGeometryTests
         // The ASCII reader produces the same FbxNode tree shape as the binary reader; loading an
         // ASCII fixture must succeed and produce non-empty geometry. cubes_with_names.fbx is FBX
         // 7.5.0 ASCII with named per-cube nodes.
-        var model = ModelImporter.Load(TestModels.Fbx("cubes_with_names.fbx"));
+        var model = ModelImporter.Load(TestModels.Fbx("cubes_with_names.fbx"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("fbx", model.Metadata.Format);
         Assert.NotEmpty(model.Nodes);

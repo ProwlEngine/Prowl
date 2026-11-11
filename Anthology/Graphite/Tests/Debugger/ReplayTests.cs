@@ -155,7 +155,7 @@ file static class Passes
 [Collection("GPU Tests")]
 public class ReplayTests
 {
-    [SkippableFact]
+    [Fact]
     public void Replay_BlitIsRecordedAndReexecuted()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -181,7 +181,7 @@ public class ReplayTests
         Assert.Equal(deep.Blobs.Single(b => b.Ref == copy.Blob).Data, result.Outputs.Single().Data);
     }
 
-    [SkippableFact]
+    [Fact]
     public void ReplayOnly_GroupedPassRestoresWhatWasDrawnOutsideTheGroup()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -210,7 +210,7 @@ public class ReplayTests
         Assert.Equal(full.Blobs.Single(b => b.Ref == copy.Blob).Data, result.Outputs.Single().Data);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Replay_IndirectSlicesAndPatchesChangeWhatIsDrawn()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -247,7 +247,7 @@ public class ReplayTests
         Assert.False(Drawn(emptied));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Replay_IndexedIndirectSlicesAndPatchesChangeWhatIsDrawn()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -277,7 +277,7 @@ public class ReplayTests
         Assert.True(Drawn(second));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Record_ProgramsDifferingOnlyInSpecializationsStayDistinct()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -302,7 +302,7 @@ public class ReplayTests
         Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Replay_RebuildsProgramAndPropertiesForADraw()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -318,7 +318,7 @@ public class ReplayTests
         Assert.Contains(output.Data.Where((b, i) => i % 4 != 3), b => b != 0);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Replay_FullWithoutEventRestoresFromCopies()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -330,7 +330,7 @@ public class ReplayTests
         Assert.Single(result.Outputs);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Replay_UnsupportedFormatReportsReason()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -349,7 +349,7 @@ public class ReplayTests
         Assert.Contains("does not support", result.Reason);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Replay_MissingProgramReportsReason()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -361,7 +361,7 @@ public class ReplayTests
         Assert.Contains("missing from the recording", result.Reason);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Replay_UndeclaredWriteReportsReason()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -378,7 +378,7 @@ public class ReplayTests
         Assert.Contains("Undeclared GPU write", result.Reason);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Replay_ImportedBuffersAreRebuiltAndTheDispatchReexecuted()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -401,7 +401,7 @@ public class ReplayTests
         Assert.Equal(new uint[] { 6, 7, 8, 9 }, System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(output.Data.AsSpan()).ToArray());
     }
 
-    [SkippableFact]
+    [Fact]
     public void Replay_AfterEchoRoundTripMatchesTheOriginal()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -459,7 +459,7 @@ public class ReplayTests
         return Record(device, DeepMode.Full, graph => Passes.Sample(graph, target, program, source, sampler));
     }
 
-    [SkippableFact]
+    [Fact]
     public void ReplayOnly_ReexecutedPassesMatchFullCopies()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -504,7 +504,7 @@ public class ReplayTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void EventReplay_UpToLastEventEqualsPassOutput()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));

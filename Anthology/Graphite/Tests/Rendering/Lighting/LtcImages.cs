@@ -157,11 +157,11 @@ public sealed class LtcImages
         WritePng(Path.Combine(folder, scene.Name + ".png"), Width * 3, Height, rgb);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Render_TheLtcTable_BesideBruteForce()
     {
         string? folder = Environment.GetEnvironmentVariable("LTC_IMAGES");
-        Skip.If(string.IsNullOrEmpty(folder), "Set LTC_IMAGES to a folder to render the images.");
+        Assert.SkipWhen(string.IsNullOrEmpty(folder), "Set LTC_IMAGES to a folder to render the images.");
         Directory.CreateDirectory(folder);
         D3 Turn(D3 v, double angle) => new(v.X * Math.Cos(angle) - v.Z * Math.Sin(angle), v.Y, v.X * Math.Sin(angle) + v.Z * Math.Cos(angle));
 

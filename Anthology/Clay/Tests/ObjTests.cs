@@ -21,7 +21,7 @@ public sealed class ObjTests
     [Fact]
     public void Box_Obj_LoadsAsTriangulatedCube()
     {
-        var model = ModelImporter.Load(Path.Combine(TestModels.ObjRoot, "box.obj"));
+        var model = ModelImporter.Load(Path.Combine(TestModels.ObjRoot, "box.obj"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(model.Meshes);
         var mesh = model.Meshes[0];
@@ -203,7 +203,7 @@ public sealed class ObjTests
             f 1 2 3
             """);
 
-            var model = ModelImporter.Load(Path.Combine(tempDir, "test.obj"));
+            var model = ModelImporter.Load(Path.Combine(tempDir, "test.obj"), cancellationToken: TestContext.Current.CancellationToken);
             var shiny = model.Materials.First(m => m.Name == "shiny");
             Assert.Equal(0.8f, shiny.BaseColor.R, precision: 4);
             Assert.Equal(0.5f, shiny.Metallic, precision: 4);
