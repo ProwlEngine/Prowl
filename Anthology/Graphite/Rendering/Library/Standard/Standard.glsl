@@ -5,7 +5,8 @@
 // from main, the fragment stage includes Graphite/Standard/StandardFragment.glsl after the model's "#pragma surface"
 // line and calls Graphite_StandardFragment from main.
 //
-// Pass defines, exactly one: GRAPHITE_STANDARD_FORWARD, GRAPHITE_STANDARD_DEPTH (prepass and shadow caster).
+// Pass defines, exactly one: GRAPHITE_STANDARD_FORWARD, GRAPHITE_STANDARD_DEPTH (prepass and shadow caster),
+// GRAPHITE_STANDARD_VOXEL (the Voxelize pass, see Graphite/VoxelData.glsl).
 // GRAPHITE_STANDARD_BACK_DEPTH: with the depth define, the back depth pass, writing the distance along the view ray.
 // GRAPHITE_STANDARD_SHADOW: with the depth define, the shadow caster. Transparent casters, and PBR ones letting light
 // through by transmission or thin walled subsurface, dither their coverage by what they let through.
@@ -48,9 +49,9 @@
     #define GRAPHITE_STANDARD_SHADOW_DITHER
 #endif
 
-// Passes whose fragments read the vertex colour and relative position: forward, back depth, dithered shadow casters, the
-// depth passes of cutout surfaces and a prepass writing normals
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_BACK_DEPTH) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
+// Passes whose fragments read the vertex colour and relative position: forward, back depth, voxelize, dithered shadow
+// casters, the depth passes of cutout surfaces and a prepass writing normals
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_BACK_DEPTH) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
     #define GRAPHITE_STANDARD_VERTEX_DATA
 #endif
 
@@ -69,6 +70,10 @@
     #ifdef GRAPHITE_STANDARD_BACK_DEPTH
         #include "Graphite/SceneColor.glsl"
     #endif
+    #ifdef GRAPHITE_STANDARD_VOXEL
+        #define GRAPHITE_VOXEL_WRITER
+        #include "Graphite/VoxelData.glsl"
+    #endif
     #if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_PREPASS_MOTION)
         #include "Graphite/Passes.glsl"
     #endif
@@ -78,7 +83,7 @@
 #endif
 
 // vUV and vUV1 are the mesh's two UV sets as they are, vLightmapUV the lightmap UV placed
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_ALPHA) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
 GRAPHITE_STANDARD_VARYING vec2 vUV;
 GRAPHITE_STANDARD_VARYING vec2 vUV1;
 #endif

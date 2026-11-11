@@ -62,7 +62,8 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             samplerFilterMinmax: _enabledVulkan12Features.SamplerFilterMinmax,
             textureCompressionBC: _physicalDeviceFeatures.TextureCompressionBC,
             textureCompressionEtc2: _physicalDeviceFeatures.TextureCompressionEtc2,
-            textureCompressionAstc: _physicalDeviceFeatures.TextureCompressionAstcLdr);
+            textureCompressionAstc: _physicalDeviceFeatures.TextureCompressionAstcLdr,
+            fragmentStoresAndAtomics: _physicalDeviceFeatures.FragmentStoresAndAtomics);
         Limits = CreateLimits();
 
         ResourceFactory = new VkResourceFactory(this);

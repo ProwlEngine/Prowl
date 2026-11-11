@@ -47,6 +47,9 @@ public enum ViewKind : byte
     SkyCapture,
     Shadow,
     ObjectId,
+
+    /// <summary>A world's voxel view, drawing its renderables' Voxelize passes into its voxel volume.</summary>
+    Voxelization,
 }
 
 [Flags]
@@ -61,6 +64,7 @@ public enum ViewKinds : ushort
     SkyCapture = 1 << ViewKind.SkyCapture,
     Shadow = 1 << ViewKind.Shadow,
     ObjectId = 1 << ViewKind.ObjectId,
+    Voxelization = 1 << ViewKind.Voxelization,
 
     /// <summary>Views people look at.</summary>
     Cameras = Game | SceneView | Preview | RenderTexture,
@@ -202,7 +206,7 @@ public sealed class FeatureGroup(string name)
 
     /// <summary>The built in frame features' groups.</summary>
     public static readonly FeatureGroup Deform = new("Deform"), LightProbes = new("LightProbes"), LocalShadows = new("LocalShadows"),
-        CaptureFill = new("CaptureFill"), Readback = new("Readback");
+        Voxelization = new("Voxelization"), CaptureFill = new("CaptureFill"), Readback = new("Readback");
 }
 
 /// <summary>
@@ -915,6 +919,29 @@ public sealed class FeatureBuilder
         if (!View.Published.TryGetValue(name, out TextureHandle texture))
             throw new InvalidOperationException($"{_pass.Name} reads {name}, which no earlier feature published.");
         return _graph.Read(texture);
+    }
+
+    /// <summary>
+    /// Reads the world's voxel volume and what lights it, filled this frame before the views, or null while the world
+    /// has no box. See Graphite/VoxelLighting.glsl.
+    /// </summary>
+    internal VoxelInputs? ReadVoxels()
+    {
+        WorldFrame world = View.Camera.World;
+        WorldVoxels voxels = world.World.Voxels;
+        if (voxels.Data is not { } data || voxels.Cache is not { } cache || world.VoxelShadow is not { } shadow)
+            return null;
+        _graph.Read(FrameGraph.Import(data), BufferAccess.AllReads);
+        _graph.Write(FrameGraph.Import(cache), BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+        _graph.Read(FrameGraph.Import(voxels.Lighting.Buffer), BufferAccess.AllReads);
+        _graph.Read(FrameGraph.Import(shadow), TextureState.Sampled);
+        Texture sky = View.Frame.Resources.NoCube;
+        if (world.World.Reflections.Sky is { Persistent.Texture: { } captured } target)
+        {
+            _graph.Read(FrameGraph.Import(captured), TextureState.Sampled);
+            sky = target.Cube;
+        }
+        return new VoxelInputs(voxels, cache, shadow.DepthTexture!, sky, View.Frame.ShadowSampler);
     }
 
     // The views the fullscreen programs of a new colour read

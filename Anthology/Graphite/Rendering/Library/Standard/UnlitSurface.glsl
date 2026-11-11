@@ -11,7 +11,7 @@
 #include "Graphite/Fog.glsl"
 #endif
 
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA)
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_ALPHA)
 uniform vec4 base_color;
 uniform sampler2D base_color_map;
 uniform float emission_luminance;
@@ -29,7 +29,7 @@ struct Unlit_Params
     float alpha;
 };
 
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_ALPHA)
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_ALPHA)
 Unlit_Params Unlit_MaterialParams(Graphite_SurfaceData i)
 {
     vec4 color = base_color * i.vertexColor;

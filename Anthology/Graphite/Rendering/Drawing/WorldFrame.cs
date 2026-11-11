@@ -35,6 +35,56 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     public readonly List<CameraFrame> ProbeFaceCameras = new();
     public int ProbeCamerasUsed, ProbeFaceCamerasUsed;
 
+    /// <summary>The view drawing the world's voxel volume and the three layer target it rasterizes into, while it has a box.</summary>
+    public CameraFrame? VoxelCamera;
+    public RenderTexture? VoxelTarget { get; private set; }
+
+    /// <summary>The views drawing this frame's regions of the voxel box, each culled to its region, reused across frames.</summary>
+    public readonly List<CameraFrame> VoxelDrawCameras = new();
+    public int VoxelDrawCamerasUsed;
+
+    public void EnsureVoxelTarget(GraphicsDevice device, RenderStore store, uint size)
+    {
+        if (VoxelTarget is { } current && current.Desc.Width == size)
+            return;
+        if (VoxelTarget != null)
+            store.Retire(VoxelTarget);
+        VoxelTarget = new RenderTexture(device, PersistentTexture.Describe(GraphTextureDesc.Sized((int)size, (int)size, PixelFormat.R8_UNorm) with { ArrayLayers = 3 }))
+        {
+            Name = $"{World.Name} voxel target",
+        };
+    }
+
+    /// <summary>The sun's shadow over the voxel box, drawn every frame the world has one, cleared when the sun casts none.</summary>
+    public CameraFrame? VoxelShadowCamera;
+    public RenderTexture? VoxelShadow { get; private set; }
+    public readonly List<ShadowDraw> VoxelShadowDraws = new();
+
+    public void EnsureVoxelShadow(GraphicsDevice device, RenderStore store, int size, PixelFormat format)
+    {
+        if (VoxelShadow is { } current && current.Desc.Width == size && current.DepthTexture!.Format == format)
+            return;
+        if (VoxelShadow != null)
+            store.Retire(VoxelShadow);
+        VoxelShadow = new RenderTexture(device, PersistentTexture.Describe(ShadowRecorder.Desc(size, format)))
+        {
+            Name = $"{World.Name} voxel sun shadow",
+        };
+    }
+
+    public void ReleaseVoxelView(RenderStore store)
+    {
+        if (VoxelShadow != null)
+            store.Retire(VoxelShadow);
+        VoxelShadow = null;
+        VoxelShadowDraws.Clear();
+        if (VoxelTarget != null)
+            store.Retire(VoxelTarget);
+        VoxelTarget = null;
+        if (VoxelCamera != null)
+            VoxelCamera.VoxelTarget = null;
+    }
+
     private string? _shadowsName, _shadowsGroup;
 
     /// <summary>The debug group the world's shadow passes record in, made again when the world is renamed.</summary>
@@ -59,12 +109,20 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
             yield return camera;
         foreach (CameraFrame camera in ProbeFaceCameras)
             yield return camera;
+        if (VoxelCamera != null)
+            yield return VoxelCamera;
+        foreach (CameraFrame camera in VoxelDrawCameras)
+            yield return camera;
+        if (VoxelShadowCamera != null)
+            yield return VoxelShadowCamera;
     }
 
     public void Dispose()
     {
         foreach (CameraFrame camera in Captures())
             camera.Dispose();
+        VoxelTarget?.Dispose();
+        VoxelShadow?.Dispose();
     }
 }
 

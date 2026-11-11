@@ -6,7 +6,7 @@
 
 #ifdef GRAPHITE_FRAGMENT
 
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
 // The inputs from the varyings, the frame flipped on back faces, the UVs moved by PBR parallax. Depth passes keep the
 // frame at its defaults unless parallax needs it.
 Graphite_SurfaceData graphite_StandardInputs()
@@ -129,6 +129,39 @@ void Graphite_StandardFragment()
 }
 
 #endif
+
+#elif defined(GRAPHITE_STANDARD_VOXEL)
+
+// Voxelize: the surface's diffuse albedo and emission into the world's voxel volume, from the layer of the axis it faces
+// most, cut out where the alpha test fails. Unlit surfaces only emit.
+void Graphite_StandardFragment()
+{
+    if (!Graphite_VoxelFacesLayer(vRelativePos))
+        discard;
+    Graphite_SurfaceData i = graphite_StandardInputs();
+#ifdef GRAPHITE_STANDARD_UNLIT
+    Unlit_Params p = Unlit_MaterialParams(i);
+#ifdef GRAPHITE_SURFACE_FUNCTION
+    Surface(p, i);
+#endif
+#ifdef _SURFACE_CUTOUT
+    if (p.alpha < alpha_cutoff)
+        discard;
+#endif
+    Graphite_WriteVoxel(vRelativePos, vec3(0.0), p.baseColor * p.emissionLuminance);
+#else
+    float mapVariance;
+    PBR_Params p = PBR_MaterialParams(i, false, mapVariance);
+#ifdef GRAPHITE_SURFACE_FUNCTION
+    Surface(p, i);
+#endif
+#ifdef _SURFACE_CUTOUT
+    if (p.geometryOpacity < alpha_cutoff)
+        discard;
+#endif
+    Graphite_WriteVoxel(vRelativePos, p.baseColor * p.baseWeight * (1.0 - p.baseMetalness), p.emissionColor * p.emissionLuminance);
+#endif
+}
 
 #elif defined(GRAPHITE_STANDARD_BACK_DEPTH)
 

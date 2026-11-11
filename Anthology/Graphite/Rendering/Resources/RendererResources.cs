@@ -86,6 +86,11 @@ internal sealed class RendererResources : IDisposable
         device.UpdateTexture<ushort>(NoCloudShadowMap, [0, 0, 0, 0], TextureRegion.Whole(NoCloudShadowMap, 0, 0));
         NoCloudShadowData = factory.CreateBuffer(new BufferDescription(CloudShadowRecord.Size, BufferUsage.StructuredBufferReadOnly));
         device.UpdateBuffer(NoCloudShadowData, 0, new CloudShadowRecord());
+        NoVoxels = factory.CreateBuffer(new BufferDescription(VoxelHeader.Size + 4, BufferUsage.StructuredBufferReadWrite));
+        device.UpdateBuffer(NoVoxels, 0, new VoxelHeader());
+        NoCube = factory.CreateTexture(TextureDescription.CreateCube(1, 1, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
+        for (uint face = 0; face < 6; face++)
+            device.UpdateTexture<ushort>(NoCube, [0, 0, 0, 0x3C00], TextureRegion.Whole(NoCube, 0, face));
         NoExposure = factory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_Float, TextureUsage.Sampled));
         device.UpdateTexture<float>(NoExposure, [0f], TextureRegion.Whole(NoExposure, 0, 0));
     }
@@ -154,6 +159,12 @@ internal sealed class RendererResources : IDisposable
     /// <summary>What views without clouds read as the cloud shadow, which leaves the sun unshaded.</summary>
     public Texture NoCloudShadowMap { get; }
     public DeviceBuffer NoCloudShadowData { get; }
+
+    /// <summary>What views other than a world's voxel view bind as the voxel volume, empty.</summary>
+    public DeviceBuffer NoVoxels { get; }
+
+    /// <summary>A black cube for passes reading a sky capture a world does not have yet.</summary>
+    public Texture NoCube { get; }
 
     /// <summary>What the exposure pass reads for a view an AutoExposure has not measured yet.</summary>
     public Texture NoExposure { get; }
@@ -271,6 +282,8 @@ internal sealed class RendererResources : IDisposable
         NoFogVolume.Dispose();
         NoCloudShadowMap.Dispose();
         NoCloudShadowData.Dispose();
+        NoVoxels.Dispose();
+        NoCube.Dispose();
         NoExposure.Dispose();
         LinearClamp.Dispose();
         PointClamp.Dispose();

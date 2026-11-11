@@ -255,6 +255,31 @@ Shader "Graphite/Lit"
 
     Pass
     {
+        Name "Voxelize"
+        Tags { "LightMode" = "Voxelize" }
+        GLSLPROGRAM
+        Shared
+        {
+            #define GRAPHITE_STANDARD_VOXEL
+            #include "Graphite/Standard/PBRSurface.glsl"
+        }
+        Vertex
+        {
+            #pragma surface_vertex
+            #include "Graphite/Standard/StandardVertex.glsl"
+            void main() { Graphite_StandardVertex(); }
+        }
+        Fragment
+        {
+            #pragma surface
+            #include "Graphite/Standard/StandardFragment.glsl"
+            void main() { Graphite_StandardFragment(); }
+        }
+        ENDGLSL
+    }
+
+    Pass
+    {
         Name "Debug"
         Tags { "LightMode" = "Debug" "Output" = "Premultiplied" }
         GLSLPROGRAM

@@ -78,6 +78,10 @@ public class GraphicsDeviceFeatures
     /// ASTC block compressed textures can be sampled, as on mobile GPUs.
     /// </summary>
     public bool TextureCompressionAstc { get; }
+    /// <summary>
+    /// Fragment shaders can write storage buffers and images and run atomics on them.
+    /// </summary>
+    public bool FragmentStoresAndAtomics { get; }
 
     internal GraphicsDeviceFeatures(
         bool geometryShader,
@@ -97,7 +101,8 @@ public class GraphicsDeviceFeatures
         bool samplerFilterMinmax,
         bool textureCompressionBC,
         bool textureCompressionEtc2,
-        bool textureCompressionAstc)
+        bool textureCompressionAstc,
+        bool fragmentStoresAndAtomics = false)
     {
         GeometryShader = geometryShader;
         TessellationShaders = tessellationShaders;
@@ -117,5 +122,6 @@ public class GraphicsDeviceFeatures
         TextureCompressionBC = textureCompressionBC;
         TextureCompressionEtc2 = textureCompressionEtc2;
         TextureCompressionAstc = textureCompressionAstc;
+        FragmentStoresAndAtomics = fragmentStoresAndAtomics;
     }
 }

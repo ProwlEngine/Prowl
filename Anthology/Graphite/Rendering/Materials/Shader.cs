@@ -22,6 +22,12 @@ public readonly record struct PassType(string Name)
     public static readonly PassType ShadowCaster = new("ShadowCaster");
     public static readonly PassType ObjectId = new("ObjectId");
 
+    /// <summary>
+    /// A surface's albedo and emission written into the world's voxel volume, drawn once along each axis with culling,
+    /// depth and colour off. See Graphite/VoxelData.glsl.
+    /// </summary>
+    public static readonly PassType Voxelize = new("Voxelize");
+
     /// <summary>A surface's debug view, drawn in place of its Forward pass while the view sets <see cref="GlobalAxis.Debug"/>. See Graphite/Debug.glsl.</summary>
     public static readonly PassType Debug = new("Debug");
 
