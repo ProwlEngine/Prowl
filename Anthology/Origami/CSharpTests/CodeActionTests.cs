@@ -5,7 +5,6 @@ using Prowl.OrigamiUI;
 using Prowl.OrigamiUI.CSharp;
 
 using Xunit;
-using Xunit.Abstractions;
 
 namespace Prowl.Origami.CSharp.Tests;
 

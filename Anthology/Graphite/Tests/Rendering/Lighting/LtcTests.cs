@@ -63,10 +63,10 @@ public sealed class LtcTests
         return sum;
     }
 
-    [SkippableFact]
+    [Fact]
     public void BakeLtc()
     {
-        Skip.IfNot(Environment.GetEnvironmentVariable("GRAPHITE_BAKE_TABLES") == "1", "Set GRAPHITE_BAKE_TABLES=1 to rebake the LTC table.");
+        Assert.SkipUnless(Environment.GetEnvironmentVariable("GRAPHITE_BAKE_TABLES") == "1", "Set GRAPHITE_BAKE_TABLES=1 to rebake the LTC table.");
         for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
         {
             string data = Path.Combine(dir.FullName, "Rendering", "Library", "Data");

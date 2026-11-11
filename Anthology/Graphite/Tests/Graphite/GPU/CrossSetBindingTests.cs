@@ -118,7 +118,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         return props;
     }
 
-    [SkippableFact]
+    [Fact]
     public void ResourcesInEverySet_ResolveIndependently()
     {
 
@@ -141,7 +141,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         Assert.Equal(128u, result[4]);
     }
 
-    [SkippableFact]
+    [Fact]
     public void SwappingOneResourceInOneSet_LeavesTheOtherSetsIntact()
     {
 
@@ -164,7 +164,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         Assert.Equal(64u, second[4]);
     }
 
-    [SkippableFact]
+    [Fact]
     public void IdenticalBindings_ReusedAcrossFrames_StayCorrect()
     {
 
@@ -184,7 +184,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void AlternatingBindings_DoNotAliasInTheDescriptorCache()
     {
 
@@ -215,7 +215,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void SubRangesOfOneBuffer_BindAsDistinctResources()
     {
 
@@ -243,7 +243,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         Assert.Equal(5678u, Run(second, output, program)[2]);
     }
 
-    [SkippableFact]
+    [Fact]
     public void ClearProperties_DropsPreviouslyBoundValues()
     {
 
@@ -270,7 +270,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         Assert.Equal(1u, Read(output)[0]);
     }
 
-    [SkippableFact]
+    [Fact]
     public void MissingProperty_ReportsItsSetAndBinding()
     {
 
@@ -305,7 +305,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         Assert.Equal(1u, reportedSet);
     }
 
-    [SkippableFact]
+    [Fact]
     public void MissingTexture_SubstitutesADefaultRatherThanCrashing()
     {
 
@@ -328,7 +328,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         Assert.Equal(321u, result[2]);
     }
 
-    [SkippableFact]
+    [Fact]
     public void FrameAndItemSets_AlternatingInOneRecording_EachDispatchSeesItsValues()
     {
 

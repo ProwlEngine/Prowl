@@ -19,7 +19,7 @@ public sealed class GltfMaterialExtensionsTests
     [Fact]
     public void Clearcoat_PopulatesTypedSurface_AndConsumesRawKey()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/ClearCoatTest/glTF-Binary/ClearCoatTest.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/ClearCoatTest/glTF-Binary/ClearCoatTest.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains(model.Materials, m => m.Clearcoat is not null && m.Clearcoat.Factor > 0f);
         foreach (var m in model.Materials)
@@ -29,7 +29,7 @@ public sealed class GltfMaterialExtensionsTests
     [Fact]
     public void Sheen_PopulatesTypedSurface_AndConsumesRawKey()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/SheenChair/glTF-Binary/SheenChair.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/SheenChair/glTF-Binary/SheenChair.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains(model.Materials, m => m.Sheen is not null);
         foreach (var m in model.Materials)
@@ -39,7 +39,7 @@ public sealed class GltfMaterialExtensionsTests
     [Fact]
     public void Transmission_PopulatesTypedSurface_AndConsumesRawKey()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/TransmissionTest/glTF-Binary/TransmissionTest.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/TransmissionTest/glTF-Binary/TransmissionTest.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains(model.Materials, m => m.Transmission is not null && m.Transmission.Factor > 0f);
         foreach (var m in model.Materials)
@@ -49,7 +49,7 @@ public sealed class GltfMaterialExtensionsTests
     [Fact]
     public void Iridescence_PopulatesTypedSurface_AndConsumesRawKey()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/IridescentDishWithOlives/glTF-Binary/IridescentDishWithOlives.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/IridescentDishWithOlives/glTF-Binary/IridescentDishWithOlives.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains(model.Materials, m => m.Iridescence is not null && m.Iridescence.Factor > 0f);
         foreach (var m in model.Materials)
@@ -62,7 +62,7 @@ public sealed class GltfMaterialExtensionsTests
         // GameQuality has EmbedTextures OFF by default - external textures stay external.
         var model = ModelImporter.Load(
             TestModels.Gltf("2.0/BoxTextured/glTF/BoxTextured.gltf"),
-            ModelImporterSettings.GameQuality);
+            ModelImporterSettings.GameQuality, cancellationToken: TestContext.Current.CancellationToken);
 
         var tex = model.Textures[0];
         Assert.NotNull(tex.SourcePath);
@@ -76,7 +76,7 @@ public sealed class GltfMaterialExtensionsTests
         {
             PostProcess = ModelImporterSettings.GameQuality.PostProcess | PostProcessFlags.EmbedTextures,
         };
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/BoxTextured/glTF/BoxTextured.gltf"), settings);
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/BoxTextured/glTF/BoxTextured.gltf"), settings, cancellationToken: TestContext.Current.CancellationToken);
 
         var tex = model.Textures[0];
         // SourcePath stays populated so streaming callers can still see provenance.
@@ -92,7 +92,7 @@ public sealed class GltfMaterialExtensionsTests
         {
             PostProcess = ModelImporterSettings.GameQuality.PostProcess | PostProcessFlags.EmbedTextures,
         };
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/BoxTextured/glTF-Binary/BoxTextured.glb"), settings);
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/BoxTextured/glTF-Binary/BoxTextured.glb"), settings, cancellationToken: TestContext.Current.CancellationToken);
 
         var tex = model.Textures[0];
         Assert.Null(tex.SourcePath);

@@ -1,5 +1,9 @@
 <Project>
+    <!-- Inherit build settings from the parent Directory.Build.props file. -->
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+  
     <PropertyGroup>
+        <OutputType>Exe</OutputType>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <IsPackable>false</IsPackable>
         <Nullable>enable</Nullable>
@@ -8,9 +12,7 @@
 
     <!-- Shared test tooling for every Tests/* project. -->
     <ItemGroup>
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.4.1" />
-        <PackageReference Include="xunit" Version="2.9.3" />
-        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
-        <PackageReference Include="Xunit.SkippableFact" Version="1.5.61" />
+        <PackageReference Include="xunit.v3.mtp-v2" Version="4.0.3" />
+        <PackageReference Include="coverlet.MTP" Version="10.1.0" />
     </ItemGroup>
 </Project>

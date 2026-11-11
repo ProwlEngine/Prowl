@@ -24,12 +24,17 @@
           <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
           <!-- Shared framework sets, kept in one place. Library projects opt into one of these via
-               <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>; tests and samples keep
-               their own single TargetFramework and are left alone.
+               <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
                - Default: the modern set every library supports.
                - Compat: adds netstandard2.1 for libraries that also support Unity / older runtimes. -->
           <ProwlTargetFrameworks>net8.0;net9.0;net10.0</ProwlTargetFrameworks>
           <ProwlTargetFrameworksCompat>netstandard2.1;net8.0;net9.0;net10.0</ProwlTargetFrameworksCompat>
+
+          <!-- All testing-related projects share this target framework, including benchmarks. -->
+          <ProwlTestTargetFramework>net10.0</ProwlTestTargetFramework>
+
+          <!-- All samples share this target framework. -->
+          <ProwlSampleTargetFramework>net10.0</ProwlSampleTargetFramework>
      </PropertyGroup>
 
      <!-- Polyfills the language-feature attributes (init / required / records, etc.) that

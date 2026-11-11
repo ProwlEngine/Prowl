@@ -5,7 +5,6 @@ using Prowl.OrigamiUI;
 using Prowl.OrigamiUI.Graphite;
 
 using Xunit;
-using Xunit.Abstractions;
 
 namespace Prowl.Origami.Graphite.Tests;
 

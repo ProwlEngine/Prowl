@@ -136,9 +136,11 @@ public sealed class NormalGenerationTests
     {
         // CesiumMan ships normals; generation must not touch them.
         var withFlag = ModelImporter.Load(TestModels.Gltf("2.0/CesiumMan/glTF-Binary/CesiumMan.glb"),
-            new ModelImporterSettings { PostProcess = PostProcessFlags.Triangulate | PostProcessFlags.GenerateSmoothNormals });
+            new ModelImporterSettings { PostProcess = PostProcessFlags.Triangulate | PostProcessFlags.GenerateSmoothNormals },
+            cancellationToken: TestContext.Current.CancellationToken);
         var without = ModelImporter.Load(TestModels.Gltf("2.0/CesiumMan/glTF-Binary/CesiumMan.glb"),
-            new ModelImporterSettings { PostProcess = PostProcessFlags.Triangulate });
+            new ModelImporterSettings { PostProcess = PostProcessFlags.Triangulate },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(without.Meshes.Count, withFlag.Meshes.Count);
         for (int i = 0; i < withFlag.Meshes.Count; i++)
@@ -157,7 +159,7 @@ public sealed class NormalGenerationTests
             RecalculateNormals = true,
             SmoothNormalsAngleDeg = 180f,
         };
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/CesiumMan/glTF-Binary/CesiumMan.glb"), settings);
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/CesiumMan/glTF-Binary/CesiumMan.glb"), settings, cancellationToken: TestContext.Current.CancellationToken);
 
         foreach (var mesh in model.Meshes)
         {
@@ -192,7 +194,7 @@ public sealed class NormalGenerationTests
             SmoothNormalsAngleDeg = 80f,
         };
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(obj));
-        var mesh = Assert.Single(ModelImporter.Load(stream, "obj", settings).Meshes);
+        var mesh = Assert.Single(ModelImporter.Load(stream, "obj", settings, cancellationToken: TestContext.Current.CancellationToken).Meshes);
 
         foreach (Float3 shared in new[] { new Float3(1f, 0f, 0f), new Float3(0f, 0f, 1f) })
         {

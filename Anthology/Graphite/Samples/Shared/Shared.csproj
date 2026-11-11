@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>$(ProwlSampleTargetFramework)</TargetFramework>
         <OutputType>Library</OutputType>
         <Nullable>enable</Nullable>
     </PropertyGroup>
@@ -12,7 +12,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.13.0" />
+        <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="15.1.0" />
 
         <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
         <PackageReference Include="Silk.NET.Input" Version="2.23.0" />

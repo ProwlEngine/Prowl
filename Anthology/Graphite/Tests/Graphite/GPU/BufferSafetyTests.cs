@@ -69,7 +69,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         });
     }
 
-    [SkippableFact]
+    [Fact]
     public void WriteWhileInFlight_GpuStillReadsTheOldContents()
     {
 
@@ -78,7 +78,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         ComputeProgram program = CreateProbeProgram();
 
         ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
-        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
+        Assert.SkipWhen(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
 
         GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
         GD.WaitForIdle();
@@ -88,7 +88,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         Assert.Equal(OldValue, ReadUInt(output, 0));
     }
 
-    [SkippableFact]
+    [Fact]
     public void WriteWhileInFlight_LaterFramesSeeTheNewContents()
     {
 
@@ -97,7 +97,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         ComputeProgram program = CreateProbeProgram();
 
         ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
-        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
+        Assert.SkipWhen(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
 
         GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
         GD.WaitForIdle();
@@ -110,7 +110,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         Assert.Equal(NewValue, ReadUInt(secondOutput, 0));
     }
 
-    [SkippableFact]
+    [Fact]
     public void WriteWhileInFlight_BumpsContentVersion()
     {
         DeviceBuffer source = CreateSourceBuffer();
@@ -118,7 +118,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         ComputeProgram program = CreateProbeProgram();
 
         ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
-        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
+        Assert.SkipWhen(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
 
         uint versionBefore = source.ContentVersion;
         GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });

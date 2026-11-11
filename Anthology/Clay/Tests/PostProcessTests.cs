@@ -19,8 +19,8 @@ public sealed class PostProcessTests
     {
         string path = TestModels.Gltf("2.0/BoxTextured/glTF-Binary/BoxTextured.glb");
 
-        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw);
-        var flipped = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.FlipUVs });
+        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw, cancellationToken: TestContext.Current.CancellationToken);
+        var flipped = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.FlipUVs }, cancellationToken: TestContext.Current.CancellationToken);
 
         var rawMesh = raw.Meshes[0];
         var flipMesh = flipped.Meshes[0];
@@ -39,8 +39,8 @@ public sealed class PostProcessTests
     {
         string path = TestModels.Gltf("2.0/Box/glTF-Binary/Box.glb");
 
-        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw);
-        var flipped = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.FlipWindingOrder });
+        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw, cancellationToken: TestContext.Current.CancellationToken);
+        var flipped = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.FlipWindingOrder }, cancellationToken: TestContext.Current.CancellationToken);
 
         var rawIdx = raw.Meshes[0].GetIndices32(0);
         var flipIdx = flipped.Meshes[0].GetIndices32(0);
@@ -60,12 +60,12 @@ public sealed class PostProcessTests
     {
         string path = TestModels.Gltf("2.0/Box/glTF-Binary/Box.glb");
 
-        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw);
+        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw, cancellationToken: TestContext.Current.CancellationToken);
         var scaled = ModelImporter.Load(path, ModelImporterSettings.Raw with
         {
             PostProcess = PostProcessFlags.GlobalScale,
             GlobalScale = 10f,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         for (int i = 0; i < raw.Meshes[0].Vertices.Length; i++)
         {
@@ -79,7 +79,7 @@ public sealed class PostProcessTests
         {
             PostProcess = PostProcessFlags.GlobalScale,
             GlobalScale = 1f,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         for (int i = 0; i < raw.Meshes[0].Vertices.Length; i++)
             Assert.Equal(raw.Meshes[0].Vertices[i].X, noop.Meshes[0].Vertices[i].X, precision: 5);
     }
@@ -91,7 +91,7 @@ public sealed class PostProcessTests
         // only re-sorts weights when actually truncating from > limit; on the early-path case
         // (oldInfluences <= limit) it normalizes in place without reordering, so we don't assert
         // slot order here.
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/CesiumMan/glTF-Binary/CesiumMan.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/CesiumMan/glTF-Binary/CesiumMan.glb"), cancellationToken: TestContext.Current.CancellationToken);
         var mesh = model.Meshes.First(m => m.BoneWeights is not null);
 
         foreach (var bw in mesh.BoneWeights!)
@@ -109,7 +109,7 @@ public sealed class PostProcessTests
         string gltf = SyntheticGltf.QuadWithDegenerateTri();
         using var ms = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(gltf));
         var settings = ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.RemoveDegenerates };
-        var model = ModelImporter.Load(ms, "gltf", settings, new BufferOnlyResolver(SyntheticGltf.QuadBufferBytes));
+        var model = ModelImporter.Load(ms, "gltf", settings, new BufferOnlyResolver(SyntheticGltf.QuadBufferBytes), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(model.Meshes);
         Assert.Equal(3, model.Meshes[0].SubMeshes[0].IndexCount);
@@ -121,7 +121,7 @@ public sealed class PostProcessTests
         string gltf = SyntheticGltf.SingleTriangleWithBadMaterialIndex();
         using var ms = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(gltf));
         var settings = ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.ValidateDataStructure };
-        var model = ModelImporter.Load(ms, "gltf", settings, new BufferOnlyResolver(SyntheticGltf.SingleTriangleBufferBytes));
+        var model = ModelImporter.Load(ms, "gltf", settings, new BufferOnlyResolver(SyntheticGltf.SingleTriangleBufferBytes), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains(model.Log.Entries, e => e.Source == "ValidateDataStructure");
     }
@@ -137,7 +137,7 @@ public sealed class PostProcessTests
             StrictValidation = true,
         };
 
-        Assert.Throws<ImportException>(() => ModelImporter.Load(ms, "gltf", settings, new BufferOnlyResolver(SyntheticGltf.SingleTriangleBufferBytes)));
+        Assert.Throws<ImportException>(() => ModelImporter.Load(ms, "gltf", settings, new BufferOnlyResolver(SyntheticGltf.SingleTriangleBufferBytes), cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -145,8 +145,8 @@ public sealed class PostProcessTests
     {
         string path = TestModels.Gltf("2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb");
 
-        var baseline = ModelImporter.Load(path, ModelImporterSettings.Raw);
-        var optimized = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.ImproveCacheLocality });
+        var baseline = ModelImporter.Load(path, ModelImporterSettings.Raw, cancellationToken: TestContext.Current.CancellationToken);
+        var optimized = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.ImproveCacheLocality }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(baseline.Meshes[0].VertexCount, optimized.Meshes[0].VertexCount);
         Assert.Equal(baseline.Meshes[0].SubMeshes[0].IndexCount, optimized.Meshes[0].SubMeshes[0].IndexCount);
@@ -169,8 +169,8 @@ public sealed class PostProcessTests
     {
         string path = TestModels.Gltf("2.0/CesiumMan/glTF-Binary/CesiumMan.glb");
 
-        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw);
-        var optimized = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.OptimizeGraph });
+        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw, cancellationToken: TestContext.Current.CancellationToken);
+        var optimized = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.OptimizeGraph }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Joints must not collapse: bone count is structural and skinning relies on it.
         Assert.Equal(raw.Skins[0].BoneNodeIndices.Length, optimized.Skins[0].BoneNodeIndices.Length);

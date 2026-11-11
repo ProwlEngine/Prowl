@@ -92,7 +92,7 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         return new Run(hook, external, externalBefore, imported, importedBefore, task.Id);
     }
 
-    [SkippableFact]
+    [Fact]
     public void ThreePassGraph_CallbackOrder()
     {
         Run run = Execute();
@@ -106,7 +106,7 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         Assert.Equal(new[] { "Produce", "Consume", "Finish" }, run.Hook.Group.Passes.ToArray().Select(p => p.Name));
     }
 
-    [SkippableFact]
+    [Fact]
     public void ResourceTable_ListsBackingsAndOrigin()
     {
         Run run = Execute();
@@ -123,7 +123,7 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         Assert.Equal(run.ImportedBefore, importedBacking.EntryVersion);
     }
 
-    [SkippableFact]
+    [Fact]
     public void PassReferences_CoverDeclaredCommandAndAttachmentVersions()
     {
         Run run = Execute();
@@ -154,7 +154,7 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         Assert.DoesNotContain(run.Hook.References["Finish"], r => r.First.Resource == run.External.ResourceId);
     }
 
-    [SkippableFact]
+    [Fact]
     public void NoCaptureAssigned_RunsNormally()
     {
         DeviceBuffer external = RF.CreateBuffer(new BufferDescription(64, BufferUsage.StructuredBufferReadWrite));

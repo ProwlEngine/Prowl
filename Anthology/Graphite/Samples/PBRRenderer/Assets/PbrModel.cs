@@ -343,7 +343,7 @@ internal sealed class PbrModel : IDisposable
         ClayTexture source = _model.Textures[index];
         byte[] bytes = source.EncodedBytes ?? System.IO.File.ReadAllBytes(source.SourcePath ?? throw new InvalidOperationException($"Texture {index} has no source"));
         using MagickImage image = new(bytes);
-        image.Alpha(AlphaOption.Set);
+        image.Alpha(AlphaAction.Set);
         image.Depth = 8;
         using IUnsafePixelCollection<ushort> pixels = image.GetPixelsUnsafe();
         byte[] rgba = pixels.ToByteArray(PixelMapping.RGBA) ?? throw new InvalidOperationException($"Texture {index} did not decode");

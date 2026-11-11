@@ -21,7 +21,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         private Float2 _padding0;
     }
 
-    [SkippableFact]
+    [Fact]
     public void ComputeGeneratedVertices_RenderAllRed()
     {
 
@@ -63,7 +63,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         Assert.Equal(Color.Red, map[size / 2, size / 2], ColorFuzzyComparer.Instance);
     }
 
-    [SkippableFact]
+    [Fact]
     public void ComputeGeneratedTexture_BlitsExpectedTexels()
     {
 
@@ -95,7 +95,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         Assert.Equal(new Color(1f, 1f, 1f, 1f), map[3, 0], ColorFuzzyComparer.Instance);
     }
 
-    [SkippableFact]
+    [Fact]
     public void ComputeFills3DTexture()
     {
 
@@ -131,7 +131,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void DispatchIndirect_RunsKernel()
     {
 

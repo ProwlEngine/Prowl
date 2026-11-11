@@ -21,7 +21,7 @@ public static class ImageLoader
 
         using var image = new MagickImage(file.Value.Span);
 
-        image.Alpha(AlphaOption.Set);
+        image.Alpha(AlphaAction.Set);
         image.Depth = 8;
 
         image.Flip();

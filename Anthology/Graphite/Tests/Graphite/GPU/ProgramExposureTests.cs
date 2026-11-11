@@ -38,7 +38,7 @@ public abstract class ProgramExposureTests<T> : GraphicsDeviceTestBase<T> where 
         }
     ];
 
-    [SkippableFact]
+    [Fact]
     public void GraphicsProgram_RebuildsOnSecondDeviceFromExposedData()
     {
         ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.glsl");
@@ -78,7 +78,7 @@ public abstract class ProgramExposureTests<T> : GraphicsDeviceTestBase<T> where 
         Assert.Equal(original.ResourceLayouts.Count, rebuilt.ResourceLayouts.Count);
     }
 
-    [SkippableFact]
+    [Fact]
     public void ComputeProgram_RebuildsOnSecondDeviceFromExposedData()
     {
         ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "ComputeColoredQuadGenerator.glsl");

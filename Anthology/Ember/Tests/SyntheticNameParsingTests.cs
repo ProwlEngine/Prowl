@@ -58,19 +58,19 @@ public class SyntheticNameParsingTests : MigrationTestBase
         Assert.Equal(SyntheticKind.LambdaDisplayClass, cacheClass.Kind);
         Assert.Null(cacheClass.Suffix);
 
-        string display = Assert.Single(typeNames.Where(n => n.StartsWith("<>c__DisplayClass")));
+        string display = Assert.Single(typeNames, n => n.StartsWith("<>c__DisplayClass"));
         Assert.True(SyntheticName.TryParse(display, out var closure));
         Assert.Equal(SyntheticKind.LambdaDisplayClass, closure.Kind);
         Assert.Equal("DisplayClass", closure.Suffix);
         Assert.True(closure.Ordinal >= 0 && closure.SubOrdinal >= 0);
 
-        string localFunction = Assert.Single(methodNames.Where(n => n.StartsWith("<Setup>g__Local")));
+        string localFunction = Assert.Single(methodNames, n => n.StartsWith("<Setup>g__Local"));
         Assert.True(SyntheticName.TryParse(localFunction, out var local));
         Assert.Equal(SyntheticKind.LocalFunction, local.Kind);
         Assert.Equal("Setup", local.Scope);
         Assert.Equal("Local", local.Suffix);
 
-        string iterator = Assert.Single(typeNames.Where(n => n.StartsWith("<Iter>d__")));
+        string iterator = Assert.Single(typeNames, n => n.StartsWith("<Iter>d__"));
         Assert.True(SyntheticName.TryParse(iterator, out var machine));
         Assert.Equal(SyntheticKind.StateMachine, machine.Kind);
         Assert.Equal("Iter", machine.Scope);

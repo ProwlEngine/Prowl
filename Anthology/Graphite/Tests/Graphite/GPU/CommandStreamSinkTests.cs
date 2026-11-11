@@ -217,7 +217,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         return props;
     }
 
-    [SkippableFact]
+    [Fact]
     public void MixedPass_ReportsExactSequence()
     {
         (Framebuffer fb, _) = CreateTarget();
@@ -257,7 +257,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         Assert.Same(compute, sink.Pipelines[1].Program);
     }
 
-    [SkippableFact]
+    [Fact]
     public void DebugGroupMeta_ReachesTheSink()
     {
         SinkRecorder sink = Record(cl =>
@@ -270,7 +270,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         Assert.Contains("PushMarker:Group:payload", sink.Log);
     }
 
-    [SkippableFact]
+    [Fact]
     public void SetProperties_ReportsWholeTableBeforeEveryDraw()
     {
         (Framebuffer fb, _) = CreateTarget();
@@ -302,7 +302,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         Assert.Equal(7, last.Uniform.Read<int>());
     }
 
-    [SkippableFact]
+    [Fact]
     public void SetMutatedThenReapplied_ReportsNewValueAtNextDraw()
     {
         (Framebuffer fb, _) = CreateTarget();
@@ -328,7 +328,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         Assert.Equal(9, last.Uniform.Read<int>());
     }
 
-    [SkippableFact]
+    [Fact]
     public void ComputeBarriers_AreReportedBetweenTheirDispatches()
     {
         ComputeProgram compute = CreateFillProgram();
@@ -348,7 +348,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         Assert.Equal(["Dispatch:1:1:1", "ComputeBarrier", "Dispatch:1:1:1"], sink.Log.Where(e => e.StartsWith("Dispatch") || e == "ComputeBarrier"));
     }
 
-    [SkippableFact]
+    [Fact]
     public void BufferWrittenBetweenDispatches_IsReEmittedWithNewVersion()
     {
         ComputeProgram compute = CreateFillProgram();
@@ -382,7 +382,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         Assert.True(states[2].Resource.Version >= after.Version);
     }
 
-    [SkippableFact]
+    [Fact]
     public void InPassUpdates_CarryBytesAndVersions()
     {
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
@@ -410,7 +410,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         Assert.Equal(texels, texelData);
     }
 
-    [SkippableFact]
+    [Fact]
     public void VertexAndIndexBindings_ReportedAtEveryDraw()
     {
         (Framebuffer fb, _) = CreateTarget();
@@ -445,7 +445,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         Assert.Contains("DrawIndexed:4:2:1:0:0", sink.Log);
     }
 
-    [SkippableFact]
+    [Fact]
     public void ReferencedResources_AreTracked()
     {
         (Framebuffer fb, Texture target) = CreateTarget();
@@ -472,7 +472,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         Assert.Contains(referenced!, r => r.Texture == target);
     }
 
-    [SkippableFact]
+    [Fact]
     public void PassBeginAndEnd_BracketCommands()
     {
         SinkRecorder sink = new();
@@ -482,7 +482,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         Assert.Equal(["BeginPass:SinkPass", "PushMarker:SinkPass", "PopMarker", "EndPass"], sink.Log);
     }
 
-    [SkippableFact]
+    [Fact]
     public void NoSinkRegistered_ReportsNothing()
     {
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));

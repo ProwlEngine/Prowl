@@ -69,7 +69,7 @@ internal sealed class CopyingProfiler : ICaptureProfiler, IDisposable
 
 public abstract class CaptureCopyTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
-    [SkippableFact]
+    [Fact]
     public void BeforeAndAfterPass_HoldPrePassAndPassOutputContents()
     {
         DeviceBuffer external = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
@@ -91,7 +91,7 @@ public abstract class CaptureCopyTests<T> : GraphicsDeviceTestBase<T> where T : 
         Assert.All(Texels(Read(profiler, "Target", CopyPlacement.AfterPass)), texel => Assert.Equal(new byte[] { 0, 0, 255, 255 }, texel));
     }
 
-    [SkippableFact]
+    [Fact]
     public void DepthStencil_CopiesBothAspects()
     {
         RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: true));
@@ -113,7 +113,7 @@ public abstract class CaptureCopyTests<T> : GraphicsDeviceTestBase<T> where T : 
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void MultisampledColor_IsResolved()
     {
         RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false, sampleCount: TextureSampleCount.Count4));
@@ -136,7 +136,7 @@ public abstract class CaptureCopyTests<T> : GraphicsDeviceTestBase<T> where T : 
         return profiler;
     }
 
-    [SkippableFact]
+    [Fact]
     public void TargetBacking_Throws()
     {
         RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: true));

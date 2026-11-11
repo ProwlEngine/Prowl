@@ -18,7 +18,7 @@ public sealed class GltfAnimationTests
     [Fact]
     public void BoxAnimated_HasClipWithPositionAndRotationBindings()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/BoxAnimated/glTF-Binary/BoxAnimated.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/BoxAnimated/glTF-Binary/BoxAnimated.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(model.AnimationClips);
         var clip = model.AnimationClips[0];
@@ -31,7 +31,7 @@ public sealed class GltfAnimationTests
     [Fact]
     public void BoxAnimated_RotationCurve_StaysUnitLengthAcrossEvaluation()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/BoxAnimated/glTF-Binary/BoxAnimated.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/BoxAnimated/glTF-Binary/BoxAnimated.glb"), cancellationToken: TestContext.Current.CancellationToken);
         var clip = model.AnimationClips[0];
         var rot = clip.Bindings.First(b => b.Property == AnimatedProperty.Rotation);
 
@@ -47,8 +47,8 @@ public sealed class GltfAnimationTests
     public void ConvertCoordinateSystem_NegatesX_OnNodesAndCurves()
     {
         string path = TestModels.Gltf("2.0/CesiumMan/glTF-Binary/CesiumMan.glb");
-        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw);
-        var converted = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.ConvertCoordinateSystem });
+        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw, cancellationToken: TestContext.Current.CancellationToken);
+        var converted = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.ConvertCoordinateSystem }, cancellationToken: TestContext.Current.CancellationToken);
 
         static Float3 Map(Float3 v) => new(-v.X, v.Y, v.Z);
         static Quaternion MapRotation(Quaternion q) => new(q.X, -q.Y, -q.Z, q.W);
@@ -81,7 +81,7 @@ public sealed class GltfAnimationTests
     [Fact]
     public void CesiumMan_Skin_HasValidJointReferences_AndNormalizedWeights()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/CesiumMan/glTF-Binary/CesiumMan.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/CesiumMan/glTF-Binary/CesiumMan.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(model.Skins);
         Assert.NotEmpty(model.AnimationClips);
@@ -109,7 +109,7 @@ public sealed class GltfAnimationTests
     [Fact]
     public void RiggedFigure_PopulateSkeletons_LeavesValidRootIndex()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/RiggedFigure/glTF-Binary/RiggedFigure.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/RiggedFigure/glTF-Binary/RiggedFigure.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(model.Skins);
         Assert.InRange(model.Skins[0].RootNodeIndex, 0, model.Nodes.Count - 1);
@@ -118,7 +118,7 @@ public sealed class GltfAnimationTests
     [Fact]
     public void AnimatedMorphCube_HasBlendShapes_AndWeightAnimation()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/AnimatedMorphCube/glTF-Binary/AnimatedMorphCube.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/AnimatedMorphCube/glTF-Binary/AnimatedMorphCube.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(model.Meshes);
         var mesh = model.Meshes[0];
@@ -138,7 +138,7 @@ public sealed class GltfAnimationTests
     [Fact]
     public void InterpolationTest_SurfacesStepLinearAndCubicSpline()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/InterpolationTest/glTF/InterpolationTest.gltf"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/InterpolationTest/glTF/InterpolationTest.gltf"), cancellationToken: TestContext.Current.CancellationToken);
 
         // Interpolation is per key on the shared curve, so a clip can mix modes within one curve.
         var seen = new HashSet<CurveInterpolation>();

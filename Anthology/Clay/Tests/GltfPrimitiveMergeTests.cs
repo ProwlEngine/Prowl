@@ -117,7 +117,7 @@ public sealed class GltfPrimitiveMergeTests
     public void SinglePrimitiveMeshKeepsItsOwnName()
     {
         // The old mapper named every mesh "<parent>/prim0" whether or not it had siblings.
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/Box/glTF-Binary/Box.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/Box/glTF-Binary/Box.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
         foreach (var mesh in model.Meshes)
             Assert.DoesNotContain("/prim", mesh.Name);
@@ -158,7 +158,7 @@ public sealed class GltfPrimitiveMergeTests
     [Fact]
     public void RealModelsMergeWithoutLosingGeometry()
     {
-        var model = ModelImporter.Load(TestModels.Gltf("2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"));
+        var model = ModelImporter.Load(TestModels.Gltf("2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
         foreach (var mesh in model.Meshes)
         {

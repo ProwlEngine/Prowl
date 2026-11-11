@@ -36,10 +36,10 @@ public sealed class EnergyTableTests
     private static void Near(double expected, double got, double tolerance, string what)
         => Assert.True(Math.Abs(expected - got) <= tolerance, $"{what}: expected {expected}, got {got}");
 
-    [SkippableFact]
+    [Fact]
     public void BakeTables()
     {
-        Skip.IfNot(Environment.GetEnvironmentVariable("GRAPHITE_BAKE_TABLES") == "1", "Set GRAPHITE_BAKE_TABLES=1 to rebake the energy tables.");
+        Assert.SkipUnless(Environment.GetEnvironmentVariable("GRAPHITE_BAKE_TABLES") == "1", "Set GRAPHITE_BAKE_TABLES=1 to rebake the energy tables.");
         string data = DataFolder();
         EnergyTables.Write(Path.Combine(data, "Dfg.bin"), EnergyTables.BakeDfg(EnergyTables.BakeSamples));
         EnergyTables.Write(Path.Combine(data, "DielectricE.bin"), EnergyTables.BakeDielectric(EnergyTables.BakeSamples));

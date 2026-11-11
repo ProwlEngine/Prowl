@@ -170,6 +170,6 @@ public sealed class GltfLayeredMaterialTests
         { "asset": { "version": "2.0" }, "extensionsRequired": [ "{{extension}}" ], "scene": 0, "scenes": [ { "nodes": [] } ] }
         """;
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
-        Assert.NotNull(ModelImporter.Load(stream, "gltf", ModelImporterSettings.Raw).Root);
+        Assert.NotNull(ModelImporter.Load(stream, "gltf", ModelImporterSettings.Raw, cancellationToken: TestContext.Current.CancellationToken).Root);
     }
 }

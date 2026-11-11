@@ -103,7 +103,7 @@ public sealed class SmoothingGroupTests
             // Wide enough that the angle alone would smooth these two together.
             PostProcess = PostProcessFlags.Triangulate | PostProcessFlags.GenerateSmoothNormals,
             SmoothNormalsAngleDeg = 179f,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         var mesh = model.Meshes[0];
         // The two shared vertices each carry a different normal per group, so both had to split.
@@ -132,7 +132,7 @@ public sealed class SmoothingGroupTests
         {
             PostProcess = PostProcessFlags.Triangulate | PostProcessFlags.GenerateSmoothNormals,
             SmoothNormalsAngleDeg = 179f,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         var mesh = model.Meshes[0];
         // The pentagon's own three triangles stay smooth with each other, so its interior normals
