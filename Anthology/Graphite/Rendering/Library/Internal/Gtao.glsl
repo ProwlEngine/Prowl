@@ -40,14 +40,6 @@ Graphite_ViewData gtao_View;
 
 vec3 ViewPosition(vec2 uv, float depth) { return Graphite_PostViewPosition(gtao_View, uv, depth); }
 
-// The direction toward the camera, the same everywhere under an orthographic projection
-vec3 TowardCamera(vec2 uv, vec3 viewPos)
-{
-    if (Graphite_PostOrthographic(gtao_View))
-        return normalize(ViewPosition(uv, 1.0) - ViewPosition(uv, 0.0));
-    return -normalize(viewPos);
-}
-
 // A normal from the neighbours closest in position on each axis, facing the camera
 vec3 NormalFromDepth(vec2 uv, vec3 center, vec3 viewDir)
 {
@@ -125,10 +117,9 @@ float CalculateGTAO(vec2 coord, vec3 viewPos, vec3 viewDir, vec3 normal, vec2 di
         }
 
         vec2 h = n + clamp(vec2(Gtao_FastAcos(cHorizonCos.x), -Gtao_FastAcos(cHorizonCos.y)) - n, -GRAPHITE_HALF_PI, GRAPHITE_HALF_PI);
-        h = cosN + 2.0 * h * sin(n) - cos(2.0 * h - n);
-        visibility += lenV * (h.x + h.y);
+        visibility += lenV * (Graphite_SliceArc(h.x, n) + Graphite_SliceArc(h.y, n));
     }
-    return 0.25 * rSliceCount * visibility;
+    return rSliceCount * visibility;
 }
 
 void main()
@@ -141,7 +132,7 @@ void main()
         return;
     }
     vec3 viewPos = ViewPosition(vUV, depth);
-    vec3 viewDir = TowardCamera(vUV, viewPos);
+    vec3 viewDir = mat3(gtao_View.view) * Graphite_PostTowardCamera(gtao_View, vUV, Graphite_RelativeFromDepth(gtao_View, vUV, depth));
     vec3 normal = NormalFromDepth(vUV, viewPos, viewDir);
     vec2 noise = texture(_Noise, vUV * _NoiseScale + _JitterOffset).rg;
     float ao = pow(clamp(CalculateGTAO(vUV, viewPos, viewDir, normal, noise), 0.0, 1.0), _Intensity);

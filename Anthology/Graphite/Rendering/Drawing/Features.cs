@@ -424,12 +424,14 @@ public abstract class RenderFeature : RenderExtension
 /// A producer of the view's screen lighting, in AfterPrepass after the depth prepass: the visibility, and optionally the
 /// indirect irradiance with its confidence, that every renderable drawn after reads through Graphite_IndirectDiffuse and
 /// Graphite_IndirectSpecular. Direct light is never touched. A view runs one, as they share the ScreenLighting group.
-/// Normals are not drawn yet, so producers rebuild them from depth.
+/// The forward pass has not drawn yet, so producers read the normals and motion the prepass writes when asked through
+/// sceneReads, or rebuild them from depth.
 /// </summary>
 public abstract class ScreenLightingFeature : RenderFeature
 {
-    protected ScreenLightingFeature(int order = 0, ViewKinds runsOn = ViewKinds.Cameras)
-        : base(RenderSlot.AfterPrepass, order, FeatureGroup.ScreenLighting, runsOn) { }
+    /// <param name="sceneReads">Targets it reads, which the prepass writes for it, see <see cref="GlobalAxis.Prepass"/>.</param>
+    protected ScreenLightingFeature(int order = 0, ViewKinds runsOn = ViewKinds.Cameras, SceneTargets sceneReads = SceneTargets.None)
+        : base(RenderSlot.AfterPrepass, order, FeatureGroup.ScreenLighting, runsOn, sceneReads) { }
 
     /// <summary>The part of the view's render resolution the screen lighting takes, 1/16 to 1.</summary>
     public abstract float Scale { get; }

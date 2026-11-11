@@ -562,6 +562,12 @@ bool Graphite_ContributeLocal(Graphite_LightSample L, Graphite_LightFrame f, boo
     return true;
 }
 
+// A shadowed directional light's shadow map alone
+float graphite_DirectionalMapShadow(Graphite_DirectionalLight d, uint index, vec3 relativePos, vec3 geomNormal)
+{
+    return Graphite_DirectionalShadow(index, d.direction, d.shadowDepthBias, d.shadowNormalBias, d.shadowStrength, d.shadowFilter, d.sinRadius / max(d.cosRadius, 1e-4), relativePos, geomNormal);
+}
+
 // How much of a directional light reaches a surface past its shadow, 1 lit. index is its place in the world's buffer,
 // the sun first, which the clouds shade too.
 float Graphite_DirectionalLightShadow(Graphite_DirectionalLight d, uint index, vec3 relativePos, vec3 geomNormal)
@@ -571,7 +577,7 @@ float Graphite_DirectionalLightShadow(Graphite_DirectionalLight d, uint index, v
     float clouds = index == 0u ? Graphite_CloudShadow(relativePos) : 1.0;
     if (!d.shadow || clouds <= 0.0)
         return clouds;
-    return clouds * Graphite_DirectionalShadow(index, d.direction, d.shadowDepthBias, d.shadowNormalBias, d.shadowStrength, d.shadowFilter, d.sinRadius / max(d.cosRadius, 1e-4), relativePos, geomNormal);
+    return clouds * graphite_DirectionalMapShadow(d, index, relativePos, geomNormal);
 }
 
 // The sun's shadow, 1 lit
@@ -580,6 +586,15 @@ float Graphite_MainDirectionalShadowFactor(vec3 relativePos, vec3 geomNormal)
     if (Graphite_DirectionalCount() == 0u)
         return 1.0;
     return Graphite_DirectionalLightShadow(Graphite_GetDirectional(0u), 0u, relativePos, geomNormal);
+}
+
+// The sun's shadow from its shadow map alone, without the clouds, 1 lit or without a sun
+float Graphite_MainDirectionalMapShadow(vec3 relativePos, vec3 geomNormal)
+{
+    if (Graphite_DirectionalCount() == 0u || !Graphite_ReceivesShadows())
+        return 1.0;
+    Graphite_DirectionalLight d = Graphite_GetDirectional(0u);
+    return d.shadow ? graphite_DirectionalMapShadow(d, 0u, relativePos, geomNormal) : 1.0;
 }
 
 // The direction inside a directional light's disk nearest a lobe's reflected ray
