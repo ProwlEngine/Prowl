@@ -12,6 +12,7 @@ internal sealed class PassTimer
     private readonly object _lock = new();
     private readonly Dictionary<string, double> _gpu = new();
     private readonly Dictionary<string, double> _cpu = new();
+    private readonly Dictionary<string, (ulong Triangles, ulong Fragments)> _stats = new();
     private int _frames;
 
     public IProfiler Begin() => new Frame(this);
@@ -25,8 +26,13 @@ internal sealed class PassTimer
             double total = _gpu.Values.Sum();
             Console.WriteLine($"--- {_frames} frames, GPU {total / _frames:0.00} ms, CPU record {_cpu.Values.Sum() / _frames:0.00} ms");
             foreach (var pair in _gpu.OrderByDescending(p => p.Value).Take(14))
-                Console.WriteLine($"  {pair.Value / _frames,7:0.000} ms  {pair.Key}");
+            {
+                (ulong triangles, ulong fragments) = _stats.GetValueOrDefault(pair.Key);
+                string counts = triangles == 0 ? "" : $"  {triangles / (double)_frames / 1e6,7:0.00}M triangles {fragments / (double)_frames / 1e6,6:0.00}M fragments";
+                Console.WriteLine($"  {pair.Value / _frames,7:0.000} ms  {pair.Key}{counts}");
+            }
             _gpu.Clear();
+            _stats.Clear();
             _cpu.Clear();
             _frames = 0;
         }
@@ -71,6 +77,12 @@ internal sealed class PassTimer
 
         public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats)
         {
+            string name = commandBuffer.Pass?.Name ?? commandBuffer.Name;
+            lock (owner._lock)
+            {
+                (ulong triangles, ulong fragments) = owner._stats.GetValueOrDefault(name);
+                owner._stats[name] = (triangles + stats.InputAssemblyPrimitives, fragments + stats.FragmentShaderInvocations);
+            }
         }
     }
 }
