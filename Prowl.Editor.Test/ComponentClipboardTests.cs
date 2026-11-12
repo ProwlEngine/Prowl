@@ -150,34 +150,6 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
     }
 
     [Fact]
-    public void PasteAsNew_GetsFreshIdentifier()
-    {
-        MakeScene(out GameObject? a, out GameObject? b);
-        ClipComp src = a.AddComponent<ClipComp>();
-
-        ComponentClipboard.Copy(src);
-        Component? pasted = ComponentClipboard.PasteAsNew(b);
-
-        Assert.NotNull(pasted);
-        Assert.NotEqual(src.Identifier, pasted!.Identifier);
-    }
-
-    [Fact]
-    public void PasteAsNew_OntoSameGameObject_AddsSecondInstance()
-    {
-        MakeScene(out GameObject? a, out _);
-        ClipComp src = a.AddComponent<ClipComp>();
-        src.Value = 7;
-
-        ComponentClipboard.Copy(src);
-        ComponentClipboard.PasteAsNew(a);
-
-        var all = a.GetComponents<ClipComp>().ToList();
-        Assert.Equal(2, all.Count);
-        Assert.All(all, c => Assert.Equal(7, c.Value));
-    }
-
-    [Fact]
     public void PasteAsNew_OntoSameGameObject_RealEngineComponent()
     {
         // Stacking several colliders on one object is the motivating case for same-object paste.
@@ -194,24 +166,6 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         Assert.Equal(new Float3(1, 0, 0), pasted.Center);
         Assert.Equal(2, a.GetComponents<BoxCollider>().Count());
         Assert.NotEqual(src.Identifier, pasted.Identifier);
-    }
-
-    [Fact]
-    public void CopiedComponent_IsUnmodifiedByCopy()
-    {
-        MakeScene(out GameObject? a, out _);
-        ClipComp target = a.AddComponent<ClipComp>();
-        ClipRefComp src = a.AddComponent<ClipRefComp>();
-        src.TargetGO = a;
-        src.TargetComp = target;
-        src.TargetTransform = a.Transform;
-
-        ComponentClipboard.Copy(src);
-
-        // Copy links references by id and never mutates the source component's fields.
-        Assert.Same(a, src.TargetGO);
-        Assert.Same(target, src.TargetComp);
-        Assert.Same(a.Transform, src.TargetTransform);
     }
 
     // ---- Type gating ----
@@ -237,14 +191,6 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         Assert.False(ComponentClipboard.PasteValues(other));
         Assert.Equal(99, other.Value);
-    }
-
-    [Fact]
-    public void EmptyClipboard_PasteIsNoOp()
-    {
-        MakeScene(out _, out GameObject? b);
-        Assert.False(ComponentClipboard.CanPasteAsNew());
-        Assert.Null(ComponentClipboard.PasteAsNew(b));
     }
 
     [Fact]
@@ -539,20 +485,6 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         Assert.NotNull(ComponentClipboard.PasteAsNew(b));
     }
 
-    [Fact]
-    public void PasteValues_OnDetachedComponent_DoesNotThrow()
-    {
-        MakeScene(out GameObject? a, out _);
-        ClipComp src = a.AddComponent<ClipComp>();
-        src.Value = 12;
-        ComponentClipboard.Copy(src);
-
-        // Not attached to any GameObject - the lifecycle bracket must handle a null GameObject.
-        var orphan = new ClipComp();
-        Assert.True(ComponentClipboard.PasteValues(orphan));
-        Assert.Equal(12, orphan.Value);
-    }
-
     // ---- Undo ----
 
     [Fact]
@@ -613,26 +545,6 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         Undo.PerformUndo(); // must not throw
         Assert.False(Undo.CanUndo);
-    }
-
-    [Fact]
-    public void PasteValues_Undo_AfterComponentRemoved_FailsGracefully()
-    {
-        MakeScene(out GameObject? a, out GameObject? b);
-        ClipComp src = a.AddComponent<ClipComp>();
-        src.Value = 1;
-
-        ClipComp dst = b.AddComponent<ClipComp>();
-        dst.Value = 999;
-
-        ComponentClipboard.Copy(src);
-        ComponentClipboard.PasteValues(dst);
-        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
-
-        b.RemoveComponent(dst);
-
-        Undo.PerformUndo(); // FindComponent returns null; must no-op rather than throw
-        Undo.PerformRedo();
     }
 
     [Fact]

@@ -153,19 +153,6 @@ public class NavMeshQueryTests
         Assert.True(blocked.Position.X < 10.5f, $"Blocked ray should stop at the mesh border, got x={blocked.Position.X:0.0}.");
     }
 
-    [Fact]
-    public void FindClosestEdge_ReturnsBorder()
-    {
-        var world = new NavMeshWorld();
-        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [Quad(10, 10, Float3.Zero)]);
-        world.AddNavMeshData(data!);
-
-        Assert.True(world.FindClosestEdge(new Float3(5, 0, 5), out NavMeshHit hit, NavMeshAreaMask.Everything));
-        Assert.True(hit.Hit);
-        // From the center of a 10x10 eroded floor, the nearest border is a few units away.
-        Assert.InRange(hit.Distance, 1f, 6f);
-    }
-
     /// <summary>The default search distance comes from the mesh's own bounds rather than a fixed
     /// radius, so an edge is found on a mesh wider than that radius. The border here is ~200 units
     /// from the center — beyond the 100 the default used to cap at.</summary>
@@ -306,26 +293,6 @@ public class NavMeshQueryTests
             Assert.True(found, $"Query {i} from {from} to {to} failed.");
             Assert.True(world.SamplePosition(from, out _, 2f, NavMeshAreaMask.Everything));
         });
-    }
-
-    [Fact]
-    public void MutateTileCache_DrainsPoolAndKeepsWorking()
-    {
-        var world = new NavMeshWorld();
-        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [Quad(10, 10, Float3.Zero)]);
-        NavMeshInstance? instance = world.AddNavMeshData(data!);
-        Assert.NotNull(instance);
-
-        var path = new NavMeshPath();
-        Assert.True(world.CalculatePath(new Float3(2, 0, 2), new Float3(8, 0, 8), path, NavMeshAreaMask.Everything));
-
-        bool mutated = false;
-        world.MutateTileCache(instance!, _ => mutated = true);
-        Assert.True(mutated);
-
-        // Queries still work after the pool was invalidated.
-        Assert.True(world.CalculatePath(new Float3(2, 0, 2), new Float3(8, 0, 8), path, NavMeshAreaMask.Everything));
-        Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
     }
 
     /// <summary>

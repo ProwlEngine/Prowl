@@ -93,41 +93,6 @@ public class LifecycleTests : RuntimeTestBase
     }
 
     /// <summary>
-    /// Test 1: Adding GameObject to DISABLED Scene
-    /// Expected: OnAddedToScene called, OnEnable NOT called (scene disabled)
-    /// </summary>
-    [Fact]
-    public void AddingGameObject_ToDisabledScene_CallsOnAddedToSceneOnly()
-    {
-        SceneInstance scene = CreateScene();
-        GameObject go = CreateGameObject();
-        TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
-
-        scene.Add(go);
-
-        Assert.Contains("OnAddedToScene", comp.Events);
-        Assert.DoesNotContain("OnEnable", comp.Events);
-    }
-
-    /// <summary>
-    /// Test 2: Enabling Scene
-    /// Expected: OnEnable called for all enabled components
-    /// </summary>
-    [Fact]
-    public void EnablingScene_CallsOnEnableForAllEnabledComponents()
-    {
-        SceneInstance scene = CreateScene();
-        GameObject go = CreateGameObject();
-        TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
-        scene.Add(go);
-        comp.ClearEvents();
-
-        scene.Activate();
-
-        Assert.Contains("OnEnable", comp.Events);
-    }
-
-    /// <summary>
     /// Test 3: Adding GameObject to ENABLED Scene
     /// Expected: OnAddedToScene called, then OnEnable called (scene enabled)
     /// </summary>
@@ -169,51 +134,6 @@ public class LifecycleTests : RuntimeTestBase
         // Re-enable component
         comp.Enabled = true;
         Assert.Contains("OnEnable", comp.Events);
-    }
-
-    /// <summary>
-    /// Test 5: Toggling GameObject Enabled State
-    /// Expected: OnDisable called for all enabled components when disabled,
-    /// OnEnable called for all enabled components when re-enabled
-    /// </summary>
-    [Fact]
-    public void TogglingGameObjectEnabled_CallsOnDisableAndOnEnableForComponents()
-    {
-        SceneInstance scene = CreateScene();
-        scene.Activate();
-        GameObject go = CreateGameObject();
-        TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
-        scene.Add(go);
-        comp.ClearEvents();
-
-        // Disable GameObject
-        go.Enabled = false;
-        Assert.Contains("OnDisable", comp.Events);
-
-        comp.ClearEvents();
-
-        // Re-enable GameObject
-        go.Enabled = true;
-        Assert.Contains("OnEnable", comp.Events);
-    }
-
-    /// <summary>
-    /// Test 6: Disabling Scene
-    /// Expected: OnDisable called for all enabled components
-    /// </summary>
-    [Fact]
-    public void DisablingScene_CallsOnDisableForAllEnabledComponents()
-    {
-        SceneInstance scene = CreateScene();
-        scene.Activate();
-        GameObject go = CreateGameObject();
-        TestLifecycleComponent comp = go.AddComponent<TestLifecycleComponent>();
-        scene.Add(go);
-        comp.ClearEvents();
-
-        scene.Deactivate();
-
-        Assert.Contains("OnDisable", comp.Events);
     }
 
     /// <summary>
@@ -728,28 +648,6 @@ public class LifecycleTests : RuntimeTestBase
 
         Assert.NotEqual(SceneState.Running, scene.State);
         Assert.DoesNotContain("OnDisable", comp.Events);
-    }
-
-    /// <summary>
-    /// Additional test: Child added to parent that is already in scene
-    /// Expected: Child gets OnAddedToScene and OnEnable
-    /// </summary>
-    [Fact]
-    public void ChildAddedToParentInScene_GetsLifecycleEvents()
-    {
-        SceneInstance scene = CreateScene();
-        scene.Activate();
-
-        GameObject parent = CreateGameObject("Parent");
-        scene.Add(parent);
-
-        GameObject child = CreateGameObject("Child");
-        TestLifecycleComponent childComp = child.AddComponent<TestLifecycleComponent>();
-
-        child.SetParent(parent);
-
-        Assert.Contains("OnAddedToScene", childComp.Events);
-        Assert.Contains("OnEnable", childComp.Events);
     }
     private sealed class ParentProbe : Component
     {

@@ -295,6 +295,22 @@ public class ThreadingTests : RuntimeTestBase
     }
 
     [Fact]
+    public void AWorldTokenReadFromItsOwnCancelCallback_StillEndsWithTheWorld()
+    {
+        MainThreadContext.Uninstall();
+        SceneInstance world = CreateScene(enable: true);
+        CancellationToken reread = default;
+        world.Token.Register(() => reread = world.Token);
+
+        using var loop = new LoopScope();
+        CancellationToken current = world.Token;
+        world.Dispose();
+
+        Assert.True(reread.IsCancellationRequested);
+        Assert.True(current.IsCancellationRequested);
+    }
+
+    [Fact]
     public void EndingASessionDropsQueuedWorkCancelsItsTokenAndItsFrameWaits()
     {
         using var loop = new LoopScope();

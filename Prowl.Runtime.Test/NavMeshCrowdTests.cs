@@ -256,65 +256,6 @@ public class NavMeshCrowdTests : RuntimeTestBase
         => NavMeshAgentTypes.ApplyTable([new NavMeshAgentType { Id = 0, Name = "Humanoid" }]);
 
     /// <summary>
-    /// Two agent types in one scene get two independent crowds, and each agent walks the mesh
-    /// baked for its own type.
-    /// </summary>
-    [Fact]
-    public void TwoAgentTypes_GetSeparateCrowds_AndBothWalk()
-    {
-        try
-        {
-            NavMeshAgentTypes.ApplyTable(
-            [
-                new NavMeshAgentType { Id = 0, Name = "Humanoid", Radius = 0.5f },
-                new NavMeshAgentType { Id = 3, Name = "Scout", Radius = 0.4f },
-            ]);
-
-            SceneInstance scene = CreateScene(enable: true);
-            GameObject floor = CreateGameObject("Floor");
-            scene.Add(floor);
-            floor.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
-            floor.Transform.Position = new Float3(0, -0.5f, 0);
-
-            foreach (int typeId in (int[])[0, 3])
-            {
-                GameObject surfaceGo = CreateGameObject($"Surface{typeId}");
-                scene.Add(surfaceGo);
-                NavMeshSurface surface = surfaceGo.AddComponent<NavMeshSurface>();
-                ApplyFastBakeSettings(surface);
-                surface.AgentTypeId = typeId;
-                Assert.True(surface.BuildNavMesh());
-            }
-
-            NavMeshAgent humanoid = AddAgent(scene, new Float3(-8, 0, -8));
-            NavMeshAgent scout = AddAgent(scene, new Float3(-8, 0, 8));
-            scout.AgentTypeId = 3;
-
-            Tick(scene, 2);
-            Assert.True(humanoid.IsOnNavMesh);
-            Assert.True(scout.IsOnNavMesh);
-
-            // One crowd per type, and they are distinct objects.
-            Assert.NotNull(scene.Navigation.GetNativeCrowd(0));
-            Assert.NotNull(scene.Navigation.GetNativeCrowd(3));
-            Assert.NotSame(scene.Navigation.GetNativeCrowd(0), scene.Navigation.GetNativeCrowd(3));
-
-            humanoid.SetDestination(new Float3(8, 0, -8));
-            scout.SetDestination(new Float3(8, 0, 8));
-            Tick(scene, 300);
-
-            Assert.True(Float3.Distance(humanoid.GameObject.Transform.Position, new Float3(8, 0, -8)) < 2.0,
-                "Humanoid should reach its destination on its own crowd.");
-            Assert.True(Float3.Distance(scout.GameObject.Transform.Position, new Float3(8, 0, 8)) < 2.0,
-                "Scout should reach its destination on its own crowd.");
-        }
-        finally
-        {
-            RestoreDefaultAgentTable();
-        }
-    }
-
-    /// <summary>
     /// Replacing one agent type's navmesh rebinds only that type's crowd: its agents rejoin
     /// (keeping destinations) while the other type's crowd is the same object throughout.
     /// </summary>

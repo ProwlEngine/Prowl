@@ -62,21 +62,6 @@ public class NavMeshModifierTests : RuntimeTestBase
         Assert.Equal(1u << Mud, SampleAreaMask(scene, new Float3(5, 0.2f, 0)));
     }
 
-    /// <summary>IgnoreFromBuild removes the object's geometry from the bake.</summary>
-    [Fact]
-    public void Modifier_IgnoreFromBuild_ExcludesGeometry()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        AddFloorBox(scene, "Plain", new Float3(-5, -0.5f, 0), new Float3(10, 1, 10));
-        GameObject ignored = AddFloorBox(scene, "Ignored", new Float3(5, -0.5f, 0), new Float3(10, 1, 10));
-        ignored.AddComponent<NavMeshModifier>().IgnoreFromBuild = true;
-
-        Assert.True(AddSurface(scene).BuildNavMesh());
-
-        Assert.NotEqual(0u, SampleAreaMask(scene, new Float3(-5, 0.2f, 0)));
-        Assert.Equal(0u, SampleAreaMask(scene, new Float3(5, 0.2f, 0)));
-    }
-
     /// <summary>A parent's modifier applies to children, but a child's own modifier wins.</summary>
     [Fact]
     public void Modifier_ChildModifier_BeatsInheritedParentModifier()

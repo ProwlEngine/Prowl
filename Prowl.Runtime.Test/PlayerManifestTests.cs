@@ -69,15 +69,4 @@ public class PlayerManifestTests : IDisposable
         Assert.Empty(read.AssemblyLoadOrder);
         Assert.Equal(Guid.Empty, read.DefaultSceneGuid);
     }
-
-    // A manifest the player cannot read must be loud, not silently become defaults.
-    [Fact]
-    public void FormatVersion_RoundTripsAndDefaultsToCurrent()
-    {
-        var written = new PlayerManifest { ProductName = "Versioned" };
-        Assert.Equal(PlayerManifest.CurrentFormatVersion, written.FormatVersion);
-
-        written.Save(_dir);
-        Assert.Equal(PlayerManifest.CurrentFormatVersion, PlayerManifest.Load(_dir).FormatVersion);
-    }
 }

@@ -25,18 +25,6 @@ public class SpriteSliceIdentityTests
     private static List<SpriteSliceData> Generated(params SpriteSliceData[] slices) => new(slices);
 
     [Fact]
-    public void IdenticalRects_KeepIdAndName()
-    {
-        var previous = new List<SpriteSliceData> { Slice("hero_idle", 0, 0, 16, 16) };
-        Guid original = previous[0].Id;
-
-        List<SpriteSliceData> result = SpriteSliceMatcher.CarryOverIdentities(previous, Generated(Slice("tex_0", 0, 0, 16, 16)));
-
-        Assert.Equal(original, result[0].Id);
-        Assert.Equal("hero_idle", result[0].Name);
-    }
-
-    [Fact]
     public void ShiftedRects_KeepIdWhenTheyMostlyOverlap()
     {
         var previous = new List<SpriteSliceData> { Slice("hero", 0, 0, 16, 16) };

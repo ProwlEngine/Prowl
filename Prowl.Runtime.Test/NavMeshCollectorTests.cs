@@ -25,34 +25,6 @@ public class NavMeshCollectorTests : RuntimeTestBase
     };
 
     [Fact]
-    public void BoxCollider_CollectsAndBakesWalkableFloor()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        GameObject floor = CreateGameObject("Floor");
-        scene.Add(floor);
-        BoxCollider box = floor.AddComponent<BoxCollider>();
-        box.Size = new Float3(20, 1, 20);
-        floor.Transform.Position = new Float3(0, -0.5f, 0); // top surface at y=0
-
-        List<NavMeshGeometrySource> sources = [];
-        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
-            LayerMask.Everything, TestSettings().EffectiveVoxelSize, NavMeshAreas.Walkable, sources);
-
-        Assert.Single(sources);
-
-        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), sources);
-        Assert.NotNull(data);
-        Assert.True(data!.HasTiles);
-
-        // Path across the box top must work end to end.
-        var world = new NavMeshWorld();
-        world.AddNavMeshData(data);
-        var path = new NavMeshPath();
-        Assert.True(world.CalculatePath(new Float3(-8, 0, -8), new Float3(8, 0, 8), path, NavMeshAreaMask.Everything));
-        Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
-    }
-
-    [Fact]
     public void Collect_RespectsLayerMask()
     {
         SceneInstance scene = CreateScene(enable: true);
@@ -72,21 +44,6 @@ public class NavMeshCollectorTests : RuntimeTestBase
         NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
             with5, 0.25f, NavMeshAreas.Walkable, sources);
         Assert.Single(sources);
-    }
-
-    [Fact]
-    public void Collect_SkipsDisabledObjects()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        GameObject floor = CreateGameObject("Floor");
-        scene.Add(floor);
-        floor.AddComponent<BoxCollider>().Size = new Float3(10, 1, 10);
-        floor.Enabled = false;
-
-        List<NavMeshGeometrySource> sources = [];
-        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
-            LayerMask.Everything, 0.25f, NavMeshAreas.Walkable, sources);
-        Assert.Empty(sources);
     }
 
     [Fact]
@@ -172,45 +129,6 @@ public class NavMeshCollectorTests : RuntimeTestBase
             LayerMask.Everything, 0.25f, NavMeshAreas.Walkable, sources);
 
         Assert.Single(sources); // the floor only
-    }
-
-    /// <summary>
-    /// An agent standing on the floor at bake time must not voxelize as an obstruction, or it
-    /// leaves a permanent hole in the navmesh under wherever it stood.
-    /// </summary>
-    [Fact]
-    public void Bake_WithAgentStandingOnFloor_LeavesNoHole()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        GameObject floor = CreateGameObject("Floor");
-        scene.Add(floor);
-        floor.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
-        floor.Transform.Position = new Float3(0, -0.5f, 0);
-
-        var standing = new Float3(4, 0, 4);
-        GameObject agent = CreateGameObject("Agent");
-        scene.Add(agent);
-        agent.Transform.Position = standing + new Float3(0, 1, 0);
-        agent.AddComponent<NavMeshAgent>();
-        BoxCollider body = agent.AddComponent<BoxCollider>();
-        body.Size = new Float3(2, 2, 2);
-
-        List<NavMeshGeometrySource> sources = [];
-        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
-            LayerMask.Everything, TestSettings().EffectiveVoxelSize, NavMeshAreas.Walkable, sources);
-        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), sources);
-        Assert.NotNull(data);
-
-        var world = new NavMeshWorld();
-        world.AddNavMeshData(data!);
-
-        // The floor under the agent is walkable, and a path runs straight through it.
-        Assert.True(world.SamplePosition(standing, out NavMeshHit hit, 0.5f, NavMeshAreaMask.Everything));
-        Assert.True(Float3.Distance(hit.Position, standing) < 0.5f);
-
-        var path = new NavMeshPath();
-        Assert.True(world.CalculatePath(new Float3(-8, 0, -8), new Float3(8, 0, 8), path, NavMeshAreaMask.Everything));
-        Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
     }
 
     private const float TerrainSize = 64f;

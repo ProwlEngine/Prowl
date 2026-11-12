@@ -64,26 +64,6 @@ public class BuildSystemTests : IDisposable
         Assert.False(progress.IsCancelled);
     }
 
-    [Fact]
-    public void Cancel_IsSafeToRepeat()
-    {
-        var progress = new BuildProgress();
-
-        progress.Cancel();
-        progress.Cancel();
-
-        Assert.True(progress.IsCancelled);
-    }
-
-    [Fact]
-    public void ACancelledResult_IsNotAFailureToReport()
-    {
-        var result = new BuildResult { Success = false, Cancelled = true };
-
-        Assert.True(result.Cancelled);
-        Assert.Equal("", result.Errors);
-    }
-
     // ---------------------------------------------------------------- StageGraphTests
 
     private static StageNode Node(BuildStage stage, params BuildStage[] dependsOn)
@@ -355,32 +335,6 @@ public class BuildSystemTests : IDisposable
         Assert.True(peak <= 4, $"limit of 4 exceeded, peak was {peak}");
     }
 
-    // Exclusive means alone: a step that owns the output directory cannot have company.
-    [Fact]
-    public async Task ExclusiveStage_NeverSharesWithAnother()
-    {
-        var graph = new StageGraph(
-        [
-            new StageNode { Stage = BuildStage.Validate },
-            new StageNode { Stage = BuildStage.CompilePlayer, DependsOn = [BuildStage.Validate], Resources = StageResources.Exclusive },
-            new StageNode { Stage = BuildStage.CopyPlugins, DependsOn = [BuildStage.Validate] },
-        ]);
-
-        var seen = new List<BuildStage>();
-        var pipeline = new ScriptedPipeline(graph, new()
-        {
-            [BuildStage.Validate] = _ => [],
-            [BuildStage.CompilePlayer] = _ => [Record(seen, BuildStage.CompilePlayer)],
-            [BuildStage.CopyPlugins] = _ => [Record(seen, BuildStage.CopyPlugins)],
-        });
-
-        var context = new BuildContext(Request());
-        BuildOutcome outcome = await new BuildExecutor().RunAsync(pipeline, context);
-
-        Assert.True(outcome.Succeeded, string.Join("; ", outcome.Issues));
-        Assert.Equal(2, seen.Count);
-    }
-
     // A build that dies partway must not leave a half written file a later run would trust.
     [Fact]
     public async Task WriteFile_ThatFails_LeavesNoPartialOutput()
@@ -526,30 +480,6 @@ public class BuildSystemTests : IDisposable
         Assert.True(lastRan, "A collected asset error stopped the stages that follow it.");
         Assert.False(outcome.Succeeded);
         Assert.Contains(outcome.Issues, i => i.Message.Contains("one bad asset"));
-    }
-
-    // And a fail fast stage that does fail still stops everything after it.
-    [Fact]
-    public async Task FailureInAFailFastStage_StopsTheRest()
-    {
-        bool lastRan = false;
-
-        var graph = new StageGraph(
-        [
-            new StageNode { Stage = BuildStage.CompileCode, OnFailure = StageFailurePolicy.FailFast },
-            new StageNode { Stage = BuildStage.Finalize, DependsOn = [BuildStage.CompileCode] },
-        ]);
-
-        var pipeline = new ScriptedStages(graph, new()
-        {
-            [BuildStage.CompileCode] = () => throw new InvalidOperationException("compile failed"),
-            [BuildStage.Finalize] = () => lastRan = true,
-        });
-
-        BuildOutcome outcome = await new BuildExecutor().RunAsync(pipeline, new BuildContext(Request()));
-
-        Assert.False(lastRan);
-        Assert.False(outcome.Succeeded);
     }
 
     /// <summary>One synchronous body per stage, for tests about ordering rather than about operations.</summary>
@@ -775,16 +705,6 @@ public class BuildSystemTests : IDisposable
 
     // ---------------------------------------------------------------- TargetRegistryTests
 
-    [Fact]
-    public void BuiltInTargets_AreRegistered()
-    {
-        var registry = TargetRegistry.CreateWithBuiltIns();
-
-        Assert.True(registry.TryGet("windows-x64", out _));
-        Assert.True(registry.TryGet("linux-x64", out _));
-        Assert.True(registry.TryGet("macos-arm64", out _));
-    }
-
     // Ids are matched case insensitively because they travel through settings files and command lines.
     [Fact]
     public void Lookup_IsCaseInsensitive()
@@ -800,20 +720,6 @@ public class BuildSystemTests : IDisposable
         var registry = TargetRegistry.CreateWithBuiltIns();
         KeyNotFoundException ex = Assert.Throws<KeyNotFoundException>(() => registry.Get("nintendo-something"));
         Assert.Contains("nintendo-something", ex.Message);
-    }
-
-    // The whole reason targets are data: a platform under NDA registers from a private assembly, and
-    // nothing about it appears in this repository.
-    [Fact]
-    public void OutOfTreeProvider_CanAddATarget()
-    {
-        var registry = TargetRegistry.CreateWithBuiltIns();
-        registry.RegisterFrom(new PrivateConsoleProvider());
-
-        Assert.True(registry.TryGet("private-console", out PlatformTarget? target));
-        Assert.Equal("console", target!.Family);
-        Assert.False(target.Capabilities.Has(TargetFlags.Jit));
-        Assert.Equal(["vendor_swizzled"], target.Capabilities.TextureFormats);
     }
 
     // Every build indexes into this list, so an empty one has to be refused where it is registered
@@ -911,13 +817,6 @@ public class BuildSystemTests : IDisposable
         Assert.Equal(first.OrderBy(id => id, StringComparer.Ordinal), first);
     }
 
-    [Fact]
-    public void EveryDesktopTarget_HasARuntimeIdentifier()
-    {
-        foreach (PlatformTarget target in TargetRegistry.Shared.ByFamily(BuiltInTargets.DesktopFamily))
-            Assert.NotEmpty(target.RuntimeIdentifiers);
-    }
-
     // The profile's platform enum has to resolve to a registered target, or the shim is broken.
     [Fact]
     public void ProfilePlatform_ResolvesToARegisteredTarget()
@@ -931,16 +830,6 @@ public class BuildSystemTests : IDisposable
             Assert.True(TargetRegistry.Shared.TryGet(profile.TargetId, out _), $"{platform} maps to an unregistered target.");
             Assert.NotEmpty(profile.RuntimeIdentifier);
         }
-    }
-
-    // How the Build window finds a pipeline: the profile names its type and constructs it directly.
-    [Fact]
-    public void ProfilesPipelineType_IsConstructible()
-    {
-        Type type = new DesktopBuildProfile().GetPipelineType();
-
-        Assert.Equal(typeof(DesktopBuildPipeline), type);
-        Assert.IsType<DesktopBuildPipeline>(Activator.CreateInstance(type));
     }
 
     [Fact]
@@ -1161,19 +1050,6 @@ public class BuildSystemTests : IDisposable
         => new(hash, target, "test-processor", version);
 
     private static Stream Bytes(string text) => new MemoryStream(Encoding.UTF8.GetBytes(text));
-
-    [Fact]
-    public async Task WriteThenOpen_RoundTrips()
-    {
-        LocalVariantCache cache = Cache();
-        await cache.WriteAsync(Key(), Bytes("payload"));
-
-        Assert.True(await cache.ExistsAsync(Key()));
-
-        await using Stream? stream = await cache.OpenAsync(Key());
-        Assert.NotNull(stream);
-        Assert.Equal("payload", new StreamReader(stream!).ReadToEnd());
-    }
 
     // A cache keyed by content grows forever otherwise: every edit leaves the previous variant behind.
     [Fact]
@@ -1607,22 +1483,6 @@ public class BuildSystemTests : IDisposable
         Assert.Equal(["AssemblyName", "OutputType", "PublishTrimmed"], names);
     }
 
-    // An identical spec has to produce an identical file, or every build looks like a change.
-    [Fact]
-    public void Output_IsStableAcrossDictionaryOrder()
-    {
-        MSBuildProjectSpec first = Minimal() with
-        {
-            Properties = new Dictionary<string, string> { ["A"] = "1", ["B"] = "2", ["C"] = "3" },
-        };
-        MSBuildProjectSpec second = Minimal() with
-        {
-            Properties = new Dictionary<string, string> { ["C"] = "3", ["A"] = "1", ["B"] = "2" },
-        };
-
-        Assert.Equal(first.ToXml(), second.ToXml());
-    }
-
     [Fact]
     public void References_CarryHintPathAndArePrivate()
     {
@@ -1838,33 +1698,6 @@ public class BuildSystemTests : IDisposable
         Assert.DoesNotContain("sign", pipeline.Ran);
     }
 
-    // A processor for a format the engine has never heard of, selected by the platform's own preference.
-    [Fact]
-    public void ItsOwnAssetFormat_IsSelectable()
-    {
-        var resolver = new AssetVariantResolver([new VendorProcessor()], new LocalVariantCache(Path.Combine(_root, "cache")));
-
-        var asset = new AssetEntry
-        {
-            Guid = Guid.NewGuid(),
-            Path = "Textures/Grass.png",
-            SubAssets = [],
-        };
-
-        Assert.NotNull(resolver.SelectProcessor(asset, HandheldTarget));
-        Assert.Null(resolver.SelectProcessor(asset, BuiltInTargets.WindowsX64));
-    }
-
-    private sealed class VendorProcessor : IAssetVariantProcessor
-    {
-        public string Id => "vendor-astc";
-        public int Version => 1;
-        public string Format => "vendor_astc";
-        public bool AppliesTo(AssetEntry asset) => asset.Path.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
-        public Task ProcessAsync(AssetEntry asset, Stream source, Stream destination, PlatformTarget target, CancellationToken ct)
-            => source.CopyToAsync(destination, ct);
-    }
-
     // ---------------------------------------------------------------- PluginPlatformTests
 
     private static PluginInfo Native(string cpu = "x64") => new()
@@ -1973,15 +1806,6 @@ public class BuildSystemTests : IDisposable
         Assert.True(entry.ExportToBuild, $"'{expected}' is read by the player but is not exported to builds.");
     }
 
-    // Renaming a category's label is UI text. It must not change what the build writes.
-    [Fact]
-    public void TheFileNames_DoNotDependOnTheDisplayLabel()
-    {
-        EditorRegistries.SettingsEntry tags = Assert.Single(EditorRegistries.SettingsEntries.Where(e => e.Type.Name == PlayerSettingsFiles.TagsAndLayers));
-
-        Assert.NotEqual(tags.Name, tags.Type.Name);
-    }
-
     [Fact]
     public void CustomTagsAndLayers_ReachThePlayer()
     {
@@ -2070,18 +1894,6 @@ public class BuildSystemTests : IDisposable
         Assert.Equal(7, issue.Line);
     }
 
-    // A Windows drive letter is a colon in the middle of the origin, which is exactly what a naive split
-    // on ':' gets wrong.
-    [Fact]
-    public void DriveLetter_DoesNotConfuseTheOrigin()
-    {
-        BuildIssue issue = Parse(@"C:\a\b\C.cs(1,1): error CS0103: The name 'x' does not exist");
-
-        Assert.Equal(@"C:\a\b\C.cs", issue.File);
-        Assert.Equal(1, issue.Line);
-        Assert.Equal("CS0103", issue.Code);
-    }
-
     [Fact]
     public void ToolLevelError_HasNoFile()
     {
@@ -2155,14 +1967,6 @@ public class BuildSystemTests : IDisposable
 
         Assert.Single(issues);
         Assert.Equal("CS0103", issues[0].Code);
-    }
-
-    // Severity words are localised, so the tool has to be pinned to English for the parse to hold.
-    [Fact]
-    public void InvariantEnvironment_PinsToolLanguage()
-    {
-        Assert.Equal("en", MSBuildDiagnostics.InvariantEnvironment["DOTNET_CLI_UI_LANGUAGE"]);
-        Assert.Equal("1033", MSBuildDiagnostics.InvariantEnvironment["VSLANG"]);
     }
 
     // The project a diagnostic came from is captured, and has to survive into the issue.

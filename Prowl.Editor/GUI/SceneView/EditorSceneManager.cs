@@ -52,7 +52,12 @@ public static class EditorSceneManager
     /// The play copy of the edit world: each section captured into a section of a new dormant game world, in the same
     /// order and with the same active section, each keeping its source. Nothing changes if this throws.
     /// </summary>
-    internal static SceneInstance BuildPlayWorld()
+    internal static SceneInstance BuildPlayWorld() => BuildPlayWorld(CaptureEditSections());
+
+    private static List<(SceneSection Section, EchoObject Tree)> CaptureEditSections()
+        => [.. EditWorld.Sections.Where(section => !section.IsPersistent).Select(section => (section, section.CaptureTree()))];
+
+    private static SceneInstance BuildPlayWorld(List<(SceneSection Section, EchoObject Tree)> captured)
     {
         SceneInstance edit = EditWorld;
         SceneInstance play = SceneInstance.Create(edit.Name, SceneMode.Game);
@@ -60,10 +65,9 @@ public static class EditorSceneManager
         try
         {
             SceneSection? first = null;
-            foreach (SceneSection section in edit.Sections)
+            foreach ((SceneSection section, EchoObject tree) in captured)
             {
-                if (section.IsPersistent) continue;
-                SceneContent content = SceneContent.Read(section.CaptureTree(), ImportHelper.CreateTrackingContext(out _));
+                SceneContent content = SceneContent.Read(tree, ImportHelper.CreateTrackingContext(out _));
                 SceneSection copy = first == null
                     ? play.ReplaceContent(content, section.Name, section.Source)
                     : play.AddContent(content, section.Name, section.Source);
@@ -94,32 +98,45 @@ public static class EditorSceneManager
     /// <summary>Binds <paramref name="play"/> as Main, running, sending the edit world dormant first when it is still awake.</summary>
     internal static void EnterPlayWorld(SceneInstance play)
     {
-        s_worldsBeforePlay = new();
-        foreach (SceneInstance world in SceneInstance.Live)
-            if (!ReferenceEquals(world, play)) s_worldsBeforePlay.Add(world, null);
+        TrackPlayWorld(play);
         SceneBuild.Set(EditorRegistries.GetSettings<BuildSettings>().Scenes
             .Where(entry => entry.Enabled)
             .Select(entry => AssetDatabase.Get<Scene>(entry.SceneGuid))
             .Where(scene => scene.IsValid())!);
         if (EditWorld.State == SceneState.Running) SleepEditWorld();
-        s_playWorld = play;
         SceneInstance.Main = play;
         play.Activate();
     }
 
     /// <summary>
-    /// Sends the edit world dormant, restarts the session, and builds the play copy in the new session, so work the copy
-    /// starts as it fills belongs to play. A failed build wakes the edit world again and rethrows.
+    /// Captures the edit world, sends it dormant, restarts the session, and builds the play copy in the new session, so
+    /// work the copy starts as it fills belongs to play. A failed build wakes the edit world again and rethrows.
     /// </summary>
     internal static SceneInstance PreparePlayWorld()
     {
+        List<(SceneSection Section, EchoObject Tree)> captured = CaptureEditSections();
         SleepEditWorld();
-        try { return BuildPlayWorld(); }
+        try { return BuildPlayWorld(captured); }
         catch
         {
             EditWorld.Activate();
             throw;
         }
+    }
+
+    private static void TrackPlayWorld(SceneInstance play)
+    {
+        s_playWorld = play;
+        s_worldsBeforePlay = new();
+        foreach (SceneInstance world in SceneInstance.Live)
+            if (!ReferenceEquals(world, play)) s_worldsBeforePlay.Add(world, null);
+    }
+
+    /// <summary>Destroys <paramref name="play"/> after a play start threw partway, whether or not it was entered.</summary>
+    internal static void AbandonPlayWorld(SceneInstance play)
+    {
+        if (!ReferenceEquals(s_playWorld, play)) TrackPlayWorld(play);
+        DestroyPlayWorld();
     }
 
     private static void SleepEditWorld()
@@ -136,7 +153,11 @@ public static class EditorSceneManager
     {
         SceneInstance? play = s_playWorld;
         s_playWorld = null;
-        if (play.IsValid()) play.Dispose();
+        if (play.IsValid())
+        {
+            try { play.Dispose(); }
+            catch (Exception e) { Debug.LogException("[Play] Destroying the play world threw", e); }
+        }
         foreach (SceneInstance world in SceneInstance.Live)
         {
             if (s_worldsBeforePlay.TryGetValue(world, out _) || world.IsDisposed) continue;

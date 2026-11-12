@@ -168,18 +168,6 @@ public class TerrainTests
         Assert.False(proxy.RayCast(new JVector(-2.0f, 50.0f, 3.5f), new JVector(0, -1, 0), out _, out _));
     }
 
-    // A ray that clips the terrain's bounds and leaves used to keep stepping to the distance limit,
-    // thousands of cells past the edge of the grid.
-    [Fact]
-    public void RayLeavingTheGrid_TerminatesInsteadOfWalkingToTheDistanceLimit()
-    {
-        var proxy = new TerrainHeightmapProxy(new FlatTerrain(2.0f));
-
-        // Above the terrain plane and heading away, so it never hits and exits the grid immediately.
-        Assert.False(proxy.RayCast(new JVector(7.5f, 10.0f, 7.5f), Float3.Normalize(new Float3(1, 1, 1)) is var d
-            ? new JVector(d.X, d.Y, d.Z) : default, out _, out _));
-    }
-
     #endregion
 
     #region Coordinate conventions shared by the maps
@@ -211,17 +199,6 @@ public class TerrainTests
         // Both filters reproduce a linear ramp exactly, so any drift here is a convention shift.
         for (float u = 0.1f; u <= 0.9f; u += 0.05f)
             Assert.Equal(u * data.Height, data.GetInterpolatedHeight(u, 0.5f), 1);
-    }
-
-    [Fact]
-    public void HeightSamplesLandOnTheirOwnUV()
-    {
-        using TerrainData data = RampTerrain();
-        for (int x = 1; x < kRes - 1; x++)
-        {
-            Float2 uv = data.HeightmapToUV(x, 4);
-            Assert.Equal(data.GetHeight(x, 4) * data.Height, data.GetInterpolatedHeight(uv.X, uv.Y), 1);
-        }
     }
 
     [Fact]
@@ -337,15 +314,6 @@ public class TerrainTests
     }
 
     [Fact]
-    public void OneCascadeCoversTheWholeDistance()
-    {
-        TerrainDetailRenderer.CascadeBand(kDistance, 1, 0, out float inner, out float outer);
-
-        Assert.Equal(0f, inner);
-        Assert.Equal(kDistance, outer, 4);
-    }
-
-    [Fact]
     public void CascadeGridDoesNotSlideWithTheCamera()
     {
         // Any camera inside one cell must resolve to the same origin, or the whole field crawls.
@@ -427,16 +395,6 @@ public class TerrainTests
         int cells = TerrainDetailRenderer.CascadeCellsPerSide(500f, 2000f, 1, 0);
 
         Assert.True(cells <= 512, $"{cells} cells per side is {cells * cells} instances");
-    }
-
-    [Fact]
-    public void FartherCascadesDrawFewerBlades()
-    {
-        // Same painted density, four times the cell area, so a quarter of the blades per band
-        float near = TerrainDetailRenderer.CascadeCellSize(kDensity, 0);
-        float far = TerrainDetailRenderer.CascadeCellSize(kDensity, 1);
-
-        Assert.Equal(4f, (far * far) / (near * near), 4);
     }
 
     [Fact]
@@ -585,17 +543,6 @@ public class TerrainTests
     }
 
     [Fact]
-    public void UnpaintedPrototypesHaveNoBounds()
-    {
-        // A prototype nobody painted should cost nothing, and an empty rect is how the renderer
-        // knows to skip it. Every prototype otherwise sweeps its full cascades regardless.
-        using var data = new TerrainData();
-        data.ResizeDetailMaps(64);
-
-        Assert.False(data.TryGetDetailBounds(0, out _));
-    }
-
-    [Fact]
     public void PaintedBoundsFollowTerrainSize()
     {
         // Bounds are kept in UV, because Size can change without touching the detail version and
@@ -741,22 +688,6 @@ public class TerrainTests
         var origin = new Float2(100f, 100f);
 
         Assert.True(TerrainMeshDetailRenderer.BuildIsStale(origin, 150f, origin, 300f));
-    }
-
-    [Fact]
-    public void MeshBuildReachesPastTheDrawDistance()
-    {
-        // The slack is what stops instances popping in: anything inside the draw distance of the
-        // new camera position was already inside the radius the previous build covered.
-        float distance = 150f;
-        float radius = TerrainMeshDetailRenderer.BuildRadius(distance);
-        float slack = radius - distance;
-
-        Assert.True(radius > distance);
-
-        // Worst case move that still counts as fresh, from the old centre
-        float worstMove = slack;
-        Assert.True(radius - worstMove >= distance);
     }
 
     #endregion

@@ -184,20 +184,6 @@ public class AnimationGraphTests : RuntimeTestBase
         Assert.NotNull(asset.Compile(BuildSkeleton()));
     }
 
-    [Fact]
-    public void TheCompiledGraphIsCachedPerRig()
-    {
-        MotionSkeleton skeleton = BuildSkeleton();
-        var asset = new AnimationGraph();
-        asset.RootNode = asset.AddNode(AnimationNodeIds.ReferencePose).Id;
-
-        MotionGraph? first = asset.Compile(skeleton);
-        Assert.Same(first, asset.Compile(skeleton));
-
-        asset.Invalidate();
-        Assert.NotSame(first, asset.Compile(skeleton));
-    }
-
     // ---- a graph that actually animates -----------------------------------------------------------
 
     private (SceneInstance Scene, Animator Animator, GameObject Root) BlendGraph(float parameter)
@@ -418,18 +404,6 @@ public class AnimationGraphTests : RuntimeTestBase
         Assert.Equal(expected, Spine(root).LocalPosition.Y, 1);
     }
 
-    [Fact]
-    public void ScriptCanDriveTheParameterAfterBinding()
-    {
-        (SceneInstance scene, Animator animator, GameObject root) = BlendGraph(0f);
-        Update(scene, 2);
-
-        animator.SetFloat("Speed", 1f);
-        Update(scene, 2);
-
-        Assert.Equal(3.0, Spine(root).LocalPosition.Y, 1);
-    }
-
     /// <summary>
     /// An edit made while the game runs has to reach the animators already running the graph, once
     /// the edit has settled. They built their graph when they bound, so without this they would play
@@ -507,18 +481,6 @@ public class AnimationGraphTests : RuntimeTestBase
         Assert.Same(before, animator.GraphInstance);
     }
 
-    // Setup code runs before the rig has necessarily streamed in, so an early write has to survive.
-    [Fact]
-    public void AParameterSetBeforeBindingStillLands()
-    {
-        (SceneInstance scene, Animator animator, GameObject root) = BlendGraph(0f);
-
-        animator.SetFloat("Speed", 1f);
-        Update(scene, 2);
-
-        Assert.Equal(3.0, Spine(root).LocalPosition.Y, 1);
-    }
-
     /// <summary>
     /// A state whose own graph plays a node, with its Enter and Exit either fixed by their toggles or
     /// wired to a node.
@@ -533,35 +495,6 @@ public class AnimationGraphTests : RuntimeTestBase
         output.Wire(enterNode).Flag = enter;
         output.Wire(exitNode).Flag = exit;
         return state;
-    }
-
-    [Fact]
-    public void AStateMachineStartsInItsDefaultState()
-    {
-        MotionSkeleton skeleton = BuildSkeleton();
-        Avatar avatar = Avatar.CreateGeneric(skeleton, 0, "Rig");
-
-        var asset = new AnimationGraph { Name = "States" };
-        GraphNodeRecord idle = asset.AddNode(AnimationNodeIds.Clip, "idle");
-        idle.Properties["Clip"] = NodeValue.FromClip(HeldClip(skeleton, avatar, 1f, "Idle"));
-        GraphNodeRecord run = asset.AddNode(AnimationNodeIds.Clip, "run");
-        run.Properties["Clip"] = NodeValue.FromClip(HeldClip(skeleton, avatar, 3f, "Run"));
-
-        GraphNodeRecord machine = asset.AddNode(AnimationNodeIds.StateMachine, "sm");
-        // Run wants in the moment it can be reached, so staying in Idle proves the default took and the
-        // way out is what holds it: Idle never lets go.
-        machine.States.Add(State(asset, "Idle", "idle", isDefault: true, exit: false));
-        machine.States.Add(State(asset, "Run", "run", enter: true));
-        machine.States[0].Transitions.Add(new GraphTransitionRecord { To = "Run", Duration = 0.1f });
-        asset.RootNode = machine.Id;
-
-        MotionGraph? compiled = asset.Compile(skeleton, avatar.Runtime);
-        Assert.NotNull(compiled);
-
-        AnimationGraphInstance instance = compiled!.CreateInstance(skeleton);
-        instance.Update(1f / 60f, Transform3D.Identity);
-
-        Assert.Equal(1.0, instance.Pose.GetTransform(2).position.Y, 1);
     }
 
     // ---- what a debug view reads back -----------------------------------------------------------

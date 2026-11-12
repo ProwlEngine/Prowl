@@ -150,7 +150,11 @@ public sealed class RenderTexture : Asset, ISerializable
         _frameBuffer = null;
     }
 
-    protected override void OnUnload() => ReleaseResources();
+    protected override void OnUnload()
+    {
+        ReleaseResources();
+        Camera.MainCameraChanged();
+    }
 
     ~RenderTexture()
     {

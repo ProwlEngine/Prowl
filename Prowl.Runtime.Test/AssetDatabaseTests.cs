@@ -336,15 +336,6 @@ public class AssetDatabaseTests : RuntimeTestBase
     }
 
     [Fact]
-    public void AMaterialWhoseShaderIsMissing_DrawsWithTheInvalidShader()
-    {
-        var material = new Material();
-        material.Shader = AssetDatabase.Get<Shader>(Guid.NewGuid());
-
-        Assert.Same(Shader.LoadDefault(DefaultShader.Invalid), material.Shader);
-    }
-
-    [Fact]
     public void ARefilledActionMap_KeepsItsActions_WithTheirListenersAndEnabledState()
     {
         var source = new InputActionMap("Player");

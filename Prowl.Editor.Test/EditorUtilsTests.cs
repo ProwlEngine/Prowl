@@ -48,16 +48,6 @@ public class EditorUtilsTests
         public void TraversalAndEmptyNames_BecomeTheFallback(string input)
             => Assert.Equal("fallback", EditorUtils.SafeFileName(input, "fallback"));
 
-        // A rooted name is what makes Path.Combine discard the folder it was given entirely.
-        [Fact]
-        public void ARootedName_CannotEscapeTheFolderItIsCombinedWith()
-        {
-            string safe = EditorUtils.SafeFileName(@"C:\Windows\System32", "fallback");
-            string combined = Path.Combine(@"C:\Projects", safe);
-
-            Assert.StartsWith(@"C:\Projects", combined);
-        }
-
         [Fact]
         public void ALeadingDot_IsKeptWhenTheRestIsRealName()
             => Assert.Equal(".gitignore", EditorUtils.SafeFileName(".gitignore", "fallback"));

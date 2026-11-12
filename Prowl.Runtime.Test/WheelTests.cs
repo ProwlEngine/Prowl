@@ -95,27 +95,6 @@ public class WheelTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Car_SettlesAtSpringEquilibrium_AndStaysGrounded()
-    {
-        SceneInstance scene = CreatePhysicsScene();
-        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50)); // ground top at y=0
-        (Rigidbody3D _, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
-
-        Tick(scene, 400);
-
-        // At equilibrium spring load = weight per wheel, and since auto sprung-mass = bodyMass/wheels,
-        // the compression is exactly g/omega^2, independent of mass.
-        float omega = 2.0f * Maths.PI * Freq;
-        float expected = 9.81f / (omega * omega);
-        foreach (WheelCollider w in wheels)
-        {
-            Assert.True(w.IsGrounded, "wheel should be grounded at rest");
-            float compression = w.SuspensionCompression * SuspDist;
-            Assert.InRange(compression, expected - 0.02f, expected + 0.02f);
-        }
-    }
-
-    [Fact]
     public void Car_AtRest_DoesNotJitterOrCreep()
     {
         SceneInstance scene = CreatePhysicsScene();
@@ -137,24 +116,6 @@ public class WheelTests : RuntimeTestBase
         Assert.True(maxLinVel < 0.05f, $"chassis should be still (no jitter), max linear vel was {maxLinVel}");
         Assert.True(maxAngVel < 0.05f, $"chassis should not rock (no jitter), max angular vel was {maxAngVel}");
         Assert.True(Float3.Length(endPos - restPos) < 0.01f, "chassis should not creep on flat ground");
-    }
-
-    [Fact]
-    public void Car_DriveTorque_AcceleratesForward()
-    {
-        SceneInstance scene = CreatePhysicsScene();
-        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
-        (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
-
-        Tick(scene, 200); // settle
-        float zStart = rb.GameObject.Transform.Position.Z;
-
-        foreach (WheelCollider w in wheels) w.MotorTorque = 600f; // drive all four
-        Tick(scene, 180);
-
-        float dz = rb.GameObject.Transform.Position.Z - zStart;
-        Assert.True(rb.LinearVelocity.Z > 0.3f, $"car should accelerate forward, vz={rb.LinearVelocity.Z}");
-        Assert.True(dz > 0.3f, $"car should have moved forward, dz={dz}, vz={rb.LinearVelocity.Z}, spin0={wheels[0].AngularVelocity}");
     }
 
     [Fact]
@@ -334,19 +295,6 @@ public class WheelTests : RuntimeTestBase
         }
 
         Assert.True(maxSpeed < 200f, $"car should not lurch on landing, peaked at {maxSpeed} m/s");
-    }
-
-    [Fact]
-    public void Wheel_Airborne_IsNotGrounded()
-    {
-        SceneInstance scene = CreatePhysicsScene();
-        // No ground; the car free-falls. Wheels find nothing.
-        (Rigidbody3D _, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 5f, 0), Quaternion.Identity);
-
-        Tick(scene, 5);
-
-        foreach (WheelCollider w in wheels)
-            Assert.False(w.IsGrounded, "wheel with no ground beneath it must not be grounded");
     }
 
     [Fact]

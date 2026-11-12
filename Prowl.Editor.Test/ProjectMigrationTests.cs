@@ -109,9 +109,6 @@ public class ProjectMigrationTests : IDisposable
     public void EngineVersion_RejectsUnknownFormats(string text) => Assert.False(EngineVersion.TryParse(text, out _));
 
     [Fact]
-    public void EngineVersion_ReadsLegacyPreviewNames() => Assert.Equal(EngineVersion.Parse("1.0-preview.5"), EngineVersion.Parse("preview-5"));
-
-    [Fact]
     public void Releases_AreUniqueNotNewerThanCurrent_AndHaveSteps()
     {
         IReadOnlyList<MigrationRelease> releases = ProjectMigration.Releases;

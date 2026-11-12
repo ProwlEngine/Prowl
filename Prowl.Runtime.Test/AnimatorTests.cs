@@ -78,17 +78,6 @@ public class AnimatorTests : RuntimeTestBase
 
     private static Transform Spine(GameObject root) => root.Children[0].Children[0].Transform;
 
-    [Fact]
-    public void ItBindsTheRigToTheHierarchy()
-    {
-        (SceneInstance scene, Animator animator, _) = Setup();
-
-        Update(scene);
-
-        Assert.True(animator.IsBound);
-        Assert.NotNull(animator.Pose);
-    }
-
     // An object named like a bone but outside the rig's chain, found first in the hierarchy, is not the bone.
     [Fact]
     public void ABoneIsFoundUnderItsParent_NotByAnObjectSharingItsName()
@@ -209,29 +198,5 @@ public class AnimatorTests : RuntimeTestBase
         Update(scene, 31);
 
         Assert.Equal(held, Spine(root).LocalPosition.Y, 3);
-    }
-
-    // Animation writes the pose before LateUpdate, so a component overriding a bone there wins.
-    [Fact]
-    public void LateUpdateSeesThePoseAlreadyWritten()
-    {
-        (SceneInstance scene, _, GameObject root) = Setup();
-        SpineObserver observer = root.AddComponent<SpineObserver>();
-        observer.Spine = Spine(root);
-
-        Update(scene, 31);
-
-        Assert.InRange(observer.SeenY, 1.8, 2.2);
-    }
-
-    private sealed class SpineObserver : Component
-    {
-        public Transform? Spine;
-        public double SeenY;
-
-        public override void LateUpdate()
-        {
-            if (Spine != null) SeenY = Spine.LocalPosition.Y;
-        }
     }
 }

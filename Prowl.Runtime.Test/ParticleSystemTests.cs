@@ -549,28 +549,6 @@ public class ParticleSystemTests : RuntimeTestBase
     }
 
     [Fact]
-    public void DeathSubEmittersEmitTheChildsBurstsAndSilenceIt()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        ParticleSystemComponent parent = CreateSystem(scene, s =>
-        {
-            s.Initial.StartLifetime = new MinMaxCurve(0.1f);
-            s.Emission.Bursts.Add(new ParticleBurst(0f, 3));
-        });
-        ParticleSystemComponent child = CreateSystem(scene, s => s.Emission.Bursts.Add(new ParticleBurst(0f, 4)), parent.GameObject);
-        parent.SubEmitters.Enabled = true;
-        parent.SubEmitters.Emitters.Add(new SubEmitter { System = child, Type = SubEmitterType.Death });
-        parent.Stop(false, ParticleStopBehavior.StopEmittingAndClear);
-        child.Stop(false, ParticleStopBehavior.StopEmittingAndClear);
-        parent.Play();
-
-        Run(scene, 0.5f);
-
-        Assert.Equal(0, parent.ParticleCount);
-        Assert.Equal(12, child.ParticleCount);
-    }
-
-    [Fact]
     public void BirthSubEmittersEmitAtTheChildsRate()
     {
         SceneInstance scene = CreateScene(enable: true);

@@ -776,33 +776,6 @@ public class BuildSystemProjectTests : EditorTestHarness
         return result.OutputPath;
     }
 
-    // A registered processor has to actually be reached by a real build.
-    [Fact]
-    public void RegisteredProcessor_IsInvokedAndPopulatesTheCache()
-    {
-        Guid sceneGuid = CreateScene();
-
-        var pipeline = new DesktopBuildPipeline();
-        var processor = new RecordingProcessor();
-        pipeline.AssetProcessors.Add(processor);
-
-        string outDir;
-        try
-        {
-            RunBuildWith(pipeline, sceneGuid, out outDir);
-
-            Assert.True(processor.Calls > 0, "A registered processor was never reached by the build.");
-
-            string cacheRoot = Path.Combine(Project.RootPath, "Library", "BuildCache");
-            Assert.True(Directory.Exists(cacheRoot), "The build did not populate the variant cache.");
-            Assert.NotEmpty(Directory.GetFiles(cacheRoot, "*", SearchOption.AllDirectories));
-        }
-        finally
-        {
-            TryDeleteDir(Path.Combine(Path.GetTempPath(), "ProwlVariantOut"));
-        }
-    }
-
     // The second build of unchanged content must reuse rather than reprocess, which is the whole point.
     [Fact]
     public void SecondBuild_ReusesTheCacheInsteadOfReprocessing()

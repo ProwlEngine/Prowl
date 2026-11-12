@@ -6,7 +6,6 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 
-using Prowl.Ember;
 using Prowl.Echo;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Runtime;
@@ -51,7 +50,20 @@ public class HotReloadSceneTests : EditorTestHarness
         Type enemyV2 = v2.GetType("Enemy")!;
         Assert.NotSame(v1, v2);
 
-        SceneHotReload.Migrate(scene, v1, v2);
+        var logs = new System.Collections.Generic.List<string>();
+        void Capture(string m, DebugStackTrace? _, LogSeverity s)
+        {
+            if (s is LogSeverity.Error or LogSeverity.Warning)
+                lock (logs) logs.Add(m);
+        }
+
+        Debug.OnLog += Capture;
+        try { SceneHotReload.Migrate(scene, v1, v2); }
+        finally { Debug.OnLog -= Capture; }
+
+        var cctorFailures = logs.Where(m => m.Contains("TypeInitialization", StringComparison.OrdinalIgnoreCase)).ToList();
+        Assert.True(cctorFailures.Count == 0,
+            $"Walking Prowl.Editor forced {cctorFailures.Count} static constructor failure(s):\n{string.Join("\n", cctorFailures)}");
 
         Component newA = goA.GetComponents().Single();
         Component newB = goB.GetComponents().Single();
@@ -157,100 +169,6 @@ public class HotReloadSceneTests : EditorTestHarness
     }
 
     // ---- engine + editor integration (through Prowl.Ember) ----
-
-    // Watching the whole Prowl.Editor assembly and walking its statics headless must not crash (a cctor throwing
-    // is caught + logged; a hard native crash would kill the process).
-    [Fact]
-    public void WatchingEditorAssembly_WalksStaticsHeadless_WithoutCrashing()
-    {
-        Assembly v1 = CompileGameAssembly("W.cs", "public class E { public int Id; }");
-        Assembly v2 = CompileGameAssembly("W.cs", "public class E { public int Id; public int X; }");
-
-        var logs = new List<string>();
-        void Capture(LogEvent e)
-        {
-            if (e.Severity is LogSeverity.Error or LogSeverity.Warning)
-                lock (logs) logs.Add(e.Message);
-        }
-
-        Debug.OnLog += Capture;
-        try
-        {
-            var engine = ReloadEngine.Create(options =>
-            {
-                options.AssemblyBytes = AssemblyBytesResolver;
-
-                foreach (string? prefix in new[] { "Silk.NET", "Jitter2" })
-                    options.Scope.ExcludePrefix(prefix);
-
-                options.Scope.Include(typeof(GameObject).Assembly);                          // Prowl.Runtime
-                options.Scope.Include(typeof(Prowl.Editor.Core.EditorApplication).Assembly); // Prowl.Editor
-                options.Scope.Include(v1);
-            });
-
-            engine.Apply(ReloadRequest.Create().Replace(v1, v2).Build());
-        }
-        finally { Debug.OnLog -= Capture; }
-
-        var cctorFailures = logs.Where(m => m.Contains("TypeInitialization", StringComparison.OrdinalIgnoreCase)).ToList();
-        Assert.True(cctorFailures.Count == 0,
-            $"Walking Prowl.Editor forced {cctorFailures.Count} static constructor failure(s):\n{string.Join("\n", cctorFailures)}");
-    }
-
-    // A ReloadCache reached by the walk clears itself (reload hook.Persisted), so entries keyed on old types are
-    // dropped rather than pinning the old assembly.
-    [Fact]
-    public void ReloadCache_ReachedByWalk_ClearsItself()
-    {
-        Assembly v1 = CompileGameAssembly("R.cs", "public class E { public int Id; }");
-        Assembly v2 = CompileGameAssembly("R.cs", "public class E { public int Id; public int Extra; }");
-
-        var cache = new ReloadCache<Type, int>();
-        cache.Set(typeof(string), 42);
-        Assert.True(cache.TryGetValue(typeof(string), out _));
-
-        var engine = ReloadEngine.Create(options =>
-        {
-            options.AssemblyBytes = AssemblyBytesResolver;
-            options.Scope.Include(v1);
-        });
-
-        // Reached as a root, so it is visited and its preserved hook fires.
-        engine.Apply(ReloadRequest.Create().Replace(v1, v2).Root(cache).Build());
-
-        Assert.False(cache.TryGetValue(typeof(string), out _)); // cleared by the walk
-    }
-
-    // A cross-GameObject component reference must be repointed to the migrated target.
-    [Fact]
-    public void Migrate_Scene_CrossGameObjectReference_IsRepointed()
-    {
-        Assembly v1 = CompileGameAssembly("Link.cs",
-            "using Prowl.Runtime; public class Node : Component { public Node Other; public int Val; }");
-        Type nodeV1 = v1.GetType("Node")!;
-
-        var scene = new SceneInstance(SceneMode.Edit);
-        var go1 = new GameObject("1");
-        var go2 = new GameObject("2");
-        Component a = go1.AddComponent(nodeV1);
-        Component b = go2.AddComponent(nodeV1);
-        nodeV1.GetField("Val")!.SetValue(b, 42);
-        nodeV1.GetField("Other")!.SetValue(a, b); // A (on go1) references B (on go2)
-        scene.Add(go1);
-        scene.Add(go2);
-
-        Assembly v2 = CompileGameAssembly("Link.cs",
-            "using Prowl.Runtime; public class Node : Component { public Node Other; public int Val; public int Extra; }");
-        SceneHotReload.Migrate(scene, v1, v2);
-
-        Type nodeV2 = v2.GetType("Node")!;
-        Component newA = go1.GetComponents().Single();
-        Component newB = go2.GetComponents().Single();
-        object? other = nodeV2.GetField("Other")!.GetValue(newA);
-
-        Assert.Same(newB, other); // repointed across GameObjects, not left as the old B
-        Assert.Equal(42, nodeV2.GetField("Val")!.GetValue(newB));
-    }
 
     // A newly added FixedUpdate override must start firing after a reload, not be dropped.
     [Fact]

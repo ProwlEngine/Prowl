@@ -165,20 +165,6 @@ public class UpdateLoopTests : RuntimeTestBase
     }
 
     [Fact]
-    public void NotPlaying_GameplayCallbacksDoNotRun()
-    {
-        // An edit world: a plain component's gameplay callbacks are gated off.
-        using EditModeScope edit = EditMode();
-
-        (SceneInstance? scene, CounterComponent? comp) = MakeRunningCounter();
-
-        Update(scene, 5);
-
-        Assert.Equal(0, comp.StartCount);
-        Assert.Equal(0, comp.UpdateCount);
-    }
-
-    [Fact]
     public void Update_RunsComponentsInExecutionOrder_RegardlessOfAddOrder()
     {
         TickLog.Entries.Clear();

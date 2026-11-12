@@ -51,7 +51,7 @@ public static class SceneHotReload
 
             // The engine and the editor: their statics and delegates hold user references, including the editor's
             // own into the scene (selection, inspector target, hierarchy). Walking the editor headless is covered
-            // by a test, so no separate repoint pass is needed.
+            // by RealRecompile_MigratesLiveScene_ToNewTypes_PreservingStateAndIdentity, so no separate repoint pass is needed.
             options.Scope.Include(typeof(GameObject).Assembly);     // Prowl.Runtime
             options.Scope.Include(typeof(SceneHotReload).Assembly); // Prowl.Editor
 

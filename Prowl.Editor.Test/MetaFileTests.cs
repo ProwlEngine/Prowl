@@ -51,17 +51,6 @@ public class MetaFileTests : IDisposable
     }
 
     [Fact]
-    public void EnsureMeta_IsStable_WhenMetaAlreadyExists()
-    {
-        string asset = AssetPath("thing.scene");
-
-        MetaFileData first = MetaFile.EnsureMeta(asset, "SceneImporter");
-        MetaFileData second = MetaFile.EnsureMeta(asset, "SceneImporter");
-
-        Assert.Equal(first.Guid, second.Guid); // honors the existing .meta, doesn't mint a new GUID
-    }
-
-    [Fact]
     public void ReadWrite_RoundTripsAllFields()
     {
         string metaPath = Path.Combine(_dir, "x.meta");

@@ -23,9 +23,11 @@ public class TimeSettings : ProjectSettingsBase
         Runtime.Time.FixedDeltaTime = FixedTimestep;
         Runtime.Time.MaxFixedIterations = MaxFixedIterations;
         Runtime.SceneClock.Defaults = new Runtime.SceneClockSettings { TimeScale = DefaultTimeScale };
-        // Worlds made already take it too, as they do physics and navigation settings.
+        // Editor worlds made already take it too. Game worlds and anything during play belong to the game's own code.
+        if (Runtime.Application.IsPlaying) return;
         foreach (Runtime.Resources.SceneInstance world in Runtime.Resources.SceneInstance.All)
-            world.Clock.TimeScale = DefaultTimeScale;
+            if (world.Mode != Runtime.Resources.SceneMode.Game)
+                world.Clock.TimeScale = DefaultTimeScale;
     }
 
     public override void ResetToDefaults()

@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 using Prowl.Echo;
 using Prowl.Graphite.Rendering;
@@ -171,9 +172,11 @@ public class Camera : Component
     [SerializeField] private RenderTexture? target;
 
     // Moves whenever which camera is main could have changed, so each world finds it again only then.
-    internal static int MainVersion { get; private set; }
+    internal static int MainVersion => s_mainVersion;
 
-    internal static void MainCameraChanged() => MainVersion++;
+    private static int s_mainVersion;
+
+    internal static void MainCameraChanged() => Interlocked.Increment(ref s_mainVersion);
 
     public override void OnValidate() => MainCameraChanged();
 

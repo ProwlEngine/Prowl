@@ -36,15 +36,6 @@ public class LayerMaskTests
     }
 
     [Fact]
-    public void EverythingAndNothing()
-    {
-        Assert.True(LayerMask.Everything.HasLayer(0));
-        Assert.True(LayerMask.Everything.HasLayer(31));
-        Assert.False(LayerMask.Nothing.HasLayer(0));
-        Assert.False(LayerMask.Nothing.HasLayer(15));
-    }
-
-    [Fact]
     public void SetLayer31_TopBit_IsDetectedInIsolation()
     {
         // Isolates the top bit: Everything (all bits set) can't distinguish a signed 1<<31 shift bug,

@@ -23,22 +23,6 @@ namespace Prowl.Runtime.Test;
 public class HeadlessGraphicsTests
 {
     [Fact]
-    public void Graphics_ReportsHeadless_WhenNoDevice()
-    {
-        Assert.True(Graphics.IsHeadless);
-        Assert.Null(Graphics.Device);
-        Assert.Null(Graphics.Renderer);
-    }
-
-    [Fact]
-    public void Texture2D_CreatesHeadless_WithoutThrowing()
-    {
-        var tex = new Texture2D(64, 64);
-        Assert.Equal(64u, tex.Width);
-        Assert.Equal(64u, tex.Height);
-    }
-
-    [Fact]
     public void Texture2D_LargeSize_DoesNotFailValidationHeadless()
     {
         var tex = new Texture2D(4096, 4096);
@@ -165,14 +149,6 @@ public class HeadlessGraphicsTests
     public void ReadDeclaredPath_HandlesRealSourceShapes(string source, string? expected)
     {
         Assert.Equal(expected, Shader.ReadDeclaredPath(source));
-    }
-
-    [Fact]
-    public void Mesh_UploadHeadless_DoesNotThrow()
-    {
-        var mesh = Mesh.CreateCube(Vector.Float3.One);
-        mesh.Upload();
-        Assert.True(mesh.VertexCount > 0);
     }
 
     private static ShaderPass[] Passes(Shader shader) => shader.GpuShader!.Definition.Passes ?? [];

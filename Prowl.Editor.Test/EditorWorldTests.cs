@@ -193,6 +193,70 @@ public class EditorWorldTests : EditorTestHarness
         finally { MainThreadContext.Uninstall(); }
     }
 
+    [ExecuteAlways]
+    public sealed class ChangesWhenDisabled : Component
+    {
+        public int Value = 1;
+        public override void OnDisable() => Value = 7;
+    }
+
+    [Fact]
+    public void ThePlayCopy_IsTakenBeforeTheEditWorldSleeps()
+    {
+        EditorSceneManager.EditWorld.Create("Thing").AddComponent<ChangesWhenDisabled>();
+        SceneInstance play = EditorSceneManager.PreparePlayWorld();
+        try
+        {
+            Assert.Equal(1, play.FindObject("Thing")!.GetComponent<ChangesWhenDisabled>()!.Value);
+        }
+        finally
+        {
+            play.Dispose();
+            EditorSceneManager.ReturnToEditWorld();
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AnAbandonedPlayStart_DestroysThePlayWorld_AndWakesTheEditWorld(bool entered)
+    {
+        SceneInstance edit = EditorSceneManager.EditWorld;
+        GameObject go = edit.Create("Thing");
+        SceneInstance play = EditorSceneManager.PreparePlayWorld();
+        using (EnterPlayMode())
+        {
+            if (entered) EditorSceneManager.EnterPlayWorld(play);
+            EditorSceneManager.AbandonPlayWorld(play);
+        }
+        EditorSceneManager.ReturnToEditWorld();
+
+        Assert.True(play.IsDisposed);
+        Assert.Null(EditorSceneManager.PlayWorld);
+        Assert.Same(edit, SceneInstance.Main);
+        Assert.Equal(SceneState.Running, edit.State);
+        Assert.False(go.IsDisposed);
+    }
+
+    [Fact]
+    public void ApplyingTimeSettings_LeavesThePlayWorldsTimeScale()
+    {
+        SceneInstance play = EditorSceneManager.BuildPlayWorld();
+        try
+        {
+            play.Clock.TimeScale = 0f;
+            new Projects.Settings.TimeSettings { DefaultTimeScale = 2f }.Apply();
+
+            Assert.Equal(0f, play.Clock.TimeScale);
+            Assert.Equal(2f, EditorSceneManager.EditWorld.Clock.TimeScale);
+        }
+        finally
+        {
+            new Projects.Settings.TimeSettings().Apply();
+            play.Dispose();
+        }
+    }
+
     [Fact]
     public void TheEditHistory_StillResolves_AfterPlay()
     {

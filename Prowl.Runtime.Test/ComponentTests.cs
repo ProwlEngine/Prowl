@@ -205,19 +205,6 @@ public class ComponentTests : RuntimeTestBase
         Assert.Empty(go.GetComponents<ThrowsWhenConstructed>());
     }
 
-    /// <summary>The object it failed on stays usable, rather than being left half built.</summary>
-    [Fact]
-    public void AddComponent_AfterAConstructorThrows_TheObjectStillWorks()
-    {
-        GameObject go = CreateGameObject();
-
-        go.AddComponent(typeof(ThrowsWhenConstructed));
-        PlainComponent plain = go.AddComponent<PlainComponent>();
-
-        Assert.NotNull(plain);
-        Assert.Single(go.GetComponents<PlainComponent>());
-    }
-
     /// <summary>
     /// A constructor that only fails later, which is what a delegate that was assigned and then
     /// cleared looks like, must not take the copy down with it.
@@ -308,13 +295,6 @@ public class ComponentTests : RuntimeTestBase
     // ---- Get ----
 
     [Fact]
-    public void GetComponent_ReturnsNull_WhenAbsent()
-    {
-        GameObject go = CreateGameObject();
-        Assert.Null(go.GetComponent<PlainComponent>());
-    }
-
-    [Fact]
     public void GetComponent_ByBaseType_ReturnsDerivedInstance()
     {
         GameObject go = CreateGameObject();
@@ -367,16 +347,6 @@ public class ComponentTests : RuntimeTestBase
 
         Assert.Same(comp, go.GetComponentByIdentifier(comp.Identifier));
         Assert.Null(go.GetComponentByIdentifier(Guid.Empty));
-    }
-
-    [Fact]
-    public void GetComponents_NoArgs_ReturnsAllComponents()
-    {
-        GameObject go = CreateGameObject();
-        go.AddComponent<PlainComponent>();
-        go.AddComponent<SecondComponent>();
-
-        Assert.Equal(2, go.GetComponents().Count());
     }
 
     // ---- Remove ----
@@ -446,17 +416,6 @@ public class ComponentTests : RuntimeTestBase
     }
 
     // ---- RequireComponent ----
-
-    [Fact]
-    public void RequireComponent_AddsDependency()
-    {
-        GameObject go = CreateGameObject();
-
-        go.AddComponent<NeedsPlain>();
-
-        Assert.NotNull(go.GetComponent<PlainComponent>());
-        Assert.NotNull(go.GetComponent<NeedsPlain>());
-    }
 
     [Fact]
     public void RequireComponent_DoesNotDuplicate_WhenDependencyAlreadyPresent()

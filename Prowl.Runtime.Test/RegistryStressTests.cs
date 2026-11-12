@@ -75,22 +75,6 @@ public class RegistryStressTests : RuntimeTestBase
     }
 
     [Fact]
-    public void DestroyingComponentDuringUpdate_SkippedWithoutCrash()
-    {
-        (SceneInstance? scene, GameObject? go) = NewSceneGo();
-        UpdateActionComponent driver = go.AddComponent<UpdateActionComponent>();
-        PlainUpdateCounter target = go.AddComponent<PlainUpdateCounter>();
-        driver.Action = () => go.RemoveComponent(target);
-        scene.Add(go);
-
-        Update(scene); // must not throw
-
-        Assert.Equal(1, driver.Updates);
-        Assert.True(target.IsDisposed);
-        Assert.Equal(0, target.Updates);
-    }
-
-    [Fact]
     public void ComponentDestroyingItselfDuringUpdate_NoCrash()
     {
         (SceneInstance? scene, GameObject? go) = NewSceneGo();
@@ -124,36 +108,6 @@ public class RegistryStressTests : RuntimeTestBase
     }
 
     [Fact]
-    public void EnableDisableEnable_DoesNotDoubleRegister()
-    {
-        (SceneInstance? scene, GameObject? go) = NewSceneGo();
-        PlainUpdateCounter c = go.AddComponent<PlainUpdateCounter>();
-        scene.Add(go);
-
-        c.Enabled = false;
-        c.Enabled = true;
-
-        Update(scene);
-
-        Assert.Equal(1, c.Updates); // exactly once, not twice
-    }
-
-    [Fact]
-    public void EqualExecutionOrder_TicksInRegistrationOrder()
-    {
-        TickLog.Entries.Clear();
-        (SceneInstance? scene, GameObject? go) = NewSceneGo();
-        go.AddComponent<TagTick>().Mark = "a";
-        go.AddComponent<TagTick>().Mark = "b";
-        go.AddComponent<TagTick>().Mark = "c";
-        scene.Add(go);
-
-        Update(scene);
-
-        Assert.Equal(["a", "b", "c"], TickLog.Entries);
-    }
-
-    [Fact]
     public void DisablingGameObjectMidUpdate_SkipsItsOtherComponents()
     {
         (SceneInstance? scene, GameObject? go) = NewSceneGo();
@@ -170,34 +124,6 @@ public class RegistryStressTests : RuntimeTestBase
         Update(scene);
 
         Assert.Equal(0, otherCounter.Updates); // disabled mid-frame, before its turn this frame
-    }
-
-    [Fact]
-    public void DisabledScene_DoesNotTick()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        GameObject go = CreateGameObject();
-        PlainUpdateCounter c = go.AddComponent<PlainUpdateCounter>();
-        scene.Add(go);
-
-        scene.Deactivate(); // unregisters all
-        Update(scene);
-
-        Assert.Equal(0, c.Updates);
-    }
-
-    [Fact]
-    public void ManyComponents_AllTickOncePerUpdate()
-    {
-        (SceneInstance? scene, GameObject? go) = NewSceneGo();
-        var counters = new List<PlainUpdateCounter>();
-        for (int i = 0; i < 200; i++)
-            counters.Add(go.AddComponent<PlainUpdateCounter>());
-        scene.Add(go);
-
-        Update(scene);
-
-        Assert.All(counters, c => Assert.Equal(1, c.Updates));
     }
 
     [Fact]

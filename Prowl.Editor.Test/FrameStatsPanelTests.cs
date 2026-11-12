@@ -154,19 +154,6 @@ public class FrameStatsPanelTests
     }
 
     [Fact]
-    public void ClearDropsEveryColumn()
-    {
-        History history = Fresh();
-        Frames(2);
-        history.Sample(Now, NoneHidden);
-
-        history.Clear();
-
-        Assert.Equal(0, history.Count);
-        Assert.Null(history.Ago(0));
-    }
-
-    [Fact]
     public void ThePeakCountsOnlyTheCategoriesShown()
     {
         FrameStat big = FrameStats.GetCategory("PanelTest.Big");

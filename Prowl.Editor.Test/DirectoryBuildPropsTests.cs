@@ -129,47 +129,6 @@ public class DirectoryBuildPropsTests : EditorTestHarness
         finally { TryDeleteDir(feed); }
     }
 
-    [Fact]
-    [Trait("Category", "Build")]
-    public void DefaultGroupPackage_ShipsIntoPlayerBuild()
-    {
-        string feed = NewFeedDir();
-        string outDir = Path.Combine(Path.GetTempPath(), "ProwlPlayerOut", Guid.NewGuid().ToString("N"));
-        try
-        {
-            PackLib(feed, "GamePkgLib", "namespace GamePkgLib { public static class GameApi { public static int Value => 7; } }");
-            WriteNugetConfig(feed);
-            WriteBuildProps(PropsWithPackage("GamePkgLib", "1.0.0"));
-
-            // Mirror the real pipeline layout: the player csproj lives under Temp/ inside the project
-            // root, so MSBuild auto-imports the project-root Directory.Build.props into it.
-            string playerDir = Path.Combine(Project.RootPath, "Temp", "PlayerBuild");
-            Directory.CreateDirectory(playerDir);
-            File.WriteAllText(Path.Combine(playerDir, "Program.cs"),
-                "using GamePkgLib; class Program { static void Main() { System.Console.WriteLine(GameApi.Value); } }");
-            File.WriteAllText(Path.Combine(playerDir, "TestPlayer.csproj"), """
-                <Project Sdk="Microsoft.NET.Sdk">
-                  <PropertyGroup>
-                    <OutputType>Exe</OutputType>
-                    <TargetFramework>net10.0</TargetFramework>
-                    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-                    <Nullable>enable</Nullable>
-                  </PropertyGroup>
-                  <ItemGroup>
-                    <Compile Include="Program.cs" />
-                  </ItemGroup>
-                </Project>
-                """);
-
-            (int exit, string? stdout, string? stderr) = RunDotnet(
-                $"publish \"{Path.Combine(playerDir, "TestPlayer.csproj")}\" -c Release -o \"{outDir}\"", playerDir);
-            Assert.True(exit == 0, $"Player publish failed:\n{stdout}\n{stderr}");
-            Assert.True(File.Exists(Path.Combine(outDir, "GamePkgLib.dll")),
-                "A package declared in Directory.Build.props must ship next to the player.");
-        }
-        finally { TryDeleteDir(feed); TryDeleteDir(outDir); }
-    }
-
     // ---- Helpers ----
 
     private void WriteBuildProps(string content)

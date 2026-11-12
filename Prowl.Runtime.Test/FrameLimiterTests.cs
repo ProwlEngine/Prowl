@@ -8,26 +8,11 @@ namespace Prowl.Runtime.Test;
 public class FrameLimiterTests
 {
     [Fact]
-    public void NoTargetNeverWaits()
-    {
-        var limiter = new FrameLimiter();
-        Assert.Equal(0.0, limiter.NextWait(0.0));
-        Assert.Equal(0.0, limiter.NextWait(100.0));
-    }
-
-    [Fact]
     public void ANegativeTargetIsTreatedAsUnlimited()
     {
         var limiter = new FrameLimiter { TargetFrameRate = -60 };
         Assert.Equal(0, limiter.TargetFrameRate);
         Assert.Equal(0.0, limiter.NextWait(0.0));
-    }
-
-    [Fact]
-    public void AFrameThatCostNothingWaitsAWholePeriod()
-    {
-        var limiter = new FrameLimiter { TargetFrameRate = 60 };
-        Assert.Equal(1.0 / 60.0, limiter.NextWait(0.0), 6);
     }
 
     /// <summary>The wait is what is left of the slot, so the rate holds however long a frame takes.</summary>

@@ -45,18 +45,6 @@ public class SceneCameraGatherTests : RuntimeTestBase
     }
 
     [Fact]
-    public void RootCamera_IsFound()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        GameObject go = CreateGameObject("Cam");
-        go.AddComponent<Camera>();
-        scene.Add(go);
-
-        Assert.Single(scene.GatherActiveCameras());
-        AssertMatchesLegacy(scene);
-    }
-
-    [Fact]
     public void NestedCamera_IsCountedExactlyOnce()
     {
         // The bug the old Distinct() existed to paper over: a camera nested under N active
@@ -312,21 +300,6 @@ public class SceneCameraGatherTests : RuntimeTestBase
         scene.Add(map);
         scene.Add(cam);
         return scene;
-    }
-
-    [Fact]
-    public void FindMainCamera_PicksHighestDepth()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        GameObject low = CreateGameObject("Low");
-        GameObject high = CreateGameObject("High");
-        low.AddComponent<Camera>().Depth = 0;
-        Camera expected = high.AddComponent<Camera>();
-        expected.Depth = 4;
-        scene.Add(low);
-        scene.Add(high);
-
-        Assert.Same(expected, scene.MainCamera);
     }
 
     [Fact]

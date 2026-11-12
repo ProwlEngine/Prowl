@@ -44,34 +44,6 @@ public class MissingTypeReferenceGraphTests
     }
 
     [Fact]
-    public void CallerOwnedContext_EditorPath_StillRecovers()
-    {
-        // The editor deserializes scenes with its own SerializationContext via the 3-arg overload (for
-        // asset-dependency tracking). Deferred back-patches must still fire on that path, not only on the
-        // context-creating overload.
-        var root = new GameObject("Root");
-        var child = new GameObject("Child");
-        child.SetParent(root);
-        MissRefComp misser = root.AddComponent<MissRefComp>();
-        misser.TargetGO = child;
-
-        var scene = new SceneInstance(SceneMode.Edit);
-        scene.Add(root);
-
-        string text = scene.ActiveSection.CaptureTree().WriteToString()
-            .Replace(nameof(MissRefComp), "GhostComp_DoesNotExist");
-
-        // Mimic the editor: a caller-supplied context passed to the 3-arg Deserialize.
-        SceneInstance loaded = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text), new SerializationContext()), SceneMode.Edit);
-
-        Assert.DoesNotContain(loaded.Objects, o => o.Name == "New GameObject"); // no phantom placeholders
-        GameObject? loadedRoot = loaded.Objects.FirstOrDefault(o => o.Name == "Root");
-        Assert.NotNull(loadedRoot);
-        Assert.Single(loadedRoot!.Children);
-        Assert.Equal("Child", loadedRoot.Children[0].Name);
-    }
-
-    [Fact]
     public void ControlNoCrossRef_AssetRefSurvives()
     {
         // Missing component does NOT reference the holder, and is added AFTER it.

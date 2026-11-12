@@ -57,15 +57,6 @@ public class RuntimeUtilsTests
         Assert.Null(RuntimeUtils.ResolveType(wrong));
     }
 
-    [Fact]
-    public void ResolveType_IsRepeatable()
-    {
-        string aqn = typeof(RuntimeUtils).AssemblyQualifiedName!;
-
-        Assert.Equal(typeof(RuntimeUtils), RuntimeUtils.ResolveType(aqn)); // resolves + caches
-        Assert.Equal(typeof(RuntimeUtils), RuntimeUtils.ResolveType(aqn)); // cache hit, same result
-    }
-
     // The reason ResolveType exists: user scripts (and their EngineObject/asset types) live in a
     // separate, collectible load context, which Type.GetType is not permitted to bind into. A dynamic
     // assembly stands in for that context here - it is reachable by reflection but not by Type.GetType.

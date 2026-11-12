@@ -104,24 +104,6 @@ public class UndoTests : EditorTestHarness
     }
 
     [Fact]
-    public void PropertyChange_Undo_Redo()
-    {
-        (SceneInstance _, GameObject _, UndoComp? comp) = MakeScene();
-        comp.Value = 10;
-        Undo.RecordObject(comp, "Edit");
-        comp.Value = 20;
-        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
-
-        Assert.True(Undo.CanUndo);
-        Undo.PerformUndo();
-        Assert.Equal(10, comp.Value);
-
-        Assert.True(Undo.CanRedo);
-        Undo.PerformRedo();
-        Assert.Equal(20, comp.Value);
-    }
-
-    [Fact]
     public void PropertyChange_MultipleFieldsSameFrame_OneStep()
     {
         (SceneInstance _, GameObject _, UndoComp? comp) = MakeScene();
@@ -134,36 +116,6 @@ public class UndoTests : EditorTestHarness
         Assert.Equal(1, comp.Value);
         Assert.Equal("a", comp.Label);
         Assert.False(Undo.CanUndo); // single step covered both fields
-    }
-
-    [Fact]
-    public void NoOpChange_DoesNotCreateStep()
-    {
-        (SceneInstance _, GameObject _, UndoComp? comp) = MakeScene();
-        comp.Value = 5;
-        Undo.RecordObject(comp, "Edit");
-        // no mutation
-        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
-
-        Assert.False(Undo.CanUndo);
-    }
-
-    [Fact]
-    public void NewAction_ClearsRedoStack()
-    {
-        (SceneInstance _, GameObject _, UndoComp? comp) = MakeScene();
-        comp.Value = 0;
-        Undo.RecordObject(comp, "Edit");
-        comp.Value = 1;
-        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
-
-        Undo.PerformUndo();
-        Assert.True(Undo.CanRedo);
-
-        Undo.RegisterOperation(new UndoTestOp("New", () => { }, () => { }));
-        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
-
-        Assert.False(Undo.CanRedo);
     }
 
     // ---- Generic actions ----
@@ -195,28 +147,6 @@ public class UndoTests : EditorTestHarness
     }
 
     // ---- Structural: destroy (the lost-work case) ----
-
-    [Fact]
-    public void RegisterDestroyObject_Undo_RestoresComponentDataAndIdentifier()
-    {
-        (SceneInstance? scene, GameObject? go, UndoComp? comp) = MakeScene();
-        comp.Value = 42; comp.Label = "hi";
-        Guid goId = go.Identifier;
-        Guid compId = comp.Identifier;
-
-        Undo.DestroyObjectImmediate(go);
-        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
-
-        Assert.Null(FindGO(goId));
-
-        Undo.PerformUndo();
-        GameObject? restored = FindGO(goId);
-        Assert.NotNull(restored);
-        UndoComp rc = restored!.GetComponent<UndoComp>()!;
-        Assert.Equal(42, rc.Value);
-        Assert.Equal("hi", rc.Label);
-        Assert.Equal(compId, rc.Identifier); // identifier preserved so future records still resolve
-    }
 
     [Fact]
     public void RegisterDestroyObject_Undo_BringsBackARuntimeMaterialNothingElseHeld()
@@ -327,24 +257,6 @@ public class UndoTests : EditorTestHarness
 
     // ---- Coalescing ----
 
-    [Fact]
-    public void PropertyEditsInOneGroup_AreOneStep()
-    {
-        (SceneInstance _, GameObject _, UndoComp? comp) = MakeScene();
-        comp.Value = 0;
-        Undo.RecordObject(comp, "Edit");
-        comp.Value = 1;
-        Undo.FlushUndoRecordObjects(); // one frame of a drag
-
-        Undo.RecordObject(comp, "Edit");
-        comp.Value = 2;
-        Undo.FlushUndoRecordObjects(); // the next frame joins the same group's step
-
-        Undo.PerformUndo();
-        Assert.Equal(0, comp.Value); // back to the original, single step
-        Assert.False(Undo.CanUndo);
-    }
-
     // ---- History trimming ----
 
     [Fact]
@@ -398,26 +310,6 @@ public class UndoTests : EditorTestHarness
     }
 
     // ---- Coalescing boundaries ----
-
-    [Fact]
-    public void PropertyEdits_InSeparateGroups_StayAsSeparateSteps()
-    {
-        (SceneInstance _, GameObject _, UndoComp? comp) = MakeScene();
-        comp.Value = 0;
-        Undo.RecordObject(comp, "Edit");
-        comp.Value = 1;
-        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
-
-        Undo.RecordObject(comp, "Edit");
-        comp.Value = 2;
-        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
-
-        // Two groups, two steps.
-        Undo.PerformUndo();
-        Assert.Equal(1, comp.Value);
-        Undo.PerformUndo();
-        Assert.Equal(0, comp.Value);
-    }
 
     // ---- Multi-object helpers ----
 

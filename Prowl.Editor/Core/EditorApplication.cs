@@ -1998,6 +1998,29 @@ public class EditorApplication : Game
             return;
         }
 
+        try { StartPlayMode(playWorld); }
+        catch (Exception e)
+        {
+            Runtime.Debug.LogException("[Play] Starting play mode threw, so the editor went back to edit mode", e);
+            AbandonPlayMode(playWorld);
+            return;
+        }
+
+        if (prefs.GameViewOnPlay != GameViewOnPlay.Nothing)
+            FocusPanel(typeof(GameViewPanel));
+        if (prefs.GameViewOnPlay == GameViewOnPlay.Maximize && FindOpenPanel<GameViewPanel>() is GameViewPanel gameView)
+            _maximizedForPlay = _panelMaximizer.Maximize(gameView);
+
+        // The editor's vsync and frame limit are its preference, not the game's, so play starts
+        // unpaced and whatever the game's own code sets from here is what it runs at.
+        Application.VSync = false;
+        Application.TargetFrameRate = 0;
+
+        Runtime.Debug.Log("Entered play mode.");
+    }
+
+    private void StartPlayMode(SceneInstance playWorld)
+    {
         // An edit made this frame, typed or flushed, belongs to the edit history set aside here.
         _savedEditUndo = Undo.PushContext();
         _dirtyAssetCopies = EditorUtility.CopyDirtyAssets();
@@ -2019,18 +2042,23 @@ public class EditorApplication : Game
 
         // The edit world goes dormant and the play world starts in a fresh session, with OnEnable and Start.
         EditorSceneManager.EnterPlayWorld(playWorld);
+    }
 
-        if (prefs.GameViewOnPlay != GameViewOnPlay.Nothing)
-            FocusPanel(typeof(GameViewPanel));
-        if (prefs.GameViewOnPlay == GameViewOnPlay.Maximize && FindOpenPanel<GameViewPanel>() is GameViewPanel gameView)
-            _maximizedForPlay = _panelMaximizer.Maximize(gameView);
-
-        // The editor's vsync and frame limit are its preference, not the game's, so play starts
-        // unpaced and whatever the game's own code sets from here is what it runs at.
-        Application.VSync = false;
-        Application.TargetFrameRate = 0;
-
-        Runtime.Debug.Log("Entered play mode.");
+    // Puts everything a failed StartPlayMode may have set up back the way edit mode had it.
+    private void AbandonPlayMode(SceneInstance playWorld)
+    {
+        Application.IsPlaying = false;
+        Guarded("Stopping XR", XR.Stop);
+        if (Input.Current is GameViewInputHandler) Input.PopHandler();
+        Guarded("Destroying the play world", () => EditorSceneManager.AbandonPlayWorld(playWorld));
+        Guarded("Reverting assets play changed", RevertAssetsAfterPlay);
+        Guarded("Restoring dirty assets", () => EditorUtility.RestoreDirtyAssets(_dirtyAssetCopies));
+        _dirtyAssetCopies = [];
+        EditorSceneManager.ReturnToEditWorld();
+        if (_savedEditUndo != null) Undo.PopContext(_savedEditUndo);
+        _savedEditUndo = null;
+        if (_savedSelection is { } selection) Selection.RestoreSnapshot(selection);
+        _savedSelection = null;
     }
 
     private void ExitPlayMode()
@@ -2067,12 +2095,6 @@ public class EditorApplication : Game
         if (_savedSelection is { } selection) Selection.RestoreSnapshot(selection);
         _savedSelection = null;
 
-        static void Guarded(string what, Action step)
-        {
-            try { step(); }
-            catch (Exception e) { Runtime.Debug.LogException($"[Play] {what} threw", e); }
-        }
-
         // Don't inherit cursor state the game left behind
         Input.CursorLockState = CursorLockMode.None;
         Input.CursorVisible = true;
@@ -2093,6 +2115,12 @@ public class EditorApplication : Game
         ApplyFramePacing();
 
         Runtime.Debug.Log("Exited play mode.");
+    }
+
+    private static void Guarded(string what, Action step)
+    {
+        try { step(); }
+        catch (Exception e) { Runtime.Debug.LogException($"[Play] {what} threw", e); }
     }
 
     // Nothing a play session does to a project asset outlives it, so every loaded one is unloaded and read again. Built-in
