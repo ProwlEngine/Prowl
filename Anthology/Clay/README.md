@@ -30,7 +30,7 @@ Pure C# .NET 10, no native dependencies, AOT-friendly. Math via [Prowl.Vector](h
   - CalcTangentSpace (MikkTSpace), LimitBoneWeights, RemoveDegenerates
   - FlipUVs, FlipWindingOrder, ConvertCoordinateSystem, GlobalScale
   - GenerateBounds, EmbedTextures, PopulateSkeletons
-  - OptimizeMeshes, OptimizeGraph, ImproveCacheLocality (Tipsify)
+  - OptimizeMeshes, OptimizeGraph, ImproveCacheLocality (Forsyth, from Prowl.Vector)
   - SplitByBoneCount, SplitLargeMeshes, Debone, SortByPrimitiveType
   - ValidateDataStructure
 

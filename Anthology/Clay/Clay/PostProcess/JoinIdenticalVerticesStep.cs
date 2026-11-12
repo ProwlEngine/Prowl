@@ -102,7 +102,7 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
     }
 
     /// <summary>Rewrites every per-vertex stream and the face indices to the welded vertex order.</summary>
-    private static void Compact(IntermediateMesh mesh, int[] oldToNew, int[] kept, int newCount)
+    internal static void Compact(IntermediateMesh mesh, int[] oldToNew, int[] kept, int newCount)
     {
         int oldCount = oldToNew.Length;
         var newKept = kept.AsSpan(0, newCount);

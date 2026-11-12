@@ -1,27 +1,24 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Runtime.InteropServices;
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.Clay.PostProcess;
 
 /// <summary>
-/// Reorders triangle indices for better post-transform vertex-cache reuse, using a port of
-/// "Tipsify" (Sander, Nehab, Barczak 2007).
+/// Orders each material's triangles for the post transform vertex cache with <see cref="VertexCacheOptimizer"/>, the
+/// materials in the order the baker draws them, then renumbers the vertices in the order those triangles first use
+/// them so their fetches stay close. Lines and points follow the triangles in their own order.
 /// </summary>
-/// <remarks>
-/// Operates only on triangle faces; lines and points are left alone. Vertex order is not changed,
-/// so this step is safe to run after <see cref="JoinIdenticalVerticesStep"/> without invalidating
-/// references in other steps.
-/// </remarks>
+/// <remarks>Renumbers every per vertex stream, so it runs after the steps that keep vertex references.</remarks>
 internal sealed class ImproveCacheLocalityStep : IPostProcess
 {
     public PostProcessFlags Flag => PostProcessFlags.ImproveCacheLocality;
     public string Name => "ImproveCacheLocality";
-
-    /// <summary>FIFO cache size used to score vertex reuse (typical GPU post-T&amp;L cache size).</summary>
-    private const int CacheSize = 32;
 
     public void Execute(IntermediateScene scene, ImportContext context)
     {
@@ -32,182 +29,53 @@ internal sealed class ImproveCacheLocalityStep : IPostProcess
 
     private static void OptimizeOne(IntermediateMesh mesh)
     {
-        // Collect triangle faces and keep non-triangle ones aside.
-        var triIndex = new List<int>();
-        for (int i = 0; i < mesh.Faces.Count; i++)
-            if (mesh.Faces[i].Count == 3)
-                triIndex.Add(i);
-        if (triIndex.Count <= 1) return;
-
-        int vertexCount = mesh.Positions.Count;
-        int triCount = triIndex.Count;
-
-        int[] triVerts = new int[triCount * 3];
-        for (int i = 0; i < triCount; i++)
+        FaceList faces = mesh.Faces;
+        var materials = new List<int>();
+        var triangles = new Dictionary<int, List<int>>();
+        for (int f = 0; f < faces.Count; f++)
         {
-            var face = mesh.Faces.IndicesOf(triIndex[i]);
-            triVerts[i * 3 + 0] = face[0];
-            triVerts[i * 3 + 1] = face[1];
-            triVerts[i * 3 + 2] = face[2];
+            if (faces[f].Count != 3)
+                continue;
+            int material = mesh.MaterialForFace(faces[f]);
+            if (!triangles.TryGetValue(material, out List<int>? group))
+            {
+                triangles[material] = group = new List<int>();
+                materials.Add(material);
+            }
+            group.Add(f);
         }
+        if (materials.Count == 0)
+            return;
 
-        // Build per-vertex triangle adjacency.
-        int[] valence = new int[vertexCount];
-        for (int t = 0; t < triCount * 3; t++)
-            valence[triVerts[t]]++;
+        uint vertexCount = (uint)mesh.Positions.Count;
+        var ordered = new FaceList(faces.Count, faces.AllIndices.Length);
+        foreach (int material in materials)
+        {
+            List<int> group = triangles[material];
+            uint[] indices = new uint[group.Count * 3];
+            for (int t = 0; t < group.Count; t++)
+            {
+                Span<int> face = faces.IndicesOf(group[t]);
+                for (int k = 0; k < 3; k++)
+                    indices[t * 3 + k] = (uint)face[k];
+            }
+            foreach (int t in VertexCacheOptimizer.TriangleOrder(indices, vertexCount))
+                ordered.Add(faces.IndicesOf(group[t]), faces[group[t]]);
+        }
+        for (int f = 0; f < faces.Count; f++)
+        {
+            if (faces[f].Count != 3)
+                ordered.Add(faces.IndicesOf(f), faces[f]);
+        }
+        mesh.Faces = ordered;
 
-        int[] offsets = new int[vertexCount + 1];
+        uint[] firstUse = VertexCacheOptimizer.FirstUseOrder(MemoryMarshal.Cast<int, uint>(ordered.AllIndices), vertexCount);
+        int[] oldToNew = new int[vertexCount], kept = new int[vertexCount];
         for (int v = 0; v < vertexCount; v++)
-            offsets[v + 1] = offsets[v] + valence[v];
-
-        int[] cursor = new int[vertexCount];
-        int[] adjTri = new int[triCount * 3];
-        for (int t = 0; t < triCount; t++)
         {
-            int v0 = triVerts[t * 3 + 0];
-            int v1 = triVerts[t * 3 + 1];
-            int v2 = triVerts[t * 3 + 2];
-            adjTri[offsets[v0] + cursor[v0]++] = t;
-            adjTri[offsets[v1] + cursor[v1]++] = t;
-            adjTri[offsets[v2] + cursor[v2]++] = t;
+            oldToNew[v] = (int)firstUse[v];
+            kept[firstUse[v]] = v;
         }
-
-        // Tipsify state.
-        int[] liveTris = new int[vertexCount];
-        Array.Copy(valence, liveTris, vertexCount);
-
-        int[] cacheTime = new int[vertexCount];
-        Array.Fill(cacheTime, -1);
-
-        bool[] triEmitted = new bool[triCount];
-
-        int[] outIndices = new int[triCount * 3];
-        int[] outTriSource = new int[triCount];
-        int outCursor = 0;
-        int timeStamp = CacheSize + 1;
-        int next = 0;
-
-        int fanningVertex = -1;
-
-        for (int writeTri = 0; writeTri < triCount; writeTri++)
-        {
-            if (fanningVertex < 0)
-            {
-                // Skip-back: find the next un-emitted triangle starting at `next`.
-                while (next < triCount && triEmitted[next]) next++;
-                if (next >= triCount) break;
-                int t = next++;
-                EmitTri(t, triVerts, outIndices, ref outCursor, triEmitted, liveTris, cacheTime, ref timeStamp, outTriSource);
-                fanningVertex = NextFan(triVerts, t, liveTris, cacheTime, timeStamp);
-            }
-            else
-            {
-                int bestTri = -1;
-                int bestPriority = int.MinValue;
-                int start = offsets[fanningVertex];
-                int end = offsets[fanningVertex + 1];
-                for (int i = start; i < end; i++)
-                {
-                    int t = adjTri[i];
-                    if (triEmitted[t]) continue;
-                    int priority = TriScore(t, triVerts, cacheTime, timeStamp, liveTris);
-                    if (priority > bestPriority)
-                    {
-                        bestPriority = priority;
-                        bestTri = t;
-                    }
-                }
-                if (bestTri < 0)
-                {
-                    fanningVertex = -1;
-                    writeTri--;
-                    continue;
-                }
-                EmitTri(bestTri, triVerts, outIndices, ref outCursor, triEmitted, liveTris, cacheTime, ref timeStamp, outTriSource);
-                fanningVertex = NextFan(triVerts, bestTri, liveTris, cacheTime, timeStamp);
-            }
-        }
-
-        // Write reordered triangles back into the mesh's face list (preserve non-triangle faces).
-        var newFaces = new FaceList(mesh.Faces.Count, mesh.Faces.AllIndices.Length);
-        int triRead = 0;
-        for (int i = 0; i < mesh.Faces.Count; i++)
-        {
-            var face = mesh.Faces[i];
-            if (face.Count == 3)
-            {
-                if (triRead < triCount)
-                {
-                    newFaces.Add(outIndices.AsSpan(triRead * 3, 3), mesh.Faces[triIndex[outTriSource[triRead]]]);
-                    triRead++;
-                }
-            }
-            else
-            {
-                newFaces.Add(mesh.Faces.IndicesOf(face), face);
-            }
-        }
-        mesh.Faces = newFaces;
-    }
-
-    private static void EmitTri(
-        int t,
-        int[] triVerts,
-        int[] outIndices,
-        ref int outCursor,
-        bool[] triEmitted,
-        int[] liveTris,
-        int[] cacheTime,
-        ref int timeStamp,
-        int[] outTriSource)
-    {
-        triEmitted[t] = true;
-        // The reorder is why this is recorded: emitted slot n is no longer source triangle n, so
-        // anything carried per triangle (its material) needs the mapping back.
-        outTriSource[outCursor / 3] = t;
-        for (int k = 0; k < 3; k++)
-        {
-            int v = triVerts[t * 3 + k];
-            outIndices[outCursor++] = v;
-            liveTris[v]--;
-            if (timeStamp - cacheTime[v] > CacheSize)
-                cacheTime[v] = timeStamp++;
-        }
-    }
-
-    private static int TriScore(int t, int[] triVerts, int[] cacheTime, int timeStamp, int[] liveTris)
-    {
-        int sum = 0;
-        for (int k = 0; k < 3; k++)
-        {
-            int v = triVerts[t * 3 + k];
-            int age = timeStamp - cacheTime[v];
-            int s = age < CacheSize ? 750 - 10 * age : 0;
-            // Bonus for vertices that still have many triangles waiting to be emitted: prefer to
-            // peel off frequently-shared vertices first.
-            s += 200 - 10 * Math.Min(liveTris[v], 19);
-            sum += s;
-        }
-        return sum;
-    }
-
-    private static int NextFan(int[] triVerts, int t, int[] liveTris, int[] cacheTime, int timeStamp)
-    {
-        // Choose the vertex of t with the most remaining live triangles and the freshest cache time
-        // as the fan center for the next iteration.
-        int best = -1;
-        int bestScore = int.MinValue;
-        for (int k = 0; k < 3; k++)
-        {
-            int v = triVerts[t * 3 + k];
-            if (liveTris[v] <= 0) continue;
-            int score = liveTris[v] * 100 - (timeStamp - cacheTime[v]);
-            if (score > bestScore)
-            {
-                bestScore = score;
-                best = v;
-            }
-        }
-        return best;
+        JoinIdenticalVerticesStep.Compact(mesh, oldToNew, kept, (int)vertexCount);
     }
 }

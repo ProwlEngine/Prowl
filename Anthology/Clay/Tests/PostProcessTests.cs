@@ -3,6 +3,7 @@
 
 using Prowl.Clay;
 using Prowl.Clay.Importer;
+using Prowl.Vector.Geometry;
 
 using Xunit;
 
@@ -141,7 +142,7 @@ public sealed class PostProcessTests
     }
 
     [Fact]
-    public void ImproveCacheLocality_ReordersIndices_WithoutChangingSetOrCount()
+    public void ImproveCacheLocality_KeepsEveryTriangle_AndMissesTheCacheLess()
     {
         string path = TestModels.Gltf("2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb");
 
@@ -149,19 +150,38 @@ public sealed class PostProcessTests
         var optimized = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.ImproveCacheLocality }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(baseline.Meshes[0].VertexCount, optimized.Meshes[0].VertexCount);
-        Assert.Equal(baseline.Meshes[0].SubMeshes[0].IndexCount, optimized.Meshes[0].SubMeshes[0].IndexCount);
+        Assert.Equal(Triangles(baseline.Meshes[0]), Triangles(optimized.Meshes[0]));
 
-        // Same set of indices, just reordered - sort-and-compare catches "reorder lost an index".
-        var baseSorted = baseline.Meshes[0].GetIndices32(0).OrderBy(x => x).ToArray();
-        var optSorted = optimized.Meshes[0].GetIndices32(0).OrderBy(x => x).ToArray();
-        Assert.Equal(baseSorted, optSorted);
+        double was = VertexCacheOptimizer.MissRatio(baseline.Meshes[0].GetIndices32(0)), now = VertexCacheOptimizer.MissRatio(optimized.Meshes[0].GetIndices32(0));
+        Assert.True(now < was, $"miss ratio {was:0.000} to {now:0.000}");
 
-        // ...but the actual order must have changed for a non-trivially-sized mesh, otherwise
-        // the step did nothing.
-        var baseRaw = baseline.Meshes[0].GetIndices32(0);
-        var optRaw = optimized.Meshes[0].GetIndices32(0);
-        Assert.False(baseRaw.SequenceEqual(optRaw),
-            "ImproveCacheLocality produced an identical index order - step appears to be a no-op.");
+        // Vertices are numbered in the order the triangles first use them
+        uint next = 0;
+        foreach (uint index in optimized.Meshes[0].GetIndices32(0))
+        {
+            Assert.True(index <= next, $"vertex {index} used before {next}");
+            if (index == next)
+                next++;
+        }
+    }
+
+    // The first submesh's triangles by position and UV of their corners, turned to start at the smallest so winding is kept
+    private static List<string> Triangles(Mesh mesh)
+    {
+        uint[] indices = mesh.GetIndices32(0);
+        string Corner(uint i) => $"{mesh.Vertices[i]} {mesh.UVs[0]?[i]}";
+        var triangles = new List<string>();
+        for (int i = 0; i + 2 < indices.Length; i += 3)
+        {
+            string[] corners = [Corner(indices[i]), Corner(indices[i + 1]), Corner(indices[i + 2])];
+            int first = 0;
+            for (int k = 1; k < 3; k++)
+                if (string.CompareOrdinal(corners[k], corners[first]) < 0)
+                    first = k;
+            triangles.Add($"{corners[first]} | {corners[(first + 1) % 3]} | {corners[(first + 2) % 3]}");
+        }
+        triangles.Sort(StringComparer.Ordinal);
+        return triangles;
     }
 
     [Fact]

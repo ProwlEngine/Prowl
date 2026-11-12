@@ -68,7 +68,7 @@ public enum PostProcessFlags : uint
     /// <summary>Collapse purely identity nodes that have no animation/skin/named role.</summary>
     OptimizeGraph = 1u << 16,
 
-    /// <summary>Reorder triangle indices for better vertex-cache locality.</summary>
+    /// <summary>Reorder each material's triangles for the vertex cache, then renumber vertices in the order they are first used.</summary>
     ImproveCacheLocality = 1u << 17,
 
     /// <summary>Split meshes that exceed the configured vertex limit.</summary>
