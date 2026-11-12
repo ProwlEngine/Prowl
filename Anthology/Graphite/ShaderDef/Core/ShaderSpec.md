@@ -359,6 +359,8 @@ ZTest Disabled | Never | Less | Equal | LessEqual | Greater | NotEqual | Greater
 
 Sets the depth comparison function. `Disabled` turns depth testing off entirely; any other value enables depth testing and sets the comparison function.
 
+Graphite's renderer draws with reversed Z, depth 1 at the near plane falling toward 0, so nearer is greater: a pass that leaves `ZTest` out takes the renderer's `GreaterEqual`, and the default below applies only where ShaderDef is used on its own.
+
 | Value          | Description                                          | Default |
 |----------------|------------------------------------------------------|---------|
 | `Disabled`     | Depth testing is turned off entirely                 |         |
@@ -497,7 +499,7 @@ another surface).
 | `factor`  | float | Scales the maximum depth slope of the polygon                                |
 | `units`   | float | Adds a constant depth offset in units of the smallest depth-buffer increment |
 
-Example: `Offset -1 -1` pulls a surface slightly towards the camera.
+Example: `Offset -1 -1` pulls a surface slightly towards the camera with a standard depth range. Under Graphite's reversed Z it is `Offset 1 1`.
 
 ---
 

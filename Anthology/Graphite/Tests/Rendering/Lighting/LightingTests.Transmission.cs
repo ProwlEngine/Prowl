@@ -149,7 +149,7 @@ public sealed partial class LightingTests
     {
         DarkWorld();
         Vector3 backdrop = new(0.2f, 0.4f, 0.8f);
-        Material flat = _renderer.CreateMaterial(_renderer.Standard.Unlit);
+        Material flat = UnitUnlit();
         flat.SetColor("base_color", new Float4(backdrop.X, backdrop.Y, backdrop.Z, 1));
         AddBackdrop(flat);
 
@@ -203,7 +203,7 @@ public sealed partial class LightingTests
     {
         DarkWorld();
         Vector3 backdrop = new(0.2f, 0.4f, 0.8f);
-        Material flat = _renderer.CreateMaterial(_renderer.Standard.Unlit);
+        Material flat = UnitUnlit();
         flat.SetColor("base_color", new Float4(backdrop.X, backdrop.Y, backdrop.Z, 1));
         AddBackdrop(flat);
 
@@ -246,7 +246,7 @@ public sealed partial class LightingTests
     {
         DarkWorld();
         Vector3 backdrop = new(0.2f, 0.4f, 0.8f);
-        Material flat = _renderer.CreateMaterial(_renderer.Standard.Unlit);
+        Material flat = UnitUnlit();
         flat.SetColor("base_color", new Float4(backdrop.X, backdrop.Y, backdrop.Z, 1));
         AddBackdrop(flat);
 
@@ -390,7 +390,7 @@ public sealed partial class LightingTests
             void main() { outColor = vec4(texture(_Reactive, vUV).r, 0.0, 0.0, 1.0); }
             """, source: false);
         _world.Features.Add(new ShowReactive(program, _renderer.Resources.PointClamp));
-        AddBackdrop(_renderer.CreateMaterial(_renderer.Standard.Unlit));
+        AddBackdrop(UnitUnlit());
         _world.Add(new RenderableDesc { Mesh = FacingQuad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)) * Double4x4.CreateScale(0.5) }, [Glass(m =>
         {
             m.SetFloat("transmission_weight", 0.7f);
@@ -431,7 +431,7 @@ public sealed partial class LightingTests
     public void TheReactiveTarget_ExistsOnlyWithTAAAndTransmission()
     {
         DarkWorld();
-        AddBackdrop(_renderer.CreateMaterial(_renderer.Standard.Unlit));
+        AddBackdrop(UnitUnlit());
         int Targets(int id) => ViewGraph.SceneTargetCount(_renderer.Frame.Camera(_harness.ViewOf(id))!.ShapeKey.Targets);
         RenderView taa = ViewWith(7, new TemporalAntiAliasing(_renderer));
         FrameOf(taa);
@@ -481,7 +481,7 @@ public sealed partial class LightingTests
             void main() { outColor = vec4(texture(_Motion, vUV).rg, 0.0, 1.0); }
             """, source: false);
         _world.Features.Add(new ShowMotion(program, _renderer.Resources.PointClamp));
-        AddBackdrop(_renderer.CreateMaterial(_renderer.Standard.Unlit));
+        AddBackdrop(UnitUnlit());
         Double4x4 At(double x) => Double4x4.CreateTranslation(_origin + new Double3(x, 0, QuadDepth)) * Double4x4.CreateScale(0.5);
         RenderableHandle glass = _world.Add(new RenderableDesc { Mesh = FacingQuad, Transform = At(0), Flags = RenderableFlags.MotionVectors }, [Glass(m => m.SetFloat("transmission_weight", 1))]);
         Frame();
