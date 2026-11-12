@@ -38,7 +38,7 @@ public partial class NetworkingTests
         ReadinessHost();
         using NetSession foreign = NetSession.Host(new LocalTransport(new(), "foreign"));
         GameObject root = CreateGameObject();
-        Scene.Current.Add(root);
+        SceneInstance.Main.Add(root);
         try
         {
             Assert.Throws<ArgumentException>(() => root.Network.Spawn(foreign.LocalPeer, NetworkOrphaned.ClearOwner));
@@ -101,7 +101,7 @@ public partial class NetworkingTests
             using FakePeer lateJoiner = FakePeer.Join(network, "late");
             Pump(() => lateJoiner.IsReady, ownerClient, lateJoiner);
             NetReader snapshot = new(lateJoiner.Last(FakePeer.SceneSnapshot));
-            using (Scene received = NetworkTestScene.Current.ReadSnapshot(ref snapshot))
+            using (SnapshotSections received = NetworkTestScene.Current.ReadSnapshot(ref snapshot))
                 Assert.Equal(updated, Find(received, root.Identifier).Network.Orphaned);
             Assert.Equal(1u, snapshot.ReadVarUInt32());
             Assert.Equal(root.Identifier, snapshot.ReadGuid()); snapshot.ReadVarUInt32();
@@ -126,7 +126,7 @@ public partial class NetworkingTests
         var (_, state, _) = ReadinessHost();
         Guid objectId = state.GameObject.Identifier;
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(Scene.Current, snapshot);
+        NetworkTestScene.Current.WriteSnapshot(SceneInstance.Main, snapshot);
         Networking.Networking.Shutdown();
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
@@ -135,7 +135,7 @@ public partial class NetworkingTests
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             Pump(() => Networking.Networking.IsReady, host);
-            GameObject root = Find(Scene.Current, objectId);
+            GameObject root = Find(SceneInstance.Main, objectId);
             uint generation = NetworkTestScene.Current.GenerationOf(root);
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
             Assert.Throws<InvalidOperationException>(() => root.Network.Orphaned = NetworkOrphaned.ClearOwner);
@@ -160,7 +160,7 @@ public partial class NetworkingTests
     public void InvalidOrphanPoliciesAreRejectedBeforeMutation()
     {
         ReadinessHost();
-        GameObject root = CreateGameObject(); Scene.Current.Add(root);
+        GameObject root = CreateGameObject(); SceneInstance.Main.Add(root);
         try
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => root.Network.Orphaned = (NetworkOrphaned)255);
@@ -174,7 +174,7 @@ public partial class NetworkingTests
     [Fact]
     public void AnOwnerRpcFromAClientRunsOnTheHostWhenTheHostsPeerOwnsTheObject()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));

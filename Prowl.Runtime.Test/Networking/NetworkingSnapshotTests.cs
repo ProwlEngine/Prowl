@@ -32,7 +32,7 @@ public partial class NetworkingTests
             uint oldId = new NetReader(client.WireReceived.First(m => m.Id == FakePeer.Snapshot).Data).ReadVarUInt32();
             PumpFor(20, client);
 
-            Scene next = CreateScene();
+            SceneInstance next = CreateScene();
             GameObject root = CreateGameObject("Next actor");
             NetTestComponent component = root.AddComponent<NetTestComponent>();
             next.Add(root);
@@ -65,7 +65,7 @@ public partial class NetworkingTests
     [Fact]
     public void AReferenceThatArrivesBeforeItsSpawnResolvesOnceTheSpawnArrives()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject holderObject = CreateGameObject("Holder");
         SyncReferenceTestComponent holder = holderObject.AddComponent<SyncReferenceTestComponent>();
         scene.Add(holderObject);
@@ -91,10 +91,10 @@ public partial class NetworkingTests
             Pump(() => host.Has(FakePeer.SnapshotAck), host);
             host.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
             host.Session.Flush();
-            Pump(() => Scene.Current.AllObjects.Any(o => o.Identifier == target.Identifier), host);
+            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == target.Identifier), host);
             PumpFor(50, host);
 
-            GameObject? resolved = Find(Scene.Current, holderObject.Identifier).GetComponent<SyncReferenceTestComponent>()!.Target;
+            GameObject? resolved = Find(SceneInstance.Main, holderObject.Identifier).GetComponent<SyncReferenceTestComponent>()!.Target;
             Assert.NotNull(resolved);
             Assert.Equal(target.Identifier, resolved!.Identifier);
         }
@@ -113,10 +113,10 @@ public partial class NetworkingTests
                                      peer.SnapshotValues(m.Data).Any(v => v.Component == component && v.Slot == slot));
 
     /// <summary>A host-owned crate a ready client knows about.</summary>
-    private (Scene Scene, GameObject Crate, NetTestComponent Component) SpawnCrate(LocalNetwork network, NetPeer? owner,
+    private (SceneInstance Scene, GameObject Crate, NetTestComponent Component) SpawnCrate(LocalNetwork network, NetPeer? owner,
         params FakePeer[] peers)
     {
-        Scene scene = Scene.Current;
+        SceneInstance scene = SceneInstance.Main;
         Pump(() => peers.All(p => p.IsReady), peers);
         GameObject crate = CreateGameObject("Crate");
         NetTestComponent component = crate.AddComponent<NetTestComponent>();
@@ -218,7 +218,7 @@ public partial class NetworkingTests
     [Fact]
     public void ValuesForObjectsNotSpawnedYetAreRejectedSoTheyStayOwed()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
         LocalNetwork network = new();
@@ -368,7 +368,7 @@ public partial class NetworkingTests
     [Fact]
     public void ValuesOfAComponentAPeerKeepsRejectingStopBeingResent()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));

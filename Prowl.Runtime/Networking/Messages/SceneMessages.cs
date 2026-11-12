@@ -8,25 +8,22 @@ using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>Snapshot header followed by an ObjectStateBlock and a SyncBlock.</summary>
+/// <summary>Snapshot header, whose sections hold every section of the world, followed by an ObjectStateBlock and a SyncBlock.</summary>
 internal readonly ref struct SceneSnapshotMessage(
     byte format,
     ulong generation,
-    string name,
-    ReadOnlySpan<byte> snapshot)
+    ReadOnlySpan<byte> sections)
 {
-    internal const byte CurrentFormat = 11;
+    internal const byte CurrentFormat = 12;
     internal readonly byte Format = format;
     internal readonly ulong Generation = generation;
-    internal readonly string Name = name;
-    internal readonly ReadOnlySpan<byte> Snapshot = snapshot;
+    internal readonly ReadOnlySpan<byte> Sections = sections;
 
     internal void Write(NetWriter writer)
     {
         writer.WriteByte(Format);
         writer.WriteUInt64(Generation);
-        writer.WriteString(Name);
-        writer.WriteBytesWithLength(Snapshot);
+        writer.WriteBytesWithLength(Sections);
     }
 
     internal static SceneSnapshotMessage Read(ref NetReader reader)
@@ -35,8 +32,35 @@ internal readonly ref struct SceneSnapshotMessage(
         NetworkValidation.SnapshotFormat(format);
         ulong generation = reader.ReadUInt64();
         NetworkValidation.SceneGeneration(generation);
-        return new SceneSnapshotMessage(format, generation, reader.ReadString(), reader.ReadBytesWithLength());
+        return new SceneSnapshotMessage(format, generation, reader.ReadBytesWithLength());
     }
+}
+
+/// <summary>A section the host loaded additively, followed by an ObjectStateBlock and a SyncBlock.</summary>
+internal readonly ref struct SectionAddMessage(ulong generation, ReadOnlySpan<byte> sections)
+{
+    internal readonly ulong Generation = generation;
+    internal readonly ReadOnlySpan<byte> Sections = sections;
+
+    internal void Write(NetWriter writer)
+    {
+        writer.WriteUInt64(Generation);
+        writer.WriteBytesWithLength(Sections);
+    }
+
+    internal static SectionAddMessage Read(ref NetReader reader) => new(reader.ReadUInt64(), reader.ReadBytesWithLength());
+}
+
+/// <summary>A section the host unloaded.</summary>
+internal readonly record struct SectionRemoveMessage(ulong Generation, uint SectionId)
+{
+    internal void Write(NetWriter writer)
+    {
+        writer.WriteUInt64(Generation);
+        writer.WriteVarUInt32(SectionId);
+    }
+
+    internal static SectionRemoveMessage Read(ref NetReader reader) => new(reader.ReadUInt64(), reader.ReadVarUInt32());
 }
 
 internal readonly record struct SnapshotObjectMessage(
@@ -61,6 +85,18 @@ internal readonly record struct SnapshotObjectMessage(
         NetworkValidation.Orphaned((NetworkOrphaned)reader.ReadByte()),
         reader.ReadUInt32(),
         NetworkValidation.NetId(reader.ReadVarUInt32()));
+}
+
+/// <summary>A networked root the host moved into another section.</summary>
+internal readonly record struct SectionMoveMessage(Guid Identifier, uint SectionId)
+{
+    internal void Write(NetWriter writer)
+    {
+        writer.WriteGuid(Identifier);
+        writer.WriteVarUInt32(SectionId);
+    }
+
+    internal static SectionMoveMessage Read(ref NetReader reader) => new(reader.ReadGuid(), reader.ReadVarUInt32());
 }
 
 /// <summary>SceneLoaded, SceneReady and SceneActivate acknowledgements carry only this generation.</summary>

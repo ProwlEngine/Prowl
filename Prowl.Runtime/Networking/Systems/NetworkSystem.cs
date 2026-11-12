@@ -32,7 +32,7 @@ internal sealed partial class NetworkSystem : IDisposable
     internal uint NextNetIdValue;
     internal double NextTick;
     internal double ReadyDeadline;
-    internal Scene? ReplicatedScene;
+    internal SceneInstance? ReplicatedWorld;
     internal ulong SceneGeneration;
     internal Dictionary<Guid, EngineObject>? Spawning;
     internal uint Tick;
@@ -63,22 +63,25 @@ internal sealed partial class NetworkSystem : IDisposable
 
         _detached = true;
         Session = null;
-        Scene.OnSceneLoaded -= OnHostSceneLoaded;
-        Scene.OnSceneLoaded -= OnNetworkSceneActivated;
+        SceneInstance.Loaded -= OnWorldLoaded;
+        SceneInstance.Unloading -= OnWorldUnloading;
+        SceneInstance.MainChanged -= OnMainChanged;
+        SceneInstance.RootMoved -= OnRootMoved;
+        if (SceneInstance.RefuseAdditive == RefuseDuplicateObjects)
+        {
+            SceneInstance.RefuseAdditive = null;
+        }
+
         foreach (NetworkObject entry in Entries.Values.ToArray())
         {
             entry.NotifyDespawn();
         }
 
-        if (ReplicatedScene.IsValid())
-        {
-            Scene.CancelPendingLoad(ReplicatedScene!);
-        }
-
         Entries.Clear();
         Index.Clear();
         Spawning = null;
-        ReplicatedScene = null;
+        ReplicatedWorld = null;
+        ForgetSections();
         LoadingPeers.Clear();
         _overLimitPeers.Clear();
         EarlyRpcs.Clear();
@@ -96,7 +99,11 @@ internal sealed partial class NetworkSystem : IDisposable
         NextTick = Now;
         LocalJoinState = session.IsHost ? NetworkJoinState.Loading : NetworkJoinState.Connecting;
         ReadyDeadline = Now + Configuration.SceneLoadTimeoutSeconds;
-        Scene.OnSceneLoaded += OnNetworkSceneActivated;
+        SceneInstance.Loaded += OnWorldLoaded;
+        SceneInstance.Unloading += OnWorldUnloading;
+        SceneInstance.MainChanged += OnMainChanged;
+        SceneInstance.RootMoved += OnRootMoved;
+        SceneInstance.RefuseAdditive = RefuseDuplicateObjects;
         session.Joined += OnSessionAdmitted;
         NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty,
             session.IsHost ? "Hosting" : "Joining");
@@ -119,6 +126,9 @@ internal sealed partial class NetworkSystem : IDisposable
         RegisterEngineMessage(session, EngineMessage.SceneCatchUp, OnSceneCatchUp);
         RegisterEngineMessage(session, EngineMessage.SceneReady, OnClientSceneReady);
         RegisterEngineMessage(session, EngineMessage.SceneActivate, OnSceneActivate);
+        RegisterEngineMessage(session, EngineMessage.SectionAdd, OnSectionAdd);
+        RegisterEngineMessage(session, EngineMessage.SectionRemove, OnSectionRemove);
+        RegisterEngineMessage(session, EngineMessage.SectionMove, OnSectionMove);
 
         RegisterEngineMessage(session, EngineMessage.StaticRpcToHost, Rpcs.OnStaticRpcToHost);
         RegisterEngineMessage(session, EngineMessage.StaticRpcFromHost, Rpcs.OnStaticRpcFromHost);
@@ -129,12 +139,17 @@ internal sealed partial class NetworkSystem : IDisposable
         RegisterEngineMessage(session, EngineMessage.NetworkFlags, OnNetworkFlags);
         if (session.IsHost)
         {
-            ReplicatedScene = Scene.Current;
+            SceneInstance world = SceneInstance.Main;
+            ReplicatedWorld = world;
+            foreach (SceneSection section in world.Sections)
+            {
+                SectionId(section);
+            }
+
             SceneGeneration = 1;
             session.PeerJoined += OnPeerConnected;
             session.PeerLeft += OnPeerLeft;
-            Scene.OnSceneLoaded += OnHostSceneLoaded;
-            RegisterSceneObjects(ReplicatedScene);
+            RegisterSceneObjects(world, world.Objects);
             if (Session == session)
             {
                 DispatchNetworkListener(e => e.OnNetworkLoading());
@@ -162,6 +177,7 @@ internal sealed partial class NetworkSystem : IDisposable
 
     internal void Flush()
     {
+        SendSectionRemovals();
         if (IsActive && (IsHost || IsReady) && Now >= NextTick)
         {
             double interval = 1.0 / Math.Max(Networking.TickRate, 1f);

@@ -21,7 +21,7 @@ public partial class NetworkingTests
     [MemberData(nameof(TransformChannelCases))]
     public void TransformChannelsAreEnforcedOnEveryReceivePath(NetworkFlags mask, string path)
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject("Channel proxy");
         root.Network.Mode = NetworkMode.Object;
         root.Network.Flags = mask;
@@ -47,7 +47,7 @@ public partial class NetworkingTests
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             Pump(() => path == "CatchUp" ? host.Has(FakePeer.SceneLoaded) : Networking.Networking.IsReady, host);
-            GameObject proxy = Find(Scene.Current, root.Identifier);
+            GameObject proxy = Find(SceneInstance.Main, root.Identifier);
             Assert.Equal(mask, proxy.Network.Flags);
             Assert.Throws<InvalidOperationException>(() => proxy.Network.Flags = mask ^ NetworkFlags.NoScaleSync);
             // Disabled channels must retain current local values, not values frozen in the snapshot.
@@ -121,7 +121,7 @@ public partial class NetworkingTests
     [Fact]
     public void OwnerCannotChangeDisabledChannelsAndRelayUsesHostValues()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject();
         root.Network.Mode = NetworkMode.Object;
         root.Network.Flags = NetworkFlags.NoScaleSync;
@@ -173,7 +173,7 @@ public partial class NetworkingTests
     [Fact]
     public void OnlyChangedChannelsAreSentAndASettledPoseIsExact()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject();
         root.Network.Mode = NetworkMode.Object;
         root.Transform.LocalRotation = Quaternion.AxisAngle(Float3.UnitY, 0.3f);
@@ -230,7 +230,7 @@ public partial class NetworkingTests
     [Fact]
     public void HandoffVelocityIsInWorldSpaceUnderATransformedParent()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject parent = CreateGameObject();
         parent.Transform.LocalRotation = Quaternion.AxisAngle(Float3.UnitY, MathF.PI * 0.5f);
         parent.Transform.LocalScale = new Float3(2, 2, 2);
@@ -275,7 +275,7 @@ public partial class NetworkingTests
     [InlineData(NetworkFlags.NoScaleSync)]
     public void DisabledChannelChangesDoNotTriggerTransformMessages(NetworkFlags mask)
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject();
         root.Network.Mode = NetworkMode.Object;
         root.Network.Flags = mask;

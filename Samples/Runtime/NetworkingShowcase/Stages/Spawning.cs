@@ -20,7 +20,7 @@ public class Hangar : Component
 {
     private int _spawned;
 
-    public int Crates => GameObject.Scene?.FindObjectsOfType<Crate>().Length ?? 0;
+    public int Crates => GameObject.Scene.IsValid() ? GameObject.Scene!.GetAll<Crate>(includeDisabled: true).Length : 0;
 
     [Rpc.Host]
     public void RequestCrate()
@@ -31,7 +31,7 @@ public class Hangar : Component
 
     public void ClearCrates()
     {
-        foreach (Crate? crate in GameObject.Scene!.FindObjectsOfType<Crate>())
+        foreach (Crate? crate in GameObject.Scene!.GetAll<Crate>(includeDisabled: true))
         {
             crate?.GameObject.Destroy();
         }
@@ -46,7 +46,7 @@ public class Hangar : Component
             Lit(new Color(0.5f, 0.5f, 0.5f, 1f)), at);
         crate.AddComponent<Crate>().Home = at;
         crate.Network.Mode = NetworkMode.Object;
-        GameObject.Scene!.Add(crate);
+        crate.MoveTo(GameObject.Scene!);
         crate.Network.Spawn(owner);
     }
 }

@@ -20,7 +20,7 @@ public class Swarm : Component
 {
     [Sync(SyncFlags.FromHost)] public bool Churn { get; set; }
 
-    public int Drones => GameObject.Scene?.FindObjectsOfType<Drone>().Length ?? 0;
+    public int Drones => GameObject.Scene.IsValid() ? GameObject.Scene!.GetAll<Drone>(includeDisabled: true).Length : 0;
 
     public void Spawn(int count)
     {
@@ -30,14 +30,14 @@ public class Swarm : Component
             GameObject drone = Model("Drone", mesh, Lit(new Color(0.7f, 0.7f, 0.75f, 1f)), Transform.Position);
             drone.AddComponent<Drone>().Seed = Random.Shared.NextSingle() * 1000f;
             drone.Network.Mode = NetworkMode.Object;
-            GameObject.Scene!.Add(drone);
+            drone.MoveTo(GameObject.Scene!);
             drone.Network.Spawn();
         }
     }
 
     public void Clear()
     {
-        foreach (Drone? drone in GameObject.Scene!.FindObjectsOfType<Drone>())
+        foreach (Drone? drone in GameObject.Scene!.GetAll<Drone>(includeDisabled: true))
         {
             drone?.GameObject.Destroy();
         }
@@ -48,7 +48,7 @@ public class Swarm : Component
     {
         List<NetPeer?> peers = [null, .. Networking.Session!.Peers.Where(p => !p.IsLocal)];
         int next = 0;
-        foreach (Drone? drone in GameObject.Scene!.FindObjectsOfType<Drone>())
+        foreach (Drone? drone in GameObject.Scene!.GetAll<Drone>(includeDisabled: true))
         {
             drone?.GameObject.Network.AssignOwnership(peers[next++ % peers.Count]);
         }
@@ -56,7 +56,7 @@ public class Swarm : Component
 
     public void Gather()
     {
-        foreach (Drone? drone in GameObject.Scene!.FindObjectsOfType<Drone>())
+        foreach (Drone? drone in GameObject.Scene!.GetAll<Drone>(includeDisabled: true))
         {
             drone?.GameObject.Network.AssignOwnership(null);
         }
@@ -82,7 +82,7 @@ public class Drone : Component
             return;
         }
 
-        _swarm ??= GameObject.Scene?.FindObjectsOfType<Swarm>().FirstOrDefault();
+        _swarm ??= GameObject.Scene.IsValid() ? GameObject.Scene!.GetAll<Swarm>(includeDisabled: true).FirstOrDefault() : null;
         if (_swarm?.Churn == true)
         {
             Hue = Random.Shared.NextSingle();

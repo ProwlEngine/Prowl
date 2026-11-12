@@ -49,7 +49,7 @@ public partial class NetworkingTests
     [Fact]
     public void RpcsOnAnotherChannelDoNotPushSyncAheadAndAreRelayedOnTheirChannel()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -84,7 +84,7 @@ public partial class NetworkingTests
     [Fact]
     public void UnreliableRpcsIgnoreTheirChannel()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -110,7 +110,7 @@ public partial class NetworkingTests
     [Fact]
     public void ReplicationMessagesOffChannelZeroAreIgnored()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -146,7 +146,7 @@ public partial class NetworkingTests
     [Fact]
     public void RpcChannelsFallBackToChannelZeroOnSmallerTransports()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         using LimitedTransport transport = new(network, _ => 1000);
@@ -174,12 +174,12 @@ public partial class NetworkingTests
     [InlineData(true)]
     public void ReliableRpcsFollowTheirCallersSyncAndCarryNoState(bool unreliable)
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject("RPC state");
         root.Network.Mode = NetworkMode.Object;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
         root.AddComponent<NetworkLifecycleListener>().TryEditOnSpawn = true;
-        scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
+        scene.Add(root); Bind(scene);
         LocalNetwork network = new();
         byte[] snapshot, rpc, nextSync, health;
         byte[]? stateSync = null;
@@ -220,8 +220,8 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(receiving, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && Scene.Current.AllObjects.Any(go => go.Name == "RPC state" && !ReferenceEquals(go, root)), host);
-            RpcStateTestComponent proxy = Scene.Current.AllObjects.Single(go => go.Name == "RPC state").GetComponent<RpcStateTestComponent>()!;
+            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(go => go.Name == "RPC state" && !ReferenceEquals(go, root)), host);
+            RpcStateTestComponent proxy = SceneInstance.Main.Objects.Single(go => go.Name == "RPC state").GetComponent<RpcStateTestComponent>()!;
             NetworkLifecycleListener lifecycle = proxy.GameObject.GetComponent<NetworkLifecycleListener>()!;
             Assert.Equal(new[] { "spawn" }, lifecycle.Events);
             Assert.Equal(100, lifecycle.HealthAtSpawn);
@@ -253,11 +253,11 @@ public partial class NetworkingTests
     [InlineData(704)]
     public void ClientRpcRunsAfterItsSyncAndRelaysAfterTheHostsOwn(int method)
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject("Client RPC");
         root.Network.Mode = NetworkMode.Object;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
-        scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
+        scene.Add(root); Bind(scene);
         LocalNetwork network = new();
         try
         {
@@ -304,10 +304,10 @@ public partial class NetworkingTests
     [Fact]
     public void RpcWithTrailingBytesDropsItsCaller()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject(); root.Network.Mode = NetworkMode.Object;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
-        scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
+        scene.Add(root); Bind(scene);
         LocalNetwork network = new();
         try
         {
@@ -328,10 +328,10 @@ public partial class NetworkingTests
     [Fact]
     public void EachRpcBetweenTicksFollowsItsOwnSync()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject(); root.Network.Mode = NetworkMode.Object;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
-        scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
+        scene.Add(root); Bind(scene);
         LocalNetwork network = new();
         try
         {
@@ -379,9 +379,9 @@ public partial class NetworkingTests
     private static uint NetworkGeneration(GameObject root)
     {
         using NetWriter writer = new();
-        NetworkTestScene.Current.WriteSnapshot(Scene.Current, writer);
+        NetworkTestScene.Current.WriteSnapshot(SceneInstance.Main, writer);
         NetReader reader = new(writer.WrittenSpan);
-        reader.ReadByte(); reader.ReadUInt64(); reader.ReadString(); reader.ReadBytesWithLength();
+        reader.ReadByte(); reader.ReadUInt64(); reader.ReadBytesWithLength();
         uint count = reader.ReadVarUInt32();
         for (uint i = 0; i < count; i++)
         {
@@ -396,10 +396,10 @@ public partial class NetworkingTests
     [Fact]
     public void OldSyncCannotCrossOwnershipGenerationWhenOwnerReturns()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject(); root.Network.Mode = NetworkMode.Object;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
-        scene.Add(root); Scene.Load(scene); Scene.ProcessPendingLoad();
+        scene.Add(root); Bind(scene);
         LocalNetwork network = new();
         try
         {
@@ -427,7 +427,7 @@ public partial class NetworkingTests
     [InlineData(true)]
     public void AReliableRpcOnAnotherChannelThatOvertakesActivationStillRuns(bool rpcFirst)
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject("Talker");
         RpcChannelTestComponent component = go.AddComponent<RpcChannelTestComponent>();
         scene.Add(go);
@@ -458,7 +458,7 @@ public partial class NetworkingTests
 
             Pump(() => Networking.Networking.IsReady, host);
             PumpFor(50, host);
-            Assert.Equal(1, Find(Scene.Current, go.Identifier).GetComponent<RpcChannelTestComponent>()!.Talks);
+            Assert.Equal(1, Find(SceneInstance.Main, go.Identifier).GetComponent<RpcChannelTestComponent>()!.Talks);
         }
         finally { Networking.Networking.Shutdown(); }
     }

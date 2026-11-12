@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -257,6 +257,7 @@ public partial class GameObject : EngineObject, ISerializable
         SceneSection? from = _section;
         GiveFreshIdentifiersAgainst(section);
         section.Instance.JoinSection(this, section);
+        SceneInstance.RaiseRootMoved(this, section);
         if (from is { IsPersistent: true } || section.IsPersistent)
             Debug.Log($"[Scene] '{Name}' moved from '{from?.Name}' to '{section.Name}'.");
 

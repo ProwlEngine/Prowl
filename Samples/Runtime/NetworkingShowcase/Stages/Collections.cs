@@ -115,7 +115,7 @@ public class Board : Component
 
             // Only what the bars show is local: the bars themselves are the synced list.
             bar.Network.Mode = NetworkMode.Never;
-            GameObject.Scene!.Add(bar);
+            bar.MoveTo(GameObject.Scene!);
             _shown.Add(bar);
         }
     }

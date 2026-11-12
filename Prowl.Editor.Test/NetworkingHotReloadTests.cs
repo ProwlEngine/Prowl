@@ -32,7 +32,7 @@ public class NetworkingHotReloadTests : EditorTestHarness
             """;
         Assembly v1 = CompileGameAssembly("Actor.cs", script.Replace("EXTRA_STATIC", "").Replace("EXTRA", ""));
         Type actor = v1.GetType("Actor")!;
-        var scene = new Scene();
+        SceneInstance scene = SceneInstance.Create("Reload");
         var go = new GameObject("Actor");
         go.AddComponent(actor);
         scene.Add(go);

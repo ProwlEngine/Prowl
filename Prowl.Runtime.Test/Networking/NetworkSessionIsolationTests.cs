@@ -16,9 +16,8 @@ public sealed class NetworkSessionIsolationTests : RuntimeTestBase
         try
         {
             Networking.Networking.Configure(new() { Execution = NetworkExecution.DedicatedThread });
-            Scene scene = CreateScene();
-            Scene.Load(scene);
-            Scene.ProcessPendingLoad();
+            SceneInstance scene = CreateScene();
+            Bind(scene);
             Networking.Networking.Host(transport);
             Assert.True(transport.Entered.Wait(TimeSpan.FromSeconds(2)));
             Networking.Networking.Shutdown();
@@ -45,13 +44,12 @@ public sealed class NetworkSessionIsolationTests : RuntimeTestBase
     [Fact]
     public void UnsentCollectionChangesDoNotCarryIntoTheNextSession()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject();
         root.Network.Mode = NetworkMode.Object;
         NetCollectionTestComponent component = root.AddComponent<NetCollectionTestComponent>();
         scene.Add(root);
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
+        Bind(scene);
         LocalNetwork network = new();
         try
         {

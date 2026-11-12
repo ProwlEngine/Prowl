@@ -317,15 +317,15 @@ public class SyncAndRpcTests
             RpcFromHost = SceneSnapshot + 7, SceneLoaded = SceneSnapshot + 8, SceneCatchUp = SceneSnapshot + 9,
             SceneReady = SceneSnapshot + 10;
 
-        private readonly Scene _scene = new();
+        private readonly SceneInstance _scene = SceneInstance.Create("Hosted");
 
         public HostedComponent(Type type)
         {
             GameObject go = new(type.Name);
             Component = go.AddComponent(type)!;
             _scene.Add(go);
-            Scene.Load(_scene);
-            Scene.ProcessPendingLoad();
+            _scene.Activate();
+            SceneInstance.Main = _scene;
             LocalNetwork network = new();
             Net.Host(new LocalTransport(network, "host"));
             Client = NetSession.Join(new LocalTransport(network, "client"), "host", "client");
@@ -374,7 +374,7 @@ public class SyncAndRpcTests
         {
             Net.Shutdown();
             Client.Dispose();
-            _scene.Dispose();
+            SceneInstance.Shutdown();
         }
     }
 }

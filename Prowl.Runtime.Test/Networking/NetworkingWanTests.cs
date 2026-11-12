@@ -26,8 +26,8 @@ public sealed class NetworkingWanTests : RuntimeTestBase
         try
         {
             Networking.Networking.Configure(configuration);
-            Scene scene = CreateScene();
-            Scene.Load(scene); Scene.ProcessPendingLoad();
+            SceneInstance scene = CreateScene();
+            Bind(scene);
             NetSession server = Networking.Networking.Host(Stack(42));
             List<int> ordered = new();
             server.OnRaw(42, (NetPeer peer, ref NetReader reader, Delivery delivery, byte channel) => ordered.Add(reader.ReadInt32()));

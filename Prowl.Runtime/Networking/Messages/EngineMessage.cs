@@ -24,5 +24,8 @@ internal enum EngineMessage : ushort
     OwnershipState,
     OwnerTransfer,
     NetworkFlags,
-    SnapshotAck
+    SnapshotAck,
+    SectionAdd,
+    SectionRemove,
+    SectionMove
 }

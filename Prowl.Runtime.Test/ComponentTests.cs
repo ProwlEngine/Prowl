@@ -351,7 +351,7 @@ public class ComponentTests : RuntimeTestBase
     private static GameObject AddedToUnheldScene()
     {
         GameObject go = new();
-        new Scene().Add(go);
+        SceneInstance.Create("Unheld").Add(go);
         return go;
     }
 

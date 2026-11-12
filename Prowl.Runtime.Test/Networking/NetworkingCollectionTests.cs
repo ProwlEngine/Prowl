@@ -290,7 +290,7 @@ public partial class NetworkingTests
     [Fact]
     public void HostSendsEachChangeAndAJoinersWholeStateIsntChangedTwice()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         MakeCurrent(scene);
 
         LocalNetwork network = new();
@@ -379,7 +379,7 @@ public partial class NetworkingTests
     [Fact]
     public void OwnersChangeTheirCollectionsAndNobodyElseCan()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         MakeCurrent(scene);
 
         LocalNetwork network = new();
@@ -432,7 +432,7 @@ public partial class NetworkingTests
     [Fact]
     public void ReceivedStateIsInPlaceBeforeComponentsStartAndRunsNoHooks()
     {
-        Scene hostScene = CreateScene();
+        SceneInstance hostScene = CreateScene();
         GameObject level = CreateGameObject("Level");
         NetCollectionTestComponent levelSource = level.AddComponent<NetCollectionTestComponent>();
         levelSource.Health = 3;
@@ -462,9 +462,9 @@ public partial class NetworkingTests
         Networking.Networking.Join(new LocalTransport(network, "bob"), "host", "bob");
         try
         {
-            Pump(() => Scene.Current.AllObjects.Any(o => o.Identifier == shipId), host);
-            NetCollectionTestComponent levelHere = Find(Scene.Current, levelId).GetComponent<NetCollectionTestComponent>()!;
-            NetCollectionTestComponent shipHere = Find(Scene.Current, shipId).GetComponent<NetCollectionTestComponent>()!;
+            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == shipId), host);
+            NetCollectionTestComponent levelHere = Find(SceneInstance.Main, levelId).GetComponent<NetCollectionTestComponent>()!;
+            NetCollectionTestComponent shipHere = Find(SceneInstance.Main, shipId).GetComponent<NetCollectionTestComponent>()!;
 
             Assert.Equal(3, levelHere.Health);
             Assert.Equal([1], levelHere.Scores);
@@ -509,7 +509,7 @@ public partial class NetworkingTests
     /// <summary>Joins a fake host that spawns a ship owned by this client, and waits until it's ready.</summary>
     private (FakePeer Host, Guid ShipId) JoinOwningShip()
     {
-        Scene hostScene = CreateScene();
+        SceneInstance hostScene = CreateScene();
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteSnapshot(hostScene, snapshot);
         byte[] snapshotBytes = snapshot.ToArray();
@@ -530,7 +530,7 @@ public partial class NetworkingTests
         };
 
         Networking.Networking.Join(new LocalTransport(network, "bob"), "host", "bob");
-        Pump(() => Networking.Networking.IsReady && Scene.Current.AllObjects.Any(o => o.Identifier == shipId), host);
+        Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == shipId), host);
         return (host, shipId);
     }
 
@@ -543,7 +543,7 @@ public partial class NetworkingTests
             GameObject local = CreateGameObject("Local effect");
             local.Network.Mode = NetworkMode.Never;
             NetCollectionTestComponent component = local.AddComponent<NetCollectionTestComponent>();
-            Scene.Current.Add(local);
+            SceneInstance.Main.Add(local);
 
             component.Health = 5;
             component.Scores.Add(1);
@@ -561,7 +561,7 @@ public partial class NetworkingTests
     public void AnOwnersChangeTurnedAwayByAHandoffDoesNotOutliveIt()
     {
         // A real host gives a ship to a client, takes it back, then changes its list. Its messages are kept.
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject ship = CreateGameObject("Ship");
         ship.Network.Mode = NetworkMode.Object;
         NetCollectionTestComponent source = ship.AddComponent<NetCollectionTestComponent>();
@@ -604,8 +604,8 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(receiving, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && !Find(Scene.Current, ship.Identifier).IsProxy, host);
-            NetCollectionTestComponent here = Find(Scene.Current, ship.Identifier).GetComponent<NetCollectionTestComponent>()!;
+            Pump(() => Networking.Networking.IsReady && !Find(SceneInstance.Main, ship.Identifier).IsProxy, host);
+            NetCollectionTestComponent here = Find(SceneInstance.Main, ship.Identifier).GetComponent<NetCollectionTestComponent>()!;
             here.Scores.Add(5);
             Pump(() => host.Has(FakePeer.Sync), host);
 

@@ -34,7 +34,7 @@ public partial class NetworkingTests
         GameObject child = CreateGameObject("Flag child");
         // Build a separate tree before spawning, so its child is covered by the root's generation.
         GameObject spawned = CreateGameObject("Flag root"); child.SetParent(spawned);
-        Scene.Current.Add(spawned);
+        SceneInstance.Main.Add(spawned);
         using FakePeer client = FakePeer.Join(network, "client");
         client.AutoReady = false;
         try
@@ -51,7 +51,7 @@ public partial class NetworkingTests
             Assert.Equal(child.Identifier, childUpdate.ReadGuid());
             Assert.Equal(NetworkGeneration(spawned), childUpdate.ReadUInt32());
             Assert.Equal((byte)child.Network.Flags, childUpdate.ReadByte());
-            using Scene snapshot = RoundTrip(Scene.Current);
+            using SnapshotSections snapshot = RoundTrip(SceneInstance.Main);
             Assert.Equal(root.Network.Flags, Find(snapshot, root.Identifier).Network.Flags);
             Assert.Equal(child.Network.Flags, Find(snapshot, child.Identifier).Network.Flags);
             root.Network.Flags = NetworkFlags.NoScaleSync; // A no-op does not broadcast again.
@@ -131,7 +131,7 @@ public partial class NetworkingTests
     [Fact]
     public void ClientReceivesRootAndChildFlagsWhileSceneActivationIsQueued()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject("Flag root"); root.Network.Mode = NetworkMode.Object;
         GameObject child = CreateGameObject("Flag child"); child.SetParent(root);
         scene.Add(root); MakeCurrent(scene);
@@ -160,13 +160,11 @@ public partial class NetworkingTests
                 Networking.Networking.Receive(); Networking.Networking.Flush(); host.Session.Update();
                 Thread.Sleep(1);
             }
-            Assert.Equal(NetworkJoinState.Loading, Networking.Networking.JoinState);
-            Assert.True(Scene.IsLoadPending);
             Assert.Equal(NetworkFlags.NoRotationSync, ((GameObject)NetworkTestScene.Current.FindByIdentifier(child.Identifier)!).Network.Flags);
             Pump(() => Networking.Networking.IsReady, host);
-            Assert.Equal(NetworkFlags.NoScaleSync, Find(Scene.Current, root.Identifier).Network.Flags);
-            Assert.Equal(NetworkFlags.NoRotationSync, Find(Scene.Current, child.Identifier).Network.Flags);
-            Assert.Throws<InvalidOperationException>(() => Find(Scene.Current, child.Identifier).Network.Flags = NetworkFlags.None);
+            Assert.Equal(NetworkFlags.NoScaleSync, Find(SceneInstance.Main, root.Identifier).Network.Flags);
+            Assert.Equal(NetworkFlags.NoRotationSync, Find(SceneInstance.Main, child.Identifier).Network.Flags);
+            Assert.Throws<InvalidOperationException>(() => Find(SceneInstance.Main, child.Identifier).Network.Flags = NetworkFlags.None);
         }
         finally { Networking.Networking.Shutdown(); }
     }

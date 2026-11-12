@@ -26,7 +26,7 @@ internal sealed partial class NetworkSystem
     /// <summary>The GameObject or Component with this identifier in the replicated scene, or null.</summary>
     internal EngineObject? FindByIdentifier(Guid id)
     {
-        if (id == Guid.Empty || ReferenceEquals(ReplicatedScene, null))
+        if (id == Guid.Empty || ReplicatedWorld.IsNotValid())
         {
             return null;
         }
@@ -48,7 +48,7 @@ internal sealed partial class NetworkSystem
 
         IndexFrame = Frame;
         Index.Clear();
-        foreach (GameObject go in ReplicatedScene.AllObjects)
+        foreach (GameObject go in ReplicatedWorld!.Objects)
         {
             IndexObject(go);
         }
@@ -76,9 +76,9 @@ internal sealed partial class NetworkSystem
 
     internal bool IsLive(EngineObject obj, Guid id) => obj switch
     {
-        GameObject go => !go.IsDisposed && go.Identifier == id && go.Scene == ReplicatedScene,
+        GameObject go => !go.IsDisposed && go.Identifier == id && go.Scene == ReplicatedWorld,
         Component c => !c.IsDisposed && c.Identifier == id && c.GameObject.IsValid() &&
-                       c.GameObject.Scene == ReplicatedScene,
+                       c.GameObject.Scene == ReplicatedWorld,
         _ => false
     };
 
@@ -157,10 +157,10 @@ internal sealed partial class NetworkSystem
                 throw new InvalidOperationException("An object being despawned cannot be spawned again.");
             }
 
-            if (go.Scene != ReplicatedScene)
+            if (go.Scene != ReplicatedWorld)
             {
                 throw new InvalidOperationException(
-                    $"'{go.Name}' has to be in the current scene before it can be spawned.");
+                    $"'{go.Name}' has to be in the networked world, SceneInstance.Main, before it can be spawned.");
             }
 
             if (NetworkAccessor.IsExcludedFromNetwork(go))
@@ -174,6 +174,11 @@ internal sealed partial class NetworkSystem
             {
                 throw new InvalidOperationException(
                     $"'{go.Name}' is inside the networked object '{outer.Name}' already.");
+            }
+
+            if (go.Section is { } section)
+            {
+                EnsureAnnounced(section);
             }
         }
 
@@ -233,7 +238,7 @@ internal sealed partial class NetworkSystem
             NetworkSerialization.WritingSnapshot = false;
         }
 
-        new SpawnMessage(go.Identifier, go.Parent.IsValid() ? go.Parent!.Identifier : Guid.Empty,
+        new SpawnMessage(go.Identifier, go.Parent.IsValid() ? go.Parent!.Identifier : Guid.Empty, SectionSlot(go),
             owner, orphaned, generation, netId == 0 ? NextNetId() : netId, Compress(echo)).Write(output);
 
         List<GameObject> tree = [go, .. go.GetChildrenDeep()];
@@ -242,13 +247,13 @@ internal sealed partial class NetworkSystem
 
     internal void OnSpawn(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
-        if (IsHost || ReferenceEquals(ReplicatedScene, null))
+        if (IsHost || ReferenceEquals(ReplicatedWorld, null))
         {
             return;
         }
 
         NetSession? session = Session;
-        Scene scene = ReplicatedScene;
+        SceneInstance scene = ReplicatedWorld;
         SpawnMessage message = SpawnMessage.Read(ref reader);
         Guid id = message.Identifier;
         Guid parentId = message.ParentId;
@@ -267,7 +272,7 @@ internal sealed partial class NetworkSystem
         bool attached = false, adopted = false;
         try
         {
-            if (Session != session || ReplicatedScene != scene)
+            if (Session != session || ReplicatedWorld != scene)
             {
                 return;
             }
@@ -308,7 +313,7 @@ internal sealed partial class NetworkSystem
                 Spawning = null;
             }
 
-            if (Session != session || ReplicatedScene != scene)
+            if (Session != session || ReplicatedWorld != scene)
             {
                 return;
             }
@@ -326,11 +331,11 @@ internal sealed partial class NetworkSystem
             }
             else if (!adopted)
             {
-                scene.Add(go);
+                scene.Add(go, message.SectionSlot == 0 ? null : SectionOf(message.SectionSlot - 1));
             }
 
             attached = true;
-            if (Session != session || ReplicatedScene != scene)
+            if (Session != session || ReplicatedWorld != scene)
             {
                 return;
             }
@@ -376,8 +381,9 @@ internal sealed partial class NetworkSystem
         using FrameStatScope stats = FrameStats.Network.Scope();
         Entries.Remove(go.Identifier);
 
-        // A scene being swapped out is disabled first. Its objects aren't destroyed, they're replaced by the next snapshot.
-        if (!IsHost || go.Scene is not { IsDisposed: false, IsActive: true } || !IsActive)
+        // A section being unloaded, or a world being torn down, goes away on clients as a whole.
+        if (!IsHost || !IsActive || go.Scene != ReplicatedWorld || ReplicatedWorld!.State != SceneState.Running ||
+            IsUnloading(go))
         {
             return;
         }

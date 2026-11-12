@@ -51,8 +51,8 @@ public static class SceneEvents
         Dispatch(root, action, scope, includeInactive);
     }
 
-    /// <summary>Dispatches in an explicit scene, independently of Scene.Current.</summary>
-    public static void RunEvent<T>(this Scene scene, Action<T> action, bool includeInactive = false) where T : class
+    /// <summary>Dispatches to every object of an explicit world, independently of SceneInstance.Active.</summary>
+    public static void RunEvent<T>(this SceneInstance scene, Action<T> action, bool includeInactive = false) where T : class
     {
         ArgumentNullException.ThrowIfNull(action);
         MainThreadContext.AssertMainThread();
@@ -101,7 +101,7 @@ public static class SceneEvents
         if (cache.Revision == revision)
             return cache.Targets;
 
-        IEnumerable<GameObject> objects = root is Scene scene ? scene.AllObjects : EnumerateTree((GameObject)root);
+        IEnumerable<GameObject> objects = root is SceneInstance world ? world.Objects : EnumerateTree((GameObject)root);
         cache.Targets = objects.Where(go => go.IsValid())
             .SelectMany(go => go.GetComponents())
             .Where(component => component.IsValid())
@@ -126,8 +126,8 @@ public static class SceneEvents
 
     private static bool IsInScope(EngineObject root, GameObject owner, EventScope scope)
     {
-        if (root is Scene scene)
-            return owner.Scene == scene;
+        if (root is SceneInstance world)
+            return owner.Scene == world;
         if (scope == EventScope.Self)
             return owner == root;
 
@@ -157,7 +157,7 @@ public static class SceneEvents
 /// <summary>Convenience methods for custom local scene event interfaces. These do not send RPCs.</summary>
 public interface ISceneEvent<T> where T : class
 {
-    static void Post(Action<T> action) => Scene.Current.RunEvent(action);
+    static void Post(Action<T> action) => SceneInstance.Active.RunEvent(action);
 
     static void PostToGameObject(GameObject root, Action<T> action,
         EventScope scope = EventScope.SelfAndDescendants, bool includeInactive = false) =>

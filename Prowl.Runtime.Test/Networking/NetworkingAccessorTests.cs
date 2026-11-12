@@ -59,12 +59,12 @@ public partial class NetworkingTests
     [Fact]
     public void SnapshotOnlyTreesDoNotAllocateNetworkAccessorsDuringSnapshotRoundTrip()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject();
         GameObject child = CreateGameObject(); child.SetParent(root);
         scene.Add(root);
-        using Scene copy = RoundTrip(scene);
-        Assert.All(scene.AllObjects, go => Assert.Null(go._network));
-        Assert.All(copy.AllObjects, go => Assert.Null(go._network));
+        using SnapshotSections copy = RoundTrip(scene);
+        Assert.All(scene.Objects, go => Assert.Null(go._network));
+        Assert.All(copy.Objects, go => Assert.Null(go._network));
     }
 }

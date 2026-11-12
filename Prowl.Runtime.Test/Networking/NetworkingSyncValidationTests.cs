@@ -59,7 +59,7 @@ public partial class NetworkingTests
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
         Networking.Networking.Configure(new() { Execution = execution });
-        Scene scene = CreateScene(); MakeCurrent(scene);
+        SceneInstance scene = CreateScene(); MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
         using FakePeer owner = FakePeer.Join(network, "owner"), observer = FakePeer.Join(network, "observer");
@@ -99,7 +99,7 @@ public partial class NetworkingTests
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
         Networking.Networking.Configure(new() { Execution = execution });
-        Scene source = CreateScene(); GameObject root = CreateGameObject();
+        SceneInstance source = CreateScene(); GameObject root = CreateGameObject();
         root.AddComponent<NetCollectionTestComponent>();
         source.Add(root);
         using NetWriter snapshot = new(); NetworkTestScene.Current.WriteSnapshot(source, snapshot);
@@ -112,7 +112,7 @@ public partial class NetworkingTests
             SessionEndReason? reason = null;
             session.Ended += (why, _) => reason = why;
             Pump(() => Networking.Networking.IsReady, host);
-            NetCollectionTestComponent component = Find(Scene.Current, root.Identifier).GetComponent<NetCollectionTestComponent>()!;
+            NetCollectionTestComponent component = Find(SceneInstance.Main, root.Identifier).GetComponent<NetCollectionTestComponent>()!;
             component.ClearSeen();
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
             host.Session.SendRaw(client, FakePeer.Sync, SyncWithMalformedTail(NetPeer.HostId, component, kind));
@@ -131,7 +131,7 @@ public partial class NetworkingTests
     [Fact]
     public void InvalidInitialCollectionStateDoesNotPartiallyApplyCatchUp()
     {
-        Scene source = CreateScene(); GameObject root = CreateGameObject();
+        SceneInstance source = CreateScene(); GameObject root = CreateGameObject();
         NetCollectionTestComponent original = root.AddComponent<NetCollectionTestComponent>();
         original.Scores.Add(9); source.Add(root);
         using NetWriter snapshot = new(); NetworkTestScene.Current.WriteSnapshot(source, snapshot);
@@ -146,7 +146,7 @@ public partial class NetworkingTests
             SessionEndReason? reason = null;
             session.Ended += (why, _) => reason = why;
             Pump(() => Networking.Networking.JoinState == NetworkJoinState.Synchronizing && host.Has(FakePeer.SceneLoaded), host);
-            NetCollectionTestComponent component = Find(Scene.Current, root.Identifier).GetComponent<NetCollectionTestComponent>()!;
+            NetCollectionTestComponent component = Find(SceneInstance.Main, root.Identifier).GetComponent<NetCollectionTestComponent>()!;
             using NetWriter collection = new();
             original.Scores.WriteChanges(collection);
             host.Send(FakePeer.SceneCatchUp, w =>
@@ -173,7 +173,7 @@ public partial class NetworkingTests
     [InlineData("stale")]
     public void ValidSyncSkipsRejectedValuesAndNotifiesOnceAfterTheWholeBlock(string skipped)
     {
-        Scene scene = CreateScene(); MakeCurrent(scene);
+        SceneInstance scene = CreateScene(); MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
         using FakePeer owner = FakePeer.Join(network, "owner"), observer = FakePeer.Join(network, "observer");

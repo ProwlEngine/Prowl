@@ -100,7 +100,7 @@ public partial class NetworkingTests
         // The payload expands to far more than this budget while remaining tiny on the wire.
         Networking.Networking.Configure(new() { Execution = execution, MaxSnapshotDecompressedBytes = 1024,
             MaxSnapshotDepth = 8, MaxSnapshotNodes = 256 });
-        Scene original = CreateScene();
+        SceneInstance original = CreateScene();
         MakeCurrent(original);
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteSnapshot(original, snapshot);
@@ -119,7 +119,7 @@ public partial class NetworkingTests
         });
         if (kind == "zlib") malformed = [0, 0, 0, 0];
         Assert.True(malformed.Length < 16 * 1024);
-        HashSet<Scene> liveBefore = Scene.Live.ToHashSet();
+        HashSet<SceneInstance> liveBefore = SceneInstance.All.ToHashSet();
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
         SessionEndReason? ended = null;
@@ -146,9 +146,9 @@ public partial class NetworkingTests
             session.Ended += (reason, _) => ended = reason;
             Pump(() => Networking.Networking.Session == null, host);
             Assert.Equal(SessionEndReason.ProtocolError, ended);
-            Assert.Same(original, Scene.Current);
-            Assert.False(Scene.IsLoadPending);
-            Assert.All(Scene.Live, scene => Assert.Contains(scene, liveBefore));
+            Assert.Same(original, SceneInstance.Main);
+            Assert.Null(SceneInstance.Main.PendingLoad);
+            Assert.All(SceneInstance.All, scene => Assert.Contains(scene, liveBefore));
         }
         finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
     }

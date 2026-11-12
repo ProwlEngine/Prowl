@@ -124,7 +124,7 @@ public partial class NetworkingTests
         {
             Networking.Networking.Join(new LocalTransport(receiving, "client"), "host", "client");
             Pump(() => Networking.Networking.IsReady, host);
-            GameObject root = Find(Scene.Current, original.Identifier);
+            GameObject root = Find(SceneInstance.Main, original.Identifier);
             NetTestComponent received = root.GetComponent<NetTestComponent>()!;
             Assert.Equal(OwnerTransfer.Takeover, root.Network.OwnerTransfer);
             Assert.True(root.IsProxy);
@@ -187,7 +187,7 @@ public partial class NetworkingTests
     [Fact]
     public void HostCanTakeAndDropThroughChildrenWithoutChangingTheirSettings()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject("Root"); root.Network.Mode = NetworkMode.Object;
         GameObject child = CreateGameObject("Child"); child.SetParent(root);
         scene.Add(root); MakeCurrent(scene);
@@ -265,7 +265,7 @@ public partial class NetworkingTests
             using FakePeer late = FakePeer.Join(network, "late");
             Pump(() => late.IsReady, client, late);
             NetReader snapshot = new(late.Last(FakePeer.SceneSnapshot));
-            using Scene scene = NetworkTestScene.Current.ReadSnapshot(ref snapshot);
+            using SnapshotSections scene = NetworkTestScene.Current.ReadSnapshot(ref snapshot);
             Assert.Equal(OwnerTransfer.Takeover, Find(scene, root.Identifier).Network.OwnerTransfer);
         }
         finally { Networking.Networking.Shutdown(); }

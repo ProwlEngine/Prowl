@@ -12,7 +12,7 @@ public partial class NetworkingTests
     [Fact]
     public void AComponentGivenUpOnIsSentAgainOnceItsObjectIsHandedOver()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));

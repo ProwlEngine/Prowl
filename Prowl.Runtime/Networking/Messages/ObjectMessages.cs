@@ -7,10 +7,11 @@ using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>Spawn header followed by a SyncBlock of initial component values.</summary>
+/// <summary>Spawn header followed by a SyncBlock of initial component values. A root goes into section SectionSlot minus one, or the active one for 0.</summary>
 internal readonly ref struct SpawnMessage(
     Guid identifier,
     Guid parentId,
+    uint sectionSlot,
     int ownerId,
     NetworkOrphaned orphaned,
     uint generation,
@@ -19,6 +20,7 @@ internal readonly ref struct SpawnMessage(
 {
     internal readonly Guid Identifier = identifier;
     internal readonly Guid ParentId = parentId;
+    internal readonly uint SectionSlot = sectionSlot;
     internal readonly int OwnerId = ownerId;
     internal readonly NetworkOrphaned Orphaned = orphaned;
     internal readonly uint Generation = generation;
@@ -29,6 +31,7 @@ internal readonly ref struct SpawnMessage(
     {
         writer.WriteGuid(Identifier);
         writer.WriteGuid(ParentId);
+        writer.WriteVarUInt32(SectionSlot);
         writer.WriteVarUInt32((uint)(OwnerId + 1));
         writer.WriteByte((byte)Orphaned);
         writer.WriteUInt32(Generation);
@@ -39,6 +42,7 @@ internal readonly ref struct SpawnMessage(
     internal static SpawnMessage Read(ref NetReader reader) => new(
         reader.ReadGuid(),
         reader.ReadGuid(),
+        reader.ReadVarUInt32(),
         (int)reader.ReadVarUInt32() - 1,
         NetworkValidation.Orphaned((NetworkOrphaned)reader.ReadByte()),
         reader.ReadUInt32(),

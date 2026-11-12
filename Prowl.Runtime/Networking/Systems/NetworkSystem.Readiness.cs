@@ -82,22 +82,10 @@ internal sealed partial class NetworkSystem
         Snapshots.Delivered(peer);
     }
 
+    /// <summary>The host's sections are in place on this client, so it asks for the values that changed meanwhile.</summary>
     internal void OnNetworkSceneActivated()
     {
-        // A joining client can still activate local scenes before the host supplies its first snapshot.
-        // Only guard scene replacement once there is a network scene to protect (including a queued one).
-        if (!IsClient || ReferenceEquals(ReplicatedScene, null))
-        {
-            return;
-        }
-
-        if (Scene.Current != ReplicatedScene)
-        {
-            Networking.Shutdown("The network scene was replaced locally during the session.");
-            return;
-        }
-
-        if (JoinState != NetworkJoinState.Loading)
+        if (!IsClient || JoinState != NetworkJoinState.Loading)
         {
             return;
         }
@@ -119,7 +107,7 @@ internal sealed partial class NetworkSystem
         using NetWriter message = new();
         Snapshots.Delivered(peer);
         new SceneCatchUpMessage(generation).Write(message);
-        Sync.WriteSyncState(message, ReplicatedScene!.AllObjects);
+        Sync.WriteSyncState(message, ReplicatedWorld.IsValid() ? ReplicatedWorld!.Objects : Enumerable.Empty<GameObject>());
         WriteCatchUpTransforms(message);
         state!.Stage = NetworkJoinState.Synchronizing;
         SendEngine(peer, EngineMessage.SceneCatchUp, message.WrittenSpan);
@@ -134,7 +122,7 @@ internal sealed partial class NetworkSystem
 
         ulong generation = SceneCatchUpMessage.Read(ref reader).Generation;
         if (!IsClient || !peer.IsHost || generation != SceneGeneration ||
-            JoinState != NetworkJoinState.Synchronizing || Scene.Current != ReplicatedScene || CatchUpApplied)
+            JoinState != NetworkJoinState.Synchronizing || ReplicatedWorld.IsNotValid() || CatchUpApplied)
         {
             return;
         }
@@ -180,7 +168,7 @@ internal sealed partial class NetworkSystem
     {
         ulong generation = ReadSceneGeneration(ref reader, delivery);
         if (IsClient && peer.IsHost && generation == SceneGeneration && CatchUpApplied &&
-            LocalJoinState == NetworkJoinState.Synchronizing && Scene.Current == ReplicatedScene)
+            LocalJoinState == NetworkJoinState.Synchronizing && ReplicatedWorld.IsValid())
         {
             SetLocalReady();
             RunEarlyRpcs();
@@ -250,20 +238,36 @@ internal sealed partial class NetworkSystem
     internal void DispatchNetworkListener(Action<INetworkListener> action)
     {
         NetSession? session = Session;
-        Scene? scene = ReplicatedScene;
-        if (scene.IsNotValid())
+        SceneInstance? world = ReplicatedWorld;
+        if (world.IsNotValid())
         {
             return;
         }
 
-        scene!.RunEvent<INetworkListener>(listener =>
+        world!.RunEvent<INetworkListener>(listener =>
         {
-            // A previous listener can shut down or replace the scene during the same dispatch.
-            if (Session == session && ReplicatedScene == scene)
+            // A previous listener can shut down or replace the world during the same dispatch.
+            if (Session == session && ReplicatedWorld == world)
             {
                 action(listener);
             }
         }, true);
+    }
+
+    /// <summary>Runs <paramref name="action" /> on the listeners of one section, for a section loaded during the session.</summary>
+    internal void DispatchSectionListener(SceneSection section, Action<INetworkListener> action)
+    {
+        NetSession? session = Session;
+        foreach (GameObject root in section.Roots.ToArray())
+        {
+            root.RunEvent<INetworkListener>(listener =>
+            {
+                if (Session == session && ReferenceEquals(root.Section, section))
+                {
+                    action(listener);
+                }
+            }, EventScope.SelfAndDescendants, true);
+        }
     }
 
     internal bool CanReceiveEngineMessage(NetPeer peer, EngineMessage kind)

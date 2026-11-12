@@ -17,7 +17,7 @@ public class SceneEventTests : RuntimeTestBase
     [Fact]
     public void ScopesAndInactiveOptionsAreExplicit()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject(), child = CreateGameObject(), sibling = CreateGameObject();
         child.SetParent(root);
         scene.Add(root); scene.Add(sibling);
@@ -97,7 +97,7 @@ public class SceneEventTests : RuntimeTestBase
     [Fact]
     public void SceneMembershipMovesAndHotReloadInvalidateCachedTargets()
     {
-        Scene first = CreateScene(), second = CreateScene();
+        SceneInstance first = CreateScene(), second = CreateScene();
         GameObject go = CreateGameObject();
         Listener listener = go.AddComponent<Listener>();
         first.Add(go);
@@ -114,11 +114,11 @@ public class SceneEventTests : RuntimeTestBase
     [Fact]
     public void ExplicitSceneAndConvenienceMethodsHaveTheSameTargets()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
         Listener listener = go.AddComponent<Listener>();
         scene.Add(go);
-        Scene.Load(scene); Scene.ProcessPendingLoad();
+        Bind(scene);
         ITestEvent.Post(e => e.Fire());
         ITestEvent.PostToGameObject(go, e => e.Fire(), EventScope.Self);
         Assert.Equal(2, listener.Calls);

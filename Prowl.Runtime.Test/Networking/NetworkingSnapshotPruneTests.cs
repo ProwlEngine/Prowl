@@ -12,7 +12,7 @@ public partial class NetworkingTests
     [Fact]
     public void AClientForgetsTheComponentIdsOfDespawnedObjects()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
         GameObject crate = CreateGameObject("Crate");
@@ -31,8 +31,8 @@ public partial class NetworkingTests
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
             host.Session.SendRaw(client, FakePeer.Spawn, spawn.WrittenSpan);
             host.Session.Flush();
-            Pump(() => Scene.Current.AllObjects.Any(o => o.Identifier == crate.Identifier), host);
-            NetTestComponent here = Find(Scene.Current, crate.Identifier).GetComponent<NetTestComponent>()!;
+            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == crate.Identifier), host);
+            NetTestComponent here = Find(SceneInstance.Main, crate.Identifier).GetComponent<NetTestComponent>()!;
             host.SendSnapshotValues(client, 7, 1, (component.Identifier, NetTestComponent.HealthSlot, 1u, IntValue(5)));
             Pump(() => here.Health == 5, host);
             NetPeer hostHere = Networking.Networking.Session!.HostPeer!;

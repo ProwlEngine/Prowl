@@ -40,7 +40,7 @@ public partial class NetworkingTests
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
         Networking.Networking.Configure(new() { Execution = execution });
-        Scene original = CreateScene(); MakeCurrent(original);
+        SceneInstance original = CreateScene(); MakeCurrent(original);
         using NetWriter snapshot = new(); NetworkTestScene.Current.WriteSnapshot(original, snapshot);
         GameObject root = CreateGameObject("Spawn root"); root.Network.Mode = NetworkMode.Object;
         NetworkSpawnCleanupComponent component = root.AddComponent<NetworkSpawnCleanupComponent>();
@@ -55,7 +55,7 @@ public partial class NetworkingTests
         if (kind == "sync")
         {
             NetReader header = new(bytes);
-            header.ReadGuid(); header.ReadGuid(); header.ReadVarUInt32(); header.ReadByte(); header.ReadUInt32();
+            header.ReadGuid(); header.ReadGuid(); header.ReadVarUInt32(); header.ReadVarUInt32(); header.ReadByte(); header.ReadUInt32();
             header.ReadVarUInt32(); header.ReadBytesWithLength(); // Network id, then the object.
             using NetWriter malformed = new(); malformed.WriteBytes(bytes.AsSpan(0, header.Position));
             malformed.WriteVarUInt32(1); malformed.WriteGuid(component.Identifier);
@@ -97,7 +97,7 @@ public partial class NetworkingTests
                     Assert.True(c.IsDisposed); Assert.Equal(1, c.DisposeCalls); Assert.Equal(0, c.SpawnCalls);
                 });
                 Assert.Equal(0, NetworkDiagnostics.NetworkObjectCount);
-                Assert.False(Scene.IsLoadPending);
+                Assert.Null(SceneInstance.Main.PendingLoad);
             }
         }
         finally
@@ -131,7 +131,7 @@ public partial class NetworkingTests
     [Fact]
     public void SpawningAnObjectTheSceneSnapshotBroughtKeepsTheClientsOneInstance()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject crate = CreateGameObject("Crate");
         NetTestComponent original = crate.AddComponent<NetTestComponent>();
         scene.Add(crate);
@@ -146,13 +146,13 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && Scene.Current.AllObjects.Any(o => o.Identifier == crate.Identifier), host);
-            GameObject before = Find(Scene.Current, crate.Identifier);
+            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == crate.Identifier), host);
+            GameObject before = Find(SceneInstance.Main, crate.Identifier);
             host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), FakePeer.Spawn, spawn.WrittenSpan);
             Pump(() => before.Network.Active, host);
             PumpFor(50, host);
 
-            Assert.Same(before, Find(Scene.Current, crate.Identifier));
+            Assert.Same(before, Find(SceneInstance.Main, crate.Identifier));
             Assert.Equal(7, before.GetComponent<NetTestComponent>()!.Health);
         }
         finally

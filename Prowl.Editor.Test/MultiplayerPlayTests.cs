@@ -62,9 +62,9 @@ public class MultiplayerPlayTests : EditorTestHarness
         Assembly scripts = Assembly.Load(File.ReadAllBytes(Project.GameAssemblyPath));
         Type beaconType = scripts.GetType("Beacon")!;
 
-        Scene scene = new();
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
+        SceneInstance scene = SceneInstance.Create("Host");
+        scene.Activate();
+        SceneInstance.Main = scene;
 
         KcpTransportOptions options = Networking.Configuration.CreateKcpOptions();
         options.Port = 0;
@@ -146,7 +146,7 @@ public class MultiplayerPlayTests : EditorTestHarness
 
             Networking.Receive();
             Networking.Flush();
-            Scene.ProcessPendingLoad();
+            SceneInstance.ProcessPendingLoad();
             EngineObject.ProcessDestroyed();
             Thread.Sleep(5);
         }

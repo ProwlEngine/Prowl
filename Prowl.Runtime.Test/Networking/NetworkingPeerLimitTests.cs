@@ -34,7 +34,7 @@ public partial class NetworkingTests
     [Fact]
     public void HostKicksAPeerThatCannotReceiveTheSceneSnapshot()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Add(CreateGameObject(Incompressible(2000)));
         MakeCurrent(scene);
         LocalNetwork network = new();
@@ -54,7 +54,7 @@ public partial class NetworkingTests
     [Fact]
     public void ASpawnTooLargeForOnePeerKicksOnlyThatPeer()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -78,7 +78,7 @@ public partial class NetworkingTests
     [Fact]
     public void SnapshotsAreSplitToThePeersOwnMessageLimit()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -103,7 +103,7 @@ public partial class NetworkingTests
     [Fact]
     public void ARelayedRpcTooLargeForOnePeerKicksThatPeerAndKeepsTheCaller()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject ship = CreateGameObject("Ship");
         NetTestComponent component = ship.AddComponent<NetTestComponent>();
         ship.Network.Mode = NetworkMode.Object;
