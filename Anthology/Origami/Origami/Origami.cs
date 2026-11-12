@@ -354,7 +354,7 @@ public static partial class Origami
 
     /// <summary>Begin building a data table. Declare columns with <c>.Column(...)</c>, add rows with
     /// <c>.Row().Cell(...)</c>, then call <c>.Show()</c>. Controlled — caller owns the selected index.</summary>
-    public static TableBuilder Table(Paper paper, string id, int selectedIndex, Action<int> onSelect)
+    public static TableBuilder Table(Paper paper, string id, int selectedIndex = -1, Action<int>? onSelect = null)
         => new TableBuilder(paper, id, selectedIndex, onSelect, Current);
 
     // ── Image diff factory ─────────────────────────────────────
