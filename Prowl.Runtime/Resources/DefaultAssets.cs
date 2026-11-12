@@ -78,7 +78,6 @@ public enum DefaultTexture
     Emission,
     Grid,
     Noise,
-    CloudNoise,
 
     // UI
     UIPanel,
@@ -89,14 +88,6 @@ public enum DefaultTexture
     // Gizmo icons
     IconCamera,
     IconLight,
-}
-
-/// <summary>
-/// Default 3D textures embedded in the runtime
-/// </summary>
-public enum DefaultTexture3D
-{
-    CloudNoise,
 }
 
 /// <summary>

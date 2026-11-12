@@ -41,20 +41,6 @@ public static class Application
     public static bool IsHeadless { get; set; }
 
     /// <summary>
-    /// True when play mode is paused. Update/FixedUpdate/LateUpdate stop, but rendering continues.
-    /// </summary>
-    public static bool IsPaused { get; set; }
-
-    /// <summary>
-    /// When true, one frame of gameplay executes then IsPaused reasserts.
-    /// Set by the editor Step button, consumed by the game loop.
-    /// </summary>
-    internal static bool StepRequested { get; set; }
-
-    /// <summary>Whether gameplay should execute this frame (playing and not paused, or stepping).</summary>
-    public static bool ShouldRunGameplay => IsPlaying && (!IsPaused || StepRequested);
-
-    /// <summary>
     /// True while gameplay code (Update/FixedUpdate) is executing.
     /// Used by the editor's input filtering to distinguish gameplay input from editor input.
     /// </summary>

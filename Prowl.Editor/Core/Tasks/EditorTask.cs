@@ -44,7 +44,7 @@ public class EditorTask
             lock (s_waiting) s_waiting.Remove(wait);
 
             try { wait.Continuation!(); }
-            catch (Exception ex) { Runtime.Debug.LogError($"[EditorTask] A continuation threw: {ex.Message}\n{ex.StackTrace}"); }
+            catch (Exception ex) { Runtime.Debug.LogException($"[EditorTask] A continuation threw", ex); }
         }
     }
 

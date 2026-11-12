@@ -365,18 +365,14 @@ public class DesktopBuildPipeline : BuildPipeline
         string outputDirectory = CreateBuildDirectory(request);
         context.Log($"Building into {outputDirectory}");
 
-        // Always save the current scene: the build reads the cache, which comes from the .scene file. The open scene
-        // and the asset database belong to the main thread.
+        // Every dirty open scene is saved first: the build reads the cache, which comes from each .scene file. The open
+        // scenes and the asset database belong to the main thread.
         Core.EditorApplication.RunOnMainThread(() =>
         {
-            if (EditorSceneManager.CurrentScenePath != null)
+            if (EditorSceneManager.CanEditScenes && EditorSceneManager.HasDirtyScenes)
             {
-                EditorSceneManager.Save();
-                context.Log("Auto-saved current scene.");
-            }
-            else
-            {
-                Runtime.Debug.LogWarning("[Build] Current scene has no save path. Save it first for accurate build.");
+                if (EditorSceneManager.SaveAll()) context.Log("Auto-saved the open scenes.");
+                else Runtime.Debug.LogWarning("[Build] An open scene has no file or failed to save, so the build uses what is on disk.");
             }
 
             EditorAssetBackend? db = EditorAssetBackend.Instance;
@@ -391,7 +387,7 @@ public class DesktopBuildPipeline : BuildPipeline
 
         context.Log("Compiling game scripts for the player...");
         ScriptCompiler.PlayerCompileResult scripts = ScriptCompiler.CompileForPlayer(
-            _project, targetPlatform, PlayerDefines(_settings, this), Path.Combine(buildTempDir, "Scripts"));
+            _project, targetPlatform, PlayerDefines(_settings, this), request.Configuration, Path.Combine(buildTempDir, "Scripts"));
         if (!scripts.Result.Success)
             throw new InvalidOperationException($"Script compilation for the player failed:{Environment.NewLine}{scripts.Result.Errors}");
         List<ScriptCompiler.BuildAssembly> assemblies = scripts.Assemblies;
@@ -814,6 +810,7 @@ public class DesktopBuildPipeline : BuildPipeline
             TargetId = plan.Profile.TargetId,
             BuildDateUtcTicks = BuildTimestampTicks(),
             DefaultScene = plan.DefaultScene.ToString(),
+            Scenes = [.. request.Scenes.Select(s => s.ToString())],
             AssemblyLoadOrder = [.. plan.Assemblies.Select(a => a.Name)],
             Packaging = request.Packaging,
             WindowWidth = plan.Profile.WindowWidth,

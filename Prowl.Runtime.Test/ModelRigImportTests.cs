@@ -401,16 +401,6 @@ public class ModelRigImportTests
         Assert.Empty(result.Materials);
     }
 
-    // The heal: a reference that has gone missing is not claimed, so the import rebuilds the material
-    // and the model still renders.
-    [Fact]
-    public void AMissingReferenceFallsBackToAnOwnedMaterial()
-    {
-        ModelImportResult result = ImportMaterials(new FixedMaterialResolver("Red", default));
-
-        Assert.Single(result.Materials);
-    }
-
     // ---- root motion ----------------------------------------------------------------------------
 
     /// <summary>

@@ -38,27 +38,28 @@ public static class VolumeProfileGUI
         .OrderBy(VolumeComponent.MenuPath, StringComparer.OrdinalIgnoreCase)]);
 
     /// <summary>
-    /// Draws the profile's components. <paramref name="changed"/> runs after every edit, for the owner to mark its
-    /// scene or asset dirty.
+    /// Draws the profile's components. An embedded profile's edits are recorded as owned by <paramref name="holder"/>.
     /// </summary>
-    public static void DrawComponents(Paper paper, string id, VolumeProfile profile, Action? changed = null)
+    public static void DrawComponents(Paper paper, string id, VolumeProfile profile, EngineObject? holder = null)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null || profile.IsNotValid()) return;
-        Undo.Snapshot(profile);
+        UndoOwner owner = OwnerOf(profile, holder);
+        Action<string> record = name => Undo.RecordObject(profile, owner, name);
+        EngineObject recordHolder = profile.IsFromDatabase || holder.IsNotValid() ? profile : holder!;
 
         List<VolumeComponent> components = [.. profile.Loaded.Where(c => c != null)];
         if (components.Count == 0)
             EditorGUI.Note(paper, $"{id}_empty", "No overrides yet. Add one to change how cameras in range draw.");
 
         foreach (VolumeComponent component in components)
-            DrawCard(paper, $"{id}_{component.GetType().Name}", profile, component, font, changed);
+            DrawCard(paper, $"{id}_{component.GetType().Name}", profile, component, font, record, recordHolder);
 
         using (paper.Row($"{id}_add_row").Height(28).Padding(Origami.Current.Metrics.PaddingLarge, Origami.Current.Metrics.PaddingLarge, 0, 0)
             .Margin(0, 0, Origami.Current.Metrics.Spacing, Origami.Current.Metrics.SpacingLarge).Enter())
         {
             Origami.Button(paper, $"{id}_add", $"{EditorIcons.Plus}  Add Override", () =>
-                Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b => BuildAddMenu(b, profile, changed)))
+                Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b => BuildAddMenu(b, profile, record)))
                 .FullWidth().Show();
         }
     }
@@ -66,7 +67,7 @@ public static class VolumeProfileGUI
     /// <summary>Every volume component type, built in and user, sorted by menu path.</summary>
     public static IReadOnlyList<Type> ComponentTypes => s_types[0];
 
-    private static void BuildAddMenu(ContextBuilder builder, VolumeProfile profile, Action? changed)
+    private static void BuildAddMenu(ContextBuilder builder, VolumeProfile profile, Action<string> record)
     {
         foreach (IGrouping<string, Type> group in ComponentTypes.GroupBy(t => Category(VolumeComponent.MenuPath(t))))
         {
@@ -77,9 +78,8 @@ public static class VolumeProfileGUI
                     Type captured = type;
                     sub.Item(Leaf(VolumeComponent.MenuPath(type)), () =>
                     {
-                        Undo.Snapshot(profile);
+                        record("Add Override");
                         profile.Add(captured);
-                        changed?.Invoke();
                     }, enabled: !profile.Has(type));
                 }
             });
@@ -94,7 +94,7 @@ public static class VolumeProfileGUI
 
     private static string Leaf(string path) => path[(path.LastIndexOf('/') + 1)..];
 
-    private static void DrawCard(Paper paper, string id, VolumeProfile profile, VolumeComponent component, Scribe.FontFile font, Action? changed)
+    private static void DrawCard(Paper paper, string id, VolumeProfile profile, VolumeComponent component, Scribe.FontFile font, Action<string> record, EngineObject recordHolder)
     {
         bool expanded = !s_collapsed.Contains(id);
         Scribe.FontFile semi = EditorTheme.FontSemiBold ?? font;
@@ -106,7 +106,7 @@ public static class VolumeProfileGUI
             using (paper.Row($"{id}_head").Height(30).Padding(8, 6, 0, 0).Gap(6).Enter())
             {
                 using (paper.Box($"{id}_en_wrap").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
-                    Origami.Checkbox(paper, $"{id}_en", component.Active, v => { component.Active = v; changed?.Invoke(); }).NoLabel().Show();
+                    Origami.Checkbox(paper, $"{id}_en", component.Active, v => { record("Toggle Override"); component.Active = v; }).NoLabel().Show();
 
                 using (paper.Row($"{id}_click").Width(UnitValue.Stretch()).Height(30).Gap(6).Rounded(EditorTheme.Roundness)
                     .Hovered.BackgroundColor(Color.FromArgb(13, EditorTheme.Purple400)).End()
@@ -120,13 +120,12 @@ public static class VolumeProfileGUI
                         .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
                 }
 
-                HeaderText(paper, $"{id}_all", "All", () => { component.SetAllOverrides(true); changed?.Invoke(); });
-                HeaderText(paper, $"{id}_none", "None", () => { component.SetAllOverrides(false); changed?.Invoke(); });
+                HeaderText(paper, $"{id}_all", "All", () => { record("Override All"); component.SetAllOverrides(true); });
+                HeaderText(paper, $"{id}_none", "None", () => { record("Override None"); component.SetAllOverrides(false); });
                 EditorGUI.HeaderIconButton(paper, $"{id}_remove", EditorIcons.Trash, Loc.Get("inspector.remove"), () =>
                 {
-                    Undo.Snapshot(profile);
+                    record("Remove Override");
                     profile.Remove(component.GetType());
-                    changed?.Invoke();
                 });
             }
 
@@ -135,8 +134,12 @@ public static class VolumeProfileGUI
             using (paper.Column($"{id}_body").Height(UnitValue.Auto).Padding(0, 0, 2, Origami.Current.Metrics.Spacing).Enter())
             {
                 CustomEditor? custom = EditorRegistries.GetCustomEditor(component.GetType());
-                if (custom != null) custom.OnGUI(paper, $"{id}_custom", component);
-                else DrawParameters(paper, id, component, changed);
+                if (custom != null)
+                {
+                    using (Undo.InspectorHolder(recordHolder))
+                        custom.OnGUI(paper, $"{id}_custom", component);
+                }
+                else DrawParameters(paper, id, component, record);
             }
         }
     }
@@ -148,14 +151,14 @@ public static class VolumeProfileGUI
     }
 
     /// <summary>A row per parameter of <paramref name="component"/>, for custom component editors too.</summary>
-    public static void DrawParameters(Paper paper, string id, VolumeComponent component, Action? changed = null)
+    public static void DrawParameters(Paper paper, string id, VolumeComponent component, Action<string> record)
     {
         foreach (FieldInfo field in VolumeComponent.ParameterFields(component.GetType()))
-            DrawParameter(paper, $"{id}_{field.Name}", component, field, changed);
+            DrawParameter(paper, $"{id}_{field.Name}", component, field, record);
     }
 
     /// <summary>One parameter's row: its override checkbox, then its value, greyed out until overridden.</summary>
-    public static void DrawParameter(Paper paper, string id, VolumeComponent component, FieldInfo field, Action? changed = null)
+    public static void DrawParameter(Paper paper, string id, VolumeComponent component, FieldInfo field, Action<string> record)
     {
         if (field.GetValue(component) is not VolumeParameter parameter) return;
         if (field.GetCustomAttribute<HeaderAttribute>() is { } header)
@@ -166,18 +169,18 @@ public static class VolumeProfileGUI
         {
             using (paper.Box($"{id}_ov_wrap").Width(UnitValue.Auto).Height(m.RowHeight).Enter())
                 using (paper.Box($"{id}_ov_c").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
-                    Origami.Checkbox(paper, $"{id}_ov", parameter.Override, v => { parameter.Override = v; changed?.Invoke(); }).NoLabel().Show();
+                    Origami.Checkbox(paper, $"{id}_ov", parameter.Override, v => { record("Toggle Parameter Override"); parameter.Override = v; }).NoLabel().Show();
 
             using (paper.Column($"{id}_v").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
             {
                 IDisposable? disabled = parameter.Override ? null : EnableIfAttributeHandler.PushDisabledScope();
-                try { DrawValue(paper, $"{id}_f", PropertyGridUtils.NicifyName(field.Name), parameter, field, changed); }
+                try { DrawValue(paper, $"{id}_f", PropertyGridUtils.NicifyName(field.Name), parameter, field, record); }
                 finally { disabled?.Dispose(); }
             }
         }
     }
 
-    private static void DrawValue(Paper paper, string id, string label, VolumeParameter parameter, FieldInfo field, Action? changed)
+    private static void DrawValue(Paper paper, string id, string label, VolumeParameter parameter, FieldInfo field, Action<string> record)
     {
         Type type = parameter.ValueType;
         RangeAttribute? range = field.GetCustomAttribute<RangeAttribute>();
@@ -187,8 +190,8 @@ public static class VolumeProfileGUI
         {
             PropertyGridUtils.DrawField(paper, id, label, type, parameter.BoxedValue, value =>
             {
+                record($"Change {label}");
                 parameter.BoxedValue = ranged ? Clamp(value, range!, type) : value;
-                changed?.Invoke();
             });
         }
         finally
@@ -240,10 +243,10 @@ public static class VolumeProfileGUI
         if (!Directory.Exists(absolute)) return;
         string name = AssetCreateMenu.FindUniqueName(absolute, string.IsNullOrWhiteSpace(profile.Name) ? "Volume Profile" : profile.Name, ".volume");
         backend.CreateAsset(profile, string.IsNullOrEmpty(folder) ? name : $"{folder}/{name}");
-        EditorSceneManager.MarkDirty();
+        foreach (OpenScene scene in EditorSceneManager.OpenScenes) EditorSceneManager.MarkDirty(scene);
     }
 
-    /// <summary>Marks the open scene dirty after an edit to a profile it embeds; database profiles have their own Apply.</summary>
-    public static Action ChangedFor(VolumeProfile? profile)
-        => () => { if (profile.IsValid() && !profile.IsFromDatabase) EditorSceneManager.MarkDirty(); };
+    /// <summary>An embedded profile's edits belong to the holder's scene, a database profile's to the profile itself.</summary>
+    private static UndoOwner OwnerOf(VolumeProfile profile, EngineObject? holder)
+        => profile.IsFromDatabase || holder.IsNotValid() ? UndoOwner.Of(profile) : UndoOwner.Of(holder);
 }

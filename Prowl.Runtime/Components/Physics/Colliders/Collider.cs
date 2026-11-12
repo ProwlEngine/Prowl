@@ -61,9 +61,10 @@ public abstract class Collider : Component
     /// </summary>
     private PhysicsWorld _registeredWorld;
 
-    // The world polling this collider for placement changes, and its slot in that world's list.
+    // The world that checks this collider when a transform or layer edit reaches it, and the world a check is queued in.
+    // They differ after a scene change, as the old world may never step again to clear its check.
     private PhysicsWorld _watchingWorld;
-    internal int WatchIndex = -1;
+    internal PhysicsWorld? CheckQueuedIn;
 
     /// <summary>
     /// Transform version tracking for static colliders.
@@ -120,7 +121,7 @@ public abstract class Collider : Component
     /// </summary>
     private void AttachToStatic()
     {
-        Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
+        SceneInstance? scene = GameObject.IsValid() ? GameObject.Scene : null;
         if (scene.IsNotValid() || scene.Physics == null)
             return;
 
@@ -192,7 +193,6 @@ public abstract class Collider : Component
                 _registeredWorld.UnregisterShapeOwner(shape);
         }
 
-        _watchingWorld?.UnwatchCollider(this);
         _watchingWorld = null;
         _registeredWorld = null;
         _attachedBody = null;
@@ -222,7 +222,7 @@ public abstract class Collider : Component
 
         if (_attachedShapes != null)
         {
-            Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
+            SceneInstance? scene = GameObject.IsValid() ? GameObject.Scene : null;
             _registeredWorld = scene.IsValid() ? scene.Physics : null;
 
             foreach (RigidBodyShape shape in _attachedShapes)
@@ -236,13 +236,14 @@ public abstract class Collider : Component
         }
 
         // A collider on its rigidbody's own GameObject cannot move relative to it, so that rigidbody
-        // refreshes it on a rescale. Every other collider is checked by the physics world before each step.
+        // refreshes it on a rescale. Every other collider is checked by the physics world when a transform
+        // moves it, and once now, as a transform already woken this sync won't wake it again.
         bool onOwnBody = _attachedRigidbody3D.IsValid() && _attachedRigidbody3D.GameObject == GameObject;
-        Scene? owner = GameObject.IsValid() ? GameObject.Scene : null;
+        SceneInstance? owner = GameObject.IsValid() ? GameObject.Scene : null;
         if (!onOwnBody && owner.IsValid() && owner.Physics != null)
         {
             _watchingWorld = owner.Physics;
-            _watchingWorld.WatchCollider(this);
+            QueueCheck();
         }
 
         // Mass and inertia are derived from every shape on the body, so the rigidbody owns that step.
@@ -387,6 +388,9 @@ public abstract class Collider : Component
         // Detach from whatever rigidbody we're attached to
         Detach();
     }
+
+    /// <summary>Asks the physics world to check this collider's placement before the next step.</summary>
+    internal void QueueCheck() => _watchingWorld?.QueueCheck(this);
 
     /// <summary>
     /// Rebuilds the shapes when the collider's placement relative to its body, the body's scale, or a

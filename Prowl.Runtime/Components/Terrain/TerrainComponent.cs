@@ -296,7 +296,7 @@ public class TerrainComponent : Component, IRenderSync
     private void PickWindZones()
     {
         Float3 near = _cameras.Count > 0 ? (Float3)_cameras[0].Position : Transform.Position;
-        _windZoneCount = WindZone.GetNearest(near, _windZones);
+        _windZoneCount = WindZone.GetNearest(GameObject.Scene, near, _windZones);
     }
 
     /// <summary>Gives a grass material the wind zones picked this frame.</summary>

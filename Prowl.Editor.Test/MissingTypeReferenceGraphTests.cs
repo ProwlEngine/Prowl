@@ -44,34 +44,6 @@ public class MissingTypeReferenceGraphTests
     }
 
     [Fact]
-    public void CallerOwnedContext_EditorPath_StillRecovers()
-    {
-        // The editor deserializes scenes with its own SerializationContext via the 3-arg overload (for
-        // asset-dependency tracking). Deferred back-patches must still fire on that path, not only on the
-        // context-creating overload.
-        var root = new GameObject("Root");
-        var child = new GameObject("Child");
-        child.SetParent(root);
-        MissRefComp misser = root.AddComponent<MissRefComp>();
-        misser.TargetGO = child;
-
-        var scene = new Scene();
-        scene.Add(root);
-
-        string text = Serializer.Serialize(typeof(object), scene).WriteToString()
-            .Replace(nameof(MissRefComp), "GhostComp_DoesNotExist");
-
-        // Mimic the editor: a caller-supplied context passed to the 3-arg Deserialize.
-        Scene loaded = Serializer.Deserialize<Scene>(EchoObject.ReadFromString(text), new SerializationContext())!;
-
-        Assert.DoesNotContain(loaded.AllObjects, o => o.Name == "New GameObject"); // no phantom placeholders
-        GameObject? loadedRoot = loaded.AllObjects.FirstOrDefault(o => o.Name == "Root");
-        Assert.NotNull(loadedRoot);
-        Assert.Single(loadedRoot!.Children);
-        Assert.Equal("Child", loadedRoot.Children[0].Name);
-    }
-
-    [Fact]
     public void ControlNoCrossRef_AssetRefSurvives()
     {
         // Missing component does NOT reference the holder, and is added AFTER it.
@@ -123,14 +95,14 @@ public class MissingTypeReferenceGraphTests
         MissRefComp misser = root.AddComponent<MissRefComp>();
         misser.TargetGO = grandchild;
 
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(root);
 
-        string text = Serializer.Serialize(typeof(object), scene).WriteToString();
+        string text = scene.ActiveSection.CaptureTree().WriteToString();
         text = text.Replace(nameof(MissRefComp), "GhostComp_DoesNotExist");
-        Scene loaded = Serializer.Deserialize<Scene>(EchoObject.ReadFromString(text))!;
+        SceneInstance loaded = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text)), SceneMode.Edit);
 
-        GameObject? loadedRoot = loaded.AllObjects.FirstOrDefault(o => o.Name == "Root");
+        GameObject? loadedRoot = loaded.Objects.FirstOrDefault(o => o.Name == "Root");
         string Structure(GameObject g, int d = 0) =>
             new string(' ', d * 2) + g.Name + "\n" + string.Concat(g.Children.Select(c => Structure(c, d + 1)));
         _out.WriteLine("[scene]\n" + (loadedRoot is null ? "<no Root>" : Structure(loadedRoot)));

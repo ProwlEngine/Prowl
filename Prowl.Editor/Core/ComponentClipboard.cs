@@ -110,41 +110,9 @@ public static class ComponentClipboard
             if (!TryReadClipboard(out Type? type, out EchoObject? data) || type == null || data == null)
                 return null;
 
-            var comp = Serializer.Deserialize(data, type, DeserializeContext()) as Component;
+            Component? comp = Undo.AddComponent(go, type);
             if (comp.IsNotValid()) return null;
-
-            // AddComponent(instance) attaches, registers with the scene and fires OnAddedToScene /
-            // OnEnable, so the pasted component is live immediately.
-            if (!go.AddComponent(comp)) return null;
-            comp.OnValidate();
-
-            // Look the GameObject back up by identifier rather than capturing it: undoing a destroy
-            // recreates objects as new instances, so a captured reference would go stale.
-            Guid goId = go.Identifier;
-            Guid compId = comp.Identifier;
-            Type compType = type;
-            EchoObject compData = data;
-
-            Undo.RegisterAction("Paste Component",
-                undo: () =>
-                {
-                    GameObject g = Undo.FindGO(goId)!;
-                    if (g.IsNotValid()) return;
-                    Component c = g.GetComponentByIdentifier(compId)!;
-                    if (c.IsValid()) g.RemoveComponent(c);
-                },
-                redo: () =>
-                {
-                    GameObject g = Undo.FindGO(goId)!;
-                    if (g.IsNotValid()) return;
-                    var restored = Serializer.Deserialize(compData, compType, DeserializeContext()) as Component;
-                    if (restored.IsNotValid()) return;
-                    restored.Identifier = compId;
-                    g.AddComponent(restored);
-                    restored.OnValidate();
-                });
-
-            EditorSceneManager.MarkDirty();
+            ApplyState(comp, data);
             return comp;
         }
         catch (Exception ex)
@@ -169,21 +137,8 @@ public static class ComponentClipboard
                 return false;
             if (type != target.GetType()) return false;
 
-            // Snapshot the current state through the same reference-linking path, so undo restores
-            // scene references as live instances rather than deep-cloned orphans.
-            DependencySerializationContext beforeContext = SerializeContext(target);
-            var before = new MemoryCopy(Serializer.Serialize(target.GetType(), target, beforeContext), beforeContext.LinkedAssets);
-
+            Undo.RecordObject(target, "Paste Component Values");
             ApplyState(target, data);
-
-            Guid compId = target.Identifier;
-            var after = new MemoryCopy(data, s_linkedAssets);
-
-            Undo.RegisterAction("Paste Component Values",
-                undo: () => { Component? c = Undo.FindComponent(compId); if (c.IsValid()) ApplyState(c, before.Data); },
-                redo: () => { Component? c = Undo.FindComponent(compId); if (c.IsValid()) ApplyState(c, after.Data); });
-
-            EditorSceneManager.MarkDirty();
             return true;
         }
         catch (Exception ex)
@@ -203,7 +158,7 @@ public static class ComponentClipboard
     private static void ApplyState(Component target, EchoObject data)
     {
         bool attached = target.GameObject.IsValid();
-        bool inActiveScene = attached && target.Scene.IsValid() && target.Scene!.IsActive;
+        bool inActiveScene = attached && target.IsInWorld && target.Scene.State == Runtime.Resources.SceneState.Running;
         bool wasLive = inActiveScene && target.HasBeenEnabled && target.EnabledInHierarchy;
 
         if (wasLive) target.InternalOnDisable();
@@ -264,6 +219,6 @@ public static class ComponentClipboard
         if (!typeof(Component).IsAssignableFrom(type) || type.IsAbstract) return false;
 
         data = EchoObject.ReadFromString(body);
-        return data != null;
+        return data != null && data.TagType == EchoType.Compound;
     }
 }

@@ -473,7 +473,7 @@ public static class CliServer
         return type.GetProperty("Result")!.GetValue(task);
     }
 
-    private static void CaptureLog(string message, DebugStackTrace? trace, LogSeverity severity) => s_capture.Value?.Add(severity, message);
+    private static void CaptureLog(LogEvent e) => s_capture.Value?.Add(e.Severity, e.Message);
 
     private sealed class LogCapture
     {

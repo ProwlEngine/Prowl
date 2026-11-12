@@ -497,7 +497,7 @@ public sealed class Gun : Component
         rigidbody.Mass = 0.012f;
         rigidbody.EnableSpeculativeContacts = true;
         casing.AddComponent<Expire>().Seconds = 6f;
-        GameObject.Scene.Add(casing);
+        casing.MoveTo(GameObject.Scene);
 
         Float3 right = body.Rotation * Float3.UnitX;
         Float3 up = body.Rotation * Float3.UnitY;

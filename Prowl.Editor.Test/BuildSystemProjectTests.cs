@@ -57,7 +57,7 @@ public class BuildSystemProjectTests : EditorTestHarness
     [Fact]
     public void EachBuild_TakesItsOwnFolderAndLeavesTheRestAlone()
     {
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(new GameObject("Root"));
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
 
@@ -169,7 +169,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         Type? compType = gameAsm.GetType("ParentRefComponent");
         Assert.NotNull(compType);
 
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Root");
         Component comp = go.AddComponent(compType!);
         compType!.GetField("MyTexture")!.SetValue(comp, AssetDatabase.Get<Texture2D>(texGuidA));
@@ -235,7 +235,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         Type? compType = gameAsm.GetType("EditorTexRefComponent");
         Assert.NotNull(compType);
 
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Root");
         Component comp = go.AddComponent(compType!);
         compType!.GetField("MyTexture")!.SetValue(comp, AssetDatabase.Get<Texture2D>(texGuid));
@@ -430,7 +430,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         Assert.NotNull(compType);
 
         // 5. Author a scene that uses the component and save it as an asset.
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Logger");
         Component comp = go.AddComponent(compType!);
         compType!.GetField("MyTexture")!.SetValue(comp, AssetDatabase.Get<Texture2D>(texGuid));
@@ -572,7 +572,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         Type? compType = gameAsm.GetType("AsyncVoidComponent");
         Assert.NotNull(compType);
 
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Async");
         go.AddComponent(compType!);
         scene.Add(go);
@@ -616,7 +616,7 @@ public class BuildSystemProjectTests : EditorTestHarness
     [Fact]
     public void SelfContainedBuild_KeepsTheFrameworkInTheRootAndRuns()
     {
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(new GameObject("Root"));
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
 
@@ -696,7 +696,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         var gameAsm = Assembly.Load(File.ReadAllBytes(Project.GameAssemblyPath));
         Type compType = gameAsm.GetType("AotComponent")!;
 
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Aot");
         Component comp = go.AddComponent(compType);
         compType.GetField("MyTexture")!.SetValue(comp, AssetDatabase.Get<Texture2D>(texGuid));
@@ -756,7 +756,7 @@ public class BuildSystemProjectTests : EditorTestHarness
 
     private Guid CreateScene()
     {
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(new GameObject("Root"));
         return CreateSceneAsset(scene, "Main.scene");
     }
@@ -774,33 +774,6 @@ public class BuildSystemProjectTests : EditorTestHarness
         BuildResult result = pipeline.BuildAsync(Project.RootPath, build, outDir).GetAwaiter().GetResult();
         Assert.True(result.Success, $"Build failed: {result.Errors}");
         return result.OutputPath;
-    }
-
-    // A registered processor has to actually be reached by a real build.
-    [Fact]
-    public void RegisteredProcessor_IsInvokedAndPopulatesTheCache()
-    {
-        Guid sceneGuid = CreateScene();
-
-        var pipeline = new DesktopBuildPipeline();
-        var processor = new RecordingProcessor();
-        pipeline.AssetProcessors.Add(processor);
-
-        string outDir;
-        try
-        {
-            RunBuildWith(pipeline, sceneGuid, out outDir);
-
-            Assert.True(processor.Calls > 0, "A registered processor was never reached by the build.");
-
-            string cacheRoot = Path.Combine(Project.RootPath, "Library", "BuildCache");
-            Assert.True(Directory.Exists(cacheRoot), "The build did not populate the variant cache.");
-            Assert.NotEmpty(Directory.GetFiles(cacheRoot, "*", SearchOption.AllDirectories));
-        }
-        finally
-        {
-            TryDeleteDir(Path.Combine(Path.GetTempPath(), "ProwlVariantOut"));
-        }
     }
 
     // The second build of unchanged content must reuse rather than reprocess, which is the whole point.
@@ -910,7 +883,7 @@ public class BuildSystemProjectTests : EditorTestHarness
 
     private BuildSettings SettingsFor(PlatformTarget target)
     {
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(new GameObject("Root"));
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
 

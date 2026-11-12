@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Linq;
 using System.Collections.Generic;
 
 using Prowl.Graphite.Rendering;
@@ -40,7 +41,7 @@ public interface IRenderSync
 /// </summary>
 public sealed class SceneRendering : IDisposable
 {
-    private readonly Scene _scene;
+    private readonly SceneInstance _scene;
     private readonly List<IRenderSync> _members = [];
     private readonly HashSet<IRenderSync> _memberSet = [];
 
@@ -48,8 +49,11 @@ public sealed class SceneRendering : IDisposable
     private readonly HashSet<IRenderSync> _parked = [];
 
     // Parked members by the mesh they draw, so a mesh edit wakes them, and meshes edited since the last sync
-    private readonly Dictionary<Mesh, List<IRenderSync>> _meshUsers = [];
+    private readonly Dictionary<Mesh, HashSet<IRenderSync>> _meshUsers = [];
     private readonly Dictionary<IRenderSync, Mesh> _parkedMeshes = [];
+
+    // Emptied user sets kept for the next mesh to park, as a mover alone on its mesh empties and refills one every frame
+    private readonly Stack<HashSet<IRenderSync>> _spareUserSets = [];
     private readonly System.Collections.Concurrent.ConcurrentQueue<Mesh> _changedMeshes = new();
     private readonly Action<Mesh> _onMeshChanged;
     private int _lightingVersion = -1;
@@ -64,7 +68,7 @@ public sealed class SceneRendering : IDisposable
     private ulong _syncedFrame = ulong.MaxValue;
     private readonly List<DirectionalLight> _directionals = [];
 
-    internal SceneRendering(Scene scene)
+    internal SceneRendering(SceneInstance scene)
     {
         _scene = scene;
         _onMeshChanged = _changedMeshes.Enqueue;
@@ -132,18 +136,19 @@ public sealed class SceneRendering : IDisposable
         if (Unpark(member)) _members.Add(member);
     }
 
-    /// <summary>Parks a member as a sync that found it settled does.</summary>
+    /// <summary>Parks a member as a sync that found it settled does, moving <see cref="Epoch"/> as the end of a sync does.</summary>
     internal void Settle(IRenderSync member)
     {
         if (_members.Remove(member)) Park(member);
+        Epoch++;
     }
 
     private void Park(IRenderSync member)
     {
         _parked.Add(member);
         if (member.SyncedMesh is not { } mesh) return;
-        if (!_meshUsers.TryGetValue(mesh, out List<IRenderSync>? users))
-            _meshUsers[mesh] = users = [];
+        if (!_meshUsers.TryGetValue(mesh, out HashSet<IRenderSync>? users))
+            _meshUsers[mesh] = users = _spareUserSets.Count > 0 ? _spareUserSets.Pop() : [];
         users.Add(member);
         _parkedMeshes[member] = mesh;
     }
@@ -151,10 +156,14 @@ public sealed class SceneRendering : IDisposable
     private bool Unpark(IRenderSync member)
     {
         if (!_parked.Remove(member)) return false;
-        if (_parkedMeshes.Remove(member, out Mesh? mesh) && _meshUsers.TryGetValue(mesh, out List<IRenderSync>? users))
+        if (_parkedMeshes.Remove(member, out Mesh? mesh) && _meshUsers.TryGetValue(mesh, out HashSet<IRenderSync>? users))
         {
             users.Remove(member);
-            if (users.Count == 0) _meshUsers.Remove(mesh);
+            if (users.Count == 0)
+            {
+                _meshUsers.Remove(mesh);
+                _spareUserSets.Push(users);
+            }
         }
         return true;
     }
@@ -165,6 +174,7 @@ public sealed class SceneRendering : IDisposable
         _parked.Clear();
         _meshUsers.Clear();
         _parkedMeshes.Clear();
+        _spareUserSets.Clear();
     }
 
     // Wakes the members drawing a mesh edited since the last sync, and every member after a lightmap rebake or a quality change
@@ -178,8 +188,8 @@ public sealed class SceneRendering : IDisposable
         }
         while (_changedMeshes.TryDequeue(out Mesh? mesh))
         {
-            if (!_meshUsers.TryGetValue(mesh, out List<IRenderSync>? users)) continue;
-            foreach (IRenderSync member in users.ToArray())
+            if (!_meshUsers.TryGetValue(mesh, out HashSet<IRenderSync>? users)) continue;
+            foreach (IRenderSync member in (IRenderSync[])[.. users])
                 Refresh(member);
         }
     }
@@ -199,7 +209,7 @@ public sealed class SceneRendering : IDisposable
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         int synced = _members.Count;
 
-        bool playing = Application.IsPlaying;
+        bool playing = _scene.IsPlaying;
         if (!playing && _parked.Count > 0)
             UnparkAll();
         WakeChanged();
@@ -222,44 +232,82 @@ public sealed class SceneRendering : IDisposable
         RenderStats.AddSceneSync(System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds, synced, _parked.Count);
     }
 
-    private Scene.BakedLightingData? _probesFrom;
+    private SceneInstance.ProbeSet? _probesFrom;
     private int _probesVersion = -1;
 
     private void SyncProbes(RenderWorld world)
     {
-        Scene.BakedLightingData baked = _scene.BakedLighting;
+        SceneInstance.ProbeSet? baked = _scene.Probes;
         if (baked == _probesFrom && _scene.BakedLightingVersion == _probesVersion) return;
         _probesFrom = baked;
         _probesVersion = _scene.BakedLightingVersion;
 
-        if (baked == null || !baked.HasProbes)
+        if (baked == null)
         {
             world.SetLightProbes(null);
             return;
         }
 
-        var positions = new Double3[baked.ProbePositions.Length];
+        var positions = new Double3[baked.Positions.Length];
         for (int i = 0; i < positions.Length; i++)
-            positions[i] = new Double3(baked.ProbePositions[i].X, baked.ProbePositions[i].Y, baked.ProbePositions[i].Z);
-        var coefficients = new Graphite.Rendering.SphericalHarmonicsL2[baked.ProbeSH.Length];
+            positions[i] = new Double3(baked.Positions[i].X, baked.Positions[i].Y, baked.Positions[i].Z);
+        var coefficients = new Graphite.Rendering.SphericalHarmonicsL2[baked.SH.Length];
         for (int i = 0; i < coefficients.Length; i++)
         {
-            SphericalHarmonicsL2 sh = baked.ProbeSH[i];
+            SphericalHarmonicsL2 sh = baked.SH[i];
             coefficients[i] = new Graphite.Rendering.SphericalHarmonicsL2 { C0 = sh.C0, C1 = sh.C1, C2 = sh.C2, C3 = sh.C3, C4 = sh.C4, C5 = sh.C5, C6 = sh.C6, C7 = sh.C7, C8 = sh.C8 };
         }
         world.SetLightProbes(new LightProbeData
         {
             Positions = positions,
             Coefficients = coefficients,
-            Tetrahedra = baked.ProbeTetrahedra,
-            Neighbours = baked.ProbeTetNeighbours,
+            Tetrahedra = baked.Tetrahedra,
+            Neighbours = baked.Neighbours,
         });
+    }
+
+    private readonly List<FogVolumeDesc> _fogVolumes = [];
+
+    // The scene's enabled fog volumes, their density a multiple of the volumetric fog's
+    private FogVolumeDesc[] FogVolumes(float density)
+    {
+        _fogVolumes.Clear();
+        foreach (GameObject go in _scene.Objects.Where(o => o.EnabledInHierarchy))
+        {
+            FogVolume? volume = go.GetComponent<FogVolume>();
+            if (volume.IsValid() && volume.EnabledInHierarchy && _fogVolumes.Count < EnvironmentDesc.MaxFogVolumes)
+                _fogVolumes.Add(volume.Describe(density));
+        }
+        return [.. _fogVolumes];
+    }
+
+    private Graphite.Rendering.VolumetricCloudsFeature? _clouds;
+
+    // The scene's clouds in the world while they are on, their shadow pass ahead of every view's surfaces
+    private void SyncClouds(RenderWorld world)
+    {
+        SceneEnvironment.VolumetricCloudsSettings settings = _scene.Environment.VolumetricClouds;
+        if (!settings.Enabled || settings.Coverage <= 0f || Graphics.Renderer is not { } renderer)
+        {
+            if (_clouds != null)
+            {
+                world.Features.Remove(_clouds.ShadowPass);
+                world.Features.Remove(_clouds);
+            }
+            return;
+        }
+        _clouds ??= new Graphite.Rendering.VolumetricCloudsFeature(renderer);
+        settings.ApplyTo(_clouds, _scene.Clock.DeltaTime);
+        world.Features.Add(_clouds.ShadowPass);
+        world.Features.Add(_clouds);
     }
 
     private void SyncEnvironment(RenderWorld world)
     {
         EnvironmentDesc env = world.Environment;
         _scene.Environment.ApplyTo(env);
+        env.FogVolumes = FogVolumes(_scene.Environment.VolumetricFog.Density);
+        SyncClouds(world);
 
         DirectionalLight? sun = null;
         foreach (DirectionalLight light in _directionals)
@@ -289,11 +337,14 @@ public sealed class SceneRendering : IDisposable
             _world.Dispose();
             _world = null;
         }
+        _clouds?.Dispose();
+        _clouds = null;
         _members.Clear();
         _memberSet.Clear();
         _parked.Clear();
         _meshUsers.Clear();
         _parkedMeshes.Clear();
+        _spareUserSets.Clear();
         _directionals.Clear();
     }
 }

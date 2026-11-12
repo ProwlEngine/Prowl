@@ -1066,7 +1066,7 @@ public sealed class ColliderGizmos : Component
         if (!Show)
             return;
 
-        foreach (Collider? collider in GameObject.Scene.FindObjectsOfType<Collider>())
+        foreach (Collider? collider in GameObject.Scene.GetAll<Collider>(includeDisabled: true))
             if (collider.IsValid() && collider.EnabledInHierarchy)
                 collider.DrawGizmosSelected();
     }

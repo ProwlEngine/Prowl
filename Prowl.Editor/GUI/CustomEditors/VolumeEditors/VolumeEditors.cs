@@ -13,40 +13,22 @@ using Prowl.Runtime.Rendering;
 
 namespace Prowl.Editor.Inspector;
 
-/// <summary>The .volume asset inspector: the profile's components, edited live, with Apply and Revert.</summary>
+/// <summary>The .volume asset inspector: the profile's components, edited live. Edits are undo records that put the profile in the dirty asset set.</summary>
 [CustomAssetEditor(typeof(VolumeProfile))]
 public class VolumeProfileAssetEditor : AssetImporterEditor
 {
-    /// <summary>One editor for inline edits of profile assets from the Volume and Camera inspectors.</summary>
-    internal static readonly VolumeProfileAssetEditor Shared = new();
-
-    protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
-        => asset is VolumeProfile profile && profile.IsValid() ? Serializer.Serialize(typeof(object), profile) : null;
-
-    protected override EchoObject? CapturePersistedState(AssetEntry entry, EngineObject? asset)
-        => EditorAssetBackend.Instance?.ReadCachedEcho(entry.Guid) ?? CaptureState(entry, asset);
-
-    protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
-        => asset is VolumeProfile profile && profile.IsValid() && (EditorAssetBackend.Instance?.SaveAsset(entry.Guid, Serializer.Serialize(typeof(object), profile)) ?? false);
-
-    protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
-    {
-        if (asset is VolumeProfile profile && profile.IsValid()) EditorAssetBackend.Instance?.RevertToSaved(profile);
-    }
-
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
         if (asset is not VolumeProfile profile || profile.IsNotValid()) return;
         EditorGUI.SectionHeader(paper, $"{id}_hdr", $"{EditorIcons.LayerGroup}  Volume Profile", first: true);
         VolumeProfileGUI.DrawComponents(paper, $"{id}_list", profile);
-        DrawApplyRevertBar(paper, id, entry, asset);
+        DrawSaveRevertBar(paper, id, profile);
     }
 
-    /// <summary>The Apply and Revert bar for a database profile edited outside its own inspector.</summary>
-    internal void DrawPendingBar(Paper paper, string id, VolumeProfile profile)
+    /// <summary>The Save and Revert bar for a database profile edited outside its own inspector.</summary>
+    internal static void DrawPendingBar(Paper paper, string id, VolumeProfile profile)
     {
-        if (!profile.IsFromDatabase || EditorAssetBackend.Instance?.GetEntry(profile.AssetID) is not { } entry) return;
-        DrawApplyRevertBar(paper, id, entry, profile);
+        if (profile.IsFromDatabase) DrawSaveRevertBar(paper, id, profile);
     }
 }
 
@@ -57,23 +39,46 @@ public class VolumeEditor : CustomEditor
     public override void OnGUI(Paper paper, string id, object target)
     {
         var volume = (Volume)target;
-        Undo.Snapshot(volume);
 
-        PropertyGridUtils.DrawField(paper, $"{id}_global", "Is Global", typeof(bool), volume.IsGlobal, v => volume.IsGlobal = (bool)v!);
+        PropertyGridUtils.DrawField(paper, $"{id}_global", "Is Global", typeof(bool), volume.IsGlobal, v =>
+        {
+            Undo.RecordObject(volume, "Change Is Global");
+            volume.IsGlobal = (bool)v!;
+        });
         if (!volume.IsGlobal)
         {
-            PropertyGridUtils.DrawField(paper, $"{id}_size", "Size", typeof(Vector.Float3), volume.Size, v => volume.Size = (Vector.Float3)v!);
-            PropertyGridUtils.DrawField(paper, $"{id}_blend", "Blend Distance", typeof(float), volume.BlendDistance, v => volume.BlendDistance = System.MathF.Max(0f, (float)v!));
+            PropertyGridUtils.DrawField(paper, $"{id}_size", "Size", typeof(Vector.Float3), volume.Size, v =>
+            {
+                Undo.RecordObject(volume, "Change Size");
+                volume.Size = (Vector.Float3)v!;
+            });
+            PropertyGridUtils.DrawField(paper, $"{id}_blend", "Blend Distance", typeof(float), volume.BlendDistance, v =>
+            {
+                Undo.RecordObject(volume, "Change Blend Distance");
+                volume.BlendDistance = System.MathF.Max(0f, (float)v!);
+            });
         }
-        EditorGUI.SliderRow(paper, $"{id}_weight", "Weight", volume.Weight, 0f, 1f, v => volume.Weight = v);
-        PropertyGridUtils.DrawField(paper, $"{id}_priority", "Priority", typeof(float), volume.Priority, v => volume.Priority = (float)v!);
+        EditorGUI.SliderRow(paper, $"{id}_weight", "Weight", volume.Weight, 0f, 1f, v =>
+        {
+            Undo.RecordObject(volume, "Change Weight");
+            volume.Weight = v;
+        });
+        PropertyGridUtils.DrawField(paper, $"{id}_priority", "Priority", typeof(float), volume.Priority, v =>
+        {
+            Undo.RecordObject(volume, "Change Priority");
+            volume.Priority = (float)v!;
+        });
 
-        VolumeProfileGUI.DrawProfileField(paper, $"{id}_profile", "Profile", volume.SharedProfile, volume.GameObject.Name, p => volume.SharedProfile = p);
+        VolumeProfileGUI.DrawProfileField(paper, $"{id}_profile", "Profile", volume.SharedProfile, volume.GameObject.Name, p =>
+        {
+            Undo.RecordObject(volume, "Change Profile");
+            volume.SharedProfile = p;
+        });
 
         VolumeProfile? profile = volume.SharedProfile;
         if (profile.IsNotValid()) return;
-        VolumeProfileGUI.DrawComponents(paper, $"{id}_list", profile, VolumeProfileGUI.ChangedFor(profile));
-        VolumeProfileAssetEditor.Shared.DrawPendingBar(paper, $"{id}_pending", profile);
+        VolumeProfileGUI.DrawComponents(paper, $"{id}_list", profile, volume);
+        VolumeProfileAssetEditor.DrawPendingBar(paper, $"{id}_pending", profile);
     }
 }
 
@@ -94,14 +99,14 @@ public class CameraEditor : CustomEditor
         {
             Origami.Button(paper, $"{id}_base_new", $"{EditorIcons.Plus}  New", () =>
             {
-                Undo.Snapshot(camera);
+                Undo.RecordObject(camera, "New Profile");
                 camera.Profile = new VolumeProfile { Name = $"{camera.GameObject.Name} Profile" };
             }).Small().Show();
             if (profile.IsValid())
             {
                 Origami.Button(paper, $"{id}_base_clone", $"{EditorIcons.Clone}  Clone", () =>
                 {
-                    Undo.Snapshot(camera);
+                    Undo.RecordObject(camera, "Clone Profile");
                     VolumeProfile copy = profile.Clone();
                     copy.Name = $"{profile.Name} Copy";
                     camera.Profile = copy;
@@ -112,7 +117,7 @@ public class CameraEditor : CustomEditor
         }
 
         if (profile.IsNotValid()) return;
-        VolumeProfileGUI.DrawComponents(paper, $"{id}_base", profile, VolumeProfileGUI.ChangedFor(profile));
-        VolumeProfileAssetEditor.Shared.DrawPendingBar(paper, $"{id}_base_pending", profile);
+        VolumeProfileGUI.DrawComponents(paper, $"{id}_base", profile, camera);
+        VolumeProfileAssetEditor.DrawPendingBar(paper, $"{id}_base_pending", profile);
     }
 }

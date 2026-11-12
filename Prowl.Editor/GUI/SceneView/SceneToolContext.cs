@@ -32,7 +32,7 @@ public sealed class SceneToolContext
     public SceneDrawList Draw => Handles.Draw;
 
     /// <summary> The scene being edited in this viewport. </summary>
-    public Scene Scene { get; private set; } = null!;
+    public SceneInstance Scene { get; private set; } = null!;
 
     /// <summary> The camera used to render the viewport. </summary>
     public Camera Camera => Handles.Camera;
@@ -64,7 +64,7 @@ public sealed class SceneToolContext
     /// <summary> All currently selected GameObjects. </summary>
     public IReadOnlyList<GameObject> SelectedObjects => [.. Selection.GetSelected<GameObject>()];
 
-    internal void Begin(Scene scene, object view)
+    internal void Begin(SceneInstance scene, object view)
     {
         Scene = scene;
         View = view;
@@ -92,9 +92,6 @@ public sealed class SceneToolContext
             _state.Remove(key);
     }
 
-    /// <summary>Mark the scene dirty so the change is saved.</summary>
-    public void MarkDirty() => EditorSceneManager.MarkDirty();
-
     /// <summary>
     /// Scope a multi-frame interactive edit into one undo step. Dispose commits; call
     /// <see cref="ToolUndoScope.Cancel"/> to revert everything done inside it.
@@ -104,32 +101,37 @@ public sealed class SceneToolContext
 }
 
 /// <summary>
-/// Groups an interactive operation into a single undo entry. Wraps
-/// <see cref="Undo.BeginContinuous"/> so a tool does not have to pair begin/end by hand across
-/// early returns.
+/// Records an interactive operation as one undo step. The targets are recorded when the scope opens and the
+/// record stays open across frames, so every change the tool makes before the scope ends is in it.
 /// </summary>
-public readonly struct ToolUndoScope : IDisposable
+public sealed class ToolUndoScope : IDisposable
 {
-    private readonly bool _continuous;
+    private object? _held;
 
     internal ToolUndoScope(string description, GameObject[] targets)
     {
-        _continuous = targets.Length > 0;
-        if (_continuous)
-            Undo.BeginContinuous(targets, description);
+        if (targets.Length > 0)
+            _held = Undo.HoldRecords(targets, description);
         else
-            Undo.IncrementGroup();
+        {
+            Undo.FlushUndoRecordObjects();
+            Undo.IncrementCurrentGroup();
+        }
     }
 
-    /// <summary>Abandon the operation, reverting anything recorded inside the scope.</summary>
+    /// <summary>Abandon the operation, reverting what the targets went through inside the scope.</summary>
     public void Cancel()
     {
-        if (_continuous) Undo.CancelContinuous();
+        if (_held == null) return;
+        Undo.ReleaseRecords(_held, revert: true);
+        _held = null;
     }
 
-    /// <summary> Commits the undo scope, ending the continuous undo recording. </summary>
+    /// <summary>Ends the scope. Its changes become a step at the next flush.</summary>
     public void Dispose()
     {
-        if (_continuous) Undo.EndContinuous();
+        if (_held == null) return;
+        Undo.ReleaseRecords(_held, revert: false);
+        _held = null;
     }
 }

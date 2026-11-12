@@ -22,10 +22,8 @@ public abstract class RuntimeTestBase : IDisposable
 {
     private readonly bool _prevIsPlaying;
     private readonly bool _prevIsEditor;
-    private readonly bool _prevIsPaused;
-    private readonly TimeData _time;
 
-    private readonly List<Scene> _scenes = [];
+    private readonly List<SceneInstance> _scenes = [];
     private readonly List<GameObject> _gameObjects = [];
 
     protected RuntimeTestBase()
@@ -34,20 +32,21 @@ public abstract class RuntimeTestBase : IDisposable
         // Capture and override global state so each test starts from a known, play-mode setup.
         _prevIsPlaying = Application.IsPlaying;
         _prevIsEditor = Application.IsEditor;
-        _prevIsPaused = Application.IsPaused;
 
         Application.IsPlaying = true;
         Application.IsEditor = false;
-        Application.IsPaused = false;
 
-        // Push a deterministic time source so Time.DeltaTime is stable instead of being driven
-        // by a wall-clock stopwatch. Physics uses the static Time.FixedDeltaTime (default 1/60).
-        _time = new TimeData { DeltaTime = Time.FixedDeltaTime };
-        Time.TimeStack.Push(_time);
+        SceneInstance main = SceneInstance.Create("Test");
+        main.Clock.Advance(FrameDelta);
+        main.Activate();
+        SceneInstance.Main = main;
     }
 
     /// <summary> The fixed timestep used by physics, mirrored from <see cref="Time.FixedDeltaTime"/>. </summary>
     protected static float FixedDeltaTime => Time.FixedDeltaTime;
+
+    /// <summary>The scaled time each frame the helpers run gives its world's clock, one fixed step unless a test changes it.</summary>
+    protected float FrameDelta = Time.FixedDeltaTime;
 
     /// <summary>
     /// Runs the block as an open editor with play mode off, so only components marked
@@ -55,39 +54,56 @@ public abstract class RuntimeTestBase : IDisposable
     /// the scope: enabling one decides there and then which components get OnEnable, and a
     /// scene assembled in play mode has already had them.
     /// </summary>
-    protected static EditModeScope EditMode() => new();
+    protected EditModeScope EditMode() => new(this);
+
+    private SceneMode _createMode = SceneMode.Game;
 
     protected readonly struct EditModeScope : IDisposable
     {
+        private readonly RuntimeTestBase _test;
         private readonly bool _wasPlaying;
         private readonly bool _wasEditor;
 
-        public EditModeScope()
+        public EditModeScope(RuntimeTestBase test)
         {
+            _test = test;
             _wasPlaying = Application.IsPlaying;
             _wasEditor = Application.IsEditor;
             Application.IsPlaying = false;
             Application.IsEditor = true;
+            test._createMode = SceneMode.Edit;
         }
 
         public void Dispose()
         {
             Application.IsPlaying = _wasPlaying;
             Application.IsEditor = _wasEditor;
+            _test._createMode = SceneMode.Game;
         }
     }
 
+    /// <summary>The list of stored objects in a captured scene tree.</summary>
+    protected static Prowl.Echo.EchoObject StoredObjects(Prowl.Echo.EchoObject content) => content["Objects"]["array"];
+
     /// <summary>
-    /// Creates a tracked scene. Pass <paramref name="enable"/> to immediately enable it (play mode),
-    /// otherwise it starts disabled so component OnEnable is deferred until <see cref="Scene.Enable"/>.
+    /// Creates a tracked world, an edit world inside <see cref="EditMode"/>. Pass <paramref name="enable"/> to activate
+    /// it at once, otherwise it stays dormant so component OnEnable is deferred until <see cref="SceneInstance.Activate"/>.
     /// </summary>
-    protected Scene CreateScene(bool enable = false)
+    protected SceneInstance CreateScene(bool enable = false)
     {
-        var scene = new Scene();
+        var scene = new SceneInstance(_createMode);
+        scene.Clock.Advance(FrameDelta);
         _scenes.Add(scene);
         if (enable)
-            scene.Enable();
+            scene.Activate();
         return scene;
+    }
+
+    /// <summary>Binds <paramref name="world"/> as Main, running, the way a host binds the world it shows.</summary>
+    protected static void Bind(SceneInstance world)
+    {
+        world.Activate();
+        SceneInstance.Main = world;
     }
 
     /// <summary> Creates a tracked GameObject that will be disposed when the test ends. </summary>
@@ -99,32 +115,34 @@ public abstract class RuntimeTestBase : IDisposable
     }
 
     /// <summary>
-    /// Advances one full frame: steps physics (<see cref="Scene.FixedUpdate"/>) then runs the
-    /// per-frame update (<see cref="Scene.Update"/>). This mirrors the order the real game loop uses
+    /// Advances one full frame: steps physics (<see cref="SceneInstance.FixedUpdate"/>) then runs the
+    /// per-frame update (<see cref="SceneInstance.Update"/>). This mirrors the order the real game loop uses
     /// so components that read back physics state in Update (e.g. Rigidbody3D) stay in sync.
     /// </summary>
-    protected void Tick(Scene scene, int steps = 1)
+    protected void Tick(SceneInstance scene, int steps = 1)
     {
         for (int i = 0; i < steps; i++)
         {
+            scene.Clock.Advance(FrameDelta);
             scene.FixedUpdate();
             scene.Update();
             EngineObject.ProcessDestroyed();
         }
     }
 
-    /// <summary> Runs <see cref="Scene.Update"/> the given number of times (no physics step). </summary>
-    protected void Update(Scene scene, int frames = 1)
+    /// <summary> Runs <see cref="SceneInstance.Update"/> the given number of times (no physics step). </summary>
+    protected void Update(SceneInstance scene, int frames = 1)
     {
         for (int i = 0; i < frames; i++)
         {
+            scene.Clock.Advance(FrameDelta);
             scene.Update();
             EngineObject.ProcessDestroyed();
         }
     }
 
-    /// <summary> Steps physics via <see cref="Scene.FixedUpdate"/> the given number of times. </summary>
-    protected void StepPhysics(Scene scene, int steps = 1)
+    /// <summary> Steps physics via <see cref="SceneInstance.FixedUpdate"/> the given number of times. </summary>
+    protected void StepPhysics(SceneInstance scene, int steps = 1)
     {
         for (int i = 0; i < steps; i++)
         {
@@ -145,9 +163,9 @@ public abstract class RuntimeTestBase : IDisposable
 
     /// <summary> A flat collider floor with its top surface at y=0, plus a surface configured
     /// for a fast bake. Pass <paramref name="bake"/> to bake and register it immediately. </summary>
-    protected (Scene scene, NavMeshSurface surface) CreateFloorScene(float size = 20f, bool bake = false)
+    protected (SceneInstance scene, NavMeshSurface surface) CreateFloorScene(float size = 20f, bool bake = false)
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
 
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
@@ -166,7 +184,7 @@ public abstract class RuntimeTestBase : IDisposable
 
     /// <summary> Tick until <paramref name="condition"/> holds — incremental cache updates
     /// process a bounded slice per frame. Returns the ticks taken, or -1 on timeout. </summary>
-    protected int TickUntil(Scene scene, Func<bool> condition, int maxTicks = 240)
+    protected int TickUntil(SceneInstance scene, Func<bool> condition, int maxTicks = 240)
     {
         for (int i = 0; i < maxTicks; i++)
         {
@@ -179,15 +197,15 @@ public abstract class RuntimeTestBase : IDisposable
     public virtual void Dispose()
     {
         NetworkTestScene.Reset();
-        // DontDestroyOnLoad is static state, so anything a test preserved would still be in the
-        // registry for the next one. Immediate teardown: no frame follows to drain a destroy queue.
-        Scene.DestroyPreserved(immediate: true);
+        // Main, a pending load and anything preserved are static state the next test must not see. Immediate
+        // teardown: no frame follows to drain a destroy queue.
+        SceneInstance.Shutdown();
 
-        foreach (Scene scene in _scenes)
+        foreach (SceneInstance scene in _scenes)
         {
             if (scene.IsDisposed) continue;
-            if (scene.IsActive)
-                scene.Disable();
+            if (scene.State == SceneState.Running)
+                scene.Deactivate();
             scene.Dispose();
         }
         _scenes.Clear();
@@ -199,13 +217,8 @@ public abstract class RuntimeTestBase : IDisposable
         }
         _gameObjects.Clear();
 
-        // Restore global state for any test that doesn't go through this base.
-        if (Time.TimeStack.Count > 0 && Time.TimeStack.Peek() == _time)
-            Time.TimeStack.Pop();
-
         Application.IsPlaying = _prevIsPlaying;
         Application.IsEditor = _prevIsEditor;
-        Application.IsPaused = _prevIsPaused;
 
         GC.SuppressFinalize(this);
     }

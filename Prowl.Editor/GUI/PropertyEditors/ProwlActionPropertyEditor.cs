@@ -41,12 +41,8 @@ public class ProwlActionPropertyEditor : PropertyEditor
 
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        var action = value as ProwlAction;
-        if (action == null)
-        {
-            action = new ProwlAction();
-            onChange(action);
-        }
+        // A null action draws as an empty one, assigned by the first edit through onChange.
+        var action = value as ProwlAction ?? new ProwlAction();
 
         Prowl.Scribe.FontFile? font = EditorTheme.Font;
         if (font == null) return;

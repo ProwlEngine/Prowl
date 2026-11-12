@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Echo;
@@ -14,7 +15,7 @@ using Silk.NET.Maths;
 namespace Prowl.Runtime.UI;
 
 /// <summary>
-/// Drives GameObject-UI input. A scene needs exactly one enabled <see cref="EventSystem"/>
+/// Drives GameObject-UI input. A world needs exactly one enabled <see cref="EventSystem"/>
 /// for its <see cref="GameCanvas"/>es to receive pointer and keyboard events. Each frame it hit-tests the
 /// pointer against the scene's canvases (via <see cref="UIRaycaster"/>) and dispatches enter/exit, press,
 /// drag, click, scroll, submit/cancel and selection events to the components under it.
@@ -23,17 +24,12 @@ namespace Prowl.Runtime.UI;
 /// This is entirely game-space: it ticks from <see cref="Update"/> (play mode only) and nothing in the
 /// engine loop drives it. A <see cref="GameCanvas"/> has no dependency on it - delete this component and
 /// canvases still render, they just stop receiving input - so you can drop in your own event system.
-/// Access the active one through <see cref="Current"/>.
+/// Access a world's through <see cref="SceneInput.EventSystem"/>.
 /// </remarks>
 [AddComponentMenu("UI/Event System")]
 [ComponentIcon("")] // ArrowPointer
 public sealed class EventSystem : Component
 {
-    [SerializeIgnore] private static EventSystem? s_current;
-
-    /// <summary>The active event system driving UI input, or null when none is enabled.</summary>
-    public static EventSystem? Current => s_current;
-
     // ============================================================
     // Configuration
     // ============================================================
@@ -63,13 +59,6 @@ public sealed class EventSystem : Component
         public bool ReceivesInput;
     }
 
-    /// <summary>
-    /// The active host viewport, or <c>null</c> when running standalone (no editor). Hosts (the editor
-    /// game view) write this every frame so input is sourced from a render-target region instead of the
-    /// OS window. A host that stops being active sets <see cref="HostViewport.ReceivesInput"/> to false.
-    /// </summary>
-    public HostViewport? Viewport { get; set; }
-
     /// <summary>A pointer cast into world space canvases as a ray, such as a laser from a VR controller.</summary>
     public struct RayPointer
     {
@@ -88,7 +77,7 @@ public sealed class EventSystem : Component
     /// <summary>The nearest world space canvas element under <paramref name="ray"/>, and how far along the ray it is.</summary>
     public static bool RaycastWorld(Ray ray, out GameObject? hit, out float distance)
     {
-        bool found = UIRaycaster.TryPickRay(Scene.Current, ray, out UIRaycaster.Hit result, out distance);
+        bool found = UIRaycaster.TryPickRay(SceneInstance.Active, ray, out UIRaycaster.Hit result, out distance);
         hit = found ? result.GameObject : null;
         return found;
     }
@@ -122,27 +111,23 @@ public sealed class EventSystem : Component
     // Lifecycle
     // ============================================================
 
-    public override void OnEnable()
-    {
-        // First enabled instance wins; any extras stay inert so the tick only runs once per frame.
-        if (s_current.IsNotValid()) s_current = this;
-    }
+    /// <summary>The event system driving the world <paramref name="go"/> is in, or null.</summary>
+    public static EventSystem? Of(GameObject? go) => go.IsValid() && go.Scene.IsValid() ? go.Scene.Input.EventSystem : null;
 
-    public override void OnDisable()
+    // The first enabled event system in a world drives it, any extras stay inert.
+    internal override void JoinWorld(SceneInstance world) => world.Input.Join(this);
+
+    internal override void LeaveWorld(SceneInstance world)
     {
-        if (ReferenceEquals(s_current, this))
-        {
-            s_current = null;
-            ClearState(); // drop focus/hover so nothing dangles once input stops (e.g. leaving play mode)
-        }
+        world.Input.Leave(this);
+        ClearState();
     }
 
     public override void Update()
     {
-        // Reclaim the role if the active system went away, so a surviving instance keeps input alive.
-        if (s_current.IsNotValid()) s_current = this;
-        if (!ReferenceEquals(s_current, this)) return;
-        Tick(Time.UnscaledTotalTime);
+        SceneInstance? world = GameObject.Scene;
+        if (world.IsNotValid() || !ReferenceEquals(world.Input.EventSystem, this)) return;
+        Tick(world, Time.UnscaledTotalTime);
     }
 
     private void ClearState()
@@ -296,59 +281,71 @@ public sealed class EventSystem : Component
     // Frame tick
     // ============================================================
 
-    private void Tick(float currentTime)
+    // The pointer in the pixels canvases lay out in: from the host viewport when there is one, else the window and mouse.
+    private static void ReadPointer(SceneInput input, out Float2 size, out Float2 position, out bool receives)
     {
-        Scene? scene = Scene.Current;
+        if (input.Viewport is { } vp)
+        {
+            size = vp.ReferenceSize;
+            position = vp.PointerPosition;
+            receives = vp.ReceivesInput;
+            return;
+        }
 
-        // Source the pointer from the active host viewport when present; otherwise the OS window + mouse.
+        // Canvases lay out against the framebuffer, but the OS mouse arrives in window coordinates.
+        // Those differ on a HiDPI display, so scale the pointer into framebuffer pixels or every hit
+        // test would be offset and scaled against what was actually drawn.
+        Vector2D<int> fb = Window.InternalWindow.FramebufferSize;
+        Vector2D<int> win = Window.InternalWindow.Size;
+        size = new(fb.X, fb.Y);
+        Int2 mp = Input.MousePosition;
+        float sx = win.X > 0 ? (float)fb.X / win.X : 1f;
+        float sy = win.Y > 0 ? (float)fb.Y / win.Y : 1f;
+        position = new(mp.X * sx, mp.Y * sy);
+        receives = true;
+    }
+
+    // Hit tests the screen space canvases. A host viewport's reference size is pushed as the canvas screen size for the
+    // pick, so each canvas lays out against the size the renderer used, like a 1920x1080 target in a letterboxed panel.
+    private static bool Pick(SceneInstance world, Float2 pos, Float2 size, out UIRaycaster.Hit hit)
+    {
+        SceneInput input = world.Input;
+        Float2? previous = input.ScreenSize;
+        if (input.Viewport != null) input.ScreenSize = size;
+        try { return UIRaycaster.TryPick(world, pos, size, out hit); }
+        finally { input.ScreenSize = previous; }
+    }
+
+    /// <summary>True when screen space UI in <paramref name="world"/> is under the pointer this frame.</summary>
+    internal bool HitsPointer(SceneInstance world)
+    {
+        if (WorldPointer != null) return false;
+        ReadPointer(world.Input, out Float2 size, out Float2 pos, out bool receives);
+        return receives && Pick(world, pos, size, out _);
+    }
+
+    private void Tick(SceneInstance world, float currentTime)
+    {
         if (WorldPointer is { } ray)
         {
-            TickRay(GameObject.Scene.IsValid() ? GameObject.Scene : scene, ray, currentTime);
+            TickRay(world, ray, currentTime);
             return;
         }
         WorldPointerDistance = null;
         _rayWasPressed = false;
 
-        Float2 winSize;
-        Float2 pos;
-        bool gated; // when true, suppress all hits this frame (panel not focused)
-        if (Viewport is { } vp)
-        {
-            winSize = vp.ReferenceSize;
-            pos = vp.PointerPosition;
-            gated = !vp.ReceivesInput;
-        }
-        else
-        {
-            // Canvases lay out against the framebuffer, but the OS mouse arrives in window coordinates.
-            // Those differ on a HiDPI display, so scale the pointer into framebuffer pixels or every hit
-            // test would be offset and scaled against what was actually drawn.
-            Vector2D<int> fb = Window.InternalWindow.FramebufferSize;
-            Vector2D<int> win = Window.InternalWindow.Size;
-            winSize = new(fb.X, fb.Y);
-            Int2 mp = Input.MousePosition;
-            float sx = win.X > 0 ? (float)fb.X / win.X : 1f;
-            float sy = win.Y > 0 ? (float)fb.Y / win.Y : 1f;
-            pos = new(mp.X * sx, mp.Y * sy);
-            gated = false;
-        }
+        ReadPointer(world.Input, out Float2 winSize, out Float2 pos, out bool receives);
+
+        // Suppressed while the host panel is unfocused, or while a world drawn above has UI under the pointer.
+        bool gated = !receives || world.Input.PointerBlocked;
 
         Float2 delta = pos - _lastPointerPos;
         _lastPointerPos = pos;
         _pointerPosition = pos;
 
-        // 1) Hit-test the cursor against every screen-space canvas. When a host viewport is active we push
-        //    its ReferenceSize as the canvas screen-size override for the pick, so each canvas lays out
-        //    against the same size the renderer used (e.g. a 1920x1080 RT inside a letterboxed panel).
         bool hadHit = false;
         UIRaycaster.Hit hit = default;
-        if (!gated)
-        {
-            Float2? prevOverride = GameCanvas.ScreenSizeOverride;
-            if (Viewport != null) GameCanvas.ScreenSizeOverride = winSize;
-            try { hadHit = UIRaycaster.TryPick(scene, pos, winSize, out hit); }
-            finally { if (Viewport != null) GameCanvas.ScreenSizeOverride = prevOverride; }
-        }
+        if (!gated) hadHit = Pick(world, pos, winSize, out hit);
         GameObject? hovered = hadHit ? hit.GameObject : null;
         GameCanvas? hoveredCanvas = hadHit ? hit.Canvas : null;
         Float2 designPos = hadHit ? hit.DesignPosition : Float2.Zero;
@@ -412,7 +409,7 @@ public sealed class EventSystem : Component
     /// The frame for a <see cref="WorldPointer"/>: the ray is hit tested against world space canvases and its press
     /// acts as the left button. The pointer's position is its place on the hit canvas, in design pixels.
     /// </summary>
-    private void TickRay(Scene? scene, RayPointer ray, float currentTime)
+    private void TickRay(SceneInstance? scene, RayPointer ray, float currentTime)
     {
         bool hadHit = UIRaycaster.TryPickRay(scene, ray.Ray, out UIRaycaster.Hit hit, out float distance);
         WorldPointerDistance = hadHit ? distance : null;
@@ -549,6 +546,58 @@ public sealed class EventSystem : Component
             e.ClickTarget = null;
             e.Dragging = null;
             e.IsDragging = false;
+        }
+    }
+}
+
+/// <summary>A world's UI input: its event system, the viewport its host feeds it, and whether a world above took the pointer.</summary>
+public sealed class SceneInput
+{
+    private readonly List<EventSystem> _eventSystems = [];
+
+    /// <summary>The first enabled event system in the world, which drives its UI input, or null when there is none.</summary>
+    public EventSystem? EventSystem => _eventSystems.Count > 0 ? _eventSystems[0] : null;
+
+    /// <summary>
+    /// Where the host draws this world, or null to read the OS window. Hosts like the editor game view write it every
+    /// frame so input comes from a region of a render target. A host that stops being active sets
+    /// <see cref="EventSystem.HostViewport.ReceivesInput"/> to false.
+    /// </summary>
+    public EventSystem.HostViewport? Viewport { get; set; }
+
+    /// <summary>True while a world drawn over this one has UI under the pointer, so this world sees no hit.</summary>
+    public bool PointerBlocked { get; internal set; }
+
+    /// <summary>The surface size this world's screen space canvases lay out against, while a render or pick sets one.</summary>
+    internal Float2? ScreenSize { get; set; }
+
+    internal void Join(EventSystem eventSystem)
+    {
+        if (!_eventSystems.Contains(eventSystem)) _eventSystems.Add(eventSystem);
+    }
+
+    internal void Leave(EventSystem eventSystem) => _eventSystems.Remove(eventSystem);
+
+    internal void Clear()
+    {
+        _eventSystems.Clear();
+        PointerBlocked = false;
+    }
+
+    /// <summary>
+    /// Hands the pointer to the topmost of <paramref name="presented"/>, sorted lowest render order first, with UI under
+    /// it. Every world below that one is blocked for the frame.
+    /// </summary>
+    internal static void Arbitrate(List<SceneInstance> presented)
+    {
+        bool taken = false;
+        for (int i = presented.Count - 1; i >= 0; i--)
+        {
+            SceneInstance world = presented[i];
+            world.Input.PointerBlocked = taken;
+            if (taken || i == 0) continue;
+            EventSystem? events = world.Input.EventSystem;
+            if (events.IsValid() && events.HitsPointer(world)) taken = true;
         }
     }
 }

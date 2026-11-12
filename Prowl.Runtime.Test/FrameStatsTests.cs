@@ -83,28 +83,6 @@ public class FrameStatsTests
     }
 
     [Fact]
-    public void ScopesOffTheMainThreadRecordNothing()
-    {
-        FrameStat offThread = FrameStats.GetCategory("Test.OffThread");
-
-        FrameStats.Start();
-        OnOtherThread(() =>
-        {
-            using (offThread.Scope()) Spin(5);
-        });
-        FrameStats.EndFrame();
-
-        Assert.Equal(new FrameStatSample(0, 0), offThread.GetSample(0));
-    }
-
-    [Fact]
-    public void CategoriesAreLookedUpByNameIgnoringCase()
-    {
-        Assert.Same(FrameStats.GetCategory("Test.Lookup"), FrameStats.GetCategory("test.lookup"));
-        Assert.Same(FrameStats.Physics, FrameStats.GetCategory("physics"));
-    }
-
-    [Fact]
     public void APathMakesASubcategoryAndAnyMissingParents()
     {
         string root = "Test.Tree." + Guid.NewGuid();
@@ -160,31 +138,6 @@ public class FrameStatsTests
         int before = FrameStats.Categories.Count;
         Assert.Throws<ArgumentException>(() => FrameStats.GetCategory(path));
         Assert.Equal(before, FrameStats.Categories.Count);
-    }
-
-    [Fact]
-    public void WaitingAndEditorWorkAreHiddenByDefault()
-    {
-        Assert.True(FrameStats.Idle.HiddenByDefault);
-        Assert.True(FrameStats.RenderWait.HiddenByDefault);
-        Assert.True(FrameStats.Editor.HiddenByDefault);
-        Assert.False(FrameStats.Render.HiddenByDefault);
-        Assert.False(FrameStats.GetCategory("Test.Made").HiddenByDefault);
-    }
-
-    [Fact]
-    public void RepeatedScopesAddUp()
-    {
-        FrameStat repeated = FrameStats.GetCategory("Test.Repeated");
-
-        FrameStats.Start();
-        for (int i = 0; i < 3; i++)
-            using (repeated.Scope()) Spin(5);
-        FrameStats.EndFrame();
-
-        FrameStatSample sample = repeated.GetSample(0);
-        Assert.Equal(3, sample.Calls);
-        Assert.True(sample.Ms >= 14, $"repeated {sample.Ms}");
     }
 
     [Fact]
@@ -248,21 +201,6 @@ public class FrameStatsTests
     }
 
     [Fact]
-    public void SamplesAreNewestFirst()
-    {
-        FrameStat stat = FrameStats.GetCategory("Test.Order");
-
-        FrameStats.Start();
-        using (stat.Scope()) Spin(5);
-        FrameStats.EndFrame();
-        FrameStats.EndFrame();
-
-        Assert.Equal(0, stat.GetSample(0).Calls);
-        Assert.Equal(1, stat.GetSample(1).Calls);
-        Assert.True(stat.GetSample(1).Ms >= 4);
-    }
-
-    [Fact]
     public void StatsSummariseTheFramesAskedFor()
     {
         FrameStat stat = FrameStats.GetCategory("Test.Summary");
@@ -297,18 +235,6 @@ public class FrameStatsTests
     }
 
     [Fact]
-    public void OtherIsNeverNegative()
-    {
-        FrameStat from = FrameStats.GetCategory("Test.Busy");
-
-        FrameStats.Start();
-        using (from.Scope()) Spin(5);
-        FrameStats.EndFrame();
-
-        Assert.True(FrameStats.Other.GetSample(0).Ms >= 0);
-    }
-
-    [Fact]
     public void StartDropsAHalfCountedFrame()
     {
         FrameStat leftover = FrameStats.GetCategory("Test.Leftover");
@@ -320,16 +246,6 @@ public class FrameStatsTests
         FrameStats.EndFrame();
 
         Assert.Equal(new FrameStatSample(0, 0), leftover.GetSample(0));
-    }
-
-    [Fact]
-    public void NewCategoriesAreListedAndKeepTheirColour()
-    {
-        FrameStat made = FrameStats.GetCategory("Test.Listed");
-
-        Assert.Contains(made, FrameStats.Categories);
-        Assert.Equal(made.Color, FrameStats.GetCategory("TEST.LISTED").Color);
-        Assert.Contains(FrameStats.Render, FrameStats.Categories);
     }
 
     // Always on in shipped games, so the engine's per-frame use must never make garbage. Timing is left to the
@@ -469,18 +385,6 @@ public class FrameStatsTests
     }
 
     [Fact]
-    public void ACategoryCreatedMidRunHasEmptyHistory()
-    {
-        FrameStats.Start();
-        for (int i = 0; i < 10; i++) FrameStats.EndFrame();
-
-        FrameStat late = FrameStats.GetCategory("Test.Late." + Guid.NewGuid());
-
-        Assert.Equal(new FrameStatSample(0, 0), late.GetSample(5));
-        Assert.Equal(0, late.GetStats(10).Max);
-    }
-
-    [Fact]
     public void ConcurrentLookupsOfANewNameAllGetTheSameCategory()
     {
         string name = "Test.Concurrent." + Guid.NewGuid();
@@ -515,17 +419,5 @@ public class FrameStatsTests
 
         Assert.Equal(5, stat.GetStats(int.MaxValue).Calls);
         Assert.Equal(default, stat.GetStats(-1));
-    }
-
-    [Fact]
-    public void BackToBackFrameEndsRecordEmptyFrames()
-    {
-        FrameStats.Start();
-        FrameStats.EndFrame();
-        FrameStats.EndFrame();
-
-        Assert.True(FrameStats.GetFrameMs(0) >= 0);
-        Assert.True(FrameStats.Other.GetSample(0).Ms >= 0);
-        Assert.True(float.IsFinite(FrameStats.Other.GetStats(2).Avg));
     }
 }

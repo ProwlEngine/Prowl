@@ -29,27 +29,25 @@ public class UIImageEditor : CustomEditor
         FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        Undo.Snapshot(img);
-
         DrawSourceRow(paper, $"{id}_src", img);
 
         paper.Box($"{id}_sp0").Height(EditorTheme.Spacing);
 
         EditorGUI.Row(paper, $"{id}_color", "Color", () =>
-            Origami.ColorField(paper, $"{id}_color_v", img.Color, v => img.Color = v).Show());
+            Origami.ColorField(paper, $"{id}_color_v", img.Color, v => Edit(img, "Change Color", () => img.Color = v)).Show());
 
         PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material",
             typeof(Material), img.Material,
-            v => img.Material = v as Material, 0);
+            v => Edit(img, "Change Material", () => img.Material = v as Material), 0);
 
-        BoolRow(paper, $"{id}_ray", "Raycast Target", img.RaycastTarget, v => img.RaycastTarget = v);
+        BoolRow(paper, $"{id}_ray", "Raycast Target", img.RaycastTarget, v => Edit(img, "Toggle Raycast Target", () => img.RaycastTarget = v));
 
         paper.Box($"{id}_sp1").Height(EditorTheme.Spacing * 2);
 
         Origami.Header(paper, $"{id}_h_type", "Image Settings").Show();
 
         EditorGUI.Row(paper, $"{id}_type", "Image Type", () =>
-            Origami.EnumDropdown<ImageType>(paper, $"{id}_type_v", img.Type, v => img.Type = v).Show());
+            Origami.EnumDropdown<ImageType>(paper, $"{id}_type_v", img.Type, v => Edit(img, "Change Image Type", () => img.Type = v)).Show());
 
         switch (img.Type)
         {
@@ -72,6 +70,12 @@ public class UIImageEditor : CustomEditor
         => EditorGUI.Row(paper, id, label, () =>
             Origami.Checkbox(paper, $"{id}_v", value, setter).Show());
 
+    private static void Edit(UIImage img, string name, Action change)
+    {
+        Undo.RecordObject(img, name);
+        change();
+    }
+
     /// <summary>
     /// A sliced sprite (one that carries a border) is almost always meant to be drawn nine-sliced, so on
     /// assignment we default the draw type from the sprite: bordered -> Sliced, otherwise -> Simple.
@@ -92,6 +96,7 @@ public class UIImageEditor : CustomEditor
                 typeof(Sprite), img.Sprite,
                 v =>
                 {
+                    Undo.RecordObject(img, "Change Sprite");
                     img.Sprite = v as Sprite;
                     InferTypeFromSprite(img);
                 }, 0);
@@ -163,13 +168,13 @@ public class UIImageEditor : CustomEditor
 
     private static void DrawSimpleOptions(Paper paper, string id, UIImage img)
     {
-        BoolRow(paper, $"{id}_pa", "Preserve Aspect", img.PreserveAspect, v => img.PreserveAspect = v);
+        BoolRow(paper, $"{id}_pa", "Preserve Aspect", img.PreserveAspect, v => Edit(img, "Toggle Preserve Aspect", () => img.PreserveAspect = v));
         DrawSetNativeSizeButton(paper, $"{id}_sns", img);
     }
 
     private static void DrawSlicedOptions(Paper paper, string id, UIImage img)
     {
-        BoolRow(paper, $"{id}_pa", "Preserve Aspect", img.PreserveAspect, v => img.PreserveAspect = v);
+        BoolRow(paper, $"{id}_pa", "Preserve Aspect", img.PreserveAspect, v => Edit(img, "Toggle Preserve Aspect", () => img.PreserveAspect = v));
         DrawPixelsPerUnitMultiplierField(paper, $"{id}_ppu", img);
     }
 
@@ -180,11 +185,12 @@ public class UIImageEditor : CustomEditor
 
     private static void DrawFilledOptions(Paper paper, string id, UIImage img)
     {
-        BoolRow(paper, $"{id}_pa", "Preserve Aspect", img.PreserveAspect, v => img.PreserveAspect = v);
+        BoolRow(paper, $"{id}_pa", "Preserve Aspect", img.PreserveAspect, v => Edit(img, "Toggle Preserve Aspect", () => img.PreserveAspect = v));
 
         EditorGUI.Row(paper, $"{id}_fm", "Fill Method", () =>
             Origami.EnumDropdown<FillMethod>(paper, $"{id}_fm_v", img.FillMethod, v =>
             {
+                Undo.RecordObject(img, "Change Fill Method");
                 img.FillMethod = v;
                 img.FillOrigin = Math.Clamp(img.FillOrigin, 0, MaxOriginIndex(v));
             }).Show());
@@ -193,10 +199,10 @@ public class UIImageEditor : CustomEditor
 
         EditorGUI.Row(paper, $"{id}_fa", "Fill Amount", () =>
             Origami.Slider(paper, $"{id}_fa_v", img.FillAmount,
-                v => img.FillAmount = v, 0f, 1f).Format("F2").Show());
+                v => Edit(img, "Change Fill Amount", () => img.FillAmount = v), 0f, 1f).Format("F2").Show());
 
         if (IsRadial(img.FillMethod))
-            BoolRow(paper, $"{id}_cw", "Clockwise", img.FillClockwise, v => img.FillClockwise = v);
+            BoolRow(paper, $"{id}_cw", "Clockwise", img.FillClockwise, v => Edit(img, "Toggle Clockwise", () => img.FillClockwise = v));
 
         DrawSetNativeSizeButton(paper, $"{id}_sns", img);
     }
@@ -213,9 +219,9 @@ public class UIImageEditor : CustomEditor
             {
                 using (paper.Box($"{id}_n").Width(UnitValue.Stretch()).Enter())
                     Origami.NumericField<float>(paper, $"{id}_n_v", img.PixelsPerUnitMultiplier,
-                        v => img.PixelsPerUnitMultiplier = MathF.Max(0.0001f, v)).Min(0.0001f).Show();
+                        v => Edit(img, "Change Pixels Per Unit Multiplier", () => img.PixelsPerUnitMultiplier = MathF.Max(0.0001f, v))).Min(0.0001f).Show();
 
-                Origami.IconButton(paper, $"{id}_r", EditorIcons.ArrowsRotate, () => img.PixelsPerUnitMultiplier = 1f)
+                Origami.IconButton(paper, $"{id}_r", EditorIcons.ArrowsRotate, () => Edit(img, "Reset Pixels Per Unit Multiplier", () => img.PixelsPerUnitMultiplier = 1f))
                     .Width(EditorTheme.RowHeight).Height(EditorTheme.RowHeight)
                     .Tooltip("Reset to 1").Show();
             }
@@ -232,7 +238,7 @@ public class UIImageEditor : CustomEditor
                 GameObject go = img.GameObject;
                 RectTransform? rt = go.IsValid() ? go.RectTransform : null;
                 if (rt.IsNotValid()) return;
-                Undo.Snapshot(rt);
+                Undo.RecordObject(rt, "Set Native Size");
 
                 // A stretched anchor (edge/fullscreen) makes SizeDelta a padding offset, so setting a
                 // literal pixel size wouldn't work. Collapse it to a bottom-left point anchor first; a
@@ -260,7 +266,7 @@ public class UIImageEditor : CustomEditor
 
         EditorGUI.Row(paper, id, "Fill Origin", () =>
         {
-            ButtonGroupBuilder group = Origami.ButtonGroup(paper, $"{id}_g", origin, v => img.FillOrigin = v)
+            ButtonGroupBuilder group = Origami.ButtonGroup(paper, $"{id}_g", origin, v => Edit(img, "Change Fill Origin", () => img.FillOrigin = v))
                 .Height(EditorTheme.RowHeight).FullWidth();
 
             switch (img.FillMethod)

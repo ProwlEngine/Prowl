@@ -80,12 +80,11 @@ internal static class ClayBackedImporter
         if (s.CalculateTangentSpace) flags |= PostProcessFlags.CalcTangentSpace;
         else flags &= ~PostProcessFlags.CalcTangentSpace;
 
-        // glTF stores UVs with V=0 at the top of the texture; FBX and OBJ store V=0 at the bottom,
-        // which is what Prowl's shaders expect post-import because Texture2D uploads bottom-up. So
-        // the flip is a property of the source format, not a preference: glTF always needs it and
-        // FBX and OBJ never do. It used to be a toggle, which could only ever produce upside-down
-        // textures on every glTF or do nothing at all.
-        if (fileExt is ".gltf" or ".glb" or ".vrm") flags |= PostProcessFlags.FlipUVs;
+        // Clay hands glTF and FBX UVs over with V=0 at the top of the texture, and OBJ with V=0 at
+        // the bottom, which is what Prowl's shaders expect post-import because Texture2D uploads
+        // bottom-up. So the flip is a property of the source format, not a preference: glTF and FBX
+        // always need it and OBJ never does.
+        if (fileExt is ".gltf" or ".glb" or ".vrm" or ".fbx") flags |= PostProcessFlags.FlipUVs;
         else flags &= ~PostProcessFlags.FlipUVs;
 
         if (s.OptimizeMeshes) flags |= PostProcessFlags.OptimizeMeshes;

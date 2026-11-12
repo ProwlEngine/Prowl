@@ -1,5 +1,6 @@
 using System;
 
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Theming;
 using Prowl.Runtime;
@@ -19,7 +20,7 @@ public class SceneDropHandlerAttribute : Attribute
 
 public struct SceneDropContext
 {
-    public Scene Scene;
+    public SceneInstance Scene;
     public EditorCamera Camera;
     public Float2 MouseLocal;
     public Float2 PanelSize;
@@ -43,7 +44,7 @@ internal class SceneAssetDropHandler : ISceneDropHandler
     public void Handle(AssetDragPayload payload, SceneDropContext context)
     {
         AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(payload.AssetGuid);
-        if (entry != null) EditorSceneManager.ConfirmSceneChange(() => EditorSceneManager.OpenScene(entry.Path));
+        if (entry != null) EditorSceneManager.OpenWithPrompt(entry.Path);
     }
 }
 
@@ -58,7 +59,9 @@ internal class MaterialDropHandler : ISceneDropHandler
         var mat = Runtime.AssetDatabase.Get(payload.AssetGuid) as Material;
         if (mat.IsNotValid()) return;
         MeshRenderer? meshRenderer = hitGO.GetComponent<MeshRenderer>();
-        if (meshRenderer.IsValid()) { meshRenderer.Material = mat; EditorSceneManager.MarkDirty(); }
+        if (meshRenderer.IsNotValid()) return;
+        Undo.RecordObject(meshRenderer, "Assign Material");
+        meshRenderer.Material = mat;
     }
 }
 

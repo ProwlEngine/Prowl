@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 
 using Prowl.Motion;
 using Prowl.Runtime.AnimationNodes;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
@@ -89,16 +90,22 @@ public class Animator : Component
 
     public SampledEventsBuffer? Events => _graph?.Events;
 
+    // The world this animator is registered with, kept so it leaves even during teardown, when it no longer reads as in one.
+    private SceneInstance? _registeredIn;
+
     public override void OnEnable()
     {
         Rebind();
         _autoPlayPending = PlayAutomatically;
-        if (Scene.IsValid()) Scene!.Animation.Register(this);
+        if (!IsInWorld) return;
+        _registeredIn = Scene;
+        _registeredIn.Animation.Register(this);
     }
 
     public override void OnDisable()
     {
-        if (Scene.IsValid()) Scene!.Animation.Unregister(this);
+        if (!ReferenceEquals(_registeredIn, null)) _registeredIn.Animation.Unregister(this);
+        _registeredIn = null;
         Rebind();
     }
 
@@ -535,13 +542,13 @@ public class Animator : Component
         point = default;
         normal = new Float3(0f, 1f, 0f);
 
-        if (Scene.IsNotValid()) return false;
+        if (!IsInWorld) return false;
 
         // The ragdoll stands where the feet are, so the probe would find it as the ground.
         var filter = new QueryFilter(GroundLayers);
         if (_ragdoll != null) filter = filter.Ignoring(_ragdoll.Bodies);
 
-        if (!Scene!.Physics.Raycast(origin, direction, maxDistance, out RaycastHit hit, filter))
+        if (!Scene.Physics.Raycast(origin, direction, maxDistance, out RaycastHit hit, filter))
             return false;
 
         point = hit.Point;

@@ -1,4 +1,4 @@
-﻿﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
@@ -52,6 +52,7 @@ internal static class RoslynScriptBackend
         public CSharpCompilation? Compilation;
         public MetadataReference[] References = Array.Empty<MetadataReference>();
         public bool AllowUnsafe;
+        public OptimizationLevel Optimization;
 
         // Snapshot of the last SUCCESSFUL compile, used to decide the whole unit skip.
         public Dictionary<string, ulong> SuccessHashes = new(StringComparer.OrdinalIgnoreCase);
@@ -90,7 +91,7 @@ internal static class RoslynScriptBackend
                 if (!scripts.Contains(scriptPath, StringComparer.OrdinalIgnoreCase)) continue;
 
                 context = new ScriptContext(key.Substring(prefix.Length), state.References, scripts,
-                    BuildOptions(state.AllowUnsafe), EditorParseOptions);
+                    BuildOptions(state.AllowUnsafe, state.Optimization), EditorParseOptions);
                 return true;
             }
         }
@@ -104,13 +105,15 @@ internal static class RoslynScriptBackend
     }
 
     /// <summary>
-    /// Compile one unit. <paramref name="stateKey"/> uniquely identifies the unit across projects,
-    /// <paramref name="peerRefs"/> holds references to units compiled earlier this run, and
-    /// <paramref name="nugetDllPaths"/> is the resolved package set.
+    /// Compile one unit. <paramref name="stateKey"/> uniquely identifies the unit across projects and
+    /// always comes with the same <paramref name="optimization"/>. <paramref name="peerRefs"/> holds
+    /// references to units compiled earlier this run, and <paramref name="nugetDllPaths"/> is the
+    /// resolved package set.
     /// </summary>
     public static CompileOutcome Compile(
         string stateKey,
         CompilationUnit unit,
+        OptimizationLevel optimization,
         IReadOnlyDictionary<string, MetadataReference> peerRefs,
         IReadOnlyList<string> nugetDllPaths,
         CSharpParseOptions? parseOptions = null)
@@ -132,6 +135,11 @@ internal static class RoslynScriptBackend
 
             List<MetadataReference> references = BuildReferences(unit, peerRefs, nugetDllPaths);
             s_states.TryGetValue(stateKey, out UnitState? state);
+
+            // The reuse below never compares levels, so a key that switched level would hand back the old build
+            if (state != null && state.Optimization != optimization)
+                throw new InvalidOperationException(
+                    $"'{stateKey}' was compiled at {state.Optimization} and cannot be recompiled at {optimization}.");
 
             // 2. Whole unit skip: unchanged source + references since the last successful compile.
             if (state?.Image != null
@@ -168,7 +176,7 @@ internal static class RoslynScriptBackend
             //    (Prowl.CodeGen, which dotnet build runs too): scripts rewritten in place, plus files of its own.
             //    A file whose result is unchanged comes back as the very same tree.
             string[] files = [.. parsed.Keys];
-            CSharpCompilation source = Reuse(state?.Source, state?.Parsed, parsed, state, references, unit);
+            CSharpCompilation source = Reuse(state?.Source, state?.Parsed, parsed, state, references, unit, optimization);
             ScriptCodeGen.Result generated = ScriptCodeGen.Run(source, [.. files.Select(f => parsed[f].Tree)]);
             var newTrees = new Dictionary<string, (ulong Hash, SyntaxTree Tree)>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < files.Length; i++)
@@ -182,7 +190,7 @@ internal static class RoslynScriptBackend
             }
 
             // 5. What compiles is the rewrite, again swapping only the trees that changed.
-            CSharpCompilation compilation = Reuse(state?.Compilation, state?.Trees, newTrees, state, references, unit);
+            CSharpCompilation compilation = Reuse(state?.Compilation, state?.Trees, newTrees, state, references, unit, optimization);
 
             // 6. Emit with an embedded PDB.
             using var peStream = new MemoryStream();
@@ -212,6 +220,7 @@ internal static class RoslynScriptBackend
             state.Compilation = compilation;
             state.References = refArray;
             state.AllowUnsafe = unit.AllowUnsafe;
+            state.Optimization = optimization;
             state.Diagnostics = diagnostics;
 
             if (image != null)
@@ -238,10 +247,10 @@ internal static class RoslynScriptBackend
     /// keeps the binding of the rest; or a new compilation when there's nothing to build on.
     /// </summary>
     private static CSharpCompilation Reuse(CSharpCompilation? previous, Dictionary<string, (ulong Hash, SyntaxTree Tree)>? previousTrees,
-        Dictionary<string, (ulong Hash, SyntaxTree Tree)> trees, UnitState? state, List<MetadataReference> references, CompilationUnit unit)
+        Dictionary<string, (ulong Hash, SyntaxTree Tree)> trees, UnitState? state, List<MetadataReference> references, CompilationUnit unit, OptimizationLevel optimization)
     {
         if (previous == null || previousTrees == null || state == null || state.AllowUnsafe != unit.AllowUnsafe)
-            return CSharpCompilation.Create(unit.Name, trees.Values.Select(t => t.Tree), references, BuildOptions(unit));
+            return CSharpCompilation.Create(unit.Name, trees.Values.Select(t => t.Tree), references, BuildOptions(unit.AllowUnsafe, optimization));
 
         CSharpCompilation compilation = previous;
         foreach ((string path, (ulong Hash, SyntaxTree Tree) entry) in previousTrees)
@@ -259,7 +268,7 @@ internal static class RoslynScriptBackend
     internal static readonly ImmutableArray<DiagnosticAnalyzer> ScriptAnalyzers =
         ImmutableArray.Create<DiagnosticAnalyzer>(
             new ReloadDiagnosticAnalyzer(), new EngineObjectNullAnalyzer(), new ComponentConstructorAnalyzer(),
-            new BlockingWaitAnalyzer());
+            new BlockingWaitAnalyzer(), new SceneAnalyzer());
 
     /// <summary>Run the Prowl script-safety analyzers over the compilation and surface their diagnostics.</summary>
     private static IEnumerable<Diagnostic> RunScriptAnalyzers(CSharpCompilation compilation)
@@ -280,12 +289,10 @@ internal static class RoslynScriptBackend
     /// <summary>Severity overrides from the project's code style, applied on top of the built in ones.</summary>
     public static KeyValuePair<string, ReportDiagnostic>[] DiagnosticOverrides { get; set; } = [];
 
-    private static CSharpCompilationOptions BuildOptions(CompilationUnit unit) => BuildOptions(unit.AllowUnsafe);
-
-    private static CSharpCompilationOptions BuildOptions(bool allowUnsafe) =>
+    private static CSharpCompilationOptions BuildOptions(bool allowUnsafe, OptimizationLevel optimization) =>
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
             .WithPlatform(Platform.AnyCpu)
-            .WithOptimizationLevel(OptimizationLevel.Debug)
+            .WithOptimizationLevel(optimization)
             .WithAllowUnsafe(allowUnsafe)
             .WithNullableContextOptions(NullableContextOptions.Annotations)
             .WithConcurrentBuild(true)

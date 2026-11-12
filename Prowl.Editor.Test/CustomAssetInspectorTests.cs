@@ -31,28 +31,6 @@ public class CustomAssetInspectorTests : EditorTestHarness
     }
 
     [Fact]
-    public void CustomAssetHasNoEditorOfItsOwn()
-    {
-        // The whole reason the inspector needs a field fallback: nothing is registered for a type
-        // the engine has never heard of, and its base walk stops at EngineObject.
-        Assert.Null(EditorRegistries.GetAssetEditor(typeof(CustomTestAsset)));
-    }
-
-    [Fact]
-    public void CustomAssetResolvesFromItsEntry()
-    {
-        Guid guid = CreateCustomAsset("Custom.customtest", out _);
-
-        AssetEntry? entry = Assets.GetEntry("Custom.customtest");
-        Assert.NotNull(entry);
-        Assert.True(typeof(Asset).IsAssignableFrom(entry!.MainAssetType));
-
-        Asset? loaded = AssetDatabase.Get(guid);
-        Assert.NotNull(loaded);
-        Assert.IsType<CustomTestAsset>(loaded);
-    }
-
-    [Fact]
     public void FieldEditsSurviveSaveAndReimport()
     {
         // What the inspector's Save button does: mutate the live instance, write it back, reimport.

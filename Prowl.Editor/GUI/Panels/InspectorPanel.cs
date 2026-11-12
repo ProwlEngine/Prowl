@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json.Nodes;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Echo;
 using Prowl.Editor.Core;
 using Prowl.Editor.Importers;
@@ -24,13 +25,10 @@ namespace Prowl.Editor.GUI.Panels;
 public class InspectorPanel : DockPanel
 {
     [MenuItem("Window/General/Inspector", priority: 3)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(InspectorPanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<InspectorPanel>();
 
     public override string Title => Loc.Get("panel.inspector");
     public override string Icon => EditorIcons.Sliders;
-
-    // Remember the last non-folder selection so navigating folders doesn't clear the inspector.
-    private object? _lastInspectable;
     private bool _subscribed;
 
     public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
@@ -50,7 +48,7 @@ public class InspectorPanel : DockPanel
     {
         if (state["selection"] is not System.Text.Json.Nodes.JsonArray arr) return;
 
-        Scene scene = Runtime.Resources.Scene.Current;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         bool first = true;
@@ -58,7 +56,7 @@ public class InspectorPanel : DockPanel
         {
             string? guidStr = node?.GetValue<string>();
             if (!Guid.TryParse(guidStr, out Guid guid)) continue;
-            GameObject? go = scene.FindObjectByIdentifier<GameObject>(guid);
+            GameObject? go = scene.FindObject<GameObject>(guid);
             if (go.IsNotValid()) continue;
 
             if (first) { Selection.Select(go); first = false; }
@@ -73,7 +71,6 @@ public class InspectorPanel : DockPanel
     {
         if (_subscribed)
         {
-            Selection.OnSelectionChanged -= OnSelectionChanged;
             EditorApplication.PlayModeRequested -= OnPlayModeRequested;
             _subscribed = false;
         }
@@ -216,18 +213,6 @@ public class InspectorPanel : DockPanel
             cancellable: true);
     }
 
-    private void OnSelectionChanged()
-    {
-        object? active = Selection.ActiveObject;
-
-        // If the new selection is a folder (or all selected are folders), keep the
-        // previous inspectable so browsing folders doesn't wipe the inspector.
-        if (active == null || IsFolderSelection(active))
-            return;
-
-        _lastInspectable = active;
-    }
-
     public override void OnGUI(Paper paper, float width, float height)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
@@ -235,7 +220,6 @@ public class InspectorPanel : DockPanel
 
         if (!_subscribed)
         {
-            Selection.OnSelectionChanged += OnSelectionChanged;
             EditorApplication.PlayModeRequested += OnPlayModeRequested;
             _subscribed = true;
         }
@@ -245,9 +229,7 @@ public class InspectorPanel : DockPanel
         {
             // Determine what to inspect: current selection, unless it's a folder
             object? active = Selection.ActiveObject;
-            if (active == null || IsFolderSelection(active))
-                active = _lastInspectable;
-            if (active == null)
+            if (active == null || (active is EngineObject disposable && disposable.IsDisposed))
             {
                 DrawEmpty(paper, font);
                 return;
@@ -275,12 +257,6 @@ public class InspectorPanel : DockPanel
                 var gos = Selection.GetSelected<GameObject>().ToList();
                 if (gos.Count > 1)
                     GameObjectInspector.DrawMulti(paper, font, gos);
-                else if (gameObject.IsDestroyQueued || gameObject.IsDisposed)
-                {
-                    // Hide game objects that have been deleted.
-                    _lastInspectable = null;
-                    DrawEmpty(paper, font);
-                }
                 else
                     GameObjectInspector.Draw(paper, font, gameObject);
             }
@@ -536,13 +512,12 @@ public class InspectorPanel : DockPanel
 
             if (File.Exists(metaPath))
             {
-                MetaFileData meta = MetaFile.Read(metaPath);
                 AssetImporter? importer = EditorRegistries.CreateImporterByName(entry.ImporterType);
 
                 if (importer != null)
                 {
-                    // Ensure settings exist (use defaults if missing)
-                    EchoObject? settings = meta.Settings ?? importer.DefaultSettings();
+                    Guid guid = entry.Guid;
+                    EchoObject? settings = ImportSettingsEditor.Pending(guid);
                     if (settings != null && settings.TagType == Echo.EchoType.Compound)
                     {
                         Origami.Header(paper, "insp_h_settings", $"{EditorIcons.Gear}  {Loc.Get("inspector.import_settings")}").Underline().Show();
@@ -556,38 +531,34 @@ public class InspectorPanel : DockPanel
                             {
                                 case Echo.EchoType.Bool:
                                     Origami.Checkbox(paper, $"insp_set_{key}", val.BoolValue,
-                                            v => { settings[key] = new Echo.EchoObject(v); })
+                                            v => SetImportSetting(guid, key, new EchoObject(v)))
                                         .LabelRight(PropertyGridUtils.NicifyName(key)).Show();
                                     break;
 
                                 case Echo.EchoType.Int:
                                     EditorGUI.Row(paper, $"insp_set_{key}", PropertyGridUtils.NicifyName(key), () =>
                                         Origami.NumericField<int>(paper, $"insp_set_{key}_v", val.IntValue,
-                                            v => { settings[key] = new Echo.EchoObject(v); }).Show());
+                                            v => SetImportSetting(guid, key, new EchoObject(v))).Show());
                                     break;
 
                                 case Echo.EchoType.Float:
                                     EditorGUI.Row(paper, $"insp_set_{key}", PropertyGridUtils.NicifyName(key), () =>
                                         Origami.NumericField<float>(paper, $"insp_set_{key}_v", val.FloatValue,
-                                            v => { settings[key] = new Echo.EchoObject(v); }).Show());
+                                            v => SetImportSetting(guid, key, new EchoObject(v))).Show());
                                     break;
 
                                 case Echo.EchoType.String:
                                     EditorGUI.Row(paper, $"insp_set_{key}", PropertyGridUtils.NicifyName(key), () =>
                                         Origami.TextField(paper, $"insp_set_{key}_v", val.StringValue,
-                                            v => { settings[key] = new Echo.EchoObject(v); }).CommitOnEnter().Show());
+                                            v => SetImportSetting(guid, key, new EchoObject(v))).CommitOnEnter().Show());
                                     break;
                             }
                         }
 
                         // Save & Reimport button
                         paper.Box("insp_set_sp").Height(4);
-                        Origami.Button(paper, "insp_set_save", $"{EditorIcons.FloppyDisk}  {Loc.Get("inspector.save_and_reimport")}", () =>
-                        {
-                            meta.Settings = settings;
-                            MetaFile.Write(metaPath, meta);
-                            db.Reimport(entry.Guid);
-                        }).Width(150).Show();
+                        Origami.Button(paper, "insp_set_save", $"{EditorIcons.FloppyDisk}  {Loc.Get("inspector.save_and_reimport")}",
+                            () => SaveImportSettings(db, guid, metaPath)).Width(150).Show();
                     }
                 }
             }
@@ -599,6 +570,27 @@ public class InspectorPanel : DockPanel
         {
             Origami.Button(paper, "insp_reimport", $"{EditorIcons.ArrowsRotate}  {Loc.Get("inspector.reimport")}", () => db.Reimport(entry.Guid)).Show();
         }
+    }
+
+    internal static void SetImportSetting(Guid guid, string key, EchoObject value)
+    {
+        Undo.RegisterImporterUndo(guid, "Change Import Settings");
+        if (ImportSettingsEditor.Pending(guid) is EchoObject settings) settings[key] = value;
+    }
+
+    internal static void SaveImportSettings(EditorAssetBackend db, Guid guid, string metaPath)
+    {
+        if (ImportSettingsEditor.Pending(guid) is not EchoObject settings || !File.Exists(metaPath)) return;
+
+        MetaFileData meta = MetaFile.Read(metaPath);
+        EchoObject merged = meta.Settings ?? EchoObject.NewCompound();
+        foreach (KeyValuePair<string, EchoObject> kvp in settings.Tags)
+            merged[kvp.Key] = kvp.Value.Clone();
+
+        meta.Settings = merged;
+        MetaFile.Write(metaPath, meta);
+        ImportSettingsEditor.SetPending(guid, merged);
+        db.Reimport(guid);
     }
 
 
@@ -765,8 +757,6 @@ public class InspectorPanel : DockPanel
     /// Draws an asset's own serialized fields for types that have no editor of their own, which is
     /// what makes a custom <see cref="EngineObject"/> asset editable without writing one.
     /// </summary>
-    private readonly HashSet<Guid> _unsavedAssets = [];
-
     private void DrawAssetFieldsFallback(Paper paper, ContentItem item, AssetEntry? entry)
     {
         if (entry?.MainAssetType == null) return;
@@ -776,9 +766,12 @@ public class InspectorPanel : DockPanel
         if (Runtime.AssetDatabase.Load<Asset>(guid) is not { IsLoaded: true } asset) return;
 
         Origami.Header(paper, "insp_h_fields", Loc.Get("inspector.properties")).Underline().Show();
-        PropertyGridUtils.Draw(paper, "insp_asset_fields", asset, _ => _unsavedAssets.Add(guid));
+        bool readOnly = !Core.Undo.CanSave(asset);
+        if (readOnly) Origami.BeginReadOnly();
+        try { PropertyGridUtils.Draw(paper, "insp_asset_fields", asset, null); }
+        finally { if (readOnly) Origami.EndReadOnly(); }
 
-        if (Origami.IsReadOnly || !_unsavedAssets.Contains(guid)) return;
+        if (Origami.IsReadOnly || !EditorUtility.IsDirty(asset)) return;
 
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db == null) return;
@@ -790,14 +783,16 @@ public class InspectorPanel : DockPanel
             Origami.Button(paper, "insp_asset_fields_save",
                 $"{EditorIcons.FloppyDisk}  {Loc.Get("inspector.save_and_reimport")}", () =>
                 {
-                    if (db.SaveAsset(asset)) _unsavedAssets.Remove(guid);
+                    if (db.SaveAsset(asset)) EditorUtility.ClearAssetDirty(guid);
                 }).Show();
 
             Origami.Button(paper, "insp_asset_fields_revert",
                 $"{EditorIcons.ArrowsRotate}  {Loc.Get("dialog.revert")}", () =>
                 {
+                    Core.Undo.RecordObject(asset, "Revert Asset");
                     Runtime.AssetDatabase.Refill(asset, ReloadReason.Revert);
-                    _unsavedAssets.Remove(guid);
+                    Core.Undo.FlushUndoRecordObjects();
+                    EditorUtility.ClearAssetDirty(guid);
                 }).Show();
         }
     }
@@ -863,19 +858,18 @@ public class InspectorPanel : DockPanel
             .FontSize(fs - 1);
 
         // Stack trace
-        if (log.StackTrace != null && log.StackTrace.StackFrames.Length > 0)
+        if (log.StackTrace is not null)
         {
             paper.Box("log_sp").Height(8);
             Origami.Header(paper, "log_st_hdr", Loc.Get("inspector.stack_trace")).Underline().Show();
 
-            for (int i = 0; i < log.StackTrace.StackFrames.Length; i++)
+            for (int i = 0; i < log.StackTrace.LineCount; i++)
             {
-                DebugStackFrame frame = log.StackTrace.StackFrames[i];
-                string frameText = frame.ToString();
+                string frameText = log.StackTrace.GetLine(i);
 
                 Color frameBg = i % 2 == 0
-                    ? System.Drawing.Color.FromArgb(8, 255, 255, 255)
-                    : System.Drawing.Color.Transparent;
+                    ? Color.FromArgb(8, 255, 255, 255)
+                    : Color.Transparent;
 
                 paper.Box($"log_frame_{i}")
                     .Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(18)

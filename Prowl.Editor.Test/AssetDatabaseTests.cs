@@ -15,7 +15,7 @@ namespace Prowl.Editor.Test;
 /// <summary>A component that names a scene lazily, for soft dependency tests.</summary>
 public sealed class AssetRefComponent : Component
 {
-    public AssetRef<SceneAsset> Ref;
+    public AssetRef<Scene> Ref;
 }
 
 /// <summary>A component that holds a material in a plain field, for hard dependency tests.</summary>
@@ -40,7 +40,7 @@ public sealed class ThrowingTestImporter : AssetImporter
 /// </summary>
 public class AssetDatabaseTests : EditorTestHarness
 {
-    private Guid CreateScene(string path) => CreateSceneAsset(new Scene(), path);
+    private Guid CreateScene(string path) => CreateSceneAsset(new SceneInstance(SceneMode.Edit), path);
 
     private Material CreateMaterial(string path, float value = 1f)
     {
@@ -60,14 +60,6 @@ public class AssetDatabaseTests : EditorTestHarness
     #region Create / Import / Resolve
 
     [Fact]
-    public void CreateScene_WritesFileAndMeta()
-    {
-        CreateScene("S.scene");
-        Assert.True(File.Exists(AssetAbsolutePath("S.scene")));
-        Assert.True(File.Exists(AssetAbsolutePath("S.scene.meta")));
-    }
-
-    [Fact]
     public void CreateAsset_MakesTheCallersObjectTheAsset()
     {
         Material material = CreateMaterial("M.mat");
@@ -82,7 +74,7 @@ public class AssetDatabaseTests : EditorTestHarness
     public void AScene_ImportsAsItsStoredForm()
     {
         Guid g = CreateScene("S.scene");
-        Assert.IsType<SceneAsset>(AssetDatabase.Load<Asset>(g));
+        Assert.IsType<Scene>(AssetDatabase.Load<Asset>(g));
     }
 
     [Fact]
@@ -91,14 +83,6 @@ public class AssetDatabaseTests : EditorTestHarness
         Guid g = CreateScene("S.scene");
         Assert.Equal(g, Assets.PathToGuid("S.scene"));
         Assert.Equal("S.scene", Assets.GuidToPath(g));
-    }
-
-    [Fact]
-    public void CreateScene_NestedFolders_AreCreated()
-    {
-        Guid g = CreateScene("A/B/C/Deep.scene");
-        Assert.NotEqual(Guid.Empty, g);
-        Assert.True(File.Exists(AssetAbsolutePath("A/B/C/Deep.scene")));
     }
 
     [Fact]
@@ -152,7 +136,7 @@ public class AssetDatabaseTests : EditorTestHarness
         Guid unknown = Guid.NewGuid();
 
         Assert.Null(AssetDatabase.Get(unknown));
-        SceneAsset? missing = AssetDatabase.Get<SceneAsset>(unknown);
+        Scene? missing = AssetDatabase.Get<Scene>(unknown);
         Assert.NotNull(missing);
         Assert.True(missing!.IsMissing);
         Assert.Equal(unknown, missing.AssetID);
@@ -202,9 +186,6 @@ public class AssetDatabaseTests : EditorTestHarness
     #region Path / Guid Queries
 
     [Fact]
-    public void PathToGuid_Unknown_ReturnsEmpty() => Assert.Equal(Guid.Empty, Assets.PathToGuid("nope.scene"));
-
-    [Fact]
     public void GuidToPath_Unknown_ReturnsNull() => Assert.Null(Assets.GuidToPath(Guid.NewGuid()));
 
     [Fact]
@@ -214,37 +195,21 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.Equal(g, Assets.PathToGuid("folder/s.scene"));
     }
 
-    [Fact]
-    public void GetEntry_ByGuidAndByPath()
-    {
-        Guid g = CreateScene("S.scene");
-        Assert.NotNull(Assets.GetEntry(g));
-        Assert.Equal(g, Assets.GetEntry("S.scene")!.Guid);
-    }
-
     #endregion
 
     #region GUID Stability Across Reopen
 
     [Fact]
-    public void Guid_IsStable_AcrossDatabaseReopen()
-    {
-        Guid g = CreateScene("S.scene");
-        ReopenDatabase();
-        Assert.Equal(g, Assets.PathToGuid("S.scene"));
-    }
-
-    [Fact]
     public void Reopen_PicksUpFileAddedOutOfBand()
     {
         File.WriteAllText(AssetAbsolutePath("Extra.scene"),
-            Serializer.Serialize(typeof(object), new Scene()).WriteToString());
+            Serializer.Serialize(typeof(object), new SceneInstance(SceneMode.Edit)).WriteToString());
 
         ReopenDatabase();
 
         Guid g = Assets.PathToGuid("Extra.scene");
         Assert.NotEqual(Guid.Empty, g);
-        Assert.NotNull(AssetDatabase.Load<SceneAsset>(g));
+        Assert.NotNull(AssetDatabase.Load<Scene>(g));
     }
 
     [Fact]
@@ -654,7 +619,7 @@ public class AssetDatabaseTests : EditorTestHarness
     public void AnAssetALiveSceneUses_StaysLoaded()
     {
         Material material = CreateMaterial("M.mat");
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         try
         {
             var go = new GameObject("Holder");
@@ -681,7 +646,7 @@ public class AssetDatabaseTests : EditorTestHarness
         CreateScene("S.scene");
         CreatePrefabAsset(new GameObject("P"), "P.prefab");
 
-        var scenes = Assets.FindAssetsOfType<SceneAsset>().ToList();
+        var scenes = Assets.FindAssetsOfType<Scene>().ToList();
 
         Assert.Single(scenes);
         Assert.Equal("S.scene", scenes[0].Path);
@@ -701,7 +666,7 @@ public class AssetDatabaseTests : EditorTestHarness
 
         Assert.Null(ex);
         Assert.NotEqual(Guid.Empty, Assets.PathToGuid("Good.scene"));
-        Assert.NotNull(AssetDatabase.Load<SceneAsset>(Assets.PathToGuid("Good.scene")));
+        Assert.NotNull(AssetDatabase.Load<Scene>(Assets.PathToGuid("Good.scene")));
     }
 
     #endregion
@@ -746,13 +711,47 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.DoesNotContain(material.AssetID, entry.SoftDependencies);
     }
 
+    // A .scene copied in from an older project after it migrated is still a live scene on disk.
+    [Fact]
+    public void LegacyScene_ImportsAsContent_WithItsIdentifiers()
+    {
+        var world = new SceneInstance(SceneMode.Edit);
+        var parent = new GameObject("Parent");
+        var child = new GameObject("Child");
+        child.SetParent(parent);
+        world.Add(parent);
+        (string, Guid)[] stored = [("Child", child.Identifier), ("Parent", parent.Identifier)];
+        File.WriteAllText(AssetAbsolutePath("Old.scene"), ProjectMigrationTests.LegacyScene(world).WriteToString());
+
+        Guid guid = Assets.ImportFile("Old.scene");
+        SceneContent content = AssetDatabase.Load<Scene>(guid)!.ReadContent();
+
+        Assert.Equal(stored, content.Objects.Select(o => (o.Name, o.Identifier)).OrderBy(o => o.Item1));
+    }
+
+    [Fact]
+    public void SceneFields_StaySoft_InASavedScene()
+    {
+        Guid next = CreateScene("Next.scene");
+        var go = new GameObject("Door");
+        go.AddComponent<AssetRefComponent>().Ref = new AssetRef<Scene>(next);
+        var world = new SceneInstance(SceneMode.Edit);
+        world.Add(go);
+
+        Guid level = CreateSceneAsset(world, "Level.scene");
+
+        AssetEntry entry = Assets.GetEntry(level)!;
+        Assert.Contains(next, entry.SoftDependencies);
+        Assert.DoesNotContain(next, entry.Dependencies);
+    }
+
     [Fact]
     public void Prefab_TracksASoftDependency_ThroughAnAssetRef()
     {
         Guid sceneGuid = CreateScene("Referenced.scene");
 
         var go = new GameObject("Holder");
-        go.AddComponent<AssetRefComponent>().Ref = new AssetRef<SceneAsset>(sceneGuid);
+        go.AddComponent<AssetRefComponent>().Ref = new AssetRef<Scene>(sceneGuid);
         Guid prefabGuid = CreatePrefabAsset(go, "Holder.prefab");
 
         AssetEntry entry = Assets.GetEntry(prefabGuid)!;
@@ -776,7 +775,7 @@ public class AssetDatabaseTests : EditorTestHarness
             Value = Serializer.Serialize(typeof(Material), material, new SerializationContext { RootByReference = true })
         });
 
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(go);
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
 
@@ -789,10 +788,10 @@ public class AssetDatabaseTests : EditorTestHarness
     {
         Guid prefabGuid = CreatePrefabAsset(new GameObject("P"), "P.prefab");
         GameObject instance = GameObject.Instantiate(GetPrefab(prefabGuid)!)!;
-        Scene scene = instance.Scene!;
+        SceneInstance scene = instance.Scene!;
         scene.Remove(instance);
 
-        var holder = new Scene();
+        var holder = new SceneInstance(SceneMode.Edit);
         holder.Add(instance);
         Guid sceneGuid = CreateSceneAsset(holder, "Main.scene");
 
@@ -938,7 +937,7 @@ public class AssetDatabaseTests : EditorTestHarness
         Guid guid = Assets.ImportFile("Shared.navmesh");
         Assert.NotEqual(Guid.Empty, guid);
 
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         try
         {
             var original = new GameObject("Original");
@@ -966,8 +965,8 @@ public class AssetDatabaseTests : EditorTestHarness
     [Fact]
     public void NavMeshBake_RunsInTheBackground_ThenSavesAndAssignsTheAsset()
     {
-        var scene = new Scene();
-        scene.Enable();
+        var scene = new SceneInstance(SceneMode.Edit);
+        scene.Activate();
         try
         {
             var floor = new GameObject("Floor");

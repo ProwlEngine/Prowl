@@ -235,6 +235,7 @@ public class RendererModule : ParticleSystemModule
                     Sorted = sorted,
                     SortFudge = SortingFudge,
                     LayerMask = layer,
+                    ViewFlags = Rendering.RenderableState.ViewFlagsFor(system.GameObject),
                     ObjectId = objectId,
                 });
             }
@@ -269,6 +270,7 @@ public class RendererModule : ParticleSystemModule
                         Count = count,
                         SortFudge = SortingFudge + 0.01f,
                         LayerMask = layer,
+                        ViewFlags = Rendering.RenderableState.ViewFlagsFor(system.GameObject),
                         ObjectId = objectId,
                     });
                 }
@@ -390,6 +392,7 @@ internal struct ParticleBatch
     public bool Sorted;
     public float SortFudge;
     public uint LayerMask;
+    public RenderableFlags ViewFlags;
     public uint ObjectId;
 }
 
@@ -513,7 +516,7 @@ internal sealed class ParticleRenderProvider(ParticleSystemComponent system, Par
                 Custom1 = new Float4(_render.First + batch.Header, orderBase + 1, 0f, 0f),
                 LayerMask = batch.LayerMask,
                 ObjectId = batch.ObjectId,
-                Flags = RenderableFlags.ReceiveShadows,
+                Flags = RenderableFlags.ReceiveShadows | batch.ViewFlags,
                 SortDepth = SortDepth(batch, view.Camera, info),
             };
             for (int s = 0; s < batch.SubMeshes; s++)

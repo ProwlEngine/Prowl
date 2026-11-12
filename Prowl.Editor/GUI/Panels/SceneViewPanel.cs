@@ -27,7 +27,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class SceneViewPanel : DockPanel
 {
     [MenuItem("Window/General/Scene", priority: 5)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(SceneViewPanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<SceneViewPanel>();
 
     public override string Title => Loc.Get("panel.scene");
     public override string Icon => EditorIcons.Shapes;
@@ -44,7 +44,6 @@ public class SceneViewPanel : DockPanel
     private Gizmo.TransformGizmo? _transformGizmo;
     private bool _wasGizmoActive;
     private bool _gizmoHasMoved;
-    private bool _gizmoDuplicated;
     private GameObject[]? _gizmoTargets;
     private GameObject[]? _gizmoSelection;
     private Gizmo.ViewManipulatorGizmo? _viewManipulator;
@@ -267,7 +266,7 @@ public class SceneViewPanel : DockPanel
         uint rtHeight = (uint)MathF.Max(1, height);
         _editorCamera.EnsureRenderTarget(rtWidth, rtHeight);
 
-        Scene scene = Scene.Current;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         RenderTexture? rt = _editorCamera.RenderTarget;
 
         if (scene.IsNotValid())
@@ -292,7 +291,7 @@ public class SceneViewPanel : DockPanel
                     .Enter())
                 {
                     paper.Box("sv_btn_spacer_l");
-                    Origami.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => EditorSceneManager.CreateAndLoadDefaultScene()).Width(120).Show();
+                    Origami.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", EditorSceneManager.NewWithPrompt).Width(120).Show();
                     paper.Box("sv_btn_spacer_r");
                 }
 
@@ -442,12 +441,11 @@ public class SceneViewPanel : DockPanel
                     foreach (GameObject go in HierarchyPanel.ExcludeNestedSelections([.. Selection.GetSelected<GameObject>()]))
                         HierarchyPanel.DeleteGameObject(go);
                     Selection.Clear();
-                    EditorSceneManager.MarkDirty();
                 }
                 else if (ShortcutManager.IsPressed("Scene/Duplicate"))
                 {
                     List<GameObject> dupes = GameObjectClipboard.Duplicate([.. Selection.GetSelected<GameObject>()]);
-                    foreach (GameObject d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
+                    foreach (GameObject d in dupes) Undo.RegisterCreatedObjectUndo(d, "Duplicate");
                 }
                 else if (ShortcutManager.IsPressed("Scene/Copy"))
                 {
@@ -456,7 +454,7 @@ public class SceneViewPanel : DockPanel
                 else if (ShortcutManager.IsPressed("Scene/Paste"))
                 {
                     List<GameObject> pasted = GameObjectClipboard.Paste();
-                    foreach (GameObject p in pasted) Undo.RegisterCreatedObject(p, "Paste");
+                    foreach (GameObject p in pasted) Undo.RegisterCreatedObjectUndo(p, "Paste");
                 }
 
                 // Gizmo tool switching
@@ -552,14 +550,14 @@ public class SceneViewPanel : DockPanel
         return false;
     }
 
-    internal static GameObject? PickObjectAt(Scene scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    internal static GameObject? PickObjectAt(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
     {
         Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
 
         GameObject? bestHit = null;
         float bestDist = float.MaxValue;
 
-        foreach (GameObject go in scene.ActiveObjects)
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy && o.Section is not { HiddenInSceneView: true }))
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 
@@ -605,7 +603,7 @@ public class SceneViewPanel : DockPanel
     /// click-select, a press that drags out a rectangle is a box-select. Registered as the default
     /// control, so it only runs when no handle anywhere in the viewport claimed the cursor.
     /// </summary>
-    private void UpdatePickControl(Scene scene, Float2 panelSize)
+    private void UpdatePickControl(SceneInstance scene, Float2 panelSize)
     {
         ControlID pick = _handles.GetControlID(PickControl);
         _handles.AddDefaultControl(pick);
@@ -649,7 +647,7 @@ public class SceneViewPanel : DockPanel
     /// Select everything whose screen-projected bounds centre falls inside the marquee. Shift adds to
     /// the selection, Ctrl toggles, plain replaces.
     /// </summary>
-    private void ApplyMarquee(Scene scene, Float2 panelSize)
+    private void ApplyMarquee(SceneInstance scene, Float2 panelSize)
     {
         Float2 a = _marqueeStart, b = _handles.MousePosition;
         float minX = MathF.Min(a.X, b.X), maxX = MathF.Max(a.X, b.X);
@@ -658,7 +656,7 @@ public class SceneViewPanel : DockPanel
         bool additive = _handles.Shift || _handles.Ctrl;
         if (!additive) Selection.Clear();
 
-        foreach (GameObject go in scene.ActiveObjects)
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy && o.Section is not { HiddenInSceneView: true }))
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
             if (!TryGetSelectionAnchor(go, out Float3 anchor)) continue;
@@ -697,7 +695,7 @@ public class SceneViewPanel : DockPanel
         return true;
     }
 
-    private void PickObject(Scene scene, Float2 screenPos, Float2 panelSize)
+    private void PickObject(SceneInstance scene, Float2 screenPos, Float2 panelSize)
     {
         GameObject? bestHit = PickObjectAt(scene, _editorCamera!, screenPos, panelSize);
 
@@ -770,7 +768,7 @@ public class SceneViewPanel : DockPanel
     /// <summary>
     /// Raycast into the scene to find a drop position. Falls back to the XZ plane at Y=0.
     /// </summary>
-    internal static Float3 GetDropPosition(Scene scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    internal static Float3 GetDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
     {
         Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
 
@@ -779,7 +777,7 @@ public class SceneViewPanel : DockPanel
         Float3 bestPos = Float3.Zero;
         bool hit = false;
 
-        foreach (GameObject go in scene.ActiveObjects)
+        foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy && o.Section is not { HiddenInSceneView: true }))
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 
@@ -811,7 +809,7 @@ public class SceneViewPanel : DockPanel
     }
 
     /// <summary>Called only by views that are drawing; disabled gizmos do not consume the frame's shared pass.</summary>
-    internal void DrawSceneGizmos(EditorApplication? editor, Scene scene)
+    internal void DrawSceneGizmos(EditorApplication? editor, SceneInstance scene)
     {
         if (!ShowGizmos) return;
         editor?.DrawSceneGizmos(scene);
@@ -915,10 +913,6 @@ public class SceneViewPanel : DockPanel
 
     private void EndGizmoDrag()
     {
-        Undo.EndContinuous();
-        if (_gizmoDuplicated && _gizmoTargets is { } targets)
-            Undo.RegisterActionGroup("Duplicate", [.. targets.Where(go => go.IsValid()).Select(Undo.CaptureCreatedObject)]);
-        _gizmoDuplicated = false;
         _wasGizmoActive = false;
         _gizmoTargets = null;
         _gizmoSelection = null;
@@ -1009,7 +1003,7 @@ public class SceneViewPanel : DockPanel
 
         // Gizmo drawing happens in the viewport's DrawForeground callback (needs canvas)
 
-        // Continuous undo spans the whole drag. Keyed off control ownership rather than whether the
+        // The drag spans every frame the control is hot. Keyed off control ownership rather than whether the
         // gizmo produced a delta this frame - a sub-gizmo returns no result at degenerate view
         // angles, which would otherwise split one drag into two undo steps.
         bool dragging = _handles.IsHot(control);
@@ -1018,7 +1012,6 @@ public class SceneViewPanel : DockPanel
             _gizmoHasMoved = false;
             _gizmoSelection = [.. selectedObjects];
             _gizmoTargets = [.. GameObjectClipboard.FilterToRoots(_gizmoSelection)];
-            Undo.BeginContinuous(_gizmoTargets, "Transform");
         }
         _wasGizmoActive = dragging;
 
@@ -1037,7 +1030,6 @@ public class SceneViewPanel : DockPanel
                 _gizmoHasMoved = true;
                 if (_handles.Shift)
                 {
-                    Undo.EndContinuous();
                     List<GameObject> copies = GameObjectClipboard.Duplicate(targets);
                     if (copies.Count > 0)
                     {
@@ -1057,13 +1049,12 @@ public class SceneViewPanel : DockPanel
                             foreach (GameObject go in _gizmoSelection) Selection.AddToSelection(go);
                         }
                         _gizmoTargets = targets = [.. copies];
-                        _gizmoDuplicated = true;
+                        foreach (GameObject copy in copies) Undo.RegisterCreatedObjectUndo(copy, "Duplicate");
                     }
-                    // Copies are recorded at release; their final pose belongs to creation.
-                    Undo.BeginContinuous(_gizmoDuplicated ? [] : targets,
-                        _gizmoDuplicated ? "Duplicate" : "Transform");
                 }
             }
+
+            Undo.RecordObjects(targets, "Transform");
 
             if (r.TranslationDelta is { } delta)
             {
@@ -1076,17 +1067,15 @@ public class SceneViewPanel : DockPanel
             {
                 var rotDelta = Quaternion.AxisAngle(r.RotationAxis.Value, r.RotationDelta.Value);
                 foreach (GameObject go in targets)
-                    go.Transform.Rotation = rotDelta * go.Transform.Rotation;
+                    if (go.IsValid()) go.Transform.Rotation = rotDelta * go.Transform.Rotation;
             }
 
             // Apply scale
             if (r.ScaleDelta.HasValue)
             {
                 foreach (GameObject go in targets)
-                    go.Transform.LocalScale *= r.ScaleDelta.Value;
+                    if (go.IsValid()) go.Transform.LocalScale *= r.ScaleDelta.Value;
             }
-
-            EditorSceneManager.MarkDirty();
         }
 
         if (!_handles.IsHot(control) && _wasGizmoActive)

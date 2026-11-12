@@ -65,24 +65,24 @@ public abstract class ControllerTestBase : RuntimeTestBase
     /// <summary>Turns something to a rotation given in the test's frame.</summary>
     protected void SetRotation(GameObject go, Quaternion local) => go.Transform.Rotation = Frame * local;
 
-    protected Scene World()
+    protected SceneInstance World()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         scene.Physics.UseMultithreading = false;
         return scene;
     }
 
-    protected Scene WorldWithFloor(float size = 80f)
+    protected SceneInstance WorldWithFloor(float size = 80f)
     {
-        Scene scene = World();
+        SceneInstance scene = World();
         Box(scene, new Float3(0f, -0.5f, 0f), new Float3(size, 1f, size));
         return scene;
     }
 
-    protected GameObject Box(Scene scene, Float3 center, Float3 size, Float3 euler = default, string name = "Box")
+    protected GameObject Box(SceneInstance scene, Float3 center, Float3 size, Float3 euler = default, string name = "Box")
         => Box(scene, center, size, Quaternion.FromEuler(euler), name);
 
-    protected GameObject Box(Scene scene, Float3 center, Float3 size, Quaternion rotation, string name = "Box")
+    protected GameObject Box(SceneInstance scene, Float3 center, Float3 size, Quaternion rotation, string name = "Box")
     {
         GameObject go = CreateGameObject(name);
         go.Transform.Position = ToWorld(center);
@@ -92,7 +92,7 @@ public abstract class ControllerTestBase : RuntimeTestBase
         return go;
     }
 
-    protected GameObject Cylinder(Scene scene, Float3 center, float radius, float height, Quaternion rotation, string name = "Cylinder")
+    protected GameObject Cylinder(SceneInstance scene, Float3 center, float radius, float height, Quaternion rotation, string name = "Cylinder")
     {
         GameObject go = CreateGameObject(name);
         go.Transform.Position = ToWorld(center);
@@ -104,11 +104,11 @@ public abstract class ControllerTestBase : RuntimeTestBase
         return go;
     }
 
-    protected GameObject Pillar(Scene scene, Float3 foot, float radius, float height)
+    protected GameObject Pillar(SceneInstance scene, Float3 foot, float radius, float height)
         => Cylinder(scene, foot + new Float3(0f, height * 0.5f, 0f), radius, height, Quaternion.Identity, "Pillar");
 
     /// <summary>A ramp rising from <paramref name="foot"/> on the floor along +Z turned by <paramref name="yaw"/>, <paramref name="length"/> long along its surface.</summary>
-    protected GameObject Ramp(Scene scene, Float3 foot, float degrees, float length, float width = 6f, float thickness = 0.4f, float yaw = 0f)
+    protected GameObject Ramp(SceneInstance scene, Float3 foot, float degrees, float length, float width = 6f, float thickness = 0.4f, float yaw = 0f)
     {
         float radians = degrees * MathF.PI / 180f;
         Quaternion turn = Quaternion.FromEuler(0f, yaw, 0f);
@@ -123,7 +123,7 @@ public abstract class ControllerTestBase : RuntimeTestBase
     /// A ceiling whose underside is <paramref name="height"/> above <paramref name="edge"/> and slopes
     /// down by <paramref name="degrees"/> going along +Z turned by <paramref name="yaw"/>, until it meets the floor.
     /// </summary>
-    protected GameObject SlopedCeiling(Scene scene, Float3 edge, float height, float degrees, float width = 40f, float yaw = 0f, float thickness = 0.4f)
+    protected GameObject SlopedCeiling(SceneInstance scene, Float3 edge, float height, float degrees, float width = 40f, float yaw = 0f, float thickness = 0.4f)
     {
         float radians = degrees * MathF.PI / 180f;
         float length = height / MathF.Sin(radians) + 0.5f;
@@ -140,7 +140,7 @@ public abstract class ControllerTestBase : RuntimeTestBase
     protected static float RampHeight(float degrees, float run) => run * MathF.Tan(degrees * MathF.PI / 180f);
 
     /// <summary>A solid staircase climbing along +Z from <paramref name="start"/>, each step a box down to the floor.</summary>
-    protected void Stairs(Scene scene, Float3 start, int count, float rise, float run, float width = 3f, float yaw = 0f)
+    protected void Stairs(SceneInstance scene, Float3 start, int count, float rise, float run, float width = 3f, float yaw = 0f)
     {
         Quaternion turn = Quaternion.FromEuler(0f, yaw, 0f);
         for (int i = 0; i < count; i++)
@@ -151,7 +151,7 @@ public abstract class ControllerTestBase : RuntimeTestBase
         }
     }
 
-    protected Walker Spawn(Scene scene, Float3 at, ColliderShape shape = ColliderShape.Capsule, float radius = 0.4f, float height = 1.8f)
+    protected Walker Spawn(SceneInstance scene, Float3 at, ColliderShape shape = ColliderShape.Capsule, float radius = 0.4f, float height = 1.8f)
     {
         GameObject go = CreateGameObject("Player");
         go.Transform.Position = ToWorld(at);

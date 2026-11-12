@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 using Prowl.Echo;
 using Prowl.Editor.Core;
+using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Utils;
 using Prowl.Runtime;
@@ -73,12 +74,13 @@ public static class GameObjectClipboard
             var root = EchoObject.ReadFromString(echoText);
             if (root == null || root.TagType != EchoType.List) return results;
 
-            Scene scene = Scene.Current;
+            SceneInstance scene = EditorSceneManager.EditedWorld;
             if (scene.IsNotValid()) return results;
 
             // Shared context so a reference between two pasted objects resolves to the pasted one,
             // and a resolver so a reference out of the selection binds to the live scene object.
             var context = new SerializationContext { ExternalReferences = new SceneReferenceResolver() };
+            SceneSection section = HierarchyPanel.SectionForNew(scene, parent);
 
             foreach (EchoObject item in root.List)
             {
@@ -92,7 +94,7 @@ public static class GameObjectClipboard
                     go.ClearPrefabDataRecursive();
 
                 go.Name = UniqueNames.ForGameObjectSibling(go.Name, parent, scene);
-                scene.Add(go);
+                scene.Add(go, section);
                 if (parent.IsValid())
                     // Keep the deserialized local transform (see Duplicate); don't preserve world pos.
                     go.SetParent(parent, worldPositionStays: false);
@@ -104,7 +106,6 @@ public static class GameObjectClipboard
                 Selection.Clear();
                 foreach (GameObject go in results)
                     Selection.AddToSelection(go);
-                EditorSceneManager.MarkDirty();
             }
         }
         catch (Exception ex)
@@ -123,7 +124,7 @@ public static class GameObjectClipboard
     public static List<GameObject> Duplicate(IEnumerable<GameObject> gameObjects)
     {
         var results = new List<GameObject>();
-        Scene scene = Scene.Current;
+        SceneInstance scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return results;
 
         List<GameObject> roots = FilterToRoots(gameObjects);
@@ -150,7 +151,7 @@ public static class GameObjectClipboard
             Prefabs.PrefabUtility.SettleCopiedPrefabData(source, clone);
 
             clone.Name = UniqueNames.ForGameObjectSibling(source.Name, source.Parent, scene);
-            scene.Add(clone);
+            scene.Add(clone, source.Section is { } section && ReferenceEquals(section.Instance, scene) ? section : null);
             if (source.Parent.IsValid())
                 // Keep the clone's copied local transform; don't preserve world position (the
                 // clone is briefly a root, so that path would reinterpret its local pos as world).
@@ -163,7 +164,6 @@ public static class GameObjectClipboard
             Selection.Clear();
             foreach (GameObject go in results)
                 Selection.AddToSelection(go);
-            EditorSceneManager.MarkDirty();
         }
 
         return results;

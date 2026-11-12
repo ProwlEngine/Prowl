@@ -11,7 +11,7 @@ namespace Prowl.Runtime.Test;
 
 public class VolumeTests : RuntimeTestBase
 {
-    private readonly Scene _scene;
+    private readonly SceneInstance _scene;
     private readonly VolumeStack _stack = new();
 
     public VolumeTests() => _scene = CreateScene(enable: true);

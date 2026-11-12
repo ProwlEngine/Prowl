@@ -1,9 +1,10 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Reflection;
 
 using Jitter2.Collision.Shapes;
+using Prowl.Echo;
 
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Utils;
@@ -38,7 +39,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody3D_OutOfRangeFields_AreClampedOnValidate()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero);
 
         SetField(rb, "angularDamping", 1.5f);
@@ -63,7 +64,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody3D_SleepThresholds_ReachTheMatchingAxis()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero);
 
         SetField(rb, "linearSleepThreshold", 0.25f);
@@ -85,14 +86,14 @@ public class PhysicsTests : RuntimeTestBase
         base.Dispose();
     }
 
-    private Scene CreatePhysicsScene()
+    private SceneInstance CreatePhysicsScene()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         scene.Physics.UseMultithreading = false; // deterministic stepping
         return scene;
     }
 
-    private Rigidbody3D AddDynamicBox(Scene scene, Float3 position, bool gravity = true, int layer = 0)
+    private Rigidbody3D AddDynamicBox(SceneInstance scene, Float3 position, bool gravity = true, int layer = 0)
     {
         GameObject go = CreateGameObject("DynamicBox");
         go.Transform.Position = position;
@@ -104,7 +105,7 @@ public class PhysicsTests : RuntimeTestBase
         return rb;
     }
 
-    private GameObject AddStaticBox(Scene scene, Float3 position, Float3 size, int layer = 0)
+    private GameObject AddStaticBox(SceneInstance scene, Float3 position, Float3 size, int layer = 0)
     {
         GameObject go = CreateGameObject("StaticBox");
         go.Transform.Position = position;
@@ -125,21 +126,11 @@ public class PhysicsTests : RuntimeTestBase
     // Rigidbody3D <-> body lifecycle and transform sync
     // ---------------------------------------------------------------------
 
-    [Fact]
-    public void Rigidbody_CreatesQueryableBody_OnEnable()
-    {
-        Scene scene = CreatePhysicsScene();
-        AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
-        StepPhysics(scene);
-
-        Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f));
-    }
-
     // With AutoSyncTransforms off, even the pre-step sync is skipped; only manual SyncTransforms applies edits.
     [Fact]
     public void MovingRigidbodyTransform_NeedsManualSync_WhenAutoSyncOff()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         scene.Physics.AutoSyncTransforms = false;
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
         StepPhysics(scene);
@@ -155,7 +146,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody_RemovesBody_OnDisable()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
         StepPhysics(scene);
         Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f));
@@ -166,20 +157,7 @@ public class PhysicsTests : RuntimeTestBase
         Assert.False(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f));
     }
 
-    [Fact]
-    public void Rigidbody_SyncsTransformFromBody_AfterStep()
-    {
-        // Prowl's Rigidbody3D.Update copies the simulated body pose back onto the Transform.
-        Scene scene = CreatePhysicsScene();
-        Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 10, 0));
-
-        Tick(scene, 30);
-
-        Assert.True(rb.Transform.Position.Y < 10.0,
-            $"Transform.Y should have followed the falling body, was {rb.Transform.Position.Y}");
-    }
-
-    private Rigidbody3D DropBoxUntilAsleep(Scene scene)
+    private Rigidbody3D DropBoxUntilAsleep(SceneInstance scene)
     {
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 2, 0));
@@ -190,7 +168,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody_FallingAsleepWhileMoving_TransformLandsOnFinalPose()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
         rb.LinearSleepThreshold = 10f;
         rb.AngularSleepThreshold = 10f;
@@ -209,7 +187,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody_Sleeping_TransformIsNotRewritten()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = DropBoxUntilAsleep(scene);
         Tick(scene, 2);
 
@@ -222,7 +200,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody_WokenFromSleep_TransformFollowsAgain()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = DropBoxUntilAsleep(scene);
         float restY = rb.Transform.Position.Y;
 
@@ -236,7 +214,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody_SleepingTransformEdited_BodyFollowsBeforeTheNextStep()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = DropBoxUntilAsleep(scene);
 
         rb.Transform.Position = new Float3(5, 3, 0);
@@ -249,7 +227,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody_LayerChanged_IsQueriedOnTheNewLayer()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false, layer: 1);
         StepPhysics(scene);
 
@@ -263,7 +241,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody_PhysicsWriteBack_DoesNotQueueASync()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 10, 0));
         Tick(scene, 5);
 
@@ -273,7 +251,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void StaticCollider_Moved_ShapeFollowsBeforeTheNextStep()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One);
         StepPhysics(scene);
 
@@ -285,9 +263,132 @@ public class PhysicsTests : RuntimeTestBase
     }
 
     [Fact]
+    public void StaticCollider_ParentMoved_ShapeFollows()
+    {
+        SceneInstance scene = CreatePhysicsScene();
+        GameObject parent = CreateGameObject("Parent");
+        scene.Add(parent);
+        GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One);
+        wall.SetParent(parent);
+        StepPhysics(scene);
+
+        parent.Transform.Position = new Float3(10, 0, 0);
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.4f));
+        Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
+    }
+
+    // Moving a transform queues its colliders once a sync, so a collider built after the first move of a
+    // sync has to be checked anyway or the second move goes unseen.
+    [Fact]
+    public void StaticCollider_AddedBetweenTwoMoves_FollowsTheSecond()
+    {
+        SceneInstance scene = CreatePhysicsScene();
+        GameObject wall = CreateGameObject("Wall");
+        scene.Add(wall);
+
+        wall.Transform.Position = new Float3(5, 0, 0);
+        wall.AddComponent<BoxCollider>().Size = Float3.One;
+        wall.Transform.Position = new Float3(10, 0, 0);
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(new Float3(5, 0, 0), 0.4f));
+        Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
+    }
+
+    // Each sync starts a new round of queueing, so a move after one has to reach the next.
+    [Fact]
+    public void StaticCollider_MovedAgainAfterASync_FollowsEveryMove()
+    {
+        SceneInstance scene = CreatePhysicsScene();
+        GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One);
+        StepPhysics(scene);
+
+        wall.Transform.Position = new Float3(5, 0, 0);
+        StepPhysics(scene);
+        Assert.True(scene.Physics.CheckSphere(new Float3(5, 0, 0), 0.4f));
+
+        wall.Transform.Position = new Float3(10, 0, 0);
+        StepPhysics(scene);
+        Assert.False(scene.Physics.CheckSphere(new Float3(5, 0, 0), 0.4f));
+        Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
+    }
+
+    // A step refreshes colliders without a full sync when AutoSyncTransforms is off, and that has to start a new round too.
+    [Fact]
+    public void StaticCollider_MovedAgainWithAutoSyncOff_FollowsEveryMove()
+    {
+        SceneInstance scene = CreatePhysicsScene();
+        scene.Physics.AutoSyncTransforms = false;
+        GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One);
+        StepPhysics(scene);
+
+        wall.Transform.Position = new Float3(5, 0, 0);
+        StepPhysics(scene);
+        Assert.True(scene.Physics.CheckSphere(new Float3(5, 0, 0), 0.4f));
+
+        wall.Transform.Position = new Float3(10, 0, 0);
+        StepPhysics(scene);
+        Assert.False(scene.Physics.CheckSphere(new Float3(5, 0, 0), 0.4f));
+        Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
+    }
+
+    // The old world may never step again to clear its queued check, so the new world has to queue the collider anyway.
+    [Fact]
+    public void StaticCollider_MovedToAnotherSceneWhileQueued_FollowsLaterMoves()
+    {
+        SceneInstance oldScene = CreatePhysicsScene();
+        SceneInstance newScene = CreatePhysicsScene();
+        GameObject wall = AddStaticBox(oldScene, Float3.Zero, Float3.One);
+        StepPhysics(oldScene);
+
+        wall.Transform.Position = new Float3(5, 0, 0);
+        wall.MoveTo(newScene);
+        StepPhysics(newScene);
+
+        wall.Transform.Position = new Float3(10, 0, 0);
+        StepPhysics(newScene);
+        Assert.False(newScene.Physics.CheckSphere(new Float3(5, 0, 0), 0.4f));
+        Assert.True(newScene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
+    }
+
+    // Parenting at the same world pose leaves every local value alone, and the collider still has to change body.
+    [Fact]
+    public void StaticCollider_ParentedToARigidbodyWithItsLocalsUnchanged_JoinsTheBody()
+    {
+        SceneInstance scene = CreatePhysicsScene();
+        Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero);
+        GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One);
+        StepPhysics(scene);
+
+        wall.SetParent(rb.GameObject);
+        StepPhysics(scene);
+
+        Assert.Same(rb, wall.GetComponent<BoxCollider>()?.AttachedRigidbody);
+    }
+
+    [Fact]
+    public void StaticCollider_MovedWhileDisabled_IsThereWhenEnabled()
+    {
+        SceneInstance scene = CreatePhysicsScene();
+        GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One);
+        StepPhysics(scene);
+
+        wall.Enabled = false;
+        wall.Transform.Position = new Float3(10, 0, 0);
+        StepPhysics(scene);
+        wall.Enabled = true;
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.4f));
+        Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
+    }
+
+    [Fact]
     public void StaticCollider_LayerChanged_IsQueriedOnTheNewLayer()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One, layer: 1);
         StepPhysics(scene);
 
@@ -301,7 +402,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void ChildCollider_MovedOnItsBody_ShapeFollows()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject body = CreateGameObject("Body");
         body.AddComponent<Rigidbody3D>().AffectedByGravity = false;
         GameObject child = CreateGameObject("Child");
@@ -320,7 +421,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody_Rescaled_ColliderOnItsObjectRescales()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
         StepPhysics(scene);
         Assert.False(scene.Physics.CheckSphere(new Float3(1.5f, 0, 0), 0.1f));
@@ -334,7 +435,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody_Rescaled_ChildColliderRescales()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject body = CreateGameObject("Body");
         Rigidbody3D rb = body.AddComponent<Rigidbody3D>();
         rb.AffectedByGravity = false;
@@ -354,7 +455,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody_MovePosition_TeleportsBody_AndShapeFollows()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
         StepPhysics(scene);
         Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f));
@@ -371,7 +472,7 @@ public class PhysicsTests : RuntimeTestBase
     public void Rigidbody_InitialTransformPosition_PlacesBody()
     {
         // AutoSyncTransforms: the body is created at the GameObject's transform position.
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddDynamicBox(scene, new Float3(5, 0, 0), gravity: false);
         StepPhysics(scene);
 
@@ -384,19 +485,9 @@ public class PhysicsTests : RuntimeTestBase
     // ---------------------------------------------------------------------
 
     [Fact]
-    public void BoxCollider_RegistersShape()
-    {
-        Scene scene = CreatePhysicsScene();
-        AddStaticBox(scene, Float3.Zero, new Float3(2, 2, 2));
-        StepPhysics(scene, 2);
-
-        Assert.True(scene.Physics.CheckSphere(Float3.Zero, 0.3f));
-    }
-
-    [Fact]
     public void SphereCollider_RegistersShape()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject go = CreateGameObject();
         go.AddComponent<SphereCollider>().Radius = 1f;
         scene.Add(go);
@@ -408,7 +499,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void CapsuleCollider_RegistersShape()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject go = CreateGameObject();
         go.AddComponent<CapsuleCollider>();
         scene.Add(go);
@@ -420,7 +511,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void CylinderCollider_RegistersShape()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject go = CreateGameObject();
         go.AddComponent<CylinderCollider>();
         scene.Add(go);
@@ -432,7 +523,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void ConeCollider_RegistersShape()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject go = CreateGameObject();
         go.AddComponent<ConeCollider>();
         scene.Add(go);
@@ -444,7 +535,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void BoxCollider_Size_DeterminesExtent()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject go = CreateGameObject();
         go.AddComponent<BoxCollider>().Size = new Float3(1, 1, 1); // half-extents 0.5
         scene.Add(go);
@@ -460,7 +551,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Collider_Center_OffsetsShape()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject go = CreateGameObject();
         BoxCollider box = go.AddComponent<BoxCollider>();
         box.Size = new Float3(0.5f, 0.5f, 0.5f);
@@ -472,23 +563,12 @@ public class PhysicsTests : RuntimeTestBase
         Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.1f));
     }
 
-    [Fact]
-    public void Collider_WithoutRigidbody_IsStaticAndQueryable()
-    {
-        Scene scene = CreatePhysicsScene();
-        AddStaticBox(scene, new Float3(0, 0, 0), new Float3(2, 2, 2));
-        StepPhysics(scene, 2);
-
-        Assert.True(scene.Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, out RaycastHit hit));
-        Assert.True(hit.Distance > 0);
-    }
-
     [Theory]
     [InlineData(50f)]
     [InlineData(3000f)]
     public void Raycast_OnAPlacedBox_IsExactWhateverItsSize(float size)
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject box = CreateGameObject("PlacedBox");
         box.Transform.Position = new Float3(0, -1, 0);
         box.Transform.Rotation = Quaternion.FromEuler(new Float3(10f, 0f, 5f));
@@ -515,7 +595,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Raycast_StartingInsideAPlacedBox_HasNoNaNNormal()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(3, 0, 0), new Float3(2, 2, 2));
         StepPhysics(scene, 2);
 
@@ -524,23 +604,9 @@ public class PhysicsTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Collider_OnRigidbody_MovesWithBody()
-    {
-        Scene scene = CreatePhysicsScene();
-        Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
-        StepPhysics(scene);
-
-        rb.MovePosition(new Float3(0, 8, 0));
-        Tick(scene);
-
-        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.4f));
-        Assert.True(scene.Physics.CheckSphere(new Float3(0, 8, 0), 0.4f));
-    }
-
-    [Fact]
     public void CompoundColliders_BothShapesRegisterOnOneBody()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject go = CreateGameObject();
         Rigidbody3D rb = go.AddComponent<Rigidbody3D>();
         rb.AffectedByGravity = false;
@@ -570,7 +636,7 @@ public class PhysicsTests : RuntimeTestBase
     {
         // Concave mesh colliders build per-triangle shapes (no volume), so the meaningful check is that
         // a dynamic body collides with the triangle surface instead of falling through it.
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject floor = CreateGameObject("MeshFloor");
         MeshCollider mc = floor.AddComponent<MeshCollider>();
         mc.Mesh = Mesh.CreateCube(new Float3(20, 1, 20)); // top at y=0.5
@@ -610,7 +676,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void MeshCollider_Convex_RegistersHull()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject go = CreateGameObject();
         MeshCollider mc = go.AddComponent<MeshCollider>();
         mc.Mesh = Mesh.CreateCube(Float3.One);
@@ -622,32 +688,11 @@ public class PhysicsTests : RuntimeTestBase
     }
 
     [Fact]
-    public void MeshCollider_Convex_OnDynamicBody_RestsOnFloor()
-    {
-        // A convex mesh collider has volume, so it can drive a dynamic rigidbody (mass/inertia work).
-        Scene scene = CreatePhysicsScene();
-        AddStaticBox(scene, new Float3(0, 0, 0), new Float3(20, 1, 20)); // floor top at y=0.5
-
-        GameObject go = CreateGameObject("DynamicMesh");
-        go.Transform.Position = new Float3(0, 3, 0);
-        Rigidbody3D rb = go.AddComponent<Rigidbody3D>();
-        MeshCollider mc = go.AddComponent<MeshCollider>();
-        mc.Mesh = Mesh.CreateCube(Float3.One);
-        mc.Convex = true;
-        scene.Add(go);
-
-        Tick(scene, 180);
-
-        Assert.True(rb.Transform.Position.Y > 0,
-            $"Dynamic convex-mesh body should rest on the floor, was at y={rb.Transform.Position.Y}");
-    }
-
-    [Fact]
     public void MeshCollider_Concave_OnDynamicBody_UsesBoxInertiaFallback()
     {
         // Concave TriangleShapes have no volume, so the body's inertia falls back to a solid-box
         // approximation from the mesh AABB (instead of a meaningless identity tensor) and must not throw.
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject go = CreateGameObject("ConcaveDynamic");
         go.Transform.Position = new Float3(0, 5, 0);
         Rigidbody3D rb = go.AddComponent<Rigidbody3D>();
@@ -692,7 +737,7 @@ public class PhysicsTests : RuntimeTestBase
         public override void OnCharacterExit(CharacterController character) => CharactersExited.Add(character);
     }
 
-    private CharacterController AddCharacter(Scene scene, Float3 feet, int layer = 0)
+    private CharacterController AddCharacter(SceneInstance scene, Float3 feet, int layer = 0)
     {
         GameObject go = CreateGameObject("Character");
         go.Transform.Position = feet;
@@ -705,7 +750,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Trigger_CharacterInside_RaisesCharacterEnterNotTriggerEnter()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         TriggerVolume trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         CharacterController character = AddCharacter(scene, new Float3(0, -1, 0));
 
@@ -719,7 +764,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Trigger_CharacterStaying_RaisesCharacterStay()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         TriggerVolume trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         AddCharacter(scene, new Float3(0, -1, 0));
 
@@ -732,7 +777,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Trigger_CharacterLeaving_RaisesCharacterExit()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         TriggerVolume trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         CharacterController character = AddCharacter(scene, new Float3(0, -1, 0));
 
@@ -747,7 +792,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Trigger_CharacterOutside_IsNotReported()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         TriggerVolume trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(2, 2, 2));
         AddCharacter(scene, new Float3(5, 0, 0));
 
@@ -759,7 +804,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Trigger_LayerMask_FiltersCharacters()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         TriggerVolume trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         trigger.LayerMask = OnlyLayer(3);
         AddCharacter(scene, new Float3(0, -1, 0), layer: 5);
@@ -772,7 +817,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Trigger_DisabledCharacter_RaisesCharacterExit()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         TriggerVolume trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         CharacterController character = AddCharacter(scene, new Float3(0, -1, 0));
 
@@ -783,7 +828,7 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Contains(character, Recorder(trigger).CharactersExited);
     }
 
-    private TriggerVolume AddBoxTrigger(Scene scene, Float3 position, Float3 size)
+    private TriggerVolume AddBoxTrigger(SceneInstance scene, Float3 position, Float3 size)
     {
         GameObject go = CreateGameObject("Trigger");
         go.Transform.Position = position;
@@ -805,14 +850,14 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Trigger_HandlersMayRemoveBodies()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         TriggerVolume trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         trigger.GameObject.AddComponent<DisableOnEnter>();
         Rigidbody3D a = AddDynamicBox(scene, new Float3(-1, 0, 0), gravity: false);
         Rigidbody3D b = AddDynamicBox(scene, new Float3(1, 0, 0), gravity: false);
 
         int errors = 0;
-        void Count(string message, DebugStackTrace? trace, LogSeverity severity) { if (severity is LogSeverity.Error or LogSeverity.Exception) errors++; }
+        void Count(LogEvent e) { if (e.Severity is LogSeverity.Error or LogSeverity.Exception) errors++; }
         Debug.OnLog += Count;
         try { StepPhysics(scene, 3); }
         finally { Debug.OnLog -= Count; }
@@ -823,21 +868,9 @@ public class PhysicsTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Trigger_Entered_FiresForRigidbodyInside()
-    {
-        Scene scene = CreatePhysicsScene();
-        TriggerVolume trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
-        Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
-
-        StepPhysics(scene);
-
-        Assert.Contains(rb, Recorder(trigger).Entered);
-    }
-
-    [Fact]
     public void Trigger_Staying_FiresOnSubsequentSteps()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         TriggerVolume trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
 
@@ -851,7 +884,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Trigger_Exited_FiresWhenBodyLeaves()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         TriggerVolume trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(2, 2, 2));
         Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
 
@@ -865,7 +898,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Trigger_IgnoresStaticColliders()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         TriggerVolume trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         AddStaticBox(scene, Float3.Zero, new Float3(1, 1, 1)); // no Rigidbody3D
 
@@ -878,7 +911,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Trigger_LayerMask_FiltersBodies()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         TriggerVolume trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         trigger.LayerMask = OnlyLayer(5);
         AddDynamicBox(scene, Float3.Zero, gravity: false, layer: 3); // not in the mask
@@ -891,7 +924,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Trigger_FiresExit_OnDisable()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         TriggerVolume trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
 
@@ -908,7 +941,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Raycast_LayerMask_RespectsGameObjectLayer()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticBox(scene, Float3.Zero, new Float3(2, 2, 2), layer: 5);
         StepPhysics(scene, 2);
 
@@ -919,7 +952,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void CollisionMatrix_DisabledLayers_DynamicPassesThroughStatic()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, 0, 0), new Float3(20, 1, 20), layer: 1); // floor, top at y=0.5
         Rigidbody3D top = AddDynamicBox(scene, new Float3(0, 3, 0), gravity: true, layer: 2);
 
@@ -932,23 +965,9 @@ public class PhysicsTests : RuntimeTestBase
     }
 
     [Fact]
-    public void CollisionMatrix_EnabledLayers_DynamicRestsOnStatic()
-    {
-        // Control for the previous test: with collision enabled (default) the body rests on the floor.
-        Scene scene = CreatePhysicsScene();
-        AddStaticBox(scene, new Float3(0, 0, 0), new Float3(20, 1, 20), layer: 1);
-        Rigidbody3D top = AddDynamicBox(scene, new Float3(0, 3, 0), gravity: true, layer: 2);
-
-        Tick(scene, 180);
-
-        Assert.True(top.Transform.Position.Y > 0.5,
-            $"Body should rest on the floor, was at y={top.Transform.Position.Y}");
-    }
-
-    [Fact]
     public void IgnoreCollisionBetween_BodiesDoNotCollide()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
 
         // Static floor as a Rigidbody3D so it can be referenced in the ignore pair.
         GameObject floorGo = CreateGameObject("Floor");
@@ -970,7 +989,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void IgnoredCollisions_AreScopedToTheirOwnWorld()
     {
-        Scene sceneA = CreatePhysicsScene();
+        SceneInstance sceneA = CreatePhysicsScene();
         GameObject floorA = CreateGameObject("Floor");
         Rigidbody3D floorRbA = floorA.AddComponent<Rigidbody3D>();
         floorRbA.MotionType = Jitter2.Dynamics.MotionType.Static;
@@ -981,7 +1000,7 @@ public class PhysicsTests : RuntimeTestBase
         sceneA.Physics.IgnoreCollisionBetween(boxA, floorRbA);
 
         // A second world must not inherit the first world's ignore pairs.
-        Scene sceneB = CreatePhysicsScene();
+        SceneInstance sceneB = CreatePhysicsScene();
         GameObject floorB = CreateGameObject("Floor");
         Rigidbody3D floorRbB = floorB.AddComponent<Rigidbody3D>();
         floorRbB.MotionType = Jitter2.Dynamics.MotionType.Static;
@@ -1013,7 +1032,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void CollisionBegin_FiresAgainstStaticGeometry_AndNamesTheCollider()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject floor = AddStaticBox(scene, new Float3(0, -1, 0), new Float3(20, 1, 20));
 
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 2, 0), gravity: true);
@@ -1030,33 +1049,12 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Same(floor, hit.GameObject);
     }
 
-    [Fact]
-    public void CollisionEnd_AgainstStaticGeometry_StillNamesTheCollider()
-    {
-        Scene scene = CreatePhysicsScene();
-        GameObject floor = AddStaticBox(scene, new Float3(0, -1, 0), new Float3(20, 1, 20));
-
-        Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 2, 0), gravity: true);
-        CollisionRecorder recorder = rb.GameObject.AddComponent<CollisionRecorder>();
-
-        Tick(scene, 180);
-        Assert.NotEmpty(recorder.Begins);
-
-        // Fling it off the floor so the contact breaks.
-        rb.AffectedByGravity = false;
-        rb.LinearVelocity = new Float3(0, 40, 0);
-        Tick(scene, 60);
-
-        Assert.NotEmpty(recorder.Ends);
-        Assert.Same(floor, recorder.Ends[0].Collider.GameObject);
-    }
-
     // Contacts are not recorded while nothing listens, so the first listener has to pick up the ones
     // already touching. They continue like any contact that began earlier: Stay, then End, never Begin.
     [Fact]
     public void FirstCollisionListener_PicksUpContactsAlreadyTouching()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         scene.Physics.AllowSleep = false;
         GameObject floor = AddStaticBox(scene, new Float3(0, -1, 0), new Float3(20, 1, 20));
 
@@ -1077,7 +1075,7 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Same(floor, Assert.Single(recorder.Ends).Collider.GameObject);
     }
 
-    private GameObject AddStaticRigidbodyFloor(Scene scene, out Rigidbody3D floorBody)
+    private GameObject AddStaticRigidbodyFloor(SceneInstance scene, out Rigidbody3D floorBody)
     {
         GameObject floor = CreateGameObject("Floor");
         floor.Transform.Position = new Float3(0, -0.5f, 0);
@@ -1091,7 +1089,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Collision_BothSidesGetTheirOwnNormalAndTheRealContactPoint()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject floor = AddStaticRigidbodyFloor(scene, out Rigidbody3D floorBody);
         CollisionRecorder floorRecorder = floor.AddComponent<CollisionRecorder>();
 
@@ -1120,7 +1118,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Collision_StaticColliderAndChildColliderObjectsReceiveEvents()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject floor = AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
         CollisionRecorder floorRecorder = floor.AddComponent<CollisionRecorder>();
 
@@ -1149,7 +1147,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Collision_StayFiresWhileTouching_ThenEnd()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
 
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 1, 0), gravity: true);
@@ -1177,7 +1175,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Collision_ChangingPhysicsInsideACallback_DoesNotBreakTheStep()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
 
         Rigidbody3D lower = AddDynamicBox(scene, new Float3(0, 3, 0), gravity: false);
@@ -1187,7 +1185,7 @@ public class PhysicsTests : RuntimeTestBase
         CollisionRecorder upperRecorder = upper.GameObject.AddComponent<CollisionRecorder>();
 
         int errors = 0;
-        void Count(string message, DebugStackTrace? trace, LogSeverity severity) { if (severity is LogSeverity.Error or LogSeverity.Exception) errors++; }
+        void Count(LogEvent e) { if (e.Severity is LogSeverity.Error or LogSeverity.Exception) errors++; }
         Debug.OnLog += Count;
         try { Tick(scene, 120); }
         finally { Debug.OnLog -= Count; }
@@ -1201,7 +1199,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Collision_EndFires_WhenTheOtherBodyIsDisabledOrDestroyed()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject floor = AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
         CollisionRecorder floorRecorder = floor.AddComponent<CollisionRecorder>();
 
@@ -1220,7 +1218,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Collision_MovingAStaticCollider_DoesNotRestartTheContact()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject floor = AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
 
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 1, 0), gravity: true);
@@ -1243,7 +1241,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void ConvexMeshCollider_OfANonConvexMesh_RestsOnTheFloor()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(40, 1, 40));
 
         var rocks = new List<Rigidbody3D>();
@@ -1279,7 +1277,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Constraint_ConnectedBodyEnabledLater_IsBoundToIt()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
 
         GameObject anchorGo = CreateGameObject("Anchor");
         Rigidbody3D anchor = anchorGo.AddComponent<Rigidbody3D>();
@@ -1302,7 +1300,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Constraint_SurvivesItsRigidbodyBeingDisabledAndEnabled()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
 
         GameObject anchorGo = CreateGameObject("Anchor");
         Rigidbody3D anchor = anchorGo.AddComponent<Rigidbody3D>();
@@ -1334,7 +1332,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void ConstraintReadouts_AreSafeAfterTheirBodyIsDisabled()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
 
         GameObject anchorGo = CreateGameObject("Anchor");
         Rigidbody3D anchor = anchorGo.AddComponent<Rigidbody3D>();
@@ -1383,7 +1381,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void DistanceLimit_HoldsTheTargetByDefault_AndAllowsItsRange()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
 
         GameObject anchorGo = CreateGameObject("Anchor");
         Rigidbody3D anchor = anchorGo.AddComponent<Rigidbody3D>();
@@ -1417,7 +1415,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void PointOnPlane_HoldsThePointOnThePlaneByDefault()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
 
         GameObject go = CreateGameObject("Slider");
         go.Transform.Position = new Float3(0, 5, 0);
@@ -1452,7 +1450,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody_TransformEditsSurvive_WhateverTheComponentOrder()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
 
         GameObject go = CreateGameObject("Moved");
         MoveOnce mover = go.AddComponent<MoveOnce>();
@@ -1469,23 +1467,9 @@ public class PhysicsTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Rigidbody_LayerChange_ReachesQueries()
-    {
-        Scene scene = CreatePhysicsScene();
-        Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
-        Tick(scene, 1);
-
-        rb.GameObject.LayerIndex = 3;
-        scene.Physics.SyncTransforms();
-
-        Assert.True(scene.Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, OnlyLayer(3)));
-        Assert.False(scene.Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, OnlyLayer(0)));
-    }
-
-    [Fact]
     public void IgnoreCollisionBetween_SeparatesBodiesAlreadyTouching()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticRigidbodyFloor(scene, out Rigidbody3D floorBody);
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 0.5f, 0), gravity: true);
         Tick(scene, 60);
@@ -1500,7 +1484,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void CollisionMatrixChange_SeparatesBodiesAlreadyTouching()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20), layer: 1);
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 0.5f, 0), gravity: true, layer: 2);
         Tick(scene, 60);
@@ -1515,7 +1499,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void ZeroFriction_SlidesFreelyOverStaticGeometry()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(200, 1, 200));
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 0.5f, 0), gravity: true);
         rb.Friction = 0f;
@@ -1530,7 +1514,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void StaticRigidbody_IgnoresVelocityAndImpulses()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticRigidbodyFloor(scene, out Rigidbody3D floorBody);
         Tick(scene, 1);
 
@@ -1549,7 +1533,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void AddTorque_Acceleration_IsInWorldSpace_ForARotatedBody()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
 
         GameObject go = CreateGameObject("Plank");
         go.Transform.Rotation = Quaternion.FromEuler(new Float3(0, 0, 90));
@@ -1574,7 +1558,7 @@ public class PhysicsTests : RuntimeTestBase
         Debug.ClearReportedOnce();
 
         int logged = 0;
-        void Count(string message, DebugStackTrace? trace, LogSeverity severity) => logged++;
+        void Count(LogEvent _) => logged++;
 
         Debug.OnLog += Count;
         try
@@ -1610,7 +1594,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void CenterOfMass_FollowsOffsetColliders()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
 
         GameObject go = CreateGameObject("Offset");
         Rigidbody3D rb = go.AddComponent<Rigidbody3D>();
@@ -1626,7 +1610,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void CenterOfMass_OfACompound_IsMassWeightedBetweenTheShapes()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
 
         GameObject go = CreateGameObject("Compound");
         Rigidbody3D rb = go.AddComponent<Rigidbody3D>();
@@ -1647,7 +1631,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void ConstraintProperties_AreSafeAfterTheirBodyIsDisabled()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
 
         GameObject anchorGo = CreateGameObject("Anchor");
         Rigidbody3D anchor = anchorGo.AddComponent<Rigidbody3D>();
@@ -1678,7 +1662,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Joint_Active_ReflectsAndControlsAllOfItsConstraints()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
 
         GameObject anchorGo = CreateGameObject("Anchor");
         Rigidbody3D anchor = anchorGo.AddComponent<Rigidbody3D>();
@@ -1709,42 +1693,18 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Collider_Center_RebuildsShapes_WhenSetAtRuntime()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticBox(scene, Float3.Zero, new Float3(1, 1, 1));
         StepPhysics(scene, 2);
 
         Assert.True(scene.Physics.CheckSphere(Float3.Zero, 0.2f));
 
-        Collider collider = scene.AllObjects.First(o => o.Name == "StaticBox").GetComponent<BoxCollider>()!;
+        Collider collider = scene.Objects.First(o => o.Name == "StaticBox").GetComponent<BoxCollider>()!;
         collider.Center = new Float3(10, 0, 0);
         StepPhysics(scene, 2);
 
         Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.2f), "the shape should have moved off the origin");
         Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.2f), "the shape should be at the new centre");
-    }
-
-    [Fact]
-    public void Collider_OnRigidbody_RebuildsWhenMovedRelativeToTheBody()
-    {
-        Scene scene = CreatePhysicsScene();
-
-        GameObject bodyGo = CreateGameObject("Body");
-        Rigidbody3D rb = bodyGo.AddComponent<Rigidbody3D>();
-        rb.AffectedByGravity = false;
-
-        GameObject colliderGo = CreateGameObject("Child");
-        colliderGo.AddComponent<BoxCollider>();
-        colliderGo.SetParent(bodyGo);
-        scene.Add(bodyGo);
-        StepPhysics(scene, 2);
-
-        Assert.True(scene.Physics.CheckSphere(Float3.Zero, 0.2f));
-
-        colliderGo.Transform.LocalPosition = new Float3(0, 8, 0);
-        Tick(scene, 2);
-
-        Assert.True(scene.Physics.CheckSphere(new Float3(0, 8, 0), 0.3f),
-            "the shape should have followed the collider's new offset from the body");
     }
 
     // ---------------------------------------------------------------------
@@ -1757,7 +1717,7 @@ public class PhysicsTests : RuntimeTestBase
     [InlineData(ForceMode.VelocityChange)]
     public void MassIndependentForceModes_MoveHeavyAndLightBodiesAlike(ForceMode mode)
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D light = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
         Rigidbody3D heavy = AddDynamicBox(scene, new Float3(10, 0, 0), gravity: false);
         StepPhysics(scene, 1);
@@ -1776,7 +1736,7 @@ public class PhysicsTests : RuntimeTestBase
     [InlineData(ForceMode.Impulse)]
     public void MassDependentForceModes_MoveHeavyBodiesLess(ForceMode mode)
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D light = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
         Rigidbody3D heavy = AddDynamicBox(scene, new Float3(10, 0, 0), gravity: false);
         StepPhysics(scene, 1);
@@ -1793,7 +1753,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void FreezePosition_PinsTheFrozenAxis_AndLeavesOthersFree()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 5, 0), gravity: true);
         rb.Constraints = RigidbodyConstraints.FreezePositionY;
 
@@ -1807,7 +1767,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void FreezeRotation_KeepsTheBodyUpright()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
         rb.Constraints = RigidbodyConstraints.FreezeRotation;
 
@@ -1821,7 +1781,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Constraints_ConfiguredBeforeCreation_RestrictImpulsesAndNativeStepping()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject go = CreateGameObject("PlanarBody");
         Rigidbody3D rb = go.AddComponent<Rigidbody3D>();
         rb.AffectedByGravity = false;
@@ -1856,7 +1816,7 @@ public class PhysicsTests : RuntimeTestBase
     [InlineData(ForceMode.VelocityChange)]
     public void FrozenAxis_RejectsEveryForceMode_DuringNativeStepping(ForceMode mode)
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
         StepPhysics(scene, 1);
         rb.Mass = 4f;
@@ -1875,7 +1835,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void FrozenAxis_RestrictsOffCenterImpulsesImmediately()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
         rb.Mass = 2f;
         rb.Constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotationZ;
@@ -1892,7 +1852,7 @@ public class PhysicsTests : RuntimeTestBase
     [InlineData(true)]
     public void Constraints_RuntimeAndInspectorChanges_ClearVelocityAndRestoreMassResponse(bool inspector)
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
         rb.Mass = 2f;
         rb.LinearVelocity = new Float3(1, 2, 3);
@@ -1925,7 +1885,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void PartialRotationFreeze_PreservesAccelerationTorqueOnFreeAxis()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
         StepPhysics(scene, 1);
         rb.Mass = 4f;
@@ -1943,7 +1903,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void FrozenKinematicBody_AllowsTeleportAndUnlocking()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
         rb.MotionType = Jitter2.Dynamics.MotionType.Kinematic;
         rb.Constraints = RigidbodyConstraints.FreezeAll;
@@ -1973,7 +1933,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void RaycastAll_ReturnsEveryHit_NearestFirst()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, 0, 0), new Float3(2, 1, 2));
         AddStaticBox(scene, new Float3(0, -4, 0), new Float3(2, 1, 2));
         AddStaticBox(scene, new Float3(0, -8, 0), new Float3(2, 1, 2));
@@ -1990,7 +1950,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void QueryFilter_IgnoringRigidbody_SkipsThatBody()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
         StepPhysics(scene, 2);
 
@@ -2005,7 +1965,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void QueryFilter_IgnoringCollider_SkipsStaticGeometry()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject floor = AddStaticBox(scene, new Float3(0, 0, 0), new Float3(4, 1, 4));
         StepPhysics(scene, 2);
 
@@ -2022,7 +1982,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Linecast_HitsOnlyBetweenTheTwoPoints()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, 0, 0), new Float3(2, 1, 2));
         StepPhysics(scene, 2);
 
@@ -2034,7 +1994,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void ShapeCastAll_ReturnsHitsNearestFirst()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, 0, 0), new Float3(2, 1, 2));
         AddStaticBox(scene, new Float3(0, -6, 0), new Float3(2, 1, 2));
         StepPhysics(scene, 2);
@@ -2051,7 +2011,7 @@ public class PhysicsTests : RuntimeTestBase
     [InlineData(0f, float.PositiveInfinity, 0f)]
     public void Queries_WithNonFiniteInputs_ReportNoHitInsteadOfThrowing(float x, float y, float z)
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
         StepPhysics(scene, 1);
 
@@ -2076,7 +2036,7 @@ public class PhysicsTests : RuntimeTestBase
     [InlineData(0.005f)]
     public void ACastFromRestingOnASurfaceOnlyHitsItWhenMovingIntoIt(float gap)
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
 
         Float3 bottom = new(0, 0.3f + gap, 0), top = new(0, 1.5f + gap, 0);
@@ -2096,7 +2056,7 @@ public class PhysicsTests : RuntimeTestBase
     [InlineData(true)]
     public void Constraint_CollideConnected_DecidesWhetherJoinedBodiesCollide(bool collide)
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D a = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
         Rigidbody3D b = AddDynamicBox(scene, new Float3(0.5f, 0, 0), gravity: false);
         TwistAngleConstraint twist = a.GameObject.AddComponent<TwistAngleConstraint>();
@@ -2116,7 +2076,7 @@ public class PhysicsTests : RuntimeTestBase
     [InlineData(-1f, false)]
     public void HingeJoint_APositiveTurnOfItsBody_IsAPositiveAngle(float spin, bool allowed)
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D body = AddDynamicBox(scene, Float3.Zero, gravity: false);
         HingeJoint hinge = body.GameObject.AddComponent<HingeJoint>();
         hinge.Axis = Float3.UnitX;
@@ -2130,7 +2090,7 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Equal(allowed, hinge.CurrentAngleDegrees > 10f);
     }
 
-    private Rigidbody3D AddFloatingBody(Scene scene)
+    private Rigidbody3D AddFloatingBody(SceneInstance scene)
     {
         GameObject go = CreateGameObject("Driven");
         go.Transform.Position = new Float3(0, 5, 0);
@@ -2144,7 +2104,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void LinearMotor_PositiveVelocity_MovesItsBodyAlongTheAxis()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D body = AddFloatingBody(scene);
         LinearMotorConstraint motor = body.GameObject.AddComponent<LinearMotorConstraint>();
         motor.Axis1 = Float3.UnitY;
@@ -2161,7 +2121,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void AngularMotor_PositiveVelocity_TurnsItsBodyAboutTheAxis()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D body = AddFloatingBody(scene);
         body.GameObject.AddComponent<BallSocketConstraint>();
         AngularMotorConstraint motor = body.GameObject.AddComponent<AngularMotorConstraint>();
@@ -2179,7 +2139,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void HingeJointMotor_PositiveVelocity_TurnsItsBodyAboutTheAxis_AndReadsAPositiveAngle()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D body = AddFloatingBody(scene);
         HingeJoint hinge = body.GameObject.AddComponent<HingeJoint>();
         hinge.Axis = Float3.UnitY;
@@ -2197,7 +2157,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void PrismaticJointMotor_PositiveVelocity_MovesItsBodyAlongTheAxis_AndReadsAPositiveDistance()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D body = AddFloatingBody(scene);
         PrismaticJoint slider = body.GameObject.AddComponent<PrismaticJoint>();
         slider.Axis = Float3.UnitY;
@@ -2219,7 +2179,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void ChangingAMotor_WakesASleepingBody()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D body = AddFloatingBody(scene);
         body.DeactivationTime = 0.1f;
         LinearMotorConstraint motor = body.GameObject.AddComponent<LinearMotorConstraint>();
@@ -2239,7 +2199,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void PrismaticJoint_Limits_AreMeasuredAlongItsOwnAxis()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D body = AddFloatingBody(scene);
         body.AffectedByGravity = true;
         PrismaticJoint slider = body.GameObject.AddComponent<PrismaticJoint>();
@@ -2257,7 +2217,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody3D_Settings_CanChangeAfterTheWorldDroppedTheBody()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Body");
         go.AddComponent<BoxCollider>();
         Rigidbody3D body = go.AddComponent<Rigidbody3D>();
@@ -2276,7 +2236,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void LinearMotor_AxisChangedWhileLive_DrivesAlongTheNewAxis()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         scene.Physics.UseMultithreading = false;
         GameObject go = CreateGameObject("Body");
         go.AddComponent<SphereCollider>();
@@ -2304,7 +2264,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void LinearMotor_MaximumForce_IsTheForceItPushesWith()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         scene.Physics.UseMultithreading = false;
         scene.Physics.Substep = 3;
         GameObject go = CreateGameObject("Body");
@@ -2326,7 +2286,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody3D_InertiaTensorOverride_SetsHowHardItIsToTurn()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         scene.Physics.UseMultithreading = false;
         GameObject go = CreateGameObject("Body");
         go.AddComponent<BoxCollider>().Size = new Float3(0.1f, 0.1f, 0.1f);
@@ -2346,9 +2306,9 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Equal(2f * (0.1f * 0.1f + 0.1f * 0.1f) / 12f, body.InertiaTensor.Y, 4);
     }
 
-    private (Scene scene, Rigidbody3D body) WeightlessBox(Float3 position)
+    private (SceneInstance scene, Rigidbody3D body) WeightlessBox(Float3 position)
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         scene.Physics.UseMultithreading = false;
         GameObject go = CreateGameObject("Body");
         go.Transform.Position = position;
@@ -2364,7 +2324,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody3D_CenterOfMassOverride_IsWhatTheBodyTurnsAbout()
     {
-        (Scene? scene, Rigidbody3D? body) = WeightlessBox(new Float3(0f, 5f, 0f));
+        (SceneInstance? scene, Rigidbody3D? body) = WeightlessBox(new Float3(0f, 5f, 0f));
         body.CenterOfMassOverride = new Float3(0.4f, 0f, 0f);
         Assert.Equal(new Float3(0f, 5f, 0f), body.Position);
         Assert.True(scene.Physics.Raycast(new Float3(-2f, 5f, 0f), Float3.UnitX, 5f, out RaycastHit hit));
@@ -2384,7 +2344,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody3D_CenterOfMassOverride_HangsBelowAPivot()
     {
-        (Scene? scene, Rigidbody3D? body) = WeightlessBox(new Float3(0f, 5f, 0f));
+        (SceneInstance? scene, Rigidbody3D? body) = WeightlessBox(new Float3(0f, 5f, 0f));
         body.AffectedByGravity = true;
         body.AngularDamping = 0.5f;
         body.CenterOfMassOverride = new Float3(0.4f, 0f, 0f);
@@ -2400,7 +2360,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody3D_CenterOfMassOverride_ChangedWhileMovingKeepsTheMotion()
     {
-        (Scene? scene, Rigidbody3D? body) = WeightlessBox(new Float3(0f, 5f, 0f));
+        (SceneInstance? scene, Rigidbody3D? body) = WeightlessBox(new Float3(0f, 5f, 0f));
         body.LinearVelocity = new Float3(1f, 0f, 0f);
         body.AngularVelocity = new Float3(0f, 1f, 0f);
         Float3 position = body.Position;
@@ -2419,7 +2379,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody3D_CenterOfMassOverride_MovePositionAndRotationUseTheOrigin()
     {
-        (Scene? scene, Rigidbody3D? body) = WeightlessBox(Float3.Zero);
+        (SceneInstance? scene, Rigidbody3D? body) = WeightlessBox(Float3.Zero);
         body.CenterOfMassOverride = new Float3(0.4f, 0f, 0f);
 
         body.MovePosition(new Float3(1f, 2f, 3f));
@@ -2433,7 +2393,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody3D_CenterOfMassOverride_JointsHoldTheSamePoint()
     {
-        (Scene? scene, Rigidbody3D? body) = WeightlessBox(new Float3(0f, 5f, 0f));
+        (SceneInstance? scene, Rigidbody3D? body) = WeightlessBox(new Float3(0f, 5f, 0f));
         body.AffectedByGravity = true;
         GameObject joint = CreateGameObject("Joint");
         joint.Enabled = false;
@@ -2453,7 +2413,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Drive_WithAMovedCenterOfMass_PutsTheOriginOnTarget()
     {
-        (Scene? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
+        (SceneInstance? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
         body.CenterOfMassOverride = new Float3(0.3f, 0f, 0f);
         drive.PositionSpring = 3000f;
         drive.PositionDamper = 300f;
@@ -2471,7 +2431,7 @@ public class PhysicsTests : RuntimeTestBase
 
     private static int Seconds(float seconds) => (int)MathF.Round(seconds / Time.FixedDeltaTime);
 
-    private Rigidbody3D FreeBall(Scene scene, Float3 position, float mass = 2f)
+    private Rigidbody3D FreeBall(SceneInstance scene, Float3 position, float mass = 2f)
     {
         GameObject go = CreateGameObject("Ball");
         go.Transform.Position = position;
@@ -2487,7 +2447,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Drive_WithAMovedCenterOfMassAndNoRotationDrive_PutsTheOriginOnTarget()
     {
-        (Scene? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
+        (SceneInstance? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
         body.Transform.Rotation = Quaternion.AxisAngle(Float3.UnitY, MathF.PI);
         body.CenterOfMassOverride = new Float3(0.5f, 0f, 0f);
         drive.RotationSpring = 0f;
@@ -2504,7 +2464,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Drive_FrozenAxis_LeavesTheForceToTheFreeAxes()
     {
-        (Scene? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
+        (SceneInstance? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
         body.Constraints = RigidbodyConstraints.FreezePositionY;
         drive.PositionSpring = 1e6f;
         drive.PositionDamper = 1e4f;
@@ -2522,7 +2482,7 @@ public class PhysicsTests : RuntimeTestBase
     {
         float SpinAboutY(bool freeze)
         {
-            (Scene? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
+            (SceneInstance? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
             body.InertiaTensorOverride = new Float3(0.1f);
             if (freeze) body.Constraints = RigidbodyConstraints.FreezeRotationX;
             drive.PositionSpring = 0f;
@@ -2542,7 +2502,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Drive_OnAStaticBody_PushesNothing()
     {
-        (Scene? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
+        (SceneInstance? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
         body.MotionType = Jitter2.Dynamics.MotionType.Static;
         drive.TargetPosition = new Float3(1f, 0f, 0f);
 
@@ -2555,7 +2515,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Drive_BetweenFreeBodies_GivesThePairNoSpin()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D anchor = FreeBall(scene, Float3.Zero);
         Rigidbody3D driven = FreeBall(scene, new Float3(0f, 0f, 2f));
         DriveConstraint drive = driven.GameObject.AddComponent<DriveConstraint>();
@@ -2580,7 +2540,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Drive_FromASpinningBody_KeepsUpWithIt()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D spinner = FreeBall(scene, Float3.Zero);
         spinner.MotionType = Jitter2.Dynamics.MotionType.Kinematic;
         Rigidbody3D driven = FreeBall(scene, new Float3(2f, 0f, 0f));
@@ -2604,7 +2564,7 @@ public class PhysicsTests : RuntimeTestBase
     [InlineData(6)]
     public void Motors_SubstepCountChangedAfterwards_KeepTheirForce(int substeps)
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         Rigidbody3D moved = FreeBall(scene, Float3.Zero);
         LinearMotorConstraint motor = moved.GameObject.AddComponent<LinearMotorConstraint>();
         motor.TargetVelocity = 100f;
@@ -2630,7 +2590,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody3D_CenterOfMassOverride_KeepsJointLimits()
     {
-        (Scene? scene, Rigidbody3D? body) = WeightlessBox(Float3.Zero);
+        (SceneInstance? scene, Rigidbody3D? body) = WeightlessBox(Float3.Zero);
         HingeJoint hinge = body.GameObject.AddComponent<HingeJoint>();
         hinge.MinAngle = -30f;
         hinge.MaxAngle = 30f;
@@ -2651,7 +2611,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Rigidbody3D_ZeroInertiaInSavedData_IsClamped()
     {
-        (Scene? scene, Rigidbody3D? body) = WeightlessBox(Float3.Zero);
+        (SceneInstance? scene, Rigidbody3D? body) = WeightlessBox(Float3.Zero);
         BindingFlags flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
         typeof(Rigidbody3D).GetField("overrideInertia", flags)!.SetValue(body, true);
         typeof(Rigidbody3D).GetField("inertiaOverride", flags)!.SetValue(body, new Float3(0f, 1f, 1f));
@@ -2664,7 +2624,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void LinearMotor_ZeroAxis_IsRejected()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         LinearMotorConstraint motor = FreeBall(scene, Float3.Zero).GameObject.AddComponent<LinearMotorConstraint>();
         Tick(scene, 1);
 
@@ -2675,7 +2635,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void EveryConstraintAxis_RejectsZero()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject go = FreeBall(scene, Float3.Zero).GameObject;
         var setters = new Action[]
         {
@@ -2699,9 +2659,9 @@ public class PhysicsTests : RuntimeTestBase
             Assert.Throws<ArgumentException>(set);
     }
 
-    private (Scene scene, Rigidbody3D body, DriveConstraint drive) DrivenBody(float mass = 2f)
+    private (SceneInstance scene, Rigidbody3D body, DriveConstraint drive) DrivenBody(float mass = 2f)
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         scene.Physics.UseMultithreading = false;
         GameObject go = CreateGameObject("Driven");
         go.AddComponent<SphereCollider>().Radius = 0.05f;
@@ -2717,7 +2677,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Drive_SpringAndDamper_SettleOnTheTargetWithoutOvershoot()
     {
-        (Scene? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
+        (SceneInstance? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
         drive.PositionSpring = 3000f;
         drive.PositionDamper = 300f;
         drive.MaximumForce = 10000f;
@@ -2735,7 +2695,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Drive_MaximumForce_LimitsThePush()
     {
-        (Scene? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
+        (SceneInstance? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
         drive.PositionSpring = 1e6f;
         drive.PositionDamper = 1e4f;
         drive.MaximumForce = 10f;
@@ -2750,7 +2710,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Drive_Rotation_TurnsTheBodyToItsTarget()
     {
-        (Scene? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
+        (SceneInstance? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
         body.InertiaTensorOverride = new Float3(0.02f);
         drive.RotationSpring = 500f;
         drive.RotationDamper = 50f;
@@ -2766,7 +2726,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void Drive_PushesTheConnectedBodyBack()
     {
-        (Scene? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
+        (SceneInstance? scene, Rigidbody3D? body, DriveConstraint? drive) = DrivenBody();
         GameObject other = CreateGameObject("Anchor");
         other.Transform.Position = new Float3(0f, 0f, 2f);
         other.AddComponent<SphereCollider>().Radius = 0.05f;
@@ -2789,7 +2749,7 @@ public class PhysicsTests : RuntimeTestBase
     [Fact]
     public void RebuildingABodysShapesThrowsNothingInsideJitter()
     {
-        Scene scene = CreatePhysicsScene();
+        SceneInstance scene = CreatePhysicsScene();
         GameObject go = CreateGameObject("Hammer");
         go.AddComponent<BoxCollider>();
         Rigidbody3D body = go.AddComponent<Rigidbody3D>();
@@ -2815,5 +2775,113 @@ public class PhysicsTests : RuntimeTestBase
         }
 
         Assert.Empty(thrown);
+    }
+
+
+    [Fact]
+    public void StaticPhysics_QueriesTheActiveScene()
+    {
+        SceneInstance withBox = CreatePhysicsScene();
+        AddStaticBox(withBox, Float3.Zero, new Float3(2, 2, 2));
+        StepPhysics(withBox, 2);
+        SceneInstance empty = CreatePhysicsScene();
+
+        using (withBox.Enter())
+        {
+            Assert.True(Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, out RaycastHit hit));
+            Assert.True(hit.Distance > 0);
+            Assert.Equal(1, Physics.RaycastAll(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, new List<RaycastHit>()));
+            Physics.Gravity = new Float3(0, -3, 0);
+        }
+        using (empty.Enter())
+        {
+            Assert.False(Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f));
+            Assert.Equal(0, Physics.RaycastAll(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, new List<RaycastHit>(), QueryFilter.Default));
+        }
+
+        Assert.Equal(new Float3(0, -3, 0), withBox.Physics.Gravity);
+        Assert.NotEqual(new Float3(0, -3, 0), empty.Physics.Gravity);
+    }
+}
+
+// Assigns the project wide defaults every new world copies, so nothing else may run alongside it.
+[CollectionDefinition(nameof(WorldDefaultsTests), DisableParallelization = true)]
+public sealed class WorldDefaultsTestsCollection { }
+
+[Collection(nameof(WorldDefaultsTests))]
+public class WorldDefaultsTests : RuntimeTestBase
+{
+    [Fact]
+    public void PhysicsDefaults_ReachEveryNewWorld()
+    {
+        PhysicsWorldSettings previous = PhysicsWorld.Defaults;
+        try
+        {
+            PhysicsWorld.Defaults = new PhysicsWorldSettings { Gravity = new Float3(0, -1, 0), SolverIterations = 5, AllowSleep = false };
+
+            SceneInstance scene = CreateScene();
+            var standalone = new PhysicsWorld();
+
+            Assert.Equal(new Float3(0, -1, 0), scene.Physics.Gravity);
+            Assert.Equal(5, scene.Physics.SolverIterations);
+            Assert.False(scene.Physics.AllowSleep);
+            Assert.Equal(new Float3(0, -1, 0), standalone.Gravity);
+        }
+        finally { PhysicsWorld.Defaults = previous; }
+    }
+
+    [Fact]
+    public void ClockDefaults_ReachEveryNewClock()
+    {
+        SceneClockSettings previous = SceneClock.Defaults;
+        try
+        {
+            SceneClock.Defaults = new SceneClockSettings { TimeScale = 0.5f };
+            Assert.Equal(0.5f, new SceneClock().TimeScale);
+        }
+        finally { SceneClock.Defaults = previous; }
+    }
+
+    [Fact]
+    public void NavigationProjectSettings_ReachEveryWorld()
+    {
+        NavMeshWorldSettings previous = NavMeshWorld.DefaultSettings;
+        try
+        {
+            SceneInstance first = CreateScene();
+            SceneInstance second = CreateScene();
+            NavMeshWorldSettings settings = previous.Clone();
+            settings.MaxPolyPath = previous.MaxPolyPath + 7;
+
+            NavMeshWorld.ApplyProjectSettings(settings);
+
+            Assert.Equal(settings.MaxPolyPath, first.Navigation.MaxPolyPath);
+            Assert.Equal(settings.MaxPolyPath, second.Navigation.MaxPolyPath);
+        }
+        finally { NavMeshWorld.DefaultSettings = previous; }
+    }
+
+    [Fact]
+    public void PlayerTimeSettings_ReachWorldsMadeBeforeThem()
+    {
+        SceneClockSettings previous = SceneClock.Defaults;
+        string dir = Path.Combine(Path.GetTempPath(), "prowl-timesettings", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            SceneInstance scene = CreateScene();
+            EchoObject time = EchoObject.NewCompound();
+            time["DefaultTimeScale"] = new EchoObject(0.25f);
+            File.WriteAllText(Path.Combine(dir, PlayerSettingsFiles.Time + ".yaml"), time.WriteToYaml());
+
+            PlayerSettingsLoader.Apply(dir);
+
+            Assert.Equal(0.25f, scene.Clock.TimeScale);
+        }
+        finally
+        {
+            SceneClock.Defaults = previous;
+            Directory.Delete(dir, true);
+        }
     }
 }

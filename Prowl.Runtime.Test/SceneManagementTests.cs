@@ -2,6 +2,9 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.UI;
+using Prowl.Vector;
 
 using Xunit;
 
@@ -18,7 +21,7 @@ public class SceneManagementTests : RuntimeTestBase
     [Fact]
     public void Dispose_MarksGameObjectsDisposed()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject("root");
         GameObject child = CreateGameObject("child");
         child.SetParent(root);
@@ -35,59 +38,59 @@ public class SceneManagementTests : RuntimeTestBase
     [Fact]
     public void Add_RegistersObject_AndSetsScene()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
 
         scene.Add(go);
 
         Assert.Same(scene, go.Scene);
-        Assert.Equal(1, scene.Count);
-        Assert.Contains(go, scene.AllObjects);
+        Assert.Equal(1, scene.ObjectCount);
+        Assert.Contains(go, scene.Objects);
     }
 
     [Fact]
     public void Add_IsIdempotent()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
 
         scene.Add(go);
         scene.Add(go);
 
-        Assert.Equal(1, scene.Count);
+        Assert.Equal(1, scene.ObjectCount);
     }
 
     [Fact]
     public void Add_RegistersChildrenRecursively()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject parent = CreateGameObject("Parent");
         GameObject child = CreateGameObject("Child");
         child.SetParent(parent);
 
         scene.Add(parent);
 
-        Assert.Equal(2, scene.Count);
+        Assert.Equal(2, scene.ObjectCount);
         Assert.Same(scene, child.Scene);
     }
 
     [Fact]
     public void Remove_UnregistersObject_AndClearsScene()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
         scene.Add(go);
 
         scene.Remove(go);
 
         Assert.Null(go.Scene);
-        Assert.Equal(0, scene.Count);
+        Assert.Equal(0, scene.ObjectCount);
     }
 
     [Fact]
     public void Remove_UnregistersChildrenRecursively()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject parent = CreateGameObject("Parent");
         GameObject child = CreateGameObject("Child");
         child.SetParent(parent);
@@ -95,42 +98,42 @@ public class SceneManagementTests : RuntimeTestBase
 
         scene.Remove(parent);
 
-        Assert.Equal(0, scene.Count);
+        Assert.Equal(0, scene.ObjectCount);
         Assert.Null(child.Scene);
     }
 
     [Fact]
     public void Add_MovesObjectFromPreviousScene()
     {
-        Scene scene1 = CreateScene();
-        Scene scene2 = CreateScene();
+        SceneInstance scene1 = CreateScene();
+        SceneInstance scene2 = CreateScene();
         GameObject go = CreateGameObject();
         scene1.Add(go);
 
         scene2.Add(go);
 
         Assert.Same(scene2, go.Scene);
-        Assert.DoesNotContain(go, scene1.AllObjects);
-        Assert.Contains(go, scene2.AllObjects);
+        Assert.DoesNotContain(go, scene1.Objects);
+        Assert.Contains(go, scene2.Objects);
     }
 
     [Fact]
     public void Clear_RemovesAllObjects()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         scene.Add(CreateGameObject("A"));
         scene.Add(CreateGameObject("B"));
 
         scene.Clear();
 
-        Assert.True(scene.IsEmpty);
-        Assert.Equal(0, scene.Count);
+        Assert.Equal(0, scene.ObjectCount);
+        Assert.Equal(0, scene.ObjectCount);
     }
 
     [Fact]
     public void Flush_DropsDisposedObjects()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject keep = CreateGameObject("Keep");
         GameObject drop = CreateGameObject("Drop");
         scene.Add(keep);
@@ -139,30 +142,15 @@ public class SceneManagementTests : RuntimeTestBase
         drop.Dispose();
         // Count and AllObjects both exclude disposed objects immediately (before Flush), so they
         // alone can't prove Flush does anything - verify Flush actually removes it from the scene.
-        Assert.Equal(1, scene.Count);
-        Assert.DoesNotContain(drop, scene.AllObjects);
+        Assert.Equal(1, scene.ObjectCount);
+        Assert.DoesNotContain(drop, scene.Objects);
         Assert.NotNull(drop.Scene); // still owned by the scene until flushed
 
         scene.Flush();
 
         Assert.Null(drop.Scene); // Flush detached it from the scene
-        Assert.Equal(1, scene.Count);
-        Assert.Contains(keep, scene.AllObjects);
-    }
-
-    [Fact]
-    public void Count_ExcludesDisposedObjects()
-    {
-        Scene scene = CreateScene();
-        GameObject a = CreateGameObject("A");
-        GameObject b = CreateGameObject("B");
-        scene.Add(a);
-        scene.Add(b);
-        Assert.Equal(2, scene.Count);
-
-        a.Dispose();
-
-        Assert.Equal(1, scene.Count);
+        Assert.Equal(1, scene.ObjectCount);
+        Assert.Contains(keep, scene.Objects);
     }
 
     // ---- Collection views ----
@@ -170,37 +158,21 @@ public class SceneManagementTests : RuntimeTestBase
     [Fact]
     public void RootObjects_ExcludesChildren()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject parent = CreateGameObject("Parent");
         GameObject child = CreateGameObject("Child");
         child.SetParent(parent);
         scene.Add(parent);
 
-        Assert.Single(scene.RootObjects);
-        Assert.Contains(parent, scene.RootObjects);
-        Assert.DoesNotContain(child, scene.RootObjects);
-    }
-
-    [Fact]
-    public void ActiveObjects_ExcludesDisabled()
-    {
-        Scene scene = CreateScene();
-        GameObject on = CreateGameObject("On");
-        GameObject off = CreateGameObject("Off");
-        off.Enabled = false;
-        scene.Add(on);
-        scene.Add(off);
-
-        var active = scene.ActiveObjects.ToList();
-
-        Assert.Contains(on, active);
-        Assert.DoesNotContain(off, active);
+        Assert.Single(scene.Roots);
+        Assert.Contains(parent, scene.Roots);
+        Assert.DoesNotContain(child, scene.Roots);
     }
 
     [Fact]
     public void SaveableObjects_ExcludesDontSave()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject normal = CreateGameObject("Normal");
         GameObject hidden = CreateGameObject("Hidden");
         hidden.HideFlags = HideFlags.DontSave;
@@ -213,57 +185,19 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.DoesNotContain(hidden, saveable);
     }
 
-    [Fact]
-    public void IsEmpty_ReflectsContents()
-    {
-        Scene scene = CreateScene();
-        Assert.True(scene.IsEmpty);
-
-        GameObject go = CreateGameObject();
-        scene.Add(go);
-        Assert.False(scene.IsEmpty);
-
-        scene.Remove(go);
-        Assert.True(scene.IsEmpty);
-    }
-
     // ---- Find ----
 
     [Fact]
-    public void FindObjectsOfType_ReturnsGameObjectsAndComponents()
+    public void FindObject_FindsGameObjectAndComponent()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
         PlainComponent comp = go.AddComponent<PlainComponent>();
         scene.Add(go);
 
-        Assert.Contains(go, scene.FindObjectsOfType<GameObject>());
-        Assert.Contains(comp, scene.FindObjectsOfType<PlainComponent>());
-    }
-
-    [Fact]
-    public void FindObjectByID_FindsGameObjectAndComponent()
-    {
-        Scene scene = CreateScene();
-        GameObject go = CreateGameObject();
-        PlainComponent comp = go.AddComponent<PlainComponent>();
-        scene.Add(go);
-
-        Assert.Same(go, scene.FindObjectByID<GameObject>(go.InstanceID));
-        Assert.Same(comp, scene.FindObjectByID<PlainComponent>(comp.InstanceID));
-        Assert.Null(scene.FindObjectByID<GameObject>(-12345));
-    }
-
-    [Fact]
-    public void FindObjectByIdentifier_FindsGameObjectAndComponent()
-    {
-        Scene scene = CreateScene();
-        GameObject go = CreateGameObject();
-        PlainComponent comp = go.AddComponent<PlainComponent>();
-        scene.Add(go);
-
-        Assert.Same(go, scene.FindObjectByIdentifier<GameObject>(go.Identifier));
-        Assert.Same(comp, scene.FindObjectByIdentifier<PlainComponent>(comp.Identifier));
+        Assert.Same(go, scene.FindObject<GameObject>(go.Identifier));
+        Assert.Same(comp, scene.FindObject<PlainComponent>(comp.Identifier));
+        Assert.Null(scene.FindObject(Guid.NewGuid()));
     }
 
     // ---- Static scene manager ----
@@ -271,143 +205,619 @@ public class SceneManagementTests : RuntimeTestBase
     // Load only queues. The swap lands at the end of the frame, which the game loop drives and these
     // tests drive by hand. There is no unload: there is always a current scene.
 
+    private interface IProbe { }
+
+    private sealed class Probed : Component, IProbe { }
+
+    private sealed class OtherProbed : Component { }
+
+    // The index is built by the first query and then kept as components join, so later joins and destroyed members
+    // show up correctly without a rescan.
     [Fact]
-    public void Current_IsNeverNull()
+    public void GetAll_TracksComponentsJoiningAndLeaving_ByClassAndInterface()
     {
-        Assert.NotNull(Scene.Current);
-        Assert.False(Scene.Current.IsDisposed);
+        SceneInstance world = CreateScene(enable: true);
+        GameObject a = CreateGameObject("A");
+        Probed first = a.AddComponent<Probed>();
+        world.Add(a);
+        Assert.Equal([first], world.GetAll<IProbe>());
+
+        GameObject b = CreateGameObject("B");
+        b.AddComponent<OtherProbed>();
+        world.Add(b);
+        Probed second = b.AddComponent<Probed>();
+        Assert.Equal([first, second], world.GetAll<Probed>());
+        Assert.Equal([first, second], world.GetAll<IProbe>());
+
+        second.Enabled = false;
+        Assert.Equal([first], world.GetAll<IProbe>());
+        Assert.Equal([first, second], world.GetAll<IProbe>(includeDisabled: true));
+
+        a.Dispose();
+        Assert.Equal([second], world.GetAll<Probed>(includeDisabled: true));
+        Assert.Null(world.Get<Probed>());
+
+        world.Remove(b);
+        Assert.Empty(world.GetAll<Probed>(includeDisabled: true));
     }
 
     [Fact]
-    public void Current_RebuildsAfterTheCurrentSceneIsDisposed()
+    public void FindObject_ByIdentifier_FollowsIdentifierChangesAndLeaving()
     {
-        Scene first = Scene.Current;
-        first.Dispose();
+        SceneInstance world = CreateScene();
+        GameObject go = CreateGameObject();
+        PlainComponent comp = go.AddComponent<PlainComponent>();
+        world.Add(go);
 
-        Scene second = Scene.Current;
+        Assert.Same(go, world.FindObject(go.Identifier));
+        Assert.True(world.TryFindObject(comp.Identifier, out PlainComponent found));
+        Assert.Same(comp, found);
 
-        Assert.NotSame(first, second);
-        Assert.False(second.IsDisposed);
+        Guid old = go.Identifier, renewed = Guid.NewGuid();
+        go.SetIdentifier(renewed);
+        Assert.Null(world.FindObject(old));
+        Assert.Same(go, world.FindObject(renewed));
+
+        world.Remove(go);
+        Assert.Null(world.FindObject(renewed));
     }
 
     [Fact]
-    public void Load_SetsCurrent_EnablesScene_FiresEvent()
+    public void FindObject_ByNamePathAndTag()
     {
-        Scene scene = CreateScene();
-        bool fired = false;
-        void handler() => fired = true;
-        Scene.OnSceneLoaded += handler;
+        SceneInstance world = CreateScene();
+        GameObject level = CreateGameObject("Level");
+        GameObject props = CreateGameObject("Props");
+        GameObject door = CreateGameObject("Door");
+        door.Tag = "Player";
+        props.SetParent(level);
+        door.SetParent(props);
+        world.Add(level);
+
+        Assert.Same(door, world.FindObject("Door"));
+        Assert.Same(door, world.FindObjectByPath("Level/Props/Door"));
+        Assert.Null(world.FindObjectByPath("Level/Door"));
+        Assert.Same(door, world.FindObjectWithTag("Player"));
+        var tagged = new List<GameObject>();
+        world.FindObjectsWithTag("Player", tagged);
+        Assert.Equal([door], tagged);
+        Assert.Equal([level], world.Roots);
+        Assert.Equal(3, world.ObjectCount);
+    }
+
+    // ---- Sections ----
+
+    [Fact]
+    public void ANewWorld_HasPersistentThenOneActiveSection()
+    {
+        SceneInstance world = SceneInstance.Create("Level");
         try
         {
-            Scene.Load(scene);
-            Scene.ProcessPendingLoad();
-
-            Assert.Same(scene, Scene.Current);
-            Assert.True(scene.IsActive);
-            Assert.True(fired);
+            Assert.Equal(2, world.Sections.Count);
+            Assert.True(world.Sections[0].IsPersistent);
+            Assert.Same(world.Sections[1], world.ActiveSection);
+            Assert.Equal("Level", world.ActiveSection.Name);
+            Assert.Throws<InvalidOperationException>(() => world.ActiveSection = world.Persistent);
+            Assert.Throws<InvalidOperationException>(() => world.Persistent.Capture());
         }
-        finally
+        finally { world.Dispose(); }
+    }
+
+    [Fact]
+    public void ObjectsJoinTheActiveSection_TheirParentsSection_OrTheirOwners()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+
+        GameObject inActive = world.Create("A");
+        GameObject inOther = world.Create(other, "B");
+        GameObject child = world.Create("Child", parent: inOther);
+        GameObject owned = world.Create("Puppet", owner: inOther.AddComponent<PlainComponent>());
+
+        Assert.Same(world.ActiveSection, inActive.Section);
+        Assert.Same(other, inOther.Section);
+        Assert.Same(other, child.Section);
+        Assert.Same(other, owned.Section);
+        Assert.Equal([inActive], world.ActiveSection.Roots);
+        Assert.Equal([inOther, owned], other.Roots);
+        Assert.Equal([inActive, inOther, owned], world.Roots);
+    }
+
+    [Fact]
+    public void SectionsOwnTheirSettings_AndTheWorldShowsTheActiveOnes()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        other.Lighting.LightmapScale = 5f;
+
+        Assert.NotEqual(5f, world.Lighting.LightmapScale);
+        world.ActiveSection = other;
+        Assert.Equal(5f, world.Lighting.LightmapScale);
+        Assert.Same(other.Environment, world.Environment);
+    }
+
+    [Fact]
+    public void ReparentingAcrossSections_MovesTheSubtree_AndSetParentNullKeepsTheSection()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        GameObject anchor = world.Create(other, "Anchor");
+        GameObject mover = world.Create("Mover");
+        GameObject moverChild = world.Create("MoverChild", parent: mover);
+
+        mover.SetParent(anchor);
+        Assert.Same(other, moverChild.Section);
+        Assert.DoesNotContain(mover, world.ActiveSection.Roots);
+
+        mover.SetParent(null!);
+        Assert.Same(other, mover.Section);
+        Assert.Equal([anchor, mover], other.Roots);
+    }
+
+    [Fact]
+    public void Capture_WritesOneSection_AndSavesReferencesIntoAnotherAsNull()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        GameObject target = world.Create(other, "TargetInOther");
+        GameObject holder = world.Create("Holder");
+        holder.AddComponent<SectionLink>().Target = target;
+
+        SceneContent content = world.ActiveSection.Capture();
+
+        GameObject saved = Assert.Single(content.Objects);
+        Assert.Equal("Holder", saved.Name);
+        Assert.Null(saved.GetComponent<SectionLink>()!.Target);
+    }
+
+    private sealed class SectionLink : Component
+    {
+        public GameObject? Target;
+    }
+
+    [Fact]
+    public void MovingIntoASectionThatHoldsTheIdentifier_GivesAFreshOne()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        GameObject first = world.Create(other, "First");
+        GameObject second = world.Create("Second");
+        second.SetIdentifier(first.Identifier);
+
+        second.MoveTo(other);
+
+        Assert.NotEqual(first.Identifier, second.Identifier);
+        Assert.Same(first, world.FindObject(other, first.Identifier));
+    }
+
+    [Fact]
+    public void ALightmapPlacement_StaysWithAMovedRenderer_AndFollowsARebake()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        GameObject renderer = world.Create("Renderer");
+        SceneLighting lighting = world.ActiveSection.Lighting;
+        lighting.Placements[renderer.Identifier] = new LightmapPlacement { Index = 0 };
+        lighting.MarkChanged();
+        var cache = new Rendering.BakedLightingBinding.Cache();
+        Assert.Equal(0, Rendering.BakedLightingBinding.Resolve(renderer, ref cache).Placement?.Index);
+
+        renderer.MoveTo(other);
+        renderer.SetIdentifier(Guid.NewGuid());
+        Assert.Same(lighting, Rendering.BakedLightingBinding.Resolve(renderer, ref cache).Lighting);
+        Assert.Equal(0, Rendering.BakedLightingBinding.Resolve(renderer, ref cache).Placement?.Index);
+
+        lighting.Placements.Clear();
+        lighting.MarkChanged();
+        Assert.Null(Rendering.BakedLightingBinding.Resolve(renderer, ref cache).Placement);
+    }
+
+    [Fact]
+    public void Lookups_SkipRemovedComponents_DormantWorlds_AndIgnoreSectionLookupHistory()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        GameObject holder = world.Create("Holder");
+        SectionLink removed = holder.AddComponent<SectionLink>();
+        holder.RemoveComponent(removed);
+        Assert.DoesNotContain(removed, world.GetAll<SectionLink>(includeDisabled: true));
+
+        SceneSection other = world.CreateSection("Other");
+        GameObject first = world.Create("First");
+        GameObject twin = world.Create(other, "Twin");
+        twin.SetIdentifier(first.Identifier);
+        Assert.Same(twin, world.FindObject(other, first.Identifier));
+        Assert.Same(first, world.FindObject(first.Identifier));
+
+        SceneInstance dormant = CreateScene();
+        dormant.Create("Cam").AddComponent<SectionLink>();
+        Assert.Null(dormant.Get<SectionLink>());
+        Assert.Single(dormant.GetAll<SectionLink>(includeDisabled: true));
+    }
+
+    [Fact]
+    public void Step_RefusesADormantWorld_AndRunsOneFrameOfAPausedOne()
+    {
+        SceneInstance dormant = CreateScene();
+        Assert.Throws<InvalidOperationException>(() => dormant.Step(0.1f));
+
+        SceneInstance paused = CreateScene(enable: true);
+        paused.Paused = true;
+        paused.Step(0.1f);
+        Assert.Equal(0.1f, paused.Clock.DeltaTime, 3);
+    }
+
+    [Fact]
+    public void DestroyingMain_RaisesMainChangedToNothing()
+    {
+        SceneInstance world = SceneInstance.Create("Bound");
+        SceneInstance.Main = world;
+        (SceneInstance? From, SceneInstance? To)? changed = null;
+        void Handler(SceneInstance? from, SceneInstance? to) => changed = (from, to);
+        SceneInstance.MainChanged += Handler;
+        try { world.Dispose(); }
+        finally { SceneInstance.MainChanged -= Handler; }
+
+        Assert.Equal((world, null), changed);
+        Assert.False(SceneInstance.HasMain);
+    }
+
+    [Fact]
+    public void CreatingIntoAnUnloadedSection_IsRefused()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection level = world.CreateSection("Level");
+        level.Unload();
+        SceneInstance.ProcessPendingLoad();
+
+        Assert.Throws<InvalidOperationException>(() => world.Create(level, "Late"));
+        Assert.DoesNotContain(world.Objects, go => go.Name == "Late");
+    }
+
+    [Fact]
+    public void AnUnloadedAnimator_LeavesTheWorldsAnimation()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        SceneSection level = world.CreateSection("Level");
+        Animator animator = world.Create(level, "Character").AddComponent<Animator>();
+        Assert.Contains(animator, world.Animation.Animators);
+
+        level.Unload();
+        SceneInstance.ProcessPendingLoad();
+        Assert.DoesNotContain(animator, world.Animation.Animators);
+
+        Animator destroyed = world.Create("Other").AddComponent<Animator>();
+        destroyed.GameObject.Dispose();
+        Assert.DoesNotContain(destroyed, world.Animation.Animators);
+    }
+
+    private sealed class GizmoCounter : Component
+    {
+        public int Draws;
+        public override void DrawGizmos() => Draws++;
+    }
+
+    [Fact]
+    public void ASectionHiddenInTheSceneView_DrawsNoGizmos()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        SceneSection hidden = world.CreateSection("Hidden");
+        GizmoCounter shown = world.Create("Shown").AddComponent<GizmoCounter>();
+        GizmoCounter skipped = world.Create(hidden, "Skipped").AddComponent<GizmoCounter>();
+        hidden.HiddenInSceneView = true;
+
+        world.DrawGizmos();
+
+        Assert.Equal(1, shown.Draws);
+        Assert.Equal(0, skipped.Draws);
+    }
+
+    [Fact]
+    public void OwnedRoots_FollowAParentingIntoAnotherSection()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        GameObject character = world.Create("Character");
+        GameObject helper = world.Create("Helper", owner: character.AddComponent<SectionLink>());
+        GameObject anchor = world.Create(other, "Anchor");
+
+        character.SetParent(anchor);
+
+        Assert.Same(other, helper.Section);
+    }
+
+    [Fact]
+    public void MovingToAnotherWorld_GivesAFreshIdentifierOnAClash()
+    {
+        SceneInstance from = CreateScene();
+        SceneInstance to = CreateScene();
+        GameObject mover = from.Create("Mover");
+        GameObject holder = to.Create("Holder");
+        Guid shared = holder.Identifier;
+        mover.SetIdentifier(shared);
+        SectionLink link = mover.AddComponent<SectionLink>();
+        link.Identifier = holder.AddComponent<SectionLink>().Identifier;
+
+        mover.MoveTo(to);
+
+        Assert.NotEqual(shared, mover.Identifier);
+        Assert.NotEqual(holder.GetComponent<SectionLink>()!.Identifier, link.Identifier);
+        Assert.Same(holder, to.FindObject(to.ActiveSection, shared));
+    }
+
+    [Fact]
+    public void MainCamera_FollowsDepthTargetBackgroundAndEnabling()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        Camera low = world.Create("Low").AddComponent<Camera>();
+        Camera high = world.Create("High").AddComponent<Camera>();
+        low.Depth = 0;
+        high.Depth = 1;
+        Assert.Same(high, world.MainCamera);
+
+        high.Background = CameraBackground.None;
+        Assert.Same(low, world.MainCamera);
+        high.Background = CameraBackground.Skybox;
+        high.GameObject.Enabled = false;
+        Assert.Same(low, world.MainCamera);
+        high.GameObject.Enabled = true;
+        low.Depth = 5;
+        Assert.Same(low, world.MainCamera);
+    }
+
+    [Fact]
+    public void MainCamera_FollowsHidingAndATargetGoingAway()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        Camera low = world.Create("Low").AddComponent<Camera>();
+        Camera high = world.Create("High").AddComponent<Camera>();
+        low.Depth = 0;
+        high.Depth = 1;
+        Assert.Same(high, world.MainCamera);
+
+        high.GameObject.HideFlags = HideFlags.HideAndDontSave;
+        Assert.Same(low, world.MainCamera);
+        high.GameObject.HideFlags = HideFlags.None;
+        Assert.Same(high, world.MainCamera);
+
+        var target = new RenderTexture(4, 4, false, [TextureFormat.RGBA8]);
+        high.Target = target;
+        Assert.Same(low, world.MainCamera);
+        target.Dispose();
+        Assert.Same(high, world.MainCamera);
+    }
+
+    [Fact]
+    public void Roots_WalkEverySectionInOrder_WithoutAllocating()
+    {
+        SceneInstance world = CreateScene();
+        SceneSection other = world.CreateSection("Other");
+        world.Create("A");
+        world.Create(other, "B");
+        world.Create("Gone").Dispose();
+        Assert.Equal(["A", "B"], world.Roots.Select(r => r.Name));
+        Assert.True(world.Persistent.Roots.IsEmpty);
+
+        int count = 0;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        foreach (GameObject root in world.Roots) count++;
+        Assert.Equal(before, GC.GetAllocatedBytesForCurrentThread());
+        Assert.Equal(2, count);
+    }
+
+    [Fact]
+    public void SiblingIndex_CountsOnlyLiveRoots()
+    {
+        SceneInstance world = CreateScene();
+        GameObject gone = world.Create("Gone");
+        GameObject a = world.Create("A");
+        GameObject b = world.Create("B");
+        GameObject parent = world.Create("Parent");
+        GameObject child = world.Create("Child", parent);
+        gone.Dispose();
+        parent.Dispose();
+
+        Assert.Equal(1, b.SiblingIndex);
+        b.SiblingIndex = 0;
+        Assert.Equal(["B", "A"], world.ActiveSection.Roots.Select(r => r.Name));
+        Assert.DoesNotContain(child, world.ActiveSection.RootsList);
+    }
+
+    [Fact]
+    public void ADestroyingWorld_RefusesNewObjects()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        SpawnOnDisable spawner = go.AddComponent<SpawnOnDisable>();
+        world.Add(go);
+
+        world.Dispose();
+
+        Assert.True(spawner.Refused);
+    }
+
+    private sealed class SpawnOnDisable : Component
+    {
+        public bool Refused;
+        public override void OnDisable()
         {
-            Scene.OnSceneLoaded -= handler;
+            try { GameObject.Scene!.Create("Late"); }
+            catch (InvalidOperationException) { Refused = true; }
         }
     }
 
     [Fact]
-    public void Load_QueuedUntilProcessed()
+    public void Main_IsNeverMadeOnTheFly_OnceItsWorldIsGone()
     {
-        Scene before = Scene.Current;
-        Scene scene = CreateScene();
+        SceneInstance.Main.Dispose();
 
-        Scene.Load(scene);
-
-        Assert.Same(before, Scene.Current);
-        Assert.False(scene.IsActive);
-
-        Scene.ProcessPendingLoad();
-
-        Assert.Same(scene, Scene.Current);
+        Assert.False(SceneInstance.HasMain);
+        Assert.Throws<InvalidOperationException>(() => SceneInstance.Main);
+        Assert.Throws<InvalidOperationException>(() => SceneInstance.Active);
     }
 
     [Fact]
-    public void Load_ReplacingCurrent_DisposesPrevious()
+    public void BindingMain_RaisesMainChanged_InsideTheNewWorld()
     {
-        Scene first = CreateScene();
-        Scene second = CreateScene();
+        SceneInstance previous = SceneInstance.Main;
+        SceneInstance next = CreateScene(enable: true);
+        (SceneInstance? From, SceneInstance? To, SceneInstance? Active) seen = default;
+        void Handler(SceneInstance? from, SceneInstance? to) => seen = (from, to, SceneInstance.Active);
+        SceneInstance.MainChanged += Handler;
+        try { SceneInstance.Main = next; }
+        finally { SceneInstance.MainChanged -= Handler; }
 
-        Scene.Load(first);
-        Scene.ProcessPendingLoad();
+        Assert.Equal((previous, next, next), seen);
+    }
 
-        Scene.Load(second);
+    private sealed class GateProbe : Component
+    {
+        public bool EnableSawPlaying, DisableSawPlaying;
+        public override void OnEnable() => EnableSawPlaying = GameObject.Scene!.IsPlaying;
+        public override void OnDisable() => DisableSawPlaying = GameObject.Scene!.IsPlaying;
+    }
 
-        // The outgoing scene stays usable until the swap actually applies.
-        Assert.Same(first, Scene.Current);
-        Assert.False(first.IsDisposed);
+    // Running is set before OnEnable and Dormant after OnDisable, so the gameplay gate passes for both.
+    [Fact]
+    public void ActivateAndDeactivate_DeliverLifecycle_WhileTheWorldCountsAsPlaying()
+    {
+        SceneInstance world = CreateScene();
+        GameObject go = CreateGameObject();
+        GateProbe probe = go.AddComponent<GateProbe>();
+        world.Add(go);
+        Assert.False(world.IsPlaying);
 
-        Scene.ProcessPendingLoad();
+        world.Activate();
+        Assert.True(probe.EnableSawPlaying);
+        Assert.True(world.IsPlaying);
 
-        Assert.Same(second, Scene.Current);
-        Assert.True(first.IsDisposed);
+        world.Deactivate();
+        Assert.True(probe.DisableSawPlaying);
+        Assert.Equal(SceneState.Dormant, world.State);
+        Assert.False(world.IsPlaying);
     }
 
     [Fact]
-    public void Load_LastRequestOfTheFrameWins()
+    public void EditAndPreviewWorlds_NeverPlay()
     {
-        Scene first = CreateScene();
-        Scene second = CreateScene();
+        SceneInstance edit = new(SceneMode.Edit);
+        SceneInstance preview = new(SceneMode.Preview);
+        GameObject go = CreateGameObject();
+        GateProbe probe = go.AddComponent<GateProbe>();
+        edit.Add(go);
+        edit.Activate();
+        preview.Activate();
 
-        Scene.Load(first);
-        Scene.Load(second);
-        Scene.ProcessPendingLoad();
-
-        Assert.Same(second, Scene.Current);
-        Assert.True(first.IsDisposed); // replaced before it loaded, so nothing else would ever free it
-    }
-
-    // Loading the scene that is already current used to dispose it and then enable the corpse.
-    [Fact]
-    public void Load_TheCurrentScene_IsANoOp()
-    {
-        Scene current = Scene.Current;
-
-        Scene.Load(current);
-        Scene.ProcessPendingLoad();
-
-        Assert.Same(current, Scene.Current);
-        Assert.False(current.IsDisposed);
-        Assert.True(current.IsActive);
+        Assert.False(edit.IsPlaying);
+        Assert.False(preview.IsPlaying);
+        Assert.False(probe.EnableSawPlaying);
+        edit.Dispose();
+        preview.Dispose();
     }
 
     [Fact]
-    public void Load_AnAlreadyEnabledScene_DoesNotThrow()
+    public void Destroy_GoesThroughDestroying_StillPlayingForOnDisable()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance world = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        GateProbe probe = go.AddComponent<GateProbe>();
+        world.Add(go);
+        SceneState? raisedIn = null;
+        void Handler(SceneInstance w) => raisedIn = w.State;
+        SceneInstance.Destroying += Handler;
+        try { world.Dispose(); }
+        finally { SceneInstance.Destroying -= Handler; }
 
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
+        Assert.Equal(SceneState.Destroying, raisedIn);
+        Assert.True(probe.DisableSawPlaying);
+        Assert.Equal(SceneState.Destroyed, world.State);
+        Assert.DoesNotContain(world, SceneInstance.All);
+        Assert.ThrowsAny<InvalidOperationException>(world.Activate);
+    }
 
-        Assert.Same(scene, Scene.Current);
-        Assert.True(scene.IsActive);
+    [Fact]
+    public void Destroy_UnloadsEverySection()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        SceneSection level = world.ActiveSection;
+        List<SceneSection> unloading = [];
+        void Handler(SceneSection s) => unloading.Add(s);
+        SceneInstance.Unloading += Handler;
+        try { world.Dispose(); }
+        finally { SceneInstance.Unloading -= Handler; }
+
+        Assert.False(level.IsLoaded);
+        Assert.True(level.UnloadToken.IsCancellationRequested);
+        Assert.Contains(level, unloading);
+        Assert.Throws<InvalidOperationException>(() => new GameObject("Late").MoveTo(level));
+    }
+
+    private sealed class RaycastOnDisable : Component
+    {
+        public bool Hit;
+        public override void OnDisable() => Hit = Physics.Raycast(new Float3(0, 0, -5), new Float3(0, 0, 1), 10f);
+    }
+
+    [Fact]
+    public void Destroy_KeepsPhysicsUntilEverythingIsDisabled()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        RaycastOnDisable probe = world.Create("Probe").AddComponent<RaycastOnDisable>();
+        world.Create("Wall").AddComponent<BoxCollider>();
+        Tick(world, 1);
+
+        world.Dispose();
+
+        Assert.True(probe.Hit);
+    }
+
+    private sealed class JoinCounter : Component
+    {
+        public int Joins, Leaves;
+        internal override void JoinWorld(SceneInstance world) => Joins++;
+        internal override void LeaveWorld(SceneInstance world) => Leaves++;
+    }
+
+    private sealed class DisableOther : Component
+    {
+        public GameObject? Other;
+        public override void OnEnable() => Other!.Enabled = false;
+    }
+
+    [Fact]
+    public void ActivatingAWorld_JoinsEachComponentOnce_AndLeavesOnesDisabledBeforeTheirTurn()
+    {
+        SceneInstance world = CreateScene();
+        GameObject first = world.Create("First");
+        GameObject second = world.Create("Second");
+        JoinCounter counted = first.AddComponent<JoinCounter>();
+        JoinCounter skipped = second.AddComponent<JoinCounter>();
+        first.AddComponent<DisableOther>().Other = second;
+
+        world.Activate();
+
+        Assert.Equal(1, counted.Joins);
+        Assert.Equal(skipped.Joins, skipped.Leaves);
     }
 
     [Fact]
     public void EnableAndDisable_AreIdempotent()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
 
-        scene.Enable();
-        scene.Enable();
-        Assert.True(scene.IsActive);
+        scene.Activate();
+        scene.Activate();
+        Assert.Equal(SceneState.Running, scene.State);
 
-        scene.Disable();
-        scene.Disable();
-        Assert.False(scene.IsActive);
+        scene.Deactivate();
+        scene.Deactivate();
+        Assert.NotEqual(SceneState.Running, scene.State);
     }
 
     // A component disposing its own scene mid-callback used to blow up on the trailing Flush().
     [Fact]
     public void FrameCallbacks_OnASceneDisposedMidCallback_DoNotThrow()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         UpdateActionComponent driver = go.AddComponent<UpdateActionComponent>();
         driver.Action = () => scene.Dispose();
@@ -421,7 +831,7 @@ public class SceneManagementTests : RuntimeTestBase
     [Fact]
     public void FrameCallbacks_OnADisposedScene_AreNoOps()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         scene.Dispose();
 
         scene.Update();
@@ -441,278 +851,291 @@ public class SceneManagementTests : RuntimeTestBase
         public override void Update() => Updates++;
     }
 
-    // The hand-rolled version: take the object out of the outgoing scene and put it in the incoming
-    // one. It works, as long as you add it to the scene you are loading and not to Scene.Current,
-    // which is still the outgoing scene until the swap applies.
-    [Fact]
-    public void ManualPreserve_RemoveFromOldSceneAndAddToTheNextOne_Survives()
-    {
-        Scene first = CreateScene();
-        GameObject keeper = CreateGameObject("Keeper");
-        first.Add(keeper);
-        Scene.Load(first);
-        Scene.ProcessPendingLoad();
-
-        Scene second = CreateScene();
-        first.Remove(keeper);
-        second.Add(keeper);
-        Scene.Load(second);
-        Scene.ProcessPendingLoad();
-
-        Assert.False(keeper.IsDisposed);
-        Assert.Same(second, keeper.Scene);
-        Assert.Contains(keeper, second.AllObjects);
-    }
-
-    // The trap: after Load(), Scene.Current is still the outgoing scene, so adding there hands the
-    // object to the scene that is about to be disposed.
-    [Fact]
-    public void ManualPreserve_AddingBackToSceneCurrentAfterLoad_LosesTheObject()
-    {
-        Scene first = CreateScene();
-        GameObject keeper = CreateGameObject("Keeper");
-        first.Add(keeper);
-        Scene.Load(first);
-        Scene.ProcessPendingLoad();
-
-        Scene second = CreateScene();
-        first.Remove(keeper);
-        Scene.Load(second);
-        Scene.Current.Add(keeper); // still `first` at this point
-        Scene.ProcessPendingLoad();
-
-        Assert.True(keeper.IsDisposed, "Scene.Current is only the new scene once the swap applies.");
-    }
+    // What a Load does at the safe point, without a stored scene.
+    private static void LoadEmpty(SceneInstance world) => world.ReplaceContent(new SceneContent(), "Next", null);
 
     [Fact]
-    public void DontDestroyOnLoad_SurvivesTheLoad_AndJoinsTheNewScene()
+    public void Persistent_SurvivesALoad_WithoutRestarting_AndKeepsItsRegistrations()
     {
-        Scene first = CreateScene();
-        GameObject keeper = CreateGameObject("Keeper");
-        GameObject doomed = CreateGameObject("Doomed");
-        first.Add(keeper);
-        first.Add(doomed);
-        Scene.Load(first);
-        Scene.ProcessPendingLoad();
-
-        Scene.DontDestroyOnLoad(keeper);
-
-        Scene second = CreateScene();
-        Scene.Load(second);
-        Scene.ProcessPendingLoad();
-
-        Assert.False(keeper.IsDisposed);
-        Assert.Same(second, keeper.Scene);
-        Assert.Contains(keeper, second.AllObjects);
-        Assert.True(doomed.IsDisposed, "Anything not preserved goes with the old scene.");
-    }
-
-    [Fact]
-    public void DontDestroyOnLoad_KeepsTicking_InTheNewScene()
-    {
-        Scene first = CreateScene(enable: true);
-        GameObject keeper = CreateGameObject("Keeper");
+        SceneInstance main = SceneInstance.Main;
+        GameObject keeper = main.Create("Keeper");
         TickCounter comp = keeper.AddComponent<TickCounter>();
-        first.Add(keeper);
-        Scene.Load(first);
-        Scene.ProcessPendingLoad();
-        Scene.DontDestroyOnLoad(keeper);
-
-        Update(first);
-        Assert.Equal(1, comp.Updates);
-
-        Scene second = CreateScene();
-        Scene.Load(second);
-        Scene.ProcessPendingLoad();
-
-        Update(second);
-        Assert.Equal(2, comp.Updates); // re-registered with the new scene's dispatcher
-    }
-
-    [Fact]
-    public void DontDestroyOnLoad_MovesSceneRegistrations_ToTheNewScene()
-    {
-        Scene first = CreateScene(enable: true);
-        GameObject keeper = CreateGameObject("Keeper");
         GameCanvas canvas = keeper.AddComponent<GameCanvas>();
-        first.Add(keeper);
-        Scene.Load(first);
-        Scene.ProcessPendingLoad();
-        Scene.DontDestroyOnLoad(keeper);
-        Assert.Equal([canvas], first.Canvases);
+        GameObject doomed = main.Create("Doomed");
+        keeper.Persistent = true;
+        Update(main);
 
-        Scene second = CreateScene();
-        Scene.Load(second);
-        Scene.ProcessPendingLoad();
+        LoadEmpty(main);
+        Update(main);
 
-        Assert.Equal([canvas], second.Canvases);
-    }
-
-    [Fact]
-    public void DontDestroyOnLoad_DoesNotRestartTheObject()
-    {
-        Scene first = CreateScene(enable: true);
-        GameObject keeper = CreateGameObject("Keeper");
-        TickCounter comp = keeper.AddComponent<TickCounter>();
-        first.Add(keeper);
-        Scene.Load(first);
-        Scene.ProcessPendingLoad();
-        Scene.DontDestroyOnLoad(keeper);
-        int enables = comp.Enables;
-
-        Scene.Load(CreateScene());
-        Scene.ProcessPendingLoad();
-
-        Assert.Equal(enables, comp.Enables);
+        Assert.False(keeper.IsDisposed);
+        Assert.True(doomed.IsDisposed, "Anything not persistent goes with the old level.");
+        Assert.Equal(2, comp.Updates);
+        Assert.Equal(1, comp.Enables);
         Assert.Equal(0, comp.Disables);
+        Assert.Equal([canvas], main.Canvases);
     }
 
     [Fact]
-    public void DontDestroyOnLoad_OnAChild_PreservesItsRootInstead()
+    public void Persistent_IsSetOnARoot_AndReadOnAChildForItsRoot()
     {
-        Scene first = CreateScene();
-        GameObject root = CreateGameObject("Root");
-        GameObject child = CreateGameObject("Child");
-        child.SetParent(root);
-        first.Add(root);
-        Scene.Load(first);
-        Scene.ProcessPendingLoad();
+        SceneInstance main = SceneInstance.Main;
+        GameObject root = main.Create("Root");
+        GameObject child = main.Create("Child", root);
 
-        Scene.DontDestroyOnLoad(child);
+        Assert.Throws<InvalidOperationException>(() => child.Persistent = true);
+        root.Persistent = true;
+        Assert.True(child.Persistent);
+        Assert.Same(main.Persistent, child.Section);
 
-        Scene second = CreateScene();
-        Scene.Load(second);
-        Scene.ProcessPendingLoad();
+        LoadEmpty(main);
 
         Assert.False(root.IsDisposed);
         Assert.False(child.IsDisposed);
-        Assert.Same(second, root.Scene);
-        Assert.Same(second, child.Scene);
         Assert.Same(root, child.Parent);
     }
 
     [Fact]
-    public void CancelDontDestroyOnLoad_LetsItDieWithTheScene()
+    public void Persistent_SetBackToFalse_LetsItGoWithTheLevel()
     {
-        Scene first = CreateScene();
-        GameObject go = CreateGameObject();
-        first.Add(go);
-        Scene.Load(first);
-        Scene.ProcessPendingLoad();
+        SceneInstance main = SceneInstance.Main;
+        GameObject go = main.Create("Go");
 
-        Scene.DontDestroyOnLoad(go);
-        Scene.CancelDontDestroyOnLoad(go);
-
-        Scene.Load(CreateScene());
-        Scene.ProcessPendingLoad();
+        go.Persistent = true;
+        go.Persistent = false;
+        LoadEmpty(main);
 
         Assert.True(go.IsDisposed);
     }
 
     [Fact]
-    public void DontDestroyOnLoad_ADestroyedObject_IsDroppedNotResurrected()
+    public void Persistent_ADestroyedObject_IsDroppedNotResurrected()
     {
-        Scene first = CreateScene();
-        GameObject go = CreateGameObject();
-        first.Add(go);
-        Scene.Load(first);
-        Scene.ProcessPendingLoad();
-        Scene.DontDestroyOnLoad(go);
+        SceneInstance main = SceneInstance.Main;
+        GameObject go = main.Create("Go");
+        go.Persistent = true;
 
         go.Dispose();
+        LoadEmpty(main);
 
-        Scene second = CreateScene();
-        Scene.Load(second);
-        Scene.ProcessPendingLoad(); // must not throw or re-add the corpse
-
-        Assert.Empty(second.AllObjects);
-    }
-
-    // Leaving play mode ends the preservation session. Without this the objects a play session kept
-    // alive would ride the swap into the authoring scene the editor restores behind it, and stay there.
-    [Fact]
-    public void DestroyPreserved_KeepsThemOutOfTheNextScene()
-    {
-        Scene play = CreateScene(enable: true);
-        GameObject keeper = CreateGameObject("Keeper");
-        play.Add(keeper);
-        Scene.Load(play);
-        Scene.ProcessPendingLoad();
-        Scene.DontDestroyOnLoad(keeper);
-
-        Scene.DestroyPreserved();
-
-        // Same order the game loop uses: the destroy queue drains, then the scene swap applies.
-        Scene restored = CreateScene();
-        Scene.Load(restored);
-        EngineObject.ProcessDestroyed();
-        Scene.ProcessPendingLoad();
-
-        Assert.True(keeper.IsDisposed);
-        Assert.Empty(restored.AllObjects);
-    }
-
-    // Queued like any other Destroy, so teardown lands at the end of the frame rather than under
-    // whatever was running when the play button was clicked.
-    [Fact]
-    public void DestroyPreserved_TearsDownAtTheEndOfTheFrame()
-    {
-        Scene scene = CreateScene(enable: true);
-        GameObject keeper = CreateGameObject("Keeper");
-        TickCounter comp = keeper.AddComponent<TickCounter>();
-        scene.Add(keeper);
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
-        Scene.DontDestroyOnLoad(keeper);
-
-        Scene.DestroyPreserved();
-
-        Assert.False(keeper.IsDisposed);
-        Assert.Equal(0, comp.Disables);
-
-        EngineObject.ProcessDestroyed();
-
-        Assert.True(keeper.IsDisposed);
-        Assert.Equal(1, comp.Disables); // torn down properly, not just dropped from the registry
+        Assert.DoesNotContain(go, main.Objects);
     }
 
     [Fact]
-    public void Shutdown_DestroysPreservedObjects()
+    public void Persistent_IsRefusedOutsideAGameWorld()
     {
-        Scene scene = CreateScene(enable: true);
-        GameObject keeper = CreateGameObject("Keeper");
-        scene.Add(keeper);
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
-        Scene.DontDestroyOnLoad(keeper);
+        var edit = new SceneInstance(SceneMode.Edit);
+        GameObject go = CreateGameObject();
+        edit.Add(go);
 
-        Scene.Shutdown();
+        Assert.Throws<InvalidOperationException>(() => go.Persistent = true);
+        edit.Dispose();
+    }
+
+    [Fact]
+    public void Shutdown_DestroysPersistentObjects()
+    {
+        SceneInstance main = SceneInstance.Main;
+        GameObject keeper = main.Create("Keeper");
+        keeper.Persistent = true;
+
+        SceneInstance.Shutdown();
 
         // No frame follows a shutdown, so nothing would drain a destroy queue: teardown is immediate.
         Assert.True(keeper.IsDisposed);
-        Assert.True(scene.IsDisposed);
+        Assert.True(main.IsDisposed);
+    }
 
-        // And the registry is empty, so the next run does not inherit the last one's objects.
-        Scene next = CreateScene();
-        Scene.Load(next);
-        Scene.ProcessPendingLoad();
-        Assert.Empty(next.AllObjects);
+    // ---- The ambient world ----
+
+    private sealed class ActiveProbe : Component
+    {
+        public SceneInstance? AtEnable, AtStart, AtDispose;
+        public override void OnEnable() => AtEnable = SceneInstance.Active;
+        public override void Start() => AtStart = SceneInstance.Active;
+        protected override void OnDispose() { AtDispose = SceneInstance.Active; base.OnDispose(); }
+    }
+
+    // Code in one scene enabling an object in another runs that object's callbacks in its own scene.
+    [Fact]
+    public void Active_IsTheComponentsScene_WhenAnotherScenesCodeEnablesIt()
+    {
+        SceneInstance a = CreateScene(enable: true);
+        SceneInstance b = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        ActiveProbe probe = go.AddComponent<ActiveProbe>();
+
+        using (a.Enter())
+            b.Add(go);
+
+        Assert.Same(b, probe.AtEnable);
     }
 
     [Fact]
-    public void Load_SkipsASceneDisposedBeforeItApplied()
+    public void Active_FlowsThroughAwait_AndScopesNest()
     {
-        Scene current = CreateScene();
-        Scene queued = CreateScene();
+        SceneInstance a = CreateScene(enable: true);
+        SceneInstance b = CreateScene(enable: true);
 
-        Scene.Load(current);
-        Scene.ProcessPendingLoad();
+        SceneInstance? afterAwait;
+        using (a.Enter())
+        {
+            using (b.Enter())
+            {
+                afterAwait = AfterYield().GetAwaiter().GetResult();
+                Assert.Same(b, SceneInstance.Active);
+            }
+            Assert.Same(a, SceneInstance.Active);
+        }
 
-        Scene.Load(queued);
-        queued.Dispose();
-        Scene.ProcessPendingLoad();
+        Assert.Same(b, afterAwait);
 
-        Assert.Same(current, Scene.Current);
-        Assert.False(current.IsDisposed);
+        static async Task<SceneInstance> AfterYield()
+        {
+            await Task.Delay(1).ConfigureAwait(false);
+            return SceneInstance.Active;
+        }
+    }
+
+    // A scene stays Active for its own teardown, and code still holding it afterwards gets a clear error.
+    [Fact]
+    public void Active_IsTheSceneDuringItsTeardown_AndThrowsOnceItIsDestroyed()
+    {
+        SceneInstance scene = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        ActiveProbe probe = go.AddComponent<ActiveProbe>();
+        scene.Add(go);
+
+        using (scene.Enter())
+        {
+            scene.Dispose();
+            Assert.Throws<ObjectDisposedException>(() => SceneInstance.Active);
+        }
+
+        Assert.Same(scene, probe.AtDispose);
+    }
+
+    [Fact]
+    public void CameraMain_IsTheActiveScenesCamera_AndANewCameraIsMainAtOnce()
+    {
+        SceneInstance a = CreateScene(enable: true);
+        SceneInstance b = CreateScene(enable: true);
+        GameObject camA = CreateGameObject("CamA");
+        Camera cameraA = camA.AddComponent<Camera>();
+        a.Add(camA);
+
+        using (b.Enter())
+        {
+            Assert.True(ReferenceEquals(Camera.Main, null));
+            GameObject camB = CreateGameObject("CamB");
+            Camera cameraB = camB.AddComponent<Camera>();
+            b.Add(camB);
+            Assert.Same(cameraB, Camera.Main);
+        }
+        using (a.Enter())
+            Assert.Same(cameraA, Camera.Main);
+    }
+
+    [Fact]
+    public void DebugDraws_LandInTheActiveScene()
+    {
+        SceneInstance a = CreateScene(enable: true);
+        SceneInstance b = CreateScene(enable: true);
+
+        using (b.Enter())
+            Debug.DrawLine(Vector.Float3.Zero, Vector.Float3.One, System.Drawing.Color.Red);
+
+        Assert.True(a.Gizmos.IsEmpty);
+        Assert.False(b.Gizmos.IsEmpty);
+        Debug.ClearGizmos();
+        Assert.True(b.Gizmos.IsEmpty);
+    }
+
+    // ---- Teardown ----
+
+    private sealed class TeardownLog : Component
+    {
+        public static readonly List<string> Events = [];
+        public string Tag = "";
+        public bool ThrowOnDispose;
+        public override void OnDisable() => Events.Add($"disable {Tag}");
+        public override void OnRemovedFromScene() => Events.Add($"removed {Tag}");
+        protected override void OnDispose()
+        {
+            Events.Add($"dispose {Tag}");
+            base.OnDispose();
+            if (ThrowOnDispose) throw new InvalidOperationException("teardown test");
+        }
+    }
+
+    // A scene tears down in three passes, each object guarded, so one throwing OnDispose leaves the rest torn down.
+    [Fact]
+    public void Teardown_RunsThreePasses_AndContinuesPastAThrowingOnDispose()
+    {
+        TeardownLog.Events.Clear();
+        SceneInstance scene = CreateScene(enable: true);
+        GameObject a = CreateGameObject("A");
+        TeardownLog first = a.AddComponent<TeardownLog>();
+        first.Tag = "A";
+        first.ThrowOnDispose = true;
+        GameObject b = CreateGameObject("B");
+        TeardownLog second = b.AddComponent<TeardownLog>();
+        second.Tag = "B";
+        scene.Add(a);
+        scene.Add(b);
+
+        scene.Dispose();
+
+        Assert.True(a.IsDisposed && b.IsDisposed && first.IsDisposed && second.IsDisposed);
+        int lastDisable = Math.Max(TeardownLog.Events.IndexOf("disable A"), TeardownLog.Events.IndexOf("disable B"));
+        int firstRemoved = Math.Min(TeardownLog.Events.IndexOf("removed A"), TeardownLog.Events.IndexOf("removed B"));
+        int lastRemoved = Math.Max(TeardownLog.Events.IndexOf("removed A"), TeardownLog.Events.IndexOf("removed B"));
+        int firstDispose = Math.Min(TeardownLog.Events.IndexOf("dispose A"), TeardownLog.Events.IndexOf("dispose B"));
+        Assert.True(lastDisable >= 0 && lastDisable < firstRemoved && lastRemoved < firstDispose, string.Join(", ", TeardownLog.Events));
+    }
+
+    // Each world keeps its own registries, and a dormant world's are empty.
+    [Fact]
+    public void Registries_ArePerWorld_AndEmptyWhileDormant()
+    {
+        SceneInstance first = CreateScene(enable: true);
+        SceneInstance second = CreateScene(enable: true);
+        WindZone zone = first.Create("Wind").AddComponent<WindZone>();
+        Volume volume = first.Create("Volume").AddComponent<Volume>();
+        EventSystem events = second.Create("Events").AddComponent<EventSystem>();
+        Camera camera = second.Create("Camera").AddComponent<Camera>();
+
+        Assert.Equal([zone], first.WindZones);
+        Assert.Empty(second.WindZones);
+        Assert.Equal([volume], first.Volumes);
+        Assert.Empty(second.Volumes);
+        Assert.Same(events, second.Input.EventSystem);
+        Assert.Null(first.Input.EventSystem);
+        Assert.Same(camera, second.MainCamera);
+        Assert.Null(first.MainCamera);
+
+        first.Deactivate();
+        Assert.Empty(first.WindZones);
+        Assert.Empty(first.Volumes);
+
+        first.Activate();
+        Assert.Equal([zone], first.WindZones);
+    }
+
+    // A component's Scene is its world, and reading it with none throws instead of handing back null.
+    [Fact]
+    public void ComponentScene_IsItsWorld_AndThrowsWhileDetached()
+    {
+        GameObject go = CreateGameObject("Loose");
+        TickCounter comp = go.AddComponent<TickCounter>();
+
+        Assert.False(comp.IsInWorld);
+        Assert.Throws<InvalidOperationException>(() => comp.Scene);
+
+        SceneInstance world = CreateScene(enable: true);
+        go.MoveTo(world);
+
+        Assert.True(comp.IsInWorld);
+        Assert.Same(world, comp.Scene);
     }
 }

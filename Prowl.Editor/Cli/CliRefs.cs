@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 using Prowl.Echo;
 using Prowl.Editor.Core;
@@ -26,20 +27,63 @@ namespace Prowl.Editor;
 /// A ref is <c>@selection</c>, <c>@active</c>, <c>#guid</c> (a scene object or an asset), a hierarchy path like
 /// <c>/Player/Camera</c> (<c>Name[1]</c> picks among same named siblings), or an asset path relative to Assets like
 /// <c>Guns/Rifle.fbx</c> (<c>Rifle.fbx#Fire</c> for a sub asset). A scene ref takes <c>:Type</c> or <c>:Type[1]</c>
-/// to address one of its components.
+/// to address one of its components, and a <c>scene:Name:</c> prefix to look in one open scene, like
+/// <c>scene:Level2:#guid</c> or <c>scene:Level2:/Player</c>.
 /// </summary>
 public static class CliRefs
 {
     private static readonly Regex s_componentSuffix = new(@":(?<type>[A-Za-z_][A-Za-z0-9_.]*)(\[(?<index>\d+)\])?$", RegexOptions.Compiled);
     private static readonly Regex s_indexedName = new(@"^(?<name>.*)\[(?<index>\d+)\]$", RegexOptions.Compiled);
 
-    public static Scene Scene => Scene.Current.IsValid() ? Scene.Current : throw new CliException("No scene is open.");
+    public static SceneInstance Scene => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld : throw new CliException("No scene is open.");
+
+    // The section a scene: prefix narrowed the lookup to, while the rest of that ref resolves.
+    [ThreadStatic] private static SceneSection? t_section;
+
+    /// <summary>An open scene by path relative to Assets, or by name when only one open scene has it.</summary>
+    public static OpenScene OpenSceneNamed(string name)
+    {
+        OpenScene? byPath = EditorSceneManager.OpenScenes.FirstOrDefault(o => string.Equals(o.Path, AssetPath(name), StringComparison.OrdinalIgnoreCase));
+        if (byPath != null) return byPath;
+        List<OpenScene> byName = [.. EditorSceneManager.OpenScenes.Where(o => string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase))];
+        if (byName.Count > 1)
+            throw new CliException($"Several open scenes are named '{name}'. Name one by its path: {string.Join(", ", byName.Select(o => o.Path ?? o.Name))}.");
+        return byName.Count == 1 ? byName[0]
+            : throw new CliException($"No open scene '{name}'. Open: {string.Join(", ", EditorSceneManager.OpenScenes.Select(o => o.Name))}.");
+    }
+
+    /// <summary>The section showing <paramref name="open"/> in the edited world: its own, or its play copy during play.</summary>
+    public static SceneSection SectionOf(OpenScene open)
+        => EditorSceneManager.SectionShowing(open) ?? throw new CliException($"'{open.Name}' is not loaded.");
+
+    // How a scene: prefix names a scene: its name when no other open scene shares it, else its path.
+    private static string SceneKey(OpenScene open)
+        => EditorSceneManager.OpenScenes.Count(o => string.Equals(o.Name, open.Name, StringComparison.OrdinalIgnoreCase)) > 1 && open.Path != null ? open.Path : open.Name;
+
+    // A ref narrowed to its scene when several scenes are open, so a duplicated scene's twin never answers it.
+    private static string Qualified(GameObject go, string reference)
+        => EditorSceneManager.SceneOf(go) is { } open && EditorSceneManager.OpenScenes.Count > 1 ? $"scene:{SceneKey(open)}:{reference}" : reference;
 
     /// <summary> Resolves a ref to a GameObject, a component, or an asset. </summary>
     public static object Resolve(string text)
     {
         text = text.Trim();
         if (text.Length == 0) throw new CliException("Empty ref.");
+
+        if (text.StartsWith("scene:", StringComparison.Ordinal))
+        {
+            // The scene part ends where the object part starts, so a scene name may hold a colon.
+            int byPath = text.IndexOf(":/", "scene:".Length, StringComparison.Ordinal);
+            int byId = text.IndexOf(":#", "scene:".Length, StringComparison.Ordinal);
+            int split = byPath < 0 ? byId : byId < 0 ? byPath : Math.Min(byPath, byId);
+            if (split < 0) throw new CliException($"'{text}' names a scene but no object. Write scene:Name:#guid or scene:Name:/Path.");
+            OpenScene open = OpenSceneNamed(text["scene:".Length..split]);
+            SceneSection section = SectionOf(open);
+            SceneSection? previous = t_section;
+            t_section = section;
+            try { return Resolve(text[(split + 1)..]); }
+            finally { t_section = previous; }
+        }
 
         Match suffix = s_componentSuffix.Match(text);
         if (suffix.Success && LooksLikeSceneRef(text[..suffix.Index]))
@@ -70,8 +114,8 @@ public static class CliRefs
 
     private static EngineObject? FindInScene(Guid id)
     {
-        if (Scene.Current.IsNotValid()) return null;
-        EngineObject? found = Scene.Current.FindObjectByIdentifier<EngineObject>(id);
+        if (EditorSceneManager.EditedWorld.IsNotValid()) return null;
+        EngineObject? found = t_section != null ? t_section.Instance.FindObject(t_section, id) : EditorSceneManager.EditedWorld.FindObject<EngineObject>(id);
         return found.IsValid() ? found : null;
     }
 
@@ -102,7 +146,7 @@ public static class CliRefs
     private static GameObject FindByPath(string path)
     {
         string[] segments = path.Trim('/').Split('/');
-        IEnumerable<GameObject> level = Scene.RootObjects;
+        IEnumerable<GameObject> level = t_section != null ? t_section.Roots : Scene.Roots;
         GameObject? current = null;
 
         foreach (string segment in segments)
@@ -238,7 +282,7 @@ public static class CliRefs
         for (GameObject? current = go; current.IsValid(); current = current.Parent)
         {
             IEnumerable<GameObject> siblings = current.Parent.IsValid() ? current.Parent.Children
-                : current.Scene.IsValid() ? current.Scene.RootObjects : [current];
+                : current.Scene.IsValid() ? current.Scene.Roots : [current];
             var same = siblings.Where(s => s.Name == current.Name).ToList();
             names.Add(same.Count > 1 ? $"{current.Name}[{same.IndexOf(current)}]" : current.Name);
         }
@@ -248,10 +292,12 @@ public static class CliRefs
 
     public static JsonObject Summary(object value) => value switch
     {
-        GameObject go => new JsonObject { ["id"] = "#" + go.Identifier, ["path"] = PathOf(go), ["name"] = go.Name },
+        GameObject go => EditorSceneManager.SceneOf(go) is { } open && EditorSceneManager.OpenScenes.Count > 1
+            ? new JsonObject { ["id"] = Qualified(go, "#" + go.Identifier), ["path"] = PathOf(go), ["name"] = go.Name, ["scene"] = open.Name }
+            : new JsonObject { ["id"] = "#" + go.Identifier, ["path"] = PathOf(go), ["name"] = go.Name },
         Component mb => new JsonObject
         {
-            ["id"] = "#" + mb.Identifier,
+            ["id"] = mb.GameObject.IsValid() ? Qualified(mb.GameObject, "#" + mb.Identifier) : "#" + mb.Identifier,
             ["ref"] = ComponentRef(mb),
             ["type"] = mb.GetType().Name,
             ["enabled"] = mb.Enabled,
@@ -307,7 +353,8 @@ public static class CliRefs
         else
             CliEdit.Run("Set", () =>
             {
-                Undo.Snapshot(target);
+                if (target is EngineObject engineObject) Undo.RecordObject(engineObject, "CLI: Set");
+                else Undo.RecordObject(target, UndoOwner.None, "CLI: Set");
                 WriteFields(target, values);
             });
 
@@ -356,17 +403,38 @@ public static class CliRefs
         object temp = Serializer.Deserialize(root, type, SceneReferenceResolver.ContextForLinking())
             ?? throw new CliException($"Echo could not read the edited {type.Name} back.");
 
-        foreach (string topField in topFields)
-        {
-            FieldInfo field = FindField(type, topField) ?? throw new CliException($"{type.Name} has no field '{topField}'.");
+        var fields = topFields.Select(name => FindField(type, name) ?? throw new CliException($"{type.Name} has no field '{name}'.")).ToList();
+        if (target is Component holder && EditorSceneManager.SceneOf(holder.GameObject) is { } scene)
+            foreach (FieldInfo field in fields)
+                foreach (GameObject referenced in ReferencedObjects(field.GetValue(temp)))
+                    if (EditorSceneManager.RefusesReference(scene, referenced, out string why))
+                        throw new CliException(why);
+
+        foreach (FieldInfo field in fields)
             field.SetValue(target, field.GetValue(temp));
-        }
 
         if (target is EngineObject eo && eo.IsValid())
         {
             try { eo.OnValidate(); }
             catch (Exception ex) { Debug.LogException($"OnValidate threw on {type.Name}", ex); }
             PrefabUtility.NotifyEdited(target);
+        }
+    }
+
+    // The scene objects a field value points at, directly or as items of a collection.
+    private static IEnumerable<GameObject> ReferencedObjects(object? value)
+    {
+        switch (value)
+        {
+            case GameObject go: yield return go; break;
+            case Component c when c.GameObject.IsValid(): yield return c.GameObject; break;
+            case Transform t when t.GameObject.IsValid(): yield return t.GameObject; break;
+            case string: break;
+            case IEnumerable items:
+                foreach (object? item in items)
+                    foreach (GameObject inner in ReferencedObjects(item))
+                        yield return inner;
+                break;
         }
     }
 
@@ -710,13 +778,27 @@ public static class CliEdit
     private static bool s_warnedThisPlay;
     private static bool s_wasPlaying;
 
+    /// <summary>
+    /// Waits for an editor interaction, such as a drag in the scene view, to end, so a command never splits or reverts it.
+    /// Commands wait before they resolve their targets. Simulated input is never held back, so a drag the CLI drives still ends.
+    /// </summary>
+    public static async Task WaitForEditor()
+    {
+        if (!await CliServer.WaitUntil(() => !Undo.InteractionActive, s_interactionTimeout))
+            throw new CliException("An editor interaction is in progress, such as a drag in the scene view. Try again once it ends.");
+    }
+
+    private static readonly TimeSpan s_interactionTimeout = TimeSpan.FromSeconds(20);
+
     public static void Run(string description, Action change)
     {
+        if (Undo.InteractionActive) throw new CliException("An editor interaction is in progress, such as a drag in the scene view. Try again once it ends.");
         WarnIfPlaying();
-        Undo.IncrementGroup();
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
         change();
-        Undo.IncrementGroup();
-        if (!Application.IsPlaying) EditorSceneManager.MarkDirty();
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
     }
 
     public static T Run<T>(string description, Func<T> change)
@@ -742,14 +824,16 @@ public static class CliEdit
             change();
             EchoObject after = assets.SerializeForSave(owner) ?? throw new CliException($"'{owner.Name}' could not be serialized after the edit.");
             if (!assets.SaveAsset(ownerId, after)) throw new CliException($"'{owner.Name}' could not be saved. See the logs.");
-            Undo.RegisterAction($"CLI: {description}", () => assets.SaveAsset(ownerId, before), () => assets.SaveAsset(ownerId, after));
+            Undo.RegisterOperation(new AssetSaveOperation($"CLI: {description}", assets, ownerId, before, after));
         });
     }
 
-    /// <summary> Records a GameObject level change as its own undo step, looking the object up again by id on undo and redo. </summary>
-    public static void Record(string description, List<(Action undo, Action redo)> actions)
+    private sealed class AssetSaveOperation(string name, EditorAssetBackend assets, Guid fileId, EchoObject before, EchoObject after) : IUndoOperation
     {
-        if (actions.Count > 0) Undo.RegisterActionGroup($"CLI: {description}", actions);
+        public string Name => name;
+        public IReadOnlyList<UndoOwner> Owners { get; } = [UndoOwner.OfAssetFile(fileId)];
+        public void Undo() => assets.SaveAsset(fileId, before);
+        public void Redo() => assets.SaveAsset(fileId, after);
     }
 
     private static void WarnIfPlaying()
@@ -760,6 +844,6 @@ public static class CliEdit
 
         if (!playing || s_warnedThisPlay) return;
         s_warnedThisPlay = true;
-        Debug.LogWarning("[CLI] Play mode is running, so this change is not undoable and is lost when play stops. Stop play mode to make lasting edits.");
+        Debug.LogWarning("[CLI] Play mode is running, so this change is lost when play stops. Stop play mode to make lasting edits.");
     }
 }

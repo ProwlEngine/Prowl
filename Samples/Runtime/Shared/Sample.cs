@@ -38,7 +38,7 @@ public abstract class StationGame : Game
 
     public sealed record Station(string Name, string Description, Float3 Center, Float3 View, float LookHeight);
 
-    protected Scene SampleScene = null!;
+    protected SceneInstance SampleScene = null!;
     protected GameObject CameraObject = null!;
     protected Camera MainCamera = null!;
     protected SampleHud Hud = null!;
@@ -53,9 +53,10 @@ public abstract class StationGame : Game
 
     // Capture mode renders every station with time locked to 60 frames a second, saves an image of each and then
     // times a run of frames there, for reference images and performance numbers that repeat run to run
-    private const int PerformanceFrames = 300;
+    private int _performanceFrames = 300;
     private string? _captureFolder;
     private int _captureFrames = 120;
+    private string? _captureStation;
     private int _captureCounter;
     private bool _captureNow;
     private readonly Stopwatch _frameClock = new();
@@ -86,7 +87,7 @@ public abstract class StationGame : Game
         // imported the first time something asks for them by path.
         AssetDatabase.Mount(new SourceAssetBackend(new FolderAssetSource(Path.Combine(AppContext.BaseDirectory, "Assets"))));
 
-        SampleScene = new Scene();
+        SampleScene = SceneInstance.Main;
 
         CameraObject = new GameObject("Main Camera") { Tag = "Main Camera" };
         MainCamera = CameraObject.AddComponent<Camera>();
@@ -98,19 +99,18 @@ public abstract class StationGame : Game
         MainCamera.AntiAliasing = AntiAliasingMode.FXAA;
         CameraObject.AddComponent<FlyCamera>();
         CameraObject.AddComponent<PhysicsGrabber>().Game = this;
-        SampleScene.Add(CameraObject);
+        CameraObject.MoveTo(SampleScene);
 
         var hud = new GameObject("HUD");
         Hud = hud.AddComponent<SampleHud>();
         Hud.Game = this;
-        SampleScene.Add(hud);
+        hud.MoveTo(SampleScene);
         if (_captureFolder != null) Hud.Visible = false;
 
         Build();
         if (_captureFolder != null) FixParticleSeeds();
 
-        GoToStation(0);
-        Scene.Load(SampleScene);
+        GoToStation(_captureStation == null ? 0 : Math.Max(Stations.FindIndex(s => s.Name.Equals(_captureStation, StringComparison.OrdinalIgnoreCase)), 0));
     }
 
     /// <summary>Creates the sample's content. Called once, before the scene loads.</summary>
@@ -177,7 +177,7 @@ public abstract class StationGame : Game
     /// <summary>Adds a root object to the sample scene and returns it.</summary>
     protected GameObject Add(GameObject go)
     {
-        SampleScene.Add(go);
+        go.MoveTo(SampleScene);
         return go;
     }
 
@@ -205,7 +205,7 @@ public abstract class StationGame : Game
     private void FixParticleSeeds()
     {
         uint seed = 1;
-        foreach (GameObject go in SampleScene.AllObjects)
+        foreach (GameObject go in SampleScene.Objects)
             foreach (ParticleSystemComponent particles in go.GetComponents<Prowl.Runtime.ParticleSystem.ParticleSystemComponent>())
             {
                 particles.AutoRandomSeed = false;
@@ -215,7 +215,7 @@ public abstract class StationGame : Game
 
     public override void EndRender() => RenderStats.EndFrame();
 
-    public override void AfterGui(Scene? scene)
+    public override void AfterGui()
     {
         if (!_captureNow) return;
         _captureNow = false;
@@ -237,10 +237,20 @@ public abstract class StationGame : Game
         if (at + 2 < args.Length && int.TryParse(args[at + 2], out int frames))
             _captureFrames = frames;
 
+        // With --frames each station times that many frames instead of 300
+        int timed = Array.IndexOf(args, "--frames");
+        if (timed >= 0 && timed + 1 < args.Length && int.TryParse(args[timed + 1], out int count))
+            _performanceFrames = Math.Max(count, 1);
+
+        // With --station only that station is captured
+        int station = Array.IndexOf(args, "--station");
+        if (station >= 0 && station + 1 < args.Length)
+            _captureStation = args[station + 1];
+
         // Warnings and errors land in the capture's log, so a capture that looks wrong says why
-        Prowl.Runtime.Debug.OnLog += (message, _, severity) =>
+        Prowl.Runtime.Debug.OnLog += (e) =>
         {
-            if (severity >= LogSeverity.Warning) Console.WriteLine($"{severity}: {message}");
+            if (e.Severity >= LogSeverity.Warning) Console.WriteLine($"{e.Severity}: {e.Message}");
         };
 
         Time.LockedDeltaTime = 1f / 60f;
@@ -291,11 +301,11 @@ public abstract class StationGame : Game
 
         _frameTimes.Add(elapsed);
         _waitTimes.Add(Graphics.LastFrameWaitMs);
-        if (_frameTimes.Count < PerformanceFrames) return;
+        if (_frameTimes.Count < _performanceFrames) return;
 
         WritePerformance();
         _captureCounter = 0;
-        if (CurrentStation + 1 < Stations.Count)
+        if (_captureStation == null && CurrentStation + 1 < Stations.Count)
             GoToStation(CurrentStation + 1);
         else
         {
@@ -1159,6 +1169,29 @@ public static class Sample
         paper.Box("header " + text, id).Height(24)
             .Text(text, font).FontSize(16).TextColor(SampleHud.Accent)
             .Alignment(TextAlignment.MiddleLeft);
+    }
+
+    private static readonly HashSet<string> s_openFolds = new();
+
+    /// <summary>A header that opens and closes the controls under it on click, true while open.</summary>
+    public static bool Foldout(Paper paper, FontFile font, string text, bool startOpen = false, int id = 0)
+    {
+        string key = text + "#" + id;
+        if (startOpen && s_openFolds.Add(key + "#seen"))
+            s_openFolds.Add(key);
+        bool open = s_openFolds.Contains(key);
+        paper.Box("fold " + text, id).Height(26)
+            .BackgroundColor(SampleHud.Control).Rounded(6)
+            .Hovered.BackgroundColor(SampleHud.ControlHover).End()
+            .Text((open ? "-  " : "+  ") + text, font).FontSize(14).TextColor(SampleHud.Accent)
+            .Alignment(TextAlignment.MiddleLeft)
+            .Cursor(PaperCursor.Pointer)
+            .OnClick(_ =>
+            {
+                if (!s_openFolds.Remove(key))
+                    s_openFolds.Add(key);
+            });
+        return open;
     }
 
     public static void Label(Paper paper, FontFile font, string text, int id = 0)

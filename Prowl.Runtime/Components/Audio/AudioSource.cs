@@ -707,10 +707,10 @@ public sealed class AudioSource : Component
         {
             // Checked here rather than at Play, so scene setup order cannot make this fire spuriously
             // for a source that starts before its listener exists.
-            if (AudioListener.ActiveCount == 0 && IsPlaying)
+            if (IsPlaying && (!SceneInstance.HasMain || SceneInstance.Main.AudioListener.IsNotValid()))
             {
                 Debug.LogWarningOnce("Audio.NoListener",
-                    "A spatial AudioSource is playing with no enabled AudioListener in the scene, so it is positioned relative to the world origin.");
+                    "A spatial AudioSource is playing with no enabled AudioListener in the main world, so it is positioned relative to the world origin.");
             }
 
             Float3 pos = Transform.Position;
@@ -1190,11 +1190,11 @@ public sealed class AudioSource : Component
         if (!AudioContext.IsInitialized)
             return null;
 
-        Scene scene = Scene.Current;
+        SceneInstance scene = SceneInstance.Active;
 
-        if (scene.IsNotValid())
+        if (scene.IsNotValid() || scene.State == SceneState.Destroying)
         {
-            Debug.LogWarning("PlayClipAtPoint needs a loaded scene to place the sound in.");
+            Debug.LogError(scene.IsValid() ? $"PlayClipAtPoint: '{scene.Name}' is being destroyed, so the sound was not placed." : "PlayClipAtPoint needs a world to place the sound in.");
             return null;
         }
 

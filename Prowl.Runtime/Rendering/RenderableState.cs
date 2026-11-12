@@ -140,8 +140,12 @@ public sealed class RenderableState
         if (receiveShadows) flags |= RenderableFlags.ReceiveShadows;
         if (gameObject.IsStatic) flags |= RenderableFlags.Static;
         if (motionVectors) flags |= RenderableFlags.MotionVectors;
-        return flags;
+        return flags | ViewFlagsFor(gameObject);
     }
+
+    /// <summary>The flags that keep a renderable out of some views: out of scene views while the editor hides its section there.</summary>
+    public static RenderableFlags ViewFlagsFor(GameObject gameObject)
+        => gameObject.Section is { HiddenInSceneView: true } ? RenderableFlags.SceneViewHidden : RenderableFlags.None;
 
     /// <summary>A layer index as a layer mask bit.</summary>
     public static uint LayerBit(int layerIndex) => 1u << Math.Clamp(layerIndex, 0, 31);

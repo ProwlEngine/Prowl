@@ -103,7 +103,7 @@ internal sealed class AnimatorRagdoll
                     $"[Animator] '{_animator.GameObject.Name}' has Ragdoll nodes with different bodies, but a character has one ragdoll, made as the first asked.");
             return _parts.Length > 0;
         }
-        if (_rig == null || _animator.Scene.IsNotValid()) return false;
+        if (_rig == null || !_animator.IsInWorld) return false;
 
         Dictionary<HumanBodyBone, Transform>? bones = RagdollBuilder.FindBones(_rig, _binding, out string problem);
         if (bones == null)
@@ -130,8 +130,8 @@ internal sealed class AnimatorRagdoll
     private void Make(Dictionary<HumanBodyBone, Transform> bones, float totalMass, bool handsAndFeet)
     {
         // Flat, so no body is ever moved by another body's transform.
-        _puppet = new GameObject($"{_animator.GameObject.Name} Ragdoll") { HideFlags = HideFlags.HideAndDontSave };
-        _animator.Scene!.Add(_puppet);
+        _puppet = _animator.Scene!.Create($"{_animator.GameObject.Name} Ragdoll", owner: _animator);
+        _puppet.HideFlags = HideFlags.HideAndDontSave;
         var puppetBones = new Dictionary<HumanBodyBone, Transform>(bones.Count);
         foreach ((HumanBodyBone bone, Transform source) in bones)
         {
@@ -287,7 +287,7 @@ internal sealed class AnimatorRagdoll
     private void Step(float dt)
     {
         _substep = 0;
-        if (dt <= 0f || _history == null || _physics == null || _animator.Scene.IsNotValid()) return;
+        if (dt <= 0f || _history == null || _physics == null || !_animator.IsInWorld) return;
 
         float muscle = _muscle, pin = _pin;
         RagdollPinning pinning = _pinning;

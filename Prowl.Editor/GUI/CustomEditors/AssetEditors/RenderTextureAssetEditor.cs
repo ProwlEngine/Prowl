@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Echo;
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
@@ -75,23 +76,25 @@ public class RenderTextureAssetEditor : AssetImporterEditor
         if (asset is not RenderTexture rt) return;
 
         Description edits = Edits(entry, rt);
+        Guid guid = entry.Guid;
+        void Record(string name) => Undo.RecordObject(() => s_edits.GetValueOrDefault(guid)!, UndoOwner.OfAssetFile(guid), name);
 
         EditorGUI.SectionHeader(paper, $"{id}_hdr", "Render Texture", first: true);
 
         EditorGUI.Row(paper, $"{id}_w", "Width", () =>
             Origami.NumericField<int>(paper, $"{id}_w_v", edits.Width,
-                v => edits.Width = Math.Max(1, v)).Show());
+                v => { Record("Width"); edits.Width = Math.Max(1, v); }).Show());
 
         EditorGUI.Row(paper, $"{id}_h", "Height", () =>
             Origami.NumericField<int>(paper, $"{id}_h_v", edits.Height,
-                v => edits.Height = Math.Max(1, v)).Show());
+                v => { Record("Height"); edits.Height = Math.Max(1, v); }).Show());
 
         Origami.Checkbox(paper, $"{id}_depth", edits.HasDepth,
-            v => edits.HasDepth = v)
+            v => { Record("Depth Attachment"); edits.HasDepth = v; })
             .LabelRight("Depth Attachment").Show();
 
         Origami.Checkbox(paper, $"{id}_srgb", edits.Srgb,
-            v => edits.Srgb = v)
+            v => { Record("sRGB"); edits.Srgb = v; })
             .LabelRight("sRGB (RGBA8 colour attachments)").Show();
 
         Origami.Header(paper, $"{id}_fmt_hdr", "Color Attachments").Show();
@@ -101,7 +104,7 @@ public class RenderTextureAssetEditor : AssetImporterEditor
             int index = i;
             EditorGUI.Row(paper, $"{id}_fmt{index}", $"Format {index}", () =>
                 Origami.EnumDropdown(paper, $"{id}_fmt{index}_v", edits.Formats[index],
-                    v => edits.Formats[index] = v).Show());
+                    v => { Record("Color Format"); edits.Formats[index] = v; }).Show());
         }
 
         using (paper.Row($"{id}_fmt_btns").Height(UnitValue.Auto)
@@ -109,11 +112,11 @@ public class RenderTextureAssetEditor : AssetImporterEditor
             .Margin(0, 0, 0, Origami.Current.Metrics.SpacingLarge).Enter())
         {
             Origami.Button(paper, $"{id}_fmt_add", $"{EditorIcons.Plus}  Add",
-                () => edits.Formats.Add(TextureFormat.RGBA8)).Width(90).Show();
+                () => { Record("Add Color Attachment"); edits.Formats.Add(TextureFormat.RGBA8); }).Width(90).Show();
 
             if (edits.Formats.Count > 0)
                 Origami.Button(paper, $"{id}_fmt_rem", $"{EditorIcons.Minus}  Remove",
-                    () => edits.Formats.RemoveAt(edits.Formats.Count - 1)).Width(110).Show();
+                    () => { Record("Remove Color Attachment"); edits.Formats.RemoveAt(edits.Formats.Count - 1); }).Width(110).Show();
         }
 
         DrawApplyRevertBar(paper, id, entry, asset);

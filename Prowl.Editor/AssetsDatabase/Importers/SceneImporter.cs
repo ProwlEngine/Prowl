@@ -9,20 +9,22 @@ using Prowl.Runtime.Resources;
 namespace Prowl.Editor.Importers;
 
 /// <summary>
-/// Imports .scene files, Echo-serialized Scene objects, as the <see cref="SceneAsset"/> that stores them. Nothing
-/// is built: the stored tree is kept as it is, and what it references is read straight from it.
+/// Imports .scene files, Echo-serialized <see cref="SceneContent"/>, as the <see cref="Scene"/> that stores them.
+/// Nothing is built: the stored tree is kept as it is, and what it references is read straight from it. A file saved
+/// as a live scene by an older engine is converted on the way in.
 /// </summary>
 [ImporterFor(".scene")]
 public class SceneImporter : AssetImporter
 {
-    public override int Version => 4;
+    public override int Version => 5;
 
     public override bool Import(ImportContext ctx)
     {
         try
         {
             var echo = EchoObject.ReadFromString(File.ReadAllText(ctx.AbsolutePath));
-            var scene = new SceneAsset { Name = ctx.FileName, Data = echo };
+            Migration.Releases.Release_1_0.SceneContentLayout(echo);
+            var scene = new Scene { Name = ctx.FileName, Data = echo };
             ctx.SetMainAsset(scene);
             ImportHelper.CollectAssetDependencies(echo, ctx);
         }

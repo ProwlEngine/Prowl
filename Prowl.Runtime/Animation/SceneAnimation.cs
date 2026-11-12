@@ -27,7 +27,7 @@ public sealed class SceneAnimation
     /// <summary>Advances every animator. One that throws is reported and skipped, not fatal to the frame.</summary>
     public void Update(float deltaTime)
     {
-        if (!Application.ShouldRunGameplay || _animators.Count == 0) return;
+        if (_animators.Count == 0) return;
 
         // A tick can enable or destroy another animator, so the pass runs over a copy.
         _scratch.Clear();

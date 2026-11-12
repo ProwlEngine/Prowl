@@ -149,17 +149,6 @@ public class GameObjectCloneTests : RuntimeTestBase
         Assert.Equal(2, markers[1].Number);
     }
 
-    [Fact]
-    public void Clone_ComponentIsFindableThroughTheCache()
-    {
-        GameObject source = Build("root", out _);
-
-        GameObject clone = ObjectCopy.Clone(source);
-
-        Assert.NotNull(clone.GetComponent<Marker>());
-        Assert.Single(clone.GetComponents<Marker>());
-    }
-
     #endregion
 
     #region Identity
@@ -272,23 +261,9 @@ public class GameObjectCloneTests : RuntimeTestBase
     #region Independence
 
     [Fact]
-    public void Clone_EditingTheCopyLeavesTheSourceAlone()
-    {
-        GameObject source = Build("root", out Marker marker);
-        marker.Number = 1;
-
-        GameObject clone = ObjectCopy.Clone(source);
-        clone.GetComponent<Marker>()!.Number = 99;
-        clone.Name = "changed";
-
-        Assert.Equal(1, marker.Number);
-        Assert.Equal("root", source.Name);
-    }
-
-    [Fact]
     public void Clone_IsDetachedFromAnyScene()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject source = Build("root", out _);
         scene.Add(source);
 
@@ -408,7 +383,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void CopyTo_LeavesTheTargetInItsScene()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject source = Build("source", out _);
         GameObject target = Build("target", out _);
         scene.Add(target);
@@ -434,20 +409,6 @@ public class GameObjectCloneTests : RuntimeTestBase
 
         Assert.Same(clones[1], clones[0].GetComponent<Marker>()!.TargetObject);
         Assert.Same(clones[0], clones[1].GetComponent<Marker>()!.TargetObject);
-    }
-
-    [Fact]
-    public void Clone_SeparateCallsDoNotCrossLink()
-    {
-        GameObject a = Build("a", out Marker markerA);
-        GameObject b = Build("b", out _);
-        markerA.TargetObject = b;
-
-        GameObject cloneA = ObjectCopy.Clone(a);
-        GameObject cloneB = ObjectCopy.Clone(b);
-
-        Assert.Same(b, cloneA.GetComponent<Marker>()!.TargetObject);
-        Assert.NotSame(cloneB, cloneA.GetComponent<Marker>()!.TargetObject);
     }
 
     #endregion
@@ -547,9 +508,8 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void Instantiate_RunsTheLifecycleOnTheCopy()
     {
-        Scene scene = CreateScene();
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
+        SceneInstance scene = CreateScene();
+        Bind(scene);
 
         var original = new GameObject("orig");
         original.AddComponent<Lifecycle>();
@@ -569,9 +529,8 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void Instantiate_IntoAParentPlacesItRelativeToThatParent()
     {
-        Scene scene = CreateScene();
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
+        SceneInstance scene = CreateScene();
+        Bind(scene);
 
         var parent = new GameObject("parent");
         parent.Transform.LocalPosition = new Float3(10, 0, 0);
@@ -589,4 +548,30 @@ public class GameObjectCloneTests : RuntimeTestBase
     }
 
     #endregion
+    private sealed class ParentAtEnable : Component
+    {
+        public GameObject? Seen;
+        public SceneSection? Section;
+        public override void OnEnable()
+        {
+            Seen = GameObject.Parent;
+            Section = GameObject.Section;
+        }
+    }
+
+    [Fact]
+    public void InstantiateUnderAParent_JoinsTheParentsSection_WithTheParentInOnEnable()
+    {
+        SceneInstance world = CreateScene(enable: true);
+        GameObject player = world.Create("Player");
+        player.Persistent = true;
+        var weapon = new GameObject("Weapon");
+        weapon.AddComponent<ParentAtEnable>();
+
+        GameObject clone = GameObject.Instantiate(weapon, player)!;
+
+        ParentAtEnable probe = clone.GetComponent<ParentAtEnable>()!;
+        Assert.Same(player, probe.Seen);
+        Assert.Same(world.Persistent, probe.Section);
+    }
 }

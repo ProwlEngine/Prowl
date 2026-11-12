@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -15,17 +15,13 @@ namespace Prowl.Runtime;
 /// </summary>
 public static class PlayerSettingsLoader
 {
-    private static string? _settingsDir;
-
     /// <summary>
     /// Applies every project setting and starts XR if the project asks for it. Runs before the first scene loads, so the
     /// scene wakes up with them: assets resolved in OnEnable see the budget, navmesh worlds read their settings as their
-    /// surfaces register, and components can see XR running. Physics settings reach each scene as it loads.
+    /// surfaces register, and components can see XR running. Physics settings become the defaults every new world copies.
     /// </summary>
     public static void Apply(string settingsDir)
     {
-        _settingsDir = settingsDir;
-
         if (!Directory.Exists(settingsDir))
         {
             Debug.LogWarning($"[PlayerSettings] Settings directory not found: {settingsDir}");
@@ -40,15 +36,7 @@ public static class PlayerSettingsLoader
         ApplyTagsAndLayers(settingsDir);
         ApplyQuality(settingsDir);
 
-        // Physics needs to apply to each new scene's PhysicsWorld
         ApplyPhysics(settingsDir);
-
-        // Re-apply physics whenever a new scene loads
-        Resources.Scene.OnSceneLoaded += () =>
-        {
-            if (_settingsDir != null)
-                ApplyPhysics(_settingsDir);
-        };
 
         ApplyXR(settingsDir);
     }
@@ -107,22 +95,25 @@ public static class PlayerSettingsLoader
             bool persistManifold = !settings.TryGet("PersistentContactManifold", out EchoObject? pm) || pm!.BoolValue;
             float specRelax = settings.TryGet("SpeculativeRelaxationFactor", out EchoObject? sr) ? sr!.FloatValue : 0.9f;
 
-            Scene scene = Resources.Scene.Current;
-            if (scene.IsValid())
+            PhysicsWorld.Defaults = new PhysicsWorldSettings
             {
-                scene.Physics.Gravity = new Vector.Float3(gx, gy, gz);
-                scene.Physics.SolverIterations = solverIter;
-                scene.Physics.RelaxIterations = relaxIter;
-                scene.Physics.Substep = subSteps;
-                scene.Physics.AllowSleep = sleep;
-                scene.Physics.UseMultithreading = mt;
-                scene.Physics.AutoSyncTransforms = sync;
-                scene.Physics.EnhancedDeterminism = determ;
-                scene.Physics.ThreadModel = persistThreads ? PhysicsThreadModel.Persistent : PhysicsThreadModel.Regular;
-                scene.Physics.EnableAuxiliaryContactPoints = auxcp;
-                scene.Physics.PersistentContactManifold = persistManifold;
-                scene.Physics.SpeculativeRelaxationFactor = specRelax;
-            }
+                Gravity = new Vector.Float3(gx, gy, gz),
+                SolverIterations = solverIter,
+                RelaxIterations = relaxIter,
+                Substep = subSteps,
+                AllowSleep = sleep,
+                UseMultithreading = mt,
+                AutoSyncTransforms = sync,
+                EnhancedDeterminism = determ,
+                ThreadModel = persistThreads ? PhysicsThreadModel.Persistent : PhysicsThreadModel.Regular,
+                EnableAuxiliaryContactPoints = auxcp,
+                PersistentContactManifold = persistManifold,
+                SpeculativeRelaxationFactor = specRelax,
+            };
+
+            // Settings load before the first scene, but worlds already made get them too.
+            foreach (SceneInstance world in SceneInstance.All)
+                world.Physics.ApplySettings(PhysicsWorld.Defaults);
 
             // Collision matrix (uint[] serializes as a compound holding an "array" list)
             if (settings.TryGet("CollisionMatrixRows", out EchoObject? cmProp) && cmProp!.TryGet("array", out EchoObject? rows)
@@ -204,8 +195,10 @@ public static class PlayerSettingsLoader
             int maxIter = settings.TryGet("MaxFixedIterations", out EchoObject? mi) ? mi!.IntValue : 3;
 
             Time.FixedDeltaTime = fixedDt;
-            Time.TimeScale = timeScale;
             Time.MaxFixedIterations = maxIter;
+            SceneClock.Defaults = new SceneClockSettings { TimeScale = timeScale };
+            foreach (SceneInstance world in SceneInstance.All)
+                world.Clock.TimeScale = timeScale;
             Debug.Log("[PlayerSettings] Time applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply time: {ex.Message}"); }

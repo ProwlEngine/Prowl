@@ -4,1185 +4,27 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Prowl.Echo;
-using Prowl.PaperUI;
-using Prowl.Runtime.Diagnostics;
-using Prowl.Runtime.Networking;
-using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Tasks;
+using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.Resources;
 
 /// <summary>
-/// A live world of GameObjects. Its stored form is a <see cref="SceneAsset"/>, and any number of scenes can be
-/// instantiated from one, like the editor's edit copy and play copy.
+/// A scene as stored in a .scene file. Holding one keeps only its stored data loaded, not what the scene uses:
+/// <see cref="Load"/> and <see cref="AssetDatabase.Preload"/> load that.
 /// </summary>
 [CreateAssetMenu("Scene", Extension = ".scene", Order = 0)]
-public class Scene : EngineObject, ISerializationCallbackReceiver
-{
-    #region Scene Manager
-
-    private static Scene? _current;
-
-    // Weak, so a scene dropped without being disposed goes away with whatever it used rather than being walked forever.
-    private static readonly List<WeakReference<Scene>> s_live = [];
-
-    /// <summary>Every scene not yet disposed: the current one, one waiting to load, previews and prefab editing.</summary>
-    internal static Scene[] Live
-    {
-        get
-        {
-            lock (s_live)
-            {
-                var live = new List<Scene>(s_live.Count);
-                for (int i = s_live.Count - 1; i >= 0; i--)
-                {
-                    if (s_live[i].TryGetTarget(out Scene? scene)) live.Add(scene);
-                    else s_live.RemoveAt(i);
-                }
-                return [.. live];
-            }
-        }
-    }
-
-    internal static IReadOnlyList<GameObject> Preserved => _preserved;
-
-    /// <summary>
-    /// The currently active scene. There is always one: reading this before anything has been loaded
-    /// creates an empty scene, so the engine is never in a no-scene state and callers never have to
-    /// handle null. Use <see cref="Load(Scene)"/> to replace it.
-    /// </summary>
-    public static Scene Current
-    {
-        get
-        {
-            if (ReferenceEquals(_current, null) || _current.IsDisposed)
-            {
-                // Before anything is created, so a read from another thread cannot leave an inactive scene current.
-                MainThreadContext.AssertMainThread(nameof(Current));
-                _current = new Scene { Name = "Untitled" };
-                _current.Enable();
-            }
-            return _current;
-        }
-    }
-
-    /// <summary>Fires after a scene is loaded via Load().</summary>
-    public static event Action? OnSceneLoaded;
-
-    private static Scene? _pendingScene;
-
-    /// <summary>
-    /// Ends the async session at the next scene swap, between the outgoing scene's teardown and the incoming
-    /// scene's start. The editor sets it when entering and leaving play mode.
-    /// </summary>
-    internal static bool EndSessionOnSwap;
-
-    /// <summary>Whether a <see cref="Load(Scene)"/> is queued and has not been applied yet, so <see cref="Current"/>
-    /// is still the outgoing scene.</summary>
-    public static bool IsLoadPending => !ReferenceEquals(_pendingScene, null);
-
-    /// <summary>
-    /// Queues a scene to become the current one, replacing the previously loaded scene. The swap
-    /// happens at the end of the frame, alongside the destroy queue, so the outgoing scene stays
-    /// usable for everything still running this frame.
-    /// </summary>
-    public static void Load(Scene scene)
-    {
-        MainThreadContext.AssertMainThread();
-        if (ReferenceEquals(scene, null))
-            throw new ArgumentNullException(nameof(scene));
-
-        _pendingLoad?.Cancel();
-        _pendingLoad = null;
-        DropPendingScene(except: scene);
-        _pendingScene = scene;
-    }
-
-    // Network cancellation must only remove the scene owned by that join, not a later local load.
-    internal static void CancelPendingLoad(Scene scene)
-    {
-        if (ReferenceEquals(_pendingScene, scene)) _pendingScene = null;
-        if (!ReferenceEquals(_current, scene) && scene.IsValid()) scene.Dispose();
-    }
-
-    // A scene queued and then replaced before it became current belongs to nobody, and would stay live.
-    private static void DropPendingScene(Scene? except)
-    {
-        Scene? dropped = _pendingScene;
-        _pendingScene = null;
-        if (dropped.IsValid() && !ReferenceEquals(dropped, except) && !ReferenceEquals(dropped, _current))
-            dropped!.Dispose();
-    }
-
-    /// <summary>Loads a stored scene and everything it uses, blocking, and makes it current at the end of the frame.</summary>
-    public static void Load(SceneAsset asset)
-    {
-        using AssetGroup preload = AssetDatabase.Preload(asset);
-        preload.Wait();
-        Load(Instantiate(asset));
-    }
-
-    /// <summary>
-    /// Loads a stored scene and everything it uses in the background while the current scene keeps running, and
-    /// makes it current at the end of the frame the loading finishes on. A second load cancels this one.
-    /// </summary>
-    public static SceneLoad LoadAsync(SceneAsset asset)
-    {
-        MainThreadContext.AssertMainThread();
-        _pendingLoad?.Cancel();
-        DropPendingScene(except: null);
-        _pendingLoad = new SceneLoad(asset);
-        return _pendingLoad;
-    }
-
-    private static SceneLoad? _pendingLoad;
-
-    /// <summary>Builds a live scene from a stored one, without making it current.</summary>
-    public static Scene Instantiate(SceneAsset asset)
-    {
-        asset.Load();
-        Scene? scene = asset.Data is { } data ? Serializer.Deserialize<Scene>(data) : null;
-        if (scene.IsNotValid()) scene = new Scene();
-        scene.Name = asset.Name;
-        scene.Source = asset;
-        return scene;
-    }
-
-    /// <summary>The stored scene this one was instantiated from, if any. Not held, since a live scene no longer needs its stored form.</summary>
-    [NonSerialized, NotHeld] public SceneAsset? Source;
-
-    private static readonly List<GameObject> _preserved = [];
-
-    /// <summary>
-    /// Keeps a GameObject alive across scene loads. It moves straight from the outgoing scene to the
-    /// incoming one when the swap applies, so it is never held by a scene that is about to be
-    /// disposed, and it is not disabled and re-enabled on the way.
-    /// <para/>
-    /// Only roots can be preserved, since half a hierarchy surviving a load is never what was meant.
-    /// Passing a child preserves its root instead.
-    /// </summary>
-    public static void DontDestroyOnLoad(GameObject go)
-    {
-        MainThreadContext.AssertMainThread();
-        if (go.IsNotValid())
-        {
-            Debug.LogWarning("[Scene] DontDestroyOnLoad on a null or destroyed GameObject does nothing.");
-            return;
-        }
-
-        GameObject root = go;
-        while (root.Parent.IsValid())
-            root = root.Parent;
-
-        if (!ReferenceEquals(root, go))
-            Debug.LogWarning($"[Scene] '{go.Name}' is not a root object, so its root '{root.Name}' is preserved instead.");
-
-        if (!_preserved.Any(p => ReferenceEquals(p, root)))
-            _preserved.Add(root);
-    }
-
-    /// <summary>
-    /// Stops preserving a GameObject. It stays in whatever scene it is in now, and goes with that
-    /// scene on the next load.
-    /// </summary>
-    public static void CancelDontDestroyOnLoad(GameObject go)
-    {
-        MainThreadContext.AssertMainThread();
-        _preserved.RemoveAll(p => ReferenceEquals(p, go));
-    }
-
-    /// <summary>
-    /// Destroys everything <see cref="DontDestroyOnLoad"/> is holding and empties the registry.
-    /// <para/>
-    /// Teardown is queued like any other <see cref="EngineObject.Destroy"/>, so it lands at the end of
-    /// the frame, which is before the scene swap and therefore before anything could be carried over.
-    /// Pass <paramref name="immediate"/> when no further frame will run, since nothing would be left
-    /// to drain the queue.
-    /// </summary>
-    internal static void DestroyPreserved(bool immediate = false)
-    {
-        foreach (GameObject go in _preserved)
-        {
-            if (go.IsNotValid()) continue;
-
-            if (immediate)
-                go.Dispose();
-            else
-                go.Destroy();
-        }
-
-        _preserved.Clear();
-    }
-
-    /// <summary>Whether this GameObject (or the root it belongs to) survives scene loads.</summary>
-    public static bool IsPreserved(GameObject go)
-    {
-        if (go.IsNotValid()) return false;
-
-        GameObject root = go;
-        while (root.Parent.IsValid())
-            root = root.Parent;
-
-        return _preserved.Any(p => ReferenceEquals(p, root));
-    }
-
-    /// <summary>
-    /// Applies a queued <see cref="Load(Scene)"/>. Driven once per frame by the game loop, right after the
-    /// destroy queue. Nothing is mid-callback at that point, so the outgoing scene is disposed
-    /// outright rather than queued for another frame.
-    /// </summary>
-    public static void ProcessPendingLoad()
-    {
-        if (_pendingLoad is { IsReady: true } ready)
-        {
-            _pendingLoad = null;
-            _pendingScene = ready.Activate();
-        }
-        if (ReferenceEquals(_pendingScene, null)) return;
-
-        Scene next = _pendingScene;
-        _pendingScene = null;
-
-        bool endSession = EndSessionOnSwap;
-        EndSessionOnSwap = false;
-
-        if (next.IsDisposed)
-        {
-            Debug.LogWarning("[Scene] The scene queued for loading was disposed before the frame ended, so it was skipped.");
-            if (endSession) MainThreadContext.Restart();
-            return;
-        }
-
-        // Loading the scene that is already current would dispose it and then enable the corpse.
-        if (ReferenceEquals(next, _current))
-        {
-            if (endSession) MainThreadContext.Restart();
-            return;
-        }
-
-        // Preserved objects leave before the outgoing scene is disposed, and join the incoming one
-        // after it is enabled, so they are never registered with a scene that is being torn down.
-        _preserved.RemoveAll(p => p.IsNotValid());
-        foreach (GameObject go in _preserved)
-            if (ReferenceEquals(go.Scene, _current))
-                _current!.Detach(go);
-
-        // A failure in either step below is reported and the swap carries on, so the incoming scene always
-        // becomes current and the session always ends when it was asked to, rather than leaving both half done.
-
-        // Everything the incoming scene uses is loaded before any of it enables, so OnEnable never sees an asset still loading.
-        try { AssetDatabase.LoadEverythingReached(); }
-        catch (Exception e) { Debug.LogException($"[Scene] Loading what '{next.Name}' uses threw", e); }
-
-        if (!ReferenceEquals(_current, null) && !_current.IsDisposed)
-        {
-            Scene outgoing = _current;
-            try
-            {
-                if (outgoing.IsActive)
-                    outgoing.Disable();
-                outgoing.Dispose();
-            }
-            catch (Exception e) { Debug.LogException($"[Scene] Tearing down '{outgoing.Name}' threw", e); }
-        }
-
-        // Between the two scenes, so the outgoing one's teardown belongs to its own session and the incoming
-        // one starts in a fresh one.
-        if (endSession) MainThreadContext.Restart();
-
-        _current = next;
-        _current.Enable();
-
-        foreach (GameObject go in _preserved)
-            _current.Attach(go);
-
-        // Assets only the outgoing scene used are unreached from here, and go once the grace period is over.
-        AssetDatabase.Walk();
-
-        OnSceneLoaded?.Invoke();
-    }
-
-    /// <summary>
-    /// Disposes the current scene, so everything in it runs its teardown callbacks. Driven by the
-    /// game loop on the way out. Reading <see cref="Current"/> afterwards creates a fresh empty scene.
-    /// </summary>
-    internal static void Shutdown()
-    {
-        _pendingScene = null;
-        _pendingLoad?.Cancel();
-        _pendingLoad = null;
-
-        DestroyPreserved(immediate: true);
-
-        if (ReferenceEquals(_current, null) || _current.IsDisposed)
-        {
-            _current = null;
-            return;
-        }
-
-        if (_current.IsActive)
-            _current.Disable();
-        _current.Dispose();
-        _current = null;
-    }
-
-    #endregion
-
-    // Staging for a save or load only. The live objects are in _allObj.
-    [SerializeField, NotHeld]
-    private GameObject[] serializeObj = null;
-
-    [SerializeIgnore]
-    private List<GameObject> _allObj = [];
-    [SerializeIgnore]
-    private HashSet<GameObject> _allObjSet = new(ReferenceEqualityComparer.Instance);
-
-    // Set when one of this scene's GameObjects is disposed, so Flush only scans when there is something to drop.
-    [SerializeIgnore]
-    private bool _hasDisposedObjects;
-
-    internal void MarkObjectDisposed() => _hasDisposedObjects = true;
-
-    // The worlds below only index the scene's own components, which the walk reaches through _allObj.
-    [NotHeld]
-    private PhysicsWorld _physics = new();
-
-    public PhysicsWorld Physics { get { EnsureNotDisposed(); return _physics; } }
-
-    [SerializeIgnore, NotHeld]
-    private readonly NavMeshWorld _navigation = new();
-    [NotHeld]
-    private readonly SceneAnimation _animation = new();
-
-    /// <summary>This scene's navigation state (registered navmeshes, queries, crowd).</summary>
-    public NavMeshWorld Navigation { get { EnsureNotDisposed(); return _navigation; } }
-
-    /// <summary>Every animator in the scene, advanced once per frame in its own phase.</summary>
-    public SceneAnimation Animation { get { EnsureNotDisposed(); return _animation; } }
-
-    // Rebuilds lazily, so it can still list removed components.
-    [SerializeIgnore, NotHeld]
-    private readonly SceneDispatcher _dispatcher = new();
-
-    /// <summary>The scene's dispatch point for per-frame component callbacks and physics events.</summary>
-    internal SceneDispatcher Dispatcher => _dispatcher;
-
-    /// <summary>The enabled canvases in this scene, each added by its own OnEnable and removed by its OnDisable.</summary>
-    [SerializeIgnore, NotHeld]
-    internal readonly List<GameCanvas> Canvases = [];
-
-    /// <summary>The enabled volumetric clouds in this scene. The first one is drawn.</summary>
-    [SerializeIgnore, NotHeld]
-    internal readonly List<VolumetricClouds> Clouds = [];
-
-    [SerializeIgnore, NotHeld]
-    private SceneRendering? _rendering;
-
-    /// <summary>The scene's link to Graphite: its render world and what keeps state in it.</summary>
-    public SceneRendering Rendering { get { EnsureNotDisposed(); return _rendering ??= new SceneRendering(this); } }
-
-    /// <summary>
-    /// Called once after a hot reload has migrated the scene graph in place: each GameObject drops removed
-    /// components and rebuilds its lookup, then the dispatcher re-derives membership and ordering from the new
-    /// types. Ordered that way deliberately, since the dispatcher must not re-register a component that is
-    /// about to be dropped.
-    /// </summary>
-    internal void OnHotReload()
-    {
-        SceneEvents.Reset();
-        foreach (GameObject go in _allObj)
-            if (!ReferenceEquals(go, null) && !go.IsDisposed)
-                go.OnHotReload();
-
-        // Re-registering from the live scene rather than from what was registered before is what lets a
-        // component whose new type gained its first per-frame callback start dispatching at all.
-        _dispatcher.Reset();
-        Canvases.Clear();
-        Clouds.Clear();
-
-        foreach (GameObject go in _allObj)
-        {
-            if (ReferenceEquals(go, null) || go.IsDisposed) continue;
-
-            foreach (Component comp in go._components)
-            {
-                if (ReferenceEquals(comp, null) || comp.IsDisposed || !comp.EnabledInHierarchy) continue;
-                comp._countedCollisionListener = false;
-                _dispatcher.Register(comp);
-                if (comp is GameCanvas canvas) canvas.RegisterIn(this);
-                if (comp is VolumetricClouds clouds) clouds.JoinScene(this);
-            }
-        }
-    }
-
-    [SerializeIgnore]
-    private bool _isActive = false;
-
-    /// <summary>The scene's sky, ambient light and fog.</summary>
-    public SceneEnvironment Environment = new();
-
-    /// <summary>Where one renderer's surface sits in the baked atlas.</summary>
-    public struct LightmapPlacement
-    {
-        /// <summary>Which atlas page, indexing <see cref="BakedLightingData.Lightmaps"/>.</summary>
-        public int Index;
-        /// <summary>Scale and offset taking the renderer's UVs into that page.</summary>
-        public Float4 ScaleOffset;
-    }
-
-    /// <summary>Baked lightmaps + light-probe data for this scene, produced by the editor lightmap bake.</summary>
-    public sealed class BakedLightingData
-    {
-        /// <summary>Baked lightmap atlas pages (RGBM-encoded). A placement below selects one.</summary>
-        public List<Texture2D> Lightmaps = [];
-
-        /// <summary>What the decoded RGBM texels of every page are multiplied by to give irradiance over pi, in nits.</summary>
-        public float LightmapScale = 1f;
-
-        /// <summary>
-        /// Where each baked renderer landed in the atlas, keyed by the identifier of the object it is on.
-        /// Here rather than on the renderer because it belongs to this scene's bake and to nothing else,
-        /// which is also what stops a prefab instance reading as modified the moment it is baked.
-        /// </summary>
-        public Dictionary<Guid, LightmapPlacement> Placements = [];
-        /// <summary>World-space light-probe positions.</summary>
-        public Float3[] ProbePositions = [];
-        /// <summary>Baked SH per probe, indexed with <see cref="ProbePositions"/>.</summary>
-        public SphericalHarmonicsL2[] ProbeSH = [];
-        /// <summary>Tetrahedralization of the probes: 4 probe indices per tetrahedron.</summary>
-        public int[] ProbeTetrahedra = [];
-        /// <summary>Per-tetra neighbour links: 4 per tetra (across the face opposite vertex i), -1 = hull.</summary>
-        public int[] ProbeTetNeighbours = [];
-
-        public bool HasLightmaps => Lightmaps.Count > 0;
-        public bool HasProbes => ProbeSH.Length > 0;
-
-        /// <summary>Where this object's surface was baked, or nothing if it was not.</summary>
-        public LightmapPlacement? PlacementFor(Guid objectIdentifier)
-            => Placements.TryGetValue(objectIdentifier, out LightmapPlacement placement) ? placement : null;
-
-        /// <summary>Drop every baked lightmap page and placement, leaving the probes alone.</summary>
-        public void ClearLightmaps()
-        {
-            Lightmaps.Clear();
-            Placements.Clear();
-        }
-    }
-
-    public BakedLightingData BakedLighting = new();
-
-    /// <summary>
-    /// Per-scene lightmapper configuration, edited in the editor's Environment panel and consumed by
-    /// the bake. Persisted with the scene (it's a public field) so a bake's settings survive editor
-    /// reloads.
-    /// </summary>
-    public sealed class LightmapBakeSettings
-    {
-        // Atlas / resolution
-        public int AtlasSize = 1024;
-        public float TexelsPerUnit = 20f;
-        public int DilatePixels = 2;          // edge dilation to stop bilinear bleed at seams
-
-        // Quality
-        public int Bounces = 2;
-        public int Samples = 64;              // progressive indirect iterations before finalize
-        public int ProbeSamples = 256;
-        public bool DoBackfaceCull = false;   // cull back faces on all bake rays (matches Prowl's backface-culled rendering)
-
-        // Trace one texel per NxN atlas cell and interpolate the rest. 1 traces everything; higher
-        // values converge far faster and cost fine indirect detail. Contacts and corners always trace.
-        public int SparseStride = 1;
-
-        // Feed the scene's ambient colour in as ray-miss (sky) radiance.
-        public bool BakeSkyLighting = false;
-
-        // Debug: bake every surface as a white Lambertian (isolates light/GI from albedo).
-        public bool IgnoreAlbedo = false;
-    }
-
-    public LightmapBakeSettings LightmapBake = new();
-
-    [SerializeField, NotHeld]
-    [NonSerialized] private LightProbeVolume? _probeVolume;
-
-    /// <summary>Runtime probe sampler built from <see cref="BakedLighting"/> (lazy). Null when there are no baked probes.</summary>
-    public LightProbeVolume? ProbeVolume
-    {
-        get
-        {
-            EnsureNotDisposed();
-            if (_probeVolume == null && BakedLighting.HasProbes)
-                _probeVolume = new LightProbeVolume(BakedLighting.ProbePositions, BakedLighting.ProbeSH,
-                                                    BakedLighting.ProbeTetrahedra, BakedLighting.ProbeTetNeighbours);
-            return _probeVolume;
-        }
-    }
-
-    /// <summary>Drop the cached probe volume so the next access rebuilds it (call after a rebake).</summary>
-    public void InvalidateProbeVolume() { EnsureNotDisposed(); _probeVolume = null; BakedLightingVersion++; }
-
-    /// <summary>Moves whenever the baked lighting changes, so the render world takes the new probes.</summary>
-    [SerializeIgnore, NonSerialized]
-    internal int BakedLightingVersion;
-
-    /// <summary> The number of registered, non-disposed objects. </summary>
-    public int Count { get { EnsureNotDisposed(); return _allObj.Count(o => !o.IsDisposed); } }
-
-    /// <summary> Enumerates all registered objects. </summary>
-    public IEnumerable<GameObject> AllObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed); } }
-
-    /// <summary> Enumerates all registered objects that are currently active and saveable. </summary>
-    public IEnumerable<GameObject> SaveableObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && IsSaveable(o)); } }
-
-    /// <summary>
-    /// False for an object marked <see cref="HideFlags.DontSave"/> or <see cref="HideFlags.HideAndDontSave"/>,
-    /// and for anything under one: a child written out without its parent would load back as a stray root.
-    /// While writing a network snapshot, also false for anything <see cref="NetworkMode.Never"/>.
-    /// </summary>
-    private static bool IsSaveable(GameObject obj)
-    {
-        for (GameObject? go = obj; go.IsValid(); go = go.Parent)
-            if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0
-                || !NetworkSerialization.Include(go))
-                return false;
-        return true;
-    }
-
-    /// <summary> Enumerates all registered objects that are currently active. </summary>
-    public IEnumerable<GameObject> ActiveObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && o.EnabledInHierarchy); } }
-
-    /// <summary> Enumerates all root GameObjects, i.e. all GameObjects without a parent object. </summary>
-    public IEnumerable<GameObject> RootObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && o.Transform.Parent == null); } }
-
-    /// <summary> Enumerates all <see cref="RootObjects"/> that are currently active. </summary>
-    public IEnumerable<GameObject> ActiveRootObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && o.Transform.Parent == null && o.EnabledInHierarchy); } }
-
-    /// <summary> Returns whether this Scene is completely empty. </summary>
-    public bool IsEmpty { get { EnsureNotDisposed(); return !AllObjects.Any(); } }
-
-    /// <summary> Returns whether this scene is currently active. </summary>
-    public bool IsActive { get { EnsureNotDisposed(); return _isActive; } }
-
-    /// <summary>
-    /// Creates a new, empty scene which does not contain any <see cref="GameObject">GameObjects</see>.
-    /// </summary>
-    public Scene()
-    {
-        lock (s_live) s_live.Add(new WeakReference<Scene>(this));
-    }
-
-    /// <summary>
-    /// Enables this scene, triggering OnEnable callbacks for its components.
-    /// For most use cases, prefer using Scene.Load() instead of calling Enable() directly.
-    /// </summary>
-    public void Enable()
-    {
-        EnsureNotDisposed();
-        MainThreadContext.AssertMainThread();
-        using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
-        if (_isActive) return; // already enabled, nothing to deliver
-
-        _isActive = true;
-
-        // Create a copy to avoid collection modification during enumeration
-        List<GameObject> allObjectsCopy = [.. AllObjects];
-
-        // Trigger OnEnable for all enabled components in the scene
-        foreach (GameObject go in allObjectsCopy)
-        {
-            if (go.IsDisposed) continue;
-
-            if (go.EnabledInHierarchy)
-            {
-                IEnumerable<Component> components = go.GetComponents<Component>();
-                foreach (Component component in components)
-                {
-                    if (component.IsDisposed) continue;
-                    if (component.Enabled && component.EnabledInHierarchy)
-                        component.InternalOnEnable();
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Disables this scene, triggering OnDisable callbacks for its components.
-    /// For most use cases, prefer using Scene.Unload() or Scene.Load() instead of calling Disable() directly.
-    /// </summary>
-    public void Disable()
-    {
-        EnsureNotDisposed();
-        MainThreadContext.AssertOwner(this);
-        using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
-        if (!_isActive) return; // already disabled, nothing to deliver
-
-        // Create a copy to avoid collection modification during enumeration
-        List<GameObject> allObjectsCopy = [.. AllObjects];
-
-        // Trigger OnDisable for all enabled components in the scene
-        foreach (GameObject go in allObjectsCopy)
-        {
-            if (go.IsDisposed) continue;
-
-            if (go.EnabledInHierarchy)
-            {
-                IEnumerable<Component> components = go.GetComponents<Component>();
-                foreach (Component component in components)
-                {
-                    if (component.IsDisposed) continue;
-                    if (component.Enabled && component.EnabledInHierarchy)
-                        component.InternalOnDisable();
-                }
-            }
-        }
-
-        _isActive = false;
-    }
-
-
-    /// <summary>
-    /// Registers a GameObject and all of its children.
-    /// </summary>
-    public void Add(GameObject obj)
-    {
-        EnsureNotDisposed();
-        MainThreadContext.AssertOwner(this);
-        MainThreadContext.AssertOwner(obj);
-        if (obj.Scene.IsValid() && obj.Scene != this) obj.Scene.Remove(obj);
-        AddObject(obj);
-    }
-
-    /// <summary>
-    /// Move a root-level GameObject to a specific index within the root object list.
-    /// Only works for root objects (no parent). Index is clamped to valid range.
-    /// </summary>
-    public void SetRootIndex(GameObject obj, int index)
-    {
-        EnsureNotDisposed();
-        MainThreadContext.AssertOwner(this);
-        if (obj.Scene != this || obj.Parent.IsValid()) return;
-        int current = _allObj.IndexOf(obj);
-        if (current < 0) return;
-        _allObj.RemoveAt(current);
-        // Collect root indices to map root-order index to list index
-        var rootIndices = new List<int>();
-        for (int i = 0; i < _allObj.Count; i++)
-            if (!_allObj[i].IsDisposed && _allObj[i].Transform.Parent == null)
-                rootIndices.Add(i);
-        index = Math.Max(0, Math.Min(index, rootIndices.Count));
-        int insertAt = index < rootIndices.Count ? rootIndices[index] : _allObj.Count;
-        _allObj.Insert(insertAt, obj);
-    }
-
-    /// <summary>
-    /// Get the index of a root-level GameObject among other root objects.
-    /// Returns -1 if not a root or not in this scene.
-    /// </summary>
-    public int GetRootIndex(GameObject obj)
-    {
-        EnsureNotDisposed();
-        if (obj.Scene != this || obj.Parent.IsValid()) return -1;
-        int rootIdx = 0;
-        foreach (GameObject go in _allObj)
-        {
-            if (go.IsDisposed || go.Transform.Parent != null) continue;
-            if (go == obj) return rootIdx;
-            rootIdx++;
-        }
-        return -1;
-    }
-
-    /// <summary>
-    /// Unregisters a GameObject and all of its children.
-    /// </summary>
-    /// <remarks>
-    /// Asking to remove something this scene does not hold is reported rather than ignored. It leaves the
-    /// object ticking in whichever scene does hold it, which reads as the engine having ignored the call.
-    /// </remarks>
-    public void Remove(GameObject obj)
-    {
-        EnsureNotDisposed();
-        MainThreadContext.AssertOwner(this);
-
-        if (object.ReferenceEquals(obj, null))
-        {
-            Debug.LogWarning("[Scene] Remove(null) does nothing.");
-            return;
-        }
-
-        if (obj.IsNotValid())
-        {
-            Debug.LogWarning("[Scene] Cannot remove a Disposed or Null GameObject.");
-            return;
-        }
-
-        if (obj.Scene != this)
-        {
-            Debug.LogWarning(obj.Scene.IsValid()
-                ? $"[Scene] '{obj.Name}' belongs to another scene, so this one cannot remove it."
-                : $"[Scene] '{obj.Name}' is not in any scene, so there is nothing to remove.");
-            return;
-        }
-
-        if (obj.Parent.IsValid() && obj.Parent.Scene == this)
-        {
-            obj.SetParent(null);
-        }
-        RemoveObject(obj);
-    }
-
-    /// <summary>
-    /// Hands a GameObject tree over to another scene without running any lifecycle callback. Only the
-    /// registration moves: the scene's object list and, for each enabled component, the per-frame
-    /// dispatch slot. Used by <see cref="DontDestroyOnLoad"/>, where the object is not entering or
-    /// leaving the world, just changing which scene holds it.
-    /// </summary>
-    internal void Detach(GameObject obj)
-    {
-        SceneEvents.Invalidate();
-        foreach (GameObject child in obj.Children.ToArray())
-            Detach(child);
-
-        if (!_allObjSet.Remove(obj)) return;
-
-        _allObj.Remove(obj);
-
-        foreach (Component component in obj._components)
-        {
-            if (component.IsDisposed) continue;
-            _dispatcher.Unregister(component);
-            component.LeaveScene(this);
-        }
-
-        obj.Scene = null;
-    }
-
-    /// <inheritdoc cref="Detach"/>
-    internal void Attach(GameObject obj)
-    {
-        SceneEvents.Invalidate();
-        if (_allObjSet.Add(obj))
-        {
-            _allObj.Add(obj);
-            obj.Scene = this;
-
-            if (IsActive && obj.EnabledInHierarchy)
-                foreach (Component component in obj._components)
-                {
-                    if (component.IsDisposed || !component.Enabled || !component.EnabledInHierarchy) continue;
-                    _dispatcher.Register(component);
-                    component.JoinScene(this);
-                }
-        }
-
-        foreach (GameObject child in obj.Children.ToArray())
-            Attach(child);
-    }
-
-    private void AddObject(GameObject obj)
-    {
-        SceneEvents.Invalidate();
-        if (_allObjSet.Add(obj))
-        {
-            _allObj.Add(obj);
-            obj.Scene = this;
-
-            IEnumerable<Component> components = obj.GetComponents<Component>();
-
-            // Call OnAddedToScene for all components
-            foreach (Component component in components)
-            {
-                if (component.IsDisposed) continue;
-                try { component.OnAddedToScene(); }
-                catch (Exception ex) { Debug.LogException($"[{obj.Name}/{component.GetType().Name}] OnAddedToScene() threw", ex); }
-            }
-
-            // Call OnEnable for enabled components, but only if the scene is active
-            if (IsActive && obj.EnabledInHierarchy)
-            {
-                foreach (Component component in components)
-                {
-                    if (component.IsDisposed) continue;
-                    if (component.Enabled && component.EnabledInHierarchy)
-                        component.InternalOnEnable();
-                }
-            }
-        }
-
-        // Create a copy to avoid modification during enumeration
-        List<GameObject> children = [.. obj.Children];
-        foreach (GameObject child in children)
-            AddObject(child);
-    }
-
-    private void RemoveObject(GameObject obj)
-    {
-        SceneEvents.Invalidate();
-        // Create a copy to avoid modification during enumeration
-        List<GameObject> children = [.. obj.Children];
-        foreach (GameObject child in children)
-            RemoveObject(child);
-
-        if (_allObjSet.Remove(obj))
-        {
-            _allObj.Remove(obj);
-            IEnumerable<Component> components = obj.GetComponents<Component>();
-
-            // Call OnDisable for currently enabled components (only if scene is active)
-            if (IsActive && obj.EnabledInHierarchy)
-            {
-                foreach (Component component in components)
-                {
-                    if (component.IsDisposed) continue;
-                    if (component.Enabled && component.EnabledInHierarchy)
-                        component.InternalOnDisable();
-                }
-            }
-
-            // Call OnRemovedFromScene for all components
-            foreach (Component component in components)
-            {
-                if (component.IsDisposed) continue;
-                try { component.OnRemovedFromScene(); }
-                catch (Exception ex) { Debug.LogException($"[{component.Name}/{component.GetType().Name}] OnRemovedFromScene() threw", ex); }
-            }
-
-            obj.Scene = null;
-        }
-    }
-
-    public T?[] FindObjectsOfType<T>() where T : EngineObject
-    {
-        EnsureNotDisposed();
-        List<T> objects = [];
-        foreach (GameObject go in AllObjects)
-        {
-            if (go is T t)
-                objects.Add(t);
-
-            foreach (Component comp in go.GetComponents<Component>())
-                if (comp is T t2)
-                    objects.Add(t2);
-        }
-        return [.. objects];
-    }
-
-    public T? FindObjectByID<T>(int id) where T : EngineObject
-    {
-        EnsureNotDisposed();
-        foreach (GameObject go in AllObjects)
-        {
-            if (go.InstanceID == id)
-                return go as T;
-            foreach (Component comp in go.GetComponents<Component>())
-                if (comp.InstanceID == id)
-                    return comp as T;
-        }
-        return null;
-    }
-
-    public T? FindObjectByIdentifier<T>(Guid identifier) where T : EngineObject
-    {
-        EnsureNotDisposed();
-        foreach (GameObject go in AllObjects)
-        {
-            if (go.Identifier == identifier)
-                return go as T;
-            foreach (Component comp in go.GetComponents<Component>())
-                if (comp.Identifier == identifier)
-                    return comp as T;
-        }
-        return null;
-    }
-
-    /// <summary> Unregisters all GameObjects. </summary>
-    public void Clear()
-    {
-        EnsureNotDisposed();
-        // Create a copy to iterate over since RemoveObject modifies the collection
-        List<GameObject> rootObjects = [.. RootObjects];
-        foreach (GameObject obj in rootObjects)
-        {
-            Remove(obj);
-        }
-    }
-
-    /// <summary> Unregisters all dead / disposed GameObjects </summary>
-    public void Flush()
-    {
-        if (IsDisposed || !_hasDisposedObjects) return;
-        _hasDisposedObjects = false;
-        List<GameObject> removed = [];
-        foreach (GameObject obj in _allObj)
-        {
-            if (obj.IsDisposed)
-                removed.Add(obj);
-        }
-
-        _allObj.RemoveAll(obj => obj.IsDisposed);
-        _allObjSet.RemoveWhere(obj => obj.IsDisposed);
-
-        foreach (GameObject obj in removed)
-            obj.Scene = null;
-    }
-
-    private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(this, nameof(Dispose));
-
-    protected override void OnDispose()
-    {
-        base.OnDispose();
-
-        // Drop the current-scene reference without going through the property, which would build a
-        // replacement scene in the middle of this one's teardown.
-        if (ReferenceEquals(_current, this))
-            _current = null;
-
-        lock (s_live) s_live.RemoveAll(entry => !entry.TryGetTarget(out Scene? scene) || ReferenceEquals(scene, this));
-
-
-        // Clear the physics world
-        _physics.Clear();
-
-        // Clear the navigation world (waits out in-flight queries)
-        _navigation.Clear();
-        _animation.Clear();
-
-        // Dispose all GameObjects which will also remove them from the scene. Dispose() (not the raw
-        // OnDispose() body) sets IsDisposed and is idempotent, so the flat list's double-hits on
-        // already-disposed children are no-ops.
-        List<GameObject> allObjects = [.. _allObj.Where(o => !o.IsDisposed)];
-        foreach (GameObject g in allObjects)
-            g.Dispose();
-
-        // Clear any remaining references
-        _allObj.Clear();
-        _allObjSet.Clear();
-
-        _rendering?.Dispose();
-        _rendering = null;
-
-        // Remove all identifiers and reference to any possible gameobject that could hold a
-        // user-defined script as it might leave the ALC alive
-        serializeObj = null;
-    }
-
-    public void OnBeforeSerialize()
-    {
-        serializeObj = [.. SaveableObjects];
-    }
-
-    public void OnAfterDeserialize()
-    {
-        if (serializeObj == null) return;
-
-        // GameObjects and components got fresh identifiers while loading, a scene keeps the stored ones.
-        foreach (GameObject obj in serializeObj)
-        {
-            // A GameObject that failed to deserialize leaves a null slot; skip it rather than lose the rest.
-            if (ReferenceEquals(obj, null)) continue;
-            if (obj.LoadedIdentifier != Guid.Empty)
-                obj.SetIdentifier(obj.LoadedIdentifier);
-
-            foreach (Component comp in obj.GetComponents<Component>())
-                if (comp._loadedIdentifier != Guid.Empty)
-                    comp.Identifier = comp._loadedIdentifier;
-        }
-
-        foreach (GameObject obj in serializeObj)
-            if (!ReferenceEquals(obj, null)) Add(obj);
-        serializeObj = null;
-    }
-
-    /// <summary>
-    /// Runs Start, then Update, then LateUpdate for the scene's registered components (those that
-    /// implement those callbacks and are enabled in an active scene), in execution order. Each call
-    /// is still gated per-component by ShouldExecuteGameplay.
-    /// </summary>
-    public void Update()
-    {
-        if (IsDisposed) return;
-        using FrameStatScope stats = FrameStats.Update.Scope();
-        using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
-
-        // Paused play mode freezes every component, [ExecuteAlways] included, until a step or resume.
-        bool ticking = !Application.IsPlaying || Application.ShouldRunGameplay;
-        if (ticking) _dispatcher.RunStart();
-
-        // Navigation (crowd steering) advances on the variable update, before component Updates
-        // so gameplay code sees fresh agent state. A crowd that blows up must not crash the frame,
-        // and does so every frame, so it is reported once.
-        using (FrameStats.Navigation.Scope())
-        {
-            try { _navigation.Update(Time.DeltaTime); }
-            catch (Exception ex) { Debug.LogErrorOnce("Navigation.UpdateThrew", $"[Navigation] Update threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
-        }
-
-        // Rigidbodies that moved get their Transform written before gameplay code reads it.
-        Physics.WriteTransforms();
-
-        if (ticking) _dispatcher.RunUpdate();
-
-        // Animation sits between the two so gameplay code reaching in to override a bone in
-        // LateUpdate finds the pose already written. An animator that blows up must not take the
-        // frame with it, and the manager reports each one rather than rethrowing.
-        using (FrameStats.Animation.Scope())
-            _animation.Update(Time.DeltaTime);
-
-        if (ticking) _dispatcher.RunLateUpdate();
-
-        Flush();
-    }
-
-    /// <summary>
-    /// Executes physics update on all active GameObjects and their components.
-    /// FixedUpdate is gated internally by each component's ShouldExecuteGameplay.
-    /// </summary>
-    public void FixedUpdate()
-    {
-        if (IsDisposed) return;
-        using FrameStatScope stats = FrameStats.Update.Scope();
-        using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
-        // Start must run before a component's first FixedUpdate. The loop runs FixedUpdate before
-        // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
-        _dispatcher.RunStart();
-
-        _dispatcher.RunFixedUpdate();
-
-        Physics.TrackCollisions(_dispatcher.CollisionListeners > 0);
-        // A solver blow up (NaN or Inf transforms, degenerate collider) must not crash the frame.
-        using (FrameStats.Physics.Scope())
-        {
-            try { Physics.Update(); }
-            // A solver that blows up does so every frame, so report it once rather than per frame.
-            catch (Exception ex) { Debug.LogErrorOnce("Physics.StepThrew", $"[Physics] Step threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
-        }
-
-        Flush();
-    }
-
-    /// <summary>
-    /// Collects render data from all active components for the given camera.
-    /// Components add their renderables and lights to the provided lists.
-    /// </summary>
-    public void DrawGizmos()
-    {
-        if (IsDisposed) return;
-        using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
-        _dispatcher.RunDrawGizmos();
-
-        Flush();
-    }
-
-    /// <summary>
-    /// Executes GUI update on all active GameObjects and their components.
-    /// Calls OnGUI.
-    /// </summary>
-    public void OnGui(Paper paper)
-    {
-        if (IsDisposed) return;
-        using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
-        _dispatcher.RunOnGui(paper);
-
-        Flush();
-    }
-
-    /// <summary>
-    /// Collects every Camera on an enabled-in-hierarchy GameObject, sorted by Camera.Depth.
-    /// </summary>
-    /// <remarks>
-    /// Cameras on <see cref="HideFlags.HideAndDontSave"/> objects are skipped. Those are editor helpers
-    /// (scene view, previews) that render themselves into their own targets; letting them into the
-    /// game's camera list draws the scene again, and uses shadow atlas space, for nothing.
-    /// </remarks>
-    internal List<Camera> GatherActiveCameras()
-    {
-        var cameras = new List<Camera>();
-
-        for (int i = 0; i < _allObj.Count; i++)
-        {
-            GameObject go = _allObj[i];
-            if (go.IsDisposed || !go.EnabledInHierarchy) continue;
-            if ((go.HideFlags & HideFlags.HideAndDontSave) != 0) continue; // not HasFlag: it boxes in unoptimized builds
-
-            foreach (Component component in go._components)
-            {
-                if (component is Camera camera && camera.EnabledInHierarchy)
-                {
-                    cameras.Add(camera);
-                }
-            }
-        }
-
-        cameras.Sort(static (a, b) => a.Depth.CompareTo(b.Depth));
-        return cameras;
-    }
-
-    /// <summary>The enabled camera drawing to the screen with the highest depth, or null. Same filter as <see cref="GatherActiveCameras"/>.</summary>
-    internal Camera? FindMainCamera()
-    {
-        Camera? main = null;
-        for (int i = 0; i < _allObj.Count; i++)
-        {
-            GameObject go = _allObj[i];
-            if (go.IsDisposed || !go.EnabledInHierarchy) continue;
-            if ((go.HideFlags & HideFlags.HideAndDontSave) != 0) continue;
-
-            foreach (Component component in go._components)
-            {
-                if (component is Camera camera && camera.EnabledInHierarchy && camera.Target.IsNotValid() && camera.Background != CameraBackground.None
-                    && (main.IsNotValid() || camera.Depth > main.Depth))
-                    main = camera;
-            }
-        }
-        return main;
-    }
-
-    /// <summary>
-    /// Adds a view to this frame for every active camera of the scene, lowest depth first. Cameras without a target of
-    /// their own draw into <paramref name="target"/>, or the window when it is null.
-    /// </summary>
-    /// <param name="target">Where cameras without a target of their own draw, null for the window.</param>
-    /// <param name="displayGizmos">Draw the gizmos and Debug.Draw shapes queued this frame on top</param>
-    /// <returns>True if any cameras were rendered, false otherwise</returns>
-    public bool Render(RenderTexture? target = null, bool displayGizmos = false)
-    {
-        if (IsDisposed) return false;
-
-        List<Camera> cameras = GatherActiveCameras();
-        if (cameras.Count == 0)
-            return false;
-
-        Rendering.Sync();
-        foreach (Camera cam in cameras)
-        {
-            try
-            {
-                cam.Render(new CameraRenderOptions { FallbackTarget = target, DisplayGizmos = displayGizmos });
-            }
-            catch (Exception ex)
-            {
-                Debug.LogException($"[Render] Camera '{(cam.GameObject.IsValid() ? cam.GameObject.Name : null)}' render threw and was skipped", ex);
-            }
-        }
-
-        return true;
-    }
-
-}
-
-/// <summary>
-/// A scene as stored in a .scene file. Holding one keeps only its stored data loaded, not what the scene uses:
-/// <see cref="Scene.Load(SceneAsset)"/> and <see cref="AssetDatabase.Preload"/> load that.
-/// </summary>
-public sealed class SceneAsset : Asset
+public sealed class Scene : Asset
 {
     [SerializeField] private EchoObject? _data;
 
-    /// <summary>The stored scene, a serialized <see cref="Scene"/>.</summary>
+    /// <summary>The stored scene, a serialized <see cref="SceneContent"/>.</summary>
     public EchoObject? Data
     {
         get { EnsureLoaded(); return _data; }
@@ -1195,51 +37,461 @@ public sealed class SceneAsset : Asset
         get { EnsureLoaded(); return StoredTree.ReferencedAssets(_data); }
     }
 
+    /// <summary>Replaces <paramref name="into"/>'s content with this scene, Main when none is given, at the next safe point.</summary>
+    public SceneLoad Load(SceneInstance? into = null, LoadOptions options = default)
+        => Queue(new SceneLoad(this, SceneLoadKind.Load, ReferenceEquals(into, null) ? SceneInstance.Main : into, SceneMode.Game, options));
+
+    /// <summary>Adds this scene as a section of <paramref name="into"/>, Main when none is given, at the next safe point.</summary>
+    public SceneLoad LoadAdditive(SceneInstance? into = null, LoadOptions options = default)
+        => Queue(new SceneLoad(this, SceneLoadKind.Additive, ReferenceEquals(into, null) ? SceneInstance.Main : into, SceneMode.Game, options));
+
+    /// <summary>Creates a new dormant world from this scene, with it as the active section. The caller activates it.</summary>
+    public SceneLoad Open(SceneMode mode = SceneMode.Game, LoadOptions options = default)
+        => Queue(new SceneLoad(this, SceneLoadKind.Open, null, mode, options));
+
+    private static SceneLoad Queue(SceneLoad load)
+    {
+        if (!load.IsFinished) SceneInstance.Queue(load);
+        return load;
+    }
+
+    /// <summary>
+    /// A detached copy of the stored scene, in no world, with its stored identifiers. Nothing in it gets
+    /// <c>OnAddedToScene</c>, <c>OnEnable</c> or any tick.
+    /// </summary>
+    public SceneContent ReadContent()
+    {
+        EchoObject? data = Data;
+        return data == null ? new SceneContent() : SceneContent.Read(data);
+    }
+
     // A stored scene is an Echo tree, which in memory takes several times what its file does.
     protected internal override long EstimateBytes() => Math.Max(256 * 1024, (AssetDatabase.Backend?.GetEstimatedSize(AssetID) ?? 0) * 4);
 }
 
-/// <summary>A stored scene loading in the background, made current at the end of the frame it finishes on.</summary>
+/// <summary>The stored payload of a <see cref="Scene"/>: its objects and settings, plain data in no world.</summary>
+public sealed class SceneContent : ISerializationCallbackReceiver
+{
+    /// <summary>
+    /// Every object, children included, so every stored identifier is restored. An array, since Echo reads one element
+    /// at a time and an object that fails to load leaves only its own slot empty.
+    /// </summary>
+    public GameObject[] Objects = [];
+    public SceneEnvironment Environment = new();
+    public SceneLighting Lighting = new();
+    public LightmapBakeSettings LightmapBake = new();
+
+    /// <summary>The objects with no parent, in stored order.</summary>
+    public IEnumerable<GameObject> Roots
+    {
+        get
+        {
+            foreach (GameObject obj in Objects)
+                if (obj.IsValid() && obj.Parent.IsNotValid())
+                    yield return obj;
+        }
+    }
+
+    /// <summary>Every object and component of this content by identifier, for resolving links in it.</summary>
+    public Dictionary<Guid, EngineObject> IdentifierMap()
+    {
+        var map = new Dictionary<Guid, EngineObject>();
+        foreach (GameObject obj in Objects)
+        {
+            if (obj.IsNotValid()) continue;
+            map.TryAdd(obj.Identifier, obj);
+            foreach (Component component in obj.GetComponents<Component>())
+                map.TryAdd(component.Identifier, component);
+        }
+        return map;
+    }
+
+    /// <summary>Reads a stored tree back with its stored identifiers.</summary>
+    public static SceneContent Read(EchoObject data, SerializationContext? context = null)
+        => GameObject.PreservingIdentifiersWhile(() => (context == null ? Serializer.Deserialize<SceneContent>(data) : Serializer.Deserialize<SceneContent>(data, context)) ?? new SceneContent());
+
+    /// <summary>Writes this content as a stored tree, as a .scene file holds it.</summary>
+    public EchoObject Write() => Serializer.Serialize(typeof(object), this);
+
+    /// <summary>Drops the objects destroyed since this content was read and adds the ones parented under it since.</summary>
+    internal void Resync()
+    {
+        var kept = new HashSet<GameObject>(ReferenceEqualityComparer.Instance);
+        var objects = new List<GameObject>(Objects.Length);
+        foreach (GameObject obj in Objects)
+            if (IsKept(obj) && kept.Add(obj))
+                objects.Add(obj);
+
+        foreach (GameObject root in objects.ToArray())
+            if (root.Parent.IsNotValid())
+                AddChildren(root);
+        Objects = [.. objects];
+
+        void AddChildren(GameObject parent)
+        {
+            foreach (GameObject child in parent.Children)
+            {
+                if (child.IsDestroyQueued) continue;
+                if (kept.Add(child)) objects.Add(child);
+                AddChildren(child);
+            }
+        }
+
+        static bool IsKept(GameObject obj)
+        {
+            for (GameObject? go = obj; go.IsValid(); go = go.Parent)
+                if (go.IsDestroyQueued) return false;
+            return obj.IsValid();
+        }
+    }
+
+    /// <summary>Disposes every object in this content.</summary>
+    internal void DisposeObjects()
+    {
+        foreach (GameObject root in Roots.ToArray())
+            root.Dispose();
+        Objects = [];
+    }
+
+    public void OnBeforeSerialize() { }
+
+    public void OnAfterDeserialize()
+    {
+        Objects = [.. Objects.Where(obj => !ReferenceEquals(obj, null))];
+        foreach (GameObject obj in Objects)
+        {
+            if (obj.LoadedIdentifier != Guid.Empty)
+                obj.SetIdentifier(obj.LoadedIdentifier);
+
+            foreach (Component comp in obj.GetComponents<Component>())
+                if (comp._loadedIdentifier != Guid.Empty)
+                    comp.Identifier = comp._loadedIdentifier;
+        }
+    }
+}
+
+/// <summary>Where one renderer's surface sits in the baked atlas.</summary>
+public struct LightmapPlacement
+{
+    /// <summary>Which atlas page, indexing <see cref="SceneLighting.Lightmaps"/>.</summary>
+    public int Index;
+    /// <summary>Scale and offset taking the renderer's UVs into that page.</summary>
+    public Float4 ScaleOffset;
+}
+
+/// <summary>Baked lightmaps + light-probe data for this scene, produced by the editor lightmap bake.</summary>
+public sealed class SceneLighting
+{
+    /// <summary>Baked lightmap atlas pages (RGBM-encoded). A placement below selects one.</summary>
+    public List<Texture2D> Lightmaps = [];
+
+    /// <summary>What the decoded RGBM texels of every page are multiplied by to give irradiance over pi, in nits.</summary>
+    public float LightmapScale = 1f;
+
+    /// <summary>
+    /// Where each baked renderer landed in the atlas, keyed by the identifier of the object it is on.
+    /// Here rather than on the renderer because it belongs to this scene's bake and to nothing else,
+    /// which is also what stops a prefab instance reading as modified the moment it is baked.
+    /// </summary>
+    public Dictionary<Guid, LightmapPlacement> Placements = [];
+    /// <summary>World-space light-probe positions.</summary>
+    public Float3[] ProbePositions = [];
+    /// <summary>Baked SH per probe, indexed with <see cref="ProbePositions"/>.</summary>
+    public SphericalHarmonicsL2[] ProbeSH = [];
+    /// <summary>Tetrahedralization of the probes: 4 probe indices per tetrahedron.</summary>
+    public int[] ProbeTetrahedra = [];
+    /// <summary>Per-tetra neighbour links: 4 per tetra (across the face opposite vertex i), -1 = hull.</summary>
+    public int[] ProbeTetNeighbours = [];
+
+    public bool HasLightmaps => Lightmaps.Count > 0;
+    public bool HasProbes => ProbeSH.Length > 0;
+
+    /// <summary>Where this object's surface was baked, or nothing if it was not.</summary>
+    public LightmapPlacement? PlacementFor(Guid objectIdentifier)
+        => Placements.TryGetValue(objectIdentifier, out LightmapPlacement placement) ? placement : null;
+
+    /// <summary>Drop every baked lightmap page and placement, leaving the probes alone.</summary>
+    public void ClearLightmaps()
+    {
+        Lightmaps.Clear();
+        Placements.Clear();
+        MarkChanged();
+    }
+
+    // Bumped when the pages or placements change, so renderers resolve their placement again.
+    internal int Version { get; private set; }
+
+    /// <summary>Tells renderers that already resolved a placement that the pages or placements changed, like after a rebake.</summary>
+    public void MarkChanged() => Version++;
+}
+
+/// <summary>
+/// Per-scene lightmapper configuration, edited in the editor's Environment panel and consumed by
+/// the bake. Persisted with the scene (it's a public field) so a bake's settings survive editor
+/// reloads.
+/// </summary>
+public sealed class LightmapBakeSettings
+{
+    // Atlas / resolution
+    public int AtlasSize = 1024;
+    public float TexelsPerUnit = 20f;
+    public int DilatePixels = 2;          // edge dilation to stop bilinear bleed at seams
+
+    // Quality
+    public int Bounces = 2;
+    public int Samples = 64;              // progressive indirect iterations before finalize
+    public int ProbeSamples = 256;
+    public bool DoBackfaceCull = false;   // cull back faces on all bake rays (matches Prowl's backface-culled rendering)
+
+    // Trace one texel per NxN atlas cell and interpolate the rest. 1 traces everything; higher
+    // values converge far faster and cost fine indirect detail. Contacts and corners always trace.
+    public int SparseStride = 1;
+
+    // Feed the scene's ambient colour in as ray-miss (sky) radiance.
+    public bool BakeSkyLighting = false;
+
+    // Debug: bake every surface as a white Lambertian (isolates light/GI from albedo).
+    public bool IgnoreAlbedo = false;
+}
+
+/// <summary>Where a <see cref="SceneLoad"/> is.</summary>
+public enum SceneLoadPhase
+{
+    /// <summary>The assets the level uses load in the background.</summary>
+    Preloading,
+    /// <summary>The stored content becomes detached objects.</summary>
+    Instantiating,
+    /// <summary>Ready, held back by <see cref="SceneLoad.AllowActivation"/>.</summary>
+    WaitingForActivation,
+    /// <summary>Queued for the next safe point.</summary>
+    Activating,
+    Done,
+    Failed,
+    Cancelled,
+}
+
+internal enum SceneLoadKind { Load, Additive, Open }
+
+/// <summary>How a scene loads.</summary>
+public struct LoadOptions
+{
+    /// <summary>Start with <see cref="SceneLoad.AllowActivation"/> false, for a "press any key" screen.</summary>
+    public bool HoldActivation;
+    /// <summary>After activation, free everything nothing reaches at once, without the grace period.</summary>
+    public bool UnloadUnusedAssets;
+}
+
+/// <summary>A section that finished activating, and whether it was loaded additively.</summary>
+public readonly record struct SceneLoadedArgs(SceneSection Section, bool Additive);
+
+/// <summary>A scene load that failed: the asset was missing or unreadable, or instantiating it threw.</summary>
+public sealed class SceneLoadException(string message, Exception? inner = null) : Exception(message, inner);
+
+/// <summary>
+/// A scene loading. It completes exactly once: done, failed or cancelled. Awaiting it gives the loaded section, throws a
+/// <see cref="SceneLoadException"/> when it failed, and an <see cref="OperationCanceledException"/> when it was cancelled.
+/// </summary>
 public sealed class SceneLoad
 {
-    private readonly SceneAsset _asset;
-    private readonly AssetGroup _group;
-    private readonly TaskCompletionSource<Scene?> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private bool _allowed = true;
+    private readonly TaskCompletionSource<SceneSection> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly CancellationTokenSource _cancel = new();
+    private AssetGroup? _group;
+    private SceneContent? _content;
 
-    internal SceneLoad(SceneAsset asset)
+    internal SceneLoad(Scene scene, SceneLoadKind kind, SceneInstance? target, SceneMode openMode, LoadOptions options)
     {
-        _asset = asset;
-        _group = AssetDatabase.Preload(asset);
+        Scene = scene;
+        Kind = kind;
+        Target = target;
+        OpenMode = openMode;
+        Options = options;
+        AllowActivation = !options.HoldActivation;
+        try { _group = AssetDatabase.Preload(scene); }
+        catch (Exception e) { Fail(e); }
     }
 
-    public float Progress => _group.Progress;
-    public bool IsDone => _completion.Task.IsCompleted;
-    public Scene? Scene { get; private set; }
-    public System.Runtime.CompilerServices.TaskAwaiter<Scene?> GetAwaiter() => _completion.Task.GetAwaiter();
+    public Scene Scene { get; }
+    internal SceneLoadKind Kind { get; }
+    internal SceneInstance? Target { get; }
+    internal SceneMode OpenMode { get; }
+    internal LoadOptions Options { get; }
 
-    /// <summary>Keeps a finished load waiting until <see cref="Allow"/>, for a "press any key" screen.</summary>
-    public bool WaitForActivation
+    public SceneLoadPhase Phase { get; private set; }
+
+    /// <summary>How far the load is, 0 to 1. Preloading counts for most of it.</summary>
+    public float Progress => Phase switch
     {
-        get => !_allowed;
-        set => _allowed = !value;
+        SceneLoadPhase.Preloading => (_group?.Progress ?? 0f) * 0.9f,
+        SceneLoadPhase.Instantiating => 0.9f,
+        _ => 1f,
+    };
+
+    public Exception? Error { get; private set; }
+
+    /// <summary>The loaded section once done. Its <see cref="SceneSection.Instance"/> is the world, a new one for an open.</summary>
+    public SceneSection? Section { get; private set; }
+
+    /// <summary>False holds a ready load back until it is set.</summary>
+    public bool AllowActivation { get; set; }
+
+    // True while its activation runs, when a Load queued from a callback must not cancel it.
+    internal bool IsApplying { get; set; }
+
+    internal bool IsFinished => Phase is SceneLoadPhase.Done or SceneLoadPhase.Failed or SceneLoadPhase.Cancelled;
+
+    // The detached objects from instantiating until activation, a root of the asset walk.
+    internal GameObject[]? PendingObjects => _content?.Objects;
+
+    /// <summary>Cancels the load unless it is done or activating. Its detached objects go away.</summary>
+    public void Cancel()
+    {
+        if (IsFinished || IsApplying) return;
+        Phase = SceneLoadPhase.Cancelled;
+        Release();
+        _cancel.Cancel();
+        _completion.TrySetCanceled(_cancel.Token);
     }
 
-    public void Allow() => _allowed = true;
-
-    internal bool IsReady => _allowed && _group.IsDone;
-
-    internal Scene Activate()
+    /// <summary>
+    /// Blocks until the load is ready to activate. Activation still happens at the next safe point, which outside an
+    /// engine frame is at once.
+    /// </summary>
+    public void Wait()
     {
-        Scene = Scene.Instantiate(_asset);
-        _group.Dispose();
-        _completion.TrySetResult(Scene);
-        return Scene;
+        MainThreadContext.AssertMainThread();
+        if (IsFinished) return;
+        _group?.Wait();
+        Advance();
+        if (!SceneInstance.FrameRunning) SceneInstance.ApplyQueue();
     }
 
-    internal void Cancel()
+    /// <summary>Awaits the load, giving up with an <see cref="OperationCanceledException"/> when <paramref name="cancellation"/> fires.</summary>
+    public Task<SceneSection> WaitAsync(CancellationToken cancellation) => _completion.Task.WaitAsync(cancellation);
+
+    public TaskAwaiter<SceneSection> GetAwaiter() => _completion.Task.GetAwaiter();
+
+    /// <summary>Moves the load on as far as it can go now. True once it is ready to activate.</summary>
+    internal bool Advance()
     {
-        _group.Dispose();
-        _completion.TrySetResult(null);
+        if (Phase == SceneLoadPhase.Preloading)
+        {
+            if (_group is { IsDone: false }) return false;
+            if (Scene.IsMissing || Scene.State is AssetState.Failed or AssetState.Missing)
+            {
+                Fail(new SceneLoadException($"The scene '{Scene.Name}' is missing or could not be read."));
+                return false;
+            }
+            Phase = SceneLoadPhase.Instantiating;
+        }
+
+        if (Phase == SceneLoadPhase.Instantiating)
+        {
+            try
+            {
+                if (Scene.Data == null) throw new SceneLoadException($"The scene '{Scene.Name}' holds no stored content.");
+                _content = Scene.ReadContent();
+            }
+            catch (Exception e)
+            {
+                Fail(e as SceneLoadException ?? new SceneLoadException($"Instantiating '{Scene.Name}' threw.", e));
+                return false;
+            }
+            Phase = SceneLoadPhase.WaitingForActivation;
+        }
+
+        if (Phase == SceneLoadPhase.WaitingForActivation && AllowActivation)
+            Phase = SceneLoadPhase.Activating;
+        return Phase == SceneLoadPhase.Activating;
     }
+
+    internal SceneContent TakeContent()
+    {
+        SceneContent content = _content ?? throw new InvalidOperationException("The load has no content to activate.");
+        _content = null;
+        return content;
+    }
+
+    internal void Complete(SceneSection section)
+    {
+        if (IsFinished) return;
+        Section = section;
+        Phase = SceneLoadPhase.Done;
+        Release();
+        _completion.TrySetResult(section);
+    }
+
+    internal void Fail(Exception error)
+    {
+        if (IsFinished) return;
+        Error = error;
+        Phase = SceneLoadPhase.Failed;
+        Release();
+        _completion.TrySetException(error);
+        Debug.LogException($"[Scene] Loading '{Scene.Name}' failed", error);
+    }
+
+    private void Release()
+    {
+        _group?.Dispose();
+        _group = null;
+        _content?.DisposeObjects();
+        _content = null;
+    }
+
+    public override string ToString() => $"{Kind} {Scene.Name} ({Phase})";
+}
+
+/// <summary>Loading a scene through a soft reference, as through the <see cref="Scene"/> it names.</summary>
+public static class SceneReferenceExtensions
+{
+    public static SceneLoad Load(this AssetRef<Scene> scene, SceneInstance? into = null, LoadOptions options = default) => Resolve(scene).Load(into, options);
+
+    public static SceneLoad LoadAdditive(this AssetRef<Scene> scene, SceneInstance? into = null, LoadOptions options = default) => Resolve(scene).LoadAdditive(into, options);
+
+    public static SceneLoad Open(this AssetRef<Scene> scene, SceneMode mode = SceneMode.Game, LoadOptions options = default) => Resolve(scene).Open(mode, options);
+
+    private static Scene Resolve(AssetRef<Scene> scene)
+    {
+        Scene? found = AssetDatabase.Get<Scene>(scene.AssetID);
+        return found.IsValid() ? found! : throw new SceneLoadException($"No scene is stored under {scene.AssetID}.");
+    }
+}
+
+/// <summary>The scenes a build ships, in build order, and lookups by name.</summary>
+public static class SceneBuild
+{
+    private static Scene[] s_list = [];
+
+    /// <summary>The scenes in the build, in order. The player sets it from its manifest, the editor from the build settings.</summary>
+    public static IReadOnlyList<Scene> List => s_list;
+
+    internal static void Set(IEnumerable<Scene> scenes) => s_list = [.. scenes];
+
+    /// <summary>The scene in the build list with this name, or whose path ends with it.</summary>
+    public static Scene? Find(string nameOrPath)
+    {
+        foreach (Scene scene in s_list)
+            if (string.Equals(scene.Name, nameOrPath, StringComparison.OrdinalIgnoreCase))
+                return scene;
+
+        string wanted = WithoutExtension(nameOrPath);
+        foreach (Scene scene in s_list)
+        {
+            if (AssetDatabase.GetAssetPath(scene.AssetID) is not { } path) continue;
+            string stored = WithoutExtension(path);
+            if (stored.Equals(wanted, StringComparison.OrdinalIgnoreCase)
+                || stored.EndsWith("/" + wanted, StringComparison.OrdinalIgnoreCase))
+                return scene;
+        }
+        return null;
+    }
+
+    private static string WithoutExtension(string path)
+    {
+        path = path.Replace('\\', '/');
+        return path.EndsWith(".scene", StringComparison.OrdinalIgnoreCase) ? path[..^".scene".Length] : path;
+    }
+
+    /// <summary>Where a scene is in the build list, -1 when it is not in it.</summary>
+    public static int IndexOf(Scene scene) => Array.IndexOf(s_list, scene);
 }

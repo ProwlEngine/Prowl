@@ -53,7 +53,13 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
     /// has to say so, or its references resolve against whatever scene happens to be open and bind to
     /// the wrong objects or to nothing.
     /// </summary>
-    public Scene? ResolveIn { get; init; }
+    public SceneInstance? ResolveIn { get; init; }
+
+    /// <summary>
+    /// Detached content a link resolves against instead of a world, as an identifier map from
+    /// <see cref="SceneContent.IdentifierMap"/>. Set for content read off disk that is never built into a world.
+    /// </summary>
+    public IReadOnlyDictionary<Guid, EngineObject>? ResolveInContent { get; init; }
 
     /// <summary>Context for writing a tree out by value, linking everything it references beyond itself.</summary>
     public static SerializationContext ContextForTree(GameObject root)
@@ -77,8 +83,13 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
     /// Context for reading data back, binding every link to the live object it names.
     /// </summary>
     /// <param name="scene">The scene to resolve in, or null for the open one.</param>
-    public static SerializationContext ContextForLinking(Scene? scene = null)
+    public static SerializationContext ContextForLinking(SceneInstance? scene = null)
         => new() { ExternalReferences = new SceneReferenceResolver { ResolveIn = scene } };
+
+    /// <summary>Context for reading data back, binding every link to the object it names in detached content.</summary>
+    /// <param name="content">The content's identifier map, from <see cref="SceneContent.IdentifierMap"/>.</param>
+    public static SerializationContext ContextForLinking(IReadOnlyDictionary<Guid, EngineObject> content)
+        => new() { ExternalReferences = new SceneReferenceResolver { ResolveInContent = content } };
 
     /// <summary>
     /// A resolver for writing out a whole GameObject tree: the tree serializes by value, and anything
@@ -117,6 +128,53 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
     }
 
     /// <summary>
+    /// A resolver for capturing a world's content: the listed objects, children included, serialize by value, and a
+    /// reference to any other object, world or a world itself is written as null and logged, so saving never copies
+    /// a foreign object into the content.
+    /// </summary>
+    internal static IExternalReferenceResolver ForCapture(IEnumerable<GameObject> objects) => new CaptureReferences(objects);
+
+    private sealed class CaptureReferences : IExternalReferenceResolver
+    {
+        private readonly HashSet<object> _captured = new(ReferenceEqualityComparer.Instance);
+
+        public CaptureReferences(IEnumerable<GameObject> objects)
+        {
+            foreach (GameObject go in objects)
+                Collect(go);
+        }
+
+        // Children are written inside their parent, so every one of them is part of the content.
+        private void Collect(GameObject go)
+        {
+            if (!_captured.Add(go)) return;
+            _captured.Add(go.Transform);
+            foreach (Component component in go.GetComponents<Component>())
+                _captured.Add(component);
+            foreach (GameObject child in go.Children)
+                Collect(child);
+        }
+
+        public object? GetReferenceKey(object value)
+        {
+            string? name = value switch
+            {
+                GameObject go => go.Name,
+                Component component => component.GameObject.IsValid() ? $"{component.GameObject.Name}/{component.GetType().Name}" : component.GetType().Name,
+                Transform transform => transform.GameObject.IsValid() ? transform.GameObject.Name : "Transform",
+                SceneInstance world => world.Name,
+                _ => null,
+            };
+            if (name == null || _captured.Contains(value)) return null;
+
+            Debug.LogWarning($"A reference to '{name}', which is not part of the content being saved, was saved as null.");
+            return ExternalReference.Null;
+        }
+
+        public object? ResolveReference(object key, Type targetType) => null;
+    }
+
+    /// <summary>
     /// The objects this resolver linked out rather than serialized, in the order it met them.
     /// <para/>
     /// Linking out is right for a copy, which lands back in the same scene. It is a loss for a prefab
@@ -149,17 +207,24 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
 
     public object? ResolveReference(object key, Type targetType)
     {
-        Scene? target = ResolveIn.IsValid() ? ResolveIn : Scene.Current;
+        if (ResolveInContent != null)
+        {
+            if (key is not Guid contentId || !ResolveInContent.TryGetValue(contentId, out EngineObject? found)) return null;
+            if (typeof(Transform).IsAssignableFrom(targetType))
+                return found is GameObject owner && owner.IsValid() ? owner.Transform : null;
+            return found;
+        }
+
+        SceneInstance? target = ResolveIn.IsValid() ? ResolveIn : SceneInstance.HasMain ? SceneInstance.Main : null;
         if (key is not Guid id || target is not { } scene) return null;
 
-        // GameObject and Component share the FindObjectByIdentifier lookup; a Transform key is
-        // its GameObject's id, so resolve the GameObject and hand back its Transform.
+        // A Transform key is its GameObject's id, so this resolves the GameObject and hands back its Transform.
         if (typeof(Transform).IsAssignableFrom(targetType))
         {
-            GameObject owner = scene.FindObjectByIdentifier<GameObject>(id)!;
+            GameObject owner = scene.FindObject<GameObject>(id)!;
             return owner.IsValid() ? owner.Transform : null;
         }
 
-        return scene.FindObjectByIdentifier<EngineObject>(id);
+        return scene.FindObject<EngineObject>(id);
     }
 }

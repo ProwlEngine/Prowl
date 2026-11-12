@@ -33,7 +33,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class FrameStatsPanel : DockPanel
 {
     [MenuItem("Window/Debug/Frame Stats", priority: 100)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(FrameStatsPanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<FrameStatsPanel>();
 
     public override string Title => Loc.Get("panel.frame_stats");
     public override string Icon => EditorIcons.ChartColumn;

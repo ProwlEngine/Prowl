@@ -31,16 +31,31 @@ public abstract class ImportSettingsEditor : AssetImporterEditor
     /// </summary>
     protected EchoObject Settings(AssetEntry entry)
     {
-        if (s_settings.TryGetValue(entry.Guid, out EchoObject cached)) return cached;
+        if (!s_settings.TryGetValue(entry.Guid, out EchoObject settings))
+        {
+            settings = ReadFromDisk(entry);
+            s_settings[entry.Guid] = settings;
+            Rebaseline(entry, null); // what is on disk is, by definition, the clean state
+        }
 
-        EchoObject settings = ReadFromDisk(entry);
-        s_settings[entry.Guid] = settings;
-        Rebaseline(entry, null); // what is on disk is, by definition, the clean state
+        // Drawn every frame, so an edit made from here is a pending settings record, kept only if something changed.
+        if (!OrigamiUI.Origami.IsReadOnly) Core.Undo.WatchImporter(entry.Guid, "Change Import Settings");
         return settings;
     }
 
     /// <summary> Drops the cached settings for an asset whose <c>.meta</c> was written elsewhere, so the inspector reads it again. </summary>
     public static void Forget(Guid guid) => s_settings.Remove(guid);
+
+    /// <summary>An asset's pending import settings, read from disk if nothing has edited them yet. Null when the asset is unknown.</summary>
+    internal static EchoObject? Pending(Guid guid)
+    {
+        if (s_settings.TryGetValue(guid, out EchoObject cached)) return cached;
+        if (EditorAssetBackend.Instance?.GetEntry(guid) is not AssetEntry entry) return null;
+        return s_settings[guid] = ReadFromDisk(entry);
+    }
+
+    /// <summary>Replaces an asset's pending import settings, as undo does. Nothing is written or reimported.</summary>
+    internal static void SetPending(Guid guid, EchoObject settings) => s_settings[guid] = settings;
 
     /// <summary>The asset's <c>.meta</c> path, or null when there is no open project.</summary>
     protected static string? MetaPathOf(AssetEntry entry)

@@ -115,8 +115,6 @@ public abstract class Light : Component, IRenderSync
     [System.NonSerialized, NotHeld] private uint _poseVersion;
     [System.NonSerialized, NotHeld] private (Double3 Position, Float3 Forward, Float3 Up) _pose;
 
-    // The FogLight beside this light, which registers itself when it joins the scene
-    [System.NonSerialized, NotHeld] internal FogLight? Fog;
     [System.NonSerialized, NotHeld] private RenderWorld? _world;
 
     private bool ShowsShadows => CanCastShadows && CastShadows;
@@ -207,7 +205,6 @@ public abstract class Light : Component, IRenderSync
             Intensity = Intensity,
             LayerMask = LayerMask.Mask,
             Static = GameObject.IsStatic,
-            HostData = FogData(color),
             Shadow = new ShadowDesc
             {
                 Enabled = CanCastShadows && CastShadows && ShadowStrength > 0,
@@ -241,23 +238,6 @@ public abstract class Light : Component, IRenderSync
             _poseVersion = transform.WorldVersion;
         }
         return pose;
-    }
-
-    // What volumetric fog reads as the light's HostData: its scattering colour times intensity, then its scattering bias
-    // with 4 added when it casts no fog shadows
-    private Float4 FogData(Color color)
-    {
-        float intensity = Intensity, bias = 0f;
-        bool shadows = true;
-        FogLight? fog = Fog;
-        if (fog.IsValid() && fog.GameObject == GameObject && fog.EnabledInHierarchy)
-        {
-            intensity *= fog.IntensityMultiplier;
-            if (fog.UseOverrideColor) color = fog.OverrideColor;
-            bias = Maths.Clamp(fog.ScatteringBias, -2f, 2f);
-            shadows = fog.CastFogShadows;
-        }
-        return new Float4(color.R * intensity, color.G * intensity, color.B * intensity, bias + (shadows ? 0f : 4f));
     }
 
     bool IRenderSync.Sync(RenderWorld world)
@@ -318,8 +298,6 @@ public abstract class Light : Component, IRenderSync
         && a.Shadow.Enabled == b.Shadow.Enabled && a.Shadow.Resolution == b.Shadow.Resolution && a.Shadow.DepthBias == b.Shadow.DepthBias
         && a.Shadow.NormalBias == b.Shadow.NormalBias && a.Shadow.Cascades == b.Shadow.Cascades && a.Shadow.Distance == b.Shadow.Distance
         && a.Shadow.CascadeBlend == b.Shadow.CascadeBlend && a.Shadow.Strength == b.Shadow.Strength && a.Shadow.Filter == b.Shadow.Filter;
-
-    public override void OnAddedToScene() => Fog = GetComponent<FogLight>();
 
     public override void DrawGizmos()
     {

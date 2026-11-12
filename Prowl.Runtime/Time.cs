@@ -1,33 +1,44 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Collections.Generic;
 
+using Prowl.Runtime.Resources;
+
 using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace Prowl.Runtime;
 
-public class TimeData
+/// <summary>The time settings every new clock starts with, from the project time settings.</summary>
+public sealed class SceneClockSettings
 {
-    public float UnscaledDeltaTime;
-    public float UnscaledTotalTime;
-    public float DeltaTime;
-    public float Time;
-    public float SmoothUnscaledDeltaTime;
-    public float SmoothDeltaTime;
-
-    private Stopwatch _stopwatch;
-
-    public TimeData() { }
-
-    public long FrameCount;
-
-    /// <summary>The base time scale. Time runs at <see cref="EffectiveTimeScale"/>, this times every active modifier.</summary>
     public float TimeScale = 1f;
-    public float TimeSmoothFactor = .25f;
+
+    public SceneClockSettings Clone() => (SceneClockSettings)MemberwiseClone();
+}
+
+/// <summary>
+/// A world's clock: its time scale and modifiers, the scaled time it has run, and its own fixed step accumulator. It
+/// moves only while its world ticks, so a paused world's time stands still.
+/// </summary>
+public sealed class SceneClock
+{
+    private static SceneClockSettings s_defaults = new();
 
     private readonly List<TimeScaleModifier> _modifiers = [];
+
+    /// <summary>The project time settings. A new clock copies them.</summary>
+    public static SceneClockSettings Defaults
+    {
+        get => s_defaults;
+        set => s_defaults = (value ?? throw new ArgumentNullException(nameof(value))).Clone();
+    }
+
+    public SceneClock() => TimeScale = s_defaults.TimeScale;
+
+    /// <summary>The base time scale. Time runs at <see cref="EffectiveTimeScale"/>, this times every active modifier.</summary>
+    public float TimeScale { get; set; }
 
     /// <summary>The scale time actually runs at: <see cref="TimeScale"/> times every active <see cref="TimeScaleModifier"/>.</summary>
     public float EffectiveTimeScale
@@ -40,11 +51,32 @@ public class TimeData
         }
     }
 
+    /// <summary>The scaled time this world has run, in seconds.</summary>
+    public double TimeSinceStartup { get; private set; }
+
+    /// <summary>The scaled time of this world's current frame, zero on a frame it did not tick.</summary>
+    public float DeltaTime { get; private set; }
+
+    public float SmoothDeltaTime { get; private set; }
+
+    /// <summary>
+    /// How far the frame being drawn sits past the last fixed step, in seconds: what the fixed steps of the frame did not
+    /// consume, so always under <see cref="Time.FixedDeltaTime"/> once the frame's Update runs. Physics interpolation
+    /// renders at this.
+    /// </summary>
+    public float FixedAccumulator { get; private set; }
+
+    /// <summary>How far drawing is from the last fixed step toward the next, 0 to 1.</summary>
+    public float FixedAlpha => Time.FixedDeltaTime > 0f ? Math.Clamp(FixedAccumulator / Time.FixedDeltaTime, 0f, 1f) : 1f;
+
     /// <summary>How many modifiers are active.</summary>
     public int ModifierCount => _modifiers.Count;
 
-    /// <summary>Adds a modifier that multiplies the time scale until its owner removes it.</summary>
-    public TimeScaleModifier AddModifier(float scale)
+    /// <summary>
+    /// Multiplies the time scale until the returned modifier is removed. Use this rather than setting <see cref="TimeScale"/>
+    /// for temporary effects (slow motion, hit stop), since several can overlap and each removes only its own.
+    /// </summary>
+    public TimeScaleModifier AddTimeScaleModifier(float scale)
     {
         var modifier = new TimeScaleModifier(this, scale);
         _modifiers.Add(modifier);
@@ -53,35 +85,47 @@ public class TimeData
 
     internal void RemoveModifier(TimeScaleModifier modifier) => _modifiers.Remove(modifier);
 
-    public void Update()
+    /// <summary>Moves the clock on by one frame of unscaled time.</summary>
+    internal void Advance(float unscaledDelta)
     {
-        _stopwatch ??= Stopwatch.StartNew();
-
-        float dt = Prowl.Runtime.Time.LockedDeltaTime > 0f ? Prowl.Runtime.Time.LockedDeltaTime : (float)_stopwatch.Elapsed.TotalMilliseconds / 1000.0f;
-
-        FrameCount++;
-
-        UnscaledDeltaTime = dt;
-        UnscaledTotalTime += UnscaledDeltaTime;
-
         float scale = EffectiveTimeScale;
-        DeltaTime = dt * scale;
-        Time += DeltaTime;
+        DeltaTime = unscaledDelta * scale;
+        TimeSinceStartup += DeltaTime;
+        SmoothDeltaTime = Time.SmoothUnscaledDeltaTime * scale;
+    }
 
-        SmoothUnscaledDeltaTime += (dt - SmoothUnscaledDeltaTime) * TimeSmoothFactor;
-        SmoothDeltaTime = SmoothUnscaledDeltaTime * scale;
+    /// <summary>A frame the world did not tick: no time passes.</summary>
+    internal void Hold()
+    {
+        DeltaTime = 0f;
+        SmoothDeltaTime = 0f;
+    }
 
-        _stopwatch.Restart();
+    /// <summary>
+    /// How many fixed steps this frame's scaled time yields. Scale changes how many steps run, never their size. A
+    /// backlog beyond the iteration cap is dropped rather than replayed over the next frames.
+    /// </summary>
+    internal int TakeFixedSteps()
+    {
+        FixedAccumulator += DeltaTime;
+        int steps = 0;
+        while (FixedAccumulator >= Time.FixedDeltaTime && steps < Time.MaxFixedIterations)
+        {
+            FixedAccumulator -= Time.FixedDeltaTime;
+            steps++;
+        }
+        if (FixedAccumulator >= Time.FixedDeltaTime) FixedAccumulator = 0f;
+        return steps;
     }
 }
 
 /// <summary>
-/// A multiplier on the time scale, owned by whoever added it. Modifiers multiply together and each owner removes
+/// A multiplier on a clock's time scale, owned by whoever added it. Modifiers multiply together and each owner removes
 /// only its own, so overlapping slow motion and hit stops can never leave time stuck at another owner's value.
 /// </summary>
 public sealed class TimeScaleModifier
 {
-    private readonly TimeData _time;
+    private readonly SceneClock _clock;
 
     /// <summary>The multiplier. Can be changed while active, for example to ease slow motion in and out.</summary>
     public float Scale;
@@ -89,9 +133,9 @@ public sealed class TimeScaleModifier
     /// <summary>False once removed.</summary>
     public bool IsActive { get; private set; } = true;
 
-    internal TimeScaleModifier(TimeData time, float scale)
+    internal TimeScaleModifier(SceneClock clock, float scale)
     {
-        _time = time;
+        _clock = clock;
         Scale = scale;
     }
 
@@ -100,22 +144,26 @@ public sealed class TimeScaleModifier
     {
         if (!IsActive) return;
         IsActive = false;
-        _time.RemoveModifier(this);
+        _clock.RemoveModifier(this);
     }
 }
 
+/// <summary>
+/// Frame time. The unscaled values and the frame count are the engine's, shared by every world. The scaled values are
+/// <see cref="SceneInstance.Active"/>'s <see cref="SceneClock"/>, and read as a stopped clock when no world is bound.
+/// </summary>
 public static class Time
 {
-    private static readonly TimeData s_defaultTime = new();
+    private static Stopwatch? s_stopwatch;
 
-    public static Stack<TimeData> TimeStack { get; } = new();
+    public static float UnscaledDeltaTime { get; private set; }
+    public static float UnscaledTotalTime { get; private set; }
+    public static float SmoothUnscaledDeltaTime { get; private set; }
+    public static long FrameCount { get; private set; }
 
-    public static TimeData CurrentTime => TimeStack.TryPeek(out TimeData? time) && time != null ? time : s_defaultTime;
+    public static float TimeSmoothFactor = .25f;
 
-    public static float UnscaledDeltaTime => CurrentTime.UnscaledDeltaTime;
-    public static float UnscaledTotalTime => CurrentTime.UnscaledTotalTime;
-
-    public static float DeltaTime => CurrentTime.DeltaTime;
+    /// <summary>The fixed step, unscaled.</summary>
     public static float FixedDeltaTime = 1.0f / 60.0f;
 
     /// <summary>
@@ -125,48 +173,49 @@ public static class Time
     public static float LockedDeltaTime = 0f;
     public static int MaxFixedIterations = 3;
 
-    /// <summary>
-    /// How far the frame being drawn sits past the last fixed step, in seconds - the fixed loop
-    /// leaves this holding whatever part of the frame its steps did not consume, so it is always
-    /// under <see cref="FixedDeltaTime"/> by the time the scene's Update runs.
-    ///
-    /// This is the alpha physics interpolation has to render at. Counting time since the last step
-    /// with a per-frame accumulator instead does not work: the step that resets such a counter
-    /// happens partway through a frame, and the whole of that frame's delta then gets added on top
-    /// of time the step already consumed, which reads back a pose the body has not reached yet.
-    /// Owned by the game loop - read it, do not write it.
-    /// </summary>
-    public static float FixedAccumulator;
+    /// <summary>Starts a frame: measures the unscaled time since the last one.</summary>
+    internal static void AdvanceFrame()
+    {
+        s_stopwatch ??= Stopwatch.StartNew();
+        float dt = LockedDeltaTime > 0f ? LockedDeltaTime : (float)s_stopwatch.Elapsed.TotalSeconds;
+        s_stopwatch.Restart();
+        AdvanceFrame(dt);
+    }
 
-    /// <summary>How far drawing is from the last fixed step toward the next, 0 to 1.</summary>
-    public static float FixedAlpha => FixedDeltaTime > 0f ? Math.Clamp(FixedAccumulator / FixedDeltaTime, 0f, 1f) : 1f;
-    public static float TimeSinceStartup => CurrentTime.Time;
+    /// <summary>Starts a frame of a given unscaled length.</summary>
+    internal static void AdvanceFrame(float dt)
+    {
+        FrameCount++;
+        UnscaledDeltaTime = dt;
+        UnscaledTotalTime += dt;
+        SmoothUnscaledDeltaTime += (dt - SmoothUnscaledDeltaTime) * TimeSmoothFactor;
+    }
 
-    public static float SmoothUnscaledDeltaTime => CurrentTime.SmoothUnscaledDeltaTime;
-    public static float SmoothDeltaTime => CurrentTime.SmoothDeltaTime;
+    private static SceneClock? Clock => SceneInstance.ActiveClock;
 
-    public static long FrameCount => CurrentTime.FrameCount;
+    public static float DeltaTime => Clock?.DeltaTime ?? 0f;
+    public static float TimeSinceStartup => (float)(Clock?.TimeSinceStartup ?? 0d);
+    public static float SmoothDeltaTime => Clock?.SmoothDeltaTime ?? 0f;
 
-    /// <summary>The base time scale. Time runs at <see cref="EffectiveTimeScale"/>, this times every active modifier.</summary>
+    /// <inheritdoc cref="SceneClock.FixedAccumulator"/>
+    public static float FixedAccumulator => Clock?.FixedAccumulator ?? 0f;
+
+    /// <inheritdoc cref="SceneClock.FixedAlpha"/>
+    public static float FixedAlpha => Clock?.FixedAlpha ?? 1f;
+
+    /// <summary>The base time scale of the active world. Time runs at <see cref="EffectiveTimeScale"/>, this times every active modifier.</summary>
     public static float TimeScale
     {
-        get => CurrentTime.TimeScale;
-        set => CurrentTime.TimeScale = value;
+        get => Clock?.TimeScale ?? SceneClock.Defaults.TimeScale;
+        set => RequireClock().TimeScale = value;
     }
 
-    /// <summary>The scale time actually runs at: <see cref="TimeScale"/> times every active <see cref="TimeScaleModifier"/>.</summary>
-    public static float EffectiveTimeScale => CurrentTime.EffectiveTimeScale;
+    /// <summary>The scale the active world's time actually runs at.</summary>
+    public static float EffectiveTimeScale => Clock?.EffectiveTimeScale ?? SceneClock.Defaults.TimeScale;
 
-    /// <summary>
-    /// Multiplies the time scale until the returned modifier is removed. Use this rather than setting <see cref="TimeScale"/>
-    /// for temporary effects (slow motion, hit stop), since several can overlap and each removes only its own.
-    /// Modifiers belong to the current time context, so play mode's end with it.
-    /// </summary>
-    public static TimeScaleModifier AddTimeScaleModifier(float scale) => CurrentTime.AddModifier(scale);
+    /// <inheritdoc cref="SceneClock.AddTimeScaleModifier"/>
+    public static TimeScaleModifier AddTimeScaleModifier(float scale) => RequireClock().AddTimeScaleModifier(scale);
 
-    public static float TimeSmoothFactor
-    {
-        get => CurrentTime.TimeSmoothFactor;
-        set => CurrentTime.TimeSmoothFactor = value;
-    }
+    private static SceneClock RequireClock()
+        => Clock ?? throw new InvalidOperationException("No world is bound, so there is no clock to change. Change a world's Clock, or SceneClock.Defaults for new worlds.");
 }

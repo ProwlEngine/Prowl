@@ -28,7 +28,7 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
     [InlineData(ColliderShape.Cylinder, 60f, 75f)]
     public void WalkingIntoASlopedCeilingAtAnAngleSlidesAlongIt(ColliderShape shape, float ceilingDegrees, float approachFromSide)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         SlopedCeiling(scene, new Float3(0f, 0f, 2f), 2.4f, ceilingDegrees);
         Walker walker = Spawn(scene, new Float3(-6f, 0f, 0f), shape);
 
@@ -50,7 +50,7 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
     [InlineData(ColliderShape.Cylinder, 45f)]
     public void WalkingStraightIntoASlopedCeilingStopsAndCanBackOut(ColliderShape shape, float degrees)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         SlopedCeiling(scene, new Float3(0f, 0f, 2f), 2.4f, degrees);
         Walker walker = Spawn(scene, Float3.Zero, shape);
 
@@ -69,7 +69,7 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
     [InlineData(ColliderShape.Cylinder)]
     public void JumpingIntoASlopedCeilingSlidesOffItAndLands(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         SlopedCeiling(scene, new Float3(0f, 0f, -1f), 3.2f, 30f);
         Walker walker = Spawn(scene, new Float3(0f, 0f, 1f), shape);
 
@@ -87,7 +87,7 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
     [InlineData(ColliderShape.Cylinder)]
     public void JumpingIntoAFlatCeilingStopsTheClimbAndReportsIt(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, 2.5f + 0.25f, 0f), new Float3(6f, 0.5f, 6f));
         Walker walker = Spawn(scene, Float3.Zero, shape);
 
@@ -109,7 +109,7 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
     [InlineData(ColliderShape.Cylinder)]
     public void ABeamLowerThanTheControllerBlocksIt(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, 1.5f, 3f), new Float3(8f, 0.6f, 1f));
         Walker walker = Spawn(scene, Float3.Zero, shape);
 
@@ -125,7 +125,7 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
     [InlineData(ColliderShape.Cylinder)]
     public void CrouchingFitsUnderALowCeilingAndCannotStandUpUnderIt(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, 1.3f + 0.5f, 5f), new Float3(8f, 1f, 4f));
         Walker walker = Spawn(scene, Float3.Zero, shape);
 
@@ -145,7 +145,7 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
     [InlineData(ColliderShape.Cylinder)]
     public void WalkingUpARampIntoACeilingStopsWithoutSinkingIn(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, 1f), 25f, 10f);
         Box(scene, new Float3(0f, 3.2f + 0.25f, 8f), new Float3(8f, 0.5f, 10f));
         Walker walker = Spawn(scene, Float3.Zero, shape);
@@ -162,7 +162,7 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
     [InlineData(ColliderShape.Cylinder, 20f)]
     public void WalkingIntoTheTipOfAVShapedWedgeStopsAndCanLeave(ColliderShape shape, float halfAngle)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         float length = 8f;
         Float3 tip = new(0f, 0f, 6f);
         foreach (float side in new[] { -1f, 1f })
@@ -187,7 +187,7 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
     [InlineData(ColliderShape.Cylinder)]
     public void ARoofOfTwoSlopesMeetingOverheadCanBeWalkedUnder(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         SlopedCeiling(scene, new Float3(0f, 0f, 0f), 2.6f, 30f, width: 40f, yaw: 90f);
         SlopedCeiling(scene, new Float3(0f, 0f, 0f), 2.6f, 30f, width: 40f, yaw: -90f);
         Walker walker = Spawn(scene, new Float3(0f, 0f, -12f), shape);

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects.Settings;
@@ -113,29 +114,37 @@ public sealed class DesktopBuildProfileDrawer : IBuildProfileDrawer
         EditorGUI.SettingsRow(paper, "bld_platform", "Platform", () =>
             Origami.Dropdown(paper, "bld_platform_v", current, v =>
             {
+                Record(desktop, "Change Build Platform");
                 desktop.SelectTarget(targets[v]);
                 EditorRegistries.SaveSettings();
             }, names).Show(), separator: false);
 
         EditorGUI.SettingsToggle(paper, "bld_selfcontained", "Self-Contained", desktop.SelfContained,
-            v => { desktop.SelfContained = v; EditorRegistries.SaveSettings(); }, separator: false);
+            v => { Record(desktop, "Toggle Self-Contained"); desktop.SelfContained = v; EditorRegistries.SaveSettings(); }, separator: false);
 
         EditorGUI.SettingsToggle(paper, "bld_trimmed", "Publish Trimmed", desktop.PublishTrimmed,
-            v => { desktop.PublishTrimmed = v; EditorRegistries.SaveSettings(); }, separator: false);
+            v => { Record(desktop, "Toggle Publish Trimmed"); desktop.PublishTrimmed = v; EditorRegistries.SaveSettings(); }, separator: false);
 
         EditorGUI.SettingsToggle(paper, "bld_aot", "Native AOT", desktop.PublishAot,
-            v => { desktop.PublishAot = v; EditorRegistries.SaveSettings(); }, separator: false);
+            v => { Record(desktop, "Toggle Native AOT"); desktop.PublishAot = v; EditorRegistries.SaveSettings(); }, separator: false);
 
         EditorGUI.SectionHeader(paper, "bld_window_h", "Window");
 
         EditorGUI.SettingsRow(paper, "bld_width", "Width", () =>
             Origami.NumericField<int>(paper, "bld_width_v", desktop.WindowWidth,
-                v => { desktop.WindowWidth = Math.Max(320, v); EditorRegistries.SaveSettings(); })
+                v => { Record(desktop, "Change Window Width"); desktop.WindowWidth = Math.Max(320, v); EditorRegistries.SaveSettings(); })
                 .Min(320).Show(), separator: false);
 
         EditorGUI.SettingsRow(paper, "bld_height", "Height", () =>
             Origami.NumericField<int>(paper, "bld_height_v", desktop.WindowHeight,
-                v => { desktop.WindowHeight = Math.Max(240, v); EditorRegistries.SaveSettings(); })
+                v => { Record(desktop, "Change Window Height"); desktop.WindowHeight = Math.Max(240, v); EditorRegistries.SaveSettings(); })
                 .Min(240).Show(), separator: false);
+    }
+
+    // Found again through the build settings, which a settings reload refills with new profiles.
+    private static void Record(DesktopBuildProfile desktop, string name)
+    {
+        Type pipeline = desktop.GetPipelineType();
+        Undo.RecordObject(() => EditorRegistries.GetSettings<BuildSettings>().GetProfile<DesktopBuildProfile>(pipeline), UndoOwner.OfSettings(typeof(BuildSettings)), name);
     }
 }

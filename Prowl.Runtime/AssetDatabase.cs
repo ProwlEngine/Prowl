@@ -28,7 +28,7 @@ public readonly record struct AssetResidency(
 
 /// <summary>
 /// Every asset by GUID, one object each for the whole session. Assets stay loaded while something reaches them:
-/// a live scene, an object kept with <see cref="Scene.DontDestroyOnLoad"/>, a hold, a root, or a load group. A walk from
+/// a live world, a hold, a root, or a load group. A walk from
 /// those roots runs about once a second, and an asset nothing reached for <see cref="GracePeriod"/> has its payload
 /// freed, sooner when over <see cref="MemoryBudget"/>. Reading an unloaded asset loads it again.
 /// </summary>
@@ -233,7 +233,7 @@ public static class AssetDatabase
     public static Type? GetAssetType(Guid assetId)
         => BuiltInAssets.Entries.TryGetValue(assetId, out BuiltInAssets.BuiltInEntry builtIn) ? builtIn.AssetType : SourceOf(assetId)?.GetAssetType(assetId);
 
-    private static string? GetAssetPath(Guid assetId)
+    internal static string? GetAssetPath(Guid assetId)
         => BuiltInAssets.Entries.TryGetValue(assetId, out BuiltInAssets.BuiltInEntry builtIn) ? builtIn.Path : SourceOf(assetId)?.GetAssetPath(assetId);
 
     public static bool IsBuiltIn(Asset asset) => BuiltInAssets.IsBuiltIn(asset.AssetID);
@@ -392,7 +392,7 @@ public static class AssetDatabase
         => new(withDependencies ? WithDependencies(assets) : [.. assets.Distinct()]);
 
     /// <summary>Loads a scene's stored data and everything it depends on, without instantiating it.</summary>
-    public static AssetGroup Preload(SceneAsset scene) => LoadGroup([scene]);
+    public static AssetGroup Preload(Scene scene) => LoadGroup([scene]);
 
     private static List<Asset> WithDependencies(IEnumerable<Asset> assets)
     {
@@ -762,10 +762,10 @@ public static class AssetDatabase
         int epoch = ++s_epoch;
         s_walker.Begin(epoch, s_lastWalk);
 
-        foreach (Scene scene in Scene.Live)
+        foreach (SceneInstance scene in SceneInstance.Live)
             s_walker.Visit(scene);
-        foreach (GameObject preserved in Scene.Preserved)
-            s_walker.Visit(preserved);
+        foreach (object pending in SceneInstance.PendingContent)
+            s_walker.Visit(pending);
 
         lock (s_holdLock)
         {

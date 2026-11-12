@@ -46,7 +46,21 @@ public static class MenuContext
         _pinned = null;
         _isPinned = false;
         _targets = [];
+        Section = null;
     }
+
+    /// <summary>The section a menu opened on a scene header creates into, or null to follow the selection.</summary>
+    public static Runtime.Resources.SceneSection? Section { get; private set; }
+
+    /// <summary>Pins the context to no object and to <paramref name="section"/>, for a scene header's create menu.</summary>
+    public static void SetSection(Runtime.Resources.SceneSection? section)
+    {
+        Set(null);
+        Section = section;
+    }
+
+    /// <summary>Drops a pinned section, leaving any pinned object.</summary>
+    public static void ClearSection() => Section = null;
 }
 
 /// <summary> Attribute applied to methods to register them as menu items. Supports validation methods, priority ordering, icons, and separators. </summary>

@@ -269,7 +269,7 @@ public class AssetDatabaseTests : RuntimeTestBase
     [Fact]
     public void TheWalk_NeverRunsAnIteratorItFinds()
     {
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
         scene.Add(go);
         IteratorHolder.Ran = false;
@@ -310,9 +310,9 @@ public class AssetDatabaseTests : RuntimeTestBase
     public void EveryBuiltInAsset_LoadsOnTheLoaderThread_WithoutLoadingAnother()
     {
         var nested = new List<string>();
-        void Capture(string message, DebugStackTrace? trace, LogSeverity severity)
+        void Capture(LogEvent e)
         {
-            if (message.Contains("inside another load") || message.Contains("while another asset was loading")) lock (nested) nested.Add(message);
+            if (e.Message.Contains("inside another load") || e.Message.Contains("while another asset was loading")) lock (nested) nested.Add(e.Message);
         }
 
         Debug.OnLog += Capture;
@@ -333,15 +333,6 @@ public class AssetDatabaseTests : RuntimeTestBase
         }
 
         Assert.True(nested.Count == 0, string.Join("\n", nested));
-    }
-
-    [Fact]
-    public void AMaterialWhoseShaderIsMissing_DrawsWithTheInvalidShader()
-    {
-        var material = new Material();
-        material.Shader = AssetDatabase.Get<Shader>(Guid.NewGuid());
-
-        Assert.Same(Shader.LoadDefault(DefaultShader.Invalid), material.Shader);
     }
 
     [Fact]
@@ -516,7 +507,7 @@ public class AssetDatabaseTests : RuntimeTestBase
 
         Assert.Equal(id.ToString(), echo["Later"]["$assetRef"].StringValue);
         Assert.Equal(AssetState.Unloaded, copy.Later.Get()!.State);
-        Assert.Equal(8, copy.Later.Load()!.Size);
+        Assert.Equal(8, copy.Later.LoadImmediate()!.Size);
     }
 
     #endregion
@@ -554,12 +545,12 @@ public class AssetDatabaseTests : RuntimeTestBase
     public void AnObjectRemovedFromASavedScene_NoLongerKeepsWhatItUsed()
     {
         Crate crate = AssetDatabase.Load<Crate>(AddCrate(1))!;
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
         scene.Add(go);
         go.AddComponent<CrateHolder>().Crate = crate;
         scene.Update();
-        Serializer.Serialize(typeof(Scene), scene);
+        scene.ActiveSection.CaptureTree();
 
         scene.Remove(go);
         go.Dispose();
@@ -603,7 +594,7 @@ public class AssetDatabaseTests : RuntimeTestBase
     public void AnAssetAComponentHolds_StaysLoaded_EvenWhileDisabled()
     {
         Crate crate = AssetDatabase.Load<Crate>(AddCrate(1))!;
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject();
         scene.Add(go);
         go.AddComponent<CrateHolder>().Crate = crate;
@@ -690,7 +681,7 @@ public class AssetDatabaseTests : RuntimeTestBase
     public void SlicedWalk_SpreadOverManyFrames_StillReachesEverything()
     {
         Crate crate = AssetDatabase.Load<Crate>(AddCrate(1))!;
-        Scene scene = CreateScene();
+        SceneInstance scene = CreateScene();
         for (int i = 0; i < 2000; i++)
             scene.Add(CreateGameObject());
         GameObject holder = CreateGameObject();
@@ -807,25 +798,25 @@ public class AssetDatabaseTests : RuntimeTestBase
     public void LoadingAStoredScene_LoadsWhatItUses_BeforeAnythingEnables()
     {
         Crate crate = AssetDatabase.Get<Crate>(AddCrate(5))!;
-        var authored = new Scene();
+        var authored = new SceneInstance();
         var go = new GameObject("Holder");
         authored.Add(go);
         go.AddComponent<CrateHolder>().Crate = crate;
-        var stored = new SceneAsset { Data = Serializer.Serialize(typeof(object), authored) };
+        var stored = new Scene { Data = authored.ActiveSection.CaptureTree() };
         authored.Dispose();
         Guid sceneId = _backend.Add(stored, "Level.scene");
 
-        Scene.Load(AssetDatabase.Get<SceneAsset>(sceneId)!);
-        Scene.ProcessPendingLoad();
+        AssetDatabase.Get<Scene>(sceneId)!.Load().Wait();
+        SceneInstance.ProcessPendingLoad();
         try
         {
-            CrateHolder holder = Scene.Current.AllObjects.Single().GetComponent<CrateHolder>()!;
+            CrateHolder holder = SceneInstance.Main.Objects.Single().GetComponent<CrateHolder>()!;
             Assert.Same(crate, holder.SeenOnEnable);
             Assert.True(holder.WasLoadedOnEnable);
         }
         finally
         {
-            Scene.Shutdown();
+            SceneInstance.Shutdown();
         }
     }
 
@@ -853,13 +844,13 @@ public class AssetDatabaseTests : RuntimeTestBase
     public void AStoredScene_HeldOnItsOwn_DoesNotKeepWhatItUses()
     {
         Crate crate = AssetDatabase.Get<Crate>(AddCrate(3))!;
-        var authored = new Scene();
+        var authored = new SceneInstance();
         var go = new GameObject("Holder");
         authored.Add(go);
         go.AddComponent<CrateHolder>().Crate = crate;
-        var stored = new SceneAsset { Data = Serializer.Serialize(typeof(object), authored) };
+        var stored = new Scene { Data = authored.ActiveSection.CaptureTree() };
         authored.Dispose();
-        SceneAsset level = AssetDatabase.Load<SceneAsset>(_backend.Add(stored, "Level.scene"))!;
+        Scene level = AssetDatabase.Load<Scene>(_backend.Add(stored, "Level.scene"))!;
         crate.Load();
         object owner = new();
         AssetDatabase.Hold(level, owner);

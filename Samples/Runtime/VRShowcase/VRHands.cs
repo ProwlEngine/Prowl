@@ -1118,7 +1118,7 @@ public sealed class GravityGlove : Component
         _line.Material = new Material(Shader.LoadDefault(DefaultShader.Line));
         _line.StartWidth = 0.004f;
         _line.EndWidth = 0.01f;
-        GameObject.Scene.Add(go);
+        go.MoveTo(GameObject.Scene);
     }
 
     public override void Update()

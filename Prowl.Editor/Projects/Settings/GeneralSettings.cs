@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 using Prowl.Editor.GUI;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Theming;
@@ -13,8 +15,11 @@ public class GeneralSettings : ProjectSettingsBase
     public string ProductName = "My Game";
     public string Version = "0.1.0";
 
-    /// <summary>Relative path to the last loaded scene. Restored on project open.</summary>
-    public string? LastScenePath;
+    /// <summary>The scenes open when the project was last used, restored on project open.</summary>
+    public List<GUI.SceneView.SceneSetup> LastSetup = [];
+
+    /// <summary>The scenes hidden in the scene view, restored with the setup.</summary>
+    public List<System.Guid> HiddenScenes = [];
 
     /// <summary> Draws the General settings panel in the Project Settings window. </summary>
     public override void OnGUI(Paper paper, float width)

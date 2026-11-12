@@ -19,7 +19,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void AJumpLeavesTheGroundOnTheFirstFrameAndLandsAgain(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Walker walker = Spawn(scene, Float3.Zero, shape);
 
         walker.Jump();
@@ -39,7 +39,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void LandingWhileRunningKeepsRunning(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Walker walker = Spawn(scene, new Float3(0f, 3f, 0f), shape);
         walker.Teleport(new Float3(0f, 3f, 0f));
         walker.Velocity = Float3.Zero;
@@ -56,7 +56,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void FallingOntoASteepSlopeSlidesDownItRatherThanSticking(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, -2f), 70f, 8f);
         Walker walker = Spawn(scene, new Float3(0f, 10f, 0f), shape);
         int groundedOnSlope = 0;
@@ -72,7 +72,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void WalkingOffALedgeTallerThanTheSnapFalls(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, 1f, -3f), new Float3(4f, 2f, 6f));
         Walker walker = Spawn(scene, new Float3(0f, 2f, -1f), shape);
         bool leftTheGround = false;
@@ -88,7 +88,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void WalkingOffALedgeWithinTheSnapStaysGrounded(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, 0.2f, -3f), new Float3(4f, 0.4f, 6f));
         Walker walker = Spawn(scene, new Float3(0f, 0.4f, -1f), shape);
         walker.ResetCounts();
@@ -104,7 +104,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void TurningOffTheSnapLetsItFallOffEvenASmallLedge(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, 0.25f, -3f), new Float3(4f, 0.5f, 6f));
         Walker walker = Spawn(scene, new Float3(0f, 0.5f, -1f), shape);
         walker.Controller.SnapDownDistance = 0f;
@@ -120,7 +120,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void JumpingIntoAWallSlidesDownItAndLands(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, 3f, 2f), new Float3(8f, 6f, 1f));
         Walker walker = Spawn(scene, Float3.Zero, shape);
 
@@ -136,7 +136,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void JumpingAlongAWallKeepsTheSidewaysSpeed(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(1f, 3f, 0f), new Float3(1f, 6f, 30f));
         Walker walker = Spawn(scene, Float3.Zero, shape);
 
@@ -153,7 +153,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void AHighFallOntoThinGroundDoesNotPassThrough(ColliderShape shape)
     {
-        Scene scene = World();
+        SceneInstance scene = World();
         Box(scene, new Float3(0f, -0.05f, 0f), new Float3(10f, 0.1f, 10f));
         Walker walker = Spawn(scene, new Float3(0f, 40f, 0f), shape);
         walker.Gravity = 60f;
@@ -170,7 +170,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void RestingInASteepVCountsAsGround(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, 0.3f), 65f, 5f, width: 6f);
         Ramp(scene, new Float3(0f, 0f, -0.3f), 65f, 5f, width: 6f, yaw: 180f);
         Walker walker = Spawn(scene, new Float3(0f, 3f, 0f), shape);
@@ -188,7 +188,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void WalkingOutOfASteepVLeavesAtWalkingSpeed(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, 0.3f), 65f, 5f, width: 6f);
         Ramp(scene, new Float3(0f, 0f, -0.3f), 65f, 5f, width: 6f, yaw: 180f);
         Walker walker = Spawn(scene, new Float3(0f, 3f, 0f), shape);
@@ -217,7 +217,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder, 0.9f)]
     public void HangingPartlyOverAnEdgeStillStandsAndCanJump(ColliderShape shape, float overhang)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, 1f, -3f), new Float3(4f, 2f, 6f));
         Walker walker = Spawn(scene, new Float3(0f, 2f, -2f), shape);
         while (walker.Position.Z < walker.Controller.Radius * overhang && walker.Frames < 300) walker.Step(North * 0.5f);
@@ -247,7 +247,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder, 1.4f)]
     public void JumpingAtABlockAboutAsTallAsTheJumpNeverHangsOnItsEdge(ColliderShape shape, float height)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, height * 0.5f, 12f), new Float3(4f, height, 20f));
         Walker walker = Spawn(scene, new Float3(0f, 0f, 1f), shape);
         walker.Run(North * WalkSpeed, 0.1f);
@@ -271,7 +271,7 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void JumpingAtABlockJustLowEnoughLandsOnTop(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Box(scene, new Float3(0f, 0.4f, 3.5f), new Float3(4f, 0.8f, 3f));
         Walker walker = Spawn(scene, new Float3(0f, 0f, 1f), shape);
         walker.Run(North * WalkSpeed, 0.1f);

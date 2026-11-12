@@ -199,10 +199,9 @@ public class NavMeshLink : Component
         // Catch-up must survive any enable order between links and surfaces: a navmesh may
         // already be live (runtime-spawned link), or may only register later (scene load
         // order), which the registration event covers.
-        Scene? scene = Scene;
-        if (scene.IsValid())
+        if (IsInWorld)
         {
-            _world = scene.Navigation;
+            _world = Scene.Navigation;
             _world.InstanceRegistered += OnInstanceRegistered;
             _world.InstanceUnregistered += OnInstanceUnregistered;
             _world.RegisterLink(this);

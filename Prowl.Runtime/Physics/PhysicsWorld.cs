@@ -41,6 +41,9 @@ public class PhysicsWorld
     /// <summary>Enabled character controllers in this world. They have no body, so trigger volumes test them directly.</summary>
     internal readonly List<CharacterController> Characters = [];
 
+    /// <summary>The wheels hanging from each body, so each shares the body's mass with the others.</summary>
+    internal readonly Dictionary<Rigidbody3D, List<WheelCollider>> WheelsOnBody = [];
+
     /// <summary>
     /// Stops two rigidbodies colliding with each other, on top of whatever the layer matrix says. The
     /// pair is scoped to this world and is dropped when the world is cleared.
@@ -188,8 +191,8 @@ public class PhysicsWorld
     private List<Rigidbody3D> _movedBodies = [];
     private List<Rigidbody3D> _movedScratch = [];
 
-    // Colliders that can move relative to their body: static ones, and ones on a child GameObject.
-    private readonly List<Collider> _watchedColliders = [];
+    // Colliders whose placement or layer may have changed since the last sync, never ones on their rigidbody's own GameObject.
+    private readonly List<Collider> _pendingColliders = [];
     private uint _captureStamp;
 
     // Colliders without a Rigidbody3D all share one static body per layer, so a hit's body cannot say
@@ -614,6 +617,9 @@ public class PhysicsWorld
         return null;
     }
 
+    /// <summary>Bumped by every sync, so a Transform queues its colliders once a sync however often it moves.</summary>
+    internal static uint SyncEpoch { get; private set; } = 1;
+
     /// <summary>
     /// Pushes any changed Transforms into their physics bodies and collider shapes (transform -> body).
     /// Runs automatically before each simulation step when <see cref="AutoSyncTransforms"/> is on. Call it
@@ -645,36 +651,27 @@ public class PhysicsWorld
         _pendingSync.Add(body);
     }
 
-    internal void WatchCollider(Collider collider)
+    internal void QueueCheck(Collider collider)
     {
-        if (collider.WatchIndex >= 0) return;
-        collider.WatchIndex = _watchedColliders.Count;
-        _watchedColliders.Add(collider);
+        if (ReferenceEquals(collider.CheckQueuedIn, this)) return;
+        collider.CheckQueuedIn = this;
+        _pendingColliders.Add(collider);
     }
 
-    internal void UnwatchCollider(Collider collider)
-    {
-        int index = collider.WatchIndex;
-        if (index < 0 || index >= _watchedColliders.Count || !ReferenceEquals(_watchedColliders[index], collider)) return;
-
-        int last = _watchedColliders.Count - 1;
-        Collider moved = _watchedColliders[last];
-        _watchedColliders[index] = moved;
-        moved.WatchIndex = index;
-        _watchedColliders.RemoveAt(last);
-        collider.WatchIndex = -1;
-    }
-
-    /// <summary>Rebuilds the shapes of watched colliders whose placement changed.</summary>
+    /// <summary>Rebuilds the shapes of queued colliders whose placement changed.</summary>
     private void RefreshColliders()
     {
-        // Backwards, since a rebuild swaps the collider out of its slot and appends it again.
-        for (int i = _watchedColliders.Count - 1; i >= 0; i--)
+        // Indexed, since a rebuild queues the collider again and it is checked again in the same pass.
+        for (int i = 0; i < _pendingColliders.Count; i++)
         {
-            if (i >= _watchedColliders.Count) continue;
-            Collider collider = _watchedColliders[i];
+            Collider collider = _pendingColliders[i];
+            if (ReferenceEquals(collider, null)) continue; // a hot reload nulls a removed type's references
+            if (!ReferenceEquals(collider.CheckQueuedIn, this)) continue; // it left for another world
+            collider.CheckQueuedIn = null;
             if (collider.IsValid() && collider.EnabledInHierarchy) collider.RefreshPlacement();
         }
+        _pendingColliders.Clear();
+        SyncEpoch++;
     }
 
     /// <summary>
@@ -734,8 +731,34 @@ public class PhysicsWorld
     /// </summary>
     public event Action<float> PreSubStep;
 
+    private static PhysicsWorldSettings s_defaults = new();
+
+    /// <summary>The project physics settings. Every new world copies them, so previews, opened worlds and tests get them too.</summary>
+    public static PhysicsWorldSettings Defaults
+    {
+        get => s_defaults;
+        set => s_defaults = (value ?? throw new ArgumentNullException(nameof(value))).Clone();
+    }
+
+    /// <summary>Copies every setting from <paramref name="settings"/>.</summary>
+    public void ApplySettings(PhysicsWorldSettings settings)
+    {
+        Gravity = settings.Gravity;
+        SolverIterations = settings.SolverIterations;
+        RelaxIterations = settings.RelaxIterations;
+        Substep = settings.Substep;
+        AllowSleep = settings.AllowSleep;
+        UseMultithreading = settings.UseMultithreading;
+        AutoSyncTransforms = settings.AutoSyncTransforms;
+        EnhancedDeterminism = settings.EnhancedDeterminism;
+        ThreadModel = settings.ThreadModel;
+        EnableAuxiliaryContactPoints = settings.EnableAuxiliaryContactPoints;
+        PersistentContactManifold = settings.PersistentContactManifold;
+        SpeculativeRelaxationFactor = settings.SpeculativeRelaxationFactor;
+    }
+
     /// <summary>
-    /// Initializes a new empty <see cref="PhysicsWorld"/>.
+    /// Initializes a new empty <see cref="PhysicsWorld"/> with the project <see cref="Defaults"/>.
     /// </summary>
     public PhysicsWorld()
     {
@@ -756,6 +779,8 @@ public class PhysicsWorld
         World.PreStep += OnPreStep;
         World.PostStep += OnPostStep;
         World.PreSubStep += OnPreSubStep;
+
+        ApplySettings(s_defaults);
     }
 
     /// <summary>
@@ -867,6 +892,7 @@ public class PhysicsWorld
 
         // Clear the static rigidbodies dictionary - they will be recreated as needed
         _staticRigidbodiesByLayer.Clear();
+        WheelsOnBody.Clear();
 
         // World.Clear removed every body, so the per-body registries hold nothing worth visiting.
         // The components re-register when they recreate their bodies.
@@ -880,9 +906,9 @@ public class PhysicsWorld
         foreach (Rigidbody3D body in _pendingSync)
             body.SyncQueued = false;
         _pendingSync.Clear();
-        foreach (Collider collider in _watchedColliders)
-            collider.WatchIndex = -1;
-        _watchedColliders.Clear();
+        foreach (Collider collider in _pendingColliders)
+            if (ReferenceEquals(collider.CheckQueuedIn, this)) collider.CheckQueuedIn = null;
+        _pendingColliders.Clear();
         _shapeOwners.Clear();
         _shapeOwnersById.Clear();
         _layerFilter.ClearIgnoredCollisions();
@@ -2587,4 +2613,23 @@ public class PhysicsWorld
     }
 
     #endregion
+}
+
+/// <summary>The settings a <see cref="PhysicsWorld"/> starts with, from the project physics settings.</summary>
+public sealed class PhysicsWorldSettings
+{
+    public Float3 Gravity = new(0, -9.81f, 0);
+    public int SolverIterations = 12;
+    public int RelaxIterations = 4;
+    public int Substep = 3;
+    public bool AllowSleep = true;
+    public bool UseMultithreading = true;
+    public bool AutoSyncTransforms = true;
+    public bool EnhancedDeterminism;
+    public PhysicsThreadModel ThreadModel = PhysicsThreadModel.Regular;
+    public bool EnableAuxiliaryContactPoints = true;
+    public bool PersistentContactManifold = true;
+    public float SpeculativeRelaxationFactor = 0.9f;
+
+    public PhysicsWorldSettings Clone() => (PhysicsWorldSettings)MemberwiseClone();
 }

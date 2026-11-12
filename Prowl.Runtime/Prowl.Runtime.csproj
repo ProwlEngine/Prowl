@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -17,6 +17,7 @@
     <InternalsVisibleTo Include="Prowl.Editor" />
     <InternalsVisibleTo Include="Prowl.Editor.Test" />
     <InternalsVisibleTo Include="Prowl.CodeGen.Test" />
+    <InternalsVisibleTo Include="Prowl.Player.Desktop" />
   </ItemGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">

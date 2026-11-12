@@ -22,10 +22,12 @@ public class TimeSettings : ProjectSettingsBase
     {
         Runtime.Time.FixedDeltaTime = FixedTimestep;
         Runtime.Time.MaxFixedIterations = MaxFixedIterations;
-
-        // A running game owns its time scale. Entering play mode starts it from the default.
-        if (!Runtime.Application.IsPlaying)
-            Runtime.Time.TimeScale = DefaultTimeScale;
+        Runtime.SceneClock.Defaults = new Runtime.SceneClockSettings { TimeScale = DefaultTimeScale };
+        // Editor worlds made already take it too. Game worlds and anything during play belong to the game's own code.
+        if (Runtime.Application.IsPlaying) return;
+        foreach (Runtime.Resources.SceneInstance world in Runtime.Resources.SceneInstance.All)
+            if (world.Mode != Runtime.Resources.SceneMode.Game)
+                world.Clock.TimeScale = DefaultTimeScale;
     }
 
     public override void ResetToDefaults()

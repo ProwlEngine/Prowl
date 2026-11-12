@@ -33,20 +33,20 @@ public sealed class VRBasicsGame : Game
 {
     public override void Initialize()
     {
-        var scene = new Scene();
+        SceneInstance scene = SceneInstance.Main;
 
         var sun = new GameObject("Sun");
         DirectionalLight sunLight = sun.AddComponent<DirectionalLight>();
         sunLight.Intensity = 100000f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
-        scene.Add(sun);
+        sun.MoveTo(scene);
 
         var floor = new GameObject("Floor");
         floor.Transform.Position = new Float3(0f, -0.5f, 0f);
         floor.AddComponent<MeshRenderer>().Mesh = Mesh.CreateCube(new Float3(20f, 1f, 20f));
         floor.GetComponent<MeshRenderer>()!.Material = Lit(new Color(0.12f, 0.13f, 0.15f, 1f));
         floor.AddComponent<BoxCollider>().Size = new Float3(20f, 1f, 20f);
-        scene.Add(floor);
+        floor.MoveTo(scene);
 
         // Blocks on a table in front of the player.
         var table = new GameObject("Table");
@@ -54,7 +54,7 @@ public sealed class VRBasicsGame : Game
         table.AddComponent<MeshRenderer>().Mesh = Mesh.CreateCube(new Float3(1.2f, 0.8f, 0.6f));
         table.GetComponent<MeshRenderer>()!.Material = Lit(new Color(0.16f, 0.08f, 0.035f, 1f));
         table.AddComponent<BoxCollider>().Size = new Float3(1.2f, 0.8f, 0.6f);
-        scene.Add(table);
+        table.MoveTo(scene);
 
         for (int i = 0; i < 5; i++)
         {
@@ -66,7 +66,7 @@ public sealed class VRBasicsGame : Game
             Rigidbody3D body = block.AddComponent<Rigidbody3D>();
             body.Mass = 0.3f;
             SimpleHand.Grabbables.Add(body);
-            scene.Add(block);
+            block.MoveTo(scene);
         }
 
         // The player: a tracking space with the head and hands in it.
@@ -89,10 +89,9 @@ public sealed class VRBasicsGame : Game
             hand.AddComponent<MeshRenderer>().Mesh = Mesh.CreateCube(new Float3(0.06f, 0.04f, 0.12f));
             hand.AddComponent<SimpleHand>().Hand = side;
         }
-        scene.Add(rig);
+        rig.MoveTo(scene);
 
         XR.Start();
-        Scene.Load(scene);
     }
 
     public static Material Lit(Color color)

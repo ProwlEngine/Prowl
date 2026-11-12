@@ -7,10 +7,10 @@ description: Prowl physics for gameplay. Use when writing movement with Characte
 
 ## Queries
 
-Queries live on the scene: `Scene.Current.Physics`. `Scene` is in `Prowl.Runtime.Resources`, and without that using, `Scene` inside a component means the component's own nullable `Scene` property. Queries are **main thread only**.
+Queries live on the world: `SceneInstance.Main.Physics`, or the static `Physics` class for the world whose code is running. `SceneInstance` is in `Prowl.Runtime.Resources`. Inside a component, `Scene` is the component's own nullable `Scene` property. Queries are **main thread only**.
 
 - `Raycast(origin, direction, out RaycastHit hit)` and `Raycast(origin, direction, maxDistance, out hit)`.
-- **With a filter, Raycast moves the out before the distance:** `Raycast(origin, direction, out hit, maxDistance, filter)`. SphereCast keeps it after: `SphereCast(origin, radius, direction, maxDistance, out hit, filter)`.
+- **With a filter, the out comes after the distance:** `Raycast(origin, direction, maxDistance, out hit, filter)`, the same as `SphereCast(origin, radius, direction, maxDistance, out hit, filter)`.
 - `RaycastAll(origin, direction, maxDistance, hits)` fills a list, nearest first. `Linecast(from, to, out hit)`.
 - `SphereCast(origin, radius, direction, maxDistance, out ShapeCastHit hit)`, `OverlapSphere(position, radius, hits)`, `OverlapBox(position, size, rotation, hits)`. Box sizes are full extents, not half.
 - The direction is normalized for you.
@@ -41,7 +41,7 @@ public sealed class HitscanGun : Component
         if (!Input.GetMouseButtonDown(0)) return;
 
         QueryFilter filter = Owner.IsValid() ? new QueryFilter(LayerMask.Everything).Ignoring(Owner) : QueryFilter.Default;
-        if (Scene.Current.Physics.Raycast(Transform.Position, Transform.Forward, out RaycastHit hit, Range, filter))
+        if (SceneInstance.Main.Physics.Raycast(Transform.Position, Transform.Forward, Range, out RaycastHit hit, filter))
         {
             if (hit.Transform.GameObject.TryGetComponent<Health>(out var health)) health.Hurt(Damage);
             if (hit.Rigidbody.IsValid()) hit.Rigidbody.ApplyImpulse(Transform.Forward * 2f, hit.Point);

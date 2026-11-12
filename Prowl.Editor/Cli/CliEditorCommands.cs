@@ -26,7 +26,6 @@ using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Echo;
-using Prowl.Runtime.Rendering;
 using Prowl.Editor.Build;
 using Shader = Prowl.Runtime.Resources.Shader;
 using Material = Prowl.Runtime.Resources.Material;
@@ -46,12 +45,12 @@ public static class LogHistory
     /// <summary> The sequence number the next log will get. </summary>
     public static long NextSeq { get { lock (s_lock) return s_next; } }
 
-    public static void Add(string message, DebugStackTrace? stack, LogSeverity severity)
+    public static void Add(LogEvent e)
     {
         lock (s_lock)
         {
             long seq = s_next++;
-            s_ring[seq % Capacity] = new Entry(seq, DateTime.UtcNow, severity, message, stack);
+            s_ring[seq % Capacity] = new Entry(seq, DateTime.UtcNow, e.Severity, e.Message, e.StackTrace);
         }
     }
 
@@ -95,7 +94,7 @@ public static class CliEditorCommands
     public enum LogFilter { All, Warning, Error }
     public enum GoAction { Create, Delete, Duplicate, Rename, Parent, Active, Transform }
     public enum ComponentAction { Add, Remove, List }
-    public enum SceneAction { Info, Open, Save, SaveAs, New }
+    public enum SceneAction { Info, Open, OpenAdditive, New, NewAdditive, Load, Unload, Remove, SetActive, Save, SaveAs }
 
     // ================================================================
     //  Editor
@@ -106,10 +105,10 @@ public static class CliEditorCommands
     {
         project = Project.Current?.Name,
         projectPath = Project.Current?.RootPath,
-        scene = EditorSceneManager.CurrentScenePath,
-        dirty = EditorSceneManager.IsDirty,
+        scenes = EditorSceneManager.OpenScenes.Select(o => o.Name).ToList(),
+        dirty = EditorSceneManager.HasDirtyScenes || (PrefabEditingMode.IsEditing && PrefabEditingMode.IsDirty),
         isPlaying = Application.IsPlaying,
-        isPaused = Application.IsPaused,
+        isPaused = EditorApplication.IsPlayPaused,
         compiling = ScriptAssemblyManager.IsCompiling,
         lastCompile = ScriptAssemblyManager.LastCompile is { } c
             ? new { ok = c.Success, errors = c.Diagnostics.Count(d => d.Severity == "Error"), warnings = c.Diagnostics.Count(d => d.Severity == "Warning") }
@@ -149,9 +148,9 @@ public static class CliEditorCommands
     }
 
     [CliCommand("undo", "Undoes, or with --redo redoes, editor steps")]
-    public static object UndoCommand([CliArg("steps", "How many steps")] int steps = 1, [CliArg("redo", "Redo instead")] bool redo = false)
+    public static async Task<object> UndoCommand([CliArg("steps", "How many steps")] int steps = 1, [CliArg("redo", "Redo instead")] bool redo = false)
     {
-        if (Application.IsPlaying) throw new CliException("Undo is not available in play mode.");
+        await CliEdit.WaitForEditor();
 
         var done = new List<string>();
         for (int i = 0; i < steps; i++)
@@ -218,63 +217,113 @@ public static class CliEditorCommands
     //  Scene and hierarchy
     // ================================================================
 
-    [CliCommand("scene", "Shows, opens, saves or creates the scene. Opening or creating refuses to drop unsaved changes unless --force")]
+    [CliCommand("scene", "Lists the open scenes, and opens, adds, loads, unloads, removes, activates, saves or creates them. Closing one with unsaved changes is refused unless --force")]
     public static object SceneCommand(
         [CliArg("action")] SceneAction action = SceneAction.Info,
-        [CliArg("path", "Scene path relative to Assets, for open and saveas")] string path = "",
+        [CliArg("path", "Scene path relative to Assets, for open, openadditive and saveas")] string path = "",
+        [CliArg("scene", "An open scene's name or path, for load, unload, remove, setactive, save, saveas and info")] string scene = "",
         [CliArg("force", "Discard unsaved changes")] bool force = false)
     {
         switch (action)
         {
             case SceneAction.Open:
-                RequirePath(path);
-                RequireClean(force);
-                if (!EditorSceneManager.OpenScene(CliRefs.AssetPath(path))) throw new CliException($"Could not open '{path}'. See the logs.");
+                Guarded(() => EditorSceneManager.Open(SceneAt(Require(path, "path")), force));
+                break;
+            case SceneAction.OpenAdditive:
+                Guarded(() => EditorSceneManager.OpenAdditive(SceneAt(Require(path, "path"))));
                 break;
             case SceneAction.New:
-                RequireClean(force);
-                EditorSceneManager.NewScene();
+                Guarded(() => EditorSceneManager.New(force: force));
                 break;
+            case SceneAction.NewAdditive:
+                Guarded(() => EditorSceneManager.New(additive: true));
+                break;
+            case SceneAction.Load:
+                Guarded(() => EditorSceneManager.Load(Listed(scene)));
+                break;
+            case SceneAction.Unload:
+                Guarded(() => EditorSceneManager.Unload(Listed(scene), force));
+                break;
+            case SceneAction.Remove:
+                Guarded(() => EditorSceneManager.Remove(Listed(scene), force));
+                break;
+            case SceneAction.SetActive:
+                Guarded(() => EditorSceneManager.SetActive(Listed(scene)));
+                break;
+            case SceneAction.Save when scene.Length > 0:
+            {
+                OpenScene listed = Listed(scene);
+                if (listed.Path == null) throw new CliException($"'{listed.Name}' has never been saved. Use --action saveas --scene \"{listed.Name}\" --path Scenes/Name.scene.");
+                if (!EditorSceneManager.Save(listed)) throw new CliException("Saving failed. See the logs.");
+                break;
+            }
             case SceneAction.Save:
-                if (EditorSceneManager.CurrentScenePath == null) throw new CliException("The scene has never been saved. Use --action saveas --path Scenes/Name.scene.");
-                if (!EditorSceneManager.Save()) throw new CliException("Saving failed. See the logs.");
+                if (EditorSceneManager.OpenScenes.FirstOrDefault(o => o.IsDirty && o.Path == null) is { } untitled)
+                    throw new CliException($"'{untitled.Name}' has never been saved. Use --action saveas --scene \"{untitled.Name}\" --path Scenes/Name.scene.");
+                if (!EditorSceneManager.SaveAll()) throw new CliException("Saving failed. See the logs.");
                 break;
             case SceneAction.SaveAs:
-                RequirePath(path);
-                if (!EditorSceneManager.SaveAs(CliRefs.AssetPath(path))) throw new CliException("Saving failed. See the logs.");
+            {
+                OpenScene listed = scene.Length > 0 ? Listed(scene) : EditorSceneManager.ActiveScene;
+                if (!EditorSceneManager.SaveAs(listed, CliRefs.AssetPath(Require(path, "path")))) throw new CliException("Saving failed. See the logs.");
                 break;
+            }
         }
 
-        // Opening or creating only queues the swap for the end of the frame. Commands run between frames, so it can happen now.
-        if (Scene.IsLoadPending) Scene.ProcessPendingLoad();
+        // Commands run between frames, so the editor's queued scene changes apply at once.
+        EditorSceneManager.ApplyPendingNow();
 
-        return new
+        if (scene.Length > 0 && action != SceneAction.Remove)
         {
-            path = EditorSceneManager.CurrentScenePath,
-            dirty = EditorSceneManager.IsDirty,
-            objects = Scene.Current.IsValid() ? Scene.Current.AllObjects.Count() : 0,
-            roots = Scene.Current.IsValid() ? Scene.Current.RootObjects.Select(g => g.Name).ToList() : [],
-        };
+            OpenScene listed = Listed(scene);
+            return Describe(listed, roots: true);
+        }
+        return new { scenes = EditorSceneManager.OpenScenes.Select(o => Describe(o, roots: false)).ToList() };
 
-        static void RequirePath(string path)
+        static JsonObject Describe(OpenScene open, bool roots)
         {
-            if (path.Length == 0) throw new CliException("Give --path, relative to the Assets folder.");
+            var node = new JsonObject
+            {
+                ["name"] = open.Name,
+                ["path"] = open.Path,
+                ["loaded"] = open.IsLoaded,
+                ["active"] = open.IsActive,
+                ["dirty"] = open.IsDirty,
+            };
+            if (open.Section != null)
+            {
+                node["objects"] = open.Section.Roots.Sum(r => 1 + r.GetChildrenDeep().Count());
+                if (roots) node["roots"] = new JsonArray(open.Section.Roots.Select(g => (JsonNode)JsonValue.Create(g.Name)!).ToArray());
+            }
+            return node;
         }
 
-        static void RequireClean(bool force)
+        static string Require(string value, string arg)
+            => value.Length > 0 ? value : throw new CliException($"Give --{arg}{(arg == "path" ? ", relative to the Assets folder" : "")}.");
+
+        static Scene SceneAt(string path)
         {
-            if (EditorSceneManager.IsDirty && !force) throw new CliException("The scene has unsaved changes. Save it first, or pass --force to discard them.");
+            Scene? asset = EditorSceneManager.SceneAt(CliRefs.AssetPath(path));
+            return asset.IsValid() ? asset : throw new CliException($"No scene at '{path}'.");
+        }
+
+        static OpenScene Listed(string name) => CliRefs.OpenSceneNamed(Require(name, "scene"));
+
+        static void Guarded(Action action)
+        {
+            try { action(); }
+            catch (InvalidOperationException e) { throw new CliException(e.Message); }
         }
     }
 
-    [CliCommand("tree", "The scene hierarchy, or part of it. --filter lists every object whose name or component type contains the text")]
+    [CliCommand("tree", "The hierarchy grouped by scene, or part of it. --filter lists every object whose name or component type contains the text")]
     public static object Tree(
         [CliArg("root", "Start here instead of the scene root")] string root = "",
         [CliArg("depth", "Levels to descend")] int depth = 3,
         [CliArg("components", "List component types")] bool components = true,
         [CliArg("filter", "Name or component type to search for")] string filter = "")
     {
-        IEnumerable<GameObject> starts = root.Length > 0 ? [CliRefs.ResolveGameObject(root)] : CliRefs.Scene.RootObjects;
+        IEnumerable<GameObject> starts = root.Length > 0 ? [CliRefs.ResolveGameObject(root)] : CliRefs.Scene.Roots;
 
         if (filter.Length > 0)
         {
@@ -288,7 +337,18 @@ public static class CliEditorCommands
             return new { count = matches.Count, matches };
         }
 
-        return starts.Select(g => Node(g, Math.Max(0, depth), components)).ToList();
+        if (root.Length > 0) return starts.Select(g => Node(g, Math.Max(0, depth), components)).ToList();
+
+        SceneInstance world = CliRefs.Scene;
+        return world.Sections
+            .Where(s => !s.IsPersistent || !s.Roots.IsEmpty)
+            .Select(s => new JsonObject
+            {
+                ["scene"] = s.IsPersistent ? "Persistent" : s.Name,
+                ["active"] = ReferenceEquals(s, world.ActiveSection),
+                ["roots"] = new JsonArray(s.Roots.Select(g => (JsonNode)Node(g, Math.Max(0, depth), components)).ToArray()),
+            })
+            .ToList();
     }
 
     private static JsonObject Node(GameObject go, int depth, bool components)
@@ -319,7 +379,7 @@ public static class CliEditorCommands
     }
 
     [CliCommand("go", "Creates, deletes, duplicates, renames, reparents, activates or moves GameObjects. One undo step per call")]
-    public static object Go(
+    public static async Task<object> Go(
         [CliArg("action")] GoAction action,
         [CliArg("target", "Ref of the object, or a comma list for delete, duplicate and active")] string target = "",
         [CliArg("name", "Name for create and rename")] string name = "",
@@ -331,9 +391,11 @@ public static class CliEditorCommands
         [CliArg("scale", "[x, y, z]")] string scale = "",
         [CliArg("world", "Position and rotation are in world space instead of relative to the parent")] bool world = false,
         [CliArg("active", "For active: whether the objects are active")] bool active = true,
-        [CliArg("index", "Sibling index for create and parent")] int index = -1)
+        [CliArg("index", "Sibling index for create and parent")] int index = -1,
+        [CliArg("scene", "For create without a parent: the open scene to create in, the active scene by default")] string inScene = "")
     {
-        Scene scene = CliRefs.Scene;
+        await CliEdit.WaitForEditor();
+        SceneInstance scene = CliRefs.Scene;
         switch (action)
         {
             case GoAction.Create:
@@ -349,7 +411,8 @@ public static class CliEditorCommands
                     }
                     else go = new GameObject(name.Length > 0 ? name : "GameObject");
 
-                    scene.Add(go);
+                    SceneSection? section = inScene.Length > 0 ? CliRefs.SectionOf(CliRefs.OpenSceneNamed(inScene)) : null;
+                    scene.Add(go, section);
                     if (parent.Length > 0 && parent != "/") go.SetParent(CliRefs.ResolveGameObject(parent), worldPositionStays: false);
                     if (index >= 0) go.SetSiblingIndex(index);
                     foreach (string typeName in CliRefs.SplitList(components))
@@ -357,7 +420,7 @@ public static class CliEditorCommands
                     ApplyTransform(go, position, rotation, scale, world);
 
                     Selection.Select(go);
-                    Undo.RegisterCreatedObject(go, "CLI: Create");
+                    Undo.RegisterCreatedObjectUndo(go, "CLI: Create");
                     return Described(go);
                 });
 
@@ -375,7 +438,7 @@ public static class CliEditorCommands
                 return CliEdit.Run("Duplicate", () =>
                 {
                     List<GameObject> copies = GameObjectClipboard.Duplicate(Targets(target));
-                    foreach (GameObject copy in copies) Undo.RegisterCreatedObject(copy, "CLI: Duplicate");
+                    foreach (GameObject copy in copies) Undo.RegisterCreatedObjectUndo(copy, "CLI: Duplicate");
                     return copies.Select(CliRefs.Summary).ToList();
                 });
 
@@ -385,7 +448,7 @@ public static class CliEditorCommands
                 string newName = Require(name, "name");
                 CliEdit.Run("Rename", () =>
                 {
-                    Undo.RecordGameObjectChange(go, "CLI: Rename", go.Name, newName, (g, v) => g.Name = v);
+                    Undo.RecordObject(go, "CLI: Rename");
                     go.Name = newName;
                 });
                 return CliRefs.Summary(go);
@@ -403,8 +466,11 @@ public static class CliEditorCommands
 
                 CliEdit.Run("Parent", () =>
                 {
-                    var actions = targets.Select(go => Reparent(scene, go, newParent, index, world)).ToList();
-                    CliEdit.Record("Parent", actions);
+                    foreach (GameObject go in targets)
+                    {
+                        Undo.SetTransformParent(go, newParent, world, "CLI: Parent");
+                        if (index >= 0) Undo.SetSiblingIndex(go, index, "CLI: Parent");
+                    }
                 });
                 return targets.Select(CliRefs.Summary).ToList();
             }
@@ -412,24 +478,21 @@ public static class CliEditorCommands
             case GoAction.Active:
             {
                     List<GameObject> targets = Targets(target);
-                CliEdit.Run("Active", () => Undo.ApplyGameObjectChanges(targets, "CLI: Active", g => g.Enabled, (g, v) => g.Enabled = v, active));
+                CliEdit.Run("Active", () =>
+                {
+                    Undo.RecordObjects(targets, "CLI: Active");
+                    foreach (GameObject go in targets) go.Enabled = active;
+                });
                 return targets.Select(CliRefs.Summary).ToList();
             }
 
             case GoAction.Transform:
             {
                     GameObject go = CliRefs.ResolveGameObject(Require(target, "target"));
-                    (Float3 LocalPosition, Quaternion LocalRotation, Float3 LocalScale) before = (go.Transform.LocalPosition, go.Transform.LocalRotation, go.Transform.LocalScale);
                 CliEdit.Run("Transform", () =>
                 {
+                    Undo.RecordObject(go, "CLI: Transform");
                     ApplyTransform(go, position, rotation, scale, world);
-                    (Float3 LocalPosition, Quaternion LocalRotation, Float3 LocalScale) after = (go.Transform.LocalPosition, go.Transform.LocalRotation, go.Transform.LocalScale);
-                    Undo.RecordGameObjectChange(go, "CLI: Transform", before, after, (g, v) =>
-                    {
-                        g.Transform.LocalPosition = v.Item1;
-                        g.Transform.LocalRotation = v.Item2;
-                        g.Transform.LocalScale = v.Item3;
-                    });
                 });
                 return Described(go);
             }
@@ -469,34 +532,14 @@ public static class CliEditorCommands
         return node;
     }
 
-    private static (Action undo, Action redo) Reparent(Scene scene, GameObject go, GameObject? newParent, int index, bool keepWorld)
-    {
-        Guid goId = go.Identifier;
-        Guid oldParentId = go.Parent.IsValid() ? go.Parent.Identifier : Guid.Empty;
-        Guid newParentId = newParent.IsValid() ? newParent.Identifier : Guid.Empty;
-        int oldIndex = go.Parent.IsValid() ? go.GetSiblingIndex() ?? -1 : scene.GetRootIndex(go);
-
-        Move(go, newParentId, index);
-        return (() => { if (Undo.FindGO(goId) is { } g) Move(g, oldParentId, oldIndex); },
-                () => { if (Undo.FindGO(goId) is { } g) Move(g, newParentId, index); });
-
-        void Move(GameObject g, Guid parentId, int siblingIndex)
-        {
-            GameObject? p = parentId == Guid.Empty ? null : Undo.FindGO(parentId);
-            g.SetParent(p!, keepWorld);
-            if (siblingIndex < 0) return;
-            if (p.IsValid()) g.SetSiblingIndex(siblingIndex);
-            else if (Scene.Current.IsValid()) Scene.Current.SetRootIndex(g, siblingIndex);
-        }
-    }
-
     [CliCommand("component", "Adds (optionally setting --values), removes, or lists components. One undo step per call")]
-    public static object Component(
+    public static async Task<object> Component(
         [CliArg("action")] ComponentAction action,
         [CliArg("target", "GameObject ref, or a component ref like /Player:Rigidbody3D for remove")] string target,
         [CliArg("type", "Component type name for add")] string type = "",
         [CliArg("values", "JSON object of field path to value, applied after add")] string values = "")
     {
+        await CliEdit.WaitForEditor();
         switch (action)
         {
             case ComponentAction.List:
@@ -509,7 +552,7 @@ public static class CliEditorCommands
                     List<(string Path, string Json)> fieldValues = ParseValues(values);
                 return CliEdit.Run("Add Component", () =>
                 {
-                    Component added = go.AddComponent(componentType);
+                    Component added = Undo.AddComponent(go, componentType);
                     if (added.IsNotValid()) throw new CliException($"{componentType.Name} could not be added to {go.Name}. See the logs.");
                     try
                     {
@@ -517,10 +560,9 @@ public static class CliEditorCommands
                     }
                     catch
                     {
-                        go.RemoveComponent(added);
+                        Undo.RevertAllInCurrentGroup();
                         throw;
                     }
-                    RecordAdd(go, added);
                     JsonObject summary = CliRefs.Summary(added);
                     summary["fields"] = CliRefs.GetFields(added, "");
                     return summary;
@@ -539,20 +581,6 @@ public static class CliEditorCommands
         }
 
         throw new CliException($"Unknown action {action}.");
-    }
-
-    private static void RecordAdd(GameObject go, Component added)
-    {
-        Guid goId = go.Identifier, compId = added.Identifier;
-        Type compType = added.GetType();
-        EchoObject serialized = Echo.Serializer.Serialize(compType, added);
-        Undo.RegisterAction("CLI: Add Component",
-            undo: () => { if (Undo.FindGO(goId) is { } g && g.GetComponentByIdentifier(compId) is { } c) g.RemoveComponent(c); },
-            redo: () =>
-            {
-                if (Undo.FindGO(goId) is not { } g) return;
-                if (Echo.Serializer.Deserialize(serialized, compType) is Component c) { c.Identifier = compId; g.AddComponent(c); }
-            });
     }
 
     /// <summary> A JSON object of field path to value, each value kept as JSON text. </summary>
@@ -596,12 +624,13 @@ public static class CliEditorCommands
     }
 
     [CliCommand("set", "Writes field paths on a component or asset from JSON. A ref string sets a scene or asset reference. One undo step")]
-    public static object Set(
+    public static async Task<object> Set(
         [CliArg("target", "Component or asset ref")] string target,
         [CliArg("path", "Field path, for example speed or points[2].x")] string path = "",
         [CliArg("value", "JSON value. A bare word is a string, a ref sets a reference")] string value = "",
         [CliArg("values", "JSON object of field path to value, to set several at once")] string values = "")
     {
+        await CliEdit.WaitForEditor();
         List<(string Path, string Json)> list = ParseValues(values);
         if (path.Length > 0) list.Insert(0, (path, value));
         if (list.Count == 0) throw new CliException("Give --path and --value, or --values with a JSON object.");
@@ -613,11 +642,12 @@ public static class CliEditorCommands
     // ================================================================
 
     [CliCommand("menu", "Runs any editor menu item by path, such as GameObject/3D/Cube or Window/General/Console. Without --path lists them")]
-    public static object Menu(
+    public static async Task<object> Menu(
         [CliArg("path", "Menu path, or a prefix to list under")] string path = "",
         [CliArg("context", "GameObject the item acts on, for items that use one")] string context = "",
         [CliArg("list", "List the items under --path instead of running it")] bool list = false)
     {
+        await CliEdit.WaitForEditor();
         AppMenuItem? item = FindMenu(path);
         if (list || path.Length == 0 || item is { HasSubItems: true })
         {
@@ -885,12 +915,13 @@ public static class CliEditorCommands
     public enum PrefabAction { Create, Apply, Revert, Unpack, Overrides }
 
     [CliCommand("prefab", "Saves a GameObject as a prefab, or applies, reverts, unpacks or lists the overrides and additions of a prefab instance. Apply writes both into the prefab")]
-    public static object Prefab(
+    public static async Task<object> Prefab(
         [CliArg("action")] PrefabAction action,
         [CliArg("target", "GameObject ref")] string target,
         [CliArg("path", "Prefab path relative to Assets, for create")] string path = "",
         [CliArg("overwrite", "Replace an existing prefab on create")] bool overwrite = false)
     {
+        await CliEdit.WaitForEditor();
         GameObject go = CliRefs.ResolveGameObject(target);
         GameObject Root() => PrefabUtility.GetPrefabInstanceRoot(go) is { } root && root.IsValid()
             ? root : throw new CliException($"{CliRefs.PathOf(go)} is not part of a prefab instance.");
@@ -913,15 +944,16 @@ public static class CliEditorCommands
                 Guid rootId = root.Identifier;
                 int overrides = PrefabUtility.CountOverrides(root);
                     List<PrefabUtility.AdditionDescription> additions = PrefabUtility.DescribeAdditions(root);
+                GameObject? LiveRoot() => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.FindObject<GameObject>(rootId) : null;
                 CliEdit.Run("Apply Prefab", () =>
                 {
                     PrefabUtility.ApplyOverrides(root);
                     // Each apply refreshes the instance, which can replace its objects, so the root is found again every time.
                     foreach (PrefabUtility.AdditionDescription addition in additions)
-                        if (Undo.FindGO(rootId) is { } live && live.IsValid())
+                        if (LiveRoot() is { } live && live.IsValid())
                             PrefabUtility.ApplyAddition(live, addition);
                 });
-                    GameObject? applied = Undo.FindGO(rootId);
+                    GameObject? applied = LiveRoot();
                 return new
                 {
                     instance = applied.IsValid() ? CliRefs.Summary(applied!) : null,
@@ -960,11 +992,12 @@ public static class CliEditorCommands
     }
 
     [CliCommand("material", "Shows a material's shader properties, or sets them with --values and swaps the shader with --shader. One undo step")]
-    public static object MaterialCommand(
+    public static async Task<object> MaterialCommand(
         [CliArg("target", "Material asset ref")] string target,
         [CliArg("values", "JSON object of property name to value. Colors and vectors are arrays, textures are asset refs")] string values = "",
         [CliArg("shader", "Shader asset ref to switch to")] string shader = "")
     {
+        await CliEdit.WaitForEditor();
         if (CliRefs.Resolve(target) is not Material material) throw new CliException($"'{target}' is not a material.");
         List<(string Path, string Json)> changes = ParseValues(values);
 
@@ -1089,19 +1122,18 @@ public static class CliEditorCommands
                 break;
             case PlayAction.Pause:
                 RequirePlaying();
-                Application.IsPaused = true;
+                SceneInstance.Main.Paused = true;
                 break;
             case PlayAction.Resume:
                 RequirePlaying();
-                Application.IsPaused = false;
+                SceneInstance.Main.Paused = false;
                 break;
             case PlayAction.Step:
                 RequirePlaying();
                 for (int i = 0; i < Math.Clamp(frames, 1, 600); i++)
                 {
-                    Application.IsPaused = true;
-                    Application.StepRequested = true;
-                    if (!await CliServer.WaitUntil(() => !Application.StepRequested, TimeSpan.FromSeconds(10))) break;
+                    EditorApplication.StepOneFrame();
+                    if (!await CliServer.WaitUntil(() => !SceneInstance.HasMain || !SceneInstance.Main.IsStepPending, TimeSpan.FromSeconds(10))) break;
                 }
                 break;
             case PlayAction.Wait:
@@ -1113,7 +1145,7 @@ public static class CliEditorCommands
         return new
         {
             isPlaying = Application.IsPlaying,
-            isPaused = Application.IsPaused,
+            isPaused = EditorApplication.IsPlayPaused,
             frame = Time.FrameCount,
             errors = LogHistory.Since(since, s => s is LogSeverity.Error or LogSeverity.Exception, 50).Select(e => e.Message).ToList(),
         };
@@ -1194,7 +1226,7 @@ public static class CliEditorCommands
         RenderTexture? rt = view switch
         {
             ScreenshotView.Scene => SceneViewPanel.ActiveCamera?.RenderTarget,
-            _ => EditorApplication.Instance?.FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel game ? game.RenderTarget : null,
+            _ => EditorApplication.Instance?.FindOpenPanel<GameViewPanel>() is GameViewPanel game ? game.RenderTarget : null,
         };
         if (rt.IsNotValid() || rt!.MainTexture.IsNotValid())
             throw new CliException(view == ScreenshotView.Scene
@@ -1247,13 +1279,14 @@ public static class CliEditorCommands
     public enum GraphAction { Describe, Types, Edit }
 
     [CliCommand("graph", "Reads an animation graph, lists node types, or edits it with a JSON list of --ops. See the description of each op in 'graph --action types'")]
-    public static object Graph(
+    public static async Task<object> Graph(
         [CliArg("target", "Animation graph asset ref, not needed for types")] string target = "",
         [CliArg("action")] GraphAction action = GraphAction.Describe,
         [CliArg("ops", "JSON array of edits, applied in order as one undo step")] string ops = "",
         [CliArg("filter", "Text a node type must contain, for types")] string filter = "",
         [CliArg("save", "Save the graph after editing")] bool save = true)
     {
+        await CliEdit.WaitForEditor();
         if (action == GraphAction.Types) return CliGraph.Types(filter);
 
         if (CliRefs.Resolve(Require(target, "target")) is not AnimationGraph graph) throw new CliException($"'{target}' is not an animation graph.");
@@ -1278,9 +1311,39 @@ public static class CliEditorCommands
         foreach (JsonNode? op in list) CliGraph.Apply(copy, op as JsonObject ?? throw new CliException("Each op must be a JSON object."), dryIds);
 
         if (!AnimationGraphWindow.TryEditOpen(graph.AssetID, "CLI: Graph", Change, save))
-            CliEdit.EditAsset(graph, "Graph", Change);
+        {
+            if (save) CliEdit.EditAsset(graph, "Graph", Change);
+            else EditLoadedGraph(graph, Change);
+        }
 
         return new { results, graph = CliGraph.Describe(graph) };
+    }
+
+    /// <summary>Edits the loaded graph without saving it, as one undo step that marks the graph dirty.</summary>
+    private static void EditLoadedGraph(AnimationGraph graph, Action change)
+    {
+        var domain = new AnimationGraphDomain(graph);
+        EchoObject before = domain.Snapshot();
+        CliEdit.Run("Graph", () =>
+        {
+            change();
+            Undo.RegisterOperation(new LoadedGraphOperation(graph.AssetID, UndoOwner.Of(graph), before, domain.Snapshot()));
+        });
+    }
+
+    private sealed class LoadedGraphOperation(Guid graph, UndoOwner owner, EchoObject before, EchoObject after) : IUndoOperation
+    {
+        public string Name => "CLI: Graph";
+        public IReadOnlyList<UndoOwner> Owners { get; } = [owner];
+        public void Undo() => Restore(before);
+        public void Redo() => Restore(after);
+
+        private void Restore(EchoObject snapshot)
+        {
+            if (AnimationGraphWindow.TryRestoreOpen(graph, snapshot, true)) return;
+            if (AssetDatabase.TryGetExisting(graph, out Asset asset) && asset is AnimationGraph { IsLoaded: true } loaded)
+                new AnimationGraphDomain(loaded).Restore(snapshot, true);
+        }
     }
 
     // ================================================================
@@ -1301,16 +1364,18 @@ public static class CliEditorCommands
     }
 
     [CliCommand("importer", "Shows an asset's import settings, or merges --values into them and reimports. Nested keys use dots, such as clips.Fire.loop")]
-    public static object Importer(
+    public static async Task<object> Importer(
         [CliArg("target", "Asset ref")] string target,
         [CliArg("values", "JSON object of settings key to value")] string values = "")
     {
+        await CliEdit.WaitForEditor();
         Guid guid = CliRefs.ResolveAssetGuid(target);
         AssetEntry entry = CliRefs.Assets.GetEntry(guid) ?? throw new CliException($"'{target}' is a sub asset. Import settings belong to the file it came from.");
         string metaPath = MetaFile.GetMetaPath(Path.Combine(Project.Current!.AssetsPath, entry.Path));
         if (!File.Exists(metaPath)) throw new CliException($"'{entry.Path}' has no .meta file yet. Run 'asset --action import' first.");
 
         MetaFileData meta = MetaFile.Read(metaPath);
+        EchoObject? before = meta.Settings?.Clone();
         EchoObject settings = meta.Settings ?? Echo.EchoObject.NewCompound();
         EchoObject? defaults = EditorRegistries.CreateImporterByName(entry.ImporterType)?.DefaultSettings();
         if (defaults != null)
@@ -1321,10 +1386,12 @@ public static class CliEditorCommands
         if (changes.Count > 0)
         {
             foreach ((string? key, string? json) in changes) CliRefs.SetEchoPath(settings, key, json);
-            meta.Settings = settings;
-            MetaFile.Write(metaPath, meta);
-            ImportSettingsEditor.Forget(guid);
-            CliRefs.Assets.Reimport(guid);
+            EchoObject after = settings.Clone();
+            CliEdit.Run("Import Settings", () =>
+            {
+                WriteImportSettings(guid, after);
+                Undo.RegisterOperation(new ImportSettingsOperation(guid, before, after));
+            });
         }
 
         return new
@@ -1334,6 +1401,30 @@ public static class CliEditorCommands
             settings = CliRefs.EchoToJson(settings),
             subAssets = CliRefs.Assets.GetSubAssets(guid).Select(s => new { name = s.Name, type = s.Type?.Name, @ref = $"{entry.Path}#{s.Name}" }).ToList(),
         };
+    }
+
+    /// <summary>Writes an asset's import settings to its .meta, drops what the inspector cached of them, and reimports.</summary>
+    private static void WriteImportSettings(Guid guid, EchoObject? settings)
+    {
+        if (EditorAssetBackend.Instance is not EditorAssetBackend assets || Project.Current == null) return;
+        if (assets.GetEntry(guid) is not AssetEntry entry) return;
+        string metaPath = MetaFile.GetMetaPath(Path.Combine(Project.Current.AssetsPath, entry.Path));
+        if (!File.Exists(metaPath)) return;
+
+        MetaFileData meta = MetaFile.Read(metaPath);
+        meta.Settings = settings?.Clone();
+        MetaFile.Write(metaPath, meta);
+        ImportSettingsEditor.Forget(guid);
+        AssetImporterEditor.ForgetBaseline(guid);
+        assets.Reimport(guid);
+    }
+
+    private sealed class ImportSettingsOperation(Guid guid, EchoObject? before, EchoObject after) : IUndoOperation
+    {
+        public string Name => "CLI: Import Settings";
+        public IReadOnlyList<UndoOwner> Owners { get; } = [UndoOwner.OfAssetFile(guid)];
+        public void Undo() => WriteImportSettings(guid, before);
+        public void Redo() => WriteImportSettings(guid, after);
     }
 }
 

@@ -45,6 +45,9 @@ public sealed class PlayerManifest
     /// <summary>The scene the player opens.</summary>
     public string DefaultScene = Guid.Empty.ToString();
 
+    /// <summary>The build list: every scene shipped by build order, as GUID strings.</summary>
+    public List<string> Scenes = [];
+
     /// <summary>User script assemblies to load at startup, in dependency order.</summary>
     public List<string> AssemblyLoadOrder = [];
 

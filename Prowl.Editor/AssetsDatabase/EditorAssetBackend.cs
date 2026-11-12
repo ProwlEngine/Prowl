@@ -130,8 +130,8 @@ public class EditorAssetBackend : AssetBackend
 
         // The notification above only reaches the scene that was open when the import happened, so a
         // scene opened afterwards has to catch up on whatever changed while it was closed.
-        Runtime.Resources.Scene.OnSceneLoaded -= PrefabUtility.OnSceneLoaded;
-        Runtime.Resources.Scene.OnSceneLoaded += PrefabUtility.OnSceneLoaded;
+        Runtime.Resources.SceneInstance.Loaded -= PrefabUtility.OnSectionLoaded;
+        Runtime.Resources.SceneInstance.Loaded += PrefabUtility.OnSectionLoaded;
 
         // Remove any ".meta.tmp" files left behind by a crash/power-loss mid-write before
         // ScanAssets runs, so it doesn't pick them up and import them as real asset files.
@@ -2191,6 +2191,11 @@ public class EditorAssetBackend : AssetBackend
     {
         RunImport(entry);
         imported.Add(entry.Path);
+
+        // Changed outside the editor, so undoing an earlier edit would refill the old state over the change.
+        Core.Undo.DropAsset(entry.Guid);
+        if (entry.SubAssets != null)
+            foreach (SubAssetEntry sub in entry.SubAssets) Core.Undo.DropAsset(sub.Guid);
     }
 
     /// <param name="force">Drain the watcher immediately instead of waiting out its debounce window.</param>

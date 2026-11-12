@@ -39,28 +39,17 @@ public sealed class WindZone : Component
     /// <summary>Gusts per second. They roll outward as rings rather than pulsing the whole zone at once.</summary>
     public float PulseFrequency = 0.25f;
 
-    private static readonly List<WindZone> s_active = [];
-
     private static readonly string[] s_sphereUniforms =
         ["_WindZoneSphere0", "_WindZoneSphere1", "_WindZoneSphere2", "_WindZoneSphere3"];
     private static readonly string[] s_paramUniforms =
         ["_WindZoneParams0", "_WindZoneParams1", "_WindZoneParams2", "_WindZoneParams3"];
 
-    /// <summary>Every enabled zone in the scene.</summary>
-    public static IReadOnlyList<WindZone> Active => s_active;
-
-    public override void OnEnable()
+    internal override void JoinWorld(SceneInstance world)
     {
-        base.OnEnable();
-        if (!s_active.Contains(this))
-            s_active.Add(this);
+        if (!world.WindZoneList.Contains(this)) world.WindZoneList.Add(this);
     }
 
-    public override void OnDisable()
-    {
-        base.OnDisable();
-        s_active.Remove(this);
-    }
+    internal override void LeaveWorld(SceneInstance world) => world.WindZoneList.Remove(this);
 
     /// <summary>Wind velocity this zone applies at a world position, using the current time.</summary>
     public Float3 SampleWind(Float3 worldPosition) => SampleWind(worldPosition, Time.TimeSinceStartup);
@@ -119,15 +108,17 @@ public sealed class WindZone : Component
         return t * t * (3f - 2f * t);
     }
 
-    /// <summary>The zone reaching <paramref name="worldPosition"/> from closest range, or null if there are none.</summary>
-    public static WindZone? GetNearest(Float3 worldPosition)
+    /// <summary>The zone in <paramref name="world"/> reaching <paramref name="worldPosition"/> from closest range, or null if there are none.</summary>
+    public static WindZone? GetNearest(SceneInstance? world, Float3 worldPosition)
     {
         WindZone? nearest = null;
         float nearestKey = float.MaxValue;
+        if (world.IsNotValid()) return null;
 
-        for (int i = 0; i < s_active.Count; i++)
+        List<WindZone> zones = world.WindZoneList;
+        for (int i = 0; i < zones.Count; i++)
         {
-            WindZone zone = s_active[i];
+            WindZone zone = zones[i];
             if (zone.IsNotValid()) continue;
 
             float key = SortKey(zone, worldPosition);
@@ -141,19 +132,20 @@ public sealed class WindZone : Component
     }
 
     /// <summary>
-    /// Fills <paramref name="destination"/> with the zones reaching <paramref name="worldPosition"/>
+    /// Fills <paramref name="destination"/> with the zones in <paramref name="world"/> reaching <paramref name="worldPosition"/>
     /// from closest range, nearest first, and returns how many were written.
     /// </summary>
-    public static int GetNearest(Float3 worldPosition, Span<WindZone?> destination)
+    public static int GetNearest(SceneInstance? world, Float3 worldPosition, Span<WindZone?> destination)
     {
-        if (destination.Length == 0) return 0;
+        if (destination.Length == 0 || world.IsNotValid()) return 0;
 
         Span<float> keys = stackalloc float[destination.Length];
         int count = 0;
 
-        for (int i = 0; i < s_active.Count; i++)
+        List<WindZone> zones = world.WindZoneList;
+        for (int i = 0; i < zones.Count; i++)
         {
-            WindZone zone = s_active[i];
+            WindZone zone = zones[i];
             if (zone.IsNotValid()) continue;
 
             float key = SortKey(zone, worldPosition);

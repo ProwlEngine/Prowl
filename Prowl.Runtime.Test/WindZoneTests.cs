@@ -20,7 +20,7 @@ namespace Prowl.Runtime.Test;
 public class WindZoneTests : RuntimeTestBase
 {
     /// <summary>Zone with the time-varying terms off, so only the profile is left.</summary>
-    private WindZone CreateZone(Scene scene, Float3 position, float radius, float strength)
+    private WindZone CreateZone(SceneInstance scene, Float3 position, float radius, float strength)
     {
         GameObject go = CreateGameObject("WindZone");
         go.Transform.Position = position;
@@ -36,14 +36,14 @@ public class WindZoneTests : RuntimeTestBase
     [Fact]
     public void EnabledZonesRegisterAndUnregister()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         WindZone zone = CreateZone(scene, Float3.Zero, 10f, 1f);
 
-        Assert.Contains(zone, WindZone.Active);
+        Assert.Contains(zone, scene.WindZones);
 
         zone.Enabled = false;
 
-        Assert.DoesNotContain(zone, WindZone.Active);
+        Assert.DoesNotContain(zone, scene.WindZones);
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public class WindZoneTests : RuntimeTestBase
     {
         // Downwash, not an explosion: the middle is where the air arrives, so it has no outward
         // push of its own. The flow builds as it spreads and dies at the rim.
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         WindZone zone = CreateZone(scene, Float3.Zero, 10f, 2f);
 
         float eye = zone.SampleWind(new Float3(0.2f, 0f, 0f), 0f).X;
@@ -68,7 +68,7 @@ public class WindZoneTests : RuntimeTestBase
     {
         // What the middle gets is the column coming down, which is what pins particles to the
         // ground under a hovering craft rather than blasting them sideways.
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         WindZone zone = CreateZone(scene, Float3.Zero, 10f, 2f);
 
         Float3 eye = zone.SampleWind(Float3.Zero, 0f);
@@ -81,7 +81,7 @@ public class WindZoneTests : RuntimeTestBase
     [Fact]
     public void OutflowIsRadial()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         WindZone zone = CreateZone(scene, new Float3(5f, 0f, 5f), 10f, 1f);
 
         Float3 wind = zone.SampleWind(new Float3(5f, 0f, 9f), 0f);
@@ -95,7 +95,7 @@ public class WindZoneTests : RuntimeTestBase
     {
         // Turbulence has to animate. A field that only varies in space reads as noise painted on
         // the ground rather than as air moving over it.
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         WindZone zone = CreateZone(scene, Float3.Zero, 10f, 2f);
         zone.Turbulence = 0.6f;
 
@@ -111,7 +111,7 @@ public class WindZoneTests : RuntimeTestBase
     {
         // Turning the strength up past the point where grass lies flat has to keep doing something,
         // and what it does is drive the gust fronts outward faster.
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         WindZone zone = CreateZone(scene, Float3.Zero, 10f, 1f);
         zone.Turbulence = 0.6f;
 
@@ -136,7 +136,7 @@ public class WindZoneTests : RuntimeTestBase
         // decorrelate the whole gust pattern, and worse the longer the game has been running. That
         // reads as the field flickering whenever the zone is dragged, so a nudge has to stay a nudge
         // no matter how late it happens.
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         WindZone zone = CreateZone(scene, Float3.Zero, 10f, 2f);
         zone.Turbulence = 1f;
 
@@ -156,7 +156,7 @@ public class WindZoneTests : RuntimeTestBase
     public void HeightFadesTheGroundEffect()
     {
         // A zone parked well overhead should barely stir the ground under it
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         WindZone low = CreateZone(scene, Float3.Zero, 10f, 2f);
         WindZone high = CreateZone(scene, new Float3(0f, 8f, 0f), 10f, 2f);
 
@@ -169,22 +169,22 @@ public class WindZoneTests : RuntimeTestBase
     [Fact]
     public void NearestZoneWinsForParticles()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         CreateZone(scene, new Float3(100f, 0f, 0f), 10f, 1f);
         WindZone close = CreateZone(scene, new Float3(2f, 0f, 0f), 10f, 1f);
 
-        Assert.Equal(close, WindZone.GetNearest(Float3.Zero));
+        Assert.Equal(close, WindZone.GetNearest(scene, Float3.Zero));
     }
 
     [Fact]
     public void GatherReturnsTheFourNearestZonesInOrder()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         for (int i = 5; i >= 1; i--)
             CreateZone(scene, new Float3(i * 10f, 0f, 0f), 1f, 1f);
 
         var zones = new WindZone?[WindZone.kMaxShaderZones];
-        int count = WindZone.GetNearest(Float3.Zero, zones);
+        int count = WindZone.GetNearest(scene, Float3.Zero, zones);
 
         Assert.Equal(WindZone.kMaxShaderZones, count);
         for (int i = 0; i < count; i++)
@@ -212,7 +212,7 @@ public class WindZoneTests : RuntimeTestBase
     [Fact]
     public void ParticlesAccelerateAlongTheWind()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         CreateZone(scene, Float3.Zero, 10f, 5f);
 
         GameObject go = CreateGameObject("Particles");
@@ -232,7 +232,7 @@ public class WindZoneTests : RuntimeTestBase
     [Fact]
     public void ParticlesIgnoreWindWhenTheModuleIsOff()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         CreateZone(scene, Float3.Zero, 10f, 5f);
 
         GameObject go = CreateGameObject("Particles");
@@ -250,7 +250,7 @@ public class WindZoneTests : RuntimeTestBase
     [Fact]
     public void LocalSpaceParticlesGetWindInTheirOwnSpace()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         CreateZone(scene, Float3.Zero, 100f, 5f);
 
         GameObject go = CreateGameObject("Particles");
@@ -273,7 +273,7 @@ public class WindZoneTests : RuntimeTestBase
     [Fact]
     public void DragCarriesParticlesTowardTheWindVelocity()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Particles");
         ParticleSystemComponent system = go.AddComponent<ParticleSystemComponent>();
         scene.Add(go);
@@ -295,7 +295,7 @@ public class WindZoneTests : RuntimeTestBase
     [Fact]
     public void DragIsStableAtAnyTimestep()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Particles");
         ParticleSystemComponent system = go.AddComponent<ParticleSystemComponent>();
         scene.Add(go);
@@ -318,7 +318,7 @@ public class WindZoneTests : RuntimeTestBase
     [Fact]
     public void AmbientWindBlowsWithoutAnyZone()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Particles");
         ParticleSystemComponent system = go.AddComponent<ParticleSystemComponent>();
         scene.Add(go);
@@ -339,7 +339,7 @@ public class WindZoneTests : RuntimeTestBase
     [Fact]
     public void TurbulenceDecorrelatesNeighbouringParticles()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Particles");
         ParticleSystemComponent system = go.AddComponent<ParticleSystemComponent>();
         scene.Add(go);
@@ -361,7 +361,7 @@ public class WindZoneTests : RuntimeTestBase
     [Fact]
     public void TurbulenceStaysWithinItsSpeed()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Particles");
         ParticleSystemComponent system = go.AddComponent<ParticleSystemComponent>();
         scene.Add(go);

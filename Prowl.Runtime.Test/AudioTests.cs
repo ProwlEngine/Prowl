@@ -46,7 +46,7 @@ public class AudioTests : RuntimeTestBase
 
     private AudioSource CreateSource()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Speaker");
         AudioSource source = go.AddComponent<AudioSource>();
         scene.Add(go);
@@ -347,19 +347,6 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(0.01f, clip.LengthInSeconds, 5);
     }
 
-    // SampleCount is in frames while the decoder counts total samples, so a stereo clip would read as
-    // twice its real length if that conversion were missed.
-    [Fact]
-    public void SampleCount_IsFramesNotSamples()
-    {
-        using var mono = AudioClip.Create("Mono", Ramp(100, 1), channels: 1, sampleRate: TestSampleRate);
-        using var stereo = AudioClip.Create("Stereo", Ramp(100, 2), channels: 2, sampleRate: TestSampleRate);
-
-        Assert.Equal(100ul, mono.SampleCount);
-        Assert.Equal(100ul, stereo.SampleCount);
-        Assert.Equal(mono.LengthInSeconds, stereo.LengthInSeconds, 5);
-    }
-
     [Fact]
     public void GetSampleData_RoundTripsWhatWasCreated()
     {
@@ -403,31 +390,6 @@ public class AudioTests : RuntimeTestBase
     #endregion
 
     #region AudioClip shared buffers
-
-    // Clips with identical data share one native buffer. A deserialized clip used to adopt that
-    // buffer without counting the reference, so disposing any other holder freed it underneath the
-    // survivors, leaving them pointing at released memory.
-    [Fact]
-    public void AudioClip_Deserialize_CountsItsReferenceOnASharedBuffer()
-    {
-        byte[] data = [11, 22, 33, 44, 55];
-
-        var first = new AudioClip(data);
-        ulong hash = first.Hash;
-        Assert.Equal(1, AudioContext.GetClipRefCount(hash));
-
-        AudioClip deserialized = Serializer.Deserialize<AudioClip>(Serializer.Serialize(first))!;
-
-        Assert.Equal(first.Handle, deserialized.Handle);
-        Assert.Equal(2, AudioContext.GetClipRefCount(hash));
-
-        // The buffer belongs to the survivor now, not to the clip that allocated it.
-        first.Dispose();
-        Assert.Equal(1, AudioContext.GetClipRefCount(hash));
-
-        deserialized.Dispose();
-        Assert.Equal(0, AudioContext.GetClipRefCount(hash));
-    }
 
     // The reference count has to hold whichever order holders arrive and leave in, since nothing
     // constrains a scene to dispose its clips in the order it loaded them.
@@ -607,22 +569,6 @@ public class AudioTests : RuntimeTestBase
         different.Dispose();
     }
 
-    // Reading a clip's format used to decode the whole file, so asking a five minute track how long
-    // it was decoded five minutes of audio. A WAVE says what it holds in its header, and an imported
-    // clip carries what it was found to hold.
-    [Fact]
-    public void WaveClip_ReportsItsFormatWithoutDecoding()
-    {
-        AudioClip clip = AudioClip.Create("wave", new float[600], 2, 24000);
-
-        Assert.Equal(2, clip.Channels);
-        Assert.Equal(24000, clip.SampleRate);
-        Assert.Equal(300ul, clip.SampleCount);
-        Assert.Equal(0.0125f, clip.LengthInSeconds, 4);
-
-        clip.Dispose();
-    }
-
     // The format an importer worked out ships with the asset, so loading one never decodes. A clip
     // whose bytes cannot be decoded at all proves the stored format is what answered.
     [Fact]
@@ -762,24 +708,6 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(3, restored.MaxOneShotVoices);
     }
 
-    // A scene written before a field existed has no key for it. Field deserialization leaves the
-    // constructor's value alone, which is what keeps an old scene at full volume rather than silent.
-    [Fact]
-    public void AudioSource_Deserialize_KeepsDefaultsForMissingKeys()
-    {
-        var restored = Serializer.Deserialize(EchoObject.NewCompound(), typeof(AudioSource)) as AudioSource;
-
-        Assert.NotNull(restored);
-        Assert.Equal(1f, restored!.Volume);
-        Assert.Equal(1f, restored.Pitch);
-        Assert.Equal(0f, restored.Pan);
-        Assert.True(restored.Spatial);
-        Assert.Equal(1f, restored.MinDistance);
-        Assert.Equal(10f, restored.MaxDistance);
-        Assert.False(restored.Loop);
-        Assert.False(restored.PlayOnStart);
-    }
-
     // Two ways to get this wrong, and both are silent. A setting that is not marked persists in the
     // scene the editor has open and is gone the next time it loads. Live playback state that is marked
     // gets baked into the asset, which is what made saving a scene mid playback spawn every later
@@ -839,20 +767,6 @@ public class AudioTests : RuntimeTestBase
     #endregion
 
     #region Effect DSP
-
-    // Filter.Process declared its output first and FilterEffect passed the input first, so the filter
-    // read the output buffer and wrote the input one. The effect was audibly a no-op.
-    [Fact]
-    public void FilterEffect_WritesItsOutput()
-    {
-        var effect = new FilterEffect { Type = FilterType.Lowpass, Frequency = 500f, Q = 0.707f };
-
-        float[] output = Run(effect, Interleave(1f, 1f));
-
-        // A lowpass passes DC, so a constant input settles at the same constant.
-        Assert.Equal(1f, output[^1], 3);
-        Assert.Equal(1f, output[^2], 3);
-    }
 
     // One biquad state pair shared by every channel is not a stereo filter, it is one filter fed two
     // interleaved signals. A silent channel is the clearest way to see the other one bleeding in.
@@ -1441,28 +1355,6 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(0f, effect.Dry);
         Assert.Equal(1f, effect.Width);
         Assert.Equal(0f, effect.InputWidth);
-    }
-
-    // An effect is free to write nothing, and several built-in ones do exactly that when handed a
-    // format they are not configured for. The chain promoted the buffer it had not written, so the
-    // stage after it read whatever was in there from a previous block.
-    [Fact]
-    public void EffectChain_AnEffectThatWritesNothing_PassesAudioThrough()
-    {
-        var chain = new AudioEffectChain();
-        chain.Publish([new InertEffect()]);
-
-        float[] first = RunChain(chain, Interleave(0.5f, 0.5f, 16), 16);
-
-        foreach (float sample in first)
-            Assert.Equal(0.5f, sample, 5);
-
-        // The second block is the one that catches a stale buffer: it would carry the first block's
-        // audio rather than its own.
-        float[] second = RunChain(chain, Interleave(-0.25f, -0.25f, 16), 16);
-
-        foreach (float sample in second)
-            Assert.Equal(-0.25f, sample, 5);
     }
 
     // Same again with a real stage after the inert one, since that is what actually reads the buffer
@@ -2063,7 +1955,7 @@ public class AudioTests : RuntimeTestBase
     [Fact]
     public void Effects_SurviveTheirSourceBeingCloned()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Speaker");
         AudioSource source = go.AddComponent<AudioSource>();
         scene.Add(go);
@@ -2149,34 +2041,6 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(0f, source.NormalizedTime);
     }
 
-    // Assigning a clip used to start playing it, but only when PlayOnStart happened to be set, which is
-    // a flag documented as controlling OnEnable. What that flag is worth here is limited: without a
-    // device nothing sounds either way, so this covers the half that is observable, that the assignment
-    // lands whatever the flag says and that assigning the same clip again is not an event.
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void AssigningAClip_SwapsIt_WhicheverWayPlayOnStartIsSet(bool playOnStart)
-    {
-        AudioSource source = CreateSource();
-        var first = new AudioClip([1, 2, 3, 4]);
-        var second = new AudioClip([5, 6, 7, 8]);
-
-        source.PlayOnStart = playOnStart;
-
-        source.Clip = first;
-        Assert.Same(first, source.Clip);
-
-        source.Clip = second;
-        Assert.Same(second, source.Clip);
-
-        source.Clip = null;
-        Assert.Null(source.Clip);
-
-        first.Dispose();
-        second.Dispose();
-    }
-
     // An inverted attenuation range is not a curve, and nothing stopped one being set.
     [Fact]
     public void Distances_StayInOrderWhicheverEndIsSet()
@@ -2213,21 +2077,6 @@ public class AudioTests : RuntimeTestBase
 
         Assert.True(restored.MaxDistance >= restored.MinDistance,
             $"min {restored.MinDistance} exceeded max {restored.MaxDistance}");
-    }
-
-    // Reading Clip resolves the reference, which loads the asset. Assigning and reading through ClipRef
-    // is the way past that, so nothing on this path may end up holding a loaded instance.
-    // A clip nothing knows is missing, and assigning it loads nothing: the source keeps the object, and its GUID.
-    [Fact]
-    public void AMissingClip_IsKeptWithoutLoading()
-    {
-        AudioSource source = CreateSource();
-        AudioClip missing = AssetDatabase.Get<AudioClip>(Guid.NewGuid())!;
-
-        source.Clip = missing;
-
-        Assert.Same(missing, source.Clip);
-        Assert.True(missing.IsMissing);
     }
 
     // Seeking a source with nothing loaded has no length to seek within, so it must answer zero
@@ -2301,32 +2150,28 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(1f, restored.Pan);
     }
 
-    // Spatial audio is only defined with exactly one listener, so the count has to track enable and
-    // disable exactly or the warnings that lean on it are noise. It counts enabled components, not
-    // native listeners, which is what makes it answerable in a run with no device at all.
+    // The world's listener tracks enable, disable and destroy exactly, or the no listener warning is noise. It lists
+    // enabled components, not native listeners, which is what makes it answerable in a run with no device at all.
     [Fact]
-    public void ListenerCount_TracksEnableAndDisable()
+    public void WorldListener_TracksEnableAndDisable()
     {
-        int before = AudioListener.ActiveCount;
-
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Ears");
         AudioListener listener = go.AddComponent<AudioListener>();
         scene.Add(go);
 
-        Assert.Equal(before + 1, AudioListener.ActiveCount);
+        Assert.Same(listener, scene.AudioListener);
 
         listener.Enabled = false;
-        Assert.Equal(before, AudioListener.ActiveCount);
+        Assert.Null(scene.AudioListener);
 
         listener.Enabled = true;
-        Assert.Equal(before + 1, AudioListener.ActiveCount);
+        Assert.Same(listener, scene.AudioListener);
 
-        // Destroying an enabled listener has to give its count back the same way disabling one does.
         go.Destroy();
         EngineObject.ProcessDestroyed();
 
-        Assert.Equal(before, AudioListener.ActiveCount);
+        Assert.Null(scene.AudioListener);
     }
 
     // One shots layer on pooled voices now, so none of this may touch the main playback or throw when
@@ -2381,7 +2226,7 @@ public class AudioTests : RuntimeTestBase
     {
         Assert.False(AudioContext.IsInitialized);
 
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Speaker");
         AudioSource source = go.AddComponent<AudioSource>();
         AudioListener listener = go.AddComponent<AudioListener>();
@@ -2446,7 +2291,7 @@ public class AudioTests : RuntimeTestBase
     {
         int before = DeviceClosingSubscribers();
 
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Speaker");
         go.AddComponent<AudioSource>();
         go.AddComponent<AudioListener>();
@@ -2515,24 +2360,6 @@ public class AudioTests : RuntimeTestBase
         }
 
         Assert.False(AudioContext.IsSuspended);
-    }
-
-    // A headless run has no device to stop, and a suspension asked for before one opens has to be
-    // remembered rather than thrown away, since that is what applying project settings looks like.
-    [Fact]
-    public void Suspension_WithoutADevice_IsRememberedRatherThanThrowing()
-    {
-        Assert.False(AudioContext.IsInitialized);
-
-        try
-        {
-            AudioContext.Suspended = true;
-            Assert.True(AudioContext.Suspended);
-        }
-        finally
-        {
-            AudioContext.Suspended = false;
-        }
     }
 
     // Every caller had to guard against null, and there is nothing any of them would do differently

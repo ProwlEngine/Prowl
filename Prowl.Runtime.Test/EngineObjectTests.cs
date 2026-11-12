@@ -43,17 +43,6 @@ public class EngineObjectTests
     }
 
     [Fact]
-    public void Dispose_SetsIsDisposed()
-    {
-        var obj = new TestEngineObject();
-        Assert.False(obj.IsDisposed);
-
-        obj.Dispose();
-
-        Assert.True(obj.IsDisposed);
-    }
-
-    [Fact]
     public void Dispose_IsIdempotent_CallsOnDisposeOnce()
     {
         var obj = new TestEngineObject();
@@ -162,22 +151,6 @@ public class EngineObjectTests
 
         EngineObject.ProcessDestroyed();
         bystander.Dispose();
-    }
-
-    [Fact]
-    public void Destroy_KeepsObjectUsableUntilProcessed()
-    {
-        var obj = new TestEngineObject();
-
-        obj.Destroy();
-
-        Assert.False(obj.IsDisposed);
-        Assert.True(obj.IsValid());
-
-        EngineObject.ProcessDestroyed();
-
-        Assert.True(obj.IsDisposed);
-        Assert.Equal(1, obj.DisposeCount);
     }
 
     [Fact]

@@ -30,7 +30,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class AssetDatabasePanel : DockPanel
 {
     [MenuItem("Window/Debug/Asset Database", priority: 101)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(AssetDatabasePanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<AssetDatabasePanel>();
 
     public override string Title => "Asset Database";
     public override string Icon => EditorIcons.Database;

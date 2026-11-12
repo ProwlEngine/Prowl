@@ -21,7 +21,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder, 50f)]
     public void WalksUpAWalkableSlope(ColliderShape shape, float degrees)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, 1f), degrees, 6f);
         Walker walker = Spawn(scene, Float3.Zero, shape);
         Float3 start = walker.Position;
@@ -43,7 +43,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder, 45f)]
     public void WalkingDownASlopeNeverLeavesIt(ColliderShape shape, float degrees)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, 0f), degrees, 8f);
         float top = RampHeight(degrees, 8f * MathF.Cos(degrees * MathF.PI / 180f));
         Walker walker = Spawn(scene, new Float3(0f, top - 0.6f, 8f * MathF.Cos(degrees * MathF.PI / 180f) - 0.6f), shape);
@@ -60,7 +60,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder, 50f)]
     public void StandingStillOnAWalkableSlopeDoesNotSlide(ColliderShape shape, float degrees)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, -5f), degrees, 12f);
         Walker walker = Spawn(scene, new Float3(0f, 5f, 0f), shape);
         walker.Settle(1f);
@@ -77,7 +77,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     [Fact]
     public void LoweringTheSteepestWalkableSlopeMakesAShallowRampUnclimbable()
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, 1f), 40f, 6f);
         Walker walker = Spawn(scene, Float3.Zero);
         walker.Controller.MaxSlopeAngle = 35f;
@@ -92,7 +92,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void RunningOverACrestStaysOnTheGround(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, 0f), 25f, 4f);
         float run = 4f * MathF.Cos(25f * MathF.PI / 180f);
         float top = RampHeight(25f, run);
@@ -111,7 +111,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void WalkingAcrossASlopeKeepsItsHeight(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, -6f), 30f, 14f, width: 30f);
         Walker walker = Spawn(scene, new Float3(-8f, 4f, 0f), shape);
         Float3 start = walker.Position;
@@ -128,7 +128,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void WalkingIntoASteepSlopeAtAnAngleSlidesAlongItWithoutRising(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, 2f), 70f, 6f, width: 40f);
         Walker walker = Spawn(scene, new Float3(-8f, 0f, 0f), shape);
 
@@ -143,7 +143,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void AValleyBetweenTwoWalkableSlopesIsCrossed(ColliderShape shape)
     {
-        Scene scene = World();
+        SceneInstance scene = World();
         Box(scene, new Float3(0f, -0.5f, 0f), new Float3(10f, 1f, 2f));
         Ramp(scene, new Float3(0f, 0f, 1f), 30f, 6f);
         Ramp(scene, new Float3(0f, 0f, -1f), 30f, 6f, yaw: 180f);
@@ -159,7 +159,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void ARoofShapedRidgeCanBeWalkedOver(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, 0f), 20f, 4f);
         float run = 4f * MathF.Cos(20f * MathF.PI / 180f);
         Ramp(scene, new Float3(0f, 0f, 2f * run), 20f, 4f, yaw: 180f);
@@ -181,7 +181,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder, 60f)]
     public void RunningIntoASteepSlopeCarriesUpItThenSlidesBack(ColliderShape shape, float degrees)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, 2f), 40f, 1.5f);
         float run = 1.5f * MathF.Cos(40f * MathF.PI / 180f);
         float rise = RampHeight(40f, run);
@@ -209,7 +209,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder, 80f)]
     public void HoldingForwardIntoASteepSlopeGainsNoHeight(ColliderShape shape, float degrees)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, 2f), degrees, 10f);
         Walker walker = Spawn(scene, Float3.Zero, shape);
         walker.KeepsMomentum = true;
@@ -234,7 +234,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder)]
     public void HoldingWalkWhereACurveGetsTooSteepSettlesWithoutJitter(ColliderShape shape)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         float[] angles = [10f, 20f, 30f, 40f, 50f, 60f, 70f, 80f];
         Float3 foot = new(0f, 0f, 2f);
         foreach (float angle in angles)
@@ -267,7 +267,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     [InlineData(ColliderShape.Cylinder, 20f)]
     public void DriftingOffTheSideOfARampDropsOffCleanly(ColliderShape shape, float degrees)
     {
-        Scene scene = WorldWithFloor();
+        SceneInstance scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, 1f), degrees, 12f, width: 3f);
         Walker walker = Spawn(scene, new Float3(1.1f, 0f, 0f), shape);
         walker.KeepsMomentum = true;

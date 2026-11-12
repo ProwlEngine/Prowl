@@ -77,12 +77,12 @@ public static class UniqueNames
     /// against <paramref name="scene"/>'s root objects. Uses the <c>" (N)"</c> convention with
     /// strip-and-increment, so duplicating <c>"Cube (3)"</c> yields <c>"Cube (4)"</c>.
     /// </summary>
-    public static string ForGameObjectSibling(string desired, GameObject? parent, Scene scene)
+    public static string ForGameObjectSibling(string desired, GameObject? parent, SceneInstance scene)
     {
         ArgumentNullException.ThrowIfNull(scene);
 
         var taken = new HashSet<string>(StringComparer.Ordinal);
-        IEnumerable<GameObject> siblings = parent.IsValid() ? parent.Children : scene.RootObjects;
+        IEnumerable<GameObject> siblings = parent.IsValid() ? parent.Children : scene.Roots;
         foreach (GameObject s in siblings)
             taken.Add(s.Name);
 

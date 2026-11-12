@@ -38,6 +38,13 @@ public abstract class EditorTestHarness : IDisposable
     /// <summary>The live asset database for the project.</summary>
     protected EditorAssetBackend Assets { get; private set; }
 
+    // English text, as the editor shows it, so messages read the same in tests.
+    static EditorTestHarness() => Prowl.Rosetta.Loc.Configure(cfg => cfg
+        .SetFallbackLocale("en")
+        .AddProvider(new Prowl.Rosetta.EmbeddedResourceProvider(typeof(Prowl.Editor.Core.EditorApplication).Assembly, "Prowl.Editor.Resources.Locale"))
+        .SetLocale("en")
+        .OnMissingKey(Prowl.Rosetta.MissingKeyBehavior.ReturnKey));
+
     protected EditorTestHarness()
     {
         _prevIsEditor = Application.IsEditor;
@@ -56,6 +63,20 @@ public abstract class EditorTestHarness : IDisposable
 
         Assets = new EditorAssetBackend(Project);
         Assets.Initialize(); // registers itself as AssetDatabase.Backend
+
+        // After the database, since a new world loads its default sky.
+        BindEditWorld(SceneInstance.Create("Untitled", SceneMode.Edit));
+        Core.Undo.ClearAll();
+    }
+
+    /// <summary>Binds <paramref name="world"/> as the editor's edit world and as Main, running, as the editor does at startup.</summary>
+    protected static void BindEditWorld(SceneInstance world)
+    {
+        SceneInstance? previous = GUI.SceneView.EditorSceneManager.EditWorldOrNull;
+        world.Activate();
+        GUI.SceneView.EditorSceneManager.EditWorld = world;
+        SceneInstance.Main = world;
+        if (previous.IsValid() && !ReferenceEquals(previous, world)) previous!.Dispose();
     }
 
     /// <summary>The asset with this GUID, loaded.</summary>
@@ -76,10 +97,9 @@ public abstract class EditorTestHarness : IDisposable
     {
         if (source.Scene is null)
         {
-            var scene = new Scene();
+            var scene = new SceneInstance(SceneMode.Edit);
             scene.Add(source);
-            Scene.Load(scene);
-            Scene.ProcessPendingLoad();
+            BindEditWorld(scene);
         }
 
         if (!Prefabs.PrefabUtility.SaveAsPrefabAssetAndConnect(source, relativePath, overwrite: true))
@@ -132,11 +152,11 @@ public abstract class EditorTestHarness : IDisposable
     protected PrefabAsset? GetPrefab(Guid guid) => AssetDatabase.Load<PrefabAsset>(guid);
 
     /// <summary>Persist a Scene as a .scene file, the way the editor saves one, and return its GUID.</summary>
-    protected Guid CreateSceneAsset(Scene scene, string relativePath = "Scene.scene")
+    protected Guid CreateSceneAsset(SceneInstance scene, string relativePath = "Scene.scene")
     {
         string abs = AssetAbsolutePath(relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(abs)!);
-        File.WriteAllText(abs, Serializer.Serialize(typeof(object), scene).WriteToString());
+        File.WriteAllText(abs, scene.ActiveSection.CaptureTree().WriteToString());
         return Assets.ImportFile(relativePath);
     }
 
@@ -174,46 +194,43 @@ public abstract class EditorTestHarness : IDisposable
         return CompileGameAssembly();
     }
 
-    private readonly Dictionary<Assembly, byte[]> _compiledBytes = [];
-
-    protected Func<Assembly, byte[]?> AssemblyBytesResolver => asm => _compiledBytes.TryGetValue(asm, out byte[]? bytes) ? bytes : null;
-
     /// <summary>Compile whatever scripts are on disk, assert success, and load the fresh game assembly.</summary>
     protected Assembly CompileGameAssembly()
     {
         ScriptCompiler.CompileResult result = ScriptCompiler.CompileAll(Project);
         Assert.True(result.Success, $"Compilation failed: {result.Errors}");
         byte[] bytes = File.ReadAllBytes(Project.GameAssemblyPath);
-        var asm = Assembly.Load(bytes);
-        _compiledBytes[asm] = bytes;
-        return asm;
+        return Assembly.Load(bytes);
     }
 
     /// <summary>Enters play mode with a deterministic time source until the returned scope is disposed.</summary>
     protected static PlayModeScope EnterPlayMode() => new();
 
     /// <summary>Advances full frames: FixedUpdate then Update.</summary>
-    protected static void Tick(Scene scene, int steps = 1)
+    protected static void Tick(SceneInstance scene, int steps = 1)
     {
         for (int i = 0; i < steps; i++)
         {
+            scene.Clock.Advance(Time.FixedDeltaTime);
             scene.FixedUpdate();
             scene.Update();
         }
     }
 
     /// <summary>Runs Scene.Update the given number of frames (no physics step).</summary>
-    protected static void UpdateScene(Scene scene, int frames = 1)
+    protected static void UpdateScene(SceneInstance scene, int frames = 1)
     {
         for (int i = 0; i < frames; i++)
+        {
+            scene.Clock.Advance(Time.FixedDeltaTime);
             scene.Update();
+        }
     }
 
     protected sealed class PlayModeScope : IDisposable
     {
         private readonly bool _wasPlaying;
         private readonly bool _wasEditor;
-        private readonly TimeData _time;
 
         internal PlayModeScope()
         {
@@ -221,15 +238,10 @@ public abstract class EditorTestHarness : IDisposable
             _wasEditor = Application.IsEditor;
             Application.IsPlaying = true;
             Application.IsEditor = false;
-
-            _time = new TimeData { DeltaTime = Time.FixedDeltaTime };
-            Time.TimeStack.Push(_time);
         }
 
         public void Dispose()
         {
-            if (Time.TimeStack.Count > 0 && Time.TimeStack.Peek() == _time)
-                Time.TimeStack.Pop();
             Application.IsPlaying = _wasPlaying;
             Application.IsEditor = _wasEditor;
         }
@@ -254,7 +266,7 @@ public abstract class EditorTestHarness : IDisposable
     /// <summary>Author a scene containing a single empty GameObject and save it as Main.scene.</summary>
     protected Guid AuthorEmptyScene(string relativePath = "Main.scene")
     {
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         scene.Add(new GameObject("Root"));
         Guid guid = CreateSceneAsset(scene, relativePath);
         Assert.NotEqual(Guid.Empty, guid);
@@ -268,7 +280,7 @@ public abstract class EditorTestHarness : IDisposable
         Type type = gameAsm.GetType(componentTypeName)
             ?? throw new InvalidOperationException($"Type '{componentTypeName}' not found in the game assembly.");
 
-        var scene = new Scene();
+        var scene = new SceneInstance(SceneMode.Edit);
         var go = new GameObject("Root");
         go.AddComponent(type);
         scene.Add(go);
@@ -376,8 +388,8 @@ public abstract class EditorTestHarness : IDisposable
 
     public virtual void Dispose()
     {
-        // Drop this test's scene so the next one starts from a fresh empty Scene.Current.
-        try { Scene.Shutdown(); } catch { }
+        // Drop this test's world so the next one binds its own.
+        try { SceneInstance.Shutdown(); } catch { }
 
         Assets.Dispose(); // stops the FileSystemWatcher and clears AssetDatabase.Current / Instance
         Project.CloseCurrent();

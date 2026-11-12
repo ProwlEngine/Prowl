@@ -3,7 +3,6 @@
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
-using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -52,26 +51,23 @@ public class LightProbeGroupEditor : CustomEditor
 
         Origami.Button(paper, $"{id}_gen", $"{EditorIcons.Sun}  Generate Grid", () =>
         {
-            Undo.Snapshot(grp);
+            Undo.RecordObject(grp, "Generate Probe Grid");
             grp.GenerateGrid(_min, _max, _countX, _countY, _countZ);
-            EditorSceneManager.MarkDirty();
         }).Show();
 
         paper.Box($"{id}_sp").Height(4);
 
         Origami.Button(paper, $"{id}_add", "Add Probe", () =>
         {
-            Undo.Snapshot(grp);
+            Undo.RecordObject(grp, "Add Probe");
             grp.ProbePositions.Add(Float3.Zero);
-            EditorSceneManager.MarkDirty();
         }).Show();
 
         if (grp.ProbePositions.Count > 0)
             Origami.Button(paper, $"{id}_clear", $"{EditorIcons.Trash}  Clear Probes", () =>
             {
-                Undo.Snapshot(grp);
+                Undo.RecordObject(grp, "Clear Probes");
                 grp.ProbePositions.Clear();
-                EditorSceneManager.MarkDirty();
             }).Show();
 
         paper.Box($"{id}_sp2").Height(6);

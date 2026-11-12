@@ -33,6 +33,19 @@ public sealed class BuildSettings : ProjectSettingsBase
 
     public List<SceneBuildEntry> Scenes = [];
 
+    /// <summary>Adds every listed scene with a file that is not in <paramref name="scenes"/> yet, in order. Returns how many.</summary>
+    internal static int AddOpenScenes(List<SceneBuildEntry> scenes)
+    {
+        int added = 0;
+        foreach (OpenScene open in EditorSceneManager.OpenScenes)
+        {
+            if (open.Scene.IsNotValid() || open.Path is not { } path || scenes.Any(s => s.SceneGuid == open.Scene.AssetID)) continue;
+            scenes.Add(new SceneBuildEntry { Path = path, SceneGuid = open.Scene.AssetID });
+            added++;
+        }
+        return added;
+    }
+
     public BuildConfiguration Config = BuildConfiguration.Release;
     public string OutputDirectory = "Builds";
     public AssetPackagingMode PackagingMode = AssetPackagingMode.ProwlPak;
@@ -156,18 +169,9 @@ public sealed class BuildSettings : ProjectSettingsBase
         // Add scene buttons
         using (paper.Row("bld_add_row").Height(EditorTheme.RowHeight).Gap(6).PaddingLeft(4).Enter())
         {
-            Origami.Button(paper, "bld_add_open", $"{EditorIcons.Plus} Add Open Scene", () =>
+            Origami.Button(paper, "bld_add_open", $"{EditorIcons.Plus} Add Open Scenes", () =>
                 {
-                    if (EditorSceneManager.CurrentScenePath != null)
-                    {
-                        EditorAssetBackend? db = EditorAssetBackend.Instance;
-                        AssetEntry? entry = db?.GetEntry(EditorSceneManager.CurrentScenePath);
-                        if (entry != null && !Scenes.Any(s => s.SceneGuid == entry.Guid))
-                        {
-                            Scenes.Add(new SceneBuildEntry { Path = entry.Path, SceneGuid = entry.Guid });
-                            EditorRegistries.SaveSettings();
-                        }
-                    }
+                    if (AddOpenScenes(Scenes) > 0) EditorRegistries.SaveSettings();
                 }).Width(140).Show();
         }
 

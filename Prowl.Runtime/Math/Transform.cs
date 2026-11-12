@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -239,7 +239,7 @@ public class Transform : ISerializationCallbackReceiver
     public uint Version
     {
         get => _version;
-        set { AssertOwner(); _version = value; WakeRenderers(); }
+        set { AssertOwner(); _version = value; WakeDependents(); }
     }
 
     public Transform Root => Parent == null ? this : Parent.Root;
@@ -259,20 +259,26 @@ public class Transform : ISerializationCallbackReceiver
     private void Changed()
     {
         _version++;
-        WakeRenderers();
+        WakeDependents();
     }
 
-    [SerializeIgnore] uint _wokeEpoch;
+    [SerializeIgnore] uint _wokeRenderEpoch;
+    [SerializeIgnore] uint _wokePhysicsEpoch;
 
-    // The renderers of this object and every descendant sync again, the walk done once a scene sync
-    private void WakeRenderers()
+    // Wakes the renderers and colliders of this object and every descendant, walking at most once a scene sync and once a physics sync.
+    private void WakeDependents()
     {
-        uint epoch = Prowl.Runtime.Rendering.SceneRendering.Epoch;
-        if (_wokeEpoch == epoch || GameObject.IsNotValid()) return;
-        _wokeEpoch = epoch;
-        GameObject.WakeRendering();
+        uint renderEpoch = Prowl.Runtime.Rendering.SceneRendering.Epoch;
+        uint physicsEpoch = PhysicsWorld.SyncEpoch;
+        bool wakeRendering = _wokeRenderEpoch != renderEpoch;
+        bool wakeColliders = _wokePhysicsEpoch != physicsEpoch;
+        if ((!wakeRendering && !wakeColliders) || GameObject.IsNotValid()) return;
+        _wokeRenderEpoch = renderEpoch;
+        _wokePhysicsEpoch = physicsEpoch;
+        if (wakeRendering) GameObject.WakeRendering();
+        if (wakeColliders) GameObject.WakeColliders();
         foreach (GameObject child in GameObject.Children)
-            child.Transform.WakeRenderers();
+            child.Transform.WakeDependents();
     }
 
     // Lazy world-matrix cache. _cachedLocalVersion starts at 0 (Version starts at 1) so the first

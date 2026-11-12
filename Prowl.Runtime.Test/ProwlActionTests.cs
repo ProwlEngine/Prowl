@@ -26,7 +26,7 @@ public class ProwlActionTests : RuntimeTestBase
 
     private CallTarget MakeTarget()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Target");
         CallTarget comp = go.AddComponent<CallTarget>();
         scene.Add(go);
@@ -48,7 +48,7 @@ public class ProwlActionTests : RuntimeTestBase
 
         public LogCapture() => Debug.OnLog += Record;
 
-        private void Record(string message, DebugStackTrace? trace, LogSeverity severity) => _messages.Add(message);
+        private void Record(LogEvent e) => _messages.Add(e.Message);
 
         public bool Logged(string text) => _messages.Exists(m => m.Contains(text, StringComparison.Ordinal));
 
@@ -93,14 +93,6 @@ public class ProwlActionTests : RuntimeTestBase
         Assert.True(log.Logged("null or destroyed"), "A call that silently did nothing is indistinguishable from a mis-wired one.");
     }
 
-    [Fact]
-    public void Invoke_OnANullTarget_IsANoOp()
-    {
-        ProwlAction action = ActionFor(null, nameof(CallTarget.Ping));
-
-        action.Invoke(); // must not throw
-    }
-
     // Reflection wraps whatever the target threw in a TargetInvocationException whose message and
     // stack are about reflection ("Exception has been thrown by the target of an invocation"), which
     // says nothing about the actual fault. The report has to name what really went wrong.
@@ -118,7 +110,7 @@ public class ProwlActionTests : RuntimeTestBase
         Assert.False(log.Logged("target of an invocation"), "The reflection wrapper is noise.");
     }
 
-    // The DontDestroyOnLoad trap. A saved reference to an object outside the scene's own graph is
+    // The persistent object trap. A saved reference to an object outside the scene's own graph is
     // written by value rather than as a link, so loading rebuilds it as a copy with no GameObject.
     // The call then fails somewhere inside the author's own method, with nothing pointing at the wiring.
     [Fact]

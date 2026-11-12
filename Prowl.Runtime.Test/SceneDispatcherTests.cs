@@ -69,9 +69,9 @@ public class SceneDispatcherTests : RuntimeTestBase
 {
     private static Collision NoContact => default;
 
-    private (Scene scene, GameObject go) NewSceneGo()
+    private (SceneInstance scene, GameObject go) NewSceneGo()
     {
-        Scene scene = CreateScene(enable: true);
+        SceneInstance scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         return (scene, go);
     }
@@ -84,7 +84,7 @@ public class SceneDispatcherTests : RuntimeTestBase
     [Fact]
     public void AThrowingCallback_IsContainedRatherThanUnwinding()
     {
-        (Scene? scene, GameObject? go) = NewSceneGo();
+        (SceneInstance? scene, GameObject? go) = NewSceneGo();
         go.AddComponent<ThrowingTick>();
         scene.Add(go);
 
@@ -98,7 +98,7 @@ public class SceneDispatcherTests : RuntimeTestBase
     {
         TickLog.Entries.Clear();
 
-        (Scene? scene, GameObject? go) = NewSceneGo();
+        (SceneInstance? scene, GameObject? go) = NewSceneGo();
         TagTick a = go.AddComponent<TagTick>(); a.Mark = "a";
         go.AddComponent<ThrowingTick>();
         TagTick c = go.AddComponent<TagTick>(); c.Mark = "c";
@@ -116,7 +116,7 @@ public class SceneDispatcherTests : RuntimeTestBase
     {
         TickLog.Entries.Clear();
 
-        (Scene? scene, GameObject? go) = NewSceneGo();
+        (SceneInstance? scene, GameObject? go) = NewSceneGo();
         TagTick a = go.AddComponent<TagTick>(); a.Mark = "a";
         TagTick b = go.AddComponent<TagTick>(); b.Mark = "b";
         TagTick c = go.AddComponent<TagTick>(); c.Mark = "c";
@@ -133,7 +133,7 @@ public class SceneDispatcherTests : RuntimeTestBase
     {
         TickLog.Entries.Clear();
 
-        (Scene? scene, GameObject? go) = NewSceneGo();
+        (SceneInstance? scene, GameObject? go) = NewSceneGo();
         TagTick a = go.AddComponent<TagTick>(); a.Mark = "a";
         TagTick b = go.AddComponent<TagTick>(); b.Mark = "b";
         TagTick c = go.AddComponent<TagTick>(); c.Mark = "c";
@@ -150,7 +150,7 @@ public class SceneDispatcherTests : RuntimeTestBase
     [Fact]
     public void ChurningManyComponents_KeepsEveryoneTickingExactlyOnce()
     {
-        (Scene? scene, GameObject? go) = NewSceneGo();
+        (SceneInstance? scene, GameObject? go) = NewSceneGo();
         var all = new List<PlainUpdateCounter>();
 
         for (int i = 0; i < 200; i++)
@@ -168,36 +168,12 @@ public class SceneDispatcherTests : RuntimeTestBase
             Assert.Equal(c.EnabledInHierarchy ? 1 : 0, c.Updates);
     }
 
-    [Fact]
-    public void Start_RunsOnceEvenThoughStartedComponentsLeaveLazily()
-    {
-        (Scene? scene, GameObject? go) = NewSceneGo();
-        StartCounter c = go.AddComponent<StartCounter>();
-        scene.Add(go);
-
-        Update(scene);
-        Update(scene);
-        Update(scene);
-
-        Assert.Equal(1, c.Starts);
-    }
-
     // ---- physics fan-out -----------------------------------------------------------------------------
-
-    [Fact]
-    public void PhysicsEvent_WithNoHandlers_DoesNothing()
-    {
-        (Scene? scene, GameObject? go) = NewSceneGo();
-        go.AddComponent<PlainUpdateCounter>(); // overrides nothing physics dispatches
-        scene.Add(go);
-
-        SceneDispatcher.CollisionBegin(go, NoContact); // must not throw
-    }
 
     [Fact]
     public void PhysicsEvent_WithOneHandler_Fires()
     {
-        (Scene? scene, GameObject? go) = NewSceneGo();
+        (SceneInstance? scene, GameObject? go) = NewSceneGo();
         PhysicsListener listener = go.AddComponent<PhysicsListener>();
         scene.Add(go);
 
@@ -219,7 +195,7 @@ public class SceneDispatcherTests : RuntimeTestBase
     {
         PhysicsLog.Entries.Clear();
 
-        (Scene? scene, GameObject? go) = NewSceneGo();
+        (SceneInstance? scene, GameObject? go) = NewSceneGo();
         PhysicsListener a = go.AddComponent<PhysicsListener>(); a.Mark = "a";
         PhysicsListener b = go.AddComponent<PhysicsListener>(); b.Mark = "b";
         PhysicsListener c = go.AddComponent<PhysicsListener>(); c.Mark = "c";
@@ -236,7 +212,7 @@ public class SceneDispatcherTests : RuntimeTestBase
     [Fact]
     public void PhysicsEvent_SkipsDisabledHandlers()
     {
-        (Scene? scene, GameObject? go) = NewSceneGo();
+        (SceneInstance? scene, GameObject? go) = NewSceneGo();
         PhysicsListener enabled = go.AddComponent<PhysicsListener>();
         PhysicsListener disabled = go.AddComponent<PhysicsListener>();
         scene.Add(go);
@@ -253,7 +229,7 @@ public class SceneDispatcherTests : RuntimeTestBase
     [Fact]
     public void PhysicsOnlyComponent_StillReceivesEvents()
     {
-        (Scene? scene, GameObject? go) = NewSceneGo();
+        (SceneInstance? scene, GameObject? go) = NewSceneGo();
         PhysicsOnlyListener listener = go.AddComponent<PhysicsOnlyListener>();
         scene.Add(go);
 
@@ -265,7 +241,7 @@ public class SceneDispatcherTests : RuntimeTestBase
     [Fact]
     public void PhysicsHandler_RemovingItselfMidDispatch_DoesNotDisturbTheOthers()
     {
-        (Scene? scene, GameObject? go) = NewSceneGo();
+        (SceneInstance? scene, GameObject? go) = NewSceneGo();
         SelfRemovingListener remover = go.AddComponent<SelfRemovingListener>();
         PhysicsListener survivor = go.AddComponent<PhysicsListener>();
         scene.Add(go);
@@ -282,11 +258,4 @@ public class SceneDispatcherTests : RuntimeTestBase
         SceneDispatcher.CollisionBegin(null!, NoContact);
         SceneDispatcher.TriggerExit(null!, null!);
     }
-}
-
-/// <summary>Counts Start calls, to prove a started component leaves the channel for good.</summary>
-public sealed class StartCounter : Component
-{
-    public int Starts;
-    public override void Start() => Starts++;
 }

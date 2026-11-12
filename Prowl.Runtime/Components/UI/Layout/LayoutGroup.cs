@@ -113,8 +113,9 @@ public abstract class HorizontalOrVerticalLayoutGroup : LayoutGroup
     /// whole nested group, so recomputing per property would multiply the work at every level.</summary>
     private void EnsureSizes()
     {
-        if (_sizesGeneration == LayoutUtility.Generation) return;
-        _sizesGeneration = LayoutUtility.Generation;
+        int generation = LayoutUtility.GenerationOf(GameObject);
+        if (generation >= 0 && _sizesGeneration == generation) return;
+        _sizesGeneration = generation;
 
         List<GameObject> kids = GetLayoutChildren();
         float gaps = _spacing * Maths.Max(0, kids.Count - 1) + PaddingAlong;
