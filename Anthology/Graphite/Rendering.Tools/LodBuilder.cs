@@ -45,8 +45,8 @@ public sealed class LodChain
 
 /// <summary>
 /// Builds the coarser levels of a mesh with Vector's quadric simplification, each from the one before, so every corner
-/// of a level is one the source had. Seams in any stream and the outlines between submeshes are kept. For tools and
-/// import, not for frames.
+/// of a level is one the source had. Seams in any stream and the outlines between submeshes are kept. Each level is
+/// reordered by <see cref="MeshOptimizer"/>. For tools and import, not for frames.
 /// </summary>
 public static class LodBuilder
 {
@@ -96,7 +96,7 @@ public static class LodBuilder
         {
             simplify.TargetTriangleCount = Math.Max(1, (int)(sourceTriangles * ratio));
             error += GeometryOperators.Simplify(mesh, simplify).Error;
-            levels.Add(ToMeshData(mesh, carried, layout.SubMeshes.Length));
+            levels.Add(MeshOptimizer.Optimize(ToMeshData(mesh, carried, layout.SubMeshes.Length)));
             errors.Add(error);
 
             // The size at which the error projects to PixelError pixels, as the screen metric measures size
