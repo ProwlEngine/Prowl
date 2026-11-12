@@ -247,6 +247,7 @@
   "hierarchy.save_scene": "Zapisz scene",
   "hierarchy.save_scene_as": "Zapisz scene jako",
   "hierarchy.save_all": "Zapisz wszystko",
+  "hierarchy.add_new_scene": "Dodaj nowa scene",
   "hierarchy.load_scene": "Wczytaj scene",
   "hierarchy.unload_scene": "Zwolnij scene",
   "hierarchy.remove_scene": "Usun scene",

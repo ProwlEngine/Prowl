@@ -247,6 +247,7 @@
   "hierarchy.save_scene": "씬 저장",
   "hierarchy.save_scene_as": "다른 이름으로 씬 저장",
   "hierarchy.save_all": "모두 저장",
+  "hierarchy.add_new_scene": "새 씬 추가",
   "hierarchy.load_scene": "씬 로드",
   "hierarchy.unload_scene": "씬 언로드",
   "hierarchy.remove_scene": "씬 제거",

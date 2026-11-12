@@ -630,6 +630,7 @@ public class HierarchyPanel : DockPanel
                 builder.Item(Loc.Get("hierarchy.save_scene_as"), () => EditorApplication.PromptSaveAs(open));
             }
             builder.Item(Loc.Get("hierarchy.save_all"), () => Projects.SaveManager.RequestSave());
+            builder.Item(Loc.Get("hierarchy.add_new_scene"), () => Guarded(() => EditorSceneManager.New(additive: true)));
             builder.Separator();
             if (open.IsLoaded)
                 builder.Item(Loc.Get("hierarchy.unload_scene"), () => EditorSceneManager.ConfirmClosing(() => Guarded(() => EditorSceneManager.Unload(open, force: true)), [open]));

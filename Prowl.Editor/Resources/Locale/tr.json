@@ -247,6 +247,7 @@
   "hierarchy.save_scene": "Sahneyi kaydet",
   "hierarchy.save_scene_as": "Sahneyi farkli kaydet",
   "hierarchy.save_all": "Tumunu kaydet",
+  "hierarchy.add_new_scene": "Yeni Sahne Ekle",
   "hierarchy.load_scene": "Sahneyi yukle",
   "hierarchy.unload_scene": "Sahneyi bosalt",
   "hierarchy.remove_scene": "Sahneyi kaldir",

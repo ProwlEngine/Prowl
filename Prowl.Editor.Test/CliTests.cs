@@ -585,6 +585,18 @@ public class CliEditorCommandTests : EditorTestHarness
     }
 
     [Fact]
+    public void SceneNewAdditive_AddsAnEmptyScene_AndKeepsTheOpenOne()
+    {
+        Ok("go", "create", "--name", "KeptInTheFirstScene");
+
+        JsonArray scenes = Ok("scene", "--action", "newadditive")!["scenes"]!.AsArray();
+
+        Assert.Equal(2, scenes.Count);
+        Assert.StartsWith("Untitled", scenes[1]!["name"]!.GetValue<string>());
+        Assert.Contains(SceneInstance.Main.Objects, g => g.Name == "KeptInTheFirstScene");
+    }
+
+    [Fact]
     public void ScenesOpenAdditively_GroupTheTree_AndUnloadByName()
     {
         CreateSceneAsset(new SceneInstance(SceneMode.Edit), "First.scene");

@@ -95,7 +95,7 @@ public static class CliEditorCommands
     public enum LogFilter { All, Warning, Error }
     public enum GoAction { Create, Delete, Duplicate, Rename, Parent, Active, Transform }
     public enum ComponentAction { Add, Remove, List }
-    public enum SceneAction { Info, Open, OpenAdditive, New, Load, Unload, Remove, SetActive, Save, SaveAs }
+    public enum SceneAction { Info, Open, OpenAdditive, New, NewAdditive, Load, Unload, Remove, SetActive, Save, SaveAs }
 
     // ================================================================
     //  Editor
@@ -235,6 +235,9 @@ public static class CliEditorCommands
                 break;
             case SceneAction.New:
                 Guarded(() => EditorSceneManager.New(force: force));
+                break;
+            case SceneAction.NewAdditive:
+                Guarded(() => EditorSceneManager.New(additive: true));
                 break;
             case SceneAction.Load:
                 Guarded(() => EditorSceneManager.Load(Listed(scene)));

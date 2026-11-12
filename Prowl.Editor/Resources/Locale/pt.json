@@ -247,6 +247,7 @@
   "hierarchy.save_scene": "Salvar cena",
   "hierarchy.save_scene_as": "Salvar cena como",
   "hierarchy.save_all": "Salvar tudo",
+  "hierarchy.add_new_scene": "Adicionar nova cena",
   "hierarchy.load_scene": "Carregar cena",
   "hierarchy.unload_scene": "Descarregar cena",
   "hierarchy.remove_scene": "Remover cena",

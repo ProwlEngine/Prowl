@@ -247,6 +247,7 @@
   "hierarchy.save_scene": "保存场景",
   "hierarchy.save_scene_as": "场景另存为",
   "hierarchy.save_all": "全部保存",
+  "hierarchy.add_new_scene": "添加新场景",
   "hierarchy.load_scene": "加载场景",
   "hierarchy.unload_scene": "卸载场景",
   "hierarchy.remove_scene": "移除场景",
